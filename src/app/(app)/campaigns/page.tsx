@@ -11,6 +11,7 @@ import {
 import { StatusChip } from "@/components/ui/status-chip";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Tabs } from "@/components/ui/tabs";
+import { campaignTabs } from "@/lib/campaign-tabs";
 import { campaigns } from "@/lib/mock/data";
 import type { Campaign } from "@/lib/types";
 import { cn, formatNumber, formatPercent } from "@/lib/utils";
@@ -31,15 +32,6 @@ import {
 import type { LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
-
-const campaignTabs = [
-  { label: "All", href: "/campaigns" },
-  { label: "Drafts", href: "/campaigns/drafts" },
-  { label: "Scheduled", href: "/campaigns/scheduled" },
-  { label: "Calendar", href: "/campaigns/calendar", badge: "New" },
-  { label: "Completed", href: "/campaigns/completed" },
-  { label: "Failed", href: "/campaigns/failed" },
-];
 
 const campaignIconTones: Record<string, string> = {
   Completed: "bg-emerald-50 text-emerald-600",

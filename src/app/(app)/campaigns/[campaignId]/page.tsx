@@ -1,6 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { Card, CardTitle, StatCard } from "@/components/ui/card";
-import { PageHeader } from "@/components/ui/page-header";
+import { Card } from "@/components/ui/card";
 import { StatusChip } from "@/components/ui/status-chip";
 import { auditLogs, campaigns } from "@/lib/mock/data";
 import {
@@ -11,11 +10,19 @@ import {
 } from "@/lib/utils";
 import {
   ArrowLeft,
+  CalendarDays,
+  CheckCircle2,
   Clock,
+  Copy,
+  DollarSign,
+  ExternalLink,
   MessageSquare,
   MousePointerClick,
   Reply,
+  Send,
+  Tag,
   UserMinus,
+  Users,
 } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -36,9 +43,7 @@ function buildTimeline(campaign: (typeof campaigns)[number]) {
     {
       label: "Campaign created",
       at: campaign.scheduledAt
-        ? new Date(
-            new Date(campaign.scheduledAt).getTime() - 86400000 * 2,
-          ).toISOString()
+        ? new Date(new Date(campaign.scheduledAt).getTime() - 86400000 * 2).toISOString()
         : "2026-07-15T14:00:00Z",
       detail: `Created by ${campaign.createdBy}`,
     },
@@ -52,7 +57,11 @@ function buildTimeline(campaign: (typeof campaigns)[number]) {
     });
   }
 
-  if (campaign.status === "Sending" || campaign.status === "Completed" || campaign.status === "Failed") {
+  if (
+    campaign.status === "Sending" ||
+    campaign.status === "Completed" ||
+    campaign.status === "Failed"
+  ) {
     events.push({
       label: "Send started",
       at: campaign.scheduledAt ?? "2026-07-26T12:00:00Z",
@@ -64,9 +73,7 @@ function buildTimeline(campaign: (typeof campaigns)[number]) {
     events.push({
       label: "Send completed",
       at: campaign.scheduledAt
-        ? new Date(
-            new Date(campaign.scheduledAt).getTime() + 3600000,
-          ).toISOString()
+        ? new Date(new Date(campaign.scheduledAt).getTime() + 3600000).toISOString()
         : "2026-07-20T11:00:00Z",
       detail: `${formatNumber(campaign.delivered)} delivered · ${formatNumber(campaign.replies)} replies`,
     });
@@ -76,9 +83,7 @@ function buildTimeline(campaign: (typeof campaigns)[number]) {
     events.push({
       label: "Send failed",
       at: campaign.scheduledAt
-        ? new Date(
-            new Date(campaign.scheduledAt).getTime() + 1800000,
-          ).toISOString()
+        ? new Date(new Date(campaign.scheduledAt).getTime() + 1800000).toISOString()
         : "2026-07-22T08:30:00Z",
       detail: `Only ${formatNumber(campaign.delivered)} of ${formatNumber(campaign.sent)} delivered`,
     });
@@ -129,224 +134,288 @@ export default async function CampaignDetailPage({
     log.detail.toLowerCase().includes(campaign.name.toLowerCase()),
   );
 
+  const primaryStats = [
+    {
+      label: "Sent",
+      value: formatNumber(campaign.sent),
+      hint: null as string | null,
+      icon: Send,
+      tone: "bg-emerald-50 text-emerald-600",
+    },
+    {
+      label: "Delivered",
+      value: formatNumber(campaign.delivered),
+      hint: formatPercent(deliveryRate),
+      icon: CheckCircle2,
+      tone: "bg-emerald-50 text-emerald-600",
+    },
+    {
+      label: "Replies",
+      value: formatNumber(campaign.replies),
+      hint: formatPercent(replyRate),
+      icon: Reply,
+      tone: "bg-sky-50 text-sky-600",
+    },
+    {
+      label: "Clicks",
+      value: formatNumber(campaign.clicks),
+      hint: formatPercent(clickRate),
+      icon: MousePointerClick,
+      tone: "bg-violet-50 text-violet-600",
+    },
+    {
+      label: "Opt-outs",
+      value: formatNumber(campaign.optOuts),
+      hint: formatPercent(optOutRate),
+      icon: UserMinus,
+      tone: "bg-orange-50 text-orange-600",
+    },
+    {
+      label: "Cost",
+      value: formatCurrency(campaign.cost),
+      hint: null,
+      icon: DollarSign,
+      tone: "bg-amber-50 text-amber-600",
+    },
+  ];
+
   return (
-    <div>
-      <PageHeader
-        title={campaign.name}
-        description={`${campaign.type} campaign · ${campaign.audience}`}
-        actions={
-          <>
-            <Link href="/campaigns">
-              <Button variant="outline">
-                <ArrowLeft className="mr-2 h-4 w-4" />
-                Back
+    <div className="space-y-5 text-[13px]">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <h1 className="text-[26px] font-bold tracking-tight text-foreground">
+            {campaign.name}
+          </h1>
+          <p className="mt-1 text-[13px] text-muted-foreground">
+            {campaign.type} campaign · {campaign.audience}
+          </p>
+          <div className="mt-2.5 flex flex-wrap items-center gap-2.5">
+            <StatusChip status={campaign.status} />
+            <span className="text-[12px] text-muted-foreground">
+              Created by {campaign.createdBy}
+            </span>
+            {campaign.scheduledAt ? (
+              <span className="inline-flex items-center gap-1 text-[12px] text-muted-foreground">
+                <Clock className="h-3.5 w-3.5" />
+                {formatDateTime(campaign.scheduledAt)}
+              </span>
+            ) : null}
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Link href="/campaigns">
+            <Button variant="outline" className="rounded-[10px]">
+              <ArrowLeft className="h-4 w-4" />
+              Back
+            </Button>
+          </Link>
+          {campaign.status === "Draft" ? (
+            <Link href="/send">
+              <Button className="rounded-[10px]">Continue editing</Button>
+            </Link>
+          ) : (
+            <Link href="/send">
+              <Button variant="outline" className="rounded-[10px]">
+                <Copy className="h-4 w-4" />
+                Duplicate
               </Button>
             </Link>
-            {campaign.status === "Draft" ? (
-              <Link href="/send">
-                <Button>Continue editing</Button>
-              </Link>
-            ) : (
-              <Link href="/send">
-                <Button variant="outline">Duplicate</Button>
-              </Link>
-            )}
-          </>
-        }
-      />
-
-      <div className="mb-6 flex flex-wrap items-center gap-3">
-        <StatusChip status={campaign.status} />
-        <span className="text-sm text-muted-foreground">
-          Created by {campaign.createdBy}
-        </span>
-        {campaign.scheduledAt ? (
-          <span className="flex items-center gap-1 text-sm text-muted-foreground">
-            <Clock className="h-3.5 w-3.5" />
-            {formatDateTime(campaign.scheduledAt)}
-          </span>
-        ) : null}
+          )}
+        </div>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-3">
-        <div className="space-y-6 xl:col-span-2">
-          <Card>
-            <CardTitle>Summary</CardTitle>
-            <dl className="mt-4 grid gap-4 sm:grid-cols-2">
-              <div>
-                <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Type
-                </dt>
-                <dd className="mt-1 text-sm font-medium">{campaign.type}</dd>
-              </div>
-              <div>
-                <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Audience
-                </dt>
-                <dd className="mt-1 text-sm font-medium">{campaign.audience}</dd>
-              </div>
-              <div>
-                <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Scheduled
-                </dt>
-                <dd className="mt-1 text-sm font-medium">
-                  {formatDateTime(campaign.scheduledAt)}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Segments per message
-                </dt>
-                <dd className="mt-1 text-sm font-medium">
-                  {segments.segments} ({segments.characters} characters)
-                </dd>
-              </div>
-            </dl>
-          </Card>
-
-          <Card>
-            <CardTitle>Message preview</CardTitle>
-            <div className="mt-4 max-w-sm">
-              <div className="rounded-2xl rounded-bl-sm bg-primary/10 px-4 py-3 text-sm leading-relaxed">
-                {campaign.body}
-              </div>
-              <p className="mt-2 text-xs text-muted-foreground">
-                Preview includes compliance footer. Merge tags render at send time.
-              </p>
+      <div className="grid gap-5 xl:grid-cols-[1.65fr_1fr]">
+        <div className="space-y-5">
+          <Card className="rounded-[12px] p-5">
+            <h2 className="text-[15px] font-semibold text-foreground">Summary</h2>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              {[
+                { label: "Type", value: campaign.type, icon: Tag, tone: "bg-emerald-50 text-emerald-600" },
+                { label: "Audience", value: campaign.audience, icon: Users, tone: "bg-sky-50 text-sky-600" },
+                {
+                  label: "Scheduled",
+                  value: formatDateTime(campaign.scheduledAt),
+                  icon: CalendarDays,
+                  tone: "bg-violet-50 text-violet-600",
+                },
+                {
+                  label: "Segments per message",
+                  value: `${segments.segments} (${segments.characters} characters)`,
+                  icon: MessageSquare,
+                  tone: "bg-amber-50 text-amber-600",
+                },
+              ].map((item) => (
+                <div
+                  key={item.label}
+                  className="flex items-start gap-3 rounded-[10px] border border-border bg-muted/30 px-3 py-3"
+                >
+                  <span
+                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-[8px] ${item.tone}`}
+                  >
+                    <item.icon className="h-4 w-4" />
+                  </span>
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+                      {item.label}
+                    </p>
+                    <p className="mt-0.5 text-[13px] font-semibold text-foreground">{item.value}</p>
+                  </div>
+                </div>
+              ))}
             </div>
           </Card>
 
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            <StatCard label="Sent" value={formatNumber(campaign.sent)} />
-            <StatCard
-              label="Delivered"
-              value={formatNumber(campaign.delivered)}
-              hint={formatPercent(deliveryRate)}
-            />
-            <StatCard
-              label="Replies"
-              value={formatNumber(campaign.replies)}
-              hint={formatPercent(replyRate)}
-            />
-            <StatCard
-              label="Clicks"
-              value={formatNumber(campaign.clicks)}
-              hint={formatPercent(clickRate)}
-            />
-            <StatCard
-              label="Opt-outs"
-              value={formatNumber(campaign.optOuts)}
-              hint={formatPercent(optOutRate)}
-            />
-            <StatCard label="Cost" value={formatCurrency(campaign.cost)} />
+          <Card className="rounded-[12px] p-5">
+            <h2 className="text-[15px] font-semibold text-foreground">Message preview</h2>
+            <div className="mt-4 grid gap-5 lg:grid-cols-[1fr_180px] lg:items-start">
+              <div>
+                <div className="max-w-md rounded-2xl rounded-bl-md bg-emerald-50 px-4 py-3 text-[13px] leading-relaxed text-emerald-950">
+                  {campaign.body}
+                </div>
+                <p className="mt-2 text-[12px] text-muted-foreground">
+                  Preview includes compliance footer. Merge tags render at send time.
+                </p>
+              </div>
+              <div className="mx-auto w-[150px]">
+                <div className="rounded-[28px] border-[6px] border-slate-800 bg-slate-900 p-2 shadow-lg">
+                  <div className="mb-2 flex justify-center">
+                    <span className="h-1.5 w-10 rounded-full bg-slate-700" />
+                  </div>
+                  <div className="min-h-[220px] rounded-[18px] bg-slate-100 p-2.5">
+                    <p className="mb-2 text-center text-[9px] font-semibold text-slate-500">
+                      Messages
+                    </p>
+                    <div className="rounded-2xl rounded-bl-md bg-primary px-2.5 py-2 text-[10px] leading-snug text-primary-foreground">
+                      {campaign.body}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {primaryStats.map((stat) => (
+              <div key={stat.label} className="surface rounded-[12px] bg-card p-4">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="text-[12px] font-medium uppercase tracking-wide text-muted-foreground">
+                      {stat.label}
+                    </p>
+                    <p className="mt-2 text-[22px] font-bold tracking-tight">{stat.value}</p>
+                    {stat.hint ? (
+                      <p className="mt-1 text-[12px] font-medium text-emerald-600">{stat.hint}</p>
+                    ) : null}
+                  </div>
+                  <span
+                    className={`flex h-9 w-9 items-center justify-center rounded-[8px] ${stat.tone}`}
+                  >
+                    <stat.icon className="h-4 w-4" />
+                  </span>
+                </div>
+              </div>
+            ))}
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-3">
-            <Card className="flex items-center gap-3">
-              <div className="rounded-lg bg-sky-100 p-2 text-sky-800">
-                <Reply className="h-4 w-4" />
+          <div className="grid gap-3 sm:grid-cols-3">
+            {[
+              { label: "Reply rate", value: formatPercent(replyRate), icon: Reply, tone: "bg-sky-100 text-sky-700" },
+              {
+                label: "Click rate",
+                value: formatPercent(clickRate),
+                icon: MousePointerClick,
+                tone: "bg-violet-100 text-violet-700",
+              },
+              {
+                label: "Opt-out rate",
+                value: formatPercent(optOutRate),
+                icon: UserMinus,
+                tone: "bg-orange-100 text-orange-700",
+              },
+            ].map((item) => (
+              <div
+                key={item.label}
+                className="surface flex items-center gap-3 rounded-[12px] bg-card p-4"
+              >
+                <span className={`flex h-9 w-9 items-center justify-center rounded-[8px] ${item.tone}`}>
+                  <item.icon className="h-4 w-4" />
+                </span>
+                <div>
+                  <p className="text-[12px] text-muted-foreground">{item.label}</p>
+                  <p className="text-[16px] font-bold">{item.value}</p>
+                </div>
               </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Reply rate</p>
-                <p className="font-display text-lg font-semibold">
-                  {formatPercent(replyRate)}
-                </p>
-              </div>
-            </Card>
-            <Card className="flex items-center gap-3">
-              <div className="rounded-lg bg-violet-100 p-2 text-violet-800">
-                <MousePointerClick className="h-4 w-4" />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Click rate</p>
-                <p className="font-display text-lg font-semibold">
-                  {formatPercent(clickRate)}
-                </p>
-              </div>
-            </Card>
-            <Card className="flex items-center gap-3">
-              <div className="rounded-lg bg-orange-100 p-2 text-orange-800">
-                <UserMinus className="h-4 w-4" />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Opt-out rate</p>
-                <p className="font-display text-lg font-semibold">
-                  {formatPercent(optOutRate)}
-                </p>
-              </div>
-            </Card>
+            ))}
           </div>
         </div>
 
-        <div className="space-y-6">
-          <Card>
-            <CardTitle>Timeline</CardTitle>
+        <div className="space-y-5">
+          <Card className="rounded-[12px] p-5">
+            <h2 className="text-[15px] font-semibold text-foreground">Timeline</h2>
             <ol className="mt-4 space-y-4">
               {timeline.map((event, idx) => (
-                <li key={idx} className="relative pl-6">
+                <li key={event.label} className="relative pl-8">
                   {idx < timeline.length - 1 ? (
-                    <span className="absolute left-[7px] top-5 h-full w-px bg-border" />
+                    <span className="absolute left-[11px] top-6 h-[calc(100%-8px)] w-px bg-emerald-200" />
                   ) : null}
-                  <span className="absolute left-0 top-1.5 h-3.5 w-3.5 rounded-full border-2 border-primary bg-card" />
-                  <p className="text-sm font-medium">{event.label}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {formatDateTime(event.at)}
-                  </p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">{event.detail}</p>
+                  <span className="absolute left-0 top-0.5 flex h-6 w-6 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                  </span>
+                  <p className="text-[13px] font-semibold text-foreground">{event.label}</p>
+                  <p className="text-[12px] text-muted-foreground">{formatDateTime(event.at)}</p>
+                  <p className="mt-0.5 text-[12px] text-muted-foreground">{event.detail}</p>
                 </li>
               ))}
             </ol>
           </Card>
 
-          <Card>
-            <CardTitle>Cost breakdown</CardTitle>
-            <dl className="mt-4 space-y-3 text-sm">
-              <div className="flex justify-between">
+          <Card className="rounded-[12px] p-5">
+            <h2 className="text-[15px] font-semibold text-foreground">Cost breakdown</h2>
+            <dl className="mt-4 space-y-3 text-[13px]">
+              <div className="flex justify-between gap-3">
                 <dt className="text-muted-foreground">Messages sent</dt>
                 <dd className="font-medium">{formatNumber(campaign.sent)}</dd>
               </div>
-              <div className="flex justify-between">
+              <div className="flex justify-between gap-3">
                 <dt className="text-muted-foreground">Segments per message</dt>
                 <dd className="font-medium">{segments.segments}</dd>
               </div>
-              <div className="flex justify-between">
+              <div className="flex justify-between gap-3">
                 <dt className="text-muted-foreground">Rate per segment</dt>
                 <dd className="font-medium">$0.015</dd>
               </div>
-              <div className="flex justify-between border-t border-border pt-3">
-                <dt className="font-medium">Total cost</dt>
-                <dd className="font-display font-semibold">
-                  {formatCurrency(campaign.cost)}
-                </dd>
+              <div className="flex justify-between gap-3 border-t border-border pt-3">
+                <dt className="font-semibold">Total cost</dt>
+                <dd className="text-[15px] font-bold">{formatCurrency(campaign.cost)}</dd>
               </div>
             </dl>
           </Card>
 
-          <Card>
-            <div className="flex items-center gap-2">
-              <MessageSquare className="h-4 w-4 text-primary" />
-              <CardTitle>Activity log</CardTitle>
-            </div>
+          <Card className="rounded-[12px] p-5">
+            <h2 className="text-[15px] font-semibold text-foreground">Activity log</h2>
             {activity.length === 0 ? (
-              <p className="mt-4 text-sm text-muted-foreground">
+              <p className="mt-4 text-[13px] text-muted-foreground">
                 No activity recorded for this campaign yet.
               </p>
             ) : (
-              <ul className="mt-4 space-y-3">
+              <ul className="mt-4 space-y-2.5">
                 {activity.map((log) => (
-                  <li
-                    key={log.id}
-                    className="rounded-lg border border-border p-3 text-sm"
-                  >
-                    <p className="font-medium">{log.event}</p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
+                  <li key={log.id} className="rounded-[10px] border border-border px-3 py-2.5">
+                    <p className="text-[13px] font-semibold">{log.event}</p>
+                    <p className="mt-0.5 text-[12px] text-muted-foreground">
                       {log.actor} · {formatDateTime(log.at)}
                     </p>
-                    <p className="mt-1 text-xs text-muted-foreground">{log.detail}</p>
                   </li>
                 ))}
               </ul>
             )}
+            <button
+              type="button"
+              className="mt-3 inline-flex items-center gap-1.5 text-[12px] font-semibold text-primary hover:underline"
+            >
+              View full activity log
+              <ExternalLink className="h-3.5 w-3.5" />
+            </button>
           </Card>
         </div>
       </div>

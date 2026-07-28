@@ -58,6 +58,7 @@ export const appNav: NavItem[] = [
       { label: "Calendar", href: "/campaigns/calendar" },
       { label: "Completed", href: "/campaigns/completed" },
       { label: "Failed", href: "/campaigns/failed" },
+      { label: "Recurring", href: "/campaigns/recurring" },
     ],
   },
   {
