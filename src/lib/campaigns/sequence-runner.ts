@@ -369,11 +369,16 @@ async function queueSendForStep(recipientId: string, step: SequenceStep): Promis
   }
 }
 
-export async function tryAdvanceRecipientAfterSend(recipientId: string) {
+export async function tryAdvanceRecipientAfterSend(recipientId: string, completedStepKey?: string | null) {
   const prisma = getPrisma();
   const recipient = await prisma.campaignRecipient.findUnique({ where: { id: recipientId } });
   if (!recipient) return;
   if (TERMINAL.includes(recipient.workflowStatus)) return;
+
+  // Bind to the message that just sent — ignore stale finalizers for older steps
+  if (completedStepKey && recipient.currentStep && recipient.currentStep !== completedStepKey) {
+    return;
+  }
 
   const campaign = await prisma.campaign.findUnique({ where: { id: recipient.campaignId } });
   const sequence = parseSequence(campaign?.sequenceJson);
@@ -381,8 +386,10 @@ export async function tryAdvanceRecipientAfterSend(recipientId: string) {
   if (!current) return;
 
   // Only act when still sitting on the send step that just completed.
-  // Re-finalizing an already-advanced recipient must be a no-op.
   if (current.step_type !== "send_sms" && current.step_type !== "send_email") {
+    return;
+  }
+  if (completedStepKey && current.step_key !== completedStepKey) {
     return;
   }
 

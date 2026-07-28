@@ -55,7 +55,7 @@ export async function finalizeSentMessage(messageId: string) {
 
   // Advancement is idempotent via currentStep CAS — always attempt so crashes recover
   try {
-    await tryAdvanceRecipientAfterSend(message.recipientId);
+    await tryAdvanceRecipientAfterSend(message.recipientId, message.stepKey);
     await prisma.campaignMessage.updateMany({
       where: { id: messageId, advancedAfterSend: false },
       data: { advancedAfterSend: true },

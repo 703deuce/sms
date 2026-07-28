@@ -141,10 +141,10 @@ export async function POST(request: Request) {
           });
           if (opted.count === 1) {
             campaignIds.add(recipient.campaignId);
-            await prisma.campaignMessage.updateMany({
-              where: { recipientId: recipient.id, status: { in: ["queued", "sending"] } },
-              data: { status: "skipped", error: "stopped: STOP" },
-            });
+        await prisma.campaignMessage.updateMany({
+          where: { recipientId: recipient.id, status: "queued" },
+          data: { status: "skipped", error: "stopped: STOP" },
+        });
           }
         }
         for (const campaignId of campaignIds) {

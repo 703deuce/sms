@@ -20,12 +20,38 @@ export type QuickSendSmsInput = {
   idempotencyKey?: string;
 };
 
+function idemProviderLookup(key: string) {
+  return [{ providerId: `idem:${key}` }, { providerId: { contains: `|idem:${key}` } }];
+}
+
 export async function sendQuickSms(input: QuickSendSmsInput) {
   const entitlement = requireCampaignSendAccess(input.workspaceId);
   if (!entitlement.ok) throw new Error(entitlement.error);
 
   const to = normalizeE164(input.to);
   const prisma = getPrisma();
+
+  if (input.idempotencyKey) {
+    const prior = await prisma.message.findFirst({
+      where: {
+        workspaceId: input.workspaceId,
+        OR: idemProviderLookup(input.idempotencyKey),
+        status: { not: "failed" },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+    if (prior) {
+      const sid = prior.providerId?.split("|")[0] || prior.id;
+      return {
+        sid,
+        status: prior.status,
+        trackingToken: prior.trackingToken,
+        trackingUrl: prior.trackingToken ? `${getAppBaseUrl()}/r/${prior.trackingToken}` : undefined,
+        messageId: prior.id,
+        idempotentReplay: true,
+      };
+    }
+  }
 
   const suppressed = await prisma.suppression.findFirst({
     where: { workspaceId: input.workspaceId, phone: to },
@@ -70,7 +96,10 @@ export async function sendQuickSms(input: QuickSendSmsInput) {
       ? body
       : `${body.trim()} ${trackedUrl}`.trim();
 
-  // Durable outbox row BEFORE provider call — retry after accept won't lose the SID
+  const idemProviderId = input.idempotencyKey
+    ? `idem:${input.idempotencyKey}`
+    : `pending:${trackingToken}`;
+
   const pending = await prisma.message.create({
     data: {
       workspaceId: input.workspaceId,
@@ -79,7 +108,7 @@ export async function sendQuickSms(input: QuickSendSmsInput) {
       from: reg!.phoneE164 || input.from || "messaging_service",
       body: finalBody,
       status: "sending",
-      providerId: input.idempotencyKey ? `idem:${input.idempotencyKey}` : `pending:${trackingToken}`,
+      providerId: idemProviderId,
       trackingToken,
       destinationUrl,
     },
@@ -92,11 +121,12 @@ export async function sendQuickSms(input: QuickSendSmsInput) {
         where: { id: pending.id },
         data: {
           status: result.status || "sent",
-          providerId: result.sid,
+          providerId: input.idempotencyKey
+            ? `${result.sid}|idem:${input.idempotencyKey}`
+            : result.sid,
         },
       });
     } catch (persistErr) {
-      // Provider already accepted — never tell the client to retry a resend
       console.warn("[sendQuickSms] post-accept persist failed", persistErr);
     }
 
@@ -120,11 +150,12 @@ export async function sendQuickSms(input: QuickSendSmsInput) {
 
     return { ...result, trackingToken, trackingUrl: trackedUrl, messageId: pending.id };
   } catch (err) {
-    // Only mark failed when provider did not accept
-    await prisma.message.update({
-      where: { id: pending.id },
-      data: { status: "failed" },
-    }).catch(() => undefined);
+    await prisma.message
+      .update({
+        where: { id: pending.id },
+        data: { status: "failed" },
+      })
+      .catch(() => undefined);
     throw err;
   }
 }

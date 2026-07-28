@@ -36,6 +36,10 @@ export async function POST(request: Request) {
       campaignId: body.campaignId,
       customerName: body.customerName,
       destinationUrl: body.destinationUrl,
+      idempotencyKey:
+        request.headers.get("idempotency-key") ||
+        request.headers.get("x-idempotency-key") ||
+        undefined,
     });
 
     return NextResponse.json({ data: result });
