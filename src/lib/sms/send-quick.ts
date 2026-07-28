@@ -31,24 +31,31 @@ export async function sendQuickSms(input: QuickSendSmsInput) {
     const prior = await prisma.message.findUnique({
       where: { idempotencyKey: input.idempotencyKey },
     });
-    if (prior && prior.status !== "failed") {
-      return {
-        sid: prior.providerId?.startsWith("idem:") || prior.providerId?.startsWith("pending:")
-          ? prior.id
-          : prior.providerId || prior.id,
-        status: prior.status,
-        trackingToken: prior.trackingToken,
-        trackingUrl: prior.trackingToken ? `${getAppBaseUrl()}/r/${prior.trackingToken}` : undefined,
-        messageId: prior.id,
-        idempotentReplay: true,
-      };
-    }
-    // Failed prior: free the unique key so a real retry can proceed
-    if (prior?.status === "failed") {
-      await prisma.message.update({
-        where: { id: prior.id },
-        data: { idempotencyKey: null },
-      });
+    if (prior) {
+      const staleMs = 10 * 60 * 1000;
+      const isStaleSending =
+        prior.status === "sending" &&
+        Date.now() - prior.createdAt.getTime() > staleMs &&
+        (prior.providerId?.startsWith("idem:") || prior.providerId?.startsWith("pending:"));
+
+      if (isStaleSending || prior.status === "failed") {
+        // Crash before provider / clear failure — free key and continue to a new attempt
+        await prisma.message.update({
+          where: { id: prior.id },
+          data: { idempotencyKey: null, status: prior.status === "sending" ? "failed" : prior.status },
+        });
+      } else if (prior.status !== "failed") {
+        return {
+          sid: prior.providerId?.startsWith("idem:") || prior.providerId?.startsWith("pending:")
+            ? prior.id
+            : prior.providerId || prior.id,
+          status: prior.status,
+          trackingToken: prior.trackingToken,
+          trackingUrl: prior.trackingToken ? `${getAppBaseUrl()}/r/${prior.trackingToken}` : undefined,
+          messageId: prior.id,
+          idempotentReplay: true,
+        };
+      }
     }
   }
 
