@@ -53,6 +53,21 @@ export async function enrollContactInCampaign(input: EnrollContactInput) {
     if (suppressed) {
       throw new Error("Email is on the suppression list");
     }
+
+    const dupeEmail = await prisma.campaignRecipient.findFirst({
+      where: {
+        campaignId: input.campaignId,
+        email,
+        workflowStatus: { notIn: ["completed", "stopped", "failed", "opted_out"] },
+      },
+    });
+    if (dupeEmail) {
+      throw new Error("Contact already enrolled in this campaign");
+    }
+  }
+
+  if (!phone && !email) {
+    throw new Error("phone or email is required to enroll");
   }
 
   const sequence = parseSequence(campaign.sequenceJson);
@@ -88,15 +103,23 @@ export async function enrollContactInCampaign(input: EnrollContactInput) {
     },
   });
 
-  if (campaign.status === "DRAFT" || campaign.status === "SCHEDULED") {
-    await prisma.campaign.update({
-      where: { id: campaign.id },
-      data: { status: "SENDING" },
-    });
+  if (campaign.status === "SENDING") {
+    // already active
+  } else if (campaign.status !== "DRAFT" && campaign.status !== "SCHEDULED" && campaign.status !== "PAUSED") {
+    // completed/canceled/failed — still allow enroll into historical? no — only active-ish
   }
 
-  if (workflowStatus === "in_progress") {
+  // Do NOT auto-activate DRAFT/SCHEDULED campaigns on enroll — caller must activate.
+  // Recipients wait until campaign is SENDING (scheduled activation handled by drain).
+
+  if (workflowStatus === "in_progress" && campaign.status === "SENDING") {
     await advanceRecipient(recipient.id);
+  } else if (workflowStatus === "in_progress" && campaign.status !== "SENDING") {
+    // Park until campaign is activated
+    await prisma.campaignRecipient.update({
+      where: { id: recipient.id },
+      data: { workflowStatus: "pending", nextActionAt: null },
+    });
   }
 
   return recipient;

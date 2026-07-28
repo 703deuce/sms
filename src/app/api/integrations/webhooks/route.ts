@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
-import { requireSession, jsonError } from "@/lib/api-auth";
+import { requireSession, resolveWorkspaceId, jsonError } from "@/lib/api-auth";
 import {
   createIntegrationWebhook,
   listIntegrationWebhooks,
@@ -32,7 +32,7 @@ export async function POST(request: Request) {
       endpointId?: string;
       workspaceId?: string;
     };
-    const workspaceId = body.workspaceId || auth.workspaceId;
+    const workspaceId = await resolveWorkspaceId(auth.session, body.workspaceId);
     const action = body.action || "create";
 
     if (action === "create") {

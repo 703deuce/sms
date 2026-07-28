@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { getPrisma } from "@/lib/db";
+import { decryptSecret } from "@/lib/messaging/crypto";
 import { getTwilioParentCredentials } from "@/lib/messaging/twilio-config";
 import { validateTwilioSignature } from "@/lib/messaging/twilio-client";
+import { markRecipientFact } from "@/lib/campaigns/sequence-runner";
 
 async function parseTwilioForm(request: Request) {
   const form = await request.formData();
@@ -12,12 +14,36 @@ async function parseTwilioForm(request: Request) {
   return params;
 }
 
+async function verify(request: Request, params: Record<string, string>) {
+  const signature = request.headers.get("x-twilio-signature") || "";
+  if (!signature) {
+    return !(process.env.TWILIO_MODE === "live" || process.env.MESSAGING_ADAPTER === "twilio");
+  }
+
+  const tokens: string[] = [];
+  const accountSid = params.AccountSid;
+  if (accountSid) {
+    const reg = await getPrisma().messagingRegistration.findFirst({
+      where: { subaccountSid: accountSid },
+    });
+    if (reg?.subaccountAuthTokenEnc) {
+      try {
+        tokens.push(decryptSecret(reg.subaccountAuthTokenEnc));
+      } catch {
+        // ignore
+      }
+    }
+  }
+  const parent = getTwilioParentCredentials().authToken;
+  if (parent) tokens.push(parent);
+  if (!tokens.length) return process.env.NODE_ENV !== "production";
+  return tokens.some((t) => validateTwilioSignature(t, signature, request.url, params));
+}
+
 export async function POST(request: Request) {
   try {
     const params = await parseTwilioForm(request);
-    const { authToken } = getTwilioParentCredentials();
-    const signature = request.headers.get("x-twilio-signature") || "";
-    if (authToken && signature && !validateTwilioSignature(authToken, signature, request.url, params)) {
+    if (!(await verify(request, params))) {
       return new NextResponse("Invalid signature", { status: 403 });
     }
 
@@ -30,20 +56,26 @@ export async function POST(request: Request) {
       where: { providerId: sid },
       data: { status },
     });
-    await prisma.campaignMessage.updateMany({
-      where: { providerId: sid },
-      data: {
-        status: ["delivered", "sent", "failed", "undelivered"].includes(status) ? status : status || "sent",
-      },
-    });
 
-    if (status === "delivered") {
-      const msg = await prisma.campaignMessage.findFirst({ where: { providerId: sid } });
-      if (msg) {
+    const campaignMsg = await prisma.campaignMessage.findFirst({ where: { providerId: sid } });
+    if (campaignMsg) {
+      const prev = campaignMsg.status;
+      await prisma.campaignMessage.update({
+        where: { id: campaignMsg.id },
+        data: {
+          status: ["delivered", "sent", "failed", "undelivered"].includes(status)
+            ? status
+            : status || campaignMsg.status,
+        },
+      });
+
+      // Idempotent delivered counter
+      if (status === "delivered" && prev !== "delivered") {
         await prisma.campaign.update({
-          where: { id: msg.campaignId },
+          where: { id: campaignMsg.campaignId },
           data: { delivered: { increment: 1 } },
         });
+        await markRecipientFact(campaignMsg.recipientId, "message_delivered", true);
       }
     }
 

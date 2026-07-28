@@ -49,10 +49,14 @@ export async function rotateIntegrationWebhook(workspaceId: string, endpointId: 
     where: { id: endpointId, workspaceId, revokedAt: null },
   });
   if (!existing) throw new Error("Webhook endpoint not found");
-  return getPrisma().integrationWebhookEndpoint.update({
+  const updated = await getPrisma().integrationWebhookEndpoint.update({
     where: { id: endpointId },
     data: { token: newToken(), rotatedAt: new Date(), active: true },
   });
+  return {
+    ...updated,
+    incomingUrl: `${getAppBaseUrl()}/api/integrations/webhooks/incoming/${updated.token}`,
+  };
 }
 
 export async function revokeIntegrationWebhook(workspaceId: string, endpointId: string) {
@@ -123,6 +127,10 @@ export async function processIncomingIntegrationWebhook(
       "customerName",
       "full_name",
     ]);
+
+    if (!phone && !email) {
+      throw new Error("Webhook payload must include phone or email");
+    }
 
     const recipient = await enrollContactInCampaign({
       workspaceId: endpoint.workspaceId,

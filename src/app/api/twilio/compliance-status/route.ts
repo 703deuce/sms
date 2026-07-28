@@ -5,7 +5,7 @@ import { appendRegistrationEvent } from "@/lib/messaging/store";
 
 /**
  * TrustHub / Brand status callbacks from Twilio.
- * Re-enqueues messaging_registration_advance for the matching workspace.
+ * Re-enqueues messaging_registration_advance for the matching workspace (wakes deferred jobs).
  */
 export async function POST(request: Request) {
   try {
@@ -52,7 +52,8 @@ export async function POST(request: Request) {
         message: payload.Status || payload.BrandStatus || "update",
         payload,
       });
-      await enqueueMessagingRegistrationAdvance(reg.workspaceId);
+      // wake=true via deferMs=0 in enqueueMessagingRegistrationAdvance
+      await enqueueMessagingRegistrationAdvance(reg.workspaceId, 0);
     }
 
     return NextResponse.json({ ok: true, matched: Boolean(reg) });

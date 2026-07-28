@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getPrisma } from "@/lib/db";
+import { decryptSecret } from "@/lib/messaging/crypto";
 import { getTwilioParentCredentials } from "@/lib/messaging/twilio-config";
 import { validateTwilioSignature } from "@/lib/messaging/twilio-client";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
@@ -13,39 +14,93 @@ async function parseTwilioForm(request: Request) {
   return params;
 }
 
-function verifyOptional(request: Request, params: Record<string, string>) {
-  const { authToken } = getTwilioParentCredentials();
+async function resolveInboundContext(toRaw: string, accountSid?: string) {
+  const prisma = getPrisma();
+  let to = toRaw;
+  try {
+    to = normalizeE164(toRaw);
+  } catch {
+    // keep raw
+  }
+
+  const phone = await prisma.phoneNumber.findFirst({
+    where: {
+      OR: [{ e164: to }, { e164: toRaw }],
+      status: "Active",
+    },
+  });
+  if (phone) {
+    const reg = await prisma.messagingRegistration.findUnique({ where: { workspaceId: phone.workspaceId } });
+    return { workspaceId: phone.workspaceId, phoneE164: phone.e164, registration: reg };
+  }
+
+  const reg =
+    (await prisma.messagingRegistration.findFirst({
+      where: { OR: [{ phoneE164: to }, { phoneE164: toRaw }], phoneAttached: true },
+    })) ||
+    (accountSid
+      ? await prisma.messagingRegistration.findFirst({ where: { subaccountSid: accountSid } })
+      : null);
+
+  if (reg?.phoneE164) {
+    return { workspaceId: reg.workspaceId, phoneE164: reg.phoneE164, registration: reg };
+  }
+  return null;
+}
+
+async function verifySignature(
+  request: Request,
+  params: Record<string, string>,
+  registration: { subaccountAuthTokenEnc: string | null } | null | undefined,
+) {
   const signature = request.headers.get("x-twilio-signature") || "";
-  if (!authToken || !signature) return true; // allow in mock/dev
-  return validateTwilioSignature(authToken, signature, request.url, params);
+  if (!signature) {
+    // Allow unsigned in non-live/dev
+    if (process.env.TWILIO_MODE === "live" || process.env.MESSAGING_ADAPTER === "twilio") {
+      return false;
+    }
+    return true;
+  }
+
+  const tokens: string[] = [];
+  if (registration?.subaccountAuthTokenEnc) {
+    try {
+      tokens.push(decryptSecret(registration.subaccountAuthTokenEnc));
+    } catch {
+      // ignore decrypt errors
+    }
+  }
+  const parent = getTwilioParentCredentials().authToken;
+  if (parent) tokens.push(parent);
+
+  if (!tokens.length) return process.env.NODE_ENV !== "production";
+
+  return tokens.some((token) => validateTwilioSignature(token, signature, request.url, params));
 }
 
 export async function POST(request: Request) {
   try {
     const params = await parseTwilioForm(request);
-    if (!verifyOptional(request, params)) {
-      return new NextResponse("Invalid signature", { status: 403 });
-    }
-
     const from = params.From ? normalizeE164(params.From) : "";
     const to = params.To || "";
     const body = (params.Body || "").trim();
     const upper = body.toUpperCase();
 
-    const prisma = getPrisma();
-    const phone = await prisma.phoneNumber.findFirst({
-      where: { e164: to, status: "Active" },
-    });
+    const ctx = await resolveInboundContext(to, params.AccountSid);
+    if (!(await verifySignature(request, params, ctx?.registration))) {
+      return new NextResponse("Invalid signature", { status: 403 });
+    }
 
-    // STOP / START / HELP keywords
-    if (phone && from && ["STOP", "STOPALL", "UNSUBSCRIBE", "CANCEL", "END", "QUIT"].includes(upper)) {
+    const prisma = getPrisma();
+
+    if (ctx && from && ["STOP", "STOPALL", "UNSUBSCRIBE", "CANCEL", "END", "QUIT"].includes(upper)) {
       const existing = await prisma.suppression.findFirst({
-        where: { workspaceId: phone.workspaceId, phone: from },
+        where: { workspaceId: ctx.workspaceId, phone: from },
       });
       if (!existing) {
         await prisma.suppression.create({
           data: {
-            workspaceId: phone.workspaceId,
+            workspaceId: ctx.workspaceId,
             phone: from,
             reason: "STOP",
             source: "inbound_sms",
@@ -54,13 +109,13 @@ export async function POST(request: Request) {
       }
 
       await prisma.contact.updateMany({
-        where: { workspaceId: phone.workspaceId, phone: from },
+        where: { workspaceId: ctx.workspaceId, phone: from },
         data: { status: "UNSUBSCRIBED" },
       });
 
       const recipients = await prisma.campaignRecipient.findMany({
         where: {
-          workspaceId: phone.workspaceId,
+          workspaceId: ctx.workspaceId,
           phone: from,
           workflowStatus: { in: ["pending", "scheduled", "in_progress", "waiting"] },
         },
@@ -87,30 +142,40 @@ export async function POST(request: Request) {
         });
       }
 
-      const twiml = `<?xml version="1.0" encoding="UTF-8"?><Response><Message>You are unsubscribed and will no longer receive messages. Reply START to re-subscribe.</Message></Response>`;
+      const stopMsg =
+        ctx.registration?.stopMessage ||
+        "You are unsubscribed and will no longer receive messages. Reply START to re-subscribe.";
+      const twiml = `<?xml version="1.0" encoding="UTF-8"?><Response><Message>${escapeXml(stopMsg)}</Message></Response>`;
       return new NextResponse(twiml, { headers: { "Content-Type": "text/xml" } });
     }
 
-    if (phone && from && ["START", "YES", "UNSTOP"].includes(upper)) {
+    if (ctx && from && ["START", "YES", "UNSTOP"].includes(upper)) {
       await prisma.suppression.deleteMany({
-        where: { workspaceId: phone.workspaceId, phone: from },
+        where: { workspaceId: ctx.workspaceId, phone: from },
       });
       await prisma.contact.updateMany({
-        where: { workspaceId: phone.workspaceId, phone: from },
+        where: { workspaceId: ctx.workspaceId, phone: from },
         data: { status: "SUBSCRIBED" },
       });
       const twiml = `<?xml version="1.0" encoding="UTF-8"?><Response><Message>You have been re-subscribed. Reply STOP to opt out.</Message></Response>`;
       return new NextResponse(twiml, { headers: { "Content-Type": "text/xml" } });
     }
 
-    if (phone && from) {
-      // Attach inbound to inbox conversation when possible
+    if (ctx && from && ["HELP", "INFO"].includes(upper)) {
+      const help =
+        ctx.registration?.helpMessage ||
+        `${ctx.registration?.legalBusinessName || "Support"}: For help contact ${ctx.registration?.contactEmail || "support"}. Reply STOP to opt out. Msg&data rates may apply.`;
+      const twiml = `<?xml version="1.0" encoding="UTF-8"?><Response><Message>${escapeXml(help)}</Message></Response>`;
+      return new NextResponse(twiml, { headers: { "Content-Type": "text/xml" } });
+    }
+
+    if (ctx && from) {
       let contact = await prisma.contact.findUnique({
-        where: { workspaceId_phone: { workspaceId: phone.workspaceId, phone: from } },
+        where: { workspaceId_phone: { workspaceId: ctx.workspaceId, phone: from } },
       });
       if (!contact) {
         contact = await prisma.contact.create({
-          data: { workspaceId: phone.workspaceId, phone: from, lastReply: new Date() },
+          data: { workspaceId: ctx.workspaceId, phone: from, lastReply: new Date() },
         });
       } else {
         await prisma.contact.update({
@@ -120,11 +185,11 @@ export async function POST(request: Request) {
       }
 
       let conversation = await prisma.conversation.findFirst({
-        where: { workspaceId: phone.workspaceId, contactId: contact.id, status: { not: "CLOSED" } },
+        where: { workspaceId: ctx.workspaceId, contactId: contact.id, status: { not: "CLOSED" } },
       });
       if (!conversation) {
         conversation = await prisma.conversation.create({
-          data: { workspaceId: phone.workspaceId, contactId: contact.id, status: "OPEN", unread: true },
+          data: { workspaceId: ctx.workspaceId, contactId: contact.id, status: "OPEN", unread: true },
         });
       } else {
         await prisma.conversation.update({
@@ -140,6 +205,23 @@ export async function POST(request: Request) {
           body: body || "(empty)",
         },
       });
+
+      // Mark replied fact on active recipients
+      const active = await prisma.campaignRecipient.findMany({
+        where: {
+          workspaceId: ctx.workspaceId,
+          phone: from,
+          workflowStatus: { in: ["pending", "scheduled", "in_progress", "waiting"] },
+        },
+      });
+      for (const r of active) {
+        const prev =
+          r.metadata && typeof r.metadata === "object" ? (r.metadata as Record<string, unknown>) : {};
+        await prisma.campaignRecipient.update({
+          where: { id: r.id },
+          data: { metadata: { ...prev, customer_replied: true } },
+        });
+      }
     }
 
     return new NextResponse(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`, {
@@ -151,4 +233,13 @@ export async function POST(request: Request) {
       headers: { "Content-Type": "text/xml" },
     });
   }
+}
+
+function escapeXml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
 }

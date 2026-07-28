@@ -58,10 +58,20 @@ export type RegistrationPublic = MessagingRegistration & {
 
 export class JobDeferredError extends Error {
   deferMs: number;
-  constructor(message: string, deferMs = 15 * 60 * 1000) {
+  /** When true, do not increment/consume maxAttempts (Twilio review polling). */
+  soft: boolean;
+  constructor(message: string, deferMs = 15 * 60 * 1000, soft = true) {
     super(message);
     this.name = "JobDeferredError";
     this.deferMs = deferMs;
+    this.soft = soft;
+  }
+}
+
+export class JobFailedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "JobFailedError";
   }
 }
 

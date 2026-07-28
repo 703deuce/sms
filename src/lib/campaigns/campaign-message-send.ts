@@ -4,7 +4,7 @@ import { sendTransactionalEmail } from "@/lib/email/brevo";
 import { sendViaRegistration } from "@/lib/messaging/registration-processor";
 import { isMessagingReady } from "@/lib/messaging/status";
 import { getRegistrationByWorkspace } from "@/lib/messaging/store";
-import { tryAdvanceRecipientAfterSend } from "./sequence-runner";
+import { markRecipientFact, tryAdvanceRecipientAfterSend } from "./sequence-runner";
 
 async function claimMessage(id: string) {
   const result = await getPrisma().campaignMessage.updateMany({
@@ -12,6 +12,14 @@ async function claimMessage(id: string) {
     data: { status: "sending" },
   });
   return result.count === 1;
+}
+
+function inSendWindow(now: Date, startHour: number | null | undefined, endHour: number | null | undefined) {
+  if (startHour == null || endHour == null) return true;
+  const hour = now.getUTCHours();
+  if (startHour === endHour) return true;
+  if (startHour < endHour) return hour >= startHour && hour < endHour;
+  return hour >= startHour || hour < endHour;
 }
 
 export async function sendCampaignMessageById(messageId: string) {
@@ -24,6 +32,58 @@ export async function sendCampaignMessageById(messageId: string) {
 
   if (message.status !== "queued" && message.status !== "sending") {
     return { skipped: true, status: message.status };
+  }
+
+  // Campaign status gates
+  if (message.campaign.status === "PAUSED" || message.campaign.status === "CANCELED" || message.campaign.status === "DRAFT") {
+    await prisma.campaignMessage.update({
+      where: { id: messageId },
+      data: { status: "queued", error: `campaign_${message.campaign.status.toLowerCase()}` },
+    });
+    return { deferred: true, reason: "campaign_not_active" };
+  }
+
+  if (
+    message.campaign.status === "SCHEDULED" &&
+    message.campaign.scheduledAt &&
+    message.campaign.scheduledAt > new Date()
+  ) {
+    await prisma.campaignMessage.update({
+      where: { id: messageId },
+      data: { status: "queued", scheduledFor: message.campaign.scheduledAt, error: "waiting_for_schedule" },
+    });
+    return { deferred: true, reason: "scheduled" };
+  }
+
+  const now = new Date();
+  if (!inSendWindow(now, message.campaign.sendWindowStart, message.campaign.sendWindowEnd)) {
+    // Push to next hour boundary roughly
+    const next = new Date(now.getTime() + 60 * 60 * 1000);
+    await prisma.campaignMessage.update({
+      where: { id: messageId },
+      data: { status: "queued", scheduledFor: next, error: "outside_send_window" },
+    });
+    return { deferred: true, reason: "send_window" };
+  }
+
+  if (message.campaign.dailySendLimit != null) {
+    const dayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    const sentToday = await prisma.campaignMessage.count({
+      where: {
+        campaignId: message.campaignId,
+        status: { in: ["sent", "delivered", "sending", "clicked"] },
+        sentAt: { gte: dayStart },
+        id: { not: messageId },
+      },
+    });
+    if (sentToday >= message.campaign.dailySendLimit) {
+      const tomorrow = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+      await prisma.campaignMessage.update({
+        where: { id: messageId },
+        data: { status: "queued", scheduledFor: tomorrow, error: "daily_limit" },
+      });
+      return { deferred: true, reason: "daily_limit" };
+    }
   }
 
   if (message.status === "queued") {
@@ -40,7 +100,23 @@ export async function sendCampaignMessageById(messageId: string) {
     throw new Error(entitlement.error);
   }
 
+  // Contact consent / status gate for SMS
   if (message.channel === "sms" && message.to) {
+    const contact = await prisma.contact.findUnique({
+      where: { workspaceId_phone: { workspaceId: message.workspaceId, phone: message.to } },
+    });
+    if (contact && (contact.status === "UNSUBSCRIBED" || contact.status === "BLOCKED")) {
+      await prisma.campaignMessage.update({
+        where: { id: messageId },
+        data: { status: "opted_out", error: `contact_${contact.status.toLowerCase()}` },
+      });
+      await prisma.campaignRecipient.update({
+        where: { id: message.recipientId },
+        data: { workflowStatus: "opted_out", stopReason: contact.status, completedAt: new Date() },
+      });
+      return { optedOut: true };
+    }
+
     const suppressed = await prisma.suppression.findFirst({
       where: { workspaceId: message.workspaceId, phone: message.to },
     });
@@ -72,6 +148,14 @@ export async function sendCampaignMessageById(messageId: string) {
       if (result.status === "failed") {
         throw new Error(result.error || "Email send failed");
       }
+      // In live messaging mode, refuse silent stub success for email
+      if (
+        result.provider === "stub" &&
+        (process.env.TWILIO_MODE === "live" || process.env.MESSAGING_ADAPTER === "twilio") &&
+        process.env.ALLOW_EMAIL_STUB !== "1"
+      ) {
+        throw new Error("BREVO_API_KEY is required to send campaign email in live mode");
+      }
       await prisma.campaignMessage.update({
         where: { id: messageId },
         data: {
@@ -101,6 +185,7 @@ export async function sendCampaignMessageById(messageId: string) {
       data: { sent: { increment: 1 } },
     });
 
+    await markRecipientFact(message.recipientId, "message_delivered", true);
     await tryAdvanceRecipientAfterSend(message.recipientId);
     return { ok: true };
   } catch (err) {

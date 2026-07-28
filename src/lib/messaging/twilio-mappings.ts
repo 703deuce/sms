@@ -81,6 +81,16 @@ export function mapUseCase(value: string) {
   return USE_CASE_MAP[key] || value.toUpperCase().replace(/\s+/g, "_");
 }
 
+/** Twilio A2P messaging profile company_type enum. */
+export function mapA2pCompanyType(businessType: string): string {
+  const mapped = mapBusinessType(businessType).toLowerCase();
+  if (mapped.includes("sole")) return "sole_proprietor";
+  if (mapped.includes("non-profit") || mapped.includes("nonprofit")) return "non_profit";
+  if (mapped.includes("public")) return "public";
+  if (mapped.includes("government")) return "government";
+  return "private";
+}
+
 export function normalizeE164(phone: string): string {
   const digits = phone.replace(/\D/g, "");
   if (phone.trim().startsWith("+") && digits.length >= 10) return `+${digits}`;

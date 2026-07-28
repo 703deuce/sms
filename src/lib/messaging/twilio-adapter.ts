@@ -1,7 +1,7 @@
 import type { MessagingRegistration } from "@prisma/client";
 import { getLiveParentClient, getSubaccountTwilioClient } from "./twilio-client";
 import { assertLiveTwilioConfigured, getStatusEmail, getWebhookUrls, TRUSTHUB_POLICIES } from "./twilio-config";
-import { mapBusinessType, mapIndustry, mapUseCase } from "./twilio-mappings";
+import { mapBusinessType, mapIndustry, mapUseCase, mapA2pCompanyType } from "./twilio-mappings";
 import type { NumberSearchResult } from "./types";
 import { decryptSecret } from "./crypto";
 
@@ -127,7 +127,7 @@ export const twilioAdapter = {
     const supportingDoc = await client.trusthub.v1.supportingDocuments.create({
       friendlyName: `${reg.legalBusinessName} Address`,
       type: "customer_profile_address",
-      attributes: { address_sids: address.sid },
+      attributes: { address_sids: [address.sid] },
     });
 
     const profileSid = reg.secondaryProfileSid;
@@ -171,7 +171,7 @@ export const twilioAdapter = {
         friendlyName: `${reg.legalBusinessName} A2P Messaging Profile`,
         type: "us_a2p_messaging_profile_information",
         attributes: {
-          company_type: mapBusinessType(reg.businessType || "llc").includes("Non-profit") ? "non_profit" : "private",
+          company_type: mapA2pCompanyType(reg.businessType || "llc"),
         },
       });
 
@@ -216,6 +216,20 @@ export const twilioAdapter = {
     const client = requireSubaccount(reg);
     const brand = await client.messaging.v1.brandRegistrations(reg.brandSid).fetch();
     return { sid: brand.sid, status: brand.status };
+  },
+
+  async fetchSecondaryProfileStatus(reg: MessagingRegistration) {
+    if (!reg.secondaryProfileSid) throw new Error("Secondary profile SID missing");
+    const client = requireSubaccount(reg);
+    const profile = await client.trusthub.v1.customerProfiles(reg.secondaryProfileSid).fetch();
+    return { sid: profile.sid, status: profile.status };
+  },
+
+  async fetchTrustProductStatus(reg: MessagingRegistration) {
+    if (!reg.trustProductSid) throw new Error("Trust product SID missing");
+    const client = requireSubaccount(reg);
+    const trust = await client.trusthub.v1.trustProducts(reg.trustProductSid).fetch();
+    return { sid: trust.sid, status: trust.status };
   },
 
   async createMessagingService(reg: MessagingRegistration, friendlyName: string) {
@@ -282,7 +296,8 @@ export const twilioAdapter = {
       usAppToPersonUsecase: mapUseCase(reg.useCase || "mixed"),
       hasEmbeddedLinks: true,
       hasEmbeddedPhone: true,
-      optInMessage: undefined,
+      optInMessage:
+        "You are opted in to messages from this business. Reply STOP to unsubscribe. Msg&data rates may apply.",
       optOutMessage: reg.stopMessage || "You are unsubscribed and will no longer receive messages. Reply START to re-subscribe.",
       helpMessage:
         reg.helpMessage ||

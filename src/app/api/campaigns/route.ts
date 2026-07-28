@@ -1,9 +1,10 @@
 import type { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
-import { requireSession, jsonError } from "@/lib/api-auth";
+import { requireSession, resolveWorkspaceId, jsonError } from "@/lib/api-auth";
 import { getPrisma } from "@/lib/db";
 import { enrollContactInCampaign, validateBulkRecipients } from "@/lib/campaigns/enroll-campaign";
 import { defaultSmsEmailSequence, parseSequence } from "@/lib/campaigns/sequence-engine";
+import { advanceRecipient } from "@/lib/campaigns/sequence-runner";
 
 export async function GET() {
   try {
@@ -35,12 +36,14 @@ export async function POST(request: Request) {
       sequenceJson?: unknown;
       successMode?: string;
       dailySendLimit?: number;
+      sendWindowStart?: number;
+      sendWindowEnd?: number;
       scheduledAt?: string;
       recipients?: Array<{ phone?: string; email?: string; displayName?: string }>;
       activate?: boolean;
     };
 
-    const workspaceId = body.workspaceId || auth.workspaceId;
+    const workspaceId = await resolveWorkspaceId(auth.session, body.workspaceId);
     const name = body.name?.trim();
     const message = (body.message || body.body || "").trim();
     if (!name || !message) {
@@ -63,6 +66,8 @@ export async function POST(request: Request) {
         sequenceJson: sequenceJson as Prisma.InputJsonValue,
         successMode: body.successMode || "click",
         dailySendLimit: body.dailySendLimit,
+        sendWindowStart: body.sendWindowStart,
+        sendWindowEnd: body.sendWindowEnd,
         createdBy: auth.session.email,
       },
     });
@@ -90,6 +95,72 @@ export async function POST(request: Request) {
       { data: { campaign, enrolledCount: enrolled.length, rejected } },
       { status: 201 },
     );
+  } catch (err) {
+    return jsonError(err, 400);
+  }
+}
+
+/** Activate / pause / resume / cancel a campaign. */
+export async function PATCH(request: Request) {
+  try {
+    const auth = await requireSession();
+    if ("error" in auth) return auth.error;
+
+    const body = (await request.json()) as {
+      workspaceId?: string;
+      campaignId?: string;
+      action?: "activate" | "pause" | "resume" | "cancel";
+    };
+    const workspaceId = await resolveWorkspaceId(auth.session, body.workspaceId);
+    if (!body.campaignId || !body.action) {
+      return NextResponse.json({ error: "campaignId and action required" }, { status: 400 });
+    }
+
+    const campaign = await getPrisma().campaign.findFirst({
+      where: { id: body.campaignId, workspaceId },
+    });
+    if (!campaign) return NextResponse.json({ error: "Campaign not found" }, { status: 404 });
+
+    let status = campaign.status;
+    if (body.action === "activate" || body.action === "resume") status = "SENDING";
+    if (body.action === "pause") status = "PAUSED";
+    if (body.action === "cancel") status = "CANCELED";
+
+    const updated = await getPrisma().campaign.update({
+      where: { id: campaign.id },
+      data: { status },
+    });
+
+    // Kick pending recipients when activating
+    if (status === "SENDING") {
+      const pending = await getPrisma().campaignRecipient.findMany({
+        where: { campaignId: campaign.id, workflowStatus: "pending" },
+        take: 200,
+      });
+      for (const r of pending) {
+        await getPrisma().campaignRecipient.update({
+          where: { id: r.id },
+          data: { workflowStatus: "in_progress" },
+        });
+        await advanceRecipient(r.id);
+      }
+    }
+
+    if (status === "CANCELED") {
+      await getPrisma().campaignMessage.updateMany({
+        where: { campaignId: campaign.id, status: "queued" },
+        data: { status: "cancelled", error: "campaign_canceled" },
+      });
+      await getPrisma().campaignRecipient.updateMany({
+        where: {
+          campaignId: campaign.id,
+          workflowStatus: { in: ["pending", "scheduled", "in_progress", "waiting"] },
+        },
+        data: { workflowStatus: "stopped", stopReason: "campaign_canceled", completedAt: new Date() },
+      });
+    }
+
+    return NextResponse.json({ data: updated });
   } catch (err) {
     return jsonError(err, 400);
   }

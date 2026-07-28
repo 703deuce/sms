@@ -24,7 +24,9 @@ export async function startBullmqWorkers() {
           await handleJob(job.name, (job.data || {}) as Record<string, unknown>);
         } catch (err) {
           if (err instanceof JobDeferredError) {
-            throw err; // BullMQ will retry per attempts; delay handled by job opts when enqueued
+            // Re-delay with Twilio poll spacing instead of generic backoff
+            await job.moveToDelayed(Date.now() + err.deferMs, job.token);
+            return;
           }
           throw err;
         }

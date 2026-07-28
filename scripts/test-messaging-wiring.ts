@@ -188,7 +188,6 @@ async function main() {
       if (!queued[0].body.includes("/r/")) throw new Error("campaign body missing tracking link");
       if (!queued[0].trackingToken) throw new Error("missing tracking token");
 
-      // Process send jobs
       await processDueJobs(20);
       const sent = await prisma.campaignMessage.findUnique({ where: { id: queued[0].id } });
       if (sent?.status !== "sent") throw new Error(`expected sent got ${sent?.status}`);
@@ -196,6 +195,39 @@ async function main() {
       ok("campaign enroll + send via job drain");
     } catch (e) {
       fail("campaign enroll + send via job drain", e);
+    }
+
+    // send → end completes without click
+    try {
+      const campaign = await prisma.campaign.create({
+        data: {
+          workspaceId,
+          name: "Send End Campaign",
+          type: "Sequence",
+          audience: "Test",
+          body: "Bye {{tracking_link}}",
+          status: "SENDING",
+          sequenceJson: [
+            { step_key: "sms_1", step_type: "send_sms", config: {} },
+            { step_key: "end", step_type: "end", config: {} },
+          ],
+          successMode: "manual",
+        },
+      });
+      const recipient = await enrollContactInCampaign({
+        workspaceId,
+        campaignId: campaign.id,
+        phone: "+14155550702",
+        displayName: "Ender",
+      });
+      await processDueJobs(20);
+      const after = await prisma.campaignRecipient.findUnique({ where: { id: recipient.id } });
+      if (after?.workflowStatus !== "completed") {
+        throw new Error(`expected completed got ${after?.workflowStatus} step=${after?.currentStep}`);
+      }
+      ok("send → end completes recipient");
+    } catch (e) {
+      fail("send → end completes recipient", e);
     }
 
     // Click tracking completes recipient
@@ -267,8 +299,19 @@ async function main() {
       });
       if (!suppressed) throw new Error("suppression missing");
       ok("STOP opts out recipient + suppression");
+
+      const helpForm = new FormData();
+      helpForm.set("From", "+14155550778");
+      helpForm.set("To", regNow.phoneE164!);
+      helpForm.set("Body", "HELP");
+      const helpRes = await POST(
+        new Request("http://localhost/api/twilio/inbound", { method: "POST", body: helpForm }),
+      );
+      const helpXml = await helpRes.text();
+      if (!/Message/.test(helpXml)) throw new Error(`HELP response unexpected: ${helpXml}`);
+      ok("HELP replies with message");
     } catch (e) {
-      fail("STOP opts out recipient + suppression", e);
+      fail("STOP/HELP inbound", e);
     }
 
     // Integration webhook enroll + idempotency
@@ -280,8 +323,11 @@ async function main() {
           type: "Sequence",
           audience: "Zapier",
           body: "Thanks {{name}} {{tracking_link}}",
-          status: "DRAFT",
-          sequenceJson: [{ step_key: "sms_1", step_type: "send_sms", config: {} }, { step_key: "end", step_type: "end", config: {} }],
+          status: "SENDING",
+          sequenceJson: [
+            { step_key: "sms_1", step_type: "send_sms", config: {} },
+            { step_key: "end", step_type: "end", config: {} },
+          ],
         },
       });
       const endpoint = await createIntegrationWebhook({

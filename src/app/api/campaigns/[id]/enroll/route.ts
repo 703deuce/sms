@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireSession, jsonError } from "@/lib/api-auth";
+import { requireSession, resolveWorkspaceId, jsonError } from "@/lib/api-auth";
 import { enrollContactInCampaign } from "@/lib/campaigns/enroll-campaign";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -25,7 +25,7 @@ export async function POST(request: Request, ctx: Ctx) {
       }>;
     };
 
-    const workspaceId = body.workspaceId || auth.workspaceId;
+    const workspaceId = await resolveWorkspaceId(auth.session, body.workspaceId);
     const list = body.recipients?.length
       ? body.recipients
       : [{ phone: body.phone, email: body.email, displayName: body.displayName, contactId: body.contactId }];

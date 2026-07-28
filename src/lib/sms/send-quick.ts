@@ -33,6 +33,13 @@ export async function sendQuickSms(input: QuickSendSmsInput) {
     throw new Error("Recipient is suppressed (STOP / do-not-contact)");
   }
 
+  const contact = await prisma.contact.findUnique({
+    where: { workspaceId_phone: { workspaceId: input.workspaceId, phone: to } },
+  });
+  if (contact && (contact.status === "UNSUBSCRIBED" || contact.status === "BLOCKED")) {
+    throw new Error(`Recipient contact status is ${contact.status}`);
+  }
+
   const reg = await getRegistrationByWorkspace(input.workspaceId);
   if (!isMessagingReady(reg)) {
     throw new Error(

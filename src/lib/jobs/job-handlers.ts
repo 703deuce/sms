@@ -1,4 +1,4 @@
-import { JobDeferredError } from "@/lib/messaging/types";
+import { JobDeferredError, JobFailedError } from "@/lib/messaging/types";
 import { claimDueJobs, completeJob, enqueueJob, failJob } from "@/lib/messaging/enqueue-advance";
 import { advanceMessagingRegistration } from "@/lib/messaging/registration-processor";
 import { processCampaignSendBatch } from "@/lib/campaigns/campaign-processor";
@@ -28,8 +28,7 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
 
 /** Drain due DB jobs (used by cron `/api/jobs/process` and worker). */
 export async function processDueJobs(limit = 25) {
-  // Ensure a per-minute campaign drain exists
-  const minuteKey = new Date().toISOString().slice(0, 16); // YYYY-MM-DDTHH:MM
+  const minuteKey = new Date().toISOString().slice(0, 16);
   await enqueueJob({
     jobType: "campaign_send_batch",
     queueName: "review-campaign",
@@ -37,20 +36,31 @@ export async function processDueJobs(limit = 25) {
     idempotencyKey: `campaign-send-batch:${minuteKey}`,
   });
 
-  const claimed = await claimDueJobs(limit);
   const results: Array<{ id: string; jobType: string; ok: boolean; error?: string }> = [];
 
-  for (const job of claimed) {
-    try {
-      const payload = (job.payload || {}) as Record<string, unknown>;
-      await handleJob(job.jobType, payload);
-      await completeJob(job.id);
-      results.push({ id: job.id, jobType: job.jobType, ok: true });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      const deferMs = err instanceof JobDeferredError ? err.deferMs : undefined;
-      await failJob(job.id, message, deferMs);
-      results.push({ id: job.id, jobType: job.jobType, ok: false, error: message });
+  // Multiple rounds so campaign_send_batch can enqueue sends that we drain in the same tick
+  for (let round = 0; round < 4; round += 1) {
+    const claimed = await claimDueJobs(limit);
+    if (!claimed.length) break;
+
+    for (const job of claimed) {
+      try {
+        const payload = (job.payload || {}) as Record<string, unknown>;
+        await handleJob(job.jobType, payload);
+        await completeJob(job.id);
+        results.push({ id: job.id, jobType: job.jobType, ok: true });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        if (err instanceof JobFailedError) {
+          await failJob(job.id, message);
+          results.push({ id: job.id, jobType: job.jobType, ok: false, error: message });
+          continue;
+        }
+        const deferMs = err instanceof JobDeferredError ? err.deferMs : undefined;
+        const soft = err instanceof JobDeferredError ? err.soft : false;
+        await failJob(job.id, message, deferMs, soft);
+        results.push({ id: job.id, jobType: job.jobType, ok: false, error: message });
+      }
     }
   }
 

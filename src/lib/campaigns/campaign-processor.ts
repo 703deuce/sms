@@ -9,7 +9,6 @@ function inSendWindow(now: Date, startHour: number | null | undefined, endHour: 
   const hour = now.getUTCHours();
   if (startHour === endHour) return true;
   if (startHour < endHour) return hour >= startHour && hour < endHour;
-  // wraps midnight
   return hour >= startHour || hour < endHour;
 }
 
@@ -19,11 +18,20 @@ export async function enqueueDueCampaignMessages() {
   const now = new Date();
   const dayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
 
+  // Activate due scheduled campaigns
+  await prisma.campaign.updateMany({
+    where: {
+      status: "SCHEDULED",
+      OR: [{ scheduledAt: null }, { scheduledAt: { lte: now } }],
+    },
+    data: { status: "SENDING" },
+  });
+
   const due = await prisma.campaignMessage.findMany({
     where: {
       status: "queued",
       scheduledFor: { lte: now },
-      campaign: { status: { in: ["SENDING", "SCHEDULED"] } },
+      campaign: { status: "SENDING" },
     },
     take: SEND_BATCH * 2,
     orderBy: { scheduledFor: "asc" },

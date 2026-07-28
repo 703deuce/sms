@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireSession, jsonError } from "@/lib/api-auth";
+import { requireSession, resolveWorkspaceId, jsonError } from "@/lib/api-auth";
 import { sendQuickSms } from "@/lib/sms/send-quick";
 
 export async function POST(request: Request) {
@@ -16,9 +16,11 @@ export async function POST(request: Request) {
       customMessage?: string;
       from?: string;
       campaignId?: string;
+      customerName?: string;
+      destinationUrl?: string;
     };
 
-    const workspaceId = body.workspaceId || auth.workspaceId;
+    const workspaceId = await resolveWorkspaceId(auth.session, body.workspaceId);
     const to = body.to || body.customerPhone;
     const message = body.message || body.body || body.customMessage;
 
@@ -32,6 +34,8 @@ export async function POST(request: Request) {
       body: message,
       from: body.from,
       campaignId: body.campaignId,
+      customerName: body.customerName,
+      destinationUrl: body.destinationUrl,
     });
 
     return NextResponse.json({ data: result });

@@ -94,14 +94,15 @@ export const messagingOnboarding = {
 
   async saveBusiness(workspaceId: string, input: BusinessDetailsInput) {
     const data = businessSchema.parse(input);
-    await ensureRegistrationRow(workspaceId);
+    const existing = await ensureRegistrationRow(workspaceId);
     const phone = normalizeE164(data.contactPhone);
+    const keepReady = existing.overallStatus === "ready" && existing.messagingEnabled;
     const reg = await updateRegistration(workspaceId, {
       ...data,
       contactPhone: phone,
       country: data.country || "US",
-      profileStatus: "action_required",
-      overallStatus: "action_required",
+      profileStatus: keepReady ? existing.profileStatus : "action_required",
+      overallStatus: keepReady ? "ready" : "action_required",
     });
     await appendRegistrationEvent({
       workspaceId,
@@ -114,12 +115,13 @@ export const messagingOnboarding = {
 
   async saveUseCase(workspaceId: string, input: UseCaseInput) {
     const data = useCaseSchema.parse(input);
-    await ensureRegistrationRow(workspaceId);
+    const existing = await ensureRegistrationRow(workspaceId);
+    const keepReady = existing.overallStatus === "ready" && existing.messagingEnabled;
     const reg = await updateRegistration(workspaceId, {
       ...data,
       sampleMessages: data.sampleMessages,
-      campaignStatus: "action_required",
-      overallStatus: "action_required",
+      campaignStatus: keepReady ? existing.campaignStatus : "action_required",
+      overallStatus: keepReady ? "ready" : "action_required",
     });
     await appendRegistrationEvent({
       workspaceId,

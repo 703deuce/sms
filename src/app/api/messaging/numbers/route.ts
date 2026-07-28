@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireSession, jsonError } from "@/lib/api-auth";
+import { requireSession, resolveWorkspaceId, jsonError } from "@/lib/api-auth";
 import { messagingOnboarding } from "@/lib/messaging/service";
 
 export async function GET(request: Request) {
@@ -8,7 +8,7 @@ export async function GET(request: Request) {
     if ("error" in auth) return auth.error;
 
     const url = new URL(request.url);
-    const workspaceId = url.searchParams.get("workspaceId") || auth.workspaceId;
+    const workspaceId = await resolveWorkspaceId(auth.session, url.searchParams.get("workspaceId"));
     const areaCode = url.searchParams.get("areaCode") || undefined;
 
     const numbers = await messagingOnboarding.searchNumbers(workspaceId, areaCode || undefined);

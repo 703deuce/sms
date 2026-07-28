@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import { getPrisma } from "@/lib/db";
+import { markRecipientFact } from "@/lib/campaigns/sequence-runner";
 
 type Ctx = { params: Promise<{ trackingToken: string }> };
 
 /**
  * Click tracking redirect: GET /r/{token} → mark clicked → redirect to destination.
  * Resolves both campaign messages and one-off Message rows.
+ * Preserves delivery status by appending ":clicked" only when not already clicked.
  */
 export async function GET(_request: Request, ctx: Ctx) {
   const { trackingToken } = await ctx.params;
@@ -18,15 +20,21 @@ export async function GET(_request: Request, ctx: Ctx) {
   });
 
   if (campaignMessage) {
-    if (campaignMessage.status !== "clicked") {
+    const alreadyClicked = campaignMessage.status === "clicked" || campaignMessage.error === "clicked";
+    if (!alreadyClicked) {
+      // Preserve prior status in error field, mark clicked
       await prisma.campaignMessage.update({
         where: { id: campaignMessage.id },
-        data: { status: "clicked" },
+        data: {
+          status: "clicked",
+          error: campaignMessage.status === "clicked" ? campaignMessage.error : `was:${campaignMessage.status}`,
+        },
       });
       await prisma.campaign.update({
         where: { id: campaignMessage.campaignId },
         data: { clicks: { increment: 1 } },
       });
+      await markRecipientFact(campaignMessage.recipientId, "link_clicked", true);
 
       if ((campaignMessage.campaign.successMode || "click") === "click") {
         await prisma.campaignRecipient.update({

@@ -9,6 +9,8 @@ export type EnqueueJobInput = {
   idempotencyKey?: string;
   runAfter?: Date;
   maxAttempts?: number;
+  /** Force wake an existing pending/deferred job to runAt. */
+  wake?: boolean;
 };
 
 export async function enqueueJob(input: EnqueueJobInput) {
@@ -21,8 +23,25 @@ export async function enqueueJob(input: EnqueueJobInput) {
     const existing = await prisma.jobQueue.findUnique({
       where: { idempotencyKey: input.idempotencyKey },
     });
-    if (existing && (existing.status === "pending" || existing.status === "deferred" || existing.status === "processing")) {
-      job = existing;
+    if (
+      existing &&
+      (existing.status === "pending" || existing.status === "deferred" || existing.status === "processing")
+    ) {
+      // Wake deferred/pending jobs early (e.g. compliance webhook)
+      if (input.wake || runAfter.getTime() < existing.runAfter.getTime()) {
+        job = await prisma.jobQueue.update({
+          where: { id: existing.id },
+          data: {
+            status: existing.status === "processing" ? existing.status : "pending",
+            runAfter,
+            payload: input.payload,
+            lastError: null,
+            lockedAt: existing.status === "processing" ? existing.lockedAt : null,
+          },
+        });
+      } else {
+        job = existing;
+      }
     } else if (existing) {
       job = await prisma.jobQueue.update({
         where: { id: existing.id },
@@ -37,6 +56,7 @@ export async function enqueueJob(input: EnqueueJobInput) {
           workspaceId: input.workspaceId,
           queueName,
           jobType: input.jobType,
+          maxAttempts: input.maxAttempts ?? existing.maxAttempts,
         },
       });
     }
@@ -56,7 +76,6 @@ export async function enqueueJob(input: EnqueueJobInput) {
     });
   }
 
-  // Dual-write to BullMQ when configured (DB poll remains the default drain)
   if (process.env.QUEUE_DRIVER === "bullmq" && process.env.REDIS_URL) {
     try {
       const { enqueueBullmq } = await import("@/lib/jobs/bullmq");
@@ -81,11 +100,33 @@ export async function enqueueMessagingRegistrationAdvance(workspaceId: string, d
     payload: { workspaceId },
     idempotencyKey: `messaging-registration-advance:${workspaceId}`,
     runAfter: deferMs > 0 ? new Date(Date.now() + deferMs) : new Date(),
+    // Brand/A2P review can take days — soft polls must not die after 8 attempts
+    maxAttempts: 500,
+    wake: deferMs === 0,
   });
+}
+
+/** Reclaim jobs stuck in processing after a worker crash. */
+export async function reclaimStuckJobs(staleMs = 10 * 60 * 1000) {
+  const cutoff = new Date(Date.now() - staleMs);
+  const result = await getPrisma().jobQueue.updateMany({
+    where: {
+      status: "processing",
+      lockedAt: { lt: cutoff },
+    },
+    data: {
+      status: "pending",
+      lockedAt: null,
+      runAfter: new Date(),
+      lastError: "reclaimed_stale_processing",
+    },
+  });
+  return result.count;
 }
 
 export async function claimDueJobs(limit = 25) {
   const prisma = getPrisma();
+  await reclaimStuckJobs();
   const now = new Date();
   const due = await prisma.jobQueue.findMany({
     where: {
@@ -123,8 +164,24 @@ export async function completeJob(jobId: string) {
   });
 }
 
-export async function failJob(jobId: string, error: string, deferMs?: number) {
+export async function failJob(jobId: string, error: string, deferMs?: number, softDefer?: boolean) {
   const job = await getPrisma().jobQueue.findUniqueOrThrow({ where: { id: jobId } });
+
+  // Soft defer (Twilio waiting): do not consume attempts toward failure
+  if (deferMs && softDefer) {
+    return getPrisma().jobQueue.update({
+      where: { id: jobId },
+      data: {
+        status: "deferred",
+        lastError: error,
+        runAfter: new Date(Date.now() + deferMs),
+        lockedAt: null,
+        // Roll back the claim increment so soft polls don't burn the budget
+        attempts: Math.max(0, job.attempts - 1),
+      },
+    });
+  }
+
   if (deferMs && job.attempts < job.maxAttempts) {
     return getPrisma().jobQueue.update({
       where: { id: jobId },
@@ -141,7 +198,7 @@ export async function failJob(jobId: string, error: string, deferMs?: number) {
     data: {
       status: job.attempts >= job.maxAttempts ? "failed" : "pending",
       lastError: error,
-      runAfter: new Date(Date.now() + Math.min(60_000 * job.attempts, 15 * 60_000)),
+      runAfter: new Date(Date.now() + Math.min(60_000 * Math.max(1, job.attempts), 15 * 60_000)),
       lockedAt: null,
     },
   });
