@@ -1,16 +1,15 @@
 import {
   LayoutDashboard,
-  Send,
-  Inbox,
-  Users,
-  Megaphone,
-  Workflow,
-  FileText,
-  Sprout,
   BarChart3,
-  Phone,
-  ShieldCheck,
-  Puzzle,
+  ShoppingBag,
+  Users,
+  CalendarDays,
+  Workflow,
+  Bot,
+  Globe,
+  Kanban,
+  FileText,
+  LineChart,
   Settings,
   type LucideIcon,
 } from "lucide-react";
@@ -25,96 +24,58 @@ export type NavItem = {
   href: string;
   icon: LucideIcon;
   children?: NavChild[];
+  badge?: string | number;
   emphasize?: boolean;
 };
 
 export const appNav: NavItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { label: "Send", href: "/send", icon: Send, emphasize: true },
-  { label: "Inbox", href: "/inbox", icon: Inbox },
+  { label: "Stats", href: "/reports", icon: BarChart3 },
+  { label: "Sales", href: "/campaigns", icon: ShoppingBag, badge: 12 },
+  { label: "Contacts", href: "/contacts", icon: Users },
+  { label: "Calendar", href: "/campaigns/calendar", icon: CalendarDays },
+  { label: "Automation", href: "/automations", icon: Workflow },
+  { label: "Chatbots", href: "/inbox", icon: Bot },
   {
-    label: "Contacts",
-    href: "/contacts",
-    icon: Users,
+    label: "Sites",
+    href: "/grow/pages",
+    icon: Globe,
     children: [
-      { label: "All Contacts", href: "/contacts" },
-      { label: "Lists", href: "/contacts/lists" },
-      { label: "Segments", href: "/contacts/segments" },
-      { label: "Tags", href: "/contacts/tags" },
-      { label: "Imports", href: "/contacts/imports" },
-      { label: "Unsubscribed", href: "/contacts/unsubscribed" },
-      { label: "Blocked", href: "/contacts/blocked" },
-    ],
-  },
-  {
-    label: "Campaigns",
-    href: "/campaigns",
-    icon: Megaphone,
-    children: [
-      { label: "All Campaigns", href: "/campaigns" },
-      { label: "Drafts", href: "/campaigns/drafts" },
-      { label: "Scheduled", href: "/campaigns/scheduled" },
-      { label: "Calendar", href: "/campaigns/calendar" },
-      { label: "Completed", href: "/campaigns/completed" },
-      { label: "Failed", href: "/campaigns/failed" },
-    ],
-  },
-  {
-    label: "Automations",
-    href: "/automations",
-    icon: Workflow,
-    children: [
-      { label: "Flows", href: "/automations" },
-      { label: "Templates", href: "/automations/templates" },
-      { label: "Logs", href: "/automations/logs" },
-    ],
-  },
-  { label: "Templates", href: "/templates", icon: FileText },
-  {
-    label: "Grow",
-    href: "/grow/keywords",
-    icon: Sprout,
-    children: [
-      { label: "Keywords", href: "/grow/keywords" },
+      { label: "Signup Pages", href: "/grow/pages" },
       { label: "Forms", href: "/grow/forms" },
       { label: "QR Codes", href: "/grow/qr-codes" },
     ],
   },
+  { label: "Pipelines", href: "/campaigns/scheduled", icon: Kanban },
   {
-    label: "Reports",
-    href: "/reports",
-    icon: BarChart3,
+    label: "Templates",
+    href: "/templates",
+    icon: FileText,
     children: [
-      { label: "Overview", href: "/reports" },
-      { label: "Campaigns", href: "/reports/campaigns" },
-      { label: "Messages", href: "/reports/messages" },
-      { label: "Contacts", href: "/reports/contacts" },
-      { label: "Inbox", href: "/reports/inbox" },
-      { label: "Automations", href: "/reports/automations" },
-      { label: "Usage", href: "/reports/usage" },
+      { label: "All Templates", href: "/templates" },
+      { label: "Create Template", href: "/templates/new" },
+      { label: "AI Generator", href: "/templates/ai" },
     ],
   },
-  { label: "Phone Numbers", href: "/numbers", icon: Phone },
-  { label: "Compliance", href: "/compliance", icon: ShieldCheck },
-  { label: "Integrations", href: "/integrations", icon: Puzzle },
+  { label: "Analytics", href: "/reports/campaigns", icon: LineChart },
   { label: "Settings", href: "/settings/business", icon: Settings },
 ];
 
 export const mobilePrimaryNav = [
   { label: "Home", href: "/dashboard", icon: LayoutDashboard },
-  { label: "Inbox", href: "/inbox", icon: Inbox },
-  { label: "Send", href: "/send", icon: Send },
+  { label: "Inbox", href: "/inbox", icon: Bot },
+  { label: "Send", href: "/send", icon: ShoppingBag },
   { label: "Contacts", href: "/contacts", icon: Users },
 ];
 
 export const adminNav: NavItem[] = [
   { label: "Dashboard", href: "/admin", icon: LayoutDashboard },
   { label: "Customers", href: "/admin/customers", icon: Users },
-  { label: "A2P Queue", href: "/admin/a2p", icon: ShieldCheck },
+  { label: "A2P Queue", href: "/admin/a2p", icon: Workflow },
   { label: "Monitoring", href: "/admin/monitoring", icon: BarChart3 },
-  { label: "Numbers", href: "/admin/numbers", icon: Phone },
-  { label: "Billing", href: "/admin/billing", icon: FileText },
-  { label: "Support", href: "/admin/support", icon: Inbox },
+  { label: "Numbers", href: "/admin/numbers", icon: FileText },
+  { label: "Billing", href: "/admin/billing", icon: ShoppingBag },
+  { label: "Support", href: "/admin/support", icon: Bot },
   { label: "System Logs", href: "/admin/logs", icon: Workflow },
   { label: "Platform Settings", href: "/admin/settings", icon: Settings },
 ];

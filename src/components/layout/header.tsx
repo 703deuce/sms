@@ -1,15 +1,13 @@
 "use client";
 
-import { phoneNumbers, metrics } from "@/lib/mock/data";
-import { formatNumber, formatPhone } from "@/lib/utils";
 import {
   Bell,
+  CalendarRange,
   CircleHelp,
   Menu,
   Search,
 } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
 
 export function Header({
   title,
@@ -20,11 +18,15 @@ export function Header({
   userName: string;
   onMenuClick: () => void;
 }) {
-  const [numberId, setNumberId] = useState(phoneNumbers[0]?.id);
+  const initials = userName
+    .split(" ")
+    .map((p) => p[0])
+    .join("")
+    .slice(0, 2);
 
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-header/95 backdrop-blur">
-      <div className="flex h-16 items-center gap-3 px-4 lg:px-6">
+      <div className="flex h-[64px] items-center gap-3 px-4 lg:px-6">
         <button
           type="button"
           className="rounded-lg p-2 text-foreground hover:bg-muted lg:hidden"
@@ -34,70 +36,55 @@ export function Header({
           <Menu className="h-5 w-5" />
         </button>
 
-        <div className="min-w-0 flex-1">
-          <h1 className="truncate font-display text-lg font-semibold tracking-tight">
-            {title}
-          </h1>
-        </div>
+        <h1 className="shrink-0 text-[18px] font-bold tracking-tight text-foreground">
+          {title}
+        </h1>
 
-        <div className="hidden max-w-xs flex-1 md:block lg:max-w-sm">
+        <div className="mx-auto hidden w-full max-w-[420px] flex-1 md:block">
           <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input
-              className="h-10 w-full rounded-lg border border-border bg-card pl-9 pr-3 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-ring/30"
-              placeholder="Search contacts, campaigns..."
+              className="h-10 w-full rounded-full border border-border bg-[#f8f9fc] pl-10 pr-4 text-[13px] outline-none transition focus:border-primary focus:bg-white focus:ring-2 focus:ring-ring/20"
+              placeholder="Search contacts, tools, etc."
             />
           </div>
         </div>
 
-        <select
-          className="hidden h-10 max-w-[180px] rounded-lg border border-border bg-card px-2 text-xs font-medium outline-none focus:border-primary sm:block"
-          value={numberId}
-          onChange={(e) => setNumberId(e.target.value)}
-          aria-label="Sending number"
-        >
-          {phoneNumbers.map((n) => (
-            <option key={n.id} value={n.id}>
-              {formatPhone(n.number)}
-            </option>
-          ))}
-        </select>
+        <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
+          <button
+            type="button"
+            className="hidden h-10 items-center gap-2 rounded-full border border-border bg-card px-3 text-[12px] font-medium text-foreground hover:bg-muted sm:inline-flex"
+            aria-label="Date range"
+          >
+            <CalendarRange className="h-3.5 w-3.5 text-muted-foreground" />
+            Oct 01 - Oct 31
+          </button>
 
-        <Link
-          href="/settings/billing"
-          className="hidden rounded-lg border border-border bg-card px-3 py-2 text-xs font-semibold text-foreground hover:bg-muted sm:inline-flex"
-        >
-          {formatNumber(metrics.creditsRemaining)} credits
-        </Link>
+          <button
+            type="button"
+            className="relative rounded-full p-2.5 text-foreground hover:bg-muted"
+            aria-label="Notifications"
+          >
+            <Bell className="h-4.5 w-4.5 h-[18px] w-[18px]" />
+            <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-danger ring-2 ring-white" />
+          </button>
 
-        <button
-          type="button"
-          className="relative rounded-lg p-2 text-foreground hover:bg-muted"
-          aria-label="Notifications"
-        >
-          <Bell className="h-5 w-5" />
-          <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-teal-500" />
-        </button>
+          <Link
+            href="/getting-started"
+            className="rounded-full p-2.5 text-foreground hover:bg-muted"
+            aria-label="Help"
+          >
+            <CircleHelp className="h-[18px] w-[18px]" />
+          </Link>
 
-        <Link
-          href="/getting-started"
-          className="rounded-lg p-2 text-foreground hover:bg-muted"
-          aria-label="Help"
-        >
-          <CircleHelp className="h-5 w-5" />
-        </Link>
-
-        <Link
-          href="/settings/users"
-          className="flex h-9 w-9 items-center justify-center rounded-full bg-accent text-xs font-semibold text-accent-foreground"
-          title={userName}
-        >
-          {userName
-            .split(" ")
-            .map((p) => p[0])
-            .join("")
-            .slice(0, 2)}
-        </Link>
+          <Link
+            href="/settings/users"
+            className="ml-0.5 flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-[#34d399] to-[#0ea5e9] text-[11px] font-bold text-white ring-2 ring-white"
+            title={userName}
+          >
+            {initials}
+          </Link>
+        </div>
       </div>
     </header>
   );

@@ -1,239 +1,442 @@
 import { Button } from "@/components/ui/button";
-import { Card, CardTitle, StatCard } from "@/components/ui/card";
-import { PageHeader } from "@/components/ui/page-header";
-import { StatusChip } from "@/components/ui/status-chip";
+import { teamMembers } from "@/lib/mock/data";
+import { cn } from "@/lib/utils";
 import {
-  campaigns,
-  complianceOverview,
-  conversations,
-  gettingStartedSteps,
-  metrics,
-  nextActions,
-} from "@/lib/mock/data";
-import { formatCurrency, formatNumber, formatPercent } from "@/lib/utils";
-import { AlertTriangle, ArrowRight, CheckCircle2, Circle } from "lucide-react";
+  AlertTriangle,
+  ArrowUpRight,
+  CheckCircle2,
+  Circle,
+  FileCheck2,
+  Phone,
+  Users,
+  UserPlus,
+  ShieldCheck,
+  BarChart3,
+  Sparkles,
+  TrendingUp,
+} from "lucide-react";
 import Link from "next/link";
 
-export default function DashboardPage() {
-  const doneCount = gettingStartedSteps.filter((s) => s.done).length;
-  const recentCampaigns = campaigns.slice(0, 4);
-  const recentConversations = conversations.slice(0, 3);
+function Sparkline({
+  points,
+  color,
+}: {
+  points: number[];
+  color: string;
+}) {
+  const width = 120;
+  const height = 36;
+  const min = Math.min(...points);
+  const max = Math.max(...points);
+  const range = max - min || 1;
+  const coords = points
+    .map((p, i) => {
+      const x = (i / (points.length - 1)) * width;
+      const y = height - ((p - min) / range) * (height - 4) - 2;
+      return `${x},${y}`;
+    })
+    .join(" ");
 
   return (
-    <div>
-      <PageHeader
-        title="Dashboard"
-        description="Account health, registration status, and the next actions that move you to first send."
-        actions={
-          <>
-            <Link href="/getting-started">
-              <Button variant="outline">Getting started</Button>
-            </Link>
-            <Link href="/send">
-              <Button>New campaign</Button>
-            </Link>
-          </>
-        }
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className="overflow-visible">
+      <polyline
+        fill="none"
+        stroke={color}
+        strokeWidth="2.25"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        points={coords}
       />
+    </svg>
+  );
+}
 
-      {metrics.a2pStatus !== "Approved" ? (
-        <div className="mb-6 flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex gap-3">
-            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
-            <div>
-              <p className="font-medium text-amber-950">A2P registration is {metrics.a2pStatus.toLowerCase()}</p>
-              <p className="text-sm text-amber-900/80">
-                Complete brand and campaign registration before high-volume sending. Toll-free is{" "}
-                {complianceOverview.tollFree.toLowerCase()}.
-              </p>
-            </div>
-          </div>
-          <Link href="/compliance">
-            <Button variant="outline" className="border-amber-300 bg-white">
-              Open compliance
+const metricCards = [
+  {
+    label: "A2P Registration",
+    value: "Pending",
+    hint: "Submit 10DLC registration application",
+    href: "/compliance",
+    icon: FileCheck2,
+    tone: "bg-[#efe7ff] text-[#7c3aed]",
+  },
+  {
+    label: "Phone Number",
+    value: "(+123) 456-6789",
+    hint: "Main booking number",
+    href: "/numbers",
+    icon: Phone,
+    tone: "bg-[#e8f1ff] text-[#2563eb]",
+  },
+  {
+    label: "Active Members",
+    value: "3,429",
+    hint: "View members list",
+    href: "/contacts",
+    icon: Users,
+    tone: "bg-[#e7f8f1] text-[#059669]",
+  },
+  {
+    label: "Leads Generated",
+    value: "1,500",
+    hint: "View performance metrics",
+    href: "/reports",
+    icon: UserPlus,
+    tone: "bg-[#fff1e8] text-[#ea580c]",
+  },
+];
+
+const trendCards = [
+  {
+    label: "Conversion Rate",
+    value: "$1.45k",
+    delta: "+1.2%",
+    up: true,
+    color: "#12b98b",
+    points: [8, 10, 9, 12, 11, 14, 13, 16, 15, 18],
+  },
+  {
+    label: "Revenue",
+    value: "15.6%",
+    delta: "-0.3%",
+    up: false,
+    color: "#3b82f6",
+    points: [14, 12, 15, 13, 16, 12, 14, 11, 13, 12],
+  },
+  {
+    label: "Active Users",
+    value: "15.2%",
+    delta: "+2.5%",
+    up: true,
+    color: "#8b5cf6",
+    points: [6, 8, 7, 10, 9, 12, 11, 14, 13, 16],
+  },
+  {
+    label: "Lead Value",
+    value: "+25k",
+    delta: "+4.8%",
+    up: true,
+    color: "#f97316",
+    points: [5, 7, 6, 9, 10, 12, 11, 14, 15, 18],
+  },
+];
+
+const nextSteps = [
+  {
+    title: "Setup multi-factor authentication",
+    meta: "Security · 10 pts",
+    href: "/settings/security",
+    icon: ShieldCheck,
+    tone: "bg-[#efe7ff] text-[#7c3aed]",
+  },
+  {
+    title: "Review campaign performance",
+    meta: "Analytics · 8 pts",
+    href: "/reports/campaigns",
+    icon: BarChart3,
+    tone: "bg-[#e8f1ff] text-[#2563eb]",
+  },
+  {
+    title: "Finish A2P brand registration",
+    meta: "Compliance · 15 pts",
+    href: "/compliance/brand",
+    icon: FileCheck2,
+    tone: "bg-[#fff1e8] text-[#ea580c]",
+  },
+  {
+    title: "Import opted-in contacts",
+    meta: "Growth · 12 pts",
+    href: "/contacts/imports",
+    icon: Users,
+    tone: "bg-[#e7f8f1] text-[#059669]",
+  },
+];
+
+const recentActivities = [
+  { name: "Maya Chen", time: "2 min ago", status: "In Progress", tone: "bg-blue-50 text-blue-700" },
+  { name: "Luis Ortiz", time: "18 min ago", status: "Completed", tone: "bg-emerald-50 text-emerald-700" },
+  { name: "Priya Shah", time: "1 hr ago", status: "In Progress", tone: "bg-blue-50 text-blue-700" },
+  { name: "Sam Patel", time: "3 hr ago", status: "Completed", tone: "bg-emerald-50 text-emerald-700" },
+];
+
+const announcements = [
+  { title: "A2P review window extended", date: "Oct 12" },
+  { title: "New automation templates live", date: "Oct 08" },
+  { title: "Billing cycle closes Oct 31", date: "Oct 01" },
+];
+
+const teamBars = [
+  { name: "Alex Rivera", value: 86 },
+  { name: "Jordan Lee", value: 72 },
+  { name: "Sam Patel", value: 64 },
+  { name: "Casey Nguyen", value: 48 },
+];
+
+export default function DashboardPage() {
+  const checklist = [
+    { id: 1, label: "Setup account", done: true },
+    { id: 2, label: "Connect domain", done: true },
+    { id: 3, label: "Add business details", done: true },
+    { id: 4, label: "Choose phone number", done: true, href: "/numbers" },
+    { id: 5, label: "Import contacts", done: false, href: "/contacts/imports" },
+    { id: 6, label: "Launch first campaign", done: false, href: "/send" },
+  ];
+  const doneCount = checklist.filter((s) => s.done).length;
+
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-col gap-3 rounded-xl border border-amber-200/80 bg-[#fff8e8] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-start gap-3">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+          <p className="text-[13px] leading-relaxed text-amber-950">
+            <span className="font-semibold">A2P registration is pending.</span>{" "}
+            Complete conversion tracking registration before high volume mailing.{" "}
+            <Link href="/compliance" className="font-semibold text-amber-900 underline underline-offset-2">
+              Link your accounts.
+            </Link>
+          </p>
+        </div>
+        <Link
+          href="/compliance"
+          className="shrink-0 text-[13px] font-semibold text-amber-900 hover:underline"
+        >
+          View details
+        </Link>
+      </div>
+
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h2 className="text-[22px] font-bold tracking-tight text-foreground">Dashboard</h2>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/getting-started"
+            className="text-[13px] font-semibold text-primary hover:underline"
+          >
+            Strategy guide
+          </Link>
+          <Link href="/send">
+            <Button className="h-10 rounded-lg px-4 text-[13px] font-semibold shadow-[0_8px_18px_rgba(18,185,139,0.25)]">
+              Run Campaign
             </Button>
           </Link>
         </div>
-      ) : null}
+      </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          label="A2P status"
-          value={metrics.a2pStatus}
-          hint="Brand & campaign registration"
-          href="/compliance"
-        />
-        <StatCard
-          label="Active number"
-          value={metrics.activeNumber}
-          hint="Default sending number"
-          href="/numbers"
-        />
-        <StatCard
-          label="Credits remaining"
-          value={formatNumber(metrics.creditsRemaining)}
-          hint={`Balance ${formatCurrency(metrics.balance)}`}
-          href="/settings/billing"
-        />
-        <StatCard
-          label="Sent this period"
-          value={formatNumber(metrics.messagesSentPeriod)}
-          hint="Billing period outbound"
-          href="/reports/usage"
-        />
-      </div>
-
-      <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Delivery rate" value={formatPercent(metrics.deliveryRate)} href="/reports/messages" />
-        <StatCard label="Reply rate" value={formatPercent(metrics.replyRate)} href="/reports/inbox" />
-        <StatCard label="Click rate" value={formatPercent(metrics.clickRate)} href="/reports/links" />
-        <StatCard
-          label="Contact growth"
-          value={`+${formatNumber(metrics.contactGrowth)}`}
-          hint={`Opt-out ${formatPercent(metrics.optOutRate)}`}
-          href="/reports/contacts"
-        />
-      </div>
-
-      <div className="mt-6 grid gap-4 xl:grid-cols-3">
-        <Card className="xl:col-span-1">
-          <CardTitle>Recommended next actions</CardTitle>
-          <ul className="mt-4 space-y-3">
-            {nextActions.map((action) => (
-              <li key={action.href}>
-                <Link
-                  href={action.href}
-                  className="group flex items-start justify-between gap-3 rounded-lg border border-border p-3 transition hover:border-primary/40"
+        {metricCards.map((card) => {
+          const Icon = card.icon;
+          return (
+            <Link
+              key={card.label}
+              href={card.href}
+              className="surface rounded-2xl bg-card p-4 transition hover:-translate-y-0.5 hover:shadow-md"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-[12px] font-medium text-muted-foreground">{card.label}</p>
+                  <p className="mt-2 text-[22px] font-bold tracking-tight text-foreground">
+                    {card.value}
+                  </p>
+                  <p className="mt-1 text-[12px] text-muted-foreground">{card.hint}</p>
+                </div>
+                <span
+                  className={cn(
+                    "flex h-10 w-10 items-center justify-center rounded-xl",
+                    card.tone,
+                  )}
                 >
-                  <div>
-                    <p className="text-sm font-medium">{action.title}</p>
-                    <p className="mt-1 text-xs text-muted-foreground">{action.description}</p>
-                  </div>
-                  <ArrowRight className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground group-hover:text-primary" />
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </Card>
+                  <Icon className="h-5 w-5" />
+                </span>
+              </div>
+            </Link>
+          );
+        })}
+      </div>
 
-        <Card className="xl:col-span-2">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {trendCards.map((card) => (
+          <div key={card.label} className="surface rounded-2xl bg-card p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[12px] font-medium text-muted-foreground">{card.label}</p>
+                <p className="mt-2 text-[22px] font-bold tracking-tight">{card.value}</p>
+                <p
+                  className={cn(
+                    "mt-1 text-[12px] font-semibold",
+                    card.up ? "text-emerald-600" : "text-rose-500",
+                  )}
+                >
+                  {card.delta}
+                </p>
+              </div>
+              <Sparkline points={card.points} color={card.color} />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-12">
+        <div className="surface rounded-2xl bg-card p-5 xl:col-span-3">
+          <h3 className="text-[14px] font-bold text-foreground">Recommended next steps</h3>
+          <ul className="mt-4 space-y-3">
+            {nextSteps.map((step) => {
+              const Icon = step.icon;
+              return (
+                <li key={step.title}>
+                  <Link
+                    href={step.href}
+                    className="flex items-start gap-3 rounded-xl p-2 transition hover:bg-muted/70"
+                  >
+                    <span
+                      className={cn(
+                        "mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl",
+                        step.tone,
+                      )}
+                    >
+                      <Icon className="h-4 w-4" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[13px] font-semibold leading-snug text-foreground">
+                        {step.title}
+                      </span>
+                      <span className="mt-0.5 block text-[11px] text-muted-foreground">
+                        {step.meta}
+                      </span>
+                    </span>
+                    <ArrowUpRight className="mt-1 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+
+        <div className="surface rounded-2xl bg-card p-5 xl:col-span-3">
           <div className="flex items-center justify-between">
-            <CardTitle>Getting started</CardTitle>
-            <span className="text-xs text-muted-foreground">
-              {doneCount}/{gettingStartedSteps.length} complete
+            <h3 className="text-[14px] font-bold text-foreground">Getting started</h3>
+            <span className="text-[11px] font-medium text-muted-foreground">
+              {doneCount}/{checklist.length} complete
             </span>
           </div>
           <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted">
             <div
               className="h-full rounded-full bg-primary transition-all"
-              style={{ width: `${(doneCount / gettingStartedSteps.length) * 100}%` }}
+              style={{ width: `${(doneCount / checklist.length) * 100}%` }}
             />
           </div>
-          <ul className="mt-4 grid gap-2 sm:grid-cols-2">
-            {gettingStartedSteps.map((step) => (
-              <li key={step.id}>
+          <ul className="mt-4 space-y-2.5">
+            {checklist.map((step) => (
+              <li key={step.id} className="flex items-center gap-2.5 text-[13px]">
+                {step.done ? (
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" />
+                ) : (
+                  <Circle className="h-4 w-4 shrink-0 text-muted-foreground" />
+                )}
                 {step.href && !step.done ? (
-                  <Link
-                    href={step.href}
-                    className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-muted"
-                  >
-                    <Circle className="h-4 w-4 text-muted-foreground" />
-                    <span>{step.label}</span>
+                  <Link href={step.href} className="hover:text-primary">
+                    {step.label}
                   </Link>
                 ) : (
-                  <div className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm">
-                    {step.done ? (
-                      <CheckCircle2 className="h-4 w-4 text-success" />
-                    ) : (
-                      <Circle className="h-4 w-4 text-muted-foreground" />
-                    )}
-                    <span className={step.done ? "text-muted-foreground" : ""}>{step.label}</span>
-                  </div>
+                  <span className={step.done ? "text-muted-foreground" : ""}>{step.label}</span>
                 )}
               </li>
             ))}
           </ul>
-        </Card>
-      </div>
+        </div>
 
-      <div className="mt-6 grid gap-4 xl:grid-cols-2">
-        <Card>
-          <div className="mb-4 flex items-center justify-between">
-            <CardTitle>Recent campaigns</CardTitle>
-            <Link href="/campaigns" className="text-xs font-medium text-primary hover:underline">
-              View all
-            </Link>
-          </div>
-          <div className="space-y-3">
-            {recentCampaigns.map((c) => (
-              <Link
-                key={c.id}
-                href={`/campaigns/${c.id}`}
-                className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2.5 hover:bg-muted/50"
-              >
+        <div className="surface rounded-2xl bg-card p-5 xl:col-span-3">
+          <h3 className="text-[14px] font-bold text-foreground">Recent activities</h3>
+          <ul className="mt-4 space-y-3">
+            {recentActivities.map((item) => (
+              <li key={item.name} className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-medium">{c.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {c.audience} · {formatNumber(c.sent)} sent
-                  </p>
+                  <p className="truncate text-[13px] font-semibold">{item.name}</p>
+                  <p className="text-[11px] text-muted-foreground">{item.time}</p>
                 </div>
-                <StatusChip status={c.status} />
-              </Link>
-            ))}
-          </div>
-        </Card>
-
-        <Card>
-          <div className="mb-4 flex items-center justify-between">
-            <CardTitle>Recent conversations</CardTitle>
-            <Link href="/inbox" className="text-xs font-medium text-primary hover:underline">
-              Open inbox
-            </Link>
-          </div>
-          <div className="space-y-3">
-            {recentConversations.map((c) => (
-              <Link
-                key={c.id}
-                href="/inbox"
-                className="flex items-start justify-between gap-3 rounded-lg border border-border px-3 py-2.5 hover:bg-muted/50"
-              >
-                <div className="min-w-0">
-                  <p className="text-sm font-medium">
-                    {c.contactName}
-                    {c.unread ? (
-                      <span className="ml-2 inline-block h-2 w-2 rounded-full bg-primary" />
-                    ) : null}
-                  </p>
-                  <p className="truncate text-xs text-muted-foreground">{c.lastMessage}</p>
-                </div>
-                <StatusChip status={c.status} />
-              </Link>
-            ))}
-          </div>
-        </Card>
-      </div>
-
-      <div className="mt-6 grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardTitle>Account alerts</CardTitle>
-          <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
-            {complianceOverview.requiredActions.map((a) => (
-              <li key={a} className="flex gap-2">
-                <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-warning" />
-                {a}
+                <span
+                  className={cn(
+                    "rounded-full px-2.5 py-1 text-[10px] font-semibold",
+                    item.tone,
+                  )}
+                >
+                  {item.status}
+                </span>
               </li>
             ))}
           </ul>
-        </Card>
-        <Card>
-          <CardTitle>Automation activity</CardTitle>
-          <p className="mt-3 text-sm text-muted-foreground">
-            Welcome series enrolled 18 contacts this week. Missed-call text-back sent 12 replies.
+        </div>
+
+        <div className="surface rounded-2xl bg-card p-5 xl:col-span-3">
+          <h3 className="text-[14px] font-bold text-foreground">Team performance</h3>
+          <ul className="mt-4 space-y-3.5">
+            {teamBars.map((member, i) => (
+              <li key={member.name}>
+                <div className="mb-1.5 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-[10px] font-bold text-foreground">
+                      {member.name
+                        .split(" ")
+                        .map((p) => p[0])
+                        .join("")}
+                    </span>
+                    <span className="text-[12px] font-medium">{member.name}</span>
+                  </div>
+                  <span className="text-[11px] text-muted-foreground">{member.value}%</span>
+                </div>
+                <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                  <div
+                    className={cn(
+                      "h-full rounded-full",
+                      i % 2 === 0 ? "bg-primary" : "bg-blue",
+                    )}
+                    style={{ width: `${member.value}%` }}
+                  />
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-12">
+        <div className="surface rounded-2xl bg-card p-5 lg:col-span-8">
+          <div className="flex items-center justify-between">
+            <h3 className="text-[14px] font-bold text-foreground">Announcements</h3>
+            <Sparkles className="h-4 w-4 text-primary" />
+          </div>
+          <ul className="mt-4 divide-y divide-border">
+            {announcements.map((item) => (
+              <li
+                key={item.title}
+                className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
+              >
+                <p className="text-[13px] font-medium text-foreground">{item.title}</p>
+                <span className="text-[12px] text-muted-foreground">{item.date}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <div className="surface rounded-2xl bg-card p-5 lg:col-span-4">
+          <h3 className="text-[14px] font-bold text-foreground">Performance summary</h3>
+          <p className="mt-1 text-[12px] text-muted-foreground">Weekly Trend</p>
+          <div className="mt-4 flex items-end justify-between gap-3">
+            <div>
+              <p className="text-[28px] font-bold tracking-tight text-foreground">15%</p>
+              <p className="mt-1 inline-flex items-center gap-1 text-[12px] font-semibold text-emerald-600">
+                <TrendingUp className="h-3.5 w-3.5" />
+                increase
+              </p>
+            </div>
+            <Sparkline
+              points={[4, 6, 5, 8, 7, 10, 12, 11, 14, 16]}
+              color="#12b98b"
+            />
+          </div>
+          <p className="mt-4 text-[12px] leading-relaxed text-muted-foreground">
+            Campaign replies and contact growth are up versus last week across{" "}
+            {teamMembers.length} active teammates.
           </p>
-          <Link href="/automations" className="mt-3 inline-flex text-sm font-medium text-primary hover:underline">
-            Review flows
-          </Link>
-        </Card>
+        </div>
       </div>
     </div>
   );

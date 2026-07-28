@@ -37,7 +37,7 @@ function LoginForm() {
   return (
     <div className="surface rounded-2xl p-8">
       <div className="mb-8 text-center">
-        <p className="font-display text-3xl font-semibold tracking-tight text-accent">
+        <p className="font-display text-3xl font-semibold tracking-tight text-primary">
           Transovo SMS
         </p>
         <h1 className="mt-3 font-display text-xl font-semibold">Welcome back</h1>

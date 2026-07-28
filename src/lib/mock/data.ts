@@ -19,7 +19,7 @@ export const demoUser: User = {
 };
 
 export const workspaces: Workspace[] = [
-  { id: "ws_1", name: "Harbor Home Services", slug: "harbor-home" },
+  { id: "ws_1", name: "Matrix Intercorp", slug: "matrix-intercorp" },
   { id: "ws_2", name: "Harbor Retail", slug: "harbor-retail" },
 ];
 
