@@ -17,6 +17,7 @@ async function parseTwilioForm(request: Request) {
 async function verify(request: Request, params: Record<string, string>) {
   const signature = request.headers.get("x-twilio-signature") || "";
   if (!signature) {
+    if (process.env.NODE_ENV === "production") return false;
     return !isLiveMessagingAdapter();
   }
 
@@ -90,16 +91,20 @@ export async function POST(request: Request) {
       }
 
       if (status === "delivered") {
-        // Atomic delivered counter — only the first transition wins
-        const counted = await prisma.campaignMessage.updateMany({
-          where: { id: campaignMsg.id, deliveredCounted: false },
-          data: { deliveredCounted: true },
-        });
-        if (counted.count === 1) {
-          await prisma.campaign.update({
-            where: { id: campaignMsg.campaignId },
-            data: { delivered: { increment: 1 } },
+        await prisma.$transaction(async (tx) => {
+          const counted = await tx.campaignMessage.updateMany({
+            where: { id: campaignMsg.id, deliveredCounted: false },
+            data: { deliveredCounted: true },
           });
+          if (counted.count === 1) {
+            await tx.campaign.update({
+              where: { id: campaignMsg.campaignId },
+              data: { delivered: { increment: 1 } },
+            });
+          }
+        });
+        const fresh = await prisma.campaignMessage.findUnique({ where: { id: campaignMsg.id } });
+        if (fresh?.deliveredCounted) {
           await markRecipientFact(campaignMsg.recipientId, "message_delivered", true);
         }
       }

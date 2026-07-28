@@ -419,6 +419,7 @@ model CampaignMessage {
   error           String?
   deliveredCounted Boolean  @default(false)
   clickedCounted  Boolean   @default(false)
+  sentCounted     Boolean   @default(false)
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
@@ -504,6 +505,7 @@ model IntegrationWebhookEvent {
   status      String   @default("received")
   error       String?
   createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
   processedAt DateTime?
 
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)

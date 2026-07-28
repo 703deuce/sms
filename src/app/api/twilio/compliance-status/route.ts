@@ -26,6 +26,7 @@ async function parseBody(request: Request) {
 async function verify(request: Request, params: Record<string, string>) {
   const signature = request.headers.get("x-twilio-signature") || "";
   if (!signature) {
+    if (process.env.NODE_ENV === "production") return false;
     return !isLiveMessagingAdapter();
   }
 

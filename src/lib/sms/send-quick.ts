@@ -17,6 +17,7 @@ export type QuickSendSmsInput = {
   customerName?: string;
   businessName?: string;
   destinationUrl?: string;
+  idempotencyKey?: string;
 };
 
 export async function sendQuickSms(input: QuickSendSmsInput) {
@@ -64,41 +65,64 @@ export async function sendQuickSms(input: QuickSendSmsInput) {
     review_link: trackedUrl,
   });
 
-  // Ensure body contains a tracked link when destination provided and no link yet
   const finalBody =
     body.includes(trackedUrl) || !destinationUrl
       ? body
       : `${body.trim()} ${trackedUrl}`.trim();
 
-  const result = await sendViaRegistration(input.workspaceId, to, finalBody);
-
-  await prisma.message.create({
+  // Durable outbox row BEFORE provider call — retry after accept won't lose the SID
+  const pending = await prisma.message.create({
     data: {
       workspaceId: input.workspaceId,
       campaignId: input.campaignId,
       to,
       from: reg!.phoneE164 || input.from || "messaging_service",
       body: finalBody,
-      status: result.status || "queued",
-      providerId: result.sid,
+      status: "sending",
+      providerId: input.idempotencyKey ? `idem:${input.idempotencyKey}` : `pending:${trackingToken}`,
       trackingToken,
       destinationUrl,
     },
   });
 
-  await prisma.contact.upsert({
-    where: { workspaceId_phone: { workspaceId: input.workspaceId, phone: to } },
-    create: {
-      workspaceId: input.workspaceId,
-      phone: to,
-      firstName: names.first_name || null,
-      lastName: names.last_name || null,
-      lastMessaged: new Date(),
-      consentSource: "quick_send",
-      consentDate: new Date(),
-    },
-    update: { lastMessaged: new Date() },
-  });
+  try {
+    const result = await sendViaRegistration(input.workspaceId, to, finalBody);
+    await prisma.message.update({
+      where: { id: pending.id },
+      data: {
+        status: result.status || "sent",
+        providerId: result.sid,
+      },
+    });
 
-  return { ...result, trackingToken, trackingUrl: trackedUrl };
+    try {
+      await prisma.contact.upsert({
+        where: { workspaceId_phone: { workspaceId: input.workspaceId, phone: to } },
+        create: {
+          workspaceId: input.workspaceId,
+          phone: to,
+          firstName: names.first_name || null,
+          lastName: names.last_name || null,
+          lastMessaged: new Date(),
+          consentSource: "quick_send",
+          consentDate: new Date(),
+        },
+        update: { lastMessaged: new Date() },
+      });
+    } catch (contactErr) {
+      // Contact bookkeeping must not turn an accepted send into a retryable failure
+      console.warn("[sendQuickSms] contact upsert failed after send", contactErr);
+    }
+
+    return { ...result, trackingToken, trackingUrl: trackedUrl, messageId: pending.id };
+  } catch (err) {
+    await prisma.message.update({
+      where: { id: pending.id },
+      data: {
+        status: "failed",
+        providerId: pending.providerId,
+      },
+    });
+    throw err;
+  }
 }

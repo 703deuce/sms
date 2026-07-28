@@ -4,7 +4,6 @@ import { requireSession, resolveWorkspaceId, jsonError } from "@/lib/api-auth";
 import { getPrisma } from "@/lib/db";
 import { enrollContactInCampaign, validateBulkRecipients } from "@/lib/campaigns/enroll-campaign";
 import { defaultSmsEmailSequence, parseSequence } from "@/lib/campaigns/sequence-engine";
-import { advanceRecipient } from "@/lib/campaigns/sequence-runner";
 
 export async function GET() {
   try {
@@ -122,7 +121,12 @@ export async function PATCH(request: Request) {
     if (!campaign) return NextResponse.json({ error: "Campaign not found" }, { status: 404 });
 
     let status = campaign.status;
-    if (body.action === "activate" || body.action === "resume") status = "SENDING";
+    if (body.action === "activate" || body.action === "resume") {
+      if (campaign.status === "CANCELED") {
+        return NextResponse.json({ error: "Cannot resume a canceled campaign" }, { status: 400 });
+      }
+      status = "SENDING";
+    }
     if (body.action === "pause") status = "PAUSED";
     if (body.action === "cancel") status = "CANCELED";
 
@@ -131,19 +135,10 @@ export async function PATCH(request: Request) {
       data: { status },
     });
 
-    // Kick pending recipients when activating
+    // Kick pending recipients when activating — preserve enroll delays via shared wait processor
     if (status === "SENDING") {
-      const pending = await getPrisma().campaignRecipient.findMany({
-        where: { campaignId: campaign.id, workflowStatus: "pending" },
-        take: 200,
-      });
-      for (const r of pending) {
-        await getPrisma().campaignRecipient.update({
-          where: { id: r.id },
-          data: { workflowStatus: "in_progress" },
-        });
-        await advanceRecipient(r.id);
-      }
+      const { processSequenceWaits } = await import("@/lib/campaigns/sequence-runner");
+      await processSequenceWaits();
     }
 
     if (status === "CANCELED") {
@@ -156,7 +151,13 @@ export async function PATCH(request: Request) {
           campaignId: campaign.id,
           workflowStatus: { in: ["pending", "scheduled", "in_progress", "waiting"] },
         },
-        data: { workflowStatus: "stopped", stopReason: "campaign_canceled", completedAt: new Date() },
+        data: {
+          workflowStatus: "stopped",
+          stopReason: "campaign_canceled",
+          completedAt: new Date(),
+          enrollmentKey: null,
+          nextActionAt: null,
+        },
       });
     }
 

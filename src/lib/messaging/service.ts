@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { randomBytes } from "crypto";
 import { getPrisma } from "@/lib/db";
 import { enqueueMessagingRegistrationAdvance } from "./enqueue-advance";
 import { mockAdapter } from "./mock-adapter";
@@ -107,9 +108,26 @@ export const messagingOnboarding = {
       ...data,
       contactPhone: phone,
       country: data.country || "US",
-      profileStatus: materialChanged ? "action_required" : existing.overallStatus === "ready" ? existing.profileStatus : "action_required",
-      overallStatus: materialChanged ? "action_required" : existing.overallStatus === "ready" ? "ready" : "action_required",
-      messagingEnabled: materialChanged ? false : existing.messagingEnabled,
+      ...(materialChanged
+        ? {
+            profileStatus: "action_required" as const,
+            trustStatus: "action_required" as const,
+            brandStatus: "action_required" as const,
+            campaignStatus: "action_required" as const,
+            overallStatus: "action_required" as const,
+            messagingEnabled: false,
+            // Force recreation of TrustHub resources on next submit/advance
+            secondaryProfileSid: null,
+            trustProductSid: null,
+            brandSid: null,
+            a2pCampaignSid: null,
+            certifiedAt: null,
+          }
+        : {
+            profileStatus:
+              existing.overallStatus === "ready" ? existing.profileStatus : "action_required",
+            overallStatus: existing.overallStatus === "ready" ? "ready" : "action_required",
+          }),
     });
     await appendRegistrationEvent({
       workspaceId,
@@ -132,9 +150,19 @@ export const messagingOnboarding = {
     const reg = await updateRegistration(workspaceId, {
       ...data,
       sampleMessages: data.sampleMessages,
-      campaignStatus: materialChanged ? "action_required" : existing.overallStatus === "ready" ? existing.campaignStatus : "action_required",
-      overallStatus: materialChanged ? "action_required" : existing.overallStatus === "ready" ? "ready" : "action_required",
-      messagingEnabled: materialChanged ? false : existing.messagingEnabled,
+      ...(materialChanged
+        ? {
+            campaignStatus: "action_required" as const,
+            overallStatus: "action_required" as const,
+            messagingEnabled: false,
+            a2pCampaignSid: null,
+            certifiedAt: null,
+          }
+        : {
+            campaignStatus:
+              existing.overallStatus === "ready" ? existing.campaignStatus : "action_required",
+            overallStatus: existing.overallStatus === "ready" ? "ready" : "action_required",
+          }),
     });
     await appendRegistrationEvent({
       workspaceId,
@@ -164,17 +192,20 @@ export const messagingOnboarding = {
       throw new Error("A phone number is already purchased for this workspace. Release it first.");
     }
 
-    const claimToken = `PENDING:${e164}`;
+    const claimToken = `PENDING:${randomBytes(8).toString("hex")}`;
     const claimed = await getPrisma().messagingRegistration.updateMany({
       where: {
         workspaceId,
-        OR: [{ phoneSid: null }, { phoneSid: { startsWith: "PENDING:" } }],
+        phoneSid: null,
       },
       data: { phoneSid: claimToken, phoneE164: e164, numberStatus: "submitted" },
     });
     if (claimed.count !== 1) {
       throw new Error("A phone number is already purchased for this workspace. Release it first.");
     }
+
+    // Reload reg after claim so adapter sees current row
+    reg = (await getRegistrationByWorkspace(workspaceId))!;
 
     let purchased: { sid: string; phoneNumber: string };
     try {
@@ -189,13 +220,20 @@ export const messagingOnboarding = {
       throw err;
     }
 
-    reg = await updateRegistration(workspaceId, {
-      phoneE164: purchased.phoneNumber,
-      phoneSid: purchased.sid,
-      phonePurchasedAt: new Date(),
-      phoneAttached: false,
-      numberStatus: "submitted",
+    const committed = await getPrisma().messagingRegistration.updateMany({
+      where: { workspaceId, phoneSid: claimToken },
+      data: {
+        phoneE164: purchased.phoneNumber,
+        phoneSid: purchased.sid,
+        phonePurchasedAt: new Date(),
+        phoneAttached: false,
+        numberStatus: "submitted",
+      },
     });
+    if (committed.count !== 1) {
+      throw new Error("Lost phone purchase claim — contact support to reconcile Twilio inventory");
+    }
+    reg = (await getRegistrationByWorkspace(workspaceId))!;
 
     await getPrisma().phoneNumber.upsert({
       where: { workspaceId_e164: { workspaceId, e164: purchased.phoneNumber } },

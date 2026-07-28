@@ -159,7 +159,7 @@ export async function advanceRecipient(recipientId: string, factsOverride?: Cond
     return recipient;
   }
 
-  if (recipient.campaign.status === "PAUSED" || recipient.campaign.status === "CANCELED") {
+  if (recipient.campaign.status !== "SENDING" && recipient.campaign.status !== "SCHEDULED") {
     return recipient;
   }
 
@@ -238,6 +238,14 @@ export async function advanceRecipient(recipientId: string, factsOverride?: Cond
     }
 
     if (step.step_type === "send_sms" || step.step_type === "send_email") {
+      if (recipient.campaign.status !== "SENDING") {
+        // Park until campaign is actively sending
+        await casRecipient(recipientId, {
+          workflowStatus: "pending",
+          currentStep: step.step_key,
+        });
+        return prisma.campaignRecipient.findUnique({ where: { id: recipientId } });
+      }
       const existing = await prisma.campaignMessage.findFirst({
         where: {
           recipientId,
@@ -382,17 +390,20 @@ export async function markRecipientFact(
   value = true,
 ) {
   const prisma = getPrisma();
-  // Serialize fact merges per recipient to avoid lost updates
   await prisma.$transaction(async (tx) => {
-    const recipient = await tx.campaignRecipient.findUnique({ where: { id: recipientId } });
+    const rows = await tx.$queryRaw<Array<{ id: string; metadata: unknown }>>`
+      SELECT id, metadata FROM campaign_recipients WHERE id = ${recipientId} FOR UPDATE
+    `;
+    const recipient = rows[0];
     if (!recipient) return;
-    const prev = (recipient.metadata && typeof recipient.metadata === "object"
-      ? (recipient.metadata as Record<string, unknown>)
-      : {}) as Record<string, unknown>;
+    const prev =
+      recipient.metadata && typeof recipient.metadata === "object"
+        ? (recipient.metadata as Record<string, unknown>)
+        : {};
     await tx.campaignRecipient.update({
       where: { id: recipientId },
       data: {
-        metadata: { ...prev, [fact]: value } as import("@prisma/client").Prisma.InputJsonValue,
+        metadata: { ...prev, [fact]: value } as Prisma.InputJsonValue,
       },
     });
   });

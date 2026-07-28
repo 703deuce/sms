@@ -56,6 +56,8 @@ async function verifySignature(
 ) {
   const signature = request.headers.get("x-twilio-signature") || "";
   if (!signature) {
+    // Unsigned only allowed outside production AND when not live
+    if (process.env.NODE_ENV === "production") return false;
     if (isLiveMessagingAdapter()) return false;
     return true;
   }

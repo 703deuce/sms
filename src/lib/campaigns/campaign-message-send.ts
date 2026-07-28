@@ -33,10 +33,38 @@ async function failRecipient(recipientId: string, reason: string) {
   });
 }
 
+/** Idempotent post-send bookkeeping: count once + advance recipient. */
+export async function finalizeSentMessage(messageId: string) {
+  const prisma = getPrisma();
+  const message = await prisma.campaignMessage.findUnique({ where: { id: messageId } });
+  if (!message) return { ok: false as const, reason: "missing" };
+  if (!["sent", "delivered", "clicked"].includes(message.status)) {
+    return { ok: false as const, reason: "not_sent" };
+  }
+
+  const counted = await prisma.campaignMessage.updateMany({
+    where: { id: messageId, sentCounted: false },
+    data: { sentCounted: true },
+  });
+  if (counted.count === 1) {
+    await prisma.campaign.update({
+      where: { id: message.campaignId },
+      data: { sent: { increment: 1 } },
+    });
+  }
+
+  try {
+    await tryAdvanceRecipientAfterSend(message.recipientId);
+  } catch (err) {
+    console.warn("[finalizeSentMessage] advance failed", messageId, err);
+  }
+  return { ok: true as const, counted: counted.count === 1 };
+}
+
 /**
  * Reclaim stuck sends without double-sending:
  * - no providerId yet → crash before provider call → safe to requeue
- * - pending:* → provider outcome unknown → assume sent (never resend) and finish bookkeeping
+ * - pending:* → provider outcome unknown → assume sent (never resend) and finalize
  */
 export async function reclaimStuckSendingMessages(staleMs = 10 * 60 * 1000) {
   const prisma = getPrisma();
@@ -70,17 +98,19 @@ export async function reclaimStuckSendingMessages(staleMs = 10 * 60 * 1000) {
       },
     });
     if (marked.count !== 1) continue;
+    await finalizeSentMessage(msg.id);
+  }
 
-    // Bookkeeping once — only if we just transitioned
-    await prisma.campaign.update({
-      where: { id: msg.campaignId },
-      data: { sent: { increment: 1 } },
-    });
-    try {
-      await tryAdvanceRecipientAfterSend(msg.recipientId);
-    } catch (err) {
-      console.warn("[reclaimStuckSendingMessages] advance failed", msg.id, err);
-    }
+  // Recover sent rows that never finished bookkeeping
+  const unfinished = await prisma.campaignMessage.findMany({
+    where: {
+      status: { in: ["sent", "delivered", "clicked"] },
+      sentCounted: false,
+    },
+    take: 50,
+  });
+  for (const msg of unfinished) {
+    await finalizeSentMessage(msg.id);
   }
 }
 
@@ -121,7 +151,12 @@ export async function sendCampaignMessageById(messageId: string) {
     throw new JobFailedError(message.error || "send_failed");
   }
 
-  // Only send after a successful claim from queued — never re-send `sending`/`sent`
+  // Already sent — finish bookkeeping if needed, never resend
+  if (["sent", "delivered", "clicked"].includes(message.status)) {
+    await finalizeSentMessage(messageId);
+    return { skipped: true, status: message.status, finalized: true };
+  }
+
   if (message.status !== "queued") {
     return { skipped: true, status: message.status };
   }
@@ -134,20 +169,18 @@ export async function sendCampaignMessageById(messageId: string) {
     return { skipped: true, status: "recipient_terminal" };
   }
 
-  if (message.campaign.status === "PAUSED" || message.campaign.status === "CANCELED" || message.campaign.status === "DRAFT") {
+  if (message.campaign.status !== "SENDING") {
+    if (message.campaign.status === "SCHEDULED") {
+      await prisma.campaignMessage.update({
+        where: { id: messageId },
+        data: {
+          scheduledFor: message.campaign.scheduledAt || new Date(),
+          error: "waiting_for_schedule",
+        },
+      });
+      return { deferred: true, reason: "scheduled" };
+    }
     return { deferred: true, reason: "campaign_not_active" };
-  }
-
-  if (
-    message.campaign.status === "SCHEDULED" &&
-    message.campaign.scheduledAt &&
-    message.campaign.scheduledAt > new Date()
-  ) {
-    await prisma.campaignMessage.update({
-      where: { id: messageId },
-      data: { scheduledFor: message.campaign.scheduledAt, error: "waiting_for_schedule" },
-    });
-    return { deferred: true, reason: "scheduled" };
   }
 
   const now = new Date();
@@ -195,7 +228,6 @@ export async function sendCampaignMessageById(messageId: string) {
     throw new JobFailedError(entitlement.error);
   }
 
-  // Suppression / contact gates for SMS and email
   if (message.channel === "sms" && message.to) {
     const contact = await prisma.contact.findUnique({
       where: { workspaceId_phone: { workspaceId: message.workspaceId, phone: message.to } },
@@ -267,7 +299,6 @@ export async function sendCampaignMessageById(messageId: string) {
     }
   }
 
-  // Provisional provider id so crash-after-accept won't reclaim into a resend
   await prisma.campaignMessage.update({
     where: { id: messageId },
     data: { providerId: `pending:${messageId}` },
@@ -316,22 +347,11 @@ export async function sendCampaignMessageById(messageId: string) {
       },
     });
 
-    await prisma.campaign.update({
-      where: { id: message.campaignId },
-      data: { sent: { increment: 1 } },
-    });
-
-    try {
-      await tryAdvanceRecipientAfterSend(message.recipientId);
-    } catch (advanceErr) {
-      // Provider already accepted — do not retry send; advancement can recover later
-      console.warn("[sendCampaignMessageById] advance after send failed", messageId, advanceErr);
-    }
+    await finalizeSentMessage(messageId);
     return { ok: true };
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err);
 
-    // Provider already accepted: persist sent, never auto-retry (would double-send)
     if (providerAccepted) {
       await prisma.campaignMessage.updateMany({
         where: { id: messageId, status: { in: ["sending", "queued"] } },
@@ -342,16 +362,20 @@ export async function sendCampaignMessageById(messageId: string) {
           error: `bookkeeping_error:${error}`,
         },
       });
-      try {
-        await prisma.campaign.update({
-          where: { id: message.campaignId },
-          data: { sent: { increment: 1 } },
-        });
-        await tryAdvanceRecipientAfterSend(message.recipientId);
-      } catch {
-        // recoverable via reclaim / next batch
-      }
+      await finalizeSentMessage(messageId);
       return { ok: true, bookkeepingError: error };
+    }
+
+    // Ambiguous transport error after provisional mark — do not clear and resend.
+    // Leave sending+pending so reclaim can assume-sent rather than double-send.
+    const looksAmbiguous =
+      /timeout|ECONNRESET|socket|network|aborted|ETIMEDOUT/i.test(error);
+    if (looksAmbiguous) {
+      await prisma.campaignMessage.update({
+        where: { id: messageId },
+        data: { error: `ambiguous_send:${error}` },
+      });
+      throw new JobDeferredError(`send_ambiguous:${error}`, 5 * 60_000);
     }
 
     const prior = retryCountFromError(message.error);

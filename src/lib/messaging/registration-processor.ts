@@ -416,13 +416,21 @@ export async function ensureSubaccount(workspaceId: string, friendlyName: string
       ? await live.createCustomerSubaccount(friendlyName)
       : await mockAdapter.createCustomerSubaccount(friendlyName);
 
-    reg = await updateRegistration(workspaceId, {
-      subaccountSid: created.sid,
-      subaccountAuthTokenEnc: encryptSecret(created.authToken),
-      overallStatus: reg!.overallStatus === "not_started" ? "action_required" : reg!.overallStatus,
+    const result = await getPrisma().messagingRegistration.updateMany({
+      where: { workspaceId, subaccountSid: claimToken },
+      data: {
+        subaccountSid: created.sid,
+        subaccountAuthTokenEnc: encryptSecret(created.authToken),
+        overallStatus: reg!.overallStatus === "not_started" ? "action_required" : reg!.overallStatus,
+      },
     });
-    await log(reg, "subaccount_created", created.sid);
-    return reg;
+    if (result.count !== 1) {
+      throw new Error("Lost subaccount claim after Twilio create — reconcile orphaned subaccount");
+    }
+    const updated = await getRegistrationByWorkspace(workspaceId);
+    if (!updated) throw new Error("Registration disappeared after subaccount create");
+    await log(updated, "subaccount_created", created.sid);
+    return updated;
   } catch (err) {
     await getPrisma().messagingRegistration.updateMany({
       where: { workspaceId, subaccountSid: claimToken },

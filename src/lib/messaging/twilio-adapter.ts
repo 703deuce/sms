@@ -92,7 +92,7 @@ export const twilioAdapter = {
       .customerProfiles(profileSid)
       .customerProfilesEntityAssignments.list({ limit: 50 });
 
-    if (existingAssignments.length < 2) {
+    if (existingAssignments.length < 3) {
       const businessAttrs = {
         business_name: reg.legalBusinessName,
         business_identity: reg.businessIdentity || "direct_customer",

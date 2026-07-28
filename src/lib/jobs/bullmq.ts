@@ -50,6 +50,15 @@ export async function startBullmqWorkers() {
           await syncDbJob(job.id, "completed");
         } catch (err) {
           if (err instanceof JobDeferredError) {
+            // Mirror soft defer into DB outbox so cron doesn't promote early forever
+            if (job.id) {
+              const row = await getPrisma().jobQueue.findUnique({
+                where: { idempotencyKey: job.id },
+              });
+              if (row) {
+                await failJob(row.id, err.message, err.deferMs, err.soft);
+              }
+            }
             await job.moveToDelayed(Date.now() + err.deferMs, job.token);
             throw new DelayedError();
           }

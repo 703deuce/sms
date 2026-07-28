@@ -185,6 +185,52 @@ export async function processIncomingIntegrationWebhook(
     return { duplicate: false, eventId, recipientId: recipient.id, status: "processed" };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+
+    // Crash after enroll but before event update: treat duplicate enrollment as success
+    if (message.includes("already enrolled") && endpoint.campaignId) {
+      const phone = readMapped(
+        payload,
+        (endpoint.fieldMap || null) as Record<string, string> | null,
+        ["phone", "customerPhone", "Phone", "mobile"],
+      );
+      const email = readMapped(
+        payload,
+        (endpoint.fieldMap || null) as Record<string, string> | null,
+        ["email", "customerEmail", "Email"],
+      );
+      const existing = await prisma.campaignRecipient.findFirst({
+        where: {
+          campaignId: endpoint.campaignId,
+          OR: [
+            ...(phone ? [{ phone: phone.replace(/\D/g, "").length ? undefined : phone }] : []),
+          ].filter(Boolean) as Array<{ phone?: string; email?: string }>,
+        },
+      });
+      // Simpler lookup by enrollmentKey pattern
+      const byKey = await prisma.campaignRecipient.findFirst({
+        where: {
+          campaignId: endpoint.campaignId,
+          OR: [
+            ...(phone
+              ? [{ enrollmentKey: `${endpoint.campaignId}:p:${phone.startsWith("+") ? phone : phone}` }]
+              : []),
+            ...(email ? [{ enrollmentKey: `${endpoint.campaignId}:e:${email.toLowerCase()}` }] : []),
+            ...(phone ? [{ phone }] : []),
+            ...(email ? [{ email: email.toLowerCase() }] : []),
+          ],
+        },
+        orderBy: { enrolledAt: "desc" },
+      });
+      const found = byKey || existing;
+      if (found) {
+        await prisma.integrationWebhookEvent.update({
+          where: { id: eventId! },
+          data: { status: "processed", processedAt: new Date(), error: null },
+        });
+        return { duplicate: true, eventId: eventId!, recipientId: found.id, status: "processed" };
+      }
+    }
+
     await prisma.integrationWebhookEvent.update({
       where: { id: eventId! },
       data: { status: "failed", error: message, processedAt: new Date() },
