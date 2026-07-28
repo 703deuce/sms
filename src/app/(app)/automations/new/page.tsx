@@ -148,7 +148,10 @@ export default function NewAutomationPage() {
                 Cancel
               </Button>
             </Link>
-            <Button className="rounded-[10px]">
+            <Button
+              variant="outline"
+              className="rounded-[10px] border-primary text-primary hover:bg-emerald-50"
+            >
               <Save className="h-4 w-4" />
               Save draft
             </Button>
