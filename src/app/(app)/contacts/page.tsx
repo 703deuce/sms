@@ -8,6 +8,7 @@ import {
 import { StatusChip } from "@/components/ui/status-chip";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Tabs } from "@/components/ui/tabs";
+import { contactTabs } from "@/lib/contact-tabs";
 import { contacts } from "@/lib/mock/data";
 import { cn, formatNumber, formatPercent, formatPhone } from "@/lib/utils";
 import {
@@ -22,15 +23,6 @@ import {
   Users,
 } from "lucide-react";
 import Link from "next/link";
-
-const contactTabs = [
-  { label: "All Contacts", href: "/contacts" },
-  { label: "Lists", href: "/contacts/lists" },
-  { label: "Segments", href: "/contacts/segments" },
-  { label: "Tags", href: "/contacts/tags" },
-  { label: "Imports", href: "/contacts/imports" },
-  { label: "Custom Fields", href: "/contacts/fields" },
-];
 
 const avatarTones = [
   "bg-emerald-100 text-emerald-700",

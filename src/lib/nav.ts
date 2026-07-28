@@ -44,6 +44,7 @@ export const appNav: NavItem[] = [
       { label: "Tags", href: "/contacts/tags" },
       { label: "Imports", href: "/contacts/imports" },
       { label: "Unsubscribed", href: "/contacts/unsubscribed" },
+      { label: "Invalid numbers", href: "/contacts/invalid" },
       { label: "Blocked", href: "/contacts/blocked" },
     ],
   },
