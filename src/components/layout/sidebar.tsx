@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 export function Sidebar({
   workspaceId,
@@ -28,12 +28,22 @@ export function Sidebar({
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [expanded, setExpanded] = useState<string | null>(null);
 
   const activeWorkspace = useMemo(
     () => workspaces.find((w) => w.id === workspaceId) ?? workspaces[0],
     [workspaceId],
   );
+
+  // Keep only the section for the current route open (mock-style accordion).
+  useEffect(() => {
+    const match = appNav.find((item) =>
+      item.children?.some(
+        (c) => pathname === c.href || pathname.startsWith(`${c.href}/`),
+      ),
+    );
+    setExpanded(match?.label ?? null);
+  }, [pathname]);
 
   async function switchWorkspace(id: string) {
     await fetch("/api/workspace", {
@@ -51,17 +61,18 @@ export function Sidebar({
   }
 
   const content = (
-    <aside className="flex h-full w-[260px] flex-col bg-sidebar text-sidebar-foreground">
-      <div className="border-b border-white/10 px-4 py-4">
+    <aside className="flex h-dvh w-[260px] flex-col overflow-hidden bg-sidebar text-sidebar-foreground">
+      {/* Brand + workspace — fixed top */}
+      <div className="shrink-0 px-4 pb-3 pt-4">
         <Link href="/dashboard" className="flex items-start gap-2.5" onClick={onClose}>
-          <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary text-white shadow-[0_8px_18px_rgba(16,185,129,0.35)]">
+          <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-primary text-white shadow-[0_8px_18px_rgba(16,185,129,0.35)]">
             <MessageSquare className="h-4 w-4" fill="currentColor" />
           </span>
           <span>
             <span className="block text-[15px] font-bold tracking-tight text-white">
               Transovo SMS
             </span>
-            <span className="mt-0.5 block text-[11px] text-sidebar-muted">
+            <span className="mt-0.5 block text-[11px] leading-tight text-sidebar-muted">
               Business texting platform
             </span>
           </span>
@@ -87,45 +98,49 @@ export function Sidebar({
           </select>
           <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-sidebar-muted" />
         </div>
-      </div>
 
-      <div className="px-3 pt-3">
         <Link
           href="/send"
           onClick={onClose}
-          className="flex h-10 items-center justify-center gap-2 rounded-[10px] bg-primary px-3 text-[13px] font-semibold text-white shadow-[0_8px_18px_rgba(16,185,129,0.3)] transition hover:bg-primary-hover"
+          className="mt-3 flex h-10 items-center justify-center gap-2 rounded-[10px] bg-primary px-3 text-[13px] font-semibold text-white shadow-[0_8px_18px_rgba(16,185,129,0.3)] transition hover:bg-primary-hover"
         >
           <Send className="h-4 w-4" />
           Send campaign
         </Link>
       </div>
 
-      <nav className="mt-3 flex-1 space-y-[2px] overflow-y-auto px-2.5 pb-3">
+      {/* Nav — only this region scrolls, and only when needed */}
+      <nav className="sidebar-nav min-h-0 flex-1 space-y-0.5 overflow-y-auto overscroll-contain px-2.5 pb-2">
         {appNav.map((item) => {
           const Icon = item.icon;
           const childActive = item.children?.some(
-            (c) => pathname === c.href || pathname.startsWith(c.href + "/"),
+            (c) => pathname === c.href || pathname.startsWith(`${c.href}/`),
           );
           const active =
             pathname === item.href ||
-            childActive ||
+            Boolean(childActive) ||
             (item.href !== "/dashboard" &&
-              pathname.startsWith(item.href + "/") &&
+              pathname.startsWith(`${item.href}/`) &&
               !item.children);
-          const isOpen = expanded[item.label] ?? Boolean(childActive);
+          const isOpen = expanded === item.label;
 
           return (
             <div key={item.label}>
-              <div className="flex items-center">
+              <div
+                className={cn(
+                  "group relative flex items-center rounded-[10px] transition",
+                  active
+                    ? "bg-primary/15 text-primary"
+                    : "text-sidebar-foreground/90 hover:bg-white/5 hover:text-white",
+                )}
+              >
+                {active ? (
+                  <span className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r-full bg-primary" />
+                ) : null}
                 <Link
                   href={item.href}
                   onClick={onClose}
-                  className={cn(
-                    "group flex flex-1 items-center gap-2.5 rounded-[10px] px-3 py-[9px] text-[13px] font-medium transition",
-                    active
-                      ? "bg-primary/15 text-primary"
-                      : "text-sidebar-foreground/90 hover:bg-white/5 hover:text-white",
-                  )}
+                  className="flex min-w-0 flex-1 items-center gap-2.5 py-2 pl-3 pr-1 text-[13px] font-medium"
                 >
                   <Icon
                     className={cn(
@@ -143,22 +158,37 @@ export function Sidebar({
                 {item.children ? (
                   <button
                     type="button"
-                    className="rounded-md p-2 text-sidebar-muted hover:bg-white/5 hover:text-white"
+                    className={cn(
+                      "mr-1.5 rounded-md p-1.5 transition",
+                      active
+                        ? "text-primary hover:bg-primary/10"
+                        : "text-sidebar-muted hover:bg-white/5 hover:text-white",
+                    )}
                     onClick={() =>
-                      setExpanded((s) => ({ ...s, [item.label]: !isOpen }))
+                      setExpanded((current) =>
+                        current === item.label ? null : item.label,
+                      )
                     }
+                    aria-expanded={isOpen}
                     aria-label={`Toggle ${item.label}`}
                   >
                     <ChevronDown
-                      className={cn("h-3.5 w-3.5 transition", isOpen && "rotate-180")}
+                      className={cn(
+                        "h-3.5 w-3.5 transition-transform",
+                        isOpen && "rotate-180",
+                      )}
                     />
                   </button>
                 ) : null}
               </div>
+
               {item.children && isOpen ? (
-                <div className="mb-1 ml-4 mt-0.5 space-y-0.5 border-l border-white/10 pl-2">
+                <div className="mb-1 ml-3.5 mt-0.5 space-y-0.5 border-l border-white/10 pl-2.5">
                   {item.children.map((child) => {
-                    const childIsActive = pathname === child.href;
+                    const childIsActive =
+                      pathname === child.href ||
+                      (child.href !== item.href &&
+                        pathname.startsWith(`${child.href}/`));
                     return (
                       <Link
                         key={child.href}
@@ -167,7 +197,7 @@ export function Sidebar({
                         className={cn(
                           "block rounded-md px-2.5 py-1.5 text-[12px] transition",
                           childIsActive
-                            ? "bg-white/10 text-white"
+                            ? "bg-white/10 font-medium text-white"
                             : "text-sidebar-muted hover:bg-white/5 hover:text-white",
                         )}
                       >
@@ -182,7 +212,8 @@ export function Sidebar({
         })}
       </nav>
 
-      <div className="space-y-0.5 border-t border-white/10 p-3">
+      {/* Footer — pinned bottom, never scrolls away */}
+      <div className="shrink-0 space-y-0.5 border-t border-white/10 p-3">
         <Link
           href="/getting-started"
           onClick={onClose}
@@ -225,7 +256,9 @@ export function Sidebar({
 
   return (
     <>
-      <div className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-[260px]">{content}</div>
+      <div className="hidden lg:fixed lg:inset-y-0 lg:z-30 lg:flex lg:w-[260px]">
+        {content}
+      </div>
       {open ? (
         <div className="fixed inset-0 z-50 lg:hidden">
           <button
