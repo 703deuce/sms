@@ -5,7 +5,7 @@ Multi-tenant business texting SaaS — campaigns, shared inbox, automations, com
 ## Stack
 
 - **Next.js 16** (App Router) + TypeScript + Tailwind CSS v4
-- **Prisma 6** + PostgreSQL (schema + seed; UI uses mock data by default)
+- **Supabase** (Postgres + JS client, LSE-style env) with Prisma during migration
 - **Twilio ISV messaging** (subaccounts, A2P 10DLC, Messaging Service sends) + optional BullMQ worker
 
 ## Quick start (demo UI)
@@ -23,18 +23,27 @@ Open [http://localhost:3000](http://localhost:3000) and sign in with any email/p
 - Email: `alex@harborhome.co`
 - Password: `demo1234`
 
-## Database setup (optional)
-
-When you're ready to wire up Postgres:
+## Database setup (Supabase — same as Local SEO Express)
 
 ```powershell
 cp .env.example .env
-# Edit DATABASE_URL in .env
+# Set:
+#   NEXT_PUBLIC_SUPABASE_URL
+#   NEXT_PUBLIC_SUPABASE_ANON_KEY
+#   SUPABASE_SERVICE_ROLE_KEY
+#   DATABASE_URL  = Supabase Postgres URI (Settings → Database) — same project
+```
 
-npm run db:push
+1. Run [`supabase/schema.sql`](supabase/schema.sql) in the Supabase SQL editor (creates tables).
+2. Server code uses `getSupabaseAdmin()` from `src/lib/supabase/admin.ts` (service role).
+3. `DATABASE_URL` is still required for Prisma call sites during the migration off Prisma — it is the **same** Supabase database, not a second DB.
+
+```powershell
+npm run db:push   # optional if you applied schema.sql
 npm run db:seed
 ```
 
+See [supabase/README.md](supabase/README.md).
 ## Scripts
 
 | Command | Description |
