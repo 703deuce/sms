@@ -33,7 +33,7 @@ cp .env.example .env
 #   SUPABASE_SERVICE_ROLE_KEY
 ```
 
-1. Run [`supabase/bootstrap.sql`](supabase/bootstrap.sql) in the Supabase SQL editor (idempotent — safe if partially applied).
+1. Run [`supabase/fresh-install.sql`](supabase/fresh-install.sql) in the Supabase SQL editor (drops partial tables then recreates — use if you hit schema errors).
 2. Server code uses `getSupabaseAdmin()` / `getPrisma()` (Supabase-backed) — **no `DATABASE_URL`**.
 
 ```powershell

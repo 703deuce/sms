@@ -10,19 +10,31 @@ SUPABASE_SERVICE_ROLE_KEY=
 
 ## 1. Apply the schema
 
-In the Supabase SQL editor, run:
+In the Supabase SQL editor, prefer:
 
-**[`bootstrap.sql`](./bootstrap.sql)** ← use this (idempotent, safe if you already ran part of the schema)
+### [`fresh-install.sql`](./fresh-install.sql) ← use this if you hit errors
 
-If you hit `relation "…" already exists`, you started with `schema.sql` (non-idempotent). Switch to `bootstrap.sql` and re-run — it skips existing enums/tables/indexes/constraints.
+This **drops** Transovo app tables (partial/wrong-shaped leftovers) and recreates them correctly.
 
-Fresh empty project either file works; prefer `bootstrap.sql`.
+Use it when you saw:
+- `relation "messaging_registrations" already exists`
+- `column "workspaceId" does not exist`
+
+Those happen when an older/partial table was left behind; `CREATE TABLE IF NOT EXISTS` will not fix missing columns.
+
+### Alternatives
+- [`bootstrap.sql`](./bootstrap.sql) — idempotent create (only works if existing tables already have the right columns)
+- [`schema.sql`](./schema.sql) — raw Prisma diff (fails if anything already exists)
+- [`diagnose.sql`](./diagnose.sql) — list columns on key tables
+
+Fresh empty project: `fresh-install.sql` or `bootstrap.sql` both work.
 
 To regenerate:
 
 ```bash
 npm run db:schema
 npm run db:bootstrap
+# then rebuild fresh-install from bootstrap (see scripts if added)
 ```
 
 ## 2. Env vars
@@ -39,7 +51,6 @@ npm run db:bootstrap
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getPrisma } from "@/lib/db";
 
-// Idiomatic Supabase (preferred for new code)
 const sb = getSupabaseAdmin();
 const { data, error } = await sb
   .from("messaging_registrations")
@@ -47,13 +58,8 @@ const { data, error } = await sb
   .eq("workspaceId", id)
   .maybeSingle();
 
-// Existing call sites keep Prisma-shaped helpers backed by Supabase
 const reg = await getPrisma().messagingRegistration.findUnique({ where: { workspaceId: id } });
 ```
-
-- `getSupabaseAdmin()` — service role, server only  
-- `createBrowserSupabase()` — anon key, client components  
-- `getPrisma()` — Supabase-backed facade for migrated Prisma call sites  
 
 ## 4. Seed
 

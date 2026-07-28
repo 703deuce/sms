@@ -2,6 +2,9 @@
 -- Safe to re-run if some tables/enums already exist (e.g. partial prior apply).
 -- Regenerate: npm run db:schema && npm run db:bootstrap
 
+-- Prefer supabase/bootstrap.sql in the SQL editor (idempotent).
+-- This file is the raw Prisma diff output.
+
 -- CreateEnum
 DO $$ BEGIN
     CREATE TYPE "Role" AS ENUM ('OWNER', 'ADMINISTRATOR', 'MANAGER', 'CAMPAIGN_CREATOR', 'INBOX_AGENT', 'ANALYST', 'READ_ONLY');
