@@ -19,7 +19,13 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
     case "send_campaign_email": {
       const messageId = String(payload.messageId || "");
       if (!messageId) throw new Error("messageId required");
-      return sendCampaignMessageById(messageId);
+      const result = await sendCampaignMessageById(messageId);
+      // Soft deferrals must not complete the job (BullMQ would drop re-enqueue by jobId)
+      if (result && typeof result === "object" && "deferred" in result && (result as { deferred?: boolean }).deferred) {
+        const reason = String((result as { reason?: string }).reason || "deferred");
+        throw new JobDeferredError(`send_deferred:${reason}`, 60_000);
+      }
+      return result;
     }
     default:
       throw new Error(`Unknown job type: ${jobType}`);
@@ -35,6 +41,12 @@ export async function processDueJobs(limit = 25) {
     payload: { minuteKey },
     idempotencyKey: `campaign-send-batch:${minuteKey}`,
   });
+
+  // When BullMQ is the consumer, cron only enqueues the minute batch (dual-written).
+  // Do not also claim/process DB jobs — that would double-send.
+  if (process.env.QUEUE_DRIVER === "bullmq" && process.env.REDIS_URL) {
+    return { processed: 0, results: [] as Array<{ id: string; jobType: string; ok: boolean; error?: string }>, mode: "bullmq" };
+  }
 
   const results: Array<{ id: string; jobType: string; ok: boolean; error?: string }> = [];
 
@@ -52,7 +64,7 @@ export async function processDueJobs(limit = 25) {
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         if (err instanceof JobFailedError) {
-          await failJob(job.id, message);
+          await failJob(job.id, message, undefined, undefined, true);
           results.push({ id: job.id, jobType: job.jobType, ok: false, error: message });
           continue;
         }
@@ -64,5 +76,5 @@ export async function processDueJobs(limit = 25) {
     }
   }
 
-  return { processed: results.length, results };
+  return { processed: results.length, results, mode: "db" };
 }

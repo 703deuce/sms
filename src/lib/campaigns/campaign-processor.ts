@@ -13,6 +13,9 @@ function inSendWindow(now: Date, startHour: number | null | undefined, endHour: 
 }
 
 export async function enqueueDueCampaignMessages() {
+  const { reclaimStuckSendingMessages } = await import("./campaign-message-send");
+  await reclaimStuckSendingMessages();
+
   const waits = await processSequenceWaits();
   const prisma = getPrisma();
   const now = new Date();

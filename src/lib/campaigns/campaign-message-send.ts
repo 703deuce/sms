@@ -4,7 +4,7 @@ import { sendTransactionalEmail } from "@/lib/email/brevo";
 import { sendViaRegistration } from "@/lib/messaging/registration-processor";
 import { isMessagingReady } from "@/lib/messaging/status";
 import { getRegistrationByWorkspace } from "@/lib/messaging/store";
-import { markRecipientFact, tryAdvanceRecipientAfterSend } from "./sequence-runner";
+import { tryAdvanceRecipientAfterSend } from "./sequence-runner";
 
 async function claimMessage(id: string) {
   const result = await getPrisma().campaignMessage.updateMany({
@@ -12,6 +12,18 @@ async function claimMessage(id: string) {
     data: { status: "sending" },
   });
   return result.count === 1;
+}
+
+/** Reclaim messages stuck in sending after a worker crash. */
+export async function reclaimStuckSendingMessages(staleMs = 10 * 60 * 1000) {
+  const cutoff = new Date(Date.now() - staleMs);
+  return getPrisma().campaignMessage.updateMany({
+    where: {
+      status: "sending",
+      updatedAt: { lt: cutoff },
+    },
+    data: { status: "queued", error: "reclaimed_stale_sending" },
+  });
 }
 
 function inSendWindow(now: Date, startHour: number | null | undefined, endHour: number | null | undefined) {
@@ -24,22 +36,21 @@ function inSendWindow(now: Date, startHour: number | null | undefined, endHour: 
 
 export async function sendCampaignMessageById(messageId: string) {
   const prisma = getPrisma();
+  await reclaimStuckSendingMessages();
+
   const message = await prisma.campaignMessage.findUnique({
     where: { id: messageId },
     include: { recipient: true, campaign: true },
   });
   if (!message) throw new Error(`Campaign message ${messageId} not found`);
 
-  if (message.status !== "queued" && message.status !== "sending") {
+  // Only send after a successful claim from queued — never re-send `sending`
+  if (message.status !== "queued") {
     return { skipped: true, status: message.status };
   }
 
-  // Campaign status gates
+  // Campaign status gates (check before claim to avoid stuck sending)
   if (message.campaign.status === "PAUSED" || message.campaign.status === "CANCELED" || message.campaign.status === "DRAFT") {
-    await prisma.campaignMessage.update({
-      where: { id: messageId },
-      data: { status: "queued", error: `campaign_${message.campaign.status.toLowerCase()}` },
-    });
     return { deferred: true, reason: "campaign_not_active" };
   }
 
@@ -50,18 +61,17 @@ export async function sendCampaignMessageById(messageId: string) {
   ) {
     await prisma.campaignMessage.update({
       where: { id: messageId },
-      data: { status: "queued", scheduledFor: message.campaign.scheduledAt, error: "waiting_for_schedule" },
+      data: { scheduledFor: message.campaign.scheduledAt, error: "waiting_for_schedule" },
     });
     return { deferred: true, reason: "scheduled" };
   }
 
   const now = new Date();
   if (!inSendWindow(now, message.campaign.sendWindowStart, message.campaign.sendWindowEnd)) {
-    // Push to next hour boundary roughly
     const next = new Date(now.getTime() + 60 * 60 * 1000);
     await prisma.campaignMessage.update({
       where: { id: messageId },
-      data: { status: "queued", scheduledFor: next, error: "outside_send_window" },
+      data: { scheduledFor: next, error: "outside_send_window" },
     });
     return { deferred: true, reason: "send_window" };
   }
@@ -71,8 +81,11 @@ export async function sendCampaignMessageById(messageId: string) {
     const sentToday = await prisma.campaignMessage.count({
       where: {
         campaignId: message.campaignId,
-        status: { in: ["sent", "delivered", "sending", "clicked"] },
-        sentAt: { gte: dayStart },
+        OR: [
+          { status: { in: ["sent", "delivered", "clicked"] }, sentAt: { gte: dayStart } },
+          // Reserve in-flight sends toward the cap (sending has no sentAt yet)
+          { status: "sending", updatedAt: { gte: dayStart } },
+        ],
         id: { not: messageId },
       },
     });
@@ -80,16 +93,14 @@ export async function sendCampaignMessageById(messageId: string) {
       const tomorrow = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
       await prisma.campaignMessage.update({
         where: { id: messageId },
-        data: { status: "queued", scheduledFor: tomorrow, error: "daily_limit" },
+        data: { scheduledFor: tomorrow, error: "daily_limit" },
       });
       return { deferred: true, reason: "daily_limit" };
     }
   }
 
-  if (message.status === "queued") {
-    const claimed = await claimMessage(messageId);
-    if (!claimed) return { skipped: true, status: "race" };
-  }
+  const claimed = await claimMessage(messageId);
+  if (!claimed) return { skipped: true, status: "race" };
 
   const entitlement = requireCampaignSendAccess(message.workspaceId);
   if (!entitlement.ok) {
@@ -100,7 +111,6 @@ export async function sendCampaignMessageById(messageId: string) {
     throw new Error(entitlement.error);
   }
 
-  // Contact consent / status gate for SMS
   if (message.channel === "sms" && message.to) {
     const contact = await prisma.contact.findUnique({
       where: { workspaceId_phone: { workspaceId: message.workspaceId, phone: message.to } },
@@ -148,7 +158,6 @@ export async function sendCampaignMessageById(messageId: string) {
       if (result.status === "failed") {
         throw new Error(result.error || "Email send failed");
       }
-      // In live messaging mode, refuse silent stub success for email
       if (
         result.provider === "stub" &&
         (process.env.TWILIO_MODE === "live" || process.env.MESSAGING_ADAPTER === "twilio") &&
@@ -162,6 +171,7 @@ export async function sendCampaignMessageById(messageId: string) {
           status: "sent",
           sentAt: new Date(),
           providerId: result.id,
+          error: null,
         },
       });
     } else {
@@ -176,6 +186,7 @@ export async function sendCampaignMessageById(messageId: string) {
           status: "sent",
           sentAt: new Date(),
           providerId: result.sid,
+          error: null,
         },
       });
     }
@@ -185,7 +196,7 @@ export async function sendCampaignMessageById(messageId: string) {
       data: { sent: { increment: 1 } },
     });
 
-    await markRecipientFact(message.recipientId, "message_delivered", true);
+    // Do not set message_delivered here — wait for Twilio delivery webhook
     await tryAdvanceRecipientAfterSend(message.recipientId);
     return { ok: true };
   } catch (err) {

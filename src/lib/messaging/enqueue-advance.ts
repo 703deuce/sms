@@ -164,8 +164,26 @@ export async function completeJob(jobId: string) {
   });
 }
 
-export async function failJob(jobId: string, error: string, deferMs?: number, softDefer?: boolean) {
+export async function failJob(
+  jobId: string,
+  error: string,
+  deferMs?: number,
+  softDefer?: boolean,
+  terminal?: boolean,
+) {
   const job = await getPrisma().jobQueue.findUniqueOrThrow({ where: { id: jobId } });
+
+  if (terminal) {
+    return getPrisma().jobQueue.update({
+      where: { id: jobId },
+      data: {
+        status: "failed",
+        lastError: error,
+        lockedAt: null,
+        completedAt: new Date(),
+      },
+    });
+  }
 
   // Soft defer (Twilio waiting): do not consume attempts toward failure
   if (deferMs && softDefer) {
@@ -176,7 +194,6 @@ export async function failJob(jobId: string, error: string, deferMs?: number, so
         lastError: error,
         runAfter: new Date(Date.now() + deferMs),
         lockedAt: null,
-        // Roll back the claim increment so soft polls don't burn the budget
         attempts: Math.max(0, job.attempts - 1),
       },
     });

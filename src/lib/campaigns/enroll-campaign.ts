@@ -23,6 +23,10 @@ export async function enrollContactInCampaign(input: EnrollContactInput) {
   });
   if (!campaign) throw new Error("Campaign not found");
 
+  if (!["DRAFT", "SCHEDULED", "PAUSED", "SENDING"].includes(campaign.status)) {
+    throw new Error(`Cannot enroll into campaign with status ${campaign.status}`);
+  }
+
   const phone = input.phone ? normalizeE164(input.phone) : undefined;
   const email = input.email?.trim().toLowerCase() || undefined;
 
@@ -196,6 +200,19 @@ export async function validateBulkRecipients(
       if (suppressed) {
         rejected.push({ ...r, reason: "suppressed" });
         continue;
+      }
+      if (campaignId) {
+        const active = await prisma.campaignRecipient.findFirst({
+          where: {
+            campaignId,
+            email,
+            workflowStatus: { notIn: ["completed", "stopped", "failed", "opted_out"] },
+          },
+        });
+        if (active) {
+          rejected.push({ ...r, reason: "already_enrolled" });
+          continue;
+        }
       }
       seenEmails.add(email);
     }

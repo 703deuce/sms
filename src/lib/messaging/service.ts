@@ -247,18 +247,45 @@ export const messagingOnboarding = {
     });
 
     if (isLiveMessagingAdapter()) {
-      // Create/submit TrustHub secondary profile
       let current = updated;
       if (!current.secondaryProfileSid) {
         const shell = await twilioAdapter.createSecondaryProfileShell(current);
         current = await updateRegistration(workspaceId, { secondaryProfileSid: shell.sid });
       }
-      const submitted = await twilioAdapter.submitSecondaryProfile(current);
-      updated = await updateRegistration(workspaceId, {
-        secondaryProfileSid: submitted.sid,
-        profileStatus: "in_review",
-        overallStatus: "in_review",
-      });
+
+      // Idempotent: do not re-create TrustHub entities if already submitted/in review/approved
+      const alreadySubmitted = ["submitted", "in_review", "approved", "ready"].includes(current.profileStatus);
+      if (!alreadySubmitted || current.profileStatus === "submitted") {
+        // If status is still "submitted", check Twilio before recreating entities
+        let needsSubmit = !alreadySubmitted || current.profileStatus === "action_required";
+        if (current.profileStatus === "submitted" && current.secondaryProfileSid) {
+          try {
+            const status = await twilioAdapter.fetchSecondaryProfileStatus(current);
+            const s = (status.status || "").toLowerCase();
+            needsSubmit = s === "draft" || s === "twilio-rejected" || s === "rejected" || !s;
+          } catch {
+            needsSubmit = true;
+          }
+        }
+        if (needsSubmit) {
+          const submitted = await twilioAdapter.submitSecondaryProfile(current);
+          updated = await updateRegistration(workspaceId, {
+            secondaryProfileSid: submitted.sid,
+            profileStatus: "in_review",
+            overallStatus: "in_review",
+          });
+        } else {
+          updated = await updateRegistration(workspaceId, {
+            profileStatus: "in_review",
+            overallStatus: "in_review",
+          });
+        }
+      } else {
+        updated = await updateRegistration(workspaceId, {
+          profileStatus: current.profileStatus === "approved" ? "approved" : "in_review",
+          overallStatus: "in_review",
+        });
+      }
     }
 
     await appendRegistrationEvent({

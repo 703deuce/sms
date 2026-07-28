@@ -60,22 +60,44 @@ export async function POST(request: Request) {
     const campaignMsg = await prisma.campaignMessage.findFirst({ where: { providerId: sid } });
     if (campaignMsg) {
       const prev = campaignMsg.status;
-      await prisma.campaignMessage.update({
-        where: { id: campaignMsg.id },
-        data: {
-          status: ["delivered", "sent", "failed", "undelivered"].includes(status)
-            ? status
-            : status || campaignMsg.status,
-        },
-      });
-
-      // Idempotent delivered counter
-      if (status === "delivered" && prev !== "delivered") {
-        await prisma.campaign.update({
-          where: { id: campaignMsg.campaignId },
-          data: { delivered: { increment: 1 } },
+      // Never downgrade clicked — click is terminal for UX/analytics
+      if (prev !== "clicked") {
+        await prisma.campaignMessage.update({
+          where: { id: campaignMsg.id },
+          data: {
+            status: ["delivered", "sent", "failed", "undelivered"].includes(status)
+              ? status
+              : status || campaignMsg.status,
+          },
         });
-        await markRecipientFact(campaignMsg.recipientId, "message_delivered", true);
+      }
+
+      if (status === "delivered" && prev !== "clicked") {
+        if (prev !== "delivered") {
+          await prisma.campaign.update({
+            where: { id: campaignMsg.campaignId },
+            data: { delivered: { increment: 1 } },
+          });
+          await markRecipientFact(campaignMsg.recipientId, "message_delivered", true);
+        }
+      } else if (status === "delivered" && prev === "clicked") {
+        // Count delivery once if we never recorded it before click
+        const was = campaignMsg.error || "";
+        const alreadyCounted =
+          was.includes("delivered_counted") ||
+          was.includes("was:delivered") ||
+          was.includes("was:sent");
+        if (!alreadyCounted) {
+          await prisma.campaign.update({
+            where: { id: campaignMsg.campaignId },
+            data: { delivered: { increment: 1 } },
+          });
+          await prisma.campaignMessage.update({
+            where: { id: campaignMsg.id },
+            data: { error: `${was}|delivered_counted` },
+          });
+          await markRecipientFact(campaignMsg.recipientId, "message_delivered", true);
+        }
       }
     }
 

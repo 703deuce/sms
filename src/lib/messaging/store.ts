@@ -23,6 +23,22 @@ export async function updateRegistration(
   });
 }
 
+/** CAS update that only applies while this worker still holds the advance lock token. */
+export async function updateRegistrationIfLocked(
+  workspaceId: string,
+  lockToken: string,
+  data: Prisma.MessagingRegistrationUpdateInput,
+) {
+  const result = await getPrisma().messagingRegistration.updateMany({
+    where: { workspaceId, lastError: lockToken },
+    data: data as Prisma.MessagingRegistrationUpdateManyMutationInput,
+  });
+  if (result.count !== 1) {
+    throw new Error("LOST_ADVANCE_LOCK");
+  }
+  return getRegistrationByWorkspace(workspaceId);
+}
+
 export async function appendRegistrationEvent(input: {
   workspaceId: string;
   registrationId: string;
