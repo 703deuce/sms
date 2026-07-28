@@ -154,23 +154,23 @@ export function PaginationBar({
 }) {
   return (
     <div className="mt-4 flex flex-col gap-2 border-t border-border pt-3 text-[12px] text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-      <label className="inline-flex items-center gap-2">
-        Show
-        <select className="h-8 rounded-md border border-border bg-card px-2 text-[12px]">
-          <option>25</option>
-          <option>50</option>
-        </select>
-        per page
-      </label>
-      <div className="flex items-center gap-2">
-        <span>{rangeLabel}</span>
-        <button type="button" className="rounded-md border border-border px-2 py-1 hover:bg-muted">
+      <span>{rangeLabel}</span>
+      <div className="flex items-center gap-1.5">
+        <button
+          type="button"
+          className="flex h-7 w-7 items-center justify-center rounded-md border border-border hover:bg-muted"
+          aria-label="Previous page"
+        >
           ‹
         </button>
-        <span className="flex h-7 w-7 items-center justify-center rounded-md bg-primary text-[12px] font-semibold text-white">
+        <span className="flex h-7 w-7 items-center justify-center rounded-md border border-primary text-[12px] font-semibold text-primary">
           1
         </span>
-        <button type="button" className="rounded-md border border-border px-2 py-1 hover:bg-muted">
+        <button
+          type="button"
+          className="flex h-7 w-7 items-center justify-center rounded-md border border-border hover:bg-muted"
+          aria-label="Next page"
+        >
           ›
         </button>
       </div>

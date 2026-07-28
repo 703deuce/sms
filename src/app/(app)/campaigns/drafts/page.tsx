@@ -1,23 +1,15 @@
 import { Button } from "@/components/ui/button";
-import { Card, CardTitle } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
-import { PageHeader } from "@/components/ui/page-header";
+import { SectionHeader } from "@/components/ui/metric";
 import { StatusChip } from "@/components/ui/status-chip";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Tabs } from "@/components/ui/tabs";
+import { campaignTabs } from "@/lib/campaign-tabs";
 import { campaigns } from "@/lib/mock/data";
 import { formatNumber } from "@/lib/utils";
-import { FileEdit } from "lucide-react";
+import { FileEdit, Plus } from "lucide-react";
 import Link from "next/link";
-
-const campaignTabs = [
-  { label: "All", href: "/campaigns" },
-  { label: "Drafts", href: "/campaigns/drafts" },
-  { label: "Scheduled", href: "/campaigns/scheduled" },
-  { label: "Calendar", href: "/campaigns/calendar" },
-  { label: "Completed", href: "/campaigns/completed" },
-  { label: "Failed", href: "/campaigns/failed" },
-];
 
 function formatScheduled(at: string | null) {
   if (!at) return "—";
@@ -34,13 +26,16 @@ export default function CampaignDraftsPage() {
   const drafts = campaigns.filter((c) => c.status === "Draft");
 
   return (
-    <div>
-      <PageHeader
+    <div className="text-[13px]">
+      <SectionHeader
         title="Draft campaigns"
         description="Campaigns saved but not yet scheduled or sent. Finish audience, message, and compliance before launch."
         actions={
           <Link href="/send">
-            <Button>New campaign</Button>
+            <Button className="rounded-[10px]">
+              <Plus className="h-4 w-4" />
+              New campaign
+            </Button>
           </Link>
         }
       />
@@ -56,9 +51,11 @@ export default function CampaignDraftsPage() {
           actionHref="/send"
         />
       ) : (
-        <Card>
-          <CardTitle>{drafts.length} draft{drafts.length === 1 ? "" : "s"}</CardTitle>
-          <Table className="mt-4">
+        <Card className="rounded-[12px] p-4">
+          <h2 className="mb-4 text-[14px] font-bold text-foreground">
+            {drafts.length} draft{drafts.length === 1 ? "" : "s"}
+          </h2>
+          <Table className="text-[13px]">
             <THead>
               <TR>
                 <TH>Name</TH>
@@ -80,7 +77,7 @@ export default function CampaignDraftsPage() {
                   <TD>
                     <Link
                       href={`/campaigns/${c.id}`}
-                      className="font-medium text-primary hover:underline"
+                      className="font-semibold text-primary hover:underline"
                     >
                       {c.name}
                     </Link>
@@ -93,11 +90,11 @@ export default function CampaignDraftsPage() {
                   <TD>
                     <StatusChip status={c.status} />
                   </TD>
-                  <TD>{formatNumber(c.sent)}</TD>
-                  <TD>{formatNumber(c.delivered)}</TD>
-                  <TD>{formatNumber(c.replies)}</TD>
-                  <TD>{formatNumber(c.clicks)}</TD>
-                  <TD>{formatNumber(c.optOuts)}</TD>
+                  <TD className="tabular-nums">{formatNumber(c.sent)}</TD>
+                  <TD className="tabular-nums">{formatNumber(c.delivered)}</TD>
+                  <TD className="tabular-nums">{formatNumber(c.replies)}</TD>
+                  <TD className="tabular-nums">{formatNumber(c.clicks)}</TD>
+                  <TD className="tabular-nums">{formatNumber(c.optOuts)}</TD>
                   <TD className="text-muted-foreground">{c.createdBy}</TD>
                 </TR>
               ))}

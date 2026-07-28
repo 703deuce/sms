@@ -1,13 +1,42 @@
 import { Button } from "@/components/ui/button";
-import { Card, CardTitle } from "@/components/ui/card";
-import { PageHeader } from "@/components/ui/page-header";
-import { StatusChip } from "@/components/ui/status-chip";
+import { Card } from "@/components/ui/card";
+import {
+  MetricCard,
+  SectionHeader,
+} from "@/components/ui/metric";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { formatNumber } from "@/lib/utils";
-import { Repeat } from "lucide-react";
+import {
+  Bell,
+  Cake,
+  CalendarDays,
+  Check,
+  CheckCircle2,
+  Filter,
+  Layers,
+  Mail,
+  MessageSquare,
+  MoreVertical,
+  Plus,
+  RefreshCw,
+  LineChart,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import Link from "next/link";
 
-const recurringCampaigns = [
+const recurringCampaigns: Array<{
+  id: string;
+  name: string;
+  type: string;
+  audience: string;
+  frequency: string;
+  nextRun: string;
+  lastRun: string;
+  status: "Active" | "Paused";
+  sentTotal: number;
+  icon: LucideIcon;
+  tone: string;
+}> = [
   {
     id: "rec_1",
     name: "Weekly appointment reminders",
@@ -16,9 +45,10 @@ const recurringCampaigns = [
     frequency: "Every Monday at 9:00 AM",
     nextRun: "2026-07-28T09:00:00Z",
     lastRun: "2026-07-21T09:00:00Z",
-    status: "Active" as const,
+    status: "Active",
     sentTotal: 2840,
-    createdBy: "Alex Rivera",
+    icon: CalendarDays,
+    tone: "bg-emerald-50 text-emerald-600",
   },
   {
     id: "rec_2",
@@ -28,9 +58,10 @@ const recurringCampaigns = [
     frequency: "1st of each month at 10:00 AM",
     nextRun: "2026-08-01T10:00:00Z",
     lastRun: "2026-07-01T10:00:00Z",
-    status: "Active" as const,
+    status: "Active",
     sentTotal: 6120,
-    createdBy: "Sam Patel",
+    icon: Mail,
+    tone: "bg-sky-50 text-sky-600",
   },
   {
     id: "rec_3",
@@ -40,9 +71,10 @@ const recurringCampaigns = [
     frequency: "Daily at 8:00 AM",
     nextRun: "2026-07-28T08:00:00Z",
     lastRun: "2026-07-27T08:00:00Z",
-    status: "Active" as const,
+    status: "Active",
     sentTotal: 412,
-    createdBy: "Sam Patel",
+    icon: Cake,
+    tone: "bg-pink-50 text-pink-600",
   },
   {
     id: "rec_4",
@@ -52,9 +84,10 @@ const recurringCampaigns = [
     frequency: "Every 90 days",
     nextRun: "2026-10-01T11:00:00Z",
     lastRun: "2026-07-03T11:00:00Z",
-    status: "Paused" as const,
+    status: "Paused",
     sentTotal: 176,
-    createdBy: "Casey Nguyen",
+    icon: LineChart,
+    tone: "bg-violet-50 text-violet-600",
   },
   {
     id: "rec_5",
@@ -64,9 +97,10 @@ const recurringCampaigns = [
     frequency: "Weekdays at 4:30 PM",
     nextRun: "2026-07-28T16:30:00Z",
     lastRun: "2026-07-25T16:30:00Z",
-    status: "Active" as const,
+    status: "Active",
     sentTotal: 960,
-    createdBy: "Alex Rivera",
+    icon: Bell,
+    tone: "bg-amber-50 text-amber-600",
   },
 ];
 
@@ -82,101 +116,144 @@ function formatDateTime(at: string) {
 
 export default function CampaignRecurringPage() {
   const activeCount = recurringCampaigns.filter((c) => c.status === "Active").length;
+  const lifetime = recurringCampaigns.reduce((sum, c) => sum + c.sentTotal, 0);
 
   return (
-    <div>
-      <PageHeader
+    <div className="text-[13px]">
+      <SectionHeader
+        icon={RefreshCw}
         title="Recurring campaigns"
         description="Automated sends that repeat on a schedule. Each run uses current audience membership and compliance settings."
         actions={
           <>
             <Link href="/campaigns">
-              <Button variant="outline">All campaigns</Button>
+              <Button variant="outline" className="rounded-[10px]">
+                All campaigns
+              </Button>
             </Link>
             <Link href="/send">
-              <Button>Create recurring</Button>
+              <Button className="rounded-[10px]">
+                <Plus className="h-4 w-4" />
+                Create recurring
+              </Button>
             </Link>
           </>
         }
       />
 
-      <div className="mb-6 grid gap-4 sm:grid-cols-3">
-        <Card>
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Recurring flows
-          </p>
-          <p className="mt-2 font-display text-2xl font-semibold">
-            {recurringCampaigns.length}
-          </p>
-        </Card>
-        <Card>
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Active
-          </p>
-          <p className="mt-2 font-display text-2xl font-semibold">{activeCount}</p>
-        </Card>
-        <Card>
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Messages sent (lifetime)
-          </p>
-          <p className="mt-2 font-display text-2xl font-semibold">
-            {formatNumber(recurringCampaigns.reduce((sum, c) => sum + c.sentTotal, 0))}
-          </p>
-        </Card>
+      <div className="mb-5 grid gap-4 sm:grid-cols-3">
+        <MetricCard
+          label="Recurring Flows"
+          value={formatNumber(recurringCampaigns.length)}
+          icon={Layers}
+          tone="bg-emerald-50 text-emerald-600"
+        />
+        <MetricCard
+          label="Active"
+          value={formatNumber(activeCount)}
+          icon={CheckCircle2}
+          tone="bg-emerald-50 text-emerald-600"
+        />
+        <MetricCard
+          label="Messages Sent (Lifetime)"
+          value={formatNumber(lifetime)}
+          icon={MessageSquare}
+          tone="bg-emerald-50 text-emerald-600"
+        />
       </div>
 
-      <Card>
-        <div className="mb-4 flex items-center gap-2">
-          <Repeat className="h-4 w-4 text-primary" />
-          <CardTitle>Recurring schedule</CardTitle>
+      <Card className="rounded-[12px] p-4">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <h2 className="text-[14px] font-bold text-foreground">Recurring schedule</h2>
+          <Button variant="outline" size="sm" className="rounded-[10px]">
+            <Filter className="h-3.5 w-3.5" />
+            Filters
+          </Button>
         </div>
-        <Table>
-          <THead>
-            <TR>
-              <TH>Name</TH>
-              <TH>Type</TH>
-              <TH>Audience</TH>
-              <TH>Frequency</TH>
-              <TH>Next run</TH>
-              <TH>Last run</TH>
-              <TH>Status</TH>
-              <TH>Total sent</TH>
-              <TH>Created by</TH>
-            </TR>
-          </THead>
-          <TBody>
-            {recurringCampaigns.map((c) => (
-              <TR key={c.id}>
-                <TD className="font-medium">{c.name}</TD>
-                <TD className="text-muted-foreground">{c.type}</TD>
-                <TD className="text-muted-foreground">{c.audience}</TD>
-                <TD className="whitespace-nowrap">{c.frequency}</TD>
-                <TD className="whitespace-nowrap font-medium">
-                  {formatDateTime(c.nextRun)}
-                </TD>
-                <TD className="whitespace-nowrap text-muted-foreground">
-                  {formatDateTime(c.lastRun)}
-                </TD>
-                <TD>
-                  <StatusChip status={c.status} />
-                </TD>
-                <TD>{formatNumber(c.sentTotal)}</TD>
-                <TD className="text-muted-foreground">{c.createdBy}</TD>
+
+        <div className="overflow-x-auto">
+          <Table className="min-w-[980px] text-[13px]">
+            <THead>
+              <TR>
+                <TH>Name</TH>
+                <TH>Type</TH>
+                <TH>Audience</TH>
+                <TH>Frequency</TH>
+                <TH>Next run</TH>
+                <TH>Last run</TH>
+                <TH>Status</TH>
+                <TH>Total sent</TH>
+                <TH />
               </TR>
-            ))}
-          </TBody>
-        </Table>
+            </THead>
+            <TBody>
+              {recurringCampaigns.map((c) => (
+                <TR key={c.id}>
+                  <TD>
+                    <span className="inline-flex items-center gap-2.5 font-semibold">
+                      <span
+                        className={`flex h-8 w-8 items-center justify-center rounded-[8px] ${c.tone}`}
+                      >
+                        <c.icon className="h-4 w-4" />
+                      </span>
+                      {c.name}
+                    </span>
+                  </TD>
+                  <TD className="text-muted-foreground">{c.type}</TD>
+                  <TD className="max-w-[180px] text-muted-foreground">{c.audience}</TD>
+                  <TD className="whitespace-nowrap">{c.frequency}</TD>
+                  <TD className="whitespace-nowrap font-medium">{formatDateTime(c.nextRun)}</TD>
+                  <TD className="whitespace-nowrap text-muted-foreground">
+                    {formatDateTime(c.lastRun)}
+                  </TD>
+                  <TD>
+                    <span className="inline-flex items-center gap-1.5 text-[12px] font-medium">
+                      <span
+                        className={`h-2 w-2 rounded-full ${
+                          c.status === "Active" ? "bg-emerald-500" : "bg-orange-400"
+                        }`}
+                      />
+                      {c.status}
+                    </span>
+                  </TD>
+                  <TD className="tabular-nums font-medium">{formatNumber(c.sentTotal)}</TD>
+                  <TD>
+                    <button
+                      type="button"
+                      className="rounded-md p-1 text-muted-foreground hover:bg-muted"
+                      aria-label={`Actions for ${c.name}`}
+                    >
+                      <MoreVertical className="h-4 w-4" />
+                    </button>
+                  </TD>
+                </TR>
+              ))}
+            </TBody>
+          </Table>
+        </div>
       </Card>
 
-      <Card className="mt-6">
-        <CardTitle>How recurring campaigns work</CardTitle>
-        <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
-          <li>Audience is re-evaluated before each run — new subscribers are included automatically.</li>
-          <li>Quiet hours and A2P limits apply to every scheduled occurrence.</li>
-          <li>Paused flows retain their schedule but skip runs until reactivated.</li>
-          <li>Each run creates a child campaign record visible under Completed or Failed.</li>
-        </ul>
-      </Card>
+      <div className="mt-5 flex gap-4 rounded-[12px] border border-emerald-200 bg-emerald-50/80 p-5">
+        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+          <RefreshCw className="h-6 w-6" />
+        </span>
+        <div>
+          <h3 className="text-[14px] font-bold text-emerald-950">How recurring campaigns work</h3>
+          <ul className="mt-3 space-y-2 text-[13px] text-emerald-900/80">
+            {[
+              "Audience is re-evaluated before each run — new subscribers are included automatically.",
+              "Quiet hours and A2P limits apply to every scheduled occurrence.",
+              "Paused flows retain their schedule but skip runs until reactivated.",
+              "Each run creates a child campaign record visible under Completed or Failed.",
+            ].map((item) => (
+              <li key={item} className="flex items-start gap-2">
+                <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
     </div>
   );
 }
