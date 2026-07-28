@@ -6,11 +6,11 @@ import {
   MetricCard,
   PaginationBar,
   SectionHeader,
-  TableToolbar,
 } from "@/components/ui/metric";
 import { StatusChip } from "@/components/ui/status-chip";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Tabs } from "@/components/ui/tabs";
+import { automationTabs } from "@/lib/automation-tabs";
 import { automations } from "@/lib/mock/data";
 import { cn, formatNumber } from "@/lib/utils";
 import {
@@ -24,7 +24,6 @@ import {
   Send,
   SlidersHorizontal,
   Users,
-  Wand2,
   Workflow,
   Zap,
 } from "lucide-react";
@@ -32,17 +31,14 @@ import type { LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
-const automationTabs = [
-  { label: "Flows", href: "/automations" },
-  { label: "Templates", href: "/automations/templates" },
-  { label: "Logs", href: "/automations/logs" },
-];
-
-const flowIcons: Record<string, { icon: LucideIcon; tone: string }> = {
-  auto_1: { icon: Wand2, tone: "bg-emerald-50 text-emerald-600" },
-  auto_2: { icon: MessageCircle, tone: "bg-blue-50 text-blue-600" },
-  auto_3: { icon: Clock, tone: "bg-orange-50 text-orange-600" },
-  auto_4: { icon: Cake, tone: "bg-violet-50 text-violet-600" },
+const flowMeta: Record<
+  string,
+  { icon: LucideIcon; tone: string; steps: number }
+> = {
+  auto_1: { icon: Zap, tone: "bg-emerald-50 text-emerald-600", steps: 3 },
+  auto_2: { icon: MessageCircle, tone: "bg-sky-50 text-sky-600", steps: 2 },
+  auto_3: { icon: Clock, tone: "bg-orange-50 text-orange-600", steps: 2 },
+  auto_4: { icon: Cake, tone: "bg-violet-50 text-violet-600", steps: 1 },
 };
 
 function formatUpdated(at: string) {
@@ -53,13 +49,7 @@ function formatUpdated(at: string) {
   });
 }
 
-function CompletionCell({
-  status,
-  rate,
-}: {
-  status: string;
-  rate: number;
-}) {
+function CompletionCell({ status, rate }: { status: string; rate: number }) {
   if (status === "Draft") {
     return <span className="text-muted-foreground">—</span>;
   }
@@ -67,14 +57,14 @@ function CompletionCell({
   const barColor = rate < 50 ? "bg-orange-500" : "bg-primary";
 
   return (
-    <div className="flex min-w-[120px] items-center gap-2">
-      <span className="w-10 shrink-0 text-right text-[13px] font-medium tabular-nums">
+    <div className="flex min-w-[130px] items-center gap-2">
+      <span className="w-11 shrink-0 text-right text-[13px] font-semibold tabular-nums">
         {rate.toFixed(1)}%
       </span>
-      <span className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
+      <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
         <span
           className={cn("block h-full rounded-full", barColor)}
-          style={{ width: `${rate}%` }}
+          style={{ width: `${Math.min(rate, 100)}%` }}
         />
       </span>
     </div>
@@ -88,7 +78,7 @@ export default function AutomationsPage() {
   const totalMessages = automations.reduce((sum, a) => sum + a.messagesSent, 0);
 
   return (
-    <div className="space-y-5">
+    <div className="text-[13px]">
       <SectionHeader
         icon={Zap}
         iconTone="bg-emerald-50 text-emerald-600"
@@ -96,7 +86,7 @@ export default function AutomationsPage() {
         description="Build SMS flows that trigger on contact events, keywords, and time-based rules."
         actions={
           <Link href="/automations/new">
-            <Button className="h-9 rounded-[10px] text-[13px]">
+            <Button className="rounded-[10px]">
               <Plus className="h-4 w-4" />
               New flow
             </Button>
@@ -106,26 +96,29 @@ export default function AutomationsPage() {
 
       <Tabs items={automationTabs} />
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="mb-5 grid gap-4 sm:grid-cols-3">
         <MetricCard
-          label="Active Flows"
+          label="Active flows"
           value={formatNumber(activeCount)}
+          hint="— 0% vs last 7 days"
           icon={Workflow}
           tone="bg-emerald-50 text-emerald-600"
           sparkline={[1, 1, 2, 2, 2, 2, 2, 2]}
           sparkColor="#10b981"
         />
         <MetricCard
-          label="Total Enrolled"
+          label="Total enrolled"
           value={formatNumber(totalEnrolled)}
+          hint="↑ 18% vs last 7 days"
           icon={Users}
-          tone="bg-blue-50 text-blue-600"
+          tone="bg-sky-50 text-sky-600"
           sparkline={[6, 8, 10, 12, 14, 16, 18, 20]}
           sparkColor="#3b82f6"
         />
         <MetricCard
-          label="Messages Sent"
+          label="Messages sent"
           value={formatNumber(totalMessages)}
+          hint="↑ 24% vs last 7 days"
           icon={Send}
           tone="bg-violet-50 text-violet-600"
           sparkline={[120, 180, 240, 320, 400, 520, 680, 840]}
@@ -133,116 +126,136 @@ export default function AutomationsPage() {
         />
       </div>
 
-      <Card className="p-5">
-        <TableToolbar title="All flows" searchPlaceholder="Search flows…">
-          <Button variant="outline" size="sm" className="h-9 rounded-[10px] text-[13px]">
-            <SlidersHorizontal className="h-4 w-4" />
-            Filters
-          </Button>
-          <div className="flex items-center rounded-[10px] border border-border p-0.5">
-            <button
-              type="button"
-              onClick={() => setViewMode("list")}
-              className={cn(
-                "flex h-8 w-8 items-center justify-center rounded-[8px] transition",
-                viewMode === "list"
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-              aria-label="List view"
-            >
-              <LayoutList className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode("grid")}
-              className={cn(
-                "flex h-8 w-8 items-center justify-center rounded-[8px] transition",
-                viewMode === "grid"
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-              aria-label="Grid view"
-            >
-              <LayoutGrid className="h-4 w-4" />
-            </button>
+      <Card className="rounded-[12px] p-4">
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <h2 className="text-[14px] font-bold text-foreground">All flows</h2>
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              className="h-9 w-full min-w-[180px] rounded-[10px] border border-border bg-card px-3 text-[13px] outline-none focus:border-primary sm:w-52"
+              placeholder="Search flows..."
+            />
+            <Button variant="outline" size="sm" className="rounded-[10px]">
+              <SlidersHorizontal className="h-3.5 w-3.5" />
+              Filters
+            </Button>
+            <div className="flex items-center rounded-[10px] border border-border p-0.5">
+              <button
+                type="button"
+                onClick={() => setViewMode("list")}
+                className={cn(
+                  "flex h-8 w-8 items-center justify-center rounded-[8px] transition",
+                  viewMode === "list"
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+                aria-label="List view"
+              >
+                <LayoutList className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("grid")}
+                className={cn(
+                  "flex h-8 w-8 items-center justify-center rounded-[8px] transition",
+                  viewMode === "grid"
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+                aria-label="Grid view"
+              >
+                <LayoutGrid className="h-4 w-4" />
+              </button>
+            </div>
           </div>
-        </TableToolbar>
+        </div>
 
         {viewMode === "list" ? (
-          <Table>
-            <THead>
-              <TR>
-                <TH>Name</TH>
-                <TH>Trigger</TH>
-                <TH>Enrolled</TH>
-                <TH>Messages sent</TH>
-                <TH>Completion rate</TH>
-                <TH>Status</TH>
-                <TH>Updated</TH>
-                <TH className="w-10" />
-              </TR>
-            </THead>
-            <TBody>
-              {automations.map((flow) => {
-                const meta = flowIcons[flow.id] ?? {
-                  icon: Workflow,
-                  tone: "bg-muted text-muted-foreground",
-                };
-                const Icon = meta.icon;
+          <div className="overflow-x-auto">
+            <Table className="min-w-[920px] text-[13px]">
+              <THead>
+                <TR>
+                  <TH>Flow</TH>
+                  <TH>Trigger</TH>
+                  <TH>Enrolled</TH>
+                  <TH>Messages sent</TH>
+                  <TH>Completion rate</TH>
+                  <TH>Status</TH>
+                  <TH>Updated</TH>
+                  <TH className="w-10" />
+                </TR>
+              </THead>
+              <TBody>
+                {automations.map((flow) => {
+                  const meta = flowMeta[flow.id] ?? {
+                    icon: Workflow,
+                    tone: "bg-muted text-muted-foreground",
+                    steps: 1,
+                  };
+                  const Icon = meta.icon;
 
-                return (
-                  <TR key={flow.id}>
-                    <TD>
-                      <Link
-                        href={`/automations/${flow.id}`}
-                        className="flex items-center gap-3 hover:opacity-80"
-                      >
-                        <span
-                          className={cn(
-                            "flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px]",
-                            meta.tone,
-                          )}
+                  return (
+                    <TR key={flow.id}>
+                      <TD>
+                        <Link
+                          href={`/automations/${flow.id}`}
+                          className="flex items-center gap-3 hover:opacity-80"
                         >
-                          <Icon className="h-4 w-4" />
-                        </span>
-                        <span className="font-semibold text-foreground">{flow.name}</span>
-                      </Link>
-                    </TD>
-                    <TD className="max-w-[200px] text-[13px] text-muted-foreground">
-                      {flow.trigger}
-                    </TD>
-                    <TD className="tabular-nums">{formatNumber(flow.enrolled)}</TD>
-                    <TD className="tabular-nums">{formatNumber(flow.messagesSent)}</TD>
-                    <TD>
-                      <CompletionCell status={flow.status} rate={flow.completionRate} />
-                    </TD>
-                    <TD>
-                      <StatusChip status={flow.status} />
-                    </TD>
-                    <TD className="whitespace-nowrap text-[13px] text-muted-foreground">
-                      {formatUpdated(flow.updatedAt)}
-                    </TD>
-                    <TD>
-                      <button
-                        type="button"
-                        className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
-                        aria-label={`Actions for ${flow.name}`}
-                      >
-                        <MoreHorizontal className="h-4 w-4" />
-                      </button>
-                    </TD>
-                  </TR>
-                );
-              })}
-            </TBody>
-          </Table>
+                          <span
+                            className={cn(
+                              "flex h-9 w-9 shrink-0 items-center justify-center rounded-full",
+                              meta.tone,
+                            )}
+                          >
+                            <Icon className="h-4 w-4" />
+                          </span>
+                          <span>
+                            <span className="block font-semibold text-foreground">
+                              {flow.name}
+                            </span>
+                            <span className="block text-[11px] text-muted-foreground">
+                              {meta.steps} step{meta.steps === 1 ? "" : "s"}
+                            </span>
+                          </span>
+                        </Link>
+                      </TD>
+                      <TD className="max-w-[220px] text-muted-foreground">{flow.trigger}</TD>
+                      <TD className="tabular-nums font-medium">
+                        {formatNumber(flow.enrolled)}
+                      </TD>
+                      <TD className="tabular-nums font-medium">
+                        {formatNumber(flow.messagesSent)}
+                      </TD>
+                      <TD>
+                        <CompletionCell status={flow.status} rate={flow.completionRate} />
+                      </TD>
+                      <TD>
+                        <StatusChip status={flow.status} />
+                      </TD>
+                      <TD className="whitespace-nowrap text-muted-foreground">
+                        {formatUpdated(flow.updatedAt)}
+                      </TD>
+                      <TD>
+                        <button
+                          type="button"
+                          className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted"
+                          aria-label={`Actions for ${flow.name}`}
+                        >
+                          <MoreHorizontal className="h-4 w-4" />
+                        </button>
+                      </TD>
+                    </TR>
+                  );
+                })}
+              </TBody>
+            </Table>
+          </div>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {automations.map((flow) => {
-              const meta = flowIcons[flow.id] ?? {
+              const meta = flowMeta[flow.id] ?? {
                 icon: Workflow,
                 tone: "bg-muted text-muted-foreground",
+                steps: 1,
               };
               const Icon = meta.icon;
               return (
@@ -254,7 +267,7 @@ export default function AutomationsPage() {
                   <div className="flex items-start gap-3">
                     <span
                       className={cn(
-                        "flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px]",
+                        "flex h-9 w-9 shrink-0 items-center justify-center rounded-full",
                         meta.tone,
                       )}
                     >
@@ -262,6 +275,9 @@ export default function AutomationsPage() {
                     </span>
                     <div className="min-w-0 flex-1">
                       <p className="font-semibold text-foreground">{flow.name}</p>
+                      <p className="mt-0.5 text-[11px] text-muted-foreground">
+                        {meta.steps} step{meta.steps === 1 ? "" : "s"}
+                      </p>
                       <p className="mt-1 text-[12px] text-muted-foreground">{flow.trigger}</p>
                       <div className="mt-3 flex items-center justify-between gap-2">
                         <StatusChip status={flow.status} />
