@@ -97,3 +97,22 @@ h3,
     radial-gradient(ellipse 70% 45% at 0% 0%, rgb(18 185 139 / 0.1), transparent),
     radial-gradient(ellipse 50% 35% at 100% 0%, rgb(59 130 246 / 0.08), transparent);
 }
+
+/* Sidebar nav: keep scroll available when needed, but hide the loud browser bar */
+.sidebar-nav {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(148 163 184 / 0.35) transparent;
+}
+
+.sidebar-nav::-webkit-scrollbar {
+  width: 4px;
+}
+
+.sidebar-nav::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar-nav::-webkit-scrollbar-thumb {
+  background: rgb(148 163 184 / 0.35);
+  border-radius: 999px;
+}
