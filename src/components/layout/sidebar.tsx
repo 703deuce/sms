@@ -63,30 +63,30 @@ export function Sidebar({
   const content = (
     <aside className="flex h-dvh w-[260px] flex-col overflow-hidden bg-sidebar text-sidebar-foreground">
       {/* Brand + workspace — fixed top */}
-      <div className="shrink-0 px-4 pb-3 pt-4">
+      <div className="shrink-0 px-3.5 pb-2.5 pt-3.5">
         <Link href="/dashboard" className="flex items-start gap-2.5" onClick={onClose}>
-          <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-primary text-white shadow-[0_8px_18px_rgba(16,185,129,0.35)]">
-            <MessageSquare className="h-4 w-4" fill="currentColor" />
+          <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] bg-primary text-white shadow-[0_8px_18px_rgba(16,185,129,0.35)]">
+            <MessageSquare className="h-3.5 w-3.5" fill="currentColor" />
           </span>
           <span>
-            <span className="block text-[15px] font-bold tracking-tight text-white">
+            <span className="block text-[14px] font-bold tracking-tight text-white">
               Transovo SMS
             </span>
-            <span className="mt-0.5 block text-[11px] leading-tight text-sidebar-muted">
+            <span className="mt-0.5 block text-[10px] leading-tight text-sidebar-muted">
               Business texting platform
             </span>
           </span>
         </Link>
 
-        <label className="mt-4 block text-[10px] font-semibold uppercase tracking-[0.08em] text-sidebar-muted">
+        <label className="mt-3 block text-[10px] font-semibold uppercase tracking-[0.08em] text-sidebar-muted">
           Workspace
         </label>
-        <div className="relative mt-1.5">
+        <div className="relative mt-1">
           <span className="pointer-events-none absolute left-2.5 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-md bg-violet-500 text-[10px] font-bold text-white">
             H
           </span>
           <select
-            className="h-10 w-full appearance-none rounded-[10px] border border-white/10 bg-white/5 py-2 pl-9 pr-8 text-[13px] font-medium text-white outline-none focus:border-primary/40"
+            className="h-9 w-full appearance-none rounded-[10px] border border-white/10 bg-white/5 py-1.5 pl-9 pr-8 text-[12px] font-medium text-white outline-none focus:border-primary/40"
             value={activeWorkspace.id}
             onChange={(e) => switchWorkspace(e.target.value)}
           >
@@ -102,15 +102,15 @@ export function Sidebar({
         <Link
           href="/send"
           onClick={onClose}
-          className="mt-3 flex h-10 items-center justify-center gap-2 rounded-[10px] bg-primary px-3 text-[13px] font-semibold text-white shadow-[0_8px_18px_rgba(16,185,129,0.3)] transition hover:bg-primary-hover"
+          className="mt-2.5 flex h-9 items-center justify-center gap-2 rounded-[10px] bg-primary px-3 text-[13px] font-semibold text-white shadow-[0_8px_18px_rgba(16,185,129,0.3)] transition hover:bg-primary-hover"
         >
-          <Send className="h-4 w-4" />
+          <Send className="h-3.5 w-3.5" />
           Send campaign
         </Link>
       </div>
 
       {/* Nav — only this region scrolls, and only when needed */}
-      <nav className="sidebar-nav min-h-0 flex-1 space-y-0.5 overflow-y-auto overscroll-contain px-2.5 pb-2">
+      <nav className="sidebar-nav min-h-0 flex-1 space-y-px overflow-y-auto overscroll-contain px-2 pb-1.5">
         {appNav.map((item) => {
           const Icon = item.icon;
           const childActive = item.children?.some(
@@ -140,11 +140,11 @@ export function Sidebar({
                 <Link
                   href={item.href}
                   onClick={onClose}
-                  className="flex min-w-0 flex-1 items-center gap-2.5 py-2 pl-3 pr-1 text-[13px] font-medium"
+                  className="flex min-w-0 flex-1 items-center gap-2.5 py-[7px] pl-3 pr-1 text-[13px] font-medium"
                 >
                   <Icon
                     className={cn(
-                      "h-[17px] w-[17px] shrink-0",
+                      "h-4 w-4 shrink-0",
                       active ? "text-primary" : "text-sidebar-muted group-hover:text-white",
                     )}
                   />
@@ -183,7 +183,7 @@ export function Sidebar({
               </div>
 
               {item.children && isOpen ? (
-                <div className="mb-1 ml-3.5 mt-0.5 space-y-0.5 border-l border-white/10 pl-2.5">
+                <div className="mb-0.5 ml-3.5 mt-0.5 space-y-px border-l border-white/10 pl-2.5">
                   {item.children.map((child) => {
                     const childIsActive =
                       pathname === child.href ||
@@ -195,7 +195,7 @@ export function Sidebar({
                         href={child.href}
                         onClick={onClose}
                         className={cn(
-                          "block rounded-md px-2.5 py-1.5 text-[12px] transition",
+                          "block rounded-md px-2.5 py-1 text-[12px] transition",
                           childIsActive
                             ? "bg-white/10 font-medium text-white"
                             : "text-sidebar-muted hover:bg-white/5 hover:text-white",
@@ -213,33 +213,33 @@ export function Sidebar({
       </nav>
 
       {/* Footer — pinned bottom, never scrolls away */}
-      <div className="shrink-0 space-y-0.5 border-t border-white/10 p-3">
+      <div className="shrink-0 space-y-px border-t border-white/10 p-2.5">
         <Link
           href="/getting-started"
           onClick={onClose}
-          className="flex items-center gap-2 rounded-[10px] px-3 py-2 text-[13px] text-sidebar-muted hover:bg-white/5 hover:text-white"
+          className="flex items-center gap-2 rounded-[10px] px-2.5 py-1.5 text-[12px] text-sidebar-muted hover:bg-white/5 hover:text-white"
         >
-          <CircleHelp className="h-4 w-4" />
+          <CircleHelp className="h-3.5 w-3.5" />
           Help & getting started
         </Link>
         <Link
           href="/settings/billing"
           onClick={onClose}
-          className="flex items-center gap-2 rounded-[10px] px-3 py-2 text-[13px] text-sidebar-muted hover:bg-white/5 hover:text-white"
+          className="flex items-center gap-2 rounded-[10px] px-2.5 py-1.5 text-[12px] text-sidebar-muted hover:bg-white/5 hover:text-white"
         >
-          <CreditCard className="h-4 w-4" />
+          <CreditCard className="h-3.5 w-3.5" />
           Billing / usage
         </Link>
-        <div className="mt-1 flex items-center gap-2.5 rounded-[12px] bg-white/[0.04] px-2.5 py-2">
+        <div className="mt-1 flex items-center gap-2 rounded-[12px] bg-white/[0.04] px-2 py-1.5">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src="/avatars/alex.svg"
             alt={userName}
-            className="h-8 w-8 rounded-full object-cover ring-2 ring-white/10"
+            className="h-7 w-7 rounded-full object-cover ring-2 ring-white/10"
           />
           <div className="min-w-0 flex-1">
-            <p className="truncate text-[13px] font-semibold text-white">{userName}</p>
-            <p className="text-[11px] text-sidebar-muted">Owner</p>
+            <p className="truncate text-[12px] font-semibold text-white">{userName}</p>
+            <p className="text-[10px] text-sidebar-muted">Owner</p>
           </div>
           <button
             type="button"
@@ -247,7 +247,7 @@ export function Sidebar({
             className="rounded-md p-1.5 text-sidebar-muted hover:bg-white/5 hover:text-white"
             aria-label="Log out"
           >
-            <LogOut className="h-4 w-4" />
+            <LogOut className="h-3.5 w-3.5" />
           </button>
         </div>
       </div>
