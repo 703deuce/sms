@@ -4,34 +4,16 @@ import { appNav } from "@/lib/nav";
 import { workspaces } from "@/lib/mock/data";
 import { cn } from "@/lib/utils";
 import {
-  Building2,
   ChevronDown,
+  CircleHelp,
+  CreditCard,
   LogOut,
-  Plus,
-  Sparkles,
-  Newspaper,
+  MessageSquare,
+  Send,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-
-function BrandMark() {
-  return (
-    <svg width="32" height="32" viewBox="0 0 32 32" fill="none" aria-hidden>
-      <circle cx="16" cy="16" r="16" fill="#10b981" />
-      <path
-        d="M9.5 20.5c2.2-5.2 5.1-8.2 8.7-9.1 1.4-.3 2.7-.1 3.8.5-2.5 1-4.5 2.9-6 5.7-.9 1.7-1.5 3.5-1.8 5.4-1.8-.3-3.3-1.2-4.7-2.5Z"
-        fill="white"
-        fillOpacity="0.95"
-      />
-      <path
-        d="M22.5 11.5c-1.8 3.9-4.2 6.5-7.2 7.8 2.8-3.4 4.7-7.2 5.5-11.2.7 1 1.3 2.1 1.7 3.4Z"
-        fill="white"
-        fillOpacity="0.55"
-      />
-    </svg>
-  );
-}
 
 export function Sidebar({
   workspaceId,
@@ -69,22 +51,30 @@ export function Sidebar({
   }
 
   const content = (
-    <aside className="flex h-full w-[250px] flex-col bg-sidebar text-sidebar-foreground">
-      <div className="px-4 pb-1 pt-5">
-        <Link href="/dashboard" className="flex items-center gap-2.5" onClick={onClose}>
-          <BrandMark />
-          <span className="text-[15px] font-bold tracking-tight text-white">
-            Transovo EHS
+    <aside className="flex h-full w-[260px] flex-col bg-sidebar text-sidebar-foreground">
+      <div className="border-b border-white/10 px-4 py-4">
+        <Link href="/dashboard" className="flex items-start gap-2.5" onClick={onClose}>
+          <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary text-white shadow-[0_8px_18px_rgba(16,185,129,0.35)]">
+            <MessageSquare className="h-4 w-4" fill="currentColor" />
+          </span>
+          <span>
+            <span className="block text-[15px] font-bold tracking-tight text-white">
+              Transovo SMS
+            </span>
+            <span className="mt-0.5 block text-[11px] text-sidebar-muted">
+              Business texting platform
+            </span>
           </span>
         </Link>
 
-        <div className="relative mt-5">
-          <Building2 className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-sidebar-muted" />
+        <label className="mt-4 block text-[10px] font-semibold uppercase tracking-[0.08em] text-sidebar-muted">
+          Workspace
+        </label>
+        <div className="relative mt-1.5">
           <select
-            className="h-10 w-full appearance-none rounded-[10px] border border-white/10 bg-[#141c2c] py-2 pl-9 pr-8 text-[13px] font-medium text-white outline-none focus:border-primary/40"
+            className="h-10 w-full appearance-none rounded-[10px] border border-white/10 bg-white/5 px-3 pr-8 text-[13px] font-medium text-white outline-none focus:border-primary/40"
             value={activeWorkspace.id}
             onChange={(e) => switchWorkspace(e.target.value)}
-            aria-label="Workspace"
           >
             {workspaces.map((w) => (
               <option key={w.id} value={w.id} className="text-foreground">
@@ -96,18 +86,18 @@ export function Sidebar({
         </div>
       </div>
 
-      <div className="px-4 pt-3">
+      <div className="px-3 pt-3">
         <Link
           href="/send"
           onClick={onClose}
-          className="flex h-10 items-center justify-center gap-1.5 rounded-[10px] bg-primary px-3 text-[13px] font-semibold text-white shadow-[0_8px_18px_rgba(16,185,129,0.3)] transition hover:bg-primary-hover"
+          className="flex h-10 items-center justify-center gap-2 rounded-[10px] bg-primary px-3 text-[13px] font-semibold text-white shadow-[0_8px_18px_rgba(16,185,129,0.3)] transition hover:bg-primary-hover"
         >
-          <Plus className="h-4 w-4" strokeWidth={2.5} />
-          Add Campaign
+          <Send className="h-4 w-4" />
+          Send campaign
         </Link>
       </div>
 
-      <nav className="mt-3 flex-1 space-y-[2px] overflow-y-auto px-3 pb-3">
+      <nav className="mt-3 flex-1 space-y-[2px] overflow-y-auto px-2.5 pb-3">
         {appNav.map((item) => {
           const Icon = item.icon;
           const childActive = item.children?.some(
@@ -128,15 +118,12 @@ export function Sidebar({
                   href={item.href}
                   onClick={onClose}
                   className={cn(
-                    "group relative flex flex-1 items-center gap-2.5 rounded-[10px] px-3 py-[9px] text-[13px] font-medium transition",
+                    "group flex flex-1 items-center gap-2.5 rounded-[10px] px-3 py-[9px] text-[13px] font-medium transition",
                     active
-                      ? "bg-primary/10 text-primary"
-                      : "text-sidebar-foreground hover:bg-white/[0.04] hover:text-white",
+                      ? "bg-primary/15 text-primary"
+                      : "text-sidebar-foreground/90 hover:bg-white/5 hover:text-white",
                   )}
                 >
-                  {active ? (
-                    <span className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full bg-primary" />
-                  ) : null}
                   <Icon
                     className={cn(
                       "h-[17px] w-[17px] shrink-0",
@@ -145,7 +132,7 @@ export function Sidebar({
                   />
                   <span className="truncate">{item.label}</span>
                   {item.badge != null ? (
-                    <span className="ml-auto flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-white">
+                    <span className="ml-auto flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-white">
                       {item.badge}
                     </span>
                   ) : null}
@@ -194,28 +181,31 @@ export function Sidebar({
 
       <div className="space-y-0.5 border-t border-white/10 p-3">
         <Link
-          href="/settings/billing"
-          onClick={onClose}
-          className="flex items-center gap-2 rounded-[10px] px-3 py-2 text-[13px] text-sidebar-muted hover:bg-white/5 hover:text-white"
-        >
-          <Sparkles className="h-4 w-4 text-primary" />
-          Get more features
-        </Link>
-        <Link
           href="/getting-started"
           onClick={onClose}
           className="flex items-center gap-2 rounded-[10px] px-3 py-2 text-[13px] text-sidebar-muted hover:bg-white/5 hover:text-white"
         >
-          <Newspaper className="h-4 w-4" />
-          What&apos;s new
+          <CircleHelp className="h-4 w-4" />
+          Help & getting started
+        </Link>
+        <Link
+          href="/settings/billing"
+          onClick={onClose}
+          className="flex items-center gap-2 rounded-[10px] px-3 py-2 text-[13px] text-sidebar-muted hover:bg-white/5 hover:text-white"
+        >
+          <CreditCard className="h-4 w-4" />
+          Billing / usage
         </Link>
         <div className="mt-1 flex items-center gap-2.5 rounded-[12px] bg-white/[0.04] px-2.5 py-2">
-          <div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-[#34d399] via-[#2dd4bf] to-[#38bdf8] text-[10px] font-bold text-white ring-2 ring-white/10">
-            JD
-          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/avatars/alex.svg"
+            alt={userName}
+            className="h-8 w-8 rounded-full object-cover ring-2 ring-white/10"
+          />
           <div className="min-w-0 flex-1">
             <p className="truncate text-[13px] font-semibold text-white">{userName}</p>
-            <p className="text-[11px] text-sidebar-muted">Admin</p>
+            <p className="text-[11px] text-sidebar-muted">Owner</p>
           </div>
           <button
             type="button"
@@ -232,7 +222,7 @@ export function Sidebar({
 
   return (
     <>
-      <div className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-[250px]">{content}</div>
+      <div className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-[260px]">{content}</div>
       {open ? (
         <div className="fixed inset-0 z-50 lg:hidden">
           <button

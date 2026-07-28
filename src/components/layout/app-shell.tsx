@@ -28,13 +28,13 @@ export function AppShell({
         open={menuOpen}
         onClose={() => setMenuOpen(false)}
       />
-      <div className="lg:pl-[250px]">
+      <div className="lg:pl-[260px]">
         <Header
           title={title}
           userName={userName}
           onMenuClick={() => setMenuOpen(true)}
         />
-        <main className="px-4 pb-28 pt-4 lg:px-5 lg:pb-8">{children}</main>
+        <main className="px-4 pb-28 pt-5 lg:px-6 lg:pb-8">{children}</main>
       </div>
       <MobileNav onMore={() => setMenuOpen(true)} />
     </div>

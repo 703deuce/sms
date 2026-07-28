@@ -12,14 +12,14 @@ import type {
 
 export const demoUser: User = {
   id: "u_1",
-  name: "John Doe",
+  name: "Alex Rivera",
   email: "alex@harborhome.co",
   role: "Owner",
   isAdmin: true,
 };
 
 export const workspaces: Workspace[] = [
-  { id: "ws_1", name: "Matrix Intercorp", slug: "matrix-intercorp" },
+  { id: "ws_1", name: "Harbor Home Services", slug: "harbor-home" },
   { id: "ws_2", name: "Harbor Retail", slug: "harbor-retail" },
 ];
 
@@ -382,6 +382,26 @@ export const conversations: Conversation[] = [
         direction: "in",
         body: "Confirmed for Thursday 2pm.",
         at: "2026-07-26T19:20:00Z",
+      },
+    ],
+  },
+  {
+    id: "conv_4",
+    contactId: "c_4",
+    contactName: "James Wilson",
+    phone: "+14155550144",
+    lastMessage: "Thanks — all set for now.",
+    assignedTo: "Jordan Lee",
+    status: "Closed",
+    tags: [],
+    updatedAt: "2026-07-26T12:05:00Z",
+    unread: false,
+    messages: [
+      {
+        id: "m7",
+        direction: "in",
+        body: "Thanks — all set for now.",
+        at: "2026-07-26T12:05:00Z",
       },
     ],
   },
