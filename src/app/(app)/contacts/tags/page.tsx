@@ -16,7 +16,6 @@ import {
   MoreHorizontal,
   Star,
   Tag,
-  TagIcon,
 } from "lucide-react";
 
 const tagDots = [
@@ -72,33 +71,34 @@ export default function ContactTagsPage() {
 
       <Card className="mb-5 rounded-[12px] p-4">
         <h2 className="text-[14px] font-bold text-foreground">Create a new tag</h2>
-        <div className="mt-3 flex flex-wrap items-end gap-3">
-          <div className="min-w-[220px] flex-1">
-            <label htmlFor="new-tag" className="mb-1.5 block text-[12px] font-medium text-muted-foreground">
-              Tag name
-            </label>
-            <Input id="new-tag" placeholder="e.g. vip-customer" className="h-10 rounded-[10px]" />
-          </div>
-          <Button className="rounded-[10px]">Add tag</Button>
+        <div className="mt-3 flex gap-2">
+          <Input
+            id="new-tag"
+            placeholder="e.g. vip-customer"
+            className="h-10 flex-1 rounded-[10px]"
+            aria-label="Tag name"
+          />
+          <Button className="h-10 shrink-0 rounded-[10px] px-5">Add tag</Button>
+        </div>
+        <div className="mt-4 flex flex-wrap gap-2">
+          {tags.map((tag, index) => (
+            <span
+              key={tag.id}
+              className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5 text-[13px]"
+            >
+              <Tag className="h-3.5 w-3.5 text-primary" />
+              <span className={`h-2 w-2 rounded-full ${tagDots[index % tagDots.length]}`} />
+              <span className="font-medium">{tag.name}</span>
+              <span className="tabular-nums text-muted-foreground">
+                {formatNumber(tag.count)}
+              </span>
+            </span>
+          ))}
         </div>
       </Card>
 
-      <div className="mb-5 flex flex-wrap gap-2">
-        {tags.map((tag, index) => (
-          <span
-            key={tag.id}
-            className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5 text-[13px]"
-          >
-            <TagIcon className="h-3.5 w-3.5 text-primary" />
-            <span className={`h-2 w-2 rounded-full ${tagDots[index % tagDots.length]}`} />
-            <span className="font-medium">{tag.name}</span>
-            <span className="tabular-nums text-muted-foreground">{formatNumber(tag.count)}</span>
-          </span>
-        ))}
-      </div>
-
       <Card className="rounded-[12px] p-4">
-        <h2 className="mb-4 text-[14px] font-bold text-foreground">Tag management</h2>
+        <h2 className="mb-4 text-[14px] font-bold text-foreground">All tags</h2>
         <Table className="text-[13px]">
           <THead>
             <TR>

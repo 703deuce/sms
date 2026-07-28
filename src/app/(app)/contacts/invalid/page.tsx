@@ -59,15 +59,15 @@ export default function InvalidContactsPage() {
 
       <Tabs items={contactTabs} />
 
-      <div className="mb-5 flex flex-col gap-3 rounded-[12px] border border-violet-200/80 bg-violet-50/70 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <p className="text-[14px] font-bold text-violet-950">Keep your lists healthy</p>
-          <p className="mt-1 text-[12px] text-violet-900/80">
+      <div className="relative mb-5 overflow-hidden rounded-[12px] border border-violet-200/80 bg-violet-50 px-5 py-5">
+        <div className="relative z-10 max-w-xl">
+          <p className="text-[15px] font-bold text-violet-950">Keep your lists healthy</p>
+          <p className="mt-1.5 text-[13px] text-violet-900/75">
             Review invalid numbers regularly so campaigns stay deliverable and credits aren’t wasted.
           </p>
         </div>
-        <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[12px] bg-violet-100 text-violet-600">
-          <PhoneOff className="h-7 w-7" />
+        <span className="pointer-events-none absolute -right-2 -top-2 flex h-24 w-24 items-center justify-center text-violet-300/80 sm:right-6 sm:top-1/2 sm:-translate-y-1/2">
+          <PhoneOff className="h-16 w-16" strokeWidth={1.25} />
         </span>
       </div>
 

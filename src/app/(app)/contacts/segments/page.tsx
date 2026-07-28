@@ -10,8 +10,10 @@ import { contactTabs } from "@/lib/contact-tabs";
 import { segments } from "@/lib/mock/data";
 import { formatNumber } from "@/lib/utils";
 import {
+  ChevronRight,
   Filter,
   Flame,
+  Info,
   LineChart,
   MoreHorizontal,
   Pencil,
@@ -48,24 +50,54 @@ export default function ContactSegmentsPage() {
           icon={Users}
           tone="bg-emerald-50 text-emerald-600"
         />
-        <MetricCard
-          label="Combined Reach"
-          value={formatNumber(totalReach)}
-          hint="Unique contacts may overlap"
-          icon={LineChart}
-          tone="bg-sky-50 text-sky-600"
-        />
-        <MetricCard
-          label="Most Engaged"
-          value={top?.name ?? "—"}
-          hint={`${formatNumber(top?.count ?? 0)} contacts`}
-          icon={Flame}
-          tone="bg-violet-50 text-violet-600"
-          href={`/contacts/segments`}
-        />
+        <div className="surface rounded-[12px] bg-card p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[12px] font-medium uppercase tracking-wide text-muted-foreground">
+                Combined Reach
+              </p>
+              <p className="mt-2 text-[22px] font-bold tracking-tight text-foreground">
+                {formatNumber(totalReach)}
+              </p>
+              <p className="mt-1 inline-flex items-center gap-1 text-[12px] text-muted-foreground">
+                Unique contacts may overlap
+                <Info className="h-3.5 w-3.5" aria-hidden />
+              </p>
+            </div>
+            <span className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-sky-50 text-sky-600">
+              <LineChart className="h-5 w-5" />
+            </span>
+          </div>
+        </div>
+        <a
+          href="#segment-cards"
+          className="block transition hover:-translate-y-0.5 hover:shadow-md"
+        >
+          <div className="surface rounded-[12px] bg-card p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[12px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Most Engaged
+                </p>
+                <p className="mt-2 text-[18px] font-bold tracking-tight text-foreground">
+                  {top?.name ?? "—"}
+                </p>
+                <p className="mt-1 text-[12px] text-muted-foreground">
+                  {formatNumber(top?.count ?? 0)} contacts
+                </p>
+              </div>
+              <div className="flex flex-col items-end gap-3">
+                <span className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-violet-50 text-violet-600">
+                  <Flame className="h-5 w-5" />
+                </span>
+                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+              </div>
+            </div>
+          </div>
+        </a>
       </div>
 
-      <div className="mb-5 grid gap-4 lg:grid-cols-2">
+      <div id="segment-cards" className="mb-5 grid gap-4 lg:grid-cols-2">
         {segments.map((segment) => (
           <Card key={segment.id} className="rounded-[12px] p-4">
             <div className="flex items-start justify-between gap-3">
@@ -82,7 +114,7 @@ export default function ContactSegmentsPage() {
             </div>
             <h3 className="mt-4 text-[16px] font-bold text-foreground">{segment.name}</h3>
             <p className="mt-1 text-[13px] text-muted-foreground">
-              <span className="font-semibold text-foreground tabular-nums">
+              <span className="font-semibold tabular-nums text-foreground">
                 {formatNumber(segment.count)}
               </span>{" "}
               matching contacts

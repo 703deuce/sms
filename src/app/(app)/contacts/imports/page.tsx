@@ -6,9 +6,7 @@ import { StatusChip } from "@/components/ui/status-chip";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Tabs } from "@/components/ui/tabs";
 import { contactTabs } from "@/lib/contact-tabs";
-import { auditLogs } from "@/lib/mock/data";
 import { FileSpreadsheet, Upload, X } from "lucide-react";
-import Link from "next/link";
 
 const fieldMappings = [
   { csvColumn: "first_name", transovoField: "First name", sample: "Maya" },
@@ -21,46 +19,20 @@ const fieldMappings = [
 
 const importTags = ["sms-opt-in", "import-july"];
 
-const importHistory = [
-  {
-    id: "imp_1",
-    at: "2026-07-18T14:22:00Z",
-    file: "leads-june.csv",
-    actor: "Alex Rivera",
-    status: "Completed",
-  },
-  ...auditLogs
-    .filter((log) => log.event === "Contact import")
-    .map((log) => ({
-      id: log.id,
-      at: log.at,
-      file: log.detail,
-      actor: log.actor,
-      status: "Completed",
-    })),
-];
-
 export default function ContactImportsPage() {
   return (
     <div className="text-[13px]">
       <SectionHeader
         title="Imports"
         description="Upload opted-in contacts with field mapping and consent confirmation."
-        actions={
-          <Link href="/contacts">
-            <Button variant="outline" className="rounded-[10px]">
-              View all contacts
-            </Button>
-          </Link>
-        }
       />
 
       <Tabs items={contactTabs} />
 
-      <div className="grid gap-5 xl:grid-cols-[1fr_320px]">
+      <div className="grid gap-5 xl:grid-cols-[1fr_300px]">
         <div className="space-y-5">
           <Card className="rounded-[12px] p-5">
-            <CardTitle>Step 1 — Upload file</CardTitle>
+            <CardTitle className="text-[15px]">Step 1 — Upload file</CardTitle>
             <p className="mt-1 text-[12px] text-muted-foreground">
               CSV or XLSX with phone numbers and documented consent for each contact.
             </p>
@@ -71,7 +43,10 @@ export default function ContactImportsPage() {
               <p className="mt-3 font-semibold text-foreground">
                 Drag and drop your file here or click to browse
               </p>
-              <Button variant="outline" className="mt-4 rounded-[10px] border-primary text-primary">
+              <Button
+                variant="outline"
+                className="mt-4 rounded-[10px] border-primary text-primary hover:bg-emerald-50"
+              >
                 Choose file
               </Button>
               <p className="mt-3 text-[12px] text-muted-foreground">
@@ -81,7 +56,7 @@ export default function ContactImportsPage() {
           </Card>
 
           <Card className="rounded-[12px] p-5">
-            <CardTitle>Step 2 — Map fields</CardTitle>
+            <CardTitle className="text-[15px]">Step 2 — Map fields</CardTitle>
             <p className="mt-1 text-[12px] text-muted-foreground">
               Match columns from your file to Transovo contact fields.
             </p>
@@ -116,7 +91,7 @@ export default function ContactImportsPage() {
           </Card>
 
           <Card className="rounded-[12px] p-5">
-            <CardTitle>Step 3 — Import settings</CardTitle>
+            <CardTitle className="text-[15px]">Step 3 — Import settings</CardTitle>
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <div>
                 <Label htmlFor="import-list">Add to list</Label>
@@ -148,24 +123,16 @@ export default function ContactImportsPage() {
               </div>
             </div>
 
-            <div className="mt-5 rounded-[10px] border border-border bg-muted/40 p-4">
-              <label className="flex items-start gap-3">
-                <input
-                  type="checkbox"
-                  className="mt-1 rounded border-border"
-                  defaultChecked
-                  aria-describedby="consent-help"
-                />
-                <span>
-                  <span className="block text-[13px] font-medium">
-                    I confirm all imported contacts have provided express consent to receive SMS
-                  </span>
-                  <span id="consent-help" className="mt-1 block text-[12px] text-muted-foreground">
-                    Required for TCPA compliance. Consent source and date columns must be mapped.
-                  </span>
-                </span>
-              </label>
-            </div>
+            <label className="mt-5 flex items-start gap-3">
+              <input
+                type="checkbox"
+                className="mt-1 rounded border-border accent-primary"
+                defaultChecked
+              />
+              <span className="text-[13px] font-medium text-foreground">
+                I confirm all imported contacts have provided express consent to receive SMS
+              </span>
+            </label>
 
             <div className="mt-5 flex flex-wrap gap-2">
               <Button className="rounded-[10px]">Start import</Button>
@@ -213,7 +180,7 @@ export default function ContactImportsPage() {
       </div>
 
       <Card className="mt-5 rounded-[12px] p-4">
-        <CardTitle>Import history</CardTitle>
+        <CardTitle className="text-[15px]">Import history</CardTitle>
         <Table className="mt-4 text-[13px]">
           <THead>
             <TR>
@@ -224,24 +191,14 @@ export default function ContactImportsPage() {
             </TR>
           </THead>
           <TBody>
-            {importHistory.map((log) => (
-              <TR key={log.id}>
-                <TD className="text-muted-foreground">
-                  {new Date(log.at).toLocaleDateString(undefined, {
-                    month: "short",
-                    day: "numeric",
-                    year: "numeric",
-                    hour: "numeric",
-                    minute: "2-digit",
-                  })}
-                </TD>
-                <TD className="font-semibold">{log.file}</TD>
-                <TD>{log.actor}</TD>
-                <TD>
-                  <StatusChip status={log.status} />
-                </TD>
-              </TR>
-            ))}
+            <TR>
+              <TD className="text-muted-foreground">Jul 18, 2026</TD>
+              <TD className="font-semibold">leads-june.csv</TD>
+              <TD>Alex Rivera</TD>
+              <TD>
+                <StatusChip status="Completed" />
+              </TD>
+            </TR>
           </TBody>
         </Table>
       </Card>

@@ -4,10 +4,12 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import {
   ArrowLeft,
+  ChevronDown,
   ExternalLink,
   MessageSquare,
   Pencil,
   Send,
+  UserMinus,
   UserX,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -44,7 +46,7 @@ export default function ContactDetailPage() {
 
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex items-start gap-4">
-          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-primary text-xl font-bold text-primary-foreground">
+          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-primary text-xl font-bold text-primary-foreground">
             {initials}
           </div>
           <div>
@@ -73,10 +75,18 @@ export default function ContactDetailPage() {
             <Pencil className="h-4 w-4" />
             Edit contact
           </Button>
-          <Button className="rounded-[10px]">
-            <Send className="h-4 w-4" />
-            Send message
-          </Button>
+          <div className="inline-flex overflow-hidden rounded-[10px]">
+            <Button className="rounded-none rounded-l-[10px] pr-3">
+              <Send className="h-4 w-4" />
+              Send message
+            </Button>
+            <Button
+              className="rounded-none rounded-r-[10px] border-l border-primary-foreground/20 px-2"
+              aria-label="More send options"
+            >
+              <ChevronDown className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -87,11 +97,11 @@ export default function ContactDetailPage() {
             <dl className="mt-4 grid gap-4 sm:grid-cols-2">
               {[
                 ["Phone", formatPhone(contact.phone)],
-                ["Email", contact.email],
+                ["Email", contact.email || "—"],
                 ["Consent source", contact.consentSource],
                 ["Consent date", formatDate(contact.consentDate)],
-                ["Last message sent", formatDate(contact.lastMessaged)],
-                ["Last message received", formatDate(contact.lastReply)],
+                ["Last message sent", "Jul 2, 2026 · 9:14 AM"],
+                ["Last message received", "Jul 2, 2026 · 9:16 AM"],
               ].map(([label, value]) => (
                 <div key={label}>
                   <dt className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
@@ -143,10 +153,12 @@ export default function ContactDetailPage() {
                   Campaigns
                 </button>
               </div>
-              <Button variant="outline" className="h-9 rounded-[10px] text-[12px]">
-                Open in inbox
-                <ExternalLink className="h-3.5 w-3.5" />
-              </Button>
+              <Link href="/inbox">
+                <Button variant="outline" className="h-9 rounded-[10px] text-[12px]">
+                  Open in inbox
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </Button>
+              </Link>
             </div>
 
             <div className="mt-5 space-y-3">
@@ -236,7 +248,9 @@ export default function ContactDetailPage() {
                       "rounded-full px-2.5 py-1 text-[12px] font-medium",
                       tag === "hot-lead"
                         ? "bg-orange-50 text-orange-700"
-                        : "bg-emerald-50 text-emerald-700",
+                        : tag === "risk"
+                          ? "bg-rose-50 text-rose-700"
+                          : "bg-emerald-50 text-emerald-700",
                     )}
                   >
                     {tag}
@@ -269,7 +283,7 @@ export default function ContactDetailPage() {
                 type="button"
                 className="flex w-full items-center gap-2 rounded-[10px] px-3 py-2.5 text-left text-[13px] font-medium text-rose-600 hover:bg-rose-50"
               >
-                <UserX className="h-3.5 w-3.5" />
+                <UserMinus className="h-3.5 w-3.5" />
                 Block contact
               </button>
             </div>

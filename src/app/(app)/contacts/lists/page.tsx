@@ -13,6 +13,7 @@ import { formatNumber } from "@/lib/utils";
 import {
   ListPlus,
   MoreHorizontal,
+  Pencil,
   Send,
   Settings2,
   Upload,
@@ -49,7 +50,7 @@ export default function ContactListsPage() {
 
       <div className="mb-5 grid gap-4 sm:grid-cols-3">
         <MetricCard
-          label="Total Lists"
+          label="Lists"
           value={formatNumber(lists.length)}
           icon={Users}
           tone="bg-emerald-50 text-emerald-600"
@@ -74,23 +75,23 @@ export default function ContactListsPage() {
         {lists.map((list) => (
           <Card key={list.id} className="flex flex-col rounded-[12px] p-4">
             <div className="flex items-start justify-between gap-3">
-              <span className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-emerald-50 text-emerald-600">
-                <Users className="h-5 w-5" />
+              <span className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-emerald-50 text-emerald-600">
+                <Users className="h-4.5 w-4.5 h-[18px] w-[18px]" />
               </span>
               <button
                 type="button"
-                className="text-[12px] font-semibold text-primary hover:underline"
+                className="inline-flex items-center gap-1 text-[12px] font-semibold text-primary hover:underline"
               >
+                <Pencil className="h-3 w-3" />
                 Edit
               </button>
             </div>
-            <h3 className="mt-4 text-[15px] font-bold text-foreground">{list.name}</h3>
+            <h3 className="mt-3 text-[15px] font-bold text-foreground">{list.name}</h3>
             <p className="mt-1 text-[12px] text-muted-foreground">{list.description}</p>
-            <p className="mt-4 text-[22px] font-bold tabular-nums text-primary">
-              {formatNumber(list.count)}
+            <p className="mt-4 text-[20px] font-bold tabular-nums text-primary">
+              {formatNumber(list.count)} contacts
             </p>
-            <p className="text-[11px] text-muted-foreground">contacts</p>
-            <div className="mt-4 flex gap-2">
+            <div className="mt-auto flex gap-2 pt-4">
               <Button variant="outline" size="sm" className="flex-1 rounded-[10px]">
                 View contacts
               </Button>

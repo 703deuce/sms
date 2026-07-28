@@ -12,7 +12,7 @@ import { Tabs } from "@/components/ui/tabs";
 import { contactTabs } from "@/lib/contact-tabs";
 import { contacts } from "@/lib/mock/data";
 import { formatPhone } from "@/lib/utils";
-import { Ban, Download, MoreHorizontal, Shield, Users } from "lucide-react";
+import { Ban, Download, MoreHorizontal, Shield, SlidersHorizontal, Users } from "lucide-react";
 import Link from "next/link";
 
 function formatDate(date: string | null) {
@@ -62,8 +62,13 @@ export default function BlockedContactsPage() {
             title={`${filtered.length} contact${filtered.length === 1 ? "" : "s"}`}
             searchPlaceholder="Search blocked contacts..."
           >
-            <Button variant="outline" size="sm" className="rounded-[10px]">
-              Filters
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-9 w-9 rounded-[10px]"
+              aria-label="Filters"
+            >
+              <SlidersHorizontal className="h-4 w-4" />
             </Button>
           </TableToolbar>
 
