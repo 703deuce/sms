@@ -96,18 +96,25 @@ export const messagingOnboarding = {
     const data = businessSchema.parse(input);
     const existing = await ensureRegistrationRow(workspaceId);
     const phone = normalizeE164(data.contactPhone);
-    const keepReady = existing.overallStatus === "ready" && existing.messagingEnabled;
+    const materialChanged =
+      existing.overallStatus === "ready" &&
+      (existing.legalBusinessName !== data.legalBusinessName ||
+        existing.businessRegistrationId !== data.businessRegistrationId ||
+        existing.businessType !== data.businessType ||
+        existing.websiteUrl !== data.websiteUrl);
+
     const reg = await updateRegistration(workspaceId, {
       ...data,
       contactPhone: phone,
       country: data.country || "US",
-      profileStatus: keepReady ? existing.profileStatus : "action_required",
-      overallStatus: keepReady ? "ready" : "action_required",
+      profileStatus: materialChanged ? "action_required" : existing.overallStatus === "ready" ? existing.profileStatus : "action_required",
+      overallStatus: materialChanged ? "action_required" : existing.overallStatus === "ready" ? "ready" : "action_required",
+      messagingEnabled: materialChanged ? false : existing.messagingEnabled,
     });
     await appendRegistrationEvent({
       workspaceId,
       registrationId: reg.id,
-      eventType: "business_saved",
+      eventType: materialChanged ? "business_saved_requires_resubmit" : "business_saved",
       message: data.legalBusinessName,
     });
     return toPublicRegistration(reg);
@@ -116,17 +123,23 @@ export const messagingOnboarding = {
   async saveUseCase(workspaceId: string, input: UseCaseInput) {
     const data = useCaseSchema.parse(input);
     const existing = await ensureRegistrationRow(workspaceId);
-    const keepReady = existing.overallStatus === "ready" && existing.messagingEnabled;
+    const materialChanged =
+      existing.overallStatus === "ready" &&
+      (existing.useCase !== data.useCase ||
+        existing.useCaseDescription !== data.useCaseDescription ||
+        existing.optInDescription !== data.optInDescription);
+
     const reg = await updateRegistration(workspaceId, {
       ...data,
       sampleMessages: data.sampleMessages,
-      campaignStatus: keepReady ? existing.campaignStatus : "action_required",
-      overallStatus: keepReady ? "ready" : "action_required",
+      campaignStatus: materialChanged ? "action_required" : existing.overallStatus === "ready" ? existing.campaignStatus : "action_required",
+      overallStatus: materialChanged ? "action_required" : existing.overallStatus === "ready" ? "ready" : "action_required",
+      messagingEnabled: materialChanged ? false : existing.messagingEnabled,
     });
     await appendRegistrationEvent({
       workspaceId,
       registrationId: reg.id,
-      eventType: "use_case_saved",
+      eventType: materialChanged ? "use_case_saved_requires_resubmit" : "use_case_saved",
       message: data.useCase,
     });
     return toPublicRegistration(reg);
@@ -147,13 +160,34 @@ export const messagingOnboarding = {
     const name = await workspaceName(workspaceId);
     let reg = await ensureSubaccount(workspaceId, `Transovo — ${name}`);
 
-    if (reg.phoneSid) {
+    if (reg.phoneSid && !reg.phoneSid.startsWith("PENDING:")) {
       throw new Error("A phone number is already purchased for this workspace. Release it first.");
     }
 
-    const purchased = isLiveMessagingAdapter()
-      ? await twilioAdapter.purchaseNumber(reg, e164)
-      : await mockAdapter.purchaseNumber(reg.subaccountSid!, e164);
+    const claimToken = `PENDING:${e164}`;
+    const claimed = await getPrisma().messagingRegistration.updateMany({
+      where: {
+        workspaceId,
+        OR: [{ phoneSid: null }, { phoneSid: { startsWith: "PENDING:" } }],
+      },
+      data: { phoneSid: claimToken, phoneE164: e164, numberStatus: "submitted" },
+    });
+    if (claimed.count !== 1) {
+      throw new Error("A phone number is already purchased for this workspace. Release it first.");
+    }
+
+    let purchased: { sid: string; phoneNumber: string };
+    try {
+      purchased = isLiveMessagingAdapter()
+        ? await twilioAdapter.purchaseNumber(reg, e164)
+        : await mockAdapter.purchaseNumber(reg.subaccountSid!, e164);
+    } catch (err) {
+      await getPrisma().messagingRegistration.updateMany({
+        where: { workspaceId, phoneSid: claimToken },
+        data: { phoneSid: null, phoneE164: null, numberStatus: "not_started" },
+      });
+      throw err;
+    }
 
     reg = await updateRegistration(workspaceId, {
       phoneE164: purchased.phoneNumber,
@@ -235,6 +269,17 @@ export const messagingOnboarding = {
     if (!reg) throw new Error("Registration not found");
     if (!reg.legalBusinessName || !reg.useCase) {
       throw new Error("Business details and use case are required before submit");
+    }
+
+    // Already approved — reconcile only; do not downgrade ready/messagingEnabled
+    if (reg.overallStatus === "ready" || (reg.messagingEnabled && reg.phoneAttached)) {
+      await enqueueMessagingRegistrationAdvance(workspaceId);
+      try {
+        const advanced = await advanceMessagingRegistration(workspaceId);
+        return toPublicRegistration(advanced);
+      } catch {
+        return toPublicRegistration(reg);
+      }
     }
 
     const name = await workspaceName(workspaceId);
@@ -340,6 +385,21 @@ export const messagingOnboarding = {
 
   async sendTest(workspaceId: string, to: string, body: string) {
     const e164 = normalizeE164(to);
+    const prisma = getPrisma();
+
+    const suppressed = await prisma.suppression.findFirst({
+      where: { workspaceId, phone: e164 },
+    });
+    if (suppressed) {
+      throw new Error("Recipient is suppressed (STOP / do-not-contact)");
+    }
+    const contact = await prisma.contact.findUnique({
+      where: { workspaceId_phone: { workspaceId, phone: e164 } },
+    });
+    if (contact && (contact.status === "UNSUBSCRIBED" || contact.status === "BLOCKED")) {
+      throw new Error(`Recipient contact status is ${contact.status}`);
+    }
+
     const text =
       body ||
       "Transovo test message: your messaging registration is working. Reply STOP to opt out.";

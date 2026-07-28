@@ -9,6 +9,8 @@ export function isMessagingReady(reg: MessagingRegistration | null | undefined):
   if (reg.overallStatus !== "ready") return false;
   if (!reg.messagingServiceSid) return false;
   if (!reg.phoneAttached || !reg.phoneE164) return false;
+  if (reg.phoneSid?.startsWith("PENDING:")) return false;
+  if (reg.subaccountSid?.startsWith("PENDING:")) return false;
   return true;
 }
 

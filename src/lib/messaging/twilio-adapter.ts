@@ -85,56 +85,63 @@ export const twilioAdapter = {
   async submitSecondaryProfile(reg: MessagingRegistration) {
     if (!reg.secondaryProfileSid) throw new Error("Secondary profile SID missing");
     const client = requireSubaccount(reg);
-
-    const businessAttrs = {
-      business_name: reg.legalBusinessName,
-      business_identity: reg.businessIdentity || "direct_customer",
-      business_type: mapBusinessType(reg.businessType || "llc"),
-      business_industry: mapIndustry(reg.businessIndustry || "professional_services"),
-      business_registration_identifier: "EIN",
-      business_registration_number: reg.businessRegistrationId,
-      website_url: reg.websiteUrl,
-    };
-
-    const endUser = await client.trusthub.v1.endUsers.create({
-      friendlyName: `${reg.legalBusinessName} Business Info`,
-      type: "customer_profile_business_information",
-      attributes: businessAttrs,
-    });
-
-    const authRep = await client.trusthub.v1.endUsers.create({
-      friendlyName: `${reg.contactFirstName} ${reg.contactLastName} Auth Rep`,
-      type: "authorized_representative_1",
-      attributes: {
-        first_name: reg.contactFirstName,
-        last_name: reg.contactLastName,
-        email: reg.contactEmail,
-        phone_number: reg.contactPhone,
-        business_title: reg.contactTitle || "Owner",
-        job_position: "CEO",
-      },
-    });
-
-    const address = await client.addresses.create({
-      customerName: reg.legalBusinessName || "Business",
-      street: reg.street || "",
-      city: reg.city || "",
-      region: reg.region || "",
-      postalCode: reg.postalCode || "",
-      isoCountry: reg.country || "US",
-    });
-
-    const supportingDoc = await client.trusthub.v1.supportingDocuments.create({
-      friendlyName: `${reg.legalBusinessName} Address`,
-      type: "customer_profile_address",
-      attributes: { address_sids: [address.sid] },
-    });
-
     const profileSid = reg.secondaryProfileSid;
-    for (const objectSid of [endUser.sid, authRep.sid, supportingDoc.sid]) {
-      await client.trusthub.v1.customerProfiles(profileSid).customerProfilesEntityAssignments.create({
-        objectSid,
+
+    // Resume-safe: if entity assignments already exist, just evaluate + submit
+    const existingAssignments = await client.trusthub.v1
+      .customerProfiles(profileSid)
+      .customerProfilesEntityAssignments.list({ limit: 50 });
+
+    if (existingAssignments.length < 2) {
+      const businessAttrs = {
+        business_name: reg.legalBusinessName,
+        business_identity: reg.businessIdentity || "direct_customer",
+        business_type: mapBusinessType(reg.businessType || "llc"),
+        business_industry: mapIndustry(reg.businessIndustry || "professional_services"),
+        business_registration_identifier: "EIN",
+        business_registration_number: reg.businessRegistrationId,
+        website_url: reg.websiteUrl,
+      };
+
+      const endUser = await client.trusthub.v1.endUsers.create({
+        friendlyName: `${reg.legalBusinessName} Business Info`,
+        type: "customer_profile_business_information",
+        attributes: businessAttrs,
       });
+
+      const authRep = await client.trusthub.v1.endUsers.create({
+        friendlyName: `${reg.contactFirstName} ${reg.contactLastName} Auth Rep`,
+        type: "authorized_representative_1",
+        attributes: {
+          first_name: reg.contactFirstName,
+          last_name: reg.contactLastName,
+          email: reg.contactEmail,
+          phone_number: reg.contactPhone,
+          business_title: reg.contactTitle || "Owner",
+          job_position: "CEO",
+        },
+      });
+
+      const address = await client.addresses.create({
+        customerName: reg.legalBusinessName || "Business",
+        street: reg.street || "",
+        city: reg.city || "",
+        region: reg.region || "",
+        postalCode: reg.postalCode || "",
+        isoCountry: reg.country || "US",
+      });
+
+      const supportingDoc = await client.trusthub.v1.supportingDocuments.create({
+        friendlyName: `${reg.legalBusinessName} Address`,
+        type: "customer_profile_address",
+        attributes: { address_sids: [address.sid] },
+      });
+
+      for (const objectSid of [endUser.sid, authRep.sid, supportingDoc.sid]) {
+        await client.trusthub.v1.customerProfiles(profileSid).customerProfilesEntityAssignments.create({
+          objectSid,
+        });
+      }
     }
 
     await client.trusthub.v1.customerProfiles(profileSid).customerProfilesEvaluations.create({

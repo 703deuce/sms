@@ -1,10 +1,13 @@
 import { getPrisma } from "@/lib/db";
 import { requireCampaignSendAccess } from "@/lib/billing/entitlements";
 import { sendTransactionalEmail } from "@/lib/email/brevo";
+import { JobDeferredError, JobFailedError } from "@/lib/messaging/types";
 import { sendViaRegistration } from "@/lib/messaging/registration-processor";
 import { isMessagingReady } from "@/lib/messaging/status";
 import { getRegistrationByWorkspace } from "@/lib/messaging/store";
 import { tryAdvanceRecipientAfterSend } from "./sequence-runner";
+
+const ACTIVE_RECIPIENT = ["pending", "scheduled", "in_progress", "waiting"] as const;
 
 async function claimMessage(id: string) {
   const result = await getPrisma().campaignMessage.updateMany({
@@ -14,16 +17,71 @@ async function claimMessage(id: string) {
   return result.count === 1;
 }
 
-/** Reclaim messages stuck in sending after a worker crash. */
+async function failRecipient(recipientId: string, reason: string) {
+  await getPrisma().campaignRecipient.updateMany({
+    where: {
+      id: recipientId,
+      workflowStatus: { in: [...ACTIVE_RECIPIENT] },
+    },
+    data: {
+      workflowStatus: "failed",
+      stopReason: reason,
+      completedAt: new Date(),
+      enrollmentKey: null,
+      nextActionAt: null,
+    },
+  });
+}
+
+/**
+ * Reclaim stuck sends without double-sending:
+ * - no providerId yet → crash before provider call → safe to requeue
+ * - pending:* → provider outcome unknown → assume sent (never resend) and finish bookkeeping
+ */
 export async function reclaimStuckSendingMessages(staleMs = 10 * 60 * 1000) {
+  const prisma = getPrisma();
   const cutoff = new Date(Date.now() - staleMs);
-  return getPrisma().campaignMessage.updateMany({
+
+  await prisma.campaignMessage.updateMany({
     where: {
       status: "sending",
       updatedAt: { lt: cutoff },
+      providerId: null,
     },
     data: { status: "queued", error: "reclaimed_stale_sending" },
   });
+
+  const assumed = await prisma.campaignMessage.findMany({
+    where: {
+      status: "sending",
+      updatedAt: { lt: cutoff },
+      providerId: { startsWith: "pending:" },
+    },
+    take: 50,
+  });
+
+  for (const msg of assumed) {
+    const marked = await prisma.campaignMessage.updateMany({
+      where: { id: msg.id, status: "sending", providerId: { startsWith: "pending:" } },
+      data: {
+        status: "sent",
+        sentAt: msg.sentAt || new Date(),
+        error: "assumed_sent_after_crash",
+      },
+    });
+    if (marked.count !== 1) continue;
+
+    // Bookkeeping once — only if we just transitioned
+    await prisma.campaign.update({
+      where: { id: msg.campaignId },
+      data: { sent: { increment: 1 } },
+    });
+    try {
+      await tryAdvanceRecipientAfterSend(msg.recipientId);
+    } catch (err) {
+      console.warn("[reclaimStuckSendingMessages] advance failed", msg.id, err);
+    }
+  }
 }
 
 function inSendWindow(now: Date, startHour: number | null | undefined, endHour: number | null | undefined) {
@@ -32,6 +90,20 @@ function inSendWindow(now: Date, startHour: number | null | undefined, endHour: 
   if (startHour === endHour) return true;
   if (startHour < endHour) return hour >= startHour && hour < endHour;
   return hour >= startHour || hour < endHour;
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function retryCountFromError(error: string | null | undefined) {
+  const match = (error || "").match(/retry:(\d+):/);
+  return match ? Number(match[1]) : 0;
 }
 
 export async function sendCampaignMessageById(messageId: string) {
@@ -44,12 +116,24 @@ export async function sendCampaignMessageById(messageId: string) {
   });
   if (!message) throw new Error(`Campaign message ${messageId} not found`);
 
-  // Only send after a successful claim from queued — never re-send `sending`
+  if (message.status === "failed") {
+    await failRecipient(message.recipientId, message.error || "send_failed");
+    throw new JobFailedError(message.error || "send_failed");
+  }
+
+  // Only send after a successful claim from queued — never re-send `sending`/`sent`
   if (message.status !== "queued") {
     return { skipped: true, status: message.status };
   }
 
-  // Campaign status gates (check before claim to avoid stuck sending)
+  if (!ACTIVE_RECIPIENT.includes(message.recipient.workflowStatus as (typeof ACTIVE_RECIPIENT)[number])) {
+    await prisma.campaignMessage.update({
+      where: { id: messageId },
+      data: { status: "skipped", error: `recipient_${message.recipient.workflowStatus}` },
+    });
+    return { skipped: true, status: "recipient_terminal" };
+  }
+
   if (message.campaign.status === "PAUSED" || message.campaign.status === "CANCELED" || message.campaign.status === "DRAFT") {
     return { deferred: true, reason: "campaign_not_active" };
   }
@@ -83,7 +167,6 @@ export async function sendCampaignMessageById(messageId: string) {
         campaignId: message.campaignId,
         OR: [
           { status: { in: ["sent", "delivered", "clicked"] }, sentAt: { gte: dayStart } },
-          // Reserve in-flight sends toward the cap (sending has no sentAt yet)
           { status: "sending", updatedAt: { gte: dayStart } },
         ],
         id: { not: messageId },
@@ -108,9 +191,11 @@ export async function sendCampaignMessageById(messageId: string) {
       where: { id: messageId },
       data: { status: "failed", error: entitlement.error },
     });
-    throw new Error(entitlement.error);
+    await failRecipient(message.recipientId, entitlement.error);
+    throw new JobFailedError(entitlement.error);
   }
 
+  // Suppression / contact gates for SMS and email
   if (message.channel === "sms" && message.to) {
     const contact = await prisma.contact.findUnique({
       where: { workspaceId_phone: { workspaceId: message.workspaceId, phone: message.to } },
@@ -120,9 +205,15 @@ export async function sendCampaignMessageById(messageId: string) {
         where: { id: messageId },
         data: { status: "opted_out", error: `contact_${contact.status.toLowerCase()}` },
       });
-      await prisma.campaignRecipient.update({
-        where: { id: message.recipientId },
-        data: { workflowStatus: "opted_out", stopReason: contact.status, completedAt: new Date() },
+      await prisma.campaignRecipient.updateMany({
+        where: { id: message.recipientId, workflowStatus: { in: [...ACTIVE_RECIPIENT] } },
+        data: {
+          workflowStatus: "opted_out",
+          stopReason: contact.status,
+          completedAt: new Date(),
+          enrollmentKey: null,
+          nextActionAt: null,
+        },
       });
       return { optedOut: true };
     }
@@ -135,9 +226,15 @@ export async function sendCampaignMessageById(messageId: string) {
         where: { id: messageId },
         data: { status: "opted_out", error: "suppressed" },
       });
-      await prisma.campaignRecipient.update({
-        where: { id: message.recipientId },
-        data: { workflowStatus: "opted_out", stopReason: "suppression", completedAt: new Date() },
+      await prisma.campaignRecipient.updateMany({
+        where: { id: message.recipientId, workflowStatus: { in: [...ACTIVE_RECIPIENT] } },
+        data: {
+          workflowStatus: "opted_out",
+          stopReason: "suppression",
+          completedAt: new Date(),
+          enrollmentKey: null,
+          nextActionAt: null,
+        },
       });
       await prisma.campaignMessage.updateMany({
         where: { recipientId: message.recipientId, status: "queued" },
@@ -147,12 +244,44 @@ export async function sendCampaignMessageById(messageId: string) {
     }
   }
 
+  if (message.channel === "email" && message.to) {
+    const suppressed = await prisma.suppression.findFirst({
+      where: { workspaceId: message.workspaceId, email: message.to.toLowerCase() },
+    });
+    if (suppressed) {
+      await prisma.campaignMessage.update({
+        where: { id: messageId },
+        data: { status: "opted_out", error: "suppressed" },
+      });
+      await prisma.campaignRecipient.updateMany({
+        where: { id: message.recipientId, workflowStatus: { in: [...ACTIVE_RECIPIENT] } },
+        data: {
+          workflowStatus: "opted_out",
+          stopReason: "suppression",
+          completedAt: new Date(),
+          enrollmentKey: null,
+          nextActionAt: null,
+        },
+      });
+      return { optedOut: true };
+    }
+  }
+
+  // Provisional provider id so crash-after-accept won't reclaim into a resend
+  await prisma.campaignMessage.update({
+    where: { id: messageId },
+    data: { providerId: `pending:${messageId}` },
+  });
+
+  let providerAccepted = false;
+  let providerSid: string | null = null;
+
   try {
     if (message.channel === "email") {
       const result = await sendTransactionalEmail({
         to: message.to,
         subject: message.campaign.name || "Message",
-        htmlContent: `<p>${message.body.replace(/\n/g, "<br/>")}</p>`,
+        htmlContent: `<p>${escapeHtml(message.body).replace(/\n/g, "<br/>")}</p>`,
         textContent: message.body,
       });
       if (result.status === "failed") {
@@ -165,46 +294,86 @@ export async function sendCampaignMessageById(messageId: string) {
       ) {
         throw new Error("BREVO_API_KEY is required to send campaign email in live mode");
       }
-      await prisma.campaignMessage.update({
-        where: { id: messageId },
-        data: {
-          status: "sent",
-          sentAt: new Date(),
-          providerId: result.id,
-          error: null,
-        },
-      });
+      providerAccepted = true;
+      providerSid = result.id;
     } else {
       const reg = await getRegistrationByWorkspace(message.workspaceId);
       if (!isMessagingReady(reg)) {
         throw new Error("Messaging not ready for workspace");
       }
       const result = await sendViaRegistration(message.workspaceId, message.to, message.body);
-      await prisma.campaignMessage.update({
-        where: { id: messageId },
-        data: {
-          status: "sent",
-          sentAt: new Date(),
-          providerId: result.sid,
-          error: null,
-        },
-      });
+      providerAccepted = true;
+      providerSid = result.sid;
     }
+
+    await prisma.campaignMessage.update({
+      where: { id: messageId },
+      data: {
+        status: "sent",
+        sentAt: new Date(),
+        providerId: providerSid,
+        error: null,
+      },
+    });
 
     await prisma.campaign.update({
       where: { id: message.campaignId },
       data: { sent: { increment: 1 } },
     });
 
-    // Do not set message_delivered here — wait for Twilio delivery webhook
-    await tryAdvanceRecipientAfterSend(message.recipientId);
+    try {
+      await tryAdvanceRecipientAfterSend(message.recipientId);
+    } catch (advanceErr) {
+      // Provider already accepted — do not retry send; advancement can recover later
+      console.warn("[sendCampaignMessageById] advance after send failed", messageId, advanceErr);
+    }
     return { ok: true };
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err);
+
+    // Provider already accepted: persist sent, never auto-retry (would double-send)
+    if (providerAccepted) {
+      await prisma.campaignMessage.updateMany({
+        where: { id: messageId, status: { in: ["sending", "queued"] } },
+        data: {
+          status: "sent",
+          sentAt: new Date(),
+          providerId: providerSid || `pending:${messageId}`,
+          error: `bookkeeping_error:${error}`,
+        },
+      });
+      try {
+        await prisma.campaign.update({
+          where: { id: message.campaignId },
+          data: { sent: { increment: 1 } },
+        });
+        await tryAdvanceRecipientAfterSend(message.recipientId);
+      } catch {
+        // recoverable via reclaim / next batch
+      }
+      return { ok: true, bookkeepingError: error };
+    }
+
+    const prior = retryCountFromError(message.error);
+    const next = prior + 1;
+    if (next < 3) {
+      await prisma.campaignMessage.update({
+        where: { id: messageId },
+        data: {
+          status: "queued",
+          providerId: null,
+          scheduledFor: new Date(Date.now() + next * 60_000),
+          error: `retry:${next}:${error}`,
+        },
+      });
+      throw new JobDeferredError(`send_retry:${next}:${error}`, next * 60_000);
+    }
+
     await prisma.campaignMessage.update({
       where: { id: messageId },
-      data: { status: "failed", error },
+      data: { status: "failed", providerId: null, error },
     });
-    throw err;
+    await failRecipient(message.recipientId, error);
+    throw new JobFailedError(error);
   }
 }

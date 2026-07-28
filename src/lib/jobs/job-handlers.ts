@@ -42,10 +42,17 @@ export async function processDueJobs(limit = 25) {
     idempotencyKey: `campaign-send-batch:${minuteKey}`,
   });
 
-  // When BullMQ is the consumer, cron only enqueues the minute batch (dual-written).
-  // Do not also claim/process DB jobs — that would double-send.
+  // When BullMQ is the consumer, cron enqueues the minute batch and re-syncs the DB outbox.
+  // Do not claim/process DB jobs locally — that would double-send with workers.
   if (process.env.QUEUE_DRIVER === "bullmq" && process.env.REDIS_URL) {
-    return { processed: 0, results: [] as Array<{ id: string; jobType: string; ok: boolean; error?: string }>, mode: "bullmq" };
+    const { syncDbOutboxToBullmq } = await import("@/lib/jobs/bullmq");
+    const outbox = await syncDbOutboxToBullmq(50);
+    return {
+      processed: 0,
+      results: [] as Array<{ id: string; jobType: string; ok: boolean; error?: string }>,
+      mode: "bullmq",
+      outbox,
+    };
   }
 
   const results: Array<{ id: string; jobType: string; ok: boolean; error?: string }> = [];

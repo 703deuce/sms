@@ -1,3 +1,4 @@
+import type { Prisma, RecipientWorkflowStatus } from "@prisma/client";
 import { getPrisma } from "@/lib/db";
 import { randomTrackingToken } from "@/lib/messaging/crypto";
 import { getAppBaseUrl } from "@/lib/messaging/twilio-config";
@@ -13,6 +14,8 @@ import {
 } from "./sequence-engine";
 
 const BATCH_LIMIT = 80;
+const ACTIVE: RecipientWorkflowStatus[] = ["pending", "scheduled", "in_progress", "waiting"];
+const TERMINAL: RecipientWorkflowStatus[] = ["completed", "stopped", "opted_out", "failed"];
 
 async function claimWaitingRecipient(id: string) {
   const now = new Date();
@@ -21,6 +24,24 @@ async function claimWaitingRecipient(id: string) {
     data: { workflowStatus: "in_progress" },
   });
   return result.count === 1;
+}
+
+async function casRecipient(
+  id: string,
+  data: {
+    workflowStatus?: RecipientWorkflowStatus;
+    currentStep?: string | null;
+    nextActionAt?: Date | null;
+    completedAt?: Date | null;
+    stopReason?: string | null;
+    enrollmentKey?: null;
+    metadata?: Prisma.InputJsonValue;
+  },
+) {
+  return getPrisma().campaignRecipient.updateMany({
+    where: { id, workflowStatus: { in: ACTIVE } },
+    data,
+  });
 }
 
 function factsFromRecipientMetadata(metadata: unknown): ConditionFacts {
@@ -49,16 +70,46 @@ export async function processSequenceWaits() {
   const prisma = getPrisma();
   const now = new Date();
 
-  // Activate parked recipients once campaign is SENDING
+  // Activate parked recipients once campaign is SENDING (CAS)
   const pending = await prisma.campaignRecipient.findMany({
     where: { workflowStatus: "pending", campaign: { status: "SENDING" } },
     take: BATCH_LIMIT,
+    include: { campaign: true },
   });
   for (const recipient of pending) {
-    await prisma.campaignRecipient.update({
-      where: { id: recipient.id },
+    const sequence = parseSequence(recipient.campaign.sequenceJson);
+    const first = findStep(sequence, recipient.currentStep) || sequence[0];
+
+    // Honor preserved enroll delay / first wait without starting the clock before activation
+    if (recipient.nextActionAt && recipient.nextActionAt > now) {
+      const claimed = await prisma.campaignRecipient.updateMany({
+        where: { id: recipient.id, workflowStatus: "pending" },
+        data: { workflowStatus: "waiting" },
+      });
+      if (claimed.count !== 1) continue;
+      continue;
+    }
+
+    if (first?.step_type === "wait" && !recipient.nextActionAt) {
+      const ms = waitDurationMs(first.config);
+      const next = nextStepAfter(sequence, first.step_key);
+      const claimed = await prisma.campaignRecipient.updateMany({
+        where: { id: recipient.id, workflowStatus: "pending" },
+        data: {
+          workflowStatus: "waiting",
+          currentStep: next?.step_key || first.step_key,
+          nextActionAt: new Date(Date.now() + ms),
+        },
+      });
+      if (claimed.count !== 1) continue;
+      continue;
+    }
+
+    const claimed = await prisma.campaignRecipient.updateMany({
+      where: { id: recipient.id, workflowStatus: "pending" },
       data: { workflowStatus: "in_progress" },
     });
+    if (claimed.count !== 1) continue;
     await advanceRecipient(recipient.id);
   }
 
@@ -74,7 +125,6 @@ export async function processSequenceWaits() {
 
   let advanced = 0;
   for (const recipient of due) {
-    // Honor scheduled campaigns
     if (
       recipient.campaign.status === "SCHEDULED" &&
       recipient.campaign.scheduledAt &&
@@ -105,7 +155,7 @@ export async function advanceRecipient(recipientId: string, factsOverride?: Cond
   });
   if (!recipient) return null;
 
-  if (["completed", "stopped", "opted_out", "failed"].includes(recipient.workflowStatus)) {
+  if (TERMINAL.includes(recipient.workflowStatus)) {
     return recipient;
   }
 
@@ -116,71 +166,78 @@ export async function advanceRecipient(recipientId: string, factsOverride?: Cond
   const facts = factsOverride || factsFromRecipientMetadata(recipient.metadata);
   const sequence = parseSequence(recipient.campaign.sequenceJson);
   if (!sequence.length) {
-    return prisma.campaignRecipient.update({
-      where: { id: recipientId },
-      data: { workflowStatus: "completed", completedAt: new Date(), stopReason: "empty_sequence" },
+    await casRecipient(recipientId, {
+      workflowStatus: "completed",
+      completedAt: new Date(),
+      stopReason: "empty_sequence",
+      enrollmentKey: null,
     });
+    return prisma.campaignRecipient.findUnique({ where: { id: recipientId } });
   }
 
   let step = findStep(sequence, recipient.currentStep);
   if (!step) {
-    return prisma.campaignRecipient.update({
-      where: { id: recipientId },
-      data: { workflowStatus: "completed", completedAt: new Date(), stopReason: "missing_step" },
+    await casRecipient(recipientId, {
+      workflowStatus: "completed",
+      completedAt: new Date(),
+      stopReason: "missing_step",
+      enrollmentKey: null,
     });
+    return prisma.campaignRecipient.findUnique({ where: { id: recipientId } });
   }
 
   for (let guard = 0; guard < 20; guard += 1) {
+    // Re-check terminal mid-loop (STOP/click may have raced)
+    const live = await prisma.campaignRecipient.findUnique({ where: { id: recipientId } });
+    if (!live || TERMINAL.includes(live.workflowStatus)) {
+      return live;
+    }
+
     if (step.step_type === "end") {
-      return prisma.campaignRecipient.update({
-        where: { id: recipientId },
-        data: {
-          workflowStatus: "completed",
-          currentStep: step.step_key,
-          completedAt: new Date(),
-          nextActionAt: null,
-        },
+      await casRecipient(recipientId, {
+        workflowStatus: "completed",
+        currentStep: step.step_key,
+        completedAt: new Date(),
+        nextActionAt: null,
+        enrollmentKey: null,
       });
+      return prisma.campaignRecipient.findUnique({ where: { id: recipientId } });
     }
 
     if (step.step_type === "wait") {
       const ms = waitDurationMs(step.config);
       const next = nextStepAfter(sequence, step.step_key);
-      return prisma.campaignRecipient.update({
-        where: { id: recipientId },
-        data: {
-          workflowStatus: "waiting",
-          currentStep: next?.step_key || step.step_key,
-          nextActionAt: new Date(Date.now() + ms),
-        },
+      await casRecipient(recipientId, {
+        workflowStatus: "waiting",
+        currentStep: next?.step_key || step.step_key,
+        nextActionAt: new Date(Date.now() + ms),
       });
+      return prisma.campaignRecipient.findUnique({ where: { id: recipientId } });
     }
 
     if (step.step_type === "condition") {
       const targetKey = evaluateCondition(step, facts);
       const target = findStep(sequence, targetKey);
       if (!target || target.step_type === "end") {
-        return prisma.campaignRecipient.update({
-          where: { id: recipientId },
-          data: {
-            workflowStatus: "completed",
-            currentStep: targetKey,
-            completedAt: new Date(),
-            stopReason: "condition_end",
-            nextActionAt: null,
-          },
+        await casRecipient(recipientId, {
+          workflowStatus: "completed",
+          currentStep: targetKey,
+          completedAt: new Date(),
+          stopReason: "condition_end",
+          nextActionAt: null,
+          enrollmentKey: null,
         });
+        return prisma.campaignRecipient.findUnique({ where: { id: recipientId } });
       }
       step = target;
-      await prisma.campaignRecipient.update({
-        where: { id: recipientId },
-        data: { currentStep: step.step_key, workflowStatus: "in_progress" },
+      await casRecipient(recipientId, {
+        currentStep: step.step_key,
+        workflowStatus: "in_progress",
       });
       continue;
     }
 
     if (step.step_type === "send_sms" || step.step_type === "send_email") {
-      // Stay on this step until send succeeds; tryAdvanceRecipientAfterSend moves forward
       const existing = await prisma.campaignMessage.findFirst({
         where: {
           recipientId,
@@ -189,32 +246,33 @@ export async function advanceRecipient(recipientId: string, factsOverride?: Cond
         },
       });
       if (!existing) {
-        await queueSendForStep(recipient.id, step);
+        const queued = await queueSendForStep(recipient.id, step);
+        if (!queued) {
+          // queueSendForStep already marked terminal failure — do not overwrite
+          return prisma.campaignRecipient.findUnique({ where: { id: recipientId } });
+        }
       }
-      return prisma.campaignRecipient.update({
-        where: { id: recipientId },
-        data: {
-          workflowStatus: "in_progress",
-          currentStep: step.step_key,
-          completedAt: null,
-        },
+      await casRecipient(recipientId, {
+        workflowStatus: "in_progress",
+        currentStep: step.step_key,
+        completedAt: null,
       });
+      return prisma.campaignRecipient.findUnique({ where: { id: recipientId } });
     }
 
-    return prisma.campaignRecipient.update({
-      where: { id: recipientId },
-      data: {
-        workflowStatus: "failed",
-        stopReason: `unknown_step_type:${step.step_type}`,
-      },
+    await casRecipient(recipientId, {
+      workflowStatus: "failed",
+      stopReason: `unknown_step_type:${step.step_type}`,
+      enrollmentKey: null,
     });
+    return prisma.campaignRecipient.findUnique({ where: { id: recipientId } });
   }
 
   return null;
 }
 
 /** Create queued message only — campaign_send_batch enforces windows/limits before enqueue. */
-async function queueSendForStep(recipientId: string, step: SequenceStep) {
+async function queueSendForStep(recipientId: string, step: SequenceStep): Promise<boolean> {
   const prisma = getPrisma();
   const recipient = await prisma.campaignRecipient.findUniqueOrThrow({
     where: { id: recipientId },
@@ -224,11 +282,13 @@ async function queueSendForStep(recipientId: string, step: SequenceStep) {
   const channel = step.step_type === "send_email" ? "email" : "sms";
   const to = channel === "email" ? recipient.email : recipient.phone;
   if (!to) {
-    await prisma.campaignRecipient.update({
-      where: { id: recipientId },
-      data: { workflowStatus: "failed", stopReason: `missing_${channel}_address` },
+    await casRecipient(recipientId, {
+      workflowStatus: "failed",
+      stopReason: `missing_${channel}_address`,
+      completedAt: new Date(),
+      enrollmentKey: null,
     });
-    return;
+    return false;
   }
 
   const trackingToken = randomTrackingToken();
@@ -253,59 +313,67 @@ async function queueSendForStep(recipientId: string, step: SequenceStep) {
     body = `${body.trim()} ${trackedUrl}`.trim();
   }
 
-  await prisma.campaignMessage.create({
-    data: {
-      workspaceId: recipient.workspaceId,
-      campaignId: recipient.campaignId,
-      recipientId: recipient.id,
-      channel,
-      stepKey: step.step_key,
-      to,
-      body,
-      status: "queued",
-      scheduledFor: new Date(),
-      trackingToken,
-      destinationUrl,
-    },
-  });
+  try {
+    await prisma.campaignMessage.create({
+      data: {
+        workspaceId: recipient.workspaceId,
+        campaignId: recipient.campaignId,
+        recipientId: recipient.id,
+        channel,
+        stepKey: step.step_key,
+        to,
+        body,
+        status: "queued",
+        scheduledFor: new Date(),
+        trackingToken,
+        destinationUrl,
+      },
+    });
+    return true;
+  } catch (err) {
+    if (err && typeof err === "object" && "code" in err && (err as { code: string }).code === "P2002") {
+      // Concurrent worker already created this step message
+      return true;
+    }
+    throw err;
+  }
 }
 
 export async function tryAdvanceRecipientAfterSend(recipientId: string) {
   const prisma = getPrisma();
   const recipient = await prisma.campaignRecipient.findUnique({ where: { id: recipientId } });
   if (!recipient) return;
-  if (["completed", "stopped", "opted_out", "failed"].includes(recipient.workflowStatus)) return;
+  if (TERMINAL.includes(recipient.workflowStatus)) return;
 
   const campaign = await prisma.campaign.findUnique({ where: { id: recipient.campaignId } });
   const sequence = parseSequence(campaign?.sequenceJson);
   const current = findStep(sequence, recipient.currentStep);
   if (!current) return;
 
-  // Move past the send step that just succeeded
   if (current.step_type === "send_sms" || current.step_type === "send_email") {
     const next = nextStepAfter(sequence, current.step_key);
     if (!next) {
-      await prisma.campaignRecipient.update({
-        where: { id: recipientId },
-        data: {
-          workflowStatus: "completed",
-          completedAt: new Date(),
-          nextActionAt: null,
-        },
+      await casRecipient(recipientId, {
+        workflowStatus: "completed",
+        completedAt: new Date(),
+        nextActionAt: null,
+        enrollmentKey: null,
       });
+      await reconcileCampaignStatus(recipient.campaignId);
       return;
     }
-    await prisma.campaignRecipient.update({
-      where: { id: recipientId },
-      data: {
-        currentStep: next.step_key,
-        workflowStatus: "in_progress",
-      },
+    const moved = await casRecipient(recipientId, {
+      currentStep: next.step_key,
+      workflowStatus: "in_progress",
     });
+    if (moved.count === 0) return;
   }
 
-  const facts = factsFromRecipientMetadata(recipient.metadata);
+  const fresh = await prisma.campaignRecipient.findUnique({ where: { id: recipientId } });
+  if (!fresh || TERMINAL.includes(fresh.workflowStatus)) return;
+  const facts = factsFromRecipientMetadata(fresh.metadata);
   await advanceRecipient(recipientId, facts);
+  await reconcileCampaignStatus(recipient.campaignId);
 }
 
 export async function markRecipientFact(
@@ -314,15 +382,44 @@ export async function markRecipientFact(
   value = true,
 ) {
   const prisma = getPrisma();
-  const recipient = await prisma.campaignRecipient.findUnique({ where: { id: recipientId } });
-  if (!recipient) return;
-  const prev = (recipient.metadata && typeof recipient.metadata === "object"
-    ? (recipient.metadata as Record<string, unknown>)
-    : {}) as Record<string, unknown>;
-  await prisma.campaignRecipient.update({
-    where: { id: recipientId },
-    data: {
-      metadata: { ...prev, [fact]: value } as import("@prisma/client").Prisma.InputJsonValue,
+  // Serialize fact merges per recipient to avoid lost updates
+  await prisma.$transaction(async (tx) => {
+    const recipient = await tx.campaignRecipient.findUnique({ where: { id: recipientId } });
+    if (!recipient) return;
+    const prev = (recipient.metadata && typeof recipient.metadata === "object"
+      ? (recipient.metadata as Record<string, unknown>)
+      : {}) as Record<string, unknown>;
+    await tx.campaignRecipient.update({
+      where: { id: recipientId },
+      data: {
+        metadata: { ...prev, [fact]: value } as import("@prisma/client").Prisma.InputJsonValue,
+      },
+    });
+  });
+}
+
+/** Mark campaign COMPLETED when no active recipients remain. */
+export async function reconcileCampaignStatus(campaignId: string) {
+  const prisma = getPrisma();
+  const campaign = await prisma.campaign.findUnique({ where: { id: campaignId } });
+  if (!campaign || campaign.status !== "SENDING") return;
+
+  const active = await prisma.campaignRecipient.count({
+    where: {
+      campaignId,
+      workflowStatus: { in: ACTIVE },
     },
+  });
+  if (active > 0) return;
+
+  const total = await prisma.campaignRecipient.count({ where: { campaignId } });
+  if (total === 0) return;
+
+  const failed = await prisma.campaignRecipient.count({
+    where: { campaignId, workflowStatus: "failed" },
+  });
+  await prisma.campaign.updateMany({
+    where: { id: campaignId, status: "SENDING" },
+    data: { status: failed === total ? "FAILED" : "COMPLETED" },
   });
 }

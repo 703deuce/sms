@@ -37,17 +37,6 @@ export async function enrollContactInCampaign(input: EnrollContactInput) {
     if (suppressed) {
       throw new Error("Contact is on the suppression list");
     }
-
-    const dupe = await prisma.campaignRecipient.findFirst({
-      where: {
-        campaignId: input.campaignId,
-        phone,
-        workflowStatus: { notIn: ["completed", "stopped", "failed", "opted_out"] },
-      },
-    });
-    if (dupe) {
-      throw new Error("Contact already enrolled in this campaign");
-    }
   }
 
   if (email) {
@@ -57,22 +46,16 @@ export async function enrollContactInCampaign(input: EnrollContactInput) {
     if (suppressed) {
       throw new Error("Email is on the suppression list");
     }
-
-    const dupeEmail = await prisma.campaignRecipient.findFirst({
-      where: {
-        campaignId: input.campaignId,
-        email,
-        workflowStatus: { notIn: ["completed", "stopped", "failed", "opted_out"] },
-      },
-    });
-    if (dupeEmail) {
-      throw new Error("Contact already enrolled in this campaign");
-    }
   }
 
   if (!phone && !email) {
     throw new Error("phone or email is required to enroll");
   }
+
+  // Unique active-enrollment key prevents concurrent duplicate enroll races.
+  const enrollmentKey = phone
+    ? `${input.campaignId}:p:${phone}`
+    : `${input.campaignId}:e:${email}`;
 
   const sequence = parseSequence(campaign.sequenceJson);
   const first = sequence[0] as SequenceStep | undefined;
@@ -82,8 +65,17 @@ export async function enrollContactInCampaign(input: EnrollContactInput) {
   let currentStep = first?.step_key || null;
 
   const delayMs = Math.max(0, Number(input.sendDelayMinutes || 0) * 60_000);
+  const campaignActive = campaign.status === "SENDING";
 
-  if (delayMs > 0) {
+  // Park until campaign is SENDING — preserve delay timing in nextActionAt for activation.
+  if (!campaignActive) {
+    workflowStatus = "pending";
+    nextActionAt = delayMs > 0 ? new Date(Date.now() + delayMs) : null;
+    if (first?.step_type === "wait" && delayMs === 0) {
+      // Will apply first wait when activated
+      currentStep = first.step_key;
+    }
+  } else if (delayMs > 0) {
     workflowStatus = "waiting";
     nextActionAt = new Date(Date.now() + delayMs);
   } else if (first?.step_type === "wait") {
@@ -92,38 +84,33 @@ export async function enrollContactInCampaign(input: EnrollContactInput) {
     currentStep = sequence[1]?.step_key || first.step_key;
   }
 
-  const recipient = await prisma.campaignRecipient.create({
-    data: {
-      workspaceId: input.workspaceId,
-      campaignId: input.campaignId,
-      contactId: input.contactId,
-      phone,
-      email,
-      displayName: input.displayName,
-      workflowStatus,
-      currentStep,
-      nextActionAt,
-      metadata: input.metadata,
-    },
-  });
-
-  if (campaign.status === "SENDING") {
-    // already active
-  } else if (campaign.status !== "DRAFT" && campaign.status !== "SCHEDULED" && campaign.status !== "PAUSED") {
-    // completed/canceled/failed — still allow enroll into historical? no — only active-ish
+  let recipient;
+  try {
+    recipient = await prisma.campaignRecipient.create({
+      data: {
+        workspaceId: input.workspaceId,
+        campaignId: input.campaignId,
+        contactId: input.contactId,
+        phone,
+        email,
+        displayName: input.displayName,
+        enrollmentKey,
+        workflowStatus,
+        currentStep,
+        nextActionAt,
+        metadata: input.metadata,
+      },
+    });
+  } catch (err) {
+    if (err && typeof err === "object" && "code" in err && (err as { code: string }).code === "P2002") {
+      throw new Error("Contact already enrolled in this campaign");
+    }
+    throw err;
   }
 
   // Do NOT auto-activate DRAFT/SCHEDULED campaigns on enroll — caller must activate.
-  // Recipients wait until campaign is SENDING (scheduled activation handled by drain).
-
-  if (workflowStatus === "in_progress" && campaign.status === "SENDING") {
+  if (workflowStatus === "in_progress" && campaignActive) {
     await advanceRecipient(recipient.id);
-  } else if (workflowStatus === "in_progress" && campaign.status !== "SENDING") {
-    // Park until campaign is activated
-    await prisma.campaignRecipient.update({
-      where: { id: recipient.id },
-      data: { workflowStatus: "pending", nextActionAt: null },
-    });
   }
 
   return recipient;

@@ -58,8 +58,10 @@ export async function enqueueDueCampaignMessages() {
         sentToday = await prisma.campaignMessage.count({
           where: {
             campaignId: campaign.id,
-            status: { in: ["sent", "delivered", "sending", "clicked"] },
-            sentAt: { gte: dayStart },
+            OR: [
+              { status: { in: ["sent", "delivered", "clicked"] }, sentAt: { gte: dayStart } },
+              { status: "sending", updatedAt: { gte: dayStart } },
+            ],
           },
         });
         sentTodayByCampaign.set(campaign.id, sentToday);

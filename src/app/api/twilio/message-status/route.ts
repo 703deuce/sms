@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getPrisma } from "@/lib/db";
 import { decryptSecret } from "@/lib/messaging/crypto";
-import { getTwilioParentCredentials } from "@/lib/messaging/twilio-config";
+import { getTwilioParentCredentials, isLiveMessagingAdapter } from "@/lib/messaging/twilio-config";
 import { validateTwilioSignature } from "@/lib/messaging/twilio-client";
 import { markRecipientFact } from "@/lib/campaigns/sequence-runner";
 
@@ -17,7 +17,7 @@ async function parseTwilioForm(request: Request) {
 async function verify(request: Request, params: Record<string, string>) {
   const signature = request.headers.get("x-twilio-signature") || "";
   if (!signature) {
-    return !(process.env.TWILIO_MODE === "live" || process.env.MESSAGING_ADAPTER === "twilio");
+    return !isLiveMessagingAdapter();
   }
 
   const tokens: string[] = [];
@@ -40,6 +40,23 @@ async function verify(request: Request, params: Record<string, string>) {
   return tokens.some((t) => validateTwilioSignature(t, signature, request.url, params));
 }
 
+/** Monotonic ranks — never downgrade (clicked is sticky via separate path). */
+const STATUS_RANK: Record<string, number> = {
+  queued: 0,
+  sending: 1,
+  sent: 2,
+  undelivered: 3,
+  failed: 3,
+  delivered: 4,
+  clicked: 5,
+};
+
+function statusesAtOrBelow(rank: number) {
+  return Object.entries(STATUS_RANK)
+    .filter(([, r]) => r <= rank)
+    .map(([s]) => s);
+}
+
 export async function POST(request: Request) {
   try {
     const params = await parseTwilioForm(request);
@@ -59,42 +76,29 @@ export async function POST(request: Request) {
 
     const campaignMsg = await prisma.campaignMessage.findFirst({ where: { providerId: sid } });
     if (campaignMsg) {
-      const prev = campaignMsg.status;
-      // Never downgrade clicked — click is terminal for UX/analytics
-      if (prev !== "clicked") {
-        await prisma.campaignMessage.update({
-          where: { id: campaignMsg.id },
-          data: {
-            status: ["delivered", "sent", "failed", "undelivered"].includes(status)
-              ? status
-              : status || campaignMsg.status,
+      const incomingRank = STATUS_RANK[status];
+      if (incomingRank != null && campaignMsg.status !== "clicked") {
+        // Only move status forward (or equal). Never overwrite clicked.
+        await prisma.campaignMessage.updateMany({
+          where: {
+            id: campaignMsg.id,
+            status: { in: statusesAtOrBelow(incomingRank) },
+            NOT: { status: "clicked" },
           },
+          data: { status },
         });
       }
 
-      if (status === "delivered" && prev !== "clicked") {
-        if (prev !== "delivered") {
+      if (status === "delivered") {
+        // Atomic delivered counter — only the first transition wins
+        const counted = await prisma.campaignMessage.updateMany({
+          where: { id: campaignMsg.id, deliveredCounted: false },
+          data: { deliveredCounted: true },
+        });
+        if (counted.count === 1) {
           await prisma.campaign.update({
             where: { id: campaignMsg.campaignId },
             data: { delivered: { increment: 1 } },
-          });
-          await markRecipientFact(campaignMsg.recipientId, "message_delivered", true);
-        }
-      } else if (status === "delivered" && prev === "clicked") {
-        // Count delivery once if we never recorded it before click
-        const was = campaignMsg.error || "";
-        const alreadyCounted =
-          was.includes("delivered_counted") ||
-          was.includes("was:delivered") ||
-          was.includes("was:sent");
-        if (!alreadyCounted) {
-          await prisma.campaign.update({
-            where: { id: campaignMsg.campaignId },
-            data: { delivered: { increment: 1 } },
-          });
-          await prisma.campaignMessage.update({
-            where: { id: campaignMsg.id },
-            data: { error: `${was}|delivered_counted` },
           });
           await markRecipientFact(campaignMsg.recipientId, "message_delivered", true);
         }

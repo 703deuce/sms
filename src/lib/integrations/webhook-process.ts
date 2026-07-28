@@ -96,6 +96,9 @@ export async function processIncomingIntegrationWebhook(
     throw new Error("Webhook endpoint has no campaignId configured");
   }
 
+  const staleCutoff = new Date(Date.now() - 10 * 60 * 1000);
+  let eventId: string | null = null;
+
   if (idempotencyKey) {
     const prior = await prisma.integrationWebhookEvent.findUnique({
       where: {
@@ -103,19 +106,51 @@ export async function processIncomingIntegrationWebhook(
       },
     });
     if (prior) {
-      return { duplicate: true, eventId: prior.id, status: prior.status };
+      if (prior.status === "processed") {
+        return { duplicate: true, eventId: prior.id, status: prior.status };
+      }
+      // Retry failed or stale processing events
+      if (
+        prior.status === "failed" ||
+        (prior.status === "processing" && prior.createdAt < staleCutoff)
+      ) {
+        await prisma.integrationWebhookEvent.update({
+          where: { id: prior.id },
+          data: { status: "processing", error: null, processedAt: null, payload: payload as Prisma.InputJsonValue },
+        });
+        eventId = prior.id;
+      } else {
+        return { duplicate: true, eventId: prior.id, status: prior.status };
+      }
     }
   }
 
-  const event = await prisma.integrationWebhookEvent.create({
-    data: {
-      workspaceId: endpoint.workspaceId,
-      endpointId: endpoint.id,
-      idempotencyKey: idempotencyKey || null,
-      payload: payload as Prisma.InputJsonValue,
-      status: "processing",
-    },
-  });
+  if (!eventId) {
+    try {
+      const event = await prisma.integrationWebhookEvent.create({
+        data: {
+          workspaceId: endpoint.workspaceId,
+          endpointId: endpoint.id,
+          idempotencyKey: idempotencyKey || null,
+          payload: payload as Prisma.InputJsonValue,
+          status: "processing",
+        },
+      });
+      eventId = event.id;
+    } catch (err) {
+      if (err && typeof err === "object" && "code" in err && (err as { code: string }).code === "P2002" && idempotencyKey) {
+        const prior = await prisma.integrationWebhookEvent.findUnique({
+          where: {
+            endpointId_idempotencyKey: { endpointId: endpoint.id, idempotencyKey },
+          },
+        });
+        if (prior) {
+          return { duplicate: true, eventId: prior.id, status: prior.status };
+        }
+      }
+      throw err;
+    }
+  }
 
   try {
     const fieldMap = (endpoint.fieldMap || null) as Record<string, string> | null;
@@ -139,19 +174,19 @@ export async function processIncomingIntegrationWebhook(
       email,
       displayName,
       sendDelayMinutes: endpoint.sendDelayMinutes,
-      metadata: { source: "integration_webhook", eventId: event.id },
+      metadata: { source: "integration_webhook", eventId },
     });
 
     await prisma.integrationWebhookEvent.update({
-      where: { id: event.id },
+      where: { id: eventId },
       data: { status: "processed", processedAt: new Date() },
     });
 
-    return { duplicate: false, eventId: event.id, recipientId: recipient.id, status: "processed" };
+    return { duplicate: false, eventId, recipientId: recipient.id, status: "processed" };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     await prisma.integrationWebhookEvent.update({
-      where: { id: event.id },
+      where: { id: eventId! },
       data: { status: "failed", error: message, processedAt: new Date() },
     });
     throw err;

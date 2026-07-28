@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getPrisma } from "@/lib/db";
 import { decryptSecret } from "@/lib/messaging/crypto";
-import { getTwilioParentCredentials } from "@/lib/messaging/twilio-config";
+import { getTwilioParentCredentials, isLiveMessagingAdapter } from "@/lib/messaging/twilio-config";
 import { validateTwilioSignature } from "@/lib/messaging/twilio-client";
 import { enqueueMessagingRegistrationAdvance } from "@/lib/messaging/enqueue-advance";
 import { appendRegistrationEvent } from "@/lib/messaging/store";
@@ -26,7 +26,7 @@ async function parseBody(request: Request) {
 async function verify(request: Request, params: Record<string, string>) {
   const signature = request.headers.get("x-twilio-signature") || "";
   if (!signature) {
-    return !(process.env.TWILIO_MODE === "live" || process.env.MESSAGING_ADAPTER === "twilio");
+    return !isLiveMessagingAdapter();
   }
 
   const tokens: string[] = [];

@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { getPrisma } from "@/lib/db";
 import { decryptSecret } from "@/lib/messaging/crypto";
-import { getTwilioParentCredentials } from "@/lib/messaging/twilio-config";
+import { getTwilioParentCredentials, isLiveMessagingAdapter } from "@/lib/messaging/twilio-config";
 import { validateTwilioSignature } from "@/lib/messaging/twilio-client";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
+import { reconcileCampaignStatus } from "@/lib/campaigns/sequence-runner";
 
 async function parseTwilioForm(request: Request) {
   const form = await request.formData();
@@ -55,10 +56,7 @@ async function verifySignature(
 ) {
   const signature = request.headers.get("x-twilio-signature") || "";
   if (!signature) {
-    // Allow unsigned in non-live/dev
-    if (process.env.TWILIO_MODE === "live" || process.env.MESSAGING_ADAPTER === "twilio") {
-      return false;
-    }
+    if (isLiveMessagingAdapter()) return false;
     return true;
   }
 
@@ -94,52 +92,70 @@ export async function POST(request: Request) {
     const prisma = getPrisma();
 
     if (ctx && from && ["STOP", "STOPALL", "UNSUBSCRIBE", "CANCEL", "END", "QUIT"].includes(upper)) {
-      const existing = await prisma.suppression.findFirst({
-        where: { workspaceId: ctx.workspaceId, phone: from },
-      });
-      if (!existing) {
-        await prisma.suppression.create({
-          data: {
+      try {
+        const suppressionKey = `${ctx.workspaceId}:p:${from}`;
+        try {
+          await prisma.suppression.create({
+            data: {
+              workspaceId: ctx.workspaceId,
+              phone: from,
+              suppressionKey,
+              reason: "STOP",
+              source: "inbound_sms",
+            },
+          });
+        } catch (err) {
+          if (!(err && typeof err === "object" && "code" in err && (err as { code: string }).code === "P2002")) {
+            throw err;
+          }
+        }
+
+        await prisma.contact.updateMany({
+          where: { workspaceId: ctx.workspaceId, phone: from },
+          data: { status: "UNSUBSCRIBED" },
+        });
+
+        const recipients = await prisma.campaignRecipient.findMany({
+          where: {
             workspaceId: ctx.workspaceId,
             phone: from,
-            reason: "STOP",
-            source: "inbound_sms",
+            workflowStatus: { in: ["pending", "scheduled", "in_progress", "waiting"] },
           },
         });
-      }
-
-      await prisma.contact.updateMany({
-        where: { workspaceId: ctx.workspaceId, phone: from },
-        data: { status: "UNSUBSCRIBED" },
-      });
-
-      const recipients = await prisma.campaignRecipient.findMany({
-        where: {
-          workspaceId: ctx.workspaceId,
-          phone: from,
-          workflowStatus: { in: ["pending", "scheduled", "in_progress", "waiting"] },
-        },
-      });
-      for (const recipient of recipients) {
-        await prisma.campaignRecipient.update({
-          where: { id: recipient.id },
-          data: {
-            workflowStatus: "opted_out",
-            stopReason: "STOP",
-            completedAt: new Date(),
-            nextActionAt: null,
-          },
-        });
-        await prisma.campaignMessage.updateMany({
-          where: { recipientId: recipient.id, status: { in: ["queued", "sending"] } },
-          data: { status: "skipped", error: "stopped: STOP" },
-        });
-      }
-      if (recipients.length) {
-        await prisma.campaign.updateMany({
-          where: { id: { in: recipients.map((r) => r.campaignId) } },
-          data: { optOuts: { increment: 1 } },
-        });
+        const campaignIds = new Set<string>();
+        for (const recipient of recipients) {
+          const opted = await prisma.campaignRecipient.updateMany({
+            where: {
+              id: recipient.id,
+              workflowStatus: { in: ["pending", "scheduled", "in_progress", "waiting"] },
+            },
+            data: {
+              workflowStatus: "opted_out",
+              stopReason: "STOP",
+              completedAt: new Date(),
+              nextActionAt: null,
+              enrollmentKey: null,
+            },
+          });
+          if (opted.count === 1) {
+            campaignIds.add(recipient.campaignId);
+            await prisma.campaignMessage.updateMany({
+              where: { recipientId: recipient.id, status: { in: ["queued", "sending"] } },
+              data: { status: "skipped", error: "stopped: STOP" },
+            });
+          }
+        }
+        for (const campaignId of campaignIds) {
+          await prisma.campaign.update({
+            where: { id: campaignId },
+            data: { optOuts: { increment: 1 } },
+          });
+          await reconcileCampaignStatus(campaignId);
+        }
+      } catch (err) {
+        // Return 5xx so Twilio retries — never silently drop STOP
+        console.error("[twilio/inbound] STOP persistence failed", err);
+        return new NextResponse("STOP processing failed", { status: 500 });
       }
 
       const stopMsg =
@@ -206,7 +222,6 @@ export async function POST(request: Request) {
         },
       });
 
-      // Mark replied fact on active recipients
       const active = await prisma.campaignRecipient.findMany({
         where: {
           workspaceId: ctx.workspaceId,
@@ -214,12 +229,27 @@ export async function POST(request: Request) {
           workflowStatus: { in: ["pending", "scheduled", "in_progress", "waiting"] },
         },
       });
+      const repliedCampaignIds = new Set<string>();
       for (const r of active) {
-        const prev =
-          r.metadata && typeof r.metadata === "object" ? (r.metadata as Record<string, unknown>) : {};
-        await prisma.campaignRecipient.update({
-          where: { id: r.id },
-          data: { metadata: { ...prev, customer_replied: true } },
+        await prisma.$transaction(async (tx) => {
+          const row = await tx.campaignRecipient.findUnique({ where: { id: r.id } });
+          if (!row) return;
+          const prev =
+            row.metadata && typeof row.metadata === "object"
+              ? (row.metadata as Record<string, unknown>)
+              : {};
+          if (prev.customer_replied) return;
+          await tx.campaignRecipient.update({
+            where: { id: r.id },
+            data: { metadata: { ...prev, customer_replied: true } },
+          });
+          repliedCampaignIds.add(r.campaignId);
+        });
+      }
+      for (const campaignId of repliedCampaignIds) {
+        await prisma.campaign.update({
+          where: { id: campaignId },
+          data: { replies: { increment: 1 } },
         });
       }
     }
@@ -229,9 +259,8 @@ export async function POST(request: Request) {
     });
   } catch (err) {
     console.error("[twilio/inbound]", err);
-    return new NextResponse(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`, {
-      headers: { "Content-Type": "text/xml" },
-    });
+    // Non-STOP failures: 500 so Twilio retries (better than silent drop)
+    return new NextResponse("Inbound processing failed", { status: 500 });
   }
 }
 

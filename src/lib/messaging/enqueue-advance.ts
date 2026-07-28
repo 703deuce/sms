@@ -83,6 +83,7 @@ export async function enqueueJob(input: EnqueueJobInput) {
       await enqueueBullmq(queueName, input.jobType, (input.payload || {}) as Record<string, unknown>, {
         jobId: input.idempotencyKey || job.id,
         delay: delay || undefined,
+        wake: Boolean(input.wake) || delay === 0,
       });
     } catch (err) {
       console.warn("[enqueueJob] BullMQ dual-write failed; DB queue still holds the job", err);
@@ -158,10 +159,14 @@ export async function claimDueJobs(limit = 25) {
 }
 
 export async function completeJob(jobId: string) {
-  return getPrisma().jobQueue.update({
-    where: { id: jobId },
-    data: { status: "completed", completedAt: new Date(), lastError: null },
+  const result = await getPrisma().jobQueue.updateMany({
+    where: { id: jobId, status: { in: ["processing", "pending", "deferred"] } },
+    data: { status: "completed", completedAt: new Date(), lastError: null, lockedAt: null },
   });
+  if (result.count === 0) {
+    return getPrisma().jobQueue.findUnique({ where: { id: jobId } });
+  }
+  return getPrisma().jobQueue.findUniqueOrThrow({ where: { id: jobId } });
 }
 
 export async function failJob(
@@ -174,8 +179,8 @@ export async function failJob(
   const job = await getPrisma().jobQueue.findUniqueOrThrow({ where: { id: jobId } });
 
   if (terminal) {
-    return getPrisma().jobQueue.update({
-      where: { id: jobId },
+    const result = await getPrisma().jobQueue.updateMany({
+      where: { id: jobId, status: { in: ["processing", "pending", "deferred"] } },
       data: {
         status: "failed",
         lastError: error,
@@ -183,12 +188,14 @@ export async function failJob(
         completedAt: new Date(),
       },
     });
+    if (result.count === 0) return job;
+    return getPrisma().jobQueue.findUniqueOrThrow({ where: { id: jobId } });
   }
 
   // Soft defer (Twilio waiting): do not consume attempts toward failure
   if (deferMs && softDefer) {
-    return getPrisma().jobQueue.update({
-      where: { id: jobId },
+    const result = await getPrisma().jobQueue.updateMany({
+      where: { id: jobId, status: { in: ["processing", "pending", "deferred"] } },
       data: {
         status: "deferred",
         lastError: error,
@@ -197,11 +204,13 @@ export async function failJob(
         attempts: Math.max(0, job.attempts - 1),
       },
     });
+    if (result.count === 0) return job;
+    return getPrisma().jobQueue.findUniqueOrThrow({ where: { id: jobId } });
   }
 
   if (deferMs && job.attempts < job.maxAttempts) {
-    return getPrisma().jobQueue.update({
-      where: { id: jobId },
+    const result = await getPrisma().jobQueue.updateMany({
+      where: { id: jobId, status: { in: ["processing", "pending", "deferred"] } },
       data: {
         status: "deferred",
         lastError: error,
@@ -209,9 +218,11 @@ export async function failJob(
         lockedAt: null,
       },
     });
+    if (result.count === 0) return job;
+    return getPrisma().jobQueue.findUniqueOrThrow({ where: { id: jobId } });
   }
-  return getPrisma().jobQueue.update({
-    where: { id: jobId },
+  const result = await getPrisma().jobQueue.updateMany({
+    where: { id: jobId, status: { in: ["processing", "pending", "deferred"] } },
     data: {
       status: job.attempts >= job.maxAttempts ? "failed" : "pending",
       lastError: error,
@@ -219,4 +230,6 @@ export async function failJob(
       lockedAt: null,
     },
   });
+  if (result.count === 0) return job;
+  return getPrisma().jobQueue.findUniqueOrThrow({ where: { id: jobId } });
 }

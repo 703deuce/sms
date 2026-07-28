@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server";
 import { getPrisma } from "@/lib/db";
-import { markRecipientFact } from "@/lib/campaigns/sequence-runner";
+import { markRecipientFact, reconcileCampaignStatus } from "@/lib/campaigns/sequence-runner";
 
 type Ctx = { params: Promise<{ trackingToken: string }> };
 
 /**
  * Click tracking redirect: GET /r/{token} → mark clicked → redirect to destination.
- * Resolves both campaign messages and one-off Message rows.
- * Preserves delivery status by appending ":clicked" only when not already clicked.
+ * CAS on clickedCounted so concurrent clicks only increment analytics once.
  */
 export async function GET(_request: Request, ctx: Ctx) {
   const { trackingToken } = await ctx.params;
@@ -20,16 +19,19 @@ export async function GET(_request: Request, ctx: Ctx) {
   });
 
   if (campaignMessage) {
-    const alreadyClicked = campaignMessage.status === "clicked" || campaignMessage.error === "clicked";
-    if (!alreadyClicked) {
-      // Preserve prior status in error field, mark clicked
-      await prisma.campaignMessage.update({
-        where: { id: campaignMessage.id },
-        data: {
-          status: "clicked",
-          error: campaignMessage.status === "clicked" ? campaignMessage.error : `was:${campaignMessage.status}`,
-        },
-      });
+    const claimed = await prisma.campaignMessage.updateMany({
+      where: { id: campaignMessage.id, clickedCounted: false },
+      data: {
+        status: "clicked",
+        clickedCounted: true,
+        error:
+          campaignMessage.status === "clicked"
+            ? campaignMessage.error
+            : `was:${campaignMessage.status}`,
+      },
+    });
+
+    if (claimed.count === 1) {
       await prisma.campaign.update({
         where: { id: campaignMessage.campaignId },
         data: { clicks: { increment: 1 } },
@@ -37,13 +39,17 @@ export async function GET(_request: Request, ctx: Ctx) {
       await markRecipientFact(campaignMessage.recipientId, "link_clicked", true);
 
       if ((campaignMessage.campaign.successMode || "click") === "click") {
-        await prisma.campaignRecipient.update({
-          where: { id: campaignMessage.recipientId },
+        await prisma.campaignRecipient.updateMany({
+          where: {
+            id: campaignMessage.recipientId,
+            workflowStatus: { in: ["pending", "scheduled", "in_progress", "waiting"] },
+          },
           data: {
             workflowStatus: "completed",
             completedAt: new Date(),
             stopReason: "link_clicked",
             nextActionAt: null,
+            enrollmentKey: null,
           },
         });
         await prisma.campaignMessage.updateMany({
@@ -54,6 +60,7 @@ export async function GET(_request: Request, ctx: Ctx) {
           },
           data: { status: "skipped", error: "stopped: link_clicked" },
         });
+        await reconcileCampaignStatus(campaignMessage.campaignId);
       }
     }
 

@@ -382,6 +382,8 @@ model CampaignRecipient {
   phone          String?
   email          String?
   displayName    String?
+  /// Active-enrollment identity (`p:+1…` / `e:a@b.c`); null when terminal so re-enroll works.
+  enrollmentKey  String?                 @unique
   workflowStatus RecipientWorkflowStatus @default(pending)
   currentStep    String?
   nextActionAt   DateTime?
@@ -415,6 +417,8 @@ model CampaignMessage {
   trackingToken   String?   @unique
   destinationUrl  String?
   error           String?
+  deliveredCounted Boolean  @default(false)
+  clickedCounted  Boolean   @default(false)
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
@@ -424,17 +428,20 @@ model CampaignMessage {
 
   @@index([status, scheduledFor])
   @@index([campaignId, status])
+  @@unique([recipientId, stepKey])
   @@map("campaign_messages")
 }
 
 model Suppression {
-  id          String   @id @default(cuid())
-  workspaceId String
-  phone       String?
-  email       String?
-  reason      String
-  source      String?
-  createdAt   DateTime @default(now())
+  id             String   @id @default(cuid())
+  workspaceId    String
+  phone          String?
+  email          String?
+  /// Normalized identity `p:+E164` or `e:email@x` for idempotent STOP inserts.
+  suppressionKey String   @unique
+  reason         String
+  source         String?
+  createdAt      DateTime @default(now())
 
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 

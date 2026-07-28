@@ -376,20 +376,60 @@ export async function advanceMessagingRegistration(workspaceId: string) {
 export async function ensureSubaccount(workspaceId: string, friendlyName: string) {
   let reg = await getRegistrationByWorkspace(workspaceId);
   if (!reg) throw new Error("Registration row missing");
-  if (reg.subaccountSid && reg.subaccountAuthTokenEnc) return reg;
+  if (reg.subaccountSid && !reg.subaccountSid.startsWith("PENDING:") && reg.subaccountAuthTokenEnc) {
+    return reg;
+  }
 
-  const live = adapter();
-  const created = live
-    ? await live.createCustomerSubaccount(friendlyName)
-    : await mockAdapter.createCustomerSubaccount(friendlyName);
-
-  reg = await updateRegistration(workspaceId, {
-    subaccountSid: created.sid,
-    subaccountAuthTokenEnc: encryptSecret(created.authToken),
-    overallStatus: reg.overallStatus === "not_started" ? "action_required" : reg.overallStatus,
+  const claimToken = `PENDING:${randomBytes(8).toString("hex")}`;
+  const staleCutoff = new Date(Date.now() - 120_000);
+  const claimed = await getPrisma().messagingRegistration.updateMany({
+    where: {
+      workspaceId,
+      OR: [
+        { subaccountSid: null },
+        {
+          AND: [
+            { subaccountSid: { startsWith: "PENDING:" } },
+            { updatedAt: { lt: staleCutoff } },
+          ],
+        },
+      ],
+    },
+    data: { subaccountSid: claimToken },
   });
-  await log(reg, "subaccount_created", created.sid);
-  return reg;
+
+  if (claimed.count !== 1) {
+    // Another worker is provisioning — poll briefly then re-read
+    for (let i = 0; i < 8; i += 1) {
+      await new Promise((r) => setTimeout(r, 400));
+      reg = await getRegistrationByWorkspace(workspaceId);
+      if (reg?.subaccountSid && !reg.subaccountSid.startsWith("PENDING:") && reg.subaccountAuthTokenEnc) {
+        return reg;
+      }
+    }
+    throw new JobDeferredError("Subaccount provisioning in progress", 5_000);
+  }
+
+  try {
+    const live = adapter();
+    const created = live
+      ? await live.createCustomerSubaccount(friendlyName)
+      : await mockAdapter.createCustomerSubaccount(friendlyName);
+
+    reg = await updateRegistration(workspaceId, {
+      subaccountSid: created.sid,
+      subaccountAuthTokenEnc: encryptSecret(created.authToken),
+      overallStatus: reg!.overallStatus === "not_started" ? "action_required" : reg!.overallStatus,
+    });
+    await log(reg, "subaccount_created", created.sid);
+    return reg;
+  } catch (err) {
+    await getPrisma().messagingRegistration.updateMany({
+      where: { workspaceId, subaccountSid: claimToken },
+      data: { subaccountSid: null },
+    });
+    throw err;
+  }
 }
 
 export async function sendViaRegistration(workspaceId: string, to: string, body: string) {
