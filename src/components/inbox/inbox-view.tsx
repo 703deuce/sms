@@ -19,11 +19,11 @@ import { useMemo, useState } from "react";
 const filters = [
   { label: "All conversations", count: 24 },
   { label: "Mine", count: 8 },
-  { label: "Unassigned", count: 4 },
-  { label: "Unread", count: 12 },
-  { label: "Open", count: 18 },
-  { label: "Pending", count: 2 },
-  { label: "Closed", count: 6 },
+  { label: "Unassigned", count: 3 },
+  { label: "Unread", count: 12, accent: "unread" as const },
+  { label: "Open", count: 14 },
+  { label: "Pending", count: 2, accent: "pending" as const },
+  { label: "Closed", count: 4 },
   { label: "Snoozed", count: 1 },
   { label: "Spam", count: 0 },
 ];
@@ -119,22 +119,42 @@ export function InboxView({ initialFilter = "All conversations" }: { initialFilt
           </button>
         </div>
         <div className="space-y-0.5">
-          {filters.map((f) => (
-            <button
-              key={f.label}
-              type="button"
-              onClick={() => setFilter(f.label)}
-              className={cn(
-                "flex w-full items-center justify-between rounded-[10px] px-2.5 py-2 text-[12px] font-medium transition",
-                filter === f.label
-                  ? "bg-emerald-50 text-emerald-700"
-                  : "text-muted-foreground hover:bg-muted",
-              )}
-            >
-              <span>{f.label}</span>
-              <span className="text-[11px] tabular-nums opacity-80">{f.count}</span>
-            </button>
-          ))}
+          {filters.map((f) => {
+            const active = filter === f.label;
+            const accentUnread = f.accent === "unread" && !active;
+            const accentPending = f.accent === "pending" && !active;
+            return (
+              <button
+                key={f.label}
+                type="button"
+                onClick={() => setFilter(f.label)}
+                className={cn(
+                  "flex w-full items-center justify-between rounded-[10px] px-2.5 py-2 text-[12px] font-medium transition",
+                  active
+                    ? "bg-emerald-50 text-emerald-700"
+                    : accentUnread
+                      ? "bg-emerald-50/70 text-emerald-700 hover:bg-emerald-50"
+                      : accentPending
+                        ? "bg-orange-50/80 text-orange-700 hover:bg-orange-50"
+                        : "text-muted-foreground hover:bg-muted",
+                )}
+              >
+                <span>{f.label}</span>
+                <span
+                  className={cn(
+                    "text-[11px] tabular-nums",
+                    accentUnread
+                      ? "font-semibold text-emerald-700"
+                      : accentPending
+                        ? "font-semibold text-orange-700"
+                        : "opacity-80",
+                  )}
+                >
+                  {f.count}
+                </span>
+              </button>
+            );
+          })}
         </div>
         <div className="mt-5">
           <div className="mb-2 flex items-center justify-between px-1">
@@ -220,8 +240,8 @@ export function InboxView({ initialFilter = "All conversations" }: { initialFilt
             <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                  <p className="truncate text-[15px] font-bold">{selected.contactName}</p>
-                  <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                  <p className="text-[15px] font-bold whitespace-nowrap">{selected.contactName}</p>
+                  <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
                 </div>
                 <p className="text-[12px] text-muted-foreground">{formatPhone(selected.phone)}</p>
               </div>

@@ -10,15 +10,16 @@ import {
   Bell,
   Check,
   ChevronRight,
-  FlaskConical,
   Image as ImageIcon,
   Info,
   Megaphone,
   MessageSquare,
+  Send,
   Settings2,
   Sparkles,
   Tag,
   UserRound,
+  Zap,
 } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState, type ComponentType } from "react";
@@ -116,11 +117,14 @@ export function CampaignWizard() {
         </div>
         <div className="flex flex-wrap gap-2">
           <Link href="/send/quick">
-            <Button variant="outline" className="h-9 rounded-[10px]">Quick text</Button>
+            <Button variant="outline" className="h-9 rounded-[10px]">
+              <Zap className="h-3.5 w-3.5" />
+              Quick text
+            </Button>
           </Link>
           <Link href="/send/test">
             <Button variant="outline" className="h-9 rounded-[10px]">
-              <FlaskConical className="h-3.5 w-3.5" />
+              <Send className="h-3.5 w-3.5" />
               Send test
             </Button>
           </Link>
@@ -183,7 +187,7 @@ export function CampaignWizard() {
 
               <div>
                 <p className="text-[13px] font-semibold text-foreground">Select campaign type</p>
-                <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4">
                   {typeCards.map((t) => {
                     const Icon = t.icon;
                     const selected = campaignType === t.id;
@@ -390,7 +394,7 @@ export function CampaignWizard() {
             <div className="flex flex-wrap gap-2">
               <Button variant="outline" className="rounded-[10px]">Save draft</Button>
               <Button variant="outline" className="rounded-[10px]">
-                <FlaskConical className="h-3.5 w-3.5 text-primary" />
+                <Send className="h-3.5 w-3.5 text-primary" />
                 Send test
               </Button>
               {step < 5 ? (

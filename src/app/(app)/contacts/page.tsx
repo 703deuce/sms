@@ -41,9 +41,9 @@ const avatarTones = [
 ];
 
 const statusLegend = [
-  { label: "Subscribed", dot: "bg-emerald-500" },
   { label: "Unsubscribed", dot: "bg-orange-500" },
-  { label: "Invalid / Blocked", dot: "bg-rose-500" },
+  { label: "Blocked", dot: "bg-red-500" },
+  { label: "Invalid", dot: "bg-pink-500" },
 ];
 
 function formatDate(date: string | null) {
@@ -67,6 +67,8 @@ export default function ContactsPage() {
     (c) => c.status === "Invalid" || c.status === "Blocked",
   ).length;
   const subscribedPct = total > 0 ? (subscribed / total) * 100 : 0;
+  const unsubscribedPct = total > 0 ? (unsubscribed / total) * 100 : 0;
+  const invalidBlockedPct = total > 0 ? (invalidBlocked / total) * 100 : 0;
 
   return (
     <div className="text-[13px]">
@@ -78,7 +80,7 @@ export default function ContactsPage() {
           <>
             <Button>
               <Plus className="h-4 w-4" />
-              + Add contact
+              Add contact
             </Button>
             <Link href="/contacts/imports">
               <Button variant="outline">
@@ -100,6 +102,7 @@ export default function ContactsPage() {
         <MetricCard
           label="Total Contacts"
           value={formatNumber(total)}
+          hint="All time"
           icon={Users}
           tone="bg-emerald-50 text-emerald-600"
           sparkline={[18, 20, 19, 22, 21, 24, 23, total]}
@@ -110,13 +113,14 @@ export default function ContactsPage() {
           value={formatNumber(subscribed)}
           hint={`${formatPercent(subscribedPct)} of total`}
           icon={UserCheck}
-          tone="bg-sky-50 text-sky-600"
+          tone="bg-emerald-50 text-emerald-600"
           sparkline={[14, 15, 16, 15, 17, 18, 19, subscribed]}
-          sparkColor="#0ea5e9"
+          sparkColor="#10b981"
         />
         <MetricCard
           label="Unsubscribed"
           value={formatNumber(unsubscribed)}
+          hint={`${formatPercent(unsubscribedPct)} of total`}
           icon={UserMinus}
           tone="bg-orange-50 text-orange-600"
           sparkline={[3, 2, 3, 2, 2, 3, 2, unsubscribed]}
@@ -126,6 +130,7 @@ export default function ContactsPage() {
         <MetricCard
           label="Invalid / Blocked"
           value={formatNumber(invalidBlocked)}
+          hint={`${formatPercent(invalidBlockedPct)} of total`}
           icon={Ban}
           tone="bg-rose-50 text-rose-600"
           sparkline={[1, 2, 1, 2, 2, 1, 2, invalidBlocked]}

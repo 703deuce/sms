@@ -134,39 +134,39 @@ export default function ReportsOverviewPage() {
           value={formatNumber(metrics.messagesSentPeriod)}
           hint="Current billing period"
           icon={Send}
-          tone="bg-orange-50 text-orange-600"
+          tone="bg-emerald-50 text-emerald-600"
           sparkline={[8, 9, 12, 11, 14, 13, 15, 17]}
-          sparkColor="#f97316"
+          sparkColor="#10b981"
           href="/reports/messages"
         />
         <MetricCard
           label="Delivery rate"
           value={formatPercent(metrics.deliveryRate)}
-          hint="+2.1%"
+          hint="+2.1% vs last period"
           icon={Send}
-          tone="bg-emerald-50 text-emerald-600"
+          tone="bg-sky-50 text-sky-600"
           sparkline={[12, 13, 12, 15, 14, 16, 17, 18]}
-          sparkColor="#10b981"
+          sparkColor="#0ea5e9"
           href="/reports/messages"
         />
         <MetricCard
           label="Reply rate"
           value={formatPercent(metrics.replyRate)}
-          hint="+1.6%"
+          hint="+1.6% vs last period"
           icon={Inbox}
-          tone="bg-blue-50 text-blue-600"
+          tone="bg-violet-50 text-violet-600"
           sparkline={[8, 9, 10, 9, 11, 12, 11, 13]}
-          sparkColor="#3b82f6"
+          sparkColor="#8b5cf6"
           href="/reports/inbox"
         />
         <MetricCard
           label="Click rate"
           value={formatPercent(metrics.clickRate)}
-          hint="+3.3%"
+          hint="+3.3% vs last period"
           icon={Link2}
-          tone="bg-violet-50 text-violet-600"
+          tone="bg-orange-50 text-orange-600"
           sparkline={[6, 8, 7, 10, 12, 11, 14, 15]}
-          sparkColor="#8b5cf6"
+          sparkColor="#f97316"
           href="/reports/links"
         />
       </div>
@@ -187,19 +187,32 @@ export default function ReportsOverviewPage() {
           value={formatNumber(metrics.creditsRemaining)}
           hint={`Balance ${formatCurrency(metrics.balance)}`}
           icon={Coins}
-          tone="bg-amber-50 text-amber-600"
+          tone="bg-violet-50 text-violet-600"
           sparkline={[10, 12, 11, 14, 13, 16, 15, 18]}
-          sparkColor="#f59e0b"
+          sparkColor="#8b5cf6"
           href="/reports/usage"
         />
-        <MetricCard
-          label="A2P status"
-          value={metrics.a2pStatus}
-          hint="Brand & campaign registration"
-          icon={Shield}
-          tone="bg-violet-50 text-violet-600"
-          href="/compliance"
-        />
+        <Card className="rounded-[12px] p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[12px] font-medium uppercase tracking-wide text-muted-foreground">
+                A2P status
+              </p>
+              <p className="mt-2 text-[22px] font-bold tracking-tight text-foreground">
+                {metrics.a2pStatus}
+              </p>
+              <p className="mt-1 text-[12px] text-muted-foreground">
+                Brand & campaign registration
+              </p>
+            </div>
+            <span className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-amber-50 text-amber-600">
+              <Shield className="h-5 w-5" />
+            </span>
+          </div>
+          <div className="mt-4 h-2 overflow-hidden rounded-full bg-muted">
+            <div className="h-full w-[55%] rounded-full bg-amber-400" />
+          </div>
+        </Card>
         <MetricCard
           label="Active number"
           value={metrics.activeNumber}

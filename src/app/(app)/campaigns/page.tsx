@@ -1,3 +1,5 @@
+"use client";
+
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
@@ -13,14 +15,22 @@ import { campaigns } from "@/lib/mock/data";
 import type { Campaign } from "@/lib/types";
 import { cn, formatNumber, formatPercent } from "@/lib/utils";
 import {
+  AlertTriangle,
+  Bell,
   CalendarClock,
   FilePen,
+  LayoutGrid,
+  LayoutList,
   Megaphone,
   MoreHorizontal,
+  Plus,
   RefreshCw,
   SlidersHorizontal,
+  Tag,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import Link from "next/link";
+import { useState } from "react";
 
 const campaignTabs = [
   { label: "All", href: "/campaigns" },
@@ -37,6 +47,13 @@ const campaignIconTones: Record<string, string> = {
   Draft: "bg-slate-100 text-slate-500",
   Failed: "bg-rose-50 text-rose-600",
   Sending: "bg-amber-50 text-amber-600",
+};
+
+const typeIcons: Record<string, LucideIcon> = {
+  Promotion: Tag,
+  Reminder: Bell,
+  Announcement: Megaphone,
+  Alert: AlertTriangle,
 };
 
 function formatScheduled(at: string | null) {
@@ -56,6 +73,7 @@ function deliveryRate(campaign: Campaign) {
 }
 
 export default function CampaignsPage() {
+  const [viewMode, setViewMode] = useState<"list" | "grid">("list");
   const scheduledCount = campaigns.filter((c) => c.status === "Scheduled").length;
   const draftCount = campaigns.filter((c) => c.status === "Draft").length;
 
@@ -74,7 +92,10 @@ export default function CampaignsPage() {
               </Button>
             </Link>
             <Link href="/send">
-              <Button>+ New campaign</Button>
+              <Button>
+                <Plus className="h-4 w-4" />
+                New campaign
+              </Button>
             </Link>
           </>
         }
@@ -118,83 +139,154 @@ export default function CampaignsPage() {
             <SlidersHorizontal className="h-4 w-4" />
             Filters
           </Button>
+          <div className="flex items-center rounded-[10px] border border-border p-0.5">
+            <button
+              type="button"
+              onClick={() => setViewMode("list")}
+              className={cn(
+                "flex h-8 w-8 items-center justify-center rounded-[8px] transition",
+                viewMode === "list"
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+              aria-label="List view"
+            >
+              <LayoutList className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("grid")}
+              className={cn(
+                "flex h-8 w-8 items-center justify-center rounded-[8px] transition",
+                viewMode === "grid"
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+              aria-label="Grid view"
+            >
+              <LayoutGrid className="h-4 w-4" />
+            </button>
+          </div>
         </TableToolbar>
 
-        <Table className="text-[13px]">
-          <THead>
-            <TR>
-              <TH className="w-12" />
-              <TH>Name</TH>
-              <TH>Type</TH>
-              <TH>Audience</TH>
-              <TH>Scheduled</TH>
-              <TH>Status</TH>
-              <TH>Sent</TH>
-              <TH>Delivered</TH>
-              <TH>Replies</TH>
-              <TH>Clicks</TH>
-              <TH>Opt-outs</TH>
-              <TH>Created By</TH>
-              <TH className="w-12" />
-            </TR>
-          </THead>
-          <TBody>
+        {viewMode === "list" ? (
+          <Table className="text-[13px]">
+            <THead>
+              <TR>
+                <TH className="w-12" />
+                <TH>Name</TH>
+                <TH>Type</TH>
+                <TH>Audience</TH>
+                <TH>Scheduled</TH>
+                <TH>Status</TH>
+                <TH>Sent</TH>
+                <TH>Delivered</TH>
+                <TH>Replies</TH>
+                <TH>Clicks</TH>
+                <TH>Opt-outs</TH>
+                <TH>Created By</TH>
+                <TH className="w-12" />
+              </TR>
+            </THead>
+            <TBody>
+              {campaigns.map((campaign) => {
+                const rate = deliveryRate(campaign);
+                const TypeIcon = typeIcons[campaign.type] ?? Megaphone;
+                return (
+                  <TR key={campaign.id}>
+                    <TD>
+                      <span
+                        className={cn(
+                          "flex h-9 w-9 items-center justify-center rounded-full",
+                          campaignIconTones[campaign.status] ?? "bg-muted text-muted-foreground",
+                        )}
+                      >
+                        <TypeIcon className="h-4 w-4" />
+                      </span>
+                    </TD>
+                    <TD>
+                      <Link
+                        href={`/campaigns/${campaign.id}`}
+                        className="font-semibold text-foreground hover:text-primary"
+                      >
+                        {campaign.name}
+                      </Link>
+                    </TD>
+                    <TD className="text-muted-foreground">{campaign.type}</TD>
+                    <TD className="max-w-[160px] text-muted-foreground">{campaign.audience}</TD>
+                    <TD className="whitespace-nowrap text-muted-foreground">
+                      {formatScheduled(campaign.scheduledAt)}
+                    </TD>
+                    <TD>
+                      <StatusChip status={campaign.status} />
+                    </TD>
+                    <TD>{formatNumber(campaign.sent)}</TD>
+                    <TD>
+                      <div className="leading-tight">
+                        <div className="font-medium tabular-nums">
+                          {formatNumber(campaign.delivered)}
+                        </div>
+                        {rate != null ? (
+                          <div
+                            className={cn(
+                              "text-[11px] tabular-nums",
+                              rate < 50 ? "text-rose-600" : "text-emerald-600",
+                            )}
+                          >
+                            {formatPercent(rate)}
+                          </div>
+                        ) : null}
+                      </div>
+                    </TD>
+                    <TD>{formatNumber(campaign.replies)}</TD>
+                    <TD>{formatNumber(campaign.clicks)}</TD>
+                    <TD>{formatNumber(campaign.optOuts)}</TD>
+                    <TD className="text-muted-foreground">{campaign.createdBy}</TD>
+                    <TD>
+                      <Button variant="ghost" size="sm" className="h-8 w-8 px-0">
+                        <MoreHorizontal className="h-4 w-4" />
+                        <span className="sr-only">More actions</span>
+                      </Button>
+                    </TD>
+                  </TR>
+                );
+              })}
+            </TBody>
+          </Table>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {campaigns.map((campaign) => {
-              const rate = deliveryRate(campaign);
+              const TypeIcon = typeIcons[campaign.type] ?? Megaphone;
               return (
-                <TR key={campaign.id}>
-                  <TD>
+                <Link
+                  key={campaign.id}
+                  href={`/campaigns/${campaign.id}`}
+                  className="rounded-[12px] border border-border p-4 transition hover:border-primary/30 hover:shadow-sm"
+                >
+                  <div className="flex items-start gap-3">
                     <span
                       className={cn(
-                        "flex h-9 w-9 items-center justify-center rounded-[10px]",
+                        "flex h-9 w-9 shrink-0 items-center justify-center rounded-full",
                         campaignIconTones[campaign.status] ?? "bg-muted text-muted-foreground",
                       )}
                     >
-                      <Megaphone className="h-4 w-4" />
+                      <TypeIcon className="h-4 w-4" />
                     </span>
-                  </TD>
-                  <TD>
-                    <Link
-                      href={`/campaigns/${campaign.id}`}
-                      className="font-semibold text-foreground hover:text-primary"
-                    >
-                      {campaign.name}
-                    </Link>
-                  </TD>
-                  <TD className="text-muted-foreground">{campaign.type}</TD>
-                  <TD className="max-w-[160px] text-muted-foreground">{campaign.audience}</TD>
-                  <TD className="whitespace-nowrap text-muted-foreground">
-                    {formatScheduled(campaign.scheduledAt)}
-                  </TD>
-                  <TD>
-                    <StatusChip status={campaign.status} />
-                  </TD>
-                  <TD>{formatNumber(campaign.sent)}</TD>
-                  <TD>
-                    <div>
-                      <span className="font-medium">{formatNumber(campaign.delivered)}</span>
-                      {rate != null ? (
-                        <span className="ml-1 text-[12px] text-muted-foreground">
-                          ({formatPercent(rate)})
-                        </span>
-                      ) : null}
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-foreground">{campaign.name}</p>
+                      <p className="mt-1 text-[12px] text-muted-foreground">
+                        {campaign.type} · {campaign.audience}
+                      </p>
+                      <div className="mt-3">
+                        <StatusChip status={campaign.status} />
+                      </div>
                     </div>
-                  </TD>
-                  <TD>{formatNumber(campaign.replies)}</TD>
-                  <TD>{formatNumber(campaign.clicks)}</TD>
-                  <TD>{formatNumber(campaign.optOuts)}</TD>
-                  <TD className="text-muted-foreground">{campaign.createdBy}</TD>
-                  <TD>
-                    <Button variant="ghost" size="sm" className="h-8 w-8 px-0">
-                      <MoreHorizontal className="h-4 w-4" />
-                      <span className="sr-only">More actions</span>
-                    </Button>
-                  </TD>
-                </TR>
+                  </div>
+                </Link>
               );
             })}
-          </TBody>
-        </Table>
+          </div>
+        )}
 
         <PaginationBar
           rangeLabel={`1–${campaigns.length} of ${campaigns.length}`}

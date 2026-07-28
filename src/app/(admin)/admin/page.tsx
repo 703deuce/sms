@@ -7,23 +7,48 @@ import { adminCustomers } from "@/lib/mock/data";
 import { cn, formatCurrency, formatNumber } from "@/lib/utils";
 import {
   AlertTriangle,
-  ArrowRight,
+  Clock,
   CreditCard,
   DollarSign,
+  FileText,
+  MessageSquare,
+  MoreHorizontal,
+  Settings2,
+  Shield,
+  TrendingUp,
   Users,
+  XCircle,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import Link from "next/link";
 
-const registrationPipeline = [
-  { stage: "Brand submitted", count: 4 },
-  { stage: "Brand pending", count: 2 },
-  { stage: "Campaign draft", count: 3 },
-  { stage: "Campaign rejected", count: 1 },
+const registrationPipeline: Array<{
+  stage: string;
+  count: number;
+  icon: LucideIcon;
+  tone: string;
+}> = [
+  { stage: "Brand submitted", count: 4, icon: Shield, tone: "bg-emerald-50 text-emerald-600" },
+  { stage: "Brand pending review", count: 2, icon: Clock, tone: "bg-orange-50 text-orange-600" },
+  { stage: "Campaign draft", count: 3, icon: FileText, tone: "bg-blue-50 text-blue-600" },
+  { stage: "Campaign rejected", count: 1, icon: XCircle, tone: "bg-rose-50 text-rose-600" },
 ];
 
 const abuseAlerts = [
-  { customer: "QuickMove", type: "High opt-out rate", severity: "Medium" as const },
-  { customer: "Metro Auto Sales", type: "Prohibited terms detected", severity: "High" as const },
+  {
+    customer: "QuickMove Logistics",
+    type: "High opt-out rate",
+    severity: "Medium" as const,
+    icon: Shield,
+    tone: "bg-emerald-50 text-emerald-600",
+  },
+  {
+    customer: "Metro Auto Sales",
+    type: "Prohibited terms detected",
+    severity: "High" as const,
+    icon: AlertTriangle,
+    tone: "bg-rose-50 text-rose-600",
+  },
 ];
 
 const customerMeta: Record<string, { initials: string; tone: string; joined: string }> = {
@@ -47,12 +72,12 @@ export default function AdminDashboardPage() {
     <div className="space-y-5">
       <SectionHeader
         title="Admin dashboard"
-        description="Platform overview — customers, revenue, message volume, and compliance pipeline."
+        description="Platform overview — customers, revenue, message volume, and compliance pipeline"
         actions={
           <Link href="/admin/customers">
             <Button variant="outline" className="rounded-[10px]">
+              <Users className="h-4 w-4" />
               View customers
-              <ArrowRight className="h-4 w-4" />
             </Button>
           </Link>
         }
@@ -62,32 +87,41 @@ export default function AdminDashboardPage() {
         <MetricCard
           label="Active Customers"
           value={activeCustomers}
-          hint="↑50%"
+          hint="↑ 50% vs last 30 days"
           icon={Users}
-          tone="bg-blue-50 text-blue-600"
+          tone="bg-emerald-50 text-emerald-600"
+          sparkline={[1, 1, 2, 2, 2, 2, 3, 3]}
+          sparkColor="#10b981"
           href="/admin/customers"
         />
         <MetricCard
           label="Trials"
           value={trials}
+          hint="No change"
           icon={Users}
-          tone="bg-sky-50 text-sky-600"
+          tone="bg-violet-50 text-violet-600"
+          sparkline={[1, 1, 1, 1, 1, 1, 1, 1]}
+          sparkColor="#8b5cf6"
           href="/admin/customers"
         />
         <MetricCard
           label="Paid Accounts"
           value={paid}
-          hint="↑100%"
+          hint="↑ 100% vs last 30 days"
           icon={CreditCard}
-          tone="bg-emerald-50 text-emerald-600"
+          tone="bg-blue-50 text-blue-600"
+          sparkline={[0, 1, 1, 1, 1, 2, 2, 2]}
+          sparkColor="#3b82f6"
           href="/admin/customers"
         />
         <MetricCard
           label="MRR"
           value={formatCurrency(mrr)}
-          hint="↑12.3%"
+          hint="↑ 12.3% vs last 30 days"
           icon={DollarSign}
-          tone="bg-violet-50 text-violet-600"
+          tone="bg-emerald-50 text-emerald-600"
+          sparkline={[8, 9, 10, 11, 12, 13, 14, 15]}
+          sparkColor="#10b981"
           href="/admin/billing"
         />
       </div>
@@ -96,25 +130,36 @@ export default function AdminDashboardPage() {
         <MetricCard
           label="Message Volume"
           value={formatNumber(messageVolume)}
+          hint="Last 30 days"
+          icon={MessageSquare}
+          tone="bg-blue-50 text-blue-600"
           sparkline={[12, 14, 13, 16, 18, 17, 20, 22]}
           sparkColor="#3b82f6"
         />
         <MetricCard
-          label="Est Twilio Cost"
+          label="Est. Twilio Cost"
           value={formatCurrency(twilioCost)}
+          hint="Last 30 days"
+          icon={Settings2}
+          tone="bg-violet-50 text-violet-600"
           sparkline={[10, 11, 12, 13, 14, 15, 16, 17]}
-          sparkColor="#f97316"
+          sparkColor="#8b5cf6"
         />
         <MetricCard
-          label="Est Revenue"
+          label="Est. Revenue"
           value={formatCurrency(revenue)}
+          hint="Last 30 days"
+          icon={TrendingUp}
+          tone="bg-emerald-50 text-emerald-600"
           sparkline={[8, 10, 11, 13, 14, 16, 18, 19]}
           sparkColor="#10b981"
         />
         <MetricCard
           label="Failed Messages"
           value={formatNumber(failedMessages)}
-          hint={`~${failureRate}%`}
+          hint={`~${failureRate}% failure rate`}
+          icon={AlertTriangle}
+          tone="bg-rose-50 text-rose-600"
           sparkline={[6, 5, 7, 6, 8, 7, 9, 8]}
           sparkColor="#ef4444"
         />
@@ -124,22 +169,34 @@ export default function AdminDashboardPage() {
         <Card>
           <CardTitle>A2P registration pipeline</CardTitle>
           <ul className="mt-4 space-y-2">
-            {registrationPipeline.map((stage) => (
-              <li
-                key={stage.stage}
-                className="flex items-center justify-between rounded-[10px] border border-border px-4 py-2.5 text-[13px]"
-              >
-                <span className="text-foreground">{stage.stage}</span>
-                <span className="font-semibold text-foreground">{formatNumber(stage.count)}</span>
-              </li>
-            ))}
+            {registrationPipeline.map((stage) => {
+              const Icon = stage.icon;
+              return (
+                <li
+                  key={stage.stage}
+                  className="flex items-center justify-between rounded-[10px] border border-border px-4 py-2.5 text-[13px]"
+                >
+                  <span className="inline-flex items-center gap-2.5 text-foreground">
+                    <span
+                      className={cn(
+                        "flex h-8 w-8 items-center justify-center rounded-[8px]",
+                        stage.tone,
+                      )}
+                    >
+                      <Icon className="h-4 w-4" />
+                    </span>
+                    {stage.stage}
+                  </span>
+                  <span className="font-semibold text-foreground">{formatNumber(stage.count)}</span>
+                </li>
+              );
+            })}
           </ul>
           <Link
             href="/admin/a2p"
             className="mt-4 inline-flex items-center gap-1 text-[13px] font-semibold text-primary hover:underline"
           >
-            Open A2P queue
-            <ArrowRight className="h-3.5 w-3.5" />
+            Open A2P queue →
           </Link>
         </Card>
 
@@ -149,25 +206,37 @@ export default function AdminDashboardPage() {
             <CardTitle>Abuse alerts</CardTitle>
           </div>
           <ul className="space-y-2">
-            {abuseAlerts.map((alert) => (
-              <li
-                key={alert.customer}
-                className="flex items-center justify-between rounded-[10px] border border-border px-4 py-2.5"
-              >
-                <div>
-                  <p className="text-[13px] font-semibold text-foreground">{alert.customer}</p>
-                  <p className="text-[12px] text-muted-foreground">{alert.type}</p>
-                </div>
-                <StatusChip status={alert.severity} />
-              </li>
-            ))}
+            {abuseAlerts.map((alert) => {
+              const Icon = alert.icon;
+              return (
+                <li
+                  key={alert.customer}
+                  className="flex items-center justify-between rounded-[10px] border border-border px-4 py-2.5"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <span
+                      className={cn(
+                        "flex h-8 w-8 items-center justify-center rounded-[8px]",
+                        alert.tone,
+                      )}
+                    >
+                      <Icon className="h-4 w-4" />
+                    </span>
+                    <div>
+                      <p className="text-[13px] font-semibold text-foreground">{alert.customer}</p>
+                      <p className="text-[12px] text-muted-foreground">{alert.type}</p>
+                    </div>
+                  </div>
+                  <StatusChip status={alert.severity} />
+                </li>
+              );
+            })}
           </ul>
           <Link
             href="/admin/monitoring"
             className="mt-4 inline-flex items-center gap-1 text-[13px] font-semibold text-primary hover:underline"
           >
-            View monitoring
-            <ArrowRight className="h-3.5 w-3.5" />
+            View monitoring →
           </Link>
         </Card>
       </div>
@@ -179,7 +248,7 @@ export default function AdminDashboardPage() {
             href="/admin/customers"
             className="text-[12px] font-semibold text-primary hover:underline"
           >
-            View all
+            View all customers →
           </Link>
         </div>
         <Table>
@@ -189,10 +258,11 @@ export default function AdminDashboardPage() {
               <TH>Plan</TH>
               <TH>Status</TH>
               <TH>MRR</TH>
-              <TH>Messages</TH>
-              <TH>A2P</TH>
-              <TH>Risk</TH>
+              <TH>Messages (30d)</TH>
+              <TH>A2P Status</TH>
+              <TH>Risk Level</TH>
               <TH>Joined</TH>
+              <TH className="w-10" />
             </TR>
           </THead>
           <TBody>
@@ -203,11 +273,11 @@ export default function AdminDashboardPage() {
                   <TD>
                     <Link
                       href={`/admin/customers/${c.id}`}
-                      className="flex items-center gap-2.5 font-medium text-primary hover:underline"
+                      className="flex items-center gap-2.5 font-medium text-foreground hover:text-primary"
                     >
                       <span
                         className={cn(
-                          "flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] text-[11px] font-bold text-white",
+                          "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-white",
                           meta?.tone ?? "bg-slate-400",
                         )}
                       >
@@ -229,11 +299,23 @@ export default function AdminDashboardPage() {
                     <StatusChip status={c.risk} />
                   </TD>
                   <TD className="text-muted-foreground">{meta?.joined ?? "—"}</TD>
+                  <TD>
+                    <button
+                      type="button"
+                      className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted"
+                      aria-label={`Actions for ${c.name}`}
+                    >
+                      <MoreHorizontal className="h-4 w-4" />
+                    </button>
+                  </TD>
                 </TR>
               );
             })}
           </TBody>
         </Table>
+        <p className="mt-3 text-center text-[12px] text-muted-foreground">
+          Showing {adminCustomers.length} of {adminCustomers.length} customers.
+        </p>
       </Card>
     </div>
   );

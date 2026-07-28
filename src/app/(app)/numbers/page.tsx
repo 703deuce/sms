@@ -13,7 +13,6 @@ import { phoneNumbers } from "@/lib/mock/data";
 import { cn, formatCurrency, formatPhone } from "@/lib/utils";
 import {
   Calendar,
-  CheckCircle2,
   Layers,
   MoreHorizontal,
   Phone,
@@ -85,34 +84,36 @@ export default function NumbersPage() {
         <MetricCard
           label="Active numbers"
           value={activeCount}
+          hint="Total active"
           icon={Phone}
-          tone="bg-blue-50 text-blue-600"
+          tone="bg-emerald-50 text-emerald-600"
           sparkline={[1, 1, 2, 2, 2, 2, 2, 2]}
-          sparkColor="#3b82f6"
+          sparkColor="#10b981"
         />
         <MetricCard
           label="A2P registered"
           value={a2pRegistered}
           hint="100% registered"
           icon={Shield}
-          tone="bg-emerald-50 text-emerald-600"
+          tone="bg-violet-50 text-violet-600"
           sparkline={[1, 1, 1, 2, 2, 2, 2, 2]}
-          sparkColor="#10b981"
+          sparkColor="#8b5cf6"
         />
         <MetricCard
           label="Monthly spend"
           value={formatCurrency(monthlySpend)}
+          hint="Across all numbers"
           icon={Layers}
-          tone="bg-violet-50 text-violet-600"
+          tone="bg-blue-50 text-blue-600"
           sparkline={[2, 2, 3, 3, 3, 3, 3, 3]}
-          sparkColor="#8b5cf6"
+          sparkColor="#3b82f6"
         />
         <MetricCard
           label="Next payment"
           value="May 28, 2026"
-          hint="Auto-renew enabled"
+          hint="In 12 days"
           icon={Calendar}
-          tone="bg-amber-50 text-amber-600"
+          tone="bg-orange-50 text-orange-600"
         />
       </div>
 
@@ -234,14 +235,13 @@ export default function NumbersPage() {
 
       <div className="flex flex-col gap-3 rounded-[12px] border border-emerald-200/80 bg-emerald-50/60 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-start gap-3">
-          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+          <Shield className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
           <div>
             <p className="text-[13px] font-semibold text-emerald-950">
-              A2P 10DLC compliance required for high-volume local messaging
+              A2P 10DLC compliance
             </p>
             <p className="mt-0.5 text-[12px] text-emerald-900/80">
-              Register your brand and campaign to improve deliverability on local numbers.
-              Toll-free numbers have separate verification requirements.
+              All active numbers are A2P 10DLC registered and compliant.
             </p>
           </div>
         </div>
@@ -250,7 +250,7 @@ export default function NumbersPage() {
             variant="outline"
             className="h-9 shrink-0 rounded-[10px] border-emerald-300 bg-white text-[13px] text-emerald-900 hover:bg-emerald-50"
           >
-            View compliance
+            View compliance →
           </Button>
         </Link>
       </div>

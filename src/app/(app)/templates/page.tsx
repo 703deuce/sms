@@ -58,6 +58,22 @@ const templateIconTones = [
   "bg-orange-50 text-orange-600",
 ];
 
+const categoryTones: Record<string, string> = {
+  Greetings: "bg-emerald-50 text-emerald-700",
+  "Appointment reminders": "bg-orange-50 text-orange-700",
+  Sales: "bg-violet-50 text-violet-700",
+  "Customer service": "bg-sky-50 text-sky-700",
+  Promotions: "bg-pink-50 text-pink-700",
+  Compliance: "bg-rose-50 text-rose-700",
+};
+
+const typeTones: Record<string, string> = {
+  Campaign: "bg-blue-50 text-blue-700",
+  "Inbox reply": "bg-teal-50 text-teal-700",
+  "Automation message": "bg-emerald-50 text-emerald-700",
+  "Compliance message": "bg-rose-50 text-rose-700",
+};
+
 export default function TemplatesPage() {
   const [category, setCategory] = useState<string>("All");
   const [typeFilter, setTypeFilter] = useState<string>("All types");
@@ -93,7 +109,7 @@ export default function TemplatesPage() {
             <Link href="/templates/new">
               <Button>
                 <Plus className="h-4 w-4" />
-                + Create template
+                Create template
               </Button>
             </Link>
           </>
@@ -183,7 +199,10 @@ export default function TemplatesPage() {
             Try a different category or create a new template.
           </p>
           <Link href="/templates/new" className="mt-4 inline-block">
-            <Button size="sm">+ Create template</Button>
+            <Button size="sm">
+              <Plus className="h-4 w-4" />
+              Create template
+            </Button>
           </Link>
         </Card>
       ) : (
@@ -253,22 +272,44 @@ export default function TemplatesPage() {
                         <MessageSquare className="h-4 w-4" />
                       </span>
                     </TD>
-                    <TD className="font-semibold">{template.name}</TD>
                     <TD>
-                      <span className="inline-flex rounded-full bg-muted px-2.5 py-0.5 text-[11px] font-medium text-foreground">
+                      <div>
+                        <p className="font-semibold text-foreground">{template.name}</p>
+                        <p className="mt-0.5 text-[11px] text-muted-foreground">
+                          ID: tpl_{String(template.id.replace("tpl_", "")).padStart(3, "0")}
+                        </p>
+                      </div>
+                    </TD>
+                    <TD>
+                      <span
+                        className={cn(
+                          "inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-medium",
+                          categoryTones[template.category] ?? "bg-muted text-foreground",
+                        )}
+                      >
                         {template.category}
                       </span>
                     </TD>
                     <TD>
-                      <span className="inline-flex rounded-full border border-border bg-card px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground">
+                      <span
+                        className={cn(
+                          "inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-medium",
+                          typeTones[template.type] ?? "border border-border bg-card text-muted-foreground",
+                        )}
+                      >
                         {template.type}
                       </span>
                     </TD>
                     <TD>{template.channel}</TD>
                     <TD className="text-muted-foreground">
-                      {template.shared
-                        ? `Yes (${teamMembers.length} members)`
-                        : "No"}
+                      {template.shared ? (
+                        <span className="inline-flex items-center gap-1.5">
+                          <Users className="h-3.5 w-3.5" />
+                          Yes · 3 members
+                        </span>
+                      ) : (
+                        "No"
+                      )}
                     </TD>
                     <TD className="max-w-[220px] truncate text-muted-foreground">
                       {template.body}
