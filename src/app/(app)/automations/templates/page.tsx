@@ -1,16 +1,17 @@
 import { Button } from "@/components/ui/button";
-import { Card, CardTitle } from "@/components/ui/card";
-import { PageHeader } from "@/components/ui/page-header";
+import { Card } from "@/components/ui/card";
+import { SectionHeader } from "@/components/ui/metric";
 import { Tabs } from "@/components/ui/tabs";
+import { automationTabs } from "@/lib/automation-tabs";
 import {
   Bell,
   Cake,
   Calendar,
   CreditCard,
-  Gift,
   MessageCircle,
   Package,
   PhoneMissed,
+  Plus,
   RefreshCw,
   Sparkles,
   Star,
@@ -19,12 +20,6 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
-const automationTabs = [
-  { label: "Flows", href: "/automations" },
-  { label: "Templates", href: "/automations/templates" },
-  { label: "Logs", href: "/automations/logs" },
-];
-
 const flowTemplates = [
   {
     name: "Welcome series",
@@ -32,6 +27,7 @@ const flowTemplates = [
     trigger: "Contact joins list",
     steps: 3,
     icon: Sparkles,
+    tone: "bg-emerald-50 text-emerald-600",
   },
   {
     name: "Appointment reminder",
@@ -39,6 +35,7 @@ const flowTemplates = [
     trigger: "Appointment date",
     steps: 2,
     icon: Calendar,
+    tone: "bg-sky-50 text-sky-600",
   },
   {
     name: "Estimate follow-up",
@@ -46,6 +43,7 @@ const flowTemplates = [
     trigger: "Tag added: estimate",
     steps: 2,
     icon: MessageCircle,
+    tone: "bg-violet-50 text-violet-600",
   },
   {
     name: "Missed-call response",
@@ -53,6 +51,7 @@ const flowTemplates = [
     trigger: "Missed call",
     steps: 1,
     icon: PhoneMissed,
+    tone: "bg-orange-50 text-orange-600",
   },
   {
     name: "Birthday",
@@ -60,6 +59,7 @@ const flowTemplates = [
     trigger: "Birthday",
     steps: 1,
     icon: Cake,
+    tone: "bg-pink-50 text-pink-600",
   },
   {
     name: "Reactivation",
@@ -67,6 +67,7 @@ const flowTemplates = [
     trigger: "No activity 90 days",
     steps: 3,
     icon: RefreshCw,
+    tone: "bg-amber-50 text-amber-600",
   },
   {
     name: "Event reminder",
@@ -74,6 +75,7 @@ const flowTemplates = [
     trigger: "Event date",
     steps: 2,
     icon: Bell,
+    tone: "bg-sky-50 text-sky-600",
   },
   {
     name: "Payment reminder",
@@ -81,6 +83,7 @@ const flowTemplates = [
     trigger: "Invoice due date",
     steps: 3,
     icon: CreditCard,
+    tone: "bg-emerald-50 text-emerald-600",
   },
   {
     name: "Review request",
@@ -88,6 +91,7 @@ const flowTemplates = [
     trigger: "Service completed",
     steps: 1,
     icon: Star,
+    tone: "bg-violet-50 text-violet-600",
   },
   {
     name: "Order update",
@@ -95,6 +99,7 @@ const flowTemplates = [
     trigger: "Order status change",
     steps: 3,
     icon: Package,
+    tone: "bg-sky-50 text-sky-600",
   },
   {
     name: "New lead follow-up",
@@ -102,6 +107,7 @@ const flowTemplates = [
     trigger: "Form submission",
     steps: 3,
     icon: UserPlus,
+    tone: "bg-emerald-50 text-emerald-600",
   },
   {
     name: "Keyword response",
@@ -109,6 +115,7 @@ const flowTemplates = [
     trigger: "Incoming keyword",
     steps: 1,
     icon: Zap,
+    tone: "bg-amber-50 text-amber-600",
   },
   {
     name: "No-response follow-up",
@@ -116,18 +123,22 @@ const flowTemplates = [
     trigger: "No reply after 48 hours",
     steps: 2,
     icon: MessageCircle,
+    tone: "bg-orange-50 text-orange-600",
   },
 ];
 
 export default function AutomationTemplatesPage() {
   return (
-    <div>
-      <PageHeader
+    <div className="text-[13px]">
+      <SectionHeader
         title="Automation templates"
         description="Start from a proven flow template and customize triggers, timing, and messages."
         actions={
           <Link href="/automations/new">
-            <Button>Start from scratch</Button>
+            <Button className="rounded-[10px]">
+              <Plus className="h-4 w-4" />
+              Start from scratch
+            </Button>
           </Link>
         }
       />
@@ -140,36 +151,36 @@ export default function AutomationTemplatesPage() {
           return (
             <Card
               key={template.name}
-              className="flex flex-col transition hover:border-primary/40 hover:shadow-md"
+              className="flex flex-col rounded-[12px] p-4 transition hover:border-primary/40 hover:shadow-sm"
             >
               <div className="flex items-start gap-3">
-                <div className="rounded-lg bg-primary/10 p-2.5 text-primary">
+                <span
+                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] ${template.tone}`}
+                >
                   <Icon className="h-5 w-5" />
-                </div>
+                </span>
                 <div className="min-w-0 flex-1">
-                  <CardTitle>{template.name}</CardTitle>
-                  <p className="mt-1.5 text-sm text-muted-foreground">
-                    {template.description}
-                  </p>
+                  <h3 className="text-[14px] font-bold text-foreground">{template.name}</h3>
+                  <p className="mt-1 text-[12px] text-muted-foreground">{template.description}</p>
                 </div>
               </div>
-              <dl className="mt-4 flex gap-4 text-xs">
+              <dl className="mt-4 grid grid-cols-2 gap-3 text-[11px]">
                 <div>
-                  <dt className="font-medium uppercase tracking-wide text-muted-foreground">
+                  <dt className="font-semibold uppercase tracking-wide text-muted-foreground">
                     Trigger
                   </dt>
-                  <dd className="mt-0.5 text-sm">{template.trigger}</dd>
+                  <dd className="mt-0.5 text-[13px] font-medium">{template.trigger}</dd>
                 </div>
                 <div>
-                  <dt className="font-medium uppercase tracking-wide text-muted-foreground">
+                  <dt className="font-semibold uppercase tracking-wide text-muted-foreground">
                     Steps
                   </dt>
-                  <dd className="mt-0.5 text-sm">{template.steps}</dd>
+                  <dd className="mt-0.5 text-[13px] font-medium">{template.steps}</dd>
                 </div>
               </dl>
-              <div className="mt-4 pt-2">
+              <div className="mt-auto pt-4">
                 <Link href="/automations/new">
-                  <Button variant="outline" size="sm" className="w-full">
+                  <Button variant="outline" size="sm" className="w-full rounded-[10px]">
                     Use template
                   </Button>
                 </Link>

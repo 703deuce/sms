@@ -1,15 +1,20 @@
-import { Card, CardTitle, StatCard } from "@/components/ui/card";
-import { PageHeader } from "@/components/ui/page-header";
+import { Card } from "@/components/ui/card";
+import {
+  MetricCard,
+  PaginationBar,
+  SectionHeader,
+} from "@/components/ui/metric";
 import { StatusChip } from "@/components/ui/status-chip";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Tabs } from "@/components/ui/tabs";
-import { formatNumber } from "@/lib/utils";
-
-const automationTabs = [
-  { label: "Flows", href: "/automations" },
-  { label: "Templates", href: "/automations/templates" },
-  { label: "Logs", href: "/automations/logs" },
-];
+import { automationTabs } from "@/lib/automation-tabs";
+import { cn, formatNumber } from "@/lib/utils";
+import {
+  AlertTriangle,
+  ArrowDown,
+  UserPlus,
+  Zap,
+} from "lucide-react";
 
 const automationLogs = [
   {
@@ -104,6 +109,14 @@ const automationLogs = [
   },
 ];
 
+const eventStyles: Record<string, string> = {
+  Enrollment: "bg-emerald-50 text-emerald-700",
+  Action: "bg-sky-50 text-sky-700",
+  Skip: "bg-slate-100 text-slate-700",
+  Failure: "bg-rose-50 text-rose-700",
+  Completion: "bg-violet-50 text-violet-700",
+};
+
 function formatDateTime(at: string) {
   return new Date(at).toLocaleString(undefined, {
     month: "short",
@@ -119,27 +132,54 @@ export default function AutomationLogsPage() {
   const failures = automationLogs.filter((l) => l.event === "Failure").length;
 
   return (
-    <div>
-      <PageHeader
+    <div className="text-[13px]">
+      <SectionHeader
         title="Automation logs"
         description="Track enrollments, actions, skips, failures, and completions across all flows."
       />
 
       <Tabs items={automationTabs} />
 
-      <div className="mb-6 grid gap-4 sm:grid-cols-3">
-        <StatCard label="Enrollments" value={formatNumber(enrollments)} />
-        <StatCard label="Actions taken" value={formatNumber(actions)} />
-        <StatCard label="Failures" value={formatNumber(failures)} hint="Last 7 days" />
+      <div className="mb-5 grid gap-4 sm:grid-cols-3">
+        <MetricCard
+          label="Enrollments"
+          value={formatNumber(enrollments)}
+          icon={UserPlus}
+          tone="bg-emerald-50 text-emerald-600"
+          sparkline={[1, 1, 1, 2, 2, 2, 2, 2]}
+          sparkColor="#10b981"
+        />
+        <MetricCard
+          label="Actions taken"
+          value={formatNumber(actions)}
+          icon={Zap}
+          tone="bg-sky-50 text-sky-600"
+          sparkline={[1, 2, 2, 3, 3, 4, 4, 4]}
+          sparkColor="#3b82f6"
+        />
+        <MetricCard
+          label="Failures"
+          value={formatNumber(failures)}
+          hint="Last 7 days"
+          icon={AlertTriangle}
+          tone="bg-violet-50 text-violet-600"
+          sparkline={[0, 0, 1, 1, 1, 1, 1, 1]}
+          sparkColor="#8b5cf6"
+        />
       </div>
 
-      <Card>
-        <CardTitle>Event log</CardTitle>
-        <div className="mt-4">
-          <Table>
+      <Card className="rounded-[12px] p-4">
+        <h2 className="mb-4 text-[14px] font-bold text-foreground">Event log</h2>
+        <div className="overflow-x-auto">
+          <Table className="min-w-[900px] text-[13px]">
             <THead>
               <TR>
-                <TH>Time</TH>
+                <TH>
+                  <span className="inline-flex items-center gap-1">
+                    Time
+                    <ArrowDown className="h-3 w-3" />
+                  </span>
+                </TH>
                 <TH>Contact</TH>
                 <TH>Flow</TH>
                 <TH>Event</TH>
@@ -153,14 +193,19 @@ export default function AutomationLogsPage() {
                   <TD className="whitespace-nowrap text-muted-foreground">
                     {formatDateTime(log.at)}
                   </TD>
-                  <TD className="font-medium">{log.contact}</TD>
+                  <TD className="font-semibold">{log.contact}</TD>
                   <TD className="text-muted-foreground">{log.flow}</TD>
                   <TD>
-                    <span className="inline-flex rounded-md bg-muted px-2 py-0.5 text-xs font-medium">
+                    <span
+                      className={cn(
+                        "inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-semibold",
+                        eventStyles[log.event] ?? "bg-muted text-muted-foreground",
+                      )}
+                    >
                       {log.event}
                     </span>
                   </TD>
-                  <TD className="max-w-xs truncate text-muted-foreground">{log.step}</TD>
+                  <TD className="max-w-[240px] text-muted-foreground">{log.step}</TD>
                   <TD>
                     <StatusChip status={log.status} />
                   </TD>
@@ -169,6 +214,9 @@ export default function AutomationLogsPage() {
             </TBody>
           </Table>
         </div>
+        <PaginationBar
+          rangeLabel={`Showing 1 to ${automationLogs.length} of ${automationLogs.length} events`}
+        />
       </Card>
     </div>
   );
