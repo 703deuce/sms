@@ -275,12 +275,14 @@ model Message {
   segments      Int      @default(1)
   costCents     Int      @default(0)
   providerId    String?
+  idempotencyKey String? @unique
   trackingToken String?  @unique
   destinationUrl String?
   createdAt     DateTime @default(now())
   campaign      Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
 
   @@index([trackingToken])
+  @@index([providerId])
 }
 
 /// Per-workspace Twilio ISV registration state (one row per workspace).

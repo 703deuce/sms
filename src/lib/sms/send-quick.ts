@@ -20,10 +20,6 @@ export type QuickSendSmsInput = {
   idempotencyKey?: string;
 };
 
-function idemProviderLookup(key: string) {
-  return [{ providerId: `idem:${key}` }, { providerId: { contains: `|idem:${key}` } }];
-}
-
 export async function sendQuickSms(input: QuickSendSmsInput) {
   const entitlement = requireCampaignSendAccess(input.workspaceId);
   if (!entitlement.ok) throw new Error(entitlement.error);
@@ -32,18 +28,14 @@ export async function sendQuickSms(input: QuickSendSmsInput) {
   const prisma = getPrisma();
 
   if (input.idempotencyKey) {
-    const prior = await prisma.message.findFirst({
-      where: {
-        workspaceId: input.workspaceId,
-        OR: idemProviderLookup(input.idempotencyKey),
-        status: { not: "failed" },
-      },
-      orderBy: { createdAt: "desc" },
+    const prior = await prisma.message.findUnique({
+      where: { idempotencyKey: input.idempotencyKey },
     });
-    if (prior) {
-      const sid = prior.providerId?.split("|")[0] || prior.id;
+    if (prior && prior.status !== "failed") {
       return {
-        sid,
+        sid: prior.providerId?.startsWith("idem:") || prior.providerId?.startsWith("pending:")
+          ? prior.id
+          : prior.providerId || prior.id,
         status: prior.status,
         trackingToken: prior.trackingToken,
         trackingUrl: prior.trackingToken ? `${getAppBaseUrl()}/r/${prior.trackingToken}` : undefined,
@@ -96,34 +88,63 @@ export async function sendQuickSms(input: QuickSendSmsInput) {
       ? body
       : `${body.trim()} ${trackedUrl}`.trim();
 
-  const idemProviderId = input.idempotencyKey
-    ? `idem:${input.idempotencyKey}`
-    : `pending:${trackingToken}`;
+  let pending;
+  try {
+    pending = await prisma.message.create({
+      data: {
+        workspaceId: input.workspaceId,
+        campaignId: input.campaignId,
+        to,
+        from: reg!.phoneE164 || input.from || "messaging_service",
+        body: finalBody,
+        status: "sending",
+        providerId: input.idempotencyKey ? `idem:${input.idempotencyKey}` : `pending:${trackingToken}`,
+        idempotencyKey: input.idempotencyKey || null,
+        trackingToken,
+        destinationUrl,
+      },
+    });
+  } catch (err) {
+    if (
+      input.idempotencyKey &&
+      err &&
+      typeof err === "object" &&
+      "code" in err &&
+      (err as { code: string }).code === "P2002"
+    ) {
+      const existing = await prisma.message.findUnique({
+        where: { idempotencyKey: input.idempotencyKey },
+      });
+      if (existing && existing.status !== "failed") {
+        return {
+          sid: existing.providerId || existing.id,
+          status: existing.status,
+          trackingToken: existing.trackingToken,
+          trackingUrl: existing.trackingToken
+            ? `${getAppBaseUrl()}/r/${existing.trackingToken}`
+            : undefined,
+          messageId: existing.id,
+          idempotentReplay: true,
+        };
+      }
+    }
+    throw err;
+  }
 
-  const pending = await prisma.message.create({
-    data: {
-      workspaceId: input.workspaceId,
-      campaignId: input.campaignId,
-      to,
-      from: reg!.phoneE164 || input.from || "messaging_service",
-      body: finalBody,
-      status: "sending",
-      providerId: idemProviderId,
-      trackingToken,
-      destinationUrl,
-    },
-  });
+  let providerAccepted = false;
+  let providerSid: string | null = null;
 
   try {
     const result = await sendViaRegistration(input.workspaceId, to, finalBody);
+    providerAccepted = true;
+    providerSid = result.sid;
+
     try {
       await prisma.message.update({
         where: { id: pending.id },
         data: {
           status: result.status || "sent",
-          providerId: input.idempotencyKey
-            ? `${result.sid}|idem:${input.idempotencyKey}`
-            : result.sid,
+          providerId: result.sid,
         },
       });
     } catch (persistErr) {
@@ -150,6 +171,25 @@ export async function sendQuickSms(input: QuickSendSmsInput) {
 
     return { ...result, trackingToken, trackingUrl: trackedUrl, messageId: pending.id };
   } catch (err) {
+    if (providerAccepted) {
+      await prisma.message
+        .update({
+          where: { id: pending.id },
+          data: {
+            status: "sent",
+            providerId: providerSid || pending.providerId,
+          },
+        })
+        .catch(() => undefined);
+      return {
+        sid: providerSid || pending.id,
+        status: "sent",
+        trackingToken,
+        trackingUrl: trackedUrl,
+        messageId: pending.id,
+      };
+    }
+
     await prisma.message
       .update({
         where: { id: pending.id },
