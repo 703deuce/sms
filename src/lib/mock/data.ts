@@ -12,7 +12,7 @@ import type {
 
 export const demoUser: User = {
   id: "u_1",
-  name: "Alex Rivera",
+  name: "John Doe",
   email: "alex@harborhome.co",
   role: "Owner",
   isAdmin: true,

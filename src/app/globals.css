@@ -1,17 +1,17 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f3f5f9;
-  --foreground: #111827;
+  --background: #f5f6fa;
+  --foreground: #0f172a;
   --card: #ffffff;
-  --card-foreground: #111827;
-  --muted: #eef1f6;
+  --card-foreground: #0f172a;
+  --muted: #eef0f5;
   --muted-foreground: #6b7280;
-  --border: #e5e7eb;
-  --primary: #12b98b;
+  --border: #e6e8ef;
+  --primary: #10b981;
   --primary-foreground: #ffffff;
-  --primary-hover: #0ea37b;
-  --accent: #0b5fff;
+  --primary-hover: #059669;
+  --accent: #3b82f6;
   --accent-foreground: #ffffff;
   --danger: #ef4444;
   --danger-foreground: #ffffff;
@@ -20,12 +20,12 @@
   --success: #10b981;
   --success-foreground: #ffffff;
   --sidebar: #0b1220;
-  --sidebar-foreground: #c7d2e0;
-  --sidebar-muted: #8b97ab;
-  --sidebar-active: #12b98b;
+  --sidebar-foreground: #cbd5e1;
+  --sidebar-muted: #94a3b8;
+  --sidebar-active: #10b981;
   --header: #ffffff;
-  --ring: #12b98b;
-  --shadow: 0 1px 2px rgb(17 24 39 / 0.04), 0 8px 24px rgb(17 24 39 / 0.04);
+  --ring: #10b981;
+  --shadow: 0 1px 2px rgb(15 23 42 / 0.04), 0 4px 16px rgb(15 23 42 / 0.04);
   --purple: #8b5cf6;
   --blue: #3b82f6;
   --orange: #f97316;

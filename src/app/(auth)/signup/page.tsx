@@ -39,7 +39,7 @@ export default function SignupPage() {
     <div className="surface rounded-2xl p-8">
       <div className="mb-8 text-center">
         <p className="font-display text-3xl font-semibold tracking-tight text-primary">
-          Transovo SMS
+          Transovo EHS
         </p>
         <h1 className="mt-3 font-display text-xl font-semibold">Start texting compliantly</h1>
         <p className="mt-1 text-sm text-muted-foreground">
