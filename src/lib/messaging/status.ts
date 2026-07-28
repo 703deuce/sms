@@ -1,4 +1,4 @@
-import type { MessagingRegistration, MessagingStepStatus } from "@prisma/client";
+import type { MessagingRegistration, MessagingStepStatus } from "@/lib/domain";
 import type { RegistrationProgressStep } from "./types";
 import { isLiveMessagingAdapter } from "./twilio-config";
 

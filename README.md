@@ -5,7 +5,7 @@ Multi-tenant business texting SaaS — campaigns, shared inbox, automations, com
 ## Stack
 
 - **Next.js 16** (App Router) + TypeScript + Tailwind CSS v4
-- **Supabase** (Postgres + JS client, LSE-style env) with Prisma during migration
+- **Supabase** (Postgres via `@supabase/supabase-js`, same env style as Local SEO Express)
 - **Twilio ISV messaging** (subaccounts, A2P 10DLC, Messaging Service sends) + optional BullMQ worker
 
 ## Quick start (demo UI)
@@ -31,30 +31,28 @@ cp .env.example .env
 #   NEXT_PUBLIC_SUPABASE_URL
 #   NEXT_PUBLIC_SUPABASE_ANON_KEY
 #   SUPABASE_SERVICE_ROLE_KEY
-#   DATABASE_URL  = Supabase Postgres URI (Settings → Database) — same project
 ```
 
 1. Run [`supabase/schema.sql`](supabase/schema.sql) in the Supabase SQL editor (creates tables).
-2. Server code uses `getSupabaseAdmin()` from `src/lib/supabase/admin.ts` (service role).
-3. `DATABASE_URL` is still required for Prisma call sites during the migration off Prisma — it is the **same** Supabase database, not a second DB.
+2. Server code uses `getSupabaseAdmin()` / `getPrisma()` (Supabase-backed) — **no `DATABASE_URL`**.
 
 ```powershell
-npm run db:push   # optional if you applied schema.sql
 npm run db:seed
 ```
 
 See [supabase/README.md](supabase/README.md).
+
 ## Scripts
 
 | Command | Description |
-|---------|-------------|
+| ------|-------------|
 | `npm run dev` | Start development server |
 | `npm run build` | Production build |
 | `npm run worker:all` | Job worker (A2P advance + campaign sends) |
-| `npm run db:generate` | Generate Prisma client |
-| `npm run db:migrate` | Run migrations |
-| `npm run db:push` | Push schema to DB |
-| `npm run db:seed` | Seed demo workspace |
+| `npm run db:schema` | Regenerate `supabase/schema.sql` from Prisma schema (dev only) |
+| `npm run db:seed` | Seed demo workspace into Supabase |
+| `npm run test:messaging-wiring` | Messaging wiring checks (needs Supabase env) |
+
 
 ## SMS / Twilio ISV
 

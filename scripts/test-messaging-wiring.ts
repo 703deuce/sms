@@ -1,11 +1,13 @@
 /**
- * Mock-mode wiring test (no live Twilio). Requires DATABASE_URL.
+ * Mock-mode wiring test (no live Twilio). Requires Supabase env vars.
  *
  *   npx tsx scripts/test-messaging-wiring.ts
  */
-import { PrismaClient } from "@prisma/client";
+import { getPrisma } from "../src/lib/db";
 
-process.env.DATABASE_URL ||= "postgresql://postgres:postgres@127.0.0.1:5432/transovo_sms?schema=public";
+process.env.NEXT_PUBLIC_SUPABASE_URL ||= process.env.SUPABASE_URL || "";
+process.env.SUPABASE_SERVICE_ROLE_KEY ||= "";
+process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||= "";
 process.env.APP_URL ||= "http://localhost:3000";
 process.env.INTEGRATION_SECRET_KEY ||= "test-integration-secret-key";
 // Ensure mock adapter (not live)
@@ -13,7 +15,7 @@ delete process.env.TWILIO_MODE;
 delete process.env.MESSAGING_ADAPTER;
 
 async function main() {
-  const prisma = new PrismaClient();
+  const prisma = getPrisma();
   const failures: string[] = [];
   const ok = (label: string) => console.log(`✓ ${label}`);
   const fail = (label: string, err: unknown) => {
@@ -260,7 +262,7 @@ async function main() {
           audience: "Test",
           body: "Hi {{tracking_link}}",
           status: "SENDING",
-          sequenceJson: defaultSmsEmailSequence() as unknown as import("@prisma/client").Prisma.InputJsonValue,
+          sequenceJson: defaultSmsEmailSequence() as unknown as import("../src/lib/domain").InputJsonValue,
         },
       });
       // Ensure phone number row matches To for inbound routing
@@ -368,7 +370,7 @@ async function main() {
   } finally {
     // cleanup
     await prisma.workspace.delete({ where: { id: workspaceId } }).catch(() => undefined);
-    await prisma.$disconnect();
+    // supabase client — no disconnect
   }
 
   console.log("\n---");

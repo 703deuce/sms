@@ -31,7 +31,7 @@ export async function resolveWorkspaceId(
     const membership = await getPrisma().membership.findFirst({
       where: {
         workspaceId,
-        OR: [{ userId: session.userId }, { user: { email: session.email } }],
+        userId: session.userId,
       },
     });
     if (membership) return workspaceId;

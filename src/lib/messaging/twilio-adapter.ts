@@ -1,4 +1,4 @@
-import type { MessagingRegistration } from "@prisma/client";
+import type { MessagingRegistration } from "@/lib/domain";
 import { getLiveParentClient, getSubaccountTwilioClient } from "./twilio-client";
 import { assertLiveTwilioConfigured, getStatusEmail, getWebhookUrls, TRUSTHUB_POLICIES } from "./twilio-config";
 import { mapBusinessType, mapIndustry, mapUseCase, mapA2pCompanyType } from "./twilio-mappings";

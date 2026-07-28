@@ -91,7 +91,7 @@ export async function POST(request: Request) {
       }
 
       if (status === "delivered") {
-        await prisma.$transaction(async (tx) => {
+        await prisma.$transaction(async (tx: any) => {
           const counted = await tx.campaignMessage.updateMany({
             where: { id: campaignMsg.id, deliveredCounted: false },
             data: { deliveredCounted: true },

@@ -1,4 +1,4 @@
-import type { MessagingRegistration, MessagingStepStatus } from "@prisma/client";
+import type { MessagingRegistration, MessagingStepStatus } from "@/lib/domain";
 
 export type RegistrationAction =
   | "start"

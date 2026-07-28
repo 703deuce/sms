@@ -1,4 +1,4 @@
-import type { Prisma } from "@prisma/client";
+import type { Prisma } from "@/lib/domain";
 import { getPrisma } from "@/lib/db";
 
 export type EnqueueJobInput = {

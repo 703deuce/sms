@@ -7,16 +7,12 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "db:generate": "prisma generate",
-    "db:migrate": "prisma migrate dev",
-    "db:push": "prisma db push",
+    "db:schema": "npx prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script > supabase/schema.sql",
     "db:seed": "tsx prisma/seed.ts",
     "worker:all": "tsx scripts/worker-all.ts",
-    "test:messaging-wiring": "tsx scripts/test-messaging-wiring.ts",
-    "postinstall": "prisma generate"
+    "test:messaging-wiring": "tsx scripts/test-messaging-wiring.ts"
   },
   "dependencies": {
-    "@prisma/client": "6.19.0",
     "@supabase/supabase-js": "^2.111.0",
     "bcryptjs": "^3.0.3",
     "bullmq": "^5.81.2",
@@ -45,8 +41,5 @@
     "tailwindcss": "^4",
     "tsx": "^4.23.1",
     "typescript": "^5"
-  },
-  "prisma": {
-    "seed": "tsx prisma/seed.ts"
   }
 }

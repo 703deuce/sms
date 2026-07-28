@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import type { Prisma } from "@prisma/client";
+import type { Prisma } from "@/lib/domain";
 import { requireSession, resolveWorkspaceId, jsonError } from "@/lib/api-auth";
 import {
   createIntegrationWebhook,

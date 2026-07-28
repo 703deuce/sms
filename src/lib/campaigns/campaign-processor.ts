@@ -72,9 +72,10 @@ export async function enqueueDueCampaignMessages() {
             ],
           },
         });
-        sentTodayByCampaign.set(campaign.id, sentToday);
+        sentTodayByCampaign.set(campaign.id, Number(sentToday ?? 0));
       }
-      if (sentToday >= campaign.dailySendLimit) {
+      const sentCount = Number(sentToday ?? 0);
+      if (sentCount >= campaign.dailySendLimit) {
         const tomorrow = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
         await prisma.campaignMessage.update({
           where: { id: msg.id },
@@ -82,7 +83,7 @@ export async function enqueueDueCampaignMessages() {
         });
         continue;
       }
-      sentTodayByCampaign.set(campaign.id, sentToday + 1);
+      sentTodayByCampaign.set(campaign.id, sentCount + 1);
     }
 
     await enqueueJob({

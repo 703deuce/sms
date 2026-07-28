@@ -1,8 +1,8 @@
-import type { MessagingRegistration, MessagingStepStatus, Prisma } from "@prisma/client";
+import type { MessagingRegistration, MessagingStepStatus, Prisma } from "@/lib/domain";
 import { getPrisma } from "@/lib/db";
 
 export async function getRegistrationByWorkspace(workspaceId: string) {
-  return getPrisma().messagingRegistration.findUnique({ where: { workspaceId } });
+  return getPrisma().messagingRegistration.findUnique({ where: { workspaceId } }) as Promise<MessagingRegistration | null>;
 }
 
 export async function ensureRegistrationRow(workspaceId: string) {
@@ -10,7 +10,7 @@ export async function ensureRegistrationRow(workspaceId: string) {
   if (existing) return existing;
   return getPrisma().messagingRegistration.create({
     data: { workspaceId },
-  });
+  }) as Promise<MessagingRegistration>;
 }
 
 export async function updateRegistration(
@@ -20,7 +20,7 @@ export async function updateRegistration(
   return getPrisma().messagingRegistration.update({
     where: { workspaceId },
     data,
-  });
+  }) as Promise<MessagingRegistration>;
 }
 
 /** CAS update that only applies while this worker still holds the advance lock token. */

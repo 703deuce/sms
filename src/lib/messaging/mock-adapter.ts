@@ -1,4 +1,4 @@
-import type { MessagingRegistration } from "@prisma/client";
+import type { MessagingRegistration } from "@/lib/domain";
 import { randomBytes } from "crypto";
 import type { NumberSearchResult } from "./types";
 

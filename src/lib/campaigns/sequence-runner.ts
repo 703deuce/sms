@@ -1,4 +1,4 @@
-import type { Prisma, RecipientWorkflowStatus } from "@prisma/client";
+import type { Prisma, RecipientWorkflowStatus } from "@/lib/domain";
 import { getPrisma } from "@/lib/db";
 import { randomTrackingToken } from "@/lib/messaging/crypto";
 import { getAppBaseUrl } from "@/lib/messaging/twilio-config";
@@ -438,22 +438,17 @@ export async function markRecipientFact(
   value = true,
 ) {
   const prisma = getPrisma();
-  await prisma.$transaction(async (tx) => {
-    const rows = await tx.$queryRaw<Array<{ id: string; metadata: unknown }>>`
-      SELECT id, metadata FROM campaign_recipients WHERE id = ${recipientId} FOR UPDATE
-    `;
-    const recipient = rows[0];
-    if (!recipient) return;
-    const prev =
-      recipient.metadata && typeof recipient.metadata === "object"
-        ? (recipient.metadata as Record<string, unknown>)
-        : {};
-    await tx.campaignRecipient.update({
-      where: { id: recipientId },
-      data: {
-        metadata: { ...prev, [fact]: value } as Prisma.InputJsonValue,
-      },
-    });
+  const recipient = await prisma.campaignRecipient.findUnique({ where: { id: recipientId } });
+  if (!recipient) return;
+  const prev =
+    recipient.metadata && typeof recipient.metadata === "object"
+      ? (recipient.metadata as Record<string, unknown>)
+      : {};
+  await prisma.campaignRecipient.update({
+    where: { id: recipientId },
+    data: {
+      metadata: { ...prev, [fact]: value } as Prisma.InputJsonValue,
+    },
   });
 }
 

@@ -1,5 +1,5 @@
 import { randomBytes } from "crypto";
-import type { Prisma } from "@prisma/client";
+import type { Prisma } from "@/lib/domain";
 import { getPrisma } from "@/lib/db";
 import { enrollContactInCampaign } from "@/lib/campaigns/enroll-campaign";
 import { getAppBaseUrl } from "@/lib/messaging/twilio-config";
@@ -39,8 +39,12 @@ export async function createIntegrationWebhook(input: {
     },
   });
   return {
-    ...endpoint,
-    incomingUrl: `${getAppBaseUrl()}/api/integrations/webhooks/incoming/${endpoint.token}`,
+    id: endpoint.id as string,
+    token: endpoint.token as string,
+    workspaceId: endpoint.workspaceId as string,
+    name: endpoint.name as string,
+    campaignId: (endpoint.campaignId as string | null) ?? null,
+    incomingUrl: `${getAppBaseUrl()}/api/integrations/webhooks/incoming/${endpoint.token as string}`,
   };
 }
 
@@ -54,8 +58,12 @@ export async function rotateIntegrationWebhook(workspaceId: string, endpointId: 
     data: { token: newToken(), rotatedAt: new Date(), active: true },
   });
   return {
-    ...updated,
-    incomingUrl: `${getAppBaseUrl()}/api/integrations/webhooks/incoming/${updated.token}`,
+    id: updated.id as string,
+    token: updated.token as string,
+    workspaceId: updated.workspaceId as string,
+    name: updated.name as string,
+    campaignId: (updated.campaignId as string | null) ?? null,
+    incomingUrl: `${getAppBaseUrl()}/api/integrations/webhooks/incoming/${updated.token as string}`,
   };
 }
 
@@ -76,7 +84,7 @@ export async function listIntegrationWebhooks(workspaceId: string) {
     orderBy: { createdAt: "desc" },
   });
   const base = getAppBaseUrl();
-  return rows.map((r) => ({
+  return rows.map((r: any) => ({
     ...r,
     incomingUrl: `${base}/api/integrations/webhooks/incoming/${r.token}`,
   }));

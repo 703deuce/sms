@@ -1,4 +1,4 @@
-import type { MessagingRegistration } from "@prisma/client";
+import type { MessagingRegistration } from "@/lib/domain";
 import { randomBytes } from "crypto";
 import { getPrisma } from "@/lib/db";
 import { encryptSecret } from "./crypto";
@@ -25,7 +25,7 @@ async function log(
     registrationId: reg.id,
     eventType,
     message,
-    payload: payload as import("@prisma/client").Prisma.InputJsonValue | undefined,
+    payload: payload as import("@/lib/domain").InputJsonValue | undefined,
   });
 }
 

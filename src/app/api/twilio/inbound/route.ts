@@ -233,7 +233,7 @@ export async function POST(request: Request) {
       });
       const repliedCampaignIds = new Set<string>();
       for (const r of active) {
-        await prisma.$transaction(async (tx) => {
+        await prisma.$transaction(async (tx: any) => {
           const row = await tx.campaignRecipient.findUnique({ where: { id: r.id } });
           if (!row) return;
           const prev =
