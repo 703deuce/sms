@@ -43,6 +43,13 @@ export async function sendQuickSms(input: QuickSendSmsInput) {
         idempotentReplay: true,
       };
     }
+    // Failed prior: free the unique key so a real retry can proceed
+    if (prior?.status === "failed") {
+      await prisma.message.update({
+        where: { id: prior.id },
+        data: { idempotencyKey: null },
+      });
+    }
   }
 
   const suppressed = await prisma.suppression.findFirst({
