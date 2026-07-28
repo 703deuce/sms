@@ -1,19 +1,15 @@
 import { Button } from "@/components/ui/button";
-import { Card, CardTitle } from "@/components/ui/card";
-import { PageHeader } from "@/components/ui/page-header";
+import { Card } from "@/components/ui/card";
+import {
+  MetricCard,
+  PaginationBar,
+  SectionHeader,
+} from "@/components/ui/metric";
 import { StatusChip } from "@/components/ui/status-chip";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Tabs } from "@/components/ui/tabs";
-import { Plus } from "lucide-react";
-
-const contactTabs = [
-  { label: "All Contacts", href: "/contacts" },
-  { label: "Lists", href: "/contacts/lists" },
-  { label: "Segments", href: "/contacts/segments" },
-  { label: "Tags", href: "/contacts/tags" },
-  { label: "Imports", href: "/contacts/imports" },
-  { label: "Custom Fields", href: "/contacts/fields" },
-];
+import { contactTabs } from "@/lib/contact-tabs";
+import { MoreHorizontal, Plus, SlidersHorizontal } from "lucide-react";
 
 const customFields = [
   {
@@ -86,12 +82,12 @@ export default function ContactFieldsPage() {
   const customCount = customFields.filter((f) => !f.system).length;
 
   return (
-    <div>
-      <PageHeader
+    <div className="text-[13px]">
+      <SectionHeader
         title="Custom fields"
         description="Extend contact profiles with business-specific data for merge tags and segmentation."
         actions={
-          <Button>
+          <Button className="rounded-[10px]">
             <Plus className="h-4 w-4" />
             Add field
           </Button>
@@ -100,25 +96,33 @@ export default function ContactFieldsPage() {
 
       <Tabs items={contactTabs} />
 
-      <div className="mb-6 grid gap-4 sm:grid-cols-3">
-        <Card>
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Total fields</p>
-          <p className="mt-2 font-display text-2xl font-semibold">{customFields.length}</p>
-        </Card>
-        <Card>
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Custom fields</p>
-          <p className="mt-2 font-display text-2xl font-semibold">{customCount}</p>
-        </Card>
-        <Card>
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Used in automations</p>
-          <p className="mt-2 font-display text-2xl font-semibold">2</p>
-          <p className="mt-1 text-xs text-muted-foreground">Birthday, appointment date</p>
-        </Card>
+      <div className="mb-5 grid gap-4 sm:grid-cols-3">
+        <MetricCard
+          label="Total fields"
+          value={customFields.length}
+          icon={SlidersHorizontal}
+          tone="bg-emerald-50 text-emerald-600"
+        />
+        <MetricCard
+          label="Custom fields"
+          value={customCount}
+          icon={Plus}
+          tone="bg-sky-50 text-sky-600"
+        />
+        <MetricCard
+          label="Used in automations"
+          value={2}
+          hint="Birthday, appointment date"
+          icon={SlidersHorizontal}
+          tone="bg-violet-50 text-violet-600"
+        />
       </div>
 
-      <Card>
-        <CardTitle>Field definitions</CardTitle>
-        <Table className="mt-4">
+      <Card className="rounded-[12px] p-4">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-[15px] font-semibold text-foreground">Field definitions</h2>
+        </div>
+        <Table>
           <THead>
             <TR>
               <TH>Field name</TH>
@@ -135,9 +139,7 @@ export default function ContactFieldsPage() {
                 <TD>
                   <div className="flex items-center gap-2">
                     <span className="font-medium">{field.name}</span>
-                    {field.system ? (
-                      <StatusChip status="Active" className="text-[10px]" />
-                    ) : null}
+                    {field.system ? <StatusChip status="Active" className="text-[10px]" /> : null}
                   </div>
                 </TD>
                 <TD className="font-mono text-xs text-muted-foreground">{`{{${field.key}}}`}</TD>
@@ -148,13 +150,20 @@ export default function ContactFieldsPage() {
                   {field.system ? (
                     <span className="text-xs text-muted-foreground">System field</span>
                   ) : (
-                    <div className="flex gap-1">
-                      <Button variant="ghost" size="sm">
+                    <div className="flex items-center gap-2">
+                      <button type="button" className="font-medium text-primary hover:underline">
                         Edit
-                      </Button>
-                      <Button variant="ghost" size="sm">
+                      </button>
+                      <button type="button" className="font-medium text-rose-600 hover:underline">
                         Delete
-                      </Button>
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded-md p-1 text-muted-foreground hover:bg-muted"
+                        aria-label="More"
+                      >
+                        <MoreHorizontal className="h-4 w-4" />
+                      </button>
                     </div>
                   )}
                 </TD>
@@ -162,6 +171,9 @@ export default function ContactFieldsPage() {
             ))}
           </TBody>
         </Table>
+        <PaginationBar
+          rangeLabel={`Showing ${customFields.length} of ${customFields.length} fields`}
+        />
       </Card>
     </div>
   );

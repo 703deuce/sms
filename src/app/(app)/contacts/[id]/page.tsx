@@ -1,14 +1,23 @@
+"use client";
+
+import Link from "next/link";
+import { useParams } from "next/navigation";
+import {
+  ArrowLeft,
+  ChevronDown,
+  ExternalLink,
+  MessageSquare,
+  Pencil,
+  Send,
+  UserMinus,
+  UserX,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardTitle } from "@/components/ui/card";
-import { EmptyState } from "@/components/ui/empty-state";
-import { PageHeader } from "@/components/ui/page-header";
+import { Card } from "@/components/ui/card";
 import { StatusChip } from "@/components/ui/status-chip";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
-import { contacts, conversations, messageLogs } from "@/lib/mock/data";
-import { formatPhone } from "@/lib/utils";
-import { ArrowLeft, Mail, MessageSquare, Shield } from "lucide-react";
-import Link from "next/link";
-import { notFound } from "next/navigation";
+import { contacts } from "@/lib/mock/data";
+import { cn, formatPhone } from "@/lib/utils";
 
 function formatDate(date: string | null) {
   if (!date) return "—";
@@ -19,330 +28,264 @@ function formatDate(date: string | null) {
   });
 }
 
-function formatDateTime(date: string) {
-  return new Date(date).toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
-
-const consentHistoryFor = (contactId: string, status: string) => {
-  const contact = contacts.find((c) => c.id === contactId);
-  if (!contact) return [];
-
-  const events = [
-    {
-      id: "ch_1",
-      event: "Opt-in recorded",
-      source: contact.consentSource,
-      at: contact.consentDate,
-      detail: "Initial consent captured",
-    },
-  ];
-
-  if (status === "Unsubscribed") {
-    events.push({
-      id: "ch_2",
-      event: "Unsubscribed",
-      source: "STOP keyword",
-      at: contact.lastReply ?? contact.lastMessaged ?? contact.consentDate,
-      detail: "Contact replied STOP",
-    });
-  }
-
-  if (status === "Blocked") {
-    events.push({
-      id: "ch_3",
-      event: "Blocked",
-      source: "Manual",
-      at: contact.dateAdded,
-      detail: "Blocked by workspace admin",
-    });
-  }
-
-  if (status === "Invalid") {
-    events.push({
-      id: "ch_4",
-      event: "Marked invalid",
-      source: "Carrier lookup",
-      at: contact.dateAdded,
-      detail: "Number classified as landline or unreachable",
-    });
-  }
-
-  return events;
-};
-
-export default async function ContactDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
-  const { id } = await params;
-  const contact = contacts.find((c) => c.id === id);
-
-  if (!contact) {
-    notFound();
-  }
-
-  const conversation = conversations.find((c) => c.contactId === contact.id);
-  const messages = messageLogs.filter((m) => m.to === contact.phone);
-  const consentHistory = consentHistoryFor(contact.id, contact.status);
+export default function ContactDetailPage() {
+  const params = useParams<{ id: string }>();
+  const contact = contacts.find((c) => c.id === params.id) ?? contacts[0];
+  const fullName = `${contact.firstName} ${contact.lastName}`;
+  const initials = `${contact.firstName.charAt(0)}${contact.lastName.charAt(0)}`.toUpperCase();
 
   return (
-    <div>
-      <PageHeader
-        title={`${contact.firstName} ${contact.lastName}`}
-        description={
-          contact.company
-            ? `${contact.company} · ${formatPhone(contact.phone)}`
-            : formatPhone(contact.phone)
-        }
-        actions={
-          <>
-            <Link href="/contacts">
-              <Button variant="outline">
-                <ArrowLeft className="h-4 w-4" />
-                Back
-              </Button>
-            </Link>
-            {contact.status === "Subscribed" ? (
-              <Link href="/send/quick">
-                <Button>
-                  <MessageSquare className="h-4 w-4" />
-                  Send message
-                </Button>
-              </Link>
-            ) : (
-              <Button disabled>Send message</Button>
-            )}
-          </>
-        }
-      />
+    <div className="space-y-5 text-[13px]">
+      <Link
+        href="/contacts"
+        className="inline-flex items-center gap-1.5 text-[13px] font-medium text-primary hover:underline"
+      >
+        <ArrowLeft className="h-3.5 w-3.5" />
+        Back to contacts
+      </Link>
 
-      <div className="mb-6 flex flex-wrap items-center gap-3">
-        <StatusChip status={contact.status} />
-        {contact.assignedUser ? (
-          <span className="text-sm text-muted-foreground">Assigned to {contact.assignedUser}</span>
-        ) : null}
-        <span className="text-sm text-muted-foreground">Added {formatDate(contact.dateAdded)}</span>
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="flex items-start gap-4">
+          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-primary text-xl font-bold text-primary-foreground">
+            {initials}
+          </div>
+          <div>
+            <h1 className="text-[26px] font-bold tracking-tight text-foreground">
+              {fullName}
+            </h1>
+            <p className="mt-0.5 text-[13px] text-muted-foreground">
+              {contact.company ? `${contact.company} · ` : null}
+              {formatPhone(contact.phone)}
+            </p>
+            <div className="mt-2.5 flex flex-wrap items-center gap-2">
+              <StatusChip status={contact.status} />
+              {contact.assignedUser ? (
+                <span className="rounded-full border border-border bg-card px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground">
+                  Assigned to {contact.assignedUser}
+                </span>
+              ) : null}
+              <span className="rounded-full border border-border bg-card px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground">
+                Added {formatDate(contact.dateAdded)}
+              </span>
+            </div>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" className="rounded-[10px]">
+            <Pencil className="h-4 w-4" />
+            Edit contact
+          </Button>
+          <div className="inline-flex overflow-hidden rounded-[10px]">
+            <Button className="rounded-none rounded-l-[10px] pr-3">
+              <Send className="h-4 w-4" />
+              Send message
+            </Button>
+            <Button
+              className="rounded-none rounded-r-[10px] border-l border-primary-foreground/20 px-2"
+              aria-label="More send options"
+            >
+              <ChevronDown className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[1fr_360px]">
-        <div className="space-y-6">
-          <Card>
-            <CardTitle>Contact profile</CardTitle>
+      <div className="grid gap-4 xl:grid-cols-[1.6fr_1fr]">
+        <div className="space-y-4">
+          <Card className="rounded-[12px] p-5">
+            <h2 className="text-[15px] font-semibold text-foreground">Contact profile</h2>
             <dl className="mt-4 grid gap-4 sm:grid-cols-2">
-              <div>
-                <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Phone</dt>
-                <dd className="mt-1 font-medium">{formatPhone(contact.phone)}</dd>
-              </div>
-              <div>
-                <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Email</dt>
-                <dd className="mt-1 font-medium">{contact.email || "—"}</dd>
-              </div>
-              <div>
-                <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Consent source</dt>
-                <dd className="mt-1">{contact.consentSource}</dd>
-              </div>
-              <div>
-                <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Consent date</dt>
-                <dd className="mt-1">{formatDate(contact.consentDate)}</dd>
-              </div>
-              <div>
-                <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Last messaged</dt>
-                <dd className="mt-1">{formatDate(contact.lastMessaged)}</dd>
-              </div>
-              <div>
-                <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Last reply</dt>
-                <dd className="mt-1">{formatDate(contact.lastReply)}</dd>
-              </div>
+              {[
+                ["Phone", formatPhone(contact.phone)],
+                ["Email", contact.email || "—"],
+                ["Consent source", contact.consentSource],
+                ["Consent date", formatDate(contact.consentDate)],
+                ["Last message sent", "Jul 2, 2026 · 9:14 AM"],
+                ["Last message received", "Jul 2, 2026 · 9:16 AM"],
+              ].map(([label, value]) => (
+                <div key={label}>
+                  <dt className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+                    {label}
+                  </dt>
+                  <dd className="mt-1 text-[13px] font-medium text-foreground">{value}</dd>
+                </div>
+              ))}
             </dl>
           </Card>
 
-          <Card>
-            <div className="flex items-center justify-between gap-3">
-              <CardTitle className="flex items-center gap-2">
-                <Shield className="h-4 w-4 text-primary" />
-                Consent history
-              </CardTitle>
-            </div>
-            <Table className="mt-4">
-              <THead>
-                <TR>
-                  <TH>Event</TH>
-                  <TH>Source</TH>
-                  <TH>Date</TH>
-                  <TH>Detail</TH>
-                </TR>
-              </THead>
-              <TBody>
-                {consentHistory.map((event) => (
-                  <TR key={event.id}>
-                    <TD className="font-medium">{event.event}</TD>
-                    <TD>{event.source}</TD>
-                    <TD className="text-muted-foreground">{formatDate(event.at)}</TD>
-                    <TD className="text-muted-foreground">{event.detail}</TD>
+          <Card className="rounded-[12px] p-5">
+            <h2 className="text-[15px] font-semibold text-foreground">Consent history</h2>
+            <div className="mt-4 overflow-x-auto">
+              <Table>
+                <THead>
+                  <TR>
+                    <TH>Event</TH>
+                    <TH>Source</TH>
+                    <TH>Date</TH>
+                    <TH>Detail</TH>
                   </TR>
-                ))}
-              </TBody>
-            </Table>
+                </THead>
+                <TBody>
+                  <TR>
+                    <TD className="font-medium">Opt-in recorded</TD>
+                    <TD className="text-muted-foreground">{contact.consentSource}</TD>
+                    <TD className="text-muted-foreground">{formatDate(contact.consentDate)}</TD>
+                    <TD className="text-muted-foreground">Express written consent captured</TD>
+                  </TR>
+                </TBody>
+              </Table>
+            </div>
           </Card>
 
-          <Card>
-            <CardTitle>Activity</CardTitle>
-            {conversation || messages.length > 0 ? (
-              <div className="mt-4 space-y-4">
-                {conversation ? (
-                  <div className="rounded-lg border border-border bg-muted/30 p-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="font-medium">Inbox conversation</p>
-                      <StatusChip status={conversation.status} />
-                    </div>
-                    <p className="mt-2 text-sm text-muted-foreground">{conversation.lastMessage}</p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Updated {formatDateTime(conversation.updatedAt)}
-                    </p>
-                    <Link href="/inbox" className="mt-3 inline-block">
-                      <Button variant="outline" size="sm">
-                        Open in inbox
-                      </Button>
-                    </Link>
-                  </div>
-                ) : null}
-
-                {messages.length > 0 ? (
-                  <Table>
-                    <THead>
-                      <TR>
-                        <TH>Campaign</TH>
-                        <TH>Status</TH>
-                        <TH>Sent</TH>
-                      </TR>
-                    </THead>
-                    <TBody>
-                      {messages.map((msg) => (
-                        <TR key={msg.id}>
-                          <TD className="font-medium">{msg.campaign}</TD>
-                          <TD>
-                            <StatusChip status={msg.status} />
-                          </TD>
-                          <TD className="text-muted-foreground">{formatDateTime(msg.at)}</TD>
-                        </TR>
-                      ))}
-                    </TBody>
-                  </Table>
-                ) : null}
-
-                {conversation?.messages ? (
-                  <div>
-                    <p className="mb-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                      Recent messages
-                    </p>
-                    <div className="space-y-2">
-                      {conversation.messages.slice(-3).map((msg) => (
-                        <div
-                          key={msg.id}
-                          className={`rounded-lg px-3 py-2 text-sm ${
-                            msg.direction === "in"
-                              ? "bg-muted/60"
-                              : msg.direction === "note"
-                                ? "border border-dashed border-border bg-card italic text-muted-foreground"
-                                : "bg-primary/10 text-foreground"
-                          }`}
-                        >
-                          <p>{msg.body}</p>
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            {msg.direction === "note" ? `Note · ${msg.user}` : msg.direction === "in" ? "Inbound" : "Outbound"}
-                            {" · "}
-                            {formatDateTime(msg.at)}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
+          <Card className="rounded-[12px] p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-4 border-b border-border">
+                <button
+                  type="button"
+                  className="border-b-2 border-primary pb-2.5 text-[13px] font-semibold text-primary"
+                >
+                  Conversation
+                </button>
+                <button
+                  type="button"
+                  className="pb-2.5 text-[13px] font-medium text-muted-foreground"
+                >
+                  Campaigns
+                </button>
               </div>
-            ) : (
-              <EmptyState
-                icon={<Mail className="h-8 w-8" />}
-                title="No activity yet"
-                description="Messages and inbox threads for this contact will appear here."
-                actionLabel="Send a message"
-                actionHref="/send/quick"
-              />
-            )}
+              <Link href="/inbox">
+                <Button variant="outline" className="h-9 rounded-[10px] text-[12px]">
+                  Open in inbox
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </Button>
+              </Link>
+            </div>
+
+            <div className="mt-5 space-y-3">
+              <div className="flex gap-3 rounded-[10px] border border-border bg-muted/40 px-3.5 py-3">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] bg-sky-100 text-sky-700">
+                  <MessageSquare className="h-3.5 w-3.5" />
+                </span>
+                <div>
+                  <p className="text-[13px] font-semibold text-foreground">Inbox conversation</p>
+                  <p className="text-[12px] text-muted-foreground">
+                    Jul 2, 2026 · Replied about Saturday appointment
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-3 rounded-[10px] border border-border bg-muted/40 px-3.5 py-3">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] bg-emerald-100 text-emerald-700">
+                  <Send className="h-3.5 w-3.5" />
+                </span>
+                <div>
+                  <p className="text-[13px] font-semibold text-foreground">Campaign message</p>
+                  <p className="text-[12px] text-muted-foreground">
+                    Jul 2, 2026 · July HVAC tune-up reminder
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-5 space-y-3 border-t border-border pt-5">
+              <p className="text-[12px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+                Recent messages
+              </p>
+              <div className="ml-auto max-w-[85%] rounded-2xl rounded-br-md bg-primary px-3.5 py-2.5 text-[13px] text-primary-foreground">
+                Harbor Home: Book your July tune-up and save 15% this week. Reply YES to schedule.
+                <p className="mt-1 text-[11px] text-primary-foreground/75">Jul 2 · 9:14 AM</p>
+              </div>
+              <div className="max-w-[85%] rounded-2xl rounded-bl-md bg-muted px-3.5 py-2.5 text-[13px] text-foreground">
+                Yes, Saturday morning works!
+                <p className="mt-1 text-[11px] text-muted-foreground">Jul 2 · 9:16 AM</p>
+              </div>
+              <div className="rounded-[10px] border border-dashed border-border bg-muted/40 px-3.5 py-3 text-[12px] text-muted-foreground">
+                <span className="font-semibold text-foreground">Internal note · Jordan Lee</span>
+                <p className="mt-1">
+                  Customer prefers morning appointments. Follow up if no booking by Friday.
+                </p>
+              </div>
+            </div>
           </Card>
         </div>
 
-        <div className="space-y-6">
-          <Card>
-            <CardTitle>Lists</CardTitle>
-            <div className="mt-4 flex flex-wrap gap-2">
-              {contact.lists.length > 0 ? (
+        <div className="space-y-4">
+          <Card className="rounded-[12px] p-5">
+            <div className="flex items-center justify-between">
+              <h2 className="text-[15px] font-semibold text-foreground">Lists</h2>
+              <button type="button" className="text-[12px] font-semibold text-primary hover:underline">
+                Manage lists
+              </button>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {contact.lists.length ? (
                 contact.lists.map((list) => (
-                  <Link
+                  <span
                     key={list}
-                    href="/contacts/lists"
-                    className="rounded-full bg-muted px-3 py-1 text-sm hover:bg-primary/10 hover:text-primary"
+                    className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[12px] font-medium text-emerald-700"
                   >
                     {list}
-                  </Link>
+                  </span>
                 ))
               ) : (
-                <p className="text-sm text-muted-foreground">Not on any lists</p>
+                <p className="text-[12px] text-muted-foreground">No lists yet</p>
               )}
             </div>
-            <Button variant="outline" size="sm" className="mt-4 w-full">
-              Manage lists
-            </Button>
           </Card>
 
-          <Card>
-            <CardTitle>Tags</CardTitle>
-            <div className="mt-4 flex flex-wrap gap-2">
-              {contact.tags.length > 0 ? (
+          <Card className="rounded-[12px] p-5">
+            <div className="flex items-center justify-between">
+              <h2 className="text-[15px] font-semibold text-foreground">Tags</h2>
+              <button type="button" className="text-[12px] font-semibold text-primary hover:underline">
+                Edit tags
+              </button>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {contact.tags.length ? (
                 contact.tags.map((tag) => (
-                  <Link
+                  <span
                     key={tag}
-                    href="/contacts/tags"
-                    className="rounded-full bg-primary/10 px-3 py-1 text-sm text-primary hover:bg-primary/20"
+                    className={cn(
+                      "rounded-full px-2.5 py-1 text-[12px] font-medium",
+                      tag === "hot-lead"
+                        ? "bg-orange-50 text-orange-700"
+                        : tag === "risk"
+                          ? "bg-rose-50 text-rose-700"
+                          : "bg-emerald-50 text-emerald-700",
+                    )}
                   >
                     {tag}
-                  </Link>
+                  </span>
                 ))
               ) : (
-                <p className="text-sm text-muted-foreground">No tags applied</p>
+                <p className="text-[12px] text-muted-foreground">No tags yet</p>
               )}
             </div>
-            <Button variant="outline" size="sm" className="mt-4 w-full">
-              Edit tags
-            </Button>
           </Card>
 
-          <Card>
-            <CardTitle>Quick actions</CardTitle>
-            <div className="mt-4 space-y-2">
-              <Button variant="outline" size="sm" className="w-full justify-start">
+          <Card className="rounded-[12px] p-5">
+            <h2 className="text-[15px] font-semibold text-foreground">Quick actions</h2>
+            <div className="mt-3 space-y-1">
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 rounded-[10px] px-3 py-2.5 text-left text-[13px] font-medium text-foreground hover:bg-muted/60"
+              >
+                <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
                 Edit contact
-              </Button>
-              {contact.status === "Subscribed" ? (
-                <Button variant="outline" size="sm" className="w-full justify-start">
-                  Unsubscribe
-                </Button>
-              ) : null}
-              {contact.status !== "Blocked" ? (
-                <Button variant="outline" size="sm" className="w-full justify-start text-danger">
-                  Block contact
-                </Button>
-              ) : (
-                <Button variant="outline" size="sm" className="w-full justify-start">
-                  Unblock contact
-                </Button>
-              )}
+              </button>
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 rounded-[10px] px-3 py-2.5 text-left text-[13px] font-medium text-foreground hover:bg-muted/60"
+              >
+                <UserX className="h-3.5 w-3.5 text-muted-foreground" />
+                Unsubscribe
+              </button>
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 rounded-[10px] px-3 py-2.5 text-left text-[13px] font-medium text-rose-600 hover:bg-rose-50"
+              >
+                <UserMinus className="h-3.5 w-3.5" />
+                Block contact
+              </button>
             </div>
           </Card>
         </div>
