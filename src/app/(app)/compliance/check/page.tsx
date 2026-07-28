@@ -1,0 +1,167 @@
+import { Button } from "@/components/ui/button";
+import { Card, CardTitle } from "@/components/ui/card";
+import { PageHeader } from "@/components/ui/page-header";
+import { StatusChip } from "@/components/ui/status-chip";
+import { Tabs } from "@/components/ui/tabs";
+import { complianceOverview, metrics, phoneNumbers } from "@/lib/mock/data";
+import { CheckCircle2, XCircle } from "lucide-react";
+import Link from "next/link";
+
+const complianceTabs = [
+  { label: "Overview", href: "/compliance" },
+  { label: "Business", href: "/compliance/business" },
+  { label: "Brand", href: "/compliance/brand" },
+  { label: "Campaign", href: "/compliance/campaign" },
+  { label: "Readiness", href: "/compliance/check" },
+  { label: "Consent", href: "/compliance/consent" },
+  { label: "Suppression", href: "/compliance/suppression" },
+  { label: "Events", href: "/compliance/events" },
+];
+
+type CheckItem = {
+  label: string;
+  pass: boolean;
+  detail: string;
+  href?: string;
+};
+
+const checklist: CheckItem[] = [
+  {
+    label: "Business profile complete",
+    pass: complianceOverview.customerProfile === "Complete",
+    detail: "Legal name, EIN, address, and contacts on file",
+    href: "/compliance/business",
+  },
+  {
+    label: "Brand registration approved",
+    pass: complianceOverview.brand === "Approved",
+    detail: `Current status: ${complianceOverview.brand}`,
+    href: "/compliance/brand",
+  },
+  {
+    label: "Campaign registration submitted",
+    pass: complianceOverview.campaign !== "Draft",
+    detail: `Current status: ${complianceOverview.campaign}`,
+    href: "/compliance/campaign",
+  },
+  {
+    label: "Privacy policy URL provided",
+    pass: false,
+    detail: "Required for brand vetting",
+    href: "/compliance/brand",
+  },
+  {
+    label: "Sample messages provided (2+)",
+    pass: false,
+    detail: "At least 2 representative sample messages required",
+    href: "/compliance/campaign",
+  },
+  {
+    label: "Opt-in disclosure on website",
+    pass: false,
+    detail: "Consent language must match registered message flow",
+    href: "/grow/forms",
+  },
+  {
+    label: "Active phone number assigned",
+    pass: phoneNumbers.length > 0,
+    detail: `${phoneNumbers.length} number(s) on account`,
+    href: "/numbers",
+  },
+  {
+    label: "All numbers A2P registered",
+    pass: phoneNumbers.every((pn) => pn.a2pStatus === "Approved"),
+    detail: `${phoneNumbers.filter((pn) => pn.a2pStatus === "Approved").length}/${phoneNumbers.length} approved`,
+    href: "/numbers",
+  },
+  {
+    label: "Payment method on file",
+    pass: metrics.balance > 0,
+    detail: `Balance: $${metrics.balance.toFixed(2)}`,
+    href: "/settings/billing",
+  },
+  {
+    label: "STOP handling configured",
+    pass: true,
+    detail: "Automatic opt-out processing enabled",
+    href: "/settings/messaging",
+  },
+];
+
+export default function ComplianceCheckPage() {
+  const passed = checklist.filter((item) => item.pass).length;
+  const total = checklist.length;
+  const ready = passed === total;
+
+  return (
+    <div>
+      <PageHeader
+        title="Registration readiness"
+        description="Pre-flight checklist before your first high-volume campaign send."
+        actions={
+          ready ? (
+            <StatusChip status="Complete" />
+          ) : (
+            <Link href="/compliance/brand">
+              <Button>Fix pending items</Button>
+            </Link>
+          )
+        }
+      />
+
+      <Tabs items={complianceTabs} />
+
+      <Card className="mb-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <CardTitle>Readiness score</CardTitle>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {passed} of {total} checks passed
+            </p>
+          </div>
+          <div className="text-right">
+            <p className="font-display text-3xl font-semibold text-primary">
+              {Math.round((passed / total) * 100)}%
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {ready ? "Ready to send" : "Action required"}
+            </p>
+          </div>
+        </div>
+        <div className="mt-4 h-3 overflow-hidden rounded-full bg-muted">
+          <div
+            className="h-full rounded-full bg-primary transition-all"
+            style={{ width: `${(passed / total) * 100}%` }}
+          />
+        </div>
+      </Card>
+
+      <Card>
+        <CardTitle>Checklist</CardTitle>
+        <ul className="mt-4 divide-y divide-border">
+          {checklist.map((item) => (
+            <li key={item.label} className="flex items-start gap-4 py-4 first:pt-0 last:pb-0">
+              {item.pass ? (
+                <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-success" />
+              ) : (
+                <XCircle className="mt-0.5 h-5 w-5 shrink-0 text-danger" />
+              )}
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="font-medium">{item.label}</p>
+                  <StatusChip status={item.pass ? "Complete" : "Pending"} />
+                </div>
+                <p className="mt-1 text-sm text-muted-foreground">{item.detail}</p>
+                {item.href && !item.pass ? (
+                  <Link href={item.href} className="mt-2 inline-flex text-sm font-medium text-primary hover:underline">
+                    Resolve →
+                  </Link>
+                ) : null}
+              </div>
+            </li>
+          ))}
+        </ul>
+      </Card>
+    </div>
+  );
+}

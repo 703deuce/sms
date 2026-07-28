@@ -1,0 +1,391 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  OWNER
+  ADMINISTRATOR
+  MANAGER
+  CAMPAIGN_CREATOR
+  INBOX_AGENT
+  ANALYST
+  READ_ONLY
+}
+
+enum ContactStatus {
+  SUBSCRIBED
+  UNSUBSCRIBED
+  BLOCKED
+  INVALID
+}
+
+enum CampaignStatus {
+  DRAFT
+  SCHEDULED
+  SENDING
+  COMPLETED
+  FAILED
+  PAUSED
+  CANCELED
+}
+
+enum ConversationStatus {
+  OPEN
+  PENDING
+  CLOSED
+  SNOOZED
+  SPAM
+}
+
+enum FlowStatus {
+  ACTIVE
+  DRAFT
+  PAUSED
+  ERROR
+  ARCHIVED
+}
+
+enum ComplianceStatus {
+  DRAFT
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model User {
+  id           String       @id @default(cuid())
+  email        String       @unique
+  name         String
+  passwordHash String?
+  isPlatformAdmin Boolean   @default(false)
+  createdAt    DateTime     @default(now())
+  memberships  Membership[]
+  assignedConversations Conversation[] @relation("Assignee")
+  auditLogs    AuditLog[]
+}
+
+model Workspace {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  createdAt   DateTime @default(now())
+  memberships Membership[]
+  phoneNumbers PhoneNumber[]
+  contacts    Contact[]
+  lists       ContactList[]
+  segments    Segment[]
+  tags        Tag[]
+  campaigns   Campaign[]
+  conversations Conversation[]
+  templates   Template[]
+  flows       AutomationFlow[]
+  keywords    Keyword[]
+  forms       OptInForm[]
+  consentRecords ConsentRecord[]
+  brand       ComplianceBrand?
+  complianceCampaign ComplianceCampaign?
+  apiKeys     ApiKey[]
+  webhooks    Webhook[]
+  auditLogs   AuditLog[]
+  usageRecords UsageRecord[]
+}
+
+model Membership {
+  id          String    @id @default(cuid())
+  role        Role      @default(INBOX_AGENT)
+  userId      String
+  workspaceId String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, workspaceId])
+}
+
+model PhoneNumber {
+  id               String   @id @default(cuid())
+  workspaceId      String
+  e164             String
+  type             String
+  areaCode         String?
+  friendlyName     String?
+  a2pStatus        ComplianceStatus @default(PENDING)
+  messagingService String?
+  monthlyCostCents Int      @default(115)
+  status           String   @default("Active")
+  workspace        Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, e164])
+}
+
+model Contact {
+  id            String        @id @default(cuid())
+  workspaceId   String
+  firstName     String?
+  lastName      String?
+  phone         String
+  email         String?
+  status        ContactStatus @default(SUBSCRIBED)
+  consentSource String?
+  consentDate   DateTime?
+  lastMessaged  DateTime?
+  lastReply     DateTime?
+  assignedUser  String?
+  company       String?
+  customFields  Json?
+  createdAt     DateTime      @default(now())
+  workspace     Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  listMembers   ContactListMember[]
+  tagMembers    ContactTag[]
+  consentRecords ConsentRecord[]
+  conversations Conversation[]
+
+  @@unique([workspaceId, phone])
+}
+
+model ContactList {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  description String?
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  members     ContactListMember[]
+}
+
+model ContactListMember {
+  id       String @id @default(cuid())
+  listId   String
+  contactId String
+  list     ContactList @relation(fields: [listId], references: [id], onDelete: Cascade)
+  contact  Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@unique([listId, contactId])
+}
+
+model Segment {
+  id          String @id @default(cuid())
+  workspaceId String
+  name        String
+  conditions  Json
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model Tag {
+  id          String @id @default(cuid())
+  workspaceId String
+  name        String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  contacts    ContactTag[]
+
+  @@unique([workspaceId, name])
+}
+
+model ContactTag {
+  id        String @id @default(cuid())
+  tagId     String
+  contactId String
+  tag       Tag @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  contact   Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@unique([tagId, contactId])
+}
+
+model Campaign {
+  id          String         @id @default(cuid())
+  workspaceId String
+  name        String
+  type        String
+  audience    String
+  body        String
+  status      CampaignStatus @default(DRAFT)
+  scheduledAt DateTime?
+  sent        Int            @default(0)
+  delivered   Int            @default(0)
+  replies     Int            @default(0)
+  clicks      Int            @default(0)
+  optOuts     Int            @default(0)
+  costCents   Int            @default(0)
+  createdBy   String?
+  createdAt   DateTime       @default(now())
+  workspace   Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  messages    Message[]
+}
+
+model Message {
+  id          String   @id @default(cuid())
+  campaignId  String?
+  workspaceId String?
+  to          String
+  from        String
+  body        String
+  status      String
+  segments    Int      @default(1)
+  costCents   Int      @default(0)
+  providerId  String?
+  createdAt   DateTime @default(now())
+  campaign    Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+}
+
+model Conversation {
+  id          String             @id @default(cuid())
+  workspaceId String
+  contactId   String
+  assigneeId  String?
+  status      ConversationStatus @default(OPEN)
+  tags        String[]
+  unread      Boolean            @default(true)
+  updatedAt   DateTime           @updatedAt
+  createdAt   DateTime           @default(now())
+  workspace   Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  contact     Contact            @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  assignee    User?              @relation("Assignee", fields: [assigneeId], references: [id])
+  messages    ConversationMessage[]
+}
+
+model ConversationMessage {
+  id             String   @id @default(cuid())
+  conversationId String
+  direction      String
+  body           String
+  userName       String?
+  createdAt      DateTime @default(now())
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+}
+
+model Template {
+  id          String  @id @default(cuid())
+  workspaceId String
+  name        String
+  category    String
+  type        String
+  channel     String  @default("SMS")
+  body        String
+  shared      Boolean @default(true)
+  tags        String[]
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model AutomationFlow {
+  id             String     @id @default(cuid())
+  workspaceId    String
+  name           String
+  trigger        String
+  definition     Json
+  enrolled       Int        @default(0)
+  messagesSent   Int        @default(0)
+  completionRate Float      @default(0)
+  status         FlowStatus @default(DRAFT)
+  updatedAt      DateTime   @updatedAt
+  workspace      Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model Keyword {
+  id            String  @id @default(cuid())
+  workspaceId   String
+  keyword       String
+  phoneNumber   String
+  listName      String
+  confirmation  String
+  status        String  @default("Active")
+  subscribers   Int     @default(0)
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, keyword, phoneNumber])
+}
+
+model OptInForm {
+  id          String @id @default(cuid())
+  workspaceId String
+  name        String
+  listName    String
+  url         String?
+  status      String @default("Active")
+  submissions Int    @default(0)
+  config      Json?
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model ConsentRecord {
+  id               String   @id @default(cuid())
+  workspaceId      String
+  contactId        String?
+  phone            String
+  consentDate      DateTime
+  source           String
+  disclosureVersion String?
+  ipAddress        String?
+  workspace        Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  contact          Contact?  @relation(fields: [contactId], references: [id], onDelete: SetNull)
+}
+
+model ComplianceBrand {
+  id          String           @id @default(cuid())
+  workspaceId String           @unique
+  legalName   String?
+  dba         String?
+  ein         String?
+  entityType  String?
+  industry    String?
+  website     String?
+  status      ComplianceStatus @default(DRAFT)
+  workspace   Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model ComplianceCampaign {
+  id          String           @id @default(cuid())
+  workspaceId String           @unique
+  useCase     String?
+  description String?
+  optInMethod String?
+  status      ComplianceStatus @default(DRAFT)
+  samples     String[]
+  workspace   Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model ApiKey {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  prefix      String
+  hashedKey   String
+  createdAt   DateTime @default(now())
+  lastUsedAt  DateTime?
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model Webhook {
+  id          String   @id @default(cuid())
+  workspaceId String
+  url         String
+  events      String[]
+  active      Boolean  @default(true)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  workspaceId String?
+  userId      String?
+  event       String
+  detail      String?
+  createdAt   DateTime @default(now())
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  user        User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
+}
+
+model UsageRecord {
+  id          String   @id @default(cuid())
+  workspaceId String
+  periodStart DateTime
+  periodEnd   DateTime
+  smsSegments Int      @default(0)
+  mmsMessages Int      @default(0)
+  inbound     Int      @default(0)
+  outbound    Int      @default(0)
+  costCents   Int      @default(0)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
