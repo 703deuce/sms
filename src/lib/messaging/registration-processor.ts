@@ -253,7 +253,8 @@ export async function advanceMessagingRegistration(workspaceId: string) {
         brandStatus = brand.status === "APPROVED" ? "approved" : brand.status === "FAILED" ? "failed" : "in_review";
         reg = await lockedUpdate({
           brandStatus,
-          overallStatus: brandStatus === "failed" ? "failed" : reg.overallStatus,
+          overallStatus: brandStatus === "failed" ? "failed" : brandStatus === "approved" ? reg.overallStatus : "in_review",
+          messagingEnabled: brandStatus === "approved" ? reg.messagingEnabled : false,
         });
         if (brand.status === "FAILED") throw new JobFailedError(`Brand FAILED`);
         if (brand.status !== "APPROVED") {
@@ -303,7 +304,9 @@ export async function advanceMessagingRegistration(workspaceId: string) {
           campaign.status === "VERIFIED" ? "approved" : campaign.status === "FAILED" ? "failed" : "in_review";
         reg = await lockedUpdate({
           campaignStatus,
-          overallStatus: campaignStatus === "failed" ? "failed" : reg.overallStatus,
+          overallStatus:
+            campaignStatus === "failed" ? "failed" : campaignStatus === "approved" ? reg.overallStatus : "in_review",
+          messagingEnabled: campaignStatus === "approved" ? reg.messagingEnabled : false,
         });
         if (campaign.status === "FAILED") throw new JobFailedError("A2P campaign FAILED");
         if (campaign.status !== "VERIFIED") {
@@ -341,27 +344,32 @@ export async function advanceMessagingRegistration(workspaceId: string) {
       return reg;
     } catch (err) {
       if (err instanceof JobDeferredError) {
-        // Do not downgrade a ready registration on soft Twilio polls / refresh
-        const preserveReady = reg.overallStatus === "ready";
+        // Preserve ready only while Brand + A2P remain approved
+        const preserveReady =
+          reg.overallStatus === "ready" &&
+          reg.brandStatus === "approved" &&
+          reg.campaignStatus === "approved";
         await getPrisma().messagingRegistration.updateMany({
           where: { workspaceId, lastError: lockToken },
           data: {
             lastError: err.message,
             lastAdvancedAt: new Date(),
-            ...(preserveReady ? {} : { overallStatus: "in_review" }),
+            ...(preserveReady
+              ? {}
+              : { overallStatus: "in_review", messagingEnabled: false }),
           },
         });
         await enqueueMessagingRegistrationAdvance(workspaceId, err.deferMs);
         throw err;
       }
       const message = err instanceof Error ? err.message : String(err);
-      const preserveReady = reg.overallStatus === "ready" && !(err instanceof JobFailedError);
       await getPrisma().messagingRegistration.updateMany({
         where: { workspaceId, lastError: lockToken },
         data: {
           lastError: message,
           lastAdvancedAt: new Date(),
-          ...(preserveReady ? {} : { overallStatus: "failed" }),
+          overallStatus: "failed",
+          messagingEnabled: false,
         },
       });
       await log(reg, "advance_failed", message);

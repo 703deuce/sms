@@ -102,7 +102,16 @@ export const messagingOnboarding = {
       ((existing.legalBusinessName || "") !== data.legalBusinessName ||
         (existing.businessRegistrationId || "") !== data.businessRegistrationId ||
         (existing.businessType || "") !== data.businessType ||
-        (existing.websiteUrl || "") !== data.websiteUrl);
+        (existing.businessIndustry || "") !== data.businessIndustry ||
+        (existing.websiteUrl || "") !== data.websiteUrl ||
+        (existing.street || "") !== data.street ||
+        (existing.city || "") !== data.city ||
+        (existing.region || "") !== data.region ||
+        (existing.postalCode || "") !== data.postalCode ||
+        (existing.contactFirstName || "") !== data.contactFirstName ||
+        (existing.contactLastName || "") !== data.contactLastName ||
+        (existing.contactEmail || "") !== data.contactEmail ||
+        (existing.contactPhone || "") !== phone);
 
     const reg = await updateRegistration(workspaceId, {
       ...data,
@@ -141,11 +150,16 @@ export const messagingOnboarding = {
   async saveUseCase(workspaceId: string, input: UseCaseInput) {
     const data = useCaseSchema.parse(input);
     const existing = await ensureRegistrationRow(workspaceId);
+    const samplesChanged =
+      JSON.stringify(existing.sampleMessages || []) !== JSON.stringify(data.sampleMessages || []);
     const materialChanged =
-      Boolean(existing.a2pCampaignSid || existing.overallStatus === "ready") &&
+      Boolean(existing.a2pCampaignSid || existing.overallStatus === "ready" || existing.secondaryProfileSid) &&
       ((existing.useCase || "") !== data.useCase ||
         (existing.useCaseDescription || "") !== data.useCaseDescription ||
-        (existing.optInDescription || "") !== data.optInDescription);
+        (existing.optInDescription || "") !== data.optInDescription ||
+        (existing.helpMessage || "") !== (data.helpMessage || "") ||
+        (existing.stopMessage || "") !== (data.stopMessage || "") ||
+        samplesChanged);
 
     const reg = await updateRegistration(workspaceId, {
       ...data,
