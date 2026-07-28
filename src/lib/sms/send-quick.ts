@@ -38,20 +38,43 @@ export async function sendQuickSms(input: QuickSendSmsInput) {
         Date.now() - prior.createdAt.getTime() > staleMs &&
         (prior.providerId?.startsWith("idem:") || prior.providerId?.startsWith("pending:"));
 
-      if (isStaleSending || prior.status === "failed") {
-        // Crash before provider / clear failure — free key and continue to a new attempt
+      if (isStaleSending) {
+        // Ambiguous provider outcome — never resend; assume accepted
         await prisma.message.update({
           where: { id: prior.id },
-          data: { idempotencyKey: null, status: prior.status === "sending" ? "failed" : prior.status },
+          data: {
+            status: "sent",
+            providerId: prior.providerId,
+          },
         });
-      } else if (prior.status !== "failed") {
+        return {
+          sid: prior.id,
+          status: "sent",
+          trackingToken: prior.trackingToken,
+          trackingUrl: prior.trackingToken
+            ? `${getAppBaseUrl()}/r/${prior.trackingToken}`
+            : undefined,
+          messageId: prior.id,
+          idempotentReplay: true,
+          assumedSentAfterCrash: true,
+        };
+      }
+
+      if (prior.status === "failed") {
+        await prisma.message.update({
+          where: { id: prior.id },
+          data: { idempotencyKey: null },
+        });
+      } else {
         return {
           sid: prior.providerId?.startsWith("idem:") || prior.providerId?.startsWith("pending:")
             ? prior.id
             : prior.providerId || prior.id,
           status: prior.status,
           trackingToken: prior.trackingToken,
-          trackingUrl: prior.trackingToken ? `${getAppBaseUrl()}/r/${prior.trackingToken}` : undefined,
+          trackingUrl: prior.trackingToken
+            ? `${getAppBaseUrl()}/r/${prior.trackingToken}`
+            : undefined,
           messageId: prior.id,
           idempotentReplay: true,
         };
