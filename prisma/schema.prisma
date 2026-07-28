@@ -275,12 +275,13 @@ model Message {
   segments      Int      @default(1)
   costCents     Int      @default(0)
   providerId    String?
-  idempotencyKey String? @unique
+  idempotencyKey String?
   trackingToken String?  @unique
   destinationUrl String?
   createdAt     DateTime @default(now())
   campaign      Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
 
+  @@unique([workspaceId, idempotencyKey])
   @@index([trackingToken])
   @@index([providerId])
 }

@@ -28,8 +28,11 @@ export async function sendQuickSms(input: QuickSendSmsInput) {
   const prisma = getPrisma();
 
   if (input.idempotencyKey) {
-    const prior = await prisma.message.findUnique({
-      where: { idempotencyKey: input.idempotencyKey },
+    const prior = await prisma.message.findFirst({
+      where: {
+        workspaceId: input.workspaceId,
+        idempotencyKey: input.idempotencyKey,
+      },
     });
     if (prior) {
       const staleMs = 10 * 60 * 1000;
@@ -149,8 +152,11 @@ export async function sendQuickSms(input: QuickSendSmsInput) {
       "code" in err &&
       (err as { code: string }).code === "P2002"
     ) {
-      const existing = await prisma.message.findUnique({
-        where: { idempotencyKey: input.idempotencyKey },
+      const existing = await prisma.message.findFirst({
+        where: {
+          workspaceId: input.workspaceId,
+          idempotencyKey: input.idempotencyKey,
+        },
       });
       if (existing && existing.status !== "failed") {
         return {
