@@ -98,11 +98,11 @@ export const messagingOnboarding = {
     const existing = await ensureRegistrationRow(workspaceId);
     const phone = normalizeE164(data.contactPhone);
     const materialChanged =
-      existing.overallStatus === "ready" &&
-      (existing.legalBusinessName !== data.legalBusinessName ||
-        existing.businessRegistrationId !== data.businessRegistrationId ||
-        existing.businessType !== data.businessType ||
-        existing.websiteUrl !== data.websiteUrl);
+      Boolean(existing.secondaryProfileSid || existing.brandSid || existing.a2pCampaignSid) &&
+      ((existing.legalBusinessName || "") !== data.legalBusinessName ||
+        (existing.businessRegistrationId || "") !== data.businessRegistrationId ||
+        (existing.businessType || "") !== data.businessType ||
+        (existing.websiteUrl || "") !== data.websiteUrl);
 
     const reg = await updateRegistration(workspaceId, {
       ...data,
@@ -142,10 +142,10 @@ export const messagingOnboarding = {
     const data = useCaseSchema.parse(input);
     const existing = await ensureRegistrationRow(workspaceId);
     const materialChanged =
-      existing.overallStatus === "ready" &&
-      (existing.useCase !== data.useCase ||
-        existing.useCaseDescription !== data.useCaseDescription ||
-        existing.optInDescription !== data.optInDescription);
+      Boolean(existing.a2pCampaignSid || existing.overallStatus === "ready") &&
+      ((existing.useCase || "") !== data.useCase ||
+        (existing.useCaseDescription || "") !== data.useCaseDescription ||
+        (existing.optInDescription || "") !== data.optInDescription);
 
     const reg = await updateRegistration(workspaceId, {
       ...data,
@@ -193,15 +193,28 @@ export const messagingOnboarding = {
     }
 
     const claimToken = `PENDING:${randomBytes(8).toString("hex")}`;
+    const staleCutoff = new Date(Date.now() - 120_000);
     const claimed = await getPrisma().messagingRegistration.updateMany({
       where: {
         workspaceId,
-        phoneSid: null,
+        OR: [
+          { phoneSid: null },
+          {
+            AND: [
+              { phoneSid: { startsWith: "PENDING:" } },
+              { updatedAt: { lt: staleCutoff } },
+            ],
+          },
+        ],
       },
       data: { phoneSid: claimToken, phoneE164: e164, numberStatus: "submitted" },
     });
     if (claimed.count !== 1) {
-      throw new Error("A phone number is already purchased for this workspace. Release it first.");
+      const current = await getRegistrationByWorkspace(workspaceId);
+      if (current?.phoneSid && !current.phoneSid.startsWith("PENDING:")) {
+        throw new Error("A phone number is already purchased for this workspace. Release it first.");
+      }
+      throw new Error("Phone purchase already in progress — retry shortly");
     }
 
     // Reload reg after claim so adapter sees current row
@@ -269,6 +282,18 @@ export const messagingOnboarding = {
   async releaseNumber(workspaceId: string) {
     const reg = await getRegistrationByWorkspace(workspaceId);
     if (!reg?.phoneSid) throw new Error("No phone number to release");
+
+    if (reg.phoneSid.startsWith("PENDING:")) {
+      await updateRegistration(workspaceId, {
+        phoneE164: null,
+        phoneSid: null,
+        phoneAttached: false,
+        phonePurchasedAt: null,
+        numberStatus: "not_started",
+        messagingEnabled: false,
+      });
+      return toPublicRegistration((await getRegistrationByWorkspace(workspaceId))!);
+    }
 
     if (isLiveMessagingAdapter()) {
       await twilioAdapter.releaseNumber(reg, reg.phoneSid);

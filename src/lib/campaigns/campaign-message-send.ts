@@ -33,7 +33,7 @@ async function failRecipient(recipientId: string, reason: string) {
   });
 }
 
-/** Idempotent post-send bookkeeping: count once + advance recipient. */
+/** Idempotent post-send bookkeeping: count once + advance recipient once. */
 export async function finalizeSentMessage(messageId: string) {
   const prisma = getPrisma();
   const message = await prisma.campaignMessage.findUnique({ where: { id: messageId } });
@@ -53,10 +53,21 @@ export async function finalizeSentMessage(messageId: string) {
     });
   }
 
-  try {
-    await tryAdvanceRecipientAfterSend(message.recipientId);
-  } catch (err) {
-    console.warn("[finalizeSentMessage] advance failed", messageId, err);
+  const shouldAdvance = await prisma.campaignMessage.updateMany({
+    where: { id: messageId, advancedAfterSend: false },
+    data: { advancedAfterSend: true },
+  });
+  if (shouldAdvance.count === 1) {
+    try {
+      await tryAdvanceRecipientAfterSend(message.recipientId);
+    } catch (err) {
+      // Clear flag so unfinished scan can retry advancement
+      await prisma.campaignMessage.updateMany({
+        where: { id: messageId },
+        data: { advancedAfterSend: false },
+      });
+      console.warn("[finalizeSentMessage] advance failed", messageId, err);
+    }
   }
   return { ok: true as const, counted: counted.count === 1 };
 }
@@ -101,11 +112,11 @@ export async function reclaimStuckSendingMessages(staleMs = 10 * 60 * 1000) {
     await finalizeSentMessage(msg.id);
   }
 
-  // Recover sent rows that never finished bookkeeping
+  // Recover sent rows that never finished bookkeeping or advancement
   const unfinished = await prisma.campaignMessage.findMany({
     where: {
       status: { in: ["sent", "delivered", "clicked"] },
-      sentCounted: false,
+      OR: [{ sentCounted: false }, { advancedAfterSend: false }],
     },
     take: 50,
   });

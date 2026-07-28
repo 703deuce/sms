@@ -69,6 +69,28 @@ function factsFromRecipientMetadata(metadata: unknown): ConditionFacts {
 export async function processSequenceWaits() {
   const prisma = getPrisma();
   const now = new Date();
+  const staleCutoff = new Date(Date.now() - 10 * 60 * 1000);
+
+  // Reclaim recipients stuck in_progress with no queued/sending work
+  const stuck = await prisma.campaignRecipient.findMany({
+    where: {
+      workflowStatus: "in_progress",
+      updatedAt: { lt: staleCutoff },
+      campaign: { status: "SENDING" },
+    },
+    take: BATCH_LIMIT,
+  });
+  for (const recipient of stuck) {
+    const open = await prisma.campaignMessage.count({
+      where: {
+        recipientId: recipient.id,
+        status: { in: ["queued", "sending"] },
+      },
+    });
+    if (open > 0) continue;
+    // Re-enter advancement (safe — send steps are unique per recipient/step)
+    await advanceRecipient(recipient.id);
+  }
 
   // Activate parked recipients once campaign is SENDING (CAS)
   const pending = await prisma.campaignRecipient.findMany({
@@ -358,24 +380,39 @@ export async function tryAdvanceRecipientAfterSend(recipientId: string) {
   const current = findStep(sequence, recipient.currentStep);
   if (!current) return;
 
-  if (current.step_type === "send_sms" || current.step_type === "send_email") {
-    const next = nextStepAfter(sequence, current.step_key);
-    if (!next) {
-      await casRecipient(recipientId, {
-        workflowStatus: "completed",
-        completedAt: new Date(),
-        nextActionAt: null,
-        enrollmentKey: null,
+    // CAS move past the send step — only one finalizer wins
+    if (current.step_type === "send_sms" || current.step_type === "send_email") {
+      const next = nextStepAfter(sequence, current.step_key);
+      if (!next) {
+        const done = await prisma.campaignRecipient.updateMany({
+          where: {
+            id: recipientId,
+            workflowStatus: { in: ACTIVE },
+            currentStep: current.step_key,
+          },
+          data: {
+            workflowStatus: "completed",
+            completedAt: new Date(),
+            nextActionAt: null,
+            enrollmentKey: null,
+          },
+        });
+        if (done.count === 1) await reconcileCampaignStatus(recipient.campaignId);
+        return;
+      }
+      const moved = await prisma.campaignRecipient.updateMany({
+        where: {
+          id: recipientId,
+          workflowStatus: { in: ACTIVE },
+          currentStep: current.step_key,
+        },
+        data: {
+          currentStep: next.step_key,
+          workflowStatus: "in_progress",
+        },
       });
-      await reconcileCampaignStatus(recipient.campaignId);
-      return;
+      if (moved.count === 0) return;
     }
-    const moved = await casRecipient(recipientId, {
-      currentStep: next.step_key,
-      workflowStatus: "in_progress",
-    });
-    if (moved.count === 0) return;
-  }
 
   const fresh = await prisma.campaignRecipient.findUnique({ where: { id: recipientId } });
   if (!fresh || TERMINAL.includes(fresh.workflowStatus)) return;

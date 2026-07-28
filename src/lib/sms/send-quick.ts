@@ -87,13 +87,18 @@ export async function sendQuickSms(input: QuickSendSmsInput) {
 
   try {
     const result = await sendViaRegistration(input.workspaceId, to, finalBody);
-    await prisma.message.update({
-      where: { id: pending.id },
-      data: {
-        status: result.status || "sent",
-        providerId: result.sid,
-      },
-    });
+    try {
+      await prisma.message.update({
+        where: { id: pending.id },
+        data: {
+          status: result.status || "sent",
+          providerId: result.sid,
+        },
+      });
+    } catch (persistErr) {
+      // Provider already accepted — never tell the client to retry a resend
+      console.warn("[sendQuickSms] post-accept persist failed", persistErr);
+    }
 
     try {
       await prisma.contact.upsert({
@@ -110,19 +115,16 @@ export async function sendQuickSms(input: QuickSendSmsInput) {
         update: { lastMessaged: new Date() },
       });
     } catch (contactErr) {
-      // Contact bookkeeping must not turn an accepted send into a retryable failure
       console.warn("[sendQuickSms] contact upsert failed after send", contactErr);
     }
 
     return { ...result, trackingToken, trackingUrl: trackedUrl, messageId: pending.id };
   } catch (err) {
+    // Only mark failed when provider did not accept
     await prisma.message.update({
       where: { id: pending.id },
-      data: {
-        status: "failed",
-        providerId: pending.providerId,
-      },
-    });
+      data: { status: "failed" },
+    }).catch(() => undefined);
     throw err;
   }
 }

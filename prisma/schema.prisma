@@ -391,6 +391,7 @@ model CampaignRecipient {
   completedAt    DateTime?
   stopReason     String?
   metadata       Json?
+  updatedAt      DateTime                @updatedAt
 
   workspace      Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   campaign       Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
@@ -420,6 +421,7 @@ model CampaignMessage {
   deliveredCounted Boolean  @default(false)
   clickedCounted  Boolean   @default(false)
   sentCounted     Boolean   @default(false)
+  advancedAfterSend Boolean @default(false)
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
