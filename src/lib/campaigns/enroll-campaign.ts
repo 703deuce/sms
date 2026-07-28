@@ -24,6 +24,7 @@ export async function enrollContactInCampaign(input: EnrollContactInput) {
   if (!campaign) throw new Error("Campaign not found");
 
   const phone = input.phone ? normalizeE164(input.phone) : undefined;
+  const email = input.email?.trim().toLowerCase() || undefined;
 
   if (phone) {
     const suppressed = await prisma.suppression.findFirst({
@@ -31,6 +32,26 @@ export async function enrollContactInCampaign(input: EnrollContactInput) {
     });
     if (suppressed) {
       throw new Error("Contact is on the suppression list");
+    }
+
+    const dupe = await prisma.campaignRecipient.findFirst({
+      where: {
+        campaignId: input.campaignId,
+        phone,
+        workflowStatus: { notIn: ["completed", "stopped", "failed", "opted_out"] },
+      },
+    });
+    if (dupe) {
+      throw new Error("Contact already enrolled in this campaign");
+    }
+  }
+
+  if (email) {
+    const suppressed = await prisma.suppression.findFirst({
+      where: { workspaceId: input.workspaceId, email },
+    });
+    if (suppressed) {
+      throw new Error("Email is on the suppression list");
     }
   }
 
@@ -58,7 +79,7 @@ export async function enrollContactInCampaign(input: EnrollContactInput) {
       campaignId: input.campaignId,
       contactId: input.contactId,
       phone,
-      email: input.email,
+      email,
       displayName: input.displayName,
       workflowStatus,
       currentStep,
@@ -67,7 +88,7 @@ export async function enrollContactInCampaign(input: EnrollContactInput) {
     },
   });
 
-  if (campaign.status === "DRAFT") {
+  if (campaign.status === "DRAFT" || campaign.status === "SCHEDULED") {
     await prisma.campaign.update({
       where: { id: campaign.id },
       data: { status: "SENDING" },
@@ -79,4 +100,85 @@ export async function enrollContactInCampaign(input: EnrollContactInput) {
   }
 
   return recipient;
+}
+
+export type BulkRecipient = {
+  phone?: string;
+  email?: string;
+  displayName?: string;
+  contactId?: string;
+};
+
+export async function validateBulkRecipients(
+  workspaceId: string,
+  campaignId: string | null,
+  recipients: BulkRecipient[],
+) {
+  const prisma = getPrisma();
+  const accepted: BulkRecipient[] = [];
+  const rejected: Array<BulkRecipient & { reason: string }> = [];
+  const seenPhones = new Set<string>();
+  const seenEmails = new Set<string>();
+
+  for (const r of recipients) {
+    let phone: string | undefined;
+    try {
+      phone = r.phone ? normalizeE164(r.phone) : undefined;
+    } catch {
+      rejected.push({ ...r, reason: "invalid_phone" });
+      continue;
+    }
+    const email = r.email?.trim().toLowerCase() || undefined;
+    if (!phone && !email) {
+      rejected.push({ ...r, reason: "missing_address" });
+      continue;
+    }
+    if (phone && seenPhones.has(phone)) {
+      rejected.push({ ...r, reason: "duplicate_in_batch" });
+      continue;
+    }
+    if (email && seenEmails.has(email)) {
+      rejected.push({ ...r, reason: "duplicate_in_batch" });
+      continue;
+    }
+
+    if (phone) {
+      const suppressed = await prisma.suppression.findFirst({
+        where: { workspaceId, phone },
+      });
+      if (suppressed) {
+        rejected.push({ ...r, reason: "suppressed" });
+        continue;
+      }
+      if (campaignId) {
+        const active = await prisma.campaignRecipient.findFirst({
+          where: {
+            campaignId,
+            phone,
+            workflowStatus: { notIn: ["completed", "stopped", "failed", "opted_out"] },
+          },
+        });
+        if (active) {
+          rejected.push({ ...r, reason: "already_enrolled" });
+          continue;
+        }
+      }
+      seenPhones.add(phone);
+    }
+
+    if (email) {
+      const suppressed = await prisma.suppression.findFirst({
+        where: { workspaceId, email },
+      });
+      if (suppressed) {
+        rejected.push({ ...r, reason: "suppressed" });
+        continue;
+      }
+      seenEmails.add(email);
+    }
+
+    accepted.push({ ...r, phone, email });
+  }
+
+  return { accepted, rejected };
 }

@@ -94,3 +94,19 @@ DB table `job_queue` is the default driver. Set `QUEUE_DRIVER=bullmq` + `REDIS_U
 ## Local mock mode
 
 Omit `TWILIO_MODE=live` (and `MESSAGING_ADAPTER=twilio`). The mock adapter creates fake SIDs and flips registration to `ready` after submit + number purchase — useful for UI/API integration without Twilio.
+
+Wiring self-check (needs Postgres + `DATABASE_URL`):
+
+```bash
+npm run db:push
+npm run test:messaging-wiring
+```
+
+This exercises registration → purchase → ready → test/quick send → campaign drain → click tracking → STOP → automation webhook → pause/resume.
+
+## Automation webhooks
+
+| Capability | Method + path |
+|---|---|
+| Create / rotate / revoke | `GET/POST /api/integrations/webhooks` |
+| Incoming (Zapier/Make/n8n) | `POST /api/integrations/webhooks/incoming/{token}` |

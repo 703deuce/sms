@@ -27,6 +27,7 @@ async function main() {
     where: { slug: "harbor-home" },
     update: {},
     create: {
+      id: "ws_1",
       name: "Harbor Home Services",
       slug: "harbor-home",
       memberships: {

@@ -65,6 +65,7 @@ export const twilioAdapter = {
   async createSecondaryProfileShell(reg: MessagingRegistration) {
     const { primaryProfileSid } = assertLiveTwilioConfigured();
     const client = requireSubaccount(reg);
+    const parent = getLiveParentClient();
     const email = getStatusEmail();
     const profile = await client.trusthub.v1.customerProfiles.create({
       friendlyName: `${reg.legalBusinessName || reg.workspaceId} Secondary Profile`,
@@ -73,8 +74,8 @@ export const twilioAdapter = {
       statusCallback: getWebhookUrls().complianceStatus,
     });
 
-    // Link under ISV primary profile
-    await client.trusthub.v1.customerProfiles(primaryProfileSid).customerProfilesEntityAssignments.create({
+    // Link secondary under ISV primary profile on the parent account
+    await parent.trusthub.v1.customerProfiles(primaryProfileSid).customerProfilesEntityAssignments.create({
       objectSid: profile.sid,
     });
 

@@ -58,6 +58,35 @@ export async function POST(request: Request) {
         data: { status: "UNSUBSCRIBED" },
       });
 
+      const recipients = await prisma.campaignRecipient.findMany({
+        where: {
+          workspaceId: phone.workspaceId,
+          phone: from,
+          workflowStatus: { in: ["pending", "scheduled", "in_progress", "waiting"] },
+        },
+      });
+      for (const recipient of recipients) {
+        await prisma.campaignRecipient.update({
+          where: { id: recipient.id },
+          data: {
+            workflowStatus: "opted_out",
+            stopReason: "STOP",
+            completedAt: new Date(),
+            nextActionAt: null,
+          },
+        });
+        await prisma.campaignMessage.updateMany({
+          where: { recipientId: recipient.id, status: { in: ["queued", "sending"] } },
+          data: { status: "skipped", error: "stopped: STOP" },
+        });
+      }
+      if (recipients.length) {
+        await prisma.campaign.updateMany({
+          where: { id: { in: recipients.map((r) => r.campaignId) } },
+          data: { optOuts: { increment: 1 } },
+        });
+      }
+
       const twiml = `<?xml version="1.0" encoding="UTF-8"?><Response><Message>You are unsubscribed and will no longer receive messages. Reply START to re-subscribe.</Message></Response>`;
       return new NextResponse(twiml, { headers: { "Content-Type": "text/xml" } });
     }

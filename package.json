@@ -12,6 +12,7 @@
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
     "worker:all": "tsx scripts/worker-all.ts",
+    "test:messaging-wiring": "tsx scripts/test-messaging-wiring.ts",
     "postinstall": "prisma generate"
   },
   "dependencies": {

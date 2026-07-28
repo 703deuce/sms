@@ -1,5 +1,8 @@
 import { getPrisma } from "@/lib/db";
 import { enqueueJob } from "@/lib/messaging/enqueue-advance";
+import { randomTrackingToken } from "@/lib/messaging/crypto";
+import { getAppBaseUrl } from "@/lib/messaging/twilio-config";
+import { mergeTemplate, splitDisplayName } from "@/lib/messaging/template";
 import {
   evaluateCondition,
   findStep,
@@ -9,7 +12,6 @@ import {
   type ConditionFacts,
   type SequenceStep,
 } from "./sequence-engine";
-import { randomTrackingToken } from "@/lib/messaging/crypto";
 
 const BATCH_LIMIT = 80;
 
@@ -161,9 +163,27 @@ async function queueSendForStep(
     return;
   }
 
-  const body =
+  const trackingToken = randomTrackingToken();
+  const trackedUrl = `${getAppBaseUrl()}/r/${trackingToken}`;
+  const destinationUrl = process.env.REVIEW_LINK_FALLBACK || "https://transovo.ai";
+  const names = splitDisplayName(recipient.displayName);
+
+  const template =
+    (typeof step.config?.body === "string" && step.config.body) ||
     recipient.campaign.body ||
-    `Hi${recipient.displayName ? ` ${recipient.displayName}` : ""}, thanks for choosing us! Reply STOP to opt out.`;
+    `Hi {{name}}, thanks for choosing us! {{tracking_link}} Reply STOP to opt out.`;
+
+  let body = mergeTemplate(template, {
+    ...names,
+    customer_name: recipient.displayName || names.name,
+    phone: recipient.phone || "",
+    email: recipient.email || "",
+    tracking_link: trackedUrl,
+    review_link: trackedUrl,
+  });
+  if (!body.includes(trackedUrl)) {
+    body = `${body.trim()} ${trackedUrl}`.trim();
+  }
 
   const message = await prisma.campaignMessage.create({
     data: {
@@ -176,7 +196,8 @@ async function queueSendForStep(
       body,
       status: "queued",
       scheduledFor: new Date(),
-      trackingToken: randomTrackingToken(),
+      trackingToken,
+      destinationUrl,
     },
   });
 

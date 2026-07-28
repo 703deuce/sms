@@ -291,8 +291,11 @@ export const messagingOnboarding = {
   async setPaused(workspaceId: string, paused: boolean) {
     const reg = await getRegistrationByWorkspace(workspaceId);
     if (!reg) throw new Error("Registration not found");
-    if (!paused && !isMessagingReady({ ...reg, paused: false, messagingEnabled: true })) {
-      // allow unpause only when otherwise ready
+    if (!paused) {
+      const wouldBeReady = isMessagingReady({ ...reg, paused: false, messagingEnabled: true });
+      if (!wouldBeReady && !(reg.overallStatus === "ready" && reg.phoneAttached)) {
+        throw new Error("Cannot resume messaging until registration is ready with an attached number");
+      }
     }
     const updated = await updateRegistration(workspaceId, {
       paused,

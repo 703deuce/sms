@@ -2,7 +2,7 @@ import type { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
 import { getPrisma } from "@/lib/db";
-import { enrollContactInCampaign } from "@/lib/campaigns/enroll-campaign";
+import { enrollContactInCampaign, validateBulkRecipients } from "@/lib/campaigns/enroll-campaign";
 import { defaultSmsEmailSequence, parseSequence } from "@/lib/campaigns/sequence-engine";
 
 export async function GET() {
@@ -67,9 +67,14 @@ export async function POST(request: Request) {
       },
     });
 
+    const { accepted, rejected } = await validateBulkRecipients(
+      workspaceId,
+      campaign.id,
+      body.recipients || [],
+    );
+
     const enrolled = [];
-    for (const r of body.recipients || []) {
-      if (!r.phone && !r.email) continue;
+    for (const r of accepted) {
       enrolled.push(
         await enrollContactInCampaign({
           workspaceId,
@@ -81,7 +86,10 @@ export async function POST(request: Request) {
       );
     }
 
-    return NextResponse.json({ data: { campaign, enrolledCount: enrolled.length } }, { status: 201 });
+    return NextResponse.json(
+      { data: { campaign, enrolledCount: enrolled.length, rejected } },
+      { status: 201 },
+    );
   } catch (err) {
     return jsonError(err, 400);
   }

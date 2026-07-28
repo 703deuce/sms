@@ -1,4 +1,6 @@
 import { getPrisma } from "@/lib/db";
+import { requireCampaignSendAccess } from "@/lib/billing/entitlements";
+import { sendTransactionalEmail } from "@/lib/email/brevo";
 import { sendViaRegistration } from "@/lib/messaging/registration-processor";
 import { isMessagingReady } from "@/lib/messaging/status";
 import { getRegistrationByWorkspace } from "@/lib/messaging/store";
@@ -29,7 +31,15 @@ export async function sendCampaignMessageById(messageId: string) {
     if (!claimed) return { skipped: true, status: "race" };
   }
 
-  // Suppression check
+  const entitlement = requireCampaignSendAccess(message.workspaceId);
+  if (!entitlement.ok) {
+    await prisma.campaignMessage.update({
+      where: { id: messageId },
+      data: { status: "failed", error: entitlement.error },
+    });
+    throw new Error(entitlement.error);
+  }
+
   if (message.channel === "sms" && message.to) {
     const suppressed = await prisma.suppression.findFirst({
       where: { workspaceId: message.workspaceId, phone: message.to },
@@ -43,33 +53,33 @@ export async function sendCampaignMessageById(messageId: string) {
         where: { id: message.recipientId },
         data: { workflowStatus: "opted_out", stopReason: "suppression", completedAt: new Date() },
       });
+      await prisma.campaignMessage.updateMany({
+        where: { recipientId: message.recipientId, status: "queued" },
+        data: { status: "skipped", error: "stopped: opted_out" },
+      });
       return { optedOut: true };
     }
   }
 
   try {
     if (message.channel === "email") {
-      // Email provider (Brevo) — stub until BREVO_API_KEY is wired
-      if (!process.env.BREVO_API_KEY) {
-        await prisma.campaignMessage.update({
-          where: { id: messageId },
-          data: {
-            status: "sent",
-            sentAt: new Date(),
-            providerId: `email_stub_${Date.now()}`,
-          },
-        });
-      } else {
-        // Placeholder: integrate Brevo transactional API here
-        await prisma.campaignMessage.update({
-          where: { id: messageId },
-          data: {
-            status: "sent",
-            sentAt: new Date(),
-            providerId: `brevo_pending_${Date.now()}`,
-          },
-        });
+      const result = await sendTransactionalEmail({
+        to: message.to,
+        subject: message.campaign.name || "Message",
+        htmlContent: `<p>${message.body.replace(/\n/g, "<br/>")}</p>`,
+        textContent: message.body,
+      });
+      if (result.status === "failed") {
+        throw new Error(result.error || "Email send failed");
       }
+      await prisma.campaignMessage.update({
+        where: { id: messageId },
+        data: {
+          status: "sent",
+          sentAt: new Date(),
+          providerId: result.id,
+        },
+      });
     } else {
       const reg = await getRegistrationByWorkspace(message.workspaceId);
       if (!isMessagingReady(reg)) {

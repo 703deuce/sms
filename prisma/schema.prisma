@@ -125,6 +125,8 @@ model Workspace {
   campaignMessages CampaignMessage[]
   suppressions Suppression[]
   jobQueue    JobQueue[]
+  integrationWebhooks IntegrationWebhookEndpoint[]
+  integrationWebhookEvents IntegrationWebhookEvent[]
   apiKeys     ApiKey[]
   webhooks    Webhook[]
   auditLogs   AuditLog[]
@@ -263,18 +265,22 @@ model Campaign {
 }
 
 model Message {
-  id          String   @id @default(cuid())
-  campaignId  String?
-  workspaceId String?
-  to          String
-  from        String
-  body        String
-  status      String
-  segments    Int      @default(1)
-  costCents   Int      @default(0)
-  providerId  String?
-  createdAt   DateTime @default(now())
-  campaign    Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  id            String   @id @default(cuid())
+  campaignId    String?
+  workspaceId   String?
+  to            String
+  from          String
+  body          String
+  status        String
+  segments      Int      @default(1)
+  costCents     Int      @default(0)
+  providerId    String?
+  trackingToken String?  @unique
+  destinationUrl String?
+  createdAt     DateTime @default(now())
+  campaign      Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+
+  @@index([trackingToken])
 }
 
 /// Per-workspace Twilio ISV registration state (one row per workspace).
@@ -407,6 +413,7 @@ model CampaignMessage {
   sentAt          DateTime?
   providerId      String?
   trackingToken   String?   @unique
+  destinationUrl  String?
   error           String?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
@@ -458,6 +465,46 @@ model JobQueue {
   @@index([status, runAfter, queueName])
   @@index([jobType, status])
   @@map("job_queue")
+}
+
+/// Inbound automation webhooks (Zapier/Make/n8n) — not outbound Webhook destinations.
+model IntegrationWebhookEndpoint {
+  id                String   @id @default(cuid())
+  workspaceId       String
+  name              String
+  token             String   @unique
+  campaignId        String?
+  sendDelayMinutes  Int      @default(0)
+  fieldMap          Json?
+  active            Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  rotatedAt         DateTime?
+  revokedAt         DateTime?
+
+  workspace         Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  events            IntegrationWebhookEvent[]
+
+  @@index([workspaceId, active])
+  @@map("integration_webhook_endpoints")
+}
+
+model IntegrationWebhookEvent {
+  id          String   @id @default(cuid())
+  workspaceId String
+  endpointId  String
+  idempotencyKey String?
+  payload     Json
+  status      String   @default("received")
+  error       String?
+  createdAt   DateTime @default(now())
+  processedAt DateTime?
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  endpoint    IntegrationWebhookEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+
+  @@unique([endpointId, idempotencyKey])
+  @@index([workspaceId, createdAt])
+  @@map("integration_webhook_events")
 }
 
 model Conversation {

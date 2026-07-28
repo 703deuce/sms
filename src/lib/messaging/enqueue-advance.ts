@@ -13,44 +13,64 @@ export type EnqueueJobInput = {
 
 export async function enqueueJob(input: EnqueueJobInput) {
   const prisma = getPrisma();
+  const runAfter = input.runAfter ?? new Date();
+  const queueName = input.queueName ?? "default";
 
+  let job;
   if (input.idempotencyKey) {
     const existing = await prisma.jobQueue.findUnique({
       where: { idempotencyKey: input.idempotencyKey },
     });
     if (existing && (existing.status === "pending" || existing.status === "deferred" || existing.status === "processing")) {
-      return existing;
-    }
-    if (existing) {
-      return prisma.jobQueue.update({
+      job = existing;
+    } else if (existing) {
+      job = await prisma.jobQueue.update({
         where: { id: existing.id },
         data: {
           status: "pending",
           payload: input.payload,
-          runAfter: input.runAfter ?? new Date(),
+          runAfter,
           attempts: 0,
           lastError: null,
           completedAt: null,
           lockedAt: null,
           workspaceId: input.workspaceId,
-          queueName: input.queueName ?? "default",
+          queueName,
           jobType: input.jobType,
         },
       });
     }
   }
 
-  return prisma.jobQueue.create({
-    data: {
-      jobType: input.jobType,
-      queueName: input.queueName ?? "default",
-      workspaceId: input.workspaceId,
-      payload: input.payload,
-      idempotencyKey: input.idempotencyKey,
-      runAfter: input.runAfter ?? new Date(),
-      maxAttempts: input.maxAttempts ?? 8,
-    },
-  });
+  if (!job) {
+    job = await prisma.jobQueue.create({
+      data: {
+        jobType: input.jobType,
+        queueName,
+        workspaceId: input.workspaceId,
+        payload: input.payload,
+        idempotencyKey: input.idempotencyKey,
+        runAfter,
+        maxAttempts: input.maxAttempts ?? 8,
+      },
+    });
+  }
+
+  // Dual-write to BullMQ when configured (DB poll remains the default drain)
+  if (process.env.QUEUE_DRIVER === "bullmq" && process.env.REDIS_URL) {
+    try {
+      const { enqueueBullmq } = await import("@/lib/jobs/bullmq");
+      const delay = Math.max(0, runAfter.getTime() - Date.now());
+      await enqueueBullmq(queueName, input.jobType, (input.payload || {}) as Record<string, unknown>, {
+        jobId: input.idempotencyKey || job.id,
+        delay: delay || undefined,
+      });
+    } catch (err) {
+      console.warn("[enqueueJob] BullMQ dual-write failed; DB queue still holds the job", err);
+    }
+  }
+
+  return job;
 }
 
 export async function enqueueMessagingRegistrationAdvance(workspaceId: string, deferMs = 0) {
