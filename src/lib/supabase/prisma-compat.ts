@@ -13,7 +13,7 @@ export class DbError extends Error {
 type Row = Record<string, any>;
 type Args = Record<string, any>;
 
-/** Prisma client model name → Postgres table (PascalCase, matches schema.sql). */
+/** Prisma client model name → Postgres table (matches schema.sql / @@map). */
 const MODEL_TO_TABLE: Record<string, string> = {
   user: "User",
   workspace: "Workspace",
@@ -27,14 +27,14 @@ const MODEL_TO_TABLE: Record<string, string> = {
   contactTag: "ContactTag",
   campaign: "Campaign",
   message: "Message",
-  messagingRegistration: "MessagingRegistration",
-  messagingRegistrationEvent: "MessagingRegistrationEvent",
-  campaignRecipient: "CampaignRecipient",
-  campaignMessage: "CampaignMessage",
-  suppression: "Suppression",
-  jobQueue: "JobQueue",
-  integrationWebhookEndpoint: "IntegrationWebhookEndpoint",
-  integrationWebhookEvent: "IntegrationWebhookEvent",
+  messagingRegistration: "messaging_registrations",
+  messagingRegistrationEvent: "messaging_registration_events",
+  campaignRecipient: "campaign_recipients",
+  campaignMessage: "campaign_messages",
+  suppression: "review_request_suppression",
+  jobQueue: "job_queue",
+  integrationWebhookEndpoint: "integration_webhook_endpoints",
+  integrationWebhookEvent: "integration_webhook_events",
   conversation: "Conversation",
   conversationMessage: "ConversationMessage",
   template: "Template",
@@ -66,7 +66,7 @@ const RELATIONS: Record<string, Record<string, { table: string; fk: string; pk?:
   },
   campaignMessage: {
     campaign: { table: "Campaign", fk: "campaignId" },
-    recipient: { table: "CampaignRecipient", fk: "recipientId" },
+    recipient: { table: "campaign_recipients", fk: "recipientId" },
     workspace: { table: "Workspace", fk: "workspaceId" },
   },
   message: {
@@ -76,7 +76,7 @@ const RELATIONS: Record<string, Record<string, { table: string; fk: string; pk?:
   messagingRegistration: { workspace: { table: "Workspace", fk: "workspaceId" } },
   messagingRegistrationEvent: {
     workspace: { table: "Workspace", fk: "workspaceId" },
-    registration: { table: "MessagingRegistration", fk: "registrationId" },
+    registration: { table: "messaging_registrations", fk: "registrationId" },
   },
   suppression: { workspace: { table: "Workspace", fk: "workspaceId" } },
   jobQueue: { workspace: { table: "Workspace", fk: "workspaceId" } },
@@ -86,7 +86,7 @@ const RELATIONS: Record<string, Record<string, { table: string; fk: string; pk?:
   },
   integrationWebhookEvent: {
     workspace: { table: "Workspace", fk: "workspaceId" },
-    endpoint: { table: "IntegrationWebhookEndpoint", fk: "endpointId" },
+    endpoint: { table: "integration_webhook_endpoints", fk: "endpointId" },
   },
   conversation: {
     workspace: { table: "Workspace", fk: "workspaceId" },
@@ -95,7 +95,7 @@ const RELATIONS: Record<string, Record<string, { table: string; fk: string; pk?:
   conversationMessage: { conversation: { table: "Conversation", fk: "conversationId" } },
   workspace: {
     phoneNumbers: { table: "PhoneNumber", fk: "workspaceId", pk: "id" },
-    messagingRegistration: { table: "MessagingRegistration", fk: "workspaceId", pk: "id" },
+    messagingRegistration: { table: "messaging_registrations", fk: "workspaceId", pk: "id" },
   },
 };
 
@@ -358,7 +358,7 @@ async function applyInclude(rows: Row[], include: Args | undefined, model: strin
 
     if (rel === "messagingRegistration" && model === "workspace") {
       const ids = out.map((r) => r.id as string);
-      const { data } = await db.from("MessagingRegistration").select("*").in("workspaceId", ids);
+      const { data } = await db.from("messaging_registrations").select("*").in("workspaceId", ids);
       const map = new Map((data ?? []).map((r) => [r.workspaceId as string, reviveRow(r as Row)]));
       out = out.map((r) => ({ ...r, messagingRegistration: map.get(r.id as string) ?? null }));
       continue;

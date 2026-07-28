@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "db:schema": "npx prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script > supabase/schema.sql",
+    "db:bootstrap": "node scripts/generate-bootstrap-sql.mjs",
     "db:seed": "tsx prisma/seed.ts",
     "worker:all": "tsx scripts/worker-all.ts",
     "test:messaging-wiring": "tsx scripts/test-messaging-wiring.ts"

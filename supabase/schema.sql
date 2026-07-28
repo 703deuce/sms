@@ -1,3 +1,6 @@
+-- Prefer supabase/bootstrap.sql in the SQL editor (idempotent).
+-- This file is the raw Prisma diff output.
+
 -- CreateEnum
 CREATE TYPE "Role" AS ENUM ('OWNER', 'ADMINISTRATOR', 'MANAGER', 'CAMPAIGN_CREATOR', 'INBOX_AGENT', 'ANALYST', 'READ_ONLY');
 

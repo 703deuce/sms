@@ -12,14 +12,17 @@ SUPABASE_SERVICE_ROLE_KEY=
 
 In the Supabase SQL editor, run:
 
-[`schema.sql`](./schema.sql)
+**[`bootstrap.sql`](./bootstrap.sql)** ← use this (idempotent, safe if you already ran part of the schema)
 
-That creates the tables/enums used by messaging + campaigns.
+If you hit `relation "…" already exists`, you started with `schema.sql` (non-idempotent). Switch to `bootstrap.sql` and re-run — it skips existing enums/tables/indexes/constraints.
 
-To regenerate SQL from `prisma/schema.prisma` (dev-only, not used at runtime):
+Fresh empty project either file works; prefer `bootstrap.sql`.
+
+To regenerate:
 
 ```bash
 npm run db:schema
+npm run db:bootstrap
 ```
 
 ## 2. Env vars
@@ -39,7 +42,7 @@ import { getPrisma } from "@/lib/db";
 // Idiomatic Supabase (preferred for new code)
 const sb = getSupabaseAdmin();
 const { data, error } = await sb
-  .from("MessagingRegistration")
+  .from("messaging_registrations")
   .select("*")
   .eq("workspaceId", id)
   .maybeSingle();
