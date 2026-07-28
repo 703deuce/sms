@@ -1,23 +1,49 @@
-import { getSmsProvider } from "@/lib/sms/provider";
 import { NextResponse } from "next/server";
+import { requireSession, resolveWorkspaceId, jsonError } from "@/lib/api-auth";
+import { sendQuickSms } from "@/lib/sms/send-quick";
 
 export async function POST(request: Request) {
-  const body = (await request.json()) as {
-    to?: string;
-    from?: string;
-    message?: string;
-  };
+  try {
+    const auth = await requireSession();
+    if ("error" in auth) return auth.error;
 
-  if (!body.to || !body.from || !body.message) {
-    return NextResponse.json({ error: "to, from, and message are required" }, { status: 400 });
+    const body = (await request.json()) as {
+      workspaceId?: string;
+      to?: string;
+      customerPhone?: string;
+      message?: string;
+      body?: string;
+      customMessage?: string;
+      from?: string;
+      campaignId?: string;
+      customerName?: string;
+      destinationUrl?: string;
+    };
+
+    const workspaceId = await resolveWorkspaceId(auth.session, body.workspaceId);
+    const to = body.to || body.customerPhone;
+    const message = body.message || body.body || body.customMessage;
+
+    if (!to || !message) {
+      return NextResponse.json({ error: "to (or customerPhone) and message are required" }, { status: 400 });
+    }
+
+    const result = await sendQuickSms({
+      workspaceId,
+      to,
+      body: message,
+      from: body.from,
+      campaignId: body.campaignId,
+      customerName: body.customerName,
+      destinationUrl: body.destinationUrl,
+      idempotencyKey:
+        request.headers.get("idempotency-key") ||
+        request.headers.get("x-idempotency-key") ||
+        undefined,
+    });
+
+    return NextResponse.json({ data: result });
+  } catch (err) {
+    return jsonError(err, 400);
   }
-
-  const provider = getSmsProvider();
-  const result = await provider.send({
-    to: body.to,
-    from: body.from,
-    body: body.message,
-  });
-
-  return NextResponse.json({ data: result });
 }

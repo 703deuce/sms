@@ -57,6 +57,36 @@ enum ComplianceStatus {
   REJECTED
 }
 
+enum MessagingStepStatus {
+  not_started
+  action_required
+  submitted
+  in_review
+  approved
+  failed
+  suspended
+  ready
+}
+
+enum RecipientWorkflowStatus {
+  pending
+  scheduled
+  in_progress
+  waiting
+  completed
+  stopped
+  failed
+  opted_out
+}
+
+enum JobQueueStatus {
+  pending
+  processing
+  completed
+  failed
+  deferred
+}
+
 model User {
   id           String       @id @default(cuid())
   email        String       @unique
@@ -89,6 +119,14 @@ model Workspace {
   consentRecords ConsentRecord[]
   brand       ComplianceBrand?
   complianceCampaign ComplianceCampaign?
+  messagingRegistration MessagingRegistration?
+  messagingRegistrationEvents MessagingRegistrationEvent[]
+  campaignRecipients CampaignRecipient[]
+  campaignMessages CampaignMessage[]
+  suppressions Suppression[]
+  jobQueue    JobQueue[]
+  integrationWebhooks IntegrationWebhookEndpoint[]
+  integrationWebhookEvents IntegrationWebhookEvent[]
   apiKeys     ApiKey[]
   webhooks    Webhook[]
   auditLogs   AuditLog[]
@@ -113,13 +151,17 @@ model PhoneNumber {
   type             String
   areaCode         String?
   friendlyName     String?
+  twilioSid        String?
   a2pStatus        ComplianceStatus @default(PENDING)
   messagingService String?
   monthlyCostCents Int      @default(115)
   status           String   @default("Active")
+  purchasedAt      DateTime?
+  releasedAt       DateTime?
   workspace        Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@unique([workspaceId, e164])
+  @@index([twilioSid])
 }
 
 model Contact {
@@ -195,39 +237,288 @@ model ContactTag {
 }
 
 model Campaign {
-  id          String         @id @default(cuid())
-  workspaceId String
-  name        String
-  type        String
-  audience    String
-  body        String
-  status      CampaignStatus @default(DRAFT)
-  scheduledAt DateTime?
-  sent        Int            @default(0)
-  delivered   Int            @default(0)
-  replies     Int            @default(0)
-  clicks      Int            @default(0)
-  optOuts     Int            @default(0)
-  costCents   Int            @default(0)
-  createdBy   String?
-  createdAt   DateTime       @default(now())
-  workspace   Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  messages    Message[]
+  id             String         @id @default(cuid())
+  workspaceId    String
+  name           String
+  type           String
+  audience       String
+  body           String
+  status         CampaignStatus @default(DRAFT)
+  scheduledAt    DateTime?
+  sequenceJson   Json?
+  successMode    String         @default("click")
+  dailySendLimit Int?
+  sendWindowStart Int?
+  sendWindowEnd   Int?
+  sent           Int            @default(0)
+  delivered      Int            @default(0)
+  replies        Int            @default(0)
+  clicks         Int            @default(0)
+  optOuts        Int            @default(0)
+  costCents      Int            @default(0)
+  createdBy      String?
+  createdAt      DateTime       @default(now())
+  workspace      Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  messages       Message[]
+  recipients     CampaignRecipient[]
+  campaignMessages CampaignMessage[]
 }
 
 model Message {
+  id            String   @id @default(cuid())
+  campaignId    String?
+  workspaceId   String?
+  to            String
+  from          String
+  body          String
+  status        String
+  segments      Int      @default(1)
+  costCents     Int      @default(0)
+  providerId    String?
+  idempotencyKey String?
+  trackingToken String?  @unique
+  destinationUrl String?
+  createdAt     DateTime @default(now())
+  campaign      Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+
+  @@unique([workspaceId, idempotencyKey])
+  @@index([trackingToken])
+  @@index([providerId])
+}
+
+/// Per-workspace Twilio ISV registration state (one row per workspace).
+model MessagingRegistration {
+  id                        String              @id @default(cuid())
+  workspaceId               String              @unique
+  overallStatus             MessagingStepStatus @default(not_started)
+  messagingEnabled          Boolean             @default(false)
+  paused                    Boolean             @default(false)
+
+  // Twilio subaccount
+  subaccountSid             String?
+  subaccountAuthTokenEnc    String?
+
+  // TrustHub / A2P SIDs
+  secondaryProfileSid       String?
+  trustProductSid           String?
+  brandSid                  String?
+  messagingServiceSid       String?
+  a2pCampaignSid            String?
+
+  // Phone
+  phoneE164                 String?
+  phoneSid                  String?
+  phoneAttached             Boolean             @default(false)
+  phonePurchasedAt          DateTime?
+
+  // Step statuses
+  profileStatus             MessagingStepStatus @default(not_started)
+  trustStatus               MessagingStepStatus @default(not_started)
+  brandStatus               MessagingStepStatus @default(not_started)
+  messagingServiceStatus    MessagingStepStatus @default(not_started)
+  campaignStatus            MessagingStepStatus @default(not_started)
+  numberStatus              MessagingStepStatus @default(not_started)
+
+  // Business details (TrustHub)
+  legalBusinessName         String?
+  dbaName                   String?
+  businessType              String?
+  businessIndustry          String?
+  businessIdentity          String?
+  businessRegistrationId    String? // EIN / tax id
+  websiteUrl                String?
+  street                    String?
+  city                      String?
+  region                    String?
+  postalCode                String?
+  country                   String?             @default("US")
+  contactFirstName          String?
+  contactLastName           String?
+  contactEmail              String?
+  contactPhone              String?
+  contactTitle              String?
+
+  // Use case / campaign
+  useCase                   String?
+  useCaseDescription        String?
+  sampleMessages            String[]            @default([])
+  optInDescription          String?
+  helpMessage               String?
+  stopMessage               String?
+  messageVolume             String?
+  vertical                  String?
+
+  certifiedAt               DateTime?
+  lastError                 String?
+  lastAdvancedAt            DateTime?
+  createdAt                 DateTime            @default(now())
+  updatedAt                 DateTime            @updatedAt
+
+  workspace                 Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  events                    MessagingRegistrationEvent[]
+
+  @@index([overallStatus])
+  @@map("messaging_registrations")
+}
+
+model MessagingRegistrationEvent {
+  id             String   @id @default(cuid())
+  workspaceId    String
+  registrationId String
+  eventType      String
+  message        String?
+  payload        Json?
+  createdAt      DateTime @default(now())
+
+  workspace      Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  registration   MessagingRegistration @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+
+  @@index([registrationId, createdAt])
+  @@map("messaging_registration_events")
+}
+
+model CampaignRecipient {
+  id             String                  @id @default(cuid())
+  workspaceId    String
+  campaignId     String
+  contactId      String?
+  phone          String?
+  email          String?
+  displayName    String?
+  /// Active-enrollment identity (`p:+1…` / `e:a@b.c`); null when terminal so re-enroll works.
+  enrollmentKey  String?                 @unique
+  workflowStatus RecipientWorkflowStatus @default(pending)
+  currentStep    String?
+  nextActionAt   DateTime?
+  enrolledAt     DateTime                @default(now())
+  completedAt    DateTime?
+  stopReason     String?
+  metadata       Json?
+  updatedAt      DateTime                @updatedAt
+
+  workspace      Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  campaign       Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  messages       CampaignMessage[]
+
+  @@index([campaignId, workflowStatus, nextActionAt])
+  @@index([workspaceId, phone])
+  @@map("campaign_recipients")
+}
+
+model CampaignMessage {
+  id              String    @id @default(cuid())
+  workspaceId     String
+  campaignId      String
+  recipientId     String
+  channel         String    @default("sms")
+  stepKey         String?
+  to              String
+  body            String
+  status          String    @default("queued")
+  scheduledFor    DateTime?
+  sentAt          DateTime?
+  providerId      String?
+  trackingToken   String?   @unique
+  destinationUrl  String?
+  error           String?
+  deliveredCounted Boolean  @default(false)
+  clickedCounted  Boolean   @default(false)
+  sentCounted     Boolean   @default(false)
+  advancedAfterSend Boolean @default(false)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  campaign        Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  recipient       CampaignRecipient @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@index([status, scheduledFor])
+  @@index([campaignId, status])
+  @@unique([recipientId, stepKey])
+  @@map("campaign_messages")
+}
+
+model Suppression {
+  id             String   @id @default(cuid())
+  workspaceId    String
+  phone          String?
+  email          String?
+  /// Normalized identity `p:+E164` or `e:email@x` for idempotent STOP inserts.
+  suppressionKey String   @unique
+  reason         String
+  source         String?
+  createdAt      DateTime @default(now())
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, phone])
+  @@index([workspaceId, email])
+  @@map("review_request_suppression")
+}
+
+model JobQueue {
+  id           String         @id @default(cuid())
+  workspaceId  String?
+  jobType      String
+  queueName    String         @default("default")
+  payload      Json
+  status       JobQueueStatus @default(pending)
+  idempotencyKey String?      @unique
+  attempts     Int            @default(0)
+  maxAttempts  Int            @default(8)
+  runAfter     DateTime       @default(now())
+  lockedAt     DateTime?
+  lastError    String?
+  completedAt  DateTime?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  workspace    Workspace?     @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+
+  @@index([status, runAfter, queueName])
+  @@index([jobType, status])
+  @@map("job_queue")
+}
+
+/// Inbound automation webhooks (Zapier/Make/n8n) — not outbound Webhook destinations.
+model IntegrationWebhookEndpoint {
+  id                String   @id @default(cuid())
+  workspaceId       String
+  name              String
+  token             String   @unique
+  campaignId        String?
+  sendDelayMinutes  Int      @default(0)
+  fieldMap          Json?
+  active            Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  rotatedAt         DateTime?
+  revokedAt         DateTime?
+
+  workspace         Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  events            IntegrationWebhookEvent[]
+
+  @@index([workspaceId, active])
+  @@map("integration_webhook_endpoints")
+}
+
+model IntegrationWebhookEvent {
   id          String   @id @default(cuid())
-  campaignId  String?
-  workspaceId String?
-  to          String
-  from        String
-  body        String
-  status      String
-  segments    Int      @default(1)
-  costCents   Int      @default(0)
-  providerId  String?
+  workspaceId String
+  endpointId  String
+  idempotencyKey String?
+  payload     Json
+  status      String   @default("received")
+  error       String?
   createdAt   DateTime @default(now())
-  campaign    Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  updatedAt   DateTime @updatedAt
+  processedAt DateTime?
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  endpoint    IntegrationWebhookEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+
+  @@unique([endpointId, idempotencyKey])
+  @@index([workspaceId, createdAt])
+  @@map("integration_webhook_events")
 }
 
 model Conversation {

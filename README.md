@@ -6,7 +6,7 @@ Multi-tenant business texting SaaS — campaigns, shared inbox, automations, com
 
 - **Next.js 16** (App Router) + TypeScript + Tailwind CSS v4
 - **Prisma 6** + PostgreSQL (schema + seed; UI uses mock data by default)
-- **Stub SMS provider** (Twilio adapter placeholder behind env vars)
+- **Twilio ISV messaging** (subaccounts, A2P 10DLC, Messaging Service sends) + optional BullMQ worker
 
 ## Quick start (demo UI)
 
@@ -41,10 +41,19 @@ npm run db:seed
 |---------|-------------|
 | `npm run dev` | Start development server |
 | `npm run build` | Production build |
+| `npm run worker:all` | Job worker (A2P advance + campaign sends) |
 | `npm run db:generate` | Generate Prisma client |
 | `npm run db:migrate` | Run migrations |
 | `npm run db:push` | Push schema to DB |
 | `npm run db:seed` | Seed demo workspace |
+
+## SMS / Twilio ISV
+
+See **[docs/TWILIO_ISV_MESSAGING.md](docs/TWILIO_ISV_MESSAGING.md)** for the full ISV guide (buy numbers, A2P registration, campaigns, cron/workers).
+
+Live env essentials: `TWILIO_ACCOUNT_SID`, `TWILIO_ACCOUNT_AUTH_TOKEN`, `TWILIO_PRIMARY_PROFILE_SID`, `TWILIO_MODE=live`, `INTEGRATION_SECRET_KEY`, `APP_URL`, `CRON_SECRET`.
+
+Always-on: web app + `npm run worker:all` + minute cron → `POST /api/jobs/process`. Without `TWILIO_MODE=live`, registration uses a mock adapter.
 
 ## Application areas
 
@@ -67,7 +76,7 @@ npm run db:seed
 
 Separate shell for customer management, A2P queue, message monitoring, billing, support, and platform settings.
 
-## API routes (stub)
+## API routes
 
 | Route | Method | Description |
 |-------|--------|-------------|
@@ -75,14 +84,22 @@ Separate shell for customer management, A2P queue, message monitoring, billing, 
 | `/api/auth/signup` | POST | Create account + workspace |
 | `/api/auth/logout` | POST | Clear session |
 | `/api/workspace` | POST | Switch active workspace |
-| `/api/campaigns` | GET/POST | List/create campaigns |
+| `/api/messaging/registration` | GET/POST | Twilio ISV registration actions |
+| `/api/messaging/numbers` | GET | Search available numbers |
+| `/api/campaigns` | GET/POST | List/create campaigns (sequence + enroll) |
+| `/api/campaigns/{id}/enroll` | POST | Enroll contacts into a campaign |
 | `/api/contacts` | GET | List contacts |
 | `/api/inbox` | GET | List conversations |
-| `/api/sms/send` | POST | Send via stub/Twilio provider |
+| `/api/sms/send` | POST | One-off SMS (ready gate on ISV path) |
+| `/api/jobs/process` | POST | Minute cron drain |
+| `/api/twilio/inbound` | POST | Inbound SMS webhook |
+| `/api/twilio/message-status` | POST | Delivery receipts |
+| `/api/twilio/compliance-status` | POST | TrustHub / Brand callbacks |
+| `/r/{token}` | GET | Click tracking redirect |
 
 ## SMS provider
 
-`src/lib/sms/provider.ts` exposes a `SmsProvider` interface. By default, `StubSmsProvider` queues messages without sending. Set `TWILIO_ACCOUNT_SID` and `TWILIO_AUTH_TOKEN` to enable the Twilio adapter stub.
+`src/lib/sms/provider.ts` exposes a `SmsProvider` interface. With Twilio ISV configured (`TWILIO_MODE=live` or account SID present), sends go through the workspace Messaging Service once registration is `ready`. Otherwise `StubSmsProvider` queues locally.
 
 ## Project structure
 

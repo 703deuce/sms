@@ -1,8 +1,14 @@
+import { sendQuickSms } from "@/lib/sms/send-quick";
+import { messagingOnboarding } from "@/lib/messaging/service";
+import { isLiveMessagingAdapter } from "@/lib/messaging/twilio-config";
+import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
+
 export type SendSmsInput = {
   to: string;
   from: string;
   body: string;
   mediaUrl?: string;
+  workspaceId?: string;
 };
 
 export type SendSmsResult = {
@@ -14,7 +20,7 @@ export type SendSmsResult = {
 
 export interface SmsProvider {
   send(input: SendSmsInput): Promise<SendSmsResult>;
-  buyNumber(areaCode: string): Promise<{ e164: string; sid: string }>;
+  buyNumber(areaCode: string, workspaceId?: string): Promise<{ e164: string; sid: string }>;
   registerBrand(payload: Record<string, unknown>): Promise<{ status: string; id: string }>;
 }
 
@@ -36,22 +42,61 @@ export class StubSmsProvider implements SmsProvider {
   }
 }
 
-/** Twilio adapter placeholder — wire when TWILIO_* env vars are present. */
-export class TwilioSmsProvider implements SmsProvider {
-  async send(): Promise<SendSmsResult> {
-    throw new Error("Twilio provider not configured. Set TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN.");
+/**
+ * Live/mock ISV path: sends via the workspace Messaging Service once registration is ready.
+ * Falls back to stub errors when workspaceId is missing.
+ */
+export class TwilioIsvSmsProvider implements SmsProvider {
+  async send(input: SendSmsInput): Promise<SendSmsResult> {
+    if (!input.workspaceId) {
+      return {
+        id: `twilio_fail_${Date.now()}`,
+        status: "failed",
+        provider: "twilio",
+        error: "workspaceId is required for ISV sends",
+      };
+    }
+    try {
+      const result = await sendQuickSms({
+        workspaceId: input.workspaceId,
+        to: input.to,
+        body: input.body,
+        from: input.from,
+      });
+      return {
+        id: result.sid,
+        status: result.status === "failed" ? "failed" : "queued",
+        provider: "twilio",
+      };
+    } catch (err) {
+      return {
+        id: `twilio_fail_${Date.now()}`,
+        status: "failed",
+        provider: "twilio",
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
   }
-  async buyNumber(): Promise<{ e164: string; sid: string }> {
-    throw new Error("Twilio provider not configured.");
+
+  async buyNumber(areaCode: string, workspaceId?: string) {
+    if (!workspaceId) throw new Error("workspaceId required to buy a number");
+    const results = await messagingOnboarding.searchNumbers(workspaceId, areaCode);
+    const pick = results[0];
+    if (!pick) throw new Error("No numbers available for that area code");
+    const reg = await messagingOnboarding.purchaseNumber(workspaceId, pick.phoneNumber);
+    return { e164: reg.phoneE164 || pick.phoneNumber, sid: reg.phoneSid || "" };
   }
-  async registerBrand(): Promise<{ status: string; id: string }> {
-    throw new Error("Twilio provider not configured.");
+
+  async registerBrand() {
+    return { status: "use_messaging_registration_api", id: "n/a" };
   }
 }
 
 export function getSmsProvider(): SmsProvider {
-  if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
-    return new TwilioSmsProvider();
+  if (isLiveMessagingAdapter() || process.env.TWILIO_ACCOUNT_SID) {
+    return new TwilioIsvSmsProvider();
   }
   return new StubSmsProvider();
 }
+
+export { normalizeE164 };
