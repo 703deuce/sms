@@ -49,6 +49,14 @@ export async function enqueueDueCampaignMessages() {
 
     const campaign = msg.campaign;
     if (!inSendWindow(now, campaign.sendWindowStart, campaign.sendWindowEnd)) {
+      // Push out of the due window so other campaigns are not starved
+      await prisma.campaignMessage.update({
+        where: { id: msg.id },
+        data: {
+          scheduledFor: new Date(now.getTime() + 60 * 60 * 1000),
+          error: "outside_send_window",
+        },
+      });
       continue;
     }
 
@@ -67,6 +75,11 @@ export async function enqueueDueCampaignMessages() {
         sentTodayByCampaign.set(campaign.id, sentToday);
       }
       if (sentToday >= campaign.dailySendLimit) {
+        const tomorrow = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+        await prisma.campaignMessage.update({
+          where: { id: msg.id },
+          data: { scheduledFor: tomorrow, error: "daily_limit" },
+        });
         continue;
       }
       sentTodayByCampaign.set(campaign.id, sentToday + 1);

@@ -380,39 +380,43 @@ export async function tryAdvanceRecipientAfterSend(recipientId: string) {
   const current = findStep(sequence, recipient.currentStep);
   if (!current) return;
 
-    // CAS move past the send step — only one finalizer wins
-    if (current.step_type === "send_sms" || current.step_type === "send_email") {
-      const next = nextStepAfter(sequence, current.step_key);
-      if (!next) {
-        const done = await prisma.campaignRecipient.updateMany({
-          where: {
-            id: recipientId,
-            workflowStatus: { in: ACTIVE },
-            currentStep: current.step_key,
-          },
-          data: {
-            workflowStatus: "completed",
-            completedAt: new Date(),
-            nextActionAt: null,
-            enrollmentKey: null,
-          },
-        });
-        if (done.count === 1) await reconcileCampaignStatus(recipient.campaignId);
-        return;
-      }
-      const moved = await prisma.campaignRecipient.updateMany({
-        where: {
-          id: recipientId,
-          workflowStatus: { in: ACTIVE },
-          currentStep: current.step_key,
-        },
-        data: {
-          currentStep: next.step_key,
-          workflowStatus: "in_progress",
-        },
-      });
-      if (moved.count === 0) return;
-    }
+  // Only act when still sitting on the send step that just completed.
+  // Re-finalizing an already-advanced recipient must be a no-op.
+  if (current.step_type !== "send_sms" && current.step_type !== "send_email") {
+    return;
+  }
+
+  const next = nextStepAfter(sequence, current.step_key);
+  if (!next) {
+    const done = await prisma.campaignRecipient.updateMany({
+      where: {
+        id: recipientId,
+        workflowStatus: { in: ACTIVE },
+        currentStep: current.step_key,
+      },
+      data: {
+        workflowStatus: "completed",
+        completedAt: new Date(),
+        nextActionAt: null,
+        enrollmentKey: null,
+      },
+    });
+    if (done.count === 1) await reconcileCampaignStatus(recipient.campaignId);
+    return;
+  }
+
+  const moved = await prisma.campaignRecipient.updateMany({
+    where: {
+      id: recipientId,
+      workflowStatus: { in: ACTIVE },
+      currentStep: current.step_key,
+    },
+    data: {
+      currentStep: next.step_key,
+      workflowStatus: "in_progress",
+    },
+  });
+  if (moved.count === 0) return;
 
   const fresh = await prisma.campaignRecipient.findUnique({ where: { id: recipientId } });
   if (!fresh || TERMINAL.includes(fresh.workflowStatus)) return;

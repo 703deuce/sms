@@ -304,6 +304,34 @@ export async function sendCampaignMessageById(messageId: string) {
     }
   }
 
+  // Final pre-provider gate: STOP may have raced after claim
+  const preflight = await prisma.campaignMessage.findUnique({
+    where: { id: messageId },
+    include: { recipient: true },
+  });
+  if (!preflight || preflight.status !== "sending") {
+    return { skipped: true, status: preflight?.status || "missing" };
+  }
+  if (!ACTIVE_RECIPIENT.includes(preflight.recipient.workflowStatus as (typeof ACTIVE_RECIPIENT)[number])) {
+    await prisma.campaignMessage.updateMany({
+      where: { id: messageId, status: "sending" },
+      data: { status: "skipped", error: `recipient_${preflight.recipient.workflowStatus}` },
+    });
+    return { skipped: true, status: "recipient_terminal" };
+  }
+  if (message.channel === "sms" && message.to) {
+    const lateSuppressed = await prisma.suppression.findFirst({
+      where: { workspaceId: message.workspaceId, phone: message.to },
+    });
+    if (lateSuppressed) {
+      await prisma.campaignMessage.updateMany({
+        where: { id: messageId, status: "sending" },
+        data: { status: "opted_out", error: "suppressed_late", providerId: null },
+      });
+      return { optedOut: true };
+    }
+  }
+
   await prisma.campaignMessage.update({
     where: { id: messageId },
     data: { providerId: `pending:${messageId}` },
@@ -342,8 +370,8 @@ export async function sendCampaignMessageById(messageId: string) {
       providerSid = result.sid;
     }
 
-    await prisma.campaignMessage.update({
-      where: { id: messageId },
+    await prisma.campaignMessage.updateMany({
+      where: { id: messageId, status: "sending" },
       data: {
         status: "sent",
         sentAt: new Date(),
