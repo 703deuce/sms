@@ -1,23 +1,45 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardTitle } from "@/components/ui/card";
 import { Input, Label, Select, Textarea } from "@/components/ui/input";
 import { StatusChip } from "@/components/ui/status-chip";
 import { lists, phoneNumbers, segments, templates } from "@/lib/mock/data";
-import { estimateSmsSegments, formatCurrency, formatNumber, formatPhone } from "@/lib/utils";
-import { useMemo, useState } from "react";
+import { cn, estimateSmsSegments, formatCurrency, formatNumber, formatPhone } from "@/lib/utils";
+import {
+  AlertTriangle,
+  Bell,
+  Check,
+  ChevronRight,
+  FlaskConical,
+  Image as ImageIcon,
+  Info,
+  Megaphone,
+  MessageSquare,
+  Settings2,
+  Sparkles,
+  Tag,
+  UserRound,
+} from "lucide-react";
+import Link from "next/link";
+import { useMemo, useState, type ComponentType } from "react";
 
 const steps = ["Campaign type", "Audience", "Message", "Schedule", "Review", "Send"] as const;
-const types = [
-  "SMS",
-  "MMS",
-  "Announcement",
-  "Promotion",
-  "Reminder",
-  "Alert",
-  "Customer update",
-  "Custom",
+
+const typeCards: Array<{
+  id: string;
+  label: string;
+  description: string;
+  icon: ComponentType<{ className?: string }>;
+  tone: string;
+}> = [
+  { id: "SMS", label: "SMS", description: "Send text messages", icon: MessageSquare, tone: "bg-emerald-50 text-emerald-600" },
+  { id: "MMS", label: "MMS", description: "Send image messages", icon: ImageIcon, tone: "bg-sky-50 text-sky-600" },
+  { id: "Announcement", label: "Announcement", description: "Broadcast updates", icon: Megaphone, tone: "bg-violet-50 text-violet-600" },
+  { id: "Promotion", label: "Promotion", description: "Offers and deals", icon: Tag, tone: "bg-orange-50 text-orange-600" },
+  { id: "Reminder", label: "Reminder", description: "Appointment reminders", icon: Bell, tone: "bg-blue-50 text-blue-600" },
+  { id: "Alert", label: "Alert", description: "Urgent notifications", icon: AlertTriangle, tone: "bg-rose-50 text-rose-600" },
+  { id: "Customer update", label: "Customer update", description: "Account updates", icon: UserRound, tone: "bg-teal-50 text-teal-600" },
+  { id: "Custom", label: "Custom", description: "Build your own", icon: Settings2, tone: "bg-slate-100 text-slate-600" },
 ];
 
 const FOOTER = "\n\nReply STOP to opt out. Msg & data rates may apply.";
@@ -25,7 +47,7 @@ const FOOTER = "\n\nReply STOP to opt out. Msg & data rates may apply.";
 export function CampaignWizard() {
   const [step, setStep] = useState(0);
   const [campaignType, setCampaignType] = useState("SMS");
-  const [name, setName] = useState("");
+  const [name, setName] = useState("July service special");
   const [audience, setAudience] = useState("list");
   const [listId, setListId] = useState(lists[0].id);
   const [segmentId, setSegmentId] = useState(segments[0].id);
@@ -37,12 +59,8 @@ export function CampaignWizard() {
 
   const recipients = useMemo(() => {
     if (audience === "all") return 1840;
-    if (audience === "segment") {
-      return segments.find((s) => s.id === segmentId)?.count ?? 0;
-    }
-    if (audience === "list") {
-      return lists.find((l) => l.id === listId)?.count ?? 0;
-    }
+    if (audience === "segment") return segments.find((s) => s.id === segmentId)?.count ?? 0;
+    if (audience === "list") return lists.find((l) => l.id === listId)?.count ?? 0;
     if (audience === "tags") return 54;
     if (audience === "individuals") return 3;
     return 0;
@@ -61,12 +79,12 @@ export function CampaignWizard() {
 
   if (sent) {
     return (
-      <Card className="mx-auto max-w-xl text-center">
+      <div className="surface mx-auto max-w-xl rounded-[12px] bg-card p-8 text-center">
         <StatusChip status={scheduleMode === "later" ? "Scheduled" : "Sending"} />
-        <h2 className="mt-4 font-display text-2xl font-semibold">
+        <h2 className="mt-4 text-2xl font-bold">
           {scheduleMode === "later" ? "Campaign scheduled" : "Campaign queued"}
         </h2>
-        <p className="mt-2 text-sm text-muted-foreground">
+        <p className="mt-2 text-[13px] text-muted-foreground">
           {formatNumber(recipients)} recipients · {smsSegments} segment
           {smsSegments === 1 ? "" : "s"} each · est. {formatCurrency(estimatedCost)}
         </p>
@@ -74,281 +92,321 @@ export function CampaignWizard() {
           <Button variant="outline" onClick={() => { setSent(false); setStep(0); }}>
             Create another
           </Button>
-          <a href="/campaigns">
+          <Link href="/campaigns">
             <Button>View campaigns</Button>
-          </a>
+          </Link>
         </div>
-      </Card>
+      </div>
     );
   }
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[240px_1fr]">
-      <Card className="h-fit">
-        <CardTitle>Steps</CardTitle>
-        <ol className="mt-4 space-y-2">
-          {steps.map((label, i) => (
-            <li key={label}>
-              <button
-                type="button"
-                onClick={() => setStep(i)}
-                className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm ${
-                  i === step ? "bg-muted font-medium text-foreground" : "text-muted-foreground"
-                }`}
-              >
-                <span
-                  className={`flex h-6 w-6 items-center justify-center rounded-full text-xs ${
-                    i === step ? "bg-primary text-primary-foreground" : "bg-border"
-                  }`}
-                >
-                  {i + 1}
-                </span>
-                {label}
-              </button>
-            </li>
-          ))}
-        </ol>
-      </Card>
-
-      <Card>
-        {step === 0 && (
-          <div className="space-y-4">
-            <CardTitle>Campaign type</CardTitle>
-            <div>
-              <Label>Name</Label>
-              <Input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="July service special"
-              />
-            </div>
-            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-              {types.map((t) => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => setCampaignType(t)}
-                  className={`rounded-lg border px-3 py-3 text-sm font-medium transition ${
-                    campaignType === t
-                      ? "border-primary bg-teal-50 text-primary"
-                      : "border-border hover:bg-muted"
-                  }`}
-                >
-                  {t}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {step === 1 && (
-          <div className="space-y-4">
-            <CardTitle>Audience</CardTitle>
-            <Select value={audience} onChange={(e) => setAudience(e.target.value)}>
-              <option value="all">All subscribed contacts</option>
-              <option value="list">Contact list</option>
-              <option value="segment">Dynamic segment</option>
-              <option value="tags">Selected tags</option>
-              <option value="individuals">Individual contacts</option>
-              <option value="import">Imported temporary audience</option>
-            </Select>
-            {audience === "list" ? (
-              <Select value={listId} onChange={(e) => setListId(e.target.value)}>
-                {lists.map((l) => (
-                  <option key={l.id} value={l.id}>
-                    {l.name} ({l.count})
-                  </option>
-                ))}
-              </Select>
-            ) : null}
-            {audience === "segment" ? (
-              <Select value={segmentId} onChange={(e) => setSegmentId(e.target.value)}>
-                {segments.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name} ({s.count})
-                  </option>
-                ))}
-              </Select>
-            ) : null}
-            <div className="rounded-lg bg-muted px-3 py-2 text-sm">
-              Estimated recipients: <strong>{formatNumber(recipients)}</strong>
-              <span className="text-muted-foreground"> (unsubscribed & blocked excluded)</span>
-            </div>
-          </div>
-        )}
-
-        {step === 2 && (
-          <div className="space-y-4">
-            <CardTitle>Message</CardTitle>
-            <div>
-              <Label>Sending number</Label>
-              <Select value={numberId} onChange={(e) => setNumberId(e.target.value)}>
-                {phoneNumbers.map((n) => (
-                  <option key={n.id} value={n.id}>
-                    {formatPhone(n.number)} · {n.friendlyName}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <div>
-              <Label>Saved template</Label>
-              <Select
-                defaultValue=""
-                onChange={(e) => {
-                  const t = templates.find((x) => x.id === e.target.value);
-                  if (t) setBody(t.body);
-                }}
-              >
-                <option value="">Choose a template…</option>
-                {templates.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <div>
-              <Label>Message body</Label>
-              <Textarea value={body} onChange={(e) => setBody(e.target.value)} rows={6} />
-              <div className="mt-2 flex flex-wrap gap-2 text-xs">
-                {["{{first_name}}", "{{last_name}}", "{{business_name}}"].map((f) => (
-                  <button
-                    key={f}
-                    type="button"
-                    className="rounded-md border border-border px-2 py-1 hover:bg-muted"
-                    onClick={() => setBody((b) => b + f)}
-                  >
-                    {f}
-                  </button>
-                ))}
-                <button
-                  type="button"
-                  className="rounded-md border border-border px-2 py-1 hover:bg-muted"
-                  onClick={() =>
-                    setBody(
-                      "Quick update from Harbor Home: schedule your seasonal service this week and save. Reply YES for times.",
-                    )
-                  }
-                >
-                  AI assist
-                </button>
-              </div>
-            </div>
-            <div className="grid gap-2 rounded-lg border border-border bg-muted/40 p-3 text-sm sm:grid-cols-3">
-              <div>
-                Characters: <strong>{characters}</strong>
-              </div>
-              <div>
-                SMS segments: <strong>{smsSegments}</strong>
-              </div>
-              <div>
-                Est. cost: <strong>{formatCurrency(estimatedCost)}</strong>
-              </div>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Required compliance footer is appended automatically if STOP language is missing.
+    <div className="space-y-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex items-start gap-2.5">
+          <span className="mt-1 flex h-8 w-8 items-center justify-center rounded-[10px] bg-emerald-50 text-emerald-600">
+            <Sparkles className="h-4 w-4" />
+          </span>
+          <div>
+            <h1 className="text-[24px] font-bold tracking-tight">New campaign</h1>
+            <p className="mt-1 text-[13px] text-muted-foreground">
+              Build a compliant campaign with audience estimate, message preview, and scheduling.
             </p>
           </div>
-        )}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Link href="/send/quick">
+            <Button variant="outline" className="h-9 rounded-[10px]">Quick text</Button>
+          </Link>
+          <Link href="/send/test">
+            <Button variant="outline" className="h-9 rounded-[10px]">
+              <FlaskConical className="h-3.5 w-3.5" />
+              Send test
+            </Button>
+          </Link>
+        </div>
+      </div>
 
-        {step === 3 && (
-          <div className="space-y-4">
-            <CardTitle>Schedule</CardTitle>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <button
-                type="button"
-                onClick={() => setScheduleMode("now")}
-                className={`rounded-lg border p-4 text-left ${
-                  scheduleMode === "now" ? "border-primary bg-teal-50" : "border-border"
-                }`}
-              >
-                <p className="font-medium">Send now</p>
-                <p className="mt-1 text-xs text-muted-foreground">Queue immediately after review</p>
-              </button>
-              <button
-                type="button"
-                onClick={() => setScheduleMode("later")}
-                className={`rounded-lg border p-4 text-left ${
-                  scheduleMode === "later" ? "border-primary bg-teal-50" : "border-border"
-                }`}
-              >
-                <p className="font-medium">Schedule</p>
-                <p className="mt-1 text-xs text-muted-foreground">Pick a future send time</p>
-              </button>
+      <div className="grid gap-4 xl:grid-cols-[220px_1fr]">
+        <div className="surface h-fit rounded-[12px] bg-card p-4">
+          <p className="text-[13px] font-bold text-foreground">Steps</p>
+          <ol className="relative mt-4 space-y-0">
+            {steps.map((label, i) => (
+              <li key={label} className="relative flex gap-3 pb-5 last:pb-0">
+                {i < steps.length - 1 ? (
+                  <span className="absolute left-[13px] top-7 h-[calc(100%-18px)] w-px bg-border" />
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => setStep(i)}
+                  className={cn(
+                    "relative z-[1] flex w-full items-center gap-2.5 rounded-[10px] px-1.5 py-1.5 text-left text-[13px] transition",
+                    i === step ? "bg-emerald-50 font-semibold text-emerald-700" : "text-muted-foreground hover:bg-muted/50",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-bold",
+                      i === step
+                        ? "bg-primary text-white"
+                        : i < step
+                          ? "bg-emerald-100 text-emerald-700"
+                          : "bg-muted text-muted-foreground",
+                    )}
+                  >
+                    {i < step ? <Check className="h-3.5 w-3.5" /> : i + 1}
+                  </span>
+                  {label}
+                </button>
+              </li>
+            ))}
+          </ol>
+        </div>
+
+        <div className="surface rounded-[12px] bg-card p-5 sm:p-6">
+          {step === 0 && (
+            <div className="space-y-5">
+              <div>
+                <Label htmlFor="campaign-name">Campaign name</Label>
+                <div className="relative mt-1.5">
+                  <Input
+                    id="campaign-name"
+                    value={name}
+                    onChange={(e) => setName(e.target.value.slice(0, 100))}
+                    className="h-11 rounded-[10px] pr-16"
+                  />
+                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-muted-foreground">
+                    {name.length} / 100
+                  </span>
+                </div>
+              </div>
+
+              <div>
+                <p className="text-[13px] font-semibold text-foreground">Select campaign type</p>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  {typeCards.map((t) => {
+                    const Icon = t.icon;
+                    const selected = campaignType === t.id;
+                    return (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => setCampaignType(t.id)}
+                        className={cn(
+                          "relative rounded-[12px] border bg-card p-3.5 text-left transition",
+                          selected
+                            ? "border-primary shadow-[0_0_0_1px_rgba(16,185,129,0.25)]"
+                            : "border-border hover:border-primary/40 hover:bg-muted/30",
+                        )}
+                      >
+                        {selected ? (
+                          <span className="absolute right-2.5 top-2.5 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-white">
+                            <Check className="h-3 w-3" strokeWidth={3} />
+                          </span>
+                        ) : null}
+                        <span className={cn("flex h-9 w-9 items-center justify-center rounded-[10px]", t.tone)}>
+                          <Icon className="h-4 w-4" />
+                        </span>
+                        <p className="mt-3 text-[13px] font-bold">{t.label}</p>
+                        <p className="mt-1 text-[11px] text-muted-foreground">{t.description}</p>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between gap-3 rounded-[12px] border border-sky-100 bg-sky-50 px-4 py-3">
+                <div className="flex items-center gap-2.5 text-[13px] text-sky-900">
+                  <Info className="h-4 w-4 shrink-0 text-sky-600" />
+                  Not sure which type to choose? Learn more about campaign types
+                </div>
+                <ChevronRight className="h-4 w-4 shrink-0 text-sky-600" />
+              </div>
             </div>
-            {scheduleMode === "later" ? (
-              <div>
-                <Label>Send at</Label>
-                <Input
-                  type="datetime-local"
-                  value={scheduledAt}
-                  onChange={(e) => setScheduledAt(e.target.value)}
-                />
-              </div>
-            ) : null}
-          </div>
-        )}
+          )}
 
-        {(step === 4 || step === 5) && (
-          <div className="space-y-4">
-            <CardTitle>{step === 4 ? "Review" : "Send"}</CardTitle>
-            <dl className="grid gap-3 text-sm sm:grid-cols-2">
-              <div>
-                <dt className="text-muted-foreground">Name</dt>
-                <dd className="font-medium">{name || "Untitled campaign"}</dd>
+          {step === 1 && (
+            <div className="space-y-4">
+              <h2 className="text-[16px] font-bold">Audience</h2>
+              <Select value={audience} onChange={(e) => setAudience(e.target.value)}>
+                <option value="all">All subscribed contacts</option>
+                <option value="list">Contact list</option>
+                <option value="segment">Dynamic segment</option>
+                <option value="tags">Selected tags</option>
+                <option value="individuals">Individual contacts</option>
+                <option value="import">Imported temporary audience</option>
+              </Select>
+              {audience === "list" ? (
+                <Select value={listId} onChange={(e) => setListId(e.target.value)}>
+                  {lists.map((l) => (
+                    <option key={l.id} value={l.id}>
+                      {l.name} ({l.count})
+                    </option>
+                  ))}
+                </Select>
+              ) : null}
+              {audience === "segment" ? (
+                <Select value={segmentId} onChange={(e) => setSegmentId(e.target.value)}>
+                  {segments.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name} ({s.count})
+                    </option>
+                  ))}
+                </Select>
+              ) : null}
+              <div className="rounded-[12px] bg-muted px-3 py-2 text-[13px]">
+                Estimated recipients: <strong>{formatNumber(recipients)}</strong>
+                <span className="text-muted-foreground"> (unsubscribed & blocked excluded)</span>
               </div>
-              <div>
-                <dt className="text-muted-foreground">Type</dt>
-                <dd className="font-medium">{campaignType}</dd>
-              </div>
-              <div>
-                <dt className="text-muted-foreground">Recipients</dt>
-                <dd className="font-medium">{formatNumber(recipients)}</dd>
-              </div>
-              <div>
-                <dt className="text-muted-foreground">Segments / cost</dt>
-                <dd className="font-medium">
-                  {smsSegments} · {formatCurrency(estimatedCost)}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-muted-foreground">When</dt>
-                <dd className="font-medium">
-                  {scheduleMode === "now" ? "Send now" : scheduledAt || "Not set"}
-                </dd>
-              </div>
-            </dl>
-            <div className="rounded-lg border border-border bg-muted/30 p-4">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Message preview
-              </p>
-              <p className="mt-2 whitespace-pre-wrap text-sm">{fullBody}</p>
             </div>
-            {step === 5 ? (
-              <p className="text-sm text-muted-foreground">
-                Final confirmation: unsubscribed and blocked numbers are excluded at queue time.
-              </p>
-            ) : null}
-          </div>
-        )}
+          )}
 
-        <div className="mt-8 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-4">
-          <Button variant="ghost" onClick={back} disabled={step === 0}>
-            Back
-          </Button>
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline">Save draft</Button>
-            <Button variant="outline">Send test</Button>
-            {step < 5 ? (
-              <Button onClick={next}>{step === 4 ? "Continue to send" : "Continue"}</Button>
-            ) : (
-              <Button onClick={() => setSent(true)}>
-                {scheduleMode === "later" ? "Schedule campaign" : "Send now"}
+          {step === 2 && (
+            <div className="space-y-4">
+              <h2 className="text-[16px] font-bold">Message</h2>
+              <div>
+                <Label>Sending number</Label>
+                <Select value={numberId} onChange={(e) => setNumberId(e.target.value)}>
+                  {phoneNumbers.map((n) => (
+                    <option key={n.id} value={n.id}>
+                      {formatPhone(n.number)} · {n.friendlyName}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div>
+                <Label>Saved template</Label>
+                <Select
+                  defaultValue=""
+                  onChange={(e) => {
+                    const t = templates.find((x) => x.id === e.target.value);
+                    if (t) setBody(t.body);
+                  }}
+                >
+                  <option value="">Choose a template…</option>
+                  {templates.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div>
+                <Label>Message body</Label>
+                <Textarea value={body} onChange={(e) => setBody(e.target.value)} rows={6} />
+                <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
+                  {["{{first_name}}", "{{last_name}}", "{{business_name}}"].map((f) => (
+                    <button
+                      key={f}
+                      type="button"
+                      className="rounded-md border border-border px-2 py-1 hover:bg-muted"
+                      onClick={() => setBody((b) => b + f)}
+                    >
+                      {f}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="grid gap-2 rounded-[12px] border border-border bg-muted/40 p-3 text-[13px] sm:grid-cols-3">
+                <div>Characters: <strong>{characters}</strong></div>
+                <div>SMS segments: <strong>{smsSegments}</strong></div>
+                <div>Est. cost: <strong>{formatCurrency(estimatedCost)}</strong></div>
+              </div>
+            </div>
+          )}
+
+          {step === 3 && (
+            <div className="space-y-4">
+              <h2 className="text-[16px] font-bold">Schedule</h2>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => setScheduleMode("now")}
+                  className={cn(
+                    "rounded-[12px] border p-4 text-left",
+                    scheduleMode === "now" ? "border-primary bg-emerald-50" : "border-border",
+                  )}
+                >
+                  <p className="font-semibold">Send now</p>
+                  <p className="mt-1 text-[12px] text-muted-foreground">Queue immediately after review</p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setScheduleMode("later")}
+                  className={cn(
+                    "rounded-[12px] border p-4 text-left",
+                    scheduleMode === "later" ? "border-primary bg-emerald-50" : "border-border",
+                  )}
+                >
+                  <p className="font-semibold">Schedule</p>
+                  <p className="mt-1 text-[12px] text-muted-foreground">Pick a future send time</p>
+                </button>
+              </div>
+              {scheduleMode === "later" ? (
+                <div>
+                  <Label>Send at</Label>
+                  <Input type="datetime-local" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} />
+                </div>
+              ) : null}
+            </div>
+          )}
+
+          {(step === 4 || step === 5) && (
+            <div className="space-y-4">
+              <h2 className="text-[16px] font-bold">{step === 4 ? "Review" : "Send"}</h2>
+              <dl className="grid gap-3 text-[13px] sm:grid-cols-2">
+                <div>
+                  <dt className="text-muted-foreground">Name</dt>
+                  <dd className="font-semibold">{name || "Untitled campaign"}</dd>
+                </div>
+                <div>
+                  <dt className="text-muted-foreground">Type</dt>
+                  <dd className="font-semibold">{campaignType}</dd>
+                </div>
+                <div>
+                  <dt className="text-muted-foreground">Recipients</dt>
+                  <dd className="font-semibold">{formatNumber(recipients)}</dd>
+                </div>
+                <div>
+                  <dt className="text-muted-foreground">Segments / cost</dt>
+                  <dd className="font-semibold">
+                    {smsSegments} · {formatCurrency(estimatedCost)}
+                  </dd>
+                </div>
+              </dl>
+              <div className="rounded-[12px] border border-border bg-muted/30 p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Message preview
+                </p>
+                <p className="mt-2 whitespace-pre-wrap text-[13px]">{fullBody}</p>
+              </div>
+            </div>
+          )}
+
+          <div className="mt-8 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-4">
+            <Button variant="ghost" onClick={back} disabled={step === 0}>
+              Back
+            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" className="rounded-[10px]">Save draft</Button>
+              <Button variant="outline" className="rounded-[10px]">
+                <FlaskConical className="h-3.5 w-3.5 text-primary" />
+                Send test
               </Button>
-            )}
+              {step < 5 ? (
+                <Button className="rounded-[10px]" onClick={next}>
+                  Continue
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              ) : (
+                <Button className="rounded-[10px]" onClick={() => setSent(true)}>
+                  {scheduleMode === "later" ? "Schedule campaign" : "Send now"}
+                </Button>
+              )}
+            </div>
           </div>
         </div>
-      </Card>
+      </div>
     </div>
   );
 }

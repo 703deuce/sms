@@ -71,8 +71,11 @@ export function Sidebar({
           Workspace
         </label>
         <div className="relative mt-1.5">
+          <span className="pointer-events-none absolute left-2.5 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-md bg-violet-500 text-[10px] font-bold text-white">
+            H
+          </span>
           <select
-            className="h-10 w-full appearance-none rounded-[10px] border border-white/10 bg-white/5 px-3 pr-8 text-[13px] font-medium text-white outline-none focus:border-primary/40"
+            className="h-10 w-full appearance-none rounded-[10px] border border-white/10 bg-white/5 py-2 pl-9 pr-8 text-[13px] font-medium text-white outline-none focus:border-primary/40"
             value={activeWorkspace.id}
             onChange={(e) => switchWorkspace(e.target.value)}
           >
