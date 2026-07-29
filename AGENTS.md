@@ -25,3 +25,5 @@ Backend tests (both need the DB schema applied):
 - `npm run test:backend-send` — send pipeline in **test mode** (needs `TWILIO_TEST_*` creds); proves ready gate → real Twilio test-credential send → DB status.
 
 Worker/cron: `npm run worker:all` (BullMQ when `QUEUE_DRIVER=bullmq`+`REDIS_URL`, else DB `job_queue`); minute cron is `POST /api/jobs/process` with `Authorization: Bearer $CRON_SECRET`.
+
+Frontend vs backend wiring (non-obvious): the UI pages render from `src/lib/mock/data.ts` and are a **demo shell** — only auth/workspace are wired to the backend (`/api/auth/*`, `/api/workspace`). Feature actions (quick send, campaign wizard, etc.) are client-side simulated and do NOT call the real API routes. The real backend lives in the API routes + `src/lib/**` and is exercised by scripts, cron, and external callers (Twilio webhooks). To test a real send through the app, hit `POST /api/sms/send` directly (with a session cookie) for a workspace whose registration is `ready`. Machine endpoints (`/api/twilio/*`, `/api/jobs/process`, `/api/integrations/webhooks/incoming/*`, `/r/*`) must stay exempt from the auth redirect in `src/middleware.ts`.
