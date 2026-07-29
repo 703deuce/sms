@@ -6,9 +6,13 @@ export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const session = request.cookies.get("transovo_session")?.value;
   const isPublic = publicPaths.some((p) => pathname === p || pathname.startsWith(p + "/"));
-  const isApiAuth = pathname.startsWith("/api/auth");
 
-  if (isApiAuth) return NextResponse.next();
+  // API routes authenticate themselves (session via requireSession, or Bearer/Twilio
+  // signature/token for cron + webhooks). The /r/ click-tracking redirect is public.
+  // Never redirect these to the login page.
+  if (pathname.startsWith("/api") || pathname.startsWith("/r/")) {
+    return NextResponse.next();
+  }
 
   if (!session && !isPublic && pathname !== "/") {
     const url = request.nextUrl.clone();

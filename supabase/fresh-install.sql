@@ -1053,3 +1053,35 @@ EXCEPTION
     WHEN duplicate_object THEN NULL;
 END $$;
 
+-- Ensure every app table has createdAt + updatedAt.
+-- The Supabase data layer (src/lib/supabase/prisma-compat.ts → prepareData) stamps
+-- "updatedAt" on every insert/update and "createdAt" on every insert for ALL models,
+-- so every table must carry both columns or writes fail with PGRST204. Idempotent.
+DO $$
+DECLARE
+  t text;
+  app_tables text[] := ARRAY[
+    'User','Workspace','Membership','PhoneNumber','Contact','ContactList','ContactListMember',
+    'Segment','Tag','ContactTag','Campaign','Message','messaging_registrations',
+    'messaging_registration_events','campaign_recipients','campaign_messages',
+    'review_request_suppression','job_queue','integration_webhook_endpoints',
+    'integration_webhook_events','Conversation','ConversationMessage','Template',
+    'AutomationFlow','Keyword','OptInForm','ConsentRecord','ComplianceBrand',
+    'ComplianceCampaign','ApiKey','Webhook','AuditLog','UsageRecord'
+  ];
+BEGIN
+  FOREACH t IN ARRAY app_tables LOOP
+    EXECUTE format(
+      'ALTER TABLE IF EXISTS %I ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP',
+      t
+    );
+    EXECUTE format(
+      'ALTER TABLE IF EXISTS %I ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP',
+      t
+    );
+  END LOOP;
+END $$;
+
+-- Refresh PostgREST's cached schema so new columns are visible immediately.
+NOTIFY pgrst, 'reload schema';
+

@@ -99,6 +99,44 @@ const RELATIONS: Record<string, Record<string, { table: string; fk: string; pk?:
   },
 };
 
+/**
+ * Prisma @@unique compound-key field name → component columns.
+ * Prisma exposes composite unique keys in `where` as a single nested object named by
+ * joining the field names with "_" (e.g. { workspaceId_phone: { workspaceId, phone } }).
+ * PostgREST has no such column, so we expand it into individual column filters/values.
+ */
+const COMPOSITE_KEYS: Record<string, Record<string, string[]>> = {
+  membership: { userId_workspaceId: ["userId", "workspaceId"] },
+  phoneNumber: { workspaceId_e164: ["workspaceId", "e164"] },
+  contact: { workspaceId_phone: ["workspaceId", "phone"] },
+  contactListMember: { listId_contactId: ["listId", "contactId"] },
+  tag: { workspaceId_name: ["workspaceId", "name"] },
+  contactTag: { tagId_contactId: ["tagId", "contactId"] },
+  message: { workspaceId_idempotencyKey: ["workspaceId", "idempotencyKey"] },
+  campaignMessage: { recipientId_stepKey: ["recipientId", "stepKey"] },
+  integrationWebhookEvent: { endpointId_idempotencyKey: ["endpointId", "idempotencyKey"] },
+  keyword: { workspaceId_keyword_phoneNumber: ["workspaceId", "keyword", "phoneNumber"] },
+};
+
+/** Replace any composite compound-key field with its component columns. */
+function expandCompositeKeys(model: string, obj: Args | undefined): Args | undefined {
+  if (!obj) return obj;
+  const keys = COMPOSITE_KEYS[model];
+  if (!keys) return obj;
+  let out = obj;
+  for (const [compound, cols] of Object.entries(keys)) {
+    const val = out[compound];
+    if (isObject(val)) {
+      out = { ...out };
+      delete out[compound];
+      for (const c of cols) {
+        if (c in (val as Args)) out[c] = (val as Args)[c];
+      }
+    }
+  }
+  return out;
+}
+
 const FILTER_OPS = new Set([
   "equals",
   "in",
@@ -210,10 +248,11 @@ function formatOrClause(clause: Row): string | null {
 
 async function resolveNestedWhere(model: string, where: Args | undefined): Promise<Args | undefined> {
   if (!where) return where;
-  const out: Args = { ...where };
+  const expanded = expandCompositeKeys(model, where) ?? where;
+  const out: Args = { ...expanded };
   const rels = RELATIONS[model] ?? {};
 
-  for (const [key, value] of Object.entries(where)) {
+  for (const [key, value] of Object.entries(expanded)) {
     if (key === "AND" && Array.isArray(value)) {
       out.AND = await Promise.all(value.map((c) => resolveNestedWhere(model, c as Args)));
       continue;
@@ -491,7 +530,7 @@ function modelApi(model: string): ModelApi {
 
     async create({ data, include }: Args) {
       const db = getSupabaseAdmin();
-      const row = prepareData(data, { isCreate: true });
+      const row = prepareData(expandCompositeKeys(model, data) ?? data, { isCreate: true });
       const { data: created, error } = await db.from(t).insert(row).select("*").single();
       if (error) throw new DbError(error.message, error.code);
       const hydrated = await applyInclude([reviveRow(created as Row)], include, model);
@@ -500,7 +539,9 @@ function modelApi(model: string): ModelApi {
 
     async createMany({ data, skipDuplicates }: Args) {
       const db = getSupabaseAdmin();
-      const rows = (Array.isArray(data) ? data : [data]).map((d) => prepareData(d, { isCreate: true }));
+      const rows = (Array.isArray(data) ? data : [data]).map((d) =>
+        prepareData(expandCompositeKeys(model, d) ?? d, { isCreate: true }),
+      );
       const { data: inserted, error } = await db.from(t).insert(rows).select("id");
       if (error) {
         if (skipDuplicates) return { count: 0 };
@@ -544,6 +585,18 @@ function modelApi(model: string): ModelApi {
           if (error) throw new DbError(error.message, error.code);
         }
         return { count: rows.length };
+      }
+
+      // PostgREST rejects `.or()` filters on UPDATE/DELETE (they work on SELECT),
+      // failing with 42703. When the filter has an OR clause, resolve matching ids
+      // via a SELECT first, then update by id list.
+      if (resolved && Object.prototype.hasOwnProperty.call(resolved, "OR")) {
+        const rows = await api.findMany({ where });
+        const ids = rows.map((r: Row) => r.id as string);
+        if (!ids.length) return { count: 0 };
+        const { data: updated, error } = await db.from(t).update(patch).in("id", ids).select("id");
+        if (error) throw new DbError(error.message, error.code);
+        return { count: updated?.length ?? 0 };
       }
 
       let q: any = db.from(t).update(patch).select("id");
