@@ -19,7 +19,11 @@ process.env.MESSAGING_ADAPTER = "test";
 process.env.INTEGRATION_SECRET_KEY ||= "test-integration-secret-key";
 
 import { getPrisma } from "../src/lib/db";
-import { getMessagingMode, getTwilioTestCredentials, getTestFromNumber } from "../src/lib/messaging/twilio-config";
+import {
+  getMessagingMode,
+  getTestModeSender,
+  TWILIO_VIRTUAL_PHONE,
+} from "../src/lib/messaging/twilio-config";
 
 const failures: string[] = [];
 const ok = (label: string, extra = "") => console.log(`✓ ${label}${extra ? " — " + extra : ""}`);
@@ -31,15 +35,24 @@ const fail = (label: string, err: unknown) => {
 
 async function main() {
   console.log(`messaging mode = ${getMessagingMode()} (expected "test")`);
-  const { accountSid, authToken } = getTwilioTestCredentials();
-  if (!accountSid || !authToken) {
+  let sender: ReturnType<typeof getTestModeSender>;
+  try {
+    sender = getTestModeSender();
+  } catch (e) {
+    console.error("\n" + (e as Error).message);
     console.error(
-      "\nMissing TWILIO_TEST_ACCOUNT_SID / TWILIO_TEST_AUTH_TOKEN.\n" +
-        "Add them as secrets (Twilio Console → Account → API keys & tokens → Test credentials), then re-run.",
+      "Provide TWILIO_TEST_ACCOUNT_SID/TWILIO_TEST_AUTH_TOKEN (simulated), or set " +
+        "TWILIO_TEST_FROM_NUMBER to a Twilio number your account owns (Virtual Phone).",
     );
     process.exit(2);
   }
-  console.log(`test creds present (sid ${accountSid.slice(0, 4)}…), from = ${getTestFromNumber()}`);
+  // Destinations: magic numbers with test creds, else the Twilio Virtual Phone.
+  const happyTo = sender.simulated ? "+15005550006" : TWILIO_VIRTUAL_PHONE;
+  const badTo = "+15005550001"; // valid E.164 shape but invalid destination → Twilio rejects (21211)
+  console.log(
+    `strategy = ${sender.simulated ? "simulated (test creds + magic)" : "live sender / Virtual Phone"}, ` +
+      `from = ${sender.from}, happyTo = ${happyTo}`,
+  );
 
   const prisma = getPrisma();
   const { messagingOnboarding } = await import("../src/lib/messaging/service");
@@ -96,35 +109,41 @@ async function main() {
     try {
       const res = await sendQuickSms({
         workspaceId,
-        to: "+15005550006",
+        to: happyTo,
         body: "Transovo backend test — hello from test mode",
       });
       if (!res.sid || !/^SM/.test(res.sid)) throw new Error(`unexpected sid: ${res.sid}`);
       const stored = await prisma.message.findUnique({ where: { id: res.messageId! } });
       if (!stored) throw new Error("message row not persisted");
       if (stored.providerId !== res.sid) throw new Error(`providerId mismatch: ${stored.providerId}`);
-      ok("quick send via Twilio test creds", `sid=${res.sid} status=${res.status} dbStatus=${stored.status}`);
+      ok("quick send via Twilio", `sid=${res.sid} status=${res.status} dbStatus=${stored.status}`);
     } catch (e) {
-      fail("quick send via Twilio test creds", e);
+      fail("quick send via Twilio", e);
     }
 
-    // Failure path: magic invalid number → Twilio rejects → pipeline records failure.
-    try {
-      let threw = false;
+    // Failure path: magic invalid number → Twilio rejects synchronously → pipeline
+    // records failure. Only meaningful with TEST credentials; live sends to an
+    // invalid destination are queued and failed asynchronously via status callback.
+    if (sender.simulated) {
       try {
-        await sendQuickSms({ workspaceId, to: "+15005550001", body: "should fail" });
-      } catch {
-        threw = true;
+        let threw = false;
+        try {
+          await sendQuickSms({ workspaceId, to: badTo, body: "should fail" });
+        } catch {
+          threw = true;
+        }
+        if (!threw) throw new Error("expected send to a magic invalid number to fail");
+        const failed = await prisma.message.findFirst({
+          where: { workspaceId, to: badTo },
+          orderBy: { createdAt: "desc" },
+        });
+        if (failed?.status !== "failed") throw new Error(`expected failed row, got ${failed?.status}`);
+        ok("invalid magic number recorded as failed", "Twilio error handled");
+      } catch (e) {
+        fail("invalid magic number handling", e);
       }
-      if (!threw) throw new Error("expected send to a magic invalid number to fail");
-      const failed = await prisma.message.findFirst({
-        where: { workspaceId, to: "+15005550001" },
-        orderBy: { createdAt: "desc" },
-      });
-      if (failed?.status !== "failed") throw new Error(`expected failed row, got ${failed?.status}`);
-      ok("invalid magic number recorded as failed", "Twilio error handled");
-    } catch (e) {
-      fail("invalid magic number handling", e);
+    } else {
+      console.log("• invalid-number failure test skipped (magic failure numbers need test credentials)");
     }
 
     // Campaign enroll + worker drain → send through test creds.
@@ -147,7 +166,7 @@ async function main() {
       const recipient = await enrollContactInCampaign({
         workspaceId,
         campaignId: campaign.id,
-        phone: "+15005550006",
+        phone: happyTo,
         displayName: "Test Recipient",
       });
       const queued = await prisma.campaignMessage.findMany({ where: { recipientId: recipient.id } });
@@ -156,7 +175,7 @@ async function main() {
       const sent = await prisma.campaignMessage.findUnique({ where: { id: queued[0].id } });
       if (sent?.status !== "sent") throw new Error(`expected sent, got ${sent?.status} (${sent?.error})`);
       if (!/^SM/.test(sent.providerId || "")) throw new Error(`expected Twilio SID, got ${sent?.providerId}`);
-      ok("campaign enroll + drain sent via test creds", `sid=${sent.providerId}`);
+      ok("campaign enroll + drain sent via Twilio", `sid=${sent.providerId}`);
     } catch (e) {
       fail("campaign enroll + drain", e);
     }
