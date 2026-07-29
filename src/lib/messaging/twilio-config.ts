@@ -48,30 +48,71 @@ export function isTestMessagingMode() {
 /** Twilio "magic" sender number for test-credential sends (simulated success). */
 export const TWILIO_TEST_MAGIC_FROM = "+15005550006";
 
-/** Test-credential pair used only when getMessagingMode() === "test". */
+/** Twilio Virtual Phone destination — receives test SMS without A2P/carrier delivery. */
+export const TWILIO_VIRTUAL_PHONE = "+18777804236";
+
+/** Test-credential pair (Twilio Console → Account → API keys & tokens → Test credentials). */
 export function getTwilioTestCredentials() {
   const accountSid = process.env.TWILIO_TEST_ACCOUNT_SID?.trim();
   const authToken = process.env.TWILIO_TEST_AUTH_TOKEN?.trim();
   return { accountSid, authToken };
 }
 
-/** From-number for test-mode sends (magic number by default). */
-export function getTestFromNumber() {
-  return process.env.TWILIO_TEST_FROM_NUMBER?.trim() || TWILIO_TEST_MAGIC_FROM;
-}
+/**
+ * Resolve the credentials + sender for test-mode sends. Two supported strategies:
+ *
+ * 1. **Simulated API test** — when TWILIO_TEST_ACCOUNT_SID/TWILIO_TEST_AUTH_TOKEN are set:
+ *    uses those test credentials + the magic sender (+15005550006). Twilio returns a
+ *    simulated success (no delivery/charge). Send to any number.
+ *
+ * 2. **Virtual Phone / live sender** — otherwise: uses the live account credentials + a
+ *    real Twilio number your account owns (TWILIO_TEST_FROM_NUMBER, falling back to
+ *    TWILIO_FROM_NUMBER). Send `to` the Twilio Virtual Phone (+18777804236) to test
+ *    end-to-end without A2P. The `from` MUST be a number the account actually owns.
+ */
+export function getTestModeSender(): {
+  accountSid: string;
+  authToken: string;
+  from: string;
+  simulated: boolean;
+} {
+  const test = getTwilioTestCredentials();
+  if (test.accountSid && test.authToken) {
+    return {
+      accountSid: test.accountSid,
+      authToken: test.authToken,
+      from: process.env.TWILIO_TEST_FROM_NUMBER?.trim() || TWILIO_TEST_MAGIC_FROM,
+      simulated: true,
+    };
+  }
 
-export function assertTestTwilioConfigured() {
-  const { accountSid, authToken } = getTwilioTestCredentials();
+  const { accountSid, authToken } = getTwilioParentCredentials();
+  const from = process.env.TWILIO_TEST_FROM_NUMBER?.trim() || process.env.TWILIO_FROM_NUMBER?.trim();
   const missing: string[] = [];
-  if (!accountSid) missing.push("TWILIO_TEST_ACCOUNT_SID");
-  if (!authToken) missing.push("TWILIO_TEST_AUTH_TOKEN");
-  if (missing.length) {
-    throw new Error(
-      `Twilio test mode is missing env: ${missing.join(", ")}. ` +
-        `Copy these from Twilio Console → Account → API keys & tokens → Test credentials.`,
+  if (!accountSid || !authToken) {
+    missing.push(
+      "Twilio test credentials (TWILIO_TEST_ACCOUNT_SID + TWILIO_TEST_AUTH_TOKEN) " +
+        "or live credentials (TWILIO_ACCOUNT_SID + auth token)",
     );
   }
-  return { accountSid: accountSid!, authToken: authToken! };
+  if (!from) {
+    missing.push("TWILIO_TEST_FROM_NUMBER (or TWILIO_FROM_NUMBER) — a Twilio number your account owns");
+  }
+  if (missing.length) {
+    throw new Error(`Twilio test mode is missing: ${missing.join("; ")}`);
+  }
+  return { accountSid: accountSid!, authToken: authToken!, from: from!, simulated: false };
+}
+
+/** Resolved from-number for test-mode sends (non-throwing, for logging). */
+export function getTestFromNumber() {
+  const test = getTwilioTestCredentials();
+  return (
+    process.env.TWILIO_TEST_FROM_NUMBER?.trim() ||
+    (test.accountSid && test.authToken
+      ? TWILIO_TEST_MAGIC_FROM
+      : process.env.TWILIO_FROM_NUMBER?.trim() || TWILIO_TEST_MAGIC_FROM)
+  );
 }
 
 export function getTwilioParentCredentials() {

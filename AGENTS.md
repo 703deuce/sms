@@ -16,7 +16,9 @@ Database (non-obvious):
 Messaging modes (`src/lib/messaging/twilio-config.ts` → `getMessagingMode()`):
 - `live` (`MESSAGING_ADAPTER=twilio` or truthy `TWILIO_MODE`): real Twilio ISV — needs full A2P to reach "ready".
 - `mock` (both unset): no Twilio calls; registration reaches "ready" after submit + number purchase.
-- `test` (`TWILIO_MODE=test` **and** `MESSAGING_ADAPTER=test`): mock A2P for "ready", but real Twilio Messages API sends using **test credentials** (`TWILIO_TEST_ACCOUNT_SID`/`TWILIO_TEST_AUTH_TOKEN`) + magic sender `+15005550006` (simulated success, no delivery/charge). Magic destination numbers simulate failures.
+- `test` (`TWILIO_MODE=test` **and** `MESSAGING_ADAPTER=test`): mock A2P for "ready", then a real Twilio Messages API send via `getTestModeSender()` — two strategies:
+  - **Simulated**: `TWILIO_TEST_ACCOUNT_SID`/`TWILIO_TEST_AUTH_TOKEN` + magic sender `+15005550006` (no delivery/charge; magic destination numbers simulate failures).
+  - **Virtual Phone / live sender** (fallback when no test creds): live credentials + a real owned Twilio number (`TWILIO_TEST_FROM_NUMBER`, else `TWILIO_FROM_NUMBER`), sending `to` the Twilio Virtual Phone `+18777804236` to test end-to-end without A2P. The `from` MUST be a number the account actually owns (a bare/unowned number → Twilio error 21660).
 
 Backend tests (both need the DB schema applied):
 - `npm run test:messaging-wiring` — full mock pipeline (registration → send → campaign → STOP → webhooks).
