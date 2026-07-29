@@ -7,8 +7,9 @@ import { mockAdapter } from "./mock-adapter";
 import { appendRegistrationEvent, getRegistrationByWorkspace, updateRegistration, updateRegistrationIfLocked } from "./store";
 import { JobDeferredError, JobFailedError } from "./types";
 import { isMessagingReady } from "./status";
-import { isLiveMessagingAdapter } from "./twilio-config";
+import { isLiveMessagingAdapter, isTestMessagingMode } from "./twilio-config";
 import { twilioAdapter } from "./twilio-adapter";
+import { twilioTestAdapter } from "./twilio-test-adapter";
 
 function adapter() {
   return isLiveMessagingAdapter() ? twilioAdapter : null;
@@ -452,6 +453,11 @@ export async function sendViaRegistration(workspaceId: string, to: string, body:
   const reg = await getRegistrationByWorkspace(workspaceId);
   if (!isMessagingReady(reg)) {
     throw new Error("Messaging is not ready for this workspace. Complete A2P registration first.");
+  }
+  // Test mode: registration reached "ready" via the mock adapter, but the actual send
+  // goes through the real Twilio Messages API using test credentials + the magic number.
+  if (isTestMessagingMode()) {
+    return twilioTestAdapter.sendSms({ to, body });
   }
   const live = adapter();
   if (!live) {

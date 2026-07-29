@@ -16,11 +16,62 @@ export function getAppBaseUrl() {
   );
 }
 
-export function isLiveMessagingAdapter() {
-  if (process.env.MESSAGING_ADAPTER) {
-    return process.env.MESSAGING_ADAPTER.trim().toLowerCase() === "twilio";
+/**
+ * Messaging execution mode:
+ * - "live": real Twilio ISV (subaccounts, TrustHub, A2P, Messaging Service sends).
+ * - "test": A2P/registration runs through the mock adapter (reaches "ready" without real
+ *   ISV), but outbound SMS is sent through the real Twilio Messages API using **test
+ *   credentials** and the magic sender number (+15005550006). Twilio returns a simulated
+ *   response — real SID, no carrier delivery, no charge, no A2P required.
+ * - "mock": no Twilio calls at all (fully local fake SIDs).
+ */
+export function getMessagingMode(): "live" | "test" | "mock" {
+  const adapter = process.env.MESSAGING_ADAPTER?.trim().toLowerCase();
+  const mode = process.env.TWILIO_MODE?.trim().toLowerCase();
+  if (adapter) {
+    if (adapter === "twilio") return "live";
+    if (adapter === "test") return "test";
+    return "mock";
   }
-  return truthy(process.env.TWILIO_MODE);
+  if (mode === "test") return "test";
+  return truthy(mode) ? "live" : "mock";
+}
+
+export function isLiveMessagingAdapter() {
+  return getMessagingMode() === "live";
+}
+
+export function isTestMessagingMode() {
+  return getMessagingMode() === "test";
+}
+
+/** Twilio "magic" sender number for test-credential sends (simulated success). */
+export const TWILIO_TEST_MAGIC_FROM = "+15005550006";
+
+/** Test-credential pair used only when getMessagingMode() === "test". */
+export function getTwilioTestCredentials() {
+  const accountSid = process.env.TWILIO_TEST_ACCOUNT_SID?.trim();
+  const authToken = process.env.TWILIO_TEST_AUTH_TOKEN?.trim();
+  return { accountSid, authToken };
+}
+
+/** From-number for test-mode sends (magic number by default). */
+export function getTestFromNumber() {
+  return process.env.TWILIO_TEST_FROM_NUMBER?.trim() || TWILIO_TEST_MAGIC_FROM;
+}
+
+export function assertTestTwilioConfigured() {
+  const { accountSid, authToken } = getTwilioTestCredentials();
+  const missing: string[] = [];
+  if (!accountSid) missing.push("TWILIO_TEST_ACCOUNT_SID");
+  if (!authToken) missing.push("TWILIO_TEST_AUTH_TOKEN");
+  if (missing.length) {
+    throw new Error(
+      `Twilio test mode is missing env: ${missing.join(", ")}. ` +
+        `Copy these from Twilio Console → Account → API keys & tokens → Test credentials.`,
+    );
+  }
+  return { accountSid: accountSid!, authToken: authToken! };
 }
 
 export function getTwilioParentCredentials() {
