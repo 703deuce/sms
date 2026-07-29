@@ -587,6 +587,18 @@ function modelApi(model: string): ModelApi {
         return { count: rows.length };
       }
 
+      // PostgREST rejects `.or()` filters on UPDATE/DELETE (they work on SELECT),
+      // failing with 42703. When the filter has an OR clause, resolve matching ids
+      // via a SELECT first, then update by id list.
+      if (resolved && Object.prototype.hasOwnProperty.call(resolved, "OR")) {
+        const rows = await api.findMany({ where });
+        const ids = rows.map((r: Row) => r.id as string);
+        if (!ids.length) return { count: 0 };
+        const { data: updated, error } = await db.from(t).update(patch).in("id", ids).select("id");
+        if (error) throw new DbError(error.message, error.code);
+        return { count: updated?.length ?? 0 };
+      }
+
       let q: any = db.from(t).update(patch).select("id");
       q = applyWhereSync(q, resolved);
       const { data: updated, error } = await q;
