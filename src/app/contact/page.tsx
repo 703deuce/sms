@@ -21,6 +21,9 @@ export default function ContactPage() {
             <Link href="/terms" className="text-slate-600 hover:text-blue-600">
               Terms
             </Link>
+            <Link href="/acceptable-use" className="text-slate-600 hover:text-blue-600">
+              Acceptable Use
+            </Link>
             <Link href="/" className="text-blue-600 hover:underline">
               Home
             </Link>

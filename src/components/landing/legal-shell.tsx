@@ -23,6 +23,12 @@ export function LegalShell({
             <Link href="/terms" className="text-slate-600 hover:text-blue-600">
               Terms
             </Link>
+            <Link href="/acceptable-use" className="text-slate-600 hover:text-blue-600">
+              Acceptable Use
+            </Link>
+            <Link href="/contact" className="text-slate-600 hover:text-blue-600">
+              Contact
+            </Link>
             <Link href="/" className="text-blue-600 hover:underline">
               Home
             </Link>
@@ -47,7 +53,7 @@ export function LegalShell({
             Terms of Service
           </Link>
           <Link href="/acceptable-use" className="mx-2 text-blue-600 hover:underline">
-            Acceptable Use
+            Acceptable Use Policy
           </Link>
           <Link href="/contact" className="mx-2 text-blue-600 hover:underline">
             Contact
