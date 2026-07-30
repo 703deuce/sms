@@ -7,11 +7,11 @@ import "./landing.css";
 const SUPPORT_EMAIL = "support@transovo.ai";
 
 const NAV = [
-  { href: "#product", label: "Product" },
-  { href: "#how-it-works", label: "How it Works" },
-  { href: "#benefits", label: "Benefits" },
-  { href: "#use-cases", label: "Use Cases" },
-  { href: "#faq", label: "FAQ" },
+  { href: "#top", label: "Home" },
+  { href: "#problem", label: "Why Transovo" },
+  { href: "#benefits", label: "Features" },
+  { href: "#cta", label: "Pricing" },
+  { href: "#faq", label: "Reviews" },
 ];
 
 const BENEFITS = [
@@ -45,6 +45,15 @@ const BENEFITS = [
     body: "Stay in touch with customers who already know your business. Send useful updates and offers without relying only on email or social media.",
     icon: "reconnect",
   },
+];
+
+const PRODUCT_CHECKS = [
+  "Campaigns, contacts, and templates in one place",
+  "Two-way business inbox for customer replies",
+  "Saved templates for common follow-ups",
+  "Separate business number from your personal phone",
+  "Permission-based SMS marketing workflows",
+  "Business messaging software built for small teams",
 ];
 
 const USE_CASES = [
@@ -135,17 +144,23 @@ function LogoMark() {
     <span className="lp-logo-mark" aria-hidden>
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
         <path
-          d="M12 3l1.8 4.8L19 9.6l-4.2 2.1L13.8 17 12 13.8 10.2 17l-1-5.3L5 9.6l5.2-1.8L12 3z"
+          d="M8 12a4 4 0 1 1 8 0 4 4 0 0 1-8 0Z"
           fill="currentColor"
+          opacity="0.95"
         />
-        <circle cx="12" cy="12" r="8.5" stroke="currentColor" strokeWidth="1.5" opacity="0.55" />
+        <path
+          d="M12 3v2.2M12 18.8V21M4.9 4.9l1.6 1.6M17.5 17.5l1.6 1.6M3 12h2.2M18.8 12H21M4.9 19.1l1.6-1.6M17.5 6.5l1.6-1.6"
+          stroke="currentColor"
+          strokeWidth="1.7"
+          strokeLinecap="round"
+        />
       </svg>
     </span>
   );
 }
 
 function BenefitIcon({ type }: { type: string }) {
-  const common = {
+  const props = {
     width: 22,
     height: 22,
     viewBox: "0 0 24 24",
@@ -158,7 +173,7 @@ function BenefitIcon({ type }: { type: string }) {
   switch (type) {
     case "lead":
       return (
-        <svg {...common}>
+        <svg {...props} aria-hidden>
           <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
           <circle cx="9" cy="7" r="4" />
           <path d="M19 8v6M22 11h-6" />
@@ -166,36 +181,36 @@ function BenefitIcon({ type }: { type: string }) {
       );
     case "offers":
       return (
-        <svg {...common}>
-          <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
-          <line x1="7" y1="7" x2="7.01" y2="7" />
+        <svg {...props} aria-hidden>
+          <path d="m3 11 19-9-9 19-2-8-8-2z" />
         </svg>
       );
     case "reviews":
       return (
-        <svg {...common}>
+        <svg {...props} aria-hidden>
           <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
         </svg>
       );
     case "inbox":
       return (
-        <svg {...common}>
+        <svg {...props} aria-hidden>
           <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
         </svg>
       );
     case "reminders":
       return (
-        <svg {...common}>
+        <svg {...props} aria-hidden>
           <circle cx="12" cy="12" r="9" />
           <path d="M12 7v5l3 2" />
         </svg>
       );
     default:
       return (
-        <svg {...common}>
+        <svg {...props} aria-hidden>
           <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
           <circle cx="9" cy="7" r="4" />
-          <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+          <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+          <path d="M16 3.13a4 4 0 0 1 0 7.75" />
         </svg>
       );
   }
@@ -203,8 +218,8 @@ function BenefitIcon({ type }: { type: string }) {
 
 function AudienceIcon({ type }: { type: string }) {
   const common = {
-    width: 20,
-    height: 20,
+    width: 22,
+    height: 22,
     viewBox: "0 0 24 24",
     fill: "none",
     stroke: "currentColor",
@@ -216,15 +231,15 @@ function AudienceIcon({ type }: { type: string }) {
     case "hammer":
       return (
         <svg {...common}>
-          <path d="M15 12l-8.5 8.5c-.83.83-2.17.83-3 0 0 0 0 0 0 0-.83-.83-.83-2.17 0-3L12 9" />
-          <path d="M17.64 15L22 10.64" />
-          <path d="M20.91 11.7l-1.25-1.25c-.6-.6-.93-1.4-.93-2.25v-.86l.86-.86c.8-.8 2.13-.8 2.94 0l.86.86-.86.86h-.86c-.85 0-1.65.34-2.25.93z" />
+          <path d="m15 12-8.5 8.5a2.12 2.12 0 1 1-3-3L12 9" />
+          <path d="M18 15l4-4" />
+          <path d="m21.5 11.5-1.8-1.8a2.4 2.4 0 0 0-3.4 0l-.7.7 3.4 3.4.7-.7a2.4 2.4 0 0 0 0-3.4Z" />
         </svg>
       );
     case "home":
       return (
         <svg {...common}>
-          <path d="M3 11l9-8 9 8" />
+          <path d="m3 11 9-8 9 8" />
           <path d="M5 10v10h14V10" />
         </svg>
       );
@@ -233,7 +248,7 @@ function AudienceIcon({ type }: { type: string }) {
         <svg {...common}>
           <circle cx="6" cy="6" r="3" />
           <circle cx="6" cy="18" r="3" />
-          <path d="M20 4L8.12 15.88M14.47 14.48L20 20M8.12 8.12L12 12" />
+          <path d="M20 4 8.12 15.88M14.47 14.48 20 20M8.12 8.12 12 12" />
         </svg>
       );
     case "briefcase":
@@ -255,7 +270,7 @@ function AudienceIcon({ type }: { type: string }) {
           <path d="M3 21h18" />
           <path d="M5 21V7l8-4v18" />
           <path d="M19 21V11l-6-4" />
-          <path d="M9 9v.01M9 12v.01M9 15v.01M9 18v.01" />
+          <path d="M9 9h.01M9 12h.01M9 15h.01M9 18h.01" />
         </svg>
       );
     case "heart":
@@ -267,19 +282,31 @@ function AudienceIcon({ type }: { type: string }) {
     default:
       return (
         <svg {...common}>
-          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+          <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
           <polyline points="9 22 9 12 15 12 15 22" />
         </svg>
       );
   }
 }
 
+function CheckMini() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+      <path d="M20 6 9 17l-5-5" />
+    </svg>
+  );
+}
+
 function Chevron() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M6 9l6 6 6-6" />
+      <path d="m6 9 6 6 6-6" />
     </svg>
   );
+}
+
+function SideIcon({ children, active }: { children: React.ReactNode; active?: boolean }) {
+  return <div className={`nav-item${active ? " active" : ""}`}>{children}</div>;
 }
 
 export function LandingPage() {
@@ -287,7 +314,7 @@ export function LandingPage() {
   const [openFaq, setOpenFaq] = useState<number | null>(0);
 
   return (
-    <div className="landing">
+    <div className="landing" id="top">
       <header className="lp-nav">
         <div className="lp-container lp-nav-inner">
           <Link href="/" className="lp-logo">
@@ -303,7 +330,7 @@ export function LandingPage() {
           </nav>
           <div className="lp-nav-actions">
             <Link href="/login" className="lp-login">
-              Login
+              Log In
             </Link>
             <Link href="/signup" className="lp-btn lp-btn-primary lp-btn-sm">
               Get Started
@@ -316,11 +343,7 @@ export function LandingPage() {
               onClick={() => setMenuOpen((v) => !v)}
             >
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                {menuOpen ? (
-                  <path d="M18 6L6 18M6 6l12 12" />
-                ) : (
-                  <path d="M4 7h16M4 12h16M4 17h16" />
-                )}
+                {menuOpen ? <path d="M18 6 6 18M6 6l12 12" /> : <path d="M4 7h16M4 12h16M4 17h16" />}
               </svg>
             </button>
           </div>
@@ -331,16 +354,25 @@ export function LandingPage() {
               {item.label}
             </a>
           ))}
-          <a href="/login" onClick={() => setMenuOpen(false)}>
-            Login
-          </a>
+          <Link href="/login" onClick={() => setMenuOpen(false)}>
+            Log In
+          </Link>
         </div>
       </header>
 
       <main>
         <section className="lp-hero">
+          <div className="lp-blob lp-blob-1" />
+          <div className="lp-blob lp-blob-2" />
+          <div className="lp-blob lp-blob-3" />
           <div className="lp-container lp-hero-grid">
             <div>
+              <div className="lp-eyebrow">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                  <path d="M12 2l2.4 7.2H22l-6 4.4 2.3 7.2L12 16.4 5.7 20.8 8 13.6 2 9.2h7.6L12 2z" />
+                </svg>
+                Business messaging software for small teams
+              </div>
               <h1>SMS Marketing for Small Businesses Made Simple</h1>
               <p className="lp-hero-copy">
                 SMS marketing for small businesses should make it easier to reach customers, not
@@ -360,54 +392,142 @@ export function LandingPage() {
                 Consent-based business messaging. Customers can reply STOP at any time.
               </p>
             </div>
-            <div className="lp-dashboard" aria-hidden>
-              <div className="lp-dash-side">
-                <span className="active" />
-                <span />
-                <span />
-                <span />
-                <span />
-              </div>
-              <div className="lp-dash-main">
-                <div className="lp-dash-top">
-                  <div className="lp-dash-search" />
-                  <span className="lp-pill">Live inbox</span>
+
+            <div className="lp-dash-wrap" aria-hidden>
+              <div className="lp-dash-glow" />
+              <div className="lp-dashboard">
+                <div className="lp-dash-side">
+                  <div className="lp-dash-brand">T</div>
+                  <SideIcon active>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M3 12 12 4l9 8" />
+                      <path d="M5 10v10h14V10" />
+                    </svg>
+                  </SideIcon>
+                  <SideIcon>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                    </svg>
+                  </SideIcon>
+                  <SideIcon>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                      <circle cx="9" cy="7" r="4" />
+                    </svg>
+                  </SideIcon>
+                  <SideIcon>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+                    </svg>
+                  </SideIcon>
+                  <SideIcon>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <circle cx="12" cy="12" r="3" />
+                      <path d="M12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4" />
+                    </svg>
+                  </SideIcon>
                 </div>
-                <div className="lp-dash-stats">
-                  <div className="lp-stat">
-                    <strong>1,248</strong>
-                    <span>Messages sent</span>
-                  </div>
-                  <div className="lp-stat">
-                    <strong>86%</strong>
-                    <span>Delivery rate</span>
-                  </div>
-                  <div className="lp-stat">
-                    <strong>312</strong>
-                    <span>Replies</span>
-                  </div>
-                </div>
-                <div className="lp-dash-list">
-                  <div className="lp-dash-row">
-                    <div>
-                      <div className="name">Maya Chen</div>
-                      <div className="msg">Thanks — I can come Thursday at 2.</div>
+                <div className="lp-dash-main">
+                  <div className="lp-dash-top">
+                    <div className="lp-dash-welcome">
+                      Welcome back
+                      <span>Harbor Home · Inbox overview</span>
                     </div>
-                    <span className="lp-pill">Reply</span>
-                  </div>
-                  <div className="lp-dash-row">
-                    <div>
-                      <div className="name">Jordan Lee</div>
-                      <div className="msg">Can you send the estimate again?</div>
+                    <div className="lp-dash-search">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <circle cx="11" cy="11" r="7" />
+                        <path d="m20 20-3-3" />
+                      </svg>
+                      Search messages
                     </div>
-                    <span className="lp-pill">New</span>
                   </div>
-                  <div className="lp-dash-row">
-                    <div>
-                      <div className="name">Sam Rivera</div>
-                      <div className="msg">Reminder confirmed. See you then.</div>
+                  <div className="lp-dash-stats">
+                    <div className="lp-stat">
+                      <div className="label">Messages sent</div>
+                      <strong>1,248</strong>
+                      <div className="lp-bars">
+                        <i style={{ height: "40%" }} />
+                        <i style={{ height: "65%" }} />
+                        <i style={{ height: "50%" }} />
+                        <i style={{ height: "85%" }} />
+                        <i style={{ height: "70%" }} />
+                        <i style={{ height: "95%" }} />
+                      </div>
                     </div>
-                    <span className="lp-pill">Done</span>
+                    <div className="lp-stat">
+                      <div className="label">Delivery rate</div>
+                      <strong>96%</strong>
+                      <div className="lp-bars">
+                        <i style={{ height: "55%" }} />
+                        <i style={{ height: "70%" }} />
+                        <i style={{ height: "60%" }} />
+                        <i style={{ height: "90%" }} />
+                        <i style={{ height: "80%" }} />
+                        <i style={{ height: "100%" }} />
+                      </div>
+                    </div>
+                    <div className="lp-stat">
+                      <div className="label">Replies</div>
+                      <strong>312</strong>
+                      <div className="lp-bars">
+                        <i style={{ height: "35%" }} />
+                        <i style={{ height: "50%" }} />
+                        <i style={{ height: "45%" }} />
+                        <i style={{ height: "75%" }} />
+                        <i style={{ height: "60%" }} />
+                        <i style={{ height: "88%" }} />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="lp-dash-panels">
+                    <div className="lp-dash-card">
+                      <div className="lp-dash-card-h">
+                        Recent conversations
+                        <span className="lp-pill">Live</span>
+                      </div>
+                      <div className="lp-dash-row">
+                        <div className="lp-avatar">MC</div>
+                        <div className="meta">
+                          <div className="name">Maya Chen</div>
+                          <div className="msg">Thanks — I can come Thursday at 2.</div>
+                        </div>
+                        <span className="lp-pill">Reply</span>
+                      </div>
+                      <div className="lp-dash-row">
+                        <div className="lp-avatar" style={{ background: "linear-gradient(135deg,#86efac,#059669)" }}>
+                          JL
+                        </div>
+                        <div className="meta">
+                          <div className="name">Jordan Lee</div>
+                          <div className="msg">Can you send the estimate again?</div>
+                        </div>
+                        <span className="lp-pill amber">New</span>
+                      </div>
+                      <div className="lp-dash-row">
+                        <div className="lp-avatar" style={{ background: "linear-gradient(135deg,#fcd34d,#f59e0b)" }}>
+                          SR
+                        </div>
+                        <div className="meta">
+                          <div className="name">Sam Rivera</div>
+                          <div className="msg">Reminder confirmed. See you then.</div>
+                        </div>
+                        <span className="lp-pill green">Done</span>
+                      </div>
+                    </div>
+                    <div className="lp-dash-card">
+                      <div className="lp-dash-card-h">Weekly activity</div>
+                      <div className="lp-mini-chart">
+                        <div className="bars">
+                          <span style={{ height: "42%" }} />
+                          <span style={{ height: "58%" }} />
+                          <span style={{ height: "48%" }} />
+                          <span style={{ height: "76%" }} />
+                          <span style={{ height: "64%" }} />
+                          <span style={{ height: "88%" }} />
+                          <span style={{ height: "72%" }} />
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -415,7 +535,7 @@ export function LandingPage() {
           </div>
         </section>
 
-        <section className="lp-section">
+        <section id="problem" className="lp-section">
           <div className="lp-container lp-section-center">
             <h2>Reach Customers Before They Move On</h2>
             <p className="lp-lead">
@@ -455,17 +575,33 @@ export function LandingPage() {
 
         <section id="product" className="lp-section">
           <div className="lp-container lp-product-grid">
-            <div className="lp-phone" aria-hidden>
-              <div className="lp-phone-screen">
-                <div className="lp-bubble out">
-                  Hi Maya — your appointment is tomorrow at 10 AM. Reply YES to confirm or STOP to
-                  opt out.
+            <div className="lp-phone-wrap" aria-hidden>
+              <div className="lp-phone-glow" />
+              <div className="lp-phone">
+                <div className="lp-phone-notch" />
+                <div className="lp-phone-screen">
+                  <div className="lp-phone-header">
+                    <strong>Harbor Home</strong>
+                    <span>Business SMS · iMessage style</span>
+                  </div>
+                  <div className="lp-bubble out">
+                    Hi Maya — your appointment is tomorrow at 10 AM. Reply YES to confirm or STOP
+                    to opt out.
+                    <time>9:12 AM</time>
+                  </div>
+                  <div className="lp-bubble in">
+                    YES — see you then!
+                    <time>9:14 AM</time>
+                  </div>
+                  <div className="lp-bubble out">
+                    Great. If you need to reschedule, just reply here and we will help.
+                    <time>9:15 AM</time>
+                  </div>
+                  <div className="lp-bubble in">
+                    Perfect, thank you.
+                    <time>9:16 AM</time>
+                  </div>
                 </div>
-                <div className="lp-bubble in">YES — see you then!</div>
-                <div className="lp-bubble out">
-                  Great. If you need to reschedule, just reply here and we will help.
-                </div>
-                <div className="lp-bubble in">Perfect, thank you.</div>
               </div>
             </div>
             <div>
@@ -479,38 +615,14 @@ export function LandingPage() {
                 business communication separate from your personal number.
               </p>
               <ul className="lp-checklist">
-                <li>
-                  <span className="lp-check" aria-hidden>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                      <path d="M20 6L9 17l-5-5" />
-                    </svg>
-                  </span>
-                  Campaigns, templates, and contacts in one place
-                </li>
-                <li>
-                  <span className="lp-check" aria-hidden>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                      <path d="M20 6L9 17l-5-5" />
-                    </svg>
-                  </span>
-                  Two-way inbox for customer replies
-                </li>
-                <li>
-                  <span className="lp-check" aria-hidden>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                      <path d="M20 6L9 17l-5-5" />
-                    </svg>
-                  </span>
-                  Business messaging software — not a personal texting app
-                </li>
-                <li>
-                  <span className="lp-check" aria-hidden>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                      <path d="M20 6L9 17l-5-5" />
-                    </svg>
-                  </span>
-                  Built for permission-based SMS marketing
-                </li>
+                {PRODUCT_CHECKS.map((item) => (
+                  <li key={item}>
+                    <span className="lp-check" aria-hidden>
+                      <CheckMini />
+                    </span>
+                    {item}
+                  </li>
+                ))}
               </ul>
             </div>
           </div>
@@ -562,7 +674,9 @@ export function LandingPage() {
               <ul className="lp-use-grid">
                 {USE_CASES.map((item) => (
                   <li key={item}>
-                    <span className="lp-dot" aria-hidden />
+                    <span className="lp-use-check" aria-hidden>
+                      <CheckMini />
+                    </span>
                     {item}
                   </li>
                 ))}
@@ -580,7 +694,7 @@ export function LandingPage() {
                 businesses. Each business controls its own customer list, message content, and
                 communication schedule.
               </p>
-              <div className="lp-audience-grid" style={{ marginTop: "1.25rem" }}>
+              <div className="lp-audience-grid" style={{ marginTop: "1.35rem" }}>
                 {AUDIENCES.map((item) => (
                   <div key={item.label} className="lp-audience-item">
                     <div className="lp-audience-icon">
@@ -596,10 +710,11 @@ export function LandingPage() {
 
         <section id="compliance" className="lp-compliance">
           <div className="lp-container lp-compliance-grid">
-            <article className="lp-compliance-card">
-              <div className="lp-icon">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+            <div className="lp-compliance-left">
+              <div className="lp-shield-circle" aria-hidden>
+                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.2">
                   <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                  <path d="m9 12 2 2 4-4" />
                 </svg>
               </div>
               <h2>Permission-Based Messaging Comes First</h2>
@@ -617,7 +732,7 @@ export function LandingPage() {
                 businesses follow carrier rules, but each business remains responsible for its
                 messaging practices and customer consent.
               </p>
-            </article>
+            </div>
             <article className="lp-compliance-card">
               <h2>Give Customers a Clear Choice</h2>
               <p>
@@ -636,6 +751,9 @@ export function LandingPage() {
                 Your final consent language should match your actual messaging program and business
                 practices.
               </p>
+              <a href="/acceptable-use" className="lp-btn lp-btn-secondary lp-btn-sm" style={{ marginTop: "0.35rem" }}>
+                Read Acceptable Use Policy
+              </a>
             </article>
           </div>
         </section>
@@ -667,16 +785,18 @@ export function LandingPage() {
               <Link href="/signup" className="lp-btn lp-btn-primary">
                 Get Started With Transovo
               </Link>
-              <p className="lp-disclaimer" style={{ marginTop: "0.85rem" }}>
+              <p className="lp-disclaimer" style={{ marginTop: "0.9rem" }}>
                 Business verification may be required before sending U.S. application-to-person
                 messages.
               </p>
               <div className="lp-cta-phone" aria-hidden>
                 <div className="lp-bubble out" style={{ maxWidth: "100%" }}>
                   Thanks for booking — we will text you a reminder tomorrow.
+                  <time>Today</time>
                 </div>
                 <div className="lp-bubble in" style={{ maxWidth: "100%" }}>
                   Sounds good!
+                  <time>Today</time>
                 </div>
               </div>
             </div>
@@ -693,11 +813,7 @@ export function LandingPage() {
                 const open = openFaq === index;
                 return (
                   <div key={item.q} className={`lp-faq-item${open ? " open" : ""}`}>
-                    <button
-                      type="button"
-                      aria-expanded={open}
-                      onClick={() => setOpenFaq(open ? null : index)}
-                    >
+                    <button type="button" aria-expanded={open} onClick={() => setOpenFaq(open ? null : index)}>
                       {item.q}
                       <Chevron />
                     </button>
@@ -732,6 +848,11 @@ export function LandingPage() {
                     <path d="M14 9h3V6h-3c-1.7 0-3 1.3-3 3v2H8v3h3v7h3v-7h3l1-3h-4V9c0-.6.4-1 1-1z" />
                   </svg>
                 </a>
+                <a href="https://x.com" aria-label="X" rel="noreferrer" target="_blank">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M18.244 2H21.5l-7.5 8.57L22.5 22h-6.09l-4.77-6.23L6.2 22H2.94l8.03-9.17L1.5 2h6.24l4.3 5.7L18.244 2zm-1.07 18h1.7L7.02 3.9H5.2L17.174 20z" />
+                  </svg>
+                </a>
                 <a href="https://instagram.com" aria-label="Instagram" rel="noreferrer" target="_blank">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <rect x="3" y="3" width="18" height="18" rx="5" />
@@ -739,15 +860,9 @@ export function LandingPage() {
                     <circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none" />
                   </svg>
                 </a>
-                <a href="https://linkedin.com" aria-label="LinkedIn" rel="noreferrer" target="_blank">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M6.5 8.5A2 2 0 1 1 6.5 4.5a2 2 0 0 1 0 4zM4.8 20V9.8h3.4V20H4.8zM10.2 20V9.8h3.2v1.4h.05c.45-.85 1.55-1.75 3.2-1.75 3.4 0 4.05 2.25 4.05 5.15V20h-3.4v-4.55c0-1.1 0-2.5-1.55-2.5s-1.8 1.2-1.8 2.4V20h-3.75z" />
-                  </svg>
-                </a>
               </div>
               <p className="lp-support-note">
-                Support:{" "}
-                <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>
+                Support: <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>
                 <br />
                 Legal entity: Transovo AI LLC
               </p>
@@ -757,15 +872,22 @@ export function LandingPage() {
                 <h4>Product</h4>
                 <a href="#product">Overview</a>
                 <a href="#how-it-works">How it Works</a>
-                <a href="#benefits">Benefits</a>
+                <a href="#benefits">Features</a>
                 <a href="#use-cases">Use Cases</a>
               </div>
               <div>
                 <h4>Company</h4>
                 <Link href="/">Home</Link>
                 <Link href="/contact">Contact</Link>
-                <Link href="/login">Login</Link>
+                <Link href="/login">Log In</Link>
                 <Link href="/signup">Get Started</Link>
+              </div>
+              <div>
+                <h4>Resources</h4>
+                <a href="#faq">FAQ</a>
+                <a href="#compliance">Consent Guide</a>
+                <a href="#compliance">STOP / HELP</a>
+                <Link href="/contact">Support</Link>
               </div>
               <div>
                 <h4>Legal</h4>
@@ -773,20 +895,14 @@ export function LandingPage() {
                 <Link href="/terms">Terms of Service</Link>
                 <Link href="/acceptable-use">Acceptable Use Policy</Link>
               </div>
-              <div>
-                <h4>Compliance</h4>
-                <a href="#compliance">Consent Requirements</a>
-                <a href="#compliance">STOP / HELP</a>
-                <Link href="/contact">Support</Link>
-              </div>
             </div>
           </div>
           <div className="lp-footer-legal">
-            <p>
+            <div className="lp-footer-legal-box">
               Transovo supports permission-based business messaging. Message frequency varies by
               business and campaign. Message and data rates may apply. Reply STOP to opt out or HELP
               for help.
-            </p>
+            </div>
             <p className="lp-footer-copy">© 2026 Transovo AI LLC. All rights reserved.</p>
           </div>
         </div>
