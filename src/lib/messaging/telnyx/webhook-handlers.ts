@@ -6,6 +6,7 @@ import { getPrisma } from "@/lib/db";
 import { processInboundMessage, resolveInboundContext } from "@/lib/messaging/inbound-process";
 import { enqueueMessagingRegistrationAdvance } from "@/lib/messaging/enqueue-advance";
 import { markRecipientFact } from "@/lib/campaigns/sequence-runner";
+import { looksLikeTwilioMessagingServiceSid } from "../provider-ids";
 import { telnyxProvider } from "./provider";
 import { telnyxEventType } from "./webhook-auth";
 
@@ -78,13 +79,17 @@ export async function handleTelnyxInbound(payload: unknown) {
 
   let replySent = false;
   if (result.replyText && ctx.registration) {
+    const profileId =
+      ctx.registration.messagingProfileId ||
+      (looksLikeTwilioMessagingServiceSid(ctx.registration.messagingServiceSid)
+        ? null
+        : ctx.registration.messagingServiceSid);
     try {
       await telnyxProvider.sendMessage(ctx.registration as any, {
         to: parsed.from,
         from: ctx.phoneE164 || parsed.to,
         body: result.replyText,
-        messagingProfileId:
-          ctx.registration.messagingProfileId || ctx.registration.messagingServiceSid,
+        messagingProfileId: profileId,
       });
       replySent = true;
     } catch (err) {
@@ -181,34 +186,44 @@ export async function handleTelnyxCompliance(payload: unknown) {
   }
 
   if (reg) {
-    const statusRaw = String(
-      eventPayload.status || eventPayload.brandStatus || eventPayload.campaignStatus || "",
-    );
     const eventType = String(data.event_type || root.event_type || "compliance");
+    const brandStatusRaw = String(
+      eventPayload.identityStatus ||
+        eventPayload.brandStatus ||
+        (brandId ? eventPayload.status : "") ||
+        "",
+    );
+    const campaignStatusRaw = String(
+      eventPayload.campaignStatus || (campaignId && !brandId ? eventPayload.status : "") || "",
+    );
     const patch: Record<string, unknown> = {};
-    if (brandId && statusRaw) {
-      patch.brandStatusRaw = statusRaw;
-      const upper = statusRaw.toUpperCase();
-      if (["FAILED", "REJECTED", "UNVERIFIED"].includes(upper)) {
+    if (brandId && brandStatusRaw) {
+      patch.brandStatusRaw = brandStatusRaw;
+      const upper = brandStatusRaw.toUpperCase();
+      if (["FAILED", "REJECTED", "UNVERIFIED", "REGISTRATION_FAILED", "SUSPENDED"].includes(upper)) {
         patch.brandStatus = "failed";
         patch.messagingEnabled = false;
         patch.overallStatus = "failed";
-        patch.registrationFailureReason = `Brand ${statusRaw}`;
-      } else if (["OK", "VERIFIED", "VETTED_VERIFIED", "APPROVED", "ACTIVE"].includes(upper)) {
+        patch.registrationFailureReason = `Brand ${brandStatusRaw}`;
+      } else if (
+        ["OK", "VERIFIED", "VETTED_VERIFIED", "SELF_DECLARED", "APPROVED", "ACTIVE"].includes(upper)
+      ) {
         patch.brandStatus = "approved";
       } else {
         patch.brandStatus = "in_review";
         patch.messagingEnabled = false;
       }
     }
-    if (campaignId && statusRaw) {
-      patch.campaignStatusRaw = statusRaw;
-      const upper = statusRaw.toUpperCase();
-      if (["FAILED", "REJECTED", "EXPIRED"].includes(upper)) {
+    if (campaignId && campaignStatusRaw) {
+      patch.campaignStatusRaw = campaignStatusRaw;
+      const upper = campaignStatusRaw.toUpperCase();
+      if (
+        ["FAILED", "REJECTED", "EXPIRED", "SUSPENDED", "TCR_FAILED", "MNO_REJECTED"].includes(upper)
+      ) {
         patch.campaignStatus = "failed";
         patch.messagingEnabled = false;
         patch.overallStatus = "failed";
-        patch.registrationFailureReason = `Campaign ${statusRaw}`;
+        patch.registrationFailureReason = `Campaign ${campaignStatusRaw}`;
       } else if (["ACTIVE", "APPROVED", "VERIFIED", "OK"].includes(upper)) {
         patch.campaignStatus = "approved";
       } else {

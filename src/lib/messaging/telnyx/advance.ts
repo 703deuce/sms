@@ -18,12 +18,25 @@ import { looksLikeTwilioMessagingServiceSid } from "../provider-ids";
 
 function isApprovedBrand(status: string) {
   const s = status.toUpperCase();
-  return ["OK", "VERIFIED", "VETTED_VERIFIED", "APPROVED", "ACTIVE"].includes(s);
+  return [
+    "OK",
+    "VERIFIED",
+    "VETTED_VERIFIED",
+    "SELF_DECLARED",
+    "APPROVED",
+    "ACTIVE",
+  ].includes(s);
 }
 
 function isRejectedBrand(status: string) {
   const s = status.toUpperCase();
-  return ["FAILED", "REJECTED", "UNVERIFIED"].includes(s);
+  return [
+    "FAILED",
+    "REJECTED",
+    "UNVERIFIED",
+    "REGISTRATION_FAILED",
+    "SUSPENDED",
+  ].includes(s);
 }
 
 function isApprovedCampaign(status: string) {
@@ -33,7 +46,14 @@ function isApprovedCampaign(status: string) {
 
 function isRejectedCampaign(status: string) {
   const s = status.toUpperCase();
-  return ["FAILED", "REJECTED", "EXPIRED"].includes(s);
+  return [
+    "FAILED",
+    "REJECTED",
+    "EXPIRED",
+    "SUSPENDED",
+    "TCR_FAILED",
+    "MNO_REJECTED",
+  ].includes(s);
 }
 
 async function log(

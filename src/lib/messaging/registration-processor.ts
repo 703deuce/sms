@@ -6,6 +6,7 @@ import { enqueueMessagingRegistrationAdvance } from "./enqueue-advance";
 import { getMessagingProviderForRegistration } from "./get-provider";
 import { mockAdapter } from "./mock-adapter";
 import { getMessagingProviderName } from "./provider-config";
+import { looksLikeTwilioMessagingServiceSid } from "./provider-ids";
 import { appendRegistrationEvent, getRegistrationByWorkspace, updateRegistration, updateRegistrationIfLocked } from "./store";
 import { JobDeferredError, JobFailedError } from "./types";
 import { isMessagingReady } from "./status";
@@ -484,7 +485,7 @@ export async function sendViaRegistration(workspaceId: string, to: string, body:
 
   const messagingProfileId =
     reg!.messagingProfileId ||
-    (provider.name === "telnyx" && reg!.messagingServiceSid?.startsWith("MG")
+    (provider.name === "telnyx" && looksLikeTwilioMessagingServiceSid(reg!.messagingServiceSid)
       ? null
       : reg!.messagingServiceSid);
 

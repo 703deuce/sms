@@ -31,6 +31,7 @@ import {
   pollTelnyxPhoneNumberId,
   toTelnyxOrderRef,
 } from "./phone-numbers";
+import { unwrapTelnyxData } from "../provider-ids";
 
 type TelnyxListResponse<T> = { data: T[] };
 type TelnyxDataResponse<T> = { data: T };
@@ -255,32 +256,38 @@ export const telnyxProvider: MessagingProvider = {
     const certifiedKey = reg.certifiedAt
       ? new Date(reg.certifiedAt).getTime()
       : "uncertified";
-    const res = await telnyxRequest<TelnyxDataResponse<{ brandId?: string; id?: string; status?: string }>>(
-      "/10dlc/brand",
-      {
-        method: "POST",
-        body: {
-          entityType: mapEntityType(reg.businessType),
-          displayName: reg.dbaName || reg.legalBusinessName,
-          companyName: reg.legalBusinessName,
-          ein: reg.businessRegistrationId,
-          phone: reg.contactPhone,
-          street: reg.street,
-          city: reg.city,
-          state: reg.region,
-          postalCode: reg.postalCode,
-          country: reg.country || "US",
-          email: reg.contactEmail,
-          website: reg.websiteUrl,
-          vertical: reg.vertical || reg.businessIndustry || "PROFESSIONAL",
-          webhookURL: urls.compliance,
-        },
-        idempotencyKey: `telnyx-brand:${reg.workspaceId}:${certifiedKey}`,
+    const res = await telnyxRequest("/10dlc/brand", {
+      method: "POST",
+      body: {
+        entityType: mapEntityType(reg.businessType),
+        displayName: reg.dbaName || reg.legalBusinessName,
+        companyName: reg.legalBusinessName,
+        ein: reg.businessRegistrationId,
+        phone: reg.contactPhone,
+        street: reg.street,
+        city: reg.city,
+        state: reg.region,
+        postalCode: reg.postalCode,
+        country: reg.country || "US",
+        email: reg.contactEmail,
+        website: reg.websiteUrl,
+        vertical: reg.vertical || reg.businessIndustry || "PROFESSIONAL",
+        webhookURL: urls.compliance,
       },
-    );
-    const id = res.data.brandId || res.data.id;
+      idempotencyKey: `telnyx-brand:${reg.workspaceId}:${certifiedKey}`,
+    });
+    const body = unwrapTelnyxData<{
+      brandId?: string;
+      id?: string;
+      status?: string;
+      identityStatus?: string;
+    }>(res);
+    const id = body.brandId || body.id;
     if (!id) throw new Error("Telnyx brand create returned no id");
-    return { id, status: res.data.status || "pending" };
+    return {
+      id,
+      status: body.identityStatus || body.status || "pending",
+    };
   },
 
   async createCampaign(reg): Promise<CampaignResult> {
@@ -301,39 +308,42 @@ export const telnyxProvider: MessagingProvider = {
     const optoutMessage =
       reg.stopMessage ||
       "You are unsubscribed and will no longer receive messages. Reply START to re-subscribe.";
-    const res = await telnyxRequest<TelnyxDataResponse<{ campaignId?: string; id?: string; status?: string }>>(
-      "/10dlc/campaignBuilder",
-      {
-        method: "POST",
-        body: {
-          brandId,
-          usecase: mapUseCase(reg.useCase),
-          description: reg.useCaseDescription,
-          sample1: samples[0] || "Thanks for contacting us. Reply STOP to opt out.",
-          sample2: samples[1] || "Your appointment reminder. Reply STOP to opt out.",
-          messageFlow:
-            reg.optInDescription ||
-            "Customer provides phone number and consent on website or intake form.",
-          helpMessage,
-          optinMessage: "You have been re-subscribed. Reply STOP to opt out.",
-          optoutMessage,
-          optinKeywords: "START,YES",
-          optoutKeywords: "STOP,UNSUBSCRIBE,CANCEL,END,QUIT",
-          helpKeywords: "HELP,INFO",
-          subscriberOptin: true,
-          subscriberOptout: true,
-          subscriberHelp: true,
-          embeddedLink: true,
-          numberPool: false,
-          ageGated: false,
-          webhookURL: urls.compliance,
-        },
-        idempotencyKey: `telnyx-campaign:${reg.workspaceId}:${brandId}:${certifiedKey}`,
+    const res = await telnyxRequest("/10dlc/campaignBuilder", {
+      method: "POST",
+      body: {
+        brandId,
+        usecase: mapUseCase(reg.useCase),
+        description: reg.useCaseDescription,
+        sample1: samples[0] || "Thanks for contacting us. Reply STOP to opt out.",
+        sample2: samples[1] || "Your appointment reminder. Reply STOP to opt out.",
+        messageFlow:
+          reg.optInDescription ||
+          "Customer provides phone number and consent on website or intake form.",
+        helpMessage,
+        optinMessage: "You have been re-subscribed. Reply STOP to opt out.",
+        optoutMessage,
+        optinKeywords: "START,YES",
+        optoutKeywords: "STOP,UNSUBSCRIBE,CANCEL,END,QUIT",
+        helpKeywords: "HELP,INFO",
+        subscriberOptin: true,
+        subscriberOptout: true,
+        subscriberHelp: true,
+        embeddedLink: true,
+        numberPool: false,
+        ageGated: false,
+        webhookURL: urls.compliance,
       },
-    );
-    const id = res.data.campaignId || res.data.id;
+      idempotencyKey: `telnyx-campaign:${reg.workspaceId}:${brandId}:${certifiedKey}`,
+    });
+    const body = unwrapTelnyxData<{
+      campaignId?: string;
+      id?: string;
+      status?: string;
+      campaignStatus?: string;
+    }>(res);
+    const id = body.campaignId || body.id;
     if (!id) throw new Error("Telnyx campaign create returned no id");
-    return { id, status: res.data.status || "pending" };
+    return { id, status: body.campaignStatus || body.status || "pending" };
   },
 
   async assignCampaignToNumber(phoneNumber, campaignId) {
@@ -347,23 +357,32 @@ export const telnyxProvider: MessagingProvider = {
 
   async getBrandStatus(brandId) {
     assertTelnyxConfigured();
-    const res = await telnyxRequest<TelnyxDataResponse<{ brandId?: string; id?: string; status?: string }>>(
-      `/10dlc/brand/${brandId}`,
-    );
+    const res = await telnyxRequest(`/10dlc/brand/${brandId}`);
+    const body = unwrapTelnyxData<{
+      brandId?: string;
+      id?: string;
+      status?: string;
+      identityStatus?: string;
+    }>(res);
     return {
-      id: res.data.brandId || res.data.id || brandId,
-      status: res.data.status || "unknown",
+      id: body.brandId || body.id || brandId,
+      // Prefer TCR identityStatus when present (VERIFIED / VETTED_VERIFIED / …).
+      status: body.identityStatus || body.status || "unknown",
     };
   },
 
   async getCampaignStatus(campaignId) {
     assertTelnyxConfigured();
-    const res = await telnyxRequest<TelnyxDataResponse<{ campaignId?: string; id?: string; status?: string }>>(
-      `/10dlc/campaign/${campaignId}`,
-    );
+    const res = await telnyxRequest(`/10dlc/campaign/${campaignId}`);
+    const body = unwrapTelnyxData<{
+      campaignId?: string;
+      id?: string;
+      status?: string;
+      campaignStatus?: string;
+    }>(res);
     return {
-      id: res.data.campaignId || res.data.id || campaignId,
-      status: res.data.status || "unknown",
+      id: body.campaignId || body.id || campaignId,
+      status: body.campaignStatus || body.status || "unknown",
     };
   },
 

@@ -31,3 +31,7 @@ create index if not exists messaging_registrations_campaign_id_idx
 
 create index if not exists "ConversationMessage_providerMessageId_idx"
   on "ConversationMessage" ("providerMessageId");
+
+create unique index if not exists "ConversationMessage_providerMessageId_key"
+  on "ConversationMessage" ("providerMessageId")
+  where "providerMessageId" is not null;

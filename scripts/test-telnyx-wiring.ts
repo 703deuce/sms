@@ -6,6 +6,7 @@
 import assert from "assert";
 import { getMessagingProviderName } from "../src/lib/messaging/provider-config";
 import { getTelnyxWebhookUrls } from "../src/lib/messaging/telnyx/config";
+import { unwrapTelnyxData, looksLikeTwilioMessagingServiceSid } from "../src/lib/messaging/provider-ids";
 import {
   TELNYX_ORDER_ID_PREFIX,
   fromTelnyxOrderRef,
@@ -81,6 +82,13 @@ assert.ok(isTelnyxOrderId(`${TELNYX_ORDER_ID_PREFIX}abc`));
 assert.equal(toTelnyxOrderRef("ord_1"), "ORDER:ord_1");
 assert.equal(fromTelnyxOrderRef("ORDER:ord_1"), "ord_1");
 assert.equal(isTelnyxOrderId("pn_123"), false);
+
+assert.equal(looksLikeTwilioMessagingServiceSid("MG123"), true);
+assert.equal(looksLikeTwilioMessagingServiceSid("MG_mock_1"), true);
+assert.equal(looksLikeTwilioMessagingServiceSid("uuid-profile"), false);
+
+assert.equal(unwrapTelnyxData<{ brandId: string }>({ data: { brandId: "b1" } }).brandId, "b1");
+assert.equal(unwrapTelnyxData<{ brandId: string }>({ brandId: "b2" }).brandId, "b2");
 
 process.env.APP_URL = "https://transovo.ai";
 const urls = getTelnyxWebhookUrls();

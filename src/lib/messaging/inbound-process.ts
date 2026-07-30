@@ -55,6 +55,59 @@ export type InboundProcessResult = {
   replyText?: string;
 };
 
+/** Persist inbound receipt so provider webhook retries are idempotent. */
+async function recordInboundReceipt(input: {
+  workspaceId: string;
+  from: string;
+  body: string;
+  providerMessageId?: string;
+}) {
+  if (!input.providerMessageId) return;
+  const prisma = getPrisma();
+  const existing = await prisma.conversationMessage.findFirst({
+    where: { providerMessageId: input.providerMessageId },
+  });
+  if (existing) return;
+
+  let contact = await prisma.contact.findUnique({
+    where: { workspaceId_phone: { workspaceId: input.workspaceId, phone: input.from } },
+  });
+  if (!contact) {
+    contact = await prisma.contact.create({
+      data: { workspaceId: input.workspaceId, phone: input.from, lastReply: new Date() },
+    });
+  }
+
+  let conversation = await prisma.conversation.findFirst({
+    where: { workspaceId: input.workspaceId, contactId: contact.id, status: { not: "CLOSED" } },
+  });
+  if (!conversation) {
+    conversation = await prisma.conversation.create({
+      data: {
+        workspaceId: input.workspaceId,
+        contactId: contact.id,
+        status: "OPEN",
+        unread: true,
+      },
+    });
+  }
+
+  try {
+    await prisma.conversationMessage.create({
+      data: {
+        conversationId: conversation.id,
+        direction: "inbound",
+        body: input.body || "(empty)",
+        providerMessageId: input.providerMessageId,
+      },
+    });
+  } catch (err) {
+    if (!(err && typeof err === "object" && "code" in err && (err as { code: string }).code === "P2002")) {
+      throw err;
+    }
+  }
+}
+
 export async function processInboundMessage(input: {
   workspaceId: string;
   from: string;
@@ -77,6 +130,21 @@ export async function processInboundMessage(input: {
   }
   const body = (input.body || "").trim();
   const upper = body.toUpperCase();
+
+  // Dedupe provider retries before keyword side effects / auto-replies.
+  if (input.providerMessageId) {
+    const existingMsg = await prisma.conversationMessage.findFirst({
+      where: { providerMessageId: input.providerMessageId },
+    });
+    if (existingMsg) {
+      if (["STOP", "STOPALL", "UNSUBSCRIBE", "CANCEL", "END", "QUIT"].includes(upper)) {
+        return { kind: "stop" };
+      }
+      if (["START", "YES", "UNSTOP"].includes(upper)) return { kind: "start" };
+      if (["HELP", "INFO"].includes(upper)) return { kind: "help" };
+      return { kind: body ? "message" : "empty" };
+    }
+  }
 
   if (["STOP", "STOPALL", "UNSUBSCRIBE", "CANCEL", "END", "QUIT"].includes(upper)) {
     const suppressionKey = `${input.workspaceId}:p:${from}`;
@@ -139,6 +207,13 @@ export async function processInboundMessage(input: {
       await reconcileCampaignStatus(campaignId);
     }
 
+    await recordInboundReceipt({
+      workspaceId: input.workspaceId,
+      from,
+      body,
+      providerMessageId: input.providerMessageId,
+    });
+
     return {
       kind: "stop",
       replyText:
@@ -155,6 +230,12 @@ export async function processInboundMessage(input: {
       where: { workspaceId: input.workspaceId, phone: from },
       data: { status: "SUBSCRIBED" },
     });
+    await recordInboundReceipt({
+      workspaceId: input.workspaceId,
+      from,
+      body,
+      providerMessageId: input.providerMessageId,
+    });
     return {
       kind: "start",
       replyText: "You have been re-subscribed. Reply STOP to opt out.",
@@ -162,6 +243,12 @@ export async function processInboundMessage(input: {
   }
 
   if (["HELP", "INFO"].includes(upper)) {
+    await recordInboundReceipt({
+      workspaceId: input.workspaceId,
+      from,
+      body,
+      providerMessageId: input.providerMessageId,
+    });
     return {
       kind: "help",
       replyText:
@@ -203,23 +290,20 @@ export async function processInboundMessage(input: {
     });
   }
 
-  if (input.providerMessageId) {
-    const existingMsg = await prisma.conversationMessage.findFirst({
-      where: { providerMessageId: input.providerMessageId },
+  try {
+    await prisma.conversationMessage.create({
+      data: {
+        conversationId: conversation.id,
+        direction: "inbound",
+        body: body || "(empty)",
+        providerMessageId: input.providerMessageId || null,
+      },
     });
-    if (existingMsg) {
-      return { kind: body ? "message" : "empty" };
+  } catch (err) {
+    if (!(err && typeof err === "object" && "code" in err && (err as { code: string }).code === "P2002")) {
+      throw err;
     }
   }
-
-  await prisma.conversationMessage.create({
-    data: {
-      conversationId: conversation.id,
-      direction: "inbound",
-      body: body || "(empty)",
-      providerMessageId: input.providerMessageId || null,
-    },
-  });
 
   const active = await prisma.campaignRecipient.findMany({
     where: {
