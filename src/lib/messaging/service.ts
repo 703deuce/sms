@@ -6,6 +6,8 @@ import { mockAdapter } from "./mock-adapter";
 import { advanceMessagingRegistration, ensureSubaccount, sendViaRegistration } from "./registration-processor";
 import { appendRegistrationEvent, ensureRegistrationRow, getRegistrationByWorkspace, updateRegistration } from "./store";
 import { toPublicRegistration, isMessagingReady } from "./status";
+import { getMessagingProvider } from "./get-provider";
+import { getMessagingProviderName } from "./provider-config";
 import { isLiveMessagingAdapter } from "./twilio-config";
 import { twilioAdapter } from "./twilio-adapter";
 import { normalizeE164 } from "./twilio-mappings";
@@ -189,11 +191,9 @@ export const messagingOnboarding = {
 
   async searchNumbers(workspaceId: string, areaCode?: string) {
     await ensureRegistrationRow(workspaceId);
-    if (isLiveMessagingAdapter()) {
-      // Prefer searching on parent for availability; purchase happens on subaccount.
-      return twilioAdapter.searchNumbers(areaCode);
-    }
-    return mockAdapter.searchNumbers(areaCode);
+    const provider = getMessagingProvider();
+    if (provider.name === "mock") return mockAdapter.searchNumbers(areaCode);
+    return provider.searchNumbers(areaCode);
   },
 
   async purchaseNumber(workspaceId: string, phoneNumber: string) {
@@ -235,10 +235,16 @@ export const messagingOnboarding = {
     reg = (await getRegistrationByWorkspace(workspaceId))!;
 
     let purchased: { sid: string; phoneNumber: string };
+    const providerName = getMessagingProviderName();
     try {
-      purchased = isLiveMessagingAdapter()
-        ? await twilioAdapter.purchaseNumber(reg, e164)
-        : await mockAdapter.purchaseNumber(reg.subaccountSid!, e164);
+      if (providerName === "telnyx") {
+        const bought = await getMessagingProvider().buyPhoneNumber(reg, e164);
+        purchased = { sid: bought.id, phoneNumber: bought.phoneNumber };
+      } else if (isLiveMessagingAdapter()) {
+        purchased = await twilioAdapter.purchaseNumber(reg, e164);
+      } else {
+        purchased = await mockAdapter.purchaseNumber(reg.subaccountSid!, e164);
+      }
     } catch (err) {
       await getPrisma().messagingRegistration.updateMany({
         where: { workspaceId, phoneSid: claimToken },
@@ -252,13 +258,15 @@ export const messagingOnboarding = {
       data: {
         phoneE164: purchased.phoneNumber,
         phoneSid: purchased.sid,
+        phoneNumberId: purchased.sid,
         phonePurchasedAt: new Date(),
         phoneAttached: false,
         numberStatus: "submitted",
+        messagingProvider: providerName === "mock" ? "mock" : providerName,
       },
     });
     if (committed.count !== 1) {
-      throw new Error("Lost phone purchase claim — contact support to reconcile Twilio inventory");
+      throw new Error("Lost phone purchase claim — contact support to reconcile number inventory");
     }
     reg = (await getRegistrationByWorkspace(workspaceId))!;
 
@@ -269,13 +277,15 @@ export const messagingOnboarding = {
         e164: purchased.phoneNumber,
         type: "Local",
         areaCode: purchased.phoneNumber.replace(/\D/g, "").slice(1, 4),
-        twilioSid: purchased.sid,
+        twilioSid: providerName === "twilio" ? purchased.sid : null,
+        providerNumberId: purchased.sid,
         status: "Active",
         purchasedAt: new Date(),
         a2pStatus: "PENDING",
       },
       update: {
-        twilioSid: purchased.sid,
+        twilioSid: providerName === "twilio" ? purchased.sid : undefined,
+        providerNumberId: purchased.sid,
         status: "Active",
         purchasedAt: new Date(),
         releasedAt: null,
@@ -309,7 +319,10 @@ export const messagingOnboarding = {
       return toPublicRegistration((await getRegistrationByWorkspace(workspaceId))!);
     }
 
-    if (isLiveMessagingAdapter()) {
+    const providerName = getMessagingProviderName();
+    if (providerName === "telnyx") {
+      await getMessagingProvider().releasePhoneNumber(reg, reg.phoneNumberId || reg.phoneSid);
+    } else if (isLiveMessagingAdapter()) {
       await twilioAdapter.releaseNumber(reg, reg.phoneSid);
     } else {
       await mockAdapter.releaseNumber();
@@ -325,10 +338,12 @@ export const messagingOnboarding = {
     const updated = await updateRegistration(workspaceId, {
       phoneE164: null,
       phoneSid: null,
+      phoneNumberId: null,
       phoneAttached: false,
       phonePurchasedAt: null,
       numberStatus: "not_started",
       messagingEnabled: false,
+      messagingActivationStatus: "ready_for_submission",
       overallStatus: reg.overallStatus === "ready" ? "action_required" : reg.overallStatus,
     });
 
@@ -366,7 +381,20 @@ export const messagingOnboarding = {
       certifiedAt: new Date(),
       overallStatus: "submitted",
       profileStatus: "submitted",
+      messagingProvider: getMessagingProviderName(),
+      messagingActivationStatus: "ready_for_submission",
+      registrationSubmittedAt: new Date(),
     });
+
+    if (getMessagingProviderName() === "telnyx") {
+      await enqueueMessagingRegistrationAdvance(workspaceId);
+      try {
+        const advanced = await advanceMessagingRegistration(workspaceId);
+        return toPublicRegistration(advanced);
+      } catch {
+        return toPublicRegistration((await getRegistrationByWorkspace(workspaceId))!);
+      }
+    }
 
     if (isLiveMessagingAdapter()) {
       let current = updated;

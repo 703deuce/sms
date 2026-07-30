@@ -14,6 +14,12 @@ const authPages = new Set(["/login", "/signup"]);
 
 function isPublicPath(pathname: string) {
   if (publicExact.has(pathname)) return true;
+  // Provider webhooks + cron/job drains must not require a browser session.
+  if (pathname.startsWith("/api/twilio/")) return true;
+  if (pathname.startsWith("/api/telnyx/")) return true;
+  if (pathname.startsWith("/api/jobs/")) return true;
+  if (pathname.startsWith("/api/integrations/webhooks/incoming/")) return true;
+  if (pathname.startsWith("/r/")) return true;
   return false;
 }
 
@@ -26,6 +32,10 @@ export function middleware(request: NextRequest) {
   if (isApiAuth) return NextResponse.next();
 
   if (!session && !isPublic) {
+    // API routes without a session should 401 JSON, not HTML login redirect.
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("next", pathname);

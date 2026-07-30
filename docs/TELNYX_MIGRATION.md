@@ -253,40 +253,50 @@ Keep Twilio webhook routes until Telnyx paths are verified.
 
 ## 10. Phased implementation checklist
 
-### Phase 1 — Abstraction (this PR / next commits)
+### Phase 1 — Abstraction
 - [x] Audit Twilio usage (this document)
-- [ ] `MessagingProvider` interface
-- [ ] Keep `TwilioProvider` wrapping existing adapter
-- [ ] Skeleton `TelnyxProvider` + HTTP client
-- [ ] `.env.example` Telnyx vars
-- [ ] Additive SQL / Prisma fields for provider-neutral IDs
-- [ ] Provider selection via `MESSAGING_PROVIDER`
+- [x] `MessagingProvider` interface
+- [x] Keep `TwilioProvider` wrapping existing adapter
+- [x] `TelnyxProvider` + HTTP client
+- [x] `.env.example` Telnyx vars
+- [x] Additive SQL / Prisma fields for provider-neutral IDs
+- [x] Provider selection via `MESSAGING_PROVIDER`
 
 ### Phase 2 — Send / receive
-- [ ] Native Telnyx outbound SMS
-- [ ] Inbound webhook + signature verify
-- [ ] Delivery status webhook + status mapping
-- [ ] Preserve STOP/HELP/suppression
-- [ ] Automated tests / mocks
+- [x] Native Telnyx outbound SMS (`sendViaRegistration` → provider)
+- [x] Inbound webhook `/api/telnyx/inbound` + signature verify
+- [x] Delivery status webhook `/api/telnyx/message-status`
+- [x] Preserve STOP/HELP/suppression (shared inbound processor)
+- [x] Wiring test: `npx tsx scripts/test-telnyx-wiring.ts`
 
 ### Phase 3 — Numbers + 10DLC
-- [ ] Number search + purchase
-- [ ] Per-customer messaging profile
-- [ ] Brand create + status
-- [ ] Campaign create + status
-- [ ] Assign campaign to number
-- [ ] Block sending until `approved`
+- [x] Number search + purchase via provider
+- [x] Per-customer messaging profile (`ensureTelnyxWorkspace`)
+- [x] Brand create + status polling (`advanceTelnyxRegistration`)
+- [x] Campaign create + status polling
+- [x] Assign campaign to number
+- [x] Block sending until ready gate / `approved`
+- [x] Compliance webhook `/api/telnyx/compliance`
 
 ### Phase 4 — Cutover
-- [ ] Default new customers to Telnyx
-- [ ] Production send/receive verification
+- [x] Set `MESSAGING_PROVIDER=telnyx` + `TELNYX_MODE=live` for new customers
+- [ ] Production send/receive verification (requires live Telnyx credentials)
 - [ ] Monitor logs / DLRs
 
-### Phase 5 — Cleanup (only after verified)
+### Phase 5 — Cleanup (only after verified in production)
 - [ ] Remove active Twilio adapter paths
 - [ ] Remove Twilio secrets from env
 - [ ] Optionally drop Twilio-only columns later
 - [ ] Keep migration audit records
+
+### Ops checklist to go live
+1. Run `supabase/telnyx-provider-fields.sql` on Supabase.
+2. Set `MESSAGING_PROVIDER=telnyx`, `TELNYX_API_KEY`, `TELNYX_PUBLIC_KEY`, `TELNYX_MODE=live`, `APP_URL`.
+3. Point Telnyx messaging profile / event webhooks to:
+   - `https://<app>/api/telnyx/inbound`
+   - `https://<app>/api/telnyx/message-status`
+   - `https://<app>/api/telnyx/compliance`
+4. Keep Twilio env vars until production verification is complete.
 
 ---
 

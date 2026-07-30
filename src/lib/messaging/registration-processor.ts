@@ -3,12 +3,15 @@ import { randomBytes } from "crypto";
 import { getPrisma } from "@/lib/db";
 import { encryptSecret } from "./crypto";
 import { enqueueMessagingRegistrationAdvance } from "./enqueue-advance";
+import { getMessagingProvider } from "./get-provider";
 import { mockAdapter } from "./mock-adapter";
+import { getMessagingProviderName } from "./provider-config";
 import { appendRegistrationEvent, getRegistrationByWorkspace, updateRegistration, updateRegistrationIfLocked } from "./store";
 import { JobDeferredError, JobFailedError } from "./types";
 import { isMessagingReady } from "./status";
 import { isLiveMessagingAdapter } from "./twilio-config";
 import { twilioAdapter } from "./twilio-adapter";
+import { advanceTelnyxRegistration, ensureTelnyxWorkspace } from "./telnyx/advance";
 
 function adapter() {
   return isLiveMessagingAdapter() ? twilioAdapter : null;
@@ -44,6 +47,10 @@ function isTwilioRejected(status: string | undefined | null) {
  * Creates Trust Product → Brand → Messaging Service → attach PN → US A2P Campaign → ready.
  */
 export async function advanceMessagingRegistration(workspaceId: string) {
+  if (getMessagingProviderName() === "telnyx") {
+    return advanceTelnyxRegistration(workspaceId);
+  }
+
   const live = adapter();
   let reg = await getRegistrationByWorkspace(workspaceId);
   if (!reg) throw new Error(`No messaging registration for workspace ${workspaceId}`);
@@ -118,6 +125,10 @@ export async function advanceMessagingRegistration(workspaceId: string) {
           brandSid,
           messagingServiceSid,
           a2pCampaignSid,
+          messagingProvider: "mock",
+          messagingProfileId: messagingServiceSid,
+          brandId: brandSid,
+          campaignId: a2pCampaignSid,
           phoneAttached: phoneAttached || false,
           profileStatus: "approved",
           trustStatus: "approved",
@@ -127,6 +138,7 @@ export async function advanceMessagingRegistration(workspaceId: string) {
           numberStatus: phoneAttached ? "ready" : "action_required",
           overallStatus: phoneAttached ? "ready" : "action_required",
           messagingEnabled: phoneAttached,
+          messagingActivationStatus: phoneAttached ? "approved" : "ready_for_submission",
           lastAdvancedAt: new Date(),
           lastError: null,
         },
@@ -382,6 +394,10 @@ export async function advanceMessagingRegistration(workspaceId: string) {
 }
 
 export async function ensureSubaccount(workspaceId: string, friendlyName: string) {
+  if (getMessagingProviderName() === "telnyx") {
+    return ensureTelnyxWorkspace(workspaceId);
+  }
+
   let reg = await getRegistrationByWorkspace(workspaceId);
   if (!reg) throw new Error("Registration row missing");
   if (reg.subaccountSid && !reg.subaccountSid.startsWith("PENDING:") && reg.subaccountAuthTokenEnc) {
@@ -453,13 +469,28 @@ export async function sendViaRegistration(workspaceId: string, to: string, body:
   if (!isMessagingReady(reg)) {
     throw new Error("Messaging is not ready for this workspace. Complete A2P registration first.");
   }
-  const live = adapter();
-  if (!live) {
+
+  const provider = getMessagingProvider();
+  if (provider.name === "mock") {
     return mockAdapter.sendSmsViaMessagingService({
-      messagingServiceSid: reg!.messagingServiceSid!,
+      messagingServiceSid: reg!.messagingServiceSid || "MG_MOCK",
       to,
       body,
     });
   }
-  return live.sendSmsViaMessagingService(reg!, { to, body });
+
+  const result = await provider.sendMessage(reg!, {
+    to,
+    body,
+    from: reg!.phoneE164 || undefined,
+    messagingProfileId: reg!.messagingProfileId || reg!.messagingServiceSid,
+    messagingServiceSid: reg!.messagingServiceSid,
+  });
+
+  return {
+    sid: result.providerMessageId,
+    status: result.status,
+    to,
+    messagingServiceSid: reg!.messagingServiceSid,
+  };
 }

@@ -11,7 +11,8 @@
     "db:bootstrap": "node scripts/generate-bootstrap-sql.mjs",
     "db:seed": "tsx prisma/seed.ts",
     "worker:all": "tsx scripts/worker-all.ts",
-    "test:messaging-wiring": "tsx scripts/test-messaging-wiring.ts"
+    "test:messaging-wiring": "tsx scripts/test-messaging-wiring.ts",
+    "test:telnyx-wiring": "tsx scripts/test-telnyx-wiring.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.111.0",

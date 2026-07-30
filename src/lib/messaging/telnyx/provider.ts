@@ -299,20 +299,32 @@ export const telnyxProvider: MessagingProvider = {
   },
 
   async verifyWebhook(input: WebhookVerificationInput) {
-    // Telnyx ed25519 verification typically uses TELNYX_PUBLIC_KEY.
-    // Until public-key crypto wiring is finalized, reject when key is configured
-    // but signature missing; allow unsigned only in non-live local mock testing.
     const publicKey = getTelnyxPublicKey();
     if (!publicKey) {
-      // Fail closed in production-ish configs that have an API key.
+      // Fail closed when an API key is present (live-ish). Local mock without keys can pass.
       return !process.env.TELNYX_API_KEY;
     }
     if (!input.signature || !input.timestamp) return false;
 
-    // Compatibility path: HMAC compare if public key is treated as shared secret
-    // (native ed25519 verification will replace this in Phase 2).
+    const body =
+      typeof input.payload === "string" ? input.payload : input.payload.toString("utf8");
+    const signedPayload = `${input.timestamp}|${body}`;
+
+    // Preferred: Telnyx ed25519 signature (public key from Mission Control).
     try {
-      const signedPayload = `${input.timestamp}|${typeof input.payload === "string" ? input.payload : input.payload.toString("utf8")}`;
+      const { verify, createPublicKey } = await import("crypto");
+      const keyObject = buildTelnyxPublicKey(publicKey, createPublicKey);
+      if (keyObject) {
+        const sig = Buffer.from(input.signature, "base64");
+        const ok = verify(null, Buffer.from(signedPayload), keyObject, sig);
+        if (ok) return true;
+      }
+    } catch {
+      // fall through
+    }
+
+    // Compatibility fallback for shared-secret style keys in non-ed25519 setups.
+    try {
       const expected = createHmac("sha256", publicKey).update(signedPayload).digest("hex");
       const a = Buffer.from(expected);
       const b = Buffer.from(input.signature);
@@ -408,6 +420,28 @@ async function sendViaTwexit(
 
 function asRecord(value: unknown): Record<string, any> | null {
   return value && typeof value === "object" ? (value as Record<string, any>) : null;
+}
+
+function buildTelnyxPublicKey(
+  publicKey: string,
+  createPublicKey: typeof import("crypto").createPublicKey,
+) {
+  const trimmed = publicKey.trim();
+  try {
+    if (trimmed.includes("BEGIN PUBLIC KEY")) {
+      return createPublicKey(trimmed);
+    }
+    // Raw base64 32-byte ed25519 public key → SPKI DER
+    const raw = Buffer.from(trimmed, "base64");
+    if (raw.length === 32) {
+      const derPrefix = Buffer.from("302a300506032b6570032100", "hex");
+      const der = Buffer.concat([derPrefix, raw]);
+      return createPublicKey({ key: der, format: "der", type: "spki" });
+    }
+    return createPublicKey(trimmed);
+  } catch {
+    return null;
+  }
 }
 
 function mapEntityType(businessType: string | null | undefined) {
