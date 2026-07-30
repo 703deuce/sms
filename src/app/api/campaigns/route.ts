@@ -2,6 +2,11 @@ import type { Prisma } from "@/lib/domain";
 import { NextResponse } from "next/server";
 import { requireSession, resolveWorkspaceId, jsonError } from "@/lib/api-auth";
 import { getPrisma } from "@/lib/db";
+import {
+  buildSequenceForCategory,
+  getCampaignCategory,
+  type CampaignCategoryId,
+} from "@/lib/campaigns/catalog";
 import { enrollContactInCampaign, validateBulkRecipients } from "@/lib/campaigns/enroll-campaign";
 import { defaultSmsEmailSequence, parseSequence } from "@/lib/campaigns/sequence-engine";
 
@@ -29,10 +34,12 @@ export async function POST(request: Request) {
       workspaceId?: string;
       name?: string;
       type?: string;
+      category?: string;
       audience?: string;
       message?: string;
       body?: string;
       sequenceJson?: unknown;
+      config?: Record<string, unknown>;
       successMode?: string;
       dailySendLimit?: number;
       sendWindowStart?: number;
@@ -49,20 +56,28 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "name and message are required" }, { status: 400 });
     }
 
+    const categoryMeta = getCampaignCategory(body.category);
+    const categoryId = (categoryMeta?.id || body.category || null) as CampaignCategoryId | null;
+    const config = body.config || {};
+
     const sequenceJson = body.sequenceJson
       ? parseSequence(body.sequenceJson)
-      : defaultSmsEmailSequence();
+      : categoryId
+        ? buildSequenceForCategory(categoryId, message, config)
+        : defaultSmsEmailSequence();
 
     const campaign = await getPrisma().campaign.create({
       data: {
         workspaceId,
         name,
-        type: body.type || "Sequence",
+        type: body.type || categoryMeta?.title || "Sequence",
+        category: categoryId,
         audience: body.audience || "Custom",
         body: message,
         status: body.activate ? "SENDING" : body.scheduledAt ? "SCHEDULED" : "DRAFT",
         scheduledAt: body.scheduledAt ? new Date(body.scheduledAt) : null,
         sequenceJson: sequenceJson as Prisma.InputJsonValue,
+        configJson: config as Prisma.InputJsonValue,
         successMode: body.successMode || "click",
         dailySendLimit: body.dailySendLimit,
         sendWindowStart: body.sendWindowStart,

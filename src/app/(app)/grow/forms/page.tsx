@@ -1,174 +1,166 @@
+"use client";
+
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle, StatCard } from "@/components/ui/card";
+import { Input, Label, Textarea } from "@/components/ui/input";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatusChip } from "@/components/ui/status-chip";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Tabs } from "@/components/ui/tabs";
-import { forms } from "@/lib/mock/data";
 import { formatNumber } from "@/lib/utils";
-import {
-  CheckSquare,
-  ExternalLink,
-  FileInput,
-  Mail,
-  Phone,
-  Plus,
-  Type,
-  User,
-} from "lucide-react";
-import Link from "next/link";
+import { Copy, ExternalLink, Plus } from "lucide-react";
+import { useEffect, useState } from "react";
 
 const growTabs = [
   { label: "Keywords", href: "/grow/keywords" },
   { label: "Forms", href: "/grow/forms" },
   { label: "QR Codes", href: "/grow/qr-codes" },
+  { label: "Click-to-text", href: "/grow/click-to-text" },
   { label: "Signup Pages", href: "/grow/pages" },
   { label: "Sources", href: "/grow/sources" },
 ];
 
-const builderFields = [
-  {
-    icon: Phone,
-    label: "Phone number",
-    description: "Required for SMS opt-in. Validated and formatted automatically.",
-    required: true,
-  },
-  {
-    icon: User,
-    label: "First name",
-    description: "Optional personalization field stored on the contact record.",
-    required: false,
-  },
-  {
-    icon: Mail,
-    label: "Email",
-    description: "Optional secondary contact method for cross-channel follow-up.",
-    required: false,
-  },
-  {
-    icon: Type,
-    label: "Custom text field",
-    description: "Capture company name, referral source, or other free-form data.",
-    required: false,
-  },
-  {
-    icon: CheckSquare,
-    label: "Consent checkbox",
-    description: "Required TCPA consent with customizable disclosure language.",
-    required: true,
-  },
-  {
-    icon: FileInput,
-    label: "Hidden UTM fields",
-    description: "Track campaign source, medium, and content from embed URL params.",
-    required: false,
-  },
-];
+type FormRow = {
+  id: string;
+  name: string;
+  listName: string;
+  url?: string | null;
+  slug?: string | null;
+  status: string;
+  submissions: number;
+};
 
 export default function FormsPage() {
-  const totalSubmissions = forms.reduce((sum, f) => sum + f.submissions, 0);
+  const [rows, setRows] = useState<FormRow[]>([]);
+  const [name, setName] = useState("Website signup");
+  const [listName, setListName] = useState("Form subscribers");
+  const [disclosureText, setDisclosureText] = useState(
+    "By submitting, you agree to receive SMS from us. Msg&data rates may apply. Reply STOP to opt out, HELP for help. Consent is not a condition of purchase.",
+  );
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function load() {
+    const res = await fetch("/api/growth/forms");
+    if (!res.ok) return;
+    const json = await res.json();
+    setRows(json.data || []);
+  }
+
+  useEffect(() => {
+    load().catch(() => undefined);
+  }, []);
+
+  async function create() {
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/growth/forms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, listName, disclosureText }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Failed");
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const submissions = rows.reduce((s, r) => s + (r.submissions || 0), 0);
 
   return (
     <div>
       <PageHeader
         title="Opt-in forms"
-        description="Embed compliant signup forms on your website to grow your SMS subscriber list."
-        actions={
-          <Button>
-            <Plus className="h-4 w-4" />
-            Create form
-          </Button>
-        }
+        description="Hosted signup pages with checkbox consent, disclosure text, privacy/terms links, list assignment, and consent records (phone, language, IP, time)."
       />
-
       <Tabs items={growTabs} />
 
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
-        <StatCard label="Active forms" value={formatNumber(forms.length)} />
-        <StatCard label="Total submissions" value={formatNumber(totalSubmissions)} />
-        <StatCard label="Conversion rate" value="34.2%" hint="Views to submissions (30d)" />
+        <StatCard label="Active forms" value={formatNumber(rows.length)} />
+        <StatCard label="Submissions" value={formatNumber(submissions)} />
+        <StatCard label="Public path" value="/f/[slug]" hint="No login required" />
       </div>
 
-      <Card className="mb-6">
-        <CardTitle>All forms</CardTitle>
-        <div className="mt-4">
-          <Table>
-            <THead>
-              <TR>
-                <TH>Name</TH>
-                <TH>List</TH>
-                <TH>Submissions</TH>
-                <TH>Status</TH>
-                <TH>URL</TH>
-              </TR>
-            </THead>
-            <TBody>
-              {forms.map((form) => (
-                <TR key={form.id}>
-                  <TD className="font-medium">{form.name}</TD>
-                  <TD>{form.list}</TD>
-                  <TD>{formatNumber(form.submissions)}</TD>
-                  <TD>
-                    <StatusChip status={form.status} />
-                  </TD>
-                  <TD>
-                    <a
-                      href={form.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
-                    >
-                      Open
-                      <ExternalLink className="h-3 w-3" />
-                    </a>
-                  </TD>
-                </TR>
-              ))}
-            </TBody>
-          </Table>
+      <Card className="mb-6 space-y-4 p-5">
+        <CardTitle>Create form</CardTitle>
+        <div>
+          <Label htmlFor="name">Form name</Label>
+          <Input id="name" value={name} onChange={(e) => setName(e.target.value)} />
         </div>
+        <div>
+          <Label htmlFor="list">List</Label>
+          <Input id="list" value={listName} onChange={(e) => setListName(e.target.value)} />
+        </div>
+        <div>
+          <Label htmlFor="disclosure">Disclosure text</Label>
+          <Textarea
+            id="disclosure"
+            rows={4}
+            value={disclosureText}
+            onChange={(e) => setDisclosureText(e.target.value)}
+          />
+        </div>
+        {error && <p className="text-sm text-rose-600">{error}</p>}
+        <Button disabled={saving} onClick={create}>
+          <Plus className="h-4 w-4" />
+          {saving ? "Saving…" : "Create form"}
+        </Button>
       </Card>
 
-      <Card>
-        <CardTitle>Form builder fields</CardTitle>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Drag fields into your form or use the default compliant layout.
-        </p>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {builderFields.map((field) => {
-            const Icon = field.icon;
-            return (
-              <div
-                key={field.label}
-                className="rounded-xl border border-border bg-muted/30 p-4 transition hover:border-primary/40"
-              >
-                <div className="flex items-start gap-3">
-                  <div className="rounded-lg bg-primary/10 p-2 text-primary">
-                    <Icon className="h-4 w-4" />
+      <Card className="overflow-hidden p-0">
+        <Table>
+          <THead>
+            <TR>
+              <TH>Name</TH>
+              <TH>URL</TH>
+              <TH>Submissions</TH>
+              <TH>Status</TH>
+            </TR>
+          </THead>
+          <TBody>
+            {rows.map((f) => (
+              <TR key={f.id}>
+                <TD className="font-medium">{f.name}</TD>
+                <TD>
+                  <div className="flex items-center gap-2">
+                    <span className="max-w-[220px] truncate text-sm text-slate-600">{f.url}</span>
+                    {f.url && (
+                      <>
+                        <button
+                          type="button"
+                          className="text-slate-500 hover:text-slate-800"
+                          onClick={() => navigator.clipboard.writeText(f.url || "")}
+                          title="Copy"
+                        >
+                          <Copy className="h-3.5 w-3.5" />
+                        </button>
+                        <a href={f.url} target="_blank" rel="noreferrer" className="text-slate-500 hover:text-slate-800">
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </a>
+                      </>
+                    )}
                   </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-semibold">{field.label}</p>
-                      {field.required ? (
-                        <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium uppercase text-primary">
-                          Required
-                        </span>
-                      ) : null}
-                    </div>
-                    <p className="mt-1 text-xs text-muted-foreground">{field.description}</p>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-        <div className="mt-4">
-          <Link href="/grow/pages">
-            <Button variant="outline" size="sm">
-              View hosted signup pages
-            </Button>
-          </Link>
-        </div>
+                </TD>
+                <TD>{f.submissions}</TD>
+                <TD>
+                  <StatusChip status={f.status} />
+                </TD>
+              </TR>
+            ))}
+            {rows.length === 0 && (
+              <TR>
+                <TD colSpan={4} className="text-slate-500">
+                  No forms yet.
+                </TD>
+              </TR>
+            )}
+          </TBody>
+        </Table>
       </Card>
     </div>
   );

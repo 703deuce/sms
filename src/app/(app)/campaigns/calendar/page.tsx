@@ -9,7 +9,8 @@ import { cn } from "@/lib/utils";
 import Link from "next/link";
 
 const campaignTabs = [
-  { label: "All", href: "/campaigns" },
+  { label: "Create", href: "/campaigns" },
+  { label: "All Campaigns", href: "/campaigns/all" },
   { label: "Drafts", href: "/campaigns/drafts" },
   { label: "Scheduled", href: "/campaigns/scheduled" },
   { label: "Calendar", href: "/campaigns/calendar" },

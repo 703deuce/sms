@@ -52,7 +52,8 @@ export const appNav: NavItem[] = [
     href: "/campaigns",
     icon: Megaphone,
     children: [
-      { label: "All Campaigns", href: "/campaigns" },
+      { label: "Create", href: "/campaigns" },
+      { label: "All Campaigns", href: "/campaigns/all" },
       { label: "Drafts", href: "/campaigns/drafts" },
       { label: "Scheduled", href: "/campaigns/scheduled" },
       { label: "Calendar", href: "/campaigns/calendar" },
@@ -67,6 +68,7 @@ export const appNav: NavItem[] = [
     children: [
       { label: "Flows", href: "/automations" },
       { label: "Templates", href: "/automations/templates" },
+      { label: "Builder", href: "/automations/new" },
       { label: "Logs", href: "/automations/logs" },
     ],
   },
@@ -79,6 +81,9 @@ export const appNav: NavItem[] = [
       { label: "Keywords", href: "/grow/keywords" },
       { label: "Forms", href: "/grow/forms" },
       { label: "QR Codes", href: "/grow/qr-codes" },
+      { label: "Click-to-text", href: "/grow/click-to-text" },
+      { label: "Signup Pages", href: "/grow/pages" },
+      { label: "Sources", href: "/grow/sources" },
     ],
   },
   {

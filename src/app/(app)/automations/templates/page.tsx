@@ -1,22 +1,9 @@
-import { Button } from "@/components/ui/button";
-import { Card, CardTitle } from "@/components/ui/card";
+import { CATEGORY_ICONS } from "@/components/campaigns/category-icons";
 import { PageHeader } from "@/components/ui/page-header";
 import { Tabs } from "@/components/ui/tabs";
-import {
-  Bell,
-  Cake,
-  Calendar,
-  CreditCard,
-  Gift,
-  MessageCircle,
-  Package,
-  PhoneMissed,
-  RefreshCw,
-  Sparkles,
-  Star,
-  UserPlus,
-  Zap,
-} from "lucide-react";
+import { CAMPAIGN_CATEGORIES } from "@/lib/campaigns/catalog";
+import { cn } from "@/lib/utils";
+import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 
 const automationTabs = [
@@ -25,156 +12,46 @@ const automationTabs = [
   { label: "Logs", href: "/automations/logs" },
 ];
 
-const flowTemplates = [
-  {
-    name: "Welcome series",
-    description: "3-message onboarding sequence for new subscribers with opt-in confirmation.",
-    trigger: "Contact joins list",
-    steps: 3,
-    icon: Sparkles,
-  },
-  {
-    name: "Appointment reminder",
-    description: "Reminder 24h and 2h before scheduled appointments with confirm/reschedule.",
-    trigger: "Appointment date",
-    steps: 2,
-    icon: Calendar,
-  },
-  {
-    name: "Estimate follow-up",
-    description: "Follow up on open estimates after 48h with a gentle nudge to book.",
-    trigger: "Tag added: estimate",
-    steps: 2,
-    icon: MessageCircle,
-  },
-  {
-    name: "Missed-call response",
-    description: "Auto-text callers when a call goes unanswered during business hours.",
-    trigger: "Missed call",
-    steps: 1,
-    icon: PhoneMissed,
-  },
-  {
-    name: "Birthday",
-    description: "Send a personalized birthday greeting with an optional promo code.",
-    trigger: "Birthday",
-    steps: 1,
-    icon: Cake,
-  },
-  {
-    name: "Reactivation",
-    description: "Win back inactive contacts who haven't engaged in 90+ days.",
-    trigger: "No activity 90 days",
-    steps: 3,
-    icon: RefreshCw,
-  },
-  {
-    name: "Event reminder",
-    description: "Remind registrants before an event with location and check-in details.",
-    trigger: "Event date",
-    steps: 2,
-    icon: Bell,
-  },
-  {
-    name: "Payment reminder",
-    description: "Friendly invoice reminders at 7, 3, and 1 day before due date.",
-    trigger: "Invoice due date",
-    steps: 3,
-    icon: CreditCard,
-  },
-  {
-    name: "Review request",
-    description: "Ask happy customers for a review 24h after service completion.",
-    trigger: "Service completed",
-    steps: 1,
-    icon: Star,
-  },
-  {
-    name: "Order update",
-    description: "Shipped, out for delivery, and delivered notifications for e-commerce.",
-    trigger: "Order status change",
-    steps: 3,
-    icon: Package,
-  },
-  {
-    name: "New lead follow-up",
-    description: "Instant response plus 24h and 72h follow-ups for inbound leads.",
-    trigger: "Form submission",
-    steps: 3,
-    icon: UserPlus,
-  },
-  {
-    name: "Keyword response",
-    description: "Auto-reply when contacts text a specific keyword like JOIN or HELP.",
-    trigger: "Incoming keyword",
-    steps: 1,
-    icon: Zap,
-  },
-  {
-    name: "No-response follow-up",
-    description: "Re-engage contacts who didn't reply to your last outbound message.",
-    trigger: "No reply after 48 hours",
-    steps: 2,
-    icon: MessageCircle,
-  },
-];
-
+/**
+ * Workflow templates = the same 14 campaign categories.
+ * EZ Texting-style specialized names (keyword welcome, form welcome, estimate follow-up)
+ * collapse into Welcome / Follow-up / etc. with different triggers.
+ */
 export default function AutomationTemplatesPage() {
   return (
     <div>
       <PageHeader
-        title="Automation templates"
-        description="Start from a proven flow template and customize triggers, timing, and messages."
+        title="Workflow templates"
+        description="Fourteen core workflows — not hundreds of near-duplicates. Keyword welcome and form welcome share the Welcome engine; estimate and appointment follow-ups share Follow-up."
         actions={
-          <Link href="/automations/new">
-            <Button>Start from scratch</Button>
-          </Link>
+          <Link href="/automations/new" className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-sm hover:bg-primary-hover">Blank custom workflow</Link>
         }
       />
-
       <Tabs items={automationTabs} />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {flowTemplates.map((template) => {
-          const Icon = template.icon;
+        {CAMPAIGN_CATEGORIES.map((cat) => {
+          const Icon = CATEGORY_ICONS[cat.icon];
           return (
-            <Card
-              key={template.name}
-              className="flex flex-col transition hover:border-primary/40 hover:shadow-md"
+            <Link
+              key={cat.id}
+              href={cat.id === "custom" ? "/automations/new" : `/campaigns/new/${cat.id}`}
+              className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-slate-300 hover:shadow-md"
             >
               <div className="flex items-start gap-3">
-                <div className="rounded-lg bg-primary/10 p-2.5 text-primary">
-                  <Icon className="h-5 w-5" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <CardTitle>{template.name}</CardTitle>
-                  <p className="mt-1.5 text-sm text-muted-foreground">
-                    {template.description}
-                  </p>
-                </div>
-              </div>
-              <dl className="mt-4 flex gap-4 text-xs">
-                <div>
-                  <dt className="font-medium uppercase tracking-wide text-muted-foreground">
-                    Trigger
-                  </dt>
-                  <dd className="mt-0.5 text-sm">{template.trigger}</dd>
+                <div className={cn("rounded-xl p-2.5", cat.tone)}>
+                  {Icon ? <Icon className="h-5 w-5" /> : null}
                 </div>
                 <div>
-                  <dt className="font-medium uppercase tracking-wide text-muted-foreground">
-                    Steps
-                  </dt>
-                  <dd className="mt-0.5 text-sm">{template.steps}</dd>
+                  <h3 className="font-semibold text-slate-900">{cat.title}</h3>
+                  <p className="mt-1 text-sm text-slate-600">{cat.description}</p>
+                  <p className="mt-3 text-xs text-slate-500">{cat.examples.join(" · ")}</p>
+                  <span className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-slate-800">
+                    Use template <ArrowRight className="h-3.5 w-3.5" />
+                  </span>
                 </div>
-              </dl>
-              <div className="mt-4 pt-2">
-                <Link href="/automations/new">
-                  <Button variant="outline" size="sm" className="w-full">
-                    Use template
-                  </Button>
-                </Link>
               </div>
-            </Card>
+            </Link>
           );
         })}
       </div>

@@ -1,130 +1,158 @@
+"use client";
+
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle, StatCard } from "@/components/ui/card";
-import { Input, Label, Select, Textarea } from "@/components/ui/input";
+import { Input, Label, Textarea } from "@/components/ui/input";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatusChip } from "@/components/ui/status-chip";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Tabs } from "@/components/ui/tabs";
-import { keywords, phoneNumbers } from "@/lib/mock/data";
-import { formatNumber, formatPhone } from "@/lib/utils";
+import { formatNumber } from "@/lib/utils";
 import { Hash, Plus } from "lucide-react";
+import { useEffect, useState } from "react";
 
 const growTabs = [
   { label: "Keywords", href: "/grow/keywords" },
   { label: "Forms", href: "/grow/forms" },
   { label: "QR Codes", href: "/grow/qr-codes" },
+  { label: "Click-to-text", href: "/grow/click-to-text" },
   { label: "Signup Pages", href: "/grow/pages" },
   { label: "Sources", href: "/grow/sources" },
 ];
 
+type KeywordRow = {
+  id: string;
+  keyword: string;
+  phoneNumber: string;
+  listName: string;
+  confirmation: string;
+  status: string;
+  subscribers: number;
+};
+
 export default function KeywordsPage() {
-  const totalSubscribers = keywords.reduce((sum, k) => sum + k.subscribers, 0);
-  const activeCount = keywords.filter((k) => k.status === "Active").length;
+  const [rows, setRows] = useState<KeywordRow[]>([]);
+  const [keyword, setKeyword] = useState("JOIN");
+  const [listName, setListName] = useState("Keyword subscribers");
+  const [confirmation, setConfirmation] = useState(
+    "You're subscribed! Reply STOP to opt out. Msg&data rates may apply.",
+  );
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function load() {
+    const res = await fetch("/api/growth/keywords");
+    if (!res.ok) return;
+    const json = await res.json();
+    setRows(json.data || []);
+  }
+
+  useEffect(() => {
+    load().catch(() => undefined);
+  }, []);
+
+  async function create() {
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/growth/keywords", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ keyword, listName, confirmation, autoReply: confirmation }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Failed");
+      setKeyword("");
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const totalSubscribers = rows.reduce((sum, k) => sum + (k.subscribers || 0), 0);
 
   return (
     <div>
       <PageHeader
         title="Keywords"
-        description="Let contacts text a keyword to opt in, join a list, or trigger an automation."
-        actions={
-          <Button>
-            <Plus className="h-4 w-4" />
-            Create keyword
-          </Button>
-        }
+        description="Contacts text a keyword (JOIN, QUOTE, BOOK…) to opt in, join a list, store consent, and optionally start a welcome workflow."
       />
-
       <Tabs items={growTabs} />
 
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
-        <StatCard label="Active keywords" value={formatNumber(activeCount)} />
+        <StatCard label="Active keywords" value={formatNumber(rows.length)} />
         <StatCard label="Total subscribers" value={formatNumber(totalSubscribers)} />
-        <StatCard
-          label="Primary number"
-          value={formatPhone(phoneNumbers[0]?.number ?? "")}
-          hint={phoneNumbers[0]?.friendlyName}
-        />
+        <StatCard label="Runtime" value="Live" hint="Wired to inbound SMS" />
       </div>
 
-      <Card className="mb-6">
+      <Card className="mb-6 p-5">
         <div className="flex items-center gap-2">
           <Hash className="h-4 w-4 text-primary" />
           <CardTitle>Create keyword</CardTitle>
         </div>
-        <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <div>
             <Label htmlFor="keyword">Keyword</Label>
-            <Input id="keyword" placeholder="JOIN" className="uppercase" />
+            <Input
+              id="keyword"
+              className="uppercase"
+              value={keyword}
+              onChange={(e) => setKeyword(e.target.value.toUpperCase())}
+            />
           </div>
           <div>
-            <Label htmlFor="number">Phone number</Label>
-            <Select id="number" defaultValue={phoneNumbers[0]?.number}>
-              {phoneNumbers.map((pn) => (
-                <option key={pn.id} value={pn.number}>
-                  {formatPhone(pn.number)} — {pn.friendlyName}
-                </option>
-              ))}
-            </Select>
+            <Label htmlFor="list">List name</Label>
+            <Input id="list" value={listName} onChange={(e) => setListName(e.target.value)} />
           </div>
-          <div>
-            <Label htmlFor="list">Add to list</Label>
-            <Select id="list" defaultValue="Leads">
-              <option>Leads</option>
-              <option>Customers</option>
-              <option>VIP</option>
-            </Select>
-          </div>
-          <div className="flex items-end">
-            <Button className="w-full">Create keyword</Button>
+          <div className="sm:col-span-2">
+            <Label htmlFor="confirm">Auto-reply / confirmation</Label>
+            <Textarea
+              id="confirm"
+              rows={3}
+              value={confirmation}
+              onChange={(e) => setConfirmation(e.target.value)}
+            />
           </div>
         </div>
-        <div className="mt-4">
-          <Label htmlFor="confirmation">Auto-reply confirmation</Label>
-          <Textarea
-            id="confirmation"
-            placeholder="You're subscribed! Reply STOP to opt out."
-            rows={2}
-          />
-        </div>
+        {error && <p className="mt-2 text-sm text-rose-600">{error}</p>}
+        <Button className="mt-4" disabled={saving} onClick={create}>
+          <Plus className="h-4 w-4" />
+          {saving ? "Saving…" : "Create keyword"}
+        </Button>
       </Card>
 
-      <Card>
-        <CardTitle>All keywords</CardTitle>
-        <div className="mt-4">
-          <Table>
-            <THead>
-              <TR>
-                <TH>Keyword</TH>
-                <TH>Number</TH>
-                <TH>List</TH>
-                <TH>Subscribers</TH>
-                <TH>Status</TH>
-                <TH>Confirmation message</TH>
+      <Card className="overflow-hidden p-0">
+        <Table>
+          <THead>
+            <TR>
+              <TH>Keyword</TH>
+              <TH>List</TH>
+              <TH>Subscribers</TH>
+              <TH>Status</TH>
+            </TR>
+          </THead>
+          <TBody>
+            {rows.map((k) => (
+              <TR key={k.id}>
+                <TD className="font-medium">{k.keyword}</TD>
+                <TD>{k.listName}</TD>
+                <TD>{k.subscribers}</TD>
+                <TD>
+                  <StatusChip status={k.status} />
+                </TD>
               </TR>
-            </THead>
-            <TBody>
-              {keywords.map((kw) => (
-                <TR key={kw.id}>
-                  <TD>
-                    <span className="inline-flex items-center gap-1.5 font-mono font-semibold text-primary">
-                      <Hash className="h-3.5 w-3.5" />
-                      {kw.keyword}
-                    </span>
-                  </TD>
-                  <TD className="text-muted-foreground">{formatPhone(kw.number)}</TD>
-                  <TD>{kw.list}</TD>
-                  <TD>{formatNumber(kw.subscribers)}</TD>
-                  <TD>
-                    <StatusChip status={kw.status} />
-                  </TD>
-                  <TD className="max-w-xs truncate text-muted-foreground">
-                    {kw.confirmation}
-                  </TD>
-                </TR>
-              ))}
-            </TBody>
-          </Table>
-        </div>
+            ))}
+            {rows.length === 0 && (
+              <TR>
+                <TD colSpan={4} className="text-slate-500">
+                  No keywords yet — create JOIN to start collecting opt-ins.
+                </TD>
+              </TR>
+            )}
+          </TBody>
+        </Table>
       </Card>
     </div>
   );

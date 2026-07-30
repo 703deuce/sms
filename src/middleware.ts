@@ -19,7 +19,10 @@ function isPublicPath(pathname: string) {
   if (pathname.startsWith("/api/telnyx/")) return true;
   if (pathname.startsWith("/api/jobs/")) return true;
   if (pathname.startsWith("/api/integrations/webhooks/incoming/")) return true;
+  if (pathname.startsWith("/api/public/")) return true;
   if (pathname.startsWith("/r/")) return true;
+  // Hosted opt-in forms (consent capture)
+  if (pathname.startsWith("/f/")) return true;
   return false;
 }
 

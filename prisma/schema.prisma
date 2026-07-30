@@ -117,6 +117,8 @@ model Workspace {
   keywords    Keyword[]
   forms       OptInForm[]
   consentRecords ConsentRecord[]
+  qrCodes     QrCode[]
+  clickToTextLinks ClickToTextLink[]
   brand       ComplianceBrand?
   complianceCampaign ComplianceCampaign?
   messagingRegistration MessagingRegistration?
@@ -242,11 +244,15 @@ model Campaign {
   workspaceId    String
   name           String
   type           String
+  /// One of the ~14 Transovo campaign categories (broadcast, follow_up, …)
+  category       String?
   audience       String
   body           String
   status         CampaignStatus @default(DRAFT)
   scheduledAt    DateTime?
   sequenceJson   Json?
+  /// Category-specific builder options (trigger, delays, stop rules, …)
+  configJson     Json?
   successMode    String         @default("click")
   dailySendLimit Int?
   sendWindowStart Int?
@@ -263,6 +269,8 @@ model Campaign {
   messages       Message[]
   recipients     CampaignRecipient[]
   campaignMessages CampaignMessage[]
+
+  @@index([workspaceId, category])
 }
 
 model Message {
@@ -600,6 +608,11 @@ model Keyword {
   confirmation  String
   status        String  @default("Active")
   subscribers   Int     @default(0)
+  /// Optional tags to apply on join (JSON string array)
+  tagsJson      Json?
+  /// Optional campaign/workflow to start on keyword
+  startCampaignId String?
+  autoReply     String?
   workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@unique([workspaceId, keyword, phoneNumber])
@@ -610,11 +623,19 @@ model OptInForm {
   workspaceId String
   name        String
   listName    String
+  slug        String?
   url         String?
   status      String @default("Active")
   submissions Int    @default(0)
   config      Json?
+  disclosureText String?
+  disclosureVersion String? @default("v1")
+  thankYouMessage String?
+  doubleOptIn Boolean @default(false)
+  startCampaignId String?
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, slug])
 }
 
 model ConsentRecord {
@@ -625,9 +646,46 @@ model ConsentRecord {
   consentDate      DateTime
   source           String
   disclosureVersion String?
+  disclosureText   String?
   ipAddress        String?
+  userAgent        String?
+  formUrl          String?
+  doubleOptInStatus String?
   workspace        Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   contact          Contact?  @relation(fields: [contactId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, phone])
+}
+
+/// QR codes for signup forms, click-to-text, review/booking/payment links.
+model QrCode {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  targetType  String   // form | click_to_text | url | review | booking | payment
+  targetUrl   String
+  scans       Int      @default(0)
+  status      String   @default("Active")
+  createdAt   DateTime @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+}
+
+/// sms:+1…?body=JOIN style acquisition links.
+model ClickToTextLink {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  phoneE164   String
+  body        String
+  href        String
+  clicks      Int      @default(0)
+  status      String   @default("Active")
+  createdAt   DateTime @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
 }
 
 model ComplianceBrand {

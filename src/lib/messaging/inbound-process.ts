@@ -3,6 +3,7 @@
  */
 
 import { getPrisma } from "@/lib/db";
+import { handleKeywordInbound } from "@/lib/growth/keywords";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import { reconcileCampaignStatus } from "@/lib/campaigns/sequence-runner";
 
@@ -51,7 +52,7 @@ export async function resolveInboundContext(toRaw: string, accountOrProfileId?: 
 }
 
 export type InboundProcessResult = {
-  kind: "stop" | "start" | "help" | "message" | "empty";
+  kind: "stop" | "start" | "help" | "keyword" | "message" | "empty";
   replyText?: string;
 };
 
@@ -255,6 +256,23 @@ export async function processInboundMessage(input: {
         input.registration?.helpMessage ||
         `${input.registration?.legalBusinessName || "Support"}: For help contact ${input.registration?.contactEmail || "support@transovo.ai"}. Reply STOP to opt out. Msg&data rates may apply.`,
     };
+  }
+
+  // Custom keywords (JOIN, QUOTE, …) — after compliance keywords.
+  const keywordHit = await handleKeywordInbound({
+    workspaceId: input.workspaceId,
+    from,
+    to: input.to,
+    body,
+  });
+  if (keywordHit.matched) {
+    await recordInboundReceipt({
+      workspaceId: input.workspaceId,
+      from,
+      body,
+      providerMessageId: input.providerMessageId,
+    });
+    return { kind: "keyword", replyText: keywordHit.replyText };
   }
 
   let contact = await prisma.contact.findUnique({

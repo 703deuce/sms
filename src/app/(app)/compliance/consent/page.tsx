@@ -1,12 +1,10 @@
-import { Button } from "@/components/ui/button";
-import { Card, CardTitle } from "@/components/ui/card";
+"use client";
+
+import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
-import { StatusChip } from "@/components/ui/status-chip";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Tabs } from "@/components/ui/tabs";
-import { contacts } from "@/lib/mock/data";
-import { formatPhone } from "@/lib/utils";
-import Link from "next/link";
+import { useEffect, useState } from "react";
 
 const complianceTabs = [
   { label: "Overview", href: "/compliance" },
@@ -19,61 +17,75 @@ const complianceTabs = [
   { label: "Events", href: "/compliance/events" },
 ];
 
-export default function ComplianceConsentPage() {
-  const consented = contacts.filter((c) => c.status === "Subscribed");
+type ConsentRow = {
+  id: string;
+  phone: string;
+  source: string;
+  consentDate: string;
+  disclosureVersion?: string | null;
+  disclosureText?: string | null;
+  ipAddress?: string | null;
+  formUrl?: string | null;
+  doubleOptInStatus?: string | null;
+  contact?: { firstName?: string | null; lastName?: string | null; status?: string } | null;
+};
+
+export default function ConsentPage() {
+  const [rows, setRows] = useState<ConsentRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/compliance/consent")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => setRows(json?.data || []))
+      .finally(() => setLoading(false));
+  }, []);
 
   return (
     <div>
       <PageHeader
         title="Consent records"
-        description="Proof of opt-in per contact — source, date, and current subscription status."
-        actions={
-          <Link href="/contacts/imports">
-            <Button variant="outline">Import with consent</Button>
-          </Link>
-        }
+        description="Evidence for carrier review: phone, consent language, timestamp, IP, form URL, source, and double opt-in status."
       />
-
       <Tabs items={complianceTabs} />
 
-      <Card>
-        <div className="mb-4 flex items-center justify-between">
-          <CardTitle>Consent log</CardTitle>
-          <span className="text-xs text-muted-foreground">{consented.length} subscribed contacts</span>
-        </div>
-        <Table>
-          <THead>
-            <TR>
-              <TH>Contact</TH>
-              <TH>Phone</TH>
-              <TH>Consent source</TH>
-              <TH>Consent date</TH>
-              <TH>Status</TH>
-              <TH>Lists</TH>
-            </TR>
-          </THead>
-          <TBody>
-            {contacts.map((contact) => (
-              <TR key={contact.id}>
-                <TD className="font-medium">
-                  {contact.firstName} {contact.lastName}
-                </TD>
-                <TD>{formatPhone(contact.phone)}</TD>
-                <TD className="text-muted-foreground">{contact.consentSource}</TD>
-                <TD className="text-muted-foreground">{contact.consentDate}</TD>
-                <TD>
-                  <StatusChip status={contact.status} />
-                </TD>
-                <TD className="text-muted-foreground">
-                  {contact.lists.length > 0 ? contact.lists.join(", ") : "—"}
-                </TD>
+      <Card className="overflow-hidden p-0">
+        {loading && <p className="p-6 text-sm text-slate-500">Loading…</p>}
+        {!loading && (
+          <Table>
+            <THead>
+              <TR>
+                <TH>Phone</TH>
+                <TH>Source</TH>
+                <TH>When</TH>
+                <TH>Disclosure</TH>
+                <TH>IP</TH>
+                <TH>Double opt-in</TH>
               </TR>
-            ))}
-          </TBody>
-        </Table>
-        <p className="mt-4 text-xs text-muted-foreground">
-          Consent records are retained for audit purposes. Import contacts only with documented opt-in permission.
-        </p>
+            </THead>
+            <TBody>
+              {rows.map((r) => (
+                <TR key={r.id}>
+                  <TD className="font-medium">{r.phone}</TD>
+                  <TD>{r.source}</TD>
+                  <TD>{new Date(r.consentDate).toLocaleString()}</TD>
+                  <TD className="max-w-[220px] truncate text-xs text-slate-600">
+                    {r.disclosureVersion || "—"} · {r.disclosureText || "—"}
+                  </TD>
+                  <TD className="text-xs">{r.ipAddress || "—"}</TD>
+                  <TD>{r.doubleOptInStatus || "—"}</TD>
+                </TR>
+              ))}
+              {rows.length === 0 && (
+                <TR>
+                  <TD colSpan={6} className="text-slate-500">
+                    No consent records yet. Keyword joins and form submissions create them automatically.
+                  </TD>
+                </TR>
+              )}
+            </TBody>
+          </Table>
+        )}
       </Card>
     </div>
   );
