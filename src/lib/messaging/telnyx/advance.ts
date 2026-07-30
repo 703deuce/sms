@@ -15,46 +15,12 @@ import {
   resolveTelnyxPhoneNumberId,
 } from "./phone-numbers";
 import { looksLikeTwilioMessagingServiceSid } from "../provider-ids";
-
-function isApprovedBrand(status: string) {
-  const s = status.toUpperCase();
-  return [
-    "OK",
-    "VERIFIED",
-    "VETTED_VERIFIED",
-    "SELF_DECLARED",
-    "APPROVED",
-    "ACTIVE",
-  ].includes(s);
-}
-
-function isRejectedBrand(status: string) {
-  const s = status.toUpperCase();
-  return [
-    "FAILED",
-    "REJECTED",
-    "UNVERIFIED",
-    "REGISTRATION_FAILED",
-    "SUSPENDED",
-  ].includes(s);
-}
-
-function isApprovedCampaign(status: string) {
-  const s = status.toUpperCase();
-  return ["ACTIVE", "APPROVED", "VERIFIED", "OK"].includes(s);
-}
-
-function isRejectedCampaign(status: string) {
-  const s = status.toUpperCase();
-  return [
-    "FAILED",
-    "REJECTED",
-    "EXPIRED",
-    "SUSPENDED",
-    "TCR_FAILED",
-    "MNO_REJECTED",
-  ].includes(s);
-}
+import {
+  isApprovedBrandStatus as isApprovedBrand,
+  isApprovedCampaignStatus as isApprovedCampaign,
+  isRejectedBrandStatus as isRejectedBrand,
+  isRejectedCampaignStatus as isRejectedCampaign,
+} from "./status-map";
 
 async function log(
   reg: MessagingRegistration,

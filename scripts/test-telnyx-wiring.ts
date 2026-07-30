@@ -8,6 +8,12 @@ import { getMessagingProviderName } from "../src/lib/messaging/provider-config";
 import { getTelnyxWebhookUrls } from "../src/lib/messaging/telnyx/config";
 import { unwrapTelnyxData, looksLikeTwilioMessagingServiceSid } from "../src/lib/messaging/provider-ids";
 import {
+  isApprovedCampaignStatus,
+  isRejectedCampaignStatus,
+  mapTelnyxVertical,
+  pickCampaignStatus,
+} from "../src/lib/messaging/telnyx/status-map";
+import {
   TELNYX_ORDER_ID_PREFIX,
   fromTelnyxOrderRef,
   isTelnyxOrderId,
@@ -89,6 +95,18 @@ assert.equal(looksLikeTwilioMessagingServiceSid("uuid-profile"), false);
 
 assert.equal(unwrapTelnyxData<{ brandId: string }>({ data: { brandId: "b1" } }).brandId, "b1");
 assert.equal(unwrapTelnyxData<{ brandId: string }>({ brandId: "b2" }).brandId, "b2");
+
+assert.equal(mapTelnyxVertical("professional_services"), "PROFESSIONAL");
+assert.equal(mapTelnyxVertical("Home Services"), "CONSTRUCTION");
+assert.equal(mapTelnyxVertical("SaaS / Technology"), "TECHNOLOGY");
+assert.equal(mapTelnyxVertical(null, "HEALTHCARE"), "HEALTHCARE");
+
+assert.equal(isApprovedCampaignStatus("MNO_PROVISIONED"), true);
+assert.equal(isApprovedCampaignStatus("TCR_ACCEPTED"), false);
+assert.equal(isRejectedCampaignStatus("TELNYX_FAILED"), true);
+assert.equal(isRejectedCampaignStatus("TCR_SUSPENDED"), true);
+assert.equal(pickCampaignStatus({ status: "ACTIVE", campaignStatus: "MNO_PENDING" }), "ACTIVE");
+assert.equal(pickCampaignStatus({ campaignStatus: "MNO_PROVISIONED" }), "MNO_PROVISIONED");
 
 process.env.APP_URL = "https://transovo.ai";
 const urls = getTelnyxWebhookUrls();

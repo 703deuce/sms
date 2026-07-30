@@ -8,6 +8,12 @@ import { enqueueMessagingRegistrationAdvance } from "@/lib/messaging/enqueue-adv
 import { markRecipientFact } from "@/lib/campaigns/sequence-runner";
 import { looksLikeTwilioMessagingServiceSid } from "../provider-ids";
 import { telnyxProvider } from "./provider";
+import {
+  isApprovedBrandStatus,
+  isApprovedCampaignStatus,
+  isRejectedBrandStatus,
+  isRejectedCampaignStatus,
+} from "./status-map";
 import { telnyxEventType } from "./webhook-auth";
 
 const STATUS_RANK: Record<string, number> = {
@@ -199,15 +205,12 @@ export async function handleTelnyxCompliance(payload: unknown) {
     const patch: Record<string, unknown> = {};
     if (brandId && brandStatusRaw) {
       patch.brandStatusRaw = brandStatusRaw;
-      const upper = brandStatusRaw.toUpperCase();
-      if (["FAILED", "REJECTED", "UNVERIFIED", "REGISTRATION_FAILED", "SUSPENDED"].includes(upper)) {
+      if (isRejectedBrandStatus(brandStatusRaw)) {
         patch.brandStatus = "failed";
         patch.messagingEnabled = false;
         patch.overallStatus = "failed";
         patch.registrationFailureReason = `Brand ${brandStatusRaw}`;
-      } else if (
-        ["OK", "VERIFIED", "VETTED_VERIFIED", "SELF_DECLARED", "APPROVED", "ACTIVE"].includes(upper)
-      ) {
+      } else if (isApprovedBrandStatus(brandStatusRaw)) {
         patch.brandStatus = "approved";
       } else {
         patch.brandStatus = "in_review";
@@ -216,15 +219,12 @@ export async function handleTelnyxCompliance(payload: unknown) {
     }
     if (campaignId && campaignStatusRaw) {
       patch.campaignStatusRaw = campaignStatusRaw;
-      const upper = campaignStatusRaw.toUpperCase();
-      if (
-        ["FAILED", "REJECTED", "EXPIRED", "SUSPENDED", "TCR_FAILED", "MNO_REJECTED"].includes(upper)
-      ) {
+      if (isRejectedCampaignStatus(campaignStatusRaw)) {
         patch.campaignStatus = "failed";
         patch.messagingEnabled = false;
         patch.overallStatus = "failed";
         patch.registrationFailureReason = `Campaign ${campaignStatusRaw}`;
-      } else if (["ACTIVE", "APPROVED", "VERIFIED", "OK"].includes(upper)) {
+      } else if (isApprovedCampaignStatus(campaignStatusRaw)) {
         patch.campaignStatus = "approved";
       } else {
         patch.campaignStatus = "in_review";

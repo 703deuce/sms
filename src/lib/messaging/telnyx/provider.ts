@@ -32,6 +32,7 @@ import {
   toTelnyxOrderRef,
 } from "./phone-numbers";
 import { unwrapTelnyxData } from "../provider-ids";
+import { mapTelnyxVertical, pickCampaignStatus } from "./status-map";
 
 type TelnyxListResponse<T> = { data: T[] };
 type TelnyxDataResponse<T> = { data: T };
@@ -271,7 +272,7 @@ export const telnyxProvider: MessagingProvider = {
         country: reg.country || "US",
         email: reg.contactEmail,
         website: reg.websiteUrl,
-        vertical: reg.vertical || reg.businessIndustry || "PROFESSIONAL",
+        vertical: mapTelnyxVertical(reg.businessIndustry, reg.vertical),
         webhookURL: urls.compliance,
       },
       idempotencyKey: `telnyx-brand:${reg.workspaceId}:${certifiedKey}`,
@@ -343,7 +344,7 @@ export const telnyxProvider: MessagingProvider = {
     }>(res);
     const id = body.campaignId || body.id;
     if (!id) throw new Error("Telnyx campaign create returned no id");
-    return { id, status: body.campaignStatus || body.status || "pending" };
+    return { id, status: pickCampaignStatus(body) };
   },
 
   async assignCampaignToNumber(phoneNumber, campaignId) {
@@ -373,7 +374,13 @@ export const telnyxProvider: MessagingProvider = {
 
   async getCampaignStatus(campaignId) {
     assertTelnyxConfigured();
-    const res = await telnyxRequest(`/10dlc/campaign/${campaignId}`);
+    // Prefer campaignBuilder resource — exposes campaignStatus lifecycle enum.
+    let res: unknown;
+    try {
+      res = await telnyxRequest(`/10dlc/campaignBuilder/${campaignId}`);
+    } catch {
+      res = await telnyxRequest(`/10dlc/campaign/${campaignId}`);
+    }
     const body = unwrapTelnyxData<{
       campaignId?: string;
       id?: string;
@@ -382,7 +389,7 @@ export const telnyxProvider: MessagingProvider = {
     }>(res);
     return {
       id: body.campaignId || body.id || campaignId,
-      status: body.campaignStatus || body.status || "unknown",
+      status: pickCampaignStatus(body),
     };
   },
 
