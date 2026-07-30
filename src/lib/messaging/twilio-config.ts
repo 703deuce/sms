@@ -2,10 +2,7 @@
  * Twilio ISV / messaging env gate and webhook URL helpers.
  */
 
-function truthy(value: string | undefined) {
-  if (!value) return false;
-  return ["1", "true", "live", "twilio", "yes", "on"].includes(value.trim().toLowerCase());
-}
+import { getMessagingProviderName } from "./provider-config";
 
 export function getAppBaseUrl() {
   return (
@@ -16,11 +13,9 @@ export function getAppBaseUrl() {
   );
 }
 
+/** True only when the active provider is live Twilio. */
 export function isLiveMessagingAdapter() {
-  if (process.env.MESSAGING_ADAPTER) {
-    return process.env.MESSAGING_ADAPTER.trim().toLowerCase() === "twilio";
-  }
-  return truthy(process.env.TWILIO_MODE);
+  return getMessagingProviderName() === "twilio";
 }
 
 export function getTwilioParentCredentials() {

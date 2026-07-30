@@ -54,13 +54,21 @@ See [supabase/README.md](supabase/README.md).
 | `npm run test:messaging-wiring` | Messaging wiring checks (needs Supabase env) |
 
 
-## SMS / Twilio ISV
+## SMS / messaging providers
 
-See **[docs/TWILIO_ISV_MESSAGING.md](docs/TWILIO_ISV_MESSAGING.md)** for the full ISV guide (buy numbers, A2P registration, campaigns, cron/workers).
+**Telnyx migration (in progress):** see **[docs/TELNYX_MIGRATION.md](docs/TELNYX_MIGRATION.md)**.
 
-Live env essentials: `TWILIO_ACCOUNT_SID`, `TWILIO_ACCOUNT_AUTH_TOKEN`, `TWILIO_PRIMARY_PROFILE_SID`, `TWILIO_MODE=live`, `INTEGRATION_SECRET_KEY`, `APP_URL`, `CRON_SECRET`.
+Set `MESSAGING_PROVIDER=mock|twilio|telnyx`. New customers should use Telnyx once Phase 2–3 are complete.
 
-Always-on: web app + `npm run worker:all` + minute cron → `POST /api/jobs/process`. Without `TWILIO_MODE=live`, registration uses a mock adapter.
+Telnyx env essentials: `TELNYX_API_KEY`, `TELNYX_PUBLIC_KEY`, `TELNYX_MODE=live`, `APP_URL`, `CRON_SECRET`.
+
+### Legacy Twilio ISV
+
+See **[docs/TWILIO_ISV_MESSAGING.md](docs/TWILIO_ISV_MESSAGING.md)** (kept for rollback until Telnyx is verified).
+
+Live Twilio env: `TWILIO_ACCOUNT_SID`, `TWILIO_ACCOUNT_AUTH_TOKEN`, `TWILIO_PRIMARY_PROFILE_SID`, `TWILIO_MODE=live`, `INTEGRATION_SECRET_KEY`.
+
+Always-on: web app + `npm run worker:all` + minute cron → `POST /api/jobs/process`. Default without live credentials is the mock adapter.
 
 ## Application areas
 

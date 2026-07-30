@@ -100,4 +100,17 @@ export type MessagingRegistration = {
   lastAdvancedAt: Date | string | null;
   createdAt: Date | string;
   updatedAt: Date | string;
+
+  // Provider-neutral Telnyx / multi-provider fields (additive)
+  messagingProvider?: string | null;
+  messagingProfileId?: string | null;
+  phoneNumberId?: string | null;
+  brandId?: string | null;
+  campaignId?: string | null;
+  brandStatusRaw?: string | null;
+  campaignStatusRaw?: string | null;
+  messagingActivationStatus?: string | null;
+  registrationSubmittedAt?: Date | string | null;
+  registrationApprovedAt?: Date | string | null;
+  registrationFailureReason?: string | null;
 };

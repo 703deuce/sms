@@ -152,6 +152,7 @@ model PhoneNumber {
   areaCode         String?
   friendlyName     String?
   twilioSid        String?
+  providerNumberId String?
   a2pStatus        ComplianceStatus @default(PENDING)
   messagingService String?
   monthlyCostCents Int      @default(115)
@@ -294,16 +295,29 @@ model MessagingRegistration {
   messagingEnabled          Boolean             @default(false)
   paused                    Boolean             @default(false)
 
-  // Twilio subaccount
+  // Twilio subaccount (retained for rollback / audit)
   subaccountSid             String?
   subaccountAuthTokenEnc    String?
 
-  // TrustHub / A2P SIDs
+  // TrustHub / A2P SIDs (Twilio — retained temporarily)
   secondaryProfileSid       String?
   trustProductSid           String?
   brandSid                  String?
   messagingServiceSid       String?
   a2pCampaignSid            String?
+
+  // Provider-neutral messaging fields (Telnyx-first)
+  messagingProvider         String?   // mock | twilio | telnyx
+  messagingProfileId        String?
+  phoneNumberId             String?
+  brandId                   String?
+  campaignId                String?
+  brandStatusRaw            String?
+  campaignStatusRaw         String?
+  messagingActivationStatus String?   // draft | … | approved | rejected | suspended
+  registrationSubmittedAt   DateTime?
+  registrationApprovedAt    DateTime?
+  registrationFailureReason String?
 
   // Phone
   phoneE164                 String?

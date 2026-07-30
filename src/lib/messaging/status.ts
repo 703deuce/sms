@@ -1,15 +1,29 @@
 import type { MessagingRegistration, MessagingStepStatus } from "@/lib/domain";
 import type { RegistrationProgressStep } from "./types";
-import { isLiveMessagingAdapter } from "./twilio-config";
+import { getMessagingProviderName, isLiveMessagingProvider } from "./provider-config";
 
 export function isMessagingReady(reg: MessagingRegistration | null | undefined): boolean {
   if (!reg) return false;
   if (reg.paused) return false;
   if (!reg.messagingEnabled) return false;
   if (reg.overallStatus !== "ready") return false;
-  if (!reg.messagingServiceSid) return false;
   if (!reg.phoneAttached || !reg.phoneE164) return false;
   if (reg.phoneSid?.startsWith("PENDING:")) return false;
+
+  const provider = getMessagingProviderName();
+  if (provider === "telnyx") {
+    const profileId =
+      (reg as MessagingRegistration & { messagingProfileId?: string | null }).messagingProfileId ||
+      reg.messagingServiceSid;
+    const campaignId =
+      (reg as MessagingRegistration & { campaignId?: string | null }).campaignId ||
+      reg.a2pCampaignSid;
+    if (!profileId || !campaignId) return false;
+    return true;
+  }
+
+  // Twilio / mock path
+  if (!reg.messagingServiceSid) return false;
   if (reg.subaccountSid?.startsWith("PENDING:")) return false;
   return true;
 }
@@ -56,6 +70,7 @@ export function toPublicRegistration(reg: MessagingRegistration) {
     ...safe,
     progress: buildProgressSteps(reg),
     ready: isMessagingReady(reg),
-    liveMode: isLiveMessagingAdapter(),
+    liveMode: isLiveMessagingProvider(),
+    messagingProvider: getMessagingProviderName(),
   };
 }
