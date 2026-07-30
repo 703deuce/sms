@@ -241,7 +241,8 @@ export const telnyxProvider: MessagingProvider = {
     if (isTelnyxOrderId(phoneNumberId)) {
       throw new Error("Cannot attach pending number order — resolve phone number id first");
     }
-    await telnyxRequest(`/phone_numbers/${phoneNumberId}`, {
+    // Messaging profile assignment uses /phone_numbers/{id}/messaging — not the base PATCH.
+    await telnyxRequest(`/phone_numbers/${encodeURIComponent(phoneNumberId)}/messaging`, {
       method: "PATCH",
       body: { messaging_profile_id: messagingProfileId },
     });
