@@ -42,6 +42,9 @@ export function getAppBaseUrl() {
 export function getTelnyxWebhookUrls() {
   const base = getAppBaseUrl();
   return {
+    /** Unified messaging profile webhook (inbound + delivery events). */
+    messaging: `${base}/api/telnyx/messaging`,
+    /** Legacy aliases — still accepted; prefer `messaging`. */
     inbound: `${base}/api/telnyx/inbound`,
     messageStatus: `${base}/api/telnyx/message-status`,
     compliance: `${base}/api/telnyx/compliance`,

@@ -9,6 +9,11 @@ import { getMessagingProvider } from "../get-provider";
 import { appendRegistrationEvent, getRegistrationByWorkspace, updateRegistrationIfLocked } from "../store";
 import { enqueueMessagingRegistrationAdvance } from "../enqueue-advance";
 import { JobDeferredError, JobFailedError } from "../types";
+import {
+  fromTelnyxOrderRef,
+  isTelnyxOrderId,
+  resolveTelnyxPhoneNumberId,
+} from "./phone-numbers";
 
 function isApprovedBrand(status: string) {
   const s = status.toUpperCase();
@@ -123,19 +128,48 @@ export async function advanceTelnyxRegistration(workspaceId: string) {
     const profileId = reg.messagingProfileId || reg.messagingServiceSid;
     if (!profileId) throw new JobFailedError("Missing messaging profile id");
 
-    // 2) Attach purchased number to messaging profile
-    const phoneId = reg.phoneNumberId || reg.phoneSid;
-    if (phoneId && reg.phoneE164 && !reg.phoneAttached) {
-      await provider.assignNumberToMessagingProfile(phoneId, profileId);
-      reg = await lockedUpdate({
-        phoneAttached: true,
-        numberStatus: "ready",
-        phoneNumberId: phoneId,
+    // 2) Resolve pending number orders → real phone_numbers resource id
+    let phoneId = reg.phoneNumberId || reg.phoneSid;
+    if (phoneId && reg.phoneE164 && isTelnyxOrderId(phoneId)) {
+      const resolved = await resolveTelnyxPhoneNumberId({
+        orderId: fromTelnyxOrderRef(phoneId),
+        phoneNumber: reg.phoneE164,
+        existingId: phoneId,
       });
-      await log(reg, "phone_attached_to_profile", reg.phoneE164 || undefined);
+      if (!resolved) {
+        throw new JobDeferredError("Telnyx number order still pending", 30_000);
+      }
+      reg = await lockedUpdate({
+        phoneNumberId: resolved,
+        phoneSid: resolved,
+        numberStatus: "submitted",
+      });
+      phoneId = resolved;
+      await log(reg, "telnyx_number_order_resolved", resolved);
+
+      await getPrisma().phoneNumber.updateMany({
+        where: { workspaceId, e164: reg.phoneE164 },
+        data: { providerNumberId: resolved },
+      });
     }
 
-    // 3) Brand
+    // 3) Attach purchased number to messaging profile
+    if (phoneId && reg.phoneE164 && !reg.phoneAttached) {
+      try {
+        await provider.assignNumberToMessagingProfile(phoneId, profileId);
+        reg = await lockedUpdate({
+          phoneAttached: true,
+          numberStatus: "ready",
+          phoneNumberId: phoneId,
+        });
+        await log(reg, "phone_attached_to_profile", reg.phoneE164 || undefined);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        throw new JobDeferredError(`Attach number to profile: ${msg}`, 60_000);
+      }
+    }
+
+    // 4) Brand
     let brandId = reg.brandId || reg.brandSid;
     if (!brandId) {
       const brand = await provider.createBrand(reg);
@@ -182,7 +216,7 @@ export async function advanceTelnyxRegistration(workspaceId: string) {
       }
     }
 
-    // 4) Campaign
+    // 5) Campaign
     let campaignId = reg.campaignId || reg.a2pCampaignSid;
     if (!campaignId) {
       const campaign = await provider.createCampaign(reg);
@@ -228,7 +262,7 @@ export async function advanceTelnyxRegistration(workspaceId: string) {
       }
     }
 
-    // 5) Assign number to campaign (requires profile-attached number + approved campaign)
+    // 6) Assign number to campaign (requires profile-attached number + approved campaign)
     if (reg.phoneE164 && reg.phoneAttached && campaignId) {
       try {
         await provider.assignCampaignToNumber(reg.phoneE164, campaignId);
@@ -242,21 +276,25 @@ export async function advanceTelnyxRegistration(workspaceId: string) {
       }
     }
 
+    const brandReady =
+      reg.brandStatus === "approved" || isApprovedBrand(reg.brandStatusRaw || "");
+    const campaignReady =
+      reg.campaignStatus === "approved" || isApprovedCampaign(reg.campaignStatusRaw || "");
     const ready =
       Boolean(profileId) &&
       Boolean(reg.phoneAttached && reg.phoneE164) &&
-      reg.brandStatus === "approved" &&
-      (reg.campaignStatus === "approved" || isApprovedCampaign(reg.campaignStatusRaw || ""));
+      brandReady &&
+      campaignReady;
 
     const readyUpdate = await getPrisma().messagingRegistration.updateMany({
       where: { workspaceId, lastError: lockToken },
       data: {
-        overallStatus: ready ? "ready" : "action_required",
+        overallStatus: ready ? "ready" : reg.phoneAttached ? "in_review" : "action_required",
         messagingEnabled: ready,
         messagingActivationStatus: ready ? "approved" : reg.messagingActivationStatus,
-        registrationApprovedAt: ready ? new Date() : reg.registrationApprovedAt,
-        brandStatus: "approved",
-        campaignStatus: ready || reg.campaignStatus === "approved" ? "approved" : reg.campaignStatus,
+        registrationApprovedAt: ready
+          ? reg.registrationApprovedAt || new Date()
+          : reg.registrationApprovedAt,
         numberStatus: reg.phoneAttached ? "ready" : "action_required",
         lastAdvancedAt: new Date(),
         lastError: null,

@@ -69,6 +69,7 @@ CREATE TABLE "PhoneNumber" (
     "areaCode" TEXT,
     "friendlyName" TEXT,
     "twilioSid" TEXT,
+    "providerNumberId" TEXT,
     "a2pStatus" "ComplianceStatus" NOT NULL DEFAULT 'PENDING',
     "messagingService" TEXT,
     "monthlyCostCents" INTEGER NOT NULL DEFAULT 115,
@@ -208,6 +209,17 @@ CREATE TABLE "messaging_registrations" (
     "brandSid" TEXT,
     "messagingServiceSid" TEXT,
     "a2pCampaignSid" TEXT,
+    "messagingProvider" TEXT,
+    "messagingProfileId" TEXT,
+    "phoneNumberId" TEXT,
+    "brandId" TEXT,
+    "campaignId" TEXT,
+    "brandStatusRaw" TEXT,
+    "campaignStatusRaw" TEXT,
+    "messagingActivationStatus" TEXT,
+    "registrationSubmittedAt" TIMESTAMP(3),
+    "registrationApprovedAt" TIMESTAMP(3),
+    "registrationFailureReason" TEXT,
     "phoneE164" TEXT,
     "phoneSid" TEXT,
     "phoneAttached" BOOLEAN NOT NULL DEFAULT false,
@@ -605,6 +617,9 @@ CREATE UNIQUE INDEX "messaging_registrations_workspaceId_key" ON "messaging_regi
 
 -- CreateIndex
 CREATE INDEX "messaging_registrations_overallStatus_idx" ON "messaging_registrations"("overallStatus");
+CREATE INDEX "messaging_registrations_messaging_profile_id_idx" ON "messaging_registrations"("messagingProfileId");
+CREATE INDEX "messaging_registrations_brand_id_idx" ON "messaging_registrations"("brandId");
+CREATE INDEX "messaging_registrations_campaign_id_idx" ON "messaging_registrations"("campaignId");
 
 -- CreateIndex
 CREATE INDEX "messaging_registration_events_registrationId_createdAt_idx" ON "messaging_registration_events"("registrationId", "createdAt");

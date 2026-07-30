@@ -28,6 +28,9 @@ export type SendMessageResult = {
 export type PurchasedNumber = {
   id: string;
   phoneNumber: string;
+  /** Telnyx number-order id when purchase is async */
+  orderId?: string;
+  pending?: boolean;
 };
 
 export type MessagingProfileResult = {

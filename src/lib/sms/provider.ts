@@ -1,5 +1,6 @@
 import { sendQuickSms } from "@/lib/sms/send-quick";
 import { messagingOnboarding } from "@/lib/messaging/service";
+import { getMessagingProviderName, isLiveMessagingProvider } from "@/lib/messaging/provider-config";
 import { isLiveMessagingAdapter } from "@/lib/messaging/twilio-config";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 
@@ -14,7 +15,7 @@ export type SendSmsInput = {
 export type SendSmsResult = {
   id: string;
   status: "queued" | "sent" | "failed";
-  provider: "stub" | "twilio";
+  provider: "stub" | "twilio" | "telnyx";
   error?: string;
 };
 
@@ -42,17 +43,22 @@ export class StubSmsProvider implements SmsProvider {
   }
 }
 
+function liveProviderLabel(): "twilio" | "telnyx" {
+  return getMessagingProviderName() === "telnyx" ? "telnyx" : "twilio";
+}
+
 /**
- * Live/mock ISV path: sends via the workspace Messaging Service once registration is ready.
- * Falls back to stub errors when workspaceId is missing.
+ * Live ISV path: sends via workspace registration once messaging is ready.
+ * Works for Twilio and Telnyx (sendQuickSms → sendViaRegistration → getMessagingProvider).
  */
-export class TwilioIsvSmsProvider implements SmsProvider {
+export class IsvSmsProvider implements SmsProvider {
   async send(input: SendSmsInput): Promise<SendSmsResult> {
+    const provider = liveProviderLabel();
     if (!input.workspaceId) {
       return {
-        id: `twilio_fail_${Date.now()}`,
+        id: `${provider}_fail_${Date.now()}`,
         status: "failed",
-        provider: "twilio",
+        provider,
         error: "workspaceId is required for ISV sends",
       };
     }
@@ -66,13 +72,13 @@ export class TwilioIsvSmsProvider implements SmsProvider {
       return {
         id: result.sid,
         status: result.status === "failed" ? "failed" : "queued",
-        provider: "twilio",
+        provider,
       };
     } catch (err) {
       return {
-        id: `twilio_fail_${Date.now()}`,
+        id: `${provider}_fail_${Date.now()}`,
         status: "failed",
-        provider: "twilio",
+        provider,
         error: err instanceof Error ? err.message : String(err),
       };
     }
@@ -92,9 +98,12 @@ export class TwilioIsvSmsProvider implements SmsProvider {
   }
 }
 
+/** @deprecated Use IsvSmsProvider */
+export const TwilioIsvSmsProvider = IsvSmsProvider;
+
 export function getSmsProvider(): SmsProvider {
-  if (isLiveMessagingAdapter() || process.env.TWILIO_ACCOUNT_SID) {
-    return new TwilioIsvSmsProvider();
+  if (isLiveMessagingProvider() || isLiveMessagingAdapter() || process.env.TWILIO_ACCOUNT_SID || process.env.TELNYX_API_KEY) {
+    return new IsvSmsProvider();
   }
   return new StubSmsProvider();
 }

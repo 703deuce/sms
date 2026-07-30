@@ -100,7 +100,13 @@ export const messagingOnboarding = {
     const existing = await ensureRegistrationRow(workspaceId);
     const phone = normalizeE164(data.contactPhone);
     const materialChanged =
-      Boolean(existing.secondaryProfileSid || existing.brandSid || existing.a2pCampaignSid) &&
+      Boolean(
+        existing.secondaryProfileSid ||
+          existing.brandSid ||
+          existing.a2pCampaignSid ||
+          existing.brandId ||
+          existing.campaignId,
+      ) &&
       ((existing.legalBusinessName || "") !== data.legalBusinessName ||
         (existing.businessRegistrationId || "") !== data.businessRegistrationId ||
         (existing.businessType || "") !== data.businessType ||
@@ -127,11 +133,15 @@ export const messagingOnboarding = {
             campaignStatus: "action_required" as const,
             overallStatus: "action_required" as const,
             messagingEnabled: false,
-            // Force recreation of TrustHub resources on next submit/advance
+            // Force recreation of TrustHub / Telnyx brand+campaign on next submit/advance
             secondaryProfileSid: null,
             trustProductSid: null,
             brandSid: null,
             a2pCampaignSid: null,
+            brandId: null,
+            campaignId: null,
+            brandStatusRaw: null,
+            campaignStatusRaw: null,
             certifiedAt: null,
           }
         : {
@@ -155,7 +165,12 @@ export const messagingOnboarding = {
     const samplesChanged =
       JSON.stringify(existing.sampleMessages || []) !== JSON.stringify(data.sampleMessages || []);
     const materialChanged =
-      Boolean(existing.a2pCampaignSid || existing.overallStatus === "ready" || existing.secondaryProfileSid) &&
+      Boolean(
+        existing.a2pCampaignSid ||
+          existing.campaignId ||
+          existing.overallStatus === "ready" ||
+          existing.secondaryProfileSid,
+      ) &&
       ((existing.useCase || "") !== data.useCase ||
         (existing.useCaseDescription || "") !== data.useCaseDescription ||
         (existing.optInDescription || "") !== data.optInDescription ||
@@ -172,6 +187,8 @@ export const messagingOnboarding = {
             overallStatus: "action_required" as const,
             messagingEnabled: false,
             a2pCampaignSid: null,
+            campaignId: null,
+            campaignStatusRaw: null,
             certifiedAt: null,
           }
         : {
@@ -331,7 +348,12 @@ export const messagingOnboarding = {
     if (reg.phoneE164) {
       await getPrisma().phoneNumber.updateMany({
         where: { workspaceId, e164: reg.phoneE164 },
-        data: { status: "Released", releasedAt: new Date() },
+        data: {
+          status: "Released",
+          releasedAt: new Date(),
+          providerNumberId: null,
+          twilioSid: null,
+        },
       });
     }
 
@@ -387,6 +409,11 @@ export const messagingOnboarding = {
     });
 
     if (getMessagingProviderName() === "telnyx") {
+      await appendRegistrationEvent({
+        workspaceId,
+        registrationId: updated.id,
+        eventType: "registration_submitted",
+      });
       await enqueueMessagingRegistrationAdvance(workspaceId);
       try {
         const advanced = await advanceMessagingRegistration(workspaceId);

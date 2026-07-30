@@ -1,10 +1,8 @@
 /**
  * Native Telnyx MessagingProvider.
- * Phase 1: outbound send + number search skeleton.
- * Brand/campaign/webhook parsers land in Phases 2–3.
  */
 
-import { createHmac, timingSafeEqual } from "crypto";
+import { verify, createPublicKey } from "crypto";
 import type { MessagingRegistration } from "@/lib/domain";
 import type {
   BrandResult,
@@ -28,15 +26,16 @@ import {
   getTelnyxApiKey,
   getTelnyxWebhookUrls,
 } from "./config";
+import {
+  isTelnyxOrderId,
+  pollTelnyxPhoneNumberId,
+  toTelnyxOrderRef,
+} from "./phone-numbers";
 
 type TelnyxListResponse<T> = { data: T[] };
 type TelnyxDataResponse<T> = { data: T };
 
-function notReady(feature: string): never {
-  throw new Error(
-    `TelnyxProvider.${feature} is not fully implemented yet. See docs/TELNYX_MIGRATION.md Phase 2–3.`,
-  );
-}
+const WEBHOOK_MAX_SKEW_SECONDS = 300;
 
 function mapDeliveryStatus(status: string): ParsedDeliveryStatus["internalStatus"] {
   const s = status.toLowerCase();
@@ -47,6 +46,22 @@ function mapDeliveryStatus(status: string): ParsedDeliveryStatus["internalStatus
   if (s === "delivery_unconfirmed") return "undelivered";
   if (s.includes("expired")) return "expired";
   return "unknown";
+}
+
+function extractPhone(value: unknown): string {
+  if (value == null) return "";
+  if (typeof value === "string") return value;
+  if (typeof value === "number") return String(value);
+  if (Array.isArray(value)) {
+    return extractPhone(value[0]);
+  }
+  if (typeof value === "object") {
+    const o = value as Record<string, unknown>;
+    if (typeof o.phone_number === "string") return o.phone_number;
+    if (typeof o.phoneNumber === "string") return o.phoneNumber;
+    if (typeof o.number === "string") return o.number;
+  }
+  return "";
 }
 
 export const telnyxProvider: MessagingProvider = {
@@ -69,6 +84,7 @@ export const telnyxProvider: MessagingProvider = {
       throw new Error("Telnyx send requires from number or messaging_profile_id");
     }
 
+    const urls = getTelnyxWebhookUrls();
     const body: Record<string, unknown> = {
       to: input.to,
       text: input.body,
@@ -77,13 +93,9 @@ export const telnyxProvider: MessagingProvider = {
     if (from) body.from = from;
     if (messagingProfileId) body.messaging_profile_id = messagingProfileId;
     if (input.mediaUrls?.length) body.media_urls = input.mediaUrls;
-    if (input.statusCallbackUrl) {
-      body.webhook_url = input.statusCallbackUrl;
-      body.webhook_failover_url = input.statusCallbackUrl;
-    } else {
-      const urls = getTelnyxWebhookUrls();
-      body.webhook_url = urls.messageStatus;
-    }
+    const statusUrl = input.statusCallbackUrl || urls.messaging;
+    body.webhook_url = statusUrl;
+    body.webhook_failover_url = statusUrl;
 
     const res = await telnyxRequest<TelnyxDataResponse<{ id: string; to?: Array<{ status?: string }> }>>(
       "/messages",
@@ -144,25 +156,58 @@ export const telnyxProvider: MessagingProvider = {
 
   async buyPhoneNumber(_reg, phoneNumber): Promise<PurchasedNumber> {
     assertTelnyxConfigured();
-    const res = await telnyxRequest<TelnyxDataResponse<{ id: string; phone_numbers?: Array<{ id: string; phone_number: string }> }>>(
-      "/number_orders",
-      {
-        method: "POST",
-        body: {
-          phone_numbers: [{ phone_number: phoneNumber }],
-        },
-        idempotencyKey: `number-order:${phoneNumber}`,
+    const res = await telnyxRequest<
+      TelnyxDataResponse<{
+        id: string;
+        status?: string;
+        phone_numbers?: Array<{ id?: string; phone_number?: string; status?: string }>;
+      }>
+    >("/number_orders", {
+      method: "POST",
+      body: {
+        phone_numbers: [{ phone_number: phoneNumber }],
       },
-    );
+      idempotencyKey: `number-order:${phoneNumber}`,
+    });
+
+    const orderId = res.data.id;
     const purchased = res.data.phone_numbers?.[0];
+    const e164 = purchased?.phone_number || phoneNumber;
+
+    let phoneNumberId =
+      purchased?.id && purchased.status === "success" ? purchased.id : null;
+    if (!phoneNumberId) {
+      phoneNumberId = await pollTelnyxPhoneNumberId({
+        orderId,
+        phoneNumber: e164,
+        attempts: 6,
+        delayMs: 1500,
+      });
+    }
+
+    if (!phoneNumberId) {
+      // Order accepted but resource id not ready — advance will resolve ORDER: refs.
+      return {
+        id: toTelnyxOrderRef(orderId),
+        phoneNumber: e164,
+        orderId,
+        pending: true,
+      };
+    }
+
     return {
-      id: purchased?.id || res.data.id,
-      phoneNumber: purchased?.phone_number || phoneNumber,
+      id: phoneNumberId,
+      phoneNumber: e164,
+      orderId,
+      pending: false,
     };
   },
 
   async releasePhoneNumber(_reg, phoneNumberId) {
     assertTelnyxConfigured();
+    if (isTelnyxOrderId(phoneNumberId) || phoneNumberId.startsWith("PENDING:")) {
+      return { ok: true as const };
+    }
     await telnyxRequest(`/phone_numbers/${phoneNumberId}`, { method: "DELETE" });
     return { ok: true as const };
   },
@@ -177,8 +222,9 @@ export const telnyxProvider: MessagingProvider = {
         method: "POST",
         body: {
           name,
-          webhook_url: urls.inbound,
-          webhook_failover_url: urls.inbound,
+          // Single profile webhook receives inbound + delivery lifecycle events.
+          webhook_url: urls.messaging,
+          webhook_failover_url: urls.messaging,
           webhook_api_version: "2",
           enabled: true,
         },
@@ -190,6 +236,9 @@ export const telnyxProvider: MessagingProvider = {
 
   async assignNumberToMessagingProfile(phoneNumberId, messagingProfileId) {
     assertTelnyxConfigured();
+    if (isTelnyxOrderId(phoneNumberId)) {
+      throw new Error("Cannot attach pending number order — resolve phone number id first");
+    }
     await telnyxRequest(`/phone_numbers/${phoneNumberId}`, {
       method: "PATCH",
       body: { messaging_profile_id: messagingProfileId },
@@ -202,6 +251,7 @@ export const telnyxProvider: MessagingProvider = {
     if (!reg.legalBusinessName || !reg.businessRegistrationId || !reg.websiteUrl) {
       throw new Error("Brand registration requires legal name, EIN/tax ID, and website");
     }
+    const urls = getTelnyxWebhookUrls();
     const res = await telnyxRequest<TelnyxDataResponse<{ brandId?: string; id?: string; status?: string }>>(
       "/10dlc/brand",
       {
@@ -220,6 +270,7 @@ export const telnyxProvider: MessagingProvider = {
           email: reg.contactEmail,
           website: reg.websiteUrl,
           vertical: reg.vertical || reg.businessIndustry || "PROFESSIONAL",
+          webhookURL: urls.compliance,
         },
       },
     );
@@ -235,6 +286,7 @@ export const telnyxProvider: MessagingProvider = {
     if (!brandId) throw new Error("Campaign requires brand_id");
     if (!reg.useCaseDescription) throw new Error("Campaign requires use case description");
 
+    const urls = getTelnyxWebhookUrls();
     const samples = reg.sampleMessages || [];
     const res = await telnyxRequest<TelnyxDataResponse<{ campaignId?: string; id?: string; status?: string }>>(
       "/10dlc/campaignBuilder",
@@ -246,7 +298,9 @@ export const telnyxProvider: MessagingProvider = {
           description: reg.useCaseDescription,
           sample1: samples[0] || "Thanks for contacting us. Reply STOP to opt out.",
           sample2: samples[1] || "Your appointment reminder. Reply STOP to opt out.",
-          messageFlow: reg.optInDescription || "Customer provides phone number and consent on website or intake form.",
+          messageFlow:
+            reg.optInDescription ||
+            "Customer provides phone number and consent on website or intake form.",
           helpMessage:
             reg.helpMessage ||
             "Reply HELP for help. Reply STOP to opt out. Message and data rates may apply.",
@@ -259,6 +313,7 @@ export const telnyxProvider: MessagingProvider = {
           embeddedLink: true,
           numberPool: false,
           ageGated: false,
+          webhookURL: urls.compliance,
         },
       },
     );
@@ -301,35 +356,26 @@ export const telnyxProvider: MessagingProvider = {
   async verifyWebhook(input: WebhookVerificationInput) {
     const publicKey = getTelnyxPublicKey();
     if (!publicKey) {
-      // Fail closed when an API key is present (live-ish). Local mock without keys can pass.
-      return !process.env.TELNYX_API_KEY;
+      // Fail closed when an API key is present (live-ish). Local without keys can pass.
+      return !getTelnyxApiKey();
     }
     if (!input.signature || !input.timestamp) return false;
+
+    const ts = Number(input.timestamp);
+    if (!Number.isFinite(ts)) return false;
+    // Telnyx sends unix seconds; reject replayed/skewed payloads.
+    const nowSec = Math.floor(Date.now() / 1000);
+    if (Math.abs(nowSec - ts) > WEBHOOK_MAX_SKEW_SECONDS) return false;
 
     const body =
       typeof input.payload === "string" ? input.payload : input.payload.toString("utf8");
     const signedPayload = `${input.timestamp}|${body}`;
 
-    // Preferred: Telnyx ed25519 signature (public key from Mission Control).
     try {
-      const { verify, createPublicKey } = await import("crypto");
-      const keyObject = buildTelnyxPublicKey(publicKey, createPublicKey);
-      if (keyObject) {
-        const sig = Buffer.from(input.signature, "base64");
-        const ok = verify(null, Buffer.from(signedPayload), keyObject, sig);
-        if (ok) return true;
-      }
-    } catch {
-      // fall through
-    }
-
-    // Compatibility fallback for shared-secret style keys in non-ed25519 setups.
-    try {
-      const expected = createHmac("sha256", publicKey).update(signedPayload).digest("hex");
-      const a = Buffer.from(expected);
-      const b = Buffer.from(input.signature);
-      if (a.length !== b.length) return false;
-      return timingSafeEqual(a, b);
+      const keyObject = buildTelnyxPublicKey(publicKey);
+      if (!keyObject) return false;
+      const sig = Buffer.from(input.signature, "base64");
+      return verify(null, Buffer.from(signedPayload), keyObject, sig);
     } catch {
       return false;
     }
@@ -339,11 +385,8 @@ export const telnyxProvider: MessagingProvider = {
     const root = asRecord(payload) || {};
     const data = asRecord(root.data) || root;
     const payloadObj = asRecord(data.payload) || data;
-    const from = String(payloadObj.from || payloadObj.From || "");
-    const toRaw = payloadObj.to ?? payloadObj.To ?? "";
-    const to = Array.isArray(toRaw)
-      ? String((toRaw[0] as { phone_number?: string })?.phone_number || toRaw[0] || "")
-      : String(toRaw);
+    const from = extractPhone(payloadObj.from ?? payloadObj.From);
+    const to = extractPhone(payloadObj.to ?? payloadObj.To);
     const body = String(payloadObj.text || payloadObj.body || payloadObj.Body || "");
     const id = String(payloadObj.id || payloadObj.message_id || data.id || "");
     const media = Array.isArray(payloadObj.media)
@@ -422,10 +465,7 @@ function asRecord(value: unknown): Record<string, any> | null {
   return value && typeof value === "object" ? (value as Record<string, any>) : null;
 }
 
-function buildTelnyxPublicKey(
-  publicKey: string,
-  createPublicKey: typeof import("crypto").createPublicKey,
-) {
+function buildTelnyxPublicKey(publicKey: string) {
   const trimmed = publicKey.trim();
   try {
     if (trimmed.includes("BEGIN PUBLIC KEY")) {
@@ -462,6 +502,3 @@ function mapUseCase(useCase: string | null | undefined) {
   if (u.includes("customer")) return "CUSTOMER_CARE";
   return "MIXED";
 }
-
-// silence unused until Phase 3 wiring
-void notReady;

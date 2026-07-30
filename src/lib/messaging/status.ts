@@ -19,6 +19,8 @@ export function isMessagingReady(reg: MessagingRegistration | null | undefined):
       (reg as MessagingRegistration & { campaignId?: string | null }).campaignId ||
       reg.a2pCampaignSid;
     if (!profileId || !campaignId) return false;
+    if (reg.brandStatus !== "approved") return false;
+    if (reg.campaignStatus !== "approved") return false;
     return true;
   }
 

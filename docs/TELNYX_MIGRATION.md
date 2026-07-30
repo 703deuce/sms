@@ -264,9 +264,11 @@ Keep Twilio webhook routes until Telnyx paths are verified.
 
 ### Phase 2 — Send / receive
 - [x] Native Telnyx outbound SMS (`sendViaRegistration` → provider)
-- [x] Inbound webhook `/api/telnyx/inbound` + signature verify
-- [x] Delivery status webhook `/api/telnyx/message-status`
-- [x] Preserve STOP/HELP/suppression (shared inbound processor)
+- [x] Unified messaging webhook `/api/telnyx/messaging` (inbound + DLR)
+- [x] Legacy aliases `/api/telnyx/inbound` + `/api/telnyx/message-status`
+- [x] Ed25519 signature verify + timestamp skew check (always via `telnyxProvider`)
+- [x] Keyword auto-replies (STOP/START/HELP) sent back via Telnyx
+- [x] Preserve STOP/HELP/suppression (shared inbound processor; Twilio uses it too)
 - [x] Wiring test: `npx tsx scripts/test-telnyx-wiring.ts`
 
 ### Phase 3 — Numbers + 10DLC
@@ -292,10 +294,10 @@ Keep Twilio webhook routes until Telnyx paths are verified.
 ### Ops checklist to go live
 1. Run `supabase/telnyx-provider-fields.sql` on Supabase.
 2. Set `MESSAGING_PROVIDER=telnyx`, `TELNYX_API_KEY`, `TELNYX_PUBLIC_KEY`, `TELNYX_MODE=live`, `APP_URL`.
-3. Point Telnyx messaging profile / event webhooks to:
-   - `https://<app>/api/telnyx/inbound`
-   - `https://<app>/api/telnyx/message-status`
-   - `https://<app>/api/telnyx/compliance`
+3. Point Telnyx webhooks to:
+   - Messaging profile (inbound + delivery): `https://<app>/api/telnyx/messaging`
+   - Brand/campaign compliance: `https://<app>/api/telnyx/compliance`
+   - Legacy aliases still work: `/api/telnyx/inbound`, `/api/telnyx/message-status`
 4. Keep Twilio env vars until production verification is complete.
 
 ---
