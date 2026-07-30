@@ -3,7 +3,7 @@ import { randomBytes } from "crypto";
 import { getPrisma } from "@/lib/db";
 import { encryptSecret } from "./crypto";
 import { enqueueMessagingRegistrationAdvance } from "./enqueue-advance";
-import { getMessagingProvider } from "./get-provider";
+import { getMessagingProviderForRegistration } from "./get-provider";
 import { mockAdapter } from "./mock-adapter";
 import { getMessagingProviderName } from "./provider-config";
 import { appendRegistrationEvent, getRegistrationByWorkspace, updateRegistration, updateRegistrationIfLocked } from "./store";
@@ -47,13 +47,16 @@ function isTwilioRejected(status: string | undefined | null) {
  * Creates Trust Product → Brand → Messaging Service → attach PN → US A2P Campaign → ready.
  */
 export async function advanceMessagingRegistration(workspaceId: string) {
-  if (getMessagingProviderName() === "telnyx") {
+  let reg = await getRegistrationByWorkspace(workspaceId);
+  if (!reg) throw new Error(`No messaging registration for workspace ${workspaceId}`);
+
+  const providerName =
+    (reg.messagingProvider || "").trim().toLowerCase() || getMessagingProviderName();
+  if (providerName === "telnyx") {
     return advanceTelnyxRegistration(workspaceId);
   }
 
   const live = adapter();
-  let reg = await getRegistrationByWorkspace(workspaceId);
-  if (!reg) throw new Error(`No messaging registration for workspace ${workspaceId}`);
 
   // Unique lock token so finally/CAS cannot clear another worker's lock
   const lockToken = `ADVANCE_LOCK:${randomBytes(8).toString("hex")}`;
@@ -470,7 +473,7 @@ export async function sendViaRegistration(workspaceId: string, to: string, body:
     throw new Error("Messaging is not ready for this workspace. Complete A2P registration first.");
   }
 
-  const provider = getMessagingProvider();
+  const provider = getMessagingProviderForRegistration(reg!);
   if (provider.name === "mock") {
     return mockAdapter.sendSmsViaMessagingService({
       messagingServiceSid: reg!.messagingServiceSid || "MG_MOCK",
@@ -479,11 +482,17 @@ export async function sendViaRegistration(workspaceId: string, to: string, body:
     });
   }
 
+  const messagingProfileId =
+    reg!.messagingProfileId ||
+    (provider.name === "telnyx" && reg!.messagingServiceSid?.startsWith("MG")
+      ? null
+      : reg!.messagingServiceSid);
+
   const result = await provider.sendMessage(reg!, {
     to,
     body,
     from: reg!.phoneE164 || undefined,
-    messagingProfileId: reg!.messagingProfileId || reg!.messagingServiceSid,
+    messagingProfileId,
     messagingServiceSid: reg!.messagingServiceSid,
   });
 

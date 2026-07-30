@@ -32,11 +32,10 @@ export async function readTelnyxWebhook(request: Request): Promise<
     headers: request.headers,
   });
 
+  // Fail closed whenever Telnyx credentials are configured (API key and/or public key).
   const mustVerify = Boolean(getTelnyxPublicKey() || getTelnyxApiKey());
   if (!verified && mustVerify) {
-    if (process.env.NODE_ENV === "production" || getTelnyxPublicKey()) {
-      return { ok: false, response: new NextResponse("Invalid signature", { status: 403 }) };
-    }
+    return { ok: false, response: new NextResponse("Invalid signature", { status: 403 }) };
   }
 
   return { ok: true, rawBody, payload };

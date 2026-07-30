@@ -283,6 +283,16 @@ export const messagingOnboarding = {
       },
     });
     if (committed.count !== 1) {
+      // Best-effort release so we don't leave a billable orphaned number.
+      try {
+        if (providerName === "telnyx") {
+          await getMessagingProvider().releasePhoneNumber(reg, purchased.sid);
+        } else if (isLiveMessagingAdapter()) {
+          await twilioAdapter.releaseNumber(reg, purchased.sid);
+        }
+      } catch (err) {
+        console.error("[purchaseNumber] orphan release failed", purchased.phoneNumber, err);
+      }
       throw new Error("Lost phone purchase claim — contact support to reconcile number inventory");
     }
     reg = (await getRegistrationByWorkspace(workspaceId))!;
@@ -338,7 +348,32 @@ export const messagingOnboarding = {
 
     const providerName = getMessagingProviderName();
     if (providerName === "telnyx") {
-      await getMessagingProvider().releasePhoneNumber(reg, reg.phoneNumberId || reg.phoneSid);
+      const { isTelnyxOrderId, fromTelnyxOrderRef, resolveTelnyxPhoneNumberId } = await import(
+        "./telnyx/phone-numbers"
+      );
+      const { telnyxRequest } = await import("./telnyx/client");
+      let releaseId: string | null = reg.phoneNumberId || reg.phoneSid;
+      if (releaseId && isTelnyxOrderId(releaseId) && reg.phoneE164) {
+        const orderId = fromTelnyxOrderRef(releaseId);
+        const resolved = await resolveTelnyxPhoneNumberId({
+          orderId,
+          phoneNumber: reg.phoneE164,
+          existingId: releaseId,
+        });
+        if (resolved) {
+          releaseId = resolved;
+        } else {
+          try {
+            await telnyxRequest(`/number_orders/${orderId}`, { method: "DELETE" });
+          } catch (err) {
+            console.error("[releaseNumber] failed to cancel pending Telnyx number order", err);
+          }
+          releaseId = null;
+        }
+      }
+      if (releaseId) {
+        await getMessagingProvider().releasePhoneNumber(reg, releaseId);
+      }
     } else if (isLiveMessagingAdapter()) {
       await twilioAdapter.releaseNumber(reg, reg.phoneSid);
     } else {

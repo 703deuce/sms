@@ -14,6 +14,7 @@ import {
   isTelnyxOrderId,
   resolveTelnyxPhoneNumberId,
 } from "./phone-numbers";
+import { looksLikeTwilioMessagingServiceSid } from "../provider-ids";
 
 function isApprovedBrand(status: string) {
   const s = status.toUpperCase();
@@ -108,13 +109,31 @@ export async function advanceTelnyxRegistration(workspaceId: string) {
       return reg;
     }
 
+    if (!reg.legalBusinessName || !reg.businessRegistrationId || !reg.websiteUrl || !reg.useCase) {
+      await log(reg, "advance_skipped", "Incomplete business/use-case details");
+      reg = await lockedUpdate({
+        overallStatus: "action_required",
+        messagingEnabled: false,
+        lastError: "Complete business details and use case before registration can advance",
+      });
+      return reg;
+    }
+
     // Ensure provider marker
     if (reg.messagingProvider !== "telnyx") {
       reg = await lockedUpdate({ messagingProvider: "telnyx" });
     }
 
-    // 1) Messaging profile (dedicated per customer)
-    if (!reg.messagingProfileId && !reg.messagingServiceSid) {
+    // 1) Messaging profile (dedicated per customer — never reuse Twilio MG… SIDs)
+    const existingTelnyxProfile =
+      reg.messagingProfileId ||
+      (reg.messagingServiceSid &&
+      !looksLikeTwilioMessagingServiceSid(reg.messagingServiceSid) &&
+      reg.messagingProvider === "telnyx"
+        ? reg.messagingServiceSid
+        : null);
+
+    if (!existingTelnyxProfile) {
       const profile = await provider.createMessagingProfile(reg);
       reg = await lockedUpdate({
         messagingProfileId: profile.id,
@@ -123,9 +142,11 @@ export async function advanceTelnyxRegistration(workspaceId: string) {
         messagingActivationStatus: "ready_for_submission",
       });
       await log(reg, "messaging_profile_created", profile.id);
+    } else if (!reg.messagingProfileId) {
+      reg = await lockedUpdate({ messagingProfileId: existingTelnyxProfile });
     }
 
-    const profileId = reg.messagingProfileId || reg.messagingServiceSid;
+    const profileId = reg.messagingProfileId || existingTelnyxProfile;
     if (!profileId) throw new JobFailedError("Missing messaging profile id");
 
     // 2) Resolve pending number orders → real phone_numbers resource id
@@ -169,33 +190,33 @@ export async function advanceTelnyxRegistration(workspaceId: string) {
       }
     }
 
-    // 4) Brand
+    // 4) Brand — create if missing; always re-poll when present (catch post-approval rejection)
     let brandId = reg.brandId || reg.brandSid;
     if (!brandId) {
       const brand = await provider.createBrand(reg);
       brandId = brand.id;
-      const brandOk = isApprovedBrand(brand.status);
-      const brandFail = isRejectedBrand(brand.status);
       reg = await lockedUpdate({
         brandId,
         brandSid: brandId,
         brandStatusRaw: brand.status,
-        brandStatus: brandFail ? "failed" : brandOk ? "approved" : "in_review",
-        messagingActivationStatus: brandFail
+        brandStatus: isRejectedBrand(brand.status)
+          ? "failed"
+          : isApprovedBrand(brand.status)
+            ? "approved"
+            : "in_review",
+        messagingActivationStatus: isRejectedBrand(brand.status)
           ? "rejected"
-          : brandOk
+          : isApprovedBrand(brand.status)
             ? "brand_approved"
             : "brand_submitted",
-        overallStatus: brandFail ? "failed" : "in_review",
+        overallStatus: isRejectedBrand(brand.status) ? "failed" : "in_review",
         registrationSubmittedAt: reg.registrationSubmittedAt || new Date(),
       });
       await log(reg, "telnyx_brand_created", `${brand.id} ${brand.status}`);
-      if (brandFail) throw new JobFailedError(`Brand ${brand.status}`);
-      if (!brandOk) {
-        throw new JobDeferredError(`Brand status ${brand.status}`, 15 * 60 * 1000);
-      }
-    } else if (reg.brandStatus !== "approved") {
-      const brand = await provider.getBrandStatus(brandId);
+    }
+
+    {
+      const brand = await provider.getBrandStatus(brandId!);
       const brandOk = isApprovedBrand(brand.status);
       const brandFail = isRejectedBrand(brand.status);
       reg = await lockedUpdate({
@@ -216,32 +237,32 @@ export async function advanceTelnyxRegistration(workspaceId: string) {
       }
     }
 
-    // 5) Campaign
+    // 5) Campaign — create if missing; always re-poll when present
     let campaignId = reg.campaignId || reg.a2pCampaignSid;
     if (!campaignId) {
       const campaign = await provider.createCampaign(reg);
       campaignId = campaign.id;
-      const campOk = isApprovedCampaign(campaign.status);
-      const campFail = isRejectedCampaign(campaign.status);
       reg = await lockedUpdate({
         campaignId,
         a2pCampaignSid: campaignId,
         campaignStatusRaw: campaign.status,
-        campaignStatus: campFail ? "failed" : campOk ? "approved" : "in_review",
-        messagingActivationStatus: campFail
+        campaignStatus: isRejectedCampaign(campaign.status)
+          ? "failed"
+          : isApprovedCampaign(campaign.status)
+            ? "approved"
+            : "in_review",
+        messagingActivationStatus: isRejectedCampaign(campaign.status)
           ? "rejected"
-          : campOk
+          : isApprovedCampaign(campaign.status)
             ? "approved"
             : "campaign_submitted",
-        overallStatus: campFail ? "failed" : "in_review",
+        overallStatus: isRejectedCampaign(campaign.status) ? "failed" : "in_review",
       });
       await log(reg, "telnyx_campaign_created", `${campaign.id} ${campaign.status}`);
-      if (campFail) throw new JobFailedError(`Campaign ${campaign.status}`);
-      if (!campOk) {
-        throw new JobDeferredError(`Campaign status ${campaign.status}`, 15 * 60 * 1000);
-      }
-    } else if (reg.campaignStatus !== "approved") {
-      const campaign = await provider.getCampaignStatus(campaignId);
+    }
+
+    {
+      const campaign = await provider.getCampaignStatus(campaignId!);
       const campOk = isApprovedCampaign(campaign.status);
       const campFail = isRejectedCampaign(campaign.status);
       reg = await lockedUpdate({
@@ -355,7 +376,19 @@ export async function ensureTelnyxWorkspace(workspaceId: string) {
     }) as MessagingRegistration;
   }
 
-  if (reg.messagingProfileId || reg.messagingServiceSid) {
+  const existingTelnyxProfile =
+    reg.messagingProfileId ||
+    (reg.messagingServiceSid && !looksLikeTwilioMessagingServiceSid(reg.messagingServiceSid)
+      ? reg.messagingServiceSid
+      : null);
+
+  if (existingTelnyxProfile) {
+    if (!reg.messagingProfileId) {
+      return (await getPrisma().messagingRegistration.update({
+        where: { workspaceId },
+        data: { messagingProfileId: existingTelnyxProfile },
+      })) as MessagingRegistration;
+    }
     return reg;
   }
 

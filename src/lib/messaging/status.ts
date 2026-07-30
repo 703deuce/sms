@@ -1,6 +1,17 @@
 import type { MessagingRegistration, MessagingStepStatus } from "@/lib/domain";
 import type { RegistrationProgressStep } from "./types";
-import { getMessagingProviderName, isLiveMessagingProvider } from "./provider-config";
+import { getMessagingProviderName } from "./provider-config";
+import { looksLikeTwilioMessagingServiceSid } from "./provider-ids";
+
+export function registrationProviderName(
+  reg: MessagingRegistration | null | undefined,
+): ReturnType<typeof getMessagingProviderName> {
+  const stored = (reg?.messagingProvider || "").trim().toLowerCase();
+  if (stored === "telnyx" || stored === "twilio" || stored === "mock") {
+    return stored;
+  }
+  return getMessagingProviderName();
+}
 
 export function isMessagingReady(reg: MessagingRegistration | null | undefined): boolean {
   if (!reg) return false;
@@ -10,11 +21,13 @@ export function isMessagingReady(reg: MessagingRegistration | null | undefined):
   if (!reg.phoneAttached || !reg.phoneE164) return false;
   if (reg.phoneSid?.startsWith("PENDING:")) return false;
 
-  const provider = getMessagingProviderName();
+  const provider = registrationProviderName(reg);
   if (provider === "telnyx") {
     const profileId =
       (reg as MessagingRegistration & { messagingProfileId?: string | null }).messagingProfileId ||
-      reg.messagingServiceSid;
+      (looksLikeTwilioMessagingServiceSid(reg.messagingServiceSid)
+        ? null
+        : reg.messagingServiceSid);
     const campaignId =
       (reg as MessagingRegistration & { campaignId?: string | null }).campaignId ||
       reg.a2pCampaignSid;
@@ -68,11 +81,12 @@ export function toPublicRegistration(reg: MessagingRegistration) {
   // Omit encrypted token from API responses
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { subaccountAuthTokenEnc, ...safe } = reg;
+  const provider = registrationProviderName(reg);
   return {
     ...safe,
     progress: buildProgressSteps(reg),
     ready: isMessagingReady(reg),
-    liveMode: isLiveMessagingProvider(),
-    messagingProvider: getMessagingProviderName(),
+    liveMode: provider === "twilio" || provider === "telnyx",
+    messagingProvider: provider,
   };
 }

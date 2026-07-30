@@ -17,6 +17,9 @@ alter table if exists messaging_registrations
 alter table if exists "PhoneNumber"
   add column if not exists "providerNumberId" text;
 
+alter table if exists "ConversationMessage"
+  add column if not exists "providerMessageId" text;
+
 create index if not exists messaging_registrations_messaging_profile_id_idx
   on messaging_registrations ("messagingProfileId");
 
@@ -25,3 +28,6 @@ create index if not exists messaging_registrations_brand_id_idx
 
 create index if not exists messaging_registrations_campaign_id_idx
   on messaging_registrations ("campaignId");
+
+create index if not exists "ConversationMessage_providerMessageId_idx"
+  on "ConversationMessage" ("providerMessageId");

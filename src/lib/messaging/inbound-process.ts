@@ -203,11 +203,21 @@ export async function processInboundMessage(input: {
     });
   }
 
+  if (input.providerMessageId) {
+    const existingMsg = await prisma.conversationMessage.findFirst({
+      where: { providerMessageId: input.providerMessageId },
+    });
+    if (existingMsg) {
+      return { kind: body ? "message" : "empty" };
+    }
+  }
+
   await prisma.conversationMessage.create({
     data: {
       conversationId: conversation.id,
       direction: "inbound",
       body: body || "(empty)",
+      providerMessageId: input.providerMessageId || null,
     },
   });
 

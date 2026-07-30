@@ -76,6 +76,7 @@ export async function handleTelnyxInbound(payload: unknown) {
     registration: ctx.registration,
   });
 
+  let replySent = false;
   if (result.replyText && ctx.registration) {
     try {
       await telnyxProvider.sendMessage(ctx.registration as any, {
@@ -85,6 +86,7 @@ export async function handleTelnyxInbound(payload: unknown) {
         messagingProfileId:
           ctx.registration.messagingProfileId || ctx.registration.messagingServiceSid,
       });
+      replySent = true;
     } catch (err) {
       console.error("[telnyx/inbound] keyword reply send failed", err);
     }
@@ -94,7 +96,7 @@ export async function handleTelnyxInbound(payload: unknown) {
     ok: true as const,
     kind: result.kind,
     reply: result.replyText || null,
-    replySent: Boolean(result.replyText),
+    replySent,
   };
 }
 
@@ -179,12 +181,54 @@ export async function handleTelnyxCompliance(payload: unknown) {
   }
 
   if (reg) {
+    const statusRaw = String(
+      eventPayload.status || eventPayload.brandStatus || eventPayload.campaignStatus || "",
+    );
+    const eventType = String(data.event_type || root.event_type || "compliance");
+    const patch: Record<string, unknown> = {};
+    if (brandId && statusRaw) {
+      patch.brandStatusRaw = statusRaw;
+      const upper = statusRaw.toUpperCase();
+      if (["FAILED", "REJECTED", "UNVERIFIED"].includes(upper)) {
+        patch.brandStatus = "failed";
+        patch.messagingEnabled = false;
+        patch.overallStatus = "failed";
+        patch.registrationFailureReason = `Brand ${statusRaw}`;
+      } else if (["OK", "VERIFIED", "VETTED_VERIFIED", "APPROVED", "ACTIVE"].includes(upper)) {
+        patch.brandStatus = "approved";
+      } else {
+        patch.brandStatus = "in_review";
+        patch.messagingEnabled = false;
+      }
+    }
+    if (campaignId && statusRaw) {
+      patch.campaignStatusRaw = statusRaw;
+      const upper = statusRaw.toUpperCase();
+      if (["FAILED", "REJECTED", "EXPIRED"].includes(upper)) {
+        patch.campaignStatus = "failed";
+        patch.messagingEnabled = false;
+        patch.overallStatus = "failed";
+        patch.registrationFailureReason = `Campaign ${statusRaw}`;
+      } else if (["ACTIVE", "APPROVED", "VERIFIED", "OK"].includes(upper)) {
+        patch.campaignStatus = "approved";
+      } else {
+        patch.campaignStatus = "in_review";
+        patch.messagingEnabled = false;
+      }
+    }
+    if (Object.keys(patch).length) {
+      await prisma.messagingRegistration.update({
+        where: { workspaceId: reg.workspaceId },
+        data: patch,
+      });
+    }
+
     await prisma.messagingRegistrationEvent.create({
       data: {
         workspaceId: reg.workspaceId,
         registrationId: reg.id,
         eventType: "telnyx_compliance_webhook",
-        message: String(data.event_type || root.event_type || "compliance"),
+        message: eventType,
         payload: root,
       },
     });

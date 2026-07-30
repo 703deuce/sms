@@ -87,12 +87,19 @@ const urls = getTelnyxWebhookUrls();
 assert.equal(urls.messaging, "https://transovo.ai/api/telnyx/messaging");
 assert.equal(urls.compliance, "https://transovo.ai/api/telnyx/compliance");
 
-// verifyWebhook fail-closed when API key set without public key
-process.env.TELNYX_API_KEY = "KEY";
-delete process.env.TELNYX_PUBLIC_KEY;
-assert.equal(await telnyxProvider.verifyWebhook({ payload: "{}", signature: null }), false);
+async function main() {
+  // verifyWebhook fail-closed when API key set without public key
+  process.env.TELNYX_API_KEY = "KEY";
+  delete process.env.TELNYX_PUBLIC_KEY;
+  assert.equal(await telnyxProvider.verifyWebhook({ payload: "{}", signature: null }), false);
 
-delete process.env.TELNYX_API_KEY;
-assert.equal(await telnyxProvider.verifyWebhook({ payload: "{}", signature: null }), true);
+  delete process.env.TELNYX_API_KEY;
+  assert.equal(await telnyxProvider.verifyWebhook({ payload: "{}", signature: null }), true);
 
-console.log("telnyx wiring checks passed");
+  console.log("telnyx wiring checks passed");
+}
+
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

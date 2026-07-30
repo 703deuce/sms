@@ -83,8 +83,22 @@ const mockProvider: MessagingProvider = {
 };
 
 export function getMessagingProvider(): MessagingProvider {
-  const name = getMessagingProviderName();
+  return getMessagingProviderByName(getMessagingProviderName());
+}
+
+export function getMessagingProviderByName(name: string): MessagingProvider {
   if (name === "telnyx") return telnyxProvider;
   if (name === "twilio") return twilioProvider;
   return mockProvider;
+}
+
+/** Prefer the registration's stored provider over the process-wide env default. */
+export function getMessagingProviderForRegistration(reg: {
+  messagingProvider?: string | null;
+}): MessagingProvider {
+  const stored = (reg.messagingProvider || "").trim().toLowerCase();
+  if (stored === "telnyx" || stored === "twilio" || stored === "mock") {
+    return getMessagingProviderByName(stored);
+  }
+  return getMessagingProvider();
 }

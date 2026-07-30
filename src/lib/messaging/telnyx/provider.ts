@@ -252,6 +252,9 @@ export const telnyxProvider: MessagingProvider = {
       throw new Error("Brand registration requires legal name, EIN/tax ID, and website");
     }
     const urls = getTelnyxWebhookUrls();
+    const certifiedKey = reg.certifiedAt
+      ? new Date(reg.certifiedAt).getTime()
+      : "uncertified";
     const res = await telnyxRequest<TelnyxDataResponse<{ brandId?: string; id?: string; status?: string }>>(
       "/10dlc/brand",
       {
@@ -272,6 +275,7 @@ export const telnyxProvider: MessagingProvider = {
           vertical: reg.vertical || reg.businessIndustry || "PROFESSIONAL",
           webhookURL: urls.compliance,
         },
+        idempotencyKey: `telnyx-brand:${reg.workspaceId}:${certifiedKey}`,
       },
     );
     const id = res.data.brandId || res.data.id;
@@ -288,6 +292,15 @@ export const telnyxProvider: MessagingProvider = {
 
     const urls = getTelnyxWebhookUrls();
     const samples = reg.sampleMessages || [];
+    const certifiedKey = reg.certifiedAt
+      ? new Date(reg.certifiedAt).getTime()
+      : "uncertified";
+    const helpMessage =
+      reg.helpMessage ||
+      "Reply HELP for help. Reply STOP to opt out. Message and data rates may apply.";
+    const optoutMessage =
+      reg.stopMessage ||
+      "You are unsubscribed and will no longer receive messages. Reply START to re-subscribe.";
     const res = await telnyxRequest<TelnyxDataResponse<{ campaignId?: string; id?: string; status?: string }>>(
       "/10dlc/campaignBuilder",
       {
@@ -301,9 +314,9 @@ export const telnyxProvider: MessagingProvider = {
           messageFlow:
             reg.optInDescription ||
             "Customer provides phone number and consent on website or intake form.",
-          helpMessage:
-            reg.helpMessage ||
-            "Reply HELP for help. Reply STOP to opt out. Message and data rates may apply.",
+          helpMessage,
+          optinMessage: "You have been re-subscribed. Reply STOP to opt out.",
+          optoutMessage,
           optinKeywords: "START,YES",
           optoutKeywords: "STOP,UNSUBSCRIBE,CANCEL,END,QUIT",
           helpKeywords: "HELP,INFO",
@@ -315,6 +328,7 @@ export const telnyxProvider: MessagingProvider = {
           ageGated: false,
           webhookURL: urls.compliance,
         },
+        idempotencyKey: `telnyx-campaign:${reg.workspaceId}:${brandId}:${certifiedKey}`,
       },
     );
     const id = res.data.campaignId || res.data.id;

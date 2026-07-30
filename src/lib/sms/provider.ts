@@ -1,6 +1,6 @@
 import { sendQuickSms } from "@/lib/sms/send-quick";
 import { messagingOnboarding } from "@/lib/messaging/service";
-import { getMessagingProviderName, isLiveMessagingProvider } from "@/lib/messaging/provider-config";
+import { getMessagingProviderName } from "@/lib/messaging/provider-config";
 import { isLiveMessagingAdapter } from "@/lib/messaging/twilio-config";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 
@@ -102,7 +102,8 @@ export class IsvSmsProvider implements SmsProvider {
 export const TwilioIsvSmsProvider = IsvSmsProvider;
 
 export function getSmsProvider(): SmsProvider {
-  if (isLiveMessagingProvider() || isLiveMessagingAdapter() || process.env.TWILIO_ACCOUNT_SID || process.env.TELNYX_API_KEY) {
+  const name = getMessagingProviderName();
+  if (name === "telnyx" || name === "twilio" || isLiveMessagingAdapter()) {
     return new IsvSmsProvider();
   }
   return new StubSmsProvider();

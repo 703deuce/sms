@@ -28,17 +28,18 @@ export function getMessagingProviderName(): MessagingProviderName {
   if (adapter === "twilio") return "twilio";
   if (adapter === "telnyx") return "telnyx";
 
-  const twilioMode = normalize(process.env.TWILIO_MODE);
-  if (["1", "true", "live", "twilio", "yes", "on"].includes(twilioMode)) {
-    return "twilio";
-  }
-
+  // Prefer Telnyx when both legacy mode flags are set (migration direction).
   const telnyxMode = normalize(process.env.TELNYX_MODE);
   if (
     ["1", "true", "live", "telnyx", "yes", "on"].includes(telnyxMode) &&
     process.env.TELNYX_API_KEY?.trim()
   ) {
     return "telnyx";
+  }
+
+  const twilioMode = normalize(process.env.TWILIO_MODE);
+  if (["1", "true", "live", "twilio", "yes", "on"].includes(twilioMode)) {
+    return "twilio";
   }
 
   return "mock";

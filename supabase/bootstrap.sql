@@ -456,6 +456,7 @@ CREATE TABLE IF NOT EXISTS "ConversationMessage" (
     "direction" TEXT NOT NULL,
     "body" TEXT NOT NULL,
     "userName" TEXT,
+    "providerMessageId" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "ConversationMessage_pkey" PRIMARY KEY ("id")
