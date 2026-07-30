@@ -14,11 +14,11 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "Transovo SMS",
-    template: "%s · Transovo SMS",
+    default: "SMS Marketing for Small Businesses | Transovo AI",
+    template: "%s · Transovo AI",
   },
   description:
-    "Transovo SMS — multi-tenant business texting for campaigns, inbox, automations, and A2P compliance.",
+    "SMS marketing for small businesses made simple. Send promotions, follow up with leads, request reviews, and manage customer replies with Transovo AI.",
 };
 
 export default function RootLayout({
