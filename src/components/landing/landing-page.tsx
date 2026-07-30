@@ -10,8 +10,8 @@ const NAV = [
   { href: "#top", label: "Home" },
   { href: "#problem", label: "Why Transovo" },
   { href: "#benefits", label: "Features" },
-  { href: "#cta", label: "Pricing" },
-  { href: "#faq", label: "Reviews" },
+  { href: "#how-it-works", label: "How it Works" },
+  { href: "#faq", label: "FAQ" },
 ];
 
 const BENEFITS = [
@@ -751,9 +751,9 @@ export function LandingPage() {
                 Your final consent language should match your actual messaging program and business
                 practices.
               </p>
-              <a href="/acceptable-use" className="lp-btn lp-btn-secondary lp-btn-sm" style={{ marginTop: "0.35rem" }}>
+              <Link href="/acceptable-use" className="lp-btn lp-btn-secondary lp-btn-sm" style={{ marginTop: "0.35rem" }}>
                 Read Acceptable Use Policy
-              </a>
+              </Link>
             </article>
           </div>
         </section>
@@ -842,29 +842,10 @@ export function LandingPage() {
                 SMS marketing and customer communication tools for small businesses. Transovo AI
                 LLC provides business messaging software for permission-based texting.
               </p>
-              <div className="lp-socials" aria-label="Social links">
-                <a href="https://facebook.com" aria-label="Facebook" rel="noreferrer" target="_blank">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M14 9h3V6h-3c-1.7 0-3 1.3-3 3v2H8v3h3v7h3v-7h3l1-3h-4V9c0-.6.4-1 1-1z" />
-                  </svg>
-                </a>
-                <a href="https://x.com" aria-label="X" rel="noreferrer" target="_blank">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M18.244 2H21.5l-7.5 8.57L22.5 22h-6.09l-4.77-6.23L6.2 22H2.94l8.03-9.17L1.5 2h6.24l4.3 5.7L18.244 2zm-1.07 18h1.7L7.02 3.9H5.2L17.174 20z" />
-                  </svg>
-                </a>
-                <a href="https://instagram.com" aria-label="Instagram" rel="noreferrer" target="_blank">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <rect x="3" y="3" width="18" height="18" rx="5" />
-                    <circle cx="12" cy="12" r="4" />
-                    <circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none" />
-                  </svg>
-                </a>
-              </div>
               <p className="lp-support-note">
                 Support: <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>
                 <br />
-                Legal entity: Transovo AI LLC
+                Transovo AI LLC · Woodbridge, Virginia
               </p>
             </div>
             <div className="lp-footer-cols">
@@ -901,9 +882,12 @@ export function LandingPage() {
             <div className="lp-footer-legal-box">
               Transovo supports permission-based business messaging. Message frequency varies by
               business and campaign. Message and data rates may apply. Reply STOP to opt out or HELP
-              for help.
+              for help. Questions:{" "}
+              <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>.
             </div>
-            <p className="lp-footer-copy">© 2026 Transovo AI LLC. All rights reserved.</p>
+            <p className="lp-footer-copy">
+              © 2026 Transovo AI LLC. Woodbridge, Virginia. All rights reserved.
+            </p>
           </div>
         </div>
       </footer>

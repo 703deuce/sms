@@ -1310,8 +1310,246 @@
   }
 }
 
+.landing .lp-footer-legal-box a {
+  color: #93c5fd;
+  font-weight: 600;
+}
+
+.landing .lp-footer-legal-box a:hover {
+  color: white;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html:has(.landing) {
+    scroll-behavior: smooth;
+  }
+}
+
 @media (max-width: 959px) {
   .landing .lp-dashboard {
     transform: none;
   }
+
+  .landing .lp-nav-inner {
+    min-height: 64px;
+  }
+
+  .landing .lp-hero {
+    padding: 2.75rem 0 3rem;
+  }
+
+  .landing .lp-section {
+    padding: 3.5rem 0;
+  }
+
+  .landing .lp-compliance {
+    padding: 3.75rem 0;
+  }
+
+  .landing .lp-dash-panels {
+    grid-template-columns: 1fr;
+  }
+
+  .landing .lp-dash-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .landing .lp-hero-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .landing .lp-hero-actions .lp-btn {
+    width: 100%;
+  }
+
+  .landing .lp-cta-card .lp-btn {
+    width: 100%;
+  }
+
+  .landing .lp-login {
+    display: none;
+  }
 }
+
+@media (max-width: 640px) {
+  .landing .lp-container {
+    width: min(100% - 1.5rem, 1180px);
+  }
+
+  .landing .lp-logo {
+    font-size: 1rem;
+  }
+
+  .landing .lp-logo-mark {
+    width: 32px;
+    height: 32px;
+  }
+
+  .landing .lp-btn-sm {
+    padding: 0.6rem 0.95rem;
+    font-size: 0.8125rem;
+  }
+
+  .landing .lp-hero h1 {
+    font-size: 1.85rem;
+  }
+
+  .landing .lp-hero-copy {
+    font-size: 0.98rem;
+  }
+
+  .landing .lp-dashboard {
+    grid-template-columns: 56px 1fr;
+    min-height: 0;
+    border-radius: 14px;
+  }
+
+  .landing .lp-dash-side {
+    padding: 0.75rem 0.4rem;
+  }
+
+  .landing .lp-dash-brand {
+    width: 28px;
+    height: 28px;
+    font-size: 0.6rem;
+    margin-bottom: 0.35rem;
+  }
+
+  .landing .lp-dash-side .nav-item {
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+  }
+
+  .landing .lp-dash-main {
+    padding: 0.85rem 0.75rem 1rem;
+  }
+
+  .landing .lp-dash-top {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .landing .lp-dash-search {
+    width: 100%;
+  }
+
+  .landing .lp-stat strong {
+    font-size: 1.05rem;
+  }
+
+  .landing .lp-phone {
+    width: min(260px, 100%);
+    border-radius: 32px;
+  }
+
+  .landing .lp-phone-screen {
+    min-height: 380px;
+    border-radius: 24px;
+  }
+
+  .landing .lp-panel,
+  .landing .lp-compliance-card,
+  .landing .lp-benefit-card {
+    padding: 1.25rem 1.1rem;
+  }
+
+  .landing .lp-audience-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .landing .lp-footer {
+    padding: 3rem 0 1.5rem;
+  }
+
+  .landing .lp-footer-cols {
+    grid-template-columns: 1fr 1fr;
+    gap: 1.25rem;
+  }
+
+  .landing .lp-footer-legal {
+    grid-template-columns: 1fr;
+  }
+
+  .landing .lp-shield-circle {
+    width: 72px;
+    height: 72px;
+  }
+
+  .landing .lp-faq-item button {
+    font-size: 0.92rem;
+    padding: 0.95rem 1rem;
+  }
+
+  .landing .lp-blob-1,
+  .landing .lp-blob-2,
+  .landing .lp-blob-3 {
+    filter: blur(28px);
+  }
+}
+
+@media (max-width: 400px) {
+  .landing .lp-nav-actions .lp-btn-sm {
+    padding: 0.55rem 0.75rem;
+  }
+
+  .landing .lp-footer-cols {
+    grid-template-columns: 1fr;
+  }
+
+  .landing .lp-dashboard {
+    grid-template-columns: 1fr;
+  }
+
+  .landing .lp-dash-side {
+    flex-direction: row;
+    justify-content: flex-start;
+    padding: 0.65rem;
+    overflow-x: auto;
+  }
+
+  .landing .lp-dash-brand {
+    margin-bottom: 0;
+  }
+}
+
+@media (min-width: 641px) and (max-width: 959px) {
+  .landing .lp-benefits-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .landing .lp-audience-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .landing .lp-dash-stats {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .landing .lp-value-grid,
+  .landing .lp-product-grid,
+  .landing .lp-two-panels,
+  .landing .lp-compliance-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .landing .lp-steps {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing .lp-btn,
+  .landing .lp-benefit-card,
+  .landing .lp-faq-item button svg,
+  .landing .lp-audience-item {
+    transition: none;
+  }
+
+  .landing .lp-btn:hover,
+  .landing .lp-benefit-card:hover {
+    transform: none;
+  }
+}
+
