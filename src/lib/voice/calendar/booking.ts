@@ -1,6 +1,37 @@
 import { getPrisma } from "@/lib/db";
+import {
+  computeFreeSlots,
+  getGoogleBusy,
+  getMicrosoftBusy,
+  getValidAccessToken,
+  hasOAuthTokens,
+  insertGoogleEvent,
+  insertMicrosoftEvent,
+  type CalendarConfig,
+} from "./providers";
 
 type Slot = { startsAt: string; endsAt: string; staffName?: string };
+
+async function resolveCalendarConnection(
+  workspaceId: string,
+  calendarId?: string,
+) {
+  const prisma = getPrisma();
+  if (calendarId) {
+    return prisma.voiceCalendarConnection.findFirst({
+      where: { id: calendarId, workspaceId },
+    });
+  }
+  // Fall back to the first OAuth-connected external calendar for the workspace.
+  return prisma.voiceCalendarConnection.findFirst({
+    where: {
+      workspaceId,
+      provider: { in: ["google", "microsoft"] },
+      status: "connected",
+    },
+    orderBy: { createdAt: "asc" },
+  });
+}
 
 export async function getAvailability(
   workspaceId: string,
@@ -17,24 +48,39 @@ export async function getAvailability(
   });
   const durationMinutes = service?.durationMinutes || duration;
 
-  if (calendarId) {
-    const cal = await prisma.voiceCalendarConnection.findFirst({
-      where: { id: calendarId, workspaceId },
-    });
-    if (cal?.provider === "google" || cal?.provider === "microsoft") {
-      // OAuth-connected calendars use stored tokens + external API when configured
-      const config = (cal.config || {}) as Record<string, unknown>;
-      if (config.webhookUrl) {
-        const { assertSafeWebhookUrl } = await import("../url-safety");
-        const url = await assertSafeWebhookUrl(String(config.webhookUrl));
-        const res = await fetch(url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "availability", serviceName, days }),
-        });
-        const json = await res.json();
-        return { slots: (json.slots as Slot[]) || [] };
+  const cal = await resolveCalendarConnection(workspaceId, calendarId);
+  if (cal && (cal.provider === "google" || cal.provider === "microsoft")) {
+    const config = (cal.config || {}) as CalendarConfig;
+
+    // Live OAuth-connected calendar: use provider free/busy.
+    if (hasOAuthTokens(config)) {
+      try {
+        const token = await getValidAccessToken(cal.id, cal.provider, config);
+        if (token) {
+          const timeMin = new Date();
+          const timeMax = new Date(timeMin.getTime() + days * 86_400_000);
+          const busy =
+            cal.provider === "google"
+              ? await getGoogleBusy(token, config.calendarId || "primary", timeMin, timeMax)
+              : await getMicrosoftBusy(token, timeMin, timeMax);
+          return { slots: computeFreeSlots(busy, durationMinutes, days, timeMin) };
+        }
+      } catch (err) {
+        console.warn("[calendar] availability lookup failed, falling back", cal.id, err);
       }
+    }
+
+    // Optional external webhook integration (e.g. custom scheduler).
+    if (config.webhookUrl) {
+      const { assertSafeWebhookUrl } = await import("../url-safety");
+      const url = await assertSafeWebhookUrl(String(config.webhookUrl));
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "availability", serviceName, days }),
+      });
+      const json = await res.json();
+      return { slots: (json.slots as Slot[]) || [] };
     }
   }
 
@@ -91,17 +137,50 @@ export async function bookAppointment(
   });
   if (conflict) throw new Error("Slot no longer available");
 
+  const serviceName = String(input.serviceName || "Appointment");
+  const staffName = String(input.staffName || "") || null;
+  const timezone = String(input.timezone || "America/New_York");
+
+  // Create the event on the connected external calendar when OAuth tokens exist.
+  let externalId: string | null = null;
+  const calendarId = input.calendarId as string | undefined;
+  const cal = await resolveCalendarConnection(workspaceId, calendarId);
+  if (cal && (cal.provider === "google" || cal.provider === "microsoft")) {
+    const config = (cal.config || {}) as CalendarConfig;
+    if (hasOAuthTokens(config)) {
+      try {
+        const token = await getValidAccessToken(cal.id, cal.provider, config);
+        if (token) {
+          const event = {
+            summary: `${serviceName}${phone ? ` — ${phone}` : ""}`,
+            description: staffName ? `Staff: ${staffName}` : undefined,
+            start: startsAt,
+            end: endsAt,
+            timezone: config.timezone || timezone,
+          };
+          externalId =
+            cal.provider === "google"
+              ? await insertGoogleEvent(token, config.calendarId || "primary", event)
+              : await insertMicrosoftEvent(token, event);
+        }
+      } catch (err) {
+        console.warn("[calendar] event insert failed", cal.id, err);
+      }
+    }
+  }
+
   const appointment = await prisma.voiceAppointment.create({
     data: {
       workspaceId,
       callId,
       contactId,
-      serviceName: String(input.serviceName || "Appointment"),
-      staffName: String(input.staffName || "") || null,
+      serviceName,
+      staffName,
       startsAt,
       endsAt,
-      timezone: String(input.timezone || "America/New_York"),
+      timezone,
       status: "confirmed",
+      externalId,
       metadata: input as object,
     },
   });
