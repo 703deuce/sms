@@ -4,6 +4,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  /// Supabase Connect → Session pooler URI (port 5432). Required for `npm run db:push`.
   url      = env("DATABASE_URL")
 }
 

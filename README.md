@@ -23,7 +23,7 @@ Open [http://localhost:3000](http://localhost:3000) and sign in with any email/p
 - Email: `alex@harborhome.co`
 - Password: `demo1234`
 
-## Database setup (Supabase — same as Local SEO Express)
+## Database setup (Supabase + Prisma schema push)
 
 ```powershell
 cp .env.example .env
@@ -31,16 +31,17 @@ cp .env.example .env
 #   NEXT_PUBLIC_SUPABASE_URL
 #   NEXT_PUBLIC_SUPABASE_ANON_KEY
 #   SUPABASE_SERVICE_ROLE_KEY
+#   DATABASE_URL   ← Session pooler URI (lets Cursor push schema)
 ```
 
-1. Run [`supabase/fresh-install.sql`](supabase/fresh-install.sql) in the Supabase SQL editor (drops partial tables then recreates — use if you hit schema errors).
-2. Server code uses `getSupabaseAdmin()` / `getPrisma()` (Supabase-backed) — **no `DATABASE_URL`**.
+Apply / update all tables from `prisma/schema.prisma` (no SQL editor):
 
 ```powershell
+npm run db:push
 npm run db:seed
 ```
 
-See [supabase/README.md](supabase/README.md).
+See **[docs/DATABASE.md](docs/DATABASE.md)**. SQL files under `supabase/` remain as a fallback only.
 
 ## Scripts
 
@@ -49,8 +50,9 @@ See [supabase/README.md](supabase/README.md).
 | `npm run dev` | Start development server |
 | `npm run build` | Production build |
 | `npm run worker:all` | Job worker (A2P advance + campaign sends) |
-| `npm run db:schema` | Regenerate `supabase/schema.sql` from Prisma schema (dev only) |
+| `npm run db:push` | Apply Prisma schema to Postgres (preferred) |
 | `npm run db:seed` | Seed demo workspace into Supabase |
+| `npm run db:schema` | Regenerate `supabase/schema.sql` from Prisma schema (dev only) |
 | `npm run test:messaging-wiring` | Messaging wiring checks (needs Supabase env) |
 
 

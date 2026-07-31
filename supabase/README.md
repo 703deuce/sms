@@ -1,16 +1,19 @@
 # Supabase setup (LSE-style)
 
-This app talks to Supabase the same way Local SEO Express does — via `@supabase/supabase-js` with URL + keys. **No `DATABASE_URL` / Prisma runtime.**
+This app talks to Supabase the same way Local SEO Express does — via `@supabase/supabase-js` with URL + keys for **runtime**.
+
+**Preferred schema path (no SQL editor):** set `DATABASE_URL` (Session pooler) and run `npm run db:push`. See [docs/DATABASE.md](../docs/DATABASE.md).
 
 ```bash
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
+DATABASE_URL=   # Session pooler — for Prisma db push
 ```
 
-## 1. Apply the schema
+## 1. Apply the schema (fallback: SQL editor)
 
-In the Supabase SQL editor, prefer:
+Prefer `npm run db:push` first. If you must use the SQL editor:
 
 ### [`fresh-install.sql`](./fresh-install.sql) ← use this if you hit errors
 
