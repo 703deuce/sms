@@ -3,7 +3,31 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
 import { Input, Label, Select, Textarea } from "@/components/ui/input";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+
+type ListOption = { id: string; name: string; contactCount: number };
+
+function computeNextRun(
+  nextRunAt: string,
+  frequency: "daily" | "weekly" | "monthly",
+  interval: number,
+): Date | null {
+  if (!nextRunAt) return null;
+  const first = new Date(nextRunAt);
+  if (Number.isNaN(first.getTime())) return null;
+  const now = new Date();
+  const step = Math.max(1, interval || 1);
+  const next = new Date(first);
+  // Advance to the first occurrence in the future.
+  let guard = 0;
+  while (next <= now && guard < 1000) {
+    if (frequency === "daily") next.setDate(next.getDate() + step);
+    else if (frequency === "weekly") next.setDate(next.getDate() + 7 * step);
+    else next.setMonth(next.getMonth() + step);
+    guard += 1;
+  }
+  return next;
+}
 
 export function RecurringCampaignForm() {
   const [name, setName] = useState("");
@@ -12,9 +36,22 @@ export function RecurringCampaignForm() {
   const [interval, setInterval] = useState(1);
   const [nextRunAt, setNextRunAt] = useState("");
   const [listId, setListId] = useState("");
+  const [lists, setLists] = useState<ListOption[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/contacts/lists")
+      .then((r) => (r.ok ? r.json() : { data: [] }))
+      .then((j) => setLists(j.data || []))
+      .catch(() => setLists([]));
+  }, []);
+
+  const nextRun = useMemo(
+    () => computeNextRun(nextRunAt, frequency, interval),
+    [nextRunAt, frequency, interval],
+  );
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -105,15 +142,25 @@ export function RecurringCampaignForm() {
             value={nextRunAt}
             onChange={(e) => setNextRunAt(e.target.value)}
           />
+          {nextRun ? (
+            <p className="mt-1 text-xs text-muted-foreground">
+              Next run: {nextRun.toLocaleString()}
+            </p>
+          ) : null}
         </div>
         <div>
-          <Label htmlFor="rc-list">List ID (optional)</Label>
-          <Input
-            id="rc-list"
-            placeholder="Contact list ID to enroll each run"
-            value={listId}
-            onChange={(e) => setListId(e.target.value)}
-          />
+          <Label htmlFor="rc-list">Contact list</Label>
+          <Select id="rc-list" value={listId} onChange={(e) => setListId(e.target.value)}>
+            <option value="">— select a list —</option>
+            {lists.map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.name} ({l.contactCount})
+              </option>
+            ))}
+          </Select>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Every run enrolls the contacts in this list.
+          </p>
         </div>
         {error ? <p className="text-sm text-rose-600">{error}</p> : null}
         {done ? <p className="text-sm text-emerald-600">Recurring campaign created.</p> : null}
