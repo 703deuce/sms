@@ -41,6 +41,8 @@ const MODEL_TO_TABLE: Record<string, string> = {
   automationFlow: "AutomationFlow",
   keyword: "Keyword",
   optInForm: "OptInForm",
+  qrCode: "QrCode",
+  clickToTextLink: "ClickToTextLink",
   consentRecord: "ConsentRecord",
   complianceBrand: "ComplianceBrand",
   complianceCampaign: "ComplianceCampaign",
@@ -91,11 +93,24 @@ const RELATIONS: Record<string, Record<string, { table: string; fk: string; pk?:
   conversation: {
     workspace: { table: "Workspace", fk: "workspaceId" },
     contact: { table: "Contact", fk: "contactId" },
+    assignee: { table: "User", fk: "assigneeId" },
   },
+  qrCode: { workspace: { table: "Workspace", fk: "workspaceId" } },
+  clickToTextLink: { workspace: { table: "Workspace", fk: "workspaceId" } },
   conversationMessage: { conversation: { table: "Conversation", fk: "conversationId" } },
   workspace: {
     phoneNumbers: { table: "PhoneNumber", fk: "workspaceId", pk: "id" },
     messagingRegistration: { table: "messaging_registrations", fk: "workspaceId", pk: "id" },
+  },
+};
+
+/** model → `_count` relation name → child table + FK for aggregate counts. */
+const COUNT_RELATIONS: Record<string, Record<string, { table: string; fk: string }>> = {
+  contactList: { members: { table: "ContactListMember", fk: "listId" } },
+  tag: { contacts: { table: "ContactTag", fk: "tagId" } },
+  campaign: {
+    recipients: { table: "campaign_recipients", fk: "campaignId" },
+    campaignMessages: { table: "campaign_messages", fk: "campaignId" },
   },
 };
 
@@ -124,6 +139,19 @@ function table(model: string): string {
 
 function nowIso() {
   return new Date().toISOString();
+}
+
+/**
+ * PostgREST returns PGRST204 ("Could not find the 'X' column of 'T' in the
+ * schema cache") when a write payload includes a column the table does not
+ * have. Some models (e.g. User, Contact, Campaign) do not carry `updatedAt`
+ * even though prepareData sets it. Extract that column so we can drop it and
+ * retry instead of failing the whole write.
+ */
+function missingColumnFromError(error: { message?: string } | null | undefined): string | null {
+  const msg = error?.message || "";
+  const m = msg.match(/Could not find the '([^']+)' column/);
+  return m ? m[1] : null;
 }
 
 function isObject(v: unknown): v is Row {
@@ -323,6 +351,20 @@ function applyWhereSync(query: any, where: Args | undefined): any {
       continue;
     }
 
+    // Prisma compound unique key, e.g. { userId_workspaceId: { userId, workspaceId } }
+    // or { workspaceId_phone: { workspaceId, phone } }. Expand each scalar
+    // sub-field into an equality filter so the lookup actually targets a row.
+    if (isObject(value)) {
+      for (const [ck, cv] of Object.entries(value)) {
+        if (cv === null) q = q.is(ck, null);
+        else if (cv instanceof Date) q = q.eq(ck, cv.toISOString());
+        else if (typeof cv === "string" || typeof cv === "number" || typeof cv === "boolean") {
+          q = q.eq(ck, cv);
+        }
+      }
+      continue;
+    }
+
     if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
       q = q.eq(key, value);
     } else if (value instanceof Date) {
@@ -342,6 +384,32 @@ async function applyInclude(rows: Row[], include: Args | undefined, model: strin
     if (!cfg) continue;
     const meta = RELATIONS[model]?.[rel];
 
+    // Aggregate counts: include: { _count: { select: { members: true } } }
+    if (rel === "_count") {
+      const select = isObject(cfg) && isObject(cfg.select) ? (cfg.select as Row) : {};
+      const names = Object.keys(select).filter((k) => select[k]);
+      const countMaps: Record<string, Map<string, number>> = {};
+      const ids = out.map((r) => r.id as string);
+      for (const name of names) {
+        const rel2 = COUNT_RELATIONS[model]?.[name];
+        const m = new Map<string, number>();
+        if (rel2 && ids.length) {
+          const { data } = await db.from(rel2.table).select(rel2.fk).in(rel2.fk, ids);
+          for (const row of data ?? []) {
+            const k = (row as Row)[rel2.fk] as string;
+            m.set(k, (m.get(k) ?? 0) + 1);
+          }
+        }
+        countMaps[name] = m;
+      }
+      out = out.map((r) => {
+        const c: Row = {};
+        for (const name of names) c[name] = countMaps[name]?.get(r.id as string) ?? 0;
+        return { ...r, _count: c };
+      });
+      continue;
+    }
+
     // One-to-many from workspace
     if (rel === "phoneNumbers" && model === "workspace") {
       const ids = out.map((r) => r.id as string);
@@ -353,6 +421,35 @@ async function applyInclude(rows: Row[], include: Args | undefined, model: strin
         by.set(p.workspaceId as string, list);
       }
       out = out.map((r) => ({ ...r, phoneNumbers: by.get(r.id as string) ?? [] }));
+      continue;
+    }
+
+    // One-to-many: conversation.messages (ConversationMessage.conversationId)
+    if (rel === "messages" && model === "conversation") {
+      const ids = out.map((r) => r.id as string);
+      const { data } = await db
+        .from("ConversationMessage")
+        .select("*")
+        .in("conversationId", ids);
+      const orderBy = isObject(cfg) ? (cfg.orderBy as Row | undefined) : undefined;
+      const dir = orderBy && "createdAt" in orderBy ? orderBy.createdAt : "asc";
+      const take = isObject(cfg) && typeof cfg.take === "number" ? cfg.take : undefined;
+      const by = new Map<string, Row[]>();
+      for (const m of data ?? []) {
+        const list = by.get(m.conversationId as string) ?? [];
+        list.push(reviveRow(m as Row));
+        by.set(m.conversationId as string, list);
+      }
+      out = out.map((r) => {
+        let list = by.get(r.id as string) ?? [];
+        list = list.sort((a, b) => {
+          const av = new Date(a.createdAt as string).getTime();
+          const bv = new Date(b.createdAt as string).getTime();
+          return dir === "desc" ? bv - av : av - bv;
+        });
+        if (take != null) list = list.slice(0, take);
+        return { ...r, messages: list };
+      });
       continue;
     }
 
@@ -441,6 +538,7 @@ type ModelApi = {
   delete: (args: Args) => Promise<any>;
   deleteMany: (args?: Args) => Promise<{ count: number }>;
   count: (args?: Args) => Promise<number>;
+  groupBy: (args: Args) => Promise<Row[]>;
 };
 
 function modelApi(model: string): ModelApi {
@@ -492,21 +590,35 @@ function modelApi(model: string): ModelApi {
     async create({ data, include }: Args) {
       const db = getSupabaseAdmin();
       const row = prepareData(data, { isCreate: true });
-      const { data: created, error } = await db.from(t).insert(row).select("*").single();
-      if (error) throw new DbError(error.message, error.code);
-      const hydrated = await applyInclude([reviveRow(created as Row)], include, model);
-      return hydrated[0];
+      for (let attempt = 0; ; attempt++) {
+        const { data: created, error } = await db.from(t).insert(row).select("*").single();
+        if (!error) {
+          const hydrated = await applyInclude([reviveRow(created as Row)], include, model);
+          return hydrated[0];
+        }
+        const col = missingColumnFromError(error);
+        if (col && col in row && attempt < 8) {
+          delete row[col];
+          continue;
+        }
+        throw new DbError(error.message, error.code);
+      }
     },
 
     async createMany({ data, skipDuplicates }: Args) {
       const db = getSupabaseAdmin();
       const rows = (Array.isArray(data) ? data : [data]).map((d) => prepareData(d, { isCreate: true }));
-      const { data: inserted, error } = await db.from(t).insert(rows).select("id");
-      if (error) {
+      for (let attempt = 0; ; attempt++) {
+        const { data: inserted, error } = await db.from(t).insert(rows).select("id");
+        if (!error) return { count: inserted?.length ?? 0 };
+        const col = missingColumnFromError(error);
+        if (col && rows.some((r) => col in r) && attempt < 8) {
+          for (const r of rows) delete r[col];
+          continue;
+        }
         if (skipDuplicates) return { count: 0 };
         throw new DbError(error.message, error.code);
       }
-      return { count: inserted?.length ?? 0 };
     },
 
     async update({ where, data, include }: Args) {
@@ -514,13 +626,22 @@ function modelApi(model: string): ModelApi {
       const resolved = await resolveNestedWhere(model, where);
       let patch = prepareData(data, { isCreate: false });
       patch = await applyIncrements(model, resolved ?? {}, patch);
-      let q: any = db.from(t).update(patch).select("*");
-      q = applyWhereSync(q, resolved);
-      const { data: updated, error } = await q.maybeSingle();
-      if (error) throw new DbError(error.message, error.code);
-      if (!updated) throw new DbError(`Update failed: no row matched on ${t}`, "P2025");
-      const hydrated = await applyInclude([reviveRow(updated as Row)], include, model);
-      return hydrated[0];
+      for (let attempt = 0; ; attempt++) {
+        let q: any = db.from(t).update(patch).select("*");
+        q = applyWhereSync(q, resolved);
+        const { data: updated, error } = await q.maybeSingle();
+        if (!error) {
+          if (!updated) throw new DbError(`Update failed: no row matched on ${t}`, "P2025");
+          const hydrated = await applyInclude([reviveRow(updated as Row)], include, model);
+          return hydrated[0];
+        }
+        const col = missingColumnFromError(error);
+        if (col && col in patch && attempt < 8) {
+          delete patch[col];
+          continue;
+        }
+        throw new DbError(error.message, error.code);
+      }
     },
 
     async updateMany({ where, data }: Args) {
@@ -540,17 +661,32 @@ function modelApi(model: string): ModelApi {
             if (isObject(v) && "increment" in v) continue;
             one[k] = v;
           }
-          const { error } = await db.from(t).update(one).eq("id", row.id);
-          if (error) throw new DbError(error.message, error.code);
+          for (let attempt = 0; ; attempt++) {
+            const { error } = await db.from(t).update(one).eq("id", row.id);
+            if (!error) break;
+            const col = missingColumnFromError(error);
+            if (col && col in one && attempt < 8) {
+              delete one[col];
+              continue;
+            }
+            throw new DbError(error.message, error.code);
+          }
         }
         return { count: rows.length };
       }
 
-      let q: any = db.from(t).update(patch).select("id");
-      q = applyWhereSync(q, resolved);
-      const { data: updated, error } = await q;
-      if (error) throw new DbError(error.message, error.code);
-      return { count: updated?.length ?? 0 };
+      for (let attempt = 0; ; attempt++) {
+        let q: any = db.from(t).update(patch).select("id");
+        q = applyWhereSync(q, resolved);
+        const { data: updated, error } = await q;
+        if (!error) return { count: updated?.length ?? 0 };
+        const col = missingColumnFromError(error);
+        if (col && col in patch && attempt < 8) {
+          delete patch[col];
+          continue;
+        }
+        throw new DbError(error.message, error.code);
+      }
     },
 
     async upsert({ where, create, update }: Args) {
@@ -587,6 +723,31 @@ function modelApi(model: string): ModelApi {
       const { count, error } = await q;
       if (error) throw new DbError(error.message, error.code);
       return count ?? 0;
+    },
+
+    async groupBy(args: Args = {}) {
+      const by: string[] = Array.isArray(args.by) ? args.by : args.by ? [args.by] : [];
+      const rows = await api.findMany({ where: args.where });
+      const groups = new Map<string, Row>();
+      for (const row of rows) {
+        const key = by.map((f) => JSON.stringify(row[f])).join("|");
+        let g = groups.get(key);
+        if (!g) {
+          g = {};
+          for (const f of by) g[f] = row[f];
+          groups.set(key, g);
+        }
+        if (args._count === true) {
+          g._count = ((g._count as number) || 0) + 1;
+        } else if (isObject(args._count)) {
+          const cnt = (g._count as Row) || {};
+          for (const k of Object.keys(args._count)) {
+            if (k === "_all" || row[k] != null) cnt[k] = ((cnt[k] as number) || 0) + 1;
+          }
+          g._count = cnt;
+        }
+      }
+      return [...groups.values()];
     },
   };
   return api;
