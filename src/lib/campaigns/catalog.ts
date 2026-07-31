@@ -348,7 +348,7 @@ export function buildSequenceForCategory(
         {
           step_key: "gate_paid",
           step_type: "condition",
-          config: { when: "customer_replied", then: "end", else: "sms_2" },
+          config: { when: "payment_received", then: "end", else: "sms_2" },
         },
         {
           step_key: "sms_2",

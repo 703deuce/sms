@@ -126,13 +126,85 @@ export async function resolvePaymentLinkForTemplate(
   return link.url;
 }
 
+const ACTIVE_RECIPIENT_STATUSES = ["pending", "scheduled", "in_progress", "waiting"] as const;
+
+/**
+ * On payment, flip the link to paid (idempotent) and propagate a
+ * `payment_received` fact to any active campaign recipients for the same
+ * workspace + phone. Recipients enrolled in payment-category campaigns
+ * (invoice / overdue reminders) are stopped so no further dunning is sent.
+ */
 export async function markPaymentLinkPaid(stripeSessionId: string) {
   const prisma = getPrisma();
   const row = await prisma.paymentLink.findFirst({ where: { stripeSessionId } });
   if (!row) return null;
   if (row.status === "paid") return row;
-  return prisma.paymentLink.update({
+
+  const updated = await prisma.paymentLink.update({
     where: { id: row.id },
     data: { status: "paid" },
   });
+
+  try {
+    await applyPaymentReceivedFacts(row.workspaceId, row.phone, row.campaignId);
+  } catch (err) {
+    console.warn("[markPaymentLinkPaid] failed to propagate payment_received", row.id, err);
+  }
+
+  return updated;
+}
+
+async function applyPaymentReceivedFacts(
+  workspaceId: string,
+  phone: string | null,
+  campaignId: string | null,
+) {
+  if (!phone) return;
+  const prisma = getPrisma();
+
+  const recipients = await prisma.campaignRecipient.findMany({
+    where: {
+      workspaceId,
+      phone,
+      workflowStatus: { in: [...ACTIVE_RECIPIENT_STATUSES] },
+      ...(campaignId ? { campaignId } : {}),
+    },
+    include: { campaign: true },
+  });
+
+  for (const recipient of recipients) {
+    const prev =
+      recipient.metadata && typeof recipient.metadata === "object"
+        ? (recipient.metadata as Record<string, unknown>)
+        : {};
+    if (!prev.payment_received) {
+      await prisma.campaignRecipient.update({
+        where: { id: recipient.id },
+        data: { metadata: { ...prev, payment_received: true } },
+      });
+    }
+
+    // Stop dunning sequences (invoice / overdue reminders) once paid.
+    if (recipient.campaign?.category === "payment") {
+      const stopped = await prisma.campaignRecipient.updateMany({
+        where: {
+          id: recipient.id,
+          workflowStatus: { in: [...ACTIVE_RECIPIENT_STATUSES] },
+        },
+        data: {
+          workflowStatus: "stopped",
+          stopReason: "payment_received",
+          completedAt: new Date(),
+          enrollmentKey: null,
+          nextActionAt: null,
+        },
+      });
+      if (stopped.count > 0) {
+        await prisma.campaignMessage.updateMany({
+          where: { recipientId: recipient.id, status: "queued" },
+          data: { status: "skipped", error: "stopped: payment_received" },
+        });
+      }
+    }
+  }
 }

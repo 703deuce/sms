@@ -16,6 +16,7 @@ export type ConditionFacts = {
   customer_replied?: boolean;
   customer_opted_out?: boolean;
   review_detected?: boolean;
+  payment_received?: boolean;
   no_activity?: boolean;
   valid_phone?: boolean;
   valid_email?: boolean;

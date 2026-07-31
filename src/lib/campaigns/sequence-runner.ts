@@ -54,6 +54,7 @@ function factsFromRecipientMetadata(metadata: unknown): ConditionFacts {
     customer_replied: Boolean(m.customer_replied),
     customer_opted_out: Boolean(m.customer_opted_out),
     review_detected: Boolean(m.review_detected),
+    payment_received: Boolean(m.payment_received),
     valid_phone: m.valid_phone == null ? undefined : Boolean(m.valid_phone),
     valid_email: m.valid_email == null ? undefined : Boolean(m.valid_email),
   };
@@ -61,7 +62,8 @@ function factsFromRecipientMetadata(metadata: unknown): ConditionFacts {
     facts.message_delivered ||
     facts.link_clicked ||
     facts.customer_replied ||
-    facts.review_detected
+    facts.review_detected ||
+    facts.payment_received
   );
   return facts;
 }
