@@ -38,23 +38,40 @@ type Metrics = {
   messagesSentPeriod: number;
 };
 
+type Billing = {
+  plan: string;
+  balanceCents: number;
+  balance: number;
+  creditTrackingEnabled: boolean;
+  stripeConfigured: boolean;
+  stripeCustomerId: string | null;
+  stripeSubscriptionId: string | null;
+};
+
+function titleCasePlan(plan: string) {
+  if (!plan) return "—";
+  return plan.charAt(0).toUpperCase() + plan.slice(1);
+}
+
 export function BillingSettingsPanel() {
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [usage, setUsage] = useState<UsageRow[]>([]);
+  const [billing, setBilling] = useState<Billing | null>(null);
   const [creditAmount, setCreditAmount] = useState(50);
-  const [stripePortalUrl, setStripePortalUrl] = useState<string | null>(null);
   const [purchasing, setPurchasing] = useState(false);
   const [message, setMessage] = useState("");
+
+  function applyData(data: { metrics?: Metrics; usage?: UsageRow[]; billing?: Billing }) {
+    if (data.metrics) setMetrics(data.metrics);
+    setUsage(data.usage || []);
+    if (data.billing) setBilling(data.billing);
+  }
 
   useEffect(() => {
     fetch("/api/settings/billing")
       .then((r) => r.json())
       .then((j) => {
-        if (j.data) {
-          setMetrics(j.data.metrics);
-          setUsage(j.data.usage || []);
-          setStripePortalUrl(j.data.stripePortalUrl);
-        }
+        if (j.data) applyData(j.data);
       })
       .catch(() => undefined);
   }, []);
@@ -70,12 +87,13 @@ export function BillingSettingsPanel() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Purchase failed");
-      setMessage(`Added ${formatCurrency(creditAmount)} in credits (mock ledger entry).`);
-      const refresh = await fetch("/api/settings/billing").then((r) => r.json());
-      if (refresh.data) {
-        setMetrics(refresh.data.metrics);
-        setUsage(refresh.data.usage || []);
+      if (json.url) {
+        window.location.href = json.url;
+        return;
       }
+      setMessage(`Added ${formatCurrency(creditAmount)} in credits.`);
+      const refresh = await fetch("/api/settings/billing").then((r) => r.json());
+      if (refresh.data) applyData(refresh.data);
     } catch (e) {
       setMessage(e instanceof Error ? e.message : "Purchase failed");
     } finally {
@@ -84,21 +102,20 @@ export function BillingSettingsPanel() {
   }
 
   async function openStripePortal() {
-    if (stripePortalUrl) {
-      window.open(stripePortalUrl, "_blank");
-      return;
-    }
+    setMessage("");
     const res = await fetch("/api/settings/billing", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "stripe_portal" }),
     });
     const json = await res.json();
-    if (json.url) window.open(json.url, "_blank");
+    if (json.url) window.location.href = json.url;
     else setMessage(json.error || "Stripe portal not configured");
   }
 
   const currentUsage = usage[0];
+  const stripeConfigured = billing?.stripeConfigured ?? false;
+  const balance = billing ? billing.balance : metrics?.balance ?? 0;
 
   return (
     <div>
@@ -116,8 +133,12 @@ export function BillingSettingsPanel() {
 
       {metrics ? (
         <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <StatCard label="Current plan" value="Growth" hint="Workspace billing" />
-          <StatCard label="Account balance" value={formatCurrency(metrics.balance)} />
+          <StatCard
+            label="Current plan"
+            value={titleCasePlan(billing?.plan || "")}
+            hint={stripeConfigured ? "Managed in Stripe" : "Workspace billing"}
+          />
+          <StatCard label="Credit balance" value={formatCurrency(balance)} />
           <StatCard label="Credits remaining" value={formatNumber(metrics.creditsRemaining)} />
           <StatCard label="Sent this period" value={formatNumber(metrics.messagesSentPeriod)} />
         </div>
@@ -128,11 +149,19 @@ export function BillingSettingsPanel() {
           <CardTitle>Payment method</CardTitle>
           <div className="mt-4 rounded-lg border border-border p-4">
             <p className="text-sm text-muted-foreground">
-              {stripePortalUrl ? "Manage payment method in Stripe customer portal." : "No payment method on file."}
+              {stripeConfigured
+                ? "Manage payment method, invoices, and subscription in the Stripe customer portal."
+                : "Stripe billing is not configured for this environment."}
             </p>
           </div>
-          <Button variant="outline" size="sm" className="mt-4" onClick={openStripePortal}>
-            {stripePortalUrl ? "Stripe customer portal" : "Update payment method"}
+          <Button
+            variant="outline"
+            size="sm"
+            className="mt-4"
+            onClick={openStripePortal}
+            disabled={!stripeConfigured}
+          >
+            Stripe customer portal
           </Button>
         </Card>
 
@@ -156,7 +185,9 @@ export function BillingSettingsPanel() {
             </Button>
           </div>
           <p className="mt-2 text-xs text-muted-foreground">
-            Creates a mock credit ledger entry when Stripe billing is not configured.
+            {stripeConfigured
+              ? "Redirects to Stripe Checkout to purchase prepaid messaging credits."
+              : "Creates a credit ledger entry when Stripe billing is not configured."}
           </p>
         </Card>
       </div>
