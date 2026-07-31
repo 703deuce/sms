@@ -29,6 +29,7 @@ export async function PATCH(request: Request) {
       awayAlways?: boolean;
       quietHoursStart?: string | null;
       quietHoursEnd?: string | null;
+      reviewLinkUrl?: string | null;
     };
 
     const patch: Record<string, unknown> = {};
@@ -39,6 +40,7 @@ export async function PATCH(request: Request) {
     if (body.awayAlways !== undefined) patch.awayAlways = body.awayAlways;
     if (body.quietHoursStart !== undefined) patch.quietHoursStart = body.quietHoursStart;
     if (body.quietHoursEnd !== undefined) patch.quietHoursEnd = body.quietHoursEnd;
+    if (body.reviewLinkUrl !== undefined) patch.reviewLinkUrl = body.reviewLinkUrl?.trim() || null;
 
     const data = await upsertMessagingRuntimeSettings(auth.workspaceId, patch);
     return NextResponse.json({ data });

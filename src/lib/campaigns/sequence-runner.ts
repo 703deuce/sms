@@ -325,7 +325,8 @@ async function queueSendForStep(recipientId: string, step: SequenceStep): Promis
 
   const trackingToken = randomTrackingToken();
   const trackedUrl = `${getAppBaseUrl()}/r/${trackingToken}`;
-  const destinationUrl = process.env.REVIEW_LINK_FALLBACK || "https://transovo.ai";
+  const { resolveReviewLink } = await import("@/lib/messaging/review-link");
+  const destinationUrl = await resolveReviewLink(recipient.workspaceId);
   const names = splitDisplayName(recipient.displayName);
 
   const template =

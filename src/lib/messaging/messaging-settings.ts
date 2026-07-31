@@ -12,6 +12,7 @@ export type MessagingRuntimeSettings = {
   awayAlways: boolean;
   quietHoursStart: string | null;
   quietHoursEnd: string | null;
+  reviewLinkUrl: string | null;
 };
 
 const DAY_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
@@ -112,6 +113,7 @@ export async function getMessagingRuntimeSettings(workspaceId: string): Promise<
       awayAlways: false,
       quietHoursStart: null,
       quietHoursEnd: null,
+      reviewLinkUrl: null,
     };
   }
   return {
@@ -123,6 +125,7 @@ export async function getMessagingRuntimeSettings(workspaceId: string): Promise<
     awayAlways: row.awayAlways,
     quietHoursStart: row.quietHoursStart,
     quietHoursEnd: row.quietHoursEnd,
+    reviewLinkUrl: row.reviewLinkUrl,
   };
 }
 
@@ -142,6 +145,7 @@ export async function upsertMessagingRuntimeSettings(
       awayAlways: patch.awayAlways ?? false,
       quietHoursStart: patch.quietHoursStart,
       quietHoursEnd: patch.quietHoursEnd,
+      reviewLinkUrl: patch.reviewLinkUrl,
     },
     update: {
       businessHoursJson: patch.businessHoursJson ?? undefined,
@@ -151,6 +155,7 @@ export async function upsertMessagingRuntimeSettings(
       awayAlways: patch.awayAlways,
       quietHoursStart: patch.quietHoursStart,
       quietHoursEnd: patch.quietHoursEnd,
+      reviewLinkUrl: patch.reviewLinkUrl,
     },
   });
   return {
@@ -162,6 +167,7 @@ export async function upsertMessagingRuntimeSettings(
     awayAlways: row.awayAlways,
     quietHoursStart: row.quietHoursStart,
     quietHoursEnd: row.quietHoursEnd,
+    reviewLinkUrl: row.reviewLinkUrl,
   };
 }
 

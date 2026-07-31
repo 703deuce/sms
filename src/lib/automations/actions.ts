@@ -2,7 +2,6 @@ import type { Prisma } from "@/lib/domain";
 import { getPrisma } from "@/lib/db";
 import { sendTransactionalEmail } from "@/lib/email/brevo";
 import { mergeTemplate } from "@/lib/messaging/template";
-import { getAppBaseUrl } from "@/lib/messaging/twilio-config";
 import { sendQuickSms } from "@/lib/sms/send-quick";
 import { enrollInAutomation } from "./enroll";
 import { mergeExecutionMetadata, type ExecutionFacts } from "./metadata";
@@ -21,7 +20,8 @@ export async function mergeMessageVars(
   body: string,
 ): Promise<string> {
   const ws = await getPrisma().workspace.findUnique({ where: { id: workspaceId } });
-  const reviewLink = `${getAppBaseUrl()}/review`;
+  const { resolveReviewLink } = await import("@/lib/messaging/review-link");
+  const reviewLink = await resolveReviewLink(workspaceId);
   return mergeTemplate(body, {
     firstName: contact.firstName || "",
     lastName: contact.lastName || "",

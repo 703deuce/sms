@@ -103,6 +103,7 @@ export function MessagingSettingsForm({ registration }: Props) {
           timezone: String(form.get("quietTimezone") || "America/Los_Angeles"),
           quietHoursStart: String(form.get("quietStart") || "") || null,
           quietHoursEnd: String(form.get("quietEnd") || "") || null,
+          reviewLinkUrl: String(form.get("reviewLinkUrl") || "") || null,
           businessHoursJson: runtime?.businessHoursJson || defaultBusinessHours(),
         }),
       });
@@ -192,6 +193,23 @@ export function MessagingSettingsForm({ registration }: Props) {
               />
               <p className="mt-1 text-xs text-muted-foreground">
                 Sent once per contact per day when away is active. STOP/HELP/keywords run first.
+              </p>
+            </div>
+            <div>
+              <Label htmlFor="reviewLinkUrl">Review link URL</Label>
+              <Input
+                id="reviewLinkUrl"
+                name="reviewLinkUrl"
+                type="url"
+                placeholder="https://g.page/r/your-business/review"
+                value={runtime?.reviewLinkUrl || ""}
+                onChange={(e) =>
+                  setRuntime((r) => (r ? { ...r, reviewLinkUrl: e.target.value } : r))
+                }
+              />
+              <p className="mt-1 text-xs text-muted-foreground">
+                Destination for {"{{review_link}}"} in campaigns and review requests. Overridden by
+                the workspace-level review link when set.
               </p>
             </div>
           </form>
