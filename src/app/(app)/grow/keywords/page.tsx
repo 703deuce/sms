@@ -23,13 +23,17 @@ type KeywordRow = {
   subscribers: number;
 };
 
+type CampaignOption = { id: string; name: string; status: string };
+
 export default function KeywordsPage() {
   const [rows, setRows] = useState<KeywordRow[]>([]);
+  const [campaigns, setCampaigns] = useState<CampaignOption[]>([]);
   const [keyword, setKeyword] = useState("JOIN");
   const [listName, setListName] = useState("Keyword subscribers");
   const [confirmation, setConfirmation] = useState(
     "You're subscribed! Reply STOP to opt out. Msg&data rates may apply.",
   );
+  const [startCampaignId, setStartCampaignId] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -40,8 +44,20 @@ export default function KeywordsPage() {
     setRows(json.data || []);
   }
 
+  async function loadCampaigns() {
+    try {
+      const res = await fetch("/api/campaigns");
+      if (!res.ok) return;
+      const json = await res.json();
+      setCampaigns(json.data || []);
+    } catch {
+      // optional
+    }
+  }
+
   useEffect(() => {
     load().catch(() => undefined);
+    loadCampaigns();
   }, []);
 
   async function create() {
@@ -51,7 +67,13 @@ export default function KeywordsPage() {
       const res = await fetch("/api/growth/keywords", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ keyword, listName, confirmation, autoReply: confirmation }),
+        body: JSON.stringify({
+          keyword,
+          listName,
+          confirmation,
+          autoReply: confirmation,
+          startCampaignId: startCampaignId || undefined,
+        }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Failed");
@@ -98,6 +120,25 @@ export default function KeywordsPage() {
           <div>
             <Label htmlFor="list">List name</Label>
             <Input id="list" value={listName} onChange={(e) => setListName(e.target.value)} />
+          </div>
+          <div className="sm:col-span-2">
+            <Label htmlFor="start-campaign">Start campaign / workflow (optional)</Label>
+            <select
+              id="start-campaign"
+              className="h-10 w-full rounded-[10px] border border-border bg-card px-3 text-sm"
+              value={startCampaignId}
+              onChange={(e) => setStartCampaignId(e.target.value)}
+            >
+              <option value="">— none —</option>
+              {campaigns.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name} ({c.status})
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-muted-foreground">
+              When someone texts this keyword, they&apos;ll be enrolled into the selected campaign.
+            </p>
           </div>
           <div className="sm:col-span-2">
             <Label htmlFor="confirm">Auto-reply / confirmation</Label>
