@@ -1,7 +1,11 @@
 import { NumberSettingsForm } from "@/components/numbers/number-settings-form";
+import {
+  NumberAssignmentForm,
+  NumberMessagingForm,
+  NumberWebhooksForm,
+} from "@/components/numbers/number-config-forms";
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle, StatCard } from "@/components/ui/card";
-import { Input, Label, Select, Textarea } from "@/components/ui/input";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatusChip } from "@/components/ui/status-chip";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
@@ -46,9 +50,19 @@ export default async function NumberDetailPage({ params, searchParams }: PagePro
 
   const registration = await getPrisma().messagingRegistration.findUnique({
     where: { workspaceId },
-    select: { phoneE164: true },
   });
   const isRegistrationNumber = registration?.phoneE164 === number.number;
+
+  function statusLabel(status?: string | null) {
+    const s = (status || "not_started").toLowerCase();
+    if (s === "approved" || s === "ready" || s === "complete" || s === "completed") return "Approved";
+    if (s === "rejected" || s === "failed" || s === "suspended") return "Rejected";
+    if (s === "submitted" || s === "in_review" || s === "action_required") return "Pending";
+    return "Draft";
+  }
+  const brandStatusLabel = statusLabel(registration?.brandStatus);
+  const campaignStatusLabel = statusLabel(registration?.campaignStatus);
+  const campaignApproved = campaignStatusLabel === "Approved";
 
   const usageLogs: Array<{
     id: string;
@@ -158,32 +172,11 @@ export default async function NumberDetailPage({ params, searchParams }: PagePro
       {tab === "messaging" && (
         <Card>
           <CardTitle>Messaging configuration</CardTitle>
-          <form className="mt-4 space-y-4 max-w-xl">
-            <div>
-              <Label htmlFor="messagingService">Messaging service</Label>
-              <Select id="messagingService" defaultValue={number.messagingService}>
-                <option value={number.messagingService}>{number.messagingService}</option>
-                <option value="Default">Default</option>
-              </Select>
-            </div>
-            <div>
-              <Label htmlFor="inboundUrl">Inbound webhook URL</Label>
-              <Input id="inboundUrl" placeholder="https://api.example.com/sms/inbound" />
-            </div>
-            <div>
-              <Label htmlFor="statusUrl">Status callback URL</Label>
-              <Input id="statusUrl" placeholder="https://api.example.com/sms/status" />
-            </div>
-            <div className="flex items-center gap-2">
-              <input type="checkbox" id="mmsEnabled" defaultChecked className="rounded border-border" />
-              <Label htmlFor="mmsEnabled" className="mb-0">
-                Enable MMS on this number
-              </Label>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Messaging webhook configuration is managed in workspace messaging settings.
-            </p>
-          </form>
+          <NumberMessagingForm
+            numberId={numberId}
+            messagingService={number.messagingService}
+            initialSettings={number.settingsJson ?? null}
+          />
         </Card>
       )}
 
@@ -193,37 +186,16 @@ export default async function NumberDetailPage({ params, searchParams }: PagePro
           <p className="mt-2 text-sm text-muted-foreground">
             Assigned users can send from and receive replies to this number in the inbox.
           </p>
-          <Table className="mt-4">
-            <THead>
-              <TR>
-                <TH>User</TH>
-                <TH>Role</TH>
-                <TH>Assigned</TH>
-              </TR>
-            </THead>
-            <TBody>
-              {teamMembers.map((member) => {
-                const assigned = number.assignedUsers.includes(member.name);
-                return (
-                  <TR key={member.id}>
-                    <TD>
-                      <div>
-                        <p className="font-medium">{member.name}</p>
-                        <p className="text-xs text-muted-foreground">{member.email}</p>
-                      </div>
-                    </TD>
-                    <TD>{member.role}</TD>
-                    <TD>
-                      <input type="checkbox" defaultChecked={assigned} className="rounded border-border" />
-                    </TD>
-                  </TR>
-                );
-              })}
-            </TBody>
-          </Table>
-          <p className="mt-4 text-xs text-muted-foreground">
-            Per-number inbox assignment is coming soon. All team members with inbox access can use active numbers.
-          </p>
+          <NumberAssignmentForm
+            numberId={numberId}
+            members={teamMembers.map((m) => ({
+              id: m.id,
+              name: m.name,
+              email: m.email,
+              role: m.role,
+            }))}
+            initialAssignedUserIds={number.assignedUserIds ?? []}
+          />
         </Card>
       )}
 
@@ -237,8 +209,34 @@ export default async function NumberDetailPage({ params, searchParams }: PagePro
                 {number.type === "Toll-free" ? "Toll-free verification" : "10DLC campaign linked"}
               </span>
             </div>
+            {registration ? (
+              <dl className="mt-4 space-y-3 text-sm">
+                <div className="flex justify-between gap-4">
+                  <dt className="text-muted-foreground">Brand</dt>
+                  <dd>
+                    <StatusChip status={brandStatusLabel} />
+                  </dd>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <dt className="text-muted-foreground">Campaign</dt>
+                  <dd>
+                    <StatusChip status={campaignStatusLabel} />
+                  </dd>
+                </div>
+                {registration.campaignDisplayName || registration.useCase ? (
+                  <div className="flex justify-between gap-4">
+                    <dt className="text-muted-foreground">Use case</dt>
+                    <dd>{registration.campaignDisplayName || registration.useCase}</dd>
+                  </div>
+                ) : null}
+              </dl>
+            ) : (
+              <p className="mt-4 text-sm text-muted-foreground">
+                No messaging registration found for this workspace yet.
+              </p>
+            )}
             <p className="mt-4 text-sm text-muted-foreground">
-              {number.a2pStatus === "Approved"
+              {campaignApproved
                 ? "This number is approved for registered use cases."
                 : "Complete brand and campaign registration to enable full throughput."}
             </p>
@@ -252,17 +250,23 @@ export default async function NumberDetailPage({ params, searchParams }: PagePro
             <CardTitle>Throughput limits</CardTitle>
             <dl className="mt-4 space-y-3 text-sm">
               <div className="flex justify-between">
+                <dt className="text-muted-foreground">Registration status</dt>
+                <dd className="font-medium">{campaignApproved ? "Registered" : "Unregistered"}</dd>
+              </div>
+              <div className="flex justify-between">
                 <dt className="text-muted-foreground">Daily segment limit</dt>
-                <dd className="font-medium">{number.a2pStatus === "Approved" ? "10,000" : "200"}</dd>
+                <dd className="font-medium">{campaignApproved ? "10,000" : "200"}</dd>
               </div>
               <div className="flex justify-between">
                 <dt className="text-muted-foreground">Per-minute rate</dt>
-                <dd className="font-medium">{number.a2pStatus === "Approved" ? "60 MPS" : "1 MPS"}</dd>
+                <dd className="font-medium">{campaignApproved ? "60 MPS" : "1 MPS"}</dd>
               </div>
-              <div className="flex justify-between">
-                <dt className="text-muted-foreground">Campaign</dt>
-                <dd>{number.friendlyName}</dd>
-              </div>
+              {registration?.messageVolume ? (
+                <div className="flex justify-between">
+                  <dt className="text-muted-foreground">Declared volume</dt>
+                  <dd>{registration.messageVolume}</dd>
+                </div>
+              ) : null}
             </dl>
           </Card>
         </div>
@@ -271,23 +275,7 @@ export default async function NumberDetailPage({ params, searchParams }: PagePro
       {tab === "webhooks" && (
         <Card>
           <CardTitle>Webhook endpoints</CardTitle>
-          <form className="mt-4 space-y-4 max-w-xl">
-            <div>
-              <Label htmlFor="deliveryWebhook">Delivery status</Label>
-              <Input id="deliveryWebhook" placeholder="https://api.example.com/webhooks/delivery" />
-            </div>
-            <div>
-              <Label htmlFor="inboundWebhook">Inbound message</Label>
-              <Input id="inboundWebhook" placeholder="https://api.example.com/webhooks/inbound" />
-            </div>
-            <div>
-              <Label htmlFor="fallbackWebhook">Fallback URL</Label>
-              <Input id="fallbackWebhook" placeholder="https://api.example.com/webhooks/fallback" />
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Webhook endpoints are configured per workspace in Settings → Messaging.
-            </p>
-          </form>
+          <NumberWebhooksForm numberId={numberId} initialWebhookUrl={number.webhookUrl ?? null} />
         </Card>
       )}
 
@@ -353,6 +341,7 @@ export default async function NumberDetailPage({ params, searchParams }: PagePro
             numberId={numberId}
             e164={number.number}
             initialFriendlyName={number.friendlyName}
+            initialVoiceForwardTo={number.voiceForwardTo ?? null}
             isRegistrationNumber={isRegistrationNumber}
           />
         </Card>

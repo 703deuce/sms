@@ -62,7 +62,12 @@ export function mapPhoneNumber(n: {
   messagingService: string | null;
   monthlyCostCents: number;
   status: string;
+  voiceForwardTo?: string | null;
+  webhookUrl?: string | null;
+  settingsJson?: unknown;
+  assignments?: Array<{ userId: string; user?: { id: string; name: string } | null }>;
 }): PhoneNumber {
+  const assignments = n.assignments || [];
   return {
     id: n.id,
     number: n.e164,
@@ -71,7 +76,16 @@ export function mapPhoneNumber(n: {
     friendlyName: n.friendlyName || n.e164,
     a2pStatus: titleCaseStatus(n.a2pStatus),
     messagingService: n.messagingService || "Default",
-    assignedUsers: [],
+    assignedUsers: assignments
+      .map((a) => a.user?.name)
+      .filter((name): name is string => Boolean(name)),
+    assignedUserIds: assignments.map((a) => a.userId),
+    voiceForwardTo: n.voiceForwardTo ?? null,
+    webhookUrl: n.webhookUrl ?? null,
+    settingsJson:
+      n.settingsJson && typeof n.settingsJson === "object"
+        ? (n.settingsJson as Record<string, unknown>)
+        : null,
     monthlyCost: (n.monthlyCostCents || 0) / 100,
     status: titleCaseStatus(n.status),
   };

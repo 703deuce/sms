@@ -593,6 +593,38 @@ async function applyInclude(rows: Row[], include: Args | undefined, model: strin
       continue;
     }
 
+    // One-to-many: phoneNumber.assignments (phone_number_assignments.phoneNumberId)
+    if (rel === "assignments" && model === "phoneNumber") {
+      const ids = out.map((r) => r.id as string);
+      const { data } = ids.length
+        ? await db.from("phone_number_assignments").select("*").in("phoneNumberId", ids)
+        : { data: [] as Row[] };
+      let assignmentRows = (data ?? []).map((r) => reviveRow(r as Row));
+      if (isObject(cfg) && isObject(cfg.include) && cfg.include.user) {
+        const userIds = [
+          ...new Set(assignmentRows.map((a) => a.userId).filter(Boolean)),
+        ] as string[];
+        const { data: users } = userIds.length
+          ? await db.from("User").select("*").in("id", userIds)
+          : { data: [] as Row[] };
+        const userMap = new Map(
+          (users ?? []).map((u) => [u.id as string, reviveRow(u as Row)]),
+        );
+        assignmentRows = assignmentRows.map((a) => ({
+          ...a,
+          user: userMap.get(a.userId as string) ?? null,
+        }));
+      }
+      const by = new Map<string, Row[]>();
+      for (const a of assignmentRows) {
+        const list = by.get(a.phoneNumberId as string) ?? [];
+        list.push(a);
+        by.set(a.phoneNumberId as string, list);
+      }
+      out = out.map((r) => ({ ...r, assignments: by.get(r.id as string) ?? [] }));
+      continue;
+    }
+
     if (rel === "messagingRegistration" && model === "workspace") {
       const ids = out.map((r) => r.id as string);
       const { data } = await db.from("messaging_registrations").select("*").in("workspaceId", ids);

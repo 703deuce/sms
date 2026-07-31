@@ -3,6 +3,10 @@ import { requireSession, jsonError } from "@/lib/api-auth";
 import { getPrisma } from "@/lib/db";
 import { mapPhoneNumber } from "@/lib/mappers";
 
+const assignmentsInclude = {
+  assignments: { include: { user: { select: { id: true, name: true } } } },
+} as const;
+
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ numberId: string }> },
@@ -13,6 +17,7 @@ export async function GET(
     const { numberId } = await params;
     const row = await getPrisma().phoneNumber.findFirst({
       where: { id: numberId, workspaceId: auth.workspaceId },
+      include: assignmentsInclude,
     });
     if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
     return NextResponse.json({ data: mapPhoneNumber(row) });
@@ -32,19 +37,57 @@ export async function PATCH(
     const body = (await request.json()) as {
       friendlyName?: string;
       status?: string;
+      voiceForwardTo?: string | null;
+      webhookUrl?: string | null;
+      settingsJson?: Record<string, unknown> | null;
+      assignedUserIds?: string[];
     };
-    const existing = await getPrisma().phoneNumber.findFirst({
+    const prisma = getPrisma();
+    const existing = await prisma.phoneNumber.findFirst({
       where: { id: numberId, workspaceId: auth.workspaceId },
     });
     if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    const updated = await getPrisma().phoneNumber.update({
+
+    const data: Record<string, unknown> = {
+      friendlyName: body.friendlyName ?? undefined,
+      status: body.status ?? undefined,
+    };
+    if (body.voiceForwardTo !== undefined) {
+      data.voiceForwardTo = body.voiceForwardTo?.trim() || null;
+    }
+    if (body.webhookUrl !== undefined) {
+      data.webhookUrl = body.webhookUrl?.trim() || null;
+    }
+    if (body.settingsJson !== undefined) {
+      data.settingsJson = body.settingsJson ?? null;
+    }
+
+    await prisma.phoneNumber.update({ where: { id: numberId }, data });
+
+    // Reconcile per-number user assignments when provided.
+    if (Array.isArray(body.assignedUserIds)) {
+      const validMembers = await prisma.membership.findMany({
+        where: { workspaceId: auth.workspaceId, userId: { in: body.assignedUserIds } },
+        select: { userId: true },
+      });
+      const validIds = new Set(
+        (validMembers as Array<{ userId: string }>).map((m) => m.userId),
+      );
+      const desired = [...new Set(body.assignedUserIds.filter((id) => validIds.has(id)))];
+
+      await prisma.phoneNumberAssignment.deleteMany({ where: { phoneNumberId: numberId } });
+      for (const userId of desired) {
+        await prisma.phoneNumberAssignment.create({
+          data: { phoneNumberId: numberId, userId },
+        });
+      }
+    }
+
+    const updated = await prisma.phoneNumber.findFirst({
       where: { id: numberId },
-      data: {
-        friendlyName: body.friendlyName ?? undefined,
-        status: body.status ?? undefined,
-      },
+      include: assignmentsInclude,
     });
-    return NextResponse.json({ data: mapPhoneNumber(updated) });
+    return NextResponse.json({ data: mapPhoneNumber(updated!) });
   } catch (err) {
     return jsonError(err, 400);
   }

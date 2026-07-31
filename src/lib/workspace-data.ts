@@ -58,8 +58,9 @@ export async function loadPhoneNumbers(workspaceId: string): Promise<PhoneNumber
   const rows = await getPrisma().phoneNumber.findMany({
     where: { workspaceId },
     orderBy: { e164: "asc" },
+    include: { assignments: { include: { user: { select: { id: true, name: true } } } } },
   });
-  return rows.map(mapPhoneNumber);
+  return (rows as Parameters<typeof mapPhoneNumber>[0][]).map(mapPhoneNumber);
 }
 
 export async function loadContacts(workspaceId: string, status?: string): Promise<Contact[]> {

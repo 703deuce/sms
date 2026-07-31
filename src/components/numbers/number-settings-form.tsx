@@ -9,6 +9,7 @@ type Props = {
   numberId: string;
   e164: string;
   initialFriendlyName: string;
+  initialVoiceForwardTo?: string | null;
   isRegistrationNumber: boolean;
 };
 
@@ -16,10 +17,12 @@ export function NumberSettingsForm({
   numberId,
   e164,
   initialFriendlyName,
+  initialVoiceForwardTo,
   isRegistrationNumber,
 }: Props) {
   const router = useRouter();
   const [friendlyName, setFriendlyName] = useState(initialFriendlyName);
+  const [voiceForwardTo, setVoiceForwardTo] = useState(initialVoiceForwardTo || "");
   const [saving, setSaving] = useState(false);
   const [releasing, setReleasing] = useState(false);
   const [error, setError] = useState("");
@@ -34,7 +37,10 @@ export function NumberSettingsForm({
       const res = await fetch(`/api/numbers/${numberId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ friendlyName: friendlyName.trim() }),
+        body: JSON.stringify({
+          friendlyName: friendlyName.trim(),
+          voiceForwardTo: voiceForwardTo.trim() || null,
+        }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Failed to save settings");
@@ -90,8 +96,15 @@ export function NumberSettingsForm({
       </div>
       <div>
         <Label htmlFor="forwardVoice">Voice forwarding (optional)</Label>
-        <Input id="forwardVoice" placeholder="+1 (555) 555-0100" disabled />
-        <p className="mt-1 text-xs text-muted-foreground">Voice forwarding is not yet configured.</p>
+        <Input
+          id="forwardVoice"
+          placeholder="+1 (555) 555-0100"
+          value={voiceForwardTo}
+          onChange={(e) => setVoiceForwardTo(e.target.value)}
+        />
+        <p className="mt-1 text-xs text-muted-foreground">
+          Inbound voice calls to this number will be forwarded to this destination. Leave blank to disable.
+        </p>
       </div>
       <div className="rounded-lg border border-border bg-muted/40 p-4">
         <p className="text-sm font-medium text-foreground">Release number</p>

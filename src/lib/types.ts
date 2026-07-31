@@ -51,6 +51,10 @@ export type PhoneNumber = {
   a2pStatus: StatusChip;
   messagingService: string;
   assignedUsers: string[];
+  assignedUserIds?: string[];
+  voiceForwardTo?: string | null;
+  webhookUrl?: string | null;
+  settingsJson?: Record<string, unknown> | null;
   monthlyCost: number;
   status: StatusChip;
 };
