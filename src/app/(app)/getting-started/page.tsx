@@ -1,11 +1,42 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
-import { gettingStartedSteps } from "@/lib/mock/data";
+import {
+  deriveGettingStartedSteps,
+} from "@/lib/compliance-helpers";
+import {
+  requireWorkspaceContext,
+  loadComplianceOverview,
+  loadDashboardMetrics,
+  loadPhoneNumbers,
+  loadContacts,
+  loadTemplates,
+  loadCampaigns,
+} from "@/lib/workspace-data";
 import { CheckCircle2, Circle, ExternalLink } from "lucide-react";
 import Link from "next/link";
 
-export default function GettingStartedPage() {
+export default async function GettingStartedPage() {
+  const { workspaceId } = await requireWorkspaceContext();
+  const [overview, metrics, phoneNumbers, contacts, templates, campaigns] = await Promise.all([
+    loadComplianceOverview(workspaceId),
+    loadDashboardMetrics(workspaceId),
+    loadPhoneNumbers(workspaceId),
+    loadContacts(workspaceId),
+    loadTemplates(workspaceId),
+    loadCampaigns(workspaceId),
+  ]);
+
+  const gettingStartedSteps = deriveGettingStartedSteps({
+    hasBusiness: Boolean(overview.registration?.legalBusinessName),
+    hasPayment: metrics.balance > 0,
+    a2pReady: overview.ready,
+    hasNumber: phoneNumbers.length > 0 || Boolean(overview.registration?.phoneE164),
+    contactCount: contacts.length,
+    templateCount: templates.length,
+    hasSentCampaign: campaigns.some((c) => c.sent > 0),
+  });
+
   const doneCount = gettingStartedSteps.filter((s) => s.done).length;
   const progress = Math.round((doneCount / gettingStartedSteps.length) * 100);
   const nextStep = gettingStartedSteps.find((s) => !s.done);

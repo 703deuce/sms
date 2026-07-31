@@ -11,7 +11,7 @@ import {
 import { StatusChip } from "@/components/ui/status-chip";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Tabs } from "@/components/ui/tabs";
-import { automations } from "@/lib/mock/data";
+import type { AutomationFlow } from "@/lib/types";
 import { cn, formatNumber } from "@/lib/utils";
 import {
   Cake,
@@ -30,7 +30,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 const automationTabs = [
   { label: "Flows", href: "/automations" },
@@ -83,6 +83,17 @@ function CompletionCell({
 
 export default function AutomationsPage() {
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
+  const [automations, setAutomations] = useState<AutomationFlow[]>([]);
+
+  useEffect(() => {
+    fetch("/api/automations")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => {
+        if (json?.data) setAutomations(json.data);
+      })
+      .catch(() => undefined);
+  }, []);
+
   const activeCount = automations.filter((a) => a.status === "Active").length;
   const totalEnrolled = automations.reduce((sum, a) => sum + a.enrolled, 0);
   const totalMessages = automations.reduce((sum, a) => sum + a.messagesSent, 0);
@@ -277,7 +288,13 @@ export default function AutomationsPage() {
           </div>
         )}
 
-        <PaginationBar rangeLabel="1–4 of 4" />
+        <PaginationBar
+          rangeLabel={
+            automations.length
+              ? `1–${automations.length} of ${automations.length}`
+              : "0 of 0"
+          }
+        />
       </Card>
     </div>
   );

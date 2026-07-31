@@ -1,9 +1,15 @@
 import { Card, CardTitle, StatCard } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatusChip } from "@/components/ui/status-chip";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Tabs } from "@/components/ui/tabs";
-import { conversations, metrics, teamMembers } from "@/lib/mock/data";
+import {
+  loadConversations,
+  loadDashboardMetrics,
+  loadTeamMembers,
+  requireWorkspaceContext,
+} from "@/lib/workspace-data";
 import { formatNumber, formatPercent, formatPhone } from "@/lib/utils";
 import Link from "next/link";
 
@@ -19,7 +25,14 @@ const reportTabs = [
   { label: "Audit log", href: "/reports/audit-log" },
 ];
 
-export default function ReportsInboxPage() {
+export default async function ReportsInboxPage() {
+  const { workspaceId } = await requireWorkspaceContext();
+  const [metrics, conversations, teamMembers] = await Promise.all([
+    loadDashboardMetrics(workspaceId),
+    loadConversations(workspaceId),
+    loadTeamMembers(workspaceId),
+  ]);
+
   const open = conversations.filter((c) => c.status === "Open").length;
   const unread = conversations.filter((c) => c.unread).length;
   const unassigned = conversations.filter((c) => !c.assignedTo).length;
@@ -47,56 +60,67 @@ export default function ReportsInboxPage() {
 
       <Card>
         <CardTitle>Recent conversations</CardTitle>
-        <Table className="mt-4">
-          <THead>
-            <TR>
-              <TH>Contact</TH>
-              <TH>Phone</TH>
-              <TH>Assigned to</TH>
-              <TH>Status</TH>
-              <TH>Last message</TH>
-              <TH>Updated</TH>
-            </TR>
-          </THead>
-          <TBody>
-            {conversations.map((c) => (
-              <TR key={c.id}>
-                <TD className="font-medium">
-                  {c.contactName}
-                  {c.unread ? (
-                    <span className="ml-2 inline-block h-2 w-2 rounded-full bg-primary" />
-                  ) : null}
-                </TD>
-                <TD>{formatPhone(c.phone)}</TD>
-                <TD className="text-muted-foreground">{c.assignedTo ?? "Unassigned"}</TD>
-                <TD>
-                  <StatusChip status={c.status} />
-                </TD>
-                <TD className="max-w-[240px] truncate text-muted-foreground">{c.lastMessage}</TD>
-                <TD className="whitespace-nowrap text-muted-foreground">
-                  {new Date(c.updatedAt).toLocaleDateString()}
-                </TD>
+        {conversations.length === 0 ? (
+          <EmptyState title="No conversations" description="Inbox activity will appear here." />
+        ) : (
+          <Table className="mt-4">
+            <THead>
+              <TR>
+                <TH>Contact</TH>
+                <TH>Phone</TH>
+                <TH>Assigned to</TH>
+                <TH>Status</TH>
+                <TH>Last message</TH>
+                <TH>Updated</TH>
               </TR>
-            ))}
-          </TBody>
-        </Table>
+            </THead>
+            <TBody>
+              {conversations.map((c) => (
+                <TR key={c.id}>
+                  <TD className="font-medium">
+                    {c.contactName}
+                    {c.unread ? (
+                      <span className="ml-2 inline-block h-2 w-2 rounded-full bg-primary" />
+                    ) : null}
+                  </TD>
+                  <TD>{formatPhone(c.phone)}</TD>
+                  <TD className="text-muted-foreground">{c.assignedTo ?? "Unassigned"}</TD>
+                  <TD>
+                    <StatusChip status={c.status} />
+                  </TD>
+                  <TD className="max-w-[240px] truncate text-muted-foreground">{c.lastMessage}</TD>
+                  <TD className="whitespace-nowrap text-muted-foreground">
+                    {new Date(c.updatedAt).toLocaleDateString()}
+                  </TD>
+                </TR>
+              ))}
+            </TBody>
+          </Table>
+        )}
       </Card>
 
       <Card className="mt-4">
         <CardTitle>Agent workload</CardTitle>
-        <ul className="mt-3 space-y-2">
-          {teamMembers
-            .filter((m) => m.role === "Inbox agent" || m.role === "Owner")
-            .map((m) => {
-              const assigned = conversations.filter((c) => c.assignedTo === m.name).length;
-              return (
-                <li key={m.id} className="flex items-center justify-between rounded-lg border border-border px-4 py-2 text-sm">
-                  <span>{m.name}</span>
-                  <span className="text-muted-foreground">{assigned} assigned</span>
-                </li>
-              );
-            })}
-        </ul>
+        {teamMembers.length === 0 ? (
+          <p className="mt-3 text-sm text-muted-foreground">No team members.</p>
+        ) : (
+          <ul className="mt-3 space-y-2">
+            {teamMembers
+              .filter((m) => m.role === "Inbox agent" || m.role === "Owner")
+              .map((m) => {
+                const assigned = conversations.filter((c) => c.assignedTo === m.name).length;
+                return (
+                  <li
+                    key={m.id}
+                    className="flex items-center justify-between rounded-lg border border-border px-4 py-2 text-sm"
+                  >
+                    <span>{m.name}</span>
+                    <span className="text-muted-foreground">{assigned} assigned</span>
+                  </li>
+                );
+              })}
+          </ul>
+        )}
       </Card>
     </div>
   );

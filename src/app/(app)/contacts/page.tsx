@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import {
   MetricCard,
   PaginationBar,
@@ -8,7 +9,9 @@ import {
 import { StatusChip } from "@/components/ui/status-chip";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Tabs } from "@/components/ui/tabs";
-import { contacts } from "@/lib/mock/data";
+import { getActiveWorkspaceId } from "@/lib/auth";
+import type { Contact } from "@/lib/types";
+import { loadContacts } from "@/lib/workspace-data";
 import { cn, formatNumber, formatPercent, formatPhone } from "@/lib/utils";
 import {
   Ban,
@@ -59,7 +62,26 @@ function getInitials(firstName: string, lastName: string) {
   return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
 }
 
-export default function ContactsPage() {
+export default async function ContactsPage() {
+  const workspaceId = await getActiveWorkspaceId();
+  if (!workspaceId) {
+    return (
+      <div className="text-[13px]">
+        <SectionHeader
+          icon={Users}
+          title="All contacts"
+          description="Manage subscribers, consent records, lists, and tags for your messaging audience."
+        />
+        <EmptyState
+          icon={<Users className="h-8 w-8" />}
+          title="No workspace selected"
+          description="Select or create a workspace to view contacts."
+        />
+      </div>
+    );
+  }
+
+  const contacts: Contact[] = await loadContacts(workspaceId);
   const total = contacts.length;
   const subscribed = contacts.filter((c) => c.status === "Subscribed").length;
   const unsubscribed = contacts.filter((c) => c.status === "Unsubscribed").length;
@@ -160,124 +182,136 @@ export default function ContactsPage() {
           </div>
         </div>
 
-        <Table className="text-[13px]">
-          <THead>
-            <TR>
-              <TH className="w-10">
-                <input
-                  type="checkbox"
-                  aria-label="Select all contacts"
-                  className="rounded border-border"
-                />
-              </TH>
-              <TH>Name</TH>
-              <TH>Phone</TH>
-              <TH>Email</TH>
-              <TH>Status</TH>
-              <TH>Lists</TH>
-              <TH>Tags</TH>
-              <TH>Consent Source</TH>
-              <TH>Consent Date</TH>
-              <TH>Last Messaged</TH>
-              <TH>Actions</TH>
-            </TR>
-          </THead>
-          <TBody>
-            {contacts.map((contact, index) => (
-              <TR key={contact.id}>
-                <TD>
-                  <input
-                    type="checkbox"
-                    aria-label={`Select ${contact.firstName} ${contact.lastName}`}
-                    className="rounded border-border"
-                  />
-                </TD>
-                <TD>
-                  <div className="flex items-center gap-2.5">
-                    <span
-                      className={cn(
-                        "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-bold",
-                        avatarTones[index % avatarTones.length],
-                      )}
-                    >
-                      {getInitials(contact.firstName, contact.lastName)}
-                    </span>
-                    <div>
-                      <Link
-                        href={`/contacts/${contact.id}`}
-                        className="font-semibold text-foreground hover:text-primary"
-                      >
-                        {contact.firstName} {contact.lastName}
-                      </Link>
-                      {contact.company ? (
-                        <p className="text-[12px] text-muted-foreground">{contact.company}</p>
-                      ) : null}
-                    </div>
-                  </div>
-                </TD>
-                <TD className="whitespace-nowrap">{formatPhone(contact.phone)}</TD>
-                <TD className="text-muted-foreground">{contact.email || "—"}</TD>
-                <TD>
-                  <StatusChip status={contact.status} />
-                </TD>
-                <TD>
-                  <div className="flex max-w-[140px] flex-wrap gap-1">
-                    {contact.lists.length > 0 ? (
-                      contact.lists.map((list) => (
+        {contacts.length === 0 ? (
+          <EmptyState
+            icon={<Users className="h-8 w-8" />}
+            title="No contacts yet"
+            description="Import contacts or add them manually to start building your audience."
+            actionLabel="Import contacts"
+            actionHref="/contacts/imports"
+          />
+        ) : (
+          <>
+            <Table className="text-[13px]">
+              <THead>
+                <TR>
+                  <TH className="w-10">
+                    <input
+                      type="checkbox"
+                      aria-label="Select all contacts"
+                      className="rounded border-border"
+                    />
+                  </TH>
+                  <TH>Name</TH>
+                  <TH>Phone</TH>
+                  <TH>Email</TH>
+                  <TH>Status</TH>
+                  <TH>Lists</TH>
+                  <TH>Tags</TH>
+                  <TH>Consent Source</TH>
+                  <TH>Consent Date</TH>
+                  <TH>Last Messaged</TH>
+                  <TH>Actions</TH>
+                </TR>
+              </THead>
+              <TBody>
+                {contacts.map((contact, index) => (
+                  <TR key={contact.id}>
+                    <TD>
+                      <input
+                        type="checkbox"
+                        aria-label={`Select ${contact.firstName} ${contact.lastName}`}
+                        className="rounded border-border"
+                      />
+                    </TD>
+                    <TD>
+                      <div className="flex items-center gap-2.5">
                         <span
-                          key={list}
-                          className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-foreground"
+                          className={cn(
+                            "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-bold",
+                            avatarTones[index % avatarTones.length],
+                          )}
                         >
-                          {list}
+                          {getInitials(contact.firstName, contact.lastName)}
                         </span>
-                      ))
-                    ) : (
-                      <span className="text-muted-foreground">—</span>
-                    )}
-                  </div>
-                </TD>
-                <TD>
-                  <div className="flex max-w-[140px] flex-wrap gap-1">
-                    {contact.tags.length > 0 ? (
-                      contact.tags.map((tag) => (
-                        <span
-                          key={tag}
-                          className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary"
-                        >
-                          {tag}
-                        </span>
-                      ))
-                    ) : (
-                      <span className="text-muted-foreground">—</span>
-                    )}
-                  </div>
-                </TD>
-                <TD className="text-muted-foreground">{contact.consentSource}</TD>
-                <TD className="whitespace-nowrap text-muted-foreground">
-                  {formatDate(contact.consentDate)}
-                </TD>
-                <TD className="whitespace-nowrap text-muted-foreground">
-                  {formatDate(contact.lastMessaged)}
-                </TD>
-                <TD>
-                  <div className="flex items-center gap-1">
-                    <Link href={`/contacts/${contact.id}`}>
-                      <Button variant="outline" size="sm" className="text-[12px]">
-                        View
-                      </Button>
-                    </Link>
-                    <Button variant="ghost" size="sm" className="h-8 w-8 px-0">
-                      <MoreHorizontal className="h-4 w-4" />
-                      <span className="sr-only">More actions</span>
-                    </Button>
-                  </div>
-                </TD>
-              </TR>
-            ))}
-          </TBody>
-        </Table>
+                        <div>
+                          <Link
+                            href={`/contacts/${contact.id}`}
+                            className="font-semibold text-foreground hover:text-primary"
+                          >
+                            {contact.firstName} {contact.lastName}
+                          </Link>
+                          {contact.company ? (
+                            <p className="text-[12px] text-muted-foreground">{contact.company}</p>
+                          ) : null}
+                        </div>
+                      </div>
+                    </TD>
+                    <TD className="whitespace-nowrap">{formatPhone(contact.phone)}</TD>
+                    <TD className="text-muted-foreground">{contact.email || "—"}</TD>
+                    <TD>
+                      <StatusChip status={contact.status} />
+                    </TD>
+                    <TD>
+                      <div className="flex max-w-[140px] flex-wrap gap-1">
+                        {contact.lists.length > 0 ? (
+                          contact.lists.map((list) => (
+                            <span
+                              key={list}
+                              className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-foreground"
+                            >
+                              {list}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </div>
+                    </TD>
+                    <TD>
+                      <div className="flex max-w-[140px] flex-wrap gap-1">
+                        {contact.tags.length > 0 ? (
+                          contact.tags.map((tag) => (
+                            <span
+                              key={tag}
+                              className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary"
+                            >
+                              {tag}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </div>
+                    </TD>
+                    <TD className="text-muted-foreground">{contact.consentSource}</TD>
+                    <TD className="whitespace-nowrap text-muted-foreground">
+                      {formatDate(contact.consentDate)}
+                    </TD>
+                    <TD className="whitespace-nowrap text-muted-foreground">
+                      {formatDate(contact.lastMessaged)}
+                    </TD>
+                    <TD>
+                      <div className="flex items-center gap-1">
+                        <Link href={`/contacts/${contact.id}`}>
+                          <Button variant="outline" size="sm" className="text-[12px]">
+                            View
+                          </Button>
+                        </Link>
+                        <Button variant="ghost" size="sm" className="h-8 w-8 px-0">
+                          <MoreHorizontal className="h-4 w-4" />
+                          <span className="sr-only">More actions</span>
+                        </Button>
+                      </div>
+                    </TD>
+                  </TR>
+                ))}
+              </TBody>
+            </Table>
 
-        <PaginationBar rangeLabel={`1–${total} of ${total}`} />
+            <PaginationBar rangeLabel={`1–${total} of ${total}`} />
+          </>
+        )}
       </Card>
     </div>
   );

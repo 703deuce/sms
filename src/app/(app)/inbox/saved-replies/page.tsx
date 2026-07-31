@@ -3,12 +3,17 @@ import { Card, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatusChip } from "@/components/ui/status-chip";
 import { Table, TBody, TD, THead, TH, TR } from "@/components/ui/table";
-import { templates } from "@/lib/mock/data";
+import {
+  requireWorkspaceContext,
+  loadTemplates,
+} from "@/lib/workspace-data";
 import Link from "next/link";
 
-const inboxReplies = templates.filter((t) => t.type === "Inbox reply");
+export default async function SavedRepliesPage() {
+  const { workspaceId } = await requireWorkspaceContext();
+  const templates = await loadTemplates(workspaceId);
+  const inboxReplies = templates.filter((t) => t.type === "Inbox reply");
 
-export default function SavedRepliesPage() {
   return (
     <div>
       <PageHeader

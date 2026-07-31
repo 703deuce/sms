@@ -5,7 +5,9 @@ import { PageHeader } from "@/components/ui/page-header";
 import { StatusChip } from "@/components/ui/status-chip";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Tabs } from "@/components/ui/tabs";
-import { campaigns } from "@/lib/mock/data";
+import { getActiveWorkspaceId } from "@/lib/auth";
+import type { Campaign } from "@/lib/types";
+import { loadCampaigns } from "@/lib/workspace-data";
 import { formatNumber } from "@/lib/utils";
 import { FileEdit } from "lucide-react";
 import Link from "next/link";
@@ -31,8 +33,19 @@ function formatScheduled(at: string | null) {
   });
 }
 
-export default function CampaignDraftsPage() {
-  const drafts = campaigns.filter((c) => c.status === "Draft");
+export default async function CampaignDraftsPage() {
+  const workspaceId = await getActiveWorkspaceId();
+
+  if (!workspaceId) {
+    return (
+      <div>
+        <PageHeader title="Draft campaigns" description="Campaigns saved but not yet scheduled or sent." />
+        <EmptyState title="No workspace selected" description="Select or create a workspace to view campaigns." />
+      </div>
+    );
+  }
+
+  const drafts: Campaign[] = await loadCampaigns(workspaceId, "DRAFT");
 
   return (
     <div>

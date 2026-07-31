@@ -1,12 +1,20 @@
 import { Button } from "@/components/ui/button";
 import {
-  campaigns,
-  complianceOverview,
-  conversations,
-  gettingStartedSteps,
-  metrics,
-  nextActions,
-} from "@/lib/mock/data";
+  deriveGettingStartedSteps,
+  deriveRequiredActions,
+  tollFreeSummary,
+} from "@/lib/compliance-helpers";
+import {
+  requireWorkspaceContext,
+  loadDashboardMetrics,
+  loadCampaigns,
+  loadConversations,
+  loadComplianceOverview,
+  loadPhoneNumbers,
+  loadContacts,
+  loadTemplates,
+  loadAutomations,
+} from "@/lib/workspace-data";
 import { formatCurrency, formatNumber, formatPercent } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import {
@@ -62,13 +70,6 @@ function Sparkline({
   );
 }
 
-const avatarByName: Record<string, string> = {
-  "Maya Chen": "/avatars/maya.svg",
-  "Luis Ortiz": "/avatars/luis.svg",
-  "Priya Shah": "/avatars/priya.svg",
-  "James Wilson": "/avatars/james.svg",
-};
-
 const campaignIcons: Record<string, string> = {
   Completed: "bg-emerald-50 text-emerald-600",
   Scheduled: "bg-blue-50 text-blue-600",
@@ -93,65 +94,96 @@ const nextActionIcons = [
   { icon: Megaphone, tone: "bg-violet-50 text-violet-600" },
 ];
 
-const conversationMeta: Record<
-  string,
-  { time: string; dot: string; actionLabel: string; actionTone: string }
-> = {
-  "Maya Chen": {
-    time: "10:24 AM",
-    dot: "bg-emerald-500",
-    actionLabel: "Open",
-    actionTone: "text-emerald-700 bg-emerald-50",
-  },
-  "Luis Ortiz": {
-    time: "9:42 AM",
-    dot: "bg-emerald-500",
-    actionLabel: "Open",
-    actionTone: "text-emerald-700 bg-emerald-50",
-  },
-  "Priya Shah": {
-    time: "Yesterday",
-    dot: "bg-amber-500",
-    actionLabel: "Pending",
-    actionTone: "text-amber-700 bg-amber-50",
-  },
-  "James Wilson": {
-    time: "Yesterday",
-    dot: "bg-slate-400",
-    actionLabel: "Closed",
-    actionTone: "text-slate-600 bg-slate-100",
-  },
-};
+export default async function DashboardPage() {
+  const { workspaceId } = await requireWorkspaceContext();
+  const [
+    metrics,
+    campaigns,
+    conversations,
+    overview,
+    phoneNumbers,
+    contacts,
+    templates,
+    automations,
+  ] = await Promise.all([
+    loadDashboardMetrics(workspaceId),
+    loadCampaigns(workspaceId),
+    loadConversations(workspaceId),
+    loadComplianceOverview(workspaceId),
+    loadPhoneNumbers(workspaceId),
+    loadContacts(workspaceId),
+    loadTemplates(workspaceId),
+    loadAutomations(workspaceId),
+  ]);
 
-export default function DashboardPage() {
+  const gettingStartedSteps = deriveGettingStartedSteps({
+    hasBusiness: Boolean(overview.registration?.legalBusinessName),
+    hasPayment: metrics.balance > 0,
+    a2pReady: overview.ready,
+    hasNumber: phoneNumbers.length > 0 || Boolean(overview.registration?.phoneE164),
+    contactCount: contacts.length,
+    templateCount: templates.length,
+    hasSentCampaign: campaigns.some((c) => c.sent > 0),
+  });
+
+  const requiredActions = deriveRequiredActions(overview.registration, phoneNumbers);
+  const tollFree = tollFreeSummary(phoneNumbers);
+
+  const nextActions = [
+    requiredActions[0]
+      ? {
+          title: requiredActions[0],
+          description: "Complete this step to improve messaging compliance.",
+          href: "/compliance",
+        }
+      : {
+          title: "Review compliance center",
+          description: "Your registration looks complete — review status anytime.",
+          href: "/compliance",
+        },
+    {
+      title: "Import your opted-in contacts",
+      description: "Upload CSV/XLSX with consent confirmation before your first campaign.",
+      href: "/contacts/imports",
+    },
+    {
+      title: "Create your first campaign",
+      description: "Use the Send wizard with audience estimate and compliance footer.",
+      href: "/send",
+    },
+  ];
+
   const doneCount = gettingStartedSteps.filter((s) => s.done).length;
   const recentCampaigns = campaigns.slice(0, 4);
   const recentConversations = conversations.slice(0, 4);
+  const topAutomation = automations.find((a) => a.status === "Active") || automations[0];
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-3 rounded-[12px] border border-amber-200/80 bg-[#fff8e8] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-start gap-3">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
-          <div>
-            <p className="text-[13px] font-semibold text-amber-950">
-              A2P registration is pending
-            </p>
-            <p className="mt-0.5 text-[12px] text-amber-900/80">
-              Complete brand and campaign registration before high-volume sending.
-              Toll-free is {complianceOverview.tollFree.toLowerCase()}.
-            </p>
+      {metrics.a2pStatus !== "Approved" ? (
+        <div className="flex flex-col gap-3 rounded-[12px] border border-amber-200/80 bg-[#fff8e8] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+            <div>
+              <p className="text-[13px] font-semibold text-amber-950">
+                A2P registration is pending
+              </p>
+              <p className="mt-0.5 text-[12px] text-amber-900/80">
+                Complete brand and campaign registration before high-volume sending.
+                Toll-free is {tollFree.toLowerCase()}.
+              </p>
+            </div>
           </div>
+          <Link href="/compliance">
+            <Button
+              variant="outline"
+              className="h-9 rounded-[10px] border-amber-300 bg-white text-[13px]"
+            >
+              Open compliance
+            </Button>
+          </Link>
         </div>
-        <Link href="/compliance">
-          <Button
-            variant="outline"
-            className="h-9 rounded-[10px] border-amber-300 bg-white text-[13px]"
-          >
-            Open compliance
-          </Button>
-        </Link>
-      </div>
+      ) : null}
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Link href="/compliance" className="surface rounded-[12px] bg-card p-4 transition hover:shadow-md">
@@ -357,36 +389,40 @@ export default function DashboardPage() {
             </Link>
           </div>
           <div className="space-y-3">
-            {recentCampaigns.map((c) => (
-              <Link
-                key={c.id}
-                href={`/campaigns/${c.id}`}
-                className="flex items-center gap-3 rounded-[12px] border border-border px-3 py-2.5 transition hover:bg-muted/40"
-              >
-                <span
-                  className={cn(
-                    "flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px]",
-                    campaignIcons[c.status] ?? "bg-muted text-muted-foreground",
-                  )}
+            {recentCampaigns.length === 0 ? (
+              <p className="text-[13px] text-muted-foreground">No campaigns yet.</p>
+            ) : (
+              recentCampaigns.map((c) => (
+                <Link
+                  key={c.id}
+                  href={`/campaigns/${c.id}`}
+                  className="flex items-center gap-3 rounded-[12px] border border-border px-3 py-2.5 transition hover:bg-muted/40"
                 >
-                  <Megaphone className="h-4 w-4" />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[13px] font-semibold">{c.name}</span>
-                  <span className="mt-0.5 block text-[11px] text-muted-foreground">
-                    {c.audience} · {formatNumber(c.sent)} sent
+                  <span
+                    className={cn(
+                      "flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px]",
+                      campaignIcons[c.status] ?? "bg-muted text-muted-foreground",
+                    )}
+                  >
+                    <Megaphone className="h-4 w-4" />
                   </span>
-                </span>
-                <span
-                  className={cn(
-                    "rounded-full px-2.5 py-1 text-[10px] font-semibold",
-                    statusTone[c.status] ?? "bg-muted text-muted-foreground",
-                  )}
-                >
-                  {c.status}
-                </span>
-              </Link>
-            ))}
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[13px] font-semibold">{c.name}</span>
+                    <span className="mt-0.5 block text-[11px] text-muted-foreground">
+                      {c.audience} · {formatNumber(c.sent)} sent
+                    </span>
+                  </span>
+                  <span
+                    className={cn(
+                      "rounded-full px-2.5 py-1 text-[10px] font-semibold",
+                      statusTone[c.status] ?? "bg-muted text-muted-foreground",
+                    )}
+                  >
+                    {c.status}
+                  </span>
+                </Link>
+              ))
+            )}
           </div>
         </div>
 
@@ -398,40 +434,27 @@ export default function DashboardPage() {
             </Link>
           </div>
           <div className="space-y-3">
-            {recentConversations.map((c) => {
-              const meta = conversationMeta[c.contactName] ?? {
-                time: "Today",
-                dot: "bg-emerald-500",
-                actionLabel: c.status,
-                actionTone: statusTone[c.status] ?? "bg-muted text-muted-foreground",
-              };
-              const src = avatarByName[c.contactName] ?? "/avatars/alex.svg";
-              return (
+            {recentConversations.length === 0 ? (
+              <p className="text-[13px] text-muted-foreground">No conversations yet.</p>
+            ) : (
+              recentConversations.map((c) => (
                 <Link
                   key={c.id}
                   href="/inbox"
                   className="flex items-center gap-3 rounded-[12px] border border-border px-3 py-2.5 transition hover:bg-muted/40"
                 >
-                  <span className="relative shrink-0">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={src}
-                      alt={c.contactName}
-                      width={40}
-                      height={40}
-                      className="h-10 w-10 rounded-full object-cover"
-                    />
-                    <span
-                      className={cn(
-                        "absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full ring-2 ring-white",
-                        meta.dot,
-                      )}
-                    />
+                  <span className="relative shrink-0 flex h-10 w-10 items-center justify-center rounded-full bg-muted text-[12px] font-semibold text-muted-foreground">
+                    {c.contactName.slice(0, 1)}
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="flex items-center justify-between gap-2">
                       <span className="truncate text-[13px] font-semibold">{c.contactName}</span>
-                      <span className="shrink-0 text-[11px] text-muted-foreground">{meta.time}</span>
+                      <span className="shrink-0 text-[11px] text-muted-foreground">
+                        {new Date(c.updatedAt).toLocaleDateString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                        })}
+                      </span>
                     </span>
                     <span className="mt-0.5 block truncate text-[12px] text-muted-foreground">
                       {c.lastMessage}
@@ -440,52 +463,65 @@ export default function DashboardPage() {
                   <span
                     className={cn(
                       "rounded-full px-2.5 py-1 text-[10px] font-semibold",
-                      meta.actionTone,
+                      statusTone[c.status] ?? "bg-muted text-muted-foreground",
                     )}
                   >
-                    {meta.actionLabel}
+                    {c.status}
                   </span>
                 </Link>
-              );
-            })}
+              ))
+            )}
           </div>
         </div>
 
         <div className="space-y-3 xl:col-span-4">
           <div className="surface rounded-[12px] bg-card p-5">
             <h3 className="text-[14px] font-bold text-foreground">Account alerts</h3>
-            <ul className="mt-3 space-y-2.5">
-              {complianceOverview.requiredActions.map((a) => (
-                <li key={a} className="flex items-start gap-2.5 text-[13px] text-muted-foreground">
-                  <FileWarning className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
-                  <span>{a}</span>
-                </li>
-              ))}
-            </ul>
+            {requiredActions.length === 0 ? (
+              <p className="mt-3 text-[13px] text-muted-foreground">No pending compliance actions.</p>
+            ) : (
+              <ul className="mt-3 space-y-2.5">
+                {requiredActions.slice(0, 3).map((a) => (
+                  <li key={a} className="flex items-start gap-2.5 text-[13px] text-muted-foreground">
+                    <FileWarning className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+                    <span>{a}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
 
           <div className="surface rounded-[12px] bg-card p-5">
             <h3 className="text-[14px] font-bold text-foreground">Automation activity</h3>
-            <p className="mt-3 text-[13px] leading-relaxed text-muted-foreground">
-              Welcome series enrolled 18 contacts this week. Missed-call text-back sent 12 replies.
-            </p>
-            <Link
-              href="/automations"
-              className="mt-4 flex items-center justify-between rounded-[12px] border border-border bg-muted/40 px-3 py-3 transition hover:border-primary/30"
-            >
-              <span className="flex items-center gap-2.5">
-                <span className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-emerald-50 text-emerald-600">
-                  <Activity className="h-4 w-4" />
-                </span>
-                <span>
-                  <span className="block text-[13px] font-semibold text-foreground">
-                    Welcome Series
+            {topAutomation ? (
+              <>
+                <p className="mt-3 text-[13px] leading-relaxed text-muted-foreground">
+                  {topAutomation.name} has {formatNumber(topAutomation.enrolled)} enrolled contacts
+                  and sent {formatNumber(topAutomation.messagesSent)} messages.
+                </p>
+                <Link
+                  href={`/automations/${topAutomation.id}`}
+                  className="mt-4 flex items-center justify-between rounded-[12px] border border-border bg-muted/40 px-3 py-3 transition hover:border-primary/30"
+                >
+                  <span className="flex items-center gap-2.5">
+                    <span className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-emerald-50 text-emerald-600">
+                      <Activity className="h-4 w-4" />
+                    </span>
+                    <span>
+                      <span className="block text-[13px] font-semibold text-foreground">
+                        {topAutomation.name}
+                      </span>
+                      <span className="text-[11px] text-muted-foreground">
+                        {topAutomation.status} · {formatNumber(topAutomation.enrolled)} enrolled
+                      </span>
+                    </span>
                   </span>
-                  <span className="text-[11px] text-muted-foreground">Active · 18 enrolled</span>
-                </span>
-              </span>
-              <ChevronRight className="h-4 w-4 text-muted-foreground" />
-            </Link>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                </Link>
+              </>
+            ) : (
+              <p className="mt-3 text-[13px] text-muted-foreground">No automations yet.</p>
+            )}
           </div>
         </div>
       </div>

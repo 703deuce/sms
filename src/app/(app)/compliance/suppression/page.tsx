@@ -4,7 +4,10 @@ import { PageHeader } from "@/components/ui/page-header";
 import { StatusChip } from "@/components/ui/status-chip";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Tabs } from "@/components/ui/tabs";
-import { contacts } from "@/lib/mock/data";
+import {
+  requireWorkspaceContext,
+  loadSuppressions,
+} from "@/lib/workspace-data";
 import { formatNumber, formatPhone } from "@/lib/utils";
 
 const complianceTabs = [
@@ -18,59 +21,36 @@ const complianceTabs = [
   { label: "Events", href: "/compliance/events" },
 ];
 
-type SuppressionEntry = {
-  id: string;
-  name: string;
-  phone: string;
-  reason: "STOP" | "Manual" | "Blocked" | "Invalid";
-  date: string;
-  source: string;
+const reasonToStatus: Record<string, string> = {
+  stop: "Unsubscribed",
+  STOP: "Unsubscribed",
+  manual: "Blocked",
+  blocked: "Blocked",
+  invalid: "Invalid",
 };
 
-const suppressionList: SuppressionEntry[] = [
-  ...contacts
-    .filter((c) => c.status === "Unsubscribed")
-    .map((c) => ({
-      id: c.id,
-      name: `${c.firstName} ${c.lastName}`,
-      phone: c.phone,
-      reason: "STOP" as const,
-      date: c.lastReply ?? c.consentDate,
-      source: "Inbound keyword",
-    })),
-  ...contacts
-    .filter((c) => c.status === "Blocked")
-    .map((c) => ({
-      id: c.id,
-      name: `${c.firstName} ${c.lastName}`,
-      phone: c.phone,
-      reason: "Blocked" as const,
-      date: c.consentDate,
-      source: "Manual block",
-    })),
-  ...contacts
-    .filter((c) => c.status === "Invalid")
-    .map((c) => ({
-      id: c.id,
-      name: `${c.firstName} ${c.lastName}`,
-      phone: c.phone,
-      reason: "Invalid" as const,
-      date: c.dateAdded,
-      source: "Carrier lookup",
-    })),
-];
+function mapReason(reason: string): string {
+  const lower = reason.toLowerCase();
+  if (lower.includes("stop")) return "STOP";
+  if (lower.includes("block")) return "Blocked";
+  if (lower.includes("invalid")) return "Invalid";
+  return "Manual";
+}
 
-const reasonToStatus = {
-  STOP: "Unsubscribed",
-  Manual: "Blocked",
-  Blocked: "Blocked",
-  Invalid: "Invalid",
-} as const;
+export default async function ComplianceSuppressionPage() {
+  const { workspaceId } = await requireWorkspaceContext();
+  const suppressions = await loadSuppressions(workspaceId);
 
-export default function ComplianceSuppressionPage() {
-  const stopCount = suppressionList.filter((e) => e.reason === "STOP").length;
-  const blockedCount = suppressionList.filter((e) => e.reason === "Blocked").length;
-  const invalidCount = suppressionList.filter((e) => e.reason === "Invalid").length;
+  const stopCount = suppressions.filter((e) =>
+    (e.reason || "").toLowerCase().includes("stop"),
+  ).length;
+  const blockedCount = suppressions.filter((e) =>
+    (e.reason || "").toLowerCase().includes("block") ||
+    (e.reason || "").toLowerCase() === "manual",
+  ).length;
+  const invalidCount = suppressions.filter((e) =>
+    (e.reason || "").toLowerCase().includes("invalid"),
+  ).length;
 
   return (
     <div>
@@ -83,7 +63,7 @@ export default function ComplianceSuppressionPage() {
       <Tabs items={complianceTabs} />
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Total suppressed" value={formatNumber(suppressionList.length)} />
+        <StatCard label="Total suppressed" value={formatNumber(suppressions.length)} />
         <StatCard label="STOP opt-outs" value={formatNumber(stopCount)} />
         <StatCard label="Manual blocks" value={formatNumber(blockedCount)} />
         <StatCard label="Invalid numbers" value={formatNumber(invalidCount)} />
@@ -91,30 +71,46 @@ export default function ComplianceSuppressionPage() {
 
       <Card>
         <CardTitle>Suppression entries</CardTitle>
-        <Table className="mt-4">
-          <THead>
-            <TR>
-              <TH>Contact</TH>
-              <TH>Phone</TH>
-              <TH>Reason</TH>
-              <TH>Source</TH>
-              <TH>Date</TH>
-            </TR>
-          </THead>
-          <TBody>
-            {suppressionList.map((entry) => (
-              <TR key={entry.id}>
-                <TD className="font-medium">{entry.name}</TD>
-                <TD>{formatPhone(entry.phone)}</TD>
-                <TD>
-                  <StatusChip status={reasonToStatus[entry.reason]} />
-                </TD>
-                <TD className="text-muted-foreground">{entry.source}</TD>
-                <TD className="text-muted-foreground">{entry.date}</TD>
+        {suppressions.length === 0 ? (
+          <p className="mt-4 py-8 text-center text-sm text-muted-foreground">
+            No suppressed contacts yet. STOP replies and manual blocks will appear here.
+          </p>
+        ) : (
+          <Table className="mt-4">
+            <THead>
+              <TR>
+                <TH>Contact</TH>
+                <TH>Phone</TH>
+                <TH>Reason</TH>
+                <TH>Source</TH>
+                <TH>Date</TH>
               </TR>
-            ))}
-          </TBody>
-        </Table>
+            </THead>
+            <TBody>
+              {suppressions.map((entry) => {
+                const reason = mapReason(entry.reason);
+                const statusChip = reasonToStatus[entry.reason] || reasonToStatus[reason] || "Blocked";
+                return (
+                  <TR key={entry.id}>
+                    <TD className="font-medium">{entry.email || "—"}</TD>
+                    <TD>{entry.phone ? formatPhone(entry.phone) : "—"}</TD>
+                    <TD>
+                      <StatusChip status={statusChip} />
+                    </TD>
+                    <TD className="text-muted-foreground">{entry.source || "—"}</TD>
+                    <TD className="text-muted-foreground">
+                      {new Date(entry.createdAt).toLocaleDateString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                        year: "numeric",
+                      })}
+                    </TD>
+                  </TR>
+                );
+              })}
+            </TBody>
+          </Table>
+        )}
         <p className="mt-4 text-xs text-muted-foreground">
           Suppressed contacts are automatically excluded from campaigns and automations. STOP replies are processed
           immediately and cannot be overridden.

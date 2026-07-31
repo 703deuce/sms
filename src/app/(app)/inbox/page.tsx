@@ -1,9 +1,22 @@
 import { InboxView } from "@/components/inbox/inbox-view";
 import { Button } from "@/components/ui/button";
+import {
+  loadContacts,
+  loadConversations,
+  loadTeamMembers,
+  requireWorkspaceContext,
+} from "@/lib/workspace-data";
 import { Archive, MessageSquareText } from "lucide-react";
 import Link from "next/link";
 
-export default function InboxPage() {
+export default async function InboxPage() {
+  const { workspaceId, session } = await requireWorkspaceContext();
+  const [conversations, contacts, teamMembers] = await Promise.all([
+    loadConversations(workspaceId),
+    loadContacts(workspaceId),
+    loadTeamMembers(workspaceId),
+  ]);
+
   return (
     <div>
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -23,7 +36,12 @@ export default function InboxPage() {
           </Link>
         </div>
       </div>
-      <InboxView />
+      <InboxView
+        conversations={conversations}
+        contacts={contacts}
+        teamMembers={teamMembers}
+        currentUserName={session.name}
+      />
     </div>
   );
 }

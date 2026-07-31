@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select, Textarea } from "@/components/ui/input";
 import { StatusChip } from "@/components/ui/status-chip";
-import { lists, phoneNumbers, segments, templates } from "@/lib/mock/data";
+import type { PhoneNumber, Template } from "@/lib/types";
 import { cn, estimateSmsSegments, formatCurrency, formatNumber, formatPhone } from "@/lib/utils";
 import {
   AlertTriangle,
@@ -22,9 +22,12 @@ import {
   Zap,
 } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState, type ComponentType } from "react";
+import { useEffect, useMemo, useState, type ComponentType } from "react";
 
 const steps = ["Campaign type", "Audience", "Message", "Schedule", "Review", "Send"] as const;
+
+type WizardList = { id: string; name: string; contactCount: number };
+type WizardSegment = { id: string; name: string; conditions: unknown };
 
 const typeCards: Array<{
   id: string;
@@ -48,24 +51,70 @@ const FOOTER = "\n\nReply STOP to opt out. Msg & data rates may apply.";
 export function CampaignWizard() {
   const [step, setStep] = useState(0);
   const [campaignType, setCampaignType] = useState("SMS");
-  const [name, setName] = useState("July service special");
+  const [name, setName] = useState("New campaign");
   const [audience, setAudience] = useState("list");
-  const [listId, setListId] = useState(lists[0].id);
-  const [segmentId, setSegmentId] = useState(segments[0].id);
-  const [numberId, setNumberId] = useState(phoneNumbers[0].id);
+  const [listId, setListId] = useState("");
+  const [segmentId, setSegmentId] = useState("");
+  const [numberId, setNumberId] = useState("");
   const [body, setBody] = useState("Hi {{first_name}}, ");
   const [scheduleMode, setScheduleMode] = useState<"now" | "later">("now");
   const [scheduledAt, setScheduledAt] = useState("");
   const [sent, setSent] = useState(false);
+  const [lists, setLists] = useState<WizardList[]>([]);
+  const [segments, setSegments] = useState<WizardSegment[]>([]);
+  const [phoneNumbers, setPhoneNumbers] = useState<PhoneNumber[]>([]);
+  const [templates, setTemplates] = useState<Template[]>([]);
+
+  useEffect(() => {
+    fetch("/api/contacts/lists")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => {
+        if (json?.data?.length) {
+          setLists(json.data);
+          setListId(json.data[0].id);
+        }
+      })
+      .catch(() => undefined);
+    fetch("/api/contacts/segments")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => {
+        if (json?.data?.length) {
+          setSegments(json.data);
+          setSegmentId(json.data[0].id);
+        }
+      })
+      .catch(() => undefined);
+    fetch("/api/numbers")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => {
+        if (json?.data?.length) {
+          setPhoneNumbers(json.data);
+          setNumberId(json.data[0].id);
+        }
+      })
+      .catch(() => undefined);
+    fetch("/api/templates")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => {
+        if (json?.data) setTemplates(json.data);
+      })
+      .catch(() => undefined);
+  }, []);
 
   const recipients = useMemo(() => {
-    if (audience === "all") return 1840;
-    if (audience === "segment") return segments.find((s) => s.id === segmentId)?.count ?? 0;
-    if (audience === "list") return lists.find((l) => l.id === listId)?.count ?? 0;
-    if (audience === "tags") return 54;
-    if (audience === "individuals") return 3;
+    if (audience === "all") return 0;
+    if (audience === "segment") {
+      const seg = segments.find((s) => s.id === segmentId);
+      return seg ? 0 : 0;
+    }
+    if (audience === "list") {
+      const list = lists.find((l) => l.id === listId);
+      return list?.contactCount ?? 0;
+    }
+    if (audience === "tags") return 0;
+    if (audience === "individuals") return 0;
     return 0;
-  }, [audience, listId, segmentId]);
+  }, [audience, listId, segmentId, lists, segments]);
 
   const fullBody = body.includes("STOP") ? body : `${body.trim()}${FOOTER}`;
   const { characters, segments: smsSegments } = estimateSmsSegments(fullBody);
@@ -241,22 +290,30 @@ export function CampaignWizard() {
                 <option value="import">Imported temporary audience</option>
               </Select>
               {audience === "list" ? (
-                <Select value={listId} onChange={(e) => setListId(e.target.value)}>
-                  {lists.map((l) => (
-                    <option key={l.id} value={l.id}>
-                      {l.name} ({l.count})
-                    </option>
-                  ))}
-                </Select>
+                lists.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No lists yet. Create a list under Contacts.</p>
+                ) : (
+                  <Select value={listId} onChange={(e) => setListId(e.target.value)}>
+                    {lists.map((l) => (
+                      <option key={l.id} value={l.id}>
+                        {l.name} ({l.contactCount})
+                      </option>
+                    ))}
+                  </Select>
+                )
               ) : null}
               {audience === "segment" ? (
-                <Select value={segmentId} onChange={(e) => setSegmentId(e.target.value)}>
-                  {segments.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name} ({s.count})
-                    </option>
-                  ))}
-                </Select>
+                segments.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No segments yet.</p>
+                ) : (
+                  <Select value={segmentId} onChange={(e) => setSegmentId(e.target.value)}>
+                    {segments.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </Select>
+                )
               ) : null}
               <div className="rounded-[12px] bg-muted px-3 py-2 text-[13px]">
                 Estimated recipients: <strong>{formatNumber(recipients)}</strong>
@@ -270,13 +327,17 @@ export function CampaignWizard() {
               <h2 className="text-[16px] font-bold">Message</h2>
               <div>
                 <Label>Sending number</Label>
-                <Select value={numberId} onChange={(e) => setNumberId(e.target.value)}>
-                  {phoneNumbers.map((n) => (
-                    <option key={n.id} value={n.id}>
-                      {formatPhone(n.number)} · {n.friendlyName}
-                    </option>
-                  ))}
-                </Select>
+                {phoneNumbers.length === 0 ? (
+                  <p className="mt-1 text-sm text-muted-foreground">No phone numbers provisioned.</p>
+                ) : (
+                  <Select value={numberId} onChange={(e) => setNumberId(e.target.value)}>
+                    {phoneNumbers.map((n) => (
+                      <option key={n.id} value={n.id}>
+                        {formatPhone(n.number)} · {n.friendlyName}
+                      </option>
+                    ))}
+                  </Select>
+                )}
               </div>
               <div>
                 <Label>Saved template</Label>

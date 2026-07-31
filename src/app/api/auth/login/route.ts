@@ -1,36 +1,63 @@
-import { createDemoSession, SESSION_COOKIE, WORKSPACE_COOKIE } from "@/lib/auth";
-import { workspaces } from "@/lib/mock/data";
+import { compare } from "bcryptjs";
 import { NextResponse } from "next/server";
-
-async function resolveWorkspaceId() {
-  try {
-    const { getPrisma } = await import("@/lib/db");
-    const ws = await getPrisma().workspace.findUnique({ where: { slug: "harbor-home" } });
-    if (ws) return ws.id;
-  } catch {
-    // Demo UI without DB — fall through to mock id
-  }
-  return workspaces[0].id;
-}
+import { encodeSession, SESSION_COOKIE, WORKSPACE_COOKIE } from "@/lib/auth";
+import { getPrisma } from "@/lib/db";
 
 export async function POST(request: Request) {
-  const body = (await request.json()) as { email?: string; password?: string };
-  if (!body.email || !body.password) {
-    return NextResponse.json({ error: "Email and password required" }, { status: 400 });
-  }
+  try {
+    const body = (await request.json()) as { email?: string; password?: string };
+    if (!body.email || !body.password) {
+      return NextResponse.json({ error: "Email and password required" }, { status: 400 });
+    }
 
-  const session = createDemoSession(body.email);
-  const workspaceId = await resolveWorkspaceId();
-  const res = NextResponse.json({ ok: true, workspaceId });
-  res.cookies.set(SESSION_COOKIE, encodeURIComponent(JSON.stringify(session)), {
-    httpOnly: true,
-    path: "/",
-    sameSite: "lax",
-  });
-  res.cookies.set(WORKSPACE_COOKIE, workspaceId, {
-    httpOnly: true,
-    path: "/",
-    sameSite: "lax",
-  });
-  return res;
+    const email = body.email.trim().toLowerCase();
+    const prisma = getPrisma();
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user?.passwordHash) {
+      return NextResponse.json({ error: "Invalid email or password" }, { status: 401 });
+    }
+
+    const ok = await compare(body.password, user.passwordHash);
+    if (!ok) {
+      return NextResponse.json({ error: "Invalid email or password" }, { status: 401 });
+    }
+
+    const membership = await prisma.membership.findFirst({
+      where: { userId: user.id },
+      include: { workspace: true },
+    });
+    if (!membership) {
+      return NextResponse.json({ error: "No workspace for this account" }, { status: 403 });
+    }
+
+    const session = {
+      userId: user.id,
+      email: user.email,
+      name: user.name,
+      isAdmin: user.isPlatformAdmin,
+    };
+
+    const res = NextResponse.json({
+      ok: true,
+      workspaceId: membership.workspaceId,
+      workspace: membership.workspace.name,
+    });
+    res.cookies.set(SESSION_COOKIE, encodeSession(session), {
+      httpOnly: true,
+      path: "/",
+      sameSite: "lax",
+    });
+    res.cookies.set(WORKSPACE_COOKIE, membership.workspaceId, {
+      httpOnly: true,
+      path: "/",
+      sameSite: "lax",
+    });
+    return res;
+  } catch (err) {
+    console.error("[auth/login]", err);
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Login failed" },
+      { status: 500 },
+    );
+  }
 }

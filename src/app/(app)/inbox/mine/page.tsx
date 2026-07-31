@@ -1,9 +1,22 @@
 import { InboxView } from "@/components/inbox/inbox-view";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
+import {
+  loadContacts,
+  loadConversations,
+  loadTeamMembers,
+  requireWorkspaceContext,
+} from "@/lib/workspace-data";
 import Link from "next/link";
 
-export default function InboxMinePage() {
+export default async function InboxMinePage() {
+  const { workspaceId, session } = await requireWorkspaceContext();
+  const [conversations, contacts, teamMembers] = await Promise.all([
+    loadConversations(workspaceId),
+    loadContacts(workspaceId),
+    loadTeamMembers(workspaceId),
+  ]);
+
   return (
     <div>
       <PageHeader
@@ -15,7 +28,13 @@ export default function InboxMinePage() {
           </Link>
         }
       />
-      <InboxView initialFilter="Mine" />
+      <InboxView
+        initialFilter="Mine"
+        conversations={conversations}
+        contacts={contacts}
+        teamMembers={teamMembers}
+        currentUserName={session.name}
+      />
     </div>
   );
 }

@@ -1,10 +1,13 @@
+import { CreateWorkspaceButton } from "@/components/settings/create-workspace-button";
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatusChip } from "@/components/ui/status-chip";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Tabs } from "@/components/ui/tabs";
-import { workspaces } from "@/lib/mock/data";
+import { getActiveWorkspaceId } from "@/lib/auth";
+import { loadWorkspacesForUser, requireWorkspaceContext } from "@/lib/workspace-data";
 
 const settingsTabs = [
   { label: "Business", href: "/settings/business" },
@@ -19,50 +22,61 @@ const settingsTabs = [
   { label: "Data", href: "/settings/data" },
 ];
 
-export default function SettingsWorkspacesPage() {
+export default async function SettingsWorkspacesPage() {
+  const { session } = await requireWorkspaceContext();
+  const activeWorkspaceId = await getActiveWorkspaceId();
+  const workspaces = await loadWorkspacesForUser(session.userId);
+
   return (
     <div>
       <PageHeader
         title="Workspaces"
         description="Separate brands, numbers, and contacts under one account."
-        actions={<Button>Create workspace</Button>}
+        actions={<CreateWorkspaceButton />}
       />
 
       <Tabs items={settingsTabs} />
 
       <Card>
         <CardTitle>Your workspaces</CardTitle>
-        <Table className="mt-4">
-          <THead>
-            <TR>
-              <TH>Name</TH>
-              <TH>Slug</TH>
-              <TH>Status</TH>
-              <TH />
-            </TR>
-          </THead>
-          <TBody>
-            {workspaces.map((ws, index) => (
-              <TR key={ws.id}>
-                <TD className="font-medium">
-                  {ws.name}
-                  {index === 0 ? (
-                    <span className="ml-2 text-xs text-muted-foreground">(current)</span>
-                  ) : null}
-                </TD>
-                <TD className="font-mono text-sm text-muted-foreground">{ws.slug}</TD>
-                <TD>
-                  <StatusChip status="Active" />
-                </TD>
-                <TD className="text-right">
-                  <Button variant="ghost" size="sm">
-                    Manage
-                  </Button>
-                </TD>
+        {workspaces.length === 0 ? (
+          <EmptyState
+            title="No workspaces"
+            description="Create a workspace to organize numbers, contacts, and campaigns."
+          />
+        ) : (
+          <Table className="mt-4">
+            <THead>
+              <TR>
+                <TH>Name</TH>
+                <TH>Slug</TH>
+                <TH>Status</TH>
+                <TH />
               </TR>
-            ))}
-          </TBody>
-        </Table>
+            </THead>
+            <TBody>
+              {workspaces.map((ws) => (
+                <TR key={ws.id}>
+                  <TD className="font-medium">
+                    {ws.name}
+                    {ws.id === activeWorkspaceId ? (
+                      <span className="ml-2 text-xs text-muted-foreground">(current)</span>
+                    ) : null}
+                  </TD>
+                  <TD className="font-mono text-sm text-muted-foreground">{ws.slug}</TD>
+                  <TD>
+                    <StatusChip status="Active" />
+                  </TD>
+                  <TD className="text-right">
+                    <Button variant="ghost" size="sm">
+                      Manage
+                    </Button>
+                  </TD>
+                </TR>
+              ))}
+            </TBody>
+          </Table>
+        )}
       </Card>
 
       <Card className="mt-4">

@@ -3,7 +3,17 @@ import { Card, CardTitle } from "@/components/ui/card";
 import { SectionHeader } from "@/components/ui/metric";
 import { StatusChip } from "@/components/ui/status-chip";
 import { Tabs } from "@/components/ui/tabs";
-import { complianceOverview, metrics } from "@/lib/mock/data";
+import {
+  deriveRequiredActions,
+  phoneNumbersSummary,
+  tollFreeSummary,
+} from "@/lib/compliance-helpers";
+import {
+  requireWorkspaceContext,
+  loadComplianceOverview,
+  loadDashboardMetrics,
+  loadPhoneNumbers,
+} from "@/lib/workspace-data";
 import { cn } from "@/lib/utils";
 import {
   AlertTriangle,
@@ -29,62 +39,6 @@ const complianceTabs = [
   { label: "Suppression", href: "/compliance/suppression" },
   { label: "Events", href: "/compliance/events" },
 ];
-
-const statusCards: Array<{
-  title: string;
-  status: string;
-  hint: string;
-  href: string;
-  icon: LucideIcon;
-  tone: string;
-}> = [
-  {
-    title: "Customer Profile",
-    status: complianceOverview.customerProfile,
-    hint: "Verified",
-    href: "/compliance/business",
-    icon: Building2,
-    tone: "bg-emerald-50 text-emerald-600",
-  },
-  {
-    title: "Brand Registration",
-    status: complianceOverview.brand,
-    hint: "2 steps remaining",
-    href: "/compliance/brand",
-    icon: Shield,
-    tone: "bg-amber-50 text-amber-600",
-  },
-  {
-    title: "Campaign Registration",
-    status: complianceOverview.campaign,
-    hint: "Not submitted",
-    href: "/compliance/campaign",
-    icon: Megaphone,
-    tone: "bg-slate-100 text-slate-500",
-  },
-  {
-    title: "Phone Numbers",
-    status: complianceOverview.phoneNumbers,
-    hint: "2 active • 1 pending",
-    href: "/numbers",
-    icon: Phone,
-    tone: "bg-blue-50 text-blue-600",
-  },
-  {
-    title: "Toll-Free",
-    status: complianceOverview.tollFree,
-    hint: "Verified",
-    href: "/numbers",
-    icon: ShieldCheck,
-    tone: "bg-violet-50 text-violet-600",
-  },
-];
-
-const requiredActionLinks = [
-  "/compliance/brand",
-  "/compliance/campaign",
-  "/compliance/brand",
-] as const;
 
 const quickLinks = [
   {
@@ -124,8 +78,76 @@ const quickLinks = [
   },
 ];
 
-export default function ComplianceOverviewPage() {
-  const actionCount = complianceOverview.requiredActions.length;
+const requiredActionLinks = [
+  "/compliance/brand",
+  "/compliance/campaign",
+  "/compliance/business",
+  "/compliance/check",
+  "/numbers",
+] as const;
+
+export default async function ComplianceOverviewPage() {
+  const { workspaceId } = await requireWorkspaceContext();
+  const [overview, metrics, phoneNumbers] = await Promise.all([
+    loadComplianceOverview(workspaceId),
+    loadDashboardMetrics(workspaceId),
+    loadPhoneNumbers(workspaceId),
+  ]);
+
+  const requiredActions = deriveRequiredActions(overview.registration, phoneNumbers);
+  const actionCount = requiredActions.length;
+  const phoneSummary = phoneNumbersSummary(phoneNumbers);
+  const tollFree = tollFreeSummary(phoneNumbers);
+
+  const statusCards: Array<{
+    title: string;
+    status: string;
+    hint: string;
+    href: string;
+    icon: LucideIcon;
+    tone: string;
+  }> = [
+    {
+      title: "Customer Profile",
+      status: overview.customerProfile,
+      hint: overview.customerProfile === "Complete" ? "Verified" : "Incomplete",
+      href: "/compliance/business",
+      icon: Building2,
+      tone: "bg-emerald-50 text-emerald-600",
+    },
+    {
+      title: "Brand Registration",
+      status: overview.brand,
+      hint: overview.brand === "Approved" ? "Approved" : "Action required",
+      href: "/compliance/brand",
+      icon: Shield,
+      tone: "bg-amber-50 text-amber-600",
+    },
+    {
+      title: "Campaign Registration",
+      status: overview.campaign,
+      hint: overview.campaign === "Approved" ? "Approved" : "Not submitted",
+      href: "/compliance/campaign",
+      icon: Megaphone,
+      tone: "bg-slate-100 text-slate-500",
+    },
+    {
+      title: "Phone Numbers",
+      status: phoneNumbers.length ? "Assigned" : "Missing",
+      hint: phoneSummary,
+      href: "/numbers",
+      icon: Phone,
+      tone: "bg-blue-50 text-blue-600",
+    },
+    {
+      title: "Toll-Free",
+      status: tollFree === "Verified" ? "Approved" : tollFree === "Pending" ? "Pending" : "Draft",
+      hint: tollFree,
+      href: "/numbers",
+      icon: ShieldCheck,
+      tone: "bg-violet-50 text-violet-600",
+    },
+  ];
 
   return (
     <div className="space-y-5">
@@ -217,7 +239,7 @@ export default function ComplianceOverviewPage() {
           </div>
           {actionCount > 0 ? (
             <ul className="mt-4 space-y-2">
-              {complianceOverview.requiredActions.map((action, i) => (
+              {requiredActions.map((action, i) => (
                 <li key={action}>
                   <Link
                     href={requiredActionLinks[i] ?? "/compliance/check"}

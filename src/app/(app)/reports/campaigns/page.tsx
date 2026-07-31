@@ -1,10 +1,11 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle, StatCard } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatusChip } from "@/components/ui/status-chip";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Tabs } from "@/components/ui/tabs";
-import { campaigns } from "@/lib/mock/data";
+import { loadCampaigns, requireWorkspaceContext } from "@/lib/workspace-data";
 import { formatCurrency, formatNumber, formatPercent } from "@/lib/utils";
 import Link from "next/link";
 
@@ -20,7 +21,10 @@ const reportTabs = [
   { label: "Audit log", href: "/reports/audit-log" },
 ];
 
-export default function ReportsCampaignsPage() {
+export default async function ReportsCampaignsPage() {
+  const { workspaceId } = await requireWorkspaceContext();
+  const campaigns = await loadCampaigns(workspaceId);
+
   const totalSent = campaigns.reduce((sum, c) => sum + c.sent, 0);
   const totalDelivered = campaigns.reduce((sum, c) => sum + c.delivered, 0);
   const totalReplies = campaigns.reduce((sum, c) => sum + c.replies, 0);
@@ -52,38 +56,47 @@ export default function ReportsCampaignsPage() {
 
       <Card>
         <CardTitle>Campaign performance</CardTitle>
-        <Table className="mt-4">
-          <THead>
-            <TR>
-              <TH>Campaign</TH>
-              <TH>Status</TH>
-              <TH>Audience</TH>
-              <TH>Sent</TH>
-              <TH>Delivered</TH>
-              <TH>Replies</TH>
-              <TH>Clicks</TH>
-              <TH>Opt-outs</TH>
-              <TH>Cost</TH>
-            </TR>
-          </THead>
-          <TBody>
-            {campaigns.map((c) => (
-              <TR key={c.id}>
-                <TD className="font-medium">{c.name}</TD>
-                <TD>
-                  <StatusChip status={c.status} />
-                </TD>
-                <TD className="text-muted-foreground">{c.audience}</TD>
-                <TD>{formatNumber(c.sent)}</TD>
-                <TD>{formatNumber(c.delivered)}</TD>
-                <TD>{formatNumber(c.replies)}</TD>
-                <TD>{formatNumber(c.clicks)}</TD>
-                <TD>{formatNumber(c.optOuts)}</TD>
-                <TD>{formatCurrency(c.cost)}</TD>
+        {campaigns.length === 0 ? (
+          <EmptyState
+            title="No campaigns yet"
+            description="Campaign performance will appear here after you send."
+            actionLabel="View campaigns"
+            actionHref="/campaigns"
+          />
+        ) : (
+          <Table className="mt-4">
+            <THead>
+              <TR>
+                <TH>Campaign</TH>
+                <TH>Status</TH>
+                <TH>Audience</TH>
+                <TH>Sent</TH>
+                <TH>Delivered</TH>
+                <TH>Replies</TH>
+                <TH>Clicks</TH>
+                <TH>Opt-outs</TH>
+                <TH>Cost</TH>
               </TR>
-            ))}
-          </TBody>
-        </Table>
+            </THead>
+            <TBody>
+              {campaigns.map((c) => (
+                <TR key={c.id}>
+                  <TD className="font-medium">{c.name}</TD>
+                  <TD>
+                    <StatusChip status={c.status} />
+                  </TD>
+                  <TD className="text-muted-foreground">{c.audience}</TD>
+                  <TD>{formatNumber(c.sent)}</TD>
+                  <TD>{formatNumber(c.delivered)}</TD>
+                  <TD>{formatNumber(c.replies)}</TD>
+                  <TD>{formatNumber(c.clicks)}</TD>
+                  <TD>{formatNumber(c.optOuts)}</TD>
+                  <TD>{formatCurrency(c.cost)}</TD>
+                </TR>
+              ))}
+            </TBody>
+          </Table>
+        )}
       </Card>
     </div>
   );

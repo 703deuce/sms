@@ -1,169 +1,99 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatusChip } from "@/components/ui/status-chip";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
-import { adminCustomers } from "@/lib/mock/data";
+import { titleCaseStatus } from "@/lib/mappers";
+import { loadAdminRegistrations } from "@/lib/admin-data";
 import Link from "next/link";
 
-const pendingBrands = [
-  {
-    id: "br_1",
-    customer: "Harbor Home Services",
-    customerId: "ac_1",
-    brand: "Harbor Home Services LLC",
-    submitted: "2026-07-18",
-    status: "Pending" as const,
-  },
-  {
-    id: "br_2",
-    customer: "Sunrise Fitness",
-    customerId: "ac_4",
-    brand: "Sunrise Fitness Co",
-    submitted: "2026-07-22",
-    status: "Pending" as const,
-  },
-];
+export default async function AdminA2pPage() {
+  const registrations = await loadAdminRegistrations();
 
-const pendingCampaigns = [
-  {
-    id: "cp_1",
-    customer: "Harbor Home Services",
-    customerId: "ac_1",
-    campaign: "Marketing — Service reminders",
-    useCase: "Mixed",
-    submitted: "2026-07-20",
-    status: "Draft" as const,
-  },
-  {
-    id: "cp_2",
-    customer: "QuickMove Logistics",
-    customerId: "ac_3",
-    campaign: "Delivery notifications",
-    useCase: "Delivery",
-    submitted: "2026-07-15",
-    status: "Rejected" as const,
-  },
-  {
-    id: "cp_3",
-    customer: "BrightPath Dental",
-    customerId: "ac_2",
-    campaign: "Appointment reminders",
-    useCase: "Customer care",
-    submitted: "2026-07-10",
-    status: "Pending" as const,
-  },
-];
-
-export default function AdminA2pPage() {
-  const pendingFromCustomers = adminCustomers.filter(
-    (c) => c.a2p === "Pending" || c.a2p === "Rejected",
+  const pendingBrands = registrations.filter(
+    (r) => ["pending", "in_review", "submitted"].includes((r.brandStatus || "").toLowerCase()),
+  );
+  const pendingCampaigns = registrations.filter(
+    (r) =>
+      ["draft", "pending", "in_review", "submitted", "rejected", "failed"].includes(
+        (r.campaignStatus || "").toLowerCase(),
+      ),
   );
 
   return (
     <div>
       <PageHeader
-        title="A2P registrations"
-        description="Review pending brand and campaign registrations in the 10DLC queue."
+        title="A2P registration queue"
+        description="Brand and campaign registrations across all customer workspaces."
         actions={<Button variant="outline">Export queue</Button>}
       />
 
-      <div className="mb-6 flex flex-wrap gap-2">
-        {pendingFromCustomers.map((c) => (
-          <Link
-            key={c.id}
-            href={`/admin/customers/${c.id}`}
-            className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-muted/30"
-          >
-            {c.name}
-            <StatusChip status={c.a2p} />
-          </Link>
-        ))}
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Card>
+          <CardTitle>Pending brands ({pendingBrands.length})</CardTitle>
+          {pendingBrands.length === 0 ? (
+            <EmptyState title="No pending brands" description="Brand submissions will appear here." />
+          ) : (
+            <Table className="mt-4">
+              <THead>
+                <TR>
+                  <TH>Customer</TH>
+                  <TH>Business</TH>
+                  <TH>Status</TH>
+                </TR>
+              </THead>
+              <TBody>
+                {pendingBrands.map((r) => (
+                  <TR key={r.id}>
+                    <TD>
+                      <Link href={`/admin/customers/${r.workspace.id}`} className="font-medium hover:text-primary">
+                        {r.workspace.name}
+                      </Link>
+                    </TD>
+                    <TD className="text-muted-foreground">{r.legalBusinessName || "—"}</TD>
+                    <TD>
+                      <StatusChip status={titleCaseStatus(r.brandStatus)} />
+                    </TD>
+                  </TR>
+                ))}
+              </TBody>
+            </Table>
+          )}
+        </Card>
+
+        <Card>
+          <CardTitle>Campaign registrations ({pendingCampaigns.length})</CardTitle>
+          {pendingCampaigns.length === 0 ? (
+            <EmptyState title="No campaign registrations" description="Campaign submissions will appear here." />
+          ) : (
+            <Table className="mt-4">
+              <THead>
+                <TR>
+                  <TH>Customer</TH>
+                  <TH>Use case</TH>
+                  <TH>Status</TH>
+                </TR>
+              </THead>
+              <TBody>
+                {pendingCampaigns.map((r) => (
+                  <TR key={r.id}>
+                    <TD>
+                      <Link href={`/admin/customers/${r.workspace.id}`} className="font-medium hover:text-primary">
+                        {r.workspace.name}
+                      </Link>
+                    </TD>
+                    <TD className="text-muted-foreground">{r.useCase || "—"}</TD>
+                    <TD>
+                      <StatusChip status={titleCaseStatus(r.campaignStatus)} />
+                    </TD>
+                  </TR>
+                ))}
+              </TBody>
+            </Table>
+          )}
+        </Card>
       </div>
-
-      <Card className="mb-4">
-        <CardTitle>Pending brands</CardTitle>
-        <Table className="mt-4">
-          <THead>
-            <TR>
-              <TH>Customer</TH>
-              <TH>Brand name</TH>
-              <TH>Submitted</TH>
-              <TH>Status</TH>
-              <TH />
-            </TR>
-          </THead>
-          <TBody>
-            {pendingBrands.map((brand) => (
-              <TR key={brand.id}>
-                <TD>
-                  <Link
-                    href={`/admin/customers/${brand.customerId}`}
-                    className="font-medium text-primary hover:underline"
-                  >
-                    {brand.customer}
-                  </Link>
-                </TD>
-                <TD>{brand.brand}</TD>
-                <TD className="text-muted-foreground">
-                  {new Date(brand.submitted).toLocaleDateString()}
-                </TD>
-                <TD>
-                  <StatusChip status={brand.status} />
-                </TD>
-                <TD className="text-right">
-                  <Button variant="ghost" size="sm">
-                    Review
-                  </Button>
-                </TD>
-              </TR>
-            ))}
-          </TBody>
-        </Table>
-      </Card>
-
-      <Card>
-        <CardTitle>Pending campaigns</CardTitle>
-        <Table className="mt-4">
-          <THead>
-            <TR>
-              <TH>Customer</TH>
-              <TH>Campaign</TH>
-              <TH>Use case</TH>
-              <TH>Submitted</TH>
-              <TH>Status</TH>
-              <TH />
-            </TR>
-          </THead>
-          <TBody>
-            {pendingCampaigns.map((campaign) => (
-              <TR key={campaign.id}>
-                <TD>
-                  <Link
-                    href={`/admin/customers/${campaign.customerId}`}
-                    className="font-medium text-primary hover:underline"
-                  >
-                    {campaign.customer}
-                  </Link>
-                </TD>
-                <TD>{campaign.campaign}</TD>
-                <TD className="text-muted-foreground">{campaign.useCase}</TD>
-                <TD className="text-muted-foreground">
-                  {new Date(campaign.submitted).toLocaleDateString()}
-                </TD>
-                <TD>
-                  <StatusChip status={campaign.status} />
-                </TD>
-                <TD className="text-right">
-                  <Button variant="ghost" size="sm">
-                    Review
-                  </Button>
-                </TD>
-              </TR>
-            ))}
-          </TBody>
-        </Table>
-      </Card>
     </div>
   );
 }

@@ -5,7 +5,9 @@ import { PageHeader } from "@/components/ui/page-header";
 import { StatusChip } from "@/components/ui/status-chip";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Tabs } from "@/components/ui/tabs";
-import { campaigns } from "@/lib/mock/data";
+import { getActiveWorkspaceId } from "@/lib/auth";
+import type { Campaign } from "@/lib/types";
+import { loadCampaigns } from "@/lib/workspace-data";
 import { formatCurrency, formatNumber, formatPercent } from "@/lib/utils";
 import { AlertTriangle } from "lucide-react";
 import Link from "next/link";
@@ -20,39 +22,6 @@ const campaignTabs = [
   { label: "Failed", href: "/campaigns/failed" },
 ];
 
-const failureReasons = [
-  {
-    reason: "Invalid number",
-    count: 12,
-    description: "Landline, disconnected, or malformed phone numbers in the audience.",
-  },
-  {
-    reason: "Unsubscribed",
-    count: 8,
-    description: "Contacts opted out before or during the send window.",
-  },
-  {
-    reason: "Insufficient balance",
-    count: 0,
-    description: "Send paused when account credits dropped below the minimum threshold.",
-  },
-  {
-    reason: "Carrier rejection",
-    count: 14,
-    description: "Messages blocked by carrier spam filters or content policies.",
-  },
-  {
-    reason: "A2P registration",
-    count: 4,
-    description: "10DLC traffic rejected due to pending brand or campaign registration.",
-  },
-  {
-    reason: "Quiet hours",
-    count: 2,
-    description: "Messages blocked by account quiet-hour or timezone policy.",
-  },
-];
-
 function formatScheduled(at: string | null) {
   if (!at) return "—";
   return new Date(at).toLocaleString(undefined, {
@@ -64,11 +33,22 @@ function formatScheduled(at: string | null) {
   });
 }
 
-export default function CampaignFailedPage() {
-  const failed = campaigns.filter((c) => c.status === "Failed");
-  const totalFailedMessages = failureReasons.reduce((sum, r) => sum + r.count, 0);
+export default async function CampaignFailedPage() {
+  const workspaceId = await getActiveWorkspaceId();
+
+  if (!workspaceId) {
+    return (
+      <div>
+        <PageHeader title="Failed campaigns" description="Campaigns that did not complete successfully." />
+        <EmptyState title="No workspace selected" description="Select or create a workspace to view campaigns." />
+      </div>
+    );
+  }
+
+  const failed: Campaign[] = await loadCampaigns(workspaceId, "FAILED");
   const totalSent = failed.reduce((sum, c) => sum + c.sent, 0);
   const totalDelivered = failed.reduce((sum, c) => sum + c.delivered, 0);
+  const totalUndelivered = totalSent - totalDelivered;
   const failureRate = totalSent > 0 ? ((totalSent - totalDelivered) / totalSent) * 100 : 0;
 
   return (
@@ -97,7 +77,7 @@ export default function CampaignFailedPage() {
         <>
           <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <StatCard label="Failed campaigns" value={formatNumber(failed.length)} />
-            <StatCard label="Undelivered" value={formatNumber(totalFailedMessages)} />
+            <StatCard label="Undelivered" value={formatNumber(totalUndelivered)} />
             <StatCard
               label="Failure rate"
               value={formatPercent(failureRate)}
@@ -111,29 +91,6 @@ export default function CampaignFailedPage() {
 
           <div className="mb-6 grid gap-4 xl:grid-cols-2">
             <Card>
-              <CardTitle>Failure reasons</CardTitle>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Breakdown across failed campaigns in this workspace.
-              </p>
-              <ul className="mt-4 space-y-3">
-                {failureReasons.map((item) => (
-                  <li
-                    key={item.reason}
-                    className="flex items-start justify-between gap-4 rounded-lg border border-border p-3"
-                  >
-                    <div>
-                      <p className="text-sm font-medium">{item.reason}</p>
-                      <p className="mt-0.5 text-xs text-muted-foreground">{item.description}</p>
-                    </div>
-                    <span className="shrink-0 font-display text-lg font-semibold tabular-nums">
-                      {formatNumber(item.count)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </Card>
-
-            <Card>
               <CardTitle>Recommended actions</CardTitle>
               <ul className="mt-4 space-y-3 text-sm">
                 <li className="flex gap-2 rounded-lg bg-muted/50 p-3">
@@ -141,7 +98,7 @@ export default function CampaignFailedPage() {
                   <div>
                     <p className="font-medium">Validate audience numbers</p>
                     <p className="mt-0.5 text-muted-foreground">
-                      Remove invalid and landline contacts before retrying Storm Alert.
+                      Remove invalid and landline contacts before retrying failed sends.
                     </p>
                   </div>
                 </li>

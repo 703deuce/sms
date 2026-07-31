@@ -1,10 +1,11 @@
+import { InviteUserButton } from "@/components/settings/invite-user-button";
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
-import { StatusChip } from "@/components/ui/status-chip";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Tabs } from "@/components/ui/tabs";
-import { teamMembers } from "@/lib/mock/data";
+import { loadTeamMembers, requireWorkspaceContext } from "@/lib/workspace-data";
 
 const settingsTabs = [
   { label: "Business", href: "/settings/business" },
@@ -19,13 +20,16 @@ const settingsTabs = [
   { label: "Data", href: "/settings/data" },
 ];
 
-export default function SettingsUsersPage() {
+export default async function SettingsUsersPage() {
+  const { workspaceId } = await requireWorkspaceContext();
+  const teamMembers = await loadTeamMembers(workspaceId);
+
   return (
     <div>
       <PageHeader
         title="Users & permissions"
         description="Manage team access, roles, and inbox assignment permissions."
-        actions={<Button>Invite user</Button>}
+        actions={<InviteUserButton />}
       />
 
       <Tabs items={settingsTabs} />
@@ -35,36 +39,45 @@ export default function SettingsUsersPage() {
           <CardTitle>Team members</CardTitle>
           <span className="text-xs text-muted-foreground">{teamMembers.length} users</span>
         </div>
-        <Table>
-          <THead>
-            <TR>
-              <TH>Name</TH>
-              <TH>Email</TH>
-              <TH>Role</TH>
-              <TH>Admin</TH>
-              <TH />
-            </TR>
-          </THead>
-          <TBody>
-            {teamMembers.map((member) => (
-              <TR key={member.id}>
-                <TD className="font-medium">{member.name}</TD>
-                <TD className="text-muted-foreground">{member.email}</TD>
-                <TD>
-                  <span className="inline-flex items-center rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium">
-                    {member.role}
-                  </span>
-                </TD>
-                <TD>{member.isAdmin ? "Yes" : "—"}</TD>
-                <TD className="text-right">
-                  <Button variant="ghost" size="sm">
-                    Edit
-                  </Button>
-                </TD>
+        {teamMembers.length === 0 ? (
+          <EmptyState
+            title="No team members yet"
+            description="Invite colleagues to collaborate on campaigns and inbox."
+            actionLabel="Invite user"
+            actionHref="/settings/users"
+          />
+        ) : (
+          <Table>
+            <THead>
+              <TR>
+                <TH>Name</TH>
+                <TH>Email</TH>
+                <TH>Role</TH>
+                <TH>Admin</TH>
+                <TH />
               </TR>
-            ))}
-          </TBody>
-        </Table>
+            </THead>
+            <TBody>
+              {teamMembers.map((member) => (
+                <TR key={member.id}>
+                  <TD className="font-medium">{member.name}</TD>
+                  <TD className="text-muted-foreground">{member.email}</TD>
+                  <TD>
+                    <span className="inline-flex items-center rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium">
+                      {member.role}
+                    </span>
+                  </TD>
+                  <TD>{member.isAdmin ? "Yes" : "—"}</TD>
+                  <TD className="text-right">
+                    <Button variant="ghost" size="sm">
+                      Edit
+                    </Button>
+                  </TD>
+                </TR>
+              ))}
+            </TBody>
+          </Table>
+        )}
       </Card>
 
       <Card className="mt-4">

@@ -1,76 +1,16 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatusChip } from "@/components/ui/status-chip";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { formatNumber } from "@/lib/utils";
+import { loadRecurringCampaigns, requireWorkspaceContext } from "@/lib/workspace-data";
 import { Repeat } from "lucide-react";
 import Link from "next/link";
 
-const recurringCampaigns = [
-  {
-    id: "rec_1",
-    name: "Weekly appointment reminders",
-    type: "Reminder",
-    audience: "Customers with upcoming visits",
-    frequency: "Every Monday at 9:00 AM",
-    nextRun: "2026-07-28T09:00:00Z",
-    lastRun: "2026-07-21T09:00:00Z",
-    status: "Active" as const,
-    sentTotal: 2840,
-    createdBy: "Alex Rivera",
-  },
-  {
-    id: "rec_2",
-    name: "Monthly service newsletter",
-    type: "Promotion",
-    audience: "All subscribed",
-    frequency: "1st of each month at 10:00 AM",
-    nextRun: "2026-08-01T10:00:00Z",
-    lastRun: "2026-07-01T10:00:00Z",
-    status: "Active" as const,
-    sentTotal: 6120,
-    createdBy: "Sam Patel",
-  },
-  {
-    id: "rec_3",
-    name: "Birthday greetings",
-    type: "Announcement",
-    audience: "Birthday segment",
-    frequency: "Daily at 8:00 AM",
-    nextRun: "2026-07-28T08:00:00Z",
-    lastRun: "2026-07-27T08:00:00Z",
-    status: "Active" as const,
-    sentTotal: 412,
-    createdBy: "Sam Patel",
-  },
-  {
-    id: "rec_4",
-    name: "Quarterly NPS survey",
-    type: "Survey",
-    audience: "VIP",
-    frequency: "Every 90 days",
-    nextRun: "2026-10-01T11:00:00Z",
-    lastRun: "2026-07-03T11:00:00Z",
-    status: "Paused" as const,
-    sentTotal: 176,
-    createdBy: "Casey Nguyen",
-  },
-  {
-    id: "rec_5",
-    name: "End-of-day dispatch updates",
-    type: "Alert",
-    audience: "Employees",
-    frequency: "Weekdays at 4:30 PM",
-    nextRun: "2026-07-28T16:30:00Z",
-    lastRun: "2026-07-25T16:30:00Z",
-    status: "Active" as const,
-    sentTotal: 960,
-    createdBy: "Alex Rivera",
-  },
-];
-
-function formatDateTime(at: string) {
+function formatDateTime(at: string | null) {
+  if (!at) return "—";
   return new Date(at).toLocaleString(undefined, {
     month: "short",
     day: "numeric",
@@ -80,7 +20,9 @@ function formatDateTime(at: string) {
   });
 }
 
-export default function CampaignRecurringPage() {
+export default async function CampaignRecurringPage() {
+  const { workspaceId } = await requireWorkspaceContext();
+  const recurringCampaigns = await loadRecurringCampaigns(workspaceId);
   const activeCount = recurringCampaigns.filter((c) => c.status === "Active").length;
 
   return (
@@ -120,53 +62,61 @@ export default function CampaignRecurringPage() {
             Messages sent (lifetime)
           </p>
           <p className="mt-2 font-display text-2xl font-semibold">
-            {formatNumber(recurringCampaigns.reduce((sum, c) => sum + c.sentTotal, 0))}
+            {formatNumber(recurringCampaigns.reduce((sum, c) => sum + c.sent, 0))}
           </p>
         </Card>
       </div>
 
-      <Card>
-        <div className="mb-4 flex items-center gap-2">
-          <Repeat className="h-4 w-4 text-primary" />
-          <CardTitle>Recurring schedule</CardTitle>
-        </div>
-        <Table>
-          <THead>
-            <TR>
-              <TH>Name</TH>
-              <TH>Type</TH>
-              <TH>Audience</TH>
-              <TH>Frequency</TH>
-              <TH>Next run</TH>
-              <TH>Last run</TH>
-              <TH>Status</TH>
-              <TH>Total sent</TH>
-              <TH>Created by</TH>
-            </TR>
-          </THead>
-          <TBody>
-            {recurringCampaigns.map((c) => (
-              <TR key={c.id}>
-                <TD className="font-medium">{c.name}</TD>
-                <TD className="text-muted-foreground">{c.type}</TD>
-                <TD className="text-muted-foreground">{c.audience}</TD>
-                <TD className="whitespace-nowrap">{c.frequency}</TD>
-                <TD className="whitespace-nowrap font-medium">
-                  {formatDateTime(c.nextRun)}
-                </TD>
-                <TD className="whitespace-nowrap text-muted-foreground">
-                  {formatDateTime(c.lastRun)}
-                </TD>
-                <TD>
-                  <StatusChip status={c.status} />
-                </TD>
-                <TD>{formatNumber(c.sentTotal)}</TD>
-                <TD className="text-muted-foreground">{c.createdBy}</TD>
+      {recurringCampaigns.length === 0 ? (
+        <EmptyState
+          icon={<Repeat className="h-8 w-8" />}
+          title="No recurring campaigns"
+          description="Recurring and reminder campaigns will appear here when you create appointment reminders or scheduled sequences."
+          actionLabel="Create campaign"
+          actionHref="/send"
+        />
+      ) : (
+        <Card>
+          <div className="mb-4 flex items-center gap-2">
+            <Repeat className="h-4 w-4 text-primary" />
+            <CardTitle>Recurring schedule</CardTitle>
+          </div>
+          <Table>
+            <THead>
+              <TR>
+                <TH>Name</TH>
+                <TH>Type</TH>
+                <TH>Audience</TH>
+                <TH>Next run</TH>
+                <TH>Status</TH>
+                <TH>Total sent</TH>
+                <TH>Created by</TH>
               </TR>
-            ))}
-          </TBody>
-        </Table>
-      </Card>
+            </THead>
+            <TBody>
+              {recurringCampaigns.map((c) => (
+                <TR key={c.id}>
+                  <TD className="font-medium">
+                    <Link href={`/campaigns/${c.id}`} className="text-primary hover:underline">
+                      {c.name}
+                    </Link>
+                  </TD>
+                  <TD className="text-muted-foreground">{c.type}</TD>
+                  <TD className="text-muted-foreground">{c.audience}</TD>
+                  <TD className="whitespace-nowrap font-medium">
+                    {formatDateTime(c.scheduledAt)}
+                  </TD>
+                  <TD>
+                    <StatusChip status={c.status} />
+                  </TD>
+                  <TD>{formatNumber(c.sent)}</TD>
+                  <TD className="text-muted-foreground">{c.createdBy || "—"}</TD>
+                </TR>
+              ))}
+            </TBody>
+          </Table>
+        </Card>
+      )}
 
       <Card className="mt-6">
         <CardTitle>How recurring campaigns work</CardTitle>

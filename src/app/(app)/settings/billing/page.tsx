@@ -1,11 +1,14 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle, StatCard } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Input, Label, Select } from "@/components/ui/input";
 import { PageHeader } from "@/components/ui/page-header";
-import { StatusChip } from "@/components/ui/status-chip";
-import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Tabs } from "@/components/ui/tabs";
-import { metrics } from "@/lib/mock/data";
+import {
+  loadDashboardMetrics,
+  loadUsage,
+  requireWorkspaceContext,
+} from "@/lib/workspace-data";
 import { formatCurrency, formatNumber } from "@/lib/utils";
 
 const settingsTabs = [
@@ -21,13 +24,15 @@ const settingsTabs = [
   { label: "Data", href: "/settings/data" },
 ];
 
-const invoices = [
-  { id: "inv_1", date: "2026-07-01", amount: 79.0, status: "Paid" as const, description: "Growth plan — July 2026" },
-  { id: "inv_2", date: "2026-06-01", amount: 79.0, status: "Paid" as const, description: "Growth plan — June 2026" },
-  { id: "inv_3", date: "2026-05-01", amount: 47.5, status: "Paid" as const, description: "Growth plan + usage — May 2026" },
-];
+export default async function SettingsBillingPage() {
+  const { workspaceId } = await requireWorkspaceContext();
+  const [metrics, usage] = await Promise.all([
+    loadDashboardMetrics(workspaceId),
+    loadUsage(workspaceId),
+  ]);
 
-export default function SettingsBillingPage() {
+  const currentUsage = usage[0];
+
   return (
     <div>
       <PageHeader
@@ -39,7 +44,7 @@ export default function SettingsBillingPage() {
       <Tabs items={settingsTabs} />
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Current plan" value="Growth" hint="Trial through Aug 15, 2026" />
+        <StatCard label="Current plan" value="Growth" hint="Workspace billing" />
         <StatCard label="Account balance" value={formatCurrency(metrics.balance)} />
         <StatCard label="Credits remaining" value={formatNumber(metrics.creditsRemaining)} />
         <StatCard label="Sent this period" value={formatNumber(metrics.messagesSentPeriod)} />
@@ -49,8 +54,7 @@ export default function SettingsBillingPage() {
         <Card>
           <CardTitle>Payment method</CardTitle>
           <div className="mt-4 rounded-lg border border-border p-4">
-            <p className="text-sm font-medium">Visa ending in 4242</p>
-            <p className="text-xs text-muted-foreground">Expires 08/2028</p>
+            <p className="text-sm text-muted-foreground">No payment method on file.</p>
           </div>
           <Button variant="outline" size="sm" className="mt-4">
             Update payment method
@@ -61,7 +65,7 @@ export default function SettingsBillingPage() {
           <CardTitle>Auto-recharge</CardTitle>
           <form className="mt-4 space-y-4">
             <div className="flex items-center gap-2">
-              <input type="checkbox" id="autoRecharge" defaultChecked className="rounded border-border" />
+              <input type="checkbox" id="autoRecharge" className="rounded border-border" />
               <Label htmlFor="autoRecharge" className="mb-0">
                 Enable auto-recharge when balance is low
               </Label>
@@ -105,35 +109,34 @@ export default function SettingsBillingPage() {
       </Card>
 
       <Card className="mt-4">
-        <CardTitle>Invoices</CardTitle>
-        <Table className="mt-4">
-          <THead>
-            <TR>
-              <TH>Date</TH>
-              <TH>Description</TH>
-              <TH>Amount</TH>
-              <TH>Status</TH>
-              <TH />
-            </TR>
-          </THead>
-          <TBody>
-            {invoices.map((inv) => (
-              <TR key={inv.id}>
-                <TD className="text-muted-foreground">{inv.date}</TD>
-                <TD className="font-medium">{inv.description}</TD>
-                <TD>{formatCurrency(inv.amount)}</TD>
-                <TD>
-                  <StatusChip status={inv.status} />
-                </TD>
-                <TD className="text-right">
-                  <Button variant="ghost" size="sm">
-                    Download
-                  </Button>
-                </TD>
-              </TR>
+        <CardTitle>Usage periods</CardTitle>
+        {usage.length === 0 ? (
+          <EmptyState
+            title="No usage records"
+            description="Usage will appear here once you send messages."
+          />
+        ) : (
+          <div className="mt-4 space-y-3">
+            {usage.map((row) => (
+              <div
+                key={row.id}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border px-4 py-3 text-sm"
+              >
+                <span className="text-muted-foreground">
+                  {new Date(row.periodStart).toLocaleDateString()} – {new Date(row.periodEnd).toLocaleDateString()}
+                </span>
+                <span>
+                  {formatNumber(row.outbound)} outbound · {formatCurrency(row.costCents / 100)}
+                </span>
+              </div>
             ))}
-          </TBody>
-        </Table>
+          </div>
+        )}
+        {currentUsage ? (
+          <p className="mt-4 text-xs text-muted-foreground">
+            Current period: {formatNumber(currentUsage.smsSegments)} SMS segments, {formatNumber(currentUsage.mmsMessages)} MMS.
+          </p>
+        ) : null}
       </Card>
     </div>
   );

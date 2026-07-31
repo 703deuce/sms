@@ -1,10 +1,14 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle, StatCard } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { PageHeader } from "@/components/ui/page-header";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Tabs } from "@/components/ui/tabs";
-import { tags } from "@/lib/mock/data";
+import { getActiveWorkspaceId } from "@/lib/auth";
+import { loadTags } from "@/lib/workspace-data";
+
+type TagRow = Awaited<ReturnType<typeof loadTags>>[number];
 import { formatNumber } from "@/lib/utils";
 import { Tag, TagIcon } from "lucide-react";
 
@@ -17,8 +21,24 @@ const contactTabs = [
   { label: "Custom Fields", href: "/contacts/fields" },
 ];
 
-export default function ContactTagsPage() {
-  const totalTagged = tags.reduce((sum, tag) => sum + tag.count, 0);
+export default async function ContactTagsPage() {
+  const workspaceId = await getActiveWorkspaceId();
+
+  if (!workspaceId) {
+    return (
+      <div>
+        <PageHeader title="Tags" description="Label contacts for filtering, automations, and inbox organization." />
+        <EmptyState
+          title="No workspace selected"
+          description="Select or create a workspace to manage tags."
+        />
+      </div>
+    );
+  }
+
+  const tags: TagRow[] = await loadTags(workspaceId);
+  const sortedTags = [...tags].sort((a, b) => b.contactCount - a.contactCount);
+  const totalTagged = tags.reduce((sum, tag) => sum + tag.contactCount, 0);
 
   return (
     <div>
@@ -38,7 +58,7 @@ export default function ContactTagsPage() {
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
         <StatCard label="Tags" value={formatNumber(tags.length)} />
         <StatCard label="Tagged instances" value={formatNumber(totalTagged)} hint="Contacts can have multiple tags" />
-        <StatCard label="Most used" value={tags[1]?.name ?? "—"} hint={`${formatNumber(tags[1]?.count ?? 0)} contacts`} />
+        <StatCard label="Most used" value={sortedTags[0]?.name ?? "—"} hint={`${formatNumber(sortedTags[0]?.contactCount ?? 0)} contacts`} />
       </div>
 
       <Card className="mb-6">
@@ -53,57 +73,67 @@ export default function ContactTagsPage() {
         </div>
       </Card>
 
-      <div className="mb-6 flex flex-wrap gap-2">
-        {tags.map((tag) => (
-          <span
-            key={tag.id}
-            className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5 text-sm"
-          >
-            <TagIcon className="h-3.5 w-3.5 text-primary" />
-            <span className="font-medium">{tag.name}</span>
-            <span className="text-muted-foreground">{formatNumber(tag.count)}</span>
-          </span>
-        ))}
-      </div>
-
-      <Card>
-        <CardTitle>Tag management</CardTitle>
-        <Table className="mt-4">
-          <THead>
-            <TR>
-              <TH>Tag</TH>
-              <TH>Contacts</TH>
-              <TH>Actions</TH>
-            </TR>
-          </THead>
-          <TBody>
+      {tags.length === 0 ? (
+        <EmptyState
+          icon={<TagIcon className="h-10 w-10" />}
+          title="No tags yet"
+          description="Create tags to label and filter contacts across campaigns and inbox."
+        />
+      ) : (
+        <>
+          <div className="mb-6 flex flex-wrap gap-2">
             {tags.map((tag) => (
-              <TR key={tag.id}>
-                <TD>
-                  <span className="inline-flex items-center gap-2 font-medium">
-                    <span className="h-2 w-2 rounded-full bg-primary" />
-                    {tag.name}
-                  </span>
-                </TD>
-                <TD>{formatNumber(tag.count)}</TD>
-                <TD>
-                  <div className="flex gap-1">
-                    <Button variant="ghost" size="sm">
-                      View contacts
-                    </Button>
-                    <Button variant="ghost" size="sm">
-                      Rename
-                    </Button>
-                    <Button variant="ghost" size="sm" className="text-danger">
-                      Delete
-                    </Button>
-                  </div>
-                </TD>
-              </TR>
+              <span
+                key={tag.id}
+                className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5 text-sm"
+              >
+                <TagIcon className="h-3.5 w-3.5 text-primary" />
+                <span className="font-medium">{tag.name}</span>
+                <span className="text-muted-foreground">{formatNumber(tag.contactCount)}</span>
+              </span>
             ))}
-          </TBody>
-        </Table>
-      </Card>
+          </div>
+
+          <Card>
+            <CardTitle>Tag management</CardTitle>
+            <Table className="mt-4">
+              <THead>
+                <TR>
+                  <TH>Tag</TH>
+                  <TH>Contacts</TH>
+                  <TH>Actions</TH>
+                </TR>
+              </THead>
+              <TBody>
+                {tags.map((tag) => (
+                  <TR key={tag.id}>
+                    <TD>
+                      <span className="inline-flex items-center gap-2 font-medium">
+                        <span className="h-2 w-2 rounded-full bg-primary" />
+                        {tag.name}
+                      </span>
+                    </TD>
+                    <TD>{formatNumber(tag.contactCount)}</TD>
+                    <TD>
+                      <div className="flex gap-1">
+                        <Button variant="ghost" size="sm">
+                          View contacts
+                        </Button>
+                        <Button variant="ghost" size="sm">
+                          Rename
+                        </Button>
+                        <Button variant="ghost" size="sm" className="text-danger">
+                          Delete
+                        </Button>
+                      </div>
+                    </TD>
+                  </TR>
+                ))}
+              </TBody>
+            </Table>
+          </Card>
+        </>
+      )}
     </div>
   );
 }

@@ -4,7 +4,9 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatusChip } from "@/components/ui/status-chip";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
-import { contacts, conversations, messageLogs } from "@/lib/mock/data";
+import { getActiveWorkspaceId } from "@/lib/auth";
+import type { Contact, Conversation } from "@/lib/types";
+import { loadContactById, loadConversations } from "@/lib/workspace-data";
 import { formatPhone } from "@/lib/utils";
 import { ArrowLeft, Mail, MessageSquare, Shield } from "lucide-react";
 import Link from "next/link";
@@ -29,31 +31,30 @@ function formatDateTime(date: string) {
   });
 }
 
-const consentHistoryFor = (contactId: string, status: string) => {
-  const contact = contacts.find((c) => c.id === contactId);
-  if (!contact) return [];
+function consentHistoryFor(contact: Contact) {
+  const events = [];
 
-  const events = [
-    {
+  if (contact.consentDate) {
+    events.push({
       id: "ch_1",
       event: "Opt-in recorded",
       source: contact.consentSource,
       at: contact.consentDate,
       detail: "Initial consent captured",
-    },
-  ];
+    });
+  }
 
-  if (status === "Unsubscribed") {
+  if (contact.status === "Unsubscribed") {
     events.push({
       id: "ch_2",
       event: "Unsubscribed",
       source: "STOP keyword",
       at: contact.lastReply ?? contact.lastMessaged ?? contact.consentDate,
-      detail: "Contact replied STOP",
+      detail: "Contact opted out",
     });
   }
 
-  if (status === "Blocked") {
+  if (contact.status === "Blocked") {
     events.push({
       id: "ch_3",
       event: "Blocked",
@@ -63,7 +64,7 @@ const consentHistoryFor = (contactId: string, status: string) => {
     });
   }
 
-  if (status === "Invalid") {
+  if (contact.status === "Invalid") {
     events.push({
       id: "ch_4",
       event: "Marked invalid",
@@ -74,7 +75,7 @@ const consentHistoryFor = (contactId: string, status: string) => {
   }
 
   return events;
-};
+}
 
 export default async function ContactDetailPage({
   params,
@@ -82,15 +83,31 @@ export default async function ContactDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const contact = contacts.find((c) => c.id === id);
+  const workspaceId = await getActiveWorkspaceId();
+
+  if (!workspaceId) {
+    return (
+      <div>
+        <PageHeader title="Contact" description="Contact details" />
+        <EmptyState
+          title="No workspace selected"
+          description="Select or create a workspace to view this contact."
+        />
+      </div>
+    );
+  }
+
+  const contact = await loadContactById(workspaceId, id);
 
   if (!contact) {
     notFound();
   }
 
-  const conversation = conversations.find((c) => c.contactId === contact.id);
-  const messages = messageLogs.filter((m) => m.to === contact.phone);
-  const consentHistory = consentHistoryFor(contact.id, contact.status);
+  const conversations: Conversation[] = await loadConversations(workspaceId);
+  const conversation = conversations.find(
+    (c: Conversation) => c.contactId === contact.id,
+  );
+  const consentHistory = consentHistoryFor(contact);
 
   return (
     <div>
@@ -170,74 +187,53 @@ export default async function ContactDetailPage({
                 Consent history
               </CardTitle>
             </div>
-            <Table className="mt-4">
-              <THead>
-                <TR>
-                  <TH>Event</TH>
-                  <TH>Source</TH>
-                  <TH>Date</TH>
-                  <TH>Detail</TH>
-                </TR>
-              </THead>
-              <TBody>
-                {consentHistory.map((event) => (
-                  <TR key={event.id}>
-                    <TD className="font-medium">{event.event}</TD>
-                    <TD>{event.source}</TD>
-                    <TD className="text-muted-foreground">{formatDate(event.at)}</TD>
-                    <TD className="text-muted-foreground">{event.detail}</TD>
+            {consentHistory.length > 0 ? (
+              <Table className="mt-4">
+                <THead>
+                  <TR>
+                    <TH>Event</TH>
+                    <TH>Source</TH>
+                    <TH>Date</TH>
+                    <TH>Detail</TH>
                   </TR>
-                ))}
-              </TBody>
-            </Table>
+                </THead>
+                <TBody>
+                  {consentHistory.map((event) => (
+                    <TR key={event.id}>
+                      <TD className="font-medium">{event.event}</TD>
+                      <TD>{event.source}</TD>
+                      <TD className="text-muted-foreground">{formatDate(event.at)}</TD>
+                      <TD className="text-muted-foreground">{event.detail}</TD>
+                    </TR>
+                  ))}
+                </TBody>
+              </Table>
+            ) : (
+              <p className="mt-4 text-sm text-muted-foreground">No consent events recorded.</p>
+            )}
           </Card>
 
           <Card>
             <CardTitle>Activity</CardTitle>
-            {conversation || messages.length > 0 ? (
+            {conversation ? (
               <div className="mt-4 space-y-4">
-                {conversation ? (
-                  <div className="rounded-lg border border-border bg-muted/30 p-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="font-medium">Inbox conversation</p>
-                      <StatusChip status={conversation.status} />
-                    </div>
-                    <p className="mt-2 text-sm text-muted-foreground">{conversation.lastMessage}</p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Updated {formatDateTime(conversation.updatedAt)}
-                    </p>
-                    <Link href="/inbox" className="mt-3 inline-block">
-                      <Button variant="outline" size="sm">
-                        Open in inbox
-                      </Button>
-                    </Link>
+                <div className="rounded-lg border border-border bg-muted/30 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="font-medium">Inbox conversation</p>
+                    <StatusChip status={conversation.status} />
                   </div>
-                ) : null}
+                  <p className="mt-2 text-sm text-muted-foreground">{conversation.lastMessage}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Updated {formatDateTime(conversation.updatedAt)}
+                  </p>
+                  <Link href="/inbox" className="mt-3 inline-block">
+                    <Button variant="outline" size="sm">
+                      Open in inbox
+                    </Button>
+                  </Link>
+                </div>
 
-                {messages.length > 0 ? (
-                  <Table>
-                    <THead>
-                      <TR>
-                        <TH>Campaign</TH>
-                        <TH>Status</TH>
-                        <TH>Sent</TH>
-                      </TR>
-                    </THead>
-                    <TBody>
-                      {messages.map((msg) => (
-                        <TR key={msg.id}>
-                          <TD className="font-medium">{msg.campaign}</TD>
-                          <TD>
-                            <StatusChip status={msg.status} />
-                          </TD>
-                          <TD className="text-muted-foreground">{formatDateTime(msg.at)}</TD>
-                        </TR>
-                      ))}
-                    </TBody>
-                  </Table>
-                ) : null}
-
-                {conversation?.messages ? (
+                {conversation.messages && conversation.messages.length > 0 ? (
                   <div>
                     <p className="mb-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                       Recent messages

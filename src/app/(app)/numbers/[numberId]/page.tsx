@@ -4,7 +4,11 @@ import { Input, Label, Select, Textarea } from "@/components/ui/input";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatusChip } from "@/components/ui/status-chip";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
-import { messageLogs, phoneNumbers, teamMembers } from "@/lib/mock/data";
+import {
+  requireWorkspaceContext,
+  loadPhoneNumbers,
+  loadTeamMembers,
+} from "@/lib/workspace-data";
 import { cn, formatCurrency, formatNumber, formatPhone } from "@/lib/utils";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
@@ -28,14 +32,27 @@ type PageProps = {
 export default async function NumberDetailPage({ params, searchParams }: PageProps) {
   const { numberId } = await params;
   const { tab = "overview" } = await searchParams;
+  const { workspaceId } = await requireWorkspaceContext();
+
+  const [phoneNumbers, teamMembers] = await Promise.all([
+    loadPhoneNumbers(workspaceId),
+    loadTeamMembers(workspaceId),
+  ]);
 
   const number = phoneNumbers.find((pn) => pn.id === numberId);
   if (!number) notFound();
 
-  const usageLogs = messageLogs.filter((log) => log.from === number.number);
-  const sentCount = usageLogs.length;
-  const deliveredCount = usageLogs.filter((l) => l.status === "Delivered").length;
-  const totalCost = usageLogs.reduce((sum, l) => sum + l.cost, 0);
+  const usageLogs: Array<{
+    id: string;
+    to: string;
+    campaign: string;
+    status: string;
+    cost: number;
+    at: string;
+  }> = [];
+  const sentCount = 0;
+  const deliveredCount = 0;
+  const totalCost = 0;
 
   return (
     <div>
@@ -81,7 +98,10 @@ export default async function NumberDetailPage({ params, searchParams }: PagePro
             <StatCard label="A2P status" value={number.a2pStatus} href="/compliance" />
             <StatCard label="Monthly cost" value={formatCurrency(number.monthlyCost)} />
             <StatCard label="Messages sent" value={formatNumber(sentCount)} />
-            <StatCard label="Delivery rate" value={sentCount ? `${Math.round((deliveredCount / sentCount) * 100)}%` : "—"} />
+            <StatCard
+              label="Delivery rate"
+              value={sentCount ? `${Math.round((deliveredCount / sentCount) * 100)}%` : "—"}
+            />
           </div>
           <div className="mt-4 grid gap-4 md:grid-cols-2">
             <Card>
@@ -107,14 +127,21 @@ export default async function NumberDetailPage({ params, searchParams }: PagePro
             </Card>
             <Card>
               <CardTitle>Assigned users</CardTitle>
-              <ul className="mt-4 space-y-2">
-                {number.assignedUsers.map((user) => (
-                  <li key={user} className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm">
-                    <span className="font-medium">{user}</span>
-                    <span className="text-xs text-muted-foreground">Inbox access</span>
-                  </li>
-                ))}
-              </ul>
+              {number.assignedUsers.length > 0 ? (
+                <ul className="mt-4 space-y-2">
+                  {number.assignedUsers.map((user) => (
+                    <li
+                      key={user}
+                      className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm"
+                    >
+                      <span className="font-medium">{user}</span>
+                      <span className="text-xs text-muted-foreground">Inbox access</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-4 text-sm text-muted-foreground">No users assigned yet.</p>
+              )}
             </Card>
           </div>
         </>
@@ -127,7 +154,7 @@ export default async function NumberDetailPage({ params, searchParams }: PagePro
             <div>
               <Label htmlFor="messagingService">Messaging service</Label>
               <Select id="messagingService" defaultValue={number.messagingService}>
-                <option value="Harbor Messaging">Harbor Messaging</option>
+                <option value={number.messagingService}>{number.messagingService}</option>
                 <option value="Default">Default</option>
               </Select>
             </div>
@@ -226,7 +253,7 @@ export default async function NumberDetailPage({ params, searchParams }: PagePro
               </div>
               <div className="flex justify-between">
                 <dt className="text-muted-foreground">Campaign</dt>
-                <dd>Harbor Home Customer Care</dd>
+                <dd>{number.friendlyName}</dd>
               </div>
             </dl>
           </Card>
@@ -261,7 +288,10 @@ export default async function NumberDetailPage({ params, searchParams }: PagePro
           <div className="mb-4 grid gap-4 sm:grid-cols-3">
             <StatCard label="Segments sent" value={formatNumber(sentCount)} />
             <StatCard label="Total cost" value={formatCurrency(totalCost)} />
-            <StatCard label="Failed" value={formatNumber(usageLogs.filter((l) => l.status === "Failed").length)} />
+            <StatCard
+              label="Failed"
+              value={formatNumber(usageLogs.filter((l) => l.status === "Failed").length)}
+            />
           </div>
           <Card>
             <CardTitle>Recent messages</CardTitle>

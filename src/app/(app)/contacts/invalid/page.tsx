@@ -3,7 +3,9 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatusChip } from "@/components/ui/status-chip";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
-import { contacts } from "@/lib/mock/data";
+import { getActiveWorkspaceId } from "@/lib/auth";
+import type { Contact } from "@/lib/types";
+import { loadContacts } from "@/lib/workspace-data";
 import { formatPhone } from "@/lib/utils";
 import { PhoneOff } from "lucide-react";
 import Link from "next/link";
@@ -17,8 +19,19 @@ function formatDate(date: string | null) {
   });
 }
 
-export default function InvalidContactsPage() {
-  const filtered = contacts.filter((c) => c.status === "Invalid");
+export default async function InvalidContactsPage() {
+  const workspaceId = await getActiveWorkspaceId();
+
+  if (!workspaceId) {
+    return (
+      <div>
+        <PageHeader title="Invalid numbers" description="Landlines, malformed numbers, or unreachable devices." />
+        <EmptyState title="No workspace selected" description="Select or create a workspace to view contacts." />
+      </div>
+    );
+  }
+
+  const filtered: Contact[] = await loadContacts(workspaceId, "INVALID");
 
   return (
     <div>

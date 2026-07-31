@@ -5,20 +5,76 @@ import { Card, CardTitle } from "@/components/ui/card";
 import { Input, Label, Select, Textarea } from "@/components/ui/input";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatusChip } from "@/components/ui/status-chip";
-import { contacts, phoneNumbers } from "@/lib/mock/data";
+import type { Contact, PhoneNumber } from "@/lib/types";
 import { cn, estimateSmsSegments, formatCurrency, formatNumber, formatPhone } from "@/lib/utils";
 import { Check, Search } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
-const sendableContacts = contacts.filter((c) => c.status === "Subscribed");
+type ApiContact = {
+  id: string;
+  firstName: string | null;
+  lastName: string | null;
+  phone: string;
+  email: string | null;
+  status: string;
+};
+
+function mapContact(c: ApiContact): Contact {
+  const statusMap: Record<string, Contact["status"]> = {
+    SUBSCRIBED: "Subscribed",
+    UNSUBSCRIBED: "Unsubscribed",
+    BLOCKED: "Blocked",
+    INVALID: "Invalid",
+  };
+  return {
+    id: c.id,
+    firstName: c.firstName || "",
+    lastName: c.lastName || "",
+    phone: c.phone,
+    email: c.email || "",
+    status: statusMap[c.status] || "Subscribed",
+    lists: [],
+    tags: [],
+    consentSource: "",
+    consentDate: "",
+    lastMessaged: null,
+    lastReply: null,
+    dateAdded: "",
+    assignedUser: null,
+  };
+}
 
 export default function QuickSendPage() {
   const [search, setSearch] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [numberId, setNumberId] = useState(phoneNumbers[0].id);
-  const [message, setMessage] = useState("Hi {{first_name}}, quick update from Harbor Home: ");
+  const [numberId, setNumberId] = useState("");
+  const [message, setMessage] = useState("Hi {{first_name}}, ");
   const [sent, setSent] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState("");
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [phoneNumbers, setPhoneNumbers] = useState<PhoneNumber[]>([]);
+
+  useEffect(() => {
+    fetch("/api/contacts?status=subscribed")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => {
+        if (json?.data) setContacts(json.data.map(mapContact));
+      })
+      .catch(() => undefined);
+    fetch("/api/numbers")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => {
+        if (json?.data?.length) {
+          setPhoneNumbers(json.data);
+          setNumberId(json.data[0].id);
+        }
+      })
+      .catch(() => undefined);
+  }, []);
+
+  const sendableContacts = contacts.filter((c) => c.status === "Subscribed");
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -30,11 +86,12 @@ export default function QuickSendPage() {
         c.phone.includes(q) ||
         c.email.toLowerCase().includes(q),
     );
-  }, [search]);
+  }, [search, sendableContacts]);
 
   const { characters, segments } = estimateSmsSegments(message);
   const recipientCount = selectedIds.length;
   const estimatedCost = recipientCount * segments * 0.015;
+  const selectedNumber = phoneNumbers.find((n) => n.id === numberId);
 
   function toggleContact(id: string) {
     setSelectedIds((prev) =>
@@ -49,6 +106,38 @@ export default function QuickSendPage() {
       setSelectedIds((prev) => prev.filter((id) => !visibleIds.includes(id)));
     } else {
       setSelectedIds((prev) => [...new Set([...prev, ...visibleIds])]);
+    }
+  }
+
+  async function handleSend() {
+    if (!selectedNumber || recipientCount === 0 || !message.trim()) return;
+    setSending(true);
+    setError("");
+    try {
+      const selected = sendableContacts.filter((c) => selectedIds.includes(c.id));
+      for (const contact of selected) {
+        const res = await fetch("/api/sms/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            to: contact.phone,
+            message: message
+              .replace(/\{\{first_name\}\}/g, contact.firstName)
+              .replace(/\{\{last_name\}\}/g, contact.lastName),
+            from: selectedNumber.number,
+            customerName: `${contact.firstName} ${contact.lastName}`.trim(),
+          }),
+        });
+        if (!res.ok) {
+          const json = await res.json();
+          throw new Error(json.error || "Failed to send message");
+        }
+      }
+      setSent(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to send messages");
+    } finally {
+      setSending(false);
     }
   }
 
@@ -92,6 +181,8 @@ export default function QuickSendPage() {
           </>
         }
       />
+
+      {error ? <p className="mb-4 text-sm text-danger">{error}</p> : null}
 
       <div className="grid gap-6 xl:grid-cols-[1fr_360px]">
         <Card>
@@ -148,7 +239,9 @@ export default function QuickSendPage() {
             })}
           </ul>
           {filtered.length === 0 ? (
-            <p className="mt-4 text-center text-sm text-muted-foreground">No subscribed contacts match your search.</p>
+            <p className="mt-4 text-center text-sm text-muted-foreground">
+              No subscribed contacts match your search.
+            </p>
           ) : null}
         </Card>
 
@@ -158,12 +251,20 @@ export default function QuickSendPage() {
             <div className="mt-4 space-y-4">
               <div>
                 <Label>Sending number</Label>
-                <Select value={numberId} onChange={(e) => setNumberId(e.target.value)}>
-                  {phoneNumbers.map((n) => (
-                    <option key={n.id} value={n.id}>
-                      {formatPhone(n.number)} · {n.friendlyName}
-                    </option>
-                  ))}
+                <Select
+                  value={numberId}
+                  onChange={(e) => setNumberId(e.target.value)}
+                  disabled={phoneNumbers.length === 0}
+                >
+                  {phoneNumbers.length === 0 ? (
+                    <option value="">No numbers available</option>
+                  ) : (
+                    phoneNumbers.map((n) => (
+                      <option key={n.id} value={n.id}>
+                        {formatPhone(n.number)} · {n.friendlyName}
+                      </option>
+                    ))
+                  )}
                 </Select>
               </div>
               <div>
@@ -212,10 +313,18 @@ export default function QuickSendPage() {
             </dl>
             <Button
               className="mt-4 w-full"
-              disabled={recipientCount === 0 || !message.trim() || segments === 0}
-              onClick={() => setSent(true)}
+              disabled={
+                sending ||
+                recipientCount === 0 ||
+                !message.trim() ||
+                segments === 0 ||
+                !selectedNumber
+              }
+              onClick={handleSend}
             >
-              Send to {formatNumber(recipientCount)} contact{recipientCount === 1 ? "" : "s"}
+              {sending
+                ? "Sending…"
+                : `Send to ${formatNumber(recipientCount)} contact${recipientCount === 1 ? "" : "s"}`}
             </Button>
             <p className="mt-2 text-center text-xs text-muted-foreground">
               Unsubscribed and blocked contacts are excluded automatically.

@@ -188,8 +188,8 @@ export default function AiTemplatePage() {
             <>
               <div className="mt-4 rounded-2xl rounded-bl-sm bg-primary/10 px-4 py-3 text-sm leading-relaxed">
                 {generated
-                  .replace("{{first_name}}", "Maya")
-                  .replace("{{business_name}}", "Harbor Home")}
+                  .replace("{{first_name}}", "Alex")
+                  .replace("{{business_name}}", "Your Business")}
               </div>
               {segments ? (
                 <p className="mt-2 text-xs text-muted-foreground">

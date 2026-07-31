@@ -3,7 +3,12 @@ import { Card } from "@/components/ui/card";
 import { SectionHeader } from "@/components/ui/metric";
 import { StatusChip } from "@/components/ui/status-chip";
 import { Tabs } from "@/components/ui/tabs";
-import { integrationsDirectory } from "@/lib/mock/data";
+import {
+  loadApiKeys,
+  loadIntegrationEndpoints,
+  loadOutboundWebhooks,
+  requireWorkspaceContext,
+} from "@/lib/workspace-data";
 import { cn } from "@/lib/utils";
 import {
   ArrowRight,
@@ -34,16 +39,26 @@ const integrationTabs = [
   { label: "Developer logs", href: "/integrations/logs" },
 ];
 
+const integrationsDirectory = [
+  { name: "API", status: "Available", description: "REST API for contacts, campaigns, and messages." },
+  { name: "Webhooks", status: "Available", description: "Push delivery, inbound, and subscription events." },
+  { name: "Zapier", status: "Available", description: "Connect Transovo SMS to 5,000+ apps." },
+  { name: "HubSpot", status: "Coming soon", description: "Sync contacts and trigger SMS from CRM events." },
+  { name: "Salesforce", status: "Coming soon", description: "Bi-directional contact and campaign sync." },
+  { name: "Shopify", status: "Coming soon", description: "Order and abandoned-cart messaging." },
+  { name: "Stripe", status: "Coming soon", description: "Payment event notifications." },
+  { name: "Calendly", status: "Coming soon", description: "Appointment reminders from bookings." },
+  { name: "Google Contacts", status: "Coming soon", description: "Import contacts securely." },
+  { name: "Google Sheets", status: "Coming soon", description: "Sync lists from spreadsheets." },
+];
+
 const integrationLinks: Record<string, string> = {
   API: "/integrations/api",
   Webhooks: "/integrations/webhooks",
   Zapier: "/integrations/api",
 };
 
-const integrationMeta: Record<
-  string,
-  { icon: LucideIcon; tone: string }
-> = {
+const integrationMeta: Record<string, { icon: LucideIcon; tone: string }> = {
   API: { icon: Terminal, tone: "bg-slate-900 text-white" },
   Webhooks: { icon: Webhook, tone: "bg-blue-100 text-blue-700" },
   Zapier: { icon: Zap, tone: "bg-orange-100 text-orange-600" },
@@ -56,7 +71,17 @@ const integrationMeta: Record<
   "Google Sheets": { icon: Sheet, tone: "bg-emerald-100 text-emerald-700" },
 };
 
-export default function IntegrationsPage() {
+export default async function IntegrationsPage() {
+  const { workspaceId } = await requireWorkspaceContext();
+  const [apiKeys, endpoints, webhooks] = await Promise.all([
+    loadApiKeys(workspaceId),
+    loadIntegrationEndpoints(workspaceId),
+    loadOutboundWebhooks(workspaceId),
+  ]);
+
+  const connectedApi = apiKeys.length > 0;
+  const connectedWebhooks = webhooks.length > 0 || endpoints.length > 0;
+
   const available = integrationsDirectory.filter((i) => i.status === "Available");
   const comingSoon = integrationsDirectory.filter((i) => i.status === "Coming soon");
   const total = integrationsDirectory.length;
@@ -74,7 +99,7 @@ export default function IntegrationsPage() {
           <>
             <Link href="/integrations/api">
               <Button variant="outline" className="rounded-[10px]">
-                Manage API keys
+                Manage API keys ({apiKeys.length})
               </Button>
             </Link>
             <Button className="rounded-[10px]">
@@ -86,6 +111,24 @@ export default function IntegrationsPage() {
       />
 
       <Tabs items={integrationTabs} />
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Card className="p-4">
+          <p className="text-[12px] font-medium uppercase tracking-wide text-muted-foreground">API keys</p>
+          <p className="mt-2 text-[28px] font-bold tracking-tight">{apiKeys.length}</p>
+          <p className="mt-1 text-[12px] text-muted-foreground">{connectedApi ? "Active keys configured" : "No keys yet"}</p>
+        </Card>
+        <Card className="p-4">
+          <p className="text-[12px] font-medium uppercase tracking-wide text-muted-foreground">Inbound webhooks</p>
+          <p className="mt-2 text-[28px] font-bold tracking-tight">{endpoints.length}</p>
+          <p className="mt-1 text-[12px] text-muted-foreground">Automation endpoints</p>
+        </Card>
+        <Card className="p-4">
+          <p className="text-[12px] font-medium uppercase tracking-wide text-muted-foreground">Outbound webhooks</p>
+          <p className="mt-2 text-[28px] font-bold tracking-tight">{webhooks.length}</p>
+          <p className="mt-1 text-[12px] text-muted-foreground">{connectedWebhooks ? "Event destinations" : "None configured"}</p>
+        </Card>
+      </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
         <Card className="p-4">
@@ -104,18 +147,8 @@ export default function IntegrationsPage() {
             </span>
           </div>
           <div className="mt-4 h-2 overflow-hidden rounded-full bg-muted">
-            <div
-              className="h-full rounded-full bg-emerald-500"
-              style={{ width: `${availablePct}%` }}
-            />
+            <div className="h-full rounded-full bg-emerald-500" style={{ width: `${availablePct}%` }} />
           </div>
-          <Link
-            href="/integrations"
-            className="mt-3 inline-flex items-center gap-1 text-[12px] font-semibold text-primary hover:underline"
-          >
-            View all available
-            <ArrowRight className="h-3.5 w-3.5" />
-          </Link>
         </Card>
 
         <Card className="p-4">
@@ -134,18 +167,8 @@ export default function IntegrationsPage() {
             </span>
           </div>
           <div className="mt-4 h-2 overflow-hidden rounded-full bg-muted">
-            <div
-              className="h-full rounded-full bg-sky-500"
-              style={{ width: `${comingSoonPct}%` }}
-            />
+            <div className="h-full rounded-full bg-sky-500" style={{ width: `${comingSoonPct}%` }} />
           </div>
-          <Link
-            href="/integrations"
-            className="mt-3 inline-flex items-center gap-1 text-[12px] font-semibold text-primary hover:underline"
-          >
-            View roadmap
-            <ArrowRight className="h-3.5 w-3.5" />
-          </Link>
         </Card>
       </div>
 
@@ -176,6 +199,10 @@ export default function IntegrationsPage() {
             };
             const Icon = meta.icon;
             const isAvailable = item.status === "Available";
+            const isConnected =
+              item.name === "API" && connectedApi ||
+              item.name === "Webhooks" && connectedWebhooks ||
+              item.name === "Zapier" && endpoints.length > 0;
 
             const inner = (
               <>
@@ -188,7 +215,7 @@ export default function IntegrationsPage() {
                   >
                     <Icon className="h-5 w-5" />
                   </span>
-                  <StatusChip status={item.status} />
+                  <StatusChip status={isConnected ? "Active" : item.status} />
                 </div>
                 <p className="mt-3 text-[14px] font-semibold text-foreground">{item.name}</p>
                 <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground">
@@ -197,7 +224,7 @@ export default function IntegrationsPage() {
                 <div className="mt-4 border-t border-border pt-3">
                   {isAvailable ? (
                     <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-primary">
-                      Configure
+                      {isConnected ? "Manage" : "Configure"}
                       <ArrowRight className="h-3.5 w-3.5" />
                     </span>
                   ) : (
@@ -223,10 +250,7 @@ export default function IntegrationsPage() {
             }
 
             return (
-              <div
-                key={item.name}
-                className="rounded-[12px] border border-border p-4"
-              >
+              <div key={item.name} className="rounded-[12px] border border-border p-4">
                 {inner}
               </div>
             );

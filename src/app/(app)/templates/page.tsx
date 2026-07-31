@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/metric";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Tabs } from "@/components/ui/tabs";
-import { teamMembers, templates } from "@/lib/mock/data";
+import type { Template, User } from "@/lib/types";
 import { cn, formatNumber } from "@/lib/utils";
 import {
   Eye,
@@ -25,7 +25,7 @@ import {
   Users,
 } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 const templateTabs = [
   { label: "All templates", href: "/templates" },
@@ -78,6 +78,23 @@ export default function TemplatesPage() {
   const [category, setCategory] = useState<string>("All");
   const [typeFilter, setTypeFilter] = useState<string>("All types");
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const [teamMembers, setTeamMembers] = useState<User[]>([]);
+
+  useEffect(() => {
+    fetch("/api/templates")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => {
+        if (json?.data) setTemplates(json.data);
+      })
+      .catch(() => undefined);
+    fetch("/api/team")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => {
+        if (json?.data) setTeamMembers(json.data);
+      })
+      .catch(() => undefined);
+  }, []);
 
   const filtered = useMemo(
     () =>
@@ -86,7 +103,7 @@ export default function TemplatesPage() {
         const matchType = typeFilter === "All types" || t.type === typeFilter;
         return matchCategory && matchType;
       }),
-    [category, typeFilter],
+    [category, typeFilter, templates],
   );
 
   const smsCount = templates.filter((t) => t.channel === "SMS").length;

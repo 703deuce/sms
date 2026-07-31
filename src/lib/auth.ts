@@ -1,5 +1,5 @@
 import { cookies } from "next/headers";
-import { demoUser, workspaces } from "@/lib/mock/data";
+import { getPrisma } from "@/lib/db";
 
 export const SESSION_COOKIE = "transovo_session";
 export const WORKSPACE_COOKIE = "transovo_workspace";
@@ -24,14 +24,22 @@ export async function getSession(): Promise<Session | null> {
 
 export async function getActiveWorkspaceId() {
   const jar = await cookies();
-  return jar.get(WORKSPACE_COOKIE)?.value ?? workspaces[0].id;
+  const fromCookie = jar.get(WORKSPACE_COOKIE)?.value;
+  if (fromCookie) return fromCookie;
+
+  const session = await getSession();
+  if (!session) return "";
+
+  try {
+    const membership = await getPrisma().membership.findFirst({
+      where: { userId: session.userId },
+    });
+    return membership?.workspaceId || "";
+  } catch {
+    return "";
+  }
 }
 
-export function createDemoSession(email: string, name?: string): Session {
-  return {
-    userId: demoUser.id,
-    email: email || demoUser.email,
-    name: name || demoUser.name,
-    isAdmin: true,
-  };
+export function encodeSession(session: Session) {
+  return encodeURIComponent(JSON.stringify(session));
 }

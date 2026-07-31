@@ -69,7 +69,7 @@ export default function PortNumberPage() {
 
             <div>
               <Label htmlFor="businessName">Business name on account</Label>
-              <Input id="businessName" name="businessName" defaultValue="Harbor Home Services" />
+              <Input id="businessName" name="businessName" placeholder="Legal business name" />
             </div>
 
             <div>
@@ -84,7 +84,7 @@ export default function PortNumberPage() {
 
             <div>
               <Label htmlFor="authorizedName">Authorized signatory</Label>
-              <Input id="authorizedName" name="authorizedName" defaultValue="Alex Rivera" />
+              <Input id="authorizedName" name="authorizedName" placeholder="Full name" />
             </div>
 
             <div>

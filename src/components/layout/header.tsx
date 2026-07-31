@@ -1,6 +1,6 @@
 "use client";
 
-import { metrics, phoneNumbers } from "@/lib/mock/data";
+import type { DashboardMetrics, PhoneNumber } from "@/lib/types";
 import { formatNumber, formatPhone } from "@/lib/utils";
 import {
   Bell,
@@ -15,13 +15,17 @@ import { useState } from "react";
 export function Header({
   title,
   userName,
+  phoneNumbers,
+  metrics,
   onMenuClick,
 }: {
   title: string;
   userName: string;
+  phoneNumbers: PhoneNumber[];
+  metrics: DashboardMetrics;
   onMenuClick: () => void;
 }) {
-  const [numberId, setNumberId] = useState(phoneNumbers[0]?.id);
+  const [numberId, setNumberId] = useState(phoneNumbers[0]?.id ?? "");
   const initials = userName
     .split(" ")
     .map((p) => p[0])
@@ -55,18 +59,20 @@ export function Header({
         </div>
 
         <div className="ml-auto flex items-center gap-2">
-          <select
-            className="hidden h-9 max-w-[170px] rounded-full border border-border bg-card px-3 text-[12px] font-medium outline-none focus:border-primary sm:block"
-            value={numberId}
-            onChange={(e) => setNumberId(e.target.value)}
-            aria-label="Sending number"
-          >
-            {phoneNumbers.map((n) => (
-              <option key={n.id} value={n.id}>
-                {formatPhone(n.number)}
-              </option>
-            ))}
-          </select>
+          {phoneNumbers.length > 0 ? (
+            <select
+              className="hidden h-9 max-w-[170px] rounded-full border border-border bg-card px-3 text-[12px] font-medium outline-none focus:border-primary sm:block"
+              value={numberId}
+              onChange={(e) => setNumberId(e.target.value)}
+              aria-label="Sending number"
+            >
+              {phoneNumbers.map((n) => (
+                <option key={n.id} value={n.id}>
+                  {formatPhone(n.number)}
+                </option>
+              ))}
+            </select>
+          ) : null}
 
           <Link
             href="/settings/billing"
@@ -78,25 +84,24 @@ export function Header({
 
           <button
             type="button"
-            className="relative rounded-full p-2.5 text-foreground hover:bg-muted"
+            className="relative rounded-full p-2 text-muted-foreground hover:bg-muted hover:text-foreground"
             aria-label="Notifications"
           >
-            <Bell className="h-[18px] w-[18px]" />
-            <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-danger ring-2 ring-white" />
+            <Bell className="h-5 w-5" />
           </button>
 
           <Link
             href="/getting-started"
-            className="rounded-full p-2.5 text-foreground hover:bg-muted"
+            className="hidden rounded-full p-2 text-muted-foreground hover:bg-muted hover:text-foreground sm:block"
             aria-label="Help"
           >
-            <CircleHelp className="h-[18px] w-[18px]" />
+            <CircleHelp className="h-5 w-5" />
           </Link>
 
           <Link
             href="/settings/users"
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-emerald-400 to-sky-500 text-[11px] font-bold text-white"
-            title={userName}
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-[12px] font-bold text-muted-foreground ring-1 ring-border hover:bg-muted/80"
+            aria-label="Account"
           >
             {initials}
           </Link>

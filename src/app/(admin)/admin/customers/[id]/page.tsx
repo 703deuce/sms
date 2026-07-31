@@ -3,7 +3,8 @@ import { Card, CardTitle, StatCard } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatusChip } from "@/components/ui/status-chip";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
-import { adminCustomers, metrics } from "@/lib/mock/data";
+import { loadAdminCustomerById } from "@/lib/admin-data";
+import { loadDashboardMetrics } from "@/lib/workspace-data";
 import { formatCurrency, formatNumber, formatPercent } from "@/lib/utils";
 import { ArrowLeft, CreditCard, Shield, UserCog } from "lucide-react";
 import Link from "next/link";
@@ -15,12 +16,13 @@ export default async function AdminCustomerDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const customer = adminCustomers.find((c) => c.id === id);
+  const customer = await loadAdminCustomerById(id);
 
   if (!customer) {
     notFound();
   }
 
+  const metrics = await loadDashboardMetrics(id);
   const usageCost = customer.messages * 0.015;
   const twilioCost = customer.messages * 0.0085;
 
@@ -36,7 +38,7 @@ export default async function AdminCustomerDetailPage({
 
       <PageHeader
         title={customer.name}
-        description={`${customer.plan} plan · ${customer.status} account`}
+        description={`${customer.plan} · ${customer.status} · ${customer.memberCount} members`}
         actions={
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" size="sm">
@@ -62,7 +64,7 @@ export default async function AdminCustomerDetailPage({
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="MRR" value={formatCurrency(customer.mrr)} />
-        <StatCard label="Messages (30d)" value={formatNumber(customer.messages)} />
+        <StatCard label="Messages" value={formatNumber(customer.messages)} />
         <StatCard label="Usage revenue" value={formatCurrency(usageCost)} />
         <StatCard label="Twilio cost" value={formatCurrency(twilioCost)} />
       </div>
@@ -95,10 +97,7 @@ export default async function AdminCustomerDetailPage({
               <dd>{formatPercent(metrics.deliveryRate)}</dd>
             </div>
           </dl>
-          <Link
-            href="/admin/a2p"
-            className="mt-4 inline-block text-sm font-medium text-primary hover:underline"
-          >
+          <Link href="/admin/a2p" className="mt-4 inline-block text-sm font-medium text-primary hover:underline">
             View A2P queue →
           </Link>
         </Card>
@@ -122,10 +121,6 @@ export default async function AdminCustomerDetailPage({
                 <TD>{formatNumber(Math.round(customer.messages * 1.04))}</TD>
               </TR>
               <TR>
-                <TD>MMS messages</TD>
-                <TD>{formatNumber(Math.round(customer.messages * 0.008))}</TD>
-              </TR>
-              <TR>
                 <TD>Credits remaining</TD>
                 <TD>{formatNumber(metrics.creditsRemaining)}</TD>
               </TR>
@@ -141,22 +136,12 @@ export default async function AdminCustomerDetailPage({
       <Card className="mt-4">
         <CardTitle>Admin actions</CardTitle>
         <p className="mt-2 text-sm text-muted-foreground">
-          These actions are UI-only in this demo. In production they would trigger account state changes,
-          billing adjustments, and audit log entries.
+          Workspace slug: <code className="rounded bg-muted px-1">{customer.slug}</code>
         </p>
         <div className="mt-4 flex flex-wrap gap-2">
-          <Button variant="outline" size="sm">
-            Reset A2P submission
-          </Button>
-          <Button variant="outline" size="sm">
-            Force brand resubmit
-          </Button>
-          <Button variant="outline" size="sm">
-            Send compliance notice
-          </Button>
-          <Button variant="outline" size="sm">
-            View message logs
-          </Button>
+          <Button variant="outline" size="sm">Reset A2P submission</Button>
+          <Button variant="outline" size="sm">Force brand resubmit</Button>
+          <Button variant="outline" size="sm">Send compliance notice</Button>
         </div>
       </Card>
     </div>

@@ -9,7 +9,7 @@ import {
 import { StatusChip } from "@/components/ui/status-chip";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Tabs } from "@/components/ui/tabs";
-import { phoneNumbers } from "@/lib/mock/data";
+import { requireWorkspaceContext, loadPhoneNumbers } from "@/lib/workspace-data";
 import { cn, formatCurrency, formatPhone } from "@/lib/utils";
 import {
   Calendar,
@@ -47,15 +47,20 @@ const avatarTones = [
 ];
 
 function formatA2pDate(status: string) {
-  if (status === "Approved") return "Jul 12, 2026";
-  if (status === "Pending") return "Submitted Jul 18, 2026";
+  if (status === "Approved") return "Approved";
+  if (status === "Pending") return "Submitted";
   return "—";
 }
 
-export default function NumbersPage() {
+export default async function NumbersPage() {
+  const { workspaceId } = await requireWorkspaceContext();
+  const phoneNumbers = await loadPhoneNumbers(workspaceId);
+
   const activeCount = phoneNumbers.filter((pn) => pn.status === "Active").length;
   const monthlySpend = phoneNumbers.reduce((sum, pn) => sum + pn.monthlyCost, 0);
-  const a2pRegistered = phoneNumbers.length;
+  const a2pRegistered = phoneNumbers.filter((pn) => pn.a2pStatus === "Approved").length;
+  const allA2pApproved =
+    phoneNumbers.length > 0 && phoneNumbers.every((pn) => pn.a2pStatus === "Approved");
 
   return (
     <div className="space-y-5">
@@ -93,7 +98,11 @@ export default function NumbersPage() {
         <MetricCard
           label="A2P registered"
           value={a2pRegistered}
-          hint="100% registered"
+          hint={
+            phoneNumbers.length
+              ? `${Math.round((a2pRegistered / phoneNumbers.length) * 100)}% registered`
+              : "No numbers"
+          }
           icon={Shield}
           tone="bg-violet-50 text-violet-600"
           sparkline={[1, 1, 1, 2, 2, 2, 2, 2]}
@@ -110,8 +119,8 @@ export default function NumbersPage() {
         />
         <MetricCard
           label="Next payment"
-          value="May 28, 2026"
-          hint="In 12 days"
+          value="—"
+          hint="Billing cycle"
           icon={Calendar}
           tone="bg-orange-50 text-orange-600"
         />
@@ -125,135 +134,159 @@ export default function NumbersPage() {
           </Button>
         </TableToolbar>
 
-        <Table>
-          <THead>
-            <TR>
-              <TH>Number</TH>
-              <TH>Friendly name</TH>
-              <TH>Type</TH>
-              <TH>A2P status</TH>
-              <TH>Messaging service</TH>
-              <TH>Assigned</TH>
-              <TH>Monthly</TH>
-              <TH>Status</TH>
-              <TH className="w-10" />
-            </TR>
-          </THead>
-          <TBody>
-            {phoneNumbers.map((pn, index) => (
-              <TR key={pn.id}>
-                <TD>
-                  <Link
-                    href={`/numbers/${pn.id}`}
-                    className="flex items-start gap-2.5 hover:opacity-80"
-                  >
-                    <span className="relative mt-1.5 flex h-2 w-2 shrink-0">
-                      <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                      <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
-                    </span>
-                    <span>
-                      <span className="block font-semibold text-foreground">
-                        {formatPhone(pn.number)}
-                      </span>
-                      <span className="mt-0.5 block text-[12px] text-muted-foreground">
-                        {cityByAreaCode[pn.areaCode] ?? "—"}
-                      </span>
-                    </span>
-                  </Link>
-                </TD>
-                <TD>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-[13px] font-medium">{pn.friendlyName}</span>
-                    {index === 0 ? (
-                      <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
-                        Default
-                      </span>
-                    ) : null}
-                  </div>
-                </TD>
-                <TD className="text-[13px] text-muted-foreground">{pn.type}</TD>
-                <TD>
-                  <div className="space-y-1">
-                    <StatusChip status={pn.a2pStatus} />
-                    <p className="text-[11px] text-muted-foreground">
-                      {formatA2pDate(pn.a2pStatus)}
-                    </p>
-                  </div>
-                </TD>
-                <TD>
-                  <span className="inline-flex items-center gap-2 text-[13px]">
-                    <span className="flex h-7 w-7 items-center justify-center rounded-[8px] bg-slate-100 text-slate-600">
-                      <Layers className="h-3.5 w-3.5" />
-                    </span>
-                    <span>
-                      <span className="block font-medium text-foreground">Enterprise</span>
-                      <span className="block text-[11px] text-muted-foreground">
-                        {pn.messagingService}
-                      </span>
-                    </span>
-                  </span>
-                </TD>
-                <TD>
-                  <div className="flex items-center -space-x-2">
-                    {pn.assignedUsers.map((user, i) => (
-                      <span
-                        key={user}
-                        title={user}
-                        className={cn(
-                          "flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-bold ring-2 ring-card",
-                          avatarTones[i % avatarTones.length],
-                        )}
-                      >
-                        {initials(user)}
-                      </span>
-                    ))}
-                  </div>
-                  <p className="mt-1.5 text-[11px] text-muted-foreground">
-                    {pn.assignedUsers.join(", ")}
-                  </p>
-                </TD>
-                <TD className="tabular-nums">{formatCurrency(pn.monthlyCost)}</TD>
-                <TD>
-                  <StatusChip status={pn.status} />
-                </TD>
-                <TD>
-                  <button
-                    type="button"
-                    className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
-                    aria-label={`Actions for ${pn.friendlyName}`}
-                  >
-                    <MoreHorizontal className="h-4 w-4" />
-                  </button>
-                </TD>
+        {phoneNumbers.length === 0 ? (
+          <p className="py-12 text-center text-[13px] text-muted-foreground">
+            No phone numbers yet.{" "}
+            <Link href="/numbers/buy" className="text-primary hover:underline">
+              Buy a number
+            </Link>
+            to get started.
+          </p>
+        ) : (
+          <Table>
+            <THead>
+              <TR>
+                <TH>Number</TH>
+                <TH>Friendly name</TH>
+                <TH>Type</TH>
+                <TH>A2P status</TH>
+                <TH>Messaging service</TH>
+                <TH>Assigned</TH>
+                <TH>Monthly</TH>
+                <TH>Status</TH>
+                <TH className="w-10" />
               </TR>
-            ))}
-          </TBody>
-        </Table>
+            </THead>
+            <TBody>
+              {phoneNumbers.map((pn, index) => (
+                <TR key={pn.id}>
+                  <TD>
+                    <Link
+                      href={`/numbers/${pn.id}`}
+                      className="flex items-start gap-2.5 hover:opacity-80"
+                    >
+                      <span className="relative mt-1.5 flex h-2 w-2 shrink-0">
+                        <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                        <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+                      </span>
+                      <span>
+                        <span className="block font-semibold text-foreground">
+                          {formatPhone(pn.number)}
+                        </span>
+                        <span className="mt-0.5 block text-[12px] text-muted-foreground">
+                          {cityByAreaCode[pn.areaCode] ?? "—"}
+                        </span>
+                      </span>
+                    </Link>
+                  </TD>
+                  <TD>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-[13px] font-medium">{pn.friendlyName}</span>
+                      {index === 0 ? (
+                        <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
+                          Default
+                        </span>
+                      ) : null}
+                    </div>
+                  </TD>
+                  <TD className="text-[13px] text-muted-foreground">{pn.type}</TD>
+                  <TD>
+                    <div className="space-y-1">
+                      <StatusChip status={pn.a2pStatus} />
+                      <p className="text-[11px] text-muted-foreground">
+                        {formatA2pDate(pn.a2pStatus)}
+                      </p>
+                    </div>
+                  </TD>
+                  <TD>
+                    <span className="inline-flex items-center gap-2 text-[13px]">
+                      <span className="flex h-7 w-7 items-center justify-center rounded-[8px] bg-slate-100 text-slate-600">
+                        <Layers className="h-3.5 w-3.5" />
+                      </span>
+                      <span>
+                        <span className="block font-medium text-foreground">Enterprise</span>
+                        <span className="block text-[11px] text-muted-foreground">
+                          {pn.messagingService}
+                        </span>
+                      </span>
+                    </span>
+                  </TD>
+                  <TD>
+                    {pn.assignedUsers.length > 0 ? (
+                      <>
+                        <div className="flex items-center -space-x-2">
+                          {pn.assignedUsers.map((user, i) => (
+                            <span
+                              key={user}
+                              title={user}
+                              className={cn(
+                                "flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-bold ring-2 ring-card",
+                                avatarTones[i % avatarTones.length],
+                              )}
+                            >
+                              {initials(user)}
+                            </span>
+                          ))}
+                        </div>
+                        <p className="mt-1.5 text-[11px] text-muted-foreground">
+                          {pn.assignedUsers.join(", ")}
+                        </p>
+                      </>
+                    ) : (
+                      <span className="text-[12px] text-muted-foreground">—</span>
+                    )}
+                  </TD>
+                  <TD className="tabular-nums">{formatCurrency(pn.monthlyCost)}</TD>
+                  <TD>
+                    <StatusChip status={pn.status} />
+                  </TD>
+                  <TD>
+                    <button
+                      type="button"
+                      className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+                      aria-label={`Actions for ${pn.friendlyName}`}
+                    >
+                      <MoreHorizontal className="h-4 w-4" />
+                    </button>
+                  </TD>
+                </TR>
+              ))}
+            </TBody>
+          </Table>
+        )}
 
-        <PaginationBar rangeLabel={`1–${phoneNumbers.length} of ${phoneNumbers.length}`} />
+        <PaginationBar
+          rangeLabel={
+            phoneNumbers.length
+              ? `1–${phoneNumbers.length} of ${phoneNumbers.length}`
+              : "0 of 0"
+          }
+        />
       </Card>
 
-      <div className="flex flex-col gap-3 rounded-[12px] border border-emerald-200/80 bg-emerald-50/60 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-start gap-3">
-          <Shield className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
-          <div>
-            <p className="text-[13px] font-semibold text-emerald-950">
-              A2P 10DLC compliance
-            </p>
-            <p className="mt-0.5 text-[12px] text-emerald-900/80">
-              All active numbers are A2P 10DLC registered and compliant.
-            </p>
+      {allA2pApproved ? (
+        <div className="flex flex-col gap-3 rounded-[12px] border border-emerald-200/80 bg-emerald-50/60 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <Shield className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+            <div>
+              <p className="text-[13px] font-semibold text-emerald-950">
+                A2P 10DLC compliance
+              </p>
+              <p className="mt-0.5 text-[12px] text-emerald-900/80">
+                All active numbers are A2P 10DLC registered and compliant.
+              </p>
+            </div>
           </div>
+          <Link href="/compliance">
+            <Button
+              variant="outline"
+              className="h-9 shrink-0 rounded-[10px] border-emerald-300 bg-white text-[13px] text-emerald-900 hover:bg-emerald-50"
+            >
+              View compliance →
+            </Button>
+          </Link>
         </div>
-        <Link href="/compliance">
-          <Button
-            variant="outline"
-            className="h-9 shrink-0 rounded-[10px] border-emerald-300 bg-white text-[13px] text-emerald-900 hover:bg-emerald-50"
-          >
-            View compliance →
-          </Button>
-        </Link>
-      </div>
+      ) : null}
     </div>
   );
 }

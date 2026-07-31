@@ -3,7 +3,13 @@ import { Card, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatusChip } from "@/components/ui/status-chip";
 import { Tabs } from "@/components/ui/tabs";
-import { complianceOverview, metrics, phoneNumbers } from "@/lib/mock/data";
+import {
+  requireWorkspaceContext,
+  loadComplianceOverview,
+  loadDashboardMetrics,
+  loadPhoneNumbers,
+} from "@/lib/workspace-data";
+import type { PhoneNumber } from "@/lib/types";
 import { CheckCircle2, XCircle } from "lucide-react";
 import Link from "next/link";
 
@@ -25,70 +31,83 @@ type CheckItem = {
   href?: string;
 };
 
-const checklist: CheckItem[] = [
-  {
-    label: "Business profile complete",
-    pass: complianceOverview.customerProfile === "Complete",
-    detail: "Legal name, EIN, address, and contacts on file",
-    href: "/compliance/business",
-  },
-  {
-    label: "Brand registration approved",
-    pass: complianceOverview.brand === "Approved",
-    detail: `Current status: ${complianceOverview.brand}`,
-    href: "/compliance/brand",
-  },
-  {
-    label: "Campaign registration submitted",
-    pass: complianceOverview.campaign !== "Draft",
-    detail: `Current status: ${complianceOverview.campaign}`,
-    href: "/compliance/campaign",
-  },
-  {
-    label: "Privacy policy URL provided",
-    pass: false,
-    detail: "Required for brand vetting",
-    href: "/compliance/brand",
-  },
-  {
-    label: "Sample messages provided (2+)",
-    pass: false,
-    detail: "At least 2 representative sample messages required",
-    href: "/compliance/campaign",
-  },
-  {
-    label: "Opt-in disclosure on website",
-    pass: false,
-    detail: "Consent language must match registered message flow",
-    href: "/grow/forms",
-  },
-  {
-    label: "Active phone number assigned",
-    pass: phoneNumbers.length > 0,
-    detail: `${phoneNumbers.length} number(s) on account`,
-    href: "/numbers",
-  },
-  {
-    label: "All numbers A2P registered",
-    pass: phoneNumbers.every((pn) => pn.a2pStatus === "Approved"),
-    detail: `${phoneNumbers.filter((pn) => pn.a2pStatus === "Approved").length}/${phoneNumbers.length} approved`,
-    href: "/numbers",
-  },
-  {
-    label: "Payment method on file",
-    pass: metrics.balance > 0,
-    detail: `Balance: $${metrics.balance.toFixed(2)}`,
-    href: "/settings/billing",
-  },
-  {
-    label: "STOP handling configured",
-    pass: true,
-    detail: "Automatic opt-out processing enabled",
-    href: "/settings/messaging",
-  },
-];
+export default async function ComplianceCheckPage() {
+  const { workspaceId } = await requireWorkspaceContext();
+  const [overview, metrics, phoneNumbers] = await Promise.all([
+    loadComplianceOverview(workspaceId),
+    loadDashboardMetrics(workspaceId),
+    loadPhoneNumbers(workspaceId),
+  ]);
 
-export default function ComplianceCheckPage() {
+  const samples = overview.registration?.sampleMessages || [];
+  const privacyUrl = overview.website
+    ? `${overview.website.replace(/\/$/, "")}/privacy`
+    : "";
+
+  const checklist: CheckItem[] = [
+    {
+      label: "Business profile complete",
+      pass: overview.customerProfile === "Complete",
+      detail: "Legal name, EIN, address, and contacts on file",
+      href: "/compliance/business",
+    },
+    {
+      label: "Brand registration approved",
+      pass: overview.brand === "Approved",
+      detail: `Current status: ${overview.brand}`,
+      href: "/compliance/brand",
+    },
+    {
+      label: "Campaign registration submitted",
+      pass: overview.campaign !== "Draft",
+      detail: `Current status: ${overview.campaign}`,
+      href: "/compliance/campaign",
+    },
+    {
+      label: "Privacy policy URL provided",
+      pass: Boolean(overview.website),
+      detail: privacyUrl || "Required for brand vetting",
+      href: "/compliance/brand",
+    },
+    {
+      label: "Sample messages provided (2+)",
+      pass: samples.length >= 2,
+      detail: `${samples.length} sample message(s) on file`,
+      href: "/compliance/campaign",
+    },
+    {
+      label: "Opt-in disclosure on website",
+      pass: Boolean(overview.registration?.optInDescription),
+      detail: "Consent language must match registered message flow",
+      href: "/grow/forms",
+    },
+    {
+      label: "Active phone number assigned",
+      pass: phoneNumbers.length > 0 || Boolean(overview.registration?.phoneE164),
+      detail: `${phoneNumbers.length} number(s) on account`,
+      href: "/numbers",
+    },
+    {
+      label: "All numbers A2P registered",
+      pass:
+        phoneNumbers.length > 0 && phoneNumbers.every((pn: PhoneNumber) => pn.a2pStatus === "Approved"),
+      detail: `${phoneNumbers.filter((pn: PhoneNumber) => pn.a2pStatus === "Approved").length}/${phoneNumbers.length} approved`,
+      href: "/numbers",
+    },
+    {
+      label: "Payment method on file",
+      pass: metrics.balance > 0,
+      detail: `Balance: $${metrics.balance.toFixed(2)}`,
+      href: "/settings/billing",
+    },
+    {
+      label: "STOP handling configured",
+      pass: true,
+      detail: "Automatic opt-out processing enabled",
+      href: "/settings/messaging",
+    },
+  ];
+
   const passed = checklist.filter((item) => item.pass).length;
   const total = checklist.length;
   const ready = passed === total;
@@ -153,7 +172,10 @@ export default function ComplianceCheckPage() {
                 </div>
                 <p className="mt-1 text-sm text-muted-foreground">{item.detail}</p>
                 {item.href && !item.pass ? (
-                  <Link href={item.href} className="mt-2 inline-flex text-sm font-medium text-primary hover:underline">
+                  <Link
+                    href={item.href}
+                    className="mt-2 inline-flex text-sm font-medium text-primary hover:underline"
+                  >
                     Resolve →
                   </Link>
                 ) : null}

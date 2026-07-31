@@ -1,7 +1,7 @@
 "use client";
 
 import { appNav } from "@/lib/nav";
-import { workspaces } from "@/lib/mock/data";
+import type { Workspace } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import {
   ChevronDown,
@@ -18,11 +18,13 @@ import { useEffect, useMemo, useState } from "react";
 export function Sidebar({
   workspaceId,
   userName,
+  workspaces,
   open,
   onClose,
 }: {
   workspaceId: string;
   userName: string;
+  workspaces: Workspace[];
   open?: boolean;
   onClose?: () => void;
 }) {
@@ -32,7 +34,7 @@ export function Sidebar({
 
   const activeWorkspace = useMemo(
     () => workspaces.find((w) => w.id === workspaceId) ?? workspaces[0],
-    [workspaceId],
+    [workspaceId, workspaces],
   );
 
   // Keep only the section for the current route open (mock-style accordion).
@@ -83,11 +85,11 @@ export function Sidebar({
         </label>
         <div className="relative mt-1">
           <span className="pointer-events-none absolute left-2.5 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-md bg-violet-500 text-[10px] font-bold text-white">
-            H
+            {activeWorkspace?.name?.slice(0, 1).toUpperCase() ?? "W"}
           </span>
           <select
             className="h-9 w-full appearance-none rounded-[10px] border border-white/10 bg-white/5 py-1.5 pl-9 pr-8 text-[12px] font-medium text-white outline-none focus:border-primary/40"
-            value={activeWorkspace.id}
+            value={activeWorkspace?.id ?? workspaceId}
             onChange={(e) => switchWorkspace(e.target.value)}
           >
             {workspaces.map((w) => (

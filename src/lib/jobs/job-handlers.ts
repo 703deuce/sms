@@ -3,6 +3,10 @@ import { claimDueJobs, completeJob, enqueueJob, failJob } from "@/lib/messaging/
 import { advanceMessagingRegistration } from "@/lib/messaging/registration-processor";
 import { processCampaignSendBatch } from "@/lib/campaigns/campaign-processor";
 import { sendCampaignMessageById } from "@/lib/campaigns/campaign-message-send";
+import {
+  processActiveAutomations,
+  processAutomationTick,
+} from "@/lib/automations/processor";
 
 export async function handleJob(jobType: string, payload: Record<string, unknown>) {
   switch (jobType) {
@@ -27,6 +31,15 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       }
       return result;
     }
+    case "automation_tick": {
+      const flowId = String(payload.flowId || "");
+      const workspaceId = String(payload.workspaceId || "");
+      if (!flowId || !workspaceId) throw new Error("flowId and workspaceId required");
+      return processAutomationTick(flowId, workspaceId);
+    }
+    case "automation_batch": {
+      return processActiveAutomations();
+    }
     default:
       throw new Error(`Unknown job type: ${jobType}`);
   }
@@ -40,6 +53,12 @@ export async function processDueJobs(limit = 25) {
     queueName: "review-campaign",
     payload: { minuteKey },
     idempotencyKey: `campaign-send-batch:${minuteKey}`,
+  });
+  await enqueueJob({
+    jobType: "automation_batch",
+    queueName: "automations",
+    payload: { minuteKey },
+    idempotencyKey: `automation-batch:${minuteKey}`,
   });
 
   // When BullMQ is the consumer, cron enqueues the minute batch and re-syncs the DB outbox.

@@ -3,7 +3,11 @@ import { Card, CardTitle, StatCard } from "@/components/ui/card";
 import { Input, Label, Select } from "@/components/ui/input";
 import { PageHeader } from "@/components/ui/page-header";
 import { Tabs } from "@/components/ui/tabs";
-import { metrics } from "@/lib/mock/data";
+import {
+  loadDashboardMetrics,
+  loadRegistration,
+  requireWorkspaceContext,
+} from "@/lib/workspace-data";
 import { formatNumber } from "@/lib/utils";
 import Link from "next/link";
 
@@ -20,7 +24,18 @@ const settingsTabs = [
   { label: "Data", href: "/settings/data" },
 ];
 
-export default function SettingsLimitsPage() {
+export default async function SettingsLimitsPage() {
+  const { workspaceId } = await requireWorkspaceContext();
+  const [metrics, registration] = await Promise.all([
+    loadDashboardMetrics(workspaceId),
+    loadRegistration(workspaceId),
+  ]);
+
+  const a2pApproved = metrics.a2pStatus === "Approved";
+  const dailyCap = a2pApproved ? 10000 : 200;
+  const monthlyCap = a2pApproved ? 250000 : 5000;
+  const sentToday = Math.round(metrics.messagesSentPeriod / 30);
+
   return (
     <div>
       <PageHeader
@@ -32,10 +47,10 @@ export default function SettingsLimitsPage() {
       <Tabs items={settingsTabs} />
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Daily send cap" value="10,000" hint="Segments per day" />
-        <StatCard label="Sent today" value={formatNumber(Math.round(metrics.messagesSentPeriod / 30))} />
-        <StatCard label="Monthly cap" value="250,000" hint="Segments per month" />
-        <StatCard label="A2P throughput" value={metrics.a2pStatus === "Approved" ? "60 MPS" : "1 MPS"} />
+        <StatCard label="Daily send cap" value={formatNumber(dailyCap)} hint="Segments per day" />
+        <StatCard label="Sent today (est.)" value={formatNumber(sentToday)} />
+        <StatCard label="Monthly cap" value={formatNumber(monthlyCap)} hint="Segments per month" />
+        <StatCard label="A2P throughput" value={a2pApproved ? "60 MPS" : "1 MPS"} />
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">
@@ -44,18 +59,18 @@ export default function SettingsLimitsPage() {
           <form className="mt-4 space-y-4">
             <div>
               <Label htmlFor="maxAudience">Max audience per campaign</Label>
-              <Input id="maxAudience" type="number" defaultValue={50000} />
+              <Input id="maxAudience" type="number" defaultValue={a2pApproved ? 50000 : 5000} />
             </div>
             <div>
               <Label htmlFor="approvalThreshold">Require approval above</Label>
-              <Input id="approvalThreshold" type="number" defaultValue={5000} />
+              <Input id="approvalThreshold" type="number" defaultValue={a2pApproved ? 5000 : 500} />
               <p className="mt-1 text-xs text-muted-foreground">
                 Campaigns exceeding this size require owner approval before send.
               </p>
             </div>
             <div>
               <Label htmlFor="dailyCap">Daily segment cap</Label>
-              <Input id="dailyCap" type="number" defaultValue={10000} />
+              <Input id="dailyCap" type="number" defaultValue={dailyCap} />
             </div>
           </form>
         </Card>
@@ -89,6 +104,11 @@ export default function SettingsLimitsPage() {
           Your current A2P status is <strong>{metrics.a2pStatus}</strong>. Approved registration unlocks higher
           throughput and daily caps. Unregistered accounts are limited to 200 segments per day.
         </p>
+        {registration?.useCase ? (
+          <p className="mt-2 text-sm text-muted-foreground">
+            Registered use case: {registration.useCase}
+          </p>
+        ) : null}
         <Link href="/compliance" className="mt-4 inline-flex">
           <Button variant="outline" size="sm">
             View compliance status

@@ -1,9 +1,14 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { MetricCard, SectionHeader } from "@/components/ui/metric";
 import { StatusChip } from "@/components/ui/status-chip";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
-import { adminCustomers } from "@/lib/mock/data";
+import {
+  loadAdminCustomers,
+  loadAdminRegistrationPipeline,
+  loadAdminUsageTotals,
+} from "@/lib/admin-data";
 import { cn, formatCurrency, formatNumber } from "@/lib/utils";
 import {
   AlertTriangle,
@@ -22,51 +27,36 @@ import {
 import type { LucideIcon } from "lucide-react";
 import Link from "next/link";
 
-const registrationPipeline: Array<{
-  stage: string;
-  count: number;
-  icon: LucideIcon;
-  tone: string;
-}> = [
-  { stage: "Brand submitted", count: 4, icon: Shield, tone: "bg-emerald-50 text-emerald-600" },
-  { stage: "Brand pending review", count: 2, icon: Clock, tone: "bg-orange-50 text-orange-600" },
-  { stage: "Campaign draft", count: 3, icon: FileText, tone: "bg-blue-50 text-blue-600" },
-  { stage: "Campaign rejected", count: 1, icon: XCircle, tone: "bg-rose-50 text-rose-600" },
-];
+export default async function AdminDashboardPage() {
+  const [adminCustomers, usageTotals, pipeline] = await Promise.all([
+    loadAdminCustomers(),
+    loadAdminUsageTotals(),
+    loadAdminRegistrationPipeline(),
+  ]);
 
-const abuseAlerts = [
-  {
-    customer: "QuickMove Logistics",
-    type: "High opt-out rate",
-    severity: "Medium" as const,
-    icon: Shield,
-    tone: "bg-emerald-50 text-emerald-600",
-  },
-  {
-    customer: "Metro Auto Sales",
-    type: "Prohibited terms detected",
-    severity: "High" as const,
-    icon: AlertTriangle,
-    tone: "bg-rose-50 text-rose-600",
-  },
-];
-
-const customerMeta: Record<string, { initials: string; tone: string; joined: string }> = {
-  ac_1: { initials: "HH", tone: "bg-emerald-500", joined: "Jun 12, 2026" },
-  ac_2: { initials: "BP", tone: "bg-violet-500", joined: "Mar 4, 2026" },
-  ac_3: { initials: "QL", tone: "bg-orange-500", joined: "Jan 18, 2026" },
-};
-
-export default function AdminDashboardPage() {
   const activeCustomers = adminCustomers.length;
   const trials = adminCustomers.filter((c) => c.status === "Trial").length;
   const paid = adminCustomers.filter((c) => c.status === "Paid").length;
   const mrr = adminCustomers.reduce((sum, c) => sum + c.mrr, 0);
-  const messageVolume = adminCustomers.reduce((sum, c) => sum + c.messages, 0);
-  const twilioCost = messageVolume * 0.0085;
-  const revenue = mrr + messageVolume * 0.015;
-  const failedMessages = Math.round(messageVolume * 0.024);
-  const failureRate = ((failedMessages / messageVolume) * 100).toFixed(1);
+  const messageVolume = usageTotals.messageVolume;
+  const twilioCost = usageTotals.twilioCost;
+  const revenue = mrr + usageTotals.revenue;
+  const failedMessages = usageTotals.failed;
+  const failureRate = usageTotals.failureRate.toFixed(1);
+
+  const registrationPipeline: Array<{
+    stage: string;
+    count: number;
+    icon: LucideIcon;
+    tone: string;
+  }> = [
+    { stage: "Brand submitted", count: pipeline.brandSubmitted, icon: Shield, tone: "bg-emerald-50 text-emerald-600" },
+    { stage: "Brand pending review", count: pipeline.brandPending, icon: Clock, tone: "bg-orange-50 text-orange-600" },
+    { stage: "Campaign draft", count: pipeline.campaignDraft, icon: FileText, tone: "bg-blue-50 text-blue-600" },
+    { stage: "Campaign rejected", count: pipeline.campaignRejected, icon: XCircle, tone: "bg-rose-50 text-rose-600" },
+  ];
+
+  const highRisk = adminCustomers.filter((c) => c.risk === "High" || c.risk === "Medium");
 
   return (
     <div className="space-y-5">
@@ -85,43 +75,32 @@ export default function AdminDashboardPage() {
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard
-          label="Active Customers"
+          label="Workspaces"
           value={activeCustomers}
-          hint="↑ 50% vs last 30 days"
+          hint="Total on platform"
           icon={Users}
           tone="bg-emerald-50 text-emerald-600"
-          sparkline={[1, 1, 2, 2, 2, 2, 3, 3]}
-          sparkColor="#10b981"
           href="/admin/customers"
         />
         <MetricCard
           label="Trials"
           value={trials}
-          hint="No change"
           icon={Users}
           tone="bg-violet-50 text-violet-600"
-          sparkline={[1, 1, 1, 1, 1, 1, 1, 1]}
-          sparkColor="#8b5cf6"
           href="/admin/customers"
         />
         <MetricCard
           label="Paid Accounts"
           value={paid}
-          hint="↑ 100% vs last 30 days"
           icon={CreditCard}
           tone="bg-blue-50 text-blue-600"
-          sparkline={[0, 1, 1, 1, 1, 2, 2, 2]}
-          sparkColor="#3b82f6"
           href="/admin/customers"
         />
         <MetricCard
           label="MRR"
           value={formatCurrency(mrr)}
-          hint="↑ 12.3% vs last 30 days"
           icon={DollarSign}
           tone="bg-emerald-50 text-emerald-600"
-          sparkline={[8, 9, 10, 11, 12, 13, 14, 15]}
-          sparkColor="#10b981"
           href="/admin/billing"
         />
       </div>
@@ -130,29 +109,21 @@ export default function AdminDashboardPage() {
         <MetricCard
           label="Message Volume"
           value={formatNumber(messageVolume)}
-          hint="Last 30 days"
+          hint="Aggregate outbound"
           icon={MessageSquare}
           tone="bg-blue-50 text-blue-600"
-          sparkline={[12, 14, 13, 16, 18, 17, 20, 22]}
-          sparkColor="#3b82f6"
         />
         <MetricCard
           label="Est. Twilio Cost"
           value={formatCurrency(twilioCost)}
-          hint="Last 30 days"
           icon={Settings2}
           tone="bg-violet-50 text-violet-600"
-          sparkline={[10, 11, 12, 13, 14, 15, 16, 17]}
-          sparkColor="#8b5cf6"
         />
         <MetricCard
           label="Est. Revenue"
           value={formatCurrency(revenue)}
-          hint="Last 30 days"
           icon={TrendingUp}
           tone="bg-emerald-50 text-emerald-600"
-          sparkline={[8, 10, 11, 13, 14, 16, 18, 19]}
-          sparkColor="#10b981"
         />
         <MetricCard
           label="Failed Messages"
@@ -160,8 +131,6 @@ export default function AdminDashboardPage() {
           hint={`~${failureRate}% failure rate`}
           icon={AlertTriangle}
           tone="bg-rose-50 text-rose-600"
-          sparkline={[6, 5, 7, 6, 8, 7, 9, 8]}
-          sparkColor="#ef4444"
         />
       </div>
 
@@ -177,12 +146,7 @@ export default function AdminDashboardPage() {
                   className="flex items-center justify-between rounded-[10px] border border-border px-4 py-2.5 text-[13px]"
                 >
                   <span className="inline-flex items-center gap-2.5 text-foreground">
-                    <span
-                      className={cn(
-                        "flex h-8 w-8 items-center justify-center rounded-[8px]",
-                        stage.tone,
-                      )}
-                    >
+                    <span className={cn("flex h-8 w-8 items-center justify-center rounded-[8px]", stage.tone)}>
                       <Icon className="h-4 w-4" />
                     </span>
                     {stage.stage}
@@ -192,10 +156,7 @@ export default function AdminDashboardPage() {
               );
             })}
           </ul>
-          <Link
-            href="/admin/a2p"
-            className="mt-4 inline-flex items-center gap-1 text-[13px] font-semibold text-primary hover:underline"
-          >
+          <Link href="/admin/a2p" className="mt-4 inline-flex items-center gap-1 text-[13px] font-semibold text-primary hover:underline">
             Open A2P queue →
           </Link>
         </Card>
@@ -203,39 +164,27 @@ export default function AdminDashboardPage() {
         <Card>
           <div className="mb-4 flex items-center gap-2">
             <AlertTriangle className="h-4 w-4 text-amber-600" />
-            <CardTitle>Abuse alerts</CardTitle>
+            <CardTitle>Risk alerts</CardTitle>
           </div>
-          <ul className="space-y-2">
-            {abuseAlerts.map((alert) => {
-              const Icon = alert.icon;
-              return (
+          {highRisk.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No elevated-risk workspaces.</p>
+          ) : (
+            <ul className="space-y-2">
+              {highRisk.map((c) => (
                 <li
-                  key={alert.customer}
+                  key={c.id}
                   className="flex items-center justify-between rounded-[10px] border border-border px-4 py-2.5"
                 >
-                  <div className="flex items-center gap-2.5">
-                    <span
-                      className={cn(
-                        "flex h-8 w-8 items-center justify-center rounded-[8px]",
-                        alert.tone,
-                      )}
-                    >
-                      <Icon className="h-4 w-4" />
-                    </span>
-                    <div>
-                      <p className="text-[13px] font-semibold text-foreground">{alert.customer}</p>
-                      <p className="text-[12px] text-muted-foreground">{alert.type}</p>
-                    </div>
+                  <div>
+                    <p className="text-[13px] font-semibold text-foreground">{c.name}</p>
+                    <p className="text-[12px] text-muted-foreground">A2P: {c.a2p}</p>
                   </div>
-                  <StatusChip status={alert.severity} />
+                  <StatusChip status={c.risk} />
                 </li>
-              );
-            })}
-          </ul>
-          <Link
-            href="/admin/monitoring"
-            className="mt-4 inline-flex items-center gap-1 text-[13px] font-semibold text-primary hover:underline"
-          >
+              ))}
+            </ul>
+          )}
+          <Link href="/admin/monitoring" className="mt-4 inline-flex items-center gap-1 text-[13px] font-semibold text-primary hover:underline">
             View monitoring →
           </Link>
         </Card>
@@ -243,46 +192,36 @@ export default function AdminDashboardPage() {
 
       <Card>
         <div className="mb-4 flex items-center justify-between gap-3">
-          <CardTitle>Recent customers</CardTitle>
-          <Link
-            href="/admin/customers"
-            className="text-[12px] font-semibold text-primary hover:underline"
-          >
-            View all customers →
+          <CardTitle>Workspaces</CardTitle>
+          <Link href="/admin/customers" className="text-[12px] font-semibold text-primary hover:underline">
+            View all →
           </Link>
         </div>
-        <Table>
-          <THead>
-            <TR>
-              <TH>Customer</TH>
-              <TH>Plan</TH>
-              <TH>Status</TH>
-              <TH>MRR</TH>
-              <TH>Messages (30d)</TH>
-              <TH>A2P Status</TH>
-              <TH>Risk Level</TH>
-              <TH>Joined</TH>
-              <TH className="w-10" />
-            </TR>
-          </THead>
-          <TBody>
-            {adminCustomers.map((c) => {
-              const meta = customerMeta[c.id];
-              return (
+        {adminCustomers.length === 0 ? (
+          <EmptyState title="No workspaces" description="Workspaces will appear as accounts are created." />
+        ) : (
+          <Table>
+            <THead>
+              <TR>
+                <TH>Customer</TH>
+                <TH>Plan</TH>
+                <TH>Status</TH>
+                <TH>MRR</TH>
+                <TH>Messages</TH>
+                <TH>A2P Status</TH>
+                <TH>Risk Level</TH>
+                <TH>Members</TH>
+                <TH className="w-10" />
+              </TR>
+            </THead>
+            <TBody>
+              {adminCustomers.map((c) => (
                 <TR key={c.id}>
                   <TD>
                     <Link
                       href={`/admin/customers/${c.id}`}
-                      className="flex items-center gap-2.5 font-medium text-foreground hover:text-primary"
+                      className="font-medium text-foreground hover:text-primary"
                     >
-                      <span
-                        className={cn(
-                          "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-white",
-                          meta?.tone ?? "bg-slate-400",
-                        )}
-                      >
-                        {meta?.initials ?? c.name.slice(0, 2).toUpperCase()}
-                      </span>
                       {c.name}
                     </Link>
                   </TD>
@@ -298,7 +237,7 @@ export default function AdminDashboardPage() {
                   <TD>
                     <StatusChip status={c.risk} />
                   </TD>
-                  <TD className="text-muted-foreground">{meta?.joined ?? "—"}</TD>
+                  <TD className="text-muted-foreground">{c.memberCount}</TD>
                   <TD>
                     <button
                       type="button"
@@ -309,12 +248,12 @@ export default function AdminDashboardPage() {
                     </button>
                   </TD>
                 </TR>
-              );
-            })}
-          </TBody>
-        </Table>
+              ))}
+            </TBody>
+          </Table>
+        )}
         <p className="mt-3 text-center text-[12px] text-muted-foreground">
-          Showing {adminCustomers.length} of {adminCustomers.length} customers.
+          Showing {adminCustomers.length} workspace{adminCustomers.length === 1 ? "" : "s"}.
         </p>
       </Card>
     </div>

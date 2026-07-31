@@ -1,9 +1,10 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Tabs } from "@/components/ui/tabs";
-import { auditLogs } from "@/lib/mock/data";
+import { loadAuditLogs, requireWorkspaceContext } from "@/lib/workspace-data";
 
 const reportTabs = [
   { label: "Overview", href: "/reports" },
@@ -17,7 +18,10 @@ const reportTabs = [
   { label: "Audit log", href: "/reports/audit-log" },
 ];
 
-export default function ReportsAuditLogPage() {
+export default async function ReportsAuditLogPage() {
+  const { workspaceId } = await requireWorkspaceContext();
+  const auditLogs = await loadAuditLogs(workspaceId);
+
   return (
     <div>
       <PageHeader
@@ -30,28 +34,32 @@ export default function ReportsAuditLogPage() {
 
       <Card>
         <CardTitle>Recent activity</CardTitle>
-        <Table className="mt-4">
-          <THead>
-            <TR>
-              <TH>Time</TH>
-              <TH>Event</TH>
-              <TH>Actor</TH>
-              <TH>Detail</TH>
-            </TR>
-          </THead>
-          <TBody>
-            {auditLogs.map((entry) => (
-              <TR key={entry.id}>
-                <TD className="whitespace-nowrap text-muted-foreground">
-                  {new Date(entry.at).toLocaleString()}
-                </TD>
-                <TD className="font-medium">{entry.event}</TD>
-                <TD>{entry.actor}</TD>
-                <TD className="text-muted-foreground">{entry.detail}</TD>
+        {auditLogs.length === 0 ? (
+          <EmptyState title="No audit events" description="Account activity will be logged here." />
+        ) : (
+          <Table className="mt-4">
+            <THead>
+              <TR>
+                <TH>Time</TH>
+                <TH>Event</TH>
+                <TH>Actor</TH>
+                <TH>Detail</TH>
               </TR>
-            ))}
-          </TBody>
-        </Table>
+            </THead>
+            <TBody>
+              {auditLogs.map((entry) => (
+                <TR key={entry.id}>
+                  <TD className="whitespace-nowrap text-muted-foreground">
+                    {new Date(entry.at).toLocaleString()}
+                  </TD>
+                  <TD className="font-medium">{entry.event}</TD>
+                  <TD>{entry.actor}</TD>
+                  <TD className="text-muted-foreground">{entry.detail}</TD>
+                </TR>
+              ))}
+            </TBody>
+          </Table>
+        )}
       </Card>
     </div>
   );

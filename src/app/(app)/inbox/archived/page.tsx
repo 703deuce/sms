@@ -4,30 +4,17 @@ import { PageHeader } from "@/components/ui/page-header";
 import { StatusChip } from "@/components/ui/status-chip";
 import { Table, TBody, TD, THead, TH, TR } from "@/components/ui/table";
 import { formatPhone } from "@/lib/utils";
+import {
+  loadConversations,
+  requireWorkspaceContext,
+} from "@/lib/workspace-data";
 import { Archive } from "lucide-react";
 import Link from "next/link";
 
-const archivedConversations = [
-  {
-    id: "arch_1",
-    contactName: "Tom Reyes",
-    phone: "+14155550201",
-    lastMessage: "Thanks, all set!",
-    assignedTo: "Jordan Lee",
-    archivedAt: "2026-07-10T14:22:00Z",
-  },
-  {
-    id: "arch_2",
-    contactName: "Elena Park",
-    phone: "+14155550212",
-    lastMessage: "Please remove me from promos.",
-    assignedTo: "Alex Rivera",
-    archivedAt: "2026-07-05T09:15:00Z",
-  },
-];
-
-export default function InboxArchivedPage() {
-  const hasArchived = archivedConversations.length > 0;
+export default async function InboxArchivedPage() {
+  const { workspaceId } = await requireWorkspaceContext();
+  const conversations = await loadConversations(workspaceId);
+  const archivedConversations = conversations.filter((c) => c.status === "Closed");
 
   return (
     <div>
@@ -41,7 +28,7 @@ export default function InboxArchivedPage() {
         }
       />
 
-      {hasArchived ? (
+      {archivedConversations.length > 0 ? (
         <Table>
           <THead>
             <TR>
@@ -60,9 +47,9 @@ export default function InboxArchivedPage() {
                   <p className="text-xs text-muted-foreground">{formatPhone(c.phone)}</p>
                 </TD>
                 <TD className="max-w-xs truncate text-muted-foreground">{c.lastMessage}</TD>
-                <TD>{c.assignedTo}</TD>
+                <TD>{c.assignedTo || "Unassigned"}</TD>
                 <TD className="text-muted-foreground">
-                  {new Date(c.archivedAt).toLocaleDateString(undefined, {
+                  {new Date(c.updatedAt).toLocaleDateString(undefined, {
                     month: "short",
                     day: "numeric",
                     year: "numeric",

@@ -1,10 +1,15 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle, StatCard } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatusChip } from "@/components/ui/status-chip";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Tabs } from "@/components/ui/tabs";
-import { messageLogs, metrics } from "@/lib/mock/data";
+import {
+  loadCampaignMessages,
+  loadDashboardMetrics,
+  requireWorkspaceContext,
+} from "@/lib/workspace-data";
 import { formatCurrency, formatNumber, formatPercent, formatPhone } from "@/lib/utils";
 import Link from "next/link";
 
@@ -20,7 +25,13 @@ const reportTabs = [
   { label: "Audit log", href: "/reports/audit-log" },
 ];
 
-export default function ReportsMessagesPage() {
+export default async function ReportsMessagesPage() {
+  const { workspaceId } = await requireWorkspaceContext();
+  const [metrics, messageLogs] = await Promise.all([
+    loadDashboardMetrics(workspaceId),
+    loadCampaignMessages(workspaceId),
+  ]);
+
   const delivered = messageLogs.filter((m) => m.status === "Delivered").length;
   const failed = messageLogs.filter((m) => m.status === "Failed").length;
   const totalCost = messageLogs.reduce((sum, m) => sum + m.cost, 0);
@@ -30,9 +41,7 @@ export default function ReportsMessagesPage() {
       <PageHeader
         title="Message reports"
         description="Delivery logs with segment counts, status, and per-message cost."
-        actions={
-          <Button variant="outline">Export CSV</Button>
-        }
+        actions={<Button variant="outline">Export CSV</Button>}
       />
 
       <Tabs items={reportTabs} />
@@ -46,38 +55,43 @@ export default function ReportsMessagesPage() {
 
       <Card>
         <CardTitle>Message log</CardTitle>
-        <Table className="mt-4">
-          <THead>
-            <TR>
-              <TH>Time</TH>
-              <TH>To</TH>
-              <TH>From</TH>
-              <TH>Campaign</TH>
-              <TH>Status</TH>
-              <TH>Segments</TH>
-              <TH>Cost</TH>
-              <TH>Preview</TH>
-            </TR>
-          </THead>
-          <TBody>
-            {messageLogs.map((m) => (
-              <TR key={m.id}>
-                <TD className="whitespace-nowrap text-muted-foreground">
-                  {new Date(m.at).toLocaleString()}
-                </TD>
-                <TD>{formatPhone(m.to)}</TD>
-                <TD>{formatPhone(m.from)}</TD>
-                <TD>{m.campaign}</TD>
-                <TD>
-                  <StatusChip status={m.status} />
-                </TD>
-                <TD>{m.segments}</TD>
-                <TD>{formatCurrency(m.cost)}</TD>
-                <TD className="max-w-[200px] truncate text-muted-foreground">{m.body}</TD>
+        {messageLogs.length === 0 ? (
+          <EmptyState
+            title="No message logs"
+            description="Outbound message logs will appear here after campaigns send."
+          />
+        ) : (
+          <Table className="mt-4">
+            <THead>
+              <TR>
+                <TH>Time</TH>
+                <TH>To</TH>
+                <TH>Campaign</TH>
+                <TH>Status</TH>
+                <TH>Segments</TH>
+                <TH>Cost</TH>
+                <TH>Preview</TH>
               </TR>
-            ))}
-          </TBody>
-        </Table>
+            </THead>
+            <TBody>
+              {messageLogs.map((m) => (
+                <TR key={m.id}>
+                  <TD className="whitespace-nowrap text-muted-foreground">
+                    {new Date(m.at).toLocaleString()}
+                  </TD>
+                  <TD>{formatPhone(m.to)}</TD>
+                  <TD>{m.campaign}</TD>
+                  <TD>
+                    <StatusChip status={m.status} />
+                  </TD>
+                  <TD>{m.segments}</TD>
+                  <TD>{formatCurrency(m.cost)}</TD>
+                  <TD className="max-w-[200px] truncate text-muted-foreground">{m.body}</TD>
+                </TR>
+              ))}
+            </TBody>
+          </Table>
+        )}
         <p className="mt-4 text-xs text-muted-foreground">
           Showing recent messages.{" "}
           <Link href="/reports/usage" className="font-medium text-primary hover:underline">

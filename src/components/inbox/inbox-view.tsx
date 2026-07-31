@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { StatusChip } from "@/components/ui/status-chip";
-import { conversations as seed, contacts, teamMembers } from "@/lib/mock/data";
+import type { Contact, Conversation, User } from "@/lib/types";
 import { cn, formatPhone } from "@/lib/utils";
 import {
   ChevronDown,
@@ -16,48 +16,65 @@ import {
 } from "lucide-react";
 import { useMemo, useState } from "react";
 
-const filters = [
-  { label: "All conversations", count: 24 },
-  { label: "Mine", count: 8 },
-  { label: "Unassigned", count: 3 },
-  { label: "Unread", count: 12, accent: "unread" as const },
-  { label: "Open", count: 14 },
-  { label: "Pending", count: 2, accent: "pending" as const },
-  { label: "Closed", count: 4 },
-  { label: "Snoozed", count: 1 },
-  { label: "Spam", count: 0 },
-];
-
-const tags = [
-  { label: "hot-lead", count: 6 },
-  { label: "estimate", count: 8 },
-  { label: "appointment", count: 10 },
-];
-
-const avatarByName: Record<string, string> = {
-  "Maya Chen": "/avatars/maya.svg",
-  "Luis Ortiz": "/avatars/luis.svg",
-  "Priya Shah": "/avatars/priya.svg",
-  "James Wilson": "/avatars/james.svg",
-};
-
-const timeByName: Record<string, string> = {
-  "Maya Chen": "4:42 PM",
-  "Luis Ortiz": "2:10 PM",
-  "Priya Shah": "7:20 PM",
-  "James Wilson": "Yesterday",
-};
-
-export function InboxView({ initialFilter = "All conversations" }: { initialFilter?: string }) {
+export function InboxView({
+  initialFilter = "All conversations",
+  conversations: seed,
+  contacts,
+  teamMembers,
+  currentUserName,
+}: {
+  initialFilter?: string;
+  conversations: Conversation[];
+  contacts: Contact[];
+  teamMembers: User[];
+  currentUserName?: string;
+}) {
   const [filter, setFilter] = useState(initialFilter);
   const [selectedId, setSelectedId] = useState(seed[0]?.id);
   const [reply, setReply] = useState("");
   const [composerTab, setComposerTab] = useState<"reply" | "note">("reply");
   const [items, setItems] = useState(seed);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const filterDefs = useMemo(() => {
+    const counts = {
+      all: items.length,
+      mine: items.filter((c) => c.assignedTo === currentUserName).length,
+      unassigned: items.filter((c) => !c.assignedTo).length,
+      unread: items.filter((c) => c.unread).length,
+      open: items.filter((c) => c.status === "Open").length,
+      pending: items.filter((c) => c.status === "Pending").length,
+      closed: items.filter((c) => c.status === "Closed").length,
+      snoozed: items.filter((c) => c.status === "Snoozed").length,
+      spam: items.filter((c) => c.status === "Spam").length,
+    };
+    return [
+      { label: "All conversations", count: counts.all },
+      { label: "Mine", count: counts.mine },
+      { label: "Unassigned", count: counts.unassigned },
+      { label: "Unread", count: counts.unread, accent: "unread" as const },
+      { label: "Open", count: counts.open },
+      { label: "Pending", count: counts.pending, accent: "pending" as const },
+      { label: "Closed", count: counts.closed },
+      { label: "Snoozed", count: counts.snoozed },
+      { label: "Spam", count: counts.spam },
+    ];
+  }, [items, currentUserName]);
+
+  const tagCounts = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const c of items) {
+      for (const t of c.tags || []) {
+        map.set(t, (map.get(t) || 0) + 1);
+      }
+    }
+    return Array.from(map.entries()).map(([label, count]) => ({ label, count }));
+  }, [items]);
 
   const filtered = useMemo(() => {
     return items.filter((c) => {
-      if (filter === "Mine") return c.assignedTo === "Jordan Lee" || c.assignedTo === "Alex Rivera";
+      if (filter === "Mine") return c.assignedTo === currentUserName;
       if (filter === "Unassigned") return !c.assignedTo;
       if (filter === "Unread") return c.unread;
       if (filter === "Open") return c.status === "Open";
@@ -67,35 +84,64 @@ export function InboxView({ initialFilter = "All conversations" }: { initialFilt
       if (filter === "Spam") return c.status === "Spam";
       return true;
     });
-  }, [filter, items]);
+  }, [filter, items, currentUserName]);
 
   const selected = filtered.find((c) => c.id === selectedId) ?? filtered[0] ?? items[0];
   const contact = contacts.find((c) => c.id === selected?.contactId);
 
-  function sendReply() {
-    if (!selected || !reply.trim()) return;
-    setItems((prev) =>
-      prev.map((c) =>
-        c.id === selected.id
-          ? {
-              ...c,
-              lastMessage: reply.trim(),
-              unread: false,
-              messages: [
-                ...c.messages,
-                {
-                  id: `local_${Date.now()}`,
-                  direction: composerTab === "note" ? ("note" as const) : ("out" as const),
-                  body: reply.trim(),
-                  at: new Date().toISOString(),
-                  user: composerTab === "note" ? "Alex Rivera" : undefined,
-                },
-              ],
-            }
-          : c,
-      ),
-    );
-    setReply("");
+  async function sendReply() {
+    if (!selected || !reply.trim() || sending) return;
+    setSending(true);
+    setError(null);
+    const body = reply.trim();
+    try {
+      const res = await fetch(`/api/inbox/${selected.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: composerTab === "note" ? "note" : "reply",
+          body,
+        }),
+      });
+      const json = (await res.json()) as { data?: Conversation; error?: string };
+      if (!res.ok) throw new Error(json.error || "Failed to send");
+      if (json.data) {
+        setItems((prev) => prev.map((c) => (c.id === selected.id ? json.data! : c)));
+      }
+      setReply("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to send");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function updateStatus(status: string) {
+    if (!selected) return;
+    const res = await fetch(`/api/inbox/${selected.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    });
+    const json = (await res.json()) as { data?: Conversation };
+    if (json.data) {
+      setItems((prev) => prev.map((c) => (c.id === selected.id ? json.data! : c)));
+    }
+  }
+
+  async function assignTo(assigneeId: string) {
+    if (!selected) return;
+    const res = await fetch(`/api/inbox/${selected.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        assigneeId: assigneeId || null,
+      }),
+    });
+    const json = (await res.json()) as { data?: Conversation };
+    if (json.data) {
+      setItems((prev) => prev.map((c) => (c.id === selected.id ? json.data! : c)));
+    }
   }
 
   return (
@@ -119,7 +165,7 @@ export function InboxView({ initialFilter = "All conversations" }: { initialFilt
           </button>
         </div>
         <div className="space-y-0.5">
-          {filters.map((f) => {
+          {filterDefs.map((f) => {
             const active = filter === f.label;
             const accentUnread = f.accent === "unread" && !active;
             const accentPending = f.accent === "pending" && !active;
@@ -164,19 +210,23 @@ export function InboxView({ initialFilter = "All conversations" }: { initialFilt
             </button>
           </div>
           <div className="space-y-1">
-            {tags.map((t) => (
-              <button
-                key={t.label}
-                type="button"
-                className="flex w-full items-center justify-between rounded-[10px] px-2.5 py-1.5 text-[12px] text-muted-foreground hover:bg-muted"
-              >
-                <span className="inline-flex items-center gap-2">
-                  <span className="h-2 w-2 rotate-45 bg-violet-400" />
-                  {t.label}
-                </span>
-                <span className="text-[11px]">{t.count}</span>
-              </button>
-            ))}
+            {tagCounts.length === 0 ? (
+              <p className="px-2.5 text-[11px] text-muted-foreground">No tags yet</p>
+            ) : (
+              tagCounts.map((t) => (
+                <button
+                  key={t.label}
+                  type="button"
+                  className="flex w-full items-center justify-between rounded-[10px] px-2.5 py-1.5 text-[12px] text-muted-foreground hover:bg-muted"
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <span className="h-2 w-2 rotate-45 bg-violet-400" />
+                    {t.label}
+                  </span>
+                  <span className="text-[11px]">{t.count}</span>
+                </button>
+              ))
+            )}
           </div>
         </div>
       </aside>
@@ -184,6 +234,11 @@ export function InboxView({ initialFilter = "All conversations" }: { initialFilt
       {/* Conversation list */}
       <aside className="border-r border-border">
         <div className="space-y-1 p-2">
+          {filtered.length === 0 ? (
+            <p className="p-4 text-center text-[12px] text-muted-foreground">
+              No conversations yet
+            </p>
+          ) : null}
           {filtered.map((c) => {
             const active = c.id === selected?.id;
             return (
@@ -197,12 +252,9 @@ export function InboxView({ initialFilter = "All conversations" }: { initialFilt
                 )}
               >
                 <span className="relative shrink-0">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={avatarByName[c.contactName] ?? "/avatars/alex.svg"}
-                    alt=""
-                    className="h-10 w-10 rounded-full object-cover"
-                  />
+                  <span className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100 text-[11px] font-bold text-emerald-700">
+                    {(c.contactName || "?").slice(0, 2).toUpperCase()}
+                  </span>
                   <span
                     className={cn(
                       "absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full ring-2 ring-white",
@@ -214,7 +266,10 @@ export function InboxView({ initialFilter = "All conversations" }: { initialFilt
                   <span className="flex items-center justify-between gap-2">
                     <span className="truncate text-[13px] font-semibold">{c.contactName}</span>
                     <span className="shrink-0 text-[10px] text-muted-foreground">
-                      {timeByName[c.contactName] ?? "Today"}
+                      {new Date(c.updatedAt).toLocaleTimeString(undefined, {
+                        hour: "numeric",
+                        minute: "2-digit",
+                      })}
                     </span>
                   </span>
                   <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
@@ -246,19 +301,28 @@ export function InboxView({ initialFilter = "All conversations" }: { initialFilt
                 <p className="text-[12px] text-muted-foreground">{formatPhone(selected.phone)}</p>
               </div>
               <div className="flex items-center gap-2">
-                <select className="h-9 rounded-[10px] border border-border bg-card px-2 text-[12px]">
-                  <option>Assign…</option>
+                <select
+                  className="h-9 rounded-[10px] border border-border bg-card px-2 text-[12px]"
+                  value={teamMembers.find((m) => m.name === selected.assignedTo)?.id || ""}
+                  onChange={(e) => assignTo(e.target.value)}
+                >
+                  <option value="">Unassigned</option>
                   {teamMembers.map((m) => (
-                    <option key={m.id}>{m.name}</option>
+                    <option key={m.id} value={m.id}>
+                      {m.name}
+                    </option>
                   ))}
                 </select>
                 <select
                   className="h-9 rounded-[10px] border border-border bg-card px-2 text-[12px]"
-                  defaultValue={selected.status}
+                  value={selected.status}
+                  onChange={(e) => updateStatus(e.target.value)}
                 >
                   <option>Open</option>
                   <option>Pending</option>
                   <option>Closed</option>
+                  <option>Snoozed</option>
+                  <option>Spam</option>
                 </select>
                 <button type="button" className="rounded-[10px] border border-border p-2 hover:bg-muted">
                   <MoreHorizontal className="h-4 w-4" />
@@ -294,7 +358,7 @@ export function InboxView({ initialFilter = "All conversations" }: { initialFilt
                     >
                       {outbound ? (
                         <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-white/80">
-                          Harbor Home
+                          You
                         </p>
                       ) : null}
                       <p>{m.body}</p>
@@ -346,9 +410,12 @@ export function InboxView({ initialFilter = "All conversations" }: { initialFilt
                 value={reply}
                 onChange={(e) => setReply(e.target.value)}
               />
+              {error ? (
+                <p className="mt-2 text-[12px] text-rose-600">{error}</p>
+              ) : null}
               <div className="mt-2 flex flex-wrap items-center gap-2">
-                <Button className="h-9 rounded-[10px]" onClick={sendReply}>
-                  Send
+                <Button className="h-9 rounded-[10px]" onClick={sendReply} disabled={sending}>
+                  {sending ? "Sending…" : "Send"}
                   <ChevronDown className="h-3.5 w-3.5" />
                 </Button>
                 <Button variant="outline" className="h-9 rounded-[10px]" type="button">
@@ -381,49 +448,60 @@ export function InboxView({ initialFilter = "All conversations" }: { initialFilt
         </p>
         {contact ? (
           <div className="mt-4">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={avatarByName[contact.firstName + " " + contact.lastName] ?? "/avatars/maya.svg"}
-              alt=""
-              className="h-16 w-16 rounded-full object-cover"
-            />
+            <span className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-[16px] font-bold text-emerald-700">
+              {`${contact.firstName?.[0] || ""}${contact.lastName?.[0] || ""}`.toUpperCase() || "?"}
+            </span>
             <p className="mt-3 text-[15px] font-bold">
               {contact.firstName} {contact.lastName}
             </p>
-            <p className="text-[12px] text-muted-foreground">{contact.email}</p>
+            <p className="text-[12px] text-muted-foreground">{contact.email || formatPhone(contact.phone)}</p>
             <div className="mt-3">
               <StatusChip status={contact.status} />
             </div>
             <dl className="mt-4 space-y-3 text-[12px]">
               <div>
                 <dt className="text-muted-foreground">Source</dt>
-                <dd className="mt-0.5 font-medium">{contact.consentSource}</dd>
+                <dd className="mt-0.5 font-medium">{contact.consentSource || "—"}</dd>
               </div>
               <div>
                 <dt className="text-muted-foreground">Lists</dt>
                 <dd className="mt-1 flex flex-wrap gap-1">
-                  {contact.lists.map((l) => (
-                    <span key={l} className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium">
-                      {l}
-                    </span>
-                  ))}
+                  {contact.lists.length ? (
+                    contact.lists.map((l) => (
+                      <span key={l} className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium">
+                        {l}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-muted-foreground">None</span>
+                  )}
                 </dd>
               </div>
               <div>
                 <dt className="text-muted-foreground">Opt-out</dt>
-                <dd className="mt-0.5 font-medium">No</dd>
+                <dd className="mt-0.5 font-medium">
+                  {contact.status === "Unsubscribed" || contact.status === "Blocked"
+                    ? "Yes"
+                    : "No"}
+                </dd>
               </div>
               <div>
                 <dt className="text-muted-foreground">Added</dt>
                 <dd className="mt-0.5 font-medium">
-                  {contact.consentDate
-                    ? new Date(contact.consentDate).toLocaleDateString()
-                    : "—"}
+                  {contact.dateAdded
+                    ? new Date(contact.dateAdded).toLocaleDateString()
+                    : contact.consentDate
+                      ? new Date(contact.consentDate).toLocaleDateString()
+                      : "—"}
                 </dd>
               </div>
               <div>
                 <dt className="text-muted-foreground">Last message</dt>
-                <dd className="mt-0.5 font-medium">Today at 4:42 PM</dd>
+                <dd className="mt-0.5 font-medium">
+                  {contact.lastMessaged
+                    ? new Date(contact.lastMessaged).toLocaleDateString()
+                    : "—"}
+                </dd>
               </div>
             </dl>
             <div className="mt-4">

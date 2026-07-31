@@ -1,9 +1,16 @@
 import { Card, CardTitle, StatCard } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatusChip } from "@/components/ui/status-chip";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Tabs } from "@/components/ui/tabs";
-import { contacts, lists, metrics, segments } from "@/lib/mock/data";
+import {
+  loadContacts,
+  loadDashboardMetrics,
+  loadLists,
+  loadSegments,
+  requireWorkspaceContext,
+} from "@/lib/workspace-data";
 import { formatNumber, formatPercent } from "@/lib/utils";
 
 const reportTabs = [
@@ -18,7 +25,15 @@ const reportTabs = [
   { label: "Audit log", href: "/reports/audit-log" },
 ];
 
-export default function ReportsContactsPage() {
+export default async function ReportsContactsPage() {
+  const { workspaceId } = await requireWorkspaceContext();
+  const [metrics, contacts, lists, segments] = await Promise.all([
+    loadDashboardMetrics(workspaceId),
+    loadContacts(workspaceId),
+    loadLists(workspaceId),
+    loadSegments(workspaceId),
+  ]);
+
   const subscribed = contacts.filter((c) => c.status === "Subscribed").length;
   const unsubscribed = contacts.filter((c) => c.status === "Unsubscribed").length;
   const blocked = contacts.filter((c) => c.status === "Blocked").length;
@@ -33,7 +48,7 @@ export default function ReportsContactsPage() {
       <Tabs items={reportTabs} />
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="New this period" value={`+${formatNumber(metrics.contactGrowth)}`} />
+        <StatCard label="Total contacts" value={formatNumber(metrics.contactGrowth)} />
         <StatCard label="Subscribed" value={formatNumber(subscribed)} />
         <StatCard label="Unsubscribed" value={formatNumber(unsubscribed)} />
         <StatCard label="Opt-out rate" value={formatPercent(metrics.optOutRate)} />
@@ -42,46 +57,56 @@ export default function ReportsContactsPage() {
       <div className="grid gap-4 xl:grid-cols-2">
         <Card>
           <CardTitle>Lists</CardTitle>
-          <Table className="mt-4">
-            <THead>
-              <TR>
-                <TH>List</TH>
-                <TH>Contacts</TH>
-                <TH>Description</TH>
-              </TR>
-            </THead>
-            <TBody>
-              {lists.map((list) => (
-                <TR key={list.id}>
-                  <TD className="font-medium">{list.name}</TD>
-                  <TD>{formatNumber(list.count)}</TD>
-                  <TD className="text-muted-foreground">{list.description}</TD>
+          {lists.length === 0 ? (
+            <EmptyState title="No lists" description="Create contact lists to organize your audience." />
+          ) : (
+            <Table className="mt-4">
+              <THead>
+                <TR>
+                  <TH>List</TH>
+                  <TH>Contacts</TH>
+                  <TH>Description</TH>
                 </TR>
-              ))}
-            </TBody>
-          </Table>
+              </THead>
+              <TBody>
+                {lists.map((list) => (
+                  <TR key={list.id}>
+                    <TD className="font-medium">{list.name}</TD>
+                    <TD>{formatNumber(list.contactCount)}</TD>
+                    <TD className="text-muted-foreground">{list.description}</TD>
+                  </TR>
+                ))}
+              </TBody>
+            </Table>
+          )}
         </Card>
 
         <Card>
           <CardTitle>Segments</CardTitle>
-          <Table className="mt-4">
-            <THead>
-              <TR>
-                <TH>Segment</TH>
-                <TH>Count</TH>
-                <TH>Conditions</TH>
-              </TR>
-            </THead>
-            <TBody>
-              {segments.map((seg) => (
-                <TR key={seg.id}>
-                  <TD className="font-medium">{seg.name}</TD>
-                  <TD>{formatNumber(seg.count)}</TD>
-                  <TD className="text-muted-foreground">{seg.conditions}</TD>
+          {segments.length === 0 ? (
+            <EmptyState title="No segments" description="Dynamic segments will appear here." />
+          ) : (
+            <Table className="mt-4">
+              <THead>
+                <TR>
+                  <TH>Segment</TH>
+                  <TH>Conditions</TH>
                 </TR>
-              ))}
-            </TBody>
-          </Table>
+              </THead>
+              <TBody>
+                {segments.map((seg) => (
+                  <TR key={seg.id}>
+                    <TD className="font-medium">{seg.name}</TD>
+                    <TD className="text-muted-foreground">
+                      {typeof seg.conditions === "string"
+                        ? seg.conditions
+                        : JSON.stringify(seg.conditions)}
+                    </TD>
+                  </TR>
+                ))}
+              </TBody>
+            </Table>
+          )}
         </Card>
       </div>
 

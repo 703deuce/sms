@@ -2,7 +2,12 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { MetricCard, SectionHeader } from "@/components/ui/metric";
 import { Tabs } from "@/components/ui/tabs";
-import { metrics } from "@/lib/mock/data";
+import {
+  loadAuditLogs,
+  loadAutomations,
+  loadDashboardMetrics,
+  requireWorkspaceContext,
+} from "@/lib/workspace-data";
 import { cn, formatCurrency, formatNumber, formatPercent } from "@/lib/utils";
 import {
   BarChart3,
@@ -34,81 +39,92 @@ const reportTabs = [
   { label: "Audit log", href: "/reports/audit-log" },
 ];
 
-const drillDowns: Array<{
-  title: string;
-  description: string;
-  href: string;
-  value: string;
-  icon: LucideIcon;
-  tone: string;
-}> = [
-  {
-    title: "Campaign performance",
-    description: "Delivery, replies, clicks, and opt-outs by campaign.",
-    href: "/reports/campaigns",
-    value: formatNumber(metrics.messagesSentPeriod),
-    icon: Megaphone,
-    tone: "bg-violet-50 text-violet-600",
-  },
-  {
-    title: "Message delivery",
-    description: "Segment-level logs with status and cost.",
-    href: "/reports/messages",
-    value: formatPercent(metrics.deliveryRate),
-    icon: Send,
-    tone: "bg-emerald-50 text-emerald-600",
-  },
-  {
-    title: "Contact growth",
-    description: "Subscribers, opt-outs, and list growth over time.",
-    href: "/reports/contacts",
-    value: `+${formatNumber(metrics.contactGrowth)}`,
-    icon: Users,
-    tone: "bg-blue-50 text-blue-600",
-  },
-  {
-    title: "Inbox activity",
-    description: "Response times, open conversations, and agent workload.",
-    href: "/reports/inbox",
-    value: formatPercent(metrics.replyRate),
-    icon: Inbox,
-    tone: "bg-sky-50 text-sky-600",
-  },
-  {
-    title: "Automation flows",
-    description: "Enrollment, completion rates, and message volume.",
-    href: "/reports/automations",
-    value: "3 active",
-    icon: Workflow,
-    tone: "bg-orange-50 text-orange-600",
-  },
-  {
-    title: "Link tracking",
-    description: "Click-through rates and top-performing links.",
-    href: "/reports/links",
-    value: formatPercent(metrics.clickRate),
-    icon: Link2,
-    tone: "bg-indigo-50 text-indigo-600",
-  },
-  {
-    title: "Usage & billing",
-    description: "Credits consumed, segment costs, and balance.",
-    href: "/reports/usage",
-    value: formatNumber(metrics.creditsRemaining),
-    icon: Coins,
-    tone: "bg-amber-50 text-amber-600",
-  },
-  {
-    title: "Audit log",
-    description: "Account activity, imports, and permission changes.",
-    href: "/reports/audit-log",
-    value: "3 events",
-    icon: ScrollText,
-    tone: "bg-slate-100 text-slate-600",
-  },
-];
+export default async function ReportsOverviewPage() {
+  const { workspaceId } = await requireWorkspaceContext();
+  const [metrics, automations, auditLogs] = await Promise.all([
+    loadDashboardMetrics(workspaceId),
+    loadAutomations(workspaceId),
+    loadAuditLogs(workspaceId),
+  ]);
 
-export default function ReportsOverviewPage() {
+  const activeAutomations = automations.filter((a) => a.status === "Active").length;
+
+  const drillDowns: Array<{
+    title: string;
+    description: string;
+    href: string;
+    value: string;
+    icon: LucideIcon;
+    tone: string;
+  }> = [
+    {
+      title: "Campaign performance",
+      description: "Delivery, replies, clicks, and opt-outs by campaign.",
+      href: "/reports/campaigns",
+      value: formatNumber(metrics.messagesSentPeriod),
+      icon: Megaphone,
+      tone: "bg-violet-50 text-violet-600",
+    },
+    {
+      title: "Message delivery",
+      description: "Segment-level logs with status and cost.",
+      href: "/reports/messages",
+      value: formatPercent(metrics.deliveryRate),
+      icon: Send,
+      tone: "bg-emerald-50 text-emerald-600",
+    },
+    {
+      title: "Contact growth",
+      description: "Subscribers, opt-outs, and list growth over time.",
+      href: "/reports/contacts",
+      value: `+${formatNumber(metrics.contactGrowth)}`,
+      icon: Users,
+      tone: "bg-blue-50 text-blue-600",
+    },
+    {
+      title: "Inbox activity",
+      description: "Response times, open conversations, and agent workload.",
+      href: "/reports/inbox",
+      value: formatPercent(metrics.replyRate),
+      icon: Inbox,
+      tone: "bg-sky-50 text-sky-600",
+    },
+    {
+      title: "Automation flows",
+      description: "Enrollment, completion rates, and message volume.",
+      href: "/reports/automations",
+      value: `${activeAutomations} active`,
+      icon: Workflow,
+      tone: "bg-orange-50 text-orange-600",
+    },
+    {
+      title: "Link tracking",
+      description: "Click-through rates and top-performing links.",
+      href: "/reports/links",
+      value: formatPercent(metrics.clickRate),
+      icon: Link2,
+      tone: "bg-indigo-50 text-indigo-600",
+    },
+    {
+      title: "Usage & billing",
+      description: "Credits consumed, segment costs, and balance.",
+      href: "/reports/usage",
+      value: formatNumber(metrics.creditsRemaining),
+      icon: Coins,
+      tone: "bg-amber-50 text-amber-600",
+    },
+    {
+      title: "Audit log",
+      description: "Account activity, imports, and permission changes.",
+      href: "/reports/audit-log",
+      value: `${auditLogs.length} events`,
+      icon: ScrollText,
+      tone: "bg-slate-100 text-slate-600",
+    },
+  ];
+
+  const a2pProgress = metrics.a2pStatus === "Approved" ? 100 : metrics.a2pStatus === "Pending" ? 55 : 20;
+
   return (
     <div className="space-y-5">
       <SectionHeader
@@ -142,7 +158,7 @@ export default function ReportsOverviewPage() {
         <MetricCard
           label="Delivery rate"
           value={formatPercent(metrics.deliveryRate)}
-          hint="+2.1% vs last period"
+          hint="Period aggregate"
           icon={Send}
           tone="bg-sky-50 text-sky-600"
           sparkline={[12, 13, 12, 15, 14, 16, 17, 18]}
@@ -152,7 +168,7 @@ export default function ReportsOverviewPage() {
         <MetricCard
           label="Reply rate"
           value={formatPercent(metrics.replyRate)}
-          hint="+1.6% vs last period"
+          hint="Period aggregate"
           icon={Inbox}
           tone="bg-violet-50 text-violet-600"
           sparkline={[8, 9, 10, 9, 11, 12, 11, 13]}
@@ -162,7 +178,7 @@ export default function ReportsOverviewPage() {
         <MetricCard
           label="Click rate"
           value={formatPercent(metrics.clickRate)}
-          hint="+3.3% vs last period"
+          hint="Period aggregate"
           icon={Link2}
           tone="bg-orange-50 text-orange-600"
           sparkline={[6, 8, 7, 10, 12, 11, 14, 15]}
@@ -210,7 +226,7 @@ export default function ReportsOverviewPage() {
             </span>
           </div>
           <div className="mt-4 h-2 overflow-hidden rounded-full bg-muted">
-            <div className="h-full w-[55%] rounded-full bg-amber-400" />
+            <div className="h-full rounded-full bg-amber-400" style={{ width: `${a2pProgress}%` }} />
           </div>
         </Card>
         <MetricCard

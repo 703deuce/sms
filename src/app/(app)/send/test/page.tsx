@@ -5,15 +5,15 @@ import { Card, CardTitle } from "@/components/ui/card";
 import { Input, Label, Textarea } from "@/components/ui/input";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatusChip } from "@/components/ui/status-chip";
-import { metrics, phoneNumbers } from "@/lib/mock/data";
+import type { DashboardMetrics, PhoneNumber } from "@/lib/types";
 import { estimateSmsSegments, formatPhone } from "@/lib/utils";
 import { CheckCircle2, MessageSquare, ShieldCheck, Smartphone } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 const DEMO_OTP = "842901";
 const DEMO_MESSAGE =
-  "Transovo: Welcome to Harbor Home Services! This is a demo test message from your Transovo account. Reply HELP for help, STOP to opt out.";
+  "Transovo: Welcome! This is a test message from your Transovo account. Reply HELP for help, STOP to opt out.";
 
 export default function SendTestPage() {
   const [phone, setPhone] = useState("");
@@ -23,6 +23,24 @@ export default function SendTestPage() {
   const [message, setMessage] = useState(DEMO_MESSAGE);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState("");
+  const [sending, setSending] = useState(false);
+  const [phoneNumbers, setPhoneNumbers] = useState<PhoneNumber[]>([]);
+  const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
+
+  useEffect(() => {
+    fetch("/api/numbers")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => {
+        if (json?.data) setPhoneNumbers(json.data);
+      })
+      .catch(() => undefined);
+    fetch("/api/reports/summary")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => {
+        if (json?.data?.metrics) setMetrics(json.data.metrics);
+      })
+      .catch(() => undefined);
+  }, []);
 
   const sendingNumber = phoneNumbers[0];
   const { characters, segments } = estimateSmsSegments(message);
@@ -46,9 +64,28 @@ export default function SendTestPage() {
     setError("Invalid code. Use 842901 for this demo.");
   }
 
-  function sendDemo() {
-    if (!verified) return;
-    setSent(true);
+  async function sendDemo() {
+    if (!verified || !sendingNumber) return;
+    setSending(true);
+    setError("");
+    try {
+      const res = await fetch("/api/sms/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to: phone,
+          message,
+          from: sendingNumber.number,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Failed to send test message");
+      setSent(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to send test message");
+    } finally {
+      setSending(false);
+    }
   }
 
   return (
@@ -151,19 +188,31 @@ export default function SendTestPage() {
             <div className="mt-6 space-y-4">
               <div>
                 <Label>From</Label>
-                <p className="text-sm font-medium">
-                  {formatPhone(sendingNumber.number)} · {sendingNumber.friendlyName}
-                </p>
+                {sendingNumber ? (
+                  <p className="text-sm font-medium">
+                    {formatPhone(sendingNumber.number)} · {sendingNumber.friendlyName}
+                  </p>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No sending number configured.</p>
+                )}
               </div>
               <div>
                 <Label>Message body</Label>
-                <Textarea rows={5} value={message} onChange={(e) => setMessage(e.target.value)} disabled={!verified} />
+                <Textarea
+                  rows={5}
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  disabled={!verified}
+                />
                 <p className="mt-2 text-xs text-muted-foreground">
                   {characters} characters · {segments} segment{segments === 1 ? "" : "s"}
                 </p>
               </div>
-              <Button disabled={!verified || sent || !message.trim()} onClick={sendDemo}>
-                {sent ? "Demo sent" : "Send demo to my phone"}
+              <Button
+                disabled={!verified || sent || !message.trim() || !sendingNumber || sending}
+                onClick={sendDemo}
+              >
+                {sent ? "Demo sent" : sending ? "Sending…" : "Send demo to my phone"}
               </Button>
               {sent ? (
                 <div className="flex items-center gap-2 text-sm text-emerald-800">
@@ -200,11 +249,13 @@ export default function SendTestPage() {
                 <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
                   <li className="flex items-center justify-between gap-2">
                     <span>A2P registration</span>
-                    <StatusChip status={metrics.a2pStatus} />
+                    <StatusChip status={metrics?.a2pStatus ?? "Pending"} />
                   </li>
                   <li className="flex items-center justify-between gap-2">
                     <span>Active number</span>
-                    <span className="font-medium text-foreground">{metrics.activeNumber}</span>
+                    <span className="font-medium text-foreground">
+                      {metrics?.activeNumber ?? "No number"}
+                    </span>
                   </li>
                   <li className="flex items-center justify-between gap-2">
                     <span>Test number</span>

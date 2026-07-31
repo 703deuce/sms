@@ -1,14 +1,19 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle, StatCard } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatusChip } from "@/components/ui/status-chip";
-import { auditLogs, campaigns } from "@/lib/mock/data";
+import type { Campaign } from "@/lib/types";
 import {
   formatCurrency,
   formatNumber,
   formatPercent,
   estimateSmsSegments,
 } from "@/lib/utils";
+import { getActiveWorkspaceId } from "@/lib/auth";
+import { loadAuditLogs, loadCampaignById } from "@/lib/workspace-data";
+
+type AuditLogRow = Awaited<ReturnType<typeof loadAuditLogs>>[number];
 import {
   ArrowLeft,
   Clock,
@@ -31,7 +36,7 @@ function formatDateTime(at: string | null) {
   });
 }
 
-function buildTimeline(campaign: (typeof campaigns)[number]) {
+function buildTimeline(campaign: Campaign) {
   const events = [
     {
       label: "Campaign created",
@@ -39,8 +44,8 @@ function buildTimeline(campaign: (typeof campaigns)[number]) {
         ? new Date(
             new Date(campaign.scheduledAt).getTime() - 86400000 * 2,
           ).toISOString()
-        : "2026-07-15T14:00:00Z",
-      detail: `Created by ${campaign.createdBy}`,
+        : new Date().toISOString(),
+      detail: `Created by ${campaign.createdBy || "—"}`,
     },
   ];
 
@@ -55,7 +60,7 @@ function buildTimeline(campaign: (typeof campaigns)[number]) {
   if (campaign.status === "Sending" || campaign.status === "Completed" || campaign.status === "Failed") {
     events.push({
       label: "Send started",
-      at: campaign.scheduledAt ?? "2026-07-26T12:00:00Z",
+      at: campaign.scheduledAt ?? new Date().toISOString(),
       detail: `${formatNumber(campaign.sent)} messages queued`,
     });
   }
@@ -67,7 +72,7 @@ function buildTimeline(campaign: (typeof campaigns)[number]) {
         ? new Date(
             new Date(campaign.scheduledAt).getTime() + 3600000,
           ).toISOString()
-        : "2026-07-20T11:00:00Z",
+        : new Date().toISOString(),
       detail: `${formatNumber(campaign.delivered)} delivered · ${formatNumber(campaign.replies)} replies`,
     });
   }
@@ -79,7 +84,7 @@ function buildTimeline(campaign: (typeof campaigns)[number]) {
         ? new Date(
             new Date(campaign.scheduledAt).getTime() + 1800000,
           ).toISOString()
-        : "2026-07-22T08:30:00Z",
+        : new Date().toISOString(),
       detail: `Only ${formatNumber(campaign.delivered)} of ${formatNumber(campaign.sent)} delivered`,
     });
   }
@@ -87,7 +92,7 @@ function buildTimeline(campaign: (typeof campaigns)[number]) {
   if (campaign.status === "Draft") {
     events.push({
       label: "Awaiting schedule",
-      at: "2026-07-15T14:00:00Z",
+      at: new Date().toISOString(),
       detail: "Complete message and audience before scheduling",
     });
   }
@@ -95,7 +100,7 @@ function buildTimeline(campaign: (typeof campaigns)[number]) {
   if (campaign.status === "Scheduled") {
     events.push({
       label: "Queued for delivery",
-      at: campaign.scheduledAt ?? "2026-07-28T15:00:00Z",
+      at: campaign.scheduledAt ?? new Date().toISOString(),
       detail: "Will send automatically at scheduled time",
     });
   }
@@ -109,12 +114,27 @@ export default async function CampaignDetailPage({
   params: Promise<{ campaignId: string }>;
 }) {
   const { campaignId } = await params;
-  const campaign = campaigns.find((c) => c.id === campaignId);
+  const workspaceId = await getActiveWorkspaceId();
+
+  if (!workspaceId) {
+    return (
+      <div>
+        <PageHeader title="Campaign" description="Campaign details" />
+        <EmptyState
+          title="No workspace selected"
+          description="Select or create a workspace to view this campaign."
+        />
+      </div>
+    );
+  }
+
+  const campaign = await loadCampaignById(workspaceId, campaignId);
 
   if (!campaign) {
     notFound();
   }
 
+  const auditLogs = await loadAuditLogs(workspaceId);
   const deliveryRate =
     campaign.sent > 0 ? (campaign.delivered / campaign.sent) * 100 : 0;
   const replyRate =
@@ -125,8 +145,10 @@ export default async function CampaignDetailPage({
     campaign.delivered > 0 ? (campaign.optOuts / campaign.delivered) * 100 : 0;
   const segments = estimateSmsSegments(campaign.body);
   const timeline = buildTimeline(campaign);
-  const activity = auditLogs.filter((log) =>
-    log.detail.toLowerCase().includes(campaign.name.toLowerCase()),
+  const activity = auditLogs.filter(
+    (log: AuditLogRow) =>
+      log.detail?.toLowerCase().includes(campaign.name.toLowerCase()) ||
+      log.event.toLowerCase().includes("campaign"),
   );
 
   return (
@@ -158,7 +180,7 @@ export default async function CampaignDetailPage({
       <div className="mb-6 flex flex-wrap items-center gap-3">
         <StatusChip status={campaign.status} />
         <span className="text-sm text-muted-foreground">
-          Created by {campaign.createdBy}
+          Created by {campaign.createdBy || "—"}
         </span>
         {campaign.scheduledAt ? (
           <span className="flex items-center gap-1 text-sm text-muted-foreground">
@@ -208,7 +230,7 @@ export default async function CampaignDetailPage({
             <CardTitle>Message preview</CardTitle>
             <div className="mt-4 max-w-sm">
               <div className="rounded-2xl rounded-bl-sm bg-primary/10 px-4 py-3 text-sm leading-relaxed">
-                {campaign.body}
+                {campaign.body || "No message body yet."}
               </div>
               <p className="mt-2 text-xs text-muted-foreground">
                 Preview includes compliance footer. Merge tags render at send time.
@@ -333,14 +355,14 @@ export default async function CampaignDetailPage({
               </p>
             ) : (
               <ul className="mt-4 space-y-3">
-                {activity.map((log) => (
+                {activity.map((log: AuditLogRow) => (
                   <li
                     key={log.id}
                     className="rounded-lg border border-border p-3 text-sm"
                   >
                     <p className="font-medium">{log.event}</p>
                     <p className="mt-0.5 text-xs text-muted-foreground">
-                      {log.actor} · {formatDateTime(log.at)}
+                      {formatDateTime(log.at)}
                     </p>
                     <p className="mt-1 text-xs text-muted-foreground">{log.detail}</p>
                   </li>

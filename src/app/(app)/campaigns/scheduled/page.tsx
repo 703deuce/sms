@@ -5,7 +5,9 @@ import { PageHeader } from "@/components/ui/page-header";
 import { StatusChip } from "@/components/ui/status-chip";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Tabs } from "@/components/ui/tabs";
-import { campaigns } from "@/lib/mock/data";
+import { getActiveWorkspaceId } from "@/lib/auth";
+import type { Campaign } from "@/lib/types";
+import { loadCampaigns } from "@/lib/workspace-data";
 import { formatNumber } from "@/lib/utils";
 import { CalendarClock } from "lucide-react";
 import Link from "next/link";
@@ -31,14 +33,23 @@ function formatScheduled(at: string | null) {
   });
 }
 
-export default function CampaignScheduledPage() {
-  const scheduled = campaigns
-    .filter((c) => c.status === "Scheduled")
-    .sort((a, b) => {
-      const aTime = a.scheduledAt ? new Date(a.scheduledAt).getTime() : 0;
-      const bTime = b.scheduledAt ? new Date(b.scheduledAt).getTime() : 0;
-      return aTime - bTime;
-    });
+export default async function CampaignScheduledPage() {
+  const workspaceId = await getActiveWorkspaceId();
+
+  if (!workspaceId) {
+    return (
+      <div>
+        <PageHeader title="Scheduled campaigns" description="Upcoming sends queued for delivery." />
+        <EmptyState title="No workspace selected" description="Select or create a workspace to view campaigns." />
+      </div>
+    );
+  }
+
+  const scheduled: Campaign[] = (await loadCampaigns(workspaceId, "SCHEDULED")).sort((a: Campaign, b: Campaign) => {
+    const aTime = a.scheduledAt ? new Date(a.scheduledAt).getTime() : 0;
+    const bTime = b.scheduledAt ? new Date(b.scheduledAt).getTime() : 0;
+    return aTime - bTime;
+  });
 
   return (
     <div>

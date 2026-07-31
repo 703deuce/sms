@@ -3,6 +3,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Tabs } from "@/components/ui/tabs";
 import { formatNumber, formatPercent } from "@/lib/utils";
+import { loadSubscriberSources, requireWorkspaceContext } from "@/lib/workspace-data";
 import {
   FileUp,
   FormInput,
@@ -11,6 +12,7 @@ import {
   QrCode,
   UserPlus,
   Webhook,
+  type LucideIcon,
 } from "lucide-react";
 
 const growTabs = [
@@ -21,69 +23,29 @@ const growTabs = [
   { label: "Sources", href: "/grow/sources" },
 ];
 
-const subscriberSources = [
-  {
-    source: "Form",
-    icon: FormInput,
-    subscribers: 302,
-    share: 42.1,
-    lastAdded: "2026-07-27",
-    detail: "Website SMS Opt-in, Event QR Signup",
-  },
-  {
-    source: "QR",
-    icon: QrCode,
-    subscribers: 209,
-    share: 29.1,
-    lastAdded: "2026-07-26",
-    detail: "Lobby poster, Truck magnets",
-  },
-  {
-    source: "Keyword",
-    icon: Hash,
-    subscribers: 414,
-    share: 57.7,
-    lastAdded: "2026-07-27",
-    detail: "JOIN, DEALS",
-  },
-  {
-    source: "API",
-    icon: Webhook,
-    subscribers: 48,
-    share: 6.7,
-    lastAdded: "2026-07-22",
-    detail: "REST API contact.create",
-  },
-  {
-    source: "Manual",
-    icon: UserPlus,
-    subscribers: 18,
-    share: 2.5,
-    lastAdded: "2026-07-15",
-    detail: "Added by team members",
-  },
-  {
-    source: "Import",
-    icon: FileUp,
-    subscribers: 892,
-    share: 100,
-    lastAdded: "2026-07-18",
-    detail: "CSV/XLSX bulk imports",
-  },
-  {
-    source: "Integration",
-    icon: Plug,
-    subscribers: 0,
-    share: 0,
-    lastAdded: "—",
-    detail: "Zapier, HubSpot (coming soon)",
-  },
-];
+const sourceIcons: Record<string, LucideIcon> = {
+  Form: FormInput,
+  QR: QrCode,
+  Keyword: Hash,
+  API: Webhook,
+  Manual: UserPlus,
+  Import: FileUp,
+  Integration: Plug,
+};
 
-export default function SubscriberSourcesPage() {
+export default async function SubscriberSourcesPage() {
+  const { workspaceId } = await requireWorkspaceContext();
+  const subscriberSources = await loadSubscriberSources(workspaceId);
+
   const totalNew = subscriberSources
     .filter((s) => s.source !== "Import")
     .reduce((sum, s) => sum + s.subscribers, 0);
+
+  const topSource = [...subscriberSources]
+    .filter((s) => s.source !== "Import")
+    .sort((a, b) => b.subscribers - a.subscribers)[0];
+
+  const activeSources = subscriberSources.filter((s) => s.subscribers > 0 || s.detail).length;
 
   return (
     <div>
@@ -95,18 +57,26 @@ export default function SubscriberSourcesPage() {
       <Tabs items={growTabs} />
 
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
-        <StatCard label="Opt-in sources" value={formatNumber(7)} />
+        <StatCard label="Opt-in sources" value={formatNumber(activeSources)} />
         <StatCard
           label="New subscribers (30d)"
           value={formatNumber(totalNew)}
           hint="Excluding bulk imports"
         />
-        <StatCard label="Top source" value="Keyword" hint="414 via text-to-join" />
+        <StatCard
+          label="Top source"
+          value={topSource?.source || "—"}
+          hint={
+            topSource && topSource.subscribers > 0
+              ? `${formatNumber(topSource.subscribers)} in last 30 days`
+              : "No recent opt-ins"
+          }
+        />
       </div>
 
       <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {subscriberSources.slice(0, 4).map((src) => {
-          const Icon = src.icon;
+          const Icon = sourceIcons[src.source] || Plug;
           return (
             <Card key={src.source}>
               <div className="flex items-center gap-2">
@@ -139,7 +109,7 @@ export default function SubscriberSourcesPage() {
             </THead>
             <TBody>
               {subscriberSources.map((src) => {
-                const Icon = src.icon;
+                const Icon = sourceIcons[src.source] || Plug;
                 return (
                   <TR key={src.source}>
                     <TD>
