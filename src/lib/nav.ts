@@ -12,6 +12,7 @@ import {
   ShieldCheck,
   Puzzle,
   Settings,
+  AudioLines,
   type LucideIcon,
 } from "lucide-react";
 
@@ -70,6 +71,28 @@ export const appNav: NavItem[] = [
       { label: "Templates", href: "/automations/templates" },
       { label: "Builder", href: "/automations/new" },
       { label: "Logs", href: "/automations/logs" },
+    ],
+  },
+  {
+    label: "AI Voice",
+    href: "/voice/overview",
+    icon: AudioLines,
+    children: [
+      { label: "Overview", href: "/voice/overview" },
+      { label: "Agents", href: "/voice/agents" },
+      { label: "Agent Builder", href: "/voice/agents/new" },
+      { label: "Phone Numbers", href: "/voice/numbers" },
+      { label: "Inbound Routing", href: "/voice/inbound-routing" },
+      { label: "Outbound Campaigns", href: "/voice/campaigns" },
+      { label: "Calls", href: "/voice/calls" },
+      { label: "Conversations", href: "/voice/conversations" },
+      { label: "Knowledge Bases", href: "/voice/knowledge" },
+      { label: "Tools & Integrations", href: "/voice/tools" },
+      { label: "Calendars", href: "/voice/calendars" },
+      { label: "Analytics", href: "/voice/analytics" },
+      { label: "Testing", href: "/voice/testing" },
+      { label: "Usage & Billing", href: "/voice/billing" },
+      { label: "Settings", href: "/voice/settings" },
     ],
   },
   { label: "Templates", href: "/templates", icon: FileText },
@@ -156,6 +179,21 @@ export const pageTitles: Record<string, string> = {
   "/automations/new": "New Automation",
   "/automations/templates": "Automation Templates",
   "/automations/logs": "Automation Logs",
+  "/voice/overview": "AI Voice Overview",
+  "/voice/agents": "Voice Agents",
+  "/voice/agents/new": "Agent Builder",
+  "/voice/numbers": "Voice Phone Numbers",
+  "/voice/inbound-routing": "Inbound Routing",
+  "/voice/campaigns": "Outbound Campaigns",
+  "/voice/calls": "Voice Calls",
+  "/voice/conversations": "Voice Conversations",
+  "/voice/knowledge": "Knowledge Bases",
+  "/voice/tools": "Voice Tools",
+  "/voice/calendars": "Voice Calendars",
+  "/voice/analytics": "Voice Analytics",
+  "/voice/testing": "Voice Testing Lab",
+  "/voice/billing": "Voice Usage & Billing",
+  "/voice/settings": "Voice Settings",
   "/templates": "Templates",
   "/templates/new": "Create Template",
   "/templates/ai": "AI Template Generator",
@@ -215,6 +253,9 @@ export function getPageTitle(pathname: string) {
   if (pathname.startsWith("/campaigns/")) return "Campaign Detail";
   if (pathname.startsWith("/contacts/")) return "Contact Detail";
   if (pathname.startsWith("/automations/")) return "Automation Detail";
+  if (pathname.startsWith("/voice/agents/")) return "Voice Agent";
+  if (pathname.startsWith("/voice/calls/")) return "Call Detail";
+  if (pathname.startsWith("/voice/")) return "AI Voice";
   if (pathname.startsWith("/numbers/")) return "Number Detail";
   if (pathname.startsWith("/admin/customers/")) return "Customer Detail";
   return "Transovo SMS";

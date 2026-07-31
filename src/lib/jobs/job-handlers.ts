@@ -46,6 +46,51 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
     case "automation_batch": {
       return processActiveAutomations();
     }
+    case "voice_webhook_process": {
+      const { processVoiceWebhookEvent } = await import("@/lib/voice/telnyx/webhook-handlers");
+      return processVoiceWebhookEvent({
+        providerEventId: String(payload.providerEventId || ""),
+        eventType: String(payload.eventType || ""),
+        workspaceId: payload.workspaceId as string | undefined,
+        callId: payload.callId as string | undefined,
+        eventPayload: (payload.eventPayload as Record<string, unknown>) || {},
+      });
+    }
+    case "voice_post_call": {
+      const { processPostCall } = await import("@/lib/voice/post-call");
+      const callId = String(payload.callId || "");
+      if (!callId) throw new Error("callId required");
+      return processPostCall(callId);
+    }
+    case "voice_campaign_batch": {
+      const { processVoiceCampaignBatch } = await import("@/lib/voice/call-service");
+      return processVoiceCampaignBatch();
+    }
+    case "voice_mock_call_complete": {
+      const { completeMockCall } = await import("@/lib/voice/call-service");
+      const callId = String(payload.callId || "");
+      if (!callId) throw new Error("callId required");
+      return completeMockCall(callId);
+    }
+    case "voice_recording_ingest": {
+      const { getPrisma } = await import("@/lib/db");
+      const prisma = getPrisma();
+      const callId = String(payload.callId || "");
+      const workspaceId = String(payload.workspaceId || "");
+      if (!callId) throw new Error("callId required");
+      const urls = payload.recordingUrl as Record<string, string> | undefined;
+      await prisma.voiceRecording.create({
+        data: {
+          workspaceId,
+          callId,
+          provider: "telnyx",
+          status: "ready",
+          storageUrl: urls?.mp3 || urls?.wav || null,
+          providerRecordingId: String(payload.providerRecordingId || ""),
+        },
+      });
+      return { ok: true };
+    }
     default:
       throw new Error(`Unknown job type: ${jobType}`);
   }
@@ -65,6 +110,12 @@ export async function processDueJobs(limit = 25) {
     queueName: "automations",
     payload: { minuteKey },
     idempotencyKey: `automation-batch:${minuteKey}`,
+  });
+  await enqueueJob({
+    jobType: "voice_campaign_batch",
+    queueName: "voice-calls",
+    payload: { minuteKey },
+    idempotencyKey: `voice-campaign-batch:${minuteKey}`,
   });
 
   // When BullMQ is the consumer, cron enqueues the minute batch and re-syncs the DB outbox.

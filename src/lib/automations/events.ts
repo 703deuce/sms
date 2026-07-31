@@ -14,6 +14,22 @@ const EVENT_TO_TRIGGER: Record<string, string> = {
   "customer.no_response": "customer_no_response",
   "customer.tag_added": "tag_added",
   "form.submitted": "form_submitted",
+  "call.created": "call_received",
+  "call.ringing": "call_received",
+  "call.answered": "call_answered",
+  "call.completed": "call_completed",
+  "call.failed": "call_failed",
+  "call.missed": "call_missed",
+  "call.voicemail_detected": "call_voicemail_detected",
+  "call.transferred": "call_transferred",
+  "call.transfer_failed": "call_transfer_failed",
+  "call.recording_ready": "call_recording_ready",
+  "call.transcription_completed": "call_transcription_completed",
+  "call.qualified": "call_qualified",
+  "call.unqualified": "call_unqualified",
+  "call.appointment_booked": "call_appointment_booked",
+  "call.follow_up_required": "call_follow_up_required",
+  "call.opt_out_requested": "call_opt_out_requested",
 };
 
 /** Fire automation triggers for application events. */

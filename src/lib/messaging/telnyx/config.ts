@@ -48,6 +48,8 @@ export function getTelnyxWebhookUrls() {
     inbound: `${base}/api/telnyx/inbound`,
     messageStatus: `${base}/api/telnyx/message-status`,
     compliance: `${base}/api/telnyx/compliance`,
+    /** Call Control + AI assistant events */
+    voice: `${base}/api/telnyx/voice`,
   };
 }
 

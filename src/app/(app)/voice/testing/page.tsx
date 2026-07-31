@@ -1,0 +1,73 @@
+"use client";
+
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input, Label } from "@/components/ui/input";
+import { PageHeader } from "@/components/ui/page-header";
+import { VoiceSubNav } from "@/components/voice/voice-subnav";
+import { useEffect, useState } from "react";
+
+export default function VoiceTestingPage() {
+  const [agents, setAgents] = useState<Array<{ id: string; name: string }>>([]);
+  const [agentId, setAgentId] = useState("");
+  const [testNumber, setTestNumber] = useState("+14155550199");
+  const [result, setResult] = useState<string | null>(null);
+  const [running, setRunning] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/voice/agents")
+      .then((r) => r.json())
+      .then((j) => {
+        setAgents(j.data || []);
+        if (j.data?.[0]) setAgentId(j.data[0].id);
+      });
+  }, []);
+
+  async function runTest() {
+    setRunning(true);
+    setResult(null);
+    try {
+      const res = await fetch(`/api/voice/agents/${agentId}/test`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ testNumber, direction: "outbound" }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error);
+      setResult(`Test call started: ${json.data.callId} (mode: ${json.data.mode})`);
+    } catch (err) {
+      setResult(err instanceof Error ? err.message : "Test failed");
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  return (
+    <div>
+      <PageHeader title="Testing lab" description="Place test calls separated from production analytics." />
+      <VoiceSubNav />
+      <Card className="max-w-lg space-y-4 p-5">
+        <div>
+          <Label>Agent</Label>
+          <select
+            className="mt-1 w-full rounded-lg border border-border px-3 py-2 text-sm"
+            value={agentId}
+            onChange={(e) => setAgentId(e.target.value)}
+          >
+            {agents.map((a) => (
+              <option key={a.id} value={a.id}>{a.name}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <Label>Test number (E.164)</Label>
+          <Input value={testNumber} onChange={(e) => setTestNumber(e.target.value)} />
+        </div>
+        <Button disabled={running || !agentId} onClick={runTest}>
+          {running ? "Running…" : "Place outbound test call"}
+        </Button>
+        {result && <p className="text-sm">{result}</p>}
+      </Card>
+    </div>
+  );
+}

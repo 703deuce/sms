@@ -136,6 +136,36 @@ model Workspace {
   usageRecords UsageRecord[]
   automationExecutions AutomationExecution[]
   formSubmissions FormSubmission[]
+  voiceAgents VoiceAgent[]
+  voiceAgentVersions VoiceAgentVersion[]
+  voiceAgentPhoneNumbers VoiceAgentPhoneNumber[]
+  voiceKnowledgeBases VoiceKnowledgeBase[]
+  voiceKnowledgeSources VoiceKnowledgeSource[]
+  voiceAgentKnowledgeBases VoiceAgentKnowledgeBase[]
+  voiceTools VoiceTool[]
+  voiceAgentTools VoiceAgentTool[]
+  voiceCalendarConnections VoiceCalendarConnection[]
+  voiceServices VoiceService[]
+  voiceStaffMembers VoiceStaffMember[]
+  voiceRoutingRules VoiceRoutingRule[]
+  voiceCampaigns VoiceCampaign[]
+  voiceCampaignContacts VoiceCampaignContact[]
+  voiceCampaignAttempts VoiceCampaignAttempt[]
+  voiceCalls VoiceCall[]
+  voiceCallLegs VoiceCallLeg[]
+  voiceCallEvents VoiceCallEvent[]
+  voiceTransfers VoiceTransfer[]
+  voiceRecordings VoiceRecording[]
+  voiceTranscripts VoiceTranscript[]
+  voiceTranscriptSegments VoiceTranscriptSegment[]
+  voiceConversationInsights VoiceConversationInsight[]
+  voiceToolExecutions VoiceToolExecution[]
+  voiceAppointments VoiceAppointment[]
+  voiceTestRuns VoiceTestRun[]
+  voiceComplianceProfile VoiceComplianceProfile?
+  voiceUsageRecords VoiceUsageRecord[]
+  voiceIntegrationSecrets VoiceIntegrationSecret[]
+  providerWebhookEvents ProviderWebhookEvent[]
 }
 
 model Membership {
@@ -838,6 +868,668 @@ model UsageRecord {
   mmsMessages Int      @default(0)
   inbound     Int      @default(0)
   outbound    Int      @default(0)
+  voiceMinutes Float   @default(0)
+  aiMinutes    Float   @default(0)
   costCents   Int      @default(0)
+  voiceCostCents Int   @default(0)
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+enum VoiceAgentStatus {
+  DRAFT
+  TESTING
+  ACTIVE
+  PAUSED
+  ARCHIVED
+  CONFIGURATION_ERROR
+}
+
+enum VoiceCallDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum VoiceCallStatus {
+  QUEUED
+  INITIATED
+  RINGING
+  ANSWERED
+  IN_PROGRESS
+  COMPLETED
+  NO_ANSWER
+  BUSY
+  FAILED
+  CANCELLED
+  VOICEMAIL
+  TRANSFERRED
+}
+
+enum VoiceCampaignStatus {
+  DRAFT
+  SCHEDULED
+  RUNNING
+  PAUSED
+  COMPLETED
+  CANCELLED
+  FAILED
+}
+
+model VoiceAgent {
+  id              String           @id @default(cuid())
+  workspaceId     String
+  name            String
+  description     String?
+  agentType       String           @default("custom")
+  status          VoiceAgentStatus @default(DRAFT)
+  displayName     String?
+  purpose         String?
+  phoneNumberId   String?
+  directions      String[]         @default(["inbound", "outbound"])
+  draftConfig     Json?
+  publishedVersionId String?
+  telnyxAssistantId String?
+  telnyxConnectionId String?
+  callsHandled    Int              @default(0)
+  conversionRate  Float            @default(0)
+  healthStatus    String           @default("ok")
+  healthMessage   String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  archivedAt      DateTime?
+  workspace       Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  versions        VoiceAgentVersion[]
+  phoneAssignments VoiceAgentPhoneNumber[]
+  knowledgeLinks  VoiceAgentKnowledgeBase[]
+  toolLinks       VoiceAgentTool[]
+  calls           VoiceCall[]
+  campaigns       VoiceCampaign[]
+  routingRules    VoiceRoutingRule[]
+  testRuns        VoiceTestRun[]
+
+  @@index([workspaceId, status])
+  @@map("voice_agents")
+}
+
+model VoiceAgentVersion {
+  id          String   @id @default(cuid())
+  workspaceId String
+  agentId     String
+  version     Int
+  config      Json
+  changeLog   String?
+  publishedAt DateTime @default(now())
+  publishedBy String?
+  agent       VoiceAgent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  workspace   Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  calls       VoiceCall[]
+
+  @@unique([agentId, version])
+  @@index([workspaceId])
+  @@map("voice_agent_versions")
+}
+
+model VoiceAgentPhoneNumber {
+  id            String   @id @default(cuid())
+  workspaceId   String
+  agentId       String
+  phoneNumberId String
+  inboundEnabled Boolean @default(true)
+  outboundEnabled Boolean @default(true)
+  isDefault     Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  agent         VoiceAgent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  workspace     Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([agentId, phoneNumberId])
+  @@index([workspaceId])
+  @@map("voice_agent_phone_numbers")
+}
+
+model VoiceKnowledgeBase {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  description String?
+  status      String   @default("active")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  sources     VoiceKnowledgeSource[]
+  agentLinks  VoiceAgentKnowledgeBase[]
+
+  @@index([workspaceId])
+  @@map("voice_knowledge_bases")
+}
+
+model VoiceKnowledgeSource {
+  id              String   @id @default(cuid())
+  workspaceId     String
+  knowledgeBaseId String
+  sourceType      String
+  name            String
+  status          String   @default("pending")
+  contentText     String?
+  fileUrl         String?
+  fileMeta        Json?
+  crawlUrl        String?
+  extractedPreview String?
+  chunkCount      Int      @default(0)
+  lastSyncedAt    DateTime?
+  errorMessage    String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  knowledgeBase   VoiceKnowledgeBase @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([knowledgeBaseId])
+  @@index([workspaceId])
+  @@map("voice_knowledge_sources")
+}
+
+model VoiceAgentKnowledgeBase {
+  id              String @id @default(cuid())
+  workspaceId     String
+  agentId         String
+  knowledgeBaseId String
+  agent           VoiceAgent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  knowledgeBase   VoiceKnowledgeBase @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([agentId, knowledgeBaseId])
+  @@map("voice_agent_knowledge_bases")
+}
+
+model VoiceTool {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  description String?
+  toolType    String
+  config      Json
+  inputSchema Json?
+  outputSchema Json?
+  secretRef   String?
+  timeoutMs   Int      @default(30000)
+  retryPolicy Json?
+  isAsync     Boolean  @default(false)
+  status      String   @default("active")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  agentLinks  VoiceAgentTool[]
+  executions  VoiceToolExecution[]
+
+  @@index([workspaceId])
+  @@map("voice_tools")
+}
+
+model VoiceAgentTool {
+  id          String @id @default(cuid())
+  workspaceId String
+  agentId     String
+  toolId      String
+  agent       VoiceAgent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  tool        VoiceTool @relation(fields: [toolId], references: [id], onDelete: Cascade)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([agentId, toolId])
+  @@map("voice_agent_tools")
+}
+
+model VoiceCalendarConnection {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  provider    String
+  status      String   @default("connected")
+  config      Json?
+  credentialsRef String?
+  lastSyncAt  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  services    VoiceService[]
+  staff       VoiceStaffMember[]
+
+  @@index([workspaceId])
+  @@map("voice_calendar_connections")
+}
+
+model VoiceService {
+  id              String   @id @default(cuid())
+  workspaceId     String
+  calendarId      String?
+  name            String
+  durationMinutes Int      @default(30)
+  bufferMinutes   Int      @default(0)
+  config          Json?
+  calendar        VoiceCalendarConnection? @relation(fields: [calendarId], references: [id], onDelete: SetNull)
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@map("voice_services")
+}
+
+model VoiceStaffMember {
+  id          String   @id @default(cuid())
+  workspaceId String
+  calendarId  String?
+  name        String
+  email       String?
+  timezone    String?
+  config      Json?
+  calendar    VoiceCalendarConnection? @relation(fields: [calendarId], references: [id], onDelete: SetNull)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@map("voice_staff_members")
+}
+
+model VoiceRoutingRule {
+  id          String   @id @default(cuid())
+  workspaceId String
+  agentId     String?
+  name        String
+  priority    Int      @default(0)
+  isActive    Boolean  @default(true)
+  conditions  Json
+  actions     Json
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  agent       VoiceAgent? @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, priority])
+  @@map("voice_routing_rules")
+}
+
+model VoiceCampaign {
+  id              String              @id @default(cuid())
+  workspaceId     String
+  agentId         String
+  name            String
+  status          VoiceCampaignStatus @default(DRAFT)
+  callerIdNumberId String?
+  audienceType    String              @default("list")
+  audienceConfig  Json?
+  scheduleConfig  Json?
+  callingRules    Json?
+  voicemailRules  Json?
+  followUpActions Json?
+  concurrency     Int                 @default(1)
+  dailyLimit      Int?
+  maxAttempts     Int                 @default(3)
+  timezone        String?
+  totalContacts   Int                 @default(0)
+  completedCount  Int                 @default(0)
+  qualifiedCount  Int                 @default(0)
+  startedAt       DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  agent           VoiceAgent          @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  workspace       Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  contacts        VoiceCampaignContact[]
+  attempts        VoiceCampaignAttempt[]
+  calls           VoiceCall[]
+
+  @@index([workspaceId, status])
+  @@map("voice_campaigns")
+}
+
+model VoiceCampaignContact {
+  id          String   @id @default(cuid())
+  workspaceId String
+  campaignId  String
+  contactId   String?
+  phone       String
+  status      String   @default("pending")
+  attemptCount Int     @default(0)
+  lastOutcome String?
+  variables   Json?
+  excludedReason String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  campaign    VoiceCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  attempts    VoiceCampaignAttempt[]
+
+  @@unique([campaignId, phone])
+  @@index([workspaceId, campaignId, status])
+  @@map("voice_campaign_contacts")
+}
+
+model VoiceCampaignAttempt {
+  id                String   @id @default(cuid())
+  workspaceId       String
+  campaignId        String
+  campaignContactId String
+  callId            String?
+  attemptNumber     Int      @default(1)
+  status            String   @default("pending")
+  scheduledAt       DateTime?
+  completedAt       DateTime?
+  outcome           String?
+  campaign          VoiceCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  campaignContact   VoiceCampaignContact @relation(fields: [campaignContactId], references: [id], onDelete: Cascade)
+  workspace         Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId, status])
+  @@index([workspaceId])
+  @@map("voice_campaign_attempts")
+}
+
+model VoiceCall {
+  id                String            @id @default(cuid())
+  workspaceId       String
+  agentId           String?
+  agentVersionId    String?
+  contactId         String?
+  campaignId        String?
+  direction         VoiceCallDirection
+  status            VoiceCallStatus   @default(QUEUED)
+  outcome           String?
+  fromE164          String
+  toE164            String
+  phoneNumberId     String?
+  isTest            Boolean           @default(false)
+  leadScore         Int?
+  appointmentBooked Boolean           @default(false)
+  transferred       Boolean           @default(false)
+  voicemailDetected Boolean           @default(false)
+  durationSeconds   Int?
+  costCents         Int               @default(0)
+  providerCostCents Int               @default(0)
+  aiMinutes         Float             @default(0)
+  telnyxCallControlId String?
+  telnyxConversationId String?
+  telnyxCallSessionId String?
+  dynamicVariables  Json?
+  metadata          Json?
+  errorMessage      String?
+  startedAt         DateTime          @default(now())
+  answeredAt        DateTime?
+  endedAt           DateTime?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  agent             VoiceAgent?       @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  agentVersion      VoiceAgentVersion? @relation(fields: [agentVersionId], references: [id], onDelete: SetNull)
+  campaign          VoiceCampaign?    @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  workspace         Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  legs              VoiceCallLeg[]
+  events            VoiceCallEvent[]
+  transfers         VoiceTransfer[]
+  recordings        VoiceRecording[]
+  transcripts       VoiceTranscript[]
+  insights          VoiceConversationInsight[]
+  toolExecutions    VoiceToolExecution[]
+  appointments      VoiceAppointment[]
+
+  @@index([workspaceId, startedAt])
+  @@index([workspaceId, status])
+  @@index([telnyxCallControlId])
+  @@index([agentId])
+  @@map("voice_calls")
+}
+
+model VoiceCallLeg {
+  id          String   @id @default(cuid())
+  workspaceId String
+  callId      String
+  legType     String
+  status      String
+  providerLegId String?
+  fromE164    String?
+  toE164      String?
+  startedAt   DateTime @default(now())
+  endedAt     DateTime?
+  call        VoiceCall @relation(fields: [callId], references: [id], onDelete: Cascade)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([callId])
+  @@map("voice_call_legs")
+}
+
+model VoiceCallEvent {
+  id              String   @id @default(cuid())
+  workspaceId     String
+  callId          String
+  eventType       String
+  providerEventId String?
+  payload         Json?
+  createdAt       DateTime @default(now())
+  call            VoiceCall @relation(fields: [callId], references: [id], onDelete: Cascade)
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([providerEventId])
+  @@index([callId, createdAt])
+  @@map("voice_call_events")
+}
+
+model VoiceTransfer {
+  id          String   @id @default(cuid())
+  workspaceId String
+  callId      String
+  transferType String
+  destination String
+  status      String   @default("requested")
+  ringSeconds Int?
+  answered    Boolean  @default(false)
+  voicemailDetected Boolean @default(false)
+  summary     String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  completedAt DateTime?
+  call        VoiceCall @relation(fields: [callId], references: [id], onDelete: Cascade)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([callId])
+  @@map("voice_transfers")
+}
+
+model VoiceRecording {
+  id          String   @id @default(cuid())
+  workspaceId String
+  callId      String
+  provider    String   @default("telnyx")
+  status      String   @default("pending")
+  storageUrl  String?
+  format      String?
+  channels    Int      @default(1)
+  durationSeconds Int?
+  costCents   Int      @default(0)
+  providerRecordingId String?
+  retentionUntil DateTime?
+  createdAt   DateTime @default(now())
+  call        VoiceCall @relation(fields: [callId], references: [id], onDelete: Cascade)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([callId])
+  @@map("voice_recordings")
+}
+
+model VoiceTranscript {
+  id          String   @id @default(cuid())
+  workspaceId String
+  callId      String
+  provider    String   @default("telnyx")
+  status      String   @default("pending")
+  language    String?
+  fullText    String?
+  confidence  Float?
+  durationSeconds Int?
+  costCents   Int      @default(0)
+  errorMessage String?
+  retryCount  Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  call        VoiceCall @relation(fields: [callId], references: [id], onDelete: Cascade)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  segments    VoiceTranscriptSegment[]
+
+  @@index([callId])
+  @@map("voice_transcripts")
+}
+
+model VoiceTranscriptSegment {
+  id            String   @id @default(cuid())
+  workspaceId   String
+  transcriptId  String
+  speaker       String
+  text          String
+  startMs       Int?
+  endMs         Int?
+  confidence    Float?
+  transcript    VoiceTranscript @relation(fields: [transcriptId], references: [id], onDelete: Cascade)
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([transcriptId])
+  @@map("voice_transcript_segments")
+}
+
+model VoiceConversationInsight {
+  id          String   @id @default(cuid())
+  workspaceId String
+  callId      String
+  summary     String?
+  intent      String?
+  sentiment   String?
+  isLead      Boolean?
+  leadScore   Int?
+  qualification Json?
+  topics      Json?
+  objections  Json?
+  actionItems Json?
+  customFields Json?
+  needsReview Boolean  @default(false)
+  confidence  Float?
+  createdAt   DateTime @default(now())
+  call        VoiceCall @relation(fields: [callId], references: [id], onDelete: Cascade)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([callId])
+  @@map("voice_conversation_insights")
+}
+
+model VoiceToolExecution {
+  id          String   @id @default(cuid())
+  workspaceId String
+  callId      String?
+  toolId      String
+  status      String   @default("pending")
+  input       Json?
+  output      Json?
+  errorMessage String?
+  latencyMs   Int?
+  isAsync     Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  completedAt DateTime?
+  call        VoiceCall? @relation(fields: [callId], references: [id], onDelete: SetNull)
+  tool        VoiceTool @relation(fields: [toolId], references: [id], onDelete: Cascade)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([callId])
+  @@index([workspaceId, createdAt])
+  @@map("voice_tool_executions")
+}
+
+model VoiceAppointment {
+  id          String   @id @default(cuid())
+  workspaceId String
+  callId      String?
+  contactId   String?
+  serviceName String?
+  staffName   String?
+  startsAt    DateTime
+  endsAt      DateTime?
+  timezone    String?
+  status      String   @default("confirmed")
+  externalId  String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  call        VoiceCall? @relation(fields: [callId], references: [id], onDelete: SetNull)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, startsAt])
+  @@map("voice_appointments")
+}
+
+model VoiceTestRun {
+  id          String   @id @default(cuid())
+  workspaceId String
+  agentId     String
+  agentVersionId String?
+  testNumber  String
+  direction   String
+  status      String   @default("pending")
+  callId      String?
+  results     Json?
+  createdAt   DateTime @default(now())
+  completedAt DateTime?
+  agent       VoiceAgent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, agentId])
+  @@map("voice_test_runs")
+}
+
+model VoiceComplianceProfile {
+  id          String   @id @default(cuid())
+  workspaceId String   @unique
+  settings    Json
+  emergencyStop Boolean @default(false)
+  updatedAt   DateTime @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("voice_compliance_profiles")
+}
+
+model VoiceUsageRecord {
+  id              String   @id @default(cuid())
+  workspaceId     String
+  callId          String?
+  agentId         String?
+  campaignId      String?
+  category        String
+  quantity        Float    @default(0)
+  unit            String
+  providerCostCents Int    @default(0)
+  billedCostCents Int      @default(0)
+  metadata        Json?
+  createdAt       DateTime @default(now())
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
+  @@index([workspaceId, category])
+  @@map("voice_usage_records")
+}
+
+model VoiceIntegrationSecret {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  secretType  String
+  encryptedValue String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, name])
+  @@map("voice_integration_secrets")
+}
+
+model ProviderWebhookEvent {
+  id              String   @id @default(cuid())
+  workspaceId     String?
+  provider        String   @default("telnyx")
+  eventType       String
+  providerEventId String   @unique
+  payload         Json?
+  status          String   @default("received")
+  errorMessage    String?
+  processedAt     DateTime?
+  createdAt       DateTime @default(now())
+  workspace       Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, createdAt])
+  @@map("provider_webhook_events")
 }

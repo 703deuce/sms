@@ -121,6 +121,38 @@ export const AUTOMATION_BLOCKS: BlockDefinition[] = [
     icon: "zap",
     defaultConfig: { formSlug: "" },
   }),
+  block({
+    blockType: "call_completed",
+    category: "trigger",
+    label: "Call completed",
+    description: "When a voice call completes",
+    icon: "zap",
+    defaultConfig: {},
+  }),
+  block({
+    blockType: "call_qualified",
+    category: "trigger",
+    label: "Call qualified",
+    description: "When a caller is scored as a qualified lead",
+    icon: "zap",
+    defaultConfig: {},
+  }),
+  block({
+    blockType: "call_voicemail_detected",
+    category: "trigger",
+    label: "Voicemail detected",
+    description: "When outbound AMD detects voicemail",
+    icon: "zap",
+    defaultConfig: {},
+  }),
+  block({
+    blockType: "call_appointment_booked",
+    category: "trigger",
+    label: "Appointment booked",
+    description: "When an appointment is booked on a call",
+    icon: "zap",
+    defaultConfig: {},
+  }),
 
   // —— Actions ——
   block({

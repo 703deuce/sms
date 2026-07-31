@@ -37,7 +37,7 @@ async function syncDbJob(idempotencyKey: string | undefined, outcome: "completed
 export async function startBullmqWorkers() {
   const conn = connection();
 
-  const queues = ["review-campaign", "sms-send", "email-send", "review-import", "automations"] as const;
+  const queues = ["review-campaign", "sms-send", "email-send", "review-import", "automations", "voice-calls"] as const;
 
   for (const name of queues) {
     void getQueue(name);
