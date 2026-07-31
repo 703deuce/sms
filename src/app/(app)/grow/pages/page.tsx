@@ -17,7 +17,7 @@ export default async function SignupPagesPage() {
   const signupPages = await loadOptInForms(workspaceId);
 
   const published = signupPages.filter((p) => p.status.toLowerCase() === "active").length;
-  const totalViews = signupPages.reduce((sum, p) => sum + p.submissions, 0);
+  const totalViews = signupPages.reduce((sum, p) => sum + p.views, 0);
   const totalSignups = signupPages.reduce((sum, p) => sum + p.submissions, 0);
   const conversionRate =
     totalViews > 0 ? ((totalSignups / totalViews) * 100).toFixed(1) : "0";
@@ -41,11 +41,11 @@ export default async function SignupPagesPage() {
 
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
         <StatCard label="Published pages" value={formatNumber(published)} />
-        <StatCard label="Total submissions" value={formatNumber(totalViews)} />
+        <StatCard label="Total views" value={formatNumber(totalViews)} hint={`${formatNumber(totalSignups)} submissions`} />
         <StatCard
           label="Conversion rate"
           value={`${conversionRate}%`}
-          hint={`${formatNumber(totalSignups)} signups`}
+          hint="submissions / views"
         />
       </div>
 
@@ -80,12 +80,18 @@ export default async function SignupPagesPage() {
                 </div>
                 <dl className="mt-4 flex gap-6 text-sm">
                   <div>
+                    <dt className="text-xs text-muted-foreground">Views</dt>
+                    <dd className="font-semibold">{formatNumber(page.views)}</dd>
+                  </div>
+                  <div>
                     <dt className="text-xs text-muted-foreground">Submissions</dt>
                     <dd className="font-semibold">{formatNumber(page.submissions)}</dd>
                   </div>
                   <div>
-                    <dt className="text-xs text-muted-foreground">List</dt>
-                    <dd>{page.listName}</dd>
+                    <dt className="text-xs text-muted-foreground">Conversion</dt>
+                    <dd className="font-semibold">
+                      {page.views > 0 ? `${((page.submissions / page.views) * 100).toFixed(1)}%` : "—"}
+                    </dd>
                   </div>
                 </dl>
                 <div className="mt-3 flex gap-2">
@@ -102,9 +108,11 @@ export default async function SignupPagesPage() {
                       </Button>
                     </a>
                   ) : null}
-                  <Button variant="ghost" size="sm">
-                    Edit
-                  </Button>
+                  <Link href={`/grow/forms/${page.id}`}>
+                    <Button variant="ghost" size="sm">
+                      Edit
+                    </Button>
+                  </Link>
                 </div>
               </Card>
             ))}
@@ -119,9 +127,12 @@ export default async function SignupPagesPage() {
                     <TH>Name</TH>
                     <TH>Slug</TH>
                     <TH>List</TH>
+                    <TH>Views</TH>
                     <TH>Submissions</TH>
+                    <TH>Conversion</TH>
                     <TH>Status</TH>
                     <TH>URL</TH>
+                    <TH />
                   </TR>
                 </THead>
                 <TBody>
@@ -130,7 +141,11 @@ export default async function SignupPagesPage() {
                       <TD className="font-medium">{page.name}</TD>
                       <TD className="font-mono text-xs text-muted-foreground">{page.slug || "—"}</TD>
                       <TD>{page.listName}</TD>
+                      <TD>{formatNumber(page.views)}</TD>
                       <TD>{formatNumber(page.submissions)}</TD>
+                      <TD>
+                        {page.views > 0 ? `${((page.submissions / page.views) * 100).toFixed(1)}%` : "—"}
+                      </TD>
                       <TD>
                         <StatusChip status={page.status} />
                       </TD>
@@ -148,6 +163,11 @@ export default async function SignupPagesPage() {
                         ) : (
                           "—"
                         )}
+                      </TD>
+                      <TD>
+                        <Link href={`/grow/forms/${page.id}`} className="text-sm text-primary hover:underline">
+                          Edit
+                        </Link>
                       </TD>
                     </TR>
                   ))}
