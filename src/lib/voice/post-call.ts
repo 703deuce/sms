@@ -83,8 +83,20 @@ export async function processPostCall(callId: string) {
     });
   }
 
+  const missedStatuses = ["NO_ANSWER", "BUSY", "CANCELLED"];
+  const isMissed =
+    missedStatuses.includes(call.status) ||
+    (!call.answeredAt && !call.voicemailDetected && !call.appointmentBooked);
+
   if (call.contactId) {
     await emitVoiceAutomationEvents(call);
+    if (isMissed) {
+      await emitAutomationEvent(call.workspaceId, "call.missed", call.contactId, {
+        callId: call.id,
+        status: call.status,
+        outcome: call.outcome,
+      }).catch(() => undefined);
+    }
     await emitAutomationEvent(
       call.workspaceId,
       "call.completed",
@@ -93,7 +105,7 @@ export async function processPostCall(callId: string) {
     ).catch(() => undefined);
   }
 
-  return { ok: true, callId };
+  return { ok: true, callId, missed: isMissed };
 }
 
 async function generateCallInsights(

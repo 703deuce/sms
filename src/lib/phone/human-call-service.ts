@@ -229,10 +229,40 @@ export async function processHumanCallWebhookEvent(input: {
     patch.recordingUrl = urls?.mp3 || urls?.wav || null;
   }
 
+  // A hangup while still ringing/initiated (never answered) is a missed call.
+  const wasAnswered = ["in_progress", "on_hold", "transferred", "completed"].includes(call.status);
+  const isMissed = input.eventType === "call.hangup" && !wasAnswered;
+  const cause = String(
+    input.eventPayload.hangup_cause || input.eventPayload.sip_hangup_cause || "",
+  ).toLowerCase();
+  if (isMissed) {
+    patch.disposition = call.disposition || `missed:${cause || "no_answer"}`;
+  }
+
   await prisma.humanCall.update({
     where: { id: call.id },
     data: patch,
   });
 
-  return { ok: true, callId: call.id };
+  if (isMissed) {
+    // The customer number differs by direction.
+    const customerPhone = call.direction === "inbound" ? call.from : call.to;
+    try {
+      const contact = await prisma.contact.findFirst({
+        where: { workspaceId: call.workspaceId, phone: customerPhone },
+      });
+      if (contact) {
+        const { emitAutomationEvent } = await import("@/lib/automations/events");
+        await emitAutomationEvent(call.workspaceId, "call.missed", contact.id, {
+          humanCallId: call.id,
+          direction: call.direction,
+          cause,
+        }).catch(() => undefined);
+      }
+    } catch (err) {
+      console.warn("[human-call] missed-call event failed", call.id, err);
+    }
+  }
+
+  return { ok: true, callId: call.id, missed: isMissed };
 }

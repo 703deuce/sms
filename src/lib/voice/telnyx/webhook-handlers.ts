@@ -218,15 +218,46 @@ export async function processVoiceWebhookEvent(input: {
     "call.transcription.completed": "COMPLETED",
   };
 
-  const nextStatus = statusMap[eventType];
+  let nextStatus = statusMap[eventType];
   const patch: Record<string, unknown> = { updatedAt: new Date() };
+
+  // On hangup, refine COMPLETED into a missed-call status when the call was
+  // never answered, based on the provider hangup cause.
+  if (eventType === "call.hangup" && !call.answeredAt && !call.voicemailDetected) {
+    const cause = String(
+      eventPayload.hangup_cause || eventPayload.sip_hangup_cause || "",
+    ).toLowerCase();
+    if (cause.includes("busy")) {
+      nextStatus = "BUSY";
+      patch.outcome = "busy";
+    } else if (cause.includes("cancel") || cause.includes("rejected")) {
+      nextStatus = "CANCELLED";
+      patch.outcome = "cancelled";
+    } else if (
+      cause.includes("no_answer") ||
+      cause.includes("no-answer") ||
+      cause.includes("noanswer") ||
+      cause.includes("timeout") ||
+      cause.includes("no_user_response") ||
+      cause === ""
+    ) {
+      nextStatus = "NO_ANSWER";
+      patch.outcome = "no_answer";
+    }
+  }
 
   if (nextStatus) {
     patch.status = nextStatus;
     if (nextStatus === "ANSWERED" || nextStatus === "IN_PROGRESS") {
       patch.answeredAt = new Date();
     }
-    if (nextStatus === "COMPLETED" || nextStatus === "VOICEMAIL") {
+    if (
+      nextStatus === "COMPLETED" ||
+      nextStatus === "VOICEMAIL" ||
+      nextStatus === "NO_ANSWER" ||
+      nextStatus === "BUSY" ||
+      nextStatus === "CANCELLED"
+    ) {
       patch.endedAt = new Date();
     }
   }
