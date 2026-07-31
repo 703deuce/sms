@@ -30,6 +30,9 @@ export async function PATCH(request: Request) {
       quietHoursStart?: string | null;
       quietHoursEnd?: string | null;
       reviewLinkUrl?: string | null;
+      optOutKeywords?: string | null;
+      optInKeywords?: string | null;
+      helpKeywords?: string | null;
     };
 
     const patch: Record<string, unknown> = {};
@@ -41,6 +44,10 @@ export async function PATCH(request: Request) {
     if (body.quietHoursStart !== undefined) patch.quietHoursStart = body.quietHoursStart;
     if (body.quietHoursEnd !== undefined) patch.quietHoursEnd = body.quietHoursEnd;
     if (body.reviewLinkUrl !== undefined) patch.reviewLinkUrl = body.reviewLinkUrl?.trim() || null;
+    if (body.optOutKeywords !== undefined)
+      patch.optOutKeywords = body.optOutKeywords?.trim() || null;
+    if (body.optInKeywords !== undefined) patch.optInKeywords = body.optInKeywords?.trim() || null;
+    if (body.helpKeywords !== undefined) patch.helpKeywords = body.helpKeywords?.trim() || null;
 
     const data = await upsertMessagingRuntimeSettings(auth.workspaceId, patch);
     return NextResponse.json({ data });

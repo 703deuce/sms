@@ -104,6 +104,9 @@ export function MessagingSettingsForm({ registration }: Props) {
           quietHoursStart: String(form.get("quietStart") || "") || null,
           quietHoursEnd: String(form.get("quietEnd") || "") || null,
           reviewLinkUrl: String(form.get("reviewLinkUrl") || "") || null,
+          optOutKeywords: runtime?.optOutKeywords ?? null,
+          optInKeywords: runtime?.optInKeywords ?? null,
+          helpKeywords: runtime?.helpKeywords ?? null,
           businessHoursJson: runtime?.businessHoursJson || defaultBusinessHours(),
         }),
       });
@@ -270,6 +273,59 @@ export function MessagingSettingsForm({ registration }: Props) {
               without &quot;always away&quot;.
             </p>
           </form>
+        </Card>
+
+        <Card>
+          <CardTitle>Opt-out &amp; opt-in keywords</CardTitle>
+          <div className="mt-4 space-y-4">
+            <div>
+              <Label htmlFor="optOutKeywords">Opt-out keywords</Label>
+              <Input
+                id="optOutKeywords"
+                name="optOutKeywords"
+                placeholder="STOP, UNSUBSCRIBE, CANCEL, END, QUIT"
+                value={runtime?.optOutKeywords ?? ""}
+                onChange={(e) =>
+                  setRuntime((r) => (r ? { ...r, optOutKeywords: e.target.value } : r))
+                }
+              />
+              <p className="mt-1 text-xs text-muted-foreground">
+                Inbound messages matching these words suppress the contact. Comma-separated. Defaults
+                to STOP, STOPALL, UNSUBSCRIBE, CANCEL, END, QUIT.
+              </p>
+            </div>
+            <div>
+              <Label htmlFor="optInKeywords">Opt-in keywords</Label>
+              <Input
+                id="optInKeywords"
+                name="optInKeywords"
+                placeholder="START, YES, UNSTOP"
+                value={runtime?.optInKeywords ?? ""}
+                onChange={(e) =>
+                  setRuntime((r) => (r ? { ...r, optInKeywords: e.target.value } : r))
+                }
+              />
+              <p className="mt-1 text-xs text-muted-foreground">
+                Re-subscribe keywords. Defaults to START, YES, UNSTOP.
+              </p>
+            </div>
+            <div>
+              <Label htmlFor="helpKeywords">Help keywords</Label>
+              <Input
+                id="helpKeywords"
+                name="helpKeywords"
+                placeholder="HELP, INFO"
+                value={runtime?.helpKeywords ?? ""}
+                onChange={(e) =>
+                  setRuntime((r) => (r ? { ...r, helpKeywords: e.target.value } : r))
+                }
+              />
+              <p className="mt-1 text-xs text-muted-foreground">
+                Trigger the HELP response. Defaults to HELP, INFO. Saved with &quot;Save away &amp;
+                hours&quot;.
+              </p>
+            </div>
+          </div>
         </Card>
 
         <Card>

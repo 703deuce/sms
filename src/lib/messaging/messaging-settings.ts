@@ -13,7 +13,27 @@ export type MessagingRuntimeSettings = {
   quietHoursStart: string | null;
   quietHoursEnd: string | null;
   reviewLinkUrl: string | null;
+  optOutKeywords: string | null;
+  optInKeywords: string | null;
+  helpKeywords: string | null;
 };
+
+export const DEFAULT_OPT_OUT_KEYWORDS = "STOP,STOPALL,UNSUBSCRIBE,CANCEL,END,QUIT";
+export const DEFAULT_OPT_IN_KEYWORDS = "START,YES,UNSTOP";
+export const DEFAULT_HELP_KEYWORDS = "HELP,INFO";
+
+/** Split a comma/space/newline separated keyword list into an upper-cased set. */
+export function parseKeywordList(raw: string | null | undefined, fallback: string): string[] {
+  const source = (raw ?? "").trim() || fallback;
+  return [
+    ...new Set(
+      source
+        .split(/[,\n]/)
+        .map((k) => k.trim().toUpperCase())
+        .filter(Boolean),
+    ),
+  ];
+}
 
 const DAY_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
 
@@ -114,6 +134,9 @@ export async function getMessagingRuntimeSettings(workspaceId: string): Promise<
       quietHoursStart: null,
       quietHoursEnd: null,
       reviewLinkUrl: null,
+      optOutKeywords: null,
+      optInKeywords: null,
+      helpKeywords: null,
     };
   }
   return {
@@ -126,6 +149,9 @@ export async function getMessagingRuntimeSettings(workspaceId: string): Promise<
     quietHoursStart: row.quietHoursStart,
     quietHoursEnd: row.quietHoursEnd,
     reviewLinkUrl: row.reviewLinkUrl,
+    optOutKeywords: row.optOutKeywords ?? null,
+    optInKeywords: row.optInKeywords ?? null,
+    helpKeywords: row.helpKeywords ?? null,
   };
 }
 
@@ -146,6 +172,9 @@ export async function upsertMessagingRuntimeSettings(
       quietHoursStart: patch.quietHoursStart,
       quietHoursEnd: patch.quietHoursEnd,
       reviewLinkUrl: patch.reviewLinkUrl,
+      optOutKeywords: patch.optOutKeywords,
+      optInKeywords: patch.optInKeywords,
+      helpKeywords: patch.helpKeywords,
     },
     update: {
       businessHoursJson: patch.businessHoursJson ?? undefined,
@@ -156,6 +185,9 @@ export async function upsertMessagingRuntimeSettings(
       quietHoursStart: patch.quietHoursStart,
       quietHoursEnd: patch.quietHoursEnd,
       reviewLinkUrl: patch.reviewLinkUrl,
+      optOutKeywords: patch.optOutKeywords,
+      optInKeywords: patch.optInKeywords,
+      helpKeywords: patch.helpKeywords,
     },
   });
   return {
@@ -168,6 +200,9 @@ export async function upsertMessagingRuntimeSettings(
     quietHoursStart: row.quietHoursStart,
     quietHoursEnd: row.quietHoursEnd,
     reviewLinkUrl: row.reviewLinkUrl,
+    optOutKeywords: row.optOutKeywords ?? null,
+    optInKeywords: row.optInKeywords ?? null,
+    helpKeywords: row.helpKeywords ?? null,
   };
 }
 

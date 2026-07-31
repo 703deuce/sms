@@ -8,7 +8,11 @@ import { getAppBaseUrl } from "@/lib/messaging/twilio-config";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import { reconcileCampaignStatus } from "@/lib/campaigns/sequence-runner";
 import {
+  DEFAULT_HELP_KEYWORDS,
+  DEFAULT_OPT_IN_KEYWORDS,
+  DEFAULT_OPT_OUT_KEYWORDS,
   getMessagingRuntimeSettings,
+  parseKeywordList,
   shouldSendAwayReply,
 } from "@/lib/messaging/messaging-settings";
 
@@ -153,22 +157,28 @@ export async function processInboundMessage(input: {
   const body = (input.body || "").trim();
   const upper = body.toUpperCase();
 
+  // Workspace-configurable compliance keywords (fall back to standard sets).
+  const runtime = await getMessagingRuntimeSettings(input.workspaceId);
+  const stopKeywords = parseKeywordList(runtime.optOutKeywords, DEFAULT_OPT_OUT_KEYWORDS);
+  const startKeywords = parseKeywordList(runtime.optInKeywords, DEFAULT_OPT_IN_KEYWORDS);
+  const helpKeywords = parseKeywordList(runtime.helpKeywords, DEFAULT_HELP_KEYWORDS);
+
   // Dedupe provider retries before keyword side effects / auto-replies.
   if (input.providerMessageId) {
     const existingMsg = await prisma.conversationMessage.findFirst({
       where: { providerMessageId: input.providerMessageId },
     });
     if (existingMsg) {
-      if (["STOP", "STOPALL", "UNSUBSCRIBE", "CANCEL", "END", "QUIT"].includes(upper)) {
+      if (stopKeywords.includes(upper)) {
         return { kind: "stop" };
       }
-      if (["START", "YES", "UNSTOP"].includes(upper)) return { kind: "start" };
-      if (["HELP", "INFO"].includes(upper)) return { kind: "help" };
+      if (startKeywords.includes(upper)) return { kind: "start" };
+      if (helpKeywords.includes(upper)) return { kind: "help" };
       return { kind: body ? "message" : "empty" };
     }
   }
 
-  if (["STOP", "STOPALL", "UNSUBSCRIBE", "CANCEL", "END", "QUIT"].includes(upper)) {
+  if (stopKeywords.includes(upper)) {
     const suppressionKey = `${input.workspaceId}:p:${from}`;
     try {
       await prisma.suppression.create({
@@ -244,7 +254,7 @@ export async function processInboundMessage(input: {
     };
   }
 
-  if (["START", "YES", "UNSTOP"].includes(upper)) {
+  if (startKeywords.includes(upper)) {
     await prisma.suppression.deleteMany({
       where: { workspaceId: input.workspaceId, phone: from },
     });
@@ -264,7 +274,7 @@ export async function processInboundMessage(input: {
     };
   }
 
-  if (["HELP", "INFO"].includes(upper)) {
+  if (helpKeywords.includes(upper)) {
     await recordInboundReceipt({
       workspaceId: input.workspaceId,
       from,
@@ -472,7 +482,6 @@ export async function processInboundMessage(input: {
   }
 
   // Away / business-hours auto-reply (once per contact per day).
-  const runtime = await getMessagingRuntimeSettings(input.workspaceId);
   if (shouldSendAwayReply(runtime)) {
     const custom =
       contact.customFields && typeof contact.customFields === "object"
