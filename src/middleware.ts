@@ -26,6 +26,10 @@ function isPublicPath(pathname: string) {
   if (pathname.startsWith("/f/")) return true;
   if (pathname.startsWith("/embed/f/")) return true;
   if (pathname === "/embed/form.js") return true;
+  // Signed expiring recording streams (token-gated, no session cookie)
+  if (pathname.startsWith("/api/voice/recordings/") && pathname.endsWith("/stream")) return true;
+  // Calendar OAuth callbacks (provider redirects without session)
+  if (pathname.startsWith("/api/voice/calendars/oauth/") && pathname.includes("/callback")) return true;
   return false;
 }
 

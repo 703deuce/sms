@@ -100,6 +100,24 @@ export async function processVoiceWebhookEvent(input: {
     });
   }
 
+  // New inbound leg — create call + routing
+  if (!call && eventType === "call.initiated") {
+    const to = String(eventPayload.to || "");
+    const from = String(eventPayload.from || "");
+    const pn = await prisma.phoneNumber.findFirst({ where: { e164: to } });
+    if (pn) {
+      const { handleInboundCallEvent } = await import("../inbound");
+      const result = await handleInboundCallEvent({
+        workspaceId: pn.workspaceId,
+        fromE164: from,
+        toE164: to,
+        telnyxCallControlId: String(eventPayload.call_control_id || ""),
+        payload: eventPayload,
+      });
+      call = await prisma.voiceCall.findUnique({ where: { id: result.callId } });
+    }
+  }
+
   if (!call) {
     await prisma.providerWebhookEvent.update({
       where: { providerEventId: input.providerEventId },
@@ -148,6 +166,15 @@ export async function processVoiceWebhookEvent(input: {
   if (eventType.includes("machine") && eventType.includes("detection")) {
     patch.voicemailDetected = true;
     patch.outcome = "voicemail";
+    if (call.campaignId) {
+      const { applyVoicemailPolicy } = await import("../campaigns");
+      await applyVoicemailPolicy(workspaceId, call.id, call.campaignId);
+    }
+    const amd = String(eventPayload.result || eventPayload.machine_detection_result || "");
+    if (amd) {
+      const { handleTransferAmdResult } = await import("../transfers");
+      await handleTransferAmdResult(call.id, workspaceId, amd);
+    }
   }
 
   if (eventPayload.call_control_id) {

@@ -2,6 +2,7 @@
 
 import { Card, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
+import { RecordingPlayer } from "@/components/voice/recording-player";
 import { VoiceSubNav } from "@/components/voice/voice-subnav";
 import Link from "next/link";
 import { useParams } from "next/navigation";
@@ -21,6 +22,7 @@ export default function VoiceCallDetailPage() {
   }, [id]);
 
   const call = data?.call as Record<string, unknown> | undefined;
+  const recordings = (data?.recordings as Array<{ id: string; status: string }>) || [];
 
   return (
     <div>
@@ -39,6 +41,18 @@ export default function VoiceCallDetailPage() {
             <p className="text-sm"><strong>Cost:</strong> ${((Number(call.costCents) || 0) / 100).toFixed(2)}</p>
           </Card>
           <Card className="p-5">
+            <CardTitle>Recording</CardTitle>
+            {recordings.length ? (
+              <div className="mt-2 space-y-4">
+                {recordings.map((r) => (
+                  <RecordingPlayer key={r.id} recordingId={r.id} label={r.status} />
+                ))}
+              </div>
+            ) : (
+              <p className="mt-2 text-sm text-muted-foreground">No recording for this call.</p>
+            )}
+          </Card>
+          <Card className="p-5">
             <CardTitle>Transcript</CardTitle>
             <pre className="mt-2 max-h-64 overflow-auto text-xs whitespace-pre-wrap">
               {JSON.stringify(data?.transcripts, null, 2)}
@@ -50,7 +64,7 @@ export default function VoiceCallDetailPage() {
               {JSON.stringify(data?.insights, null, 2)}
             </pre>
           </Card>
-          <Card className="p-5">
+          <Card className="p-5 lg:col-span-2">
             <CardTitle>Event timeline</CardTitle>
             <pre className="mt-2 max-h-64 overflow-auto text-xs whitespace-pre-wrap">
               {JSON.stringify(data?.events, null, 2)}

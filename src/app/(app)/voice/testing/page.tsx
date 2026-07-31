@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input, Label } from "@/components/ui/input";
 import { PageHeader } from "@/components/ui/page-header";
+import { MicTestPanel } from "@/components/voice/mic-test-panel";
 import { VoiceSubNav } from "@/components/voice/voice-subnav";
 import { useEffect, useState } from "react";
 
@@ -46,28 +47,32 @@ export default function VoiceTestingPage() {
     <div>
       <PageHeader title="Testing lab" description="Place test calls separated from production analytics." />
       <VoiceSubNav />
-      <Card className="max-w-lg space-y-4 p-5">
-        <div>
-          <Label>Agent</Label>
-          <select
-            className="mt-1 w-full rounded-lg border border-border px-3 py-2 text-sm"
-            value={agentId}
-            onChange={(e) => setAgentId(e.target.value)}
-          >
-            {agents.map((a) => (
-              <option key={a.id} value={a.id}>{a.name}</option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <Label>Test number (E.164)</Label>
-          <Input value={testNumber} onChange={(e) => setTestNumber(e.target.value)} />
-        </div>
-        <Button disabled={running || !agentId} onClick={runTest}>
-          {running ? "Running…" : "Place outbound test call"}
-        </Button>
-        {result && <p className="text-sm">{result}</p>}
-      </Card>
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card className="space-y-4 p-5">
+          <h2 className="font-medium">Outbound test call</h2>
+          <div>
+            <Label>Agent</Label>
+            <select
+              className="mt-1 w-full rounded-lg border border-border px-3 py-2 text-sm"
+              value={agentId}
+              onChange={(e) => setAgentId(e.target.value)}
+            >
+              {agents.map((a) => (
+                <option key={a.id} value={a.id}>{a.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <Label>Test number (E.164)</Label>
+            <Input value={testNumber} onChange={(e) => setTestNumber(e.target.value)} />
+          </div>
+          <Button disabled={running || !agentId} onClick={runTest}>
+            {running ? "Running…" : "Place outbound test call"}
+          </Button>
+          {result && <p className="text-sm">{result}</p>}
+        </Card>
+        <MicTestPanel />
+      </div>
     </div>
   );
 }

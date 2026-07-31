@@ -87,9 +87,20 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
           status: "ready",
           storageUrl: urls?.mp3 || urls?.wav || null,
           providerRecordingId: String(payload.providerRecordingId || ""),
+          channels: 2,
         },
       });
       return { ok: true };
+    }
+    case "voice_tool_execute": {
+      const { executeVoiceTool } = await import("@/lib/voice/tools/executor");
+      return executeVoiceTool(payload as import("@/lib/voice/tools/executor").ToolExecInput);
+    }
+    case "voice_knowledge_process": {
+      const { processKnowledgeSource } = await import("@/lib/voice/knowledge-processor");
+      const sourceId = String(payload.sourceId || "");
+      if (!sourceId) throw new Error("sourceId required");
+      return processKnowledgeSource(sourceId);
     }
     default:
       throw new Error(`Unknown job type: ${jobType}`);
