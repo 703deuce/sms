@@ -48,8 +48,24 @@ curl -sS -X POST "$APP_URL/api/jobs/process" -H "Authorization: Bearer $CRON_SEC
 | `QUEUE_DRIVER` | `bullmq` for Redis queues, omit for DB-only |
 | `REDIS_URL` | Required when `QUEUE_DRIVER=bullmq` |
 | `CRON_SECRET` | Auth for `/api/jobs/process` |
-| Twilio/Telnyx vars | Live SMS (mock works without) |
+| Telnyx vars (below) | Live SMS — this deployment uses **Telnyx**, not Twilio |
 | `BREVO_API_KEY` | Email automation actions |
+
+### Telnyx (production SMS)
+
+Automations send through the same messaging registration path as campaigns (`sendQuickSms` → workspace registration → Telnyx when configured).
+
+| Variable | Purpose |
+|----------|---------|
+| `MESSAGING_PROVIDER=telnyx` or `TELNYX_MODE=live` | Select Telnyx adapter |
+| `TELNYX_API_KEY` | API key |
+| `TELNYX_PUBLIC_KEY` | Webhook signature verification |
+| `TELNYX_ORG_ID` | Organization |
+| `APP_URL` | Base URL for `POST /api/telnyx/messaging` and compliance webhooks |
+
+Messaging registration must be **ready** (brand/campaign approved, number attached) before automation SMS steps send. Without Telnyx credentials, the **mock** adapter can be used for local/E2E testing.
+
+Twilio env vars remain in the repo for rollback only; do not configure them on the Telnyx deployment.
 
 ## Health check
 
@@ -62,6 +78,10 @@ curl -sS -X POST "$APP_URL/api/jobs/process" -H "Authorization: Bearer $CRON_SEC
 - BullMQ: 8 attempts with exponential backoff (15s base) for automation jobs; registration jobs use higher attempts
 - DB queue: soft defer via `JobDeferredError` re-schedules `run_after`
 - SMS/email actions use **idempotency keys** (`auto:{executionId}:{nodeId}`) so retries do not double-send
+
+### Builder test SMS
+
+`POST /api/automations/[id]/test-sms` uses the same Telnyx/mock send path as quick send. It does not create automation executions. Requires messaging registration ready for a real outbound test.
 
 ## Paused automations
 

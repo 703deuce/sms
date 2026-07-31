@@ -7,6 +7,7 @@ import { sendQuickSms } from "@/lib/sms/send-quick";
 /**
  * Builder test SMS — does not create automation executions.
  * Sends to a subscribed contact in the same workspace with merged variables.
+ * Outbound uses the workspace messaging registration (Telnyx in production).
  */
 export async function POST(
   request: Request,
