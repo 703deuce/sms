@@ -55,14 +55,23 @@ npm run db:migrate   # local / create migration
 npm run db:deploy    # CI / production
 ```
 
-## Cursor Cloud / Vercel secrets
+## Where to put secrets
 
-Add all of:
+### Coolify (Hetzner) — production app
+
+In your Coolify service → **Environment Variables**, add:
 
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY`
-- `DATABASE_URL`
+- `DATABASE_URL` (Session pooler URI — needed if any deploy/start script runs `db:push`; also useful for one-off Prisma tasks)
+- `APP_URL` / `NEXT_PUBLIC_APP_URL` (your public Coolify domain, e.g. `https://transovo.ai`)
+
+Redeploy after saving env vars so the container picks them up.
+
+### Cursor Cloud — so the agent can push schema
+
+Add the same vars (especially `DATABASE_URL`) in the Cursor Cloud **environment / secrets** for this repo. That is what lets Cursor run `npm run db:push` without you using the Supabase SQL editor.
 
 Do **not** commit passwords. Do **not** paste live DB passwords into chat.
 
