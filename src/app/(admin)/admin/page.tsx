@@ -39,7 +39,7 @@ export default async function AdminDashboardPage() {
   const paid = adminCustomers.filter((c) => c.status === "Paid").length;
   const mrr = adminCustomers.reduce((sum, c) => sum + c.mrr, 0);
   const messageVolume = usageTotals.messageVolume;
-  const twilioCost = usageTotals.twilioCost;
+  const telnyxCost = usageTotals.telnyxCost;
   const revenue = mrr + usageTotals.revenue;
   const failedMessages = usageTotals.failed;
   const failureRate = usageTotals.failureRate.toFixed(1);
@@ -114,8 +114,8 @@ export default async function AdminDashboardPage() {
           tone="bg-blue-50 text-blue-600"
         />
         <MetricCard
-          label="Est. Twilio Cost"
-          value={formatCurrency(twilioCost)}
+          label="Est. Telnyx Cost"
+          value={formatCurrency(telnyxCost)}
           icon={Settings2}
           tone="bg-violet-50 text-violet-600"
         />

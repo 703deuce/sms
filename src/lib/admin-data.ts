@@ -140,7 +140,7 @@ export async function loadAdminUsageTotals() {
     failed,
     failureRate: sent > 0 ? (failed / sent) * 100 : 0,
     monthlyNumberCost,
-    twilioCost: messageVolume * 0.0085,
+    telnyxCost: messageVolume * 0.0085,
     revenue: messageVolume * 0.015,
   };
 }

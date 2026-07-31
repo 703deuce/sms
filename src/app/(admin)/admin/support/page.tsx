@@ -1,14 +1,31 @@
-import { Button } from "@/components/ui/button";
+import { SupportTicketsPanel, type SupportTicketRow } from "@/components/admin/support-tickets-panel";
 import { Card, CardTitle, StatCard } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatusChip } from "@/components/ui/status-chip";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { loadAdminAuditLogs } from "@/lib/admin-data";
+import { getPrisma } from "@/lib/db";
 
 export default async function AdminSupportPage() {
-  const auditEntries = await loadAdminAuditLogs(50);
-  const open = auditEntries.length;
+  const [auditEntries, ticketRows] = await Promise.all([
+    loadAdminAuditLogs(50),
+    getPrisma()
+      .supportTicket.findMany({ orderBy: { createdAt: "desc" }, take: 200 })
+      .catch(() => [] as Array<Record<string, unknown>>),
+  ]);
+
+  const tickets: SupportTicketRow[] = (ticketRows as Array<Record<string, unknown>>).map((t) => ({
+    id: String(t.id),
+    email: String(t.email || ""),
+    subject: String(t.subject || ""),
+    body: String(t.body || ""),
+    status: String(t.status || "open"),
+    workspaceId: (t.workspaceId as string | null) ?? null,
+    createdAt: new Date(t.createdAt as string).toISOString(),
+  }));
+
+  const openTickets = tickets.filter((t) => t.status !== "closed").length;
   const pending = auditEntries.filter((e) =>
     e.event.toLowerCase().includes("pending") || e.event.toLowerCase().includes("review"),
   ).length;
@@ -21,17 +38,18 @@ export default async function AdminSupportPage() {
       <PageHeader
         title="Support"
         description="Customer support tickets across billing, compliance, and technical issues."
-        actions={<Button>New ticket</Button>}
       />
 
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
-        <StatCard label="Recent events" value={open} />
+        <StatCard label="Open tickets" value={openTickets} />
         <StatCard label="Pending review" value={pending} />
         <StatCard label="Needs attention" value={highPriority} />
       </div>
 
+      <SupportTicketsPanel initialTickets={tickets} />
+
       <Card>
-        <CardTitle>Support queue</CardTitle>
+        <CardTitle>Recent account events</CardTitle>
         {auditEntries.length === 0 ? (
           <EmptyState
             title="No support items"

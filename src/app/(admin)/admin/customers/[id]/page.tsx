@@ -24,7 +24,7 @@ export default async function AdminCustomerDetailPage({
 
   const metrics = await loadDashboardMetrics(id);
   const usageCost = customer.messages * 0.015;
-  const twilioCost = customer.messages * 0.0085;
+  const telnyxCost = customer.messages * 0.0085;
 
   return (
     <div>
@@ -66,7 +66,7 @@ export default async function AdminCustomerDetailPage({
         <StatCard label="MRR" value={formatCurrency(customer.mrr)} />
         <StatCard label="Messages" value={formatNumber(customer.messages)} />
         <StatCard label="Usage revenue" value={formatCurrency(usageCost)} />
-        <StatCard label="Twilio cost" value={formatCurrency(twilioCost)} />
+        <StatCard label="Telnyx cost" value={formatCurrency(telnyxCost)} />
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">

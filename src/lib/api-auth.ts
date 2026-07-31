@@ -42,6 +42,21 @@ export async function resolveWorkspaceId(
   throw new Error("Forbidden: not a member of the requested workspace");
 }
 
+/**
+ * Require an authenticated platform admin. Mirrors the admin route-group layout
+ * (session required); additionally enforces the platform-admin flag for writes.
+ */
+export async function requireAdmin() {
+  const session = await getSession();
+  if (!session) {
+    return { error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
+  }
+  if (!session.isAdmin) {
+    return { error: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
+  }
+  return { session };
+}
+
 export function jsonError(err: unknown, status = 400) {
   const message = err instanceof Error ? err.message : String(err);
   const code = /forbidden|unauthorized/i.test(message) ? 403 : status;

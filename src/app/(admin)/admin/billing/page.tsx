@@ -23,7 +23,7 @@ export default async function AdminBillingPage() {
       messages: c.messages,
       segments: Math.round(c.messages * 1.04),
       revenue: c.messages * 0.015,
-      twilioCost: c.messages * 0.0085,
+      telnyxCost: c.messages * 0.0085,
       margin: c.messages * 0.0065,
     }));
 
@@ -38,7 +38,7 @@ export default async function AdminBillingPage() {
       <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="MRR" value={formatCurrency(mrr)} />
         <StatCard label="Usage revenue" value={formatCurrency(usageTotals.revenue)} />
-        <StatCard label="Twilio cost" value={formatCurrency(usageTotals.twilioCost)} />
+        <StatCard label="Telnyx cost" value={formatCurrency(usageTotals.telnyxCost)} />
         <StatCard label="Message volume" value={formatNumber(usageTotals.messageVolume)} />
       </div>
 
@@ -86,7 +86,7 @@ export default async function AdminBillingPage() {
                 <TH>Messages</TH>
                 <TH>Segments (est.)</TH>
                 <TH>Revenue</TH>
-                <TH>Twilio cost</TH>
+                <TH>Telnyx cost</TH>
                 <TH>Margin</TH>
               </TR>
             </THead>
@@ -97,7 +97,7 @@ export default async function AdminBillingPage() {
                   <TD>{formatNumber(row.messages)}</TD>
                   <TD>{formatNumber(row.segments)}</TD>
                   <TD>{formatCurrency(row.revenue)}</TD>
-                  <TD>{formatCurrency(row.twilioCost)}</TD>
+                  <TD>{formatCurrency(row.telnyxCost)}</TD>
                   <TD>{formatCurrency(row.margin)}</TD>
                 </TR>
               ))}
