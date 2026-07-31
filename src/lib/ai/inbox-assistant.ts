@@ -1,10 +1,32 @@
+/**
+ * Inbox thread analysis and reply suggestions.
+ *
+ * Env:
+ *   OPENAI_API_KEY — when set, uses OpenAI Chat Completions for analysis
+ *   OPENAI_MODEL   — optional model name (default gpt-4o-mini)
+ */
+
+import { openAiChatCompletion } from "@/lib/ai/openai";
+
 type ThreadMessage = {
   direction: "inbound" | "outbound" | "note";
   body: string;
   at?: string;
 };
 
-export function analyzeInboxThread(messages: ThreadMessage[], contactName?: string) {
+export type InboxAssistResult = {
+  summary: string;
+  suggestedReply: string;
+  intent: string;
+  urgency: string;
+  suggestedTags: string[];
+  suggestedNextAction: string;
+  optOutRisk: boolean;
+  unansweredQuestions: string[];
+  mode?: "openai" | "heuristic";
+};
+
+function heuristicAnalyze(messages: ThreadMessage[], contactName?: string): InboxAssistResult {
   const inbound = messages.filter((m) => m.direction === "inbound");
   const lastInbound = inbound[inbound.length - 1]?.body || "";
   const name = contactName?.trim() || "there";
@@ -50,5 +72,50 @@ export function analyzeInboxThread(messages: ThreadMessage[], contactName?: stri
         : "Send suggested reply",
     optOutRisk,
     unansweredQuestions: question ? [lastInbound] : [],
+    mode: "heuristic",
   };
+}
+
+export async function analyzeInboxThread(
+  messages: ThreadMessage[],
+  contactName?: string,
+): Promise<InboxAssistResult> {
+  const heuristic = heuristicAnalyze(messages, contactName);
+
+  const threadText = messages
+    .map((m) => `[${m.direction}] ${m.body}`)
+    .join("\n");
+
+  const llm = await openAiChatCompletion(
+    "You assist SMS inbox agents. Return valid JSON with keys: summary, suggestedReply, intent, urgency (high|normal), suggestedTags (array), suggestedNextAction, optOutRisk (boolean), unansweredQuestions (array). Be concise and professional.",
+    `Contact name: ${contactName || "Customer"}\n\nThread:\n${threadText}`,
+    { temperature: 0.4, maxTokens: 700 },
+  );
+
+  if (!llm) return heuristic;
+
+  try {
+    const parsed = JSON.parse(llm) as Partial<InboxAssistResult>;
+    return {
+      summary: String(parsed.summary || heuristic.summary),
+      suggestedReply: String(parsed.suggestedReply || heuristic.suggestedReply),
+      intent: String(parsed.intent || heuristic.intent),
+      urgency: String(parsed.urgency || heuristic.urgency),
+      suggestedTags: Array.isArray(parsed.suggestedTags)
+        ? parsed.suggestedTags.map(String)
+        : heuristic.suggestedTags,
+      suggestedNextAction: String(parsed.suggestedNextAction || heuristic.suggestedNextAction),
+      optOutRisk: Boolean(parsed.optOutRisk ?? heuristic.optOutRisk),
+      unansweredQuestions: Array.isArray(parsed.unansweredQuestions)
+        ? parsed.unansweredQuestions.map(String)
+        : heuristic.unansweredQuestions,
+      mode: "openai",
+    };
+  } catch {
+    return {
+      ...heuristic,
+      summary: llm.slice(0, 200),
+      mode: "openai",
+    };
+  }
 }

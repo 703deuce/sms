@@ -52,6 +52,32 @@ export async function POST(request: Request) {
   }
 }
 
+export async function PATCH(request: Request) {
+  try {
+    const auth = await requireSession();
+    if ("error" in auth) return auth.error;
+    const body = (await request.json()) as { id?: string; name?: string };
+    if (!body.id) {
+      return NextResponse.json({ error: "id required" }, { status: 400 });
+    }
+    const name = body.name?.trim().toLowerCase();
+    if (!name) {
+      return NextResponse.json({ error: "name required" }, { status: 400 });
+    }
+    const existing = await getPrisma().tag.findFirst({
+      where: { id: body.id, workspaceId: auth.workspaceId },
+    });
+    if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    const tag = await getPrisma().tag.update({
+      where: { id: body.id },
+      data: { name },
+    });
+    return NextResponse.json({ data: tag });
+  } catch (err) {
+    return jsonError(err, 400);
+  }
+}
+
 export async function DELETE(request: Request) {
   try {
     const auth = await requireSession();

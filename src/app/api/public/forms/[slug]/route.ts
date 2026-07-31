@@ -60,6 +60,7 @@ export async function GET(
       headline: config.headline,
       subheadline: config.subheadline,
       buttonLabel: config.buttonLabel || "Subscribe",
+      ageGateMinAge: config.ageGateMinAge,
     },
   });
 }
@@ -81,17 +82,21 @@ export async function POST(
       firstName?: string;
       lastName?: string;
       email?: string;
+      dateOfBirth?: string;
       consent?: boolean;
       embedHost?: string;
     };
 
     const meta = requestMeta(request);
-    const result = await submitOptInForm(form, {
-      phone: body.phone || "",
-      firstName: body.firstName,
-      lastName: body.lastName,
-      email: body.email,
-      consent: Boolean(body.consent),
+    const result = await submitOptInForm(
+      { ...form, config: form.config },
+      {
+        phone: body.phone || "",
+        firstName: body.firstName,
+        lastName: body.lastName,
+        email: body.email,
+        dateOfBirth: body.dateOfBirth,
+        consent: Boolean(body.consent),
       ip: meta.ip,
       userAgent: meta.userAgent,
       referrer: meta.referrer,

@@ -47,7 +47,7 @@ async function main() {
     }
 
     try {
-      const composed = composeCampaignMessages({ goal: "book appointments", tone: "friendly" });
+      const composed = await composeCampaignMessages({ goal: "book appointments", tone: "friendly" });
       if (!composed.message.includes("STOP")) throw new Error("missing compliance");
       ok("campaign composer");
     } catch (e) {
@@ -55,7 +55,7 @@ async function main() {
     }
 
     try {
-      const assist = analyzeInboxThread(
+      const assist = await analyzeInboxThread(
         [{ direction: "inbound", body: "I need to book an appointment today" }],
         "Jane",
       );

@@ -47,6 +47,8 @@ export async function handleTelnyxVoiceWebhook(request: Request) {
   );
   const workspaceId = clientState.workspaceId as string | undefined;
   const callId = clientState.callId as string | undefined;
+  const humanCallId = clientState.humanCallId as string | undefined;
+  const isHuman = clientState.kind === "human" || Boolean(humanCallId);
 
   await prisma.providerWebhookEvent.upsert({
     where: { providerEventId },
@@ -72,6 +74,8 @@ export async function handleTelnyxVoiceWebhook(request: Request) {
       eventType,
       workspaceId,
       callId,
+      humanCallId,
+      isHuman,
       eventPayload,
     } as Prisma.InputJsonValue,
     idempotencyKey: `voice-webhook:${providerEventId}`,
@@ -85,10 +89,51 @@ export async function processVoiceWebhookEvent(input: {
   eventType: string;
   workspaceId?: string;
   callId?: string;
+  humanCallId?: string;
+  isHuman?: boolean;
   eventPayload: Record<string, unknown>;
 }) {
   const prisma = getPrisma();
-  const { eventType, callId, eventPayload } = input;
+  const { eventType, callId, humanCallId, isHuman, eventPayload } = input;
+
+  // Human agent softphone calls
+  if (isHuman || humanCallId) {
+    const { processHumanCallWebhookEvent } = await import("@/lib/phone/human-call-service");
+    const humanResult = await processHumanCallWebhookEvent({
+      eventType,
+      humanCallId,
+      eventPayload,
+    });
+    if (humanResult.ok) {
+      await prisma.providerWebhookEvent.update({
+        where: { providerEventId: input.providerEventId },
+        data: { status: "processed", processedAt: new Date() },
+      });
+      return humanResult;
+    }
+  }
+
+  let humanCall = humanCallId
+    ? await prisma.humanCall.findUnique({ where: { id: humanCallId } })
+    : null;
+  if (!humanCall && eventPayload.call_control_id) {
+    humanCall = await prisma.humanCall.findFirst({
+      where: { telnyxCallControlId: String(eventPayload.call_control_id) },
+    });
+  }
+  if (humanCall) {
+    const { processHumanCallWebhookEvent } = await import("@/lib/phone/human-call-service");
+    const humanResult = await processHumanCallWebhookEvent({
+      eventType,
+      humanCallId: humanCall.id,
+      eventPayload,
+    });
+    await prisma.providerWebhookEvent.update({
+      where: { providerEventId: input.providerEventId },
+      data: { status: "processed", processedAt: new Date() },
+    });
+    return humanResult;
+  }
 
   let call = callId
     ? await prisma.voiceCall.findUnique({ where: { id: callId } })
@@ -106,6 +151,29 @@ export async function processVoiceWebhookEvent(input: {
     const from = String(eventPayload.from || "");
     const pn = await prisma.phoneNumber.findFirst({ where: { e164: to } });
     if (pn) {
+      const { evaluateInboundRouting } = await import("../routing");
+      const routing = await evaluateInboundRouting({
+        workspaceId: pn.workspaceId,
+        fromE164: from,
+        toE164: to,
+        isKnownContact: false,
+      });
+
+      if (routing.action !== "ai_answer") {
+        const { handleInboundHumanCall } = await import("@/lib/phone/human-call-service");
+        await handleInboundHumanCall({
+          workspaceId: pn.workspaceId,
+          fromE164: from,
+          toE164: to,
+          telnyxCallControlId: String(eventPayload.call_control_id || ""),
+        });
+        await prisma.providerWebhookEvent.update({
+          where: { providerEventId: input.providerEventId },
+          data: { status: "processed", processedAt: new Date() },
+        });
+        return { ok: true, kind: "human_inbound" };
+      }
+
       const { handleInboundCallEvent } = await import("../inbound");
       const result = await handleInboundCallEvent({
         workspaceId: pn.workspaceId,

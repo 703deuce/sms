@@ -19,6 +19,8 @@ export const metadata: Metadata = {
   },
   description:
     "SMS marketing for small businesses made simple. Send promotions, follow up with leads, request reviews, and manage customer replies with Transovo AI.",
+  manifest: "/manifest.webmanifest",
+  themeColor: "#0f766e",
 };
 
 export default function RootLayout({

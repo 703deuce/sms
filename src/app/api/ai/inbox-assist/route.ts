@@ -16,7 +16,7 @@ export async function POST(request: Request) {
         : "inbound") as "inbound" | "outbound" | "note",
       body: m.body || "",
     }));
-    const data = analyzeInboxThread(messages, body.contactName);
+    const data = await analyzeInboxThread(messages, body.contactName);
     return NextResponse.json({ data });
   } catch (err) {
     return jsonError(err, 400);

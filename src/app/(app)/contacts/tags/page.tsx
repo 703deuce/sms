@@ -1,25 +1,8 @@
-import { Button } from "@/components/ui/button";
-import { Card, CardTitle, StatCard } from "@/components/ui/card";
+import { TagsManager } from "@/components/contacts/tags-manager";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Input } from "@/components/ui/input";
 import { PageHeader } from "@/components/ui/page-header";
-import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
-import { Tabs } from "@/components/ui/tabs";
 import { getActiveWorkspaceId } from "@/lib/auth";
 import { loadTags } from "@/lib/workspace-data";
-
-type TagRow = Awaited<ReturnType<typeof loadTags>>[number];
-import { formatNumber } from "@/lib/utils";
-import { Tag, TagIcon } from "lucide-react";
-
-const contactTabs = [
-  { label: "All Contacts", href: "/contacts" },
-  { label: "Lists", href: "/contacts/lists" },
-  { label: "Segments", href: "/contacts/segments" },
-  { label: "Tags", href: "/contacts/tags" },
-  { label: "Imports", href: "/contacts/imports" },
-  { label: "Custom Fields", href: "/contacts/fields" },
-];
 
 export default async function ContactTagsPage() {
   const workspaceId = await getActiveWorkspaceId();
@@ -36,104 +19,6 @@ export default async function ContactTagsPage() {
     );
   }
 
-  const tags: TagRow[] = await loadTags(workspaceId);
-  const sortedTags = [...tags].sort((a, b) => b.contactCount - a.contactCount);
-  const totalTagged = tags.reduce((sum, tag) => sum + tag.contactCount, 0);
-
-  return (
-    <div>
-      <PageHeader
-        title="Tags"
-        description="Label contacts for filtering, automations, and inbox organization."
-        actions={
-          <Button>
-            <Tag className="h-4 w-4" />
-            Create tag
-          </Button>
-        }
-      />
-
-      <Tabs items={contactTabs} />
-
-      <div className="mb-6 grid gap-4 sm:grid-cols-3">
-        <StatCard label="Tags" value={formatNumber(tags.length)} />
-        <StatCard label="Tagged instances" value={formatNumber(totalTagged)} hint="Contacts can have multiple tags" />
-        <StatCard label="Most used" value={sortedTags[0]?.name ?? "—"} hint={`${formatNumber(sortedTags[0]?.contactCount ?? 0)} contacts`} />
-      </div>
-
-      <Card className="mb-6">
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="min-w-[200px] flex-1">
-            <label htmlFor="new-tag" className="mb-1.5 block text-sm font-medium">
-              New tag name
-            </label>
-            <Input id="new-tag" placeholder="e.g. vip-customer" />
-          </div>
-          <Button>Add tag</Button>
-        </div>
-      </Card>
-
-      {tags.length === 0 ? (
-        <EmptyState
-          icon={<TagIcon className="h-10 w-10" />}
-          title="No tags yet"
-          description="Create tags to label and filter contacts across campaigns and inbox."
-        />
-      ) : (
-        <>
-          <div className="mb-6 flex flex-wrap gap-2">
-            {tags.map((tag) => (
-              <span
-                key={tag.id}
-                className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5 text-sm"
-              >
-                <TagIcon className="h-3.5 w-3.5 text-primary" />
-                <span className="font-medium">{tag.name}</span>
-                <span className="text-muted-foreground">{formatNumber(tag.contactCount)}</span>
-              </span>
-            ))}
-          </div>
-
-          <Card>
-            <CardTitle>Tag management</CardTitle>
-            <Table className="mt-4">
-              <THead>
-                <TR>
-                  <TH>Tag</TH>
-                  <TH>Contacts</TH>
-                  <TH>Actions</TH>
-                </TR>
-              </THead>
-              <TBody>
-                {tags.map((tag) => (
-                  <TR key={tag.id}>
-                    <TD>
-                      <span className="inline-flex items-center gap-2 font-medium">
-                        <span className="h-2 w-2 rounded-full bg-primary" />
-                        {tag.name}
-                      </span>
-                    </TD>
-                    <TD>{formatNumber(tag.contactCount)}</TD>
-                    <TD>
-                      <div className="flex gap-1">
-                        <Button variant="ghost" size="sm">
-                          View contacts
-                        </Button>
-                        <Button variant="ghost" size="sm">
-                          Rename
-                        </Button>
-                        <Button variant="ghost" size="sm" className="text-danger">
-                          Delete
-                        </Button>
-                      </div>
-                    </TD>
-                  </TR>
-                ))}
-              </TBody>
-            </Table>
-          </Card>
-        </>
-      )}
-    </div>
-  );
+  const tags = await loadTags(workspaceId);
+  return <TagsManager tags={tags} />;
 }

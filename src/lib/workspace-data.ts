@@ -429,21 +429,9 @@ function isRecurringCampaign(row: {
   scheduledAt: Date | null;
   configJson: unknown;
 }) {
-  const cat = (row.category || "").toLowerCase();
-  const type = (row.type || "").toLowerCase();
   const config = row.configJson as Record<string, unknown> | null;
-  const hasRecurrence =
-    config &&
-    ("recurrence" in config || "frequency" in config || "recurring" in config || config.recurring === true);
-  return (
-    cat.includes("recurring") ||
-    cat.includes("reminder") ||
-    cat === "appointment" ||
-    type.includes("reminder") ||
-    type.includes("recurring") ||
-    Boolean(hasRecurrence) ||
-    Boolean(row.scheduledAt && (type.includes("reminder") || type.includes("recurring")))
-  );
+  if (config?.recurrence && typeof config.recurrence === "object") return true;
+  return false;
 }
 
 export async function loadRecurringCampaigns(workspaceId: string): Promise<Campaign[]> {

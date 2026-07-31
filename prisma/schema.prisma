@@ -88,6 +88,13 @@ enum JobQueueStatus {
   deferred
 }
 
+enum PaymentLinkStatus {
+  pending
+  paid
+  expired
+  canceled
+}
+
 model User {
   id           String       @id @default(cuid())
   email        String       @unique
@@ -104,6 +111,7 @@ model Workspace {
   id          String   @id @default(cuid())
   name        String
   slug        String   @unique
+  customFieldsConfig Json?
   createdAt   DateTime @default(now())
   memberships Membership[]
   phoneNumbers PhoneNumber[]
@@ -172,6 +180,33 @@ model Workspace {
   surveyResponses SurveyResponse[]
   growWidgets GrowWidget[]
   contactCardProfile ContactCardProfile?
+  messagingSettings WorkspaceMessagingSettings?
+  emailToSmsAddresses EmailToSmsAddress[]
+  paymentLinks PaymentLink[]
+  portRequests PortRequest[]
+  humanCalls HumanCall[]
+  pushSubscriptions PushSubscription[]
+  notificationPrefs WorkspaceNotificationPrefs[]
+  workspaceLimits WorkspaceLimits?
+  workspaceDataPrefs WorkspaceDataPrefs?
+  workspacePhoneSettings WorkspacePhoneSettings?
+  creditLedgerEntries CreditLedgerEntry[]
+  senderPools SenderPool[]
+}
+
+model SenderPool {
+  id              String   @id @default(cuid())
+  workspaceId     String
+  name            String
+  description     String?
+  phoneNumberIds  String[] @default([])
+  status          String   @default("Active")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@map("sender_pools")
 }
 
 model Membership {
@@ -204,6 +239,23 @@ model PhoneNumber {
 
   @@unique([workspaceId, e164])
   @@index([twilioSid])
+}
+
+model PortRequest {
+  id             String   @id @default(cuid())
+  workspaceId    String
+  phone          String
+  currentCarrier String?
+  accountNumber  String?
+  accountPin     String?
+  billingPhone   String?
+  businessName   String?
+  address        String?
+  status         String   @default("pending")
+  createdAt      DateTime @default(now())
+  workspace      Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
 }
 
 model Contact {
@@ -1643,4 +1695,158 @@ model ContactCardProfile {
   workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@map("contact_card_profiles")
+}
+
+model WorkspaceMessagingSettings {
+  id               String   @id @default(cuid())
+  workspaceId      String   @unique
+  businessHoursJson Json?
+  timezone         String   @default("America/Los_Angeles")
+  awayMessage      String?
+  awayEnabled      Boolean  @default(false)
+  awayAlways       Boolean  @default(false)
+  quietHoursStart  String?
+  quietHoursEnd    String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  workspace        Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("workspace_messaging_settings")
+}
+
+model EmailToSmsAddress {
+  id          String   @id @default(cuid())
+  workspaceId String
+  localPart   String
+  phoneE164   String?
+  fromNumber  String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, localPart])
+  @@index([workspaceId, active])
+  @@map("email_to_sms_addresses")
+}
+
+model PaymentLink {
+  id              String            @id @default(cuid())
+  workspaceId     String
+  contactId       String?
+  phone           String
+  amountCents     Int
+  currency        String            @default("usd")
+  description     String?
+  stripeSessionId String?
+  status          PaymentLinkStatus @default(pending)
+  url             String
+  campaignId      String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  workspace       Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, status])
+  @@index([stripeSessionId])
+  @@map("payment_links")
+}
+
+model HumanCall {
+  id                  String    @id @default(cuid())
+  workspaceId         String
+  from                String
+  to                  String
+  direction           String    @default("outbound")
+  status              String    @default("initiated")
+  agentUserId         String?
+  telnyxCallControlId String?
+  startedAt           DateTime  @default(now())
+  endedAt             DateTime?
+  recordingUrl        String?
+  notes               String?
+  disposition         String?
+  muted               Boolean   @default(false)
+  onHold              Boolean   @default(false)
+  callerIdNumber      String?
+  workspace           Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, startedAt])
+  @@index([telnyxCallControlId])
+  @@map("human_calls")
+}
+
+model PushSubscription {
+  id          String   @id @default(cuid())
+  workspaceId String
+  userId      String
+  endpoint    String
+  p256dh      String
+  auth        String
+  createdAt   DateTime @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, endpoint])
+  @@index([workspaceId, userId])
+  @@map("push_subscriptions")
+}
+
+model WorkspaceNotificationPrefs {
+  id              String   @id @default(cuid())
+  workspaceId     String
+  userId          String
+  notifyEmail     String?
+  digestFrequency String   @default("daily")
+  pushEnabled     Boolean  @default(false)
+  prefs           Json     @default("{}")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@map("workspace_notification_prefs")
+}
+
+model WorkspaceLimits {
+  id          String   @id @default(cuid())
+  workspaceId String   @unique
+  limits      Json     @default("{}")
+  updatedAt   DateTime @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("workspace_limits")
+}
+
+model WorkspaceDataPrefs {
+  id                    String   @id @default(cuid())
+  workspaceId           String   @unique
+  messageRetentionDays  Int      @default(365)
+  consentRetention      String   @default("forever")
+  updatedAt             DateTime @updatedAt
+  workspace             Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("workspace_data_prefs")
+}
+
+model WorkspacePhoneSettings {
+  id                    String   @id @default(cuid())
+  workspaceId           String   @unique
+  defaultCallerIdNumber String?
+  updatedAt             DateTime @updatedAt
+  workspace             Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("workspace_phone_settings")
+}
+
+model CreditLedgerEntry {
+  id                String   @id @default(cuid())
+  workspaceId       String
+  amountCents       Int
+  balanceAfterCents Int?
+  description       String
+  source            String   @default("adjustment")
+  createdAt         DateTime @default(now())
+  workspace         Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
+  @@map("credit_ledger_entries")
 }

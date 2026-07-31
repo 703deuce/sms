@@ -7,7 +7,7 @@ export async function POST(request: Request) {
     const auth = await requireSession();
     if ("error" in auth) return auth.error;
     const body = (await request.json()) as Record<string, unknown>;
-    const data = composeCampaignMessages({
+    const data = await composeCampaignMessages({
       goal: String(body.goal || ""),
       audience: String(body.audience || ""),
       tone: String(body.tone || ""),

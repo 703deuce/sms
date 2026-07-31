@@ -1,4 +1,5 @@
 import { AppShell } from "@/components/layout/app-shell";
+import { ServiceWorkerRegister } from "@/components/push/service-worker-register";
 import { getActiveWorkspaceId, getSession } from "@/lib/auth";
 import { loadShellData } from "@/lib/workspace-data";
 import { redirect } from "next/navigation";
@@ -14,7 +15,9 @@ export default async function AppLayout({
   const shell = await loadShellData(session.userId, workspaceId);
 
   return (
-    <AppShell
+    <>
+      <ServiceWorkerRegister />
+      <AppShell
       userName={session.name}
       workspaceId={workspaceId}
       workspaces={shell.workspaces}
@@ -23,5 +26,6 @@ export default async function AppLayout({
     >
       {children}
     </AppShell>
+    </>
   );
 }

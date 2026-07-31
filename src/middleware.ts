@@ -21,9 +21,11 @@ function isPublicPath(pathname: string) {
   if (pathname.startsWith("/api/jobs/")) return true;
   if (pathname.startsWith("/api/integrations/webhooks/incoming/")) return true;
   if (pathname.startsWith("/api/public/")) return true;
+  if (pathname.startsWith("/api/payments/stripe/webhook")) return true;
   if (pathname.startsWith("/r/")) return true;
   // Hosted + embeddable opt-in forms (consent capture)
   if (pathname.startsWith("/f/")) return true;
+  if (pathname.startsWith("/s/")) return true;
   if (pathname.startsWith("/embed/f/")) return true;
   if (pathname.startsWith("/embed/w/")) return true;
   if (pathname === "/embed/form.js") return true;

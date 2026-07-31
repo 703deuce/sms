@@ -7,9 +7,10 @@ import { PageHeader } from "@/components/ui/page-header";
 import { StatusChip } from "@/components/ui/status-chip";
 import type { Contact, PhoneNumber } from "@/lib/types";
 import { cn, estimateSmsSegments, formatCurrency, formatNumber, formatPhone } from "@/lib/utils";
-import { Check, Search } from "lucide-react";
+import { Check, Paperclip, Search } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { MediaPicker } from "@/components/messaging/media-picker";
 
 type ApiContact = {
   id: string;
@@ -55,6 +56,8 @@ export default function QuickSendPage() {
   const [error, setError] = useState("");
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [phoneNumbers, setPhoneNumbers] = useState<PhoneNumber[]>([]);
+  const [mediaUrls, setMediaUrls] = useState<string[]>([]);
+  const [showMedia, setShowMedia] = useState(false);
 
   useEffect(() => {
     fetch("/api/contacts?status=subscribed")
@@ -126,6 +129,7 @@ export default function QuickSendPage() {
               .replace(/\{\{last_name\}\}/g, contact.lastName),
             from: selectedNumber.number,
             customerName: `${contact.firstName} ${contact.lastName}`.trim(),
+            mediaUrls: mediaUrls.length ? mediaUrls : undefined,
           }),
         });
         if (!res.ok) {
@@ -268,7 +272,18 @@ export default function QuickSendPage() {
                 </Select>
               </div>
               <div>
-                <Label>Message</Label>
+                <div className="flex items-center justify-between">
+                  <Label>Message</Label>
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                    onClick={() => setShowMedia(true)}
+                  >
+                    <Paperclip className="h-3.5 w-3.5" />
+                    Attach media
+                    {mediaUrls.length ? ` (${mediaUrls.length})` : ""}
+                  </button>
+                </div>
                 <Textarea
                   rows={6}
                   value={message}
@@ -287,6 +302,25 @@ export default function QuickSendPage() {
                     </button>
                   ))}
                 </div>
+                {mediaUrls.length > 0 ? (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {mediaUrls.map((url) => (
+                      <span
+                        key={url}
+                        className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-1 text-xs text-muted-foreground"
+                      >
+                        MMS media
+                        <button
+                          type="button"
+                          className="text-rose-600"
+                          onClick={() => setMediaUrls((prev) => prev.filter((u) => u !== url))}
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
               </div>
             </div>
           </Card>
@@ -332,6 +366,12 @@ export default function QuickSendPage() {
           </Card>
         </div>
       </div>
+      <MediaPicker
+        open={showMedia}
+        onClose={() => setShowMedia(false)}
+        initialSelected={mediaUrls}
+        onConfirm={setMediaUrls}
+      />
     </div>
   );
 }

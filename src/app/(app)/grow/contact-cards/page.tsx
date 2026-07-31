@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Input, Label } from "@/components/ui/input";
 import { PageHeader } from "@/components/ui/page-header";
 import { Tabs } from "@/components/ui/tabs";
+import { buildVCard } from "@/lib/contact-cards/vcard";
 import { useEffect, useState } from "react";
 import { growTabs } from "@/lib/grow-tabs";
 
@@ -30,8 +31,29 @@ export default function ContactCardsPage() {
         setEmail(d.email || "");
         setAddress(d.address || "");
         setLogoUrl(d.logoUrl || "");
+        if (d.businessName) {
+          setVcard(buildVCard(d));
+        }
       });
   }, []);
+
+  function downloadVcf() {
+    const card = buildVCard({
+      businessName,
+      phone,
+      website,
+      email,
+      address,
+      logoUrl,
+    });
+    const blob = new Blob([card], { type: "text/vcard;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${businessName.trim() || "contact"}.vcf`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 
   async function save() {
     setSaving(true);
@@ -77,8 +99,11 @@ export default function ContactCardsPage() {
           <Label>Logo URL</Label>
           <Input value={logoUrl} onChange={(e) => setLogoUrl(e.target.value)} placeholder="https://…" />
         </div>
-        <div className="sm:col-span-2">
+        <div className="sm:col-span-2 flex flex-wrap gap-2">
           <Button onClick={save} disabled={saving}>{saving ? "Saving…" : "Save contact card"}</Button>
+          <Button variant="outline" onClick={downloadVcf} disabled={!businessName.trim()}>
+            Download .vcf
+          </Button>
         </div>
       </Card>
       {vcard ? (

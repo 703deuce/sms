@@ -2,6 +2,7 @@ import type { Prisma } from "@/lib/domain";
 import { getPrisma } from "@/lib/db";
 import { enrollContactInCampaign } from "@/lib/campaigns/enroll-campaign";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
+import { parseFormConfig, computeAgeFromDateOfBirth } from "@/lib/forms/types";
 
 type FormRow = {
   id: string;
@@ -14,6 +15,7 @@ type FormRow = {
   doubleOptIn: boolean;
   listName: string;
   startCampaignId: string | null;
+  config?: unknown;
 };
 
 export type OptInSubmitInput = {
@@ -21,6 +23,7 @@ export type OptInSubmitInput = {
   firstName?: string;
   lastName?: string;
   email?: string;
+  dateOfBirth?: string;
   consent: boolean;
   ip?: string | null;
   userAgent?: string | null;
@@ -41,6 +44,23 @@ export async function submitOptInForm(
   }
   if (!input.phone?.trim()) {
     return { ok: false, error: "Phone number is required" };
+  }
+
+  const formConfig = parseFormConfig(form.config);
+  if (formConfig.ageGateMinAge) {
+    const needsDob = formConfig.fields?.includes("dateOfBirth");
+    if (needsDob && !input.dateOfBirth?.trim()) {
+      return { ok: false, error: "Date of birth is required" };
+    }
+    if (input.dateOfBirth?.trim()) {
+      const age = computeAgeFromDateOfBirth(input.dateOfBirth);
+      if (age === null) {
+        return { ok: false, error: "Invalid date of birth" };
+      }
+      if (age < formConfig.ageGateMinAge) {
+        return { ok: false, error: `You must be at least ${formConfig.ageGateMinAge} years old to subscribe` };
+      }
+    }
   }
 
   const prisma = getPrisma();
@@ -140,6 +160,7 @@ export async function submitOptInForm(
     firstName: input.firstName,
     lastName: input.lastName,
     email: input.email,
+    dateOfBirth: input.dateOfBirth,
     referrer: input.referrer,
     embedHost: input.embedHost,
   };

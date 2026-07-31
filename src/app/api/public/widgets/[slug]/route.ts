@@ -17,6 +17,16 @@ export async function GET(
       where: { id: widget.id },
       data: { views: { increment: 1 } },
     });
+
+    let linkedFormSlug: string | null = null;
+    if (widget.linkedFormId) {
+      const form = await getPrisma().optInForm.findFirst({
+        where: { id: widget.linkedFormId, workspaceId: widget.workspaceId },
+        select: { slug: true },
+      });
+      linkedFormSlug = form?.slug ?? null;
+    }
+
     return NextResponse.json({
       data: {
         id: widget.id,
@@ -24,6 +34,7 @@ export async function GET(
         widgetType: widget.widgetType,
         config: widget.config,
         linkedFormId: widget.linkedFormId,
+        linkedFormSlug,
       },
     });
   } catch (err) {

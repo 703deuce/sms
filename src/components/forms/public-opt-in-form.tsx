@@ -23,15 +23,18 @@ export type PublicFormData = {
   headline?: string;
   subheadline?: string;
   buttonLabel?: string;
+  ageGateMinAge?: number;
 };
 
 export function PublicOptInForm({
   variant = "hosted",
+  slug: slugProp,
 }: {
   variant?: "hosted" | "embed";
+  slug?: string;
 }) {
   const params = useParams();
-  const slug = String(params.slug || "");
+  const slug = slugProp || String(params.slug || "");
   const [form, setForm] = useState<PublicFormData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
@@ -78,6 +81,7 @@ export function PublicOptInForm({
           firstName: values.firstName,
           lastName: values.lastName,
           email: values.email,
+          dateOfBirth: values.dateOfBirth,
           consent,
           embedHost: variant === "embed" ? window.location.hostname : undefined,
         }),
@@ -156,6 +160,23 @@ export function PublicOptInForm({
                         className="mt-1"
                         value={values.phone || ""}
                         onChange={(e) => setValues((v) => ({ ...v, phone: e.target.value }))}
+                      />
+                    </div>
+                  );
+                }
+                if (field === "dateOfBirth") {
+                  return (
+                    <div key={field}>
+                      <Label htmlFor={field}>{FIELD_LABELS[field]}</Label>
+                      <Input
+                        id={field}
+                        required={Boolean(form?.ageGateMinAge)}
+                        type="date"
+                        className="mt-1"
+                        value={values.dateOfBirth || ""}
+                        onChange={(e) =>
+                          setValues((v) => ({ ...v, dateOfBirth: e.target.value }))
+                        }
                       />
                     </div>
                   );

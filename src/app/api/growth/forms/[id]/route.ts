@@ -91,6 +91,7 @@ export async function PATCH(
       headline?: string;
       subheadline?: string;
       buttonLabel?: string;
+      ageGateMinAge?: number;
     };
 
     const existing = await getPrisma().optInForm.findFirst({
@@ -105,6 +106,7 @@ export async function PATCH(
       headline: body.headline ?? prevConfig.headline,
       subheadline: body.subheadline ?? prevConfig.subheadline,
       buttonLabel: body.buttonLabel ?? prevConfig.buttonLabel,
+      ageGateMinAge: body.ageGateMinAge ?? prevConfig.ageGateMinAge,
     };
 
     let status = existing.status;

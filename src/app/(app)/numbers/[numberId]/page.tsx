@@ -1,3 +1,4 @@
+import { NumberSettingsForm } from "@/components/numbers/number-settings-form";
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle, StatCard } from "@/components/ui/card";
 import { Input, Label, Select, Textarea } from "@/components/ui/input";
@@ -13,6 +14,7 @@ import { cn, formatCurrency, formatNumber, formatPhone } from "@/lib/utils";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { getPrisma } from "@/lib/db";
 
 const detailTabs = [
   { id: "overview", label: "Overview" },
@@ -41,6 +43,12 @@ export default async function NumberDetailPage({ params, searchParams }: PagePro
 
   const number = phoneNumbers.find((pn) => pn.id === numberId);
   if (!number) notFound();
+
+  const registration = await getPrisma().messagingRegistration.findUnique({
+    where: { workspaceId },
+    select: { phoneE164: true },
+  });
+  const isRegistrationNumber = registration?.phoneE164 === number.number;
 
   const usageLogs: Array<{
     id: string;
@@ -172,9 +180,9 @@ export default async function NumberDetailPage({ params, searchParams }: PagePro
                 Enable MMS on this number
               </Label>
             </div>
-            <Button type="button" size="sm">
-              Save messaging settings
-            </Button>
+            <p className="text-xs text-muted-foreground">
+              Messaging webhook configuration is managed in workspace messaging settings.
+            </p>
           </form>
         </Card>
       )}
@@ -213,9 +221,9 @@ export default async function NumberDetailPage({ params, searchParams }: PagePro
               })}
             </TBody>
           </Table>
-          <Button type="button" size="sm" className="mt-4">
-            Save assignments
-          </Button>
+          <p className="mt-4 text-xs text-muted-foreground">
+            Per-number inbox assignment is coming soon. All team members with inbox access can use active numbers.
+          </p>
         </Card>
       )}
 
@@ -276,9 +284,9 @@ export default async function NumberDetailPage({ params, searchParams }: PagePro
               <Label htmlFor="fallbackWebhook">Fallback URL</Label>
               <Input id="fallbackWebhook" placeholder="https://api.example.com/webhooks/fallback" />
             </div>
-            <Button type="button" size="sm">
-              Save webhooks
-            </Button>
+            <p className="text-xs text-muted-foreground">
+              Webhook endpoints are configured per workspace in Settings → Messaging.
+            </p>
           </form>
         </Card>
       )}
@@ -341,28 +349,12 @@ export default async function NumberDetailPage({ params, searchParams }: PagePro
       {tab === "settings" && (
         <Card>
           <CardTitle>Number settings</CardTitle>
-          <form className="mt-4 space-y-4 max-w-xl">
-            <div>
-              <Label htmlFor="friendlyName">Friendly name</Label>
-              <Input id="friendlyName" defaultValue={number.friendlyName} />
-            </div>
-            <div>
-              <Label htmlFor="forwardVoice">Voice forwarding (optional)</Label>
-              <Input id="forwardVoice" placeholder="+1 (555) 555-0100" />
-            </div>
-            <div className="rounded-lg border border-border bg-muted/40 p-4">
-              <p className="text-sm font-medium text-foreground">Release number</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Releasing removes this number from your account. This action cannot be undone.
-              </p>
-              <Button type="button" variant="danger" size="sm" className="mt-3">
-                Release number
-              </Button>
-            </div>
-            <Button type="button" size="sm">
-              Save settings
-            </Button>
-          </form>
+          <NumberSettingsForm
+            numberId={numberId}
+            e164={number.number}
+            initialFriendlyName={number.friendlyName}
+            isRegistrationNumber={isRegistrationNumber}
+          />
         </Card>
       )}
     </div>

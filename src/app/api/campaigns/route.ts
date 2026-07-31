@@ -62,6 +62,18 @@ export async function POST(request: Request) {
     const categoryId = (categoryMeta?.id || body.category || null) as CampaignCategoryId | null;
     const config = body.config || {};
 
+    const recurrence = config.recurrence as { nextRunAt?: string } | undefined;
+    let scheduledAt = body.scheduledAt ? new Date(body.scheduledAt) : null;
+    let status: "DRAFT" | "SCHEDULED" | "SENDING" = body.activate
+      ? "SENDING"
+      : body.scheduledAt || recurrence?.nextRunAt
+        ? "SCHEDULED"
+        : "DRAFT";
+    if (recurrence?.nextRunAt) {
+      scheduledAt = new Date(recurrence.nextRunAt);
+      if (!body.activate) status = "SCHEDULED";
+    }
+
     const sequenceJson = body.sequenceJson
       ? parseSequence(body.sequenceJson)
       : categoryId
@@ -76,8 +88,8 @@ export async function POST(request: Request) {
         category: categoryId,
         audience: body.audience || "Custom",
         body: message,
-        status: body.activate ? "SENDING" : body.scheduledAt ? "SCHEDULED" : "DRAFT",
-        scheduledAt: body.scheduledAt ? new Date(body.scheduledAt) : null,
+        status,
+        scheduledAt,
         sequenceJson: sequenceJson as Prisma.InputJsonValue,
         configJson: config as Prisma.InputJsonValue,
         successMode: body.successMode || "click",

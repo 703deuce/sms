@@ -7,6 +7,7 @@ import { cn, formatPhone } from "@/lib/utils";
 import {
   ChevronDown,
   Filter,
+  Languages,
   MoreHorizontal,
   Paperclip,
   Plus,
@@ -14,7 +15,19 @@ import {
   Smile,
   Sparkles,
 } from "lucide-react";
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useCallback, useRef } from "react";
+import { MediaPicker } from "@/components/messaging/media-picker";
+import { TemplatePicker } from "@/components/inbox/template-picker";
+
+const LANG_OPTIONS = [
+  { value: "es", label: "Spanish" },
+  { value: "en", label: "English" },
+  { value: "fr", label: "French" },
+  { value: "de", label: "German" },
+  { value: "pt", label: "Portuguese" },
+  { value: "zh", label: "Chinese" },
+  { value: "ja", label: "Japanese" },
+];
 
 export function InboxView({
   initialFilter = "All conversations",
@@ -22,12 +35,14 @@ export function InboxView({
   contacts,
   teamMembers,
   currentUserName,
+  currentUserId,
 }: {
   initialFilter?: string;
   conversations: Conversation[];
   contacts: Contact[];
   teamMembers: User[];
   currentUserName?: string;
+  currentUserId?: string;
 }) {
   const [filter, setFilter] = useState(initialFilter);
   const [selectedId, setSelectedId] = useState(seed[0]?.id);
@@ -45,6 +60,14 @@ export function InboxView({
     urgency?: string;
     optOutRisk?: boolean;
   } | null>(null);
+  const [showTemplates, setShowTemplates] = useState(false);
+  const [showMedia, setShowMedia] = useState(false);
+  const [mediaUrls, setMediaUrls] = useState<string[]>([]);
+  const [targetLang, setTargetLang] = useState("es");
+  const [alsoViewing, setAlsoViewing] = useState<Array<{ userId: string; userName: string }>>([]);
+  const [translations, setTranslations] = useState<Record<string, { text: string; mode: string }>>({});
+  const [translatingId, setTranslatingId] = useState<string | null>(null);
+  const presenceTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const filterDefs = useMemo(() => {
     const counts = {
@@ -100,7 +123,61 @@ export function InboxView({
 
   useEffect(() => {
     setAiAssist(null);
+    setMediaUrls([]);
+    setTranslations({});
   }, [selected?.id]);
+
+  const sendPresenceHeartbeat = useCallback(async () => {
+    if (!selected?.id || !currentUserId) return;
+    try {
+      const res = await fetch(`/api/inbox/${selected.id}/presence`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: currentUserId }),
+      });
+      const json = await res.json();
+      if (res.ok && json.data?.viewers) {
+        setAlsoViewing(json.data.viewers);
+      }
+    } catch {
+      // ignore presence errors
+    }
+  }, [selected?.id, currentUserId]);
+
+  useEffect(() => {
+    if (!selected?.id || !currentUserId) {
+      setAlsoViewing([]);
+      return;
+    }
+    sendPresenceHeartbeat();
+    presenceTimerRef.current = setInterval(sendPresenceHeartbeat, 20_000);
+    return () => {
+      if (presenceTimerRef.current) clearInterval(presenceTimerRef.current);
+    };
+  }, [selected?.id, currentUserId, sendPresenceHeartbeat]);
+
+  async function translateMessage(messageId: string, text: string) {
+    if (translatingId) return;
+    setTranslatingId(messageId);
+    setError(null);
+    try {
+      const res = await fetch("/api/ai/translate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, targetLang }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Translation failed");
+      setTranslations((prev) => ({
+        ...prev,
+        [messageId]: { text: json.data.translated, mode: json.data.mode },
+      }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Translation failed");
+    } finally {
+      setTranslatingId(null);
+    }
+  }
 
   async function sendReply() {
     if (!selected || !reply.trim() || sending) return;
@@ -114,6 +191,7 @@ export function InboxView({
         body: JSON.stringify({
           action: composerTab === "note" ? "note" : "reply",
           body,
+          mediaUrls: composerTab === "reply" && mediaUrls.length ? mediaUrls : undefined,
         }),
       });
       const json = (await res.json()) as { data?: Conversation; error?: string };
@@ -122,6 +200,7 @@ export function InboxView({
         setItems((prev) => prev.map((c) => (c.id === selected.id ? json.data! : c)));
       }
       setReply("");
+      setMediaUrls([]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to send");
     } finally {
@@ -346,6 +425,21 @@ export function InboxView({
                 <p className="text-[12px] text-muted-foreground">{formatPhone(selected.phone)}</p>
               </div>
               <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5">
+                  <Languages className="h-3.5 w-3.5 text-muted-foreground" />
+                  <select
+                    className="h-9 rounded-[10px] border border-border bg-card px-2 text-[12px]"
+                    value={targetLang}
+                    onChange={(e) => setTargetLang(e.target.value)}
+                    aria-label="Translation language"
+                  >
+                    {LANG_OPTIONS.map((lang) => (
+                      <option key={lang.value} value={lang.value}>
+                        {lang.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 <select
                   className="h-9 rounded-[10px] border border-border bg-card px-2 text-[12px]"
                   value={teamMembers.find((m) => m.name === selected.assignedTo)?.id || ""}
@@ -375,6 +469,12 @@ export function InboxView({
               </div>
             </div>
 
+            {alsoViewing.length > 0 ? (
+              <div className="border-b border-sky-200 bg-sky-50 px-4 py-2 text-[12px] text-sky-900">
+                Also viewing: {alsoViewing.map((v) => v.userName).join(", ")}
+              </div>
+            ) : null}
+
             <div className="flex-1 space-y-3 overflow-y-auto p-4">
               {selected.messages.map((m) => {
                 if (m.direction === "note") {
@@ -391,6 +491,7 @@ export function InboxView({
                   );
                 }
                 const outbound = m.direction === "out";
+                const translation = translations[m.id];
                 return (
                   <div key={m.id} className={cn("flex", outbound ? "justify-end" : "justify-start")}>
                     <div
@@ -407,6 +508,29 @@ export function InboxView({
                         </p>
                       ) : null}
                       <p>{m.body}</p>
+                      {translation ? (
+                        <p
+                          className={cn(
+                            "mt-2 border-t pt-2 text-[12px]",
+                            outbound ? "border-white/20 text-white/90" : "border-border text-muted-foreground",
+                          )}
+                        >
+                          {translation.text}
+                          {translation.mode === "stub" ? (
+                            <span className="ml-1 text-[10px] opacity-70">(demo)</span>
+                          ) : null}
+                        </p>
+                      ) : null}
+                      {!outbound ? (
+                        <button
+                          type="button"
+                          className="mt-1.5 text-[10px] font-medium text-primary hover:underline"
+                          onClick={() => translateMessage(m.id, m.body)}
+                          disabled={translatingId === m.id}
+                        >
+                          {translatingId === m.id ? "Translating…" : "Translate"}
+                        </button>
+                      ) : null}
                       <p className={cn("mt-1 text-[10px]", outbound ? "text-white/70" : "text-muted-foreground")}>
                         {new Date(m.at).toLocaleString(undefined, {
                           month: "numeric",
@@ -482,9 +606,32 @@ export function InboxView({
                   Internal note
                 </button>
               </div>
+              {mediaUrls.length > 0 ? (
+                <div className="mb-2 flex flex-wrap gap-2">
+                  {mediaUrls.map((url) => (
+                    <span
+                      key={url}
+                      className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-1 text-[11px] text-muted-foreground"
+                    >
+                      Media attached
+                      <button
+                        type="button"
+                        className="text-rose-600 hover:underline"
+                        onClick={() => setMediaUrls((prev) => prev.filter((u) => u !== url))}
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              ) : null}
               <textarea
                 className="min-h-[88px] w-full resize-none rounded-[12px] border border-border bg-card px-3 py-2.5 text-[13px] outline-none focus:border-primary"
-                placeholder={composerTab === "note" ? "Write an internal note..." : "Write a reply..."}
+                placeholder={
+                  composerTab === "note"
+                    ? `Write an internal note… Use @Name to mention (${teamMembers.map((m) => m.name).join(", ")})`
+                    : "Write a reply..."
+                }
                 value={reply}
                 onChange={(e) => setReply(e.target.value)}
               />
@@ -506,10 +653,22 @@ export function InboxView({
                   <Sparkles className="h-3.5 w-3.5" />
                   {aiLoading ? "Analyzing…" : "AI suggestion"}
                 </Button>
-                <Button variant="outline" className="h-9 rounded-[10px]" type="button">
+                <Button
+                  variant="outline"
+                  className="h-9 rounded-[10px]"
+                  type="button"
+                  onClick={() => setShowTemplates(true)}
+                >
                   Saved replies
                 </Button>
-                <Button variant="outline" size="icon" className="h-9 w-9 rounded-[10px]" type="button">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-9 w-9 rounded-[10px]"
+                  type="button"
+                  onClick={() => setShowMedia(true)}
+                  disabled={composerTab === "note"}
+                >
                   <Paperclip className="h-4 w-4" />
                 </Button>
                 <Button variant="outline" size="icon" className="h-9 w-9 rounded-[10px]" type="button">
@@ -612,6 +771,20 @@ export function InboxView({
           <p className="mt-4 text-[12px] text-muted-foreground">No contact selected</p>
         )}
       </aside>
+      <TemplatePicker
+        open={showTemplates}
+        onClose={() => setShowTemplates(false)}
+        onSelect={(body) => {
+          setReply(body);
+          setComposerTab("reply");
+        }}
+      />
+      <MediaPicker
+        open={showMedia}
+        onClose={() => setShowMedia(false)}
+        initialSelected={mediaUrls}
+        onConfirm={setMediaUrls}
+      />
     </div>
   );
 }

@@ -43,6 +43,7 @@ export const appNav: NavItem[] = [
       { label: "Campaigns", href: "/campaigns" },
       { label: "Media & MMS", href: "/messaging/media" },
       { label: "Link tracking", href: "/messaging/links" },
+      { label: "Text-to-pay", href: "/messaging/payments" },
       { label: "Templates", href: "/templates" },
       { label: "AI Composer", href: "/send/ai" },
     ],
@@ -137,6 +138,16 @@ export const appNav: NavItem[] = [
     ],
   },
   { label: "Phone Numbers", href: "/numbers", icon: Phone },
+  {
+    label: "Phone",
+    href: "/phone",
+    icon: Phone,
+    children: [
+      { label: "Softphone", href: "/phone" },
+      { label: "Call history", href: "/phone/calls" },
+      { label: "Settings", href: "/phone/settings" },
+    ],
+  },
   { label: "Compliance", href: "/compliance", icon: ShieldCheck },
   { label: "Integrations", href: "/integrations", icon: Puzzle },
   { label: "Settings", href: "/settings/business", icon: Settings },
@@ -175,6 +186,7 @@ export const pageTitles: Record<string, string> = {
   "/inbox/saved-replies": "Saved Replies",
   "/messaging/media": "Media Library",
   "/messaging/links": "Link Tracking",
+  "/messaging/payments": "Text-to-pay",
   "/contacts": "All Contacts",
   "/contacts/lists": "Lists",
   "/contacts/segments": "Segments",
@@ -236,6 +248,9 @@ export const pageTitles: Record<string, string> = {
   "/numbers/buy": "Buy Number",
   "/numbers/port": "Port Number",
   "/numbers/pools": "Sender Pools",
+  "/phone": "Softphone",
+  "/phone/calls": "Call History",
+  "/phone/settings": "Phone Settings",
   "/compliance": "Compliance",
   "/compliance/business": "Business Profile",
   "/compliance/brand": "Brand Registration",
@@ -250,6 +265,7 @@ export const pageTitles: Record<string, string> = {
   "/integrations/logs": "Developer Logs",
   "/settings/business": "Business Settings",
   "/settings/messaging": "Messaging Settings",
+  "/settings/email-to-sms": "Email-to-SMS",
   "/settings/users": "Users & Permissions",
   "/settings/workspaces": "Workspaces",
   "/settings/notifications": "Notifications",
@@ -278,6 +294,7 @@ export function getPageTitle(pathname: string) {
   if (pathname.startsWith("/voice/agents/")) return "Agent builder";
   if (pathname.startsWith("/voice/calls/")) return "Call detail";
   if (pathname.startsWith("/voice/")) return "AI Voice";
+  if (pathname.startsWith("/phone/")) return "Phone";
   if (pathname.startsWith("/numbers/")) return "Number Detail";
   if (pathname.startsWith("/admin/customers/")) return "Customer Detail";
   return "Transovo SMS";

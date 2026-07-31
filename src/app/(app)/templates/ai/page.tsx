@@ -35,17 +35,34 @@ export default function AiTemplatePage() {
   const [language, setLanguage] = useState(languages[0]);
   const [generated, setGenerated] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
+  const [error, setError] = useState("");
 
-  function handleGenerate() {
+  async function handleGenerate() {
     setGenerating(true);
-    setTimeout(() => {
-      const preview =
-        language === "Spanish"
-          ? `Hola {{first_name}}, ${offer.toLowerCase()} en ${businessType.toLowerCase()}. ${cta}. Msg&data rates may apply. STOP para cancelar.`
-          : `Hi {{first_name}}, ${offer} for ${businessType.toLowerCase()} customers like you. ${cta}. Msg&data rates may apply. STOP to opt out.`;
-      setGenerated(preview);
+    setError("");
+    try {
+      const res = await fetch("/api/ai/campaign-compose", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          goal,
+          audience,
+          tone,
+          offer,
+          businessName: businessType,
+          includeLink: false,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Generation failed");
+      const message = json.data?.message as string | undefined;
+      if (!message) throw new Error("No message returned");
+      setGenerated(message);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Generation failed");
+    } finally {
       setGenerating(false);
-    }, 800);
+    }
   }
 
   const segments = generated ? estimateSmsSegments(generated) : null;
@@ -172,6 +189,7 @@ export default function AiTemplatePage() {
                 </>
               )}
             </Button>
+            {error ? <p className="text-sm text-rose-600">{error}</p> : null}
           </div>
         </Card>
 

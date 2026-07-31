@@ -10,7 +10,14 @@ export async function GET() {
     const row = await getPrisma().contactCardProfile.findUnique({
       where: { workspaceId: auth.workspaceId },
     });
-    return NextResponse.json({ data: row });
+    return NextResponse.json({
+      data: row
+        ? {
+            ...row,
+            vcard: buildVCard(row),
+          }
+        : null,
+    });
   } catch (err) {
     return jsonError(err, 500);
   }

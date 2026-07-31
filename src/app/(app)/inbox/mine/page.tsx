@@ -34,6 +34,7 @@ export default async function InboxMinePage() {
         contacts={contacts}
         teamMembers={teamMembers}
         currentUserName={session.name}
+        currentUserId={session.userId}
       />
     </div>
   );

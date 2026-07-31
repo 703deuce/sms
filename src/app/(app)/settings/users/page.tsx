@@ -1,5 +1,5 @@
+import { TeamMemberRow } from "@/components/settings/team-member-row";
 import { InviteUserButton } from "@/components/settings/invite-user-button";
-import { Button } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
@@ -59,21 +59,14 @@ export default async function SettingsUsersPage() {
             </THead>
             <TBody>
               {teamMembers.map((member) => (
-                <TR key={member.id}>
-                  <TD className="font-medium">{member.name}</TD>
-                  <TD className="text-muted-foreground">{member.email}</TD>
-                  <TD>
-                    <span className="inline-flex items-center rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium">
-                      {member.role}
-                    </span>
-                  </TD>
-                  <TD>{member.isAdmin ? "Yes" : "—"}</TD>
-                  <TD className="text-right">
-                    <Button variant="ghost" size="sm">
-                      Edit
-                    </Button>
-                  </TD>
-                </TR>
+                <TeamMemberRow
+                  key={member.membershipId}
+                  membershipId={member.membershipId}
+                  name={member.name}
+                  email={member.email}
+                  role={member.role}
+                  isAdmin={member.isAdmin ?? false}
+                />
               ))}
             </TBody>
           </Table>

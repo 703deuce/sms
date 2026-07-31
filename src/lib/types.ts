@@ -89,6 +89,7 @@ export type Campaign = {
   createdBy: string;
   body: string;
   cost: number;
+  configJson?: unknown;
 };
 
 export type Conversation = {

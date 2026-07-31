@@ -1,3 +1,4 @@
+import { CampaignActions } from "@/components/campaigns/campaign-actions";
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle, StatCard } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -173,6 +174,7 @@ export default async function CampaignDetailPage({
                 <Button variant="outline">Duplicate</Button>
               </Link>
             )}
+            <CampaignActions campaignId={campaignId} status={campaign.status} />
           </>
         }
       />

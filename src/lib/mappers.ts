@@ -139,6 +139,7 @@ export function mapCampaign(c: {
   createdBy: string | null;
   body: string;
   costCents?: number;
+  configJson?: unknown;
 }): Campaign {
   return {
     id: c.id,
@@ -155,6 +156,7 @@ export function mapCampaign(c: {
     createdBy: c.createdBy || "",
     body: c.body,
     cost: (c.costCents || 0) / 100,
+    configJson: c.configJson,
   };
 }
 

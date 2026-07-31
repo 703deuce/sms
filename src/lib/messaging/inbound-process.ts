@@ -6,6 +6,10 @@ import { getPrisma } from "@/lib/db";
 import { handleKeywordInbound } from "@/lib/growth/keywords";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import { reconcileCampaignStatus } from "@/lib/campaigns/sequence-runner";
+import {
+  getMessagingRuntimeSettings,
+  shouldSendAwayReply,
+} from "@/lib/messaging/messaging-settings";
 
 export async function resolveInboundContext(toRaw: string, accountOrProfileId?: string) {
   const prisma = getPrisma();
@@ -52,7 +56,7 @@ export async function resolveInboundContext(toRaw: string, accountOrProfileId?: 
 }
 
 export type InboundProcessResult = {
-  kind: "stop" | "start" | "help" | "keyword" | "message" | "empty";
+  kind: "stop" | "start" | "help" | "keyword" | "message" | "empty" | "away";
   replyText?: string;
 };
 
@@ -317,6 +321,20 @@ export async function processInboundMessage(input: {
         providerMessageId: input.providerMessageId || null,
       },
     });
+
+    // Web push for new inbound conversation message
+    try {
+      const { sendPushToWorkspaceAgents } = await import("@/lib/push/send");
+      const preview = (body || "").slice(0, 120);
+      await sendPushToWorkspaceAgents(input.workspaceId, {
+        title: "New inbox message",
+        body: preview || "New reply from " + from,
+        url: `/inbox?conversation=${conversation.id}`,
+        tag: `inbox-${conversation.id}`,
+      });
+    } catch {
+      // push is optional
+    }
   } catch (err) {
     if (!(err && typeof err === "object" && "code" in err && (err as { code: string }).code === "P2002")) {
       throw err;
@@ -352,6 +370,28 @@ export async function processInboundMessage(input: {
       where: { id: campaignId },
       data: { replies: { increment: 1 } },
     });
+  }
+
+  // Away / business-hours auto-reply (once per contact per day).
+  const runtime = await getMessagingRuntimeSettings(input.workspaceId);
+  if (shouldSendAwayReply(runtime)) {
+    const custom =
+      contact.customFields && typeof contact.customFields === "object"
+        ? (contact.customFields as Record<string, unknown>)
+        : {};
+    const today = new Date().toISOString().slice(0, 10);
+    if (custom.awayReplyAt !== today) {
+      await prisma.contact.update({
+        where: { id: contact.id },
+        data: {
+          customFields: { ...custom, awayReplyAt: today },
+        },
+      });
+      return {
+        kind: "away",
+        replyText: runtime.awayMessage!.trim(),
+      };
+    }
   }
 
   return { kind: body ? "message" : "empty" };

@@ -8,6 +8,7 @@ import { Tabs } from "@/components/ui/tabs";
 import { formatNumber } from "@/lib/utils";
 import { loadOptInForms, requireWorkspaceContext } from "@/lib/workspace-data";
 import { ExternalLink, Globe, Plus } from "lucide-react";
+import Link from "next/link";
 
 import { growTabs } from "@/lib/grow-tabs";
 
@@ -27,10 +28,12 @@ export default async function SignupPagesPage() {
         title="Signup pages"
         description="Hosted, mobile-friendly opt-in pages with your branding and compliance disclosures."
         actions={
-          <Button>
-            <Plus className="h-4 w-4" />
-            Create page
-          </Button>
+          <Link href="/grow/forms">
+            <Button>
+              <Plus className="h-4 w-4" />
+              Create page
+            </Button>
+          </Link>
         }
       />
 

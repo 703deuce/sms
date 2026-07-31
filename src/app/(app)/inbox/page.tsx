@@ -41,6 +41,7 @@ export default async function InboxPage() {
         contacts={contacts}
         teamMembers={teamMembers}
         currentUserName={session.name}
+        currentUserId={session.userId}
       />
     </div>
   );

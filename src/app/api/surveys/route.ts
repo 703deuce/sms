@@ -2,6 +2,15 @@ import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
 import { getPrisma } from "@/lib/db";
 
+function slugify(name: string) {
+  return (
+    name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "") || "survey"
+  );
+}
+
 export async function GET() {
   try {
     const auth = await requireSession();
@@ -29,6 +38,7 @@ export async function POST(request: Request) {
     if (!body.name?.trim()) {
       return NextResponse.json({ error: "name required" }, { status: 400 });
     }
+    const publicSlug = `${slugify(body.name.trim())}-${Date.now().toString(36)}`;
     const row = await getPrisma().survey.create({
       data: {
         workspaceId: auth.workspaceId,
@@ -36,6 +46,7 @@ export async function POST(request: Request) {
         description: body.description,
         surveyType: body.surveyType || "poll",
         questions: body.questions || [],
+        settings: { slug: publicSlug },
         status: "draft",
       },
     });

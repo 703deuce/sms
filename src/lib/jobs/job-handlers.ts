@@ -53,6 +53,8 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
         eventType: String(payload.eventType || ""),
         workspaceId: payload.workspaceId as string | undefined,
         callId: payload.callId as string | undefined,
+        humanCallId: payload.humanCallId as string | undefined,
+        isHuman: Boolean(payload.isHuman),
         eventPayload: (payload.eventPayload as Record<string, unknown>) || {},
       });
     }
@@ -102,6 +104,18 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       if (!sourceId) throw new Error("sourceId required");
       return processKnowledgeSource(sourceId);
     }
+    case "list_cleanup": {
+      const workspaceId = payload.workspaceId as string | undefined;
+      const { runListCleanup, runListCleanupAllWorkspaces } = await import("@/lib/contacts/cleanup-list");
+      if (workspaceId) {
+        return runListCleanup(workspaceId);
+      }
+      return runListCleanupAllWorkspaces();
+    }
+    case "campaign_recurrence_tick": {
+      const { tickRecurringCampaigns } = await import("@/lib/campaigns/recurrence");
+      return tickRecurringCampaigns();
+    }
     default:
       throw new Error(`Unknown job type: ${jobType}`);
   }
@@ -127,6 +141,20 @@ export async function processDueJobs(limit = 25) {
     queueName: "voice-calls",
     payload: { minuteKey },
     idempotencyKey: `voice-campaign-batch:${minuteKey}`,
+  });
+
+  const dayKey = new Date().toISOString().slice(0, 10);
+  await enqueueJob({
+    jobType: "list_cleanup",
+    queueName: "maintenance",
+    payload: { dayKey },
+    idempotencyKey: `list-cleanup:${dayKey}`,
+  });
+  await enqueueJob({
+    jobType: "campaign_recurrence_tick",
+    queueName: "review-campaign",
+    payload: { minuteKey },
+    idempotencyKey: `campaign-recurrence:${minuteKey}`,
   });
 
   // When BullMQ is the consumer, cron enqueues the minute batch and re-syncs the DB outbox.

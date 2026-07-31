@@ -1,3 +1,4 @@
+import { RecurringCampaignForm } from "@/components/campaigns/recurring-campaign-form";
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -18,6 +19,14 @@ function formatDateTime(at: string | null) {
     hour: "numeric",
     minute: "2-digit",
   });
+}
+
+function recurrenceNextRun(configJson: unknown): string | null {
+  if (!configJson || typeof configJson !== "object") return null;
+  const rec = (configJson as Record<string, unknown>).recurrence;
+  if (!rec || typeof rec !== "object") return null;
+  const next = (rec as Record<string, unknown>).nextRunAt;
+  return typeof next === "string" ? next : null;
 }
 
 export default async function CampaignRecurringPage() {
@@ -67,6 +76,8 @@ export default async function CampaignRecurringPage() {
         </Card>
       </div>
 
+      <RecurringCampaignForm />
+
       {recurringCampaigns.length === 0 ? (
         <EmptyState
           icon={<Repeat className="h-8 w-8" />}
@@ -104,7 +115,7 @@ export default async function CampaignRecurringPage() {
                   <TD className="text-muted-foreground">{c.type}</TD>
                   <TD className="text-muted-foreground">{c.audience}</TD>
                   <TD className="whitespace-nowrap font-medium">
-                    {formatDateTime(c.scheduledAt)}
+                    {formatDateTime(recurrenceNextRun(c.configJson) || c.scheduledAt)}
                   </TD>
                   <TD>
                     <StatusChip status={c.status} />

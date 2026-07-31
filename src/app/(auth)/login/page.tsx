@@ -54,7 +54,6 @@ function LoginForm() {
             name="email"
             type="email"
             required
-            defaultValue="alex@harborhome.co"
             placeholder="you@company.com"
           />
         </div>
@@ -65,7 +64,6 @@ function LoginForm() {
             name="password"
             type="password"
             required
-            defaultValue="demo1234"
             placeholder="••••••••"
           />
         </div>

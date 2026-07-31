@@ -1,0 +1,53 @@
+import { NextResponse } from "next/server";
+import { requireSession, jsonError } from "@/lib/api-auth";
+import { getPrisma } from "@/lib/db";
+import { dialHumanCall } from "@/lib/phone/human-call-service";
+
+export async function GET(request: Request) {
+  try {
+    const auth = await requireSession();
+    if ("error" in auth) return auth.error;
+
+    const url = new URL(request.url);
+    const limit = Math.min(Number(url.searchParams.get("limit") || 50), 200);
+    const direction = url.searchParams.get("direction");
+    const status = url.searchParams.get("status");
+
+    const where: Record<string, unknown> = { workspaceId: auth.workspaceId };
+    if (direction) where.direction = direction;
+    if (status) where.status = status;
+
+    const rows = await getPrisma().humanCall.findMany({
+      where,
+      orderBy: { startedAt: "desc" },
+      take: limit,
+    });
+
+    return NextResponse.json({ data: rows });
+  } catch (err) {
+    return jsonError(err, 500);
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const auth = await requireSession();
+    if ("error" in auth) return auth.error;
+
+    const body = (await request.json()) as { to?: string; from?: string };
+    if (!body.to?.trim()) {
+      return NextResponse.json({ error: "to is required" }, { status: 400 });
+    }
+
+    const result = await dialHumanCall({
+      workspaceId: auth.workspaceId,
+      agentUserId: auth.session.userId,
+      to: body.to.trim(),
+      from: body.from,
+    });
+
+    return NextResponse.json({ data: result.call, mode: result.mode }, { status: 201 });
+  } catch (err) {
+    return jsonError(err, 400);
+  }
+}

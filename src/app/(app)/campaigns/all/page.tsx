@@ -1,5 +1,6 @@
 "use client";
 
+import { CampaignActions } from "@/components/campaigns/campaign-actions";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
@@ -80,6 +81,7 @@ export default function AllCampaignsPage() {
                 <TH>Status</TH>
                 <TH>Sent</TH>
                 <TH>Replies</TH>
+                <TH>Actions</TH>
               </TR>
             </THead>
             <TBody>
@@ -98,6 +100,9 @@ export default function AllCampaignsPage() {
                     </TD>
                     <TD>{c.sent ?? 0}</TD>
                     <TD>{c.replies ?? 0}</TD>
+                    <TD>
+                      <CampaignActions campaignId={c.id} status={c.status} variant="row" />
+                    </TD>
                   </TR>
                 );
               })}

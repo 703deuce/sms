@@ -331,6 +331,26 @@ async function queueSendForStep(recipientId: string, step: SequenceStep): Promis
     recipient.campaign.body ||
     `Hi {{name}}, thanks for choosing us! {{tracking_link}} Reply STOP to opt out.`;
 
+  let paymentLinkUrl = "";
+  if (template.includes("{{payment_link}}")) {
+    const { resolvePaymentLinkForTemplate } = await import("@/lib/payments/create-link");
+    const campaignConfig =
+      recipient.campaign.configJson && typeof recipient.campaign.configJson === "object"
+        ? (recipient.campaign.configJson as Record<string, unknown>)
+        : {};
+    const paymentAmount = Number(campaignConfig.paymentAmountCents || 0);
+    paymentLinkUrl = await resolvePaymentLinkForTemplate(
+      recipient.workspaceId,
+      recipient.phone || "",
+      {
+        contactId: recipient.contactId || undefined,
+        campaignId: recipient.campaignId,
+        amountCents: paymentAmount >= 50 ? paymentAmount : undefined,
+        description: String(campaignConfig.paymentDescription || "Payment"),
+      },
+    );
+  }
+
   let body = mergeTemplate(template, {
     ...names,
     customer_name: recipient.displayName || names.name,
@@ -338,6 +358,7 @@ async function queueSendForStep(recipientId: string, step: SequenceStep): Promis
     email: recipient.email || "",
     tracking_link: trackedUrl,
     review_link: trackedUrl,
+    payment_link: paymentLinkUrl,
   });
   if (!body.includes(trackedUrl)) {
     body = `${body.trim()} ${trackedUrl}`.trim();

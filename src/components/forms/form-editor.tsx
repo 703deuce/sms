@@ -21,7 +21,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { growTabs } from "@/lib/grow-tabs";
 
-const ALL_FIELDS: FormFieldKey[] = ["firstName", "lastName", "email", "phone"];
+const ALL_FIELDS: FormFieldKey[] = ["firstName", "lastName", "email", "phone", "dateOfBirth"];
 
 type FormDetail = {
   id: string;
@@ -44,6 +44,7 @@ type FormDetail = {
     headline?: string;
     subheadline?: string;
     buttonLabel?: string;
+    ageGateMinAge?: number;
   };
 };
 
@@ -143,6 +144,7 @@ export function FormEditor({ formId }: { formId: string }) {
           headline: form.config.headline,
           subheadline: form.config.subheadline,
           buttonLabel: form.config.buttonLabel,
+          ageGateMinAge: form.config.ageGateMinAge,
         }),
       });
       const json = await res.json();
@@ -356,6 +358,36 @@ export function FormEditor({ formId }: { formId: string }) {
               ))}
             </div>
           </div>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={Boolean(form.config.ageGateMinAge)}
+              onChange={(e) =>
+                updateConfig({
+                  ageGateMinAge: e.target.checked ? 21 : undefined,
+                  fields: e.target.checked
+                    ? ([...new Set([...(form.config.fields || []), "dateOfBirth"])] as FormFieldKey[])
+                    : form.config.fields,
+                })
+              }
+            />
+            Require age verification (21+)
+          </label>
+          {form.config.ageGateMinAge ? (
+            <div>
+              <Label htmlFor="minAge">Minimum age</Label>
+              <Input
+                id="minAge"
+                type="number"
+                min={1}
+                max={99}
+                value={form.config.ageGateMinAge}
+                onChange={(e) =>
+                  updateConfig({ ageGateMinAge: Number(e.target.value) || 21 })
+                }
+              />
+            </div>
+          ) : null}
           <div>
             <Label htmlFor="business">Business name</Label>
             <Input

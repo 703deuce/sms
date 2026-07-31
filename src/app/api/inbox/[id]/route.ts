@@ -3,6 +3,8 @@ import { requireSession, jsonError } from "@/lib/api-auth";
 import { getPrisma } from "@/lib/db";
 import { mapConversation } from "@/lib/mappers";
 import { sendQuickSms } from "@/lib/sms/send-quick";
+import { parseMentionsFromNote } from "@/lib/inbox/parse-mentions";
+import { loadTeamMembers } from "@/lib/workspace-data";
 
 async function loadFull(workspaceId: string, id: string) {
   return getPrisma().conversation.findFirst({
@@ -47,6 +49,7 @@ export async function PATCH(
       action?: "reply" | "note" | "assign" | "status";
       body?: string;
       from?: string;
+      mediaUrls?: string[];
     };
 
     const existing = await getPrisma().conversation.findFirst({
@@ -62,6 +65,7 @@ export async function PATCH(
         to,
         body: body.body.trim(),
         from: body.from,
+        mediaUrls: body.mediaUrls?.filter(Boolean),
       });
       await getPrisma().conversationMessage.create({
         data: {
@@ -80,14 +84,40 @@ export async function PATCH(
         data: { lastMessaged: new Date() },
       });
     } else if (body.action === "note" && body.body?.trim()) {
+      const noteBody = body.body.trim();
       await getPrisma().conversationMessage.create({
         data: {
           conversationId: id,
           direction: "note",
-          body: body.body.trim(),
+          body: noteBody,
           userName: auth.session.name,
         },
       });
+
+      const teamMembers = await loadTeamMembers(auth.workspaceId);
+      const mentioned = parseMentionsFromNote(noteBody, teamMembers);
+      const prisma = getPrisma();
+
+      await prisma.auditLog.create({
+        data: {
+          workspaceId: auth.workspaceId,
+          userId: auth.session.userId,
+          event: "inbox.note",
+          detail: `conversation=${id} mentions=${mentioned.map((m) => m.name).join(",") || "none"}`,
+        },
+      });
+
+      for (const member of mentioned) {
+        if (member.id === auth.session.userId) continue;
+        await prisma.auditLog.create({
+          data: {
+            workspaceId: auth.workspaceId,
+            userId: member.id,
+            event: "inbox.mention",
+            detail: `${auth.session.name} mentioned you in conversation ${id}: ${noteBody.slice(0, 120)}`,
+          },
+        });
+      }
     } else {
       const statusMap: Record<string, "OPEN" | "PENDING" | "CLOSED" | "SNOOZED" | "SPAM"> = {
         Open: "OPEN",

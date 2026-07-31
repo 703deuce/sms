@@ -1,4 +1,5 @@
 import { AddContactDialog } from "@/components/contacts/add-contact-dialog";
+import { ExportContactsButton } from "@/components/contacts/export-contacts-button";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -16,7 +17,6 @@ import { loadContacts } from "@/lib/workspace-data";
 import { cn, formatNumber, formatPercent, formatPhone } from "@/lib/utils";
 import {
   Ban,
-  Download,
   MoreHorizontal,
   SlidersHorizontal,
   Upload,
@@ -107,10 +107,7 @@ export default async function ContactsPage() {
                 Import
               </Button>
             </Link>
-            <Button variant="outline">
-              <Download className="h-4 w-4" />
-              Export
-            </Button>
+            <ExportContactsButton />
           </>
         }
       />

@@ -81,6 +81,23 @@ CREATE TABLE "PhoneNumber" (
 );
 
 -- CreateTable
+CREATE TABLE "PortRequest" (
+    "id" TEXT NOT NULL,
+    "workspaceId" TEXT NOT NULL,
+    "phone" TEXT NOT NULL,
+    "currentCarrier" TEXT,
+    "accountNumber" TEXT,
+    "accountPin" TEXT,
+    "billingPhone" TEXT,
+    "businessName" TEXT,
+    "address" TEXT,
+    "status" TEXT NOT NULL DEFAULT 'pending',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "PortRequest_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "Contact" (
     "id" TEXT NOT NULL,
     "workspaceId" TEXT NOT NULL,
@@ -586,6 +603,8 @@ CREATE UNIQUE INDEX "Membership_userId_workspaceId_key" ON "Membership"("userId"
 -- CreateIndex
 CREATE INDEX "PhoneNumber_twilioSid_idx" ON "PhoneNumber"("twilioSid");
 
+CREATE INDEX "PortRequest_workspaceId_idx" ON "PortRequest"("workspaceId");
+
 -- CreateIndex
 CREATE UNIQUE INDEX "PhoneNumber_workspaceId_e164_key" ON "PhoneNumber"("workspaceId", "e164");
 
@@ -693,6 +712,8 @@ ALTER TABLE "Membership" ADD CONSTRAINT "Membership_workspaceId_fkey" FOREIGN KE
 
 -- AddForeignKey
 ALTER TABLE "PhoneNumber" ADD CONSTRAINT "PhoneNumber_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+ALTER TABLE "PortRequest" ADD CONSTRAINT "PortRequest_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Contact" ADD CONSTRAINT "Contact_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE CASCADE ON UPDATE CASCADE;
