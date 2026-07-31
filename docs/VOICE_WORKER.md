@@ -25,6 +25,8 @@ npm run worker:all
 | `voice_campaign_batch` | `voice-calls` | Outbound campaign pacing (minute cron) |
 | `voice_mock_call_complete` | `voice-calls` | Mock dial lifecycle for dev/test |
 | `voice_recording_ingest` | `voice-calls` | Store recording URLs from webhooks |
+| `voice_tool_execute` | `voice-calls` | Async tool execution |
+| `voice_knowledge_process` | `voice-calls` | Chunk/index knowledge sources |
 
 Cron `/api/jobs/process` (or worker minute tick) enqueues `voice_campaign_batch`.
 
@@ -41,6 +43,11 @@ Cron `/api/jobs/process` (or worker minute tick) enqueues `voice_campaign_batch`
 | `VOICE_TELEPHONY_CENTS_PER_MIN` | Optional | Provider telephony cost basis |
 | `VOICE_AI_CENTS_PER_MIN` | Optional | AI minute cost basis |
 | `VOICE_BILLING_MARKUP` | Optional | Customer markup multiplier |
+| `VOICE_RECORDING_URL_TTL_SEC` | Optional | Signed recording URL lifetime (default 3600) |
+| `GOOGLE_CALENDAR_CLIENT_ID` | Calendar OAuth | Google Calendar connect |
+| `GOOGLE_CALENDAR_CLIENT_SECRET` | Calendar OAuth | Google Calendar connect |
+| `MICROSOFT_CALENDAR_CLIENT_ID` | Calendar OAuth | Outlook connect |
+| `MICROSOFT_CALENDAR_CLIENT_SECRET` | Calendar OAuth | Outlook connect |
 
 ## Telnyx webhook URL
 
