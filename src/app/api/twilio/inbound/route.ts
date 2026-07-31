@@ -52,11 +52,15 @@ function escapeXml(value: string) {
     .replace(/'/g, "&apos;");
 }
 
-function twimlMessage(body?: string) {
+function twimlMessage(body?: string, mediaUrls?: string[]) {
   if (!body) {
     return `<?xml version="1.0" encoding="UTF-8"?><Response></Response>`;
   }
-  return `<?xml version="1.0" encoding="UTF-8"?><Response><Message>${escapeXml(body)}</Message></Response>`;
+  const media = (mediaUrls || [])
+    .filter(Boolean)
+    .map((url) => `<Media>${escapeXml(url)}</Media>`)
+    .join("");
+  return `<?xml version="1.0" encoding="UTF-8"?><Response><Message>${escapeXml(body)}${media}</Message></Response>`;
 }
 
 export async function POST(request: Request) {
@@ -92,7 +96,7 @@ export async function POST(request: Request) {
         registration: ctx.registration,
       });
 
-      return new NextResponse(twimlMessage(result.replyText), {
+      return new NextResponse(twimlMessage(result.replyText, result.mediaUrls), {
         headers: { "Content-Type": "text/xml" },
       });
     } catch (err) {

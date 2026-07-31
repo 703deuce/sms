@@ -16,6 +16,7 @@ export default function ContactCardsPage() {
   const [email, setEmail] = useState("");
   const [address, setAddress] = useState("");
   const [logoUrl, setLogoUrl] = useState("");
+  const [attachToWelcomeMms, setAttachToWelcomeMms] = useState(false);
   const [vcard, setVcard] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -31,6 +32,7 @@ export default function ContactCardsPage() {
         setEmail(d.email || "");
         setAddress(d.address || "");
         setLogoUrl(d.logoUrl || "");
+        setAttachToWelcomeMms(Boolean(d.attachToWelcomeMms));
         if (d.businessName) {
           setVcard(buildVCard(d));
         }
@@ -60,7 +62,15 @@ export default function ContactCardsPage() {
     const res = await fetch("/api/contact-card", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ businessName, phone, website, email, address, logoUrl }),
+      body: JSON.stringify({
+        businessName,
+        phone,
+        website,
+        email,
+        address,
+        logoUrl,
+        attachToWelcomeMms,
+      }),
     });
     const json = await res.json();
     if (json.data?.vcard) setVcard(json.data.vcard);
@@ -98,6 +108,23 @@ export default function ContactCardsPage() {
         <div className="sm:col-span-2">
           <Label>Logo URL</Label>
           <Input value={logoUrl} onChange={(e) => setLogoUrl(e.target.value)} placeholder="https://…" />
+        </div>
+        <div className="sm:col-span-2">
+          <label className="flex items-start gap-3 rounded-lg border border-border bg-muted/30 p-3">
+            <input
+              type="checkbox"
+              className="mt-0.5 h-4 w-4"
+              checked={attachToWelcomeMms}
+              onChange={(e) => setAttachToWelcomeMms(e.target.checked)}
+            />
+            <span className="text-sm">
+              <span className="font-medium">Attach to welcome MMS</span>
+              <span className="block text-muted-foreground">
+                Include this vCard as an MMS attachment on keyword opt-in and welcome replies so
+                recipients can save your business in one tap.
+              </span>
+            </span>
+          </label>
         </div>
         <div className="sm:col-span-2 flex flex-wrap gap-2">
           <Button onClick={save} disabled={saving}>{saving ? "Saving…" : "Save contact card"}</Button>

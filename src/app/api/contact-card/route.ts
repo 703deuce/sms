@@ -34,6 +34,7 @@ export async function PUT(request: Request) {
       email?: string;
       address?: string;
       logoUrl?: string;
+      attachToWelcomeMms?: boolean;
     };
     if (!body.businessName?.trim()) {
       return NextResponse.json({ error: "businessName required" }, { status: 400 });
@@ -48,6 +49,7 @@ export async function PUT(request: Request) {
         email: body.email,
         address: body.address,
         logoUrl: body.logoUrl,
+        attachToWelcomeMms: body.attachToWelcomeMms ?? false,
       },
       update: {
         businessName: body.businessName.trim(),
@@ -56,6 +58,9 @@ export async function PUT(request: Request) {
         email: body.email,
         address: body.address,
         logoUrl: body.logoUrl,
+        ...(body.attachToWelcomeMms !== undefined
+          ? { attachToWelcomeMms: body.attachToWelcomeMms }
+          : {}),
       },
     });
     return NextResponse.json({

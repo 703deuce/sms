@@ -96,6 +96,7 @@ export async function handleTelnyxInbound(payload: unknown) {
         from: ctx.phoneE164 || parsed.to,
         body: result.replyText,
         messagingProfileId: profileId,
+        mediaUrls: result.mediaUrls?.filter(Boolean),
       });
       replySent = true;
     } catch (err) {
