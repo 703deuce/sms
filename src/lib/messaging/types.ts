@@ -31,6 +31,8 @@ export type BusinessDetailsInput = {
   contactEmail: string;
   contactPhone: string;
   contactTitle?: string;
+  privacyPolicyUrl?: string;
+  vertical?: string;
 };
 
 export type UseCaseInput = {

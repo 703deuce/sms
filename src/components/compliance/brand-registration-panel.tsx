@@ -9,6 +9,7 @@ import { Tabs } from "@/components/ui/tabs";
 import type { MessagingRegistration } from "@/lib/domain";
 import { AlertTriangle } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 const complianceTabs = [
@@ -28,8 +29,86 @@ type Props = {
 };
 
 export function BrandRegistrationPanel({ registration, brandStatus }: Props) {
+  const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [saved, setSaved] = useState(false);
+
+  const [brandName, setBrandName] = useState(
+    registration?.dbaName || registration?.legalBusinessName || "",
+  );
+  const [website, setWebsite] = useState(registration?.websiteUrl || "");
+  const [privacyPolicyUrl, setPrivacyPolicyUrl] = useState(
+    registration?.privacyPolicyUrl ||
+      (registration?.websiteUrl
+        ? `${registration.websiteUrl.replace(/\/$/, "")}/privacy`
+        : ""),
+  );
+  const [brandDescription, setBrandDescription] = useState(
+    registration?.businessIdentity || registration?.useCaseDescription || "",
+  );
+  const [vertical, setVertical] = useState(
+    registration?.vertical || registration?.businessIndustry || "",
+  );
+
+  const businessComplete = Boolean(
+    registration?.legalBusinessName &&
+      registration?.businessType &&
+      registration?.businessIndustry &&
+      registration?.businessRegistrationId &&
+      registration?.street &&
+      registration?.city &&
+      registration?.region &&
+      registration?.postalCode &&
+      registration?.contactFirstName &&
+      registration?.contactLastName &&
+      registration?.contactEmail &&
+      registration?.contactPhone,
+  );
+
+  async function saveBrand(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setError("");
+    setSaved(false);
+    try {
+      const res = await fetch("/api/messaging/registration", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "save_business",
+          legalBusinessName: registration?.legalBusinessName || "",
+          dbaName: brandName.trim(),
+          businessType: registration?.businessType || "",
+          businessIndustry: registration?.businessIndustry || "",
+          businessIdentity: brandDescription.trim(),
+          businessRegistrationId: registration?.businessRegistrationId || "",
+          websiteUrl: website.trim(),
+          street: registration?.street || "",
+          city: registration?.city || "",
+          region: registration?.region || "",
+          postalCode: registration?.postalCode || "",
+          country: registration?.country || "US",
+          contactFirstName: registration?.contactFirstName || "",
+          contactLastName: registration?.contactLastName || "",
+          contactEmail: registration?.contactEmail || "",
+          contactPhone: registration?.contactPhone || "",
+          contactTitle: registration?.contactTitle || undefined,
+          privacyPolicyUrl: privacyPolicyUrl.trim() || undefined,
+          vertical: vertical.trim() || undefined,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Failed to save brand");
+      setSaved(true);
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save brand");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   async function submitForReview() {
     setSubmitting(true);
@@ -42,6 +121,7 @@ export function BrandRegistrationPanel({ registration, brandStatus }: Props) {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Failed to submit brand");
+      router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to submit brand");
     } finally {
@@ -65,7 +145,10 @@ export function BrandRegistrationPanel({ registration, brandStatus }: Props) {
         actions={
           <div className="flex items-center gap-2">
             <StatusChip status={brandStatus} />
-            <Button disabled={submitting} onClick={submitForReview}>
+            <Button type="submit" form="brand-registration-form" disabled={saving}>
+              {saving ? "Saving…" : "Save brand"}
+            </Button>
+            <Button variant="outline" disabled={submitting} onClick={submitForReview}>
               {submitting ? "Submitting…" : "Submit for review"}
             </Button>
           </div>
@@ -75,8 +158,23 @@ export function BrandRegistrationPanel({ registration, brandStatus }: Props) {
       <Tabs items={complianceTabs} />
 
       {error ? <p className="mb-4 text-sm text-danger">{error}</p> : null}
+      {saved ? <p className="mb-4 text-sm text-emerald-700">Brand details saved.</p> : null}
 
-      {brandStatus === "Pending" ? (
+      {!businessComplete ? (
+        <div className="mb-6 flex gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
+          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
+          <div>
+            <p className="font-medium text-amber-950">Complete business details first</p>
+            <p className="mt-1 text-sm text-amber-900/80">
+              Brand submission requires your legal business profile. Finish the{" "}
+              <Link href="/compliance/business" className="underline">
+                Business tab
+              </Link>{" "}
+              before submitting for carrier review.
+            </p>
+          </div>
+        </div>
+      ) : brandStatus === "Pending" ? (
         <div className="mb-6 flex gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
           <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
           <div>
@@ -91,14 +189,14 @@ export function BrandRegistrationPanel({ registration, brandStatus }: Props) {
       <div className="grid gap-4 xl:grid-cols-3">
         <Card className="xl:col-span-2">
           <CardTitle>Brand details</CardTitle>
-          <div className="mt-4 space-y-4">
+          <form id="brand-registration-form" className="mt-4 space-y-4" onSubmit={saveBrand}>
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <Label htmlFor="brandName">Brand name</Label>
                 <Input
                   id="brandName"
-                  defaultValue={registration?.dbaName || registration?.legalBusinessName || ""}
-                  readOnly
+                  value={brandName}
+                  onChange={(e) => setBrandName(e.target.value)}
                 />
               </div>
               <div>
@@ -113,35 +211,41 @@ export function BrandRegistrationPanel({ registration, brandStatus }: Props) {
             </div>
             <div>
               <Label htmlFor="brandWebsite">Brand website</Label>
-              <Input id="brandWebsite" defaultValue={registration?.websiteUrl || ""} readOnly />
+              <Input
+                id="brandWebsite"
+                type="url"
+                value={website}
+                onChange={(e) => setWebsite(e.target.value)}
+              />
             </div>
             <div>
               <Label htmlFor="privacyPolicy">Privacy policy URL</Label>
               <Input
                 id="privacyPolicy"
+                type="url"
                 placeholder="https://example.com/privacy"
-                defaultValue={
-                  registration?.websiteUrl
-                    ? `${registration.websiteUrl.replace(/\/$/, "")}/privacy`
-                    : ""
-                }
-                readOnly
+                value={privacyPolicyUrl}
+                onChange={(e) => setPrivacyPolicyUrl(e.target.value)}
               />
             </div>
             <div>
               <Label htmlFor="brandDescription">Brand description</Label>
               <Textarea
                 id="brandDescription"
-                defaultValue={registration?.businessIdentity || registration?.useCaseDescription || ""}
+                value={brandDescription}
+                onChange={(e) => setBrandDescription(e.target.value)}
                 rows={3}
-                readOnly
               />
             </div>
             <div>
               <Label htmlFor="vertical">Vertical</Label>
-              <Input id="vertical" defaultValue={registration?.vertical || registration?.businessIndustry || ""} readOnly />
+              <Input
+                id="vertical"
+                value={vertical}
+                onChange={(e) => setVertical(e.target.value)}
+              />
             </div>
-          </div>
+          </form>
         </Card>
 
         <Card>
@@ -162,8 +266,10 @@ export function BrandRegistrationPanel({ registration, brandStatus }: Props) {
               <dd>{registration?.trustStatus === "approved" ? "Verified" : "Pending"}</dd>
             </div>
             <div className="flex justify-between gap-4">
-              <dt className="text-muted-foreground">Trust score</dt>
-              <dd>—</dd>
+              <dt className="text-muted-foreground">Brand ID</dt>
+              <dd className="font-mono text-xs">
+                {registration?.brandId || registration?.brandSid || "—"}
+              </dd>
             </div>
           </dl>
           <div className="mt-6 border-t border-border pt-4">

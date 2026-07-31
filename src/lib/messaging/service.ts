@@ -36,6 +36,8 @@ const businessSchema = z.object({
   contactEmail: z.string().email(),
   contactPhone: z.string().min(7),
   contactTitle: z.string().optional(),
+  privacyPolicyUrl: z.string().optional(),
+  vertical: z.string().optional(),
 });
 
 const useCaseSchema = z.object({
