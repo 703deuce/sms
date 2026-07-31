@@ -1,7 +1,10 @@
 /**
  * Seed demo workspace into Supabase.
  * Requires NEXT_PUBLIC_SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY.
+ *
+ * Login: alex@harborhome.co / demo1234
  */
+import { hash } from "bcryptjs";
 import { getSupabaseAdmin } from "../src/lib/supabase/admin";
 import { createId } from "../src/lib/supabase/id";
 
@@ -10,12 +13,14 @@ async function main() {
 
   const userId = createId();
   const workspaceId = "ws_1";
+  const passwordHash = await hash("demo1234", 10);
 
   const { error: userErr } = await sb.from("User").upsert({
     id: userId,
     email: "alex@harborhome.co",
     name: "Alex Rivera",
-    isPlatformAdmin: false,
+    passwordHash,
+    isPlatformAdmin: true,
   });
   if (userErr) throw userErr;
 
@@ -23,6 +28,8 @@ async function main() {
     id: workspaceId,
     name: "Harbor Home Services",
     slug: "harbor-home",
+    billingPlan: "growth",
+    creditBalanceCents: 2500,
   });
   if (wsErr) throw wsErr;
 
@@ -34,7 +41,8 @@ async function main() {
   });
   if (memErr) throw memErr;
 
-  console.log("Seeded workspace", workspaceId, "user", "alex@harborhome.co");
+  console.log("Seeded workspace", workspaceId);
+  console.log("Login: alex@harborhome.co / demo1234");
 }
 
 main().catch((err) => {

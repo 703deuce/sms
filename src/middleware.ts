@@ -9,6 +9,7 @@ const publicExact = new Set([
   "/terms",
   "/acceptable-use",
   "/contact",
+  "/maintenance",
 ]);
 
 const authPages = new Set(["/login", "/signup"]);
@@ -22,6 +23,14 @@ function isPublicPath(pathname: string) {
   if (pathname.startsWith("/api/integrations/webhooks/incoming/")) return true;
   if (pathname.startsWith("/api/public/")) return true;
   if (pathname.startsWith("/api/payments/stripe/webhook")) return true;
+  if (pathname.startsWith("/api/integrations/calendly/")) return true;
+  if (pathname.startsWith("/api/integrations/hubspot/webhook")) return true;
+  if (pathname.startsWith("/api/integrations/shopify/webhook")) return true;
+  if (pathname.startsWith("/api/integrations/salesforce/webhook")) return true;
+  if (pathname.startsWith("/api/integrations/google/") && pathname.includes("/callback")) return true;
+  if (pathname.startsWith("/invite/")) return true;
+  if (pathname.startsWith("/api/invite/")) return true;
+  if (pathname.startsWith("/messaging/payments/mock/")) return true;
   if (pathname.startsWith("/r/")) return true;
   // Hosted + embeddable opt-in forms (consent capture)
   if (pathname.startsWith("/f/")) return true;
@@ -36,13 +45,24 @@ function isPublicPath(pathname: string) {
   return false;
 }
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const session = request.cookies.get("transovo_session")?.value;
   const isPublic = isPublicPath(pathname);
   const isApiAuth = pathname.startsWith("/api/auth");
 
   if (isApiAuth) return NextResponse.next();
+
+  // Maintenance mode (edge-safe via env override; DB flag enforced in layout/API).
+  const maintenanceEnv = process.env.MAINTENANCE_MODE === "1" || process.env.MAINTENANCE_MODE === "true";
+  if (maintenanceEnv && !pathname.startsWith("/admin") && !pathname.startsWith("/api/admin") && !isPublicPath(pathname) && pathname !== "/maintenance") {
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json({ error: "Platform maintenance in progress" }, { status: 503 });
+    }
+    const url = request.nextUrl.clone();
+    url.pathname = "/maintenance";
+    return NextResponse.redirect(url);
+  }
 
   if (!session && !isPublic) {
     // API routes without a session should 401 JSON, not HTML login redirect.

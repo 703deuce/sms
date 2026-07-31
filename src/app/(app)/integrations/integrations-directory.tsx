@@ -68,7 +68,22 @@ const PROVIDERS: ProviderDef[] = [
   { id: "shopify", name: "Shopify", description: "Import customers & order events.", icon: ShoppingBag, tone: "bg-emerald-100 text-emerald-700", kind: "apikey", fields: [{ key: "shopDomain", label: "Shop domain", placeholder: "my-store.myshopify.com" }, { key: "accessToken", label: "Admin API token", placeholder: "shpat_...", type: "password" }], canSync: true, hasWebhook: true },
   { id: "calendly", name: "Calendly", description: "Appointment reminders from bookings.", icon: Calendar, tone: "bg-blue-100 text-blue-600", kind: "apikey", fields: [{ key: "signingKey", label: "Webhook signing key", placeholder: "optional", type: "password" }], hasWebhook: true },
   { id: "google_contacts", name: "Google Contacts", description: "Import contacts securely via OAuth.", icon: Contact, tone: "bg-sky-100 text-sky-600", kind: "oauth", canSync: true },
-  { id: "google_sheets", name: "Google Sheets", description: "Sync lists from spreadsheets.", icon: Sheet, tone: "bg-emerald-100 text-emerald-700", kind: "oauth" },
+  {
+    id: "google_sheets",
+    name: "Google Sheets",
+    description: "Import contacts from a spreadsheet (phone/email columns).",
+    icon: Sheet,
+    tone: "bg-emerald-100 text-emerald-700",
+    kind: "oauth",
+    canSync: true,
+    fields: [
+      {
+        key: "spreadsheetId",
+        label: "Spreadsheet ID",
+        placeholder: "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms",
+      },
+    ],
+  },
 ];
 
 export function IntegrationsDirectory({
@@ -264,6 +279,11 @@ export function IntegrationsDirectory({
                   <>
                     {connected ? (
                       <>
+                        {p.fields?.length ? (
+                          <Button size="sm" variant="outline" onClick={() => openConfig(p)}>
+                            Configure
+                          </Button>
+                        ) : null}
                         {p.canSync && (
                           <Button size="sm" variant="outline" disabled={busy === p.id} onClick={() => sync(p)} className="gap-1">
                             <RefreshCw className="h-3.5 w-3.5" /> Sync
@@ -294,7 +314,7 @@ export function IntegrationsDirectory({
                 )}
               </div>
 
-              {open && p.kind === "apikey" && (
+              {open && (p.kind === "apikey" || (p.kind === "oauth" && p.fields?.length)) && (
                 <div className="mt-3 space-y-2 rounded-lg border border-border bg-muted/30 p-3">
                   {p.fields?.map((f) => (
                     <div key={f.key}>

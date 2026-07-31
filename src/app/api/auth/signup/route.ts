@@ -2,6 +2,8 @@ import { hash } from "bcryptjs";
 import { NextResponse } from "next/server";
 import { encodeSession, SESSION_COOKIE, WORKSPACE_COOKIE } from "@/lib/auth";
 import { getPrisma } from "@/lib/db";
+import { getMaintenanceState, getTrialLimits } from "@/lib/platform-flags";
+import { grantCredits } from "@/lib/settings/billing";
 
 function slugify(input: string) {
   return (
@@ -15,16 +17,26 @@ function slugify(input: string) {
 
 export async function POST(request: Request) {
   try {
+    const maintenance = await getMaintenanceState();
+    if (maintenance.enabled) {
+      return NextResponse.json(
+        { error: maintenance.message || "Signups are paused during maintenance." },
+        { status: 503 },
+      );
+    }
+
     const body = (await request.json()) as {
       name?: string;
       email?: string;
       password?: string;
       businessName?: string;
+      stripePaymentMethodId?: string;
     };
     if (!body.email || !body.password || !body.name) {
       return NextResponse.json({ error: "Name, email, and password required" }, { status: 400 });
     }
 
+    const trial = await getTrialLimits();
     const email = body.email.trim().toLowerCase();
     const prisma = getPrisma();
     const existing = await prisma.user.findUnique({ where: { email } });
@@ -51,14 +63,38 @@ export async function POST(request: Request) {
       data: {
         name: businessName,
         slug,
+        billingPlan: trial.requireCard ? "trial_pending_card" : "trial",
+        creditBalanceCents: 0,
         memberships: {
           create: { userId: user.id, role: "OWNER" },
         },
         messagingRegistration: {
           create: {},
         },
+        workspaceLimits: {
+          create: {
+            limits: {
+              dailyCap: trial.messages || 500,
+              maxNumbers: trial.numbers || 1,
+              trialDays: trial.days || 14,
+              requireCard: trial.requireCard,
+            },
+          },
+        },
       },
     });
+
+    if (trial.credits > 0) {
+      const cents = Math.round(trial.credits * 100);
+      try {
+        await grantCredits(workspace.id, cents, `Trial credit grant ($${trial.credits})`, "trial");
+      } catch {
+        await prisma.workspace.update({
+          where: { id: workspace.id },
+          data: { creditBalanceCents: cents },
+        });
+      }
+    }
 
     const session = {
       userId: user.id,

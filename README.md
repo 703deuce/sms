@@ -1,152 +1,120 @@
-# Transovo SMS
+# Transovo AI SMS
 
-Multi-tenant business texting SaaS — campaigns, shared inbox, automations, compliance, and reporting.
+Multi-tenant business texting SaaS — campaigns, shared inbox, automations, compliance, AI voice, softphone, and reporting.
 
 ## Stack
 
 - **Next.js 16** (App Router) + TypeScript + Tailwind CSS v4
-- **Supabase** (Postgres via `@supabase/supabase-js`, same env style as Local SEO Express)
-- **Telnyx messaging** (A2P 10DLC brand/campaign registration, Messaging Profile sends) with a legacy Twilio ISV path kept for rollback + optional BullMQ worker
+- **Supabase** (Postgres via Prisma / `@supabase/supabase-js`)
+- **Telnyx** messaging + voice (A2P 10DLC, Messaging Profile, Call Control). Legacy Twilio ISV path retained for rollback.
 
 ## Quick start
 
-The app is backed by Supabase — configure the database (see below) before running.
+Configure the database before running:
 
-```powershell
+```bash
 npm install
+cp .env.example .env
+# Set NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY,
+# SUPABASE_SERVICE_ROLE_KEY, DATABASE_URL (Session pooler)
+npm run db:push
+npm run db:seed
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) and sign in with a seeded account.
+Open [http://localhost:3000](http://localhost:3000).
 
-**Seeded account defaults on login page:**
+**Seeded login (after `npm run db:seed`):**
 - Email: `alex@harborhome.co`
 - Password: `demo1234`
 
-## Database setup (Supabase + Prisma schema push)
+## Database
 
-```powershell
-cp .env.example .env
-# Set:
-#   NEXT_PUBLIC_SUPABASE_URL
-#   NEXT_PUBLIC_SUPABASE_ANON_KEY
-#   SUPABASE_SERVICE_ROLE_KEY
-#   DATABASE_URL   ← Session pooler URI (lets Cursor push schema)
-```
+Prefer Prisma schema push (no SQL editor):
 
-Apply / update all tables from `prisma/schema.prisma` (no SQL editor):
-
-```powershell
+```bash
 npm run db:push
 npm run db:seed
 ```
 
-See **[docs/DATABASE.md](docs/DATABASE.md)**. SQL files under `supabase/` remain as a fallback only.
+See **[docs/DATABASE.md](docs/DATABASE.md)**. SQL under `supabase/` (including `finish-everything-fields.sql`) is a manual fallback.
 
 ## Scripts
 
 | Command | Description |
 | ------|-------------|
-| `npm run dev` | Start development server |
+| `npm run dev` | Development server |
 | `npm run build` | Production build |
-| `npm run worker:all` | Job worker (A2P advance + campaign sends) |
-| `npm run db:push` | Apply Prisma schema to Postgres (preferred) |
-| `npm run db:seed` | Seed a starter workspace into Supabase |
-| `npm run db:schema` | Regenerate `supabase/schema.sql` from Prisma schema (dev only) |
-| `npm run test:messaging-wiring` | Messaging wiring checks (needs Supabase env) |
+| `npm run worker:all` | Job worker (campaigns, recurrence, digests, voice) |
+| `npm run db:push` | Apply Prisma schema to Postgres |
+| `npm run db:seed` | Seed starter workspace |
+| `npm run test:messaging-wiring` | Messaging wiring checks |
 
+## Messaging / voice providers
 
-## SMS / messaging providers
+**Telnyx-first.** Set `MESSAGING_PROVIDER=telnyx` with `TELNYX_API_KEY`, `TELNYX_PUBLIC_KEY`, `TELNYX_MODE=live`, `APP_URL`, `CRON_SECRET`. Voice also needs `TELNYX_CONNECTION_ID`.
 
-**Telnyx migration (in progress):** see **[docs/TELNYX_MIGRATION.md](docs/TELNYX_MIGRATION.md)**.
+Optional: `OPENAI_API_KEY`, `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET`, VAPID keys for web push, calendar OAuth for bookings.
 
-Set `MESSAGING_PROVIDER=mock|twilio|telnyx`. New customers should use Telnyx once Phase 2–3 are complete.
+See **[docs/TELNYX_MIGRATION.md](docs/TELNYX_MIGRATION.md)** and **[docs/VOICE_WORKER.md](docs/VOICE_WORKER.md)**.
 
-Telnyx env essentials: `TELNYX_API_KEY`, `TELNYX_PUBLIC_KEY`, `TELNYX_MODE=live`, `APP_URL`, `CRON_SECRET`.
+Legacy Twilio ISV: **[docs/TWILIO_ISV_MESSAGING.md](docs/TWILIO_ISV_MESSAGING.md)**.
 
-### Legacy Twilio ISV
-
-See **[docs/TWILIO_ISV_MESSAGING.md](docs/TWILIO_ISV_MESSAGING.md)** (kept for rollback until Telnyx is verified).
-
-Live Twilio env: `TWILIO_ACCOUNT_SID`, `TWILIO_ACCOUNT_AUTH_TOKEN`, `TWILIO_PRIMARY_PROFILE_SID`, `TWILIO_MODE=live`, `INTEGRATION_SECRET_KEY`.
-
-Always-on: web app + `npm run worker:all` + minute cron → `POST /api/jobs/process`. Default without live credentials is the mock adapter.
+Always-on: web app + `npm run worker:all` + minute cron → `POST /api/jobs/process`.
 
 ## Application areas
 
 ### Customer app (`/dashboard`)
 
-- **Send** — Multi-step campaign wizard, quick text, test message
-- **Inbox** — Three-column shared inbox with assignment, status, notes
-- **Contacts** — Lists, segments, tags, imports, consent views
-- **Campaigns** — Status tabs, calendar, detail analytics
-- **Automations** — Flow list, visual builder, templates, logs
-- **Templates** — Campaign/inbox/compliance templates + AI generator
-- **Grow** — Keywords, opt-in forms, QR codes, signup pages
-- **Reports** — Overview, campaigns, messages, contacts, inbox, usage, audit log
-- **Phone Numbers** — Buy, port, detail, sender pools
-- **Compliance** — A2P registration, business profile, consent, suppression
-- **Integrations** — API keys, webhooks, developer logs
-- **Settings** — Business, messaging, users, billing, security, branding
+- **Send** — Campaign wizard, quick text, AI composer
+- **Inbox** — Shared inbox, saved replies, MMS, presence
+- **Contacts** — Lists, segments, tags, imports, cleanup
+- **Campaigns** — Sequences, recurrence, lifecycle controls
+- **Automations** — Visual builder, keywords, templates
+- **Grow** — Forms, popups, contests, QR, contact cards, surveys
+- **Phone** — Softphone, call history, queues, IVR
+- **AI Voice** — Agents, calendars, campaigns, recordings
+- **Numbers** — Buy, port, assignments, sender pools
+- **Compliance** — Brand/campaign registration, consent
+- **Integrations** — Stripe, Google, HubSpot, Shopify, Salesforce, Calendly, webhooks, API keys
+- **Settings** — Branding, billing, users/invites, 2FA, messaging keywords, limits
 
 ### Platform admin (`/admin`)
 
-Separate shell for customer management, A2P queue, message monitoring, billing, support, and platform settings.
+Customers, A2P queue, billing, support tickets, platform settings (plans, flags, maintenance, trial).
 
-## API routes
+## Key API routes
 
-| Route | Method | Description |
-|-------|--------|-------------|
-| `/api/auth/login` | POST | Demo session login |
-| `/api/auth/signup` | POST | Create account + workspace |
-| `/api/auth/logout` | POST | Clear session |
-| `/api/workspace` | POST | Switch active workspace |
-| `/api/messaging/registration` | GET/POST | A2P brand/campaign registration actions (Telnyx + legacy Twilio ISV) |
-| `/api/messaging/numbers` | GET | Search available numbers |
-| `/api/campaigns` | GET/POST | List/create campaigns (sequence + enroll) |
-| `/api/campaigns/{id}/enroll` | POST | Enroll contacts into a campaign |
-| `/api/contacts` | GET | List contacts |
-| `/api/inbox` | GET | List conversations |
-| `/api/sms/send` | POST | One-off SMS (ready gate on ISV path) |
-| `/api/jobs/process` | POST | Minute cron drain |
-| `/api/twilio/inbound` | POST | Inbound SMS webhook |
-| `/api/twilio/message-status` | POST | Delivery receipts |
-| `/api/twilio/compliance-status` | POST | TrustHub / Brand callbacks |
-| `/r/{token}` | GET | Click tracking redirect |
-
-## SMS provider
-
-`src/lib/sms/provider.ts` exposes a `SmsProvider` interface. With Twilio ISV configured (`TWILIO_MODE=live` or account SID present), sends go through the workspace Messaging Service once registration is `ready`. Otherwise `StubSmsProvider` queues locally.
+| Route | Description |
+|-------|-------------|
+| `/api/auth/login` | Session login (password + optional TOTP) |
+| `/api/auth/signup` | Create account + workspace (trial limits) |
+| `/api/messaging/registration` | A2P brand/campaign registration |
+| `/api/campaigns` | List/create/enroll campaigns |
+| `/api/sms/send` | One-off SMS |
+| `/api/telnyx/messaging` | Telnyx SMS webhook |
+| `/api/telnyx/voice` | Telnyx Call Control webhook |
+| `/api/payments/stripe/webhook` | Stripe billing + text-to-pay |
+| `/api/jobs/process` | Cron job drain |
 
 ## Project structure
 
 ```
 src/
   app/
-    (auth)/          Login, signup
-    (app)/           Customer dashboard (sidebar + header)
+    (auth)/          Login, signup, invite accept
+    (app)/           Customer dashboard
     (admin)/admin/   Platform admin
-    api/             Auth, campaigns, contacts, inbox, SMS
-  components/
-    layout/          Sidebar, header, mobile nav, admin shell
-    ui/              Buttons, tables, cards, status chips
-    send/, inbox/    Feature components
-  lib/
-    nav.ts           Sidebar navigation config
-    sms/provider.ts  SMS provider interface
+    (public)/        Maintenance, mock checkout
+    api/             REST + webhooks
+  components/        Feature UI
+  lib/               Domain services (messaging, voice, billing, phone, …)
 prisma/
-  schema.prisma      Multi-tenant data model
-  seed.ts            Demo seed script
+  schema.prisma
+  seed.ts
+supabase/            SQL fallbacks
 ```
 
-## Design notes
+## Deploy notes (Coolify)
 
-- **Send** is always visible (sidebar CTA + mobile compose FAB)
-- Campaigns and Inbox are separate surfaces
-- Compliance is a first-class menu item with registration status
-- Bulk send always shows recipient count, SMS segments, and estimated cost
-- Review step required before sending campaigns
-
-## License
-
-Private — Transovo SMS
+Set the same secrets in Coolify and any Cursor Cloud Environment. Apply schema with `npm run db:push` (or run the additive SQL files). Point Telnyx messaging + voice webhooks at your `APP_URL`.

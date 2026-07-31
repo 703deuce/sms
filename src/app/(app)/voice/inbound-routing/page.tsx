@@ -63,7 +63,18 @@ export default function InboundRoutingPage() {
       body: JSON.stringify({ fromE164: simFrom, toE164: simTo }),
     });
     const json = await res.json();
-    setSimResult(JSON.stringify(json.data, null, 2));
+    const data = json.data || {};
+    const action = data.action || data.matchedAction || data;
+    const lines = [
+      data.matchedRuleName ? `Matched rule: ${data.matchedRuleName}` : null,
+      data.ruleId ? `Rule id: ${data.ruleId}` : null,
+      typeof action === "object"
+        ? `Action: ${action.type || action.actionType || "unknown"}${action.agentId ? ` → agent ${action.agentId}` : ""}`
+        : `Action: ${String(action)}`,
+      data.reason ? `Reason: ${data.reason}` : null,
+      data.withinBusinessHours != null ? `Business hours: ${data.withinBusinessHours ? "yes" : "no"}` : null,
+    ].filter(Boolean);
+    setSimResult(lines.length ? lines.join("\n") : "No matching rule — default AI answer.");
   }
 
   return (
@@ -132,8 +143,15 @@ export default function InboundRoutingPage() {
               <TR key={r.id}>
                 <TD>{r.priority}</TD>
                 <TD>{r.name}</TD>
-                <TD className="text-xs font-mono">{JSON.stringify(r.conditions)}</TD>
-                <TD className="text-xs font-mono">{JSON.stringify(r.actions)}</TD>
+                <TD className="text-sm">
+                  {r.conditions.businessHoursOnly
+                    ? `Business hours ${String(r.conditions.startHour ?? 9)}–${String(r.conditions.endHour ?? 17)}`
+                    : "Always"}
+                </TD>
+                <TD className="text-sm">
+                  {String(r.actions.type || "ai_answer")}
+                  {r.actions.agentId ? " · agent" : ""}
+                </TD>
                 <TD>
                   <Button size="sm" variant="ghost" onClick={() => deleteRule(r.id)}>
                     <Trash2 className="h-4 w-4" />

@@ -268,9 +268,37 @@ export async function getBillingSummary(workspaceId: string): Promise<BillingSum
   };
 }
 
+/** Grant credits (trial, admin adjust, or local mock top-up). Updates ledger + balance. */
+export async function grantCredits(
+  workspaceId: string,
+  amountCents: number,
+  description: string,
+  source = "adjustment",
+) {
+  const prisma = getPrisma();
+  const workspace = await prisma.workspace.findUnique({ where: { id: workspaceId } });
+  if (!workspace) throw new Error("Workspace not found");
+  const prevBalance = Number(workspace.creditBalanceCents ?? 0);
+  const balanceAfterCents = prevBalance + amountCents;
+  const entry = await prisma.creditLedgerEntry.create({
+    data: {
+      workspaceId,
+      amountCents,
+      balanceAfterCents,
+      description,
+      source,
+    },
+  });
+  await prisma.workspace.update({
+    where: { id: workspaceId },
+    data: { creditBalanceCents: balanceAfterCents },
+  });
+  return entry;
+}
+
 /**
  * Dev-only fallback: add credits without Stripe. Only usable when the Stripe key
- * is missing. Also increments Workspace.creditBalanceCents so balances stay in sync.
+ * is missing. Prefer grantCredits for trial/admin grants.
  */
 export async function addMockCredits(
   workspaceId: string,
@@ -280,26 +308,10 @@ export async function addMockCredits(
   if (isStripeConfigured()) {
     throw new Error("Stripe is configured — use a real checkout session instead of mock credits");
   }
-  const prisma = getPrisma();
-  const recent = await prisma.creditLedgerEntry.findFirst({
-    where: { workspaceId },
-    orderBy: { createdAt: "desc" },
-  });
-  const prevBalance = recent?.balanceAfterCents ?? 0;
-  const balanceAfterCents = prevBalance + amountCents;
-
-  const entry = await prisma.creditLedgerEntry.create({
-    data: {
-      workspaceId,
-      amountCents,
-      balanceAfterCents,
-      description: description || `Credit purchase $${(amountCents / 100).toFixed(2)} (mock)`,
-      source: "purchase",
-    },
-  });
-  await prisma.workspace.update({
-    where: { id: workspaceId },
-    data: { creditBalanceCents: { increment: amountCents } },
-  });
-  return entry;
+  return grantCredits(
+    workspaceId,
+    amountCents,
+    description || `Credit purchase $${(amountCents / 100).toFixed(2)} (mock)`,
+    "purchase",
+  );
 }

@@ -47,7 +47,7 @@ const DEFAULT_FEATURE_FLAGS: PlatformFeatureFlag[] = [
   { id: "ff_ai_templates", name: "AI template generator", enabled: true },
   { id: "ff_mms", name: "MMS messaging", enabled: true },
   { id: "ff_automations_v2", name: "Automations v2 builder", enabled: false },
-  { id: "ff_hubspot", name: "HubSpot integration", enabled: false },
+  { id: "ff_hubspot", name: "HubSpot integration", enabled: true },
   { id: "ff_advanced_reports", name: "Advanced reporting", enabled: true },
 ];
 
@@ -56,7 +56,7 @@ const DEFAULT_TRIAL: PlatformTrialLimits = {
   messages: 500,
   numbers: 1,
   credits: 25,
-  requireCard: true,
+  requireCard: false,
 };
 
 const DEFAULT_MAINTENANCE: PlatformMaintenance = {
@@ -124,5 +124,11 @@ export async function savePlatformSettings(
     create: { id: "default", plansJson, flagsJson },
     update: { plansJson, flagsJson },
   });
+  try {
+    const { clearPlatformSettingsCache } = await import("@/lib/platform-flags");
+    clearPlatformSettingsCache();
+  } catch {
+    // ignore
+  }
   return coerceView(row);
 }

@@ -11,6 +11,9 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+
+type SearchHit = { id: string; label: string; meta?: string; href: string };
 
 export function AdminShell({
   children,
@@ -21,6 +24,11 @@ export function AdminShell({
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  const [query, setQuery] = useState("");
+  const [hits, setHits] = useState<SearchHit[]>([]);
+  const [open, setOpen] = useState(false);
+  const [ticketOpen, setTicketOpen] = useState(0);
+  const wrapRef = useRef<HTMLDivElement>(null);
 
   const initials = userName
     .split(" ")
@@ -33,6 +41,62 @@ export function AdminShell({
     router.push("/login");
     router.refresh();
   }
+
+  useEffect(() => {
+    fetch("/api/admin/support")
+      .then((r) => r.json())
+      .then((j) => {
+        const list = (j.data || []) as Array<{ status?: string }>;
+        setTicketOpen(list.filter((t) => (t.status || "open") === "open").length);
+      })
+      .catch(() => setTicketOpen(0));
+  }, [pathname]);
+
+  useEffect(() => {
+    if (query.trim().length < 2) {
+      setHits([]);
+      return;
+    }
+    const t = window.setTimeout(() => {
+      fetch(`/api/admin/search?q=${encodeURIComponent(query.trim())}`)
+        .then((r) => r.json())
+        .then((j) => {
+          const data = j.data || {};
+          const next: SearchHit[] = [
+            ...(data.workspaces || []).map((w: { id: string; name: string; slug: string; href: string }) => ({
+              id: w.id,
+              label: w.name,
+              meta: w.slug,
+              href: w.href,
+            })),
+            ...(data.users || []).map((u: { id: string; name: string; email: string; href: string }) => ({
+              id: u.id,
+              label: u.name,
+              meta: u.email,
+              href: u.href,
+            })),
+            ...(data.tickets || []).map((t: { id: string; subject: string; email: string; href: string }) => ({
+              id: t.id,
+              label: t.subject,
+              meta: t.email,
+              href: t.href,
+            })),
+          ];
+          setHits(next);
+          setOpen(true);
+        })
+        .catch(() => setHits([]));
+    }, 200);
+    return () => window.clearTimeout(t);
+  }, [query]);
+
+  useEffect(() => {
+    function onDoc(e: MouseEvent) {
+      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, []);
 
   return (
     <div className="min-h-screen bg-background">
@@ -118,25 +182,51 @@ export function AdminShell({
       <div className="lg:pl-[260px]">
         <header className="sticky top-0 z-30 border-b border-border bg-header/95 backdrop-blur">
           <div className="flex h-16 items-center gap-3 px-4 lg:px-6">
-            <div className="mx-auto hidden w-full max-w-[520px] flex-1 md:block">
+            <div className="mx-auto hidden w-full max-w-[520px] flex-1 md:block" ref={wrapRef}>
               <div className="relative">
                 <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  onFocus={() => hits.length && setOpen(true)}
                   className="h-10 w-full rounded-full border border-border bg-[#f7f8fb] pl-10 pr-4 text-[13px] outline-none transition focus:border-primary focus:bg-white focus:ring-2 focus:ring-ring/20"
-                  placeholder="Search customers, accounts, campaigns..."
+                  placeholder="Search customers, accounts, tickets..."
                 />
+                {open && hits.length > 0 ? (
+                  <div className="absolute left-0 right-0 top-12 z-50 overflow-hidden rounded-xl border border-border bg-white shadow-lg">
+                    {hits.map((h) => (
+                      <button
+                        key={`${h.href}-${h.id}`}
+                        type="button"
+                        className="flex w-full flex-col px-4 py-2.5 text-left hover:bg-muted"
+                        onClick={() => {
+                          setOpen(false);
+                          setQuery("");
+                          router.push(h.href);
+                        }}
+                      >
+                        <span className="text-[13px] font-medium">{h.label}</span>
+                        {h.meta ? (
+                          <span className="text-[11px] text-muted-foreground">{h.meta}</span>
+                        ) : null}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
               </div>
             </div>
 
             <div className="ml-auto flex items-center gap-2">
-              <button
-                type="button"
+              <Link
+                href="/admin/support"
                 className="relative rounded-full p-2.5 text-foreground hover:bg-muted"
-                aria-label="Notifications"
+                aria-label="Support tickets"
               >
                 <Bell className="h-[18px] w-[18px]" />
-                <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-danger ring-2 ring-white" />
-              </button>
+                {ticketOpen > 0 ? (
+                  <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-danger ring-2 ring-white" />
+                ) : null}
+              </Link>
 
               <Link
                 href="/admin/support"

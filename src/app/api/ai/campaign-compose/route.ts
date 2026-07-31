@@ -6,6 +6,10 @@ export async function POST(request: Request) {
   try {
     const auth = await requireSession();
     if ("error" in auth) return auth.error;
+    const { isFeatureEnabled } = await import("@/lib/platform-flags");
+    if (!(await isFeatureEnabled("ff_ai_templates", true))) {
+      return NextResponse.json({ error: "AI templates are disabled for this platform." }, { status: 403 });
+    }
     const body = (await request.json()) as Record<string, unknown>;
     const data = await composeCampaignMessages({
       goal: String(body.goal || ""),

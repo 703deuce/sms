@@ -239,7 +239,7 @@ Keep Twilio webhook routes until Telnyx paths are verified.
 | Risk | Notes |
 |------|-------|
 | Telnyx credentials not in repo yet | Need live `TELNYX_API_KEY` + public key for webhook verify |
-| Compliance UI still mock | Backend registration API exists; UI may need wiring later (out of scope for provider swap) |
+| Compliance UI | Brand + campaign registration panels are editable and persist via the registration API |
 | One-number-per-workspace | Matches Telnyx isolation rules; keep |
 | Carrier filtering | Still possible after approval; no delivery guarantee |
 | Twexit != 10DLC | Easy to overestimate Twexit’s coverage |

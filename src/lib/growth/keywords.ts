@@ -103,7 +103,23 @@ export async function handleKeywordInbound(input: {
 }): Promise<{ matched: boolean; replyText?: string; keyword?: string }> {
   const prisma = getPrisma();
   const word = (input.body || "").trim().split(/\s+/)[0]?.toUpperCase() || "";
-  if (!word || ["STOP", "STOPALL", "UNSUBSCRIBE", "CANCEL", "END", "QUIT", "START", "YES", "UNSTOP", "HELP", "INFO"].includes(word)) {
+  if (!word) return { matched: false };
+
+  // Defer compliance keywords to inbound-process (workspace-configurable lists).
+  const {
+    getMessagingRuntimeSettings,
+    parseKeywordList,
+    DEFAULT_OPT_OUT_KEYWORDS,
+    DEFAULT_OPT_IN_KEYWORDS,
+    DEFAULT_HELP_KEYWORDS,
+  } = await import("@/lib/messaging/messaging-settings");
+  const settings = await getMessagingRuntimeSettings(input.workspaceId);
+  const reserved = new Set([
+    ...parseKeywordList(settings.optOutKeywords, DEFAULT_OPT_OUT_KEYWORDS),
+    ...parseKeywordList(settings.optInKeywords, DEFAULT_OPT_IN_KEYWORDS),
+    ...parseKeywordList(settings.helpKeywords, DEFAULT_HELP_KEYWORDS),
+  ]);
+  if (reserved.has(word)) {
     return { matched: false };
   }
 

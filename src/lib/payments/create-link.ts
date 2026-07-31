@@ -134,9 +134,9 @@ const ACTIVE_RECIPIENT_STATUSES = ["pending", "scheduled", "in_progress", "waiti
  * workspace + phone. Recipients enrolled in payment-category campaigns
  * (invoice / overdue reminders) are stopped so no further dunning is sent.
  */
-export async function markPaymentLinkPaid(stripeSessionId: string) {
+export async function markPaymentLinkPaidById(linkId: string) {
   const prisma = getPrisma();
-  const row = await prisma.paymentLink.findFirst({ where: { stripeSessionId } });
+  const row = await prisma.paymentLink.findUnique({ where: { id: linkId } });
   if (!row) return null;
   if (row.status === "paid") return row;
 
@@ -148,10 +148,17 @@ export async function markPaymentLinkPaid(stripeSessionId: string) {
   try {
     await applyPaymentReceivedFacts(row.workspaceId, row.phone, row.campaignId);
   } catch (err) {
-    console.warn("[markPaymentLinkPaid] failed to propagate payment_received", row.id, err);
+    console.warn("[markPaymentLinkPaidById] failed to propagate payment_received", row.id, err);
   }
 
   return updated;
+}
+
+export async function markPaymentLinkPaid(stripeSessionId: string) {
+  const prisma = getPrisma();
+  const row = await prisma.paymentLink.findFirst({ where: { stripeSessionId } });
+  if (!row) return null;
+  return markPaymentLinkPaidById(row.id);
 }
 
 async function applyPaymentReceivedFacts(

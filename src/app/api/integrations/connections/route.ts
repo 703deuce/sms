@@ -44,6 +44,16 @@ export async function POST(request: Request) {
     const action = body.action || "connect";
     if (!provider) return NextResponse.json({ error: "provider required" }, { status: 400 });
 
+    if (provider === "hubspot") {
+      const { isFeatureEnabled } = await import("@/lib/platform-flags");
+      if (!(await isFeatureEnabled("ff_hubspot", true))) {
+        return NextResponse.json(
+          { error: "HubSpot integration is disabled in platform settings." },
+          { status: 403 },
+        );
+      }
+    }
+
     if (action === "oauth") {
       const redirectUrl = getGoogleIntegrationStartUrl(auth.workspaceId, provider);
       return NextResponse.json({ data: { redirectUrl } });
@@ -93,6 +103,16 @@ export async function POST(request: Request) {
       case "calendly":
         if (config.signingKey?.trim()) newConfig.signingKey = config.signingKey.trim();
         break;
+      case "google_sheets":
+        if (!existing || existing.status !== "connected") {
+          throw new Error("Connect Google Sheets via OAuth first, then save the spreadsheet ID.");
+        }
+        if (!config.spreadsheetId?.trim()) throw new Error("spreadsheetId required");
+        newConfig.spreadsheetId = config.spreadsheetId.trim();
+        accessToken = existing.accessToken ?? undefined;
+        break;
+      case "google_contacts":
+        throw new Error("Google Contacts uses OAuth — use Connect, then Sync.");
       default:
         throw new Error(`Provider ${provider} cannot be connected with an API key`);
     }

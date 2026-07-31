@@ -144,7 +144,22 @@ export default function SurveyDetailPage() {
                 <TR key={r.id}>
                   <TD>{r.phone || "—"}</TD>
                   <TD>{new Date(r.submittedAt).toLocaleString()}</TD>
-                  <TD className="max-w-xs truncate text-xs">{JSON.stringify(r.answers)}</TD>
+                  <TD className="max-w-md text-xs">
+                    {r.answers && typeof r.answers === "object" ? (
+                      <ul className="space-y-1">
+                        {Object.entries(r.answers as Record<string, unknown>).map(([k, v]) => (
+                          <li key={k}>
+                            <span className="font-medium text-foreground">{k}: </span>
+                            <span className="text-muted-foreground">
+                              {Array.isArray(v) ? v.join(", ") : String(v ?? "—")}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      String(r.answers ?? "—")
+                    )}
+                  </TD>
                 </TR>
               ))}
             </TBody>

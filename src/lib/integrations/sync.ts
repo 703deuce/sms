@@ -21,6 +21,8 @@ export async function syncProvider(
       return syncSalesforce(workspaceId);
     case "google_contacts":
       return syncGoogleContacts(workspaceId);
+    case "google_sheets":
+      return syncGoogleSheets(workspaceId);
     default:
       throw new Error(`Sync not supported for provider: ${provider}`);
   }
@@ -176,4 +178,59 @@ export async function syncGoogleContacts(workspaceId: string): Promise<SyncResul
       company: p.organizations?.[0]?.name,
     })),
   );
+}
+
+/** Import contacts from the first sheet tab of a configured spreadsheet. */
+export async function syncGoogleSheets(workspaceId: string): Promise<SyncResult> {
+  const conn = await getConnection(workspaceId, "google_sheets");
+  const token = await refreshGoogleToken(workspaceId, "google_sheets");
+  if (!token) throw new Error("Google Sheets not connected");
+
+  const config = (conn?.configJson || {}) as Record<string, unknown>;
+  const spreadsheetId = String(config.spreadsheetId || "").trim();
+  if (!spreadsheetId) {
+    throw new Error(
+      "Set spreadsheetId in the Google Sheets connection config (File → Share → copy ID from the URL).",
+    );
+  }
+
+  const metaRes = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}?fields=sheets.properties.title`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+  if (!metaRes.ok) throw new Error(`Google Sheets API ${metaRes.status}`);
+  const meta = (await metaRes.json()) as {
+    sheets?: Array<{ properties?: { title?: string } }>;
+  };
+  const sheetTitle = meta.sheets?.[0]?.properties?.title || "Sheet1";
+  const range = encodeURIComponent(`${sheetTitle}!A1:Z500`);
+  const valuesRes = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}/values/${range}`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+  if (!valuesRes.ok) throw new Error(`Google Sheets values API ${valuesRes.status}`);
+  const valuesJson = (await valuesRes.json()) as { values?: string[][] };
+  const rows = valuesJson.values || [];
+  if (rows.length < 2) {
+    await markSynced(workspaceId, "google_sheets", 0);
+    return { imported: 0, created: 0, provider: "google_sheets" };
+  }
+
+  const headers = rows[0].map((h) => h.trim().toLowerCase());
+  const idx = (names: string[]) => headers.findIndex((h) => names.includes(h));
+  const phoneIdx = idx(["phone", "mobile", "cell", "e164", "phone number"]);
+  const emailIdx = idx(["email", "e-mail"]);
+  const firstIdx = idx(["firstname", "first name", "first", "given"]);
+  const lastIdx = idx(["lastname", "last name", "last", "family", "surname"]);
+  const companyIdx = idx(["company", "business", "organization"]);
+
+  const contacts = rows.slice(1).map((row) => ({
+    phone: phoneIdx >= 0 ? row[phoneIdx] : null,
+    email: emailIdx >= 0 ? row[emailIdx] : null,
+    firstName: firstIdx >= 0 ? row[firstIdx] : null,
+    lastName: lastIdx >= 0 ? row[lastIdx] : null,
+    company: companyIdx >= 0 ? row[companyIdx] : null,
+  }));
+
+  return importContacts(workspaceId, "google_sheets", contacts);
 }

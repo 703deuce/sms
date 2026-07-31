@@ -79,7 +79,78 @@ export default function AiCampaignComposerPage() {
       </Card>
       {result && (
         <Card className="space-y-4 p-5">
-          <pre className="whitespace-pre-wrap text-sm">{JSON.stringify(result, null, 2)}</pre>
+          {"error" in result && result.error ? (
+            <p className="text-sm text-red-600">{String(result.error)}</p>
+          ) : (
+            <>
+              {typeof result.subject === "string" || typeof result.name === "string" ? (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Campaign
+                  </p>
+                  <p className="mt-1 text-lg font-semibold">
+                    {String(result.subject || result.name || "Generated campaign")}
+                  </p>
+                </div>
+              ) : null}
+              {typeof result.body === "string" || typeof result.message === "string" ? (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Message
+                  </p>
+                  <p className="mt-1 whitespace-pre-wrap rounded-lg bg-muted/50 p-3 text-sm">
+                    {String(result.body || result.message)}
+                  </p>
+                </div>
+              ) : null}
+              {typeof result.complianceFooter === "string" || typeof result.footer === "string" ? (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Compliance footer
+                  </p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {String(result.complianceFooter || result.footer)}
+                  </p>
+                </div>
+              ) : null}
+              {Array.isArray(result.variations) || Array.isArray(result.abVersions) ? (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Variations
+                  </p>
+                  <ul className="mt-2 space-y-2">
+                    {((result.variations || result.abVersions) as unknown[]).map((v, i) => (
+                      <li key={i} className="rounded-lg border border-border px-3 py-2 text-sm">
+                        {typeof v === "string" ? v : JSON.stringify(v)}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              {typeof result.sendTimeSuggestion === "string" || typeof result.sendWindow === "string" ? (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Send-time suggestion
+                  </p>
+                  <p className="mt-1 text-sm">{String(result.sendTimeSuggestion || result.sendWindow)}</p>
+                </div>
+              ) : null}
+              {!result.body && !result.message && !result.variations && !result.abVersions ? (
+                <div className="space-y-2 text-sm">
+                  {Object.entries(result).map(([key, value]) => (
+                    <div key={key}>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        {key}
+                      </p>
+                      <p className="mt-1 whitespace-pre-wrap">
+                        {typeof value === "string" ? value : JSON.stringify(value, null, 2)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </>
+          )}
         </Card>
       )}
     </div>
