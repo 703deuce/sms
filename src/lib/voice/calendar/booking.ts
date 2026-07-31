@@ -115,3 +115,43 @@ export async function bookAppointment(
 
   return { ok: true, appointmentId: appointment.id, startsAt: appointment.startsAt };
 }
+
+/** The next upcoming (non-cancelled) appointment for a contact, if any. */
+export async function findUpcomingAppointmentForContact(
+  workspaceId: string,
+  contactId: string,
+) {
+  return getPrisma().voiceAppointment.findFirst({
+    where: {
+      workspaceId,
+      contactId,
+      startsAt: { gte: new Date() },
+      status: { notIn: ["cancelled", "canceled", "completed"] },
+    },
+    orderBy: { startsAt: "asc" },
+  });
+}
+
+export async function confirmAppointment(workspaceId: string, appointmentId: string) {
+  const prisma = getPrisma();
+  const appt = await prisma.voiceAppointment.findFirst({
+    where: { id: appointmentId, workspaceId },
+  });
+  if (!appt) throw new Error("Appointment not found");
+  return prisma.voiceAppointment.update({
+    where: { id: appt.id },
+    data: { status: "confirmed" },
+  });
+}
+
+export async function cancelAppointment(workspaceId: string, appointmentId: string) {
+  const prisma = getPrisma();
+  const appt = await prisma.voiceAppointment.findFirst({
+    where: { id: appointmentId, workspaceId },
+  });
+  if (!appt) throw new Error("Appointment not found");
+  return prisma.voiceAppointment.update({
+    where: { id: appt.id },
+    data: { status: "cancelled" },
+  });
+}
