@@ -299,16 +299,22 @@ function BuilderCanvas({
     alert("Test run started. Check execution history on the automation detail page.");
   }
 
-  async function testSms(body: string, contactId: string) {
-    const res = await fetch("/api/sms/send", {
+  async function testSms(body: string, contactId: string, nodeId?: string, fromNumber?: string) {
+    const res = await fetch(`/api/automations/${flowId}/test-sms`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ to: contacts.find((c) => c.id === contactId)?.phone, body, test: true }),
+      body: JSON.stringify({
+        contactId,
+        body,
+        nodeId,
+        fromNumber,
+      }),
     });
+    const json = await res.json();
     if (!res.ok) {
-      const json = await res.json();
       throw new Error(json.error || "Send failed");
     }
+    return json.data;
   }
 
   const [contacts, setContacts] = useState<Array<{ id: string; phone: string }>>([]);

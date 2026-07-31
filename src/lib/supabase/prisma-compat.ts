@@ -39,6 +39,8 @@ const MODEL_TO_TABLE: Record<string, string> = {
   conversationMessage: "ConversationMessage",
   template: "Template",
   automationFlow: "AutomationFlow",
+  automationExecution: "AutomationExecution",
+  automationStepExecution: "AutomationStepExecution",
   keyword: "Keyword",
   optInForm: "OptInForm",
   qrCode: "QrCode",
@@ -98,6 +100,15 @@ const RELATIONS: Record<string, Record<string, { table: string; fk: string; pk?:
   qrCode: { workspace: { table: "Workspace", fk: "workspaceId" } },
   clickToTextLink: { workspace: { table: "Workspace", fk: "workspaceId" } },
   conversationMessage: { conversation: { table: "Conversation", fk: "conversationId" } },
+  automationFlow: { workspace: { table: "Workspace", fk: "workspaceId" } },
+  automationExecution: {
+    flow: { table: "AutomationFlow", fk: "flowId" },
+    contact: { table: "Contact", fk: "contactId" },
+    workspace: { table: "Workspace", fk: "workspaceId" },
+  },
+  automationStepExecution: {
+    execution: { table: "AutomationExecution", fk: "executionId" },
+  },
   workspace: {
     phoneNumbers: { table: "PhoneNumber", fk: "workspaceId", pk: "id" },
     messagingRegistration: { table: "messaging_registrations", fk: "workspaceId", pk: "id" },
@@ -236,7 +247,27 @@ function formatOrClause(clause: Row): string | null {
   return `and(${atoms.join(",")})`;
 }
 
+function flattenCompoundWhere(where: Args | undefined): Args | undefined {
+  if (!where) return where;
+  const out: Args = { ...where };
+  for (const [key, value] of Object.entries(where)) {
+    if (
+      key.includes("_") &&
+      isObject(value) &&
+      !isFilterOpObject(value) &&
+      !("connect" in value)
+    ) {
+      for (const [fk, fv] of Object.entries(value)) {
+        out[fk] = fv;
+      }
+      delete out[key];
+    }
+  }
+  return out;
+}
+
 async function resolveNestedWhere(model: string, where: Args | undefined): Promise<Args | undefined> {
+  where = flattenCompoundWhere(where);
   if (!where) return where;
   const out: Args = { ...where };
   const rels = RELATIONS[model] ?? {};
@@ -458,6 +489,29 @@ async function applyInclude(rows: Row[], include: Args | undefined, model: strin
       const { data } = await db.from("messaging_registrations").select("*").in("workspaceId", ids);
       const map = new Map((data ?? []).map((r) => [r.workspaceId as string, reviveRow(r as Row)]));
       out = out.map((r) => ({ ...r, messagingRegistration: map.get(r.id as string) ?? null }));
+      continue;
+    }
+
+    if (rel === "steps" && model === "automationExecution") {
+      const ids = out.map((r) => r.id as string);
+      const { data } = await db.from("AutomationStepExecution").select("*").in("executionId", ids);
+      const orderBy = isObject(cfg) ? (cfg.orderBy as Row | undefined) : undefined;
+      const dir = orderBy && "startedAt" in orderBy ? orderBy.startedAt : "asc";
+      const by = new Map<string, Row[]>();
+      for (const s of data ?? []) {
+        const list = by.get(s.executionId as string) ?? [];
+        list.push(reviveRow(s as Row));
+        by.set(s.executionId as string, list);
+      }
+      out = out.map((r) => {
+        let list = by.get(r.id as string) ?? [];
+        list = list.sort((a, b) => {
+          const av = a.startedAt ? new Date(a.startedAt as string).getTime() : 0;
+          const bv = b.startedAt ? new Date(b.startedAt as string).getTime() : 0;
+          return dir === "desc" ? bv - av : av - bv;
+        });
+        return { ...r, steps: list };
+      });
       continue;
     }
 
@@ -690,9 +744,18 @@ function modelApi(model: string): ModelApi {
     },
 
     async upsert({ where, create, update }: Args) {
-      const existing = await api.findUnique({ where });
-      if (existing) return api.update({ where, data: update });
-      return api.create({ data: { ...where, ...create } });
+      const flatWhere = flattenCompoundWhere(where) ?? where;
+      const existing = await api.findUnique({ where: flatWhere });
+      if (existing) return api.update({ where: flatWhere, data: update });
+      const createData = { ...create };
+      if (flatWhere && isObject(flatWhere)) {
+        for (const [k, v] of Object.entries(flatWhere)) {
+          if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") {
+            createData[k] = v;
+          }
+        }
+      }
+      return api.create({ data: createData });
     },
 
     async delete({ where }: Args) {

@@ -1,6 +1,7 @@
 import type { AutomationCanvasNode, AutomationDefinition } from "./types";
 import { findTriggerNode, getOutgoingEdges, hasCycle } from "./types";
 import { isConditionBlock } from "./catalog";
+import { getAutomationCapabilities } from "./capabilities";
 
 export type ValidationIssue = {
   nodeId?: string;
@@ -13,6 +14,7 @@ export function validateAutomationForPublish(
   def: AutomationDefinition,
 ): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
+  const caps = getAutomationCapabilities();
 
   if (!name.trim()) {
     issues.push({ message: "Automation name is required", severity: "error" });
@@ -81,12 +83,27 @@ export function validateAutomationForPublish(
     }
 
     if (block === "send_email") {
+      if (!caps.email) {
+        issues.push({
+          nodeId: node.id,
+          message: "Email is not configured (set BREVO_API_KEY to publish email steps)",
+          severity: "error",
+        });
+      }
       if (!String(cfg.subject || "").trim()) {
         issues.push({ nodeId: node.id, message: "Email subject is required", severity: "error" });
       }
       if (!String(cfg.body || "").trim()) {
         issues.push({ nodeId: node.id, message: "Email body is required", severity: "error" });
       }
+    }
+
+    if ((block === "send_sms" || block === "send_review_request") && !caps.sms) {
+      issues.push({
+        nodeId: node.id,
+        message: "SMS sending is paused or unavailable for this account",
+        severity: "error",
+      });
     }
 
     if (block === "send_webhook") {

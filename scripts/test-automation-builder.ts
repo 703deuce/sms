@@ -20,6 +20,7 @@ import {
 } from "../src/lib/automations/validation";
 import { evaluateConditionNode } from "../src/lib/automations/actions";
 import { factsFromMetadata } from "../src/lib/automations/metadata";
+import { getAutomationCapabilities } from "../src/lib/automations/capabilities";
 
 let passed = 0;
 let failed = 0;
@@ -214,6 +215,33 @@ assert(
   "Name required",
   validateAutomationForPublish("", mvp).some((i) => i.message.includes("name")),
 );
+
+// Email publish blocked without Brevo
+const emailDef = {
+  version: 1,
+  nodes: [
+    {
+      id: "em",
+      type: "action",
+      position: { x: 0, y: 0 },
+      data: {
+        blockType: "send_email",
+        label: "Email",
+        config: { subject: "Hi", body: "Test" },
+      },
+    },
+  ],
+  edges: [],
+};
+const savedBrevo = process.env.BREVO_API_KEY;
+delete process.env.BREVO_API_KEY;
+assert(
+  "Email publish blocked without Brevo",
+  hasBlockingErrors(validateAutomationForPublish("Email flow", emailDef as import("../src/lib/automations/types").AutomationDefinition)),
+);
+if (savedBrevo) process.env.BREVO_API_KEY = savedBrevo;
+
+assert("capabilities email flag", typeof getAutomationCapabilities().email === "boolean");
 
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

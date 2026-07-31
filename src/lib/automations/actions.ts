@@ -250,6 +250,9 @@ export async function runNodeAction(
 
   if (block === "send_email") {
     if (!contact.email) return { error: "missing_email" };
+    if (!process.env.BREVO_API_KEY?.trim()) {
+      return { error: "email_not_configured" };
+    }
     const subject = await mergeMessageVars(ctx.workspaceId, contact, String(cfg.subject || ""));
     const html = await mergeMessageVars(ctx.workspaceId, contact, String(cfg.body || ""));
     if (!ctx.testMode) {

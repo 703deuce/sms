@@ -4,11 +4,7 @@ import { enqueueJob } from "@/lib/messaging/enqueue-advance";
 import { runNodeAction } from "./actions";
 import { factsFromMetadata } from "./metadata";
 import { isConditionBlock } from "./catalog";
-import {
-  findNode,
-  parseAutomationDefinition,
-  type AutomationDefinition,
-} from "./types";
+import { findNode, parseAutomationDefinition } from "./types";
 
 const TERMINAL = ["COMPLETED", "FAILED", "CANCELLED"] as const;
 
@@ -80,16 +76,6 @@ async function completeExecution(
       });
     }
   }
-}
-
-async function enqueueAdvance(executionId: string, workspaceId: string) {
-  await enqueueJob({
-    jobType: "automation_advance",
-    queueName: "automations",
-    workspaceId,
-    payload: { executionId },
-    idempotencyKey: `automation-advance:${executionId}:${Date.now()}`,
-  });
 }
 
 async function getContactTags(contactId: string): Promise<string[]> {

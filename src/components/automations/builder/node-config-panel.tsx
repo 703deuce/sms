@@ -32,7 +32,7 @@ export function NodeConfigPanel({
   onDelete: () => void;
   onDuplicate: () => void;
   onClose: () => void;
-  onTestSms?: (body: string, contactId: string) => Promise<void>;
+  onTestSms?: (body: string, contactId: string, nodeId: string, fromNumber?: string) => Promise<void>;
 }) {
   const cfg = node.data.config || {};
   const block = node.data.blockType;
@@ -83,7 +83,12 @@ export function NodeConfigPanel({
     if (!onTestSms || !testContactId) return;
     setTestSending(true);
     try {
-      await onTestSms(String(cfg.body || ""), testContactId);
+      await onTestSms(
+        String(cfg.body || ""),
+        testContactId,
+        node.id,
+        cfg.fromNumber ? String(cfg.fromNumber) : undefined,
+      );
     } finally {
       setTestSending(false);
     }

@@ -19,17 +19,19 @@ export type AutomationNodeData = {
   selected?: boolean;
 };
 
-function iconFor(blockType: string) {
-  if (blockType === "wait") return Clock;
-  if (blockType === "condition") return GitBranch;
-  if (blockType.includes("send") || blockType.includes("sms")) return MessageSquare;
-  if (blockType === "end_automation") return Square;
-  return Zap;
+function NodeIcon({ blockType }: { blockType: string }) {
+  if (blockType === "wait") return <Clock className="mt-0.5 h-4 w-4 shrink-0 text-primary" />;
+  if (blockType === "condition" || blockType.startsWith("condition_"))
+    return <GitBranch className="mt-0.5 h-4 w-4 shrink-0 text-primary" />;
+  if (blockType.includes("send") || blockType.includes("sms"))
+    return <MessageSquare className="mt-0.5 h-4 w-4 shrink-0 text-primary" />;
+  if (blockType === "end_automation")
+    return <Square className="mt-0.5 h-4 w-4 shrink-0 text-primary" />;
+  return <Zap className="mt-0.5 h-4 w-4 shrink-0 text-primary" />;
 }
 
 export function AutomationFlowNode({ id, data, selected }: NodeProps) {
   const d = data as AutomationNodeData;
-  const Icon = iconFor(d.blockType);
   const summary = nodeSummary({
     id,
     type: "action",
@@ -64,7 +66,7 @@ export function AutomationFlowNode({ id, data, selected }: NodeProps) {
       )}
 
       <div className="flex items-start gap-2">
-        <Icon className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+        <NodeIcon blockType={d.blockType} />
         <div className="min-w-0">
           <p className="text-sm font-semibold leading-tight">{d.label}</p>
           <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">{summary}</p>

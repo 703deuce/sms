@@ -20,7 +20,9 @@
     "worker:all": "tsx scripts/worker-all.ts",
     "test:messaging-wiring": "tsx scripts/test-messaging-wiring.ts",
     "test:telnyx-wiring": "tsx scripts/test-telnyx-wiring.ts",
-    "test:campaign-catalog": "tsx scripts/test-campaign-catalog.ts"
+    "test:campaign-catalog": "tsx scripts/test-campaign-catalog.ts",
+    "test:automation-builder": "tsx scripts/test-automation-builder.ts",
+    "test:automation-e2e": "tsx scripts/test-automation-e2e.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.19.0",
