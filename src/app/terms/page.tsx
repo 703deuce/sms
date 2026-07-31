@@ -1,4 +1,5 @@
 import { LegalShell } from "@/components/landing/legal-shell";
+import { BRAND_NAME } from "@/lib/brand";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -98,6 +99,16 @@ export default function TermsPage() {
         Messaging access may remain limited until verification is complete. Transovo may collect
         business information to support that process, but approval decisions rest with carriers,
         registries, and related partners.
+      </p>
+
+      <h3>SMS phone verification and consent</h3>
+      <p>
+        When you enter your mobile number to verify your account (for example on our sign-in page or
+        at <a href="/sms-opt-in">/sms-opt-in</a>), you expressly consent to receive a one-time
+        verification code from {BRAND_NAME} by SMS. Message and data rates may apply. Message
+        frequency varies. Reply STOP to opt out and HELP for help. These are transactional messages
+        sent only when you request a code, and consent to receive them is not a condition of any
+        purchase.
       </p>
 
       <h2>6. Acceptable use</h2>

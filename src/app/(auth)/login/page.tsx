@@ -1,5 +1,6 @@
 "use client";
 
+import { SmsOptIn } from "@/components/auth/sms-opt-in";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
 import Link from "next/link";
@@ -73,6 +74,14 @@ function LoginForm() {
           {loading ? "Signing in..." : "Sign in"}
         </Button>
       </form>
+      <div className="mt-6 border-t border-border pt-6">
+        <h2 className="text-center text-sm font-semibold">Verify your mobile number</h2>
+        <p className="mb-4 mt-1 text-center text-xs text-muted-foreground">
+          Confirm your phone with a one-time SMS code — like verifying an email.
+        </p>
+        <SmsOptIn />
+      </div>
+
       <p className="mt-6 text-center text-sm text-muted-foreground">
         New to Transovo?{" "}
         <Link href="/signup" className="font-medium text-primary hover:underline">
@@ -80,7 +89,10 @@ function LoginForm() {
         </Link>
       </p>
       <p className="mt-3 text-center text-xs text-muted-foreground">
-        Demo mode: any email/password works.
+        Trouble verifying?{" "}
+        <Link href="/sms-opt-in" className="font-medium text-primary hover:underline">
+          Open the SMS opt-in page
+        </Link>
       </p>
     </div>
   );

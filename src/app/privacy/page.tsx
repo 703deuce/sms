@@ -1,4 +1,5 @@
 import { LegalShell } from "@/components/landing/legal-shell";
+import { BRAND_NAME } from "@/lib/brand";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -99,6 +100,17 @@ export default function PrivacyPage() {
         When an end customer contacts Transovo directly about a message, we may need limited
         information (such as the phone number and approximate time of the message) to help identify
         the sending business and route the request.
+      </p>
+
+      <h3>Account phone verification and one-time SMS codes</h3>
+      <p>
+        When you provide your mobile number to verify your account (for example         on our sign-in page
+        or at <a href="/sms-opt-in">/sms-opt-in</a>), you are opting in to receive a one-time
+        verification code from {BRAND_NAME} by SMS. Message and data rates may apply. Message
+        frequency varies. You can reply STOP to opt out and HELP for help. These verification
+        messages are transactional and are sent only in response to your request. We use the number
+        to confirm ownership of the device and to secure your account; we do not sell it or use it
+        for third-party marketing. See our <a href="/terms">Terms of Service</a> for more detail.
       </p>
 
       <h2>5. How we share information</h2>
