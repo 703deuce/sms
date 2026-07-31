@@ -1,3 +1,4 @@
+import { AddContactDialog } from "@/components/contacts/add-contact-dialog";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -17,7 +18,6 @@ import {
   Ban,
   Download,
   MoreHorizontal,
-  Plus,
   SlidersHorizontal,
   Upload,
   UserCheck,
@@ -100,10 +100,7 @@ export default async function ContactsPage() {
         description="Manage subscribers, consent records, lists, and tags for your messaging audience."
         actions={
           <>
-            <Button>
-              <Plus className="h-4 w-4" />
-              Add contact
-            </Button>
+            <AddContactDialog />
             <Link href="/contacts/imports">
               <Button variant="outline">
                 <Upload className="h-4 w-4" />
