@@ -140,6 +140,11 @@ export async function POST(
       data: { submissions: { increment: 1 } },
     });
 
+    const { emitAutomationEvent } = await import("@/lib/automations/events");
+    await emitAutomationEvent(form.workspaceId, "form.submitted", contact.id, {
+      formSlug: form.slug || slug,
+    }).catch(() => undefined);
+
     return NextResponse.json({
       ok: true,
       thankYouMessage: form.thankYouMessage || "Thanks — you're subscribed!",

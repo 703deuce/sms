@@ -79,6 +79,10 @@ export async function GET(_request: Request, ctx: Ctx) {
         data: { status: "clicked" },
       });
     }
+    if (oneOff.workspaceId && oneOff.to) {
+      const { markFactsFromMessageClick } = await import("@/lib/automations/metadata");
+      await markFactsFromMessageClick(oneOff.workspaceId, oneOff.to).catch(() => undefined);
+    }
     const destination =
       oneOff.destinationUrl ||
       oneOff.body.match(/https?:\/\/\S+/)?.[0]?.replace(/[)>.,]+$/, "") ||

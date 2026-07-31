@@ -1,4 +1,3 @@
-import type { Prisma } from "@/lib/domain";
 import { getPrisma } from "@/lib/db";
 import { enqueueJob } from "@/lib/messaging/enqueue-advance";
 import { findTriggerNode, parseAutomationDefinition } from "./types";
@@ -59,7 +58,7 @@ export async function enrollInAutomation({
       enrollmentKey,
       status: "RUNNING",
       currentNodeId: trigger.id,
-      metadata: { testMode } as Prisma.InputJsonValue,
+      metadata: { testMode } as import("@/lib/domain").Prisma.InputJsonValue,
     },
   });
 
@@ -93,6 +92,7 @@ export async function enrollForTrigger(
   workspaceId: string,
   triggerBlockType: string,
   contactId: string,
+  filters?: { tag?: string; formSlug?: string },
 ) {
   const prisma = getPrisma();
   const flows = await prisma.automationFlow.findMany({
@@ -105,6 +105,16 @@ export async function enrollForTrigger(
     const def = parseAutomationDefinition(flow.publishedDefinition ?? flow.definition);
     const trigger = findTriggerNode(def);
     if (!trigger || trigger.data.blockType !== triggerBlockType) continue;
+
+    if (triggerBlockType === "tag_added" && filters?.tag) {
+      const required = String(trigger.data.config?.tag || "").trim();
+      if (required && required !== filters.tag) continue;
+    }
+
+    if (triggerBlockType === "form_submitted" && filters?.formSlug) {
+      const required = String(trigger.data.config?.formSlug || "").trim();
+      if (required && required !== filters.formSlug) continue;
+    }
 
     results.push(
       await enrollInAutomation({ workspaceId, flowId: flow.id, contactId }),

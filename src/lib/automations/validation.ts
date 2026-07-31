@@ -1,5 +1,6 @@
 import type { AutomationCanvasNode, AutomationDefinition } from "./types";
-import { findTriggerNode, getOutgoingEdges } from "./types";
+import { findTriggerNode, getOutgoingEdges, hasCycle } from "./types";
+import { isConditionBlock } from "./catalog";
 
 export type ValidationIssue = {
   nodeId?: string;
@@ -15,6 +16,10 @@ export function validateAutomationForPublish(
 
   if (!name.trim()) {
     issues.push({ message: "Automation name is required", severity: "error" });
+  }
+
+  if (hasCycle(def)) {
+    issues.push({ message: "Workflow contains a loop — remove circular connections", severity: "error" });
   }
 
   const triggers = def.nodes.filter((n) => n.type === "trigger");
@@ -38,6 +43,26 @@ export function validateAutomationForPublish(
         severity: "error",
       });
     }
+    if (trigger.data.blockType === "scheduled_datetime") {
+      const runAt = String(trigger.data.config?.runAt || "").trim();
+      if (!runAt) {
+        issues.push({
+          nodeId: trigger.id,
+          message: "Scheduled trigger requires a date and time",
+          severity: "error",
+        });
+      }
+    }
+    if (trigger.data.blockType === "tag_added") {
+      const tag = String(trigger.data.config?.tag || "").trim();
+      if (!tag) {
+        issues.push({
+          nodeId: trigger.id,
+          message: "Select a tag for the tag-added trigger",
+          severity: "error",
+        });
+      }
+    }
   }
 
   for (const node of def.nodes) {
@@ -55,11 +80,34 @@ export function validateAutomationForPublish(
       }
     }
 
+    if (block === "send_email") {
+      if (!String(cfg.subject || "").trim()) {
+        issues.push({ nodeId: node.id, message: "Email subject is required", severity: "error" });
+      }
+      if (!String(cfg.body || "").trim()) {
+        issues.push({ nodeId: node.id, message: "Email body is required", severity: "error" });
+      }
+    }
+
+    if (block === "send_webhook") {
+      const url = String(cfg.url || "").trim();
+      if (!url) {
+        issues.push({ nodeId: node.id, message: "Webhook URL is required", severity: "error" });
+      }
+    }
+
+    if (block === "enroll_in_automation" || block === "remove_from_automation") {
+      if (!String(cfg.flowId || "").trim()) {
+        issues.push({ nodeId: node.id, message: "Select an automation flow", severity: "error" });
+      }
+    }
+
     if (block === "wait") {
+      const weeks = Number(cfg.weeks || 0);
       const days = Number(cfg.days || 0);
       const hours = Number(cfg.hours || 0);
       const minutes = Number(cfg.minutes || 0);
-      if (days + hours + minutes <= 0) {
+      if (weeks + days + hours + minutes <= 0) {
         issues.push({
           nodeId: node.id,
           message: "Set a valid wait duration",
@@ -68,13 +116,21 @@ export function validateAutomationForPublish(
       }
     }
 
-    if (block === "condition" || node.type === "logic" && block === "condition") {
-      const yesEdge = def.edges.some(
-        (e) => e.source === node.id && e.sourceHandle === "yes",
-      );
-      const noEdge = def.edges.some(
-        (e) => e.source === node.id && e.sourceHandle === "no",
-      );
+    if (block === "wait_until_datetime") {
+      const runAt = String(cfg.runAt || "").trim();
+      const timeOfDay = String(cfg.timeOfDay || "").trim();
+      if (!runAt && !timeOfDay) {
+        issues.push({
+          nodeId: node.id,
+          message: "Set a wait-until date/time",
+          severity: "error",
+        });
+      }
+    }
+
+    if (isConditionBlock(block)) {
+      const yesEdge = def.edges.some((e) => e.source === node.id && e.sourceHandle === "yes");
+      const noEdge = def.edges.some((e) => e.source === node.id && e.sourceHandle === "no");
       if (!yesEdge || !noEdge) {
         issues.push({
           nodeId: node.id,
@@ -86,8 +142,7 @@ export function validateAutomationForPublish(
 
     if (node.type !== "end" && block !== "end_automation") {
       const out = getOutgoingEdges(def, node.id);
-      const isCondition = block === "condition";
-      if (!isCondition && out.length === 0) {
+      if (!isConditionBlock(block) && out.length === 0) {
         issues.push({
           nodeId: node.id,
           message: `"${node.data.label}" is not connected to the next step`,
@@ -96,7 +151,6 @@ export function validateAutomationForPublish(
       }
     }
 
-    // Self-loop check
     for (const edge of def.edges) {
       if (edge.source === edge.target) {
         issues.push({
@@ -108,7 +162,6 @@ export function validateAutomationForPublish(
     }
   }
 
-  // Disconnected nodes (except trigger if alone)
   const connectedIds = new Set<string>();
   for (const e of def.edges) {
     connectedIds.add(e.source);
@@ -171,7 +224,7 @@ export function defaultMvpDefinition(): AutomationDefinition {
       data: {
         blockType: "wait",
         label: "Wait",
-        config: { days: 3, hours: 0, minutes: 0 },
+        config: { days: 3, hours: 0, minutes: 0, weeks: 0 },
       },
     },
     {

@@ -1,23 +1,14 @@
 import type { Prisma } from "@/lib/domain";
 import { getPrisma } from "@/lib/db";
 import { enqueueJob } from "@/lib/messaging/enqueue-advance";
-import { mergeTemplate } from "@/lib/messaging/template";
-import { sendQuickSms } from "@/lib/sms/send-quick";
+import { runNodeAction } from "./actions";
+import { factsFromMetadata } from "./metadata";
+import { isConditionBlock } from "./catalog";
 import {
   findNode,
-  getNextNodeId,
   parseAutomationDefinition,
-  waitDurationMs,
-  type AutomationCanvasNode,
   type AutomationDefinition,
 } from "./types";
-
-type ExecutionFacts = {
-  review_received?: boolean;
-  customer_replied?: boolean;
-  link_clicked?: boolean;
-  tag_has?: boolean;
-};
 
 const TERMINAL = ["COMPLETED", "FAILED", "CANCELLED"] as const;
 
@@ -62,266 +53,32 @@ async function completeExecution(
   error?: string,
 ) {
   const prisma = getPrisma();
+  const completed = status === "COMPLETED";
   await prisma.automationExecution.update({
     where: { id: executionId },
     data: {
       status,
-      completedAt: status === "COMPLETED" ? new Date() : null,
+      completedAt: completed ? new Date() : null,
       failedAt: status === "FAILED" ? new Date() : null,
       error,
       nextActionAt: null,
       currentNodeId: null,
     },
   });
-}
-
-function factsFromMetadata(metadata: unknown, contact: {
-  customFields?: unknown;
-  lastReply?: Date | null;
-}): ExecutionFacts {
-  const facts: ExecutionFacts = {};
-  if (metadata && typeof metadata === "object") {
-    const m = metadata as Record<string, unknown>;
-    facts.review_received = Boolean(m.review_received);
-    facts.customer_replied = Boolean(m.customer_replied);
-    facts.link_clicked = Boolean(m.link_clicked);
-  }
-  if (contact.lastReply) facts.customer_replied = true;
-  if (contact.customFields && typeof contact.customFields === "object") {
-    const cf = contact.customFields as Record<string, unknown>;
-    if (cf.review_received) facts.review_received = true;
-  }
-  return facts;
-}
-
-function evaluateCondition(
-  node: AutomationCanvasNode,
-  facts: ExecutionFacts,
-): boolean {
-  const cfg = node.data.config || {};
-  const field = String(cfg.field || "review_received");
-  const operator = String(cfg.operator || "equals");
-  const value = String(cfg.value ?? "true");
-
-  let actual: string | boolean = "";
-  if (field === "review_received") actual = facts.review_received ? "true" : "false";
-  else if (field === "customer_replied") actual = facts.customer_replied ? "true" : "false";
-  else if (field === "link_clicked") actual = facts.link_clicked ? "true" : "false";
-  else if (field === "tag_has") actual = facts.tag_has ? "true" : "false";
-
-  const actualStr = String(actual);
-  switch (operator) {
-    case "equals":
-      return actualStr === value;
-    case "not_equals":
-      return actualStr !== value;
-    case "exists":
-      return actualStr === "true";
-    case "not_exists":
-      return actualStr !== "true";
-    default:
-      return actualStr === value;
-  }
-}
-
-async function mergeMessageBody(
-  workspaceId: string,
-  contact: { firstName?: string | null; lastName?: string | null; email?: string | null; phone: string },
-  body: string,
-): Promise<string> {
-  const ws = await getPrisma().workspace.findUnique({ where: { id: workspaceId } });
-  const reviewLink = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/review`;
-  return mergeTemplate(body, {
-    firstName: contact.firstName || "",
-    lastName: contact.lastName || "",
-    name: `${contact.firstName || ""} ${contact.lastName || ""}`.trim(),
-    email: contact.email || "",
-    phone: contact.phone,
-    businessName: ws?.name || "",
-    reviewLink,
-    "customer.firstName": contact.firstName || "",
-    "customer.lastName": contact.lastName || "",
-    "customer.email": contact.email || "",
-    "customer.phone": contact.phone,
-    "business.name": ws?.name || "",
-  });
-}
-
-async function executeNode(
-  executionId: string,
-  node: AutomationCanvasNode,
-  def: AutomationDefinition,
-  workspaceId: string,
-  contactId: string,
-  facts: ExecutionFacts,
-  metadata: unknown,
-) {
-  const prisma = getPrisma();
-  const block = node.data.blockType;
-  const cfg = node.data.config || {};
-  const testMode =
-    metadata && typeof metadata === "object" && (metadata as { testMode?: boolean }).testMode;
-
-  if (node.type === "trigger") {
-    const nextId = getNextNodeId(def, node.id);
-    if (!nextId) {
-      await completeExecution(executionId, "COMPLETED");
-      return;
-    }
-    await prisma.automationExecution.update({
-      where: { id: executionId },
-      data: { currentNodeId: nextId, status: "RUNNING" },
-    });
-    await recordStep(executionId, node.id, "completed");
-    await enqueueAdvance(executionId, workspaceId);
-    return;
-  }
-
-  if (block === "wait") {
-    const ms = waitDurationMs(cfg);
-    const nextId = getNextNodeId(def, node.id);
-    await prisma.automationExecution.update({
-      where: { id: executionId },
-      data: {
-        status: "WAITING",
-        currentNodeId: nextId || node.id,
-        nextActionAt: new Date(Date.now() + ms),
-      },
-    });
-    await recordStep(executionId, node.id, "completed", {
-      output: { waitMs: ms },
-    });
-    return;
-  }
-
-  if (block === "condition") {
-    const result = evaluateCondition(node, facts);
-    const branch = result ? "yes" : "no";
-    const nextId = getNextNodeId(def, node.id, branch);
-    await recordStep(executionId, node.id, "completed", { branchTaken: branch });
-    if (!nextId) {
-      await completeExecution(executionId, "COMPLETED");
-      return;
-    }
-    await prisma.automationExecution.update({
-      where: { id: executionId },
-      data: { currentNodeId: nextId, status: "RUNNING" },
-    });
-    await enqueueAdvance(executionId, workspaceId);
-    return;
-  }
-
-  if (block === "send_sms" || block === "send_review_request") {
-    const contact = await prisma.contact.findUniqueOrThrow({ where: { id: contactId } });
-    if (contact.status !== "SUBSCRIBED" && !testMode) {
-      await completeExecution(executionId, "CANCELLED", "contact_opted_out");
-      return;
-    }
-
-    const stepKey = node.id;
-    const existing = await prisma.automationStepExecution.findUnique({
-      where: { executionId_nodeId: { executionId, nodeId: stepKey } },
-    });
-    if (existing?.status === "completed") {
-      const nextId = getNextNodeId(def, node.id);
-      if (!nextId) {
-        await completeExecution(executionId, "COMPLETED");
-        return;
-      }
-      await prisma.automationExecution.update({
-        where: { id: executionId },
-        data: { currentNodeId: nextId, status: "RUNNING" },
+  if (completed) {
+    const ex = await prisma.automationExecution.findUnique({ where: { id: executionId } });
+    if (ex) {
+      const total = await prisma.automationExecution.count({
+        where: { flowId: ex.flowId, status: "COMPLETED" },
       });
-      await enqueueAdvance(executionId, workspaceId);
-      return;
-    }
-
-    const body = await mergeMessageBody(workspaceId, contact, String(cfg.body || ""));
-    if (!testMode) {
-      try {
-        const result = await sendQuickSms({
-          workspaceId,
-          to: contact.phone,
-          body,
-          from: cfg.fromNumber ? String(cfg.fromNumber) : undefined,
-        });
-        await recordStep(executionId, node.id, "completed", {
-          output: { messageId: result?.messageId, sid: result?.sid },
-        });
-        await prisma.automationFlow.update({
-          where: { id: (await prisma.automationExecution.findUnique({ where: { id: executionId } }))!.flowId },
-          data: { messagesSent: { increment: 1 } },
-        });
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : "send_failed";
-        await recordStep(executionId, node.id, "failed", { error: msg });
-        await completeExecution(executionId, "FAILED", msg);
-        return;
-      }
-    } else {
-      await recordStep(executionId, node.id, "completed", { output: { test: true, body } });
-    }
-
-    const nextId = getNextNodeId(def, node.id);
-    if (!nextId) {
-      await completeExecution(executionId, "COMPLETED");
-      return;
-    }
-    await prisma.automationExecution.update({
-      where: { id: executionId },
-      data: { currentNodeId: nextId, status: "RUNNING" },
-    });
-    await enqueueAdvance(executionId, workspaceId);
-    return;
-  }
-
-  if (block === "add_tag" || block === "remove_tag") {
-    const tagName = String(cfg.tag || "").trim();
-    if (tagName) {
-      const tag = await prisma.tag.findFirst({
-        where: { workspaceId, name: tagName },
+      const enrolled = await prisma.automationExecution.count({ where: { flowId: ex.flowId } });
+      await prisma.automationFlow.update({
+        where: { id: ex.flowId },
+        data: {
+          completionRate: enrolled > 0 ? (total / enrolled) * 100 : 0,
+        },
       });
-      if (tag && block === "add_tag") {
-        await prisma.contactTag.upsert({
-          where: { tagId_contactId: { contactId, tagId: tag.id } },
-          create: { contactId, tagId: tag.id },
-          update: {},
-        });
-      }
-      if (tag && block === "remove_tag") {
-        await prisma.contactTag.deleteMany({ where: { contactId, tagId: tag.id } });
-      }
     }
-    await recordStep(executionId, node.id, "completed");
-    const nextId = getNextNodeId(def, node.id);
-    if (!nextId) {
-      await completeExecution(executionId, "COMPLETED");
-      return;
-    }
-    await prisma.automationExecution.update({
-      where: { id: executionId },
-      data: { currentNodeId: nextId, status: "RUNNING" },
-    });
-    await enqueueAdvance(executionId, workspaceId);
-    return;
-  }
-
-  if (block === "end_automation" || node.type === "end") {
-    await recordStep(executionId, node.id, "completed");
-    await completeExecution(executionId, "COMPLETED");
-    return;
-  }
-
-  // Unknown — skip to next or complete
-  const nextId = getNextNodeId(def, node.id);
-  if (nextId) {
-    await prisma.automationExecution.update({
-      where: { id: executionId },
-      data: { currentNodeId: nextId, status: "RUNNING" },
-    });
-    await enqueueAdvance(executionId, workspaceId);
-  } else {
-    await completeExecution(executionId, "COMPLETED");
   }
 }
 
@@ -333,6 +90,14 @@ async function enqueueAdvance(executionId: string, workspaceId: string) {
     payload: { executionId },
     idempotencyKey: `automation-advance:${executionId}:${Date.now()}`,
   });
+}
+
+async function getContactTags(contactId: string): Promise<string[]> {
+  const rows = await getPrisma().contactTag.findMany({
+    where: { contactId },
+    include: { tag: true },
+  });
+  return rows.map((r: typeof rows[number]) => r.tag.name);
 }
 
 export async function advanceAutomationExecution(executionId: string) {
@@ -347,25 +112,27 @@ export async function advanceAutomationExecution(executionId: string) {
     return { skipped: true };
   }
 
-  if (execution.flow.status === "PAUSED" && !execution.metadata) {
+  if (execution.flow.status === "PAUSED") {
     return { skipped: true, reason: "flow_paused" };
   }
 
-  const rawDef =
-    execution.flow.publishedDefinition ?? execution.flow.definition;
-  const def = parseAutomationDefinition(rawDef);
-  const node = findNode(def, execution.currentNodeId);
-  if (!node) {
-    await completeExecution(executionId, "FAILED", "missing_current_node");
-    return { failed: true };
+  if (execution.status === "PAUSED") {
+    return { skipped: true, reason: "execution_paused" };
   }
 
-  const facts = factsFromMetadata(execution.metadata, execution.contact);
+  const rawDef = execution.flow.publishedDefinition ?? execution.flow.definition;
+  const def = parseAutomationDefinition(rawDef);
 
-  for (let guard = 0; guard < 15; guard += 1) {
-    const live = await prisma.automationExecution.findUnique({
-      where: { id: executionId },
-    });
+  const testMode =
+    execution.metadata &&
+    typeof execution.metadata === "object" &&
+    (execution.metadata as { testMode?: boolean }).testMode;
+
+  const tagNames = await getContactTags(execution.contactId);
+  const facts = factsFromMetadata(execution.metadata, execution.contact, tagNames);
+
+  for (let guard = 0; guard < 20; guard += 1) {
+    const live = await prisma.automationExecution.findUnique({ where: { id: executionId } });
     if (!live || TERMINAL.includes(live.status as typeof TERMINAL[number])) {
       return { done: true };
     }
@@ -373,31 +140,107 @@ export async function advanceAutomationExecution(executionId: string) {
       return { waiting: true };
     }
 
-    const currentNode = findNode(def, live.currentNodeId);
-    if (!currentNode) break;
+    const node = findNode(def, live.currentNodeId);
+    if (!node) {
+      await completeExecution(executionId, "FAILED", "missing_current_node");
+      return { failed: true };
+    }
 
-    await executeNode(
+    const block = node.data.blockType;
+    const isSend =
+      block === "send_sms" ||
+      block === "send_review_request" ||
+      block === "send_email";
+    if (isSend) {
+      const existing = await prisma.automationStepExecution.findUnique({
+        where: { executionId_nodeId: { executionId, nodeId: node.id } },
+      });
+      if (existing?.status === "completed") {
+        const nextId = def.edges.find((e) => e.source === node.id)?.target;
+        if (!nextId) {
+          await completeExecution(executionId, "COMPLETED");
+          return { done: true };
+        }
+        await prisma.automationExecution.update({
+          where: { id: executionId },
+          data: { currentNodeId: nextId, status: "RUNNING" },
+        });
+        continue;
+      }
+    }
+
+    const result = await runNodeAction(node, def, {
       executionId,
-      currentNode,
-      def,
-      execution.workspaceId,
-      execution.contactId,
+      workspaceId: execution.workspaceId,
+      contactId: execution.contactId,
+      flowId: execution.flowId,
       facts,
-      execution.metadata,
-    );
-
-    const after = await prisma.automationExecution.findUnique({
-      where: { id: executionId },
+      tagNames,
+      testMode: Boolean(testMode),
     });
-    if (!after || TERMINAL.includes(after.status as typeof TERMINAL[number])) {
+
+    if (result.error && result.error !== "contact_opted_out") {
+      await recordStep(executionId, node.id, "failed", { error: result.error });
+      await completeExecution(executionId, "FAILED", result.error);
+      return { failed: true };
+    }
+
+    if (result.done || result.error === "contact_opted_out") {
+      await recordStep(executionId, node.id, "completed", { output: result.output });
+      await completeExecution(executionId, result.error ? "CANCELLED" : "COMPLETED", result.error);
       return { done: true };
     }
-    if (after.status === "WAITING") {
+
+    if (result.waiting && result.waitMs) {
+      await recordStep(executionId, node.id, "completed", { output: { waitMs: result.waitMs } });
+      await prisma.automationExecution.update({
+        where: { id: executionId },
+        data: {
+          status: "WAITING",
+          currentNodeId: result.nextNodeId || node.id,
+          nextActionAt: new Date(Date.now() + result.waitMs),
+        },
+      });
       return { waiting: true };
     }
-    if (after.currentNodeId === currentNode.id) {
-      break;
+
+    const branchTaken =
+      result.output &&
+      typeof result.output === "object" &&
+      "branch" in (result.output as object)
+        ? String((result.output as { branch?: string }).branch)
+        : undefined;
+
+    await recordStep(executionId, node.id, "completed", {
+      branchTaken,
+      output: result.output,
+    });
+
+    const nextId = result.nextNodeId;
+    if (!nextId) {
+      await completeExecution(executionId, "COMPLETED");
+      return { done: true };
     }
+
+    await prisma.automationExecution.update({
+      where: { id: executionId },
+      data: { currentNodeId: nextId, status: "RUNNING" },
+    });
+
+    const nextNode = findNode(def, nextId);
+    if (
+      nextNode &&
+      (isConditionBlock(nextNode.data.blockType) ||
+        nextNode.data.blockType === "wait" ||
+        nextNode.data.blockType === "wait_until_datetime" ||
+        nextNode.type === "trigger")
+    ) {
+      continue;
+    }
+    if (nextNode && nextNode.data.blockType === "end_automation") {
+      continue;
+    }
+    return { ok: true };
   }
 
   return { ok: true };
@@ -407,10 +250,7 @@ export async function processAutomationWaits() {
   const prisma = getPrisma();
   const now = new Date();
   const due = await prisma.automationExecution.findMany({
-    where: {
-      status: "WAITING",
-      nextActionAt: { lte: now },
-    },
+    where: { status: "WAITING", nextActionAt: { lte: now } },
     take: 50,
     include: { flow: true },
   });
@@ -434,7 +274,58 @@ export async function processAutomationWaits() {
   return { advanced };
 }
 
+export async function processScheduledAutomations() {
+  const prisma = getPrisma();
+  const flows = await prisma.automationFlow.findMany({
+    where: { status: "ACTIVE" },
+    take: 30,
+  });
+  let enrolled = 0;
+  for (const flow of flows) {
+    const def = parseAutomationDefinition(flow.publishedDefinition ?? flow.definition);
+    const trigger = def.nodes.find((n) => n.type === "trigger");
+    if (!trigger || trigger.data.blockType !== "scheduled_datetime") continue;
+    const runAt = String(trigger.data.config?.runAt || "");
+    if (!runAt) continue;
+    const target = new Date(runAt);
+    const now = Date.now();
+    if (target.getTime() > now || target.getTime() < now - 120_000) continue;
+
+    const key = `scheduled:${flow.id}:${runAt}`;
+    const fired = await prisma.auditLog.findFirst({
+      where: { workspaceId: flow.workspaceId, event: "automation.scheduled", detail: { contains: key } },
+    });
+    if (fired) continue;
+
+    const scope = String(trigger.data.config?.enrollScope || "all_subscribed");
+    const contacts = await prisma.contact.findMany({
+      where: { workspaceId: flow.workspaceId, status: "SUBSCRIBED" },
+      take: scope === "all_subscribed" ? 500 : 100,
+    });
+
+    const { enrollInAutomation } = await import("./enroll");
+    for (const c of contacts) {
+      await enrollInAutomation({
+        workspaceId: flow.workspaceId,
+        flowId: flow.id,
+        contactId: c.id,
+      }).catch(() => undefined);
+      enrolled += 1;
+    }
+
+    await prisma.auditLog.create({
+      data: {
+        workspaceId: flow.workspaceId,
+        event: "automation.scheduled",
+        detail: key,
+      },
+    });
+  }
+  return { enrolled };
+}
+
 export async function processActiveAutomations() {
   await processAutomationWaits();
+  await processScheduledAutomations();
   return { ok: true };
 }

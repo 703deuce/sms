@@ -83,18 +83,25 @@ export function nodeSummary(node: AutomationCanvasNode): string {
   const cfg = node.data.config || {};
   const block = node.data.blockType;
 
+  if (block === "wait_until_datetime") {
+    const at = String(cfg.runAt || cfg.timeOfDay || "");
+    return at ? `Wait until ${at}` : "Wait until date/time";
+  }
+
   if (block === "wait") {
+    const weeks = Number(cfg.weeks || 0);
     const days = Number(cfg.days || 0);
     const hours = Number(cfg.hours || 0);
     const minutes = Number(cfg.minutes || 0);
     const parts: string[] = [];
+    if (weeks) parts.push(`${weeks} week${weeks === 1 ? "" : "s"}`);
     if (days) parts.push(`${days} day${days === 1 ? "" : "s"}`);
     if (hours) parts.push(`${hours} hour${hours === 1 ? "" : "s"}`);
     if (minutes) parts.push(`${minutes} min`);
     return parts.length ? `Wait ${parts.join(" ")}` : "Wait";
   }
 
-  if (block === "condition" || node.type === "logic") {
+  if (block === "condition" || block.startsWith("condition_") || node.type === "logic") {
     const field = String(cfg.field || "review_received");
     return `If ${field.replace(/_/g, " ")}`;
   }
@@ -118,9 +125,59 @@ export function createEdgeId() {
 }
 
 export function waitDurationMs(config: Record<string, unknown> | undefined): number {
+  const weeks = Number(config?.weeks || 0);
   const days = Number(config?.days || 0);
   const hours = Number(config?.hours || 0);
   const minutes = Number(config?.minutes || 0);
-  const ms = ((days * 24 + hours) * 60 + minutes) * 60_000;
+  const totalDays = weeks * 7 + days;
+  const ms = ((totalDays * 24 + hours) * 60 + minutes) * 60_000;
   return Math.max(ms, 60_000);
+}
+
+/** Milliseconds until a configured datetime (or next time-of-day). */
+export function waitUntilMs(config: Record<string, unknown> | undefined): number {
+  const runAt = String(config?.runAt || "").trim();
+  if (runAt) {
+    const target = new Date(runAt);
+    if (!Number.isNaN(target.getTime())) {
+      return Math.max(target.getTime() - Date.now(), 60_000);
+    }
+  }
+  const timeOfDay = String(config?.timeOfDay || "09:00");
+  const [h, m] = timeOfDay.split(":").map((x) => Number(x) || 0);
+  const next = new Date();
+  next.setHours(h, m, 0, 0);
+  if (next.getTime() <= Date.now()) next.setDate(next.getDate() + 1);
+  if (config?.respectBusinessHours) {
+    const day = next.getDay();
+    if (day === 0) next.setDate(next.getDate() + 1);
+    if (day === 6) next.setDate(next.getDate() + 2);
+  }
+  return Math.max(next.getTime() - Date.now(), 60_000);
+}
+
+export function hasCycle(def: AutomationDefinition): boolean {
+  const adj = new Map<string, string[]>();
+  for (const e of def.edges) {
+    const list = adj.get(e.source) || [];
+    list.push(e.target);
+    adj.set(e.source, list);
+  }
+  const visited = new Set<string>();
+  const stack = new Set<string>();
+  function dfs(id: string): boolean {
+    if (stack.has(id)) return true;
+    if (visited.has(id)) return false;
+    visited.add(id);
+    stack.add(id);
+    for (const next of adj.get(id) || []) {
+      if (dfs(next)) return true;
+    }
+    stack.delete(id);
+    return false;
+  }
+  for (const n of def.nodes) {
+    if (dfs(n.id)) return true;
+  }
+  return false;
 }

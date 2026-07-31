@@ -12,8 +12,7 @@ import {
   nodeSummary,
   parseAutomationDefinition,
 } from "@/lib/automations/types";
-import type { BlockDefinition } from "@/lib/automations/catalog";
-import { getBlock } from "@/lib/automations/catalog";
+import { getBlock, isConditionBlock, type BlockDefinition } from "@/lib/automations/catalog";
 
 type BuilderSnapshot = {
   definition: AutomationDefinition;
@@ -91,9 +90,17 @@ export function useAutomationBuilder(initial: {
       }
 
       const id = createNodeId();
+      const category = block.category;
       const node: AutomationCanvasNode = {
         id,
-        type: block.category === "end" ? "end" : block.category === "logic" ? "logic" : block.category === "trigger" ? "trigger" : "action",
+        type:
+          category === "end"
+            ? "end"
+            : category === "trigger"
+              ? "trigger"
+              : category === "logic" || isConditionBlock(block.blockType)
+                ? "logic"
+                : "action",
         position: position ?? {
           x: 200 + definition.nodes.length * 20,
           y: 100 + definition.nodes.length * 40,

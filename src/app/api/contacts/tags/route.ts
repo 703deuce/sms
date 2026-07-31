@@ -41,6 +41,10 @@ export async function POST(request: Request) {
         create: { tagId: tag.id, contactId },
         update: {},
       });
+      const { emitAutomationEvent } = await import("@/lib/automations/events");
+      await emitAutomationEvent(auth.workspaceId, "customer.tag_added", contactId, {
+        tag: tag.name,
+      }).catch(() => undefined);
     }
     return NextResponse.json({ data: tag }, { status: 201 });
   } catch (err) {

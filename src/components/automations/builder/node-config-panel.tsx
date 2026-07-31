@@ -2,45 +2,95 @@
 
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select, Textarea } from "@/components/ui/input";
-import { MERGE_VARIABLES } from "@/lib/automations/catalog";
+import {
+  CONDITION_FIELDS,
+  CONDITION_OPERATORS,
+  MERGE_VARIABLES,
+  isConditionBlock,
+} from "@/lib/automations/catalog";
 import type { AutomationCanvasNode } from "@/lib/automations/types";
 import { X } from "lucide-react";
+import { useEffect, useState } from "react";
 
-const CONDITION_FIELDS = [
-  { value: "review_received", label: "Review received" },
-  { value: "customer_replied", label: "Customer replied" },
-  { value: "link_clicked", label: "Link clicked" },
-  { value: "tag_has", label: "Has tag" },
-];
-
-const OPERATORS = [
-  { value: "equals", label: "Equals" },
-  { value: "not_equals", label: "Does not equal" },
-  { value: "exists", label: "Exists" },
-  { value: "not_exists", label: "Does not exist" },
-];
+type TagOption = { id: string; name: string };
+type NumberOption = { id: string; number: string };
+type FlowOption = { id: string; name: string };
+type ContactOption = { id: string; firstName?: string | null; lastName?: string | null; phone: string };
 
 export function NodeConfigPanel({
+  flowId,
   node,
   onUpdate,
   onDelete,
   onDuplicate,
   onClose,
+  onTestSms,
 }: {
+  flowId: string;
   node: AutomationCanvasNode;
   onUpdate: (patch: Partial<AutomationCanvasNode["data"]>) => void;
   onDelete: () => void;
   onDuplicate: () => void;
   onClose: () => void;
+  onTestSms?: (body: string, contactId: string) => Promise<void>;
 }) {
   const cfg = node.data.config || {};
   const block = node.data.blockType;
 
+  const [tags, setTags] = useState<TagOption[]>([]);
+  const [numbers, setNumbers] = useState<NumberOption[]>([]);
+  const [flows, setFlows] = useState<FlowOption[]>([]);
+  const [contacts, setContacts] = useState<ContactOption[]>([]);
+  const [testContactId, setTestContactId] = useState("");
+  const [testSending, setTestSending] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/contacts/tags")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => setTags((j?.data || []).map((t: { id: string; name: string }) => ({ id: t.id, name: t.name }))))
+      .catch(() => undefined);
+    fetch("/api/numbers")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) =>
+        setNumbers(
+          (j?.data || []).map((n: { id: string; e164?: string; number?: string }) => ({
+            id: n.id,
+            number: n.e164 || n.number || "",
+          })),
+        ),
+      )
+      .catch(() => undefined);
+    fetch("/api/automations")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) =>
+        setFlows((j?.data || []).map((f: { id: string; name: string }) => ({ id: f.id, name: f.name }))),
+      )
+      .catch(() => undefined);
+    fetch("/api/contacts?status=subscribed")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => setContacts(j?.data || []))
+      .catch(() => undefined);
+  }, []);
+
   function insertVariable(key: string) {
-    if (block !== "send_sms" && block !== "send_review_request") return;
-    const body = String(cfg.body || "") + key;
-    onUpdate({ config: { ...cfg, body } });
+    if (block !== "send_sms" && block !== "send_review_request" && block !== "send_email") return;
+    const field = block === "send_email" ? "body" : "body";
+    const current = String(cfg[field] || "");
+    onUpdate({ config: { ...cfg, [field]: current + key } });
   }
+
+  async function sendTestSms() {
+    if (!onTestSms || !testContactId) return;
+    setTestSending(true);
+    try {
+      await onTestSms(String(cfg.body || ""), testContactId);
+    } finally {
+      setTestSending(false);
+    }
+  }
+
+  const bodyLen = String(cfg.body || "").length;
+  const segments = Math.ceil(bodyLen / 160) || 1;
 
   return (
     <div className="flex h-full flex-col border-l border-border bg-card">
@@ -49,7 +99,7 @@ export function NodeConfigPanel({
           <p className="text-sm font-semibold">{node.data.label}</p>
           <p className="text-xs text-muted-foreground">Configure this step</p>
         </div>
-        <button type="button" onClick={onClose} className="rounded-md p-1 hover:bg-muted" aria-label="Close panel">
+        <button type="button" onClick={onClose} className="rounded-md p-1 hover:bg-muted lg:hidden" aria-label="Close">
           <X className="h-4 w-4" />
         </button>
       </div>
@@ -57,6 +107,18 @@ export function NodeConfigPanel({
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {(block === "send_sms" || block === "send_review_request") && (
           <>
+            <div>
+              <Label>From number</Label>
+              <Select
+                value={String(cfg.fromNumber || "")}
+                onChange={(e) => onUpdate({ config: { ...cfg, fromNumber: e.target.value } })}
+              >
+                <option value="">Default sending number</option>
+                {numbers.map((n) => (
+                  <option key={n.id} value={n.number}>{n.number}</option>
+                ))}
+              </Select>
+            </div>
             <div>
               <Label htmlFor="sms-body">Message body</Label>
               <Textarea
@@ -66,8 +128,7 @@ export function NodeConfigPanel({
                 onChange={(e) => onUpdate({ config: { ...cfg, body: e.target.value } })}
               />
               <p className="mt-1 text-xs text-muted-foreground">
-                {String(cfg.body || "").length} chars · ~
-                {Math.ceil(String(cfg.body || "").length / 160) || 1} segment(s)
+                {bodyLen} characters · ~{segments} segment(s)
               </p>
             </div>
             <div>
@@ -89,42 +150,128 @@ export function NodeConfigPanel({
               />
               <Label htmlFor="stop-on-reply" className="text-sm">Stop on reply</Label>
             </div>
+            {onTestSms && (
+              <div className="space-y-2 border-t border-border pt-3">
+                <Label>Test message</Label>
+                <Select value={testContactId} onChange={(e) => setTestContactId(e.target.value)}>
+                  <option value="">Select test contact</option>
+                  {contacts.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.firstName} {c.lastName} — {c.phone}
+                    </option>
+                  ))}
+                </Select>
+                <Button size="sm" variant="outline" disabled={!testContactId || testSending} onClick={sendTestSms}>
+                  {testSending ? "Sending…" : "Send test SMS"}
+                </Button>
+              </div>
+            )}
+          </>
+        )}
+
+        {block === "send_email" && (
+          <>
+            <div>
+              <Label>From name</Label>
+              <Input
+                value={String(cfg.fromName || "")}
+                onChange={(e) => onUpdate({ config: { ...cfg, fromName: e.target.value } })}
+              />
+            </div>
+            <div>
+              <Label>Reply-to</Label>
+              <Input
+                type="email"
+                value={String(cfg.replyTo || "")}
+                onChange={(e) => onUpdate({ config: { ...cfg, replyTo: e.target.value } })}
+              />
+            </div>
+            <div>
+              <Label>Subject</Label>
+              <Input
+                value={String(cfg.subject || "")}
+                onChange={(e) => onUpdate({ config: { ...cfg, subject: e.target.value } })}
+              />
+            </div>
+            <div>
+              <Label>Email body</Label>
+              <Textarea
+                rows={6}
+                value={String(cfg.body || "")}
+                onChange={(e) => onUpdate({ config: { ...cfg, body: e.target.value } })}
+              />
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {MERGE_VARIABLES.map((v) => (
+                <Button key={v.key} variant="outline" size="sm" className="h-7 text-xs" onClick={() => insertVariable(v.key)}>
+                  {v.label}
+                </Button>
+              ))}
+            </div>
           </>
         )}
 
         {block === "wait" && (
-          <div className="grid grid-cols-3 gap-2">
-            <div>
-              <Label>Days</Label>
-              <Input
-                type="number"
-                min={0}
-                value={Number(cfg.days || 0)}
-                onChange={(e) => onUpdate({ config: { ...cfg, days: Number(e.target.value) } })}
-              />
+          <>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label>Weeks</Label>
+                <Input type="number" min={0} value={Number(cfg.weeks || 0)} onChange={(e) => onUpdate({ config: { ...cfg, weeks: Number(e.target.value) } })} />
+              </div>
+              <div>
+                <Label>Days</Label>
+                <Input type="number" min={0} value={Number(cfg.days || 0)} onChange={(e) => onUpdate({ config: { ...cfg, days: Number(e.target.value) } })} />
+              </div>
+              <div>
+                <Label>Hours</Label>
+                <Input type="number" min={0} value={Number(cfg.hours || 0)} onChange={(e) => onUpdate({ config: { ...cfg, hours: Number(e.target.value) } })} />
+              </div>
+              <div>
+                <Label>Minutes</Label>
+                <Input type="number" min={0} value={Number(cfg.minutes || 0)} onChange={(e) => onUpdate({ config: { ...cfg, minutes: Number(e.target.value) } })} />
+              </div>
             </div>
-            <div>
-              <Label>Hours</Label>
-              <Input
-                type="number"
-                min={0}
-                value={Number(cfg.hours || 0)}
-                onChange={(e) => onUpdate({ config: { ...cfg, hours: Number(e.target.value) } })}
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={Boolean(cfg.respectBusinessHours)}
+                onChange={(e) => onUpdate({ config: { ...cfg, respectBusinessHours: e.target.checked } })}
               />
+              <Label className="text-sm">Respect business hours</Label>
             </div>
-            <div>
-              <Label>Minutes</Label>
-              <Input
-                type="number"
-                min={0}
-                value={Number(cfg.minutes || 0)}
-                onChange={(e) => onUpdate({ config: { ...cfg, minutes: Number(e.target.value) } })}
-              />
-            </div>
-          </div>
+          </>
         )}
 
-        {block === "condition" && (
+        {block === "wait_until_datetime" && (
+          <>
+            <div>
+              <Label>Date & time</Label>
+              <Input
+                type="datetime-local"
+                value={String(cfg.runAt || "")}
+                onChange={(e) => onUpdate({ config: { ...cfg, runAt: e.target.value } })}
+              />
+            </div>
+            <div>
+              <Label>Or time of day</Label>
+              <Input
+                type="time"
+                value={String(cfg.timeOfDay || "09:00")}
+                onChange={(e) => onUpdate({ config: { ...cfg, timeOfDay: e.target.value } })}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={Boolean(cfg.respectBusinessHours)}
+                onChange={(e) => onUpdate({ config: { ...cfg, respectBusinessHours: e.target.checked } })}
+              />
+              <Label className="text-sm">Respect business hours</Label>
+            </div>
+          </>
+        )}
+
+        {isConditionBlock(block) && (
           <>
             <div>
               <Label>Field</Label>
@@ -143,7 +290,7 @@ export function NodeConfigPanel({
                 value={String(cfg.operator || "equals")}
                 onChange={(e) => onUpdate({ config: { ...cfg, operator: e.target.value } })}
               >
-                {OPERATORS.map((o) => (
+                {CONDITION_OPERATORS.map((o) => (
                   <option key={o.value} value={o.value}>{o.label}</option>
                 ))}
               </Select>
@@ -151,32 +298,177 @@ export function NodeConfigPanel({
             <div>
               <Label>Value</Label>
               <Input
-                value={String(cfg.value ?? "true")}
+                value={String(cfg.value ?? "")}
                 onChange={(e) => onUpdate({ config: { ...cfg, value: e.target.value } })}
               />
             </div>
+            {block === "condition_tag" && (
+              <div>
+                <Label>Tag</Label>
+                <Select
+                  value={String(cfg.tag || "")}
+                  onChange={(e) => onUpdate({ config: { ...cfg, tag: e.target.value, field: "tag_has" } })}
+                >
+                  <option value="">Select tag</option>
+                  {tags.map((t) => (
+                    <option key={t.id} value={t.name}>{t.name}</option>
+                  ))}
+                </Select>
+              </div>
+            )}
           </>
         )}
 
-        {(block === "add_tag" || block === "remove_tag") && (
+        {(block === "add_tag" || block === "remove_tag" || block === "tag_added") && (
           <div>
-            <Label>Tag name</Label>
+            <Label>Tag</Label>
+            <Select
+              value={String(cfg.tag || "")}
+              onChange={(e) => onUpdate({ config: { ...cfg, tag: e.target.value } })}
+            >
+              <option value="">Select or type below</option>
+              {tags.map((t) => (
+                <option key={t.id} value={t.name}>{t.name}</option>
+              ))}
+            </Select>
             <Input
+              className="mt-2"
+              placeholder="Or enter tag name"
               value={String(cfg.tag || "")}
               onChange={(e) => onUpdate({ config: { ...cfg, tag: e.target.value } })}
             />
           </div>
         )}
 
-        {block === "end_automation" && (
-          <p className="text-sm text-muted-foreground">
-            Customers exit the automation at this step. No further configuration needed.
-          </p>
+        {block === "form_submitted" && (
+          <div>
+            <Label>Form slug (optional filter)</Label>
+            <Input
+              value={String(cfg.formSlug || "")}
+              onChange={(e) => onUpdate({ config: { ...cfg, formSlug: e.target.value } })}
+              placeholder="Leave empty for any form"
+            />
+          </div>
         )}
 
-        {(block === "customer_added" || block === "manual_enrollment" || block === "tag_added" || block === "form_submitted") && (
+        {block === "scheduled_datetime" && (
+          <>
+            <div>
+              <Label>Run at</Label>
+              <Input
+                type="datetime-local"
+                value={String(cfg.runAt || "")}
+                onChange={(e) => onUpdate({ config: { ...cfg, runAt: e.target.value } })}
+              />
+            </div>
+            <div>
+              <Label>Enroll</Label>
+              <Select
+                value={String(cfg.enrollScope || "all_subscribed")}
+                onChange={(e) => onUpdate({ config: { ...cfg, enrollScope: e.target.value } })}
+              >
+                <option value="all_subscribed">All subscribed contacts</option>
+              </Select>
+            </div>
+          </>
+        )}
+
+        {(block === "enroll_in_automation" || block === "remove_from_automation") && (
+          <div>
+            <Label>Automation</Label>
+            <Select
+              value={String(cfg.flowId || "")}
+              onChange={(e) => onUpdate({ config: { ...cfg, flowId: e.target.value } })}
+            >
+              <option value="">Select automation</option>
+              {flows.filter((f) => f.id !== flowId).map((f) => (
+                <option key={f.id} value={f.id}>{f.name}</option>
+              ))}
+            </Select>
+          </div>
+        )}
+
+        {block === "send_webhook" && (
+          <>
+            <div>
+              <Label>URL</Label>
+              <Input
+                value={String(cfg.url || "")}
+                onChange={(e) => onUpdate({ config: { ...cfg, url: e.target.value } })}
+              />
+            </div>
+            <div>
+              <Label>Method</Label>
+              <Select
+                value={String(cfg.method || "POST")}
+                onChange={(e) => onUpdate({ config: { ...cfg, method: e.target.value } })}
+              >
+                <option value="POST">POST</option>
+                <option value="PUT">PUT</option>
+              </Select>
+            </div>
+          </>
+        )}
+
+        {block === "update_customer" && (
+          <>
+            <div>
+              <Label>Field</Label>
+              <Select
+                value={String(cfg.field || "company")}
+                onChange={(e) => onUpdate({ config: { ...cfg, field: e.target.value } })}
+              >
+                <option value="company">Company</option>
+                <option value="firstName">First name</option>
+                <option value="lastName">Last name</option>
+                <option value="email">Email</option>
+              </Select>
+            </div>
+            <div>
+              <Label>Value</Label>
+              <Input
+                value={String(cfg.value ?? "")}
+                onChange={(e) => onUpdate({ config: { ...cfg, value: e.target.value } })}
+              />
+            </div>
+          </>
+        )}
+
+        {block === "create_task" && (
+          <>
+            <div>
+              <Label>Task title</Label>
+              <Input
+                value={String(cfg.title || "")}
+                onChange={(e) => onUpdate({ config: { ...cfg, title: e.target.value } })}
+              />
+            </div>
+            <div>
+              <Label>Due in (days)</Label>
+              <Input
+                type="number"
+                min={0}
+                value={Number(cfg.dueInDays || 1)}
+                onChange={(e) => onUpdate({ config: { ...cfg, dueInDays: Number(e.target.value) } })}
+              />
+            </div>
+          </>
+        )}
+
+        {block === "send_internal_notification" && (
+          <div>
+            <Label>Message</Label>
+            <Textarea
+              rows={3}
+              value={String(cfg.message || "")}
+              onChange={(e) => onUpdate({ config: { ...cfg, message: e.target.value } })}
+            />
+          </div>
+        )}
+
+        {block === "end_automation" && (
           <p className="text-sm text-muted-foreground">
-            This trigger starts the workflow when the matching event occurs in your account.
+            Customers exit the automation at this step.
           </p>
         )}
       </div>

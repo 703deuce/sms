@@ -4,7 +4,7 @@ import "@xyflow/react/dist/style.css";
 
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
-import { getBlock } from "@/lib/automations/catalog";
+import { getBlock, isConditionBlock } from "@/lib/automations/catalog";
 import {
   createEdgeId,
   createNodeId,
@@ -26,14 +26,18 @@ import {
   type Edge,
   type Node,
 } from "@xyflow/react";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { automationNodeTypes } from "./automation-node";
 import { BlockSidebar } from "./block-sidebar";
 import { NodeConfigPanel } from "./node-config-panel";
 import { useAutomationBuilder } from "./use-automation-builder";
 
-function toFlowNodes(def: AutomationDefinition, selectedId: string | null): Node[] {
+function toFlowNodes(
+  def: AutomationDefinition,
+  selectedId: string | null,
+  errorIds: Set<string>,
+): Node[] {
   return def.nodes.map((n) => ({
     id: n.id,
     type: "automation",
@@ -44,8 +48,10 @@ function toFlowNodes(def: AutomationDefinition, selectedId: string | null): Node
       config: n.data.config,
       category: n.type,
       selected: n.id === selectedId,
+      hasError: errorIds.has(n.id),
     },
     selected: n.id === selectedId,
+    className: errorIds.has(n.id) ? "!ring-2 !ring-rose-500 rounded-xl" : undefined,
   }));
 }
 
@@ -77,7 +83,8 @@ function fromFlowState(
           ? "end"
           : getBlock(String((n.data as { blockType?: string }).blockType || ""))?.category === "trigger"
             ? "trigger"
-            : getBlock(String((n.data as { blockType?: string }).blockType || ""))?.category === "logic"
+            : getBlock(String((n.data as { blockType?: string }).blockType || ""))?.category === "logic" ||
+                isConditionBlock(String((n.data as { blockType?: string }).blockType || ""))
               ? "logic"
               : getBlock(String((n.data as { blockType?: string }).blockType || ""))?.category === "end"
                 ? "end"
@@ -119,18 +126,44 @@ function BuilderCanvas({
     definition: initialDefinition,
   });
 
-  const [nodes, setNodes, onNodesChange] = useNodesState(toFlowNodes(builder.definition, builder.selectedNodeId));
-  const [edges, setEdges, onEdgesChange] = useEdgesState(toFlowEdges(builder.definition));
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const syncRef = useRef(false);
+
+  const errorNodeIds = new Set(
+    builder.validationIssues.filter((i) => i.nodeId && i.severity === "error").map((i) => i.nodeId!),
+  );
 
   useEffect(() => {
     if (syncRef.current) {
       syncRef.current = false;
       return;
     }
-    setNodes(toFlowNodes(builder.definition, builder.selectedNodeId));
+    setNodes(toFlowNodes(builder.definition, builder.selectedNodeId, errorNodeIds));
     setEdges(toFlowEdges(builder.definition));
-  }, [builder.definition, builder.selectedNodeId, setNodes, setEdges]);
+  }, [builder.definition, builder.selectedNodeId, builder.validationIssues, setNodes, setEdges]);
+
+  useEffect(() => {
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (builder.dirty) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [builder.dirty]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "d" && builder.selectedNodeId) {
+        e.preventDefault();
+        builder.duplicateNode(builder.selectedNodeId);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [builder]);
 
   const syncFromCanvas = useCallback(
     (nextNodes: Node[], nextEdges: Edge[]) => {
@@ -239,6 +272,53 @@ function BuilderCanvas({
     }
   }
 
+  async function deleteFlow() {
+    if (!confirm("Delete this automation permanently?")) return;
+    await fetch(`/api/automations/${flowId}`, { method: "DELETE" });
+    router.push("/automations");
+  }
+
+  async function duplicateFlow() {
+    const res = await fetch(`/api/automations/${flowId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "duplicate" }),
+    });
+    const json = await res.json();
+    if (json?.data?.id) router.push(`/automations/${json.data.id}/edit`);
+  }
+
+  async function runTest(contactId: string) {
+    const res = await fetch(`/api/automations/${flowId}/test`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ contactId }),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || "Test failed");
+    alert("Test run started. Check execution history on the automation detail page.");
+  }
+
+  async function testSms(body: string, contactId: string) {
+    const res = await fetch("/api/sms/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ to: contacts.find((c) => c.id === contactId)?.phone, body, test: true }),
+    });
+    if (!res.ok) {
+      const json = await res.json();
+      throw new Error(json.error || "Send failed");
+    }
+  }
+
+  const [contacts, setContacts] = useState<Array<{ id: string; phone: string }>>([]);
+  useEffect(() => {
+    fetch("/api/contacts?status=subscribed")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => setContacts(j?.data || []))
+      .catch(() => undefined);
+  }, []);
+
   async function pauseOrResume() {
     const action = initialStatus === "Paused" || initialStatus === "PAUSED" ? "resume" : "pause";
     await fetch(`/api/automations/${flowId}`, {
@@ -272,17 +352,26 @@ function BuilderCanvas({
           {builder.saving ? <span>Saving…</span> : null}
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" onClick={duplicateFlow}>Duplicate</Button>
+          <Button variant="outline" size="sm" onClick={deleteFlow} className="text-rose-600">Delete</Button>
+          <Button variant="outline" size="sm" onClick={() => {
+            const id = contacts[0]?.id;
+            if (id) runTest(id).catch((e) => alert(e.message));
+            else alert("Add a subscribed contact to run a test.");
+          }}>
+            Run test
+          </Button>
           <Button variant="outline" size="sm" onClick={() => router.push(`/automations/${flowId}`)}>
             Exit
-          </Button>
-          <Button variant="outline" size="sm" onClick={saveDraft} disabled={builder.saving}>
-            Save draft
           </Button>
           {initialStatus === "Active" || initialStatus === "ACTIVE" ? (
             <Button variant="outline" size="sm" onClick={pauseOrResume}>Pause</Button>
           ) : initialStatus === "Paused" || initialStatus === "PAUSED" ? (
             <Button variant="outline" size="sm" onClick={pauseOrResume}>Resume</Button>
           ) : null}
+          <Button variant="outline" size="sm" onClick={saveDraft} disabled={builder.saving}>
+            Save draft
+          </Button>
           <Button size="sm" onClick={publish} disabled={builder.publishing}>
             {builder.publishing ? "Publishing…" : "Publish / Activate"}
           </Button>
@@ -347,11 +436,13 @@ function BuilderCanvas({
         {builder.selectedNode ? (
           <div className="w-[300px] shrink-0 hidden lg:block">
             <NodeConfigPanel
+              flowId={flowId}
               node={builder.selectedNode}
               onUpdate={(patch) => builder.updateNode(builder.selectedNode!.id, patch)}
               onDelete={() => builder.deleteNode(builder.selectedNode!.id)}
               onDuplicate={() => builder.duplicateNode(builder.selectedNode!.id)}
               onClose={() => builder.setSelectedNodeId(null)}
+              onTestSms={testSms}
             />
           </div>
         ) : null}

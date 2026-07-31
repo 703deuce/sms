@@ -38,7 +38,7 @@ export function AutomationFlowNode({ id, data, selected }: NodeProps) {
   });
 
   const isTrigger = d.blockType === "customer_added" || d.blockType === "manual_enrollment" || d.blockType === "tag_added" || d.blockType === "form_submitted";
-  const isCondition = d.blockType === "condition";
+  const isCondition = d.blockType === "condition" || d.blockType.startsWith("condition_");
   const isEnd = d.blockType === "end_automation";
 
   const color = isTrigger
