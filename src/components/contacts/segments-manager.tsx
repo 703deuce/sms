@@ -3,16 +3,22 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle, StatCard } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Input } from "@/components/ui/input";
+import { Input, Label, Select } from "@/components/ui/input";
 import { PageHeader } from "@/components/ui/page-header";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Tabs } from "@/components/ui/tabs";
 import type { SegmentSummary } from "@/lib/workspace-data";
+import {
+  parseSegmentConditions,
+  type SegmentConditions,
+  type SegmentOperator,
+  type SegmentRule,
+} from "@/lib/contacts/segment-query";
 import { formatNumber } from "@/lib/utils";
-import { Filter, Plus } from "lucide-react";
+import { Filter, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 const contactTabs = [
   { label: "All Contacts", href: "/contacts" },
@@ -23,73 +29,192 @@ const contactTabs = [
   { label: "Custom Fields", href: "/contacts/fields" },
 ];
 
-function formatConditions(conditions: unknown): string {
-  if (!conditions) return "—";
-  if (typeof conditions === "string") return conditions;
-  if (typeof conditions === "object") {
-    const obj = conditions as Record<string, unknown>;
-    if (Object.keys(obj).length === 0) return "No conditions defined";
-    return Object.entries(obj)
-      .map(([key, value]) => `${key}: ${String(value)}`)
-      .join(" · ");
-  }
-  return String(conditions);
+const STATUS_OPTIONS = ["SUBSCRIBED", "UNSUBSCRIBED", "BLOCKED", "INVALID"];
+
+const OPERATORS: { value: SegmentOperator; label: string }[] = [
+  { value: "equals", label: "is" },
+  { value: "not_equals", label: "is not" },
+  { value: "contains", label: "contains" },
+  { value: "not_contains", label: "does not contain" },
+  { value: "exists", label: "is set" },
+  { value: "not_exists", label: "is not set" },
+];
+
+type FieldOption = { value: string; label: string; kind: "status" | "tag" | "custom" };
+
+function describeConditions(conditions: unknown): string {
+  const parsed = parseSegmentConditions(conditions);
+  if (!parsed.rules.length) return "All contacts";
+  const joiner = parsed.match === "any" ? " OR " : " AND ";
+  return parsed.rules
+    .map((r) => {
+      const op = OPERATORS.find((o) => o.value === r.op)?.label || r.op;
+      const fieldLabel = r.field.startsWith("custom:") ? r.field.slice(7) : r.field;
+      return `${fieldLabel} ${op}${r.value ? ` "${r.value}"` : ""}`;
+    })
+    .join(joiner);
 }
 
 type Props = {
   segments: SegmentSummary[];
 };
 
+type EditorState = {
+  id: string | null;
+  name: string;
+  match: "all" | "any";
+  rules: SegmentRule[];
+};
+
 export function SegmentsManager({ segments: initialSegments }: Props) {
   const router = useRouter();
   const [segments, setSegments] = useState(initialSegments);
-  const [newName, setNewName] = useState("");
-  const [creating, setCreating] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState("");
 
-  async function createSegment() {
-    const name = newName.trim();
-    if (!name) return;
-    setCreating(true);
+  const [fieldOptions, setFieldOptions] = useState<FieldOption[]>([
+    { value: "status", label: "Status", kind: "status" },
+    { value: "tag", label: "Tag", kind: "tag" },
+  ]);
+  const [tagOptions, setTagOptions] = useState<string[]>([]);
+  const [editor, setEditor] = useState<EditorState | null>(null);
+  const [previewCount, setPreviewCount] = useState<number | null>(null);
+  const [previewing, setPreviewing] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/contacts/fields")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        const fields = j?.data?.fields || [];
+        setFieldOptions([
+          { value: "status", label: "Status", kind: "status" },
+          { value: "tag", label: "Tag", kind: "tag" },
+          ...fields.map((f: { key: string; name: string }) => ({
+            value: `custom:${f.key}`,
+            label: f.name,
+            kind: "custom" as const,
+          })),
+        ]);
+      })
+      .catch(() => undefined);
+    fetch("/api/contacts/tags")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => setTagOptions((j?.data || []).map((t: { name: string }) => t.name)))
+      .catch(() => undefined);
+  }, []);
+
+  function openCreate() {
+    setEditor({
+      id: null,
+      name: "",
+      match: "all",
+      rules: [{ field: "status", op: "equals", value: "SUBSCRIBED" }],
+    });
+    setPreviewCount(null);
+    setError("");
+  }
+
+  function openEdit(segment: SegmentSummary) {
+    const parsed = parseSegmentConditions(segment.conditions);
+    setEditor({
+      id: segment.id,
+      name: segment.name,
+      match: parsed.match,
+      rules: parsed.rules.length
+        ? parsed.rules
+        : [{ field: "status", op: "equals", value: "SUBSCRIBED" }],
+    });
+    setPreviewCount(null);
+    setError("");
+  }
+
+  function updateRule(index: number, patch: Partial<SegmentRule>) {
+    if (!editor) return;
+    const rules = editor.rules.map((r, i) => (i === index ? { ...r, ...patch } : r));
+    setEditor({ ...editor, rules });
+    setPreviewCount(null);
+  }
+
+  function addRule() {
+    if (!editor) return;
+    setEditor({
+      ...editor,
+      rules: [...editor.rules, { field: "status", op: "equals", value: "SUBSCRIBED" }],
+    });
+    setPreviewCount(null);
+  }
+
+  function removeRule(index: number) {
+    if (!editor) return;
+    setEditor({ ...editor, rules: editor.rules.filter((_, i) => i !== index) });
+    setPreviewCount(null);
+  }
+
+  function conditionsPayload(): SegmentConditions {
+    return {
+      match: editor?.match || "all",
+      rules: (editor?.rules || []).filter((r) => r.field),
+    };
+  }
+
+  async function preview() {
+    setPreviewing(true);
     setError("");
     try {
-      const res = await fetch("/api/contacts/segments", {
+      const res = await fetch("/api/contacts/segments/preview", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name }),
+        body: JSON.stringify({ conditions: conditionsPayload() }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Failed to create segment");
-      setSegments((prev) => [...prev, json.data]);
-      setNewName("");
-      router.refresh();
+      if (!res.ok) throw new Error(json.error || "Preview failed");
+      setPreviewCount(json.data.count);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create");
+      setError(err instanceof Error ? err.message : "Preview failed");
     } finally {
-      setCreating(false);
+      setPreviewing(false);
     }
   }
 
-  async function renameSegment(id: string, currentName: string) {
-    const name = prompt("Segment name", currentName);
-    if (!name?.trim() || name.trim() === currentName) return;
-    setBusyId(id);
+  async function save() {
+    if (!editor) return;
+    const name = editor.name.trim();
+    if (!name) {
+      setError("Segment name is required");
+      return;
+    }
+    setSaving(true);
     setError("");
     try {
-      const res = await fetch("/api/contacts/segments", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, name: name.trim() }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Failed to update segment");
-      setSegments((prev) => prev.map((s) => (s.id === id ? { ...s, name: json.data.name } : s)));
+      const conditions = conditionsPayload();
+      if (editor.id) {
+        const res = await fetch("/api/contacts/segments", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: editor.id, name, conditions }),
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || "Failed to save segment");
+        setSegments((prev) =>
+          prev.map((s) => (s.id === editor.id ? { ...s, name, conditions } : s)),
+        );
+      } else {
+        const res = await fetch("/api/contacts/segments", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, conditions }),
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || "Failed to create segment");
+        setSegments((prev) => [...prev, json.data]);
+      }
+      setEditor(null);
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update");
+      setError(err instanceof Error ? err.message : "Failed to save");
     } finally {
-      setBusyId(null);
+      setSaving(false);
     }
   }
 
@@ -112,13 +237,17 @@ export function SegmentsManager({ segments: initialSegments }: Props) {
     }
   }
 
+  function fieldKind(field: string): FieldOption["kind"] {
+    return fieldOptions.find((f) => f.value === field)?.kind || "custom";
+  }
+
   return (
     <div>
       <PageHeader
         title="Segments"
-        description="Dynamic audiences based on behavior, engagement, and contact properties."
+        description="Dynamic audiences based on status, tags, and custom fields."
         actions={
-          <Button type="button" onClick={() => document.getElementById("new-segment-name")?.focus()}>
+          <Button type="button" onClick={openCreate}>
             <Plus className="h-4 w-4" />
             Create segment
           </Button>
@@ -129,137 +258,198 @@ export function SegmentsManager({ segments: initialSegments }: Props) {
 
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
         <StatCard label="Active segments" value={formatNumber(segments.length)} />
-        <StatCard label="Combined reach" value="—" hint="Contact counts computed at send time" />
+        <StatCard label="Combined reach" value="—" hint="Preview each segment for live counts" />
         <StatCard label="Most engaged" value={segments[0]?.name ?? "—"} hint="Based on segment order" />
       </div>
 
-      <Card className="mb-6">
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="min-w-[200px] flex-1">
-            <label htmlFor="new-segment-name" className="mb-1.5 block text-sm font-medium">
-              New segment name
-            </label>
-            <Input
-              id="new-segment-name"
-              placeholder="e.g. High engagement"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-            />
-          </div>
-          <Button type="button" disabled={creating || !newName.trim()} onClick={createSegment}>
-            {creating ? "Creating…" : "Add segment"}
-          </Button>
-        </div>
-        {error ? <p className="mt-3 text-sm text-rose-600">{error}</p> : null}
-      </Card>
+      {error ? <p className="mb-4 text-sm text-rose-600">{error}</p> : null}
 
-      {segments.length === 0 ? (
+      {editor ? (
+        <Card className="mb-6 p-5">
+          <CardTitle>{editor.id ? "Edit segment" : "New segment"}</CardTitle>
+          <div className="mt-4 space-y-4">
+            <div>
+              <Label htmlFor="seg-name">Segment name</Label>
+              <Input
+                id="seg-name"
+                value={editor.name}
+                placeholder="e.g. High engagement"
+                onChange={(e) => setEditor({ ...editor, name: e.target.value })}
+              />
+            </div>
+
+            <div className="flex items-center gap-2 text-sm">
+              <span>Match</span>
+              <Select
+                className="w-auto"
+                value={editor.match}
+                onChange={(e) => setEditor({ ...editor, match: e.target.value as "all" | "any" })}
+              >
+                <option value="all">all</option>
+                <option value="any">any</option>
+              </Select>
+              <span>of the following conditions</span>
+            </div>
+
+            <div className="space-y-2">
+              {editor.rules.map((rule, index) => {
+                const kind = fieldKind(rule.field);
+                const showValue = rule.op !== "exists" && rule.op !== "not_exists";
+                return (
+                  <div key={index} className="flex flex-wrap items-center gap-2">
+                    <Select
+                      className="w-auto min-w-[140px]"
+                      value={rule.field}
+                      onChange={(e) => updateRule(index, { field: e.target.value })}
+                    >
+                      {fieldOptions.map((f) => (
+                        <option key={f.value} value={f.value}>
+                          {f.label}
+                        </option>
+                      ))}
+                    </Select>
+                    <Select
+                      className="w-auto min-w-[130px]"
+                      value={rule.op}
+                      onChange={(e) => updateRule(index, { op: e.target.value as SegmentOperator })}
+                    >
+                      {OPERATORS.map((o) => (
+                        <option key={o.value} value={o.value}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </Select>
+                    {showValue ? (
+                      kind === "status" ? (
+                        <Select
+                          className="w-auto min-w-[150px]"
+                          value={rule.value || ""}
+                          onChange={(e) => updateRule(index, { value: e.target.value })}
+                        >
+                          {STATUS_OPTIONS.map((s) => (
+                            <option key={s} value={s}>
+                              {s}
+                            </option>
+                          ))}
+                        </Select>
+                      ) : kind === "tag" && tagOptions.length ? (
+                        <Select
+                          className="w-auto min-w-[150px]"
+                          value={rule.value || ""}
+                          onChange={(e) => updateRule(index, { value: e.target.value })}
+                        >
+                          <option value="">— any tag —</option>
+                          {tagOptions.map((t) => (
+                            <option key={t} value={t}>
+                              {t}
+                            </option>
+                          ))}
+                        </Select>
+                      ) : (
+                        <Input
+                          className="w-auto min-w-[150px]"
+                          value={rule.value || ""}
+                          placeholder="value"
+                          onChange={(e) => updateRule(index, { value: e.target.value })}
+                        />
+                      )
+                    ) : null}
+                    <button
+                      type="button"
+                      className="rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-rose-600"
+                      onClick={() => removeRule(index)}
+                      aria-label="Remove condition"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                );
+              })}
+              <Button variant="outline" size="sm" type="button" onClick={addRule}>
+                <Plus className="h-3.5 w-3.5" />
+                Add condition
+              </Button>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3 border-t border-border pt-4">
+              <Button variant="outline" type="button" disabled={previewing} onClick={preview}>
+                {previewing ? "Counting…" : "Preview count"}
+              </Button>
+              {previewCount !== null ? (
+                <span className="text-sm font-medium">
+                  {formatNumber(previewCount)} matching contact{previewCount === 1 ? "" : "s"}
+                </span>
+              ) : null}
+              <div className="ml-auto flex gap-2">
+                <Button variant="ghost" type="button" onClick={() => setEditor(null)}>
+                  Cancel
+                </Button>
+                <Button type="button" disabled={saving} onClick={save}>
+                  {saving ? "Saving…" : "Save segment"}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </Card>
+      ) : null}
+
+      {segments.length === 0 && !editor ? (
         <EmptyState
           icon={<Filter className="h-10 w-10" />}
           title="No segments yet"
-          description="Create dynamic segments to target contacts based on rules and behavior."
+          description="Create dynamic segments to target contacts based on status, tags, and custom fields. Use the Create segment button above."
         />
       ) : (
-        <>
-          <div className="grid gap-4 lg:grid-cols-2">
-            {segments.map((segment) => (
-              <Card key={segment.id}>
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                    <Filter className="h-5 w-5" />
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    type="button"
-                    disabled={busyId === segment.id}
-                    onClick={() => renameSegment(segment.id, segment.name)}
-                  >
-                    Edit rules
-                  </Button>
-                </div>
-                <CardTitle className="mt-4">{segment.name}</CardTitle>
-                <p className="mt-2 font-display text-2xl font-semibold">—</p>
-                <p className="text-xs text-muted-foreground">matching contacts</p>
-                <div className="mt-4 rounded-lg border border-border bg-muted/40 px-3 py-2">
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Conditions
-                  </p>
-                  <p className="mt-1 text-sm">{formatConditions(segment.conditions)}</p>
-                </div>
-                <div className="mt-4 flex gap-2">
-                  <Link href="/contacts">
-                    <Button variant="outline" size="sm">Preview contacts</Button>
-                  </Link>
-                  <Link href="/send">
-                    <Button size="sm">Use in campaign</Button>
-                  </Link>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    type="button"
-                    className="text-danger"
-                    disabled={busyId === segment.id}
-                    onClick={() => deleteSegment(segment.id, segment.name)}
-                  >
-                    Delete
-                  </Button>
-                </div>
-              </Card>
-            ))}
-          </div>
-
-          <Card className="mt-6">
-            <CardTitle>Segment rules</CardTitle>
-            <Table className="mt-4">
-              <THead>
-                <TR>
-                  <TH>Segment</TH>
-                  <TH>Count</TH>
-                  <TH>Conditions</TH>
-                  <TH>Actions</TH>
+        <Card>
+          <CardTitle>Segment rules</CardTitle>
+          <Table className="mt-4">
+            <THead>
+              <TR>
+                <TH>Segment</TH>
+                <TH>Conditions</TH>
+                <TH>Actions</TH>
+              </TR>
+            </THead>
+            <TBody>
+              {segments.map((segment) => (
+                <TR key={segment.id}>
+                  <TD className="font-medium">{segment.name}</TD>
+                  <TD className="max-w-md text-muted-foreground">
+                    {describeConditions(segment.conditions)}
+                  </TD>
+                  <TD>
+                    <div className="flex gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        type="button"
+                        disabled={busyId === segment.id}
+                        onClick={() => openEdit(segment)}
+                      >
+                        Edit rules
+                      </Button>
+                      <Link href="/send">
+                        <Button variant="ghost" size="sm">
+                          Campaign
+                        </Button>
+                      </Link>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        type="button"
+                        className="text-danger"
+                        disabled={busyId === segment.id}
+                        onClick={() => deleteSegment(segment.id, segment.name)}
+                      >
+                        Delete
+                      </Button>
+                    </div>
+                  </TD>
                 </TR>
-              </THead>
-              <TBody>
-                {segments.map((segment) => (
-                  <TR key={segment.id}>
-                    <TD className="font-medium">{segment.name}</TD>
-                    <TD>—</TD>
-                    <TD className="max-w-md text-muted-foreground">
-                      {formatConditions(segment.conditions)}
-                    </TD>
-                    <TD>
-                      <div className="flex gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          type="button"
-                          disabled={busyId === segment.id}
-                          onClick={() => renameSegment(segment.id, segment.name)}
-                        >
-                          Edit
-                        </Button>
-                        <Link href="/send">
-                          <Button variant="ghost" size="sm">Campaign</Button>
-                        </Link>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          type="button"
-                          className="text-danger"
-                          disabled={busyId === segment.id}
-                          onClick={() => deleteSegment(segment.id, segment.name)}
-                        >
-                          Delete
-                        </Button>
-                      </div>
-                    </TD>
-                  </TR>
-                ))}
-              </TBody>
-            </Table>
-          </Card>
-        </>
+              ))}
+            </TBody>
+          </Table>
+        </Card>
       )}
     </div>
   );

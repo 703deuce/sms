@@ -210,6 +210,51 @@ export async function validateBulkRecipients(
   return { accepted, rejected };
 }
 
+export async function enrollSegmentInCampaign(
+  workspaceId: string,
+  campaignId: string,
+  segmentId: string,
+) {
+  const prisma = getPrisma();
+  const segment = await prisma.segment.findFirst({
+    where: { id: segmentId, workspaceId },
+  });
+  if (!segment) throw new Error("Segment not found");
+
+  const { resolveSegmentContactIds } = await import("@/lib/contacts/segment-query");
+  const contactIds = await resolveSegmentContactIds(workspaceId, segment.conditions);
+  if (contactIds.length === 0) {
+    return { enrolled: 0, rejected: [] as Array<BulkRecipient & { reason: string }> };
+  }
+
+  const contacts = await prisma.contact.findMany({
+    where: { id: { in: contactIds }, workspaceId },
+  });
+  const recipients: BulkRecipient[] = (contacts as Array<{ id: string; phone: string; firstName: string | null; lastName: string | null }>)
+    .filter((c) => c.phone)
+    .map((c) => ({
+      phone: c.phone,
+      contactId: c.id,
+      displayName: `${c.firstName || ""} ${c.lastName || ""}`.trim(),
+    }));
+
+  const { accepted, rejected } = await validateBulkRecipients(workspaceId, campaignId, recipients);
+  const enrolled = [];
+  for (const r of accepted) {
+    enrolled.push(
+      await enrollContactInCampaign({
+        workspaceId,
+        campaignId,
+        phone: r.phone,
+        email: r.email,
+        displayName: r.displayName,
+        contactId: r.contactId,
+      }),
+    );
+  }
+  return { enrolled: enrolled.length, rejected };
+}
+
 export async function enrollListInCampaign(
   workspaceId: string,
   campaignId: string,
