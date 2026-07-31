@@ -8,7 +8,8 @@ import { StatusChip } from "@/components/ui/status-chip";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Tabs } from "@/components/ui/tabs";
 import { formatNumber } from "@/lib/utils";
-import { Copy, ExternalLink, Plus } from "lucide-react";
+import { Copy, ExternalLink, Pencil, Plus } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 const growTabs = [
@@ -28,6 +29,7 @@ type FormRow = {
   slug?: string | null;
   status: string;
   submissions: number;
+  views?: number;
 };
 
 export default function FormsPage() {
@@ -62,7 +64,7 @@ export default function FormsPage() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Failed");
-      await load();
+      window.location.href = `/grow/forms/${json.data.id}`;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed");
     } finally {
@@ -71,19 +73,21 @@ export default function FormsPage() {
   }
 
   const submissions = rows.reduce((s, r) => s + (r.submissions || 0), 0);
+  const views = rows.reduce((s, r) => s + (r.views || 0), 0);
 
   return (
     <div>
       <PageHeader
         title="Opt-in forms"
-        description="Hosted signup pages with checkbox consent, disclosure text, privacy/terms links, list assignment, and consent records (phone, language, IP, time)."
+        description="Hosted signup pages and embeddable widgets with checkbox consent, disclosure text, list assignment, and consent records."
       />
       <Tabs items={growTabs} />
 
-      <div className="mb-6 grid gap-4 sm:grid-cols-3">
+      <div className="mb-6 grid gap-4 sm:grid-cols-4">
         <StatCard label="Active forms" value={formatNumber(rows.length)} />
+        <StatCard label="Views" value={formatNumber(views)} />
         <StatCard label="Submissions" value={formatNumber(submissions)} />
-        <StatCard label="Public path" value="/f/[slug]" hint="No login required" />
+        <StatCard label="Embed" value="form.js" hint="/embed/f/[slug]" />
       </div>
 
       <Card className="mb-6 space-y-4 p-5">
@@ -108,7 +112,7 @@ export default function FormsPage() {
         {error && <p className="text-sm text-rose-600">{error}</p>}
         <Button disabled={saving} onClick={create}>
           <Plus className="h-4 w-4" />
-          {saving ? "Saving…" : "Create form"}
+          {saving ? "Creating…" : "Create form"}
         </Button>
       </Card>
 
@@ -118,43 +122,64 @@ export default function FormsPage() {
             <TR>
               <TH>Name</TH>
               <TH>URL</TH>
+              <TH>Views</TH>
               <TH>Submissions</TH>
               <TH>Status</TH>
+              <TH />
             </TR>
           </THead>
           <TBody>
             {rows.map((f) => (
               <TR key={f.id}>
-                <TD className="font-medium">{f.name}</TD>
+                <TD className="font-medium">
+                  <Link href={`/grow/forms/${f.id}`} className="hover:text-blue-600">
+                    {f.name}
+                  </Link>
+                </TD>
                 <TD>
                   <div className="flex items-center gap-2">
-                    <span className="max-w-[220px] truncate text-sm text-slate-600">{f.url}</span>
+                    <span className="max-w-[200px] truncate text-sm text-slate-600">{f.url}</span>
                     {f.url && (
                       <>
                         <button
                           type="button"
                           className="text-slate-500 hover:text-slate-800"
                           onClick={() => navigator.clipboard.writeText(f.url || "")}
-                          title="Copy"
+                          title="Copy URL"
                         >
                           <Copy className="h-3.5 w-3.5" />
                         </button>
-                        <a href={f.url} target="_blank" rel="noreferrer" className="text-slate-500 hover:text-slate-800">
+                        <a
+                          href={f.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-slate-500 hover:text-slate-800"
+                        >
                           <ExternalLink className="h-3.5 w-3.5" />
                         </a>
                       </>
                     )}
                   </div>
                 </TD>
+                <TD>{f.views ?? 0}</TD>
                 <TD>{f.submissions}</TD>
                 <TD>
                   <StatusChip status={f.status} />
+                </TD>
+                <TD>
+                  <Link
+                    href={`/grow/forms/${f.id}`}
+                    className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                    Edit
+                  </Link>
                 </TD>
               </TR>
             ))}
             {rows.length === 0 && (
               <TR>
-                <TD colSpan={4} className="text-slate-500">
+                <TD colSpan={6} className="text-slate-500">
                   No forms yet.
                 </TD>
               </TR>

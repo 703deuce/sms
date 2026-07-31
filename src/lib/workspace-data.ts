@@ -364,6 +364,7 @@ export type OptInFormSummary = {
   url: string | null;
   status: string;
   submissions: number;
+  views: number;
 };
 
 export async function loadOptInForms(workspaceId: string): Promise<OptInFormSummary[]> {
@@ -379,6 +380,7 @@ export async function loadOptInForms(workspaceId: string): Promise<OptInFormSumm
     url: string | null;
     status: string;
     submissions: number;
+    views: number;
   }>).map((f) => ({
     id: f.id,
     name: f.name,
@@ -387,6 +389,7 @@ export async function loadOptInForms(workspaceId: string): Promise<OptInFormSumm
     url: f.url,
     status: f.status,
     submissions: f.submissions,
+    views: f.views,
   }));
 }
 

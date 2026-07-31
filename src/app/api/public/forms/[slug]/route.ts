@@ -1,24 +1,65 @@
 import { NextResponse } from "next/server";
 import { getPrisma } from "@/lib/db";
-import { enrollContactInCampaign } from "@/lib/campaigns/enroll-campaign";
-import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
+import { parseFormConfig } from "@/lib/forms/types";
+import { submitOptInForm } from "@/lib/forms/submit-opt-in";
+
+function requestMeta(request: Request) {
+  const ip =
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    request.headers.get("x-real-ip") ||
+    null;
+  const userAgent = request.headers.get("user-agent");
+  const referrer = request.headers.get("referer") || request.headers.get("referrer");
+  const embedHost = request.headers.get("x-embed-host");
+  return { ip, userAgent, referrer, embedHost };
+}
 
 export async function GET(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ slug: string }> },
 ) {
   const { slug } = await context.params;
-  const form = await getPrisma().optInForm.findFirst({
+  const prisma = getPrisma();
+  const form = await prisma.optInForm.findFirst({
     where: { slug, status: "Active" },
   });
   if (!form) return NextResponse.json({ error: "Form not found" }, { status: 404 });
+
+  const workspace = await prisma.workspace.findUnique({
+    where: { id: form.workspaceId },
+    select: { name: true },
+  });
+
+  const config = parseFormConfig(form.config);
+  const branding = {
+    businessName: config.branding?.businessName || workspace?.name || "Transovo",
+    primaryColor: config.branding?.primaryColor || "#2563eb",
+    accentColor: config.branding?.accentColor || "#0ea5e9",
+    theme: config.branding?.theme || "light",
+    logoUrl: config.branding?.logoUrl || null,
+  };
+
+  // Track page views (hosted page + embed loads)
+  const trackView = request.headers.get("x-track-view") !== "0";
+  if (trackView) {
+    await prisma.optInForm.update({
+      where: { id: form.id },
+      data: { views: { increment: 1 } },
+    }).catch(() => undefined);
+  }
+
   return NextResponse.json({
     data: {
       name: form.name,
+      slug: form.slug,
       disclosureText: form.disclosureText,
       thankYouMessage: form.thankYouMessage,
       doubleOptIn: form.doubleOptIn,
-      config: form.config,
+      fields: config.fields,
+      branding,
+      headline: config.headline,
+      subheadline: config.subheadline,
+      buttonLabel: config.buttonLabel || "Subscribe",
     },
   });
 }
@@ -41,113 +82,29 @@ export async function POST(
       lastName?: string;
       email?: string;
       consent?: boolean;
+      embedHost?: string;
     };
 
-    if (!body.consent) {
-      return NextResponse.json({ error: "Consent checkbox is required" }, { status: 400 });
-    }
-    if (!body.phone) {
-      return NextResponse.json({ error: "phone is required" }, { status: 400 });
-    }
-
-    const phone = normalizeE164(body.phone);
-    const ip =
-      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-      request.headers.get("x-real-ip") ||
-      null;
-    const userAgent = request.headers.get("user-agent");
-
-    let contact = await prisma.contact.findUnique({
-      where: { workspaceId_phone: { workspaceId: form.workspaceId, phone } },
-    });
-    if (!contact) {
-      contact = await prisma.contact.create({
-        data: {
-          workspaceId: form.workspaceId,
-          phone,
-          firstName: body.firstName || null,
-          lastName: body.lastName || null,
-          email: body.email || null,
-          status: "SUBSCRIBED",
-          consentSource: `form:${form.slug}`,
-          consentDate: new Date(),
-        },
-      });
-    } else {
-      await prisma.contact.update({
-        where: { id: contact.id },
-        data: {
-          status: "SUBSCRIBED",
-          firstName: body.firstName || contact.firstName,
-          lastName: body.lastName || contact.lastName,
-          email: body.email || contact.email,
-          consentSource: `form:${form.slug}`,
-          consentDate: new Date(),
-        },
-      });
-    }
-
-    await prisma.consentRecord.create({
-      data: {
-        workspaceId: form.workspaceId,
-        contactId: contact.id,
-        phone,
-        consentDate: new Date(),
-        source: `form:${form.slug}`,
-        disclosureVersion: form.disclosureVersion || "form-v1",
-        disclosureText: form.disclosureText,
-        ipAddress: ip,
-        userAgent,
-        formUrl: form.url,
-        doubleOptInStatus: form.doubleOptIn ? "pending" : "not_required",
-      },
+    const meta = requestMeta(request);
+    const result = await submitOptInForm(form, {
+      phone: body.phone || "",
+      firstName: body.firstName,
+      lastName: body.lastName,
+      email: body.email,
+      consent: Boolean(body.consent),
+      ip: meta.ip,
+      userAgent: meta.userAgent,
+      referrer: meta.referrer,
+      embedHost: body.embedHost || meta.embedHost,
     });
 
-    if (form.listName) {
-      let list = await prisma.contactList.findFirst({
-        where: { workspaceId: form.workspaceId, name: form.listName },
-      });
-      if (!list) {
-        list = await prisma.contactList.create({
-          data: { workspaceId: form.workspaceId, name: form.listName },
-        });
-      }
-      try {
-        await prisma.contactListMember.create({
-          data: { listId: list.id, contactId: contact.id },
-        });
-      } catch {
-        // already member
-      }
+    if (!result.ok) {
+      return NextResponse.json({ error: result.error }, { status: 400 });
     }
-
-    if (form.startCampaignId) {
-      try {
-        await enrollContactInCampaign({
-          workspaceId: form.workspaceId,
-          campaignId: form.startCampaignId,
-          phone,
-          contactId: contact.id,
-          metadata: { source: "form", formSlug: form.slug },
-        });
-      } catch (err) {
-        console.error("[public/forms] enroll failed", err);
-      }
-    }
-
-    await prisma.optInForm.update({
-      where: { id: form.id },
-      data: { submissions: { increment: 1 } },
-    });
-
-    const { emitAutomationEvent } = await import("@/lib/automations/events");
-    await emitAutomationEvent(form.workspaceId, "form.submitted", contact.id, {
-      formSlug: form.slug || slug,
-    }).catch(() => undefined);
 
     return NextResponse.json({
       ok: true,
-      thankYouMessage: form.thankYouMessage || "Thanks — you're subscribed!",
+      thankYouMessage: result.thankYouMessage,
     });
   } catch (err) {
     console.error("[public/forms]", err);

@@ -22,7 +22,8 @@
     "test:telnyx-wiring": "tsx scripts/test-telnyx-wiring.ts",
     "test:campaign-catalog": "tsx scripts/test-campaign-catalog.ts",
     "test:automation-builder": "tsx scripts/test-automation-builder.ts",
-    "test:automation-e2e": "tsx scripts/test-automation-e2e.ts"
+    "test:automation-e2e": "tsx scripts/test-automation-e2e.ts",
+    "test:forms-e2e": "tsx scripts/test-forms-e2e.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.19.0",

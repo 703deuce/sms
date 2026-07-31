@@ -43,6 +43,7 @@ const MODEL_TO_TABLE: Record<string, string> = {
   automationStepExecution: "AutomationStepExecution",
   keyword: "Keyword",
   optInForm: "OptInForm",
+  formSubmission: "FormSubmission",
   qrCode: "QrCode",
   clickToTextLink: "ClickToTextLink",
   consentRecord: "ConsentRecord",
@@ -99,6 +100,12 @@ const RELATIONS: Record<string, Record<string, { table: string; fk: string; pk?:
   },
   qrCode: { workspace: { table: "Workspace", fk: "workspaceId" } },
   clickToTextLink: { workspace: { table: "Workspace", fk: "workspaceId" } },
+  formSubmission: {
+    form: { table: "OptInForm", fk: "formId" },
+    contact: { table: "Contact", fk: "contactId" },
+    workspace: { table: "Workspace", fk: "workspaceId" },
+  },
+  optInForm: { workspace: { table: "Workspace", fk: "workspaceId" } },
   conversationMessage: { conversation: { table: "Conversation", fk: "conversationId" } },
   automationFlow: { workspace: { table: "Workspace", fk: "workspaceId" } },
   automationExecution: {

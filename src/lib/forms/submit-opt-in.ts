@@ -1,0 +1,182 @@
+import type { Prisma } from "@/lib/domain";
+import { getPrisma } from "@/lib/db";
+import { enrollContactInCampaign } from "@/lib/campaigns/enroll-campaign";
+import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
+
+type FormRow = {
+  id: string;
+  workspaceId: string;
+  slug: string | null;
+  url: string | null;
+  disclosureText: string | null;
+  disclosureVersion: string | null;
+  thankYouMessage: string | null;
+  doubleOptIn: boolean;
+  listName: string;
+  startCampaignId: string | null;
+};
+
+export type OptInSubmitInput = {
+  phone: string;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  consent: boolean;
+  ip?: string | null;
+  userAgent?: string | null;
+  referrer?: string | null;
+  embedHost?: string | null;
+};
+
+export type OptInSubmitResult =
+  | { ok: true; thankYouMessage: string; contactId: string }
+  | { ok: false; error: string };
+
+export async function submitOptInForm(
+  form: FormRow,
+  input: OptInSubmitInput,
+): Promise<OptInSubmitResult> {
+  if (!input.consent) {
+    return { ok: false, error: "Consent checkbox is required" };
+  }
+  if (!input.phone?.trim()) {
+    return { ok: false, error: "Phone number is required" };
+  }
+
+  const prisma = getPrisma();
+  const phone = normalizeE164(input.phone);
+
+  const suppressed = await prisma.suppression.findFirst({
+    where: { workspaceId: form.workspaceId, phone },
+  });
+  if (suppressed) {
+    return { ok: false, error: "This number cannot be subscribed. It may have opted out previously." };
+  }
+
+  let contact = await prisma.contact.findUnique({
+    where: { workspaceId_phone: { workspaceId: form.workspaceId, phone } },
+  });
+  const isNew = !contact;
+
+  if (!contact) {
+    contact = await prisma.contact.create({
+      data: {
+        workspaceId: form.workspaceId,
+        phone,
+        firstName: input.firstName || null,
+        lastName: input.lastName || null,
+        email: input.email || null,
+        status: "SUBSCRIBED",
+        consentSource: `form:${form.slug}`,
+        consentDate: new Date(),
+      },
+    });
+  } else {
+    if (contact.status === "BLOCKED" || contact.status === "UNSUBSCRIBED") {
+      return { ok: false, error: "This contact cannot be subscribed." };
+    }
+    await prisma.contact.update({
+      where: { id: contact.id },
+      data: {
+        status: "SUBSCRIBED",
+        firstName: input.firstName || contact.firstName,
+        lastName: input.lastName || contact.lastName,
+        email: input.email || contact.email,
+        consentSource: `form:${form.slug}`,
+        consentDate: new Date(),
+      },
+    });
+  }
+
+  await prisma.consentRecord.create({
+    data: {
+      workspaceId: form.workspaceId,
+      contactId: contact.id,
+      phone,
+      consentDate: new Date(),
+      source: `form:${form.slug}`,
+      disclosureVersion: form.disclosureVersion || "form-v1",
+      disclosureText: form.disclosureText,
+      ipAddress: input.ip,
+      userAgent: input.userAgent,
+      formUrl: form.url,
+      doubleOptInStatus: form.doubleOptIn ? "pending" : "not_required",
+    },
+  });
+
+  if (form.listName) {
+    let list = await prisma.contactList.findFirst({
+      where: { workspaceId: form.workspaceId, name: form.listName },
+    });
+    if (!list) {
+      list = await prisma.contactList.create({
+        data: { workspaceId: form.workspaceId, name: form.listName },
+      });
+    }
+    try {
+      await prisma.contactListMember.create({
+        data: { listId: list.id, contactId: contact.id },
+      });
+    } catch {
+      // already member
+    }
+  }
+
+  if (form.startCampaignId) {
+    try {
+      await enrollContactInCampaign({
+        workspaceId: form.workspaceId,
+        campaignId: form.startCampaignId,
+        phone,
+        contactId: contact.id,
+        metadata: { source: "form", formSlug: form.slug },
+      });
+    } catch (err) {
+      console.error("[forms] campaign enroll failed", err);
+    }
+  }
+
+  const payload: Record<string, unknown> = {
+    firstName: input.firstName,
+    lastName: input.lastName,
+    email: input.email,
+    referrer: input.referrer,
+    embedHost: input.embedHost,
+  };
+
+  await prisma.formSubmission.create({
+    data: {
+      workspaceId: form.workspaceId,
+      formId: form.id,
+      contactId: contact.id,
+      phone,
+      payload: payload as Prisma.InputJsonValue,
+      ipAddress: input.ip,
+      userAgent: input.userAgent,
+      referrer: input.referrer,
+      embedHost: input.embedHost,
+    },
+  });
+
+  await prisma.optInForm.update({
+    where: { id: form.id },
+    data: { submissions: { increment: 1 } },
+  });
+
+  const { emitAutomationEvent } = await import("@/lib/automations/events");
+  await emitAutomationEvent(form.workspaceId, "form.submitted", contact.id, {
+    formSlug: form.slug || "",
+  }).catch(() => undefined);
+
+  if (isNew) {
+    await emitAutomationEvent(form.workspaceId, "customer.created", contact.id).catch(
+      () => undefined,
+    );
+  }
+
+  return {
+    ok: true,
+    thankYouMessage: form.thankYouMessage || "Thanks — you're subscribed!",
+    contactId: contact.id,
+  };
+}

@@ -135,6 +135,7 @@ model Workspace {
   auditLogs   AuditLog[]
   usageRecords UsageRecord[]
   automationExecutions AutomationExecution[]
+  formSubmissions FormSubmission[]
 }
 
 model Membership {
@@ -191,6 +192,7 @@ model Contact {
   consentRecords ConsentRecord[]
   conversations Conversation[]
   automationExecutions AutomationExecution[]
+  formSubmissions FormSubmission[]
 
   @@unique([workspaceId, phone])
 }
@@ -687,15 +689,39 @@ model OptInForm {
   url         String?
   status      String @default("Active")
   submissions Int    @default(0)
+  views       Int    @default(0)
   config      Json?
   disclosureText String?
   disclosureVersion String? @default("v1")
   thankYouMessage String?
   doubleOptIn Boolean @default(false)
   startCampaignId String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  formSubmissions FormSubmission[]
 
   @@unique([workspaceId, slug])
+}
+
+model FormSubmission {
+  id          String   @id @default(cuid())
+  workspaceId String
+  formId      String
+  contactId   String?
+  phone       String
+  payload     Json?
+  ipAddress   String?
+  userAgent   String?
+  referrer    String?
+  embedHost   String?
+  createdAt   DateTime @default(now())
+  form        OptInForm @relation(fields: [formId], references: [id], onDelete: Cascade)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  contact     Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
+
+  @@index([formId, createdAt])
+  @@index([workspaceId])
 }
 
 model ConsentRecord {
