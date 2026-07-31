@@ -38,6 +38,7 @@ export function SoftphonePanel({
   const [dialNumber, setDialNumber] = useState("");
   const [callerId, setCallerId] = useState(defaultCallerId || phoneNumbers[0]?.number || "");
   const [activeCall, setActiveCall] = useState<ActiveCall | null>(null);
+  const [incoming, setIncoming] = useState<{ id: string; from: string; to: string } | null>(null);
   const [showDtmf, setShowDtmf] = useState(false);
   const [transferTo, setTransferTo] = useState("");
   const [webrtcMode, setWebrtcMode] = useState<string>("mock");
@@ -70,6 +71,62 @@ export function SoftphonePanel({
       telnyxClientRef.current?.disconnect?.();
     };
   }, []);
+
+  // Poll for ringing inbound calls so the agent can answer from the browser.
+  useEffect(() => {
+    if (activeCall) return;
+    let cancelled = false;
+    const check = () => {
+      fetch("/api/phone/calls?direction=inbound&status=ringing&limit=1")
+        .then((r) => r.json())
+        .then((j) => {
+          if (cancelled) return;
+          const call = (j.data || [])[0];
+          setIncoming(call ? { id: call.id, from: call.from, to: call.to } : null);
+        })
+        .catch(() => undefined);
+    };
+    check();
+    const t = setInterval(check, 4000);
+    return () => {
+      cancelled = true;
+      clearInterval(t);
+    };
+  }, [activeCall]);
+
+  async function answerIncoming() {
+    if (!incoming) return;
+    try {
+      const res = await fetch(`/api/phone/calls/${incoming.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ answer: true }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Answer failed");
+      setActiveCall({
+        id: incoming.id,
+        from: incoming.from,
+        to: incoming.to,
+        status: "in_progress",
+        muted: false,
+        onHold: false,
+      });
+      setIncoming(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Answer failed");
+    }
+  }
+
+  async function declineIncoming() {
+    if (!incoming) return;
+    await fetch(`/api/phone/calls/${incoming.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ hangup: true, disposition: "missed:declined" }),
+    }).catch(() => undefined);
+    setIncoming(null);
+  }
 
   const pressKey = useCallback((key: string) => {
     setDialNumber((n) => n + key);
@@ -159,6 +216,31 @@ export function SoftphonePanel({
 
   return (
     <div className="grid gap-4 lg:grid-cols-2">
+      {incoming && !activeCall ? (
+        <Card className="lg:col-span-2 border-primary/40 bg-primary/5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
+                <Phone className="h-5 w-5 animate-pulse text-primary" />
+              </span>
+              <div>
+                <p className="text-sm font-semibold">Incoming call</p>
+                <p className="text-xs text-muted-foreground">
+                  {incoming.from} → {incoming.to}
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={answerIncoming} className="gap-2">
+                <Phone className="h-4 w-4" /> Answer
+              </Button>
+              <Button variant="danger" onClick={declineIncoming} className="gap-2">
+                <PhoneOff className="h-4 w-4" /> Decline
+              </Button>
+            </div>
+          </div>
+        </Card>
+      ) : null}
       <Card>
         <CardTitle className="flex items-center gap-2">
           <Phone className="h-4 w-4" />

@@ -96,6 +96,21 @@ export async function processVoiceWebhookEvent(input: {
   const prisma = getPrisma();
   const { eventType, callId, humanCallId, isHuman, eventPayload } = input;
 
+  // IVR keypad selection — route the caller to their chosen option.
+  if (eventType === "call.gather.ended" || eventType === "call.dtmf.received") {
+    const { handleIvrGatherEnded } = await import("@/lib/phone/ivr-service");
+    const ivrResult = await handleIvrGatherEnded(eventPayload).catch(() => ({
+      handled: false as const,
+    }));
+    if (ivrResult.handled) {
+      await prisma.providerWebhookEvent.update({
+        where: { providerEventId: input.providerEventId },
+        data: { status: "processed", processedAt: new Date() },
+      });
+      return { ok: true, kind: "ivr", ...ivrResult };
+    }
+  }
+
   // Human agent softphone calls
   if (isHuman || humanCallId) {
     const { processHumanCallWebhookEvent } = await import("@/lib/phone/human-call-service");
@@ -151,6 +166,19 @@ export async function processVoiceWebhookEvent(input: {
     const from = String(eventPayload.from || "");
     const pn = await prisma.phoneNumber.findFirst({ where: { e164: to } });
     if (pn) {
+      // If an IVR menu is active for this number, greet + gather a DTMF digit
+      // and defer routing until call.gather.ended.
+      const { resolveIvrForNumber, startIvrGather } = await import("@/lib/phone/ivr-service");
+      const ivr = await resolveIvrForNumber(pn.workspaceId, to);
+      if (ivr && eventPayload.call_control_id) {
+        await startIvrGather(String(eventPayload.call_control_id), ivr).catch(() => undefined);
+        await prisma.providerWebhookEvent.update({
+          where: { providerEventId: input.providerEventId },
+          data: { status: "processed", processedAt: new Date() },
+        });
+        return { ok: true, kind: "ivr_gather" };
+      }
+
       const { evaluateInboundRouting } = await import("../routing");
       const routing = await evaluateInboundRouting({
         workspaceId: pn.workspaceId,

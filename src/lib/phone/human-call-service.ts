@@ -75,9 +75,28 @@ export async function handleInboundHumanCall(input: {
   fromE164: string;
   toE164: string;
   telnyxCallControlId?: string;
+  queueId?: string | null;
+  routingNote?: string | null;
 }) {
   const prisma = getPrisma();
   const from = normalizeE164(input.fromE164);
+
+  // If a queue is configured for the destination number (or explicitly passed),
+  // record which queue is handling the call and its overflow fallback.
+  let note = input.routingNote || null;
+  let queueId = input.queueId ?? null;
+  if (!queueId) {
+    try {
+      const { resolveQueueForInbound } = await import("./queue-service");
+      const queue = await resolveQueueForInbound(input.workspaceId, input.toE164);
+      if (queue) {
+        queueId = queue.id;
+        note = `queue:${queue.name} overflow:${queue.overflowAction}${queue.overflowTarget ? `:${queue.overflowTarget}` : ""}`;
+      }
+    } catch {
+      // best-effort queue resolution
+    }
+  }
 
   const call = await prisma.humanCall.create({
     data: {
@@ -88,10 +107,11 @@ export async function handleInboundHumanCall(input: {
       status: "ringing",
       telnyxCallControlId: input.telnyxCallControlId,
       callerIdNumber: input.toE164,
+      notes: note,
     },
   });
 
-  return { callId: call.id, call };
+  return { callId: call.id, call, queueId };
 }
 
 async function telnyxAction(controlId: string, action: string, body?: Record<string, unknown>) {
@@ -113,6 +133,19 @@ export async function hangupHumanCall(callId: string, workspaceId: string) {
   return prisma.humanCall.update({
     where: { id: callId },
     data: { status: "completed", endedAt: new Date() },
+  });
+}
+
+export async function answerHumanCall(callId: string, workspaceId: string) {
+  const prisma = getPrisma();
+  const call = await prisma.humanCall.findFirst({ where: { id: callId, workspaceId } });
+  if (!call) throw new Error("Call not found");
+  if (call.telnyxCallControlId) {
+    await telnyxAction(call.telnyxCallControlId, "answer");
+  }
+  return prisma.humanCall.update({
+    where: { id: callId },
+    data: { status: "in_progress" },
   });
 }
 
@@ -174,11 +207,13 @@ export async function updateHumanCall(
     notes?: string | null;
     disposition?: string | null;
     hangup?: boolean;
+    answer?: boolean;
     muted?: boolean;
     onHold?: boolean;
     transferTo?: string;
   },
 ) {
+  if (patch.answer) return answerHumanCall(callId, workspaceId);
   if (patch.hangup) return hangupHumanCall(callId, workspaceId);
   if (patch.muted !== undefined) return muteHumanCall(callId, workspaceId, patch.muted);
   if (patch.onHold !== undefined) return holdHumanCall(callId, workspaceId, patch.onHold);
@@ -188,10 +223,33 @@ export async function updateHumanCall(
   const data: Record<string, unknown> = {};
   if (patch.notes !== undefined) data.notes = patch.notes;
   if (patch.disposition !== undefined) data.disposition = patch.disposition;
-  return prisma.humanCall.update({
+  const updated = await prisma.humanCall.update({
     where: { id: callId },
     data,
   });
+
+  // A disposition marking the call as missed emits a call.missed automation
+  // event so follow-up flows (e.g. missed-call text-back) can fire.
+  if (patch.disposition && /missed|no[_ -]?answer|voicemail/i.test(patch.disposition)) {
+    const customerPhone = updated.direction === "inbound" ? updated.from : updated.to;
+    try {
+      const contact = await prisma.contact.findFirst({
+        where: { workspaceId, phone: customerPhone },
+      });
+      if (contact) {
+        const { emitAutomationEvent } = await import("@/lib/automations/events");
+        await emitAutomationEvent(workspaceId, "call.missed", contact.id, {
+          humanCallId: updated.id,
+          direction: updated.direction,
+          disposition: patch.disposition,
+        }).catch(() => undefined);
+      }
+    } catch (err) {
+      console.warn("[human-call] disposition missed-call event failed", callId, err);
+    }
+  }
+
+  return updated;
 }
 
 export async function processHumanCallWebhookEvent(input: {

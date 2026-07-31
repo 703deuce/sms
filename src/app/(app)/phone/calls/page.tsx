@@ -2,6 +2,7 @@
 
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
+import { Select } from "@/components/ui/input";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { PhoneSubNav } from "@/components/phone/phone-subnav";
 import { useEffect, useState } from "react";
@@ -13,26 +14,58 @@ type CallRow = {
   direction: string;
   status: string;
   disposition?: string | null;
+  recordingUrl?: string | null;
   startedAt: string;
   endedAt?: string | null;
   agentUserId?: string | null;
 };
 
+const DISPOSITIONS = [
+  "",
+  "completed",
+  "voicemail",
+  "missed",
+  "no_answer",
+  "callback_requested",
+  "wrong_number",
+  "sale",
+  "not_interested",
+];
+
 export default function PhoneCallsPage() {
   const [rows, setRows] = useState<CallRow[]>([]);
+  const [saving, setSaving] = useState<string | null>(null);
 
-  useEffect(() => {
+  function load() {
     fetch("/api/phone/calls?limit=100")
       .then((r) => r.json())
       .then((j) => setRows(j.data || []))
       .catch(() => undefined);
+  }
+
+  useEffect(() => {
+    load();
   }, []);
+
+  async function setDisposition(id: string, disposition: string) {
+    setSaving(id);
+    setRows((rs) => rs.map((r) => (r.id === id ? { ...r, disposition } : r)));
+    try {
+      await fetch(`/api/phone/calls/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ disposition: disposition || null }),
+      });
+    } finally {
+      setSaving(null);
+    }
+  }
 
   return (
     <div>
       <PageHeader
         title="Call history"
-        description="Human agent calls placed and received through the softphone."
+        description="Human agent calls placed and received through the softphone. Play recordings and set dispositions."
       />
       <PhoneSubNav />
       <Card className="overflow-hidden p-0">
@@ -43,6 +76,7 @@ export default function PhoneCallsPage() {
               <TH>From</TH>
               <TH>To</TH>
               <TH>Status</TH>
+              <TH>Recording</TH>
               <TH>Disposition</TH>
               <TH>Started</TH>
             </TR>
@@ -50,7 +84,7 @@ export default function PhoneCallsPage() {
           <TBody>
             {rows.length === 0 ? (
               <TR>
-                <TD colSpan={6} className="text-center text-muted-foreground py-8">
+                <TD colSpan={7} className="text-center text-muted-foreground py-8">
                   No calls yet
                 </TD>
               </TR>
@@ -61,7 +95,25 @@ export default function PhoneCallsPage() {
                   <TD className="font-mono text-xs">{c.from}</TD>
                   <TD className="font-mono text-xs">{c.to}</TD>
                   <TD>{c.status}</TD>
-                  <TD>{c.disposition || "—"}</TD>
+                  <TD>
+                    {c.recordingUrl ? (
+                      <audio controls preload="none" src={c.recordingUrl} className="h-8 w-44" />
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    )}
+                  </TD>
+                  <TD>
+                    <Select
+                      className="h-8 w-40 text-xs"
+                      value={c.disposition || ""}
+                      disabled={saving === c.id}
+                      onChange={(e) => setDisposition(c.id, e.target.value)}
+                    >
+                      {DISPOSITIONS.map((d) => (
+                        <option key={d} value={d}>{d === "" ? "— none —" : d.replace(/_/g, " ")}</option>
+                      ))}
+                    </Select>
+                  </TD>
                   <TD className="text-muted-foreground text-xs">
                     {new Date(c.startedAt).toLocaleString()}
                   </TD>

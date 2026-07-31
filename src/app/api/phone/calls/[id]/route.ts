@@ -16,6 +16,7 @@ export async function PATCH(
     const { id } = await params;
     const body = (await request.json()) as {
       hangup?: boolean;
+      answer?: boolean;
       muted?: boolean;
       onHold?: boolean;
       transferTo?: string;
@@ -31,6 +32,7 @@ export async function PATCH(
 
     const call = await updateHumanCall(id, auth.workspaceId, {
       hangup: body.hangup,
+      answer: body.answer,
       muted: body.muted,
       onHold: body.onHold,
       transferTo: body.transferTo,

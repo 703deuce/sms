@@ -145,6 +145,8 @@ export const appNav: NavItem[] = [
     children: [
       { label: "Softphone", href: "/phone" },
       { label: "Call history", href: "/phone/calls" },
+      { label: "Queues", href: "/phone/queues" },
+      { label: "IVR menus", href: "/phone/ivr" },
       { label: "Settings", href: "/phone/settings" },
     ],
   },
@@ -250,6 +252,8 @@ export const pageTitles: Record<string, string> = {
   "/numbers/pools": "Sender Pools",
   "/phone": "Softphone",
   "/phone/calls": "Call History",
+  "/phone/queues": "Call Queues",
+  "/phone/ivr": "IVR Menus",
   "/phone/settings": "Phone Settings",
   "/compliance": "Compliance",
   "/compliance/business": "Business Profile",

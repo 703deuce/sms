@@ -7,6 +7,8 @@ import { cn } from "@/lib/utils";
 const items = [
   { label: "Softphone", href: "/phone" },
   { label: "Call history", href: "/phone/calls" },
+  { label: "Queues", href: "/phone/queues" },
+  { label: "IVR menus", href: "/phone/ivr" },
   { label: "Settings", href: "/phone/settings" },
 ];
 
