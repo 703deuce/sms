@@ -1,25 +1,47 @@
 "use client";
 
-import { Tabs } from "@/components/ui/tabs";
+import { cn } from "@/lib/utils";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import {
+  getVoiceSectionForPath,
+  isVoiceNavItemActive,
+} from "./voice-nav";
 
-export const voiceNavItems = [
-  { label: "Overview", href: "/voice/overview" },
-  { label: "Agents", href: "/voice/agents" },
-  { label: "Agent Builder", href: "/voice/agents/new" },
-  { label: "Phone Numbers", href: "/voice/numbers" },
-  { label: "Inbound Routing", href: "/voice/inbound-routing" },
-  { label: "Outbound Campaigns", href: "/voice/campaigns" },
-  { label: "Calls", href: "/voice/calls" },
-  { label: "Conversations", href: "/voice/conversations" },
-  { label: "Knowledge Bases", href: "/voice/knowledge" },
-  { label: "Tools & Integrations", href: "/voice/tools" },
-  { label: "Calendars", href: "/voice/calendars" },
-  { label: "Analytics", href: "/voice/analytics" },
-  { label: "Testing", href: "/voice/testing" },
-  { label: "Usage & Billing", href: "/voice/billing" },
-  { label: "Settings", href: "/voice/settings" },
-];
-
+/**
+ * Contextual sub-navigation for AI Voice — shows only the 2–5 tabs for the
+ * current section (agents, phone, calls, insights). Overview, campaigns, and
+ * settings rely on the sidebar without a horizontal tab bar.
+ */
 export function VoiceSubNav() {
-  return <Tabs items={voiceNavItems} />;
+  const pathname = usePathname();
+  const section = getVoiceSectionForPath(pathname);
+  if (!section) return null;
+
+  return (
+    <div className="mb-5">
+      <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        {section.label}
+      </p>
+      <div className="flex flex-wrap gap-1 border-b border-border">
+        {section.items.map((item) => {
+          const active = isVoiceNavItemActive(pathname, item, section.key);
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={cn(
+                "-mb-px inline-flex items-center border-b-2 px-3 py-2.5 text-[13px] font-semibold transition",
+                active
+                  ? "border-primary text-primary"
+                  : "border-transparent text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {item.label}
+            </Link>
+          );
+        })}
+      </div>
+    </div>
+  );
 }

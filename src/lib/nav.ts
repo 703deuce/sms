@@ -80,18 +80,17 @@ export const appNav: NavItem[] = [
     children: [
       { label: "Overview", href: "/voice/overview" },
       { label: "Agents", href: "/voice/agents" },
-      { label: "Agent Builder", href: "/voice/agents/new" },
-      { label: "Phone Numbers", href: "/voice/numbers" },
-      { label: "Inbound Routing", href: "/voice/inbound-routing" },
-      { label: "Outbound Campaigns", href: "/voice/campaigns" },
+      { label: "Knowledge bases", href: "/voice/knowledge" },
+      { label: "Tools", href: "/voice/tools" },
+      { label: "Calendars", href: "/voice/calendars" },
+      { label: "Testing lab", href: "/voice/testing" },
+      { label: "Phone numbers", href: "/voice/numbers" },
+      { label: "Inbound routing", href: "/voice/inbound-routing" },
+      { label: "Outbound campaigns", href: "/voice/campaigns" },
       { label: "Calls", href: "/voice/calls" },
       { label: "Conversations", href: "/voice/conversations" },
-      { label: "Knowledge Bases", href: "/voice/knowledge" },
-      { label: "Tools & Integrations", href: "/voice/tools" },
-      { label: "Calendars", href: "/voice/calendars" },
       { label: "Analytics", href: "/voice/analytics" },
-      { label: "Testing", href: "/voice/testing" },
-      { label: "Usage & Billing", href: "/voice/billing" },
+      { label: "Usage & billing", href: "/voice/billing" },
       { label: "Settings", href: "/voice/settings" },
     ],
   },
@@ -253,8 +252,8 @@ export function getPageTitle(pathname: string) {
   if (pathname.startsWith("/campaigns/")) return "Campaign Detail";
   if (pathname.startsWith("/contacts/")) return "Contact Detail";
   if (pathname.startsWith("/automations/")) return "Automation Detail";
-  if (pathname.startsWith("/voice/agents/")) return "Voice Agent";
-  if (pathname.startsWith("/voice/calls/")) return "Call Detail";
+  if (pathname.startsWith("/voice/agents/")) return "Agent builder";
+  if (pathname.startsWith("/voice/calls/")) return "Call detail";
   if (pathname.startsWith("/voice/")) return "AI Voice";
   if (pathname.startsWith("/numbers/")) return "Number Detail";
   if (pathname.startsWith("/admin/customers/")) return "Customer Detail";
