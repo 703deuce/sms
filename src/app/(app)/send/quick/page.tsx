@@ -56,6 +56,8 @@ export default function QuickSendPage() {
   const [error, setError] = useState("");
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [phoneNumbers, setPhoneNumbers] = useState<PhoneNumber[]>([]);
+  const [pools, setPools] = useState<{ id: string; name: string }[]>([]);
+  const [senderPoolId, setSenderPoolId] = useState("");
   const [mediaUrls, setMediaUrls] = useState<string[]>([]);
   const [showMedia, setShowMedia] = useState(false);
 
@@ -73,6 +75,12 @@ export default function QuickSendPage() {
           setPhoneNumbers(json.data);
           setNumberId(json.data[0].id);
         }
+      })
+      .catch(() => undefined);
+    fetch("/api/numbers/pools")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => {
+        if (json?.data) setPools(json.data);
       })
       .catch(() => undefined);
   }, []);
@@ -130,6 +138,7 @@ export default function QuickSendPage() {
             from: selectedNumber.number,
             customerName: `${contact.firstName} ${contact.lastName}`.trim(),
             mediaUrls: mediaUrls.length ? mediaUrls : undefined,
+            senderPoolId: senderPoolId || undefined,
           }),
         });
         if (!res.ok) {
@@ -258,7 +267,7 @@ export default function QuickSendPage() {
                 <Select
                   value={numberId}
                   onChange={(e) => setNumberId(e.target.value)}
-                  disabled={phoneNumbers.length === 0}
+                  disabled={phoneNumbers.length === 0 || senderPoolId !== ""}
                 >
                   {phoneNumbers.length === 0 ? (
                     <option value="">No numbers available</option>
@@ -271,6 +280,22 @@ export default function QuickSendPage() {
                   )}
                 </Select>
               </div>
+              {pools.length > 0 ? (
+                <div>
+                  <Label>Sender pool (optional)</Label>
+                  <Select value={senderPoolId} onChange={(e) => setSenderPoolId(e.target.value)}>
+                    <option value="">Use single number above</option>
+                    {pools.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </Select>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Rotate sends across all numbers in the pool.
+                  </p>
+                </div>
+              ) : null}
               <div>
                 <div className="flex items-center justify-between">
                   <Label>Message</Label>

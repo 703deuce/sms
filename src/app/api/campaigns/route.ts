@@ -7,7 +7,7 @@ import {
   getCampaignCategory,
   type CampaignCategoryId,
 } from "@/lib/campaigns/catalog";
-import { enrollContactInCampaign, validateBulkRecipients, enrollListInCampaign } from "@/lib/campaigns/enroll-campaign";
+import { enrollContactInCampaign, validateBulkRecipients, enrollListInCampaign, enrollSegmentInCampaign } from "@/lib/campaigns/enroll-campaign";
 import { defaultSmsEmailSequence, parseSequence } from "@/lib/campaigns/sequence-engine";
 
 export async function GET() {
@@ -47,6 +47,7 @@ export async function POST(request: Request) {
       scheduledAt?: string;
       listId?: string;
       segmentId?: string;
+      senderPoolId?: string;
       recipients?: Array<{ phone?: string; email?: string; displayName?: string }>;
       activate?: boolean;
     };
@@ -92,6 +93,7 @@ export async function POST(request: Request) {
         scheduledAt,
         sequenceJson: sequenceJson as Prisma.InputJsonValue,
         configJson: config as Prisma.InputJsonValue,
+        senderPoolId: body.senderPoolId || null,
         successMode: body.successMode || "click",
         dailySendLimit: body.dailySendLimit,
         sendWindowStart: body.sendWindowStart,
@@ -103,7 +105,11 @@ export async function POST(request: Request) {
     let enrolledCount = 0;
     let rejected: Array<{ reason: string }> = [];
 
-    if (body.listId) {
+    if (body.segmentId) {
+      const segEnroll = await enrollSegmentInCampaign(workspaceId, campaign.id, body.segmentId);
+      enrolledCount = segEnroll.enrolled;
+      rejected = segEnroll.rejected;
+    } else if (body.listId) {
       const listEnroll = await enrollListInCampaign(workspaceId, campaign.id, body.listId);
       enrolledCount = listEnroll.enrolled;
       rejected = listEnroll.rejected;

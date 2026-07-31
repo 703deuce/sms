@@ -21,6 +21,7 @@ export type QuickSendSmsInput = {
   destinationUrl?: string;
   idempotencyKey?: string;
   mediaUrls?: string[];
+  senderPoolId?: string;
 };
 
 export async function sendQuickSms(input: QuickSendSmsInput) {
@@ -112,10 +113,14 @@ export async function sendQuickSms(input: QuickSendSmsInput) {
 
   const trackingToken = randomTrackingToken();
   const trackedUrl = `${getAppBaseUrl()}/r/${trackingToken}`;
-  const destinationUrl =
-    input.destinationUrl ||
-    process.env.REVIEW_LINK_FALLBACK ||
-    "https://transovo.ai";
+  const { resolveReviewLink } = await import("@/lib/messaging/review-link");
+  const destinationUrl = input.destinationUrl || (await resolveReviewLink(input.workspaceId));
+
+  let poolFrom: string | undefined;
+  if (input.senderPoolId) {
+    const { resolvePoolSender } = await import("@/lib/numbers/sender-pool");
+    poolFrom = await resolvePoolSender(input.workspaceId, input.senderPoolId);
+  }
 
   const names = splitDisplayName(input.customerName);
   const body = mergeTemplate(input.body, {
@@ -139,7 +144,7 @@ export async function sendQuickSms(input: QuickSendSmsInput) {
         workspaceId: input.workspaceId,
         campaignId: input.campaignId,
         to,
-        from: reg!.phoneE164 || input.from || "messaging_service",
+        from: poolFrom || reg!.phoneE164 || input.from || "messaging_service",
         body: finalBody,
         status: "sending",
         providerId: input.idempotencyKey ? `idem:${input.idempotencyKey}` : `pending:${trackingToken}`,
@@ -182,7 +187,7 @@ export async function sendQuickSms(input: QuickSendSmsInput) {
   let providerSid: string | null = null;
 
   try {
-    const result = await sendViaRegistration(input.workspaceId, to, finalBody, input.mediaUrls);
+    const result = await sendViaRegistration(input.workspaceId, to, finalBody, input.mediaUrls, poolFrom);
     providerAccepted = true;
     providerSid = result.sid;
 

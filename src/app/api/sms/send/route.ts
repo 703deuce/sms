@@ -19,6 +19,7 @@ export async function POST(request: Request) {
       customerName?: string;
       destinationUrl?: string;
       mediaUrls?: string[];
+      senderPoolId?: string;
     };
 
     const workspaceId = await resolveWorkspaceId(auth.session, body.workspaceId);
@@ -38,6 +39,7 @@ export async function POST(request: Request) {
       customerName: body.customerName,
       destinationUrl: body.destinationUrl,
       mediaUrls: body.mediaUrls,
+      senderPoolId: body.senderPoolId,
       idempotencyKey:
         request.headers.get("idempotency-key") ||
         request.headers.get("x-idempotency-key") ||

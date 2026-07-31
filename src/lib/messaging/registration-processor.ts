@@ -473,6 +473,7 @@ export async function sendViaRegistration(
   to: string,
   body: string,
   mediaUrls?: string[],
+  fromOverride?: string,
 ) {
   const reg = await getRegistrationByWorkspace(workspaceId);
   if (!isMessagingReady(reg)) {
@@ -497,7 +498,7 @@ export async function sendViaRegistration(
   const result = await provider.sendMessage(reg!, {
     to,
     body,
-    from: reg!.phoneE164 || undefined,
+    from: fromOverride || reg!.phoneE164 || undefined,
     messagingProfileId,
     messagingServiceSid: reg!.messagingServiceSid,
     mediaUrls: mediaUrls?.filter(Boolean),

@@ -63,6 +63,8 @@ export function CampaignWizard() {
   const [lists, setLists] = useState<WizardList[]>([]);
   const [segments, setSegments] = useState<WizardSegment[]>([]);
   const [phoneNumbers, setPhoneNumbers] = useState<PhoneNumber[]>([]);
+  const [pools, setPools] = useState<{ id: string; name: string }[]>([]);
+  const [senderPoolId, setSenderPoolId] = useState("");
   const [templates, setTemplates] = useState<Template[]>([]);
 
   useEffect(() => {
@@ -91,6 +93,12 @@ export function CampaignWizard() {
           setPhoneNumbers(json.data);
           setNumberId(json.data[0].id);
         }
+      })
+      .catch(() => undefined);
+    fetch("/api/numbers/pools")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => {
+        if (json?.data) setPools(json.data);
       })
       .catch(() => undefined);
     fetch("/api/templates")
@@ -330,7 +338,11 @@ export function CampaignWizard() {
                 {phoneNumbers.length === 0 ? (
                   <p className="mt-1 text-sm text-muted-foreground">No phone numbers provisioned.</p>
                 ) : (
-                  <Select value={numberId} onChange={(e) => setNumberId(e.target.value)}>
+                  <Select
+                    value={numberId}
+                    onChange={(e) => setNumberId(e.target.value)}
+                    disabled={senderPoolId !== ""}
+                  >
                     {phoneNumbers.map((n) => (
                       <option key={n.id} value={n.id}>
                         {formatPhone(n.number)} · {n.friendlyName}
@@ -339,6 +351,22 @@ export function CampaignWizard() {
                   </Select>
                 )}
               </div>
+              {pools.length > 0 ? (
+                <div>
+                  <Label>Sender pool (optional)</Label>
+                  <Select value={senderPoolId} onChange={(e) => setSenderPoolId(e.target.value)}>
+                    <option value="">Use single number above</option>
+                    {pools.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </Select>
+                  <p className="mt-1 text-[12px] text-muted-foreground">
+                    Rotate sends across all numbers in the pool for higher throughput.
+                  </p>
+                </div>
+              ) : null}
               <div>
                 <Label>Saved template</Label>
                 <Select

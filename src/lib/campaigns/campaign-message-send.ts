@@ -379,7 +379,18 @@ export async function sendCampaignMessageById(messageId: string) {
       if (!isMessagingReady(reg)) {
         throw new Error("Messaging not ready for workspace");
       }
-      const result = await sendViaRegistration(message.workspaceId, message.to, message.body);
+      let fromOverride: string | undefined;
+      if (message.campaign.senderPoolId) {
+        const { resolvePoolSender } = await import("@/lib/numbers/sender-pool");
+        fromOverride = await resolvePoolSender(message.workspaceId, message.campaign.senderPoolId);
+      }
+      const result = await sendViaRegistration(
+        message.workspaceId,
+        message.to,
+        message.body,
+        undefined,
+        fromOverride,
+      );
       providerAccepted = true;
       providerSid = result.sid;
     }
