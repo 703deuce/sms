@@ -22,7 +22,10 @@ export async function GET(
           where: { callId: id },
           orderBy: { createdAt: "asc" },
         }),
-        getPrisma().voiceTranscript.findMany({ where: { callId: id } }),
+        getPrisma().voiceTranscript.findMany({
+          where: { callId: id },
+          include: { segments: { orderBy: { startMs: "asc" } } },
+        }),
         getPrisma().voiceRecording.findMany({ where: { callId: id } }),
         getPrisma().voiceConversationInsight.findMany({ where: { callId: id } }),
         getPrisma().voiceTransfer.findMany({ where: { callId: id } }),

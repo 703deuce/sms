@@ -63,6 +63,7 @@ export async function processPostCall(callId: string) {
         qualification: insight.qualification as object,
         topics: insight.topics as object,
         objections: insight.objections as object,
+        actionItems: (insight.actionItems || []) as object,
         needsReview: insight.needsReview,
         confidence: insight.confidence,
       },
@@ -141,18 +142,116 @@ async function generateCallInsights(
 
   const isLead = leadScore >= 40 && !call.voicemailDetected;
 
-  return {
+  // Structured heuristic baseline (always available, no external deps).
+  const heuristic = {
     summary: text
       ? `Call ${call.direction.toLowerCase()} — ${text.slice(0, 200)}`
       : `Call completed with outcome ${call.outcome || "unknown"}`,
-    intent: call.voicemailDetected ? "voicemail" : "general_inquiry",
-    sentiment: "neutral",
+    intent: call.voicemailDetected
+      ? "voicemail"
+      : call.appointmentBooked
+        ? "appointment"
+        : qualification.requested_estimate
+          ? "quote_request"
+          : "general_inquiry",
+    sentiment: heuristicSentiment(text),
     isLead,
     leadScore,
     qualification,
-    topics: [],
-    objections: [],
+    topics: heuristicTopics(text),
+    objections: heuristicObjections(text),
+    actionItems: call.appointmentBooked ? ["Appointment booked — send confirmation"] : [],
     needsReview: leadScore > 0 && leadScore < 40,
     confidence: text ? 0.75 : 0.4,
+  };
+
+  // Upgrade with an LLM summary when a transcript and OpenAI key are available.
+  if (text.trim().length > 40) {
+    try {
+      const llm = await llmInsights(text, call.direction);
+      if (llm) {
+        return {
+          ...heuristic,
+          summary: llm.summary || heuristic.summary,
+          intent: llm.intent || heuristic.intent,
+          sentiment: llm.sentiment || heuristic.sentiment,
+          topics: llm.topics?.length ? llm.topics : heuristic.topics,
+          objections: llm.objections?.length ? llm.objections : heuristic.objections,
+          actionItems: llm.actionItems?.length ? llm.actionItems : heuristic.actionItems,
+          confidence: 0.9,
+        };
+      }
+    } catch (err) {
+      console.warn("[post-call] LLM insight failed, using heuristic", err);
+    }
+  }
+
+  return heuristic;
+}
+
+function heuristicSentiment(text: string): string {
+  if (!text) return "neutral";
+  const positive = /(thank|great|perfect|awesome|appreciate|happy|sounds good|wonderful)/i.test(text);
+  const negative = /(angry|upset|frustrat|terrible|cancel|refund|complaint|not happy|disappointed)/i.test(text);
+  if (negative && !positive) return "negative";
+  if (positive && !negative) return "positive";
+  return "neutral";
+}
+
+function heuristicTopics(text: string): string[] {
+  const topics: string[] = [];
+  const map: Record<string, RegExp> = {
+    pricing: /price|cost|quote|estimate|\$/i,
+    scheduling: /appointment|schedule|book|calendar|reschedule/i,
+    support: /help|issue|problem|broken|repair|fix/i,
+    billing: /invoice|bill|payment|charge|refund/i,
+    availability: /available|hours|open|when can/i,
+  };
+  for (const [topic, re] of Object.entries(map)) {
+    if (re.test(text)) topics.push(topic);
+  }
+  return topics;
+}
+
+function heuristicObjections(text: string): string[] {
+  const objections: string[] = [];
+  if (/too expensive|too much|can'?t afford|out of budget/i.test(text)) objections.push("Price concern");
+  if (/think about it|call.*back|not sure|maybe later/i.test(text)) objections.push("Needs time to decide");
+  if (/competitor|another company|someone else/i.test(text)) objections.push("Considering alternatives");
+  return objections;
+}
+
+async function llmInsights(text: string, direction: string) {
+  const { openAiChatCompletion, getOpenAiApiKey } = await import("@/lib/ai/openai");
+  if (!getOpenAiApiKey()) return null;
+
+  const system =
+    "You analyze phone call transcripts and return ONLY strict JSON with keys: " +
+    "summary (string, 1-2 sentences), intent (short snake_case string), " +
+    "sentiment (positive|neutral|negative), topics (string array), " +
+    "objections (string array), actionItems (string array). No markdown.";
+  const user = `Direction: ${direction}\nTranscript:\n${text.slice(0, 6000)}`;
+
+  const raw = await openAiChatCompletion(system, user, { temperature: 0.2, maxTokens: 500 });
+  if (!raw) return null;
+
+  const jsonText = raw.replace(/```json|```/g, "").trim();
+  const parsed = JSON.parse(jsonText) as {
+    summary?: string;
+    intent?: string;
+    sentiment?: string;
+    topics?: string[];
+    objections?: string[];
+    actionItems?: string[];
+  };
+  return {
+    summary: parsed.summary,
+    intent: parsed.intent,
+    sentiment: ["positive", "neutral", "negative"].includes(parsed.sentiment || "")
+      ? parsed.sentiment
+      : undefined,
+    topics: Array.isArray(parsed.topics) ? parsed.topics.slice(0, 8) : [],
+    objections: Array.isArray(parsed.objections) ? parsed.objections.slice(0, 8) : [],
+    actionItems: Array.isArray(parsed.actionItems) ? parsed.actionItems.slice(0, 8) : [],
   };
 }
