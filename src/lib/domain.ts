@@ -113,4 +113,20 @@ export type MessagingRegistration = {
   registrationSubmittedAt?: Date | string | null;
   registrationApprovedAt?: Date | string | null;
   registrationFailureReason?: string | null;
+
+  // TCR campaign attributes + opt keyword metadata (additive)
+  privacyPolicyUrl?: string | null;
+  optInKeywords?: string | null;
+  optOutKeywords?: string | null;
+  helpKeywords?: string | null;
+  optInFormUrl?: string | null;
+  campaignDisplayName?: string | null;
+  subscriberOptIn?: boolean | null;
+  subscriberOptOut?: boolean | null;
+  embeddedLinks?: boolean | null;
+  embeddedPhone?: boolean | null;
+  ageGated?: boolean | null;
+  directLending?: boolean | null;
+  affiliateMarketing?: boolean | null;
+  numberPoolSize?: number | null;
 };

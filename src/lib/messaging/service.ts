@@ -47,6 +47,20 @@ const useCaseSchema = z.object({
   stopMessage: z.string().optional(),
   messageVolume: z.string().optional(),
   vertical: z.string().optional(),
+  campaignDisplayName: z.string().optional(),
+  optInKeywords: z.string().optional(),
+  optOutKeywords: z.string().optional(),
+  helpKeywords: z.string().optional(),
+  optInFormUrl: z.string().optional(),
+  privacyPolicyUrl: z.string().optional(),
+  subscriberOptIn: z.boolean().optional(),
+  subscriberOptOut: z.boolean().optional(),
+  embeddedLinks: z.boolean().optional(),
+  embeddedPhone: z.boolean().optional(),
+  ageGated: z.boolean().optional(),
+  directLending: z.boolean().optional(),
+  affiliateMarketing: z.boolean().optional(),
+  numberPoolSize: z.number().int().min(1).max(100).optional(),
 });
 
 async function workspaceName(workspaceId: string) {

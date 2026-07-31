@@ -57,6 +57,20 @@ export function CampaignRegistrationForm({ registration, campaignStatus }: Props
           stopMessage: form.get("optOutMessage"),
           messageVolume: form.get("dailyVolume"),
           vertical: form.get("vertical"),
+          campaignDisplayName: String(form.get("campaignName") || "").trim() || undefined,
+          optInKeywords: String(form.get("optInKeywords") || "").trim() || undefined,
+          optOutKeywords: String(form.get("optOutKeywords") || "").trim() || undefined,
+          helpKeywords: String(form.get("helpKeywords") || "").trim() || undefined,
+          optInFormUrl: String(form.get("optInFormUrl") || "").trim() || undefined,
+          privacyPolicyUrl: String(form.get("privacyPolicyUrl") || "").trim() || undefined,
+          subscriberOptIn: form.get("subscriberOptIn") === "yes",
+          subscriberOptOut: form.get("subscriberOptOut") === "yes",
+          embeddedLinks: form.get("embeddedLinks") === "yes",
+          embeddedPhone: form.get("embeddedPhone") === "yes",
+          ageGated: form.get("ageGated") === "yes",
+          directLending: form.get("directLending") === "yes",
+          affiliateMarketing: form.get("affiliateMarketing") === "yes",
+          numberPoolSize: Number(form.get("numberPool") || 1) || 1,
         }),
       });
       const json = await res.json();
@@ -122,7 +136,12 @@ export function CampaignRegistrationForm({ registration, campaignStatus }: Props
               <Input
                 id="campaignName"
                 name="campaignName"
-                defaultValue={registration?.dbaName || registration?.legalBusinessName || ""}
+                defaultValue={
+                  registration?.campaignDisplayName ||
+                  registration?.dbaName ||
+                  registration?.legalBusinessName ||
+                  ""
+                }
               />
             </div>
             <div>
@@ -182,27 +201,50 @@ export function CampaignRegistrationForm({ registration, campaignStatus }: Props
                 required
               />
             </div>
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-4 sm:grid-cols-3">
               <div>
                 <Label htmlFor="optInKeywords">Opt-in keywords</Label>
-                <Input id="optInKeywords" name="optInKeywords" defaultValue="JOIN, START, YES" />
+                <Input
+                  id="optInKeywords"
+                  name="optInKeywords"
+                  defaultValue={registration?.optInKeywords || "JOIN, START, YES"}
+                />
               </div>
               <div>
                 <Label htmlFor="optOutKeywords">Opt-out keywords</Label>
                 <Input
                   id="optOutKeywords"
                   name="optOutKeywords"
-                  defaultValue="STOP, END, CANCEL, UNSUBSCRIBE"
+                  defaultValue={registration?.optOutKeywords || "STOP, END, CANCEL, UNSUBSCRIBE"}
+                />
+              </div>
+              <div>
+                <Label htmlFor="helpKeywords">Help keywords</Label>
+                <Input
+                  id="helpKeywords"
+                  name="helpKeywords"
+                  defaultValue={registration?.helpKeywords || "HELP, INFO"}
                 />
               </div>
             </div>
-            <div>
-              <Label htmlFor="optInFormUrl">Opt-in form URL</Label>
-              <Input
-                id="optInFormUrl"
-                name="optInFormUrl"
-                defaultValue={registration?.websiteUrl || ""}
-              />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <Label htmlFor="optInFormUrl">Opt-in form URL</Label>
+                <Input
+                  id="optInFormUrl"
+                  name="optInFormUrl"
+                  defaultValue={registration?.optInFormUrl || registration?.websiteUrl || ""}
+                />
+              </div>
+              <div>
+                <Label htmlFor="privacyPolicyUrl">Privacy policy URL</Label>
+                <Input
+                  id="privacyPolicyUrl"
+                  name="privacyPolicyUrl"
+                  placeholder="https://example.com/privacy"
+                  defaultValue={registration?.privacyPolicyUrl || ""}
+                />
+              </div>
             </div>
             <div>
               <Label htmlFor="helpMessage">Help message response</Label>
@@ -230,54 +272,90 @@ export function CampaignRegistrationForm({ registration, campaignStatus }: Props
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
             <div>
               <Label htmlFor="subscriberOptIn">Subscriber opt-in</Label>
-              <Select id="subscriberOptIn" name="subscriberOptIn" defaultValue="yes">
+              <Select
+                id="subscriberOptIn"
+                name="subscriberOptIn"
+                defaultValue={registration?.subscriberOptIn === false ? "no" : "yes"}
+              >
                 <option value="yes">Yes — explicit consent required</option>
+                <option value="no">No</option>
               </Select>
             </div>
             <div>
               <Label htmlFor="subscriberOptOut">Subscriber opt-out</Label>
-              <Select id="subscriberOptOut" name="subscriberOptOut" defaultValue="yes">
+              <Select
+                id="subscriberOptOut"
+                name="subscriberOptOut"
+                defaultValue={registration?.subscriberOptOut === false ? "no" : "yes"}
+              >
                 <option value="yes">Yes — STOP supported</option>
+                <option value="no">No</option>
               </Select>
             </div>
             <div>
               <Label htmlFor="embeddedLinks">Embedded links</Label>
-              <Select id="embeddedLinks" name="embeddedLinks" defaultValue="yes">
+              <Select
+                id="embeddedLinks"
+                name="embeddedLinks"
+                defaultValue={registration?.embeddedLinks === false ? "no" : "yes"}
+              >
                 <option value="yes">Yes</option>
                 <option value="no">No</option>
               </Select>
             </div>
             <div>
               <Label htmlFor="embeddedPhone">Embedded phone numbers</Label>
-              <Select id="embeddedPhone" name="embeddedPhone" defaultValue="no">
+              <Select
+                id="embeddedPhone"
+                name="embeddedPhone"
+                defaultValue={registration?.embeddedPhone ? "yes" : "no"}
+              >
                 <option value="yes">Yes</option>
                 <option value="no">No</option>
               </Select>
             </div>
             <div>
               <Label htmlFor="ageGated">Age-gated content</Label>
-              <Select id="ageGated" name="ageGated" defaultValue="no">
+              <Select
+                id="ageGated"
+                name="ageGated"
+                defaultValue={registration?.ageGated ? "yes" : "no"}
+              >
                 <option value="no">No</option>
                 <option value="yes">Yes</option>
               </Select>
             </div>
             <div>
               <Label htmlFor="directLending">Direct lending</Label>
-              <Select id="directLending" name="directLending" defaultValue="no">
+              <Select
+                id="directLending"
+                name="directLending"
+                defaultValue={registration?.directLending ? "yes" : "no"}
+              >
                 <option value="no">No</option>
                 <option value="yes">Yes</option>
               </Select>
             </div>
             <div>
               <Label htmlFor="affiliateMarketing">Affiliate marketing</Label>
-              <Select id="affiliateMarketing" name="affiliateMarketing" defaultValue="no">
+              <Select
+                id="affiliateMarketing"
+                name="affiliateMarketing"
+                defaultValue={registration?.affiliateMarketing ? "yes" : "no"}
+              >
                 <option value="no">No</option>
                 <option value="yes">Yes</option>
               </Select>
             </div>
             <div>
               <Label htmlFor="numberPool">Number pool size</Label>
-              <Input id="numberPool" name="numberPool" type="number" defaultValue={1} min={1} />
+              <Input
+                id="numberPool"
+                name="numberPool"
+                type="number"
+                defaultValue={registration?.numberPoolSize || 1}
+                min={1}
+              />
             </div>
             <div>
               <Label htmlFor="dailyVolume">Estimated daily volume</Label>

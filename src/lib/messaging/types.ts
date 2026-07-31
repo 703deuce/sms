@@ -42,6 +42,21 @@ export type UseCaseInput = {
   stopMessage?: string;
   messageVolume?: string;
   vertical?: string;
+  // TCR campaign attributes + opt keyword metadata
+  campaignDisplayName?: string;
+  optInKeywords?: string;
+  optOutKeywords?: string;
+  helpKeywords?: string;
+  optInFormUrl?: string;
+  privacyPolicyUrl?: string;
+  subscriberOptIn?: boolean;
+  subscriberOptOut?: boolean;
+  embeddedLinks?: boolean;
+  embeddedPhone?: boolean;
+  ageGated?: boolean;
+  directLending?: boolean;
+  affiliateMarketing?: boolean;
+  numberPoolSize?: number;
 };
 
 export type RegistrationProgressStep = {
