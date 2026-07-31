@@ -25,6 +25,7 @@ import {
   type Connection,
   type Edge,
   type Node,
+  type ReactFlowInstance,
 } from "@xyflow/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -120,6 +121,7 @@ function BuilderCanvas({
   initialStatus: string;
 }) {
   const router = useRouter();
+  const flowInstanceRef = useRef<ReactFlowInstance | null>(null);
   const builder = useAutomationBuilder({
     name: initialName,
     description: initialDescription,
@@ -210,16 +212,24 @@ function BuilderCanvas({
     [nodes, edges, setNodes, syncFromCanvas],
   );
 
+  const onDragOver = useCallback((event: React.DragEvent) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+  }, []);
+
   const onDrop = useCallback(
     (event: React.DragEvent) => {
       event.preventDefault();
       const blockType = event.dataTransfer.getData("blockType");
       const block = getBlock(blockType);
       if (!block) return;
-      const bounds = (event.currentTarget as HTMLElement).getBoundingClientRect();
+      const flow = flowInstanceRef.current;
+      const position = flow
+        ? flow.screenToFlowPosition({ x: event.clientX, y: event.clientY })
+        : { x: 200, y: 120 };
       builder.addBlock(block, {
-        x: event.clientX - bounds.left - 100,
-        y: event.clientY - bounds.top - 40,
+        x: position.x - 100,
+        y: position.y - 40,
       });
     },
     [builder],
@@ -402,7 +412,7 @@ function BuilderCanvas({
 
         <div
           className="flex-1 min-w-0 relative select-none"
-          onDragOver={(e) => e.preventDefault()}
+          onDragOver={onDragOver}
           onDrop={onDrop}
         >
           {builder.definition.nodes.length === 0 ? (
@@ -413,6 +423,15 @@ function BuilderCanvas({
           <ReactFlow
             nodes={nodes}
             edges={edges}
+            onInit={(instance) => {
+              flowInstanceRef.current = instance;
+            }}
+            onMoveEnd={(_, viewport) => {
+              builder.setDefinition(
+                { ...builder.definition, viewport },
+                false,
+              );
+            }}
             onNodesChange={onNodesChange}
             onEdgesChange={(changes) => {
               onEdgesChange(changes);
