@@ -6,20 +6,20 @@ Multi-tenant business texting SaaS — campaigns, shared inbox, automations, com
 
 - **Next.js 16** (App Router) + TypeScript + Tailwind CSS v4
 - **Supabase** (Postgres via `@supabase/supabase-js`, same env style as Local SEO Express)
-- **Twilio ISV messaging** (subaccounts, A2P 10DLC, Messaging Service sends) + optional BullMQ worker
+- **Telnyx messaging** (A2P 10DLC brand/campaign registration, Messaging Profile sends) with a legacy Twilio ISV path kept for rollback + optional BullMQ worker
 
-## Quick start (demo UI)
+## Quick start
 
-The app runs with seeded mock data — no database required for browsing.
+The app is backed by Supabase — configure the database (see below) before running.
 
 ```powershell
 npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) and sign in with any email/password (demo mode).
+Open [http://localhost:3000](http://localhost:3000) and sign in with a seeded account.
 
-**Demo account defaults on login page:**
+**Seeded account defaults on login page:**
 - Email: `alex@harborhome.co`
 - Password: `demo1234`
 
@@ -51,7 +51,7 @@ See **[docs/DATABASE.md](docs/DATABASE.md)**. SQL files under `supabase/` remain
 | `npm run build` | Production build |
 | `npm run worker:all` | Job worker (A2P advance + campaign sends) |
 | `npm run db:push` | Apply Prisma schema to Postgres (preferred) |
-| `npm run db:seed` | Seed demo workspace into Supabase |
+| `npm run db:seed` | Seed a starter workspace into Supabase |
 | `npm run db:schema` | Regenerate `supabase/schema.sql` from Prisma schema (dev only) |
 | `npm run test:messaging-wiring` | Messaging wiring checks (needs Supabase env) |
 
@@ -101,7 +101,7 @@ Separate shell for customer management, A2P queue, message monitoring, billing, 
 | `/api/auth/signup` | POST | Create account + workspace |
 | `/api/auth/logout` | POST | Clear session |
 | `/api/workspace` | POST | Switch active workspace |
-| `/api/messaging/registration` | GET/POST | Twilio ISV registration actions |
+| `/api/messaging/registration` | GET/POST | A2P brand/campaign registration actions (Telnyx + legacy Twilio ISV) |
 | `/api/messaging/numbers` | GET | Search available numbers |
 | `/api/campaigns` | GET/POST | List/create campaigns (sequence + enroll) |
 | `/api/campaigns/{id}/enroll` | POST | Enroll contacts into a campaign |
@@ -132,7 +132,6 @@ src/
     ui/              Buttons, tables, cards, status chips
     send/, inbox/    Feature components
   lib/
-    mock/data.ts     Demo workspace data
     nav.ts           Sidebar navigation config
     sms/provider.ts  SMS provider interface
 prisma/
