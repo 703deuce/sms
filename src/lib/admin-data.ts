@@ -53,9 +53,12 @@ export async function loadAdminCustomers(): Promise<AdminCustomer[]> {
   }) as WorkspaceAggregate[];
 
   return workspaces.map((ws) => {
-    const sent = ws.campaigns.reduce((s: number, c: { sent: number }) => s + c.sent, 0);
-    const outbound = ws.usageRecords[0]?.outbound ?? sent;
-    const optOuts = ws.campaigns.reduce((s: number, c: { optOuts: number }) => s + c.optOuts, 0);
+    const campaigns = ws.campaigns ?? [];
+    const usageRecords = ws.usageRecords ?? [];
+    const memberships = ws.memberships ?? [];
+    const sent = campaigns.reduce((s: number, c: { sent: number }) => s + c.sent, 0);
+    const outbound = usageRecords[0]?.outbound ?? sent;
+    const optOuts = campaigns.reduce((s: number, c: { optOuts: number }) => s + c.optOuts, 0);
     const optOutRate = sent > 0 ? optOuts / sent : 0;
     const reg = ws.messagingRegistration;
     const brandOk = (reg?.brandStatus || "").toLowerCase() === "approved";
@@ -80,7 +83,7 @@ export async function loadAdminCustomers(): Promise<AdminCustomer[]> {
       a2p,
       risk,
       createdAt: ws.createdAt,
-      memberCount: ws.memberships.length,
+      memberCount: memberships.length,
     };
   });
 }
@@ -119,12 +122,15 @@ export async function loadAdminUsageTotals() {
     prisma.phoneNumber.findMany({ select: { monthlyCostCents: true } }),
   ]);
 
-  const messageVolume = usage.reduce((s: number, u: { outbound: number }) => s + u.outbound, 0) || campaigns.reduce((s: number, c: { sent: number }) => s + c.sent, 0);
-  const costCents = usage.reduce((s: number, u: { costCents: number }) => s + u.costCents, 0) || campaigns.reduce((s: number, c: { costCents: number }) => s + c.costCents, 0);
-  const delivered = campaigns.reduce((s: number, c: { delivered: number }) => s + c.delivered, 0);
-  const sent = campaigns.reduce((s: number, c: { sent: number }) => s + c.sent, 0);
+  const usageList = usage ?? [];
+  const campaignList = campaigns ?? [];
+  const numberList = numbers ?? [];
+  const messageVolume = usageList.reduce((s: number, u: { outbound: number }) => s + u.outbound, 0) || campaignList.reduce((s: number, c: { sent: number }) => s + c.sent, 0);
+  const costCents = usageList.reduce((s: number, u: { costCents: number }) => s + u.costCents, 0) || campaignList.reduce((s: number, c: { costCents: number }) => s + c.costCents, 0);
+  const delivered = campaignList.reduce((s: number, c: { delivered: number }) => s + c.delivered, 0);
+  const sent = campaignList.reduce((s: number, c: { sent: number }) => s + c.sent, 0);
   const failed = Math.max(0, sent - delivered);
-  const monthlyNumberCost = numbers.reduce((s: number, n: { monthlyCostCents: number }) => s + n.monthlyCostCents, 0) / 100;
+  const monthlyNumberCost = numberList.reduce((s: number, n: { monthlyCostCents: number }) => s + n.monthlyCostCents, 0) / 100;
 
   return {
     messageVolume,

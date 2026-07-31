@@ -74,32 +74,50 @@ export function BusinessSettingsForm({
       const cityLine = addressLines[1] || "";
       const cityMatch = cityLine.match(/^([^,]+),\s*([A-Za-z]{2})\s*(.*)$/);
 
-      const regRes = await fetch("/api/messaging/registration", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "save_business",
-          legalBusinessName: accountName || registration?.legalBusinessName || workspaceName,
-          dbaName: registration?.dbaName || "",
-          businessType: registration?.businessType || "llc",
-          businessIndustry: registration?.businessIndustry || "other",
-          businessIdentity: registration?.businessIdentity || "",
-          businessRegistrationId: registration?.businessRegistrationId || "000000000",
-          websiteUrl: registration?.websiteUrl || "https://example.com",
-          street,
-          city: cityMatch?.[1]?.trim() || registration?.city || "—",
-          region: cityMatch?.[2]?.trim() || registration?.region || "CA",
-          postalCode: cityMatch?.[3]?.trim() || registration?.postalCode || "00000",
-          country: registration?.country || "US",
-          contactFirstName: registration?.contactFirstName || "Account",
-          contactLastName: registration?.contactLastName || "Owner",
-          contactEmail: supportEmail || registration?.contactEmail || "support@example.com",
-          contactPhone: businessPhone || registration?.contactPhone || "+10000000000",
-          contactTitle: registration?.contactTitle || "",
-        }),
-      });
-      const regJson = await regRes.json();
-      if (!regRes.ok) throw new Error(regJson.error || "Failed to save business profile");
+      const defaultAddress = addressParts.join("\n");
+      const userEditedRegFields =
+        supportEmail !== (registration?.contactEmail || "") ||
+        businessPhone !== (registration?.contactPhone || "") ||
+        address !== defaultAddress;
+
+      // Only sync to compliance registration when the user edited profile fields.
+      if (userEditedRegFields) {
+        const regRes = await fetch("/api/messaging/registration", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "save_business",
+            legalBusinessName: accountName || registration?.legalBusinessName || workspaceName,
+            dbaName: registration?.dbaName || "",
+            businessType: registration?.businessType || "llc",
+            businessIndustry: registration?.businessIndustry || "other",
+            businessIdentity: registration?.businessIdentity || "",
+            businessRegistrationId: registration?.businessRegistrationId || "000000000",
+            websiteUrl: registration?.websiteUrl || "https://example.com",
+            street: street.length >= 2 ? street : registration?.street || "123 Main Street",
+            city:
+              (cityMatch?.[1]?.trim() || registration?.city || "").length >= 2
+                ? cityMatch?.[1]?.trim() || registration?.city
+                : "San Francisco",
+            region:
+              (cityMatch?.[2]?.trim() || registration?.region || "").length >= 2
+                ? cityMatch?.[2]?.trim() || registration?.region
+                : "CA",
+            postalCode:
+              (cityMatch?.[3]?.trim() || registration?.postalCode || "").length >= 3
+                ? cityMatch?.[3]?.trim() || registration?.postalCode
+                : "94102",
+            country: registration?.country || "US",
+            contactFirstName: registration?.contactFirstName || "Account",
+            contactLastName: registration?.contactLastName || "Owner",
+            contactEmail: supportEmail || registration?.contactEmail || "support@example.com",
+            contactPhone: businessPhone || registration?.contactPhone || "+10000000000",
+            contactTitle: registration?.contactTitle || "",
+          }),
+        });
+        const regJson = await regRes.json();
+        if (!regRes.ok) throw new Error(regJson.error || "Failed to save business profile");
+      }
 
       setSaved(true);
     } catch (err) {
