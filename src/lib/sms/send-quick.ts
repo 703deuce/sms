@@ -1,5 +1,7 @@
 import { getPrisma } from "@/lib/db";
-import { requireCampaignSendAccess } from "@/lib/billing/entitlements";
+import { checkCreditBalance } from "@/lib/billing/entitlements";
+import { deductCreditsForSend } from "@/lib/settings/billing";
+import { assertWithinWorkspaceLimits } from "@/lib/settings/limits";
 import { randomTrackingToken } from "@/lib/messaging/crypto";
 import { isMessagingReady } from "@/lib/messaging/status";
 import { getRegistrationByWorkspace } from "@/lib/messaging/store";
@@ -22,8 +24,9 @@ export type QuickSendSmsInput = {
 };
 
 export async function sendQuickSms(input: QuickSendSmsInput) {
-  const entitlement = requireCampaignSendAccess(input.workspaceId);
+  const entitlement = await checkCreditBalance(input.workspaceId);
   if (!entitlement.ok) throw new Error(entitlement.error);
+  await assertWithinWorkspaceLimits(input.workspaceId);
 
   const to = normalizeE164(input.to);
   const prisma = getPrisma();
@@ -213,6 +216,12 @@ export async function sendQuickSms(input: QuickSendSmsInput) {
       console.warn("[sendQuickSms] contact upsert failed after send", contactErr);
     }
 
+    try {
+      await deductCreditsForSend(input.workspaceId, 1, "Quick SMS send");
+    } catch (creditErr) {
+      console.warn("[sendQuickSms] credit deduction failed", pending.id, creditErr);
+    }
+
     return { ...result, trackingToken, trackingUrl: trackedUrl, messageId: pending.id };
   } catch (err) {
     if (providerAccepted) {
@@ -225,6 +234,11 @@ export async function sendQuickSms(input: QuickSendSmsInput) {
           },
         })
         .catch(() => undefined);
+      try {
+        await deductCreditsForSend(input.workspaceId, 1, "Quick SMS send");
+      } catch (creditErr) {
+        console.warn("[sendQuickSms] credit deduction failed", pending.id, creditErr);
+      }
       return {
         sid: providerSid || pending.id,
         status: "sent",

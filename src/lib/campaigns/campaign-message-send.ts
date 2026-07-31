@@ -1,5 +1,7 @@
 import { getPrisma } from "@/lib/db";
-import { requireCampaignSendAccess } from "@/lib/billing/entitlements";
+import { checkCreditBalance } from "@/lib/billing/entitlements";
+import { deductCreditsForSend } from "@/lib/settings/billing";
+import { assertWithinWorkspaceLimits } from "@/lib/settings/limits";
 import { sendTransactionalEmail } from "@/lib/email/brevo";
 import { JobDeferredError, JobFailedError } from "@/lib/messaging/types";
 import { sendViaRegistration } from "@/lib/messaging/registration-processor";
@@ -223,7 +225,7 @@ export async function sendCampaignMessageById(messageId: string) {
   const claimed = await claimMessage(messageId);
   if (!claimed) return { skipped: true, status: "race" };
 
-  const entitlement = requireCampaignSendAccess(message.workspaceId);
+  const entitlement = await checkCreditBalance(message.workspaceId);
   if (!entitlement.ok) {
     await prisma.campaignMessage.update({
       where: { id: messageId },
@@ -231,6 +233,18 @@ export async function sendCampaignMessageById(messageId: string) {
     });
     await failRecipient(message.recipientId, entitlement.error);
     throw new JobFailedError(entitlement.error);
+  }
+
+  try {
+    await assertWithinWorkspaceLimits(message.workspaceId);
+  } catch (limitErr) {
+    const reason = limitErr instanceof Error ? limitErr.message : "workspace_limit";
+    const tomorrow = new Date(Date.now() + 60 * 60 * 1000);
+    await prisma.campaignMessage.updateMany({
+      where: { id: messageId, status: "sending" },
+      data: { status: "queued", scheduledFor: tomorrow, error: reason },
+    });
+    throw new JobDeferredError(reason, 60 * 60_000);
   }
 
   if (message.channel === "sms" && message.to) {
@@ -379,6 +393,14 @@ export async function sendCampaignMessageById(messageId: string) {
         error: null,
       },
     });
+
+    if (message.channel === "sms") {
+      try {
+        await deductCreditsForSend(message.workspaceId, 1, `Campaign SMS ${message.campaignId}`);
+      } catch (creditErr) {
+        console.warn("[sendCampaignMessageById] credit deduction failed", messageId, creditErr);
+      }
+    }
 
     await finalizeSentMessage(messageId);
     return { ok: true };
