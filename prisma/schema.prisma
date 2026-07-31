@@ -96,23 +96,42 @@ enum PaymentLinkStatus {
 }
 
 model User {
-  id           String       @id @default(cuid())
-  email        String       @unique
-  name         String
-  passwordHash String?
-  isPlatformAdmin Boolean   @default(false)
-  createdAt    DateTime     @default(now())
-  memberships  Membership[]
+  id                  String       @id @default(cuid())
+  email               String       @unique
+  name                String
+  passwordHash        String?
+  isPlatformAdmin     Boolean      @default(false)
+  totpSecretEnc       String?
+  totpEnabled         Boolean      @default(false)
+  totpBackupCodes     String[]     @default([])
+  deletionRequestedAt DateTime?
+  createdAt           DateTime     @default(now())
+  memberships         Membership[]
   assignedConversations Conversation[] @relation("Assignee")
-  auditLogs    AuditLog[]
+  auditLogs           AuditLog[]
+  phoneAssignments    PhoneNumberAssignment[]
+  inAppNotifications  InAppNotification[]
+  invitesSent         WorkspaceInvite[] @relation("InviteSender")
 }
 
 model Workspace {
-  id          String   @id @default(cuid())
-  name        String
-  slug        String   @unique
-  customFieldsConfig Json?
-  createdAt   DateTime @default(now())
+  id                   String   @id @default(cuid())
+  name                 String
+  slug                 String   @unique
+  displayName          String?
+  logoUrl              String?
+  primaryColor         String?  @default("#0f766e")
+  accentColor          String?  @default("#0ea5e9")
+  shortLinkDomain      String?
+  formTheme            String?  @default("light")
+  reviewLinkUrl        String?
+  stripeCustomerId     String?
+  stripeSubscriptionId String?
+  billingPlan          String?  @default("growth")
+  creditBalanceCents   Int      @default(0)
+  customFieldsConfig   Json?
+  activeFromNumberId   String?
+  createdAt            DateTime @default(now())
   memberships Membership[]
   phoneNumbers PhoneNumber[]
   contacts    Contact[]
@@ -192,6 +211,12 @@ model Workspace {
   workspacePhoneSettings WorkspacePhoneSettings?
   creditLedgerEntries CreditLedgerEntry[]
   senderPools SenderPool[]
+  invites WorkspaceInvite[]
+  inAppNotifications InAppNotification[]
+  contests Contest[]
+  integrationConnections IntegrationConnection[]
+  callQueues CallQueue[]
+  ivrMenus IvrMenu[]
 }
 
 model SenderPool {
@@ -235,10 +260,163 @@ model PhoneNumber {
   status           String   @default("Active")
   purchasedAt      DateTime?
   releasedAt       DateTime?
+  voiceForwardTo   String?
+  webhookUrl       String?
+  capabilitiesJson Json?
+  settingsJson     Json?
   workspace        Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  assignments      PhoneNumberAssignment[]
 
   @@unique([workspaceId, e164])
   @@index([twilioSid])
+}
+
+model PhoneNumberAssignment {
+  id            String   @id @default(cuid())
+  phoneNumberId String
+  userId        String
+  createdAt     DateTime @default(now())
+  phoneNumber   PhoneNumber @relation(fields: [phoneNumberId], references: [id], onDelete: Cascade)
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([phoneNumberId, userId])
+  @@index([userId])
+  @@map("phone_number_assignments")
+}
+
+model WorkspaceInvite {
+  id          String    @id @default(cuid())
+  workspaceId String
+  email       String
+  role        Role      @default(INBOX_AGENT)
+  tokenHash   String    @unique
+  invitedById String?
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  invitedBy   User?     @relation("InviteSender", fields: [invitedById], references: [id], onDelete: SetNull)
+
+  @@unique([workspaceId, email])
+  @@index([email])
+  @@map("workspace_invites")
+}
+
+model InAppNotification {
+  id          String    @id @default(cuid())
+  workspaceId String
+  userId      String
+  type        String
+  title       String
+  body        String?
+  href        String?
+  readAt      DateTime?
+  createdAt   DateTime  @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([workspaceId, userId, readAt])
+  @@map("in_app_notifications")
+}
+
+model Contest {
+  id               String    @id @default(cuid())
+  workspaceId      String
+  name             String
+  keywordId        String?
+  keywordText      String
+  startAt          DateTime?
+  endAt            DateTime?
+  maxEntries       Int?
+  winnerCount      Int       @default(1)
+  status           String    @default("draft")
+  rulesText        String?
+  prizeDescription String?
+  winnerContactIds String[]  @default([])
+  drawnAt          DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  workspace        Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  entries          ContestEntry[]
+
+  @@index([workspaceId, status])
+  @@map("contests")
+}
+
+model ContestEntry {
+  id        String   @id @default(cuid())
+  contestId String
+  contactId String?
+  phone     String
+  createdAt DateTime @default(now())
+  contest   Contest  @relation(fields: [contestId], references: [id], onDelete: Cascade)
+
+  @@unique([contestId, phone])
+  @@index([contestId, createdAt])
+  @@map("contest_entries")
+}
+
+model IntegrationConnection {
+  id           String    @id @default(cuid())
+  workspaceId  String
+  provider     String
+  status       String    @default("disconnected")
+  accessToken  String?
+  refreshToken String?
+  expiresAt    DateTime?
+  externalId   String?
+  configJson   Json?
+  lastSyncAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, provider])
+  @@index([workspaceId])
+  @@map("integration_connections")
+}
+
+model CallQueue {
+  id              String   @id @default(cuid())
+  workspaceId     String
+  name            String
+  strategy        String   @default("ring_all")
+  timeoutSeconds  Int      @default(30)
+  memberUserIds   String[] @default([])
+  overflowAction  String   @default("voicemail")
+  overflowTarget  String?
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@map("call_queues")
+}
+
+model IvrMenu {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  greeting    String?
+  optionsJson Json     @default("[]")
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@map("ivr_menus")
+}
+
+model PlatformSettings {
+  id        String   @id @default("default")
+  plansJson Json     @default("[]")
+  flagsJson Json     @default("{}")
+  updatedAt DateTime @updatedAt
+
+  @@map("platform_settings")
 }
 
 model PortRequest {
@@ -346,6 +524,7 @@ model Campaign {
   sequenceJson   Json?
   /// Category-specific builder options (trigger, delays, stop rules, …)
   configJson     Json?
+  senderPoolId   String?
   successMode    String         @default("click")
   dailySendLimit Int?
   sendWindowStart Int?
@@ -462,6 +641,20 @@ model MessagingRegistration {
   stopMessage               String?
   messageVolume             String?
   vertical                  String?
+  privacyPolicyUrl          String?
+  optInKeywords             String?
+  optOutKeywords            String?
+  helpKeywords              String?
+  optInFormUrl              String?
+  campaignDisplayName       String?
+  subscriberOptIn           Boolean             @default(true)
+  subscriberOptOut          Boolean             @default(true)
+  embeddedLinks             Boolean             @default(true)
+  embeddedPhone             Boolean             @default(false)
+  ageGated                  Boolean             @default(false)
+  directLending             Boolean             @default(false)
+  affiliateMarketing        Boolean             @default(false)
+  numberPoolSize            Int                 @default(1)
 
   certifiedAt               DateTime?
   lastError                 String?
@@ -1682,17 +1875,18 @@ model GrowWidget {
 }
 
 model ContactCardProfile {
-  id           String   @id @default(cuid())
-  workspaceId  String   @unique
-  businessName String
-  logoUrl      String?
-  phone        String?
-  website      String?
-  email        String?
-  address      String?
-  extraFields  Json?
-  updatedAt    DateTime @updatedAt
-  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  id                String   @id @default(cuid())
+  workspaceId       String   @unique
+  businessName      String
+  logoUrl           String?
+  phone             String?
+  website           String?
+  email             String?
+  address           String?
+  extraFields       Json?
+  attachToWelcomeMms Boolean @default(false)
+  updatedAt         DateTime @updatedAt
+  workspace         Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@map("contact_card_profiles")
 }
@@ -1707,6 +1901,10 @@ model WorkspaceMessagingSettings {
   awayAlways       Boolean  @default(false)
   quietHoursStart  String?
   quietHoursEnd    String?
+  optOutKeywords   String?  @default("STOP,UNSUBSCRIBE,CANCEL,END,QUIT")
+  optInKeywords    String?  @default("START,YES,UNSTOP")
+  helpKeywords     String?  @default("HELP,INFO")
+  reviewLinkUrl    String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
   workspace        Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -1838,15 +2036,32 @@ model WorkspacePhoneSettings {
 }
 
 model CreditLedgerEntry {
-  id                String   @id @default(cuid())
-  workspaceId       String
-  amountCents       Int
-  balanceAfterCents Int?
-  description       String
-  source            String   @default("adjustment")
-  createdAt         DateTime @default(now())
-  workspace         Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  id                    String   @id @default(cuid())
+  workspaceId           String
+  amountCents           Int
+  balanceAfterCents     Int?
+  description           String
+  source                String   @default("adjustment")
+  stripeSessionId       String?
+  stripePaymentIntentId String?
+  createdAt             DateTime @default(now())
+  workspace             Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
+  @@unique([stripeSessionId])
   @@index([workspaceId, createdAt])
   @@map("credit_ledger_entries")
+}
+
+model SupportTicket {
+  id          String   @id @default(cuid())
+  workspaceId String?
+  email       String
+  subject     String
+  body        String
+  status      String   @default("open")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([status, createdAt])
+  @@map("support_tickets")
 }

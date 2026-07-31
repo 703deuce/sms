@@ -101,6 +101,16 @@ const MODEL_TO_TABLE: Record<string, string> = {
   workspacePhoneSettings: "workspace_phone_settings",
   creditLedgerEntry: "credit_ledger_entries",
   senderPool: "sender_pools",
+  phoneNumberAssignment: "phone_number_assignments",
+  workspaceInvite: "workspace_invites",
+  inAppNotification: "in_app_notifications",
+  contest: "contests",
+  contestEntry: "contest_entries",
+  integrationConnection: "integration_connections",
+  callQueue: "call_queues",
+  ivrMenu: "ivr_menus",
+  platformSettings: "platform_settings",
+  supportTicket: "support_tickets",
 };
 
 /** Relation name on a model → { table, fk on this model, pk on related }. */
@@ -119,6 +129,24 @@ const RELATIONS: Record<string, Record<string, { table: string; fk: string; pk?:
   workspacePhoneSettings: { workspace: { table: "Workspace", fk: "workspaceId" } },
   creditLedgerEntry: { workspace: { table: "Workspace", fk: "workspaceId" } },
   senderPool: { workspace: { table: "Workspace", fk: "workspaceId" } },
+  phoneNumberAssignment: {
+    phoneNumber: { table: "PhoneNumber", fk: "phoneNumberId" },
+    user: { table: "User", fk: "userId" },
+  },
+  workspaceInvite: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+    invitedBy: { table: "User", fk: "invitedById" },
+  },
+  inAppNotification: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+    user: { table: "User", fk: "userId" },
+  },
+  contest: { workspace: { table: "Workspace", fk: "workspaceId" } },
+  contestEntry: { contest: { table: "contests", fk: "contestId" } },
+  integrationConnection: { workspace: { table: "Workspace", fk: "workspaceId" } },
+  callQueue: { workspace: { table: "Workspace", fk: "workspaceId" } },
+  ivrMenu: { workspace: { table: "Workspace", fk: "workspaceId" } },
+  supportTicket: {},
   contact: { workspace: { table: "Workspace", fk: "workspaceId" } },
   campaign: { workspace: { table: "Workspace", fk: "workspaceId" } },
   campaignRecipient: {
