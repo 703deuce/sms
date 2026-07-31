@@ -27,16 +27,25 @@ export async function GET(
 
   const workspace = await prisma.workspace.findUnique({
     where: { id: form.workspaceId },
-    select: { name: true },
+    select: {
+      name: true,
+      displayName: true,
+      logoUrl: true,
+      primaryColor: true,
+      accentColor: true,
+      formTheme: true,
+    },
   });
 
   const config = parseFormConfig(form.config);
+  const workspaceTheme = workspace?.formTheme === "dark" ? "dark" : "light";
   const branding = {
-    businessName: config.branding?.businessName || workspace?.name || "Transovo",
-    primaryColor: config.branding?.primaryColor || "#2563eb",
-    accentColor: config.branding?.accentColor || "#0ea5e9",
-    theme: config.branding?.theme || "light",
-    logoUrl: config.branding?.logoUrl || null,
+    businessName:
+      config.branding?.businessName || workspace?.displayName || workspace?.name || "Transovo",
+    primaryColor: config.branding?.primaryColor || workspace?.primaryColor || "#2563eb",
+    accentColor: config.branding?.accentColor || workspace?.accentColor || "#0ea5e9",
+    theme: config.branding?.theme || workspaceTheme,
+    logoUrl: config.branding?.logoUrl || workspace?.logoUrl || null,
   };
 
   // Track page views (hosted page + embed loads)

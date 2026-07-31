@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
-import { Label, Select } from "@/components/ui/input";
+import { Input, Label, Select } from "@/components/ui/input";
 import { PageHeader } from "@/components/ui/page-header";
 import { Tabs } from "@/components/ui/tabs";
 import { AlertTriangle } from "lucide-react";
@@ -27,6 +27,11 @@ export function DataSettingsPanel() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [showDelete, setShowDelete] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [deleteMsg, setDeleteMsg] = useState("");
+  const [deleteError, setDeleteError] = useState("");
 
   useEffect(() => {
     fetch("/api/settings/data")
@@ -82,6 +87,30 @@ export function DataSettingsPanel() {
 
   async function exportContacts() {
     window.open("/api/contacts/export", "_blank");
+  }
+
+  async function requestDeletion() {
+    setDeleting(true);
+    setDeleteMsg("");
+    setDeleteError("");
+    try {
+      const res = await fetch("/api/settings/data/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirm: deleteConfirm }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Deletion request failed");
+      setDeleteMsg(
+        `Deletion requested. ${json.releasedNumbers || 0} phone number(s) released and ${json.workspacesFlagged || 0} workspace(s) flagged for removal.`,
+      );
+      setShowDelete(false);
+      setDeleteConfirm("");
+    } catch (e) {
+      setDeleteError(e instanceof Error ? e.message : "Deletion request failed");
+    } finally {
+      setDeleting(false);
+    }
   }
 
   return (
@@ -171,13 +200,45 @@ export function DataSettingsPanel() {
           <div>
             <p className="text-sm font-medium text-red-950">Permanent account deletion</p>
             <p className="mt-1 text-sm text-red-900/80">
-              Contact support to request account deletion. This will release phone numbers and remove workspace data.
+              This flags your account for deletion, releases phone numbers, and marks workspaces you own for removal. This action cannot be undone.
             </p>
           </div>
         </div>
-        <Button variant="danger" size="sm" className="mt-4" disabled>
-          Request account deletion
-        </Button>
+
+        {showDelete ? (
+          <div className="mt-4 max-w-md space-y-3">
+            <div>
+              <Label htmlFor="deleteConfirm">
+                Type <span className="font-mono font-semibold">DELETE</span> to confirm
+              </Label>
+              <Input
+                id="deleteConfirm"
+                value={deleteConfirm}
+                onChange={(e) => setDeleteConfirm(e.target.value)}
+                placeholder="DELETE"
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={requestDeletion}
+                disabled={deleting || deleteConfirm !== "DELETE"}
+              >
+                {deleting ? "Requesting…" : "Confirm deletion"}
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setShowDelete(false)}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <Button variant="danger" size="sm" className="mt-4" onClick={() => setShowDelete(true)}>
+            Request account deletion
+          </Button>
+        )}
+        {deleteMsg ? <p className="mt-3 text-sm text-primary">{deleteMsg}</p> : null}
+        {deleteError ? <p className="mt-3 text-sm text-danger">{deleteError}</p> : null}
       </Card>
     </div>
   );

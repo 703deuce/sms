@@ -116,6 +116,11 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       const { tickRecurringCampaigns } = await import("@/lib/campaigns/recurrence");
       return tickRecurringCampaigns();
     }
+    case "notification_digest": {
+      const { processNotificationDigests } = await import("@/lib/notifications/digest");
+      const frequency = String(payload.frequency || "daily");
+      return processNotificationDigests(frequency);
+    }
     default:
       throw new Error(`Unknown job type: ${jobType}`);
   }
@@ -149,6 +154,12 @@ export async function processDueJobs(limit = 25) {
     queueName: "maintenance",
     payload: { dayKey },
     idempotencyKey: `list-cleanup:${dayKey}`,
+  });
+  await enqueueJob({
+    jobType: "notification_digest",
+    queueName: "maintenance",
+    payload: { dayKey, frequency: "daily" },
+    idempotencyKey: `notification-digest:daily:${dayKey}`,
   });
   await enqueueJob({
     jobType: "campaign_recurrence_tick",

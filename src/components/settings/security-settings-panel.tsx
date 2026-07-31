@@ -39,12 +39,103 @@ export function SecuritySettingsPanel() {
   const [passwordError, setPasswordError] = useState("");
   const [changing, setChanging] = useState(false);
 
+  const [totpEnabled, setTotpEnabled] = useState(false);
+  const [backupRemaining, setBackupRemaining] = useState(0);
+  const [twoFaMode, setTwoFaMode] = useState<"idle" | "setup" | "disable">("idle");
+  const [qrDataUrl, setQrDataUrl] = useState("");
+  const [manualSecret, setManualSecret] = useState("");
+  const [twoFaCode, setTwoFaCode] = useState("");
+  const [disablePassword, setDisablePassword] = useState("");
+  const [twoFaBusy, setTwoFaBusy] = useState(false);
+  const [twoFaError, setTwoFaError] = useState("");
+  const [backupCodes, setBackupCodes] = useState<string[]>([]);
+
   useEffect(() => {
     fetch("/api/settings/security/sessions")
       .then((r) => r.json())
       .then((j) => setSessions(j.data || []))
       .catch(() => undefined);
+    fetch("/api/settings/security")
+      .then((r) => r.json())
+      .then((j) => {
+        if (j.data) {
+          setTotpEnabled(Boolean(j.data.totpEnabled));
+          setBackupRemaining(j.data.backupCodesRemaining || 0);
+        }
+      })
+      .catch(() => undefined);
   }, []);
+
+  async function startSetup() {
+    setTwoFaBusy(true);
+    setTwoFaError("");
+    setBackupCodes([]);
+    try {
+      const res = await fetch("/api/settings/security", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "setup_2fa" }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Failed to start setup");
+      setQrDataUrl(json.data.qrDataUrl);
+      setManualSecret(json.data.secret);
+      setTwoFaMode("setup");
+      setTwoFaCode("");
+    } catch (e) {
+      setTwoFaError(e instanceof Error ? e.message : "Failed to start setup");
+    } finally {
+      setTwoFaBusy(false);
+    }
+  }
+
+  async function enable2fa() {
+    setTwoFaBusy(true);
+    setTwoFaError("");
+    try {
+      const res = await fetch("/api/settings/security", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "enable_2fa", code: twoFaCode }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Invalid code");
+      setTotpEnabled(true);
+      setBackupCodes(json.data.backupCodes || []);
+      setBackupRemaining((json.data.backupCodes || []).length);
+      setTwoFaMode("idle");
+      setQrDataUrl("");
+      setManualSecret("");
+      setTwoFaCode("");
+    } catch (e) {
+      setTwoFaError(e instanceof Error ? e.message : "Invalid code");
+    } finally {
+      setTwoFaBusy(false);
+    }
+  }
+
+  async function disable2fa() {
+    setTwoFaBusy(true);
+    setTwoFaError("");
+    try {
+      const res = await fetch("/api/settings/security", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "disable_2fa", password: disablePassword, code: twoFaCode }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Failed to disable 2FA");
+      setTotpEnabled(false);
+      setBackupRemaining(0);
+      setTwoFaMode("idle");
+      setDisablePassword("");
+      setTwoFaCode("");
+    } catch (e) {
+      setTwoFaError(e instanceof Error ? e.message : "Failed to disable 2FA");
+    } finally {
+      setTwoFaBusy(false);
+    }
+  }
 
   async function changePassword() {
     setChanging(true);
@@ -121,13 +212,108 @@ export function SecuritySettingsPanel() {
           <div className="mt-4 flex items-center justify-between rounded-lg border border-border p-4">
             <div>
               <p className="text-sm font-medium">Authenticator app</p>
-              <p className="text-xs text-muted-foreground">Not enabled</p>
+              <p className="text-xs text-muted-foreground">
+                {totpEnabled
+                  ? `Enabled · ${backupRemaining} backup codes remaining`
+                  : "Not enabled"}
+              </p>
             </div>
-            <StatusChip status="Pending" />
+            <StatusChip status={totpEnabled ? "Active" : "Pending"} />
           </div>
-          <Button variant="outline" size="sm" className="mt-4" disabled>
-            Enable 2FA
-          </Button>
+
+          {backupCodes.length > 0 ? (
+            <div className="mt-4 rounded-lg border border-border bg-muted/40 p-4">
+              <p className="text-sm font-medium">Save your backup codes</p>
+              <p className="text-xs text-muted-foreground">
+                Each code can be used once if you lose access to your authenticator.
+              </p>
+              <div className="mt-3 grid grid-cols-2 gap-2 font-mono text-sm">
+                {backupCodes.map((code) => (
+                  <span key={code}>{code}</span>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {twoFaMode === "setup" ? (
+            <div className="mt-4 space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Scan this QR code with your authenticator app, then enter the 6-digit code.
+              </p>
+              {qrDataUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={qrDataUrl} alt="2FA QR code" className="h-40 w-40 rounded-lg border border-border" />
+              ) : null}
+              {manualSecret ? (
+                <p className="text-xs text-muted-foreground">
+                  Or enter this key manually: <span className="font-mono text-foreground">{manualSecret}</span>
+                </p>
+              ) : null}
+              <div className="max-w-[200px]">
+                <Label htmlFor="totpCode">Verification code</Label>
+                <Input
+                  id="totpCode"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  value={twoFaCode}
+                  onChange={(e) => setTwoFaCode(e.target.value)}
+                  placeholder="123456"
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button size="sm" onClick={enable2fa} disabled={twoFaBusy}>
+                  {twoFaBusy ? "Verifying…" : "Verify & enable"}
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setTwoFaMode("idle")}>
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          ) : twoFaMode === "disable" ? (
+            <div className="mt-4 space-y-3">
+              <div className="max-w-xs">
+                <Label htmlFor="disablePassword">Password</Label>
+                <Input
+                  id="disablePassword"
+                  type="password"
+                  value={disablePassword}
+                  onChange={(e) => setDisablePassword(e.target.value)}
+                />
+              </div>
+              <div className="max-w-[200px]">
+                <Label htmlFor="disableCode">Authenticator or backup code</Label>
+                <Input
+                  id="disableCode"
+                  value={twoFaCode}
+                  onChange={(e) => setTwoFaCode(e.target.value)}
+                  placeholder="123456"
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button size="sm" variant="danger" onClick={disable2fa} disabled={twoFaBusy}>
+                  {twoFaBusy ? "Disabling…" : "Disable 2FA"}
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setTwoFaMode("idle")}>
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          ) : totpEnabled ? (
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-4"
+              onClick={() => { setTwoFaMode("disable"); setTwoFaError(""); setTwoFaCode(""); }}
+            >
+              Disable 2FA
+            </Button>
+          ) : (
+            <Button variant="outline" size="sm" className="mt-4" onClick={startSetup} disabled={twoFaBusy}>
+              {twoFaBusy ? "Starting…" : "Enable 2FA"}
+            </Button>
+          )}
+
+          {twoFaError ? <p className="mt-2 text-sm text-danger">{twoFaError}</p> : null}
         </Card>
 
         <Card>

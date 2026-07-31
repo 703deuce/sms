@@ -23,6 +23,8 @@ export default async function AppLayout({
       workspaces={shell.workspaces}
       phoneNumbers={shell.phoneNumbers}
       metrics={shell.metrics}
+      activeFromNumberId={shell.activeFromNumberId}
+      unreadNotifications={shell.unreadNotifications}
     >
       {children}
     </AppShell>

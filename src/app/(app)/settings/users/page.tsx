@@ -1,11 +1,13 @@
 import { TeamMemberRow } from "@/components/settings/team-member-row";
 import { InviteUserButton } from "@/components/settings/invite-user-button";
+import { PendingInvites } from "@/components/settings/pending-invites";
 import { Card, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Tabs } from "@/components/ui/tabs";
 import { loadTeamMembers, requireWorkspaceContext } from "@/lib/workspace-data";
+import { loadPendingInvites } from "@/lib/team/invites";
 
 const settingsTabs = [
   { label: "Business", href: "/settings/business" },
@@ -22,7 +24,10 @@ const settingsTabs = [
 
 export default async function SettingsUsersPage() {
   const { workspaceId } = await requireWorkspaceContext();
-  const teamMembers = await loadTeamMembers(workspaceId);
+  const [teamMembers, pendingInvites] = await Promise.all([
+    loadTeamMembers(workspaceId),
+    loadPendingInvites(workspaceId),
+  ]);
 
   return (
     <div>
@@ -72,6 +77,8 @@ export default async function SettingsUsersPage() {
           </Table>
         )}
       </Card>
+
+      <PendingInvites invites={pendingInvites} />
 
       <Card className="mt-4">
         <CardTitle>Role permissions</CardTitle>

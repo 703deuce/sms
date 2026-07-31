@@ -593,10 +593,21 @@ export async function loadComplianceOverview(workspaceId: string) {
 }
 
 export async function loadShellData(userId: string, workspaceId: string) {
-  const [workspaces, phoneNumbers, metrics] = await Promise.all([
+  const [workspaces, phoneNumbers, metrics, workspace, unreadNotifications] = await Promise.all([
     loadWorkspacesForUser(userId),
     loadPhoneNumbers(workspaceId),
     loadDashboardMetrics(workspaceId),
+    loadWorkspace(workspaceId),
+    getPrisma()
+      .inAppNotification.count({ where: { workspaceId, userId, readAt: null } })
+      .catch(() => 0),
   ]);
-  return { workspaces, phoneNumbers, metrics };
+  return {
+    workspaces,
+    phoneNumbers,
+    metrics,
+    activeFromNumberId:
+      (workspace as { activeFromNumberId?: string | null } | null)?.activeFromNumberId ?? null,
+    unreadNotifications,
+  };
 }

@@ -15,6 +15,8 @@ export function AppShell({
   workspaces,
   phoneNumbers,
   metrics,
+  activeFromNumberId,
+  unreadNotifications,
 }: {
   children: React.ReactNode;
   userName: string;
@@ -22,6 +24,8 @@ export function AppShell({
   workspaces: Workspace[];
   phoneNumbers: PhoneNumber[];
   metrics: DashboardMetrics;
+  activeFromNumberId?: string | null;
+  unreadNotifications?: number;
 }) {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -42,6 +46,8 @@ export function AppShell({
           userName={userName}
           phoneNumbers={phoneNumbers}
           metrics={metrics}
+          activeFromNumberId={activeFromNumberId}
+          unreadNotifications={unreadNotifications}
           onMenuClick={() => setMenuOpen(true)}
         />
         <main className="px-4 pb-28 pt-5 lg:px-6 lg:pb-8">{children}</main>

@@ -91,13 +91,39 @@ export async function PUT(request: Request) {
   try {
     const auth = await requireSession();
     if ("error" in auth) return auth.error;
-    const body = (await request.json()) as { name?: string };
-    if (!body.name?.trim()) {
-      return NextResponse.json({ error: "name required" }, { status: 400 });
+    const body = (await request.json()) as {
+      name?: string;
+      activeFromNumberId?: string | null;
+    };
+
+    const data: Record<string, unknown> = {};
+    if (body.name !== undefined) {
+      if (!body.name.trim()) {
+        return NextResponse.json({ error: "name required" }, { status: 400 });
+      }
+      data.name = body.name.trim();
     }
+
+    if (body.activeFromNumberId !== undefined) {
+      if (body.activeFromNumberId) {
+        // Ensure the number belongs to this workspace before persisting it.
+        const owned = await getPrisma().phoneNumber.findFirst({
+          where: { id: body.activeFromNumberId, workspaceId: auth.workspaceId },
+        });
+        if (!owned) {
+          return NextResponse.json({ error: "Unknown phone number" }, { status: 400 });
+        }
+      }
+      data.activeFromNumberId = body.activeFromNumberId || null;
+    }
+
+    if (Object.keys(data).length === 0) {
+      return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
+    }
+
     const workspace = await getPrisma().workspace.update({
       where: { id: auth.workspaceId },
-      data: { name: body.name.trim() },
+      data,
     });
     return NextResponse.json({ data: workspace });
   } catch (err) {

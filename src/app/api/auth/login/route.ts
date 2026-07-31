@@ -2,10 +2,15 @@ import { compare } from "bcryptjs";
 import { NextResponse } from "next/server";
 import { encodeSession, SESSION_COOKIE, WORKSPACE_COOKIE } from "@/lib/auth";
 import { getPrisma } from "@/lib/db";
+import { consumeBackupCode, decryptSecret, verifyTotp } from "@/lib/auth/totp";
 
 export async function POST(request: Request) {
   try {
-    const body = (await request.json()) as { email?: string; password?: string };
+    const body = (await request.json()) as {
+      email?: string;
+      password?: string;
+      totpCode?: string;
+    };
     if (!body.email || !body.password) {
       return NextResponse.json({ error: "Email and password required" }, { status: 400 });
     }
@@ -20,6 +25,34 @@ export async function POST(request: Request) {
     const ok = await compare(body.password, user.passwordHash);
     if (!ok) {
       return NextResponse.json({ error: "Invalid email or password" }, { status: 401 });
+    }
+
+    // Second factor when the account has 2FA enabled.
+    if (user.totpEnabled) {
+      const code = (body.totpCode || "").trim();
+      if (!code) {
+        return NextResponse.json(
+          { error: "Two-factor code required", requires2fa: true },
+          { status: 401 },
+        );
+      }
+      const secret = decryptSecret(user.totpSecretEnc);
+      const codeOk = secret ? verifyTotp(code, secret) : false;
+      const backupCodes = Array.isArray(user.totpBackupCodes) ? user.totpBackupCodes : [];
+      const remaining = codeOk ? null : consumeBackupCode(code, backupCodes);
+      if (!codeOk && remaining === null) {
+        return NextResponse.json(
+          { error: "Invalid two-factor code", requires2fa: true },
+          { status: 401 },
+        );
+      }
+      if (remaining !== null) {
+        // Consume the used backup code so it can't be reused.
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { totpBackupCodes: remaining },
+        });
+      }
     }
 
     const membership = await prisma.membership.findFirst({

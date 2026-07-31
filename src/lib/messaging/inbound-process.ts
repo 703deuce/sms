@@ -3,7 +3,8 @@
  */
 
 import { getPrisma } from "@/lib/db";
-import { handleKeywordInbound } from "@/lib/growth/keywords";
+import { handleKeywordInbound, recordContestEntryIfMatch } from "@/lib/growth/keywords";
+import { getAppBaseUrl } from "@/lib/messaging/twilio-config";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import { reconcileCampaignStatus } from "@/lib/campaigns/sequence-runner";
 import {
@@ -56,9 +57,25 @@ export async function resolveInboundContext(toRaw: string, accountOrProfileId?: 
 }
 
 export type InboundProcessResult = {
-  kind: "stop" | "start" | "help" | "keyword" | "message" | "empty" | "away";
+  kind: "stop" | "start" | "help" | "keyword" | "contest" | "message" | "empty" | "away";
   replyText?: string;
+  mediaUrls?: string[];
 };
+
+/**
+ * Build vCard MMS media URLs for a welcome/keyword reply when the workspace has
+ * a contact card configured with attach-to-welcome enabled.
+ */
+async function welcomeMmsMedia(workspaceId: string): Promise<string[] | undefined> {
+  const prisma = getPrisma();
+  try {
+    const profile = await prisma.contactCardProfile.findUnique({ where: { workspaceId } });
+    if (!profile || !profile.attachToWelcomeMms) return undefined;
+    return [`${getAppBaseUrl()}/api/public/contact-card/${workspaceId}`];
+  } catch {
+    return undefined;
+  }
+}
 
 /** Persist inbound receipt so provider webhook retries are idempotent. */
 async function recordInboundReceipt(input: {
@@ -262,6 +279,54 @@ export async function processInboundMessage(input: {
     };
   }
 
+  // Single-letter appointment confirm (C) / cancel (X) for contacts with an
+  // upcoming appointment. Falls through to normal handling when none exists.
+  if (upper === "C" || upper === "X") {
+    const apptContact = await prisma.contact.findUnique({
+      where: { workspaceId_phone: { workspaceId: input.workspaceId, phone: from } },
+    });
+    if (apptContact) {
+      const {
+        findUpcomingAppointmentForContact,
+        confirmAppointment,
+        cancelAppointment,
+      } = await import("@/lib/voice/calendar/booking");
+      const appt = await findUpcomingAppointmentForContact(input.workspaceId, apptContact.id);
+      if (appt) {
+        await recordInboundReceipt({
+          workspaceId: input.workspaceId,
+          from,
+          body,
+          providerMessageId: input.providerMessageId,
+        });
+        const whenLabel = appt.startsAt.toLocaleString("en-US", {
+          dateStyle: "medium",
+          timeStyle: "short",
+          timeZone: appt.timezone || undefined,
+        });
+        if (upper === "C") {
+          await confirmAppointment(input.workspaceId, appt.id);
+          return {
+            kind: "message",
+            replyText: `Your appointment on ${whenLabel} is confirmed. Reply X to cancel.`,
+          };
+        }
+        await cancelAppointment(input.workspaceId, appt.id);
+        return {
+          kind: "message",
+          replyText: `Your appointment on ${whenLabel} has been cancelled.`,
+        };
+      }
+    }
+  }
+
+  // Contest text-to-win entry (may coexist with an opt-in keyword).
+  const contestHit = await recordContestEntryIfMatch({
+    workspaceId: input.workspaceId,
+    from,
+    body,
+  });
+
   // Custom keywords (JOIN, QUOTE, …) — after compliance keywords.
   const keywordHit = await handleKeywordInbound({
     workspaceId: input.workspaceId,
@@ -276,7 +341,25 @@ export async function processInboundMessage(input: {
       body,
       providerMessageId: input.providerMessageId,
     });
-    return { kind: "keyword", replyText: keywordHit.replyText };
+    return {
+      kind: "keyword",
+      replyText: keywordHit.replyText,
+      mediaUrls: await welcomeMmsMedia(input.workspaceId),
+    };
+  }
+
+  if (contestHit.matched) {
+    await recordInboundReceipt({
+      workspaceId: input.workspaceId,
+      from,
+      body,
+      providerMessageId: input.providerMessageId,
+    });
+    return {
+      kind: "contest",
+      replyText: contestHit.replyText,
+      mediaUrls: await welcomeMmsMedia(input.workspaceId),
+    };
   }
 
   let contact = await prisma.contact.findUnique({
@@ -322,10 +405,13 @@ export async function processInboundMessage(input: {
       },
     });
 
+    const preview = (body || "").slice(0, 120);
+    const contactName =
+      [contact.firstName, contact.lastName].filter(Boolean).join(" ") || from;
+
     // Web push for new inbound conversation message
     try {
       const { sendPushToWorkspaceAgents } = await import("@/lib/push/send");
-      const preview = (body || "").slice(0, 120);
       await sendPushToWorkspaceAgents(input.workspaceId, {
         title: "New inbox message",
         body: preview || "New reply from " + from,
@@ -334,6 +420,19 @@ export async function processInboundMessage(input: {
       });
     } catch {
       // push is optional
+    }
+
+    // In-app notification bell for a new inbound reply
+    try {
+      const { notifyWorkspace } = await import("@/lib/notifications/in-app");
+      await notifyWorkspace(input.workspaceId, {
+        type: "newReply",
+        title: `New reply from ${contactName}`,
+        body: preview || undefined,
+        href: `/inbox?conversation=${conversation.id}`,
+      });
+    } catch {
+      // in-app notifications are best-effort
     }
   } catch (err) {
     if (!(err && typeof err === "object" && "code" in err && (err as { code: string }).code === "P2002")) {
