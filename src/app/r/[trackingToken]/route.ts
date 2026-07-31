@@ -38,6 +38,24 @@ export async function GET(_request: Request, ctx: Ctx) {
       });
       await markRecipientFact(campaignMessage.recipientId, "link_clicked", true);
 
+      const contact = await prisma.contact.findFirst({
+        where: { id: campaignMessage.recipient?.contactId || undefined },
+      });
+      const { recordLinkClick } = await import("@/lib/links/click-events");
+      await recordLinkClick({
+        workspaceId: campaignMessage.campaign.workspaceId,
+        trackingToken,
+        contactId: campaignMessage.recipient?.contactId,
+        phone: campaignMessage.recipient?.phone || contact?.phone,
+        campaignId: campaignMessage.campaignId,
+        campaignMessageId: campaignMessage.id,
+        destinationUrl:
+          campaignMessage.destinationUrl ||
+          campaignMessage.body.match(/https?:\/\/\S+/)?.[0]?.replace(/[)>.,]+$/, "") ||
+          undefined,
+        userAgent: _request.headers.get("user-agent"),
+      }).catch(() => undefined);
+
       if ((campaignMessage.campaign.successMode || "click") === "click") {
         await prisma.campaignRecipient.updateMany({
           where: {
@@ -83,6 +101,18 @@ export async function GET(_request: Request, ctx: Ctx) {
       const { markFactsFromMessageClick } = await import("@/lib/automations/metadata");
       await markFactsFromMessageClick(oneOff.workspaceId, oneOff.to).catch(() => undefined);
     }
+    const { recordLinkClick } = await import("@/lib/links/click-events");
+    await recordLinkClick({
+      workspaceId: oneOff.workspaceId || "",
+      trackingToken,
+      phone: oneOff.to,
+      messageId: oneOff.id,
+      destinationUrl:
+        oneOff.destinationUrl ||
+        oneOff.body.match(/https?:\/\/\S+/)?.[0]?.replace(/[)>.,]+$/, "") ||
+        undefined,
+      userAgent: _request.headers.get("user-agent"),
+    }).catch(() => undefined);
     const destination =
       oneOff.destinationUrl ||
       oneOff.body.match(/https?:\/\/\S+/)?.[0]?.replace(/[)>.,]+$/, "") ||

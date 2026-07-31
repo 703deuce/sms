@@ -10,14 +10,7 @@ import { formatNumber } from "@/lib/utils";
 import { Copy, MessageSquarePlus, Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 
-const growTabs = [
-  { label: "Keywords", href: "/grow/keywords" },
-  { label: "Forms", href: "/grow/forms" },
-  { label: "QR Codes", href: "/grow/qr-codes" },
-  { label: "Click-to-text", href: "/grow/click-to-text" },
-  { label: "Signup Pages", href: "/grow/pages" },
-  { label: "Sources", href: "/grow/sources" },
-];
+import { growTabs } from "@/lib/grow-tabs";
 
 type LinkRow = {
   id: string;

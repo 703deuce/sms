@@ -14,7 +14,7 @@ import {
   Smile,
   Sparkles,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 
 export function InboxView({
   initialFilter = "All conversations",
@@ -36,6 +36,15 @@ export function InboxView({
   const [items, setItems] = useState(seed);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiAssist, setAiAssist] = useState<{
+    summary?: string;
+    suggestedReply?: string;
+    suggestedTags?: string[];
+    suggestedNextAction?: string;
+    urgency?: string;
+    optOutRisk?: boolean;
+  } | null>(null);
 
   const filterDefs = useMemo(() => {
     const counts = {
@@ -89,6 +98,10 @@ export function InboxView({
   const selected = filtered.find((c) => c.id === selectedId) ?? filtered[0] ?? items[0];
   const contact = contacts.find((c) => c.id === selected?.contactId);
 
+  useEffect(() => {
+    setAiAssist(null);
+  }, [selected?.id]);
+
   async function sendReply() {
     if (!selected || !reply.trim() || sending) return;
     setSending(true);
@@ -141,6 +154,38 @@ export function InboxView({
     const json = (await res.json()) as { data?: Conversation };
     if (json.data) {
       setItems((prev) => prev.map((c) => (c.id === selected.id ? json.data! : c)));
+    }
+  }
+
+  async function runAiAssist() {
+    if (!selected || aiLoading) return;
+    setAiLoading(true);
+    setError(null);
+    try {
+      const messages = selected.messages.map((m) => ({
+        direction:
+          m.direction === "in"
+            ? "inbound"
+            : m.direction === "out"
+              ? "outbound"
+              : "note",
+        body: m.body,
+      }));
+      const res = await fetch("/api/ai/inbox-assist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages,
+          contactName: selected.contactName,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "AI assist failed");
+      setAiAssist(json.data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "AI assist failed");
+    } finally {
+      setAiLoading(false);
     }
   }
 
@@ -378,6 +423,39 @@ export function InboxView({
             </div>
 
             <div className="border-t border-border p-3">
+              {aiAssist ? (
+                <div className="mb-3 rounded-[12px] border border-violet-200 bg-violet-50 p-3 text-[12px] text-violet-950">
+                  <p className="font-semibold text-violet-800">AI assistant</p>
+                  <p className="mt-1">{aiAssist.summary}</p>
+                  {aiAssist.suggestedTags?.length ? (
+                    <p className="mt-2 text-[11px]">
+                      Tags: {aiAssist.suggestedTags.join(", ")}
+                    </p>
+                  ) : null}
+                  {aiAssist.suggestedNextAction ? (
+                    <p className="mt-1 text-[11px] text-violet-700">
+                      Next: {aiAssist.suggestedNextAction}
+                    </p>
+                  ) : null}
+                  {aiAssist.optOutRisk ? (
+                    <p className="mt-1 text-[11px] font-semibold text-rose-700">
+                      Opt-out risk detected — review before replying
+                    </p>
+                  ) : null}
+                  {aiAssist.suggestedReply ? (
+                    <button
+                      type="button"
+                      className="mt-2 text-left text-[12px] font-medium text-primary hover:underline"
+                      onClick={() => {
+                        setReply(aiAssist.suggestedReply || "");
+                        setComposerTab("reply");
+                      }}
+                    >
+                      Use suggested reply
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
               <div className="mb-2 flex gap-4 border-b border-border px-1">
                 <button
                   type="button"
@@ -418,9 +496,15 @@ export function InboxView({
                   {sending ? "Sending…" : "Send"}
                   <ChevronDown className="h-3.5 w-3.5" />
                 </Button>
-                <Button variant="outline" className="h-9 rounded-[10px]" type="button">
+                <Button
+                  variant="outline"
+                  className="h-9 rounded-[10px]"
+                  type="button"
+                  onClick={runAiAssist}
+                  disabled={aiLoading}
+                >
                   <Sparkles className="h-3.5 w-3.5" />
-                  AI suggestion
+                  {aiLoading ? "Analyzing…" : "AI suggestion"}
                 </Button>
                 <Button variant="outline" className="h-9 rounded-[10px]" type="button">
                   Saved replies

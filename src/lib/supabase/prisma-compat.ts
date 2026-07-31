@@ -83,6 +83,12 @@ const MODEL_TO_TABLE: Record<string, string> = {
   webhook: "Webhook",
   auditLog: "AuditLog",
   usageRecord: "UsageRecord",
+  linkClickEvent: "link_click_events",
+  mediaAsset: "media_assets",
+  survey: "surveys",
+  surveyResponse: "survey_responses",
+  growWidget: "grow_widgets",
+  contactCardProfile: "contact_card_profiles",
 };
 
 /** Relation name on a model → { table, fk on this model, pk on related }. */
@@ -136,6 +142,15 @@ const RELATIONS: Record<string, Record<string, { table: string; fk: string; pk?:
     workspace: { table: "Workspace", fk: "workspaceId" },
   },
   optInForm: { workspace: { table: "Workspace", fk: "workspaceId" } },
+  survey: { workspace: { table: "Workspace", fk: "workspaceId" } },
+  surveyResponse: {
+    survey: { table: "surveys", fk: "surveyId" },
+    workspace: { table: "Workspace", fk: "workspaceId" },
+  },
+  growWidget: { workspace: { table: "Workspace", fk: "workspaceId" } },
+  contactCardProfile: { workspace: { table: "Workspace", fk: "workspaceId" } },
+  linkClickEvent: { workspace: { table: "Workspace", fk: "workspaceId" } },
+  mediaAsset: { workspace: { table: "Workspace", fk: "workspaceId" } },
   voiceAgent: { workspace: { table: "Workspace", fk: "workspaceId" } },
   voiceCall: {
     workspace: { table: "Workspace", fk: "workspaceId" },

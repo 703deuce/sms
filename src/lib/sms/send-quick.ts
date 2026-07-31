@@ -18,6 +18,7 @@ export type QuickSendSmsInput = {
   businessName?: string;
   destinationUrl?: string;
   idempotencyKey?: string;
+  mediaUrls?: string[];
 };
 
 export async function sendQuickSms(input: QuickSendSmsInput) {
@@ -178,7 +179,7 @@ export async function sendQuickSms(input: QuickSendSmsInput) {
   let providerSid: string | null = null;
 
   try {
-    const result = await sendViaRegistration(input.workspaceId, to, finalBody);
+    const result = await sendViaRegistration(input.workspaceId, to, finalBody, input.mediaUrls);
     providerAccepted = true;
     providerSid = result.sid;
 

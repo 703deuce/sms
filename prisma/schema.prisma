@@ -166,6 +166,12 @@ model Workspace {
   voiceUsageRecords VoiceUsageRecord[]
   voiceIntegrationSecrets VoiceIntegrationSecret[]
   providerWebhookEvents ProviderWebhookEvent[]
+  linkClickEvents LinkClickEvent[]
+  mediaAssets MediaAsset[]
+  surveys Survey[]
+  surveyResponses SurveyResponse[]
+  growWidgets GrowWidget[]
+  contactCardProfile ContactCardProfile?
 }
 
 model Membership {
@@ -1532,4 +1538,109 @@ model ProviderWebhookEvent {
 
   @@index([workspaceId, createdAt])
   @@map("provider_webhook_events")
+}
+
+model LinkClickEvent {
+  id                String   @id @default(cuid())
+  workspaceId       String
+  trackingToken     String
+  contactId         String?
+  phone             String?
+  campaignId        String?
+  messageId         String?
+  campaignMessageId String?
+  destinationUrl    String?
+  userAgent         String?
+  createdAt         DateTime @default(now())
+  workspace         Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
+  @@index([trackingToken])
+  @@map("link_click_events")
+}
+
+model MediaAsset {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  assetType   String   @default("image")
+  mimeType    String?
+  sizeBytes   Int      @default(0)
+  storageUrl  String
+  thumbnailUrl String?
+  createdBy   String?
+  createdAt   DateTime @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
+  @@map("media_assets")
+}
+
+model Survey {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  description String?
+  surveyType  String   @default("poll")
+  status      String   @default("draft")
+  questions   Json     @default("[]")
+  settings    Json     @default("{}")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  responses   SurveyResponse[]
+
+  @@index([workspaceId, status])
+  @@map("surveys")
+}
+
+model SurveyResponse {
+  id          String   @id @default(cuid())
+  workspaceId String
+  surveyId    String
+  contactId   String?
+  phone       String?
+  answers     Json     @default("{}")
+  submittedAt DateTime @default(now())
+  survey      Survey   @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([surveyId, submittedAt])
+  @@index([workspaceId])
+  @@map("survey_responses")
+}
+
+model GrowWidget {
+  id           String   @id @default(cuid())
+  workspaceId  String
+  name         String
+  slug         String   @unique
+  widgetType   String   @default("popup")
+  status       String   @default("draft")
+  config       Json     @default("{}")
+  linkedFormId String?
+  views        Int      @default(0)
+  conversions  Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, status])
+  @@map("grow_widgets")
+}
+
+model ContactCardProfile {
+  id           String   @id @default(cuid())
+  workspaceId  String   @unique
+  businessName String
+  logoUrl      String?
+  phone        String?
+  website      String?
+  email        String?
+  address      String?
+  extraFields  Json?
+  updatedAt    DateTime @updatedAt
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("contact_card_profiles")
 }

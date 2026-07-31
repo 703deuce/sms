@@ -25,6 +25,7 @@ function isPublicPath(pathname: string) {
   // Hosted + embeddable opt-in forms (consent capture)
   if (pathname.startsWith("/f/")) return true;
   if (pathname.startsWith("/embed/f/")) return true;
+  if (pathname.startsWith("/embed/w/")) return true;
   if (pathname === "/embed/form.js") return true;
   // Signed expiring recording streams (token-gated, no session cookie)
   if (pathname.startsWith("/api/voice/recordings/") && pathname.endsWith("/stream")) return true;

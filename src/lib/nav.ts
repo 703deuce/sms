@@ -13,6 +13,7 @@ import {
   Puzzle,
   Settings,
   AudioLines,
+  ClipboardList,
   type LucideIcon,
 } from "lucide-react";
 
@@ -32,8 +33,20 @@ export type NavItem = {
 
 export const appNav: NavItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { label: "Send", href: "/send", icon: Send, emphasize: true },
-  { label: "Inbox", href: "/inbox", icon: Inbox, badge: 24 },
+  {
+    label: "Messaging",
+    href: "/inbox",
+    icon: Send,
+    emphasize: true,
+    children: [
+      { label: "Inbox", href: "/inbox" },
+      { label: "Campaigns", href: "/campaigns" },
+      { label: "Media & MMS", href: "/messaging/media" },
+      { label: "Link tracking", href: "/messaging/links" },
+      { label: "Templates", href: "/templates" },
+      { label: "AI Composer", href: "/send/ai" },
+    ],
+  },
   {
     label: "Contacts",
     href: "/contacts",
@@ -43,23 +56,11 @@ export const appNav: NavItem[] = [
       { label: "Lists", href: "/contacts/lists" },
       { label: "Segments", href: "/contacts/segments" },
       { label: "Tags", href: "/contacts/tags" },
+      { label: "Custom fields", href: "/contacts/fields" },
       { label: "Imports", href: "/contacts/imports" },
+      { label: "Validation", href: "/contacts/validation" },
       { label: "Unsubscribed", href: "/contacts/unsubscribed" },
       { label: "Blocked", href: "/contacts/blocked" },
-    ],
-  },
-  {
-    label: "Campaigns",
-    href: "/campaigns",
-    icon: Megaphone,
-    children: [
-      { label: "Create", href: "/campaigns" },
-      { label: "All Campaigns", href: "/campaigns/all" },
-      { label: "Drafts", href: "/campaigns/drafts" },
-      { label: "Scheduled", href: "/campaigns/scheduled" },
-      { label: "Calendar", href: "/campaigns/calendar" },
-      { label: "Completed", href: "/campaigns/completed" },
-      { label: "Failed", href: "/campaigns/failed" },
     ],
   },
   {
@@ -71,6 +72,32 @@ export const appNav: NavItem[] = [
       { label: "Templates", href: "/automations/templates" },
       { label: "Builder", href: "/automations/new" },
       { label: "Logs", href: "/automations/logs" },
+    ],
+  },
+  {
+    label: "Surveys",
+    href: "/surveys",
+    icon: ClipboardList,
+    children: [
+      { label: "All surveys", href: "/surveys" },
+      { label: "Polls", href: "/surveys?type=poll" },
+      { label: "NPS", href: "/surveys?type=nps" },
+    ],
+  },
+  {
+    label: "Grow",
+    href: "/grow/keywords",
+    icon: Sprout,
+    children: [
+      { label: "Keywords", href: "/grow/keywords" },
+      { label: "Forms", href: "/grow/forms" },
+      { label: "Popups & widgets", href: "/grow/popups" },
+      { label: "Signup pages", href: "/grow/pages" },
+      { label: "QR codes", href: "/grow/qr-codes" },
+      { label: "Click-to-text", href: "/grow/click-to-text" },
+      { label: "Contests", href: "/grow/contests" },
+      { label: "Contact cards", href: "/grow/contact-cards" },
+      { label: "Sources", href: "/grow/sources" },
     ],
   },
   {
@@ -94,20 +121,6 @@ export const appNav: NavItem[] = [
       { label: "Settings", href: "/voice/settings" },
     ],
   },
-  { label: "Templates", href: "/templates", icon: FileText },
-  {
-    label: "Grow",
-    href: "/grow/keywords",
-    icon: Sprout,
-    children: [
-      { label: "Keywords", href: "/grow/keywords" },
-      { label: "Forms", href: "/grow/forms" },
-      { label: "QR Codes", href: "/grow/qr-codes" },
-      { label: "Click-to-text", href: "/grow/click-to-text" },
-      { label: "Signup Pages", href: "/grow/pages" },
-      { label: "Sources", href: "/grow/sources" },
-    ],
-  },
   {
     label: "Reports",
     href: "/reports",
@@ -119,6 +132,7 @@ export const appNav: NavItem[] = [
       { label: "Contacts", href: "/reports/contacts" },
       { label: "Inbox", href: "/reports/inbox" },
       { label: "Automations", href: "/reports/automations" },
+      { label: "Links", href: "/reports/links" },
       { label: "Usage", href: "/reports/usage" },
     ],
   },
@@ -131,7 +145,7 @@ export const appNav: NavItem[] = [
 export const mobilePrimaryNav = [
   { label: "Home", href: "/dashboard", icon: LayoutDashboard },
   { label: "Inbox", href: "/inbox", icon: Inbox },
-  { label: "Send", href: "/send", icon: Send },
+  { label: "Campaigns", href: "/campaigns", icon: Megaphone },
   { label: "Contacts", href: "/contacts", icon: Users },
 ];
 
@@ -153,17 +167,21 @@ export const pageTitles: Record<string, string> = {
   "/send": "New Campaign",
   "/send/quick": "Quick Text",
   "/send/test": "Test Message",
+  "/send/ai": "AI Campaign Composer",
   "/inbox": "Inbox",
   "/inbox/mine": "Assigned to Me",
   "/inbox/unassigned": "Unassigned",
   "/inbox/archived": "Archived",
   "/inbox/saved-replies": "Saved Replies",
+  "/messaging/media": "Media Library",
+  "/messaging/links": "Link Tracking",
   "/contacts": "All Contacts",
   "/contacts/lists": "Lists",
   "/contacts/segments": "Segments",
   "/contacts/tags": "Tags",
   "/contacts/imports": "Imports",
   "/contacts/fields": "Custom Fields",
+  "/contacts/validation": "List Validation",
   "/contacts/unsubscribed": "Unsubscribed",
   "/contacts/blocked": "Blocked",
   "/contacts/invalid": "Invalid Numbers",
@@ -178,6 +196,7 @@ export const pageTitles: Record<string, string> = {
   "/automations/new": "New Automation",
   "/automations/templates": "Automation Templates",
   "/automations/logs": "Automation Logs",
+  "/surveys": "Surveys",
   "/voice/overview": "AI Voice Overview",
   "/voice/agents": "Voice Agents",
   "/voice/agents/new": "Agent Builder",
@@ -198,6 +217,9 @@ export const pageTitles: Record<string, string> = {
   "/templates/ai": "AI Template Generator",
   "/grow/keywords": "Keywords",
   "/grow/forms": "Opt-in Forms",
+  "/grow/popups": "Popups & Widgets",
+  "/grow/contests": "Contests",
+  "/grow/contact-cards": "Contact Cards",
   "/grow/qr-codes": "QR Codes",
   "/grow/pages": "Signup Pages",
   "/grow/sources": "Subscriber Sources",
@@ -252,6 +274,7 @@ export function getPageTitle(pathname: string) {
   if (pathname.startsWith("/campaigns/")) return "Campaign Detail";
   if (pathname.startsWith("/contacts/")) return "Contact Detail";
   if (pathname.startsWith("/automations/")) return "Automation Detail";
+  if (pathname.startsWith("/surveys/")) return "Survey Detail";
   if (pathname.startsWith("/voice/agents/")) return "Agent builder";
   if (pathname.startsWith("/voice/calls/")) return "Call detail";
   if (pathname.startsWith("/voice/")) return "AI Voice";

@@ -468,7 +468,12 @@ export async function ensureSubaccount(workspaceId: string, friendlyName: string
   }
 }
 
-export async function sendViaRegistration(workspaceId: string, to: string, body: string) {
+export async function sendViaRegistration(
+  workspaceId: string,
+  to: string,
+  body: string,
+  mediaUrls?: string[],
+) {
   const reg = await getRegistrationByWorkspace(workspaceId);
   if (!isMessagingReady(reg)) {
     throw new Error("Messaging is not ready for this workspace. Complete A2P registration first.");
@@ -495,6 +500,7 @@ export async function sendViaRegistration(workspaceId: string, to: string, body:
     from: reg!.phoneE164 || undefined,
     messagingProfileId,
     messagingServiceSid: reg!.messagingServiceSid,
+    mediaUrls: mediaUrls?.filter(Boolean),
   });
 
   return {

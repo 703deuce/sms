@@ -15,13 +15,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-const growTabs = [
-  { label: "Keywords", href: "/grow/keywords" },
-  { label: "Forms", href: "/grow/forms" },
-  { label: "QR Codes", href: "/grow/qr-codes" },
-  { label: "Signup Pages", href: "/grow/pages" },
-  { label: "Sources", href: "/grow/sources" },
-];
+import { growTabs } from "@/lib/grow-tabs";
 
 const sourceIcons: Record<string, LucideIcon> = {
   Form: FormInput,

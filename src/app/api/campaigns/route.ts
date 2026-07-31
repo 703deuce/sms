@@ -7,7 +7,7 @@ import {
   getCampaignCategory,
   type CampaignCategoryId,
 } from "@/lib/campaigns/catalog";
-import { enrollContactInCampaign, validateBulkRecipients } from "@/lib/campaigns/enroll-campaign";
+import { enrollContactInCampaign, validateBulkRecipients, enrollListInCampaign } from "@/lib/campaigns/enroll-campaign";
 import { defaultSmsEmailSequence, parseSequence } from "@/lib/campaigns/sequence-engine";
 
 export async function GET() {
@@ -45,6 +45,8 @@ export async function POST(request: Request) {
       sendWindowStart?: number;
       sendWindowEnd?: number;
       scheduledAt?: string;
+      listId?: string;
+      segmentId?: string;
       recipients?: Array<{ phone?: string; email?: string; displayName?: string }>;
       activate?: boolean;
     };
@@ -86,27 +88,31 @@ export async function POST(request: Request) {
       },
     });
 
-    const { accepted, rejected } = await validateBulkRecipients(
-      workspaceId,
-      campaign.id,
-      body.recipients || [],
-    );
+    let enrolledCount = 0;
+    let rejected: Array<{ reason: string }> = [];
 
-    const enrolled = [];
-    for (const r of accepted) {
-      enrolled.push(
+    if (body.listId) {
+      const listEnroll = await enrollListInCampaign(workspaceId, campaign.id, body.listId);
+      enrolledCount = listEnroll.enrolled;
+      rejected = listEnroll.rejected;
+    } else {
+      const bulk = await validateBulkRecipients(workspaceId, campaign.id, body.recipients || []);
+      rejected = bulk.rejected;
+      for (const r of bulk.accepted) {
         await enrollContactInCampaign({
           workspaceId,
           campaignId: campaign.id,
           phone: r.phone,
           email: r.email,
           displayName: r.displayName,
-        }),
-      );
+          contactId: r.contactId,
+        });
+        enrolledCount += 1;
+      }
     }
 
     return NextResponse.json(
-      { data: { campaign, enrolledCount: enrolled.length, rejected } },
+      { data: { campaign, enrolledCount, rejected } },
       { status: 201 },
     );
   } catch (err) {
