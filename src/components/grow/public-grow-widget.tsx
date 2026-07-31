@@ -17,6 +17,7 @@ export function PublicGrowWidget({ slug }: { slug: string }) {
   const [widget, setWidget] = useState<WidgetData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [floatingOpen, setFloatingOpen] = useState(false);
+  const [exitOpen, setExitOpen] = useState(false);
 
   useEffect(() => {
     fetch(`/api/public/widgets/${slug}`)
@@ -30,6 +31,18 @@ export function PublicGrowWidget({ slug }: { slug: string }) {
       })
       .catch(() => setError("Failed to load widget"));
   }, [slug]);
+
+  const isExitIntent =
+    widget?.widgetType === "exit-intent" || Boolean(widget?.config?.exitIntent);
+
+  useEffect(() => {
+    if (!isExitIntent) return;
+    function onLeave(e: MouseEvent) {
+      if (e.clientY <= 0) setExitOpen(true);
+    }
+    document.addEventListener("mouseleave", onLeave);
+    return () => document.removeEventListener("mouseleave", onLeave);
+  }, [isExitIntent]);
 
   if (error) {
     return (
@@ -55,6 +68,31 @@ export function PublicGrowWidget({ slug }: { slug: string }) {
     return (
       <div className="flex min-h-[200px] items-center justify-center p-6 text-sm text-muted-foreground">
         This widget is not linked to an active form.
+      </div>
+    );
+  }
+
+  if (widget.widgetType === "exit-intent") {
+    if (!exitOpen) return null;
+    return (
+      <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">
+        <div className="relative w-full max-w-md overflow-hidden rounded-[16px] border border-border bg-card shadow-2xl">
+          <button
+            type="button"
+            onClick={() => setExitOpen(false)}
+            className="absolute right-3 top-3 z-10 rounded-md p-1 hover:bg-muted"
+            aria-label="Close"
+          >
+            <X className="h-4 w-4" />
+          </button>
+          <div className="border-b border-border px-5 pb-3 pt-5">
+            <h2 className="text-lg font-bold">{title}</h2>
+            <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
+          </div>
+          <div className="overflow-y-auto">
+            <PublicOptInForm variant="embed" slug={formSlug} />
+          </div>
+        </div>
       </div>
     );
   }
