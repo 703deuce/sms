@@ -16,7 +16,7 @@ import type {
   SendMessageResult,
   WebhookVerificationInput,
 } from "../provider";
-import type { NumberSearchResult } from "../types";
+import type { NumberSearchOptions, NumberSearchResult } from "../types";
 import { telnyxRequest } from "./client";
 import {
   assertTelnyxConfigured,
@@ -119,7 +119,10 @@ export const telnyxProvider: MessagingProvider = {
     return this.sendMessage(reg, input);
   },
 
-  async searchNumbers(areaCode?: string): Promise<NumberSearchResult[]> {
+  async searchNumbers(
+    areaCode?: string,
+    options?: NumberSearchOptions,
+  ): Promise<NumberSearchResult[]> {
     assertTelnyxConfigured();
     const res = await telnyxRequest<
       TelnyxListResponse<{
@@ -131,9 +134,16 @@ export const telnyxProvider: MessagingProvider = {
     >("/available_phone_numbers", {
       query: {
         "filter[country_code]": "US",
-        "filter[features]": "sms",
+        "filter[features]": options?.mms ? "sms,mms" : "sms",
         "filter[limit]": 20,
         ...(areaCode ? { "filter[national_destination_code]": areaCode } : {}),
+        ...(options?.locality ? { "filter[locality]": options.locality } : {}),
+        ...(options?.administrativeArea
+          ? { "filter[administrative_area]": options.administrativeArea }
+          : {}),
+        ...(options?.contains
+          ? { "filter[phone_number][contains]": options.contains }
+          : {}),
       },
     });
 

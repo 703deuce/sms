@@ -83,3 +83,14 @@ export type NumberSearchResult = {
   isoCountry?: string;
   capabilities?: { sms?: boolean; mms?: boolean; voice?: boolean };
 };
+
+export type NumberSearchOptions = {
+  /** City name filter (Telnyx filter[locality]). */
+  locality?: string;
+  /** Two-letter state/region code (Telnyx filter[administrative_area]). */
+  administrativeArea?: string;
+  /** Digits the number should contain (Telnyx filter[phone_number][contains]). */
+  contains?: string;
+  /** Require MMS capability in addition to SMS. */
+  mms?: boolean;
+};

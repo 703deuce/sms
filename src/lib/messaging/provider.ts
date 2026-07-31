@@ -4,7 +4,7 @@
  */
 
 import type { MessagingRegistration } from "@/lib/domain";
-import type { NumberSearchResult } from "./types";
+import type { NumberSearchOptions, NumberSearchResult } from "./types";
 
 export type MessagingProviderName = "mock" | "twilio" | "telnyx";
 
@@ -79,7 +79,7 @@ export interface MessagingProvider {
   sendMessage(reg: MessagingRegistration, input: SendMessageInput): Promise<SendMessageResult>;
   sendMms?(reg: MessagingRegistration, input: SendMessageInput): Promise<SendMessageResult>;
 
-  searchNumbers(areaCode?: string): Promise<NumberSearchResult[]>;
+  searchNumbers(areaCode?: string, options?: NumberSearchOptions): Promise<NumberSearchResult[]>;
   buyPhoneNumber(reg: MessagingRegistration, phoneNumber: string): Promise<PurchasedNumber>;
   releasePhoneNumber(reg: MessagingRegistration, phoneNumberId: string): Promise<{ ok: true }>;
 

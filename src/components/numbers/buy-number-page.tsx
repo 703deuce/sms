@@ -19,6 +19,35 @@ const numberTabs = [
   { label: "Sender Pools", href: "/numbers/pools" },
 ];
 
+const US_STATES = [
+  { code: "AL", name: "Alabama" }, { code: "AK", name: "Alaska" },
+  { code: "AZ", name: "Arizona" }, { code: "AR", name: "Arkansas" },
+  { code: "CA", name: "California" }, { code: "CO", name: "Colorado" },
+  { code: "CT", name: "Connecticut" }, { code: "DE", name: "Delaware" },
+  { code: "FL", name: "Florida" }, { code: "GA", name: "Georgia" },
+  { code: "HI", name: "Hawaii" }, { code: "ID", name: "Idaho" },
+  { code: "IL", name: "Illinois" }, { code: "IN", name: "Indiana" },
+  { code: "IA", name: "Iowa" }, { code: "KS", name: "Kansas" },
+  { code: "KY", name: "Kentucky" }, { code: "LA", name: "Louisiana" },
+  { code: "ME", name: "Maine" }, { code: "MD", name: "Maryland" },
+  { code: "MA", name: "Massachusetts" }, { code: "MI", name: "Michigan" },
+  { code: "MN", name: "Minnesota" }, { code: "MS", name: "Mississippi" },
+  { code: "MO", name: "Missouri" }, { code: "MT", name: "Montana" },
+  { code: "NE", name: "Nebraska" }, { code: "NV", name: "Nevada" },
+  { code: "NH", name: "New Hampshire" }, { code: "NJ", name: "New Jersey" },
+  { code: "NM", name: "New Mexico" }, { code: "NY", name: "New York" },
+  { code: "NC", name: "North Carolina" }, { code: "ND", name: "North Dakota" },
+  { code: "OH", name: "Ohio" }, { code: "OK", name: "Oklahoma" },
+  { code: "OR", name: "Oregon" }, { code: "PA", name: "Pennsylvania" },
+  { code: "RI", name: "Rhode Island" }, { code: "SC", name: "South Carolina" },
+  { code: "SD", name: "South Dakota" }, { code: "TN", name: "Tennessee" },
+  { code: "TX", name: "Texas" }, { code: "UT", name: "Utah" },
+  { code: "VT", name: "Vermont" }, { code: "VA", name: "Virginia" },
+  { code: "WA", name: "Washington" }, { code: "WV", name: "West Virginia" },
+  { code: "WI", name: "Wisconsin" }, { code: "WY", name: "Wyoming" },
+  { code: "DC", name: "Washington, D.C." },
+];
+
 type SearchRow = {
   number: string;
   type: "Local" | "Toll-free";
@@ -53,6 +82,9 @@ type Props = {
 export function BuyNumberPageClient({ workspaceId }: Props) {
   const router = useRouter();
   const [areaCode, setAreaCode] = useState("415");
+  const [city, setCity] = useState("");
+  const [state, setState] = useState("");
+  const [capabilities, setCapabilities] = useState("sms-mms");
   const [numberType, setNumberType] = useState("local");
   const [results, setResults] = useState<SearchRow[]>([]);
   const [searched, setSearched] = useState(false);
@@ -71,6 +103,9 @@ export function BuyNumberPageClient({ workspaceId }: Props) {
         workspaceId,
         areaCode: areaCode.trim(),
       });
+      if (city.trim()) params.set("city", city.trim());
+      if (state) params.set("state", state);
+      if (capabilities === "sms-mms") params.set("mms", "1");
       const res = await fetch(`/api/messaging/numbers?${params}`);
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Search failed");
@@ -144,13 +179,28 @@ export function BuyNumberPageClient({ workspaceId }: Props) {
           </div>
           <div>
             <Label htmlFor="city">City</Label>
-            <Input id="city" name="city" placeholder="San Francisco" disabled />
+            <Input
+              id="city"
+              name="city"
+              placeholder="San Francisco"
+              value={city}
+              onChange={(e) => setCity(e.target.value)}
+            />
           </div>
           <div>
             <Label htmlFor="state">State</Label>
-            <Select id="state" name="state" defaultValue="CA" disabled>
+            <Select
+              id="state"
+              name="state"
+              value={state}
+              onChange={(e) => setState(e.target.value)}
+            >
               <option value="">Any state</option>
-              <option value="CA">California</option>
+              {US_STATES.map((s) => (
+                <option key={s.code} value={s.code}>
+                  {s.name}
+                </option>
+              ))}
             </Select>
           </div>
           <div>
@@ -167,7 +217,12 @@ export function BuyNumberPageClient({ workspaceId }: Props) {
           </div>
           <div>
             <Label htmlFor="capabilities">Capabilities</Label>
-            <Select id="capabilities" name="capabilities" defaultValue="sms-mms" disabled>
+            <Select
+              id="capabilities"
+              name="capabilities"
+              value={capabilities}
+              onChange={(e) => setCapabilities(e.target.value)}
+            >
               <option value="sms">SMS only</option>
               <option value="sms-mms">SMS + MMS</option>
             </Select>

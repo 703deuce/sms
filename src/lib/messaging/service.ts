@@ -11,7 +11,12 @@ import { getMessagingProviderName } from "./provider-config";
 import { isLiveMessagingAdapter } from "./twilio-config";
 import { twilioAdapter } from "./twilio-adapter";
 import { normalizeE164 } from "./twilio-mappings";
-import type { BusinessDetailsInput, RegistrationAction, UseCaseInput } from "./types";
+import type {
+  BusinessDetailsInput,
+  NumberSearchOptions,
+  RegistrationAction,
+  UseCaseInput,
+} from "./types";
 
 const businessSchema = z.object({
   legalBusinessName: z.string().min(2),
@@ -206,11 +211,28 @@ export const messagingOnboarding = {
     return toPublicRegistration(reg);
   },
 
-  async searchNumbers(workspaceId: string, areaCode?: string) {
+  async searchNumbers(
+    workspaceId: string,
+    areaCode?: string,
+    options?: NumberSearchOptions,
+  ) {
     await ensureRegistrationRow(workspaceId);
     const provider = getMessagingProvider();
-    if (provider.name === "mock") return mockAdapter.searchNumbers(areaCode);
-    return provider.searchNumbers(areaCode);
+    const results =
+      provider.name === "mock"
+        ? await mockAdapter.searchNumbers(areaCode)
+        : await provider.searchNumbers(areaCode, options);
+
+    // Post-filter as a safety net for providers that ignore native filters.
+    if (!options) return results;
+    const contains = options.contains?.replace(/\D/g, "");
+    const locality = options.locality?.trim().toLowerCase();
+    return results.filter((r) => {
+      if (options.mms && !r.capabilities?.mms) return false;
+      if (contains && !r.phoneNumber.replace(/\D/g, "").includes(contains)) return false;
+      if (locality && !(r.locality || "").toLowerCase().includes(locality)) return false;
+      return true;
+    });
   },
 
   async purchaseNumber(workspaceId: string, phoneNumber: string) {
