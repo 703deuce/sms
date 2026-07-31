@@ -1,5 +1,6 @@
 "use client";
 
+import { AiOfflineBanner } from "@/components/ai/ai-offline-banner";
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
 import { Input, Label, Select, Textarea } from "@/components/ui/input";
@@ -81,6 +82,8 @@ export default function AiTemplatePage() {
           </Link>
         }
       />
+
+      <AiOfflineBanner />
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>

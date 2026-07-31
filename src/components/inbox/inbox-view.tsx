@@ -59,6 +59,7 @@ export function InboxView({
     suggestedNextAction?: string;
     urgency?: string;
     optOutRisk?: boolean;
+    mode?: "openai" | "heuristic";
   } | null>(null);
   const [showTemplates, setShowTemplates] = useState(false);
   const [showMedia, setShowMedia] = useState(false);
@@ -550,6 +551,11 @@ export function InboxView({
               {aiAssist ? (
                 <div className="mb-3 rounded-[12px] border border-violet-200 bg-violet-50 p-3 text-[12px] text-violet-950">
                   <p className="font-semibold text-violet-800">AI assistant</p>
+                  {aiAssist.mode === "heuristic" ? (
+                    <p className="mt-1 rounded bg-amber-100 px-2 py-1 text-[11px] text-amber-900">
+                      Offline mode — no OpenAI key configured. Showing a heuristic suggestion.
+                    </p>
+                  ) : null}
                   <p className="mt-1">{aiAssist.summary}</p>
                   {aiAssist.suggestedTags?.length ? (
                     <p className="mt-2 text-[11px]">

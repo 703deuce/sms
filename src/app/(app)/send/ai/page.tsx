@@ -1,5 +1,6 @@
 "use client";
 
+import { AiOfflineBanner } from "@/components/ai/ai-offline-banner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input, Label, Textarea } from "@/components/ui/input";
@@ -47,6 +48,7 @@ export default function AiCampaignComposerPage() {
         title="AI Campaign Composer"
         description="Generate campaign copy, variations, compliance footer, and send-time suggestions."
       />
+      <AiOfflineBanner />
       <Card className="mb-6 grid gap-4 p-5 sm:grid-cols-2">
         <div>
           <Label>Goal</Label>
