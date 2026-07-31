@@ -4,7 +4,7 @@ import "@xyflow/react/dist/style.css";
 
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
-import { getBlock, isConditionBlock } from "@/lib/automations/catalog";
+import { getBlock, isConditionBlock, type BlockDefinition } from "@/lib/automations/catalog";
 import {
   createEdgeId,
   createNodeId,
@@ -27,7 +27,8 @@ import {
   type Node,
   type ReactFlowInstance,
 } from "@xyflow/react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { Layers, Pencil } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { automationNodeTypes } from "./automation-node";
 import { BlockSidebar } from "./block-sidebar";
@@ -107,6 +108,39 @@ function fromFlowState(
   };
 }
 
+function MobileDrawer({
+  open,
+  title,
+  onClose,
+  children,
+}: {
+  open: boolean;
+  title: string;
+  onClose: () => void;
+  children: ReactNode;
+}) {
+  if (!open) return null;
+  return (
+    <div
+      className="lg:hidden fixed inset-0 z-50 flex flex-col justify-end bg-black/45"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+    >
+      <div
+        className="max-h-[88dvh] rounded-t-2xl bg-card shadow-xl flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-border px-4 py-3">
+          <h2 className="text-sm font-semibold">{title}</h2>
+          <Button type="button" variant="ghost" size="sm" onClick={onClose}>Close</Button>
+        </div>
+        <div className="flex-1 min-h-0 overflow-hidden">{children}</div>
+      </div>
+    </div>
+  );
+}
+
 function BuilderCanvas({
   flowId,
   initialName,
@@ -130,6 +164,7 @@ function BuilderCanvas({
 
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+  const [mobilePanel, setMobilePanel] = useState<"blocks" | "config" | null>(null);
   const syncRef = useRef(false);
 
   const errorNodeIds = new Set(
@@ -347,6 +382,15 @@ function BuilderCanvas({
 
   const hasTrigger = builder.definition.nodes.some((n) => n.type === "trigger");
 
+  function openMobileConfig() {
+    if (builder.selectedNode) setMobilePanel("config");
+  }
+
+  function addBlockFromSidebar(block: BlockDefinition) {
+    builder.addBlock(block);
+    setMobilePanel(null);
+  }
+
   return (
     <div className="flex h-[calc(100dvh-8rem)] min-h-[520px] flex-col rounded-xl border border-border bg-background overflow-hidden">
       <div className="flex flex-wrap items-center gap-3 border-b border-border px-4 py-3">
@@ -367,7 +411,7 @@ function BuilderCanvas({
           {builder.lastSaved ? <span>Saved {builder.lastSaved.toLocaleTimeString()}</span> : null}
           {builder.saving ? <span>Saving…</span> : null}
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 max-md:hidden">
           <Button variant="outline" size="sm" onClick={duplicateFlow}>Duplicate</Button>
           <Button variant="outline" size="sm" onClick={deleteFlow} className="text-rose-600">Delete</Button>
           <Button variant="outline" size="sm" onClick={() => {
@@ -392,6 +436,17 @@ function BuilderCanvas({
             {builder.publishing ? "Publishing…" : "Publish / Activate"}
           </Button>
         </div>
+        <div className="flex gap-2 md:hidden w-full">
+          <Button variant="outline" size="sm" className="flex-1" onClick={() => router.push(`/automations/${flowId}`)}>
+            Exit
+          </Button>
+          <Button variant="outline" size="sm" className="flex-1" onClick={saveDraft} disabled={builder.saving}>
+            Save
+          </Button>
+          <Button size="sm" className="flex-1" onClick={publish} disabled={builder.publishing}>
+            Publish
+          </Button>
+        </div>
       </div>
 
       {builder.validationIssues.length > 0 && (
@@ -411,13 +466,17 @@ function BuilderCanvas({
         </div>
 
         <div
-          className="flex-1 min-w-0 relative select-none"
+          className="flex-1 min-w-0 relative select-none touch-manipulation"
           onDragOver={onDragOver}
           onDrop={onDrop}
         >
+          <p className="lg:hidden absolute top-2 left-2 right-2 z-10 text-center text-[11px] text-muted-foreground pointer-events-none px-2">
+            Drag from a dot on one step to another to connect. Tap a step, then Edit step.
+          </p>
           {builder.definition.nodes.length === 0 ? (
-            <div className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground pointer-events-none">
-              Drag a trigger block from the sidebar or click a block to start
+            <div className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground pointer-events-none px-6 text-center">
+              <span className="md:hidden">Tap &quot;Add block&quot; below to start your workflow</span>
+              <span className="hidden md:inline">Drag a trigger block from the sidebar or click a block to start</span>
             </div>
           ) : null}
           <ReactFlow
@@ -445,17 +504,50 @@ function BuilderCanvas({
             }}
             onConnect={onConnect}
             onNodeDragStop={onNodeDragStop}
-            onNodeClick={(_, node) => builder.setSelectedNodeId(node.id)}
-            onPaneClick={() => builder.setSelectedNodeId(null)}
+            onNodeClick={(_, node) => {
+              builder.setSelectedNodeId(node.id);
+              if (typeof window !== "undefined" && window.innerWidth < 1024) {
+                setMobilePanel("config");
+              }
+            }}
+            onPaneClick={() => {
+              builder.setSelectedNodeId(null);
+              setMobilePanel((p) => (p === "config" ? null : p));
+            }}
             nodeTypes={automationNodeTypes}
+            connectionRadius={32}
             fitView
             minZoom={0.3}
             maxZoom={1.5}
             proOptions={{ hideAttribution: true }}
           >
             <Background gap={16} size={1} />
-            <Controls showInteractive={false} />
+            <Controls showInteractive={false} className="!bottom-16 md:!bottom-3" />
           </ReactFlow>
+
+          <div className="lg:hidden absolute bottom-3 left-3 right-3 z-10 flex gap-2 pointer-events-none">
+            <Button
+              type="button"
+              size="sm"
+              className="pointer-events-auto flex-1 shadow-md"
+              onClick={() => setMobilePanel("blocks")}
+            >
+              <Layers className="mr-1.5 h-4 w-4" />
+              Add block
+            </Button>
+            {builder.selectedNode ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="pointer-events-auto flex-1 shadow-md bg-background"
+                onClick={openMobileConfig}
+              >
+                <Pencil className="mr-1.5 h-4 w-4" />
+                Edit step
+              </Button>
+            ) : null}
+          </div>
         </div>
 
         {builder.selectedNode ? (
@@ -472,6 +564,38 @@ function BuilderCanvas({
           </div>
         ) : null}
       </div>
+
+      <MobileDrawer
+        open={mobilePanel === "blocks"}
+        title="Add a block"
+        onClose={() => setMobilePanel(null)}
+      >
+        <BlockSidebar
+          hasTrigger={hasTrigger}
+          onAddBlock={(block) => addBlockFromSidebar(block)}
+        />
+      </MobileDrawer>
+
+      {builder.selectedNode ? (
+        <MobileDrawer
+          open={mobilePanel === "config"}
+          title="Edit step"
+          onClose={() => setMobilePanel(null)}
+        >
+          <NodeConfigPanel
+            flowId={flowId}
+            node={builder.selectedNode}
+            onUpdate={(patch) => builder.updateNode(builder.selectedNode!.id, patch)}
+            onDelete={() => {
+              builder.deleteNode(builder.selectedNode!.id);
+              setMobilePanel(null);
+            }}
+            onDuplicate={() => builder.duplicateNode(builder.selectedNode!.id)}
+            onClose={() => setMobilePanel(null)}
+            onTestSms={testSms}
+          />
+        </MobileDrawer>
+      ) : null}
     </div>
   );
 }

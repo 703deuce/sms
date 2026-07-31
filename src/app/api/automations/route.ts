@@ -4,8 +4,7 @@ import { requireSession, jsonError } from "@/lib/api-auth";
 import { getPrisma } from "@/lib/db";
 import { mapAutomation } from "@/lib/mappers";
 import { loadAutomations } from "@/lib/workspace-data";
-import { defaultMvpDefinition } from "@/lib/automations/validation";
-import { findTriggerNode, parseAutomationDefinition } from "@/lib/automations/types";
+import { EMPTY_DEFINITION, findTriggerNode, parseAutomationDefinition } from "@/lib/automations/types";
 import { triggerFromBlockType } from "@/lib/automations/catalog";
 import { enqueueJob } from "@/lib/messaging/enqueue-advance";
 
@@ -40,7 +39,7 @@ export async function POST(request: Request) {
         : "DRAFT";
     const definition = body.definition
       ? body.definition
-      : defaultMvpDefinition();
+      : EMPTY_DEFINITION;
     const def = parseAutomationDefinition(definition);
     const triggerNode = findTriggerNode(def);
     const triggerLabel = triggerNode

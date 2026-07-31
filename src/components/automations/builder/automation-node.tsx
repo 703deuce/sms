@@ -62,7 +62,11 @@ export function AutomationFlowNode({ id, data, selected }: NodeProps) {
       )}
     >
       {!isTrigger && (
-        <Handle type="target" position={Position.Top} className="!h-2 !w-2 !bg-primary" />
+        <Handle
+          type="target"
+          position={Position.Top}
+          className="!h-3.5 !w-3.5 md:!h-2 md:!w-2 !bg-primary touch-manipulation"
+        />
       )}
 
       <div className="flex items-start gap-2">
@@ -79,21 +83,21 @@ export function AutomationFlowNode({ id, data, selected }: NodeProps) {
             type="source"
             position={Position.Left}
             id="yes"
-            className="!h-2.5 !w-2.5 !bg-emerald-500"
+            className="!h-4 !w-4 md:!h-2.5 md:!w-2.5 !bg-emerald-500 touch-manipulation"
             style={{ top: "70%" }}
           />
-          <span className="absolute -left-6 top-[65%] text-[10px] font-medium text-emerald-600">Yes</span>
+          <span className="absolute -left-6 top-[65%] text-[10px] font-medium text-emerald-600 max-md:hidden">Yes</span>
           <Handle
             type="source"
             position={Position.Right}
             id="no"
-            className="!h-2.5 !w-2.5 !bg-rose-500"
+            className="!h-4 !w-4 md:!h-2.5 md:!w-2.5 !bg-rose-500 touch-manipulation"
             style={{ top: "70%" }}
           />
-          <span className="absolute -right-5 top-[65%] text-[10px] font-medium text-rose-600">No</span>
+          <span className="absolute -right-5 top-[65%] text-[10px] font-medium text-rose-600 max-md:hidden">No</span>
         </>
       ) : !isEnd ? (
-        <Handle type="source" position={Position.Bottom} id="default" className="!h-2 !w-2 !bg-primary" />
+        <Handle type="source" position={Position.Bottom} id="default" className="!h-3.5 !w-3.5 md:!h-2 md:!w-2 !bg-primary touch-manipulation" />
       ) : null}
     </div>
   );
