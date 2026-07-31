@@ -58,6 +58,13 @@ export async function POST(request: Request) {
         email: body.email || undefined,
       },
     });
+
+    const isNew = contact.createdAt.getTime() > Date.now() - 5000;
+    if (isNew) {
+      const { emitAutomationEvent } = await import("@/lib/automations/events");
+      await emitAutomationEvent(auth.workspaceId, "customer.created", contact.id).catch(() => undefined);
+    }
+
     return NextResponse.json({ data: contact }, { status: 201 });
   } catch (err) {
     return jsonError(err, 400);

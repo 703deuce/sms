@@ -1,0 +1,102 @@
+"use client";
+
+import { Handle, Position, type NodeProps } from "@xyflow/react";
+import { cn } from "@/lib/utils";
+import { nodeSummary } from "@/lib/automations/types";
+import {
+  Clock,
+  GitBranch,
+  MessageSquare,
+  Square,
+  Zap,
+} from "lucide-react";
+
+export type AutomationNodeData = {
+  blockType: string;
+  label: string;
+  config: Record<string, unknown>;
+  category?: string;
+  selected?: boolean;
+};
+
+function iconFor(blockType: string) {
+  if (blockType === "wait") return Clock;
+  if (blockType === "condition") return GitBranch;
+  if (blockType.includes("send") || blockType.includes("sms")) return MessageSquare;
+  if (blockType === "end_automation") return Square;
+  return Zap;
+}
+
+export function AutomationFlowNode({ id, data, selected }: NodeProps) {
+  const d = data as AutomationNodeData;
+  const Icon = iconFor(d.blockType);
+  const summary = nodeSummary({
+    id,
+    type: "action",
+    position: { x: 0, y: 0 },
+    data: d,
+  });
+
+  const isTrigger = d.blockType === "customer_added" || d.blockType === "manual_enrollment" || d.blockType === "tag_added" || d.blockType === "form_submitted";
+  const isCondition = d.blockType === "condition";
+  const isEnd = d.blockType === "end_automation";
+
+  const color = isTrigger
+    ? "border-primary bg-primary/5"
+    : isCondition
+      ? "border-violet-300 bg-violet-50"
+      : d.blockType === "wait"
+        ? "border-amber-300 bg-amber-50"
+        : isEnd
+          ? "border-border bg-muted/40"
+          : "border-sky-300 bg-sky-50";
+
+  return (
+    <div
+      className={cn(
+        "relative min-w-[200px] max-w-[240px] rounded-xl border-2 px-3 py-2.5 shadow-sm transition select-none",
+        color,
+        selected && "ring-2 ring-primary ring-offset-2",
+      )}
+    >
+      {!isTrigger && (
+        <Handle type="target" position={Position.Top} className="!h-2 !w-2 !bg-primary" />
+      )}
+
+      <div className="flex items-start gap-2">
+        <Icon className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+        <div className="min-w-0">
+          <p className="text-sm font-semibold leading-tight">{d.label}</p>
+          <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">{summary}</p>
+        </div>
+      </div>
+
+      {isCondition ? (
+        <>
+          <Handle
+            type="source"
+            position={Position.Left}
+            id="yes"
+            className="!h-2.5 !w-2.5 !bg-emerald-500"
+            style={{ top: "70%" }}
+          />
+          <span className="absolute -left-6 top-[65%] text-[10px] font-medium text-emerald-600">Yes</span>
+          <Handle
+            type="source"
+            position={Position.Right}
+            id="no"
+            className="!h-2.5 !w-2.5 !bg-rose-500"
+            style={{ top: "70%" }}
+          />
+          <span className="absolute -right-5 top-[65%] text-[10px] font-medium text-rose-600">No</span>
+        </>
+      ) : !isEnd ? (
+        <Handle type="source" position={Position.Bottom} id="default" className="!h-2 !w-2 !bg-primary" />
+      ) : null}
+    </div>
+  );
+}
+
+export const automationNodeTypes = {
+  automation: AutomationFlowNode,
+};

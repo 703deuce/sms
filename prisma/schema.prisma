@@ -134,6 +134,7 @@ model Workspace {
   webhooks    Webhook[]
   auditLogs   AuditLog[]
   usageRecords UsageRecord[]
+  automationExecutions AutomationExecution[]
 }
 
 model Membership {
@@ -189,6 +190,7 @@ model Contact {
   tagMembers    ContactTag[]
   consentRecords ConsentRecord[]
   conversations Conversation[]
+  automationExecutions AutomationExecution[]
 
   @@unique([workspaceId, phone])
 }
@@ -587,17 +589,74 @@ model Template {
 }
 
 model AutomationFlow {
-  id             String     @id @default(cuid())
-  workspaceId    String
-  name           String
-  trigger        String
-  definition     Json
-  enrolled       Int        @default(0)
-  messagesSent   Int        @default(0)
-  completionRate Float      @default(0)
-  status         FlowStatus @default(DRAFT)
-  updatedAt      DateTime   @updatedAt
-  workspace      Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  id                   String     @id @default(cuid())
+  workspaceId          String
+  name                 String
+  description          String?
+  trigger              String
+  definition           Json
+  publishedDefinition  Json?
+  version              Int        @default(0)
+  enrolled             Int        @default(0)
+  messagesSent         Int        @default(0)
+  completionRate       Float      @default(0)
+  status               FlowStatus @default(DRAFT)
+  createdAt            DateTime   @default(now())
+  updatedAt            DateTime   @updatedAt
+  publishedAt          DateTime?
+  workspace            Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  executions           AutomationExecution[]
+}
+
+enum AutomationExecutionStatus {
+  RUNNING
+  WAITING
+  COMPLETED
+  FAILED
+  CANCELLED
+  PAUSED
+}
+
+model AutomationExecution {
+  id              String                    @id @default(cuid())
+  workspaceId     String
+  flowId          String
+  flowVersion     Int
+  contactId       String
+  enrollmentKey   String                    @unique
+  status          AutomationExecutionStatus @default(RUNNING)
+  currentNodeId   String?
+  nextActionAt    DateTime?
+  metadata        Json?
+  startedAt       DateTime                  @default(now())
+  completedAt     DateTime?
+  failedAt        DateTime?
+  error           String?
+  flow            AutomationFlow            @relation(fields: [flowId], references: [id], onDelete: Cascade)
+  contact         Contact                   @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  workspace       Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  steps           AutomationStepExecution[]
+
+  @@index([workspaceId, flowId])
+  @@index([status, nextActionAt])
+}
+
+model AutomationStepExecution {
+  id           String              @id @default(cuid())
+  executionId  String
+  nodeId       String
+  status       String              @default("pending")
+  attemptCount Int                 @default(0)
+  scheduledFor DateTime?
+  startedAt    DateTime?
+  completedAt  DateTime?
+  branchTaken  String?
+  output       Json?
+  error        String?
+  execution    AutomationExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+
+  @@index([executionId])
+  @@unique([executionId, nodeId])
 }
 
 model Keyword {

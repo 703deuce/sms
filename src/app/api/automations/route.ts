@@ -4,6 +4,9 @@ import { requireSession, jsonError } from "@/lib/api-auth";
 import { getPrisma } from "@/lib/db";
 import { mapAutomation } from "@/lib/mappers";
 import { loadAutomations } from "@/lib/workspace-data";
+import { defaultMvpDefinition } from "@/lib/automations/validation";
+import { findTriggerNode, parseAutomationDefinition } from "@/lib/automations/types";
+import { triggerFromBlockType } from "@/lib/automations/catalog";
 import { enqueueJob } from "@/lib/messaging/enqueue-advance";
 
 export async function GET() {
@@ -35,12 +38,21 @@ export async function POST(request: Request) {
       body.activate || body.status === "Active" || body.status === "ACTIVE"
         ? "ACTIVE"
         : "DRAFT";
+    const definition = body.definition
+      ? body.definition
+      : defaultMvpDefinition();
+    const def = parseAutomationDefinition(definition);
+    const triggerNode = findTriggerNode(def);
+    const triggerLabel = triggerNode
+      ? triggerFromBlockType(triggerNode.data.blockType)
+      : body.trigger || "Manual enrollment";
+
     const row = await getPrisma().automationFlow.create({
       data: {
         workspaceId: auth.workspaceId,
         name: body.name.trim(),
-        trigger: body.trigger || "manual",
-        definition: (body.definition || { steps: [] }) as Prisma.InputJsonValue,
+        trigger: triggerLabel,
+        definition: definition as Prisma.InputJsonValue,
         status: status as "DRAFT" | "ACTIVE" | "PAUSED" | "ARCHIVED",
       },
     });

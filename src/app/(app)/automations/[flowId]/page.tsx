@@ -1,17 +1,19 @@
 import { FlowSettingsForm } from "@/components/automations/flow-settings-form";
+import {
+  AutomationExecutionHistory,
+  FlowActionButtons,
+} from "@/components/automations/flow-execution-history";
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle, StatCard } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatusChip } from "@/components/ui/status-chip";
-import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
-import type { Contact } from "@/lib/types";
+import { parseAutomationDefinition } from "@/lib/automations/types";
 import {
   requireWorkspaceContext,
   loadAutomationById,
-  loadContacts,
 } from "@/lib/workspace-data";
 import { cn, formatNumber, formatPercent } from "@/lib/utils";
-import { ArrowLeft, Clock, MessageSquare, Users, Zap } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -24,15 +26,6 @@ const tabItems = [
 ] as const;
 
 type TabId = (typeof tabItems)[number]["id"];
-
-function formatDateTime(at: string) {
-  return new Date(at).toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
 
 function FlowTabs({ flowId, activeTab }: { flowId: string; activeTab: TabId }) {
   return (
@@ -69,17 +62,19 @@ export default async function AutomationDetailPage({
   const { tab } = await searchParams;
   const { workspaceId } = await requireWorkspaceContext();
 
-  const [flow, contacts] = await Promise.all([
-    loadAutomationById(workspaceId, flowId),
-    loadContacts(workspaceId, "subscribed"),
-  ]);
+  const [flow] = await Promise.all([loadAutomationById(workspaceId, flowId)]);
 
   if (!flow) {
     notFound();
   }
 
   const activeTab = (tabItems.find((t) => t.id === tab)?.id ?? "builder") as TabId;
-  const enrolledContacts = contacts.slice(0, 4);
+  const def = parseAutomationDefinition(flow.definition);
+  const stepCount = def.nodes.length;
+  const smsSteps = def.nodes.filter(
+    (n) => n.data.blockType === "send_sms" || n.data.blockType === "send_review_request",
+  ).length;
+  const waitSteps = def.nodes.filter((n) => n.data.blockType === "wait").length;
 
   return (
     <div>
@@ -94,13 +89,7 @@ export default async function AutomationDetailPage({
                 Back
               </Button>
             </Link>
-            {flow.status === "Draft" ? (
-              <Button>Activate flow</Button>
-            ) : flow.status === "Paused" ? (
-              <Button>Resume</Button>
-            ) : (
-              <Button variant="outline">Pause</Button>
-            )}
+            <FlowActionButtons flowId={flowId} status={flow.status} />
           </>
         }
       />
@@ -117,39 +106,18 @@ export default async function AutomationDetailPage({
       {activeTab === "builder" && (
         <div className="grid gap-6 xl:grid-cols-3">
           <Card className="xl:col-span-2">
-            <CardTitle>Flow canvas</CardTitle>
-            <div className="mt-6 flex flex-col items-center space-y-2 py-4">
-              <div className="flex w-full max-w-xs items-center gap-2 rounded-xl border-2 border-primary bg-primary/5 px-4 py-3">
-                <Zap className="h-4 w-4 text-primary" />
-                <div>
-                  <p className="text-sm font-semibold">Trigger</p>
-                  <p className="text-xs text-muted-foreground">{flow.trigger}</p>
-                </div>
-              </div>
-              <div className="h-6 w-px bg-border" />
-              <div className="flex w-full max-w-xs items-center gap-2 rounded-xl border-2 border-amber-300 bg-amber-50 px-4 py-3">
-                <Clock className="h-4 w-4 text-amber-700" />
-                <div>
-                  <p className="text-sm font-semibold">Wait</p>
-                  <p className="text-xs text-muted-foreground">24 hours</p>
-                </div>
-              </div>
-              <div className="h-6 w-px bg-border" />
-              <div className="flex w-full max-w-xs items-center gap-2 rounded-xl border-2 border-sky-300 bg-sky-50 px-4 py-3">
-                <MessageSquare className="h-4 w-4 text-sky-700" />
-                <div>
-                  <p className="text-sm font-semibold">Send SMS</p>
-                  <p className="text-xs text-muted-foreground">Welcome message</p>
-                </div>
-              </div>
-            </div>
-            <div className="mt-4 flex justify-center">
-              <Link href={`/automations/new`}>
-                <Button variant="outline" size="sm">
-                  Edit in builder
-                </Button>
+            <CardTitle>Flow builder</CardTitle>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Open the visual builder to edit triggers, actions, delays, and conditions on the canvas.
+            </p>
+            <div className="mt-6 flex flex-wrap gap-3">
+              <Link href={`/automations/${flowId}/edit`}>
+                <Button>Edit in builder</Button>
               </Link>
             </div>
+            <p className="mt-6 text-sm text-muted-foreground">
+              {stepCount} node{stepCount === 1 ? "" : "s"} on canvas · Trigger: {flow.trigger}
+            </p>
           </Card>
           <Card>
             <CardTitle>Flow summary</CardTitle>
@@ -160,15 +128,15 @@ export default async function AutomationDetailPage({
               </div>
               <div className="flex justify-between">
                 <dt className="text-muted-foreground">Steps</dt>
-                <dd className="font-medium">3</dd>
+                <dd className="font-medium">{stepCount}</dd>
               </div>
               <div className="flex justify-between">
                 <dt className="text-muted-foreground">Messages</dt>
-                <dd className="font-medium">2 SMS</dd>
+                <dd className="font-medium">{smsSteps} SMS</dd>
               </div>
               <div className="flex justify-between">
                 <dt className="text-muted-foreground">Wait steps</dt>
-                <dd className="font-medium">1</dd>
+                <dd className="font-medium">{waitSteps}</dd>
               </div>
             </dl>
           </Card>
@@ -209,62 +177,9 @@ export default async function AutomationDetailPage({
         </>
       )}
 
-      {activeTab === "contacts" && (
-        <Card>
-          <div className="mb-4 flex items-center gap-2">
-            <Users className="h-4 w-4 text-primary" />
-            <CardTitle>Enrolled contacts</CardTitle>
-          </div>
-          {enrolledContacts.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No enrolled contacts yet.</p>
-          ) : (
-            <Table>
-              <THead>
-                <TR>
-                  <TH>Name</TH>
-                  <TH>Phone</TH>
-                  <TH>Status</TH>
-                  <TH>Current step</TH>
-                  <TH>Enrolled</TH>
-                </TR>
-              </THead>
-              <TBody>
-                {enrolledContacts.map((contact: Contact, idx: number) => (
-                  <TR key={contact.id}>
-                    <TD>
-                      <Link
-                        href={`/contacts/${contact.id}`}
-                        className="font-medium text-primary hover:underline"
-                      >
-                        {contact.firstName} {contact.lastName}
-                      </Link>
-                    </TD>
-                    <TD className="text-muted-foreground">{contact.phone}</TD>
-                    <TD>
-                      <StatusChip status={contact.status} />
-                    </TD>
-                    <TD className="text-muted-foreground">
-                      {idx === 0 ? "Wait 24h" : idx === 1 ? "Send SMS" : "Completed"}
-                    </TD>
-                    <TD className="text-muted-foreground">
-                      {contact.dateAdded || "—"}
-                    </TD>
-                  </TR>
-                ))}
-              </TBody>
-            </Table>
-          )}
-        </Card>
-      )}
+      {activeTab === "contacts" && <AutomationExecutionHistory flowId={flowId} />}
 
-      {activeTab === "logs" && (
-        <Card>
-          <CardTitle>Flow activity</CardTitle>
-          <p className="mt-4 py-8 text-center text-sm text-muted-foreground">
-            No activity logs for this flow yet.
-          </p>
-        </Card>
-      )}
+      {activeTab === "logs" && <AutomationExecutionHistory flowId={flowId} />}
 
       {activeTab === "settings" && <FlowSettingsForm flow={flow} />}
     </div>

@@ -31,6 +31,12 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       }
       return result;
     }
+    case "automation_advance": {
+      const executionId = String(payload.executionId || "");
+      if (!executionId) throw new Error("executionId required");
+      const { advanceAutomationExecution } = await import("@/lib/automations/runner");
+      return advanceAutomationExecution(executionId);
+    }
     case "automation_tick": {
       const flowId = String(payload.flowId || "");
       const workspaceId = String(payload.workspaceId || "");
