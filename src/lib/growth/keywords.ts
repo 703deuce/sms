@@ -6,6 +6,95 @@ import { getPrisma } from "@/lib/db";
 import { enrollContactInCampaign } from "@/lib/campaigns/enroll-campaign";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 
+/**
+ * Record a contest entry when an inbound message's first word matches an active
+ * contest keyword. Creates/updates a subscribed contact and dedupes by phone.
+ */
+export async function recordContestEntryIfMatch(input: {
+  workspaceId: string;
+  from: string;
+  body: string;
+}): Promise<{ matched: boolean; replyText?: string; contestId?: string }> {
+  const prisma = getPrisma();
+  const word = (input.body || "").trim().split(/\s+/)[0]?.toUpperCase() || "";
+  if (!word) return { matched: false };
+
+  const now = new Date();
+  const contests = await prisma.contest.findMany({
+    where: {
+      workspaceId: input.workspaceId,
+      status: "active",
+      keywordText: { equals: word, mode: "insensitive" },
+    },
+  });
+  const contest = (contests as Array<{ startAt: Date | null; endAt: Date | null } & Record<string, any>>).find((c) => {
+    if (c.startAt && c.startAt > now) return false;
+    if (c.endAt && c.endAt < now) return false;
+    return true;
+  });
+  if (!contest) return { matched: false };
+
+  let from = input.from;
+  try {
+    from = normalizeE164(input.from);
+  } catch {
+    // keep
+  }
+
+  // Enforce max entries when configured.
+  if (contest.maxEntries != null) {
+    const count = await prisma.contestEntry.count({ where: { contestId: contest.id } });
+    const already = await prisma.contestEntry.findFirst({
+      where: { contestId: contest.id, phone: from },
+    });
+    if (!already && count >= contest.maxEntries) {
+      return {
+        matched: true,
+        contestId: contest.id,
+        replyText: "This contest has reached its entry limit. Thanks for your interest!",
+      };
+    }
+  }
+
+  let contact = await prisma.contact.findUnique({
+    where: { workspaceId_phone: { workspaceId: input.workspaceId, phone: from } },
+  });
+  if (!contact) {
+    contact = await prisma.contact.create({
+      data: {
+        workspaceId: input.workspaceId,
+        phone: from,
+        status: "SUBSCRIBED",
+        consentSource: `contest:${contest.keywordText}`,
+        consentDate: new Date(),
+      },
+    });
+  }
+
+  let created = false;
+  try {
+    await prisma.contestEntry.create({
+      data: {
+        contestId: contest.id,
+        contactId: contact.id,
+        phone: from,
+      },
+    });
+    created = true;
+  } catch (err) {
+    if (!(err && typeof err === "object" && "code" in err && (err as { code: string }).code === "P2002")) {
+      throw err;
+    }
+    // Already entered — dedupe on [contestId, phone].
+  }
+
+  const replyText = created
+    ? `You're entered in ${contest.name}! ${contest.prizeDescription ? `Prize: ${contest.prizeDescription}. ` : ""}Reply STOP to opt out.`.trim()
+    : `You're already entered in ${contest.name}. Good luck!`;
+
+  return { matched: true, contestId: contest.id, replyText };
+}
+
 export async function handleKeywordInbound(input: {
   workspaceId: string;
   from: string;
