@@ -18,7 +18,12 @@ export async function initiateOutboundCall(input: {
     where: { id: input.agentId, workspaceId: input.workspaceId },
   });
   if (!agent) throw new Error("Agent not found");
-  if (agent.status !== "ACTIVE" && agent.status !== "TESTING") {
+  const testableStatuses = ["ACTIVE", "TESTING", "DRAFT"];
+  if (input.isTest) {
+    if (!testableStatuses.includes(agent.status)) {
+      throw new Error("Agent is not available for testing");
+    }
+  } else if (agent.status !== "ACTIVE" && agent.status !== "TESTING") {
     throw new Error("Agent is not active");
   }
 
@@ -161,7 +166,7 @@ export async function processVoiceCampaignBatch() {
 export async function completeMockCall(callId: string) {
   const prisma = getPrisma();
   const call = await prisma.voiceCall.findUnique({ where: { id: callId } });
-  if (!call) return;
+  if (!call || call.status === "COMPLETED") return;
 
   await prisma.voiceCall.update({
     where: { id: callId },

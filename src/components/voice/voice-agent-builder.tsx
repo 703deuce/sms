@@ -55,9 +55,9 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
     setAgent(aJson.data);
     if (pRes.ok) {
       const pJson = await pRes.json();
-      setPhones((pJson.data || []).map((p: { id: string; e164: string }) => ({
+      setPhones((pJson.data || []).map((p: { id: string; number?: string; e164?: string }) => ({
         id: p.id,
-        e164: p.e164,
+        e164: p.number || p.e164 || "",
       })));
     }
   }, [agentId]);
@@ -225,11 +225,16 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
                   setDirty(true);
                 }}
               >
-                <option value="">Select number</option>
-                {phones.map((p) => (
-                  <option key={p.id} value={p.id}>{p.e164}</option>
-                ))}
-              </select>
+              <option value="">Select number</option>
+              {phones.map((p) => (
+                <option key={p.id} value={p.id}>{p.e164}</option>
+              ))}
+            </select>
+            {!phones.length && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                No numbers in workspace. Add one under Phone Numbers.
+              </p>
+            )}
             </div>
             <div>
               <Label>Purpose</Label>

@@ -6,6 +6,7 @@ import { Input, Label } from "@/components/ui/input";
 import { PageHeader } from "@/components/ui/page-header";
 import { MicTestPanel } from "@/components/voice/mic-test-panel";
 import { VoiceSubNav } from "@/components/voice/voice-subnav";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 export default function VoiceTestingPage() {
@@ -13,6 +14,7 @@ export default function VoiceTestingPage() {
   const [agentId, setAgentId] = useState("");
   const [testNumber, setTestNumber] = useState("+14155550199");
   const [result, setResult] = useState<string | null>(null);
+  const [lastCallId, setLastCallId] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
 
   useEffect(() => {
@@ -35,7 +37,11 @@ export default function VoiceTestingPage() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error);
-      setResult(`Test call started: ${json.data.callId} (mode: ${json.data.mode})`);
+      const callId = json.data.callId;
+      setResult(
+        `Test call completed (mock): ${callId}. View it under Calls.`,
+      );
+      setLastCallId(callId);
     } catch (err) {
       setResult(err instanceof Error ? err.message : "Test failed");
     } finally {
@@ -50,6 +56,10 @@ export default function VoiceTestingPage() {
       <div className="grid gap-6 lg:grid-cols-2">
         <Card className="space-y-4 p-5">
           <h2 className="font-medium">Outbound test call</h2>
+          <p className="text-xs text-muted-foreground">
+            Without Telnyx configured, test calls run in mock mode and appear under Calls.
+            Assign a workspace phone number for caller ID.
+          </p>
           <div>
             <Label>Agent</Label>
             <select
@@ -69,7 +79,19 @@ export default function VoiceTestingPage() {
           <Button disabled={running || !agentId} onClick={runTest}>
             {running ? "Running…" : "Place outbound test call"}
           </Button>
-          {result && <p className="text-sm">{result}</p>}
+          {result && (
+            <p className="text-sm">
+              {result}
+              {lastCallId && (
+                <>
+                  {" "}
+                  <Link href={`/voice/calls/${lastCallId}`} className="text-primary underline">
+                    Open call detail
+                  </Link>
+                </>
+              )}
+            </p>
+          )}
         </Card>
         <MicTestPanel />
       </div>

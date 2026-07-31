@@ -47,6 +47,11 @@ export async function POST(
       dynamicVariables: body.dynamicVariables,
     });
 
+    if (result.dial.mode === "mock") {
+      const { completeMockCall } = await import("@/lib/voice/call-service");
+      await completeMockCall(result.call.id);
+    }
+
     await getPrisma().voiceTestRun.update({
       where: { id: testRun.id },
       data: { callId: result.call.id, status: "completed", completedAt: new Date() },

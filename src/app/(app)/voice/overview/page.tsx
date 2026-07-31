@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { VoiceSubNav } from "@/components/voice/voice-subnav";
 import { formatNumber } from "@/lib/utils";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 type Overview = {
@@ -96,7 +97,11 @@ export default function VoiceOverviewPage() {
                   <TD>{c.direction}</TD>
                   <TD className="font-mono text-xs">{c.fromE164}</TD>
                   <TD className="font-mono text-xs">{c.toE164}</TD>
-                  <TD>{c.status}</TD>
+                  <TD>
+                    <Link href={`/voice/calls/${c.id}`} className="text-primary hover:underline">
+                      {c.status}
+                    </Link>
+                  </TD>
                 </TR>
               ))}
               {!stats?.recentCalls?.length && (

@@ -25,7 +25,8 @@
     "test:automation-e2e": "tsx scripts/test-automation-e2e.ts",
     "test:forms-e2e": "tsx scripts/test-forms-e2e.ts",
     "test:voice-e2e": "tsx scripts/test-voice-e2e.ts",
-    "test:voice-full": "tsx scripts/test-voice-full.ts"
+    "test:voice-full": "tsx scripts/test-voice-full.ts",
+    "test:voice-audit": "tsx scripts/test-voice-api-audit.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.19.0",

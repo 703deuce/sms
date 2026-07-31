@@ -35,15 +35,24 @@ export async function POST(
       },
     });
 
-    await enqueueJob({
-      jobType: "voice_knowledge_process",
-      queueName: "voice-calls",
-      workspaceId: auth.workspaceId,
-      payload: { sourceId: source.id },
-      idempotencyKey: `voice-kb-process-${source.id}`,
-    });
-
-    return NextResponse.json({ data: source }, { status: 201 });
+    try {
+      const { processKnowledgeSource } = await import("@/lib/voice/knowledge-processor");
+      await processKnowledgeSource(source.id);
+      const indexed = await getPrisma().voiceKnowledgeSource.findUnique({
+        where: { id: source.id },
+      });
+      return NextResponse.json({ data: indexed }, { status: 201 });
+    } catch (processErr) {
+      await enqueueJob({
+        jobType: "voice_knowledge_process",
+        queueName: "voice-calls",
+        workspaceId: auth.workspaceId,
+        payload: { sourceId: source.id },
+        idempotencyKey: `voice-kb-process-${source.id}`,
+      });
+      console.warn("[voice/knowledge] sync process failed, queued job", processErr);
+      return NextResponse.json({ data: source }, { status: 201 });
+    }
   } catch (err) {
     return jsonError(err, 400);
   }
