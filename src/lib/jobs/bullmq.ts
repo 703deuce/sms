@@ -8,6 +8,17 @@ import { getPrisma } from "@/lib/db";
 let sharedConnection: IORedis | null = null;
 const queueCache = new Map<string, Queue>();
 
+/** Stored on job data so DB outbox can be completed after sanitize. */
+const IDEMPOTENCY_FIELD = "__idempotencyKey";
+
+/**
+ * BullMQ rejects custom job ids that contain `:`.
+ * Idempotency keys often embed ISO timestamps (`2026-08-01T22:12`).
+ */
+export function toBullmqJobId(id: string): string {
+  return id.replace(/:/g, "_");
+}
+
 function connection() {
   const url = process.env.REDIS_URL;
   if (!url) throw new Error("REDIS_URL required for BullMQ");
@@ -38,6 +49,8 @@ export async function startBullmqWorkers() {
   const conn = connection();
 
   const queues = [
+    "default",
+    "maintenance",
     "review-campaign",
     "sms-send",
     "email-send",
@@ -58,15 +71,21 @@ export async function startBullmqWorkers() {
     void new Worker(
       name,
       async (job) => {
+        const raw = { ...((job.data || {}) as Record<string, unknown>) };
+        const idempotencyKey =
+          (typeof raw[IDEMPOTENCY_FIELD] === "string" && raw[IDEMPOTENCY_FIELD]) ||
+          job.id ||
+          undefined;
+        delete raw[IDEMPOTENCY_FIELD];
         try {
-          await handleJob(job.name, (job.data || {}) as Record<string, unknown>);
-          await syncDbJob(job.id, "completed");
+          await handleJob(job.name, raw);
+          await syncDbJob(idempotencyKey, "completed");
         } catch (err) {
           if (err instanceof JobDeferredError) {
             // Mirror soft defer into DB outbox so cron doesn't promote early forever
-            if (job.id) {
+            if (idempotencyKey) {
               const row = await getPrisma().jobQueue.findUnique({
-                where: { idempotencyKey: job.id },
+                where: { idempotencyKey },
               });
               if (row) {
                 await failJob(row.id, err.message, err.deferMs, err.soft);
@@ -77,7 +96,7 @@ export async function startBullmqWorkers() {
           }
           const message = err instanceof Error ? err.message : String(err);
           if (err instanceof JobFailedError) {
-            await syncDbJob(job.id, "failed", message);
+            await syncDbJob(idempotencyKey, "failed", message);
             throw new UnrecoverableError(message);
           }
           throw err;
@@ -100,17 +119,20 @@ export async function enqueueBullmq(
 ) {
   const queue = getQueue(queueName);
   const isRegistration = jobName === "messaging_registration_advance";
+  const rawJobId = opts?.jobId;
+  const jobId = rawJobId ? toBullmqJobId(rawJobId) : undefined;
+  const payload = rawJobId ? { ...data, [IDEMPOTENCY_FIELD]: rawJobId } : data;
 
   // If a prior run completed/failed under the same jobId, remove it so re-advance works
-  if (opts?.jobId) {
-    const existing = await queue.getJob(opts.jobId);
+  if (jobId) {
+    const existing = await queue.getJob(jobId);
     if (existing) {
       const state = await existing.getState();
       if (state === "completed" || state === "failed") {
         await existing.remove();
       } else if (state === "delayed") {
         // Wake immediately when requested (compliance webhook / refresh), else bump delay
-        if (opts.wake || !opts.delay) {
+        if (opts?.wake || !opts?.delay) {
           await existing.promote();
         } else {
           await existing.changeDelay(opts.delay);
@@ -122,8 +144,8 @@ export async function enqueueBullmq(
     }
   }
 
-  await queue.add(jobName, data, {
-    jobId: opts?.jobId,
+  await queue.add(jobName, payload, {
+    jobId,
     delay: opts?.delay,
     removeOnComplete: 1000,
     removeOnFail: 5000,

@@ -350,4 +350,13 @@ ok("provider-specific OAuth callback URLs", async () => {
   else process.env.APP_URL = prev;
 });
 
+ok("BullMQ job ids cannot contain colon", async () => {
+  const { toBullmqJobId } = await import("../src/lib/jobs/bullmq");
+  const raw = "campaign-send-batch:2026-08-01T22:12";
+  const id = toBullmqJobId(raw);
+  assert.equal(id.includes(":"), false);
+  assert.equal(id, "campaign-send-batch_2026-08-01T22_12");
+  assert.equal(toBullmqJobId("crm-sync-zoho-abc"), "crm-sync-zoho-abc");
+});
+
 console.log(`\n${passed} CRM enterprise checks passed.`);
