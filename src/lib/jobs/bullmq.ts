@@ -62,6 +62,17 @@ export async function startBullmqWorkers() {
     "crm-salesforce",
     "crm-zoho",
     "crm-pipedrive",
+    // External native integration queues
+    "ext-calendly",
+    "ext-activecampaign",
+    "ext-mailchimp",
+    "ext-highlevel",
+    "ext-woocommerce",
+    "ext-typeform",
+    "ext-jotform",
+    "ext-close",
+    "ext-freshdesk",
+    "ext-klaviyo",
   ] as const;
 
   for (const name of queues) {

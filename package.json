@@ -29,6 +29,7 @@
     "test:voice-audit": "tsx scripts/test-voice-api-audit.ts",
     "test:product-suite": "tsx scripts/test-product-suite.ts",
     "test:crm-enterprise": "tsx scripts/test-crm-enterprise.ts",
+    "test:native-integrations": "tsx scripts/test-native-integrations.ts",
     "crm:live-readiness": "tsx scripts/crm-live-readiness.ts"
   },
   "dependencies": {

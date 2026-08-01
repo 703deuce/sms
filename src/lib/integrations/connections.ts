@@ -10,7 +10,16 @@ export type ConnectionProvider =
   | "salesforce"
   | "shopify"
   | "zoho"
-  | "pipedrive";
+  | "pipedrive"
+  | "mailchimp"
+  | "typeform"
+  | "activecampaign"
+  | "woocommerce"
+  | "jotform"
+  | "close"
+  | "freshdesk"
+  | "klaviyo"
+  | "highlevel";
 
 export type ConnectionStatus =
   | "connected"
@@ -59,7 +68,17 @@ export async function listConnections(workspaceId: string): Promise<ConnectionVi
   }));
 }
 
-const SECRET_KEYS = ["accessToken", "refreshToken", "apiKey", "signingKey", "secret", "password"];
+const SECRET_KEYS = [
+  "accessToken",
+  "refreshToken",
+  "apiKey",
+  "signingKey",
+  "secret",
+  "password",
+  "consumerKey",
+  "consumerSecret",
+  "privateToken",
+];
 
 function sanitizeConfig(config: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {};

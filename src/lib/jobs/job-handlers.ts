@@ -491,6 +491,33 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       const { enqueueScheduledCrmIncrementalSyncs } = await import("@/lib/crm/scheduled-sync");
       return enqueueScheduledCrmIncrementalSyncs();
     }
+    case "integration_sync": {
+      const { runIntegrationSyncJob } = await import("@/lib/integrations/framework/sync");
+      return runIntegrationSyncJob({
+        workspaceId: String(payload.workspaceId || ""),
+        provider: payload.provider as import("@/lib/integrations/framework").ExternalProviderId,
+        syncRunId: String(payload.syncRunId || ""),
+        kind: payload.kind as "initial" | "incremental" | "manual" | "webhook" | undefined,
+      });
+    }
+    case "integration_webhook_process": {
+      const { processIntegrationWebhookJob } = await import("@/lib/integrations/framework/sync");
+      return processIntegrationWebhookJob({
+        workspaceId: String(payload.workspaceId || ""),
+        provider: payload.provider as import("@/lib/integrations/framework").ExternalProviderId,
+        webhookEventId: String(payload.webhookEventId || ""),
+      });
+    }
+    case "integration_automation_event": {
+      // Stored normalized events are available for the future automation builder.
+      // No-op consumer keeps the "every job has a handler" contract green.
+      return {
+        ok: true,
+        queued: true,
+        provider: payload.provider,
+        eventType: payload.eventType,
+      };
+    }
     default:
       throw new Error(`Unknown job type: ${jobType}`);
   }
