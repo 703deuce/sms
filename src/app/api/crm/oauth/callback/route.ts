@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { humanizeCrmError } from "@/lib/crm/human-errors";
 import { completeCrmOAuth } from "@/lib/crm/oauth";
 import { enqueueCrmSync } from "@/lib/crm/sync-engine";
 
@@ -13,13 +14,16 @@ export async function GET(request: Request) {
   const oauthError = url.searchParams.get("error");
 
   if (oauthError) {
+    const human = humanizeCrmError(oauthError, "CRM connect");
     return NextResponse.redirect(
-      `${appUrl()}/integrations/crm?connected_error=${encodeURIComponent(oauthError)}`,
+      `${appUrl()}/integrations/crm?connected_error=${encodeURIComponent(human.slice(0, 200))}`,
     );
   }
   if (!code || !state) {
     return NextResponse.redirect(
-      `${appUrl()}/integrations/crm?connected_error=${encodeURIComponent("missing_code")}`,
+      `${appUrl()}/integrations/crm?connected_error=${encodeURIComponent(
+        "Sign-in didn’t finish. Click Connect and try again.",
+      )}`,
     );
   }
 
@@ -36,9 +40,9 @@ export async function GET(request: Request) {
       `${appUrl()}/integrations/crm/${provider}?connected=1&wizard=1`,
     );
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "oauth_failed";
+    const msg = humanizeCrmError(err, "CRM connect");
     return NextResponse.redirect(
-      `${appUrl()}/integrations/crm?connected_error=${encodeURIComponent(msg.slice(0, 120))}`,
+      `${appUrl()}/integrations/crm?connected_error=${encodeURIComponent(msg.slice(0, 200))}`,
     );
   }
 }

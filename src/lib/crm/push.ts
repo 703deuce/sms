@@ -11,6 +11,7 @@ import {
   getObjectMapping,
   upsertObjectMapping,
 } from "./mappings";
+import { isFeatureSupported } from "./feature-matrix";
 import { getConnector } from "./registry";
 import { buildContext } from "./sync-engine";
 import type { CrmPlatformEvent, CrmProviderId } from "./types";
@@ -112,7 +113,8 @@ export async function pushCrmEventJob(payload: {
         event.type === "recording.ready" ||
         event.type === "transcript.ready") &&
       prefs.syncCalls &&
-      connector.logCall
+      connector.logCall &&
+      isFeatureSupported(provider, "calls")
     ) {
       const direction =
         event.type === "call.missed"
@@ -152,7 +154,12 @@ export async function pushCrmEventJob(payload: {
       });
     }
 
-    if (event.type.startsWith("sms.") && prefs.syncSms && connector.logSms) {
+    if (
+      event.type.startsWith("sms.") &&
+      prefs.syncSms &&
+      connector.logSms &&
+      isFeatureSupported(provider, "sms")
+    ) {
       const result = await connector.logSms(ctx, {
         direction: event.type === "sms.received" ? "inbound" : "outbound",
         from: (event.payload.from as string) || null,
@@ -174,7 +181,7 @@ export async function pushCrmEventJob(payload: {
     }
 
     // Task automation
-    if (connector.createTask && prefs.syncTasks) {
+    if (connector.createTask && prefs.syncTasks && isFeatureSupported(provider, "tasks")) {
       const taskSubject =
         event.type === "call.missed" && prefs.createTasksOnMissedCall
           ? `Follow up missed call${contactPhone ? ` (${contactPhone})` : ""}`

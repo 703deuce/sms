@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { requireSession, jsonError } from "@/lib/api-auth";
+import { requireSession } from "@/lib/api-auth";
+import { humanizeCrmError } from "@/lib/crm/human-errors";
 import { startCrmOAuth } from "@/lib/crm/oauth";
 import { isCrmProvider } from "@/lib/crm/registry";
 
@@ -15,6 +16,12 @@ export async function POST(request: Request) {
     const result = await startCrmOAuth(auth.workspaceId, provider);
     return NextResponse.json({ data: result });
   } catch (err) {
-    return jsonError(err, 400);
+    return NextResponse.json(
+      {
+        error: humanizeCrmError(err, "CRM connect"),
+        technical: err instanceof Error ? err.message : String(err),
+      },
+      { status: 400 },
+    );
   }
 }

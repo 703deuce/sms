@@ -154,14 +154,25 @@ Push path uses conflict resolution (`src/lib/crm/conflict.ts`) before create.
 
 ---
 
+## Ops tooling (Phase 2)
+
+- **Diagnostics console:** `/integrations/crm/[provider]?tab=diagnostics`  
+  Probes: OAuth, refresh, contact/lead/task/call/SMS, recording/transcript links, rate limit, force resync, retry failed.  
+- **Feature matrix:** provider **Features** tab / `GET /api/crm/features`  
+- **Env + DB check:** `GET /api/crm/env`  
+- **Expanded health:** objects synced, API status, rate limit, retries  
+- **Token encryption:** `INTEGRATION_SECRET_KEY` → AES-GCM at rest (`src/lib/crm/secrets.ts`)
+
+See `docs/CRM_PHASE2_PRODUCTION_READINESS.md`, `docs/CRM_CUSTOMER_SETUP.md`, `docs/CRM_TROUBLESHOOTING.md`.
+
 ## Acceptance (still requires sandbox)
 
-Framework + production config code is in place. **Live Connect still requires:**
+Framework + production readiness tooling is in place. **Live Connect still requires:**
 
 1. Provider OAuth apps created with scopes above  
 2. Env vars set  
 3. `db:push` applied  
 4. Worker running  
-5. Sandbox end-to-end test per provider  
+5. Sandbox end-to-end test per provider (use Diagnostics for each checklist item)
 
 Until those five are true, Connect will not succeed in production.

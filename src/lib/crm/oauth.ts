@@ -5,8 +5,10 @@
 
 import { createHmac, randomBytes } from "crypto";
 import { getConnection, upsertConnection } from "@/lib/integrations/connections";
+import { assertCrmOAuthEnv } from "./env-check";
 import { getConnector, isCrmProvider } from "./registry";
 import { writeCrmAudit } from "./logging";
+import { decryptCrmSecret, encryptCrmSecret } from "./secrets";
 import type { CrmProviderId } from "./types";
 
 function appUrl() {
@@ -50,6 +52,7 @@ function envOrThrow(name: string) {
 
 /** Build the provider authorize URL and mark connection pending_oauth. */
 export async function startCrmOAuth(workspaceId: string, provider: CrmProviderId) {
+  assertCrmOAuthEnv(provider);
   const connector = getConnector(provider);
   const clientId = envOrThrow(connector.oauth.clientIdEnv);
   const state = makeState(workspaceId, provider);
@@ -139,13 +142,14 @@ export async function completeCrmOAuth(code: string, state: string) {
   const existing = await getConnection(workspaceId, provider);
   const prevConfig = (existing?.configJson || {}) as Record<string, unknown>;
 
+  const priorRefresh = decryptCrmSecret(existing?.refreshToken) || existing?.refreshToken || null;
   await upsertConnection({
     workspaceId,
     provider,
     status: "pending_oauth",
     syncStatus: "idle",
-    accessToken: parsedTokens.accessToken,
-    refreshToken: parsedTokens.refreshToken ?? existing?.refreshToken ?? null,
+    accessToken: encryptCrmSecret(parsedTokens.accessToken),
+    refreshToken: encryptCrmSecret(parsedTokens.refreshToken ?? priorRefresh),
     expiresAt: parsedTokens.expiresAt ?? null,
     externalId: parsedTokens.externalId ?? existing?.externalId ?? null,
     lastError: null,
@@ -154,6 +158,7 @@ export async function completeCrmOAuth(code: string, state: string) {
       ...(parsedTokens.meta || {}),
       lastOAuthError: null,
       connectedAt: new Date().toISOString(),
+      tokensEncrypted: Boolean(process.env.INTEGRATION_SECRET_KEY?.trim()),
     },
     mergeConfig: false,
   });
@@ -179,10 +184,21 @@ export async function completeCrmOAuth(code: string, state: string) {
   return { workspaceId, provider, validation };
 }
 
+/** Connection row with decrypted tokens for API use. */
+export async function getDecryptedCrmConnection(workspaceId: string, provider: CrmProviderId) {
+  const conn = await getConnection(workspaceId, provider);
+  if (!conn) return null;
+  return {
+    ...conn,
+    accessToken: decryptCrmSecret(conn.accessToken),
+    refreshToken: decryptCrmSecret(conn.refreshToken),
+  };
+}
+
 /** Refresh access token when expired or near expiry. */
 export async function refreshCrmAccessToken(workspaceId: string, provider: CrmProviderId) {
   const connector = getConnector(provider);
-  const conn = await getConnection(workspaceId, provider);
+  const conn = await getDecryptedCrmConnection(workspaceId, provider);
   if (!conn?.refreshToken) {
     await upsertConnection({ workspaceId, provider, status: "needs_reauth" });
     throw new Error("No refresh token — reconnect required");
@@ -222,8 +238,8 @@ export async function refreshCrmAccessToken(workspaceId: string, provider: CrmPr
     workspaceId,
     provider,
     status: "connected",
-    accessToken: parsedTokens.accessToken,
-    refreshToken: parsedTokens.refreshToken ?? conn.refreshToken,
+    accessToken: encryptCrmSecret(parsedTokens.accessToken),
+    refreshToken: encryptCrmSecret(parsedTokens.refreshToken ?? conn.refreshToken),
     expiresAt: parsedTokens.expiresAt ?? null,
     config: parsedTokens.meta || {},
     mergeConfig: true,
@@ -237,11 +253,11 @@ export async function refreshCrmAccessToken(workspaceId: string, provider: CrmPr
     message: "Access token refreshed",
   });
 
-  return getConnection(workspaceId, provider);
+  return getDecryptedCrmConnection(workspaceId, provider);
 }
 
 export async function ensureFreshCrmToken(workspaceId: string, provider: CrmProviderId) {
-  const conn = await getConnection(workspaceId, provider);
+  const conn = await getDecryptedCrmConnection(workspaceId, provider);
   if (!conn?.accessToken) throw new Error("CRM not connected");
   if (conn.status === "needs_reauth") throw new Error("CRM needs reauthentication");
   const skewMs = 2 * 60 * 1000;

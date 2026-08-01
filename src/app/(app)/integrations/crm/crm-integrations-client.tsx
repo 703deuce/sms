@@ -43,7 +43,7 @@ export function CrmIntegrationsClient() {
     load();
     const params = new URLSearchParams(window.location.search);
     const err = params.get("connected_error");
-    if (err) setMessage({ text: `Connect failed: ${err}`, error: true });
+    if (err) setMessage({ text: err, error: true });
   }, []);
 
   async function connect(provider: string) {
@@ -56,7 +56,7 @@ export function CrmIntegrationsClient() {
         body: JSON.stringify({ provider }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "OAuth start failed");
+      if (!res.ok) throw new Error(json.error || "Couldn't start CRM connection");
       window.location.href = json.data.redirectUrl;
     } catch (e) {
       setMessage({
@@ -169,10 +169,16 @@ export function CrmIntegrationsClient() {
                 </Button>
               )}
               <Link
+                href={`/integrations/crm/${p.id}?tab=diagnostics`}
+                className="inline-flex h-8 items-center rounded-lg px-3 text-xs font-medium text-muted-foreground hover:bg-muted"
+              >
+                Diagnostics
+              </Link>
+              <Link
                 href={`/integrations/crm/${p.id}?tab=logs`}
                 className="inline-flex h-8 items-center rounded-lg px-3 text-xs font-medium text-muted-foreground hover:bg-muted"
               >
-                View Logs
+                Logs
               </Link>
             </div>
           </Card>

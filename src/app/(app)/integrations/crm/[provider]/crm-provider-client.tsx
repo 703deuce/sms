@@ -46,9 +46,48 @@ const NAMES: Record<string, string> = {
   pipedrive: "Pipedrive",
 };
 
+type ProbeResult = {
+  id: string;
+  label: string;
+  ok: boolean;
+  skipped?: boolean;
+  message: string;
+  humanMessage?: string;
+  durationMs: number;
+  raw?: unknown;
+  externalId?: string | null;
+};
+
+type FeatureRow = {
+  feature: string;
+  label: string;
+  support: string;
+  notes?: string;
+};
+
+const DIAG_PROBES: Array<{ id: string; label: string }> = [
+  { id: "env", label: "Env vars" },
+  { id: "oauth", label: "OAuth" },
+  { id: "token_refresh", label: "Refresh token" },
+  { id: "api_reachable", label: "API reachable" },
+  { id: "contact_create", label: "Contact create" },
+  { id: "lead_create", label: "Lead create" },
+  { id: "task_create", label: "Task create" },
+  { id: "call_logging", label: "Call logging" },
+  { id: "sms_logging", label: "SMS logging" },
+  { id: "recording_attach", label: "Recording link" },
+  { id: "transcript_attach", label: "Transcript link" },
+  { id: "webhook_delivery", label: "Webhooks" },
+  { id: "rate_limit", label: "Rate limit" },
+  { id: "force_resync", label: "Force resync" },
+  { id: "retry_failed", label: "Retry failed" },
+];
+
 export function CrmProviderClient({ provider }: { provider: string }) {
   const name = NAMES[provider] || provider;
-  const [tab, setTab] = useState<"settings" | "logs" | "mappings" | "health">("settings");
+  const [tab, setTab] = useState<
+    "settings" | "logs" | "mappings" | "health" | "diagnostics" | "features"
+  >("settings");
   const [status, setStatus] = useState("disconnected");
   const [syncStatus, setSyncStatus] = useState("idle");
   const [prefs, setPrefs] = useState<Prefs | null>(null);
@@ -56,10 +95,15 @@ export function CrmProviderClient({ provider }: { provider: string }) {
   const [audit, setAudit] = useState<Array<Record<string, unknown>>>([]);
   const [fields, setFields] = useState<Array<Record<string, unknown>>>([]);
   const [health, setHealth] = useState<Record<string, unknown> | null>(null);
+  const [diagSnapshot, setDiagSnapshot] = useState<Record<string, unknown> | null>(null);
+  const [probeResults, setProbeResults] = useState<Record<string, ProbeResult>>({});
+  const [features, setFeatures] = useState<FeatureRow[]>([]);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [probeBusy, setProbeBusy] = useState<string | null>(null);
   const [wizard, setWizard] = useState(false);
+  const [wizardStep, setWizardStep] = useState(1);
   const [fieldForm, setFieldForm] = useState({
     objectType: "contact",
     internalField: "phone",
@@ -105,7 +149,20 @@ export function CrmProviderClient({ provider }: { provider: string }) {
   function loadHealth() {
     return fetch(`/api/crm/health?provider=${provider}`)
       .then((r) => r.json())
-      .then((j) => setHealth((j.data || [])[0] || null));
+      .then((j) => {
+        const row = (j.data || [])[0] || null;
+        setHealth(row);
+        if (row?.features) setFeatures(row.features as FeatureRow[]);
+      });
+  }
+
+  function loadDiagnostics() {
+    return fetch(`/api/crm/diagnostics?provider=${provider}`)
+      .then((r) => r.json())
+      .then((j) => {
+        setDiagSnapshot(j.data?.snapshot || null);
+        if (j.data?.features) setFeatures(j.data.features as FeatureRow[]);
+      });
   }
 
   function loadLogs() {
@@ -126,13 +183,19 @@ export function CrmProviderClient({ provider }: { provider: string }) {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get("tab") === "logs") setTab("logs");
-    if (params.get("tab") === "health") setTab("health");
-    if (params.get("wizard") === "1" || params.get("connected") === "1") setWizard(true);
+    const t = params.get("tab");
+    if (t === "logs" || t === "health" || t === "diagnostics" || t === "features" || t === "mappings") {
+      setTab(t);
+    }
+    if (params.get("wizard") === "1" || params.get("connected") === "1") {
+      setWizard(true);
+      setWizardStep(1);
+    }
     void loadProvider();
     void loadLogs();
     void loadMappings();
     void loadHealth();
+    void loadDiagnostics();
   }, [provider]);
 
   async function savePrefs() {
@@ -231,12 +294,55 @@ export function CrmProviderClient({ provider }: { provider: string }) {
         body: JSON.stringify({ provider }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "OAuth failed");
+      if (!res.ok) throw new Error(json.error || "Couldn't start reconnect");
       window.location.href = json.data.redirectUrl;
     } catch (e) {
       setError(e instanceof Error ? e.message : "Reconnect failed");
       setBusy(false);
     }
+  }
+
+  async function runProbe(probe: string) {
+    setProbeBusy(probe);
+    setError("");
+    try {
+      const res = await fetch("/api/crm/diagnostics", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider, probe }),
+      });
+      const json = await res.json();
+      const result = (json.data || {
+        id: probe,
+        label: probe,
+        ok: false,
+        message: json.error || "Probe failed",
+        durationMs: 0,
+      }) as ProbeResult;
+      setProbeResults((prev) => ({ ...prev, [probe]: result }));
+      if (!result.ok && !result.skipped) {
+        setError(result.humanMessage || result.message);
+      } else {
+        setMessage(result.humanMessage || result.message);
+      }
+      await loadDiagnostics();
+      await loadHealth();
+      await loadLogs();
+      await loadProvider();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Diagnostics failed");
+    } finally {
+      setProbeBusy(null);
+    }
+  }
+
+  async function runCoreProbes() {
+    // Sequential so token refresh doesn't race other API probes.
+    await runProbe("env");
+    await runProbe("oauth");
+    await runProbe("token_refresh");
+    await runProbe("api_reachable");
+    await runProbe("rate_limit");
   }
 
   async function addFieldMapping() {
@@ -289,21 +395,55 @@ export function CrmProviderClient({ provider }: { provider: string }) {
       {wizard ? (
         <Card className="mb-4 border-primary/30 bg-primary/5 space-y-3">
           <CardTitle>Connection wizard</CardTitle>
-          <ol className="list-decimal space-y-1 pl-5 text-sm text-muted-foreground">
-            <li>OAuth complete — connection validated</li>
-            <li>Choose sync preferences below</li>
-            <li>Save settings</li>
-            <li>Run initial synchronization</li>
+          <ol className="list-decimal space-y-2 pl-5 text-sm text-muted-foreground">
+            <li className={wizardStep >= 1 ? "text-foreground" : ""}>
+              Connected — OAuth and permissions validated
+            </li>
+            <li className={wizardStep >= 2 ? "text-foreground" : ""}>
+              Review sync preferences (calls, SMS, tasks, recordings)
+            </li>
+            <li className={wizardStep >= 3 ? "text-foreground" : ""}>
+              Save settings, then run initial sync
+            </li>
+            <li className={wizardStep >= 4 ? "text-foreground" : ""}>
+              Confirm sync status on the Health tab
+            </li>
           </ol>
-          <div className="flex gap-2">
-            <Button size="sm" disabled={busy} onClick={() => void savePrefs()}>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              disabled={busy}
+              onClick={async () => {
+                await savePrefs();
+                setWizardStep(3);
+              }}
+            >
               Save preferences
             </Button>
-            <Button size="sm" variant="secondary" disabled={busy} onClick={() => void syncNow()}>
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={busy}
+              onClick={async () => {
+                await syncNow();
+                setWizardStep(4);
+                setTab("health");
+              }}
+            >
               Run initial sync
             </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setTab("diagnostics");
+                setWizard(false);
+              }}
+            >
+              Open diagnostics
+            </Button>
             <Button size="sm" variant="ghost" onClick={() => setWizard(false)}>
-              Dismiss
+              Done
             </Button>
           </div>
         </Card>
@@ -312,8 +452,10 @@ export function CrmProviderClient({ provider }: { provider: string }) {
       {message ? <p className="mb-3 text-sm text-muted-foreground">{message}</p> : null}
       {error ? <p className="mb-3 text-sm text-danger">{error}</p> : null}
 
-      <div className="mb-4 flex gap-2 border-b border-border">
-        {(["settings", "health", "logs", "mappings"] as const).map((t) => (
+      <div className="mb-4 flex flex-wrap gap-2 border-b border-border">
+        {(
+          ["settings", "health", "diagnostics", "features", "logs", "mappings"] as const
+        ).map((t) => (
           <button
             key={t}
             type="button"
@@ -331,18 +473,35 @@ export function CrmProviderClient({ provider }: { provider: string }) {
         <div className="grid gap-4 lg:grid-cols-2">
           <Card className="space-y-2 text-sm">
             <CardTitle>Connection health</CardTitle>
-            <p>Token: {String(health.tokenStatus)}</p>
+            <p>
+              Connected:{" "}
+              {String(health.connectionStatus) === "connected" ? "Yes" : String(health.connectionStatus)}
+            </p>
+            <p>
+              Token: {String(health.tokenStatus)}{" "}
+              {health.tokenValid ? "(valid)" : "(needs attention)"}
+            </p>
+            <p>API: {String(health.apiStatus || "—")}</p>
             <p>Expires: {health.tokenExpiresAt ? String(health.tokenExpiresAt) : "—"}</p>
             <p>Account: {String(health.connectedAccountName || "—")}</p>
-            <p>Last success: {String(health.lastSuccessfulSync || "Never")}</p>
+            <p>Last sync: {String(health.lastSuccessfulSync || "Never")}</p>
             <p>Last failure: {String(health.lastFailedSync || "—")}</p>
+            <p>Webhook: {String(health.webhookStatus || "—")}</p>
+            <p>
+              Rate limit:{" "}
+              {String((health.rateLimit as { status?: string } | undefined)?.status || "ok")}
+            </p>
             {health.lastError ? <p className="text-danger">{String(health.lastError)}</p> : null}
             <Button size="sm" disabled={busy} onClick={() => void revalidate(true)}>
               Validate + write probe
             </Button>
           </Card>
           <Card className="space-y-2 text-sm">
-            <CardTitle>Queues</CardTitle>
+            <CardTitle>Objects synced</CardTitle>
+            <pre className="overflow-auto rounded bg-muted p-2 text-xs">
+              {JSON.stringify(health.objectsSynced || {}, null, 2)}
+            </pre>
+            <CardTitle className="pt-2">Queues</CardTitle>
             <pre className="overflow-auto rounded bg-muted p-2 text-xs">
               {JSON.stringify(health.queue, null, 2)}
             </pre>
@@ -356,6 +515,150 @@ export function CrmProviderClient({ provider }: { provider: string }) {
             </ul>
           </Card>
         </div>
+      ) : null}
+
+      {tab === "diagnostics" ? (
+        <div className="space-y-4">
+          <Card className="space-y-3 text-sm">
+            <CardTitle>CRM Compatibility / Test Console</CardTitle>
+            <p className="text-muted-foreground">
+              Run live probes against the connected CRM. Use this when a customer reports sync
+              issues — you should see OAuth, API, and feature failures without digging through logs.
+            </p>
+            {diagSnapshot ? (
+              <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-3 text-xs">
+                <p>Connected: {diagSnapshot.connected ? "✅" : "❌"}</p>
+                <p>Token valid: {diagSnapshot.tokenValid ? "✅" : "❌"}</p>
+                <p>Env ready: {diagSnapshot.envReady ? "✅" : "❌"}</p>
+                <p>Last sync: {String(diagSnapshot.lastSyncAt || "Never")}</p>
+                <p>
+                  Queue failed:{" "}
+                  {String((diagSnapshot.queue as { failed?: number } | undefined)?.failed ?? 0)}
+                </p>
+                <p>
+                  Rate limit:{" "}
+                  {String(
+                    (diagSnapshot.rateLimit as { status?: string } | undefined)?.status || "ok",
+                  )}
+                </p>
+              </div>
+            ) : null}
+            {diagSnapshot?.lastError ? (
+              <p className="text-danger text-xs">{String(diagSnapshot.lastError)}</p>
+            ) : null}
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" disabled={Boolean(probeBusy)} onClick={() => void runCoreProbes()}>
+                Run core checks
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={Boolean(probeBusy)}
+                onClick={() => void runProbe("force_resync")}
+              >
+                Force initial resync
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={Boolean(probeBusy)}
+                onClick={() => void runProbe("retry_failed")}
+              >
+                Retry failed jobs
+              </Button>
+            </div>
+          </Card>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {DIAG_PROBES.map((p) => {
+              const result = probeResults[p.id];
+              const mark = !result
+                ? "—"
+                : result.skipped
+                  ? "⊘"
+                  : result.ok
+                    ? "✅"
+                    : "❌";
+              return (
+                <Card key={p.id} className="space-y-2 text-sm">
+                  <div className="flex items-center justify-between gap-2">
+                    <CardTitle className="text-base">
+                      {mark} {p.label}
+                    </CardTitle>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={Boolean(probeBusy)}
+                      onClick={() => void runProbe(p.id)}
+                    >
+                      {probeBusy === p.id ? "…" : "Test"}
+                    </Button>
+                  </div>
+                  {result ? (
+                    <>
+                      <p className="text-xs text-muted-foreground">
+                        {result.humanMessage || result.message}
+                        {result.durationMs != null ? ` · ${result.durationMs}ms` : ""}
+                      </p>
+                      {result.externalId ? (
+                        <p className="font-mono text-[11px] text-muted-foreground">
+                          id: {result.externalId}
+                        </p>
+                      ) : null}
+                      {result.raw != null ? (
+                        <details>
+                          <summary className="cursor-pointer text-xs text-muted-foreground">
+                            Raw response
+                          </summary>
+                          <pre className="mt-1 max-h-40 overflow-auto rounded bg-muted p-2 text-[11px]">
+                            {JSON.stringify(result.raw, null, 2)}
+                          </pre>
+                        </details>
+                      ) : null}
+                    </>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">Not run yet</p>
+                  )}
+                </Card>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+
+      {tab === "features" ? (
+        <Card className="space-y-3">
+          <CardTitle>Provider feature matrix</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Never assume parity across CRMs. Unsupported features are skipped gracefully during sync.
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-border text-xs text-muted-foreground">
+                  <th className="py-2 pr-3">Feature</th>
+                  <th className="py-2 pr-3">Support</th>
+                  <th className="py-2">Notes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {features.map((f) => (
+                  <tr key={f.feature} className="border-b border-border/60">
+                    <td className="py-2 pr-3 font-medium">{f.label}</td>
+                    <td className="py-2 pr-3 font-mono text-xs">{f.support}</td>
+                    <td className="py-2 text-xs text-muted-foreground">{f.notes || "—"}</td>
+                  </tr>
+                ))}
+                {!features.length ? (
+                  <tr>
+                    <td colSpan={3} className="py-3 text-muted-foreground">
+                      Loading feature matrix…
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
+        </Card>
       ) : null}
 
       {tab === "settings" && prefs ? (
