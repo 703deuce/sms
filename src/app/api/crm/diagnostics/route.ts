@@ -58,6 +58,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ data: result });
     }
 
+    if (body.action === "acceptance") {
+      const { requireCrmPermission } = await import("@/lib/crm/permissions");
+      await requireCrmPermission(auth.session.userId, auth.workspaceId, "access_crm_diagnostics");
+      const { runCrmAcceptanceSuite } = await import("@/lib/crm/acceptance");
+      const report = await runCrmAcceptanceSuite(auth.workspaceId, provider);
+      return NextResponse.json({ data: report });
+    }
+
     const { requireCrmPermission } = await import("@/lib/crm/permissions");
     await requireCrmPermission(auth.session.userId, auth.workspaceId, "access_crm_diagnostics");
 
