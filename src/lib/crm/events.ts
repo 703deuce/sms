@@ -60,6 +60,8 @@ export async function publishSmsEvent(input: {
   body?: string | null;
   status?: string | null;
   messageId?: string | null;
+  mediaUrls?: string[] | null;
+  mediaUrl?: string | null;
 }) {
   let type: CrmPlatformEventType =
     input.direction === "inbound" ? "sms.received" : "sms.sent";

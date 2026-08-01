@@ -100,7 +100,13 @@ export function clampPreferencesToCapabilities(
   prefs: CrmSyncPreferences,
 ): CrmSyncPreferences {
   const next = { ...prefs };
-  if (!isFeatureSupported(provider, "leads")) next.autoCreateLeads = false;
+  // Bigin is pipeline-centric: no native Leads module parity with Zoho CRM.
+  if (provider === "zoho" && next.zohoProduct === "bigin") {
+    next.autoCreateLeads = false;
+  }
+  if (!isFeatureSupported(provider, "leads") || (provider === "zoho" && next.zohoProduct === "bigin")) {
+    next.autoCreateLeads = false;
+  }
   if (!isFeatureSupported(provider, "deals")) next.syncOpportunities = false;
   if (!isFeatureSupported(provider, "pipelines")) {
     next.defaultPipelineId = null;

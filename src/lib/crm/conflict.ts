@@ -46,8 +46,18 @@ export async function resolveContactForOutbound(input: {
     internalId: input.contactId,
   });
   if (mapped?.externalId) {
-    if ((mapped.metadataJson as { deletedAt?: string } | null)?.deletedAt) {
-      return { action: "create_new" };
+    if (
+      mapped.externalDeletedAt ||
+      (mapped.metadataJson as { deletedAt?: string } | null)?.deletedAt
+    ) {
+      // Recreate externally only when Transovo remains authoritative and auto-create is on.
+      if (input.ctx.preferences.deletionPolicy === "ignore") {
+        return { action: "use_mapping", externalId: mapped.externalId };
+      }
+      if (input.ctx.preferences.autoCreateContacts) {
+        return { action: "create_new" };
+      }
+      return { action: "skip", reason: "Mapped CRM contact deleted externally" };
     }
     return { action: "use_mapping", externalId: mapped.externalId };
   }
@@ -243,6 +253,39 @@ export async function markExternalDeleted(input: {
     message: `CRM ${input.objectType} ${input.externalId} handled (${policy})`,
     detail: { internalId: row.internalId, policy },
   });
+}
+
+/**
+ * Both-sides-changed detection using sync timestamps + hash.
+ * Returns which side should win under the workspace conflict policy.
+ */
+export function resolveBothSidesConflict(input: {
+  policy: "transovo_wins" | "crm_wins" | "most_recent" | "manual_review";
+  lastSyncedAt?: Date | null;
+  lastCrmModifiedAt?: Date | null;
+  lastInternalModifiedAt?: Date | null;
+  previousHash?: string | null;
+  incomingCrmHash?: string | null;
+  localChangedSinceSync: boolean;
+  remoteChangedSinceSync: boolean;
+}): "apply_crm" | "keep_local" | "manual_review" {
+  if (!input.localChangedSinceSync) return "apply_crm";
+  if (!input.remoteChangedSinceSync) return "keep_local";
+
+  switch (input.policy) {
+    case "transovo_wins":
+      return "keep_local";
+    case "crm_wins":
+      return "apply_crm";
+    case "most_recent": {
+      const crmTs = input.lastCrmModifiedAt?.getTime() || 0;
+      const localTs = input.lastInternalModifiedAt?.getTime() || 0;
+      if (crmTs === localTs) return "manual_review";
+      return crmTs > localTs ? "apply_crm" : "keep_local";
+    }
+    default:
+      return "manual_review";
+  }
 }
 
 /** Merge inbound CRM contact onto Transovo contact without wiping local richer data. */

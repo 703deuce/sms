@@ -21,6 +21,9 @@ export type WizardPrefs = {
   syncPaused?: boolean;
   disableReads?: boolean;
   disableWrites?: boolean;
+  syncMms?: boolean;
+  importHistoricalActivities?: boolean;
+  zohoProduct?: "crm" | "bigin";
   deletionPolicy?: "mark_deleted" | "archive_local" | "disconnect_mapping" | "ignore";
   conflictPolicy?: "transovo_wins" | "crm_wins" | "most_recent" | "manual_review";
   direction: "inbound" | "outbound" | "bidirectional";

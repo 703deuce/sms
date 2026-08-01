@@ -166,7 +166,80 @@ ok("adapters export expected enterprise methods", async () => {
     assert.equal(typeof c.logSms, "function");
     assert.equal(typeof c.updateTask, "function");
     assert.equal(typeof c.listContacts, "function");
+    assert.equal(typeof c.upsertCompany, "function");
+    assert.equal(typeof c.upsertDeal, "function");
   }
+});
+
+ok("conflict policy both-sides resolution", async () => {
+  const { resolveBothSidesConflict } = await import("../src/lib/crm/conflict");
+  assert.equal(
+    resolveBothSidesConflict({
+      policy: "transovo_wins",
+      localChangedSinceSync: true,
+      remoteChangedSinceSync: true,
+    }),
+    "keep_local",
+  );
+  assert.equal(
+    resolveBothSidesConflict({
+      policy: "crm_wins",
+      localChangedSinceSync: true,
+      remoteChangedSinceSync: true,
+    }),
+    "apply_crm",
+  );
+  assert.equal(
+    resolveBothSidesConflict({
+      policy: "most_recent",
+      localChangedSinceSync: true,
+      remoteChangedSinceSync: true,
+      lastCrmModifiedAt: new Date("2026-01-02"),
+      lastInternalModifiedAt: new Date("2026-01-01"),
+    }),
+    "apply_crm",
+  );
+  assert.equal(
+    resolveBothSidesConflict({
+      policy: "manual_review",
+      localChangedSinceSync: true,
+      remoteChangedSinceSync: true,
+    }),
+    "manual_review",
+  );
+});
+
+ok("field validation coerces types", async () => {
+  const { coerceFieldValue, validateMappedPayload } = await import(
+    "../src/lib/crm/field-validate"
+  );
+  assert.equal(coerceFieldValue("42", "number").ok, true);
+  assert.equal((coerceFieldValue("42", "number") as { value: number }).value, 42);
+  assert.equal(coerceFieldValue("not-a-number", "number").ok, false);
+  const validated = validateMappedPayload({ Website: "notaurl", Amount: "10" });
+  assert.equal(validated.payload.Amount, 10);
+  assert.ok(validated.issues.some((i) => i.field === "Website"));
+});
+
+ok("Bigin clamps lead creation", () => {
+  const clamped = clampPreferencesToCapabilities("zoho", {
+    ...DEFAULT_SYNC_PREFERENCES,
+    zohoProduct: "bigin",
+    autoCreateLeads: true,
+  });
+  assert.equal(clamped.autoCreateLeads, false);
+});
+
+ok("CRM RBAC matrix", async () => {
+  const { canCrmAction } = await import("../src/lib/crm/permissions");
+  assert.equal(canCrmAction("OWNER", "connect_crm"), true);
+  assert.equal(canCrmAction("INBOX_AGENT", "connect_crm"), false);
+  assert.equal(canCrmAction("MANAGER", "run_manual_sync"), true);
+  assert.equal(canCrmAction("READ_ONLY", "disconnect_crm"), false);
+});
+
+ok("MMS preference defaults on", () => {
+  assert.equal(DEFAULT_SYNC_PREFERENCES.syncMms, true);
 });
 
 console.log(`\n${passed} CRM enterprise checks passed.`);

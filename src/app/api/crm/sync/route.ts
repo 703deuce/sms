@@ -9,6 +9,7 @@ export async function POST(request: Request) {
   try {
     const auth = await requireSession();
     if ("error" in auth) return auth.error;
+    const { requireCrmPermission } = await import("@/lib/crm/permissions");
     const body = (await request.json()) as {
       provider?: string;
       kind?: SyncKind;
@@ -21,12 +22,14 @@ export async function POST(request: Request) {
     }
 
     if (body.validateOnly) {
+      await requireCrmPermission(auth.session.userId, auth.workspaceId, "access_crm_diagnostics");
       const result = await validateCrmProductionConnection(auth.workspaceId, provider, {
         writeProbe: Boolean(body.writeProbe),
       });
       return NextResponse.json({ data: result }, { status: result.ok ? 200 : 422 });
     }
 
+    await requireCrmPermission(auth.session.userId, auth.workspaceId, "run_manual_sync");
     const run = await enqueueCrmSync({
       workspaceId: auth.workspaceId,
       provider,

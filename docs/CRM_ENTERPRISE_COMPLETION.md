@@ -22,6 +22,14 @@ This document tracks the enterprise completion work against the Phase 1–20 def
 | Capability matrix honesty | Done (beta / fallback / unsupported) |
 | Companies / leads / deals ingest | Done when prefs enabled |
 | Automated contract unit tests | Done (`scripts/test-crm-enterprise.ts`) |
+| Product→CRM event publishers (SMS out, MMS, voice transcript/AI/recording, contacts) | Done |
+| Company ingest into Transovo records + company/deal outbound writes | Done |
+| Conflict policy enforcement (both-sides-changed) | Done |
+| Scheduled hourly incremental reconcile | Done |
+| Circuit breaker / quarantine | Done |
+| CRM RBAC on connect/configure/sync/disconnect | Done |
+| Bigin product profile (Leads clamped) | Done |
+| Field value validation/coercion on mapped payloads | Done |
 | Real sandbox acceptance | **Pending** — requires live OAuth apps |
 
 ## Intentionally not claimed yet

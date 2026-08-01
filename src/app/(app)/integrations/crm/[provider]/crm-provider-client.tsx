@@ -162,6 +162,8 @@ export function CrmProviderClient({ provider }: { provider: string }) {
         ["syncPaused", "Pause all synchronization"],
         ["disableReads", "Disable CRM → Transovo reads"],
         ["disableWrites", "Disable Transovo → CRM writes"],
+        ["syncMms", "MMS media URL logging"],
+        ["importHistoricalActivities", "Import historical CRM activities"],
         ["autoCreateContacts", "Contact creation"],
         ["autoCreateLeads", "Lead creation"],
         ["autoCreateCompanies", "Company creation"],
@@ -710,6 +712,27 @@ export function CrmProviderClient({ provider }: { provider: string }) {
                 <option value="outbound">Transovo → CRM</option>
               </select>
             </div>
+            {provider === "zoho" ? (
+              <div>
+                <Label>Zoho product</Label>
+                <select
+                  className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm"
+                  value={prefs.zohoProduct || "crm"}
+                  onChange={(e) =>
+                    setPrefs({
+                      ...prefs,
+                      zohoProduct: e.target.value as "crm" | "bigin",
+                    })
+                  }
+                >
+                  <option value="crm">Zoho CRM</option>
+                  <option value="bigin">Bigin (pipeline-centric)</option>
+                </select>
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Bigin disables Leads and uses pipeline records instead of Zoho CRM modules.
+                </p>
+              </div>
+            ) : null}
             <div>
               <Label>Deletion policy</Label>
               <select

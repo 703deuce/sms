@@ -81,17 +81,32 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       const workspaceId = String(payload.workspaceId || "");
       if (!callId) throw new Error("callId required");
       const urls = payload.recordingUrl as Record<string, string> | undefined;
+      const storageUrl = urls?.mp3 || urls?.wav || null;
       await prisma.voiceRecording.create({
         data: {
           workspaceId,
           callId,
           provider: "telnyx",
           status: "ready",
-          storageUrl: urls?.mp3 || urls?.wav || null,
+          storageUrl,
           providerRecordingId: String(payload.providerRecordingId || ""),
           channels: 2,
         },
       });
+      if (storageUrl) {
+        const call = await prisma.voiceCall.findUnique({ where: { id: callId } });
+        const { publishRecordingReady } = await import("@/lib/crm/events");
+        await publishRecordingReady({
+          workspaceId,
+          contactId: call?.contactId || null,
+          callId,
+          recordingUrl: storageUrl,
+          direction:
+            call?.direction === "OUTBOUND" || call?.direction === "outbound"
+              ? "outbound"
+              : "inbound",
+        }).catch(() => undefined);
+      }
       return { ok: true };
     }
     case "voice_tool_execute": {
@@ -170,6 +185,10 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
         webhookEventId: String(payload.webhookEventId || ""),
       });
     }
+    case "crm_scheduled_incremental": {
+      const { enqueueScheduledCrmIncrementalSyncs } = await import("@/lib/crm/scheduled-sync");
+      return enqueueScheduledCrmIncrementalSyncs();
+    }
     default:
       throw new Error(`Unknown job type: ${jobType}`);
   }
@@ -215,6 +234,15 @@ export async function processDueJobs(limit = 25) {
     queueName: "review-campaign",
     payload: { minuteKey },
     idempotencyKey: `campaign-recurrence:${minuteKey}`,
+  });
+
+  // Hourly CRM incremental reconcile across connected workspaces (complements webhooks).
+  const hourKey = new Date().toISOString().slice(0, 13);
+  await enqueueJob({
+    jobType: "crm_scheduled_incremental",
+    queueName: "crm-salesforce",
+    payload: { hourKey },
+    idempotencyKey: `crm-scheduled-tick:${hourKey}`,
   });
 
   // When BullMQ is the consumer, cron enqueues the minute batch and re-syncs the DB outbox.

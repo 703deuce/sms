@@ -140,6 +140,8 @@ export async function processInboundMessage(input: {
   to: string;
   body: string;
   providerMessageId?: string;
+  /** Inbound MMS attachment URLs when the provider supplies them. */
+  mediaUrls?: string[] | null;
   registration?: {
     stopMessage?: string | null;
     helpMessage?: string | null;
@@ -419,7 +421,7 @@ export async function processInboundMessage(input: {
     const contactName =
       [contact.firstName, contact.lastName].filter(Boolean).join(" ") || from;
 
-    // CRM framework — push inbound SMS to connected CRMs (async).
+    // CRM framework — push inbound SMS/MMS to connected CRMs (async).
     try {
       const { publishSmsEvent } = await import("@/lib/crm/events");
       await publishSmsEvent({
@@ -431,6 +433,7 @@ export async function processInboundMessage(input: {
         body: body || null,
         status: "received",
         messageId: input.providerMessageId || null,
+        mediaUrls: input.mediaUrls?.filter(Boolean) || null,
       });
     } catch {
       // CRM push is optional

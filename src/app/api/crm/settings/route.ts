@@ -24,6 +24,8 @@ export async function PATCH(request: Request) {
   try {
     const auth = await requireSession();
     if ("error" in auth) return auth.error;
+    const { requireCrmPermission } = await import("@/lib/crm/permissions");
+    await requireCrmPermission(auth.session.userId, auth.workspaceId, "configure_crm");
     const body = (await request.json()) as {
       provider?: string;
       preferences?: Partial<CrmSyncPreferences>;
@@ -48,6 +50,8 @@ export async function DELETE(request: Request) {
   try {
     const auth = await requireSession();
     if ("error" in auth) return auth.error;
+    const { requireCrmPermission } = await import("@/lib/crm/permissions");
+    await requireCrmPermission(auth.session.userId, auth.workspaceId, "disconnect_crm");
     const provider = new URL(request.url).searchParams.get("provider");
     if (!provider || !isCrmProvider(provider)) {
       return NextResponse.json({ error: "provider required" }, { status: 400 });

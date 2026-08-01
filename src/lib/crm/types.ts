@@ -181,6 +181,15 @@ export type CrmSyncPreferences = {
   disableReads: boolean;
   /** Disable Transovo→CRM writes while allowing inbound reads. */
   disableWrites: boolean;
+  /** Include MMS media URLs when logging SMS activities. */
+  syncMms: boolean;
+  /** Optional historical CRM activity import (large; off by default). */
+  importHistoricalActivities: boolean;
+  /**
+   * Zoho product profile. Bigin disables Leads and uses a pipeline-centric model.
+   * Ignored for Salesforce / Pipedrive.
+   */
+  zohoProduct?: "crm" | "bigin";
   deletionPolicy: CrmDeletionPolicy;
   conflictPolicy: CrmConflictPolicy;
   defaultOwnerExternalId?: string | null;
@@ -212,6 +221,9 @@ export const DEFAULT_SYNC_PREFERENCES: CrmSyncPreferences = {
   syncPaused: false,
   disableReads: false,
   disableWrites: false,
+  syncMms: true,
+  importHistoricalActivities: false,
+  zohoProduct: "crm",
   deletionPolicy: "mark_deleted",
   conflictPolicy: "manual_review",
   defaultOwnerExternalId: null,

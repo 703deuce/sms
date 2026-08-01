@@ -53,7 +53,9 @@ Statuses used in the product matrix:
 
 **OAuth:** Zoho accounts server + regional `api_domain`. Offline refresh required.
 
-**API:** `/crm/v2` on regional host.
+**API:** Zoho CRM uses `/crm/v2` on the regional host. **Bigin is a separate product profile** (`zohoProduct: "bigin"` in sync preferences): pipeline-centric modules (Contacts, Accounts/Companies, Pipelines/Deals, Tasks, Calls, Notes). Native Zoho CRM **Leads** are disabled for Bigin. Bigin’s native API surface is `/bigin/v*` with `ZohoBigin.*` scopes — treat Bigin as subscription/product-dependent until a dedicated Bigin adapter path is sandbox-proven; do not advertise Zoho CRM Lead parity for Bigin customers.
+
+**API (Zoho CRM default):** `/crm/v2` on regional host.
 
 | Object | Read | Create | Update | Delete detect | Search | Incremental | Webhooks | Live-wired |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |

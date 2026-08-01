@@ -4,6 +4,7 @@
  */
 
 import { listFieldMappings } from "./mappings";
+import { validateMappedPayload } from "./field-validate";
 import type { CrmProviderId } from "./types";
 
 export async function buildMappedPayload(input: {
@@ -65,10 +66,21 @@ export async function buildMappedPayload(input: {
     }
   }
 
-  if (input.stripNulls !== false) {
-    for (const k of Object.keys(out)) {
-      if (out[k] === undefined || out[k] === null || out[k] === "") delete out[k];
+  const validated = validateMappedPayload(out);
+  if (validated.issues.length) {
+    // Drop invalid custom values rather than failing the whole write; keep required base fields.
+    for (const issue of validated.issues) {
+      if (!(issue.field in input.base)) delete validated.payload[issue.field];
     }
   }
-  return out;
+  const finalOut = validated.payload;
+
+  if (input.stripNulls !== false) {
+    for (const k of Object.keys(finalOut)) {
+      if (finalOut[k] === undefined || finalOut[k] === null || finalOut[k] === "") {
+        delete finalOut[k];
+      }
+    }
+  }
+  return finalOut;
 }

@@ -8,6 +8,8 @@ export async function POST(request: Request) {
   try {
     const auth = await requireSession();
     if ("error" in auth) return auth.error;
+    const { requireCrmPermission } = await import("@/lib/crm/permissions");
+    await requireCrmPermission(auth.session.userId, auth.workspaceId, "connect_crm");
     const body = (await request.json()) as { provider?: string };
     const provider = body.provider?.trim();
     if (!provider || !isCrmProvider(provider)) {

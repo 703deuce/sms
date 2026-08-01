@@ -313,11 +313,14 @@ export async function pushCrmEventJob(payload: {
         provider,
         messageId: messageId || null,
       });
-      const mediaUrls = Array.isArray(event.payload.mediaUrls)
-        ? (event.payload.mediaUrls as string[])
-        : event.payload.mediaUrl
-          ? [String(event.payload.mediaUrl)]
-          : undefined;
+      const mediaUrls =
+        prefs.syncMms === false
+          ? undefined
+          : Array.isArray(event.payload.mediaUrls)
+            ? (event.payload.mediaUrls as string[])
+            : event.payload.mediaUrl
+              ? [String(event.payload.mediaUrl)]
+              : undefined;
       const result = await connector.logSms(ctx, {
         id: existingSms?.externalId || undefined,
         direction: event.type === "sms.received" ? "inbound" : "outbound",
@@ -441,24 +444,128 @@ export async function pushCrmEventJob(payload: {
     if (
       actions.includes("create_lead") &&
       connector.upsertLead &&
-      isFeatureSupported(provider, "leads")
+      isFeatureSupported(provider, "leads") &&
+      !(provider === "zoho" && prefs.zohoProduct === "bigin")
     ) {
+      const leadInternalId = String(event.payload.leadId || event.contactId || event.eventId);
+      const existingLead = await getObjectMapping({
+        workspaceId,
+        provider,
+        objectType: "lead",
+        internalId: leadInternalId,
+      });
       const created = await connector.upsertLead(ctx, {
+        id: existingLead?.externalId || undefined,
         firstName: (event.payload.firstName as string) || null,
         lastName: (event.payload.lastName as string) || "Lead",
         phone: contactPhone,
         email: (event.payload.email as string) || null,
         source: "Transovo",
         companyName: (event.payload.company as string) || null,
+        ownerExternalId: prefs.defaultOwnerExternalId,
+        status: (event.payload.status as string) || null,
+      });
+      await upsertObjectMapping({
+        workspaceId,
+        provider,
+        objectType: "lead",
+        internalId: leadInternalId,
+        externalId: created.externalId,
+        syncStatus: "synced",
       });
       await appendSyncEvent({
         workspaceId,
         syncRunId: run.id,
         provider,
-        action: "create",
+        action: created.created ? "create" : "update",
         objectType: "lead",
         externalId: created.externalId,
+        internalId: leadInternalId,
         message: `Lead from ${event.type}`,
+      });
+    }
+
+    // Company upsert when contact has company and auto-create companies is on.
+    if (
+      contactExternalId &&
+      connector.upsertCompany &&
+      prefs.autoCreateCompanies &&
+      isFeatureSupported(provider, "companies") &&
+      event.contactId
+    ) {
+      const contact = await prisma.contact.findFirst({
+        where: { id: event.contactId, workspaceId },
+      });
+      if (contact?.company) {
+        const companyInternalId = `contact-company:${contact.id}`;
+        const existingCompany = await getObjectMapping({
+          workspaceId,
+          provider,
+          objectType: "company",
+          internalId: companyInternalId,
+        });
+        const companyResult = await connector.upsertCompany(ctx, {
+          id: existingCompany?.externalId || undefined,
+          name: contact.company,
+          phone: contact.phone,
+          ownerExternalId: prefs.defaultOwnerExternalId,
+        });
+        await upsertObjectMapping({
+          workspaceId,
+          provider,
+          objectType: "company",
+          internalId: companyInternalId,
+          externalId: companyResult.externalId,
+          syncStatus: "synced",
+        });
+      }
+    }
+
+    // Deal/opportunity writes when enabled and payload carries deal fields.
+    if (
+      prefs.syncOpportunities &&
+      connector.upsertDeal &&
+      isFeatureSupported(provider, "deals") &&
+      (event.payload.dealName || event.payload.opportunityName)
+    ) {
+      const dealInternalId = String(
+        event.payload.dealId || event.payload.opportunityId || `${event.eventId}:deal`,
+      );
+      const existingDeal = await getObjectMapping({
+        workspaceId,
+        provider,
+        objectType: "deal",
+        internalId: dealInternalId,
+      });
+      const dealResult = await connector.upsertDeal(ctx, {
+        id: existingDeal?.externalId || undefined,
+        name: String(event.payload.dealName || event.payload.opportunityName),
+        amount: event.payload.amount != null ? Number(event.payload.amount) : null,
+        currency: (event.payload.currency as string) || null,
+        stage: (event.payload.stage as string) || prefs.defaultStageId || null,
+        pipeline: (event.payload.pipeline as string) || prefs.defaultPipelineId || null,
+        contactExternalId,
+        status: (event.payload.dealStatus as string) || null,
+        ownerExternalId: prefs.defaultOwnerExternalId,
+      });
+      await upsertObjectMapping({
+        workspaceId,
+        provider,
+        objectType: "deal",
+        internalId: dealInternalId,
+        externalId: dealResult.externalId,
+        parentExternalId: contactExternalId,
+        syncStatus: "synced",
+      });
+      await appendSyncEvent({
+        workspaceId,
+        syncRunId: run.id,
+        provider,
+        action: dealResult.created ? "create" : "update",
+        objectType: "deal",
+        externalId: dealResult.externalId,
+        internalId: dealInternalId,
+        message: `Deal from ${event.type}`,
       });
     }
 

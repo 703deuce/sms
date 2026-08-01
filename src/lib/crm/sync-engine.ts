@@ -9,6 +9,7 @@ import { enqueueJob } from "@/lib/messaging/enqueue-advance";
 import type { ConnectorContext } from "./connector";
 import { CrmHttpError } from "./http";
 import { appendSyncEvent, writeCrmAudit } from "./logging";
+import { resolveBothSidesConflict } from "./conflict";
 import {
   fingerprintEmail,
   fingerprintPhone,
@@ -18,6 +19,7 @@ import {
 import { ensureFreshCrmToken } from "./oauth";
 import { getConnector } from "./registry";
 import { getCrmSyncPreferences } from "./settings";
+import { createHash } from "crypto";
 import type { CrmProviderId } from "./types";
 
 export type SyncKind = "initial" | "incremental" | "manual" | "webhook" | "scheduled" | "push";
@@ -44,8 +46,25 @@ export async function enqueueCrmSync(input: {
   provider: CrmProviderId;
   kind?: SyncKind;
   triggeredBy?: string | null;
+  /** Optional stable key — used by scheduled ticks to avoid duplicate hourly runs. */
+  idempotencyKey?: string | null;
 }) {
   const kind = input.kind || "manual";
+  if (input.idempotencyKey) {
+    const existing = await getPrisma().jobQueue.findUnique({
+      where: { idempotencyKey: input.idempotencyKey },
+    });
+    if (existing && ["pending", "processing", "completed", "deferred"].includes(existing.status)) {
+      const syncRunId = String(
+        (existing.payload as { syncRunId?: string } | null)?.syncRunId || "",
+      );
+      if (syncRunId) {
+        const prior = await getPrisma().crmSyncRun.findUnique({ where: { id: syncRunId } });
+        if (prior) return prior;
+      }
+    }
+  }
+
   const run = await getPrisma().crmSyncRun.create({
     data: {
       workspaceId: input.workspaceId,
@@ -68,7 +87,7 @@ export async function enqueueCrmSync(input: {
       syncRunId: run.id,
       kind,
     },
-    idempotencyKey: `crm-sync-${input.provider}-${run.id}`,
+    idempotencyKey: input.idempotencyKey || `crm-sync-${input.provider}-${run.id}`,
   });
 
   await writeCrmAudit({
@@ -127,6 +146,22 @@ export async function runCrmSyncJob(payload: {
   try {
     const connector = getConnector(provider);
     const ctx = await buildContext(workspaceId, provider);
+
+    const { isCrmQuarantined, noteCrmSuccess, noteCrmPermanentFailure } = await import(
+      "./circuit-breaker"
+    );
+    if (await isCrmQuarantined(workspaceId, provider)) {
+      await prisma.crmSyncRun.update({
+        where: { id: syncRunId },
+        data: {
+          status: "failed",
+          finishedAt: new Date(),
+          lastError: "Connection quarantined — reconnect or clear quarantine after fixing CRM access",
+          statsJson: { skipped: true, reason: "quarantined" },
+        },
+      });
+      return { ok: false, skipped: true, reason: "quarantined" };
+    }
 
     if (ctx.preferences.syncPaused) {
       await prisma.crmSyncRun.update({
@@ -267,22 +302,62 @@ export async function runCrmSyncJob(payload: {
           });
           for (const company of page.items) {
             stats.companiesIn += 1;
-            if (company.id) {
-              await upsertObjectMapping({
-                workspaceId,
-                provider,
-                objectType: "company",
-                internalId: `crm-company:${company.id}`,
-                externalId: company.id,
-                syncStatus: "synced",
-                metadata: {
-                  name: company.name,
-                  phone: company.phone,
-                  website: company.website,
-                  ownerExternalId: company.ownerExternalId,
-                },
-              }).catch(() => undefined);
+            if (!company.id) continue;
+            // Persist a real Transovo contact row representing the company (phone optional).
+            const companyPhone =
+              company.phone?.trim() || `crm-company:${provider}:${company.id}`;
+            let companyContact = await prisma.contact.findFirst({
+              where: { workspaceId, phone: companyPhone },
+            });
+            if (!companyContact && company.name) {
+              companyContact = await prisma.contact
+                .create({
+                  data: {
+                    workspaceId,
+                    phone: companyPhone,
+                    firstName: null,
+                    lastName: company.name,
+                    company: company.name,
+                    consentSource: `crm:${provider}:company`,
+                    customFields: {
+                      crmCompany: true,
+                      website: company.website || null,
+                      ownerExternalId: company.ownerExternalId || null,
+                    },
+                  },
+                })
+                .catch(() => null);
+            } else if (companyContact) {
+              await prisma.contact
+                .update({
+                  where: { id: companyContact.id },
+                  data: {
+                    company: company.name || companyContact.company,
+                    lastName: companyContact.lastName || company.name,
+                    customFields: {
+                      ...((companyContact.customFields as object) || {}),
+                      crmCompany: true,
+                      website: company.website || null,
+                      ownerExternalId: company.ownerExternalId || null,
+                    },
+                  },
+                })
+                .catch(() => undefined);
             }
+            await upsertObjectMapping({
+              workspaceId,
+              provider,
+              objectType: "company",
+              internalId: companyContact?.id || `crm-company:${company.id}`,
+              externalId: company.id,
+              syncStatus: "synced",
+              metadata: {
+                name: company.name,
+                phone: company.phone,
+                website: company.website,
+                ownerExternalId: company.ownerExternalId,
+              },
+            }).catch(() => undefined);
           }
           cursor = page.nextCursor;
           pages += 1;
@@ -494,10 +569,19 @@ export async function runCrmSyncJob(payload: {
       ok: true,
     }).catch(() => undefined);
 
+    await noteCrmSuccess({ workspaceId, provider }).catch(() => undefined);
+
     return { ok: true, stats, status };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     const retryable = err instanceof CrmHttpError ? err.retryable : /rate|timeout|5\d\d/i.test(message);
+    const permanent =
+      !retryable &&
+      /reauth|invalid.?grant|permission|FORBIDDEN|INVALID_SESSION|insufficient/i.test(message);
+    if (permanent) {
+      const { noteCrmPermanentFailure } = await import("./circuit-breaker");
+      await noteCrmPermanentFailure({ workspaceId, provider, message }).catch(() => undefined);
+    }
 
     const finishedAt = new Date();
     await prisma.crmSyncRun.update({
@@ -602,6 +686,97 @@ async function ingestRemoteContact(
     externalId: remote.id,
   });
 
+  const lastCrmModifiedAt = remote.customFields?.lastModifiedAt
+    ? new Date(String(remote.customFields.lastModifiedAt))
+    : null;
+  const incomingHash = createHash("sha256")
+    .update(
+      JSON.stringify({
+        firstName: remote.firstName,
+        lastName: remote.lastName,
+        phone: remote.phone,
+        email: remote.email,
+        company: remote.companyName,
+      }),
+    )
+    .digest("hex")
+    .slice(0, 32);
+
+  if (existingMap) {
+    const prefs = await getCrmSyncPreferences(workspaceId, provider);
+    const remoteChanged =
+      !existingMap.syncHash ||
+      existingMap.syncHash !== incomingHash ||
+      Boolean(
+        lastCrmModifiedAt &&
+          existingMap.lastSyncedAt &&
+          lastCrmModifiedAt > existingMap.lastSyncedAt,
+      );
+    const localChanged = Boolean(
+      existingMap.lastInternalModifiedAt &&
+        existingMap.lastSyncedAt &&
+        existingMap.lastInternalModifiedAt > existingMap.lastSyncedAt,
+    );
+    const decision = resolveBothSidesConflict({
+      policy: prefs.conflictPolicy,
+      lastSyncedAt: existingMap.lastSyncedAt,
+      lastCrmModifiedAt,
+      lastInternalModifiedAt: existingMap.lastInternalModifiedAt,
+      previousHash: existingMap.syncHash,
+      incomingCrmHash: incomingHash,
+      localChangedSinceSync: localChanged,
+      remoteChangedSinceSync: remoteChanged,
+    });
+    if (decision === "keep_local") {
+      stats.contactsSkipped += 1;
+      await appendSyncEvent({
+        workspaceId,
+        syncRunId,
+        provider,
+        action: "skip",
+        objectType: "contact",
+        internalId: existingMap.internalId,
+        externalId: remote.id,
+        message: "Kept Transovo contact (conflict policy)",
+      });
+      return;
+    }
+    if (decision === "manual_review" && localChanged && remoteChanged) {
+      stats.contactsSkipped += 1;
+      await upsertObjectMapping({
+        workspaceId,
+        provider,
+        objectType: "contact",
+        internalId: existingMap.internalId,
+        externalId: remote.id,
+        syncStatus: "conflict",
+        lastCrmModifiedAt:
+          lastCrmModifiedAt && !Number.isNaN(lastCrmModifiedAt.getTime())
+            ? lastCrmModifiedAt
+            : null,
+        metadata: {
+          conflict: {
+            reason: "both_sides_changed",
+            incomingHash,
+            previousHash: existingMap.syncHash,
+          },
+        },
+      });
+      await appendSyncEvent({
+        workspaceId,
+        syncRunId,
+        provider,
+        level: "warn",
+        action: "skip",
+        objectType: "contact",
+        internalId: existingMap.internalId,
+        externalId: remote.id,
+        message: "Conflict queued for manual review",
+      });
+      return;
+    }
+  }
+
   const result = await upsertExternalContact({
     workspaceId,
     phone: remote.phone,
@@ -616,10 +791,6 @@ async function ingestRemoteContact(
     return;
   }
 
-  const lastCrmModifiedAt = remote.customFields?.lastModifiedAt
-    ? new Date(String(remote.customFields.lastModifiedAt))
-    : null;
-
   await upsertObjectMapping({
     workspaceId,
     provider,
@@ -627,6 +798,7 @@ async function ingestRemoteContact(
     internalId: result.contactId,
     externalId: remote.id,
     fingerprint: fingerprintPhone(remote.phone) || fingerprintEmail(remote.email),
+    syncHash: incomingHash,
     lastCrmModifiedAt:
       lastCrmModifiedAt && !Number.isNaN(lastCrmModifiedAt.getTime())
         ? lastCrmModifiedAt
