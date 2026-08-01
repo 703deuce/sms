@@ -121,6 +121,14 @@ const MODEL_TO_TABLE: Record<string, string> = {
   softphonePresence: "softphone_presence",
   softphoneDevice: "softphone_devices",
   softphoneUserSettings: "softphone_user_settings",
+  // CRM framework tables (@@map names)
+  crmObjectMapping: "crm_object_mappings",
+  crmFieldMapping: "crm_field_mappings",
+  crmSyncRun: "crm_sync_runs",
+  crmSyncEvent: "crm_sync_events",
+  crmAuditLog: "crm_audit_logs",
+  crmWebhookEvent: "crm_webhook_events",
+  crmDeadLetter: "crm_dead_letters",
 };
 
 /** Relation name on a model → { table, fk on this model, pk on related }. */
@@ -176,6 +184,19 @@ const RELATIONS: Record<string, Record<string, { table: string; fk: string; pk?:
   softphoneDevice: { workspace: { table: "Workspace", fk: "workspaceId" } },
   softphoneUserSettings: { workspace: { table: "Workspace", fk: "workspaceId" } },
   supportTicket: {},
+  crmObjectMapping: { workspace: { table: "Workspace", fk: "workspaceId" } },
+  crmFieldMapping: { workspace: { table: "Workspace", fk: "workspaceId" } },
+  crmSyncRun: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+    events: { table: "crm_sync_events", fk: "syncRunId", pk: "id" },
+  },
+  crmSyncEvent: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+    syncRun: { table: "crm_sync_runs", fk: "syncRunId" },
+  },
+  crmAuditLog: { workspace: { table: "Workspace", fk: "workspaceId" } },
+  crmWebhookEvent: { workspace: { table: "Workspace", fk: "workspaceId" } },
+  crmDeadLetter: { workspace: { table: "Workspace", fk: "workspaceId" } },
   contact: { workspace: { table: "Workspace", fk: "workspaceId" } },
   contactTag: {
     contact: { table: "Contact", fk: "contactId" },
@@ -1068,6 +1089,21 @@ export function getSupabaseDb(): AppDb {
         return (row ? [{ id: row.id, metadata: row.metadata }] : []) as T;
       }
       return [] as T;
+    },
+    async $queryRawUnsafe<T = unknown>(sql: string, ..._values: unknown[]): Promise<T> {
+      // PostgREST cannot run arbitrary SQL. Map CRM table probes to model reads.
+      const m = sql.match(/FROM\s+"?([a-zA-Z0-9_]+)"?/i);
+      const tableName = m?.[1];
+      if (tableName) {
+        const model = Object.entries(MODEL_TO_TABLE).find(([, t]) => t === tableName)?.[0];
+        if (model && models[model]) {
+          await models[model].findMany({ take: 1 });
+          return [] as T;
+        }
+      }
+      throw new DbError(
+        `$queryRawUnsafe is not supported on Supabase compat (sql starts: ${sql.slice(0, 80)})`,
+      );
     },
   };
 
