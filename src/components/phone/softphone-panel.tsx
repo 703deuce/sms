@@ -23,6 +23,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 type MediaMode = "webrtc" | "call_control" | "call_my_phone";
 
 type ActiveCall = {
+  /** Always the HumanCall DB id when available (required for park/transfer/API). */
   id: string;
   from: string;
   to: string;
@@ -32,6 +33,8 @@ type ActiveCall = {
   mediaMode: MediaMode;
   startedAt: number;
   notes?: string;
+  /** TelnyxRTC call id when media is WebRTC (may differ from HumanCall id). */
+  webrtcId?: string | null;
   warmTransferPending?: boolean;
   /** Explicit warm-transfer lifecycle for support-grade UX. */
   transferPhase?:
@@ -52,6 +55,9 @@ type IncomingCall = {
   from: string;
   to: string;
   webrtcCall?: unknown;
+  /** Set when inbound came from WebRTC invite before HumanCall match. */
+  webrtcId?: string;
+  humanCallId?: string;
 };
 
 type ContactRow = {
@@ -208,11 +214,14 @@ export function SoftphonePanel({
   const [liveTranscript, setLiveTranscript] = useState("");
 
   const telnyxClientRef = useRef<unknown>(null);
+  /** Keyed by HumanCall id (preferred) and also by raw WebRTC call id. */
   const webrtcCallsRef = useRef<Map<string, unknown>>(new Map());
+  const webrtcToHumanRef = useRef<Map<string, string>>(new Map());
   const activeCallsRef = useRef<ActiveCall[]>([]);
   const activeLineIdRef = useRef<string | null>(null);
   const remoteAudioRef = useRef<HTMLAudioElement>(null);
   const presenceManualRef = useRef(false);
+  const pendingDialRef = useRef<string | null>(null);
 
   const activeCall = activeCalls.find((c) => c.id === activeLineId) ?? null;
 
@@ -305,15 +314,11 @@ export function SoftphonePanel({
         setDialNumber(dialParam);
         setLastDialed(dialParam);
         localStorage.setItem(LS_LAST_DIALED, dialParam);
+        pendingDialRef.current = dialParam;
         // Clear query so refresh doesn't re-dial.
         const url = new URL(window.location.href);
         url.searchParams.delete("dial");
         window.history.replaceState({}, "", url.pathname + url.search);
-        // Auto-start after WebRTC token bootstrap settles.
-        setTimeout(() => {
-          const btn = document.getElementById("softphone-start-call");
-          btn?.click();
-        }, 900);
       }
       if (incomingParam) {
         fetch(`/api/phone/calls/${incomingParam}`)
@@ -456,6 +461,7 @@ export function SoftphonePanel({
                 direction?: string;
                 remoteCallerNumber?: string;
                 localCallerNumber?: string;
+                telnyxIDs?: { telnyxCallControlId?: string };
                 answer?: (opts?: { remoteElement?: HTMLAudioElement }) => void;
                 hangup?: () => void;
                 muteAudio?: () => void;
@@ -467,55 +473,128 @@ export function SoftphonePanel({
             }) => {
               const call = notification.call;
               if (!call || notification.type !== "callUpdate") return;
-              const callId = call.id || `webrtc-${Date.now()}`;
+              const webrtcId = call.id || `webrtc-${Date.now()}`;
+              const humanId = webrtcToHumanRef.current.get(webrtcId);
+              const lineId = humanId || webrtcId;
+              const controlId = call.telnyxIDs?.telnyxCallControlId;
+
+              if (humanId && controlId) {
+                fetch(`/api/phone/calls/${humanId}`, {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    telnyxCallControlId: controlId,
+                    webrtcCallId: webrtcId,
+                  }),
+                }).catch(() => undefined);
+              }
 
               if (call.state === "ringing" && call.direction === "inbound") {
                 const hasActive = activeCallsRef.current.length > 0;
-                const incomingCall: IncomingCall = {
-                  id: callId,
-                  from: call.remoteCallerNumber || "Unknown",
-                  to: call.localCallerNumber || callerId,
-                  webrtcCall: call,
-                };
-                webrtcCallsRef.current.set(callId, call);
-                if (hasActive) {
-                  setWaitingIncoming((prev) => [...prev, incomingCall]);
-                } else {
-                  setIncoming(incomingCall);
-                }
+                const from = call.remoteCallerNumber || "Unknown";
+                const to = call.localCallerNumber || callerId;
+                webrtcCallsRef.current.set(webrtcId, call);
+                // Match an existing HumanCall ringing/queued for this caller.
+                fetch(
+                  `/api/phone/calls?direction=inbound&status=ringing,queued&limit=5`,
+                )
+                  .then((r) => r.json())
+                  .then((j) => {
+                    const rows = (j.data || []) as Array<{
+                      id: string;
+                      from: string;
+                      to: string;
+                    }>;
+                    const match =
+                      rows.find((r) => r.from === from) ||
+                      rows.find((r) => from && r.from?.includes(from.replace(/\D/g, "").slice(-10))) ||
+                      rows[0];
+                    const incomingCall: IncomingCall = {
+                      id: match?.id || webrtcId,
+                      from: match?.from || from,
+                      to: match?.to || to,
+                      webrtcCall: call,
+                      webrtcId,
+                      humanCallId: match?.id,
+                    };
+                    if (match?.id) {
+                      webrtcToHumanRef.current.set(webrtcId, match.id);
+                      webrtcCallsRef.current.set(match.id, call);
+                    }
+                    if (hasActive) {
+                      setWaitingIncoming((prev) => {
+                        if (prev.some((p) => p.id === incomingCall.id || p.webrtcId === webrtcId)) {
+                          return prev;
+                        }
+                        return [...prev, incomingCall];
+                      });
+                    } else {
+                      setIncoming(incomingCall);
+                    }
+                  })
+                  .catch(() => {
+                    const incomingCall: IncomingCall = {
+                      id: webrtcId,
+                      from,
+                      to,
+                      webrtcCall: call,
+                      webrtcId,
+                    };
+                    if (hasActive) {
+                      setWaitingIncoming((prev) => [...prev, incomingCall]);
+                    } else {
+                      setIncoming(incomingCall);
+                    }
+                  });
                 return;
               }
 
               if (call.state === "active" || call.state === "answered") {
-                webrtcCallsRef.current.set(callId, call);
-                const exists = activeCallsRef.current.some((c) => c.id === callId);
-                if (!exists) {
+                webrtcCallsRef.current.set(webrtcId, call);
+                if (humanId) webrtcCallsRef.current.set(humanId, call);
+                const exists = activeCallsRef.current.some(
+                  (c) => c.id === lineId || c.webrtcId === webrtcId,
+                );
+                if (!exists && humanId) {
                   const newCall: ActiveCall = {
-                    id: callId,
+                    id: humanId,
                     from: call.localCallerNumber || callerId,
                     to: call.remoteCallerNumber || dialNumber,
                     status: "in_progress",
                     muted: false,
                     onHold: false,
                     mediaMode: "webrtc",
+                    webrtcId,
                     startedAt: Date.now(),
                   };
                   setActiveCalls((prev) => [...prev, newCall]);
-                  setActiveLineId(callId);
+                  setActiveLineId(humanId);
                   setIncoming(null);
-                  setWaitingIncoming((prev) => prev.filter((w) => w.id !== callId));
+                  setWaitingIncoming((prev) =>
+                    prev.filter((w) => w.id !== humanId && w.webrtcId !== webrtcId),
+                  );
                 }
               }
 
               if (call.state === "hangup" || call.state === "destroy") {
-                webrtcCallsRef.current.delete(callId);
-                setActiveCalls((prev) => prev.filter((c) => c.id !== callId));
-                setWaitingIncoming((prev) => prev.filter((w) => w.id !== callId));
-                if (activeLineIdRef.current === callId) {
+                webrtcCallsRef.current.delete(webrtcId);
+                if (humanId) webrtcCallsRef.current.delete(humanId);
+                setActiveCalls((prev) =>
+                  prev.filter((c) => c.id !== lineId && c.webrtcId !== webrtcId),
+                );
+                setWaitingIncoming((prev) =>
+                  prev.filter((w) => w.id !== lineId && w.webrtcId !== webrtcId),
+                );
+                if (
+                  activeLineIdRef.current === lineId ||
+                  activeLineIdRef.current === webrtcId
+                ) {
                   setActiveLineId(null);
                   setShowDtmf(false);
                 }
-                if (incoming?.id === callId) setIncoming(null);
+                setIncoming((prev) =>
+                  prev && (prev.id === lineId || prev.webrtcId === webrtcId) ? null : prev,
+                );
               }
             });
 
@@ -535,38 +614,68 @@ export function SoftphonePanel({
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (activeCalls.length > 0 || webrtcConnected) return;
     let cancelled = false;
     const check = () => {
-      fetch("/api/phone/calls?direction=inbound&status=ringing&limit=3")
+      fetch("/api/phone/calls?direction=inbound&status=ringing,queued&limit=5")
         .then((r) => r.json())
         .then((j) => {
           if (cancelled) return;
-          const rows = j.data || [];
-          if (rows.length === 0) {
-            if (!activeCallsRef.current.length) setIncoming(null);
+          const rows = (j.data || []) as Array<{ id: string; from: string; to: string }>;
+          const activeIds = new Set(activeCallsRef.current.map((c) => c.id));
+          const available = rows.filter((r) => !activeIds.has(r.id));
+          if (available.length === 0) {
+            // Keep a WebRTC-only banner; clear Call Control banner only when gone.
+            setIncoming((prev) => (prev?.webrtcCall ? prev : null));
             return;
           }
-          const first = rows[0];
-          const call: IncomingCall = { id: first.id, from: first.from, to: first.to };
+          const first = available[0]!;
+          const call: IncomingCall = {
+            id: first.id,
+            from: first.from,
+            to: first.to,
+            humanCallId: first.id,
+          };
           if (activeCallsRef.current.length > 0) {
             setWaitingIncoming((prev) => {
               if (prev.some((p) => p.id === call.id)) return prev;
               return [...prev, call];
             });
           } else {
-            setIncoming(call);
+            setIncoming((prev) => {
+              if (prev?.webrtcCall && prev.id === call.id) {
+                return { ...prev, ...call, webrtcCall: prev.webrtcCall };
+              }
+              if (prev?.webrtcCall && !prev.humanCallId) return prev;
+              return call;
+            });
           }
         })
         .catch(() => undefined);
     };
     check();
-    const t = setInterval(check, 4000);
+    const t = setInterval(check, 3000);
     return () => {
       cancelled = true;
       clearInterval(t);
     };
-  }, [activeCalls.length, webrtcConnected]);
+  }, []);
+
+  // Click-to-call: wait for WebRTC when available, else Call Control after short settle.
+  useEffect(() => {
+    if (!pendingDialRef.current) return;
+    const ready = webrtcConnected || webrtcMode === "mock" || webrtcMode === "api";
+    if (!ready && webrtcMode === "telnyx") return;
+    const dest = pendingDialRef.current;
+    pendingDialRef.current = null;
+    const t = setTimeout(() => {
+      const btn = document.getElementById("softphone-start-call");
+      if (btn) btn.click();
+      else {
+        setDialNumber(dest);
+      }
+    }, webrtcConnected ? 200 : 600);
+    return () => clearTimeout(t);
+  }, [webrtcConnected, webrtcMode]);
 
   useEffect(() => {
     if (!activeCall) {
@@ -592,13 +701,37 @@ export function SoftphonePanel({
     fetch("/api/phone/presence")
       .then((r) => r.json())
       .then((j) => {
-        const rows = j.data || [];
-        const mine = rows[0];
+        const mine = j.mine || (j.data || []).find((r: PresenceRow) => r.userId === j.me);
         if (mine?.status) setPresenceStatus(mine.status);
         if (mine?.customLabel) setCustomStatus(mine.customLabel);
       })
       .catch(() => undefined);
   }, []);
+
+  // Warm-transfer consult answered: poll call notes/events so UI leaves "ringing_consult".
+  useEffect(() => {
+    const pending = activeCalls.find((c) => c.warmTransferPending);
+    if (!pending) return;
+    let cancelled = false;
+    const tick = () => {
+      fetch(`/api/phone/calls/${pending.id}`)
+        .then((r) => r.json())
+        .then((j) => {
+          if (cancelled) return;
+          const notes = String(j.data?.notes || "");
+          if (notes.includes("[warm_consult_answered]")) {
+            updateCall(pending.id, { transferPhase: "consult_answered" });
+          }
+        })
+        .catch(() => undefined);
+    };
+    tick();
+    const t = setInterval(tick, 2500);
+    return () => {
+      cancelled = true;
+      clearInterval(t);
+    };
+  }, [activeCalls.map((c) => `${c.id}:${c.warmTransferPending}:${c.transferPhase}`).join("|")]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const onCall = activeCalls.length > 0;
@@ -655,29 +788,61 @@ export function SoftphonePanel({
         await toggleHoldForLine(activeLineId, true);
       }
 
-      if (call.webrtcCall || webrtcConnected) {
-        const webrtcCall = (call.webrtcCall || webrtcCallsRef.current.get(call.id)) as {
-          answer?: (opts?: { remoteElement?: HTMLAudioElement }) => void;
-        } | null;
+      const webrtcHandle = (call.webrtcCall ||
+        (call.webrtcId ? webrtcCallsRef.current.get(call.webrtcId) : null) ||
+        webrtcCallsRef.current.get(call.id)) as {
+        answer?: (opts?: { remoteElement?: HTMLAudioElement }) => void;
+        id?: string;
+      } | null;
+
+      // Only use the WebRTC answer path when we have a real SDK call handle.
+      if (webrtcHandle?.answer) {
         const audioEl = remoteAudioRef.current;
-        if (webrtcCall?.answer) {
-          await webrtcCall.answer(audioEl ? { remoteElement: audioEl } : undefined);
+        await webrtcHandle.answer(audioEl ? { remoteElement: audioEl } : undefined);
+        const webrtcId = call.webrtcId || webrtcHandle.id || call.id;
+        let humanCallId = call.humanCallId || call.id;
+        // If banner still uses raw WebRTC id, create/link a HumanCall for API actions.
+        if (!call.humanCallId && String(humanCallId).startsWith("webrtc")) {
+          const reg = await fetch("/api/phone/calls", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              to: call.from,
+              from: call.to || callerId,
+              mediaMode: "webrtc",
+              webrtcCallId: webrtcId,
+              direction: "inbound",
+            }),
+          });
+          const regJson = await reg.json();
+          if (reg.ok && regJson.data?.id) humanCallId = regJson.data.id;
+        } else {
+          await fetch(`/api/phone/calls/${humanCallId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ answer: true }),
+          }).catch(() => undefined);
         }
-        webrtcCallsRef.current.set(call.id, webrtcCall);
+        webrtcToHumanRef.current.set(webrtcId, humanCallId);
+        webrtcCallsRef.current.set(humanCallId, webrtcHandle);
+        webrtcCallsRef.current.set(webrtcId, webrtcHandle);
         const newCall: ActiveCall = {
-          id: call.id,
+          id: humanCallId,
           from: call.to,
           to: call.from,
           status: "in_progress",
           muted: false,
           onHold: false,
           mediaMode: "webrtc",
+          webrtcId,
           startedAt: Date.now(),
         };
         setActiveCalls((prev) => [...prev, newCall]);
-        setActiveLineId(call.id);
+        setActiveLineId(humanCallId);
         setIncoming(null);
-        setWaitingIncoming((prev) => prev.filter((w) => w.id !== call.id));
+        setWaitingIncoming((prev) =>
+          prev.filter((w) => w.id !== call.id && w.webrtcId !== webrtcId),
+        );
         return;
       }
 
@@ -753,7 +918,10 @@ export function SoftphonePanel({
         return;
       }
       if (activeCall.mediaMode === "webrtc") {
-        const call = webrtcCallsRef.current.get(activeCall.id) as { dtmf?: (d: string) => void };
+        const call = (webrtcCallsRef.current.get(activeCall.id) ||
+          (activeCall.webrtcId ? webrtcCallsRef.current.get(activeCall.webrtcId) : null)) as {
+          dtmf?: (d: string) => void;
+        } | null;
         call?.dtmf?.(key);
         return;
       }
@@ -783,11 +951,27 @@ export function SoftphonePanel({
       const from = callerId;
 
       if (webrtcConnected && !useCallMyPhone && telnyxClientRef.current) {
+        // Always create a HumanCall first so park/transfer/record APIs have a real id.
+        const reg = await fetch("/api/phone/calls", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            to: dest,
+            from,
+            anonymous: anonymousDial,
+            mediaMode: "webrtc",
+          }),
+        });
+        const regJson = await reg.json();
+        if (!reg.ok) throw new Error(regJson.error || "Failed to register call");
+        const humanCallId = regJson.data.id as string;
+
         const client = telnyxClientRef.current as {
           newCall: (opts: {
             destinationNumber: string;
             callerNumber?: string;
             remoteElement?: HTMLAudioElement;
+            clientState?: string;
           }) => unknown;
         };
         const audioEl = remoteAudioRef.current;
@@ -796,21 +980,36 @@ export function SoftphonePanel({
           callerNumber: from,
           ...(audioEl ? { remoteElement: audioEl } : {}),
         });
-        const callId = (call as { id?: string }).id || `webrtc-${Date.now()}`;
-        webrtcCallsRef.current.set(callId, call);
+        const webrtcId = (call as { id?: string }).id || `webrtc-${Date.now()}`;
+        webrtcToHumanRef.current.set(webrtcId, humanCallId);
+        webrtcCallsRef.current.set(webrtcId, call);
+        webrtcCallsRef.current.set(humanCallId, call);
+        await fetch(`/api/phone/calls/${humanCallId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ webrtcCallId: webrtcId, notes: `webrtc:${webrtcId}` }),
+        }).catch(() => undefined);
         const newCall: ActiveCall = {
-          id: callId,
-          from,
-          to: dest,
+          id: humanCallId,
+          from: regJson.data.from || from,
+          to: regJson.data.to || dest,
           status: "ringing",
           muted: false,
           onHold: false,
           mediaMode: "webrtc",
+          webrtcId,
           startedAt: Date.now(),
         };
         setActiveCalls((prev) => [...prev, newCall]);
-        setActiveLineId(callId);
+        setActiveLineId(humanCallId);
         setRecording(false);
+        return;
+      }
+
+      if (!webrtcConnected && !useCallMyPhone && webrtcMode === "telnyx") {
+        setError(
+          "Browser softphone audio is not connected yet. Wait for WebRTC, or enable Call my phone.",
+        );
         return;
       }
 
@@ -854,18 +1053,27 @@ export function SoftphonePanel({
     if (!activeCalls.length) await startCall();
   }
 
+  function webrtcHandleFor(callId: string, webrtcId?: string | null) {
+    return (
+      webrtcCallsRef.current.get(callId) ||
+      (webrtcId ? webrtcCallsRef.current.get(webrtcId) : null) ||
+      null
+    );
+  }
+
   async function toggleHoldForLine(callId: string, forceHold?: boolean) {
     const call = activeCalls.find((c) => c.id === callId);
     if (!call) return;
     const onHold = forceHold ?? !call.onHold;
     if (call.mediaMode === "webrtc") {
-      const wc = webrtcCallsRef.current.get(callId) as {
+      const wc = webrtcHandleFor(callId, call.webrtcId) as {
         hold?: () => void;
         unhold?: () => void;
-      };
+      } | null;
       if (onHold) await wc?.hold?.();
       else await wc?.unhold?.();
       updateCall(callId, { onHold, status: onHold ? "on_hold" : "in_progress" });
+      await patchCallById(callId, { onHold }).catch(() => undefined);
       return;
     }
     const data = await patchCallById(callId, { onHold });
@@ -897,11 +1105,13 @@ export function SoftphonePanel({
     if (!activeCall) return;
     try {
       if (activeCall.mediaMode === "webrtc") {
-        const call = webrtcCallsRef.current.get(activeCall.id) as { hangup?: () => void };
+        const call = webrtcHandleFor(activeCall.id, activeCall.webrtcId) as {
+          hangup?: () => void;
+        } | null;
         await call?.hangup?.();
-      } else {
-        await patchCallById(activeCall.id, { hangup: true });
       }
+      // Always complete the HumanCall row so history/disposition stay correct.
+      await patchCallById(activeCall.id, { hangup: true }).catch(() => undefined);
     } catch {
       // still clear UI
     }
@@ -914,13 +1124,14 @@ export function SoftphonePanel({
     if (!activeCall) return;
     const muted = !activeCall.muted;
     if (activeCall.mediaMode === "webrtc") {
-      const call = webrtcCallsRef.current.get(activeCall.id) as {
+      const call = webrtcHandleFor(activeCall.id, activeCall.webrtcId) as {
         muteAudio?: () => void;
         unmuteAudio?: () => void;
-      };
+      } | null;
       if (muted) call?.muteAudio?.();
       else call?.unmuteAudio?.();
       updateCall(activeCall.id, { muted });
+      await patchCallById(activeCall.id, { muted }).catch(() => undefined);
       return;
     }
     const data = await patchCallById(activeCall.id, { muted });
@@ -1060,6 +1271,25 @@ export function SoftphonePanel({
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Retrieve failed");
+      const human = json.data?.humanCall;
+      if (human?.id) {
+        const restored: ActiveCall = {
+          id: human.id,
+          from: human.from,
+          to: human.to,
+          status: human.status || "in_progress",
+          muted: Boolean(human.muted),
+          onHold: false,
+          mediaMode: (human.mediaMode as MediaMode) || "call_control",
+          startedAt: Date.now(),
+          notes: human.notes || undefined,
+        };
+        setActiveCalls((prev) => {
+          if (prev.some((c) => c.id === restored.id)) return prev;
+          return [...prev, restored];
+        });
+        setActiveLineId(human.id);
+      }
       setParkSlot("");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Retrieve failed");

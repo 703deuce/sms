@@ -122,6 +122,115 @@ export async function dialHumanCall(input: {
   return { call: updated, mode: "telnyx" };
 }
 
+/**
+ * Create a HumanCall row for a WebRTC softphone dial (browser media path).
+ * Does not place a Call Control dial — the TelnyxRTC client owns media.
+ * Call-control id is linked later via linkHumanCallControlId when the SDK exposes it.
+ */
+export async function createWebRtcHumanCall(input: {
+  workspaceId: string;
+  agentUserId: string;
+  to: string;
+  from?: string | null;
+  anonymous?: boolean;
+  webrtcCallId?: string | null;
+  direction?: "outbound" | "inbound";
+}) {
+  const prisma = getPrisma();
+  const to = normalizeE164(input.to);
+  const from = await resolveCallerIdNumber(input.workspaceId, input.from);
+  if (!from) throw new Error("No active caller ID number configured");
+
+  const { getSoftphonePermissions, requireSoftphonePermission } = await import(
+    "./softphone-permissions"
+  );
+  await requireSoftphonePermission(input.workspaceId, input.agentUserId, "place_call");
+  if (input.anonymous) {
+    await requireSoftphonePermission(input.workspaceId, input.agentUserId, "anonymous_dial");
+  }
+  const { settings: userSettings, allowed } = await getSoftphonePermissions(
+    input.workspaceId,
+    input.agentUserId,
+  );
+  if (userSettings?.dndEnabled) {
+    throw new Error("Cannot place calls while Do Not Disturb is enabled");
+  }
+  if (!to.startsWith("+1") && !allowed.has("international")) {
+    throw new Error("International calling is disabled for this user");
+  }
+
+  await markOnCallSafe(input.workspaceId, input.agentUserId, true);
+
+  let contactId: string | null = null;
+  try {
+    const { resolveContactIdForPhone } = await import("@/lib/contacts/activity-timeline");
+    contactId = await resolveContactIdForPhone(
+      input.workspaceId,
+      input.direction === "inbound" ? from : to,
+    );
+  } catch {
+    // best-effort
+  }
+
+  const webrtcNote = input.webrtcCallId ? `webrtc:${input.webrtcCallId}` : "webrtc";
+  const direction = input.direction || "outbound";
+  // Outbound: from=callerId, to=destination. Inbound answer register: input.to=customer.
+  const callFrom = direction === "inbound" ? to : from;
+  const callTo = direction === "inbound" ? from : to;
+  const call = await prisma.humanCall.create({
+    data: {
+      workspaceId: input.workspaceId,
+      from: callFrom,
+      to: callTo,
+      direction,
+      status: direction === "inbound" ? "in_progress" : "ringing",
+      agentUserId: input.agentUserId,
+      callerIdNumber: from,
+      mediaMode: "webrtc",
+      contactId,
+      answeredAt: direction === "inbound" ? new Date() : undefined,
+      notes: [input.anonymous ? "[anonymous_dial]" : null, webrtcNote].filter(Boolean).join(" "),
+    },
+  });
+
+  await logHumanCallEvent(input.workspaceId, call.id, "webrtc.call_created", {
+    webrtcCallId: input.webrtcCallId || null,
+    direction: input.direction || "outbound",
+    to,
+    from,
+  });
+
+  return { call, mode: "webrtc" as const };
+}
+
+/** Attach Telnyx Call Control id to a WebRTC-originated HumanCall so park/transfer work. */
+export async function linkHumanCallControlId(
+  callId: string,
+  workspaceId: string,
+  telnyxCallControlId: string,
+  webrtcCallId?: string | null,
+) {
+  const prisma = getPrisma();
+  const call = await prisma.humanCall.findFirst({ where: { id: callId, workspaceId } });
+  if (!call) throw new Error("Call not found");
+  const notes = webrtcCallId
+    ? `${(call.notes || "").replace(/webrtc:[^\s]+/, "").trim()} webrtc:${webrtcCallId}`.trim()
+    : call.notes;
+  const updated = await prisma.humanCall.update({
+    where: { id: callId },
+    data: {
+      telnyxCallControlId,
+      mediaMode: call.mediaMode || "webrtc",
+      notes,
+    },
+  });
+  await logHumanCallEvent(workspaceId, callId, "webrtc.control_linked", {
+    telnyxCallControlId,
+    webrtcCallId: webrtcCallId || null,
+  });
+  return updated;
+}
+
 export async function handleInboundHumanCall(input: {
   workspaceId: string;
   fromE164: string;
@@ -129,6 +238,8 @@ export async function handleInboundHumanCall(input: {
   telnyxCallControlId?: string;
   queueId?: string | null;
   routingNote?: string | null;
+  /** When false, leave the PSTN leg ringing for softphone pick-up (default: answer only for queues). */
+  autoAnswer?: boolean;
 }) {
   const prisma = getPrisma();
   const from = normalizeE164(input.fromE164);
@@ -173,8 +284,12 @@ export async function handleInboundHumanCall(input: {
     },
   });
 
-  // Answer + ring queue members (or leave ringing for softphone poll).
-  if (input.telnyxCallControlId && isTelnyxPhoneConfigured()) {
+  // Queues need an answered+held leg for hold music / member ring.
+  // Plain softphone inbound stays ringing so the UI poll / WebRTC invite can pick it up.
+  const shouldAnswer =
+    input.autoAnswer !== undefined ? input.autoAnswer : Boolean(queueId);
+
+  if (input.telnyxCallControlId && isTelnyxPhoneConfigured() && shouldAnswer) {
     await telnyxRequest(`/calls/${input.telnyxCallControlId}/actions/answer`, {
       method: "POST",
       body: {},
@@ -217,7 +332,11 @@ async function telnyxAction(controlId: string, action: string, body?: Record<str
   return { mode: "telnyx" };
 }
 
-export async function hangupHumanCall(callId: string, workspaceId: string) {
+export async function hangupHumanCall(
+  callId: string,
+  workspaceId: string,
+  disposition?: string | null,
+) {
   const prisma = getPrisma();
   const call = await prisma.humanCall.findFirst({ where: { id: callId, workspaceId } });
   if (!call) throw new Error("Call not found");
@@ -226,14 +345,45 @@ export async function hangupHumanCall(callId: string, workspaceId: string) {
   }
   await logHumanCallEvent(workspaceId, callId, "call.hangup_requested", {
     controlId: call.telnyxCallControlId,
+    disposition: disposition || null,
   });
-  return prisma.humanCall.update({
+  const nextDisposition = disposition || call.disposition || null;
+  const updated = await prisma.humanCall.update({
     where: { id: callId },
-    data: { status: "completed", endedAt: new Date() },
+    data: {
+      status: "completed",
+      endedAt: new Date(),
+      ...(nextDisposition ? { disposition: nextDisposition } : {}),
+    },
   });
+
+  if (nextDisposition && /missed|no[_ -]?answer|voicemail|declined/i.test(nextDisposition)) {
+    const customerPhone = updated.direction === "inbound" ? updated.from : updated.to;
+    try {
+      const contact = await prisma.contact.findFirst({
+        where: { workspaceId, phone: customerPhone },
+      });
+      if (contact) {
+        const { emitAutomationEvent } = await import("@/lib/automations/events");
+        await emitAutomationEvent(workspaceId, "call.missed", contact.id, {
+          humanCallId: updated.id,
+          direction: updated.direction,
+          disposition: nextDisposition,
+        }).catch(() => undefined);
+      }
+    } catch (err) {
+      console.warn("[human-call] hangup missed-call event failed", callId, err);
+    }
+  }
+
+  return updated;
 }
 
-export async function answerHumanCall(callId: string, workspaceId: string) {
+export async function answerHumanCall(
+  callId: string,
+  workspaceId: string,
+  agentUserId?: string | null,
+) {
   const prisma = getPrisma();
   const call = await prisma.humanCall.findFirst({ where: { id: callId, workspaceId } });
   if (!call) throw new Error("Call not found");
@@ -244,11 +394,15 @@ export async function answerHumanCall(callId: string, workspaceId: string) {
       await telnyxAction(call.telnyxCallControlId, "unhold").catch(() => undefined);
     }
   }
+  if (agentUserId) {
+    await markOnCallSafe(workspaceId, agentUserId, true);
+  }
   const answeredAt = call.answeredAt || new Date();
   await logHumanCallEvent(workspaceId, callId, "call.answered", {
     controlId: call.telnyxCallControlId,
     answerToDbMs: Date.now() - new Date(call.startedAt).getTime(),
     screening: (call.notes || "").includes("screening:"),
+    agentUserId: agentUserId || null,
   });
   return prisma.humanCall.update({
     where: { id: callId },
@@ -256,6 +410,7 @@ export async function answerHumanCall(callId: string, workspaceId: string) {
       status: "in_progress",
       onHold: false,
       answeredAt,
+      ...(agentUserId ? { agentUserId } : {}),
     },
   });
 }
@@ -564,6 +719,18 @@ export async function dialCallMyPhoneBridge(input: {
   const from = await resolveCallerIdNumber(input.workspaceId, input.from);
   if (!from) throw new Error("No active caller ID number configured");
 
+  const { requireSoftphonePermission } = await import("./softphone-permissions");
+  await requireSoftphonePermission(input.workspaceId, input.agentUserId, "place_call");
+  await markOnCallSafe(input.workspaceId, input.agentUserId, true);
+
+  let contactId: string | null = null;
+  try {
+    const { resolveContactIdForPhone } = await import("@/lib/contacts/activity-timeline");
+    contactId = await resolveContactIdForPhone(input.workspaceId, destination);
+  } catch {
+    // best-effort
+  }
+
   const call = await prisma.humanCall.create({
     data: {
       workspaceId: input.workspaceId,
@@ -573,6 +740,8 @@ export async function dialCallMyPhoneBridge(input: {
       status: "initiated",
       agentUserId: input.agentUserId,
       callerIdNumber: from,
+      mediaMode: "call_my_phone",
+      contactId,
       notes: `call_my_phone:${agentPhone}`,
     },
   });
@@ -859,6 +1028,7 @@ export async function updateHumanCall(
     disposition?: string | null;
     hangup?: boolean;
     answer?: boolean;
+    agentUserId?: string | null;
     muted?: boolean;
     onHold?: boolean;
     transferTo?: string;
@@ -873,8 +1043,18 @@ export async function updateHumanCall(
     blockCaller?: boolean;
     startTranscription?: boolean;
     generateAiSummary?: boolean;
+    telnyxCallControlId?: string | null;
+    webrtcCallId?: string | null;
   },
 ) {
+  if (patch.telnyxCallControlId) {
+    return linkHumanCallControlId(
+      callId,
+      workspaceId,
+      patch.telnyxCallControlId,
+      patch.webrtcCallId,
+    );
+  }
   if (patch.completeWarmTransfer) return completeWarmTransfer(callId, workspaceId);
   if (patch.cancelWarmTransfer) return cancelWarmTransfer(callId, workspaceId);
   if (patch.consult && patch.warmTransferTo) {
@@ -885,8 +1065,10 @@ export async function updateHumanCall(
   if (patch.flipTo) return flipHumanCall(callId, workspaceId, patch.flipTo);
   if (patch.startTranscription) return startHumanCallTranscription(callId, workspaceId);
   if (patch.generateAiSummary) return generateHumanCallAiSummary(callId, workspaceId);
-  if (patch.answer) return answerHumanCall(callId, workspaceId);
-  if (patch.hangup) return hangupHumanCall(callId, workspaceId);
+  if (patch.answer) {
+    return answerHumanCall(callId, workspaceId, patch.agentUserId);
+  }
+  if (patch.hangup) return hangupHumanCall(callId, workspaceId, patch.disposition);
   if (patch.muted !== undefined) return muteHumanCall(callId, workspaceId, patch.muted);
   if (patch.onHold !== undefined) return holdHumanCall(callId, workspaceId, patch.onHold);
   if (patch.transferTo) return transferHumanCall(callId, workspaceId, patch.transferTo);
@@ -995,7 +1177,15 @@ export async function processHumanCallWebhookEvent(input: {
   const nextStatus = statusMap[input.eventType];
   const patch: Record<string, unknown> = {};
   // Never let secondary-leg events overwrite the customer call status to completed mid-transfer.
-  if (nextStatus && !(isSecondaryLeg && input.eventType === "call.hangup" && call.status === "transferred")) {
+  // Keep queue waiting state until an agent actually answers (softphone / queue member).
+  const preserveQueued =
+    call.status === "queued" &&
+    (input.eventType === "call.answered" || input.eventType === "call.bridged");
+  if (
+    nextStatus &&
+    !preserveQueued &&
+    !(isSecondaryLeg && input.eventType === "call.hangup" && call.status === "transferred")
+  ) {
     if (!(isSecondaryLeg && ["call.initiated", "call.ringing"].includes(input.eventType))) {
       if (!(isSecondaryLeg && input.eventType === "call.hangup")) {
         patch.status = nextStatus;
@@ -1003,7 +1193,12 @@ export async function processHumanCallWebhookEvent(input: {
     }
   }
   if (patch.status === "completed") patch.endedAt = new Date();
-  if (input.eventType === "call.answered" && !call.answeredAt && !isSecondaryLeg) {
+  if (
+    input.eventType === "call.answered" &&
+    !call.answeredAt &&
+    !isSecondaryLeg &&
+    call.status !== "queued"
+  ) {
     patch.answeredAt = new Date();
   }
   if (input.eventType === "call.recording.saved") {

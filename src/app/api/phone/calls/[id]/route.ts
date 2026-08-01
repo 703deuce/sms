@@ -54,6 +54,8 @@ export async function PATCH(
       blockCaller?: boolean;
       startTranscription?: boolean;
       generateAiSummary?: boolean;
+      telnyxCallControlId?: string;
+      webrtcCallId?: string;
     };
 
     if (body.record) {
@@ -77,6 +79,7 @@ export async function PATCH(
     const call = await updateHumanCall(id, auth.workspaceId, {
       hangup: body.hangup,
       answer: body.answer,
+      agentUserId: body.answer ? auth.session.userId : undefined,
       muted: body.muted,
       onHold: body.onHold,
       transferTo: body.transferTo,
@@ -93,6 +96,8 @@ export async function PATCH(
       blockCaller: body.blockCaller,
       startTranscription: body.startTranscription,
       generateAiSummary: body.generateAiSummary,
+      telnyxCallControlId: body.telnyxCallControlId,
+      webrtcCallId: body.webrtcCallId,
     });
 
     return NextResponse.json({ data: call });

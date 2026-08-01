@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
 import { getPrisma } from "@/lib/db";
 import {
+  createWebRtcHumanCall,
   dialCallMyPhoneBridge,
   dialHumanCall,
   mergeHumanCalls,
@@ -21,7 +22,10 @@ export async function GET(request: Request) {
 
     const where: Record<string, unknown> = { workspaceId: auth.workspaceId };
     if (direction) where.direction = direction;
-    if (status) where.status = status;
+    if (status) {
+      const parts = status.split(",").map((s) => s.trim()).filter(Boolean);
+      where.status = parts.length > 1 ? { in: parts } : parts[0];
+    }
     if (q) {
       where.OR = [
         { from: { contains: q, mode: "insensitive" } },
@@ -54,6 +58,9 @@ export async function POST(request: Request) {
       callMyPhone?: string;
       anonymous?: boolean;
       mergeCallIds?: [string, string];
+      mediaMode?: "webrtc" | "call_control" | "call_my_phone";
+      webrtcCallId?: string;
+      direction?: "outbound" | "inbound";
     };
 
     if (body.mergeCallIds?.length === 2) {
@@ -71,6 +78,19 @@ export async function POST(request: Request) {
     }
 
     await requireSoftphonePermission(auth.workspaceId, auth.session.userId, "place_call");
+
+    if (body.mediaMode === "webrtc") {
+      const result = await createWebRtcHumanCall({
+        workspaceId: auth.workspaceId,
+        agentUserId: auth.session.userId,
+        to: body.to.trim(),
+        from: body.from,
+        anonymous: Boolean(body.anonymous),
+        webrtcCallId: body.webrtcCallId,
+        direction: body.direction,
+      });
+      return NextResponse.json({ data: result.call, mode: result.mode }, { status: 201 });
+    }
 
     if (body.callMyPhone?.trim()) {
       const result = await dialCallMyPhoneBridge({

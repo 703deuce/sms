@@ -6,7 +6,14 @@ export async function GET() {
   try {
     const auth = await requireSession();
     if ("error" in auth) return auth.error;
-    return NextResponse.json({ data: await listPresence(auth.workspaceId) });
+    const rows = await listPresence(auth.workspaceId);
+    const me =
+      rows.find((r: { userId: string }) => r.userId === auth.session.userId) || null;
+    return NextResponse.json({
+      data: rows,
+      me: auth.session.userId,
+      mine: me,
+    });
   } catch (err) {
     return jsonError(err, 500);
   }

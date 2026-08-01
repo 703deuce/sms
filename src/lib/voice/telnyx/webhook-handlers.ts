@@ -244,17 +244,31 @@ export async function processVoiceWebhookEvent(input: {
         return { ok: true, kind: "ivr_gather" };
       }
 
-      // Prefer AI agent when one is assigned to this number; otherwise softphone path.
-      const aiAgent = await prisma.voiceAgent.findFirst({
-        where: {
-          workspaceId: pn.workspaceId,
-          status: "ACTIVE",
-          OR: [
-            { phoneNumberId: pn.id },
-            { phoneAssignments: { some: { phoneNumberId: pn.id, inboundEnabled: true } } },
-          ],
-        },
-      });
+      // Phone-first: prefer softphone when humans are assigned or softphone devices exist.
+      // AI only when explicitly inbound-enabled on the number and softphone is not preferred.
+      const [humanAssignment, softphoneDeviceCount] = await Promise.all([
+        prisma.phoneNumberAssignment.findFirst({ where: { phoneNumberId: pn.id } }),
+        prisma.softphoneDevice.count({
+          where: { workspaceId: pn.workspaceId, active: true },
+        }),
+      ]);
+      const preferSoftphone = Boolean(humanAssignment) || softphoneDeviceCount > 0;
+
+      let aiAgent = null;
+      if (!preferSoftphone) {
+        const assignment = await prisma.voiceAgentPhoneNumber.findFirst({
+          where: {
+            workspaceId: pn.workspaceId,
+            phoneNumberId: pn.id,
+            inboundEnabled: true,
+          },
+        });
+        if (assignment?.agentId) {
+          aiAgent = await prisma.voiceAgent.findFirst({
+            where: { id: assignment.agentId, workspaceId: pn.workspaceId, status: "ACTIVE" },
+          });
+        }
+      }
 
       if (aiAgent) {
         const { handleInboundCallEvent } = await import("../inbound");

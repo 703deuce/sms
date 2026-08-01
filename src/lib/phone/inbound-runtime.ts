@@ -102,6 +102,7 @@ export async function processSoftphoneInbound(input: {
         toE164: to,
         telnyxCallControlId: input.telnyxCallControlId,
         routingNote: `forward_voicemail:${rule.mode}`,
+        autoAnswer: true,
       });
       if (input.telnyxCallControlId && isTelnyxPhoneConfigured()) {
         const { leaveVoicemailOnCall } = await import("./voicemail-service");
@@ -147,6 +148,7 @@ export async function processSoftphoneInbound(input: {
           toE164: to,
           telnyxCallControlId: input.telnyxCallControlId,
           routingNote: `forward_${rule.mode}`,
+          autoAnswer: true,
         });
         await ringExternalTargets(
           input,

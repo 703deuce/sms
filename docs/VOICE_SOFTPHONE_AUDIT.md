@@ -62,4 +62,13 @@ See `docs/PRODUCT_POSITIONING.md`. Phone reliability outranks AI. New launch sur
 - Voicemail recording attach + Whisper transcription pipeline on `call.recording.saved`
 - Billing itemized upcoming estimate + credit ledger + Stripe invoices
 
+### Softphone end-to-end wiring pass
+- WebRTC dial always creates a `HumanCall` first (park/transfer/record no longer orphan)
+- Answer path only uses WebRTC SDK when a real call handle exists; Call Control answer otherwise
+- Inbound softphone leaves PSTN ringing (queues still auto-answer); poll `ringing,queued` even with WebRTC up
+- Presence loads **mine** by session userId; decline disposition applied on hangup; answer sets `agentUserId`
+- Park retrieve restores active line; warm-transfer UI polls consult-answered; call-my-phone gets permissions/contactId
+- Phone-first inbound: softphone preferred when human assignment or softphone devices exist
+- prisma-compat: OR `contains`, contact `tagMembers`, conference `participants`
+
 Everything else on the customer checklists is implemented in code and ready for number-on testing.

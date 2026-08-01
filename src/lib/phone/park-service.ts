@@ -103,8 +103,9 @@ export async function retrieveParkedCall(input: {
     data: { status: "retrieved" },
   });
 
+  let humanCall = null;
   if (slot.humanCallId) {
-    await prisma.humanCall.update({
+    humanCall = await prisma.humanCall.update({
       where: { id: slot.humanCallId },
       data: {
         onHold: false,
@@ -115,7 +116,7 @@ export async function retrieveParkedCall(input: {
     });
   }
 
-  return slot;
+  return { ...slot, status: "retrieved", humanCall };
 }
 
 export async function listParkedCalls(workspaceId: string) {
