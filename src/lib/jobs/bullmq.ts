@@ -146,7 +146,6 @@ export async function enqueueBullmq(
         return;
       } else if (
         state === "waiting" ||
-        state === "wait" ||
         state === "prioritized" ||
         state === "active" ||
         state === "waiting-children"
