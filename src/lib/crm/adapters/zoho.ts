@@ -65,7 +65,7 @@ export const zohoConnector: CrmConnector = {
         `${apiBase(ctx)}/users?type=CurrentUser`,
         { accessToken: ctx.accessToken },
       );
-      const user = data.users?.[0];
+      const user = data?.users?.[0];
       return {
         ok: true,
         state: "connected",
@@ -97,7 +97,7 @@ export const zohoConnector: CrmConnector = {
       accessToken: ctx.accessToken,
     });
     return {
-      items: (data.data || []).map(
+      items: (data?.data || []).map(
         (r): CrmContact => ({
           id: String(r.id),
           firstName: (r.First_Name as string) || null,
@@ -117,7 +117,7 @@ export const zohoConnector: CrmConnector = {
           },
         }),
       ),
-      nextCursor: data.info?.more_records ? String(page + 1) : null,
+      nextCursor: data?.info?.more_records ? String(page + 1) : null,
     };
   },
 
@@ -197,7 +197,7 @@ export const zohoConnector: CrmConnector = {
         body: JSON.stringify(body),
       },
     );
-    const id = created.data?.[0]?.details?.id;
+    const id = created?.data?.[0]?.details?.id;
     if (!id) throw new Error("Zoho contact create failed");
     return { externalId: id, created: true };
   },
@@ -220,7 +220,7 @@ export const zohoConnector: CrmConnector = {
       { accessToken: ctx.accessToken },
     );
     return {
-      items: (data.data || []).map(
+      items: (data?.data || []).map(
         (r): CrmLead => ({
           id: String(r.id),
           firstName: (r.First_Name as string) || null,
@@ -231,7 +231,7 @@ export const zohoConnector: CrmConnector = {
           source: (r.Lead_Source as string) || null,
         }),
       ),
-      nextCursor: data.info?.more_records ? String(page + 1) : null,
+      nextCursor: data?.info?.more_records ? String(page + 1) : null,
     };
   },
 
@@ -268,7 +268,7 @@ export const zohoConnector: CrmConnector = {
       `${apiBase(ctx)}/Leads`,
       { method: "POST", accessToken: ctx.accessToken, body: JSON.stringify(body) },
     );
-    const id = created.data?.[0]?.details?.id;
+    const id = created?.data?.[0]?.details?.id;
     if (!id) throw new Error("Zoho lead create failed");
     return { externalId: id, created: true };
   },
@@ -289,7 +289,7 @@ export const zohoConnector: CrmConnector = {
       { accessToken: ctx.accessToken },
     );
     return {
-      items: (data.data || []).map(
+      items: (data?.data || []).map(
         (r): CrmDeal => ({
           id: String(r.id),
           name: String(r.Deal_Name || r.Pipeline_Name || r.Name || "Deal"),
@@ -299,7 +299,7 @@ export const zohoConnector: CrmConnector = {
           closeDate: (r.Closing_Date as string) || null,
         }),
       ),
-      nextCursor: data.info?.more_records ? String(page + 1) : null,
+      nextCursor: data?.info?.more_records ? String(page + 1) : null,
     };
   },
 
@@ -332,7 +332,7 @@ export const zohoConnector: CrmConnector = {
       `${apiBase(ctx)}/${module}`,
       { method: "POST", accessToken: ctx.accessToken, body: JSON.stringify(body) },
     );
-    const id = created.data?.[0]?.details?.id;
+    const id = created?.data?.[0]?.details?.id;
     if (!id) throw new Error("Zoho/Bigin deal create failed");
     return { externalId: id, created: true };
   },
@@ -359,7 +359,7 @@ export const zohoConnector: CrmConnector = {
         body: JSON.stringify({ data: [fields] }),
       },
     );
-    const id = created.data?.[0]?.details?.id;
+    const id = created?.data?.[0]?.details?.id;
     if (!id) throw new Error("Zoho task create failed");
     return { externalId: id, created: true };
   },
@@ -385,7 +385,7 @@ export const zohoConnector: CrmConnector = {
         body: JSON.stringify({ data: [fields] }),
       },
     );
-    const id = created.data?.[0]?.details?.id;
+    const id = created?.data?.[0]?.details?.id;
     if (!id) throw new Error("Zoho note create failed");
     return { externalId: id, created: true };
   },
@@ -426,7 +426,7 @@ export const zohoConnector: CrmConnector = {
       info?: { more_records?: boolean };
     }>(path, { accessToken: ctx.accessToken });
     return {
-      items: (data.data || []).map(
+      items: (data?.data || []).map(
         (r): CrmTask => ({
           id: String(r.id),
           subject: String(r.Subject || "Task"),
@@ -439,7 +439,7 @@ export const zohoConnector: CrmConnector = {
               : null,
         }),
       ),
-      nextCursor: data.info?.more_records ? String(page + 1) : null,
+      nextCursor: data?.info?.more_records ? String(page + 1) : null,
     };
   },
 
@@ -450,7 +450,7 @@ export const zohoConnector: CrmConnector = {
       info?: { more_records?: boolean };
     }>(`${apiBase(ctx)}/Notes?page=${page}&per_page=200`, { accessToken: ctx.accessToken });
     return {
-      items: (data.data || []).map((r) => ({
+      items: (data?.data || []).map((r) => ({
         id: String(r.id),
         body: String(r.Note_Content || r.Note_Title || ""),
         contactExternalId:
@@ -459,7 +459,7 @@ export const zohoConnector: CrmConnector = {
             : null,
         updatedAt: (r.Modified_Time as string) || null,
       })),
-      nextCursor: data.info?.more_records ? String(page + 1) : null,
+      nextCursor: data?.info?.more_records ? String(page + 1) : null,
     };
   },
 
@@ -472,7 +472,7 @@ export const zohoConnector: CrmConnector = {
         info?: { more_records?: boolean };
       }>(`${apiBase(ctx)}/Calls?page=${page}&per_page=200`, { accessToken: ctx.accessToken });
       return {
-        items: (data.data || []).map((r) => ({
+        items: (data?.data || []).map((r) => ({
           id: String(r.id),
           type: "call" as const,
           subject: String(r.Subject || "Call"),
@@ -485,7 +485,7 @@ export const zohoConnector: CrmConnector = {
               : null,
           updatedAt: (r.Modified_Time as string) || null,
         })),
-        nextCursor: data.info?.more_records ? String(page + 1) : null,
+        nextCursor: data?.info?.more_records ? String(page + 1) : null,
       };
     } catch {
       const tasks = await zohoConnector.listTasks!(ctx, cursor, opts);
@@ -566,7 +566,7 @@ export const zohoConnector: CrmConnector = {
           body: JSON.stringify({ data: [record] }),
         },
       );
-      const id = created.data?.[0]?.details?.id;
+      const id = created?.data?.[0]?.details?.id;
       if (!id) throw new Error("Zoho Calls create failed");
       return { externalId: id, created: true };
     } catch {
@@ -672,7 +672,7 @@ export const zohoConnector: CrmConnector = {
       accessToken: ctx.accessToken,
     });
     return {
-      items: (data.data || []).map(
+      items: (data?.data || []).map(
         (r): CrmCompany => ({
           id: String(r.id),
           name: String(r.Account_Name || r.name || "Account"),
@@ -680,7 +680,7 @@ export const zohoConnector: CrmConnector = {
           website: (r.Website as string) || null,
         }),
       ),
-      nextCursor: data.info?.more_records ? String(page + 1) : null,
+      nextCursor: data?.info?.more_records ? String(page + 1) : null,
     };
   },
 
@@ -710,7 +710,7 @@ export const zohoConnector: CrmConnector = {
       `${apiBase(ctx)}/Accounts`,
       { method: "POST", accessToken: ctx.accessToken, body: JSON.stringify(body) },
     );
-    const id = created.data?.[0]?.details?.id;
+    const id = created?.data?.[0]?.details?.id;
     if (!id) throw new Error("Zoho account create failed");
     return { externalId: id, created: true };
   },
@@ -720,7 +720,7 @@ export const zohoConnector: CrmConnector = {
       `${apiBase(ctx)}/users?type=ActiveUsers`,
       { accessToken: ctx.accessToken },
     );
-    return (data.users || []).map(
+    return (data?.users || []).map(
       (r): CrmUser => ({
         externalId: String(r.id),
         name: (r.full_name as string) || (r.name as string) || null,
@@ -736,7 +736,7 @@ export const zohoConnector: CrmConnector = {
         const data = await crmFetch<{
           fields?: Array<{ api_name?: string; field_label?: string; display_label?: string }>;
         }>(`${apiBase(ctx)}/settings/fields?module=${module}`, { accessToken: ctx.accessToken });
-        for (const f of data.fields || []) {
+        for (const f of data?.fields || []) {
           if (!f.api_name) continue;
           out.push({
             objectType: module.toLowerCase().replace(/s$/, ""),
@@ -761,7 +761,7 @@ export const zohoConnector: CrmConnector = {
           pick_list_values?: Array<{ display_value?: string; actual_value?: string }>;
         }>;
       }>(`${apiBase(ctx)}/settings/fields?module=${module}`, { accessToken: ctx.accessToken });
-      const stage = data.fields?.find((f) => f.api_name === "Stage");
+      const stage = data?.fields?.find((f) => f.api_name === "Stage");
       const stages = (stage?.pick_list_values || []).map((p, i) => ({
         id: String(p.actual_value || p.display_value || i),
         name: String(p.display_value || p.actual_value || "Stage"),
@@ -780,7 +780,7 @@ export const zohoConnector: CrmConnector = {
       const data = await crmFetch<{
         tags?: Array<{ name?: string; id?: string; colour_code?: string }>;
       }>(`${apiBase(ctx)}/settings/tags?module=Contacts`, { accessToken: ctx.accessToken });
-      return (data.tags || []).map((t) => ({
+      return (data?.tags || []).map((t) => ({
         id: t.id ? String(t.id) : undefined,
         name: String(t.name || ""),
         color: t.colour_code || null,

@@ -359,4 +359,19 @@ ok("BullMQ job ids cannot contain colon", async () => {
   assert.equal(toBullmqJobId("crm-sync-zoho-abc"), "crm-sync-zoho-abc");
 });
 
+ok("crmFetch never returns null on empty success body", async () => {
+  const { crmFetch } = await import("../src/lib/crm/http");
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () =>
+    new Response(null, { status: 200, statusText: "OK" })) as typeof fetch;
+  try {
+    const data = await crmFetch<{ data?: unknown[] }>("https://example.test/empty");
+    assert.equal(data == null, false);
+    assert.deepEqual(data, {});
+    assert.equal((data.data || []).length, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 console.log(`\n${passed} CRM enterprise checks passed.`);

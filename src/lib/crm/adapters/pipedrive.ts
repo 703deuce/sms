@@ -25,10 +25,16 @@ function apiBase(ctx: ConnectorContext) {
 }
 
 async function pd<T>(ctx: ConnectorContext, path: string, init?: RequestInit) {
-  return crmFetch<{ success: boolean; data: T; additional_data?: { pagination?: { next_start?: number } } }>(
-    `${apiBase(ctx)}${path}`,
-    { ...init, accessToken: ctx.accessToken },
-  );
+  const res = await crmFetch<{
+    success?: boolean;
+    data?: T | null;
+    additional_data?: { pagination?: { next_start?: number } };
+  }>(`${apiBase(ctx)}${path}`, { ...init, accessToken: ctx.accessToken });
+  return {
+    success: res.success !== false,
+    data: (res.data ?? null) as T,
+    additional_data: res.additional_data,
+  };
 }
 
 export const pipedriveConnector: CrmConnector = {
@@ -204,10 +210,20 @@ export const pipedriveConnector: CrmConnector = {
 
   async listCompanies(ctx, cursor, opts) {
     const start = cursor ? Number(cursor) : 0;
-    const res = await pd<Array<Record<string, unknown>>>(
-      ctx,
-      `/organizations?start=${start}&limit=100&sort=update_time DESC`,
-    );
+    let res: Awaited<ReturnType<typeof pd<Array<Record<string, unknown>>>>>;
+    try {
+      res = await pd<Array<Record<string, unknown>>>(
+        ctx,
+        `/organizations?start=${start}&limit=100&sort=update_time DESC`,
+      );
+    } catch (err) {
+      // Sandbox / scope gaps often 403 organizations — don't fail the whole sync.
+      const status = err && typeof err === "object" && "status" in err ? Number(err.status) : 0;
+      if (status === 403 || status === 401) {
+        return { items: [], nextCursor: null };
+      }
+      throw err;
+    }
     const sinceMs = opts?.modifiedSince?.getTime() ?? null;
     let stoppedEarly = false;
     const items: CrmCompany[] = [];
@@ -597,21 +613,27 @@ export const pipedriveConnector: CrmConnector = {
   },
 
   async listPipelines(ctx) {
-    const pipes = await pd<Array<Record<string, unknown>>>(ctx, "/pipelines");
-    const stages = await pd<Array<Record<string, unknown>>>(ctx, "/stages");
-    return (pipes.data || []).map(
-      (p): CrmPipeline => ({
-        id: String(p.id),
-        name: String(p.name || "Pipeline"),
-        stages: (stages.data || [])
-          .filter((s) => String(s.pipeline_id) === String(p.id))
-          .map((s) => ({
-            id: String(s.id),
-            name: String(s.name || "Stage"),
-            order: s.order_nr != null ? Number(s.order_nr) : undefined,
-          })),
-      }),
-    );
+    try {
+      const pipes = await pd<Array<Record<string, unknown>>>(ctx, "/pipelines");
+      const stages = await pd<Array<Record<string, unknown>>>(ctx, "/stages");
+      return (pipes.data || []).map(
+        (p): CrmPipeline => ({
+          id: String(p.id),
+          name: String(p.name || "Pipeline"),
+          stages: (stages.data || [])
+            .filter((s) => String(s.pipeline_id) === String(p.id))
+            .map((s) => ({
+              id: String(s.id),
+              name: String(s.name || "Stage"),
+              order: s.order_nr != null ? Number(s.order_nr) : undefined,
+            })),
+        }),
+      );
+    } catch (err) {
+      const status = err && typeof err === "object" && "status" in err ? Number(err.status) : 0;
+      if (status === 403 || status === 401) return [];
+      throw err;
+    }
   },
 
   async listFields(ctx) {
