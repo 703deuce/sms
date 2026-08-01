@@ -2089,24 +2089,32 @@ model SupportTicket {
 
 /// Maps a Transovo object to an external CRM record (provider-agnostic).
 model CrmObjectMapping {
-  id             String   @id @default(cuid())
-  workspaceId    String
-  provider       String
-  objectType     String // contact | company | lead | deal | task | activity | call | sms | note
-  internalId     String
-  externalId     String
-  externalUrl    String?
-  fingerprint    String? // phone/email hash for duplicate detection
-  lastSyncedAt   DateTime?
-  syncDirection  String   @default("bidirectional") // inbound | outbound | bidirectional
-  metadataJson   Json?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  workspace      Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  id                   String   @id @default(cuid())
+  workspaceId          String
+  provider             String
+  objectType           String // contact | company | lead | deal | task | activity | call | sms | note
+  internalId           String
+  externalId           String
+  externalUrl          String?
+  parentExternalId     String?
+  fingerprint          String? // phone/email hash for initial matching only
+  syncHash             String? // hash of last successfully synced payload
+  syncVersion          Int      @default(1)
+  syncStatus           String   @default("synced") // synced | pending | conflict | deleted_external | error
+  lastSyncedAt         DateTime?
+  lastCrmModifiedAt    DateTime?
+  lastInternalModifiedAt DateTime?
+  externalDeletedAt    DateTime?
+  syncDirection        String   @default("bidirectional") // inbound | outbound | bidirectional
+  metadataJson         Json?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  workspace            Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@unique([workspaceId, provider, objectType, internalId])
   @@unique([workspaceId, provider, objectType, externalId])
   @@index([workspaceId, provider, fingerprint])
+  @@index([workspaceId, provider, objectType, syncStatus])
   @@map("crm_object_mappings")
 }
 

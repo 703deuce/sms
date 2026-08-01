@@ -5,7 +5,15 @@
 
 import type { CrmProviderId } from "./types";
 
-export type FeatureSupport = "read_write" | "read_only" | "write_only" | "unsupported" | "link_only";
+export type FeatureSupport =
+  | "read_write"
+  | "read_only"
+  | "write_only"
+  | "unsupported"
+  | "link_only"
+  | "beta"
+  | "subscription_dependent"
+  | "fallback";
 
 export type ProviderFeature =
   | "contacts"
@@ -36,64 +44,79 @@ export type FeatureRow = {
 
 const MATRIX: Record<CrmProviderId, FeatureRow[]> = {
   salesforce: [
-    { feature: "contacts", label: "Contacts", support: "read_write" },
-    { feature: "companies", label: "Companies (Accounts)", support: "read_write" },
-    { feature: "leads", label: "Leads", support: "read_write" },
-    { feature: "deals", label: "Deals (Opportunities)", support: "read_write" },
-    { feature: "tasks", label: "Tasks", support: "read_write" },
-    { feature: "notes", label: "Notes", support: "read_write", notes: "Falls back to Task if ContentNote unavailable" },
-    { feature: "calls", label: "Call logging", support: "read_write", notes: "Logged as completed Task (Call subtype)" },
-    { feature: "sms", label: "SMS logging", support: "read_write", notes: "Logged as Task activity" },
-    { feature: "activities", label: "Activities", support: "read_write" },
+    { feature: "contacts", label: "Contacts", support: "beta", notes: "Create/update + email/phone match wired; sandbox proof pending" },
+    { feature: "companies", label: "Companies (Accounts)", support: "beta", notes: "Import + upsert wired; sandbox proof pending" },
+    { feature: "leads", label: "Leads", support: "beta", notes: "Import/upsert when enabled; sandbox proof pending" },
+    { feature: "deals", label: "Deals (Opportunities)", support: "beta", notes: "Import when syncOpportunities enabled; sandbox proof pending" },
+    { feature: "tasks", label: "Tasks", support: "beta", notes: "Create/update with idempotent mapping" },
+    { feature: "notes", label: "Notes", support: "fallback", notes: "ContentNote + ContentDocumentLink; Task fallback if unavailable" },
+    {
+      feature: "calls",
+      label: "Call logging",
+      support: "beta",
+      notes: "One Task (Call subtype) per Transovo call; recording/transcript/summary update same activity. Sandbox proof pending.",
+    },
+    {
+      feature: "sms",
+      label: "SMS logging",
+      support: "beta",
+      notes: "Task activity; MMS as media URL links. Sandbox proof pending.",
+    },
+    { feature: "activities", label: "Activities", support: "beta" },
     { feature: "recording_links", label: "Recording links", support: "link_only", notes: "URL in activity description; no binary upload" },
     { feature: "transcript_links", label: "Transcript links", support: "link_only" },
-    { feature: "custom_fields", label: "Custom fields", support: "read_write", notes: "Via field mappings" },
+    { feature: "custom_fields", label: "Custom fields", support: "beta", notes: "Field mappings applied to create/update payloads" },
     { feature: "pipelines", label: "Pipelines", support: "read_only", notes: "Virtual Opportunity pipeline" },
     { feature: "stages", label: "Stages", support: "read_only", notes: "OpportunityStage / StageName picklist" },
     { feature: "owners", label: "Owners", support: "read_only" },
-    { feature: "webhooks_inbound", label: "Inbound webhooks", support: "unsupported", notes: "Use outbound Transovo events + optional Salesforce Flow later" },
-    { feature: "incremental_sync", label: "Incremental sync", support: "read_write" },
-    { feature: "bidirectional_sync", label: "Bidirectional sync", support: "read_write", notes: "Direction controlled in preferences" },
+    { feature: "webhooks_inbound", label: "Inbound webhooks", support: "beta", notes: "Generic webhook ingest + delete handling; Salesforce Change Data Capture not subscribed yet" },
+    { feature: "incremental_sync", label: "Incremental sync", support: "beta", notes: "SOQL LastModifiedDate checkpoints" },
+    { feature: "bidirectional_sync", label: "Bidirectional sync", support: "beta", notes: "Direction/pause/read-write gates in preferences; sandbox proof pending" },
   ],
   zoho: [
-    { feature: "contacts", label: "Contacts", support: "read_write" },
-    { feature: "companies", label: "Companies (Accounts)", support: "read_write" },
-    { feature: "leads", label: "Leads", support: "read_write" },
-    { feature: "deals", label: "Deals", support: "read_write" },
-    { feature: "tasks", label: "Tasks", support: "read_write" },
-    { feature: "notes", label: "Notes", support: "read_write" },
-    { feature: "calls", label: "Call logging", support: "read_write", notes: "Calls module + Task fallback" },
-    { feature: "sms", label: "SMS logging", support: "read_write", notes: "Logged as Task" },
-    { feature: "activities", label: "Activities", support: "read_write" },
+    { feature: "contacts", label: "Contacts", support: "beta", notes: "Create/update + email/phone match; sandbox proof pending" },
+    { feature: "companies", label: "Companies (Accounts)", support: "beta" },
+    { feature: "leads", label: "Leads", support: "beta" },
+    { feature: "deals", label: "Deals", support: "beta" },
+    { feature: "tasks", label: "Tasks", support: "beta" },
+    { feature: "notes", label: "Notes", support: "beta" },
+    {
+      feature: "calls",
+      label: "Call logging",
+      support: "fallback",
+      notes: "Native Calls module when available; Task fallback on plan/module errors. UI should state which model is used after sandbox validate.",
+    },
+    { feature: "sms", label: "SMS logging", support: "fallback", notes: "Logged as Task with MMS URLs" },
+    { feature: "activities", label: "Activities", support: "beta" },
     { feature: "recording_links", label: "Recording links", support: "link_only" },
     { feature: "transcript_links", label: "Transcript links", support: "link_only" },
-    { feature: "custom_fields", label: "Custom fields", support: "read_write", notes: "Via field mappings + settings.fields.READ" },
+    { feature: "custom_fields", label: "Custom fields", support: "beta", notes: "Via field mappings + settings.fields.READ" },
     { feature: "pipelines", label: "Pipelines", support: "read_only", notes: "Deal Pipeline field when available" },
     { feature: "stages", label: "Stages", support: "read_only" },
     { feature: "owners", label: "Owners", support: "read_only" },
-    { feature: "webhooks_inbound", label: "Inbound webhooks", support: "unsupported", notes: "Queued table ready; Zoho notification channel not wired" },
-    { feature: "incremental_sync", label: "Incremental sync", support: "read_write" },
-    { feature: "bidirectional_sync", label: "Bidirectional sync", support: "read_write" },
+    { feature: "webhooks_inbound", label: "Inbound webhooks", support: "beta", notes: "Queue + delete handling; Zoho notification channel subscription pending" },
+    { feature: "incremental_sync", label: "Incremental sync", support: "beta", notes: "Modified_Time search criteria + checkpoints" },
+    { feature: "bidirectional_sync", label: "Bidirectional sync", support: "beta" },
   ],
   pipedrive: [
-    { feature: "contacts", label: "Contacts (Persons)", support: "read_write" },
-    { feature: "companies", label: "Companies (Organizations)", support: "read_write" },
-    { feature: "leads", label: "Leads", support: "unsupported", notes: "Use Persons + Deals; Leads inbox not synced" },
-    { feature: "deals", label: "Deals", support: "read_write" },
-    { feature: "tasks", label: "Tasks", support: "read_write", notes: "Activities type=task" },
-    { feature: "notes", label: "Notes", support: "read_write" },
-    { feature: "calls", label: "Call logging", support: "read_write", notes: "Activities type=call" },
-    { feature: "sms", label: "SMS logging", support: "read_write", notes: "Activities type=sms" },
-    { feature: "activities", label: "Activities", support: "read_write" },
+    { feature: "contacts", label: "Contacts (Persons)", support: "beta", notes: "Create/update + email/phone match; sandbox proof pending" },
+    { feature: "companies", label: "Companies (Organizations)", support: "beta" },
+    { feature: "leads", label: "Leads", support: "unsupported", notes: "Native Leads inbox not synced; use Persons + Deals" },
+    { feature: "deals", label: "Deals", support: "beta" },
+    { feature: "tasks", label: "Tasks", support: "beta", notes: "Activities type=task; retries update mapped activity" },
+    { feature: "notes", label: "Notes", support: "beta" },
+    { feature: "calls", label: "Call logging", support: "beta", notes: "One activity type=call per Transovo call lifecycle" },
+    { feature: "sms", label: "SMS logging", support: "beta", notes: "Activities type=sms; MMS as media URL links" },
+    { feature: "activities", label: "Activities", support: "beta" },
     { feature: "recording_links", label: "Recording links", support: "link_only" },
     { feature: "transcript_links", label: "Transcript links", support: "link_only" },
-    { feature: "custom_fields", label: "Custom fields", support: "read_write", notes: "Via field mappings" },
+    { feature: "custom_fields", label: "Custom fields", support: "beta", notes: "Via field mappings" },
     { feature: "pipelines", label: "Pipelines", support: "read_write" },
     { feature: "stages", label: "Stages", support: "read_only" },
     { feature: "owners", label: "Owners", support: "read_only" },
-    { feature: "webhooks_inbound", label: "Inbound webhooks", support: "unsupported", notes: "Queue table ready; Pipedrive webhooks not wired" },
-    { feature: "incremental_sync", label: "Incremental sync", support: "read_write" },
-    { feature: "bidirectional_sync", label: "Bidirectional sync", support: "read_write" },
+    { feature: "webhooks_inbound", label: "Inbound webhooks", support: "beta", notes: "Queue + delete handling; Pipedrive webhook registration pending" },
+    { feature: "incremental_sync", label: "Incremental sync", support: "beta", notes: "Sorted update_time pages + checkpoints" },
+    { feature: "bidirectional_sync", label: "Bidirectional sync", support: "beta" },
   ],
 };
 
@@ -107,6 +130,15 @@ export function isFeatureSupported(
 ): boolean {
   const row = MATRIX[provider].find((r) => r.feature === feature);
   return Boolean(row && row.support !== "unsupported");
+}
+
+/** Customer-facing advertising should only use sandbox-proven rows. */
+export function isSandboxProven(
+  provider: CrmProviderId,
+  feature: ProviderFeature,
+): boolean {
+  const support = featureSupport(provider, feature);
+  return support === "read_write" || support === "read_only" || support === "write_only" || support === "link_only";
 }
 
 export function featureSupport(

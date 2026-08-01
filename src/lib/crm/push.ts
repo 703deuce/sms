@@ -16,6 +16,13 @@ import { isFeatureSupported } from "./feature-matrix";
 import { applyFieldMappingsOutbound, listFieldMappings } from "./mappings";
 import { getConnector } from "./registry";
 import {
+  getMappedCallActivity,
+  getMappedSmsActivity,
+  persistMappedCallActivity,
+  persistMappedSmsActivity,
+} from "./call-lifecycle";
+import { payloadSyncHash } from "./idempotency";
+import {
   acquireCrmRateLimit,
   noteCrmRateLimitHit,
   noteCrmRateLimitSuccess,
@@ -36,6 +43,18 @@ export async function pushCrmEventJob(payload: {
 
   if (!providerAcceptsEvent(provider, event.type)) {
     return { ok: true, skipped: true, reason: "unsupported_event" };
+  }
+
+  // Gate writes early — paused / outbound-disabled connections must not hit CRM APIs.
+  {
+    const { getCrmSyncPreferences } = await import("./settings");
+    const prefsEarly = await getCrmSyncPreferences(workspaceId, provider);
+    if (prefsEarly.syncPaused) {
+      return { ok: true, skipped: true, reason: "sync_paused" };
+    }
+    if (prefsEarly.disableWrites || prefsEarly.direction === "inbound") {
+      return { ok: true, skipped: true, reason: "writes_disabled" };
+    }
   }
 
   const rate = acquireCrmRateLimit(workspaceId, provider);
@@ -99,71 +118,129 @@ export async function pushCrmEventJob(payload: {
       });
       if (contact?.phone) contactPhone = contact.phone;
 
-      if (contact && prefs.direction !== "inbound" && wantUpsert) {
-        const { resolveContactForOutbound } = await import("./conflict");
-        const resolved = await resolveContactForOutbound({
-          workspaceId,
-          provider,
-          ctx,
-          contactId: contact.id,
-          phone: contact.phone,
-          email: contact.email,
-          syncRunId: run.id,
-        });
-        if (resolved.action === "skip") {
-          await appendSyncEvent({
-            workspaceId,
-            syncRunId: run.id,
-            provider,
-            level: "warn",
-            action: "skip",
-            objectType: "contact",
-            internalId: contact.id,
-            message: resolved.reason,
-          });
-        } else if (resolved.action === "create_new") {
-          const fieldMaps = await listFieldMappings(workspaceId, provider);
-          const mapped = applyFieldMappingsOutbound(
-            {
-              firstName: contact.firstName,
-              lastName: contact.lastName,
-              phone: contact.phone,
-              email: contact.email,
-              company: contact.company,
-              source: "Transovo",
-            },
-            fieldMaps,
-          );
-          const created = await connector.upsertContact(ctx, {
-            firstName: (mapped.firstName as string) || contact.firstName,
-            lastName: (mapped.lastName as string) || contact.lastName,
-            phone: (mapped.phone as string) || contact.phone,
-            email: (mapped.email as string) || contact.email,
-            companyName: (mapped.company as string) || contact.company,
-            source: "Transovo",
-            ownerExternalId: prefs.defaultOwnerExternalId,
-            customFields: mapped,
-          });
-          contactExternalId = created.externalId;
-          await upsertObjectMapping({
-            workspaceId,
-            provider,
-            objectType: "contact",
-            internalId: contact.id,
-            externalId: contactExternalId,
-            fingerprint: fingerprintPhone(contact.phone),
-          });
-        } else {
-          contactExternalId = resolved.externalId;
-        }
-      } else if (event.contactId) {
-        const mapped = await getObjectMapping({
+      if (contact && prefs.direction !== "inbound") {
+        const existingMap = await getObjectMapping({
           workspaceId,
           provider,
           objectType: "contact",
-          internalId: event.contactId,
+          internalId: contact.id,
         });
-        contactExternalId = mapped?.externalId || null;
+
+        const fieldMaps = await listFieldMappings(workspaceId, provider);
+        const mappedFields = applyFieldMappingsOutbound(
+          {
+            firstName: contact.firstName,
+            lastName: contact.lastName,
+            phone: contact.phone,
+            email: contact.email,
+            company: contact.company,
+            source: "Transovo",
+          },
+          fieldMaps,
+        );
+        const hash = payloadSyncHash(mappedFields as Record<string, unknown>);
+
+        if (existingMap?.externalId && !existingMap.externalDeletedAt) {
+          // Enterprise path: always update the mapped CRM contact (never recreate).
+          if (wantUpsert || event.type.startsWith("contact.") || event.type.startsWith("call.") || event.type.startsWith("sms.")) {
+            if (existingMap.syncHash !== hash) {
+              await connector.upsertContact(ctx, {
+                id: existingMap.externalId,
+                firstName: (mappedFields.firstName as string) || contact.firstName,
+                lastName: (mappedFields.lastName as string) || contact.lastName,
+                phone: (mappedFields.phone as string) || contact.phone,
+                email: (mappedFields.email as string) || contact.email,
+                companyName: (mappedFields.company as string) || contact.company,
+                source: "Transovo",
+                ownerExternalId: prefs.defaultOwnerExternalId,
+                customFields: mappedFields,
+              });
+              await upsertObjectMapping({
+                workspaceId,
+                provider,
+                objectType: "contact",
+                internalId: contact.id,
+                externalId: existingMap.externalId,
+                fingerprint: fingerprintPhone(contact.phone),
+                syncHash: hash,
+                syncStatus: "synced",
+                lastInternalModifiedAt: new Date(),
+              });
+            }
+          }
+          contactExternalId = existingMap.externalId;
+        } else if (wantUpsert) {
+          const { resolveContactForOutbound } = await import("./conflict");
+          const resolved = await resolveContactForOutbound({
+            workspaceId,
+            provider,
+            ctx,
+            contactId: contact.id,
+            phone: contact.phone,
+            email: contact.email,
+            syncRunId: run.id,
+          });
+          if (resolved.action === "skip") {
+            await appendSyncEvent({
+              workspaceId,
+              syncRunId: run.id,
+              provider,
+              level: "warn",
+              action: "skip",
+              objectType: "contact",
+              internalId: contact.id,
+              message: resolved.reason,
+            });
+          } else if (resolved.action === "create_new") {
+            const created = await connector.upsertContact(ctx, {
+              firstName: (mappedFields.firstName as string) || contact.firstName,
+              lastName: (mappedFields.lastName as string) || contact.lastName,
+              phone: (mappedFields.phone as string) || contact.phone,
+              email: (mappedFields.email as string) || contact.email,
+              companyName: (mappedFields.company as string) || contact.company,
+              source: "Transovo",
+              ownerExternalId: prefs.defaultOwnerExternalId,
+              customFields: mappedFields,
+            });
+            contactExternalId = created.externalId;
+            await upsertObjectMapping({
+              workspaceId,
+              provider,
+              objectType: "contact",
+              internalId: contact.id,
+              externalId: contactExternalId,
+              fingerprint: fingerprintPhone(contact.phone),
+              syncHash: hash,
+              syncStatus: "synced",
+            });
+          } else {
+            // Matched existing CRM record — update it and persist mapping
+            contactExternalId = resolved.externalId;
+            await connector.upsertContact(ctx, {
+              id: resolved.externalId,
+              firstName: (mappedFields.firstName as string) || contact.firstName,
+              lastName: (mappedFields.lastName as string) || contact.lastName,
+              phone: (mappedFields.phone as string) || contact.phone,
+              email: (mappedFields.email as string) || contact.email,
+              companyName: (mappedFields.company as string) || contact.company,
+              source: "Transovo",
+              ownerExternalId: prefs.defaultOwnerExternalId,
+              customFields: mappedFields,
+            });
+            await upsertObjectMapping({
+              workspaceId,
+              provider,
+              objectType: "contact",
+              internalId: contact.id,
+              externalId: resolved.externalId,
+              fingerprint: fingerprintPhone(contact.phone),
+              syncHash: hash,
+              syncStatus: "synced",
+            });
+          }
+        } else {
+          contactExternalId = existingMap?.externalId || null;
+        }
       }
     }
 
@@ -172,6 +249,12 @@ export async function pushCrmEventJob(payload: {
       connector.logCall &&
       isFeatureSupported(provider, "calls")
     ) {
+      const callId = String(event.payload.callId || event.eventId || "");
+      const existingCall = await getMappedCallActivity({
+        workspaceId,
+        provider,
+        callId: callId || null,
+      });
       const direction =
         event.type === "call.missed"
           ? "missed"
@@ -179,6 +262,7 @@ export async function pushCrmEventJob(payload: {
             ? "outbound"
             : "inbound";
       const result = await connector.logCall(ctx, {
+        id: existingCall?.externalId || undefined,
         direction,
         from: (event.payload.from as string) || null,
         to: (event.payload.to as string) || null,
@@ -186,58 +270,83 @@ export async function pushCrmEventJob(payload: {
           event.payload.durationSeconds != null ? Number(event.payload.durationSeconds) : null,
         disposition: (event.payload.disposition as string) || null,
         notes: (event.payload.notes as string) || null,
-        recordingUrl: actions.includes("attach_recording")
+        recordingUrl: actions.includes("attach_recording") || prefs.syncRecordings
           ? ((event.payload.recordingUrl as string) || null)
-          : prefs.syncRecordings
-            ? ((event.payload.recordingUrl as string) || null)
-            : null,
-        transcriptText: actions.includes("attach_transcript")
+          : null,
+        transcriptText: actions.includes("attach_transcript") || prefs.syncTranscripts
           ? ((event.payload.transcriptText as string) || null)
-          : prefs.syncTranscripts
-            ? ((event.payload.transcriptText as string) || null)
-            : null,
-        transcriptUrl: actions.includes("attach_transcript")
+          : null,
+        transcriptUrl: actions.includes("attach_transcript") || prefs.syncTranscripts
           ? ((event.payload.transcriptUrl as string) || null)
-          : prefs.syncTranscripts
-            ? ((event.payload.transcriptUrl as string) || null)
-            : null,
-        aiSummary: actions.includes("attach_ai_summary")
+          : null,
+        aiSummary: actions.includes("attach_ai_summary") || prefs.syncAiSummary
           ? ((event.payload.aiSummary as string) || null)
-          : prefs.syncAiSummary
-            ? ((event.payload.aiSummary as string) || null)
-            : null,
+          : null,
         contactExternalId,
         startedAt: event.occurredAt || new Date().toISOString(),
       });
+      if (callId) {
+        await persistMappedCallActivity({
+          workspaceId,
+          provider,
+          callId,
+          externalId: result.externalId,
+          contactExternalId,
+        });
+      }
       await appendSyncEvent({
         workspaceId,
         syncRunId: run.id,
         provider,
-        action: "push",
+        action: result.created ? "create" : "update",
         objectType: "call",
         externalId: result.externalId,
-        message: `Logged ${event.type}`,
+        internalId: callId || null,
+        message: `${result.created ? "Created" : "Updated"} call activity for ${event.type}`,
       });
     }
 
     if (wantSms && connector.logSms && isFeatureSupported(provider, "sms")) {
+      const messageId = String(event.payload.messageId || event.eventId || "");
+      const existingSms = await getMappedSmsActivity({
+        workspaceId,
+        provider,
+        messageId: messageId || null,
+      });
+      const mediaUrls = Array.isArray(event.payload.mediaUrls)
+        ? (event.payload.mediaUrls as string[])
+        : event.payload.mediaUrl
+          ? [String(event.payload.mediaUrl)]
+          : undefined;
       const result = await connector.logSms(ctx, {
+        id: existingSms?.externalId || undefined,
         direction: event.type === "sms.received" ? "inbound" : "outbound",
         from: (event.payload.from as string) || null,
         to: (event.payload.to as string) || null,
         body: (event.payload.body as string) || null,
+        mediaUrls,
         status: (event.payload.status as string) || null,
         sentAt: event.occurredAt || new Date().toISOString(),
         contactExternalId,
       });
+      if (messageId) {
+        await persistMappedSmsActivity({
+          workspaceId,
+          provider,
+          messageId,
+          externalId: result.externalId,
+          contactExternalId,
+        });
+      }
       await appendSyncEvent({
         workspaceId,
         syncRunId: run.id,
         provider,
-        action: "push",
+        action: result.created ? "create" : "update",
         objectType: "sms",
         externalId: result.externalId,
-        message: `Logged ${event.type}`,
+        internalId: messageId || null,
+        message: `${result.created ? "Created" : "Updated"} SMS activity for ${event.type}`,
       });
     }
 
@@ -275,22 +384,55 @@ export async function pushCrmEventJob(payload: {
                   ? String(event.payload.subject || "Transovo task")
                   : null;
       if (taskSubject) {
+        const taskInternalId = String(
+          event.payload.taskId || event.eventId || `${event.type}:${contactPhone || "na"}`,
+        );
+        const existingTask = await getObjectMapping({
+          workspaceId,
+          provider,
+          objectType: "task",
+          internalId: taskInternalId,
+        });
         const due = new Date(Date.now() + 86400000).toISOString();
-        const result = await connector.createTask(ctx, {
-          subject: taskSubject,
-          description: `Created automatically by Transovo from ${event.type}`,
-          dueAt: due,
-          status: event.type === "task.completed" ? "Completed" : "Not Started",
-          contactExternalId,
-          ownerExternalId: prefs.defaultOwnerExternalId,
+        const status = event.type === "task.completed" ? "Completed" : "Not Started";
+        let result;
+        if (existingTask?.externalId && connector.updateTask) {
+          result = await connector.updateTask(ctx, {
+            id: existingTask.externalId,
+            subject: taskSubject,
+            description: `Updated automatically by Transovo from ${event.type}`,
+            dueAt: due,
+            status,
+            contactExternalId,
+            ownerExternalId: prefs.defaultOwnerExternalId,
+          });
+        } else {
+          result = await connector.createTask(ctx, {
+            subject: taskSubject,
+            description: `Created automatically by Transovo from ${event.type}`,
+            dueAt: due,
+            status,
+            contactExternalId,
+            ownerExternalId: prefs.defaultOwnerExternalId,
+          });
+        }
+        await upsertObjectMapping({
+          workspaceId,
+          provider,
+          objectType: "task",
+          internalId: taskInternalId,
+          externalId: result.externalId,
+          parentExternalId: contactExternalId,
+          syncStatus: "synced",
         });
         await appendSyncEvent({
           workspaceId,
           syncRunId: run.id,
           provider,
-          action: "create",
+          action: result.created ? "create" : "update",
           objectType: "task",
           externalId: result.externalId,
+          internalId: taskInternalId,
           message: taskSubject,
         });
       }

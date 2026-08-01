@@ -4,6 +4,7 @@
 
 import type { CrmConnector, ConnectorContext, UpsertResult } from "../connector";
 import { crmFetch } from "../http";
+import { buildMappedPayload } from "../payloads";
 import { scopesForProvider } from "../scopes";
 import type {
   CrmCallActivity,
@@ -71,12 +72,19 @@ export const zohoConnector: CrmConnector = {
     }
   },
 
-  async listContacts(ctx, cursor) {
+  async listContacts(ctx, cursor, opts) {
     const page = cursor ? Number(cursor) : 1;
+    let path = `${apiBase(ctx)}/Contacts?page=${page}&per_page=200`;
+    if (opts?.modifiedSince) {
+      const criteria = encodeURIComponent(
+        `(Modified_Time:greater_equal:${opts.modifiedSince.toISOString()})`,
+      );
+      path = `${apiBase(ctx)}/Contacts/search?criteria=${criteria}&page=${page}&per_page=200`;
+    }
     const data = await crmFetch<{
       data?: Array<Record<string, unknown>>;
       info?: { more_records?: boolean };
-    }>(`${apiBase(ctx)}/Contacts?page=${page}&per_page=200`, {
+    }>(path, {
       accessToken: ctx.accessToken,
     });
     return {
@@ -91,6 +99,13 @@ export const zohoConnector: CrmConnector = {
             typeof r.Account_Name === "object" && r.Account_Name
               ? String((r.Account_Name as { name?: string }).name || "")
               : null,
+          ownerExternalId:
+            typeof r.Owner === "object" && r.Owner
+              ? String((r.Owner as { id?: string }).id || "") || null
+              : null,
+          customFields: {
+            lastModifiedAt: r.Modified_Time ? String(r.Modified_Time) : null,
+          },
         }),
       ),
       nextCursor: data.info?.more_records ? String(page + 1) : null,
@@ -114,19 +129,43 @@ export const zohoConnector: CrmConnector = {
     };
   },
 
-  async upsertContact(ctx, contact) {
-    const body = {
-      data: [
-        {
-          id: contact.id || undefined,
-          First_Name: contact.firstName,
-          Last_Name: contact.lastName || "Unknown",
-          Phone: contact.phone,
-          Email: contact.email,
-          Lead_Source: contact.source || "Transovo",
-        },
-      ],
+  async findContactByEmail(ctx, email) {
+    const data = await crmFetch<{ data?: Array<Record<string, unknown>> }>(
+      `${apiBase(ctx)}/Contacts/search?email=${encodeURIComponent(email)}`,
+      { accessToken: ctx.accessToken },
+    ).catch(() => ({ data: [] as Array<Record<string, unknown>> }));
+    const r = data.data?.[0];
+    if (!r) return null;
+    return {
+      id: String(r.id),
+      firstName: (r.First_Name as string) || null,
+      lastName: (r.Last_Name as string) || null,
+      phone: (r.Phone as string) || (r.Mobile as string) || null,
+      email: (r.Email as string) || null,
     };
+  },
+
+  async upsertContact(ctx, contact) {
+    const fields = await buildMappedPayload({
+      workspaceId: ctx.workspaceId,
+      provider: "zoho",
+      objectType: "contact",
+      base: {
+        id: contact.id || undefined,
+        First_Name: contact.firstName,
+        Last_Name: contact.lastName || "Unknown",
+        Phone: contact.phone,
+        Email: contact.email,
+        Lead_Source: contact.source || "Transovo",
+        Owner: contact.ownerExternalId
+          ? { id: contact.ownerExternalId }
+          : ctx.preferences.defaultOwnerExternalId
+            ? { id: ctx.preferences.defaultOwnerExternalId }
+            : undefined,
+      },
+      customFields: contact.customFields,
+    });
+    const body = { data: [fields] };
     if (contact.id) {
       await crmFetch(`${apiBase(ctx)}/Contacts`, {
         method: "PUT",
@@ -148,10 +187,17 @@ export const zohoConnector: CrmConnector = {
     return { externalId: id, created: true };
   },
 
-  async listLeads(ctx, cursor) {
+  async listLeads(ctx, cursor, opts) {
     const page = cursor ? Number(cursor) : 1;
+    let path = `${apiBase(ctx)}/Leads?page=${page}&per_page=200`;
+    if (opts?.modifiedSince) {
+      const criteria = encodeURIComponent(
+        `(Modified_Time:greater_equal:${opts.modifiedSince.toISOString()})`,
+      );
+      path = `${apiBase(ctx)}/Leads/search?criteria=${criteria}&page=${page}&per_page=200`;
+    }
     const data = await crmFetch<{ data?: Array<Record<string, unknown>>; info?: { more_records?: boolean } }>(
-      `${apiBase(ctx)}/Leads?page=${page}&per_page=200`,
+      path,
       { accessToken: ctx.accessToken },
     );
     return {
@@ -201,10 +247,17 @@ export const zohoConnector: CrmConnector = {
     return { externalId: id, created: true };
   },
 
-  async listDeals(ctx, cursor) {
+  async listDeals(ctx, cursor, opts) {
     const page = cursor ? Number(cursor) : 1;
+    let path = `${apiBase(ctx)}/Deals?page=${page}&per_page=200`;
+    if (opts?.modifiedSince) {
+      const criteria = encodeURIComponent(
+        `(Modified_Time:greater_equal:${opts.modifiedSince.toISOString()})`,
+      );
+      path = `${apiBase(ctx)}/Deals/search?criteria=${criteria}&page=${page}&per_page=200`;
+    }
     const data = await crmFetch<{ data?: Array<Record<string, unknown>>; info?: { more_records?: boolean } }>(
-      `${apiBase(ctx)}/Deals?page=${page}&per_page=200`,
+      path,
       { accessToken: ctx.accessToken },
     );
     return {
@@ -301,36 +354,141 @@ export const zohoConnector: CrmConnector = {
     const description = [
       call.notes,
       call.disposition ? `Disposition: ${call.disposition}` : null,
+      call.durationSeconds != null ? `Duration: ${call.durationSeconds}s` : null,
       call.recordingUrl && ctx.preferences.syncRecordings ? `Recording: ${call.recordingUrl}` : null,
+      call.transcriptUrl && ctx.preferences.syncTranscripts
+        ? `Transcript: ${call.transcriptUrl}`
+        : null,
+      call.aiSummary && ctx.preferences.syncAiSummary ? `AI summary: ${call.aiSummary}` : null,
       call.transcriptText && ctx.preferences.syncTranscripts ? call.transcriptText : null,
     ]
       .filter(Boolean)
       .join("\n\n");
-    return zohoConnector.createTask!(ctx, {
-      subject: `${call.direction} call via Transovo`,
-      description,
-      status: "Completed",
-      contactExternalId: call.contactExternalId,
-      dueAt: call.startedAt,
+
+    const callType =
+      call.direction === "missed"
+        ? "Missed"
+        : call.direction === "outbound"
+          ? "Outbound"
+          : "Inbound";
+
+    const record: Record<string, unknown> = {
+      Subject: call.subject || `${callType} call via Transovo`,
+      Call_Type: callType,
+      Call_Start_Time: call.startedAt || new Date().toISOString(),
+      Call_Duration: call.durationSeconds != null ? String(call.durationSeconds) : undefined,
+      Description: description,
+      Who_Id: call.contactExternalId ? { id: call.contactExternalId } : undefined,
+      Owner: ctx.preferences.defaultOwnerExternalId
+        ? { id: ctx.preferences.defaultOwnerExternalId }
+        : undefined,
+    };
+    if (call.id) record.id = call.id;
+
+    try {
+      if (call.id) {
+        await crmFetch(`${apiBase(ctx)}/Calls`, {
+          method: "PUT",
+          accessToken: ctx.accessToken,
+          body: JSON.stringify({ data: [record] }),
+        });
+        return { externalId: call.id, created: false };
+      }
+      const created = await crmFetch<{ data?: Array<{ details?: { id?: string } }> }>(
+        `${apiBase(ctx)}/Calls`,
+        {
+          method: "POST",
+          accessToken: ctx.accessToken,
+          body: JSON.stringify({ data: [record] }),
+        },
+      );
+      const id = created.data?.[0]?.details?.id;
+      if (!id) throw new Error("Zoho Calls create failed");
+      return { externalId: id, created: true };
+    } catch {
+      // Fallback when Calls module unavailable on plan
+      if (call.id && zohoConnector.updateTask) {
+        return zohoConnector.updateTask(ctx, {
+          id: call.id,
+          subject: String(record.Subject),
+          description,
+          status: "Completed",
+          contactExternalId: call.contactExternalId,
+          dueAt: call.startedAt,
+        });
+      }
+      return zohoConnector.createTask!(ctx, {
+        subject: String(record.Subject),
+        description,
+        status: "Completed",
+        contactExternalId: call.contactExternalId,
+        dueAt: call.startedAt,
+      });
+    }
+  },
+
+  async updateTask(ctx, task) {
+    await crmFetch(`${apiBase(ctx)}/Tasks`, {
+      method: "PUT",
+      accessToken: ctx.accessToken,
+      body: JSON.stringify({
+        data: [
+          {
+            id: task.id,
+            Subject: task.subject,
+            Description: task.description,
+            Status: task.status,
+            Due_Date: task.dueAt,
+            What_Id: task.contactExternalId
+              ? { id: task.contactExternalId }
+              : undefined,
+          },
+        ],
+      }),
     });
+    return { externalId: task.id, created: false };
   },
 
   async logSms(ctx, sms) {
+    const description = [
+      sms.body || "",
+      sms.mediaUrls?.length ? `Media: ${sms.mediaUrls.join(", ")}` : null,
+      sms.status ? `Status: ${sms.status}` : null,
+    ]
+      .filter(Boolean)
+      .join("\n");
+    if (sms.id && zohoConnector.updateTask) {
+      return zohoConnector.updateTask(ctx, {
+        id: sms.id,
+        subject: `${sms.direction} SMS via Transovo`,
+        description,
+        status: "Completed",
+        contactExternalId: sms.contactExternalId,
+        dueAt: sms.sentAt,
+      });
+    }
     return zohoConnector.createTask!(ctx, {
       subject: `${sms.direction} SMS via Transovo`,
-      description: sms.body || "",
+      description,
       status: "Completed",
       contactExternalId: sms.contactExternalId,
       dueAt: sms.sentAt,
     });
   },
 
-  async listCompanies(ctx, cursor) {
+  async listCompanies(ctx, cursor, opts) {
     const page = cursor ? Number(cursor) : 1;
+    let path = `${apiBase(ctx)}/Accounts?page=${page}&per_page=200`;
+    if (opts?.modifiedSince) {
+      const criteria = encodeURIComponent(
+        `(Modified_Time:greater_equal:${opts.modifiedSince.toISOString()})`,
+      );
+      path = `${apiBase(ctx)}/Accounts/search?criteria=${criteria}&page=${page}&per_page=200`;
+    }
     const data = await crmFetch<{
       data?: Array<Record<string, unknown>>;
       info?: { more_records?: boolean };
-    }>(`${apiBase(ctx)}/Accounts?page=${page}&per_page=200`, {
+    }>(path, {
       accessToken: ctx.accessToken,
     });
     return {

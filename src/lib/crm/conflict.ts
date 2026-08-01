@@ -181,7 +181,12 @@ export async function markExternalDeleted(input: {
   provider: CrmProviderId;
   objectType: string;
   externalId: string;
+  /** Workspace deletion policy; defaults to mark_deleted. */
+  policy?: "mark_deleted" | "archive_local" | "disconnect_mapping" | "ignore";
 }) {
+  const policy = input.policy || "mark_deleted";
+  if (policy === "ignore") return;
+
   const row = await getObjectMapping({
     workspaceId: input.workspaceId,
     provider: input.provider,
@@ -189,21 +194,54 @@ export async function markExternalDeleted(input: {
     externalId: input.externalId,
   });
   if (!row) return;
-  await getPrisma().crmObjectMapping.update({
-    where: { id: row.id },
-    data: {
-      metadataJson: {
-        ...((row.metadataJson as object) || {}),
-        deletedAt: new Date().toISOString(),
+
+  if (policy === "disconnect_mapping") {
+    await getPrisma().crmObjectMapping.delete({ where: { id: row.id } });
+  } else {
+    await getPrisma().crmObjectMapping.update({
+      where: { id: row.id },
+      data: {
+        syncStatus: "deleted_external",
+        externalDeletedAt: new Date(),
+        metadataJson: {
+          ...((row.metadataJson as object) || {}),
+          deletedAt: new Date().toISOString(),
+          deletionPolicy: policy,
+        },
       },
-    },
-  });
+    });
+  }
+
+  // Never delete communication history. Archive policy stores a local flag only.
+  if (policy === "archive_local" && input.objectType === "contact") {
+    const contact = await getPrisma().contact.findFirst({
+      where: { id: row.internalId, workspaceId: input.workspaceId },
+    });
+    if (contact) {
+      const custom = (contact.customFields as Record<string, unknown> | null) || {};
+      await getPrisma()
+        .contact.update({
+          where: { id: contact.id },
+          data: {
+            customFields: {
+              ...custom,
+              crmArchived: true,
+              crmArchivedAt: new Date().toISOString(),
+              crmArchivedProvider: input.provider,
+            },
+          },
+        })
+        .catch(() => undefined);
+    }
+  }
+
   await writeCrmAudit({
     workspaceId: input.workspaceId,
     provider: input.provider,
     category: "conflict",
     action: "external_deleted",
-    message: `CRM ${input.objectType} ${input.externalId} marked deleted`,
+    message: `CRM ${input.objectType} ${input.externalId} handled (${policy})`,
+    detail: { internalId: row.internalId, policy },
   });
 }
 

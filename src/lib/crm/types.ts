@@ -146,6 +146,18 @@ export type CrmPipeline = {
   stages: Array<{ id: string; name: string; order?: number }>;
 };
 
+export type CrmDeletionPolicy =
+  | "mark_deleted"
+  | "archive_local"
+  | "disconnect_mapping"
+  | "ignore";
+
+export type CrmConflictPolicy =
+  | "transovo_wins"
+  | "crm_wins"
+  | "most_recent"
+  | "manual_review";
+
 export type CrmSyncPreferences = {
   autoCreateContacts: boolean;
   autoCreateLeads: boolean;
@@ -163,6 +175,14 @@ export type CrmSyncPreferences = {
   syncAiSummary: boolean;
   /** Generic activity logging preference (when supported). */
   syncActivities: boolean;
+  /** Pause all sync / push for this connection. */
+  syncPaused: boolean;
+  /** Disable CRM→Transovo reads while allowing outbound writes. */
+  disableReads: boolean;
+  /** Disable Transovo→CRM writes while allowing inbound reads. */
+  disableWrites: boolean;
+  deletionPolicy: CrmDeletionPolicy;
+  conflictPolicy: CrmConflictPolicy;
   defaultOwnerExternalId?: string | null;
   defaultPipelineId?: string | null;
   defaultStageId?: string | null;
@@ -189,6 +209,11 @@ export const DEFAULT_SYNC_PREFERENCES: CrmSyncPreferences = {
   syncVoicemail: true,
   syncAiSummary: true,
   syncActivities: true,
+  syncPaused: false,
+  disableReads: false,
+  disableWrites: false,
+  deletionPolicy: "mark_deleted",
+  conflictPolicy: "manual_review",
   defaultOwnerExternalId: null,
   defaultPipelineId: null,
   defaultStageId: null,

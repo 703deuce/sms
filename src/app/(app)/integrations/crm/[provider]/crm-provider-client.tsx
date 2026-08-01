@@ -159,6 +159,9 @@ export function CrmProviderClient({ provider }: { provider: string }) {
   const prefToggles = useMemo(
     () =>
       [
+        ["syncPaused", "Pause all synchronization"],
+        ["disableReads", "Disable CRM → Transovo reads"],
+        ["disableWrites", "Disable Transovo → CRM writes"],
         ["autoCreateContacts", "Contact creation"],
         ["autoCreateLeads", "Lead creation"],
         ["autoCreateCompanies", "Company creation"],
@@ -689,22 +692,60 @@ export function CrmProviderClient({ provider }: { provider: string }) {
           <p className="text-sm text-muted-foreground">
             Options unavailable for {name} are disabled automatically by the capability matrix.
           </p>
-          <div>
-            <Label>Sync direction</Label>
-            <select
-              className="mt-1 w-full max-w-sm rounded-lg border border-border bg-card px-3 py-2 text-sm"
-              value={prefs.direction}
-              onChange={(e) =>
-                setPrefs({
-                  ...prefs,
-                  direction: e.target.value as Prefs["direction"],
-                })
-              }
-            >
-              <option value="bidirectional">Bidirectional</option>
-              <option value="inbound">CRM → Transovo</option>
-              <option value="outbound">Transovo → CRM</option>
-            </select>
+          <div className="grid gap-3 md:grid-cols-3">
+            <div>
+              <Label>Sync direction</Label>
+              <select
+                className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm"
+                value={prefs.direction}
+                onChange={(e) =>
+                  setPrefs({
+                    ...prefs,
+                    direction: e.target.value as Prefs["direction"],
+                  })
+                }
+              >
+                <option value="bidirectional">Bidirectional</option>
+                <option value="inbound">CRM → Transovo</option>
+                <option value="outbound">Transovo → CRM</option>
+              </select>
+            </div>
+            <div>
+              <Label>Deletion policy</Label>
+              <select
+                className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm"
+                value={prefs.deletionPolicy || "mark_deleted"}
+                onChange={(e) =>
+                  setPrefs({
+                    ...prefs,
+                    deletionPolicy: e.target.value as NonNullable<Prefs["deletionPolicy"]>,
+                  })
+                }
+              >
+                <option value="mark_deleted">Mark mapping deleted</option>
+                <option value="archive_local">Archive local copy</option>
+                <option value="disconnect_mapping">Disconnect mapping</option>
+                <option value="ignore">Ignore CRM deletions</option>
+              </select>
+            </div>
+            <div>
+              <Label>Conflict policy</Label>
+              <select
+                className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm"
+                value={prefs.conflictPolicy || "manual_review"}
+                onChange={(e) =>
+                  setPrefs({
+                    ...prefs,
+                    conflictPolicy: e.target.value as NonNullable<Prefs["conflictPolicy"]>,
+                  })
+                }
+              >
+                <option value="manual_review">Manual review</option>
+                <option value="transovo_wins">Transovo wins</option>
+                <option value="crm_wins">CRM wins</option>
+                <option value="most_recent">Most recent wins</option>
+              </select>
+            </div>
           </div>
           <div className="grid gap-2 md:grid-cols-2">
             {prefToggles.map(([key, label]) => {

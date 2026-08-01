@@ -55,22 +55,40 @@ export interface CrmConnector {
 
   validateConnection(ctx: ConnectorContext): Promise<ConnectorHealth>;
 
-  listContacts(ctx: ConnectorContext, cursor?: string | null): Promise<ListPage<CrmContact>>;
+  listContacts(
+    ctx: ConnectorContext,
+    cursor?: string | null,
+    opts?: { modifiedSince?: Date | null },
+  ): Promise<ListPage<CrmContact>>;
   upsertContact(ctx: ConnectorContext, contact: CrmContact): Promise<UpsertResult>;
   findContactByPhone?(ctx: ConnectorContext, phone: string): Promise<CrmContact | null>;
   findContactByEmail?(ctx: ConnectorContext, email: string): Promise<CrmContact | null>;
 
-  listCompanies?(ctx: ConnectorContext, cursor?: string | null): Promise<ListPage<CrmCompany>>;
+  listCompanies?(
+    ctx: ConnectorContext,
+    cursor?: string | null,
+    opts?: { modifiedSince?: Date | null },
+  ): Promise<ListPage<CrmCompany>>;
   upsertCompany?(ctx: ConnectorContext, company: CrmCompany): Promise<UpsertResult>;
 
-  listLeads?(ctx: ConnectorContext, cursor?: string | null): Promise<ListPage<CrmLead>>;
+  listLeads?(
+    ctx: ConnectorContext,
+    cursor?: string | null,
+    opts?: { modifiedSince?: Date | null },
+  ): Promise<ListPage<CrmLead>>;
   upsertLead?(ctx: ConnectorContext, lead: CrmLead): Promise<UpsertResult>;
 
-  listDeals?(ctx: ConnectorContext, cursor?: string | null): Promise<ListPage<CrmDeal>>;
+  listDeals?(
+    ctx: ConnectorContext,
+    cursor?: string | null,
+    opts?: { modifiedSince?: Date | null },
+  ): Promise<ListPage<CrmDeal>>;
   upsertDeal?(ctx: ConnectorContext, deal: CrmDeal): Promise<UpsertResult>;
 
   createTask?(ctx: ConnectorContext, task: CrmTask): Promise<UpsertResult>;
+  updateTask?(ctx: ConnectorContext, task: CrmTask & { id: string }): Promise<UpsertResult>;
   createNote?(ctx: ConnectorContext, note: CrmNote): Promise<UpsertResult>;
+  /** Create or update call activity — when call.id is set, must update that record. */
   logCall?(ctx: ConnectorContext, call: CrmCallActivity): Promise<UpsertResult>;
   logSms?(ctx: ConnectorContext, sms: CrmSmsActivity): Promise<UpsertResult>;
 

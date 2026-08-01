@@ -199,22 +199,35 @@ export async function upsertExternalContact(input: {
   const prisma = getPrisma();
   const phone = input.phone ? normalizeE164(input.phone) : null;
 
-  // Try to match an existing contact by email when there's no phone.
+  // Match or create by email when there's no phone (CRM imports + email matching).
   if (!phone) {
     if (!input.email) return null;
     const byEmail = await prisma.contact.findFirst({
       where: { workspaceId: input.workspaceId, email: input.email },
     });
-    if (!byEmail) return null;
-    await prisma.contact.update({
-      where: { id: byEmail.id },
+    if (byEmail) {
+      await prisma.contact.update({
+        where: { id: byEmail.id },
+        data: {
+          firstName: byEmail.firstName ?? input.firstName ?? null,
+          lastName: byEmail.lastName ?? input.lastName ?? null,
+          company: byEmail.company ?? input.company ?? null,
+        },
+      });
+      return { contactId: byEmail.id, created: false };
+    }
+    const createdByEmail = await prisma.contact.create({
       data: {
-        firstName: byEmail.firstName ?? input.firstName ?? null,
-        lastName: byEmail.lastName ?? input.lastName ?? null,
-        company: byEmail.company ?? input.company ?? null,
+        workspaceId: input.workspaceId,
+        phone: `email:${input.email.toLowerCase()}`,
+        firstName: input.firstName ?? null,
+        lastName: input.lastName ?? null,
+        email: input.email,
+        company: input.company ?? null,
+        consentSource: input.source || "integration",
       },
     });
-    return { contactId: byEmail.id, created: false };
+    return { contactId: createdByEmail.id, created: true };
   }
 
   const existing = await prisma.contact.findUnique({

@@ -59,8 +59,14 @@ export async function upsertObjectMapping(input: {
   internalId: string;
   externalId: string;
   externalUrl?: string | null;
+  parentExternalId?: string | null;
   fingerprint?: string | null;
   syncDirection?: string;
+  syncHash?: string | null;
+  syncStatus?: string | null;
+  lastCrmModifiedAt?: Date | null;
+  lastInternalModifiedAt?: Date | null;
+  externalDeletedAt?: Date | null;
   metadata?: Record<string, unknown>;
 }) {
   return getPrisma().crmObjectMapping.upsert({
@@ -79,8 +85,14 @@ export async function upsertObjectMapping(input: {
       internalId: input.internalId,
       externalId: input.externalId,
       externalUrl: input.externalUrl || null,
+      parentExternalId: input.parentExternalId || null,
       fingerprint: input.fingerprint || null,
+      syncHash: input.syncHash || null,
+      syncStatus: input.syncStatus || "synced",
       syncDirection: input.syncDirection || "bidirectional",
+      lastCrmModifiedAt: input.lastCrmModifiedAt || null,
+      lastInternalModifiedAt: input.lastInternalModifiedAt || null,
+      externalDeletedAt: input.externalDeletedAt || null,
       metadataJson: (input.metadata || undefined) as object | undefined,
       lastSyncedAt: new Date(),
     },
@@ -89,6 +101,21 @@ export async function upsertObjectMapping(input: {
       externalUrl: input.externalUrl || null,
       fingerprint: input.fingerprint || null,
       lastSyncedAt: new Date(),
+      syncVersion: { increment: 1 },
+      ...(input.parentExternalId !== undefined
+        ? { parentExternalId: input.parentExternalId }
+        : {}),
+      ...(input.syncHash !== undefined ? { syncHash: input.syncHash } : {}),
+      ...(input.syncStatus !== undefined ? { syncStatus: input.syncStatus } : {}),
+      ...(input.lastCrmModifiedAt !== undefined
+        ? { lastCrmModifiedAt: input.lastCrmModifiedAt }
+        : {}),
+      ...(input.lastInternalModifiedAt !== undefined
+        ? { lastInternalModifiedAt: input.lastInternalModifiedAt }
+        : {}),
+      ...(input.externalDeletedAt !== undefined
+        ? { externalDeletedAt: input.externalDeletedAt }
+        : {}),
       ...(input.metadata ? { metadataJson: input.metadata as object } : {}),
     },
   });

@@ -122,13 +122,19 @@ export function clampPreferencesToCapabilities(
 export function supportLabel(support: FeatureSupport): string {
   switch (support) {
     case "read_write":
-      return "Supported";
+      return "Supported and sandbox-proven";
     case "read_only":
       return "Read only";
     case "write_only":
       return "Write only";
     case "link_only":
       return "Link only";
+    case "beta":
+      return "Beta (wired, sandbox proof pending)";
+    case "subscription_dependent":
+      return "Supported but subscription-dependent";
+    case "fallback":
+      return "Supported with fallback";
     default:
       return "Not supported";
   }

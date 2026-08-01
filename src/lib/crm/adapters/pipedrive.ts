@@ -4,6 +4,7 @@
 
 import type { CrmConnector, ConnectorContext, UpsertResult } from "../connector";
 import { crmFetch } from "../http";
+import { buildMappedPayload } from "../payloads";
 import { scopesForProvider } from "../scopes";
 import type {
   CrmCallActivity,
@@ -79,16 +80,24 @@ export const pipedriveConnector: CrmConnector = {
     }
   },
 
-  async listContacts(ctx, cursor) {
+  async listContacts(ctx, cursor, opts) {
     const start = cursor ? Number(cursor) : 0;
     const res = await pd<Array<Record<string, unknown>>>(
       ctx,
-      `/persons?start=${start}&limit=100`,
+      `/persons?start=${start}&limit=100&sort=update_time DESC`,
     );
-    const items: CrmContact[] = (res.data || []).map((r) => {
+    const sinceMs = opts?.modifiedSince?.getTime() ?? null;
+    let stoppedEarly = false;
+    const items: CrmContact[] = [];
+    for (const r of res.data || []) {
+      const updated = r.update_time ? new Date(String(r.update_time)).getTime() : 0;
+      if (sinceMs != null && updated && updated < sinceMs) {
+        stoppedEarly = true;
+        break;
+      }
       const phones = (r.phone as Array<{ value?: string }>) || [];
       const emails = (r.email as Array<{ value?: string }>) || [];
-      return {
+      items.push({
         id: String(r.id),
         firstName: (r.first_name as string) || null,
         lastName: (r.last_name as string) || (r.name as string) || null,
@@ -96,9 +105,12 @@ export const pipedriveConnector: CrmConnector = {
         email: emails[0]?.value || null,
         companyName: (r.org_name as string) || null,
         ownerExternalId: r.owner_id != null ? String(r.owner_id) : null,
-      };
-    });
-    const next = res.additional_data?.pagination?.next_start;
+        customFields: {
+          lastModifiedAt: r.update_time ? String(r.update_time) : null,
+        },
+      });
+    }
+    const next = stoppedEarly ? null : res.additional_data?.pagination?.next_start;
     return { items, nextCursor: next != null ? String(next) : null };
   },
 
@@ -118,19 +130,41 @@ export const pipedriveConnector: CrmConnector = {
     };
   },
 
-  async upsertContact(ctx, contact) {
-    const body = {
-      name: [contact.firstName, contact.lastName].filter(Boolean).join(" ") || "Unknown",
-      first_name: contact.firstName || undefined,
-      last_name: contact.lastName || undefined,
-      phone: contact.phone ? [{ value: contact.phone, primary: true }] : undefined,
-      email: contact.email ? [{ value: contact.email, primary: true }] : undefined,
-      owner_id: contact.ownerExternalId
-        ? Number(contact.ownerExternalId)
-        : ctx.preferences.defaultOwnerExternalId
-          ? Number(ctx.preferences.defaultOwnerExternalId)
-          : undefined,
+  async findContactByEmail(ctx, email) {
+    const res = await pd<Array<Record<string, unknown>>>(
+      ctx,
+      `/persons/search?term=${encodeURIComponent(email)}&fields=email&limit=1`,
+    ).catch(() => ({ data: [] as Array<Record<string, unknown>> }));
+    const hit = (res.data as unknown as Array<{ item?: Record<string, unknown> }>)?.[0];
+    const r = hit?.item || (res.data as Array<Record<string, unknown>>)?.[0];
+    if (!r) return null;
+    return {
+      id: String(r.id),
+      firstName: (r.first_name as string) || null,
+      lastName: (r.last_name as string) || (r.name as string) || null,
+      email,
     };
+  },
+
+  async upsertContact(ctx, contact) {
+    const body = await buildMappedPayload({
+      workspaceId: ctx.workspaceId,
+      provider: "pipedrive",
+      objectType: "contact",
+      base: {
+        name: [contact.firstName, contact.lastName].filter(Boolean).join(" ") || "Unknown",
+        first_name: contact.firstName || undefined,
+        last_name: contact.lastName || undefined,
+        phone: contact.phone ? [{ value: contact.phone, primary: true }] : undefined,
+        email: contact.email ? [{ value: contact.email, primary: true }] : undefined,
+        owner_id: contact.ownerExternalId
+          ? Number(contact.ownerExternalId)
+          : ctx.preferences.defaultOwnerExternalId
+            ? Number(ctx.preferences.defaultOwnerExternalId)
+            : undefined,
+      },
+      customFields: contact.customFields,
+    });
     if (contact.id) {
       await pd(ctx, `/persons/${contact.id}`, {
         method: "PUT",
@@ -145,25 +179,33 @@ export const pipedriveConnector: CrmConnector = {
     return { externalId: String(created.data.id), created: true };
   },
 
-  async listCompanies(ctx, cursor) {
+  async listCompanies(ctx, cursor, opts) {
     const start = cursor ? Number(cursor) : 0;
     const res = await pd<Array<Record<string, unknown>>>(
       ctx,
-      `/organizations?start=${start}&limit=100`,
+      `/organizations?start=${start}&limit=100&sort=update_time DESC`,
     );
+    const sinceMs = opts?.modifiedSince?.getTime() ?? null;
+    let stoppedEarly = false;
+    const items: CrmCompany[] = [];
+    for (const r of res.data || []) {
+      const updated = r.update_time ? new Date(String(r.update_time)).getTime() : 0;
+      if (sinceMs != null && updated && updated < sinceMs) {
+        stoppedEarly = true;
+        break;
+      }
+      items.push({
+        id: String(r.id),
+        name: String(r.name || "Organization"),
+        phone: null,
+        website: null,
+        ownerExternalId: r.owner_id != null ? String(r.owner_id) : null,
+      });
+    }
+    const next = stoppedEarly ? null : res.additional_data?.pagination?.next_start;
     return {
-      items: (res.data || []).map(
-        (r): CrmCompany => ({
-          id: String(r.id),
-          name: String(r.name || "Organization"),
-          phone: null,
-          website: null,
-        }),
-      ),
-      nextCursor:
-        res.additional_data?.pagination?.next_start != null
-          ? String(res.additional_data.pagination.next_start)
-          : null,
+      items,
+      nextCursor: next != null ? String(next) : null,
     };
   },
 
@@ -182,27 +224,38 @@ export const pipedriveConnector: CrmConnector = {
     return { externalId: String(created.data.id), created: true };
   },
 
-  async listDeals(ctx, cursor) {
+  async listDeals(ctx, cursor, opts) {
     const start = cursor ? Number(cursor) : 0;
-    const res = await pd<Array<Record<string, unknown>>>(ctx, `/deals?start=${start}&limit=100`);
+    const res = await pd<Array<Record<string, unknown>>>(
+      ctx,
+      `/deals?start=${start}&limit=100&sort=update_time DESC`,
+    );
+    const sinceMs = opts?.modifiedSince?.getTime() ?? null;
+    let stoppedEarly = false;
+    const items: CrmDeal[] = [];
+    for (const r of res.data || []) {
+      const updated = r.update_time ? new Date(String(r.update_time)).getTime() : 0;
+      if (sinceMs != null && updated && updated < sinceMs) {
+        stoppedEarly = true;
+        break;
+      }
+      items.push({
+        id: String(r.id),
+        name: String(r.title || "Deal"),
+        amount: r.value != null ? Number(r.value) : null,
+        currency: (r.currency as string) || null,
+        stage: r.stage_id != null ? String(r.stage_id) : null,
+        pipeline: r.pipeline_id != null ? String(r.pipeline_id) : null,
+        contactExternalId: r.person_id != null ? String(r.person_id) : null,
+        companyExternalId: r.org_id != null ? String(r.org_id) : null,
+        status: (r.status as string) || null,
+        ownerExternalId: r.user_id != null ? String(r.user_id) : null,
+      });
+    }
+    const next = stoppedEarly ? null : res.additional_data?.pagination?.next_start;
     return {
-      items: (res.data || []).map(
-        (r): CrmDeal => ({
-          id: String(r.id),
-          name: String(r.title || "Deal"),
-          amount: r.value != null ? Number(r.value) : null,
-          currency: (r.currency as string) || null,
-          stage: r.stage_id != null ? String(r.stage_id) : null,
-          pipeline: r.pipeline_id != null ? String(r.pipeline_id) : null,
-          contactExternalId: r.person_id != null ? String(r.person_id) : null,
-          companyExternalId: r.org_id != null ? String(r.org_id) : null,
-          status: (r.status as string) || null,
-        }),
-      ),
-      nextCursor:
-        res.additional_data?.pagination?.next_start != null
-          ? String(res.additional_data.pagination.next_start)
-          : null,
+      items,
+      nextCursor: next != null ? String(next) : null,
     };
   },
 
@@ -261,38 +314,76 @@ export const pipedriveConnector: CrmConnector = {
     const note = [
       call.notes,
       call.disposition ? `Disposition: ${call.disposition}` : null,
+      call.durationSeconds != null ? `Duration: ${call.durationSeconds}s` : null,
       call.recordingUrl && ctx.preferences.syncRecordings ? `Recording: ${call.recordingUrl}` : null,
       call.transcriptUrl && ctx.preferences.syncTranscripts
         ? `Transcript: ${call.transcriptUrl}`
         : null,
-      call.aiSummary || null,
+      call.aiSummary && ctx.preferences.syncAiSummary ? `AI summary: ${call.aiSummary}` : null,
+      call.transcriptText && ctx.preferences.syncTranscripts ? call.transcriptText : null,
     ]
       .filter(Boolean)
       .join("\n\n");
+    const body = {
+      subject: call.subject || `${call.direction} call via Transovo`,
+      type: "call",
+      note,
+      duration: call.durationSeconds ? Math.round(call.durationSeconds / 60) : undefined,
+      person_id: call.contactExternalId ? Number(call.contactExternalId) : undefined,
+      done: 1,
+    };
+    if (call.id) {
+      await pd(ctx, `/activities/${call.id}`, {
+        method: "PUT",
+        body: JSON.stringify(body),
+      });
+      return { externalId: call.id, created: false };
+    }
     const created = await pd<{ id: number }>(ctx, "/activities", {
       method: "POST",
-      body: JSON.stringify({
-        subject: call.subject || `${call.direction} call via Transovo`,
-        type: "call",
-        note,
-        duration: call.durationSeconds ? Math.round(call.durationSeconds / 60) : undefined,
-        person_id: call.contactExternalId ? Number(call.contactExternalId) : undefined,
-        done: 1,
-      }),
+      body: JSON.stringify(body),
     });
     return { externalId: String(created.data.id), created: true };
   },
 
+  async updateTask(ctx, task) {
+    await pd(ctx, `/activities/${task.id}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        subject: task.subject,
+        note: task.description,
+        done: task.status === "Completed" ? 1 : 0,
+        person_id: task.contactExternalId ? Number(task.contactExternalId) : undefined,
+      }),
+    });
+    return { externalId: task.id, created: false };
+  },
+
   async logSms(ctx, sms) {
+    const note = [
+      sms.body,
+      sms.mediaUrls?.length ? `Media: ${sms.mediaUrls.join(", ")}` : null,
+      sms.status ? `Status: ${sms.status}` : null,
+    ]
+      .filter(Boolean)
+      .join("\n");
+    const body = {
+      subject: `${sms.direction} SMS via Transovo`,
+      type: "sms",
+      note,
+      person_id: sms.contactExternalId ? Number(sms.contactExternalId) : undefined,
+      done: 1,
+    };
+    if (sms.id) {
+      await pd(ctx, `/activities/${sms.id}`, {
+        method: "PUT",
+        body: JSON.stringify(body),
+      });
+      return { externalId: sms.id, created: false };
+    }
     const created = await pd<{ id: number }>(ctx, "/activities", {
       method: "POST",
-      body: JSON.stringify({
-        subject: `${sms.direction} SMS via Transovo`,
-        type: "sms",
-        note: sms.body,
-        person_id: sms.contactExternalId ? Number(sms.contactExternalId) : undefined,
-        done: 1,
-      }),
+      body: JSON.stringify(body),
     });
     return { externalId: String(created.data.id), created: true };
   },

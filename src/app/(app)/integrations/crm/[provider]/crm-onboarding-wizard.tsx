@@ -18,6 +18,11 @@ export type WizardPrefs = {
   syncVoicemail: boolean;
   syncAiSummary: boolean;
   syncActivities: boolean;
+  syncPaused?: boolean;
+  disableReads?: boolean;
+  disableWrites?: boolean;
+  deletionPolicy?: "mark_deleted" | "archive_local" | "disconnect_mapping" | "ignore";
+  conflictPolicy?: "transovo_wins" | "crm_wins" | "most_recent" | "manual_review";
   direction: "inbound" | "outbound" | "bidirectional";
   matchByPhone: boolean;
   matchByEmail: boolean;

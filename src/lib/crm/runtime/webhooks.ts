@@ -187,7 +187,38 @@ export async function processCrmWebhookJob(payload: {
     const { getConnector } = await import("../registry");
     const { ensureFreshCrmToken } = await import("../oauth");
     const { getCrmSyncPreferences } = await import("../settings");
+    const { markExternalDeleted } = await import("../conflict");
+    const prefs = await getCrmSyncPreferences(payload.workspaceId, payload.provider);
     const connector = getConnector(payload.provider);
+
+    // Deletion / archive events — apply policy without waiting for full sync.
+    const eventType = (row.eventType || "").toLowerCase();
+    const body = (row.payloadJson || {}) as Record<string, unknown>;
+    const deletedExternalId =
+      row.externalId ||
+      (typeof body.id === "string" ? body.id : null) ||
+      (typeof body.Id === "string" ? body.Id : null);
+    if (
+      deletedExternalId &&
+      /delete|deleted|archive|trashed|removed/.test(eventType)
+    ) {
+      const objectType =
+        /lead/.test(eventType)
+          ? "lead"
+          : /deal|opportunit/.test(eventType)
+            ? "deal"
+            : /compan|account|organiz/.test(eventType)
+              ? "company"
+              : "contact";
+      await markExternalDeleted({
+        workspaceId: payload.workspaceId,
+        provider: payload.provider,
+        objectType,
+        externalId: deletedExternalId,
+        policy: prefs.deletionPolicy,
+      });
+    }
+
     if (connector.handleWebhook) {
       const conn = await ensureFreshCrmToken(payload.workspaceId, payload.provider);
       if (conn?.accessToken) {
@@ -197,7 +228,7 @@ export async function processCrmWebhookJob(payload: {
             accessToken: conn.accessToken,
             refreshToken: conn.refreshToken,
             meta: (conn.configJson || {}) as Record<string, unknown>,
-            preferences: await getCrmSyncPreferences(payload.workspaceId, payload.provider),
+            preferences: prefs,
           },
           {},
           row.payloadJson,

@@ -4,6 +4,7 @@
 
 import type { CrmConnector, ConnectorContext, ListPage, UpsertResult } from "../connector";
 import { crmFetch } from "../http";
+import { buildMappedPayload } from "../payloads";
 import { scopesForProvider } from "../scopes";
 import type {
   CrmCallActivity,
@@ -18,6 +19,10 @@ import type {
   CrmUser,
   OAuthProviderConfig,
 } from "../types";
+
+function soqlDate(d: Date) {
+  return d.toISOString().replace(/\.\d{3}Z$/, "Z");
+}
 
 function instanceUrl(ctx: ConnectorContext) {
   const url = String(ctx.meta.instanceUrl || "").replace(/\/$/, "");
@@ -77,9 +82,11 @@ export const salesforceConnector: CrmConnector = {
     }
   },
 
-  async listContacts(ctx, cursor) {
-    const soql =
-      "SELECT Id, FirstName, LastName, Phone, MobilePhone, Email, Account.Name, OwnerId FROM Contact ORDER BY LastModifiedDate DESC LIMIT 200";
+  async listContacts(ctx, cursor, opts) {
+    const since = opts?.modifiedSince
+      ? ` WHERE LastModifiedDate > ${soqlDate(opts.modifiedSince)}`
+      : "";
+    const soql = `SELECT Id, FirstName, LastName, Phone, MobilePhone, Email, Account.Name, OwnerId, LastModifiedDate FROM Contact${since} ORDER BY LastModifiedDate DESC LIMIT 200`;
     const url = cursor || `${api(ctx, "/query")}?q=${encodeURIComponent(soql)}`;
     const data = await crmFetch<{
       records?: Array<Record<string, unknown>>;
@@ -95,6 +102,9 @@ export const salesforceConnector: CrmConnector = {
       email: (r.Email as string) || null,
       companyName: (r.Account as { Name?: string } | null)?.Name || null,
       ownerExternalId: (r.OwnerId as string) || null,
+      customFields: {
+        lastModifiedAt: r.LastModifiedDate ? String(r.LastModifiedDate) : null,
+      },
     }));
     return {
       items,
@@ -124,30 +134,51 @@ export const salesforceConnector: CrmConnector = {
     };
   },
 
+  async findContactByEmail(ctx, email) {
+    const safe = email.replace(/'/g, "\\'");
+    const soql = `SELECT Id, FirstName, LastName, Phone, MobilePhone, Email FROM Contact WHERE Email = '${safe}' LIMIT 1`;
+    const data = await crmFetch<{ records?: Array<Record<string, unknown>> }>(
+      `${api(ctx, "/query")}?q=${encodeURIComponent(soql)}`,
+      { accessToken: ctx.accessToken },
+    );
+    const r = data.records?.[0];
+    if (!r) return null;
+    return {
+      id: String(r.Id),
+      firstName: (r.FirstName as string) || null,
+      lastName: (r.LastName as string) || null,
+      phone: (r.Phone as string) || (r.MobilePhone as string) || null,
+      email: (r.Email as string) || null,
+    };
+  },
+
   async upsertContact(ctx, contact) {
+    const body = await buildMappedPayload({
+      workspaceId: ctx.workspaceId,
+      provider: "salesforce",
+      objectType: "contact",
+      base: {
+        FirstName: contact.firstName,
+        LastName: contact.lastName || "Unknown",
+        Phone: contact.phone,
+        Email: contact.email,
+        LeadSource: contact.source || "Transovo",
+        OwnerId: contact.ownerExternalId || ctx.preferences.defaultOwnerExternalId || undefined,
+      },
+      customFields: contact.customFields,
+    });
     if (contact.id) {
       await crmFetch(api(ctx, `/sobjects/Contact/${contact.id}`), {
         method: "PATCH",
         accessToken: ctx.accessToken,
-        body: JSON.stringify({
-          FirstName: contact.firstName,
-          LastName: contact.lastName || "Unknown",
-          Phone: contact.phone,
-          Email: contact.email,
-        }),
+        body: JSON.stringify(body),
       });
       return { externalId: contact.id, created: false, externalUrl: `${instanceUrl(ctx)}/${contact.id}` };
     }
     const created = await crmFetch<{ id: string }>(api(ctx, "/sobjects/Contact"), {
       method: "POST",
       accessToken: ctx.accessToken,
-      body: JSON.stringify({
-        FirstName: contact.firstName,
-        LastName: contact.lastName || "Unknown",
-        Phone: contact.phone,
-        Email: contact.email,
-        LeadSource: contact.source || "Transovo",
-      }),
+      body: JSON.stringify(body),
     });
     return {
       externalId: created.id,
@@ -156,9 +187,11 @@ export const salesforceConnector: CrmConnector = {
     };
   },
 
-  async listLeads(ctx, cursor) {
-    const soql =
-      "SELECT Id, FirstName, LastName, Phone, Email, Company, Status, LeadSource, OwnerId FROM Lead ORDER BY LastModifiedDate DESC LIMIT 200";
+  async listLeads(ctx, cursor, opts) {
+    const since = opts?.modifiedSince
+      ? ` WHERE LastModifiedDate > ${soqlDate(opts.modifiedSince)}`
+      : "";
+    const soql = `SELECT Id, FirstName, LastName, Phone, Email, Company, Status, LeadSource, OwnerId FROM Lead${since} ORDER BY LastModifiedDate DESC LIMIT 200`;
     const url = cursor || `${api(ctx, "/query")}?q=${encodeURIComponent(soql)}`;
     const data = await crmFetch<{ records?: Array<Record<string, unknown>>; nextRecordsUrl?: string }>(
       url.startsWith("http") ? url : `${instanceUrl(ctx)}${url}`,
@@ -216,9 +249,11 @@ export const salesforceConnector: CrmConnector = {
     return { externalId: created.id, created: true };
   },
 
-  async listDeals(ctx, cursor) {
-    const soql =
-      "SELECT Id, Name, Amount, StageName, AccountId, OwnerId, IsClosed FROM Opportunity ORDER BY LastModifiedDate DESC LIMIT 200";
+  async listDeals(ctx, cursor, opts) {
+    const since = opts?.modifiedSince
+      ? ` WHERE LastModifiedDate > ${soqlDate(opts.modifiedSince)}`
+      : "";
+    const soql = `SELECT Id, Name, Amount, StageName, AccountId, OwnerId, IsClosed, LastModifiedDate FROM Opportunity${since} ORDER BY LastModifiedDate DESC LIMIT 200`;
     const url = cursor || `${api(ctx, "/query")}?q=${encodeURIComponent(soql)}`;
     const data = await crmFetch<{ records?: Array<Record<string, unknown>>; nextRecordsUrl?: string }>(
       url.startsWith("http") ? url : `${instanceUrl(ctx)}${url}`,
@@ -284,16 +319,52 @@ export const salesforceConnector: CrmConnector = {
   },
 
   async createNote(ctx, note) {
-    const created = await crmFetch<{ id: string }>(api(ctx, "/sobjects/ContentNote"), {
-      method: "POST",
-      accessToken: ctx.accessToken,
-      body: JSON.stringify({
-        Title: "Transovo note",
-        Content: Buffer.from(note.body).toString("base64"),
-      }),
-    }).catch(async () => {
-      // Fallback: Task as note when ContentNote unavailable.
-      return crmFetch<{ id: string }>(api(ctx, "/sobjects/Task"), {
+    try {
+      const created = await crmFetch<{ id: string }>(api(ctx, "/sobjects/ContentNote"), {
+        method: "POST",
+        accessToken: ctx.accessToken,
+        body: JSON.stringify({
+          Title: "Transovo note",
+          Content: Buffer.from(note.body, "utf8").toString("base64"),
+        }),
+      });
+      if (note.contactExternalId) {
+        // ContentNote Id is also the ContentDocument Id for linking in modern orgs;
+        // if link fails, resolve LatestPublishedVersion → ContentDocumentId.
+        let documentId = created.id;
+        const linked = await crmFetch(api(ctx, "/sobjects/ContentDocumentLink"), {
+          method: "POST",
+          accessToken: ctx.accessToken,
+          body: JSON.stringify({
+            ContentDocumentId: documentId,
+            LinkedEntityId: note.contactExternalId,
+            ShareType: "V",
+          }),
+        }).catch(() => null);
+        if (!linked) {
+          const resolved = await crmFetch<{
+            records?: Array<{ ContentDocumentId?: string }>;
+          }>(
+            `${api(ctx, "/query")}?q=${encodeURIComponent(
+              `SELECT ContentDocumentId FROM ContentVersion WHERE Id = '${created.id}' OR ContentDocumentId = '${created.id}' LIMIT 1`,
+            )}`,
+            { accessToken: ctx.accessToken },
+          ).catch(() => ({ records: [] as Array<{ ContentDocumentId?: string }> }));
+          documentId = resolved.records?.[0]?.ContentDocumentId || created.id;
+          await crmFetch(api(ctx, "/sobjects/ContentDocumentLink"), {
+            method: "POST",
+            accessToken: ctx.accessToken,
+            body: JSON.stringify({
+              ContentDocumentId: documentId,
+              LinkedEntityId: note.contactExternalId,
+              ShareType: "V",
+            }),
+          }).catch(() => undefined);
+        }
+      }
+      return { externalId: created.id, created: true };
+    } catch {
+      const created = await crmFetch<{ id: string }>(api(ctx, "/sobjects/Task"), {
         method: "POST",
         accessToken: ctx.accessToken,
         body: JSON.stringify({
@@ -303,8 +374,24 @@ export const salesforceConnector: CrmConnector = {
           WhoId: note.contactExternalId || undefined,
         }),
       });
+      return { externalId: created.id, created: true };
+    }
+  },
+
+  async updateTask(ctx, task) {
+    await crmFetch(api(ctx, `/sobjects/Task/${task.id}`), {
+      method: "PATCH",
+      accessToken: ctx.accessToken,
+      body: JSON.stringify({
+        Subject: task.subject,
+        Description: task.description,
+        Status: task.status,
+        ActivityDate: task.dueAt ? task.dueAt.slice(0, 10) : undefined,
+        WhoId: task.contactExternalId || undefined,
+        OwnerId: task.ownerExternalId || undefined,
+      }),
     });
-    return { externalId: created.id, created: true };
+    return { externalId: task.id, created: false };
   },
 
   async logCall(ctx, call) {
@@ -321,7 +408,9 @@ export const salesforceConnector: CrmConnector = {
       call.transcriptUrl && ctx.preferences.syncTranscripts
         ? `Transcript: ${call.transcriptUrl}`
         : null,
-      call.aiSummary ? `AI summary: ${call.aiSummary}` : null,
+      call.aiSummary && ctx.preferences.syncAiSummary
+        ? `AI summary: ${call.aiSummary}`
+        : null,
       call.transcriptText && ctx.preferences.syncTranscripts
         ? `Transcript text:\n${call.transcriptText}`
         : null,
@@ -329,48 +418,70 @@ export const salesforceConnector: CrmConnector = {
       .filter(Boolean)
       .join("\n\n");
 
+    const body = {
+      Subject: subject,
+      Description: description,
+      Status: "Completed",
+      TaskSubtype: "Call",
+      CallType:
+        call.direction === "inbound"
+          ? "Inbound"
+          : call.direction === "outbound"
+            ? "Outbound"
+            : undefined,
+      CallDurationInSeconds: call.durationSeconds ?? undefined,
+      WhoId: call.contactExternalId || undefined,
+      ActivityDate: (call.startedAt || new Date().toISOString()).slice(0, 10),
+    };
+
+    if (call.id) {
+      await crmFetch(api(ctx, `/sobjects/Task/${call.id}`), {
+        method: "PATCH",
+        accessToken: ctx.accessToken,
+        body: JSON.stringify(body),
+      });
+      return { externalId: call.id, created: false } satisfies UpsertResult;
+    }
+
     const created = await crmFetch<{ id: string }>(api(ctx, "/sobjects/Task"), {
       method: "POST",
       accessToken: ctx.accessToken,
-      body: JSON.stringify({
-        Subject: subject,
-        Description: description,
-        Status: "Completed",
-        TaskSubtype: "Call",
-        CallType:
-          call.direction === "inbound"
-            ? "Inbound"
-            : call.direction === "outbound"
-              ? "Outbound"
-              : undefined,
-        CallDurationInSeconds: call.durationSeconds ?? undefined,
-        WhoId: call.contactExternalId || undefined,
-        ActivityDate: (call.startedAt || new Date().toISOString()).slice(0, 10),
-      }),
+      body: JSON.stringify(body),
     });
     return { externalId: created.id, created: true } satisfies UpsertResult;
   },
 
   async logSms(ctx, sms) {
+    const body = {
+      Subject: `${sms.direction === "inbound" ? "Inbound" : "Outbound"} SMS via Transovo`,
+      Description: [sms.body, sms.mediaUrls?.length ? `Media: ${sms.mediaUrls.join(", ")}` : null]
+        .filter(Boolean)
+        .join("\n"),
+      Status: "Completed",
+      WhoId: sms.contactExternalId || undefined,
+      ActivityDate: (sms.sentAt || new Date().toISOString()).slice(0, 10),
+    };
+    if (sms.id) {
+      await crmFetch(api(ctx, `/sobjects/Task/${sms.id}`), {
+        method: "PATCH",
+        accessToken: ctx.accessToken,
+        body: JSON.stringify(body),
+      });
+      return { externalId: sms.id, created: false };
+    }
     const created = await crmFetch<{ id: string }>(api(ctx, "/sobjects/Task"), {
       method: "POST",
       accessToken: ctx.accessToken,
-      body: JSON.stringify({
-        Subject: `${sms.direction === "inbound" ? "Inbound" : "Outbound"} SMS via Transovo`,
-        Description: [sms.body, sms.mediaUrls?.length ? `Media: ${sms.mediaUrls.join(", ")}` : null]
-          .filter(Boolean)
-          .join("\n"),
-        Status: "Completed",
-        WhoId: sms.contactExternalId || undefined,
-        ActivityDate: (sms.sentAt || new Date().toISOString()).slice(0, 10),
-      }),
+      body: JSON.stringify(body),
     });
     return { externalId: created.id, created: true };
   },
 
-  async listCompanies(ctx, cursor) {
-    const soql =
-      "SELECT Id, Name, Phone, Website, OwnerId FROM Account ORDER BY LastModifiedDate DESC LIMIT 200";
+  async listCompanies(ctx, cursor, opts) {
+    const since = opts?.modifiedSince
+      ? ` WHERE LastModifiedDate > ${soqlDate(opts.modifiedSince)}`
+      : "";
+    const soql = `SELECT Id, Name, Phone, Website, OwnerId, LastModifiedDate FROM Account${since} ORDER BY LastModifiedDate DESC LIMIT 200`;
     const url = cursor || `${api(ctx, "/query")}?q=${encodeURIComponent(soql)}`;
     const data = await crmFetch<{ records?: Array<Record<string, unknown>>; nextRecordsUrl?: string }>(
       url.startsWith("http") ? url : `${instanceUrl(ctx)}${url}`,

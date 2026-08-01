@@ -127,6 +127,37 @@ export async function runCrmSyncJob(payload: {
   try {
     const connector = getConnector(provider);
     const ctx = await buildContext(workspaceId, provider);
+
+    if (ctx.preferences.syncPaused) {
+      await prisma.crmSyncRun.update({
+        where: { id: syncRunId },
+        data: {
+          status: "succeeded",
+          finishedAt: new Date(),
+          statsJson: { skipped: true, reason: "sync_paused" },
+        },
+      });
+      await prisma.integrationConnection
+        .updateMany({
+          where: { workspaceId, provider },
+          data: { status: "connected", syncStatus: "paused" },
+        })
+        .catch(() => undefined);
+      return { ok: true, skipped: true, reason: "sync_paused" };
+    }
+
+    if (kind !== "push" && ctx.preferences.disableReads) {
+      await prisma.crmSyncRun.update({
+        where: { id: syncRunId },
+        data: {
+          status: "succeeded",
+          finishedAt: new Date(),
+          statsJson: { skipped: true, reason: "reads_disabled" },
+        },
+      });
+      return { ok: true, skipped: true, reason: "reads_disabled" };
+    }
+
     const health = await connector.validateConnection(ctx);
     if (!health.ok) {
       throw new Error(health.message || "Connection validation failed");
@@ -141,8 +172,8 @@ export async function runCrmSyncJob(payload: {
       detail: { externalAccountId: health.externalAccountId },
     });
 
-    // Initial / manual / incremental / scheduled — never import historical activities unless enabled later.
-    if (kind !== "push" && kind !== "webhook") {
+    // Initial / manual / incremental / scheduled / webhook reconcile — never import historical activities unless enabled later.
+    if (kind !== "push") {
       // Users + pipelines first (owner / stage mapping metadata)
       if (connector.listUsers) {
         const users = await connector.listUsers(ctx);
@@ -201,11 +232,39 @@ export async function runCrmSyncJob(payload: {
         });
       }
 
+      // Incremental checkpoint — true modified-since, not "fewer pages"
+      const connRow = await prisma.integrationConnection.findUnique({
+        where: { workspaceId_provider: { workspaceId, provider } },
+      });
+      const cfg = (connRow?.configJson || {}) as {
+        syncCheckpoints?: Record<string, string>;
+      };
+      const checkpoints = { ...(cfg.syncCheckpoints || {}) };
+      const useIncremental =
+        kind === "incremental" || kind === "webhook" || kind === "scheduled";
+      const modifiedSince =
+        useIncremental && checkpoints.contact ? new Date(checkpoints.contact) : null;
+      const maxPage = kind === "initial" ? 50 : useIncremental ? 20 : 10;
+      let newestContactTs = modifiedSince?.getTime() || 0;
+
+      const { acquireCrmRateLimit } = await import("./runtime/rate-limit");
+      const { JobDeferredError } = await import("@/lib/messaging/types");
+
       if (connector.listCompanies && (kind === "initial" || ctx.preferences.autoCreateCompanies)) {
         let cursor: string | null | undefined = null;
         let pages = 0;
+        const companySince =
+          useIncremental && checkpoints.company
+            ? new Date(checkpoints.company)
+            : null;
         do {
-          const page = await connector.listCompanies(ctx, cursor);
+          const gate = acquireCrmRateLimit(workspaceId, provider);
+          if (!gate.ok) {
+            throw new JobDeferredError(`crm_sync_rate:${gate.reason}`, gate.retryAfterMs);
+          }
+          const page = await connector.listCompanies(ctx, cursor, {
+            modifiedSince: companySince,
+          });
           for (const company of page.items) {
             stats.companiesIn += 1;
             if (company.id) {
@@ -215,21 +274,40 @@ export async function runCrmSyncJob(payload: {
                 objectType: "company",
                 internalId: `crm-company:${company.id}`,
                 externalId: company.id,
-                metadata: { name: company.name },
+                syncStatus: "synced",
+                metadata: {
+                  name: company.name,
+                  phone: company.phone,
+                  website: company.website,
+                  ownerExternalId: company.ownerExternalId,
+                },
               }).catch(() => undefined);
             }
           }
           cursor = page.nextCursor;
           pages += 1;
-        } while (cursor && pages < (kind === "initial" ? 20 : 3));
+        } while (cursor && pages < (kind === "initial" ? 20 : 5));
+        checkpoints.company = new Date().toISOString();
       }
 
       let cursor: string | null | undefined = null;
       let pages = 0;
       do {
-        const page = await connector.listContacts(ctx, cursor);
+        const gate = acquireCrmRateLimit(workspaceId, provider);
+        if (!gate.ok) {
+          throw new JobDeferredError(`crm_sync_rate:${gate.reason}`, gate.retryAfterMs);
+        }
+        const page = await connector.listContacts(ctx, cursor, {
+          modifiedSince: modifiedSince && !Number.isNaN(modifiedSince.getTime())
+            ? modifiedSince
+            : null,
+        });
         for (const remote of page.items) {
           stats.contactsIn += 1;
+          const lm = remote.customFields?.lastModifiedAt
+            ? new Date(String(remote.customFields.lastModifiedAt)).getTime()
+            : 0;
+          if (lm > newestContactTs) newestContactTs = lm;
           try {
             await ingestRemoteContact(workspaceId, provider, syncRunId, remote, stats);
           } catch (err) {
@@ -248,18 +326,131 @@ export async function runCrmSyncJob(payload: {
         }
         cursor = page.nextCursor;
         pages += 1;
-      } while (cursor && pages < (kind === "initial" ? 50 : 5));
+      } while (cursor && pages < maxPage);
+
+      // Advance checkpoint only after successful page persistence
+      if (newestContactTs > 0) {
+        checkpoints.contact = new Date(newestContactTs).toISOString();
+      } else if (kind === "initial") {
+        checkpoints.contact = new Date().toISOString();
+      }
 
       if (connector.listLeads && ctx.preferences.autoCreateLeads) {
         cursor = null;
         pages = 0;
+        const leadSince =
+          useIncremental && checkpoints.lead ? new Date(checkpoints.lead) : null;
         do {
-          const page = await connector.listLeads(ctx, cursor);
-          stats.leadsIn += page.items.length;
+          const gate = acquireCrmRateLimit(workspaceId, provider);
+          if (!gate.ok) {
+            throw new JobDeferredError(`crm_sync_rate:${gate.reason}`, gate.retryAfterMs);
+          }
+          const page = await connector.listLeads(ctx, cursor, {
+            modifiedSince: leadSince,
+          });
+          for (const lead of page.items) {
+            stats.leadsIn += 1;
+            if (!lead.id) continue;
+            // Ingest lead as contact when phone/email present (preserves CRM lead mapping)
+            if (lead.phone || lead.email) {
+              try {
+                await ingestRemoteContact(
+                  workspaceId,
+                  provider,
+                  syncRunId,
+                  {
+                    id: lead.id,
+                    firstName: lead.firstName,
+                    lastName: lead.lastName,
+                    phone: lead.phone,
+                    email: lead.email,
+                    companyName: lead.companyName,
+                  },
+                  stats,
+                );
+                await upsertObjectMapping({
+                  workspaceId,
+                  provider,
+                  objectType: "lead",
+                  internalId: `crm-lead:${lead.id}`,
+                  externalId: lead.id,
+                  syncStatus: "synced",
+                  metadata: {
+                    status: lead.status,
+                    source: lead.source,
+                    ownerExternalId: lead.ownerExternalId,
+                  },
+                }).catch(() => undefined);
+              } catch {
+                stats.errors += 1;
+              }
+            } else {
+              await upsertObjectMapping({
+                workspaceId,
+                provider,
+                objectType: "lead",
+                internalId: `crm-lead:${lead.id}`,
+                externalId: lead.id,
+                metadata: { status: lead.status, name: lead.lastName },
+              }).catch(() => undefined);
+            }
+          }
           cursor = page.nextCursor;
           pages += 1;
-        } while (cursor && pages < 3);
+        } while (cursor && pages < (kind === "initial" ? 20 : 5));
+        checkpoints.lead = new Date().toISOString();
       }
+
+      if (connector.listDeals && ctx.preferences.syncOpportunities) {
+        cursor = null;
+        pages = 0;
+        do {
+          const gate = acquireCrmRateLimit(workspaceId, provider);
+          if (!gate.ok) {
+            throw new JobDeferredError(`crm_sync_rate:${gate.reason}`, gate.retryAfterMs);
+          }
+          const page = await connector.listDeals!(ctx, cursor, {
+            modifiedSince:
+              useIncremental && checkpoints.deal
+                ? new Date(checkpoints.deal)
+                : null,
+          });
+          for (const deal of page.items) {
+            if (!deal.id) continue;
+            await upsertObjectMapping({
+              workspaceId,
+              provider,
+              objectType: "deal",
+              internalId: `crm-deal:${deal.id}`,
+              externalId: deal.id,
+              parentExternalId: deal.contactExternalId || deal.companyExternalId || null,
+              syncStatus: "synced",
+              metadata: {
+                name: deal.name,
+                amount: deal.amount,
+                currency: deal.currency,
+                stage: deal.stage,
+                pipeline: deal.pipeline,
+                status: deal.status,
+                ownerExternalId: deal.ownerExternalId,
+              },
+            }).catch(() => undefined);
+          }
+          cursor = page.nextCursor;
+          pages += 1;
+        } while (cursor && pages < (kind === "initial" ? 20 : 5));
+        checkpoints.deal = new Date().toISOString();
+      }
+
+      await prisma.integrationConnection.updateMany({
+        where: { workspaceId, provider },
+        data: {
+          configJson: {
+            ...(cfg as object),
+            syncCheckpoints: checkpoints,
+          } as object,
+        },
+      });
     }
 
     await prisma.integrationConnection.updateMany({
@@ -385,10 +576,11 @@ async function ingestRemoteContact(
     phone?: string | null;
     email?: string | null;
     companyName?: string | null;
+    customFields?: Record<string, unknown>;
   },
   stats: { contactsCreated: number; contactsUpdated: number; contactsSkipped: number },
 ) {
-  if (!remote.id || !remote.phone) {
+  if (!remote.id || (!remote.phone && !remote.email)) {
     stats.contactsSkipped += 1;
     await appendSyncEvent({
       workspaceId,
@@ -398,7 +590,7 @@ async function ingestRemoteContact(
       action: "skip",
       objectType: "contact",
       externalId: remote.id || null,
-      message: "Skipped contact without phone",
+      message: "Skipped contact without phone or email",
     });
     return;
   }
@@ -424,6 +616,10 @@ async function ingestRemoteContact(
     return;
   }
 
+  const lastCrmModifiedAt = remote.customFields?.lastModifiedAt
+    ? new Date(String(remote.customFields.lastModifiedAt))
+    : null;
+
   await upsertObjectMapping({
     workspaceId,
     provider,
@@ -431,6 +627,12 @@ async function ingestRemoteContact(
     internalId: result.contactId,
     externalId: remote.id,
     fingerprint: fingerprintPhone(remote.phone) || fingerprintEmail(remote.email),
+    lastCrmModifiedAt:
+      lastCrmModifiedAt && !Number.isNaN(lastCrmModifiedAt.getTime())
+        ? lastCrmModifiedAt
+        : null,
+    syncStatus: "synced",
+    externalDeletedAt: null,
   });
 
   if (existingMap || !result.created) {
