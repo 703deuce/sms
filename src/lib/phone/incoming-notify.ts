@@ -8,9 +8,11 @@ export async function notifyUsersForInboundCall(input: {
   fromE164: string;
   toE164: string;
   queueId?: string | null;
+  /** Explicit target users (e.g. forward_user). Skips workspace-wide fan-out. */
+  userIds?: string[];
 }) {
   const prisma = getPrisma();
-  const userIds = new Set<string>();
+  const userIds = new Set<string>(input.userIds || []);
 
   if (input.queueId) {
     const queue = await prisma.callQueue.findFirst({
@@ -19,14 +21,16 @@ export async function notifyUsersForInboundCall(input: {
     for (const uid of queue?.memberUserIds || []) userIds.add(uid);
   }
 
-  const pn = await prisma.phoneNumber.findFirst({
-    where: { workspaceId: input.workspaceId, e164: input.toE164 },
-  });
-  if (pn) {
-    const assignments = await prisma.phoneNumberAssignment.findMany({
-      where: { phoneNumberId: pn.id },
+  if (!userIds.size) {
+    const pn = await prisma.phoneNumber.findFirst({
+      where: { workspaceId: input.workspaceId, e164: input.toE164 },
     });
-    for (const a of assignments) userIds.add(a.userId);
+    if (pn) {
+      const assignments = await prisma.phoneNumberAssignment.findMany({
+        where: { phoneNumberId: pn.id },
+      });
+      for (const a of assignments) userIds.add(a.userId);
+    }
   }
 
   // Fallback: all users with an active softphone device registration.

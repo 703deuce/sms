@@ -67,7 +67,7 @@ export function PhoneSettingsClient({
       fetch("/api/phone/presence")
         .then((r) => r.json())
         .then((j) => {
-          const mine = (j.data || [])[0];
+          const mine = j.mine || (j.data || []).find((r: { userId: string }) => r.userId === j.me);
           if (mine?.status) setPresence(mine.status);
         })
         .catch(() => undefined);
@@ -76,7 +76,9 @@ export function PhoneSettingsClient({
       fetch("/api/phone/admin")
         .then((r) => r.json())
         .then((j) => {
-          const s = (j.data?.settings || [])[0];
+          const settings = j.data?.settings || [];
+          const s =
+            settings.find((row: { userId: string }) => row.userId === j.me) || settings[0];
           if (s) {
             setExtension(s.extension || "");
             setCellular(s.forwardToCellular || "");

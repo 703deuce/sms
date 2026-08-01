@@ -1,11 +1,22 @@
 # Softphone (Cell Phone) — Wired Feature List
 
-**Updated:** 2026-08-01  
+**Updated:** 2026-08-01 (human softphone + cellular bugfix pass)  
 **Product surface:** `/phone` (Business Softphone)  
 **Stack:** Telnyx WebRTC + Call Control, HumanCall records, softphone devices, web push  
 
 This document lists **every softphone feature that is wired end-to-end** in code (UI → API → service → Telnyx/DB).  
 Live exercise still needs: `TELNYX_API_KEY`, `TELNYX_CONNECTION_ID`, `TELNYX_PUBLIC_KEY`, `TELNYX_TELEPHONY_CREDENTIAL_ID` (WebRTC), and VAPID keys for incoming-call push.
+
+### Latest human-call fixes (browser + cell)
+- Flip / warm-complete no longer wipe the active line when WebRTC hangs up
+- Call Control answer without a WebRTC invite requires Call my phone / cellular flip (uses *your* cellular setting)
+- History “Return” opens `/phone?dial=` (no orphan Call Control dial)
+- Call-my-phone honors DND + international gates; bridges only after destination answers
+- Hangup tears down both legs; presence clears when calls end
+- Queue sibling cellular rings cancel on answer/overflow
+- Warm Complete gated until consult answered; park slot collision safe
+- Softphone unanswered ring timeout + `forward_user` push targeting
+- Multi-line hangup promotes next line; presence auto `on_call` no longer sticks after first call
 
 Status legend:
 

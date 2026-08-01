@@ -159,6 +159,82 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       }
       return { ok: true, slotId };
     }
+    case "phone_softphone_ring_timeout": {
+      const { getPrisma } = await import("@/lib/db");
+      const { telnyxRequest } = await import("@/lib/messaging/telnyx/client");
+      const { resolveForwarding } = await import("@/lib/phone/forwarding-service");
+      const { leaveVoicemailOnCall } = await import("@/lib/phone/voicemail-service");
+      const prisma = getPrisma();
+      const humanCallId = String(payload.humanCallId || "");
+      const workspaceId = String(payload.workspaceId || "");
+      const controlId = String(payload.telnyxCallControlId || "");
+      const toE164 = String(payload.toE164 || "");
+      const call = await prisma.humanCall.findFirst({
+        where: { id: humanCallId, workspaceId },
+      });
+      if (
+        !call ||
+        !["ringing", "queued", "initiated"].includes(call.status) ||
+        call.answeredAt
+      ) {
+        return { skipped: true };
+      }
+      const pn = toE164
+        ? await prisma.phoneNumber.findFirst({ where: { workspaceId, e164: toE164 } })
+        : null;
+      const rule = await resolveForwarding({
+        workspaceId,
+        phoneNumberId: pn?.id,
+        userId: call.agentUserId,
+        unanswered: true,
+      }).catch(() => null);
+      if (rule?.targetType === "external" && rule.targetValue && controlId) {
+        await telnyxRequest(`/calls/${controlId}/actions/transfer`, {
+          method: "POST",
+          body: { to: rule.targetValue },
+        }).catch(() => undefined);
+        await prisma.humanCall.update({
+          where: { id: call.id },
+          data: {
+            status: "transferred",
+            disposition: `unanswered_forward:${rule.targetValue}`,
+            endedAt: new Date(),
+          },
+        });
+        return { ok: true, action: "forward" };
+      }
+      if (controlId) {
+        await leaveVoicemailOnCall({
+          workspaceId,
+          humanCallId: call.id,
+          telnyxCallControlId: controlId,
+          userId: call.agentUserId,
+        }).catch(async () => {
+          await telnyxRequest(`/calls/${controlId}/actions/hangup`, {
+            method: "POST",
+            body: {},
+          }).catch(() => undefined);
+          await prisma.humanCall.update({
+            where: { id: call.id },
+            data: {
+              status: "missed",
+              disposition: "missed:ring_timeout",
+              endedAt: new Date(),
+            },
+          });
+        });
+      } else {
+        await prisma.humanCall.update({
+          where: { id: call.id },
+          data: {
+            status: "missed",
+            disposition: "missed:ring_timeout",
+            endedAt: new Date(),
+          },
+        });
+      }
+      return { ok: true, action: "voicemail_or_missed" };
+    }
     case "voice_human_first_timeout": {
       const { handleHumanFirstTimeoutJob } = await import("@/lib/voice/inbound");
       return handleHumanFirstTimeoutJob({

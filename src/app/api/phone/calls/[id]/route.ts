@@ -58,6 +58,26 @@ export async function PATCH(
       webrtcCallId?: string;
     };
 
+    const mutatesLiveCall = Boolean(
+      body.hangup ||
+        body.answer ||
+        body.muted !== undefined ||
+        body.onHold !== undefined ||
+        body.dtmf ||
+        body.transferTo ||
+        body.warmTransferTo ||
+        body.completeWarmTransfer ||
+        body.cancelWarmTransfer ||
+        body.record !== undefined ||
+        body.flipTo ||
+        body.whisper ||
+        body.blockCaller ||
+        body.startTranscription ||
+        body.telnyxCallControlId,
+    );
+    if (mutatesLiveCall) {
+      await requireSoftphonePermission(auth.workspaceId, auth.session.userId, "place_call");
+    }
     if (body.record) {
       await requireSoftphonePermission(auth.workspaceId, auth.session.userId, "record");
     }

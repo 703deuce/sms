@@ -24,39 +24,50 @@ export async function parkCall(input: {
     );
   }
 
-  let slotCode = nextSlotCode();
-  for (let i = 0; i < 5; i++) {
+  let slotCode = "";
+  let slot = null as Awaited<ReturnType<typeof prisma.callParkSlot.create>> | null;
+  const timeoutAt = new Date(Date.now() + (input.timeoutSeconds || 180) * 1000);
+
+  // Never overwrite an already-parked slot — keep trying until a free code is found.
+  for (let i = 0; i < 40; i++) {
+    slotCode = nextSlotCode();
     const existing = await prisma.callParkSlot.findUnique({
       where: { workspaceId_slotCode: { workspaceId: input.workspaceId, slotCode } },
     });
-    if (!existing || existing.status === "available" || existing.status === "retrieved") break;
-    slotCode = nextSlotCode();
+    if (existing?.status === "parked") continue;
+    if (!existing) {
+      slot = await prisma.callParkSlot.create({
+        data: {
+          workspaceId: input.workspaceId,
+          slotCode,
+          humanCallId: call.id,
+          telnyxCallControlId: call.telnyxCallControlId,
+          parkedByUserId: input.userId,
+          status: "parked",
+          parkedAt: new Date(),
+          timeoutAt,
+          fallbackTarget: input.fallbackTarget || null,
+        },
+      });
+      break;
+    }
+    if (existing.status === "available" || existing.status === "retrieved") {
+      slot = await prisma.callParkSlot.update({
+        where: { id: existing.id },
+        data: {
+          humanCallId: call.id,
+          telnyxCallControlId: call.telnyxCallControlId,
+          parkedByUserId: input.userId,
+          status: "parked",
+          parkedAt: new Date(),
+          timeoutAt,
+          fallbackTarget: input.fallbackTarget || null,
+        },
+      });
+      break;
+    }
   }
-
-  const timeoutAt = new Date(Date.now() + (input.timeoutSeconds || 180) * 1000);
-  const slot = await prisma.callParkSlot.upsert({
-    where: { workspaceId_slotCode: { workspaceId: input.workspaceId, slotCode } },
-    create: {
-      workspaceId: input.workspaceId,
-      slotCode,
-      humanCallId: call.id,
-      telnyxCallControlId: call.telnyxCallControlId,
-      parkedByUserId: input.userId,
-      status: "parked",
-      parkedAt: new Date(),
-      timeoutAt,
-      fallbackTarget: input.fallbackTarget || null,
-    },
-    update: {
-      humanCallId: call.id,
-      telnyxCallControlId: call.telnyxCallControlId,
-      parkedByUserId: input.userId,
-      status: "parked",
-      parkedAt: new Date(),
-      timeoutAt,
-      fallbackTarget: input.fallbackTarget || null,
-    },
-  });
+  if (!slot) throw new Error("No free park slot available — try again");
 
   if (isTelnyxPhoneConfigured()) {
     await telnyxRequest(`/calls/${call.telnyxCallControlId}/actions/hold`, {

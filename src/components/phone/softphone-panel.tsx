@@ -48,6 +48,9 @@ type ActiveCall = {
     | "cancelled";
   transcriptText?: string | null;
   aiSummary?: string | null;
+  recording?: boolean;
+  /** Browser media intentionally detached (flip / warm-complete); ignore WebRTC hangup UI teardown. */
+  mediaDetached?: boolean;
 };
 
 type IncomingCall = {
@@ -226,6 +229,10 @@ export function SoftphonePanel({
   const remoteAudioRef = useRef<HTMLAudioElement>(null);
   const presenceManualRef = useRef(false);
   const pendingDialRef = useRef<string | null>(null);
+  /** HumanCall ids whose WebRTC media was intentionally hung up (flip / warm / blind). */
+  const detachedMediaRef = useRef<Set<string>>(new Set());
+  const sessionUserIdRef = useRef<string | null>(null);
+  const [sessionUserId, setSessionUserId] = useState<string | null>(null);
   const [controlLinkedIds, setControlLinkedIds] = useState<Record<string, boolean>>({});
 
   const activeCall = activeCalls.find((c) => c.id === activeLineId) ?? null;
@@ -239,9 +246,33 @@ export function SoftphonePanel({
 
   const removeCall = useCallback((id: string) => {
     webrtcCallsRef.current.delete(id);
-    setActiveCalls((prev) => prev.filter((c) => c.id !== id));
-    setActiveLineId((prev) => (prev === id ? null : prev));
+    detachedMediaRef.current.delete(id);
+    setActiveCalls((prev) => {
+      const next = prev.filter((c) => c.id !== id);
+      setActiveLineId((current) => {
+        if (current !== id) return current;
+        const promote = next.find((c) => !c.onHold) || next[0] || null;
+        return promote?.id ?? null;
+      });
+      return next;
+    });
   }, []);
+
+  function detachWebrtcMedia(humanCallId: string, webrtcId?: string | null) {
+    detachedMediaRef.current.add(humanCallId);
+    webrtcCallsRef.current.delete(humanCallId);
+    if (webrtcId) {
+      webrtcCallsRef.current.delete(webrtcId);
+      webrtcToHumanRef.current.delete(webrtcId);
+    }
+  }
+
+  function myCellularNumber() {
+    const mine =
+      (sessionUserId && userSettings.find((s) => s.userId === sessionUserId)) ||
+      userSettings.find((s) => s.forwardToCellular);
+    return myPhone.trim() || mine?.forwardToCellular || "";
+  }
 
   const applyAudioDevices = useCallback(async () => {
     const audioEl = remoteAudioRef.current;
@@ -374,6 +405,13 @@ export function SoftphonePanel({
 
     async function loadDevices() {
       if (!navigator.mediaDevices?.enumerateDevices) return;
+      try {
+        // Unlock device labels in Chrome — requires a prior getUserMedia grant.
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stream.getTracks().forEach((t) => t.stop());
+      } catch {
+        // Permission denied — still enumerate (labels may be blank).
+      }
       const devices = await navigator.mediaDevices.enumerateDevices();
       setAudioInputs(devices.filter((d) => d.kind === "audioinput"));
       setAudioOutputs(devices.filter((d) => d.kind === "audiooutput"));
@@ -417,13 +455,41 @@ export function SoftphonePanel({
 
     fetch("/api/phone/presence")
       .then((r) => r.json())
-      .then((j) => setPresenceList(j.data || []))
+      .then((j) => {
+        setPresenceList(j.data || []);
+        if (j.me) {
+          sessionUserIdRef.current = j.me;
+          setSessionUserId(j.me);
+        }
+        if (j.mine?.status) setPresenceStatus(j.mine.status);
+      })
       .catch(() => undefined);
 
     fetch("/api/phone/admin")
       .then((r) => r.json())
-      .then((j) => setUserSettings(j.data?.settings || []))
+      .then((j) => {
+        const settings = (j.data?.settings || []) as UserSettingsRow[];
+        setUserSettings(settings);
+        const me = j.me || sessionUserIdRef.current;
+        if (me) {
+          sessionUserIdRef.current = me;
+          setSessionUserId(me);
+        }
+        const mine = settings.find((s) => s.userId === me) || settings.find((s) => s.forwardToCellular);
+        if (mine?.forwardToCellular) {
+          setMyPhone((prev) => prev || mine.forwardToCellular || "");
+          setFlipNumber((prev) => prev || mine.forwardToCellular || "");
+        }
+      })
       .catch(() => undefined);
+
+    const presenceTimer = setInterval(() => {
+      fetch("/api/phone/presence")
+        .then((r) => r.json())
+        .then((j) => setPresenceList(j.data || []))
+        .catch(() => undefined);
+    }, 30_000);
+    return () => clearInterval(presenceTimer);
   }, []);
 
   useEffect(() => {
@@ -589,21 +655,33 @@ export function SoftphonePanel({
               }
 
               if (call.state === "hangup" || call.state === "destroy") {
+                // Intentional detach (flip / warm-complete / blind transfer) — keep HumanCall UI.
+                if (humanId && detachedMediaRef.current.has(humanId)) {
+                  webrtcCallsRef.current.delete(webrtcId);
+                  webrtcCallsRef.current.delete(humanId);
+                  webrtcToHumanRef.current.delete(webrtcId);
+                  updateCall(humanId, { webrtcId: null, mediaDetached: true });
+                  return;
+                }
                 webrtcCallsRef.current.delete(webrtcId);
                 if (humanId) webrtcCallsRef.current.delete(humanId);
-                setActiveCalls((prev) =>
-                  prev.filter((c) => c.id !== lineId && c.webrtcId !== webrtcId),
-                );
+                setActiveCalls((prev) => {
+                  const next = prev.filter(
+                    (c) => c.id !== lineId && c.webrtcId !== webrtcId,
+                  );
+                  if (
+                    activeLineIdRef.current === lineId ||
+                    activeLineIdRef.current === webrtcId
+                  ) {
+                    const promote = next.find((c) => !c.onHold) || next[0] || null;
+                    setActiveLineId(promote?.id ?? null);
+                    if (!promote) setShowDtmf(false);
+                  }
+                  return next;
+                });
                 setWaitingIncoming((prev) =>
                   prev.filter((w) => w.id !== lineId && w.webrtcId !== webrtcId),
                 );
-                if (
-                  activeLineIdRef.current === lineId ||
-                  activeLineIdRef.current === webrtcId
-                ) {
-                  setActiveLineId(null);
-                  setShowDtmf(false);
-                }
                 setIncoming((prev) =>
                   prev && (prev.id === lineId || prev.webrtcId === webrtcId) ? null : prev,
                 );
@@ -638,8 +716,13 @@ export function SoftphonePanel({
           if (available.length === 0) {
             // Keep a WebRTC-only banner; clear Call Control banner only when gone.
             setIncoming((prev) => (prev?.webrtcCall ? prev : null));
+            setWaitingIncoming((prev) => prev.filter((w) => Boolean(w.webrtcCall)));
             return;
           }
+          const availableIds = new Set(available.map((r) => r.id));
+          setWaitingIncoming((prev) =>
+            prev.filter((w) => Boolean(w.webrtcCall) || availableIds.has(w.id)),
+          );
           const first = available[0]!;
           const call: IncomingCall = {
             id: first.id,
@@ -740,8 +823,18 @@ export function SoftphonePanel({
           if (j.data.telnyxCallControlId) {
             setControlLinkedIds((prev) => ({ ...prev, [id]: true }));
           }
-          if (j.data.transcriptText) setLiveTranscript(String(j.data.transcriptText));
-          if (j.data.aiSummary) setAiSummary(String(j.data.aiSummary));
+          if (j.data.transcriptText) {
+            updateCall(id, { transcriptText: String(j.data.transcriptText) });
+            if (id === activeLineIdRef.current) {
+              setLiveTranscript(String(j.data.transcriptText));
+            }
+          }
+          if (j.data.aiSummary) {
+            updateCall(id, { aiSummary: String(j.data.aiSummary) });
+            if (id === activeLineIdRef.current) {
+              setAiSummary(String(j.data.aiSummary));
+            }
+          }
         })
         .catch(() => undefined);
     };
@@ -754,13 +847,21 @@ export function SoftphonePanel({
   }, [activeCalls.map((c) => `${c.id}:${c.warmTransferPending}:${c.transferPhase}`).join("|"), activeLineId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
+    const line = activeCalls.find((c) => c.id === activeLineId);
+    setLiveTranscript(line?.transcriptText || "");
+    setAiSummary(line?.aiSummary || "");
+    setRecording(Boolean(line?.recording));
+    setCallNotes(line?.notes || "");
+  }, [activeLineId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
     const onCall = activeCalls.length > 0;
     if (onCall && !presenceManualRef.current && presenceStatus !== "dnd") {
       if (presenceStatus !== "on_call") {
-        updatePresence("on_call", customStatus);
+        void updatePresence("on_call", customStatus, { auto: true });
       }
     } else if (!onCall && presenceStatus === "on_call" && !presenceManualRef.current) {
-      updatePresence("available", customStatus);
+      void updatePresence("available", customStatus, { auto: true });
     }
   }, [activeCalls.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -776,9 +877,14 @@ export function SoftphonePanel({
       .catch(() => setScreenPop(null));
   }, [incoming?.from, waitingIncoming]);
 
-  async function updatePresence(status: string, label?: string) {
+  async function updatePresence(
+    status: string,
+    label?: string,
+    opts?: { auto?: boolean },
+  ) {
     setPresenceStatus(status);
-  if (status !== "on_call") presenceManualRef.current = true;
+    // Only user-driven presence changes block auto on_call / available restore.
+    if (!opts?.auto) presenceManualRef.current = true;
     await fetch("/api/phone/presence", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -866,14 +972,12 @@ export function SoftphonePanel({
         return;
       }
 
-      // Call Control answer without WebRTC media: bridge to agent cell when available.
-      const bridgeTo =
-        myPhone.trim() ||
-        userSettings.find((s) => s.forwardToCellular)?.forwardToCellular ||
-        "";
-      if (!webrtcConnected && !bridgeTo) {
+      // Call Control answer without a WebRTC invite for THIS call: bridge to agent cell.
+      // webrtcConnected alone is not enough — another line may own the SDK session.
+      const bridgeTo = myCellularNumber();
+      if (!bridgeTo) {
         throw new Error(
-          "No browser audio for this call. Wait for WebRTC, or enter your number under Call my phone, then answer.",
+          "No browser audio for this call. Wait for the WebRTC invite, or enter your number under Call my phone, then answer.",
         );
       }
 
@@ -886,13 +990,9 @@ export function SoftphonePanel({
       if (!res.ok) throw new Error(json.error || "Answer failed");
 
       let mediaMode: MediaMode = "call_control";
-      if (bridgeTo && !webrtcConnected) {
-        await patchCallById(call.id, { flipTo: bridgeTo });
-        mediaMode = "call_my_phone";
-        setError("Answered — ringing your phone to connect audio.");
-      } else if (!webrtcConnected) {
-        setError("Answered via Call Control. Enable WebRTC for in-browser audio.");
-      }
+      await patchCallById(call.id, { flipTo: bridgeTo });
+      mediaMode = "call_my_phone";
+      setError("Answered — ringing your phone to connect audio.");
 
       setControlLinkedIds((prev) => ({ ...prev, [call.id]: true }));
       const newCall: ActiveCall = {
@@ -981,9 +1081,10 @@ export function SoftphonePanel({
     localStorage.setItem(LS_LAST_DIALED, number);
   }
 
-  async function startCall() {
-    if (!dialNumber.trim()) return;
-    if (useCallMyPhone && !myPhone.trim()) {
+  async function startCall(overrideNumber?: string) {
+    const dest = (overrideNumber ?? dialNumber).trim();
+    if (!dest) return;
+    if (useCallMyPhone && !myPhone.trim() && !myCellularNumber()) {
       setError("Enter your phone number for Call my phone.");
       return;
     }
@@ -996,7 +1097,7 @@ export function SoftphonePanel({
     }
     setLoading(true);
     setError("");
-    const dest = dialNumber.trim();
+    setDialNumber(dest);
     localStorage.setItem(LS_LAST_DIALED, dest);
     setLastDialed(dest);
     try {
@@ -1032,10 +1133,18 @@ export function SoftphonePanel({
           callerNumber?: string;
           remoteElement?: HTMLAudioElement;
           callerName?: string;
+          clientState?: string;
         } = {
           destinationNumber: dest,
           callerNumber: from,
           ...(audioEl ? { remoteElement: audioEl } : {}),
+          clientState: btoa(
+            JSON.stringify({
+              humanCallId,
+              kind: "human",
+              anonymous: anonymousDial,
+            }),
+          ),
         };
         if (anonymousDial) {
           callOpts.callerName = "Anonymous";
@@ -1070,10 +1179,16 @@ export function SoftphonePanel({
         return;
       }
 
-      if (!webrtcConnected && !useCallMyPhone && webrtcMode === "telnyx") {
+      if (!useCallMyPhone && (webrtcMode === "telnyx" || webrtcMode === "api")) {
         setError(
           "Browser softphone audio is not connected yet. Wait for WebRTC, or enable Call my phone.",
         );
+        return;
+      }
+      if (!useCallMyPhone && webrtcMode === "mock") {
+        // Mock / no Telnyx key — Call Control path is OK for local testing.
+      } else if (!useCallMyPhone) {
+        setError("Enable Call my phone or wait for browser WebRTC before dialing.");
         return;
       }
 
@@ -1084,7 +1199,7 @@ export function SoftphonePanel({
           to: dest,
           from,
           anonymous: anonymousDial,
-          ...(useCallMyPhone ? { callMyPhone: myPhone.trim() } : {}),
+          ...(useCallMyPhone ? { callMyPhone: myPhone.trim() || myCellularNumber() } : {}),
         }),
       });
       const json = await res.json();
@@ -1113,8 +1228,8 @@ export function SoftphonePanel({
   async function redial() {
     const last = lastDialed || localStorage.getItem(LS_LAST_DIALED);
     if (!last) return;
-    setDialNumber(last);
-    if (!activeCalls.length) await startCall();
+    // Multi-line: redial places another outbound (startCall auto-holds the active line).
+    await startCall(last);
   }
 
   function webrtcHandleFor(callId: string, webrtcId?: string | null) {
@@ -1224,6 +1339,7 @@ export function SoftphonePanel({
       const wc = webrtcHandleFor(activeCall.id, activeCall.webrtcId) as {
         hangup?: () => void;
       } | null;
+      detachWebrtcMedia(activeCall.id, activeCall.webrtcId);
       await wc?.hangup?.();
       setTransferTo("");
       setWarmTransferNote("");
@@ -1260,12 +1376,17 @@ export function SoftphonePanel({
 
   async function completeWarmTransfer() {
     if (!activeCall) return;
+    if (activeCall.transferPhase !== "consult_answered") {
+      setError("Wait until the employee answers before completing the transfer.");
+      return;
+    }
     try {
       updateCall(activeCall.id, { transferPhase: "completing" });
       await patchCallById(activeCall.id, { completeWarmTransfer: true });
       const wc = webrtcHandleFor(activeCall.id, activeCall.webrtcId) as {
         hangup?: () => void;
       } | null;
+      detachWebrtcMedia(activeCall.id, activeCall.webrtcId);
       await wc?.hangup?.();
       updateCall(activeCall.id, { transferPhase: "completed", warmTransferPending: false });
       setTransferTo("");
@@ -1281,6 +1402,12 @@ export function SoftphonePanel({
     if (!activeCall) return;
     try {
       await patchCallById(activeCall.id, { cancelWarmTransfer: true });
+      if (activeCall.mediaMode === "webrtc") {
+        const wc = webrtcHandleFor(activeCall.id, activeCall.webrtcId) as {
+          unhold?: () => void;
+        } | null;
+        await wc?.unhold?.();
+      }
       updateCall(activeCall.id, {
         warmTransferPending: false,
         onHold: false,
@@ -1381,16 +1508,30 @@ export function SoftphonePanel({
         parkedWebrtcRef.current.delete(slotCode);
       }
       if (human?.id) {
+        let mediaMode: MediaMode = parked?.handle
+          ? "webrtc"
+          : (human.mediaMode as MediaMode) || "call_control";
+        // Other browser/device: unhold Call Control but need cellular/flip for audio.
+        if (!parked?.handle) {
+          const bridgeTo = myCellularNumber();
+          if (bridgeTo && human.telnyxCallControlId) {
+            await patchCallById(human.id, { flipTo: bridgeTo }).catch(() => undefined);
+            mediaMode = "call_my_phone";
+            setError("Park retrieved — ringing your phone for audio.");
+          } else {
+            setError(
+              "Park retrieved on Call Control. Use this browser’s park slot, or set Call my phone / flip number for audio.",
+            );
+          }
+        }
         const restored: ActiveCall = {
           id: human.id,
           from: human.from,
           to: human.to,
           status: human.status || "in_progress",
           muted: Boolean(human.muted),
-          onHold: false,
-          mediaMode: parked?.handle
-            ? "webrtc"
-            : (human.mediaMode as MediaMode) || "call_control",
+          onHold: mediaMode === "call_my_phone",
+          mediaMode,
           webrtcId: parked?.webrtcId || null,
           startedAt: Date.now(),
           notes: human.notes || undefined,
@@ -1469,25 +1610,26 @@ export function SoftphonePanel({
   }
 
   async function flipCall() {
-    if (!activeCall || !flipNumber.trim()) return;
+    const dest = flipNumber.trim() || myCellularNumber();
+    if (!activeCall || !dest) return;
     if (activeCall.mediaMode === "webrtc" && !controlLinkedIds[activeCall.id]) {
       setError("Wait until call control is linked, then flip.");
       return;
     }
     try {
-      await patchCallById(activeCall.id, { flipTo: flipNumber.trim() });
+      await patchCallById(activeCall.id, { flipTo: dest });
       // Hang up browser media — audio continues on the flipped device after bridge.
       const wc = webrtcHandleFor(activeCall.id, activeCall.webrtcId) as {
         hangup?: () => void;
       } | null;
+      detachWebrtcMedia(activeCall.id, activeCall.webrtcId);
       await wc?.hangup?.();
-      if (activeCall.webrtcId) webrtcCallsRef.current.delete(activeCall.webrtcId);
-      webrtcCallsRef.current.delete(activeCall.id);
       updateCall(activeCall.id, {
         onHold: true,
         status: "on_hold",
         mediaMode: "call_my_phone",
         webrtcId: null,
+        mediaDetached: true,
       });
       setError("Flipping — answer on the other device to take the call.");
     } catch (e) {
@@ -1548,9 +1690,10 @@ export function SoftphonePanel({
       setError("Wait until call control is linked, then record.");
       return;
     }
-    const next = !recording;
+    const next = !Boolean(activeCall.recording);
     try {
       await patchCallById(activeCall.id, { record: next });
+      updateCall(activeCall.id, { recording: next });
       setRecording(next);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Recording failed");
@@ -1826,7 +1969,7 @@ export function SoftphonePanel({
         <div className="mt-4 flex flex-wrap gap-2">
           <Button
             id="softphone-start-call"
-            onClick={startCall}
+            onClick={() => void startCall()}
             disabled={loading || !dialNumber.trim()}
             className="gap-2"
           >
@@ -1946,7 +2089,13 @@ export function SoftphonePanel({
                   />
                 </div>
                 {transferMode === "blind" ? (
-                  <Button variant="outline" size="sm" onClick={blindTransfer} className="gap-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={blindTransfer}
+                    className="gap-1"
+                    disabled={!controlReady}
+                  >
                     <PhoneForwarded className="h-4 w-4" />
                     Transfer
                   </Button>
@@ -1959,7 +2108,12 @@ export function SoftphonePanel({
                       or cancel.
                     </p>
                     <div className="flex flex-wrap gap-2">
-                      <Button variant="outline" size="sm" onClick={completeWarmTransfer}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={completeWarmTransfer}
+                        disabled={activeCall.transferPhase !== "consult_answered"}
+                      >
                         Complete transfer
                       </Button>
                       <Button variant="outline" size="sm" onClick={cancelWarmTransfer}>
@@ -1968,7 +2122,13 @@ export function SoftphonePanel({
                     </div>
                   </div>
                 ) : (
-                  <Button variant="outline" size="sm" onClick={startWarmTransfer} className="gap-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={startWarmTransfer}
+                    className="gap-1"
+                    disabled={!controlReady}
+                  >
                     <PhoneForwarded className="h-4 w-4" />
                     Start consult
                   </Button>
@@ -1984,11 +2144,13 @@ export function SoftphonePanel({
                         <button
                           key={p.userId}
                           type="button"
-                          className="rounded border border-border px-2 py-1 text-xs hover:bg-muted"
+                          className="rounded border border-border px-2 py-1 text-xs hover:bg-muted disabled:opacity-40"
+                          disabled={!target}
                           onClick={() => target && setTransferTo(target)}
+                          title={target ? undefined : "No extension or cellular on file"}
                         >
                           {p.customLabel || p.userId.slice(0, 8)} · {p.status}
-                          {target ? ` (${target})` : ""}
+                          {target ? ` (${target})` : " (no number)"}
                         </button>
                       );
                     })}
@@ -1998,20 +2160,26 @@ export function SoftphonePanel({
             </div>
 
             <div className="flex flex-wrap gap-2 border-t border-border pt-3">
-              <Button variant="outline" size="sm" onClick={parkCall}>
+              <Button variant="outline" size="sm" onClick={parkCall} disabled={!controlReady}>
                 Park call
               </Button>
-              <Button variant="outline" size="sm" onClick={createConference} className="gap-1">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={createConference}
+                className="gap-1"
+                disabled={!controlReady}
+              >
                 <Users className="h-3 w-3" />
                 Start conference
               </Button>
-              <Button variant="outline" size="sm" onClick={mergeHeldLine}>
+              <Button variant="outline" size="sm" onClick={mergeHeldLine} disabled={!controlReady}>
                 Merge held line
               </Button>
               <Button variant="outline" size="sm" onClick={blockCaller}>
                 Block caller
               </Button>
-              <Button variant="outline" size="sm" onClick={refreshAiNotes}>
+              <Button variant="outline" size="sm" onClick={refreshAiNotes} disabled={!controlReady}>
                 AI notes
               </Button>
             </div>
@@ -2025,7 +2193,12 @@ export function SoftphonePanel({
                     onChange={(e) => setFlipNumber(e.target.value)}
                     placeholder="+1 your cell"
                   />
-                  <Button variant="outline" size="sm" onClick={flipCall}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={flipCall}
+                    disabled={!controlReady}
+                  >
                     Flip
                   </Button>
                 </div>

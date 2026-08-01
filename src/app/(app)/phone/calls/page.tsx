@@ -69,12 +69,8 @@ export default function PhoneCallsPage() {
   }
 
   async function returnCall(phone: string) {
-    await fetch("/api/phone/calls", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ to: phone }),
-    });
-    window.location.href = "/phone";
+    // Open softphone with click-to-call so WebRTC / Call my phone owns media.
+    window.location.href = `/phone?dial=${encodeURIComponent(phone)}`;
   }
 
   async function sendSms(phone: string) {

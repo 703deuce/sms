@@ -1,7 +1,13 @@
 import { getPrisma } from "@/lib/db";
 
 export type QueueStrategy = "ring_all" | "round_robin" | "longest_idle" | "linear";
-export type OverflowAction = "voicemail" | "forward" | "hangup";
+export type OverflowAction =
+  | "voicemail"
+  | "forward"
+  | "external"
+  | "hangup"
+  | "ai_agent"
+  | "callback";
 
 export type CallQueueInput = {
   name: string;
@@ -20,7 +26,14 @@ const VALID_STRATEGIES: QueueStrategy[] = [
   "longest_idle",
   "linear",
 ];
-const VALID_OVERFLOW: OverflowAction[] = ["voicemail", "forward", "hangup"];
+const VALID_OVERFLOW: OverflowAction[] = [
+  "voicemail",
+  "forward",
+  "external",
+  "hangup",
+  "ai_agent",
+  "callback",
+];
 
 function sanitizeStrategy(strategy?: string): QueueStrategy {
   return VALID_STRATEGIES.includes(strategy as QueueStrategy)
@@ -29,6 +42,7 @@ function sanitizeStrategy(strategy?: string): QueueStrategy {
 }
 
 function sanitizeOverflow(action?: string): OverflowAction {
+  if (action === "external") return "forward";
   return VALID_OVERFLOW.includes(action as OverflowAction)
     ? (action as OverflowAction)
     : "voicemail";

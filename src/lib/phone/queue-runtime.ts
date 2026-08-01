@@ -109,6 +109,7 @@ export async function ringQueueMembers(input: {
 
   // Softphone poll ring + optional PSTN/cellular dial for members with forwardToCellular / ringMobile.
   const connectionId = process.env.TELNYX_CONNECTION_ID?.trim();
+  const ringLegIds: string[] = [];
   for (const userId of ordered) {
     await prisma.softphonePresence.upsert({
       where: { workspaceId_userId: { workspaceId: input.workspaceId, userId } },
@@ -130,7 +131,7 @@ export async function ringQueueMembers(input: {
       userSettings?.ringMobile !== false &&
       userSettings?.forwardToCellular
     ) {
-      await telnyxRequest("/calls", {
+      const dialed = await telnyxRequest<{ data?: { call_control_id?: string } }>("/calls", {
         method: "POST",
         body: {
           connection_id: connectionId,
@@ -148,8 +149,20 @@ export async function ringQueueMembers(input: {
             }),
           ).toString("base64"),
         },
-      }).catch(() => undefined);
+      }).catch(() => null);
+      const legId = dialed?.data?.call_control_id;
+      if (legId) ringLegIds.push(legId);
     }
+  }
+  if (ringLegIds.length) {
+    await prisma.humanCall
+      .update({
+        where: { id: input.humanCallId },
+        data: {
+          notes: `queue:${queue.name} strategy:${queue.strategy} [ring_legs:${ringLegIds.join(",")}]`,
+        },
+      })
+      .catch(() => undefined);
   }
 
   // Schedule overflow if nobody answers
@@ -261,8 +274,35 @@ export async function handleQueueOverflowJob(payload: {
 }) {
   const prisma = getPrisma();
   const call = await prisma.humanCall.findUnique({ where: { id: payload.humanCallId } });
-  if (!call || ["in_progress", "completed", "answered"].includes(call.status)) {
+  if (
+    !call ||
+    [
+      "in_progress",
+      "completed",
+      "answered",
+      "transferred",
+      "voicemail",
+      "parked",
+      "missed",
+      "ai_fallback",
+      "callback_requested",
+      "failed",
+    ].includes(call.status)
+  ) {
     return { skipped: true };
+  }
+  // Cancel outstanding cellular ring legs before overflow.
+  const ringLegMatch = (call.notes || "").match(/\[ring_legs:([^\]]+)\]/);
+  if (ringLegMatch?.[1] && isTelnyxPhoneConfigured()) {
+    for (const legId of ringLegMatch[1]
+      .split(",")
+      .map((s: string) => s.trim())
+      .filter(Boolean)) {
+      await telnyxRequest(`/calls/${legId}/actions/hangup`, {
+        method: "POST",
+        body: {},
+      }).catch(() => undefined);
+    }
   }
   const queue = await prisma.callQueue.findUnique({ where: { id: payload.queueId } });
   if (!queue) return { skipped: true };

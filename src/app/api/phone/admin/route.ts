@@ -20,7 +20,10 @@ export async function GET() {
         where: { phoneNumberId: { in: numbers.map((n: { id: string }) => n.id) } },
       }),
     ]);
-    return NextResponse.json({ data: { settings, assignments, numbers } });
+    return NextResponse.json({
+      data: { settings, assignments, numbers },
+      me: auth.session.userId,
+    });
   } catch (err) {
     return jsonError(err, 500);
   }
