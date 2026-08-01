@@ -246,37 +246,52 @@ export async function runCrmSyncJob(payload: {
       }
 
       if (connector.listPipelines) {
-        const pipelines = await connector.listPipelines(ctx);
-        stats.pipelinesIn = pipelines.length;
-        for (const p of pipelines) {
-          await upsertObjectMapping({
-            workspaceId,
-            provider,
-            objectType: "pipeline",
-            internalId: `crm-pipeline:${p.id}`,
-            externalId: p.id,
-            metadata: { name: p.name },
-          }).catch(() => undefined);
-          for (const s of p.stages) {
-            stats.stagesIn += 1;
+        try {
+          const pipelines = await connector.listPipelines(ctx);
+          stats.pipelinesIn = pipelines.length;
+          for (const p of pipelines) {
             await upsertObjectMapping({
               workspaceId,
               provider,
-              objectType: "pipeline_stage",
-              internalId: `crm-stage:${p.id}:${s.id}`,
-              externalId: s.id,
-              metadata: { pipelineId: p.id, name: s.name, order: s.order },
+              objectType: "pipeline",
+              internalId: `crm-pipeline:${p.id}`,
+              externalId: p.id,
+              metadata: { name: p.name },
             }).catch(() => undefined);
+            for (const s of p.stages) {
+              stats.stagesIn += 1;
+              await upsertObjectMapping({
+                workspaceId,
+                provider,
+                objectType: "pipeline_stage",
+                internalId: `crm-stage:${p.id}:${s.id}`,
+                externalId: s.id,
+                metadata: { pipelineId: p.id, name: s.name, order: s.order },
+              }).catch(() => undefined);
+            }
           }
+          await appendSyncEvent({
+            workspaceId,
+            syncRunId,
+            provider,
+            action: "map",
+            objectType: "pipeline",
+            message: `Mapped ${pipelines.length} pipeline(s), ${stats.stagesIn} stage(s)`,
+          });
+        } catch (err) {
+          await appendSyncEvent({
+            workspaceId,
+            syncRunId,
+            provider,
+            level: "warn",
+            action: "skip",
+            objectType: "pipeline",
+            message:
+              err instanceof Error
+                ? `Pipelines skipped: ${err.message}`
+                : "Pipelines skipped",
+          });
         }
-        await appendSyncEvent({
-          workspaceId,
-          syncRunId,
-          provider,
-          action: "map",
-          objectType: "pipeline",
-          message: `Mapped ${pipelines.length} pipeline(s), ${stats.stagesIn} stage(s)`,
-        });
       }
 
       // Incremental checkpoint — true modified-since, not "fewer pages"
@@ -299,86 +314,102 @@ export async function runCrmSyncJob(payload: {
 
       // Always import company metadata on inbound sync; materialize Transovo rows when autoCreateCompanies.
       if (connector.listCompanies) {
-        let cursor: string | null | undefined = null;
-        let pages = 0;
-        const companySince =
-          useIncremental && checkpoints.company
-            ? new Date(checkpoints.company)
-            : null;
-        do {
-          const gate = acquireCrmRateLimit(workspaceId, provider);
-          if (!gate.ok) {
-            throw new JobDeferredError(`crm_sync_rate:${gate.reason}`, gate.retryAfterMs);
-          }
-          const page = await connector.listCompanies(ctx, cursor, {
-            modifiedSince: companySince,
-          });
-          for (const company of page.items) {
-            stats.companiesIn += 1;
-            if (!company.id) continue;
-            let companyContactId: string | null = null;
-            if (ctx.preferences.autoCreateCompanies) {
-              const companyPhone =
-                company.phone?.trim() || `crm-company:${provider}:${company.id}`;
-              let companyContact = await prisma.contact.findFirst({
-                where: { workspaceId, phone: companyPhone },
-              });
-              if (!companyContact && company.name) {
-                companyContact = await prisma.contact
-                  .create({
-                    data: {
-                      workspaceId,
-                      phone: companyPhone,
-                      firstName: null,
-                      lastName: company.name,
-                      company: company.name,
-                      consentSource: `crm:${provider}:company`,
-                      customFields: {
-                        crmCompany: true,
-                        website: company.website || null,
-                        ownerExternalId: company.ownerExternalId || null,
-                      },
-                    },
-                  })
-                  .catch(() => null);
-              } else if (companyContact) {
-                await prisma.contact
-                  .update({
-                    where: { id: companyContact.id },
-                    data: {
-                      company: company.name || companyContact.company,
-                      lastName: companyContact.lastName || company.name,
-                      customFields: {
-                        ...((companyContact.customFields as object) || {}),
-                        crmCompany: true,
-                        website: company.website || null,
-                        ownerExternalId: company.ownerExternalId || null,
-                      },
-                    },
-                  })
-                  .catch(() => undefined);
-              }
-              companyContactId = companyContact?.id || null;
+        try {
+          let cursor: string | null | undefined = null;
+          let pages = 0;
+          const companySince =
+            useIncremental && checkpoints.company
+              ? new Date(checkpoints.company)
+              : null;
+          do {
+            const gate = acquireCrmRateLimit(workspaceId, provider);
+            if (!gate.ok) {
+              throw new JobDeferredError(`crm_sync_rate:${gate.reason}`, gate.retryAfterMs);
             }
-            await upsertObjectMapping({
-              workspaceId,
-              provider,
-              objectType: "company",
-              internalId: companyContactId || `crm-company:${company.id}`,
-              externalId: company.id,
-              syncStatus: "synced",
-              metadata: {
-                name: company.name,
-                phone: company.phone,
-                website: company.website,
-                ownerExternalId: company.ownerExternalId,
-              },
-            }).catch(() => undefined);
-          }
-          cursor = page.nextCursor;
-          pages += 1;
-        } while (cursor && pages < (kind === "initial" ? 20 : 5));
-        checkpoints.company = new Date().toISOString();
+            const page = await connector.listCompanies(ctx, cursor, {
+              modifiedSince: companySince,
+            });
+            for (const company of page.items) {
+              stats.companiesIn += 1;
+              if (!company.id) continue;
+              let companyContactId: string | null = null;
+              if (ctx.preferences.autoCreateCompanies) {
+                const companyPhone =
+                  company.phone?.trim() || `crm-company:${provider}:${company.id}`;
+                let companyContact = await prisma.contact.findFirst({
+                  where: { workspaceId, phone: companyPhone },
+                });
+                if (!companyContact && company.name) {
+                  companyContact = await prisma.contact
+                    .create({
+                      data: {
+                        workspaceId,
+                        phone: companyPhone,
+                        firstName: null,
+                        lastName: company.name,
+                        company: company.name,
+                        consentSource: `crm:${provider}:company`,
+                        customFields: {
+                          crmCompany: true,
+                          website: company.website || null,
+                          ownerExternalId: company.ownerExternalId || null,
+                        },
+                      },
+                    })
+                    .catch(() => null);
+                } else if (companyContact) {
+                  await prisma.contact
+                    .update({
+                      where: { id: companyContact.id },
+                      data: {
+                        company: company.name || companyContact.company,
+                        lastName: companyContact.lastName || company.name,
+                        customFields: {
+                          ...((companyContact.customFields as object) || {}),
+                          crmCompany: true,
+                          website: company.website || null,
+                          ownerExternalId: company.ownerExternalId || null,
+                        },
+                      },
+                    })
+                    .catch(() => undefined);
+                }
+                companyContactId = companyContact?.id || null;
+              }
+              await upsertObjectMapping({
+                workspaceId,
+                provider,
+                objectType: "company",
+                internalId: companyContactId || `crm-company:${company.id}`,
+                externalId: company.id,
+                syncStatus: "synced",
+                metadata: {
+                  name: company.name,
+                  phone: company.phone,
+                  website: company.website,
+                  ownerExternalId: company.ownerExternalId,
+                },
+              }).catch(() => undefined);
+            }
+            cursor = page.nextCursor;
+            pages += 1;
+          } while (cursor && pages < (kind === "initial" ? 20 : 5));
+          checkpoints.company = new Date().toISOString();
+        } catch (err) {
+          if (err instanceof JobDeferredError) throw err;
+          await appendSyncEvent({
+            workspaceId,
+            syncRunId,
+            provider,
+            level: "warn",
+            action: "skip",
+            objectType: "company",
+            message:
+              err instanceof Error
+                ? `Companies skipped: ${err.message}`
+                : "Companies skipped",
+          });
+        }
       }
 
       let cursor: string | null | undefined = null;

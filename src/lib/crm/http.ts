@@ -37,5 +37,8 @@ export async function crmFetch<T = unknown>(
         : `CRM HTTP ${res.status}`;
     throw new CrmHttpError(msg, res.status, json);
   }
+  // Zoho often returns HTTP 204 / empty body (or JSON null) for empty modules.
+  // Callers do `data.data` — never return bare null from a successful fetch.
+  if (json == null) return {} as T;
   return json as T;
 }
