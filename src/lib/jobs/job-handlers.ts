@@ -509,14 +509,32 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       });
     }
     case "integration_automation_event": {
-      // Stored normalized events are available for the future automation builder.
-      // No-op consumer keeps the "every job has a handler" contract green.
-      return {
-        ok: true,
-        queued: true,
-        provider: payload.provider,
-        eventType: payload.eventType,
-      };
+      const { dispatchIntegrationAutomationEvent } = await import(
+        "@/lib/integrations/framework/automation-bridge"
+      );
+      return dispatchIntegrationAutomationEvent({
+        workspaceId: String(payload.workspaceId || ""),
+        provider: String(payload.provider || ""),
+        eventType: String(payload.eventType || ""),
+        contactId: (payload.contactId as string | null) || null,
+        phone: (payload.phone as string | null) || null,
+        email: (payload.email as string | null) || null,
+        webhookEventId: (payload.webhookEventId as string | null) || null,
+        payload: (payload.payload as Record<string, unknown>) || {},
+      });
+    }
+    case "integration_action": {
+      const { executeIntegrationAction } = await import(
+        "@/lib/integrations/framework/actions-registry"
+      );
+      return executeIntegrationAction({
+        workspaceId: String(payload.workspaceId || ""),
+        provider: payload.provider as import("@/lib/integrations/framework").ExternalProviderId,
+        actionId: payload.actionId as import("@/lib/integrations/framework/actions-registry").IntegrationActionId,
+        params: (payload.params as Record<string, unknown>) || {},
+        contactId: (payload.contactId as string | null) || null,
+        actorUserId: (payload.actorUserId as string | null) || null,
+      });
     }
     default:
       throw new Error(`Unknown job type: ${jobType}`);

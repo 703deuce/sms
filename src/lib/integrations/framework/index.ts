@@ -25,3 +25,18 @@ export * from "./acceptance";
 export * from "./priority";
 export * from "./http";
 export * from "./secrets";
+export {
+  getIntegrationAppUrl,
+  getIntegrationEnvHealth,
+  assertIntegrationRuntimeReady,
+  externalWebhookUrl,
+} from "./app-url";
+export * from "./actions-registry";
+export {
+  INTEGRATION_EVENT_TO_TRIGGER,
+  dispatchIntegrationAutomationEvent,
+  listIntegrationTriggerBlocks,
+  listIntegrationActionBlocks,
+} from "./automation-bridge";
+export * from "./contact-links";
+export * from "./product-persist";

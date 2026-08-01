@@ -9,7 +9,7 @@ export type SegmentOperator =
   | "not_exists";
 
 export type SegmentRule = {
-  /** "status" | "tag" | "custom:<fieldKey>" */
+  /** "status" | "tag" | "source" | "provider" | "custom:<fieldKey>" */
   field: string;
   op: SegmentOperator;
   value?: string;
@@ -49,6 +49,10 @@ type EvaluableContact = {
   customFields: unknown;
   /** Tag names attached to the contact. */
   tagNames: string[];
+  /** consentSource / import source */
+  source?: string | null;
+  /** Connected integration provider ids (from external mappings). */
+  providers?: string[];
 };
 
 function stringVal(v: unknown): string {
@@ -91,6 +95,46 @@ function evaluateRule(contact: EvaluableContact, rule: SegmentRule): boolean {
         return names.length > 0;
       case "not_exists":
         return names.length === 0;
+      default:
+        return has;
+    }
+  }
+
+  if (rule.field === "source") {
+    const src = stringVal(contact.source).toLowerCase();
+    const present = Boolean(src);
+    switch (rule.op) {
+      case "equals":
+        return src === targetLc;
+      case "not_equals":
+        return src !== targetLc;
+      case "contains":
+        return src.includes(targetLc);
+      case "not_contains":
+        return !src.includes(targetLc);
+      case "exists":
+        return present;
+      case "not_exists":
+        return !present;
+      default:
+        return src === targetLc;
+    }
+  }
+
+  if (rule.field === "provider") {
+    const providers = (contact.providers || []).map((p) => p.toLowerCase());
+    const has = target ? providers.includes(targetLc) : providers.length > 0;
+    switch (rule.op) {
+      case "equals":
+      case "contains":
+        return has;
+      case "not_equals":
+      case "not_contains":
+        return !has;
+      case "exists":
+        return providers.length > 0;
+      case "not_exists":
+        return providers.length === 0;
       default:
         return has;
     }
@@ -162,15 +206,18 @@ export async function resolveSegmentContactIds(
     id: string;
     status: string;
     customFields: unknown;
+    consentSource?: string | null;
   }>;
 
   // Load tag names per contact only when a tag rule is present (avoids extra
   // queries otherwise). The Supabase compat layer does not hydrate nested
   // relations via `select`, so we resolve the join manually.
   const needsTags = parsed.rules.some((r) => r.field === "tag");
+  const needsProviders = parsed.rules.some((r) => r.field === "provider");
   const tagNamesByContact = new Map<string, string[]>();
+  const providersByContact = new Map<string, string[]>();
+  const contactIds = rawContacts.map((c) => c.id);
   if (needsTags && rawContacts.length) {
-    const contactIds = rawContacts.map((c) => c.id);
     const contactTags = (await prisma.contactTag.findMany({
       where: { contactId: { in: contactIds } },
     })) as Array<{ contactId: string; tagId: string }>;
@@ -191,11 +238,24 @@ export async function resolveSegmentContactIds(
     }
   }
 
+  if (needsProviders && contactIds.length) {
+    const mappings = (await prisma.crmObjectMapping.findMany({
+      where: { workspaceId, internalId: { in: contactIds } },
+    })) as Array<{ internalId: string; provider: string }>;
+    for (const m of mappings) {
+      const list = providersByContact.get(m.internalId) || [];
+      if (!list.includes(m.provider)) list.push(m.provider);
+      providersByContact.set(m.internalId, list);
+    }
+  }
+
   const contacts: EvaluableContact[] = rawContacts.map((c) => ({
     id: c.id,
     status: c.status,
     customFields: c.customFields,
     tagNames: tagNamesByContact.get(c.id) || [],
+    source: c.consentSource || null,
+    providers: providersByContact.get(c.id) || [],
   }));
 
   return contacts

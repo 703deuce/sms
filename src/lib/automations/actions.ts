@@ -376,6 +376,63 @@ export async function runNodeAction(
     return { nextNodeId: getNextNodeId(def, node.id) };
   }
 
+  if (block === "integration_action") {
+    const provider = String(cfg.provider || "").trim();
+    const actionId = String(cfg.actionId || "").trim();
+    if (!provider || !actionId) {
+      return { error: "integration_action_missing_config", nextNodeId: getNextNodeId(def, node.id) };
+    }
+    let params: Record<string, unknown> = {};
+    if (cfg.params && typeof cfg.params === "object") {
+      params = cfg.params as Record<string, unknown>;
+    } else if (cfg.paramsJson) {
+      try {
+        params = JSON.parse(String(cfg.paramsJson || "{}")) as Record<string, unknown>;
+      } catch {
+        return { error: "integration_action_invalid_params" };
+      }
+    }
+    // Merge contact identity for upserts
+    params = {
+      email: contact.email,
+      phone: contact.phone,
+      firstName: contact.firstName,
+      lastName: contact.lastName,
+      ...params,
+    };
+    if (ctx.testMode) {
+      return {
+        nextNodeId: getNextNodeId(def, node.id),
+        output: JSON.parse(JSON.stringify({ test: true, provider, actionId, params })),
+      };
+    }
+    const { enqueueJob } = await import("@/lib/messaging/enqueue-advance");
+    const { isExternalProvider } = await import("@/lib/integrations/framework");
+    if (!isExternalProvider(provider)) {
+      return { error: "integration_action_unknown_provider" };
+    }
+    await enqueueJob({
+      jobType: "integration_action",
+      queueName: `ext-${provider}`,
+      workspaceId: ctx.workspaceId,
+      priority: 20,
+      payload: JSON.parse(
+        JSON.stringify({
+          workspaceId: ctx.workspaceId,
+          provider,
+          actionId,
+          params,
+          contactId: ctx.contactId,
+        }),
+      ),
+      idempotencyKey: `int-act:${ctx.executionId}:${node.id}`,
+    });
+    return {
+      nextNodeId: getNextNodeId(def, node.id),
+      output: { queued: true, provider, actionId },
+    };
+  }
+
   if (block === "end_automation" || node.type === "end") {
     return { done: true };
   }

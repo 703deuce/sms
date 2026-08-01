@@ -356,6 +356,122 @@ export function NodeConfigPanel({
           </div>
         )}
 
+        {block.startsWith("integration_") && block !== "integration_action" && (
+          <>
+            <div>
+              <Label>Provider (optional filter)</Label>
+              <Select
+                value={String(cfg.provider || "")}
+                onChange={(e) => onUpdate({ config: { ...cfg, provider: e.target.value } })}
+              >
+                <option value="">Any connected app</option>
+                <option value="calendly">Calendly</option>
+                <option value="mailchimp">Mailchimp</option>
+                <option value="typeform">Typeform</option>
+                <option value="activecampaign">ActiveCampaign</option>
+                <option value="woocommerce">WooCommerce</option>
+                <option value="jotform">Jotform</option>
+                <option value="close">Close</option>
+                <option value="freshdesk">Freshdesk</option>
+                <option value="klaviyo">Klaviyo</option>
+                <option value="highlevel">HighLevel</option>
+              </Select>
+            </div>
+            {(block === "integration_tag_added" || block === "integration_tag_removed") && (
+              <div>
+                <Label>Tag filter</Label>
+                <Input
+                  value={String(cfg.tag || "")}
+                  onChange={(e) => onUpdate({ config: { ...cfg, tag: e.target.value } })}
+                  placeholder="Optional exact tag"
+                />
+              </div>
+            )}
+            {block === "integration_form_submitted" && (
+              <div>
+                <Label>Form ID / name filter</Label>
+                <Input
+                  value={String(cfg.formSlug || "")}
+                  onChange={(e) => onUpdate({ config: { ...cfg, formSlug: e.target.value } })}
+                  placeholder="Optional form id or name"
+                />
+              </div>
+            )}
+            {block === "integration_order_updated" && (
+              <div>
+                <Label>Order status filter</Label>
+                <Input
+                  value={String(cfg.orderStatus || "")}
+                  onChange={(e) => onUpdate({ config: { ...cfg, orderStatus: e.target.value } })}
+                  placeholder="e.g. completed"
+                />
+              </div>
+            )}
+            {block === "integration_appointment_scheduled" && (
+              <div>
+                <Label>Event type filter</Label>
+                <Input
+                  value={String(cfg.eventTypeName || "")}
+                  onChange={(e) =>
+                    onUpdate({ config: { ...cfg, eventTypeName: e.target.value } })
+                  }
+                  placeholder="Optional event type name"
+                />
+              </div>
+            )}
+          </>
+        )}
+
+        {block === "integration_action" && (
+          <>
+            <div>
+              <Label>Provider</Label>
+              <Select
+                value={String(cfg.provider || "")}
+                onChange={(e) => onUpdate({ config: { ...cfg, provider: e.target.value } })}
+              >
+                <option value="">Select provider</option>
+                <option value="activecampaign">ActiveCampaign</option>
+                <option value="mailchimp">Mailchimp</option>
+                <option value="highlevel">HighLevel</option>
+                <option value="close">Close</option>
+                <option value="freshdesk">Freshdesk</option>
+                <option value="klaviyo">Klaviyo</option>
+                <option value="woocommerce">WooCommerce</option>
+              </Select>
+            </div>
+            <div>
+              <Label>Action</Label>
+              <Select
+                value={String(cfg.actionId || "contact.upsert")}
+                onChange={(e) => onUpdate({ config: { ...cfg, actionId: e.target.value } })}
+              >
+                <option value="contact.upsert">Create/update contact</option>
+                <option value="contact.add_tag">Add tag</option>
+                <option value="contact.remove_tag">Remove tag</option>
+                <option value="contact.add_to_list">Add to list</option>
+                <option value="deal.upsert">Create/update deal</option>
+                <option value="task.create">Create task</option>
+                <option value="note.create">Create note</option>
+                <option value="ticket.create">Create ticket</option>
+                <option value="ticket.add_private_note">Add private ticket note</option>
+                <option value="order.add_note">Add order note</option>
+              </Select>
+            </div>
+            <div>
+              <Label>Params JSON</Label>
+              <Input
+                value={String(cfg.paramsJson || "{}")}
+                onChange={(e) => onUpdate({ config: { ...cfg, paramsJson: e.target.value } })}
+                placeholder='{"tag":"Hot Lead"}'
+              />
+              <p className="mt-1 text-xs text-muted-foreground">
+                Contact phone/email/name are merged automatically. Do not put secrets here.
+              </p>
+            </div>
+          </>
+        )}
+
         {block === "scheduled_datetime" && (
           <>
             <div>

@@ -153,6 +153,38 @@ export const AUTOMATION_BLOCKS: BlockDefinition[] = [
     icon: "zap",
     defaultConfig: {},
   }),
+  // —— Connected app triggers ——
+  ...[
+    ["integration_appointment_scheduled", "Appointment scheduled (app)", "Calendly/HighLevel appointment booked", { provider: "", eventTypeName: "" }],
+    ["integration_appointment_canceled", "Appointment canceled (app)", "Integrated appointment canceled", { provider: "calendly" }],
+    ["integration_appointment_rescheduled", "Appointment rescheduled (app)", "Integrated appointment rescheduled", { provider: "calendly" }],
+    ["integration_form_submitted", "Form submitted (app)", "Typeform/Jotform submission", { provider: "", formSlug: "" }],
+    ["integration_tag_added", "Tag added (app)", "Tag added in connected marketing/CRM", { provider: "", tag: "" }],
+    ["integration_tag_removed", "Tag removed (app)", "Tag removed in connected app", { provider: "", tag: "" }],
+    ["integration_list_joined", "List joined (app)", "Joined Mailchimp/Klaviyo/AC list", { provider: "" }],
+    ["integration_order_created", "Order created", "WooCommerce order created", { provider: "woocommerce" }],
+    ["integration_order_paid", "Order paid", "WooCommerce order paid", { provider: "woocommerce" }],
+    ["integration_order_updated", "Order status changed", "WooCommerce order status changed", { provider: "woocommerce", orderStatus: "" }],
+    ["integration_order_completed", "Order completed", "WooCommerce order fulfilled", { provider: "woocommerce" }],
+    ["integration_deal_created", "Deal created (app)", "Deal/opportunity created", { provider: "" }],
+    ["integration_deal_stage_changed", "Deal stage changed (app)", "Deal stage changed", { provider: "" }],
+    ["integration_ticket_created", "Ticket created", "Freshdesk ticket created", { provider: "freshdesk" }],
+    ["integration_ticket_updated", "Ticket updated", "Freshdesk ticket updated", { provider: "freshdesk" }],
+    ["integration_ticket_resolved", "Ticket resolved", "Freshdesk ticket solved/closed", { provider: "freshdesk" }],
+    ["integration_contact_created", "Contact created (app)", "Contact/profile created in connected app", { provider: "" }],
+    ["integration_contact_updated", "Contact updated (app)", "Contact/profile updated in connected app", { provider: "" }],
+    ["integration_task_created", "Task created (app)", "Close/HighLevel task created", { provider: "" }],
+    ["integration_consent_changed", "Consent changed", "Mailchimp/Klaviyo consent change", { provider: "" }],
+  ].map(([blockType, label, description, defaultConfig]) =>
+    block({
+      blockType: String(blockType),
+      category: "trigger",
+      label: String(label),
+      description: String(description),
+      icon: "zap",
+      defaultConfig: defaultConfig as Record<string, unknown>,
+    }),
+  ),
 
   // —— Actions ——
   block({
@@ -253,6 +285,18 @@ export const AUTOMATION_BLOCKS: BlockDefinition[] = [
     description: "POST JSON to an external URL",
     icon: "webhook",
     defaultConfig: { url: "", method: "POST" },
+  }),
+  block({
+    blockType: "integration_action",
+    category: "action",
+    label: "Connected app action",
+    description: "Run a typed action on a connected integration (tag, ticket, deal, note, …)",
+    icon: "cloud",
+    defaultConfig: {
+      provider: "",
+      actionId: "contact.upsert",
+      paramsJson: "{}",
+    },
   }),
   block({
     blockType: "end_automation",

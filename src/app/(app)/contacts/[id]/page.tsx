@@ -10,6 +10,7 @@ import { loadContactById, loadConversations } from "@/lib/workspace-data";
 import { formatPhone } from "@/lib/utils";
 import { ClickToCallButton } from "@/components/contacts/click-to-call-button";
 import { ContactActivityTimeline } from "@/components/contacts/contact-activity-timeline";
+import { ContactIntegrationsPanel } from "@/components/contacts/contact-integrations-panel";
 import { ArrowLeft, MessageSquare, Shield } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -239,6 +240,22 @@ export default async function ContactDetailPage({
         </div>
 
         <div className="space-y-6">
+          <Card>
+            <CardTitle>Connected apps</CardTitle>
+            <p className="mt-1 text-sm text-muted-foreground">
+              External records from native integrations and CRM.
+            </p>
+            <div className="mt-4">
+              <ContactIntegrationsPanel contactId={contact.id} />
+            </div>
+            <Link
+              href="/integrations/native"
+              className="mt-4 inline-block text-sm underline text-muted-foreground"
+            >
+              Manage integrations
+            </Link>
+          </Card>
+
           <Card>
             <CardTitle>Lists</CardTitle>
             <div className="mt-4 flex flex-wrap gap-2">

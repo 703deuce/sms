@@ -143,28 +143,32 @@ export async function runIntegrationSyncJob(payload: {
     }
 
     if (adapter.listAppointments) {
+      const { persistAppointmentFromIntegration } = await import("./product-persist");
       let cursor: string | null | undefined = null;
       do {
         const page = await adapter.listAppointments(ctx, cursor, { modifiedSince });
         stats.appointments += page.items.length;
         for (const a of page.items) {
           if (!a.inviteePhone && !a.inviteeEmail) continue;
-          const matched = await upsertExternalContact({
-            workspaceId,
-            phone: a.inviteePhone,
-            email: a.inviteeEmail,
-            firstName: a.inviteeName?.split(" ")[0],
-            lastName: a.inviteeName?.split(" ").slice(1).join(" ") || null,
-            source: provider,
-          });
-          if (matched && a.id) {
-            await upsertExternalMapping({
+          try {
+            const matched = await upsertExternalContact({
               workspaceId,
-              provider,
-              objectType: "appointment",
-              internalId: matched.contactId,
-              externalId: String(a.id),
+              phone: a.inviteePhone,
+              email: a.inviteeEmail,
+              firstName: a.inviteeName?.split(" ")[0],
+              lastName: a.inviteeName?.split(" ").slice(1).join(" ") || null,
+              source: provider,
             });
+            if (matched && a.id) {
+              await persistAppointmentFromIntegration({
+                workspaceId,
+                provider,
+                contactId: matched.contactId,
+                appointment: a,
+              });
+            }
+          } catch {
+            stats.errors++;
           }
         }
         cursor = page.nextCursor;
@@ -183,24 +187,27 @@ export async function runIntegrationSyncJob(payload: {
             const page = await adapter.listFormSubmissions(ctx, String(form.id), cursor, {
               modifiedSince,
             });
+            const { persistFormSubmissionFromIntegration } = await import("./product-persist");
             for (const s of page.items) {
               stats.submissions++;
               if (!s.phone && !s.email) continue;
-              const matched = await upsertExternalContact({
-                workspaceId,
-                phone: s.phone,
-                email: s.email,
-                source: provider,
-              });
-              if (matched && s.id) {
-                await upsertExternalMapping({
+              try {
+                const matched = await upsertExternalContact({
                   workspaceId,
-                  provider,
-                  objectType: "form_submission",
-                  internalId: matched.contactId,
-                  externalId: String(s.id),
-                  parentExternalId: form.id,
+                  phone: s.phone,
+                  email: s.email,
+                  source: provider,
                 });
+                if (matched && s.id) {
+                  await persistFormSubmissionFromIntegration({
+                    workspaceId,
+                    provider,
+                    contactId: matched.contactId,
+                    submission: { ...s, formName: form.name },
+                  });
+                }
+              } catch {
+                stats.errors++;
               }
             }
             cursor = page.nextCursor;

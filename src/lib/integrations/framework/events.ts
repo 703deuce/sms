@@ -88,31 +88,36 @@ export async function publishNormalizedEvent(event: NormalizedEvent) {
     },
   });
 
-  // Optional: enqueue automation trigger by event type (future builder consumes these).
   try {
-    const { enqueueJob } = await import("@/lib/messaging/enqueue-advance");
-    await enqueueJob({
-      jobType: "integration_automation_event",
-      queueName: "automations",
-      workspaceId: event.workspaceId,
-      priority: 18,
-      payload: JSON.parse(
-        JSON.stringify({
-          workspaceId: event.workspaceId,
-          provider: event.provider,
-          eventType: event.eventType,
-          webhookEventId: row.id,
-          contactId,
-          phone: event.phone ?? null,
-          email: event.email ?? null,
-          payload: event.payload,
-        }),
-      ),
-      idempotencyKey: `int-evt-${event.idempotencyKey}`,
-    });
-  } catch {
-    // Job type may be a no-op until automation wiring exists — still stored.
+    const { persistProductFromNormalizedEvent } = await import("./product-persist");
+    await persistProductFromNormalizedEvent(event, contactId);
+  } catch (err) {
+    console.warn(
+      "[integrations] product persist failed",
+      err instanceof Error ? err.message : err,
+    );
   }
+
+  const { enqueueJob } = await import("@/lib/messaging/enqueue-advance");
+  await enqueueJob({
+    jobType: "integration_automation_event",
+    queueName: "automations",
+    workspaceId: event.workspaceId,
+    priority: 15,
+    payload: JSON.parse(
+      JSON.stringify({
+        workspaceId: event.workspaceId,
+        provider: event.provider,
+        eventType: event.eventType,
+        webhookEventId: row.id,
+        contactId,
+        phone: event.phone ?? null,
+        email: event.email ?? null,
+        payload: event.payload,
+      }),
+    ),
+    idempotencyKey: `int-evt-${event.idempotencyKey}`,
+  });
 
   return { published: true, eventId: row.id, contactId };
 }

@@ -92,7 +92,14 @@ export async function enrollForTrigger(
   workspaceId: string,
   triggerBlockType: string,
   contactId: string,
-  filters?: { tag?: string; formSlug?: string },
+  filters?: {
+    tag?: string;
+    formSlug?: string;
+    provider?: string;
+    eventType?: string;
+    orderStatus?: string;
+    eventTypeName?: string;
+  },
 ) {
   const prisma = getPrisma();
   const flows = await prisma.automationFlow.findMany({
@@ -106,14 +113,41 @@ export async function enrollForTrigger(
     const trigger = findTriggerNode(def);
     if (!trigger || trigger.data.blockType !== triggerBlockType) continue;
 
-    if (triggerBlockType === "tag_added" && filters?.tag) {
-      const required = String(trigger.data.config?.tag || "").trim();
+    const cfg = (trigger.data.config || {}) as Record<string, unknown>;
+
+    if (
+      (triggerBlockType === "tag_added" || triggerBlockType === "integration_tag_added") &&
+      filters?.tag
+    ) {
+      const required = String(cfg.tag || "").trim();
       if (required && required !== filters.tag) continue;
     }
 
-    if (triggerBlockType === "form_submitted" && filters?.formSlug) {
-      const required = String(trigger.data.config?.formSlug || "").trim();
+    if (
+      (triggerBlockType === "form_submitted" ||
+        triggerBlockType === "integration_form_submitted") &&
+      filters?.formSlug
+    ) {
+      const required = String(cfg.formSlug || "").trim();
       if (required && required !== filters.formSlug) continue;
+    }
+
+    if (triggerBlockType.startsWith("integration_") && filters?.provider) {
+      const requiredProvider = String(cfg.provider || "").trim();
+      if (requiredProvider && requiredProvider !== filters.provider) continue;
+    }
+
+    if (triggerBlockType === "integration_order_updated" && filters?.orderStatus) {
+      const required = String(cfg.orderStatus || "").trim();
+      if (required && required !== filters.orderStatus) continue;
+    }
+
+    if (
+      triggerBlockType === "integration_appointment_scheduled" &&
+      filters?.eventTypeName
+    ) {
+      const required = String(cfg.eventTypeName || "").trim();
+      if (required && required !== filters.eventTypeName) continue;
     }
 
     results.push(

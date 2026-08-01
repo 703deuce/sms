@@ -4,7 +4,7 @@ import { getPrisma } from "@/lib/db";
 
 export type SearchResult = {
   id: string;
-  type: "contact" | "campaign" | "conversation";
+  type: "contact" | "campaign" | "conversation" | "appointment" | "form_submission" | "external";
   title: string;
   subtitle: string;
   href: string;
@@ -106,6 +106,91 @@ export async function GET(request: Request) {
           href: `/inbox?conversation=${conv.id}`,
         });
       }
+    }
+
+    // Appointments (Calendly / HighLevel synced)
+    const appointments = (await prisma.voiceAppointment.findMany({
+      where: {
+        workspaceId,
+        OR: [
+          { serviceName: { contains: q, mode: "insensitive" } },
+          { externalId: { contains: q, mode: "insensitive" } },
+          { staffName: { contains: q, mode: "insensitive" } },
+        ],
+      },
+      take: PER_TYPE,
+      orderBy: { startsAt: "desc" },
+    })) as Array<{
+      id: string;
+      serviceName: string | null;
+      startsAt: Date;
+      contactId: string | null;
+      externalId: string | null;
+    }>;
+    for (const a of appointments) {
+      results.push({
+        id: a.id,
+        type: "appointment",
+        title: a.serviceName || "Appointment",
+        subtitle: `${new Date(a.startsAt).toLocaleString()}${a.externalId ? ` · ${a.externalId}` : ""}`,
+        href: a.contactId ? `/contacts/${a.contactId}` : "/integrations/native/appointments",
+      });
+    }
+
+    // Form submissions (Typeform / Jotform synced)
+    const submissions = (await prisma.formSubmission.findMany({
+      where: {
+        workspaceId,
+        OR: [
+          { phone: { contains: q, mode: "insensitive" } },
+        ],
+      },
+      take: PER_TYPE,
+      orderBy: { createdAt: "desc" },
+      include: { form: true },
+    })) as Array<{
+      id: string;
+      phone: string;
+      contactId: string | null;
+      form: { name: string; slug: string | null };
+    }>;
+    for (const s of submissions) {
+      results.push({
+        id: s.id,
+        type: "form_submission",
+        title: s.form.name,
+        subtitle: s.phone,
+        href: s.contactId
+          ? `/contacts/${s.contactId}`
+          : "/integrations/native/leads",
+      });
+    }
+
+    // External IDs from mappings
+    const mappings = (await prisma.crmObjectMapping.findMany({
+      where: {
+        workspaceId,
+        OR: [
+          { externalId: { contains: q, mode: "insensitive" } },
+        ],
+      },
+      take: PER_TYPE,
+      orderBy: { lastSyncedAt: "desc" },
+    })) as Array<{
+      id: string;
+      provider: string;
+      objectType: string;
+      externalId: string;
+      internalId: string;
+    }>;
+    for (const m of mappings) {
+      results.push({
+        id: m.id,
+        type: "external",
+        title: `${m.provider} ${m.objectType}`,
+        subtitle: m.externalId,
+        href: `/contacts/${m.internalId}`,
+      });
     }
 
     return NextResponse.json({ data: results });

@@ -200,8 +200,8 @@ export async function runIntegrationProbe(
           error: "Webhook registration unsupported",
         };
       }
-      const { getAppBaseUrl } = await import("@/lib/messaging/twilio-config");
-      const url = `${getAppBaseUrl()}/api/integrations/native/webhooks/${provider}`;
+      const { externalWebhookUrl } = await import("./app-url");
+      const url = externalWebhookUrl(provider);
       const result = await adapter.registerWebhooks(ctx, url);
       return { ok: true, probe, durationMs: Date.now() - started, data: result };
     }

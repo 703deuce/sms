@@ -118,6 +118,12 @@ export function NativeIntegrationsClient() {
         <Link href="/integrations/crm" className="underline">
           CRM framework (Zoho / Pipedrive)
         </Link>
+        <Link href="/integrations/native/leads" className="underline">
+          Lead inbox
+        </Link>
+        <Link href="/integrations/native/appointments" className="underline">
+          Appointments
+        </Link>
         <Link href="/integrations" className="underline">
           All integrations
         </Link>

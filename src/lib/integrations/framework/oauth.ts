@@ -6,16 +6,18 @@ import { getAdapter, isExternalProvider } from "./registry";
 import { decryptIntegrationSecret, encryptIntegrationSecret } from "./secrets";
 import type { ExternalProviderId } from "./types";
 
-function appUrl() {
-  return (process.env.APP_URL || "http://localhost:3000").replace(/\/$/, "");
-}
+import {
+  assertIntegrationRuntimeReady,
+  externalOAuthCallbackUrl as buildCallbackUrl,
+  getIntegrationAppUrl,
+} from "./app-url";
 
 function secret() {
   return process.env.INTEGRATION_SECRET_KEY?.trim() || "transovo-dev-oauth";
 }
 
 export function externalOAuthCallbackUrl(provider: ExternalProviderId) {
-  return `${appUrl()}/api/integrations/native/${provider}/callback`;
+  return buildCallbackUrl(provider);
 }
 
 function makeState(workspaceId: string, provider: string) {
@@ -50,6 +52,7 @@ function useSandbox() {
 }
 
 export async function startExternalOAuth(workspaceId: string, provider: ExternalProviderId) {
+  assertIntegrationRuntimeReady({ requireOauth: [provider] });
   const adapter = getAdapter(provider);
   if (adapter.authKind !== "oauth" || !adapter.oauth) {
     throw new Error(`${provider} does not use OAuth`);
@@ -324,21 +327,30 @@ export function oauthEnvReady(provider: ExternalProviderId): {
   ready: boolean;
   missing: string[];
   callbackUrl: string;
+  appUrl: string;
 } {
   const adapter = getAdapter(provider);
   const missing: string[] = [];
   if (adapter.authKind !== "oauth" || !adapter.oauth) {
-    return { ready: false, missing: ["not_oauth"], callbackUrl: externalOAuthCallbackUrl(provider) };
+    return {
+      ready: false,
+      missing: ["not_oauth"],
+      callbackUrl: externalOAuthCallbackUrl(provider),
+      appUrl: getIntegrationAppUrl(),
+    };
   }
   if (!process.env[adapter.oauth.clientIdEnv]?.trim()) missing.push(adapter.oauth.clientIdEnv);
   if (!process.env[adapter.oauth.clientSecretEnv]?.trim()) {
     missing.push(adapter.oauth.clientSecretEnv);
   }
-  if (!process.env.APP_URL?.trim()) missing.push("APP_URL");
+  if (!process.env.APP_URL?.trim() && !process.env.NEXT_PUBLIC_APP_URL?.trim()) {
+    missing.push("APP_URL");
+  }
   if (!process.env.INTEGRATION_SECRET_KEY?.trim()) missing.push("INTEGRATION_SECRET_KEY");
   return {
     ready: missing.length === 0,
     missing,
     callbackUrl: externalOAuthCallbackUrl(provider),
+    appUrl: getIntegrationAppUrl(),
   };
 }

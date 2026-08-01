@@ -19,6 +19,7 @@ import {
   Users,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ContactIntegrationsPanel } from "@/components/contacts/contact-integrations-panel";
 
 type MediaMode = "webrtc" | "call_control" | "call_my_phone";
 
@@ -2047,7 +2048,7 @@ export function SoftphonePanel({
           )}
           {screenPop && (
             <div className="mt-3 rounded-lg border border-border bg-card p-3">
-              <p className="text-xs font-medium text-muted-foreground">CRM screen-pop</p>
+              <p className="text-xs font-medium text-muted-foreground">Contact screen-pop</p>
               <p className="text-sm font-semibold">{contactName(screenPop)}</p>
               <p className="text-xs text-muted-foreground">{screenPop.phone}</p>
               {screenPop.tagMembers?.length ? (
@@ -2060,6 +2061,9 @@ export function SoftphonePanel({
                   Notes: {JSON.stringify(screenPop.customFields)}
                 </p>
               ) : null}
+              <div className="mt-2 border-t border-border pt-2">
+                <ContactIntegrationsPanel contactId={screenPop.id} compact />
+              </div>
             </div>
           )}
         </Card>
