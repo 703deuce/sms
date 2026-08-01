@@ -131,14 +131,26 @@ export async function enqueueBullmq(
       if (state === "completed" || state === "failed") {
         await existing.remove();
       } else if (state === "delayed") {
-        // Wake immediately when requested (compliance webhook / refresh), else bump delay
-        if (opts?.wake || !opts?.delay) {
-          await existing.promote();
-        } else {
-          await existing.changeDelay(opts.delay);
+        // Wake immediately when requested (compliance webhook / refresh), else bump delay.
+        // Race-safe: job may leave delayed between getState() and promote().
+        try {
+          if (opts?.wake || !opts?.delay) {
+            await existing.promote();
+          } else {
+            await existing.changeDelay(opts.delay);
+          }
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          if (!/not in the delayed state/i.test(msg)) throw err;
         }
         return;
-      } else if (state === "waiting" || state === "prioritized" || state === "active") {
+      } else if (
+        state === "waiting" ||
+        state === "wait" ||
+        state === "prioritized" ||
+        state === "active" ||
+        state === "waiting-children"
+      ) {
         return;
       }
     }
