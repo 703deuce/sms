@@ -113,17 +113,104 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
         telnyxCallControlId: String(payload.telnyxCallControlId || ""),
       });
     }
-    case "voice_send_email": {
-      // Queued email follow-up from AI tools — log for ops until SMTP integration is bound.
+    case "phone_park_timeout": {
       const { getPrisma } = await import("@/lib/db");
-      await getPrisma().auditLog.create({
+      const prisma = getPrisma();
+      const slotId = String(payload.slotId || "");
+      const slot = await prisma.callParkSlot.findUnique({ where: { id: slotId } });
+      if (!slot || slot.status !== "parked") return { skipped: true };
+      await prisma.callParkSlot.update({
+        where: { id: slotId },
+        data: { status: "timed_out" },
+      });
+      if (slot.fallbackTarget && slot.telnyxCallControlId) {
+        const { telnyxRequest } = await import("@/lib/messaging/telnyx/client");
+        await telnyxRequest(`/calls/${slot.telnyxCallControlId}/actions/transfer`, {
+          method: "POST",
+          body: { to: slot.fallbackTarget },
+        }).catch(() => undefined);
+      } else if (slot.telnyxCallControlId && slot.humanCallId) {
+        const { leaveVoicemailOnCall } = await import("@/lib/phone/voicemail-service");
+        await leaveVoicemailOnCall({
+          workspaceId: slot.workspaceId,
+          humanCallId: slot.humanCallId,
+          telnyxCallControlId: slot.telnyxCallControlId,
+        }).catch(() => undefined);
+      }
+      return { ok: true, slotId };
+    }
+    case "voice_human_first_timeout": {
+      const { handleHumanFirstTimeoutJob } = await import("@/lib/voice/inbound");
+      return handleHumanFirstTimeoutJob({
+        workspaceId: String(payload.workspaceId || ""),
+        callId: String(payload.callId || ""),
+        humanCallId: payload.humanCallId as string | undefined,
+        telnyxCallControlId: payload.telnyxCallControlId as string | undefined,
+        agentId: payload.agentId as string | undefined,
+      });
+    }
+    case "voice_warm_transfer_timeout": {
+      const { handleWarmTransferTimeoutJob } = await import("@/lib/voice/transfers");
+      return handleWarmTransferTimeoutJob({
+        workspaceId: String(payload.workspaceId || ""),
+        callId: String(payload.callId || ""),
+        transferId: String(payload.transferId || ""),
+      });
+    }
+    case "voice_send_email": {
+      const { getPrisma } = await import("@/lib/db");
+      const prisma = getPrisma();
+      const workspaceId = String(payload.workspaceId || "") || null;
+      const to = String(payload.to || "");
+      const subject = String(payload.subject || "");
+      const body = String(payload.body || "");
+      if (!to || !subject || !body) throw new Error("to, subject, body required");
+
+      const pending = await prisma.message.create({
         data: {
-          workspaceId: String(payload.workspaceId || "") || null,
-          event: "voice.email_queued",
-          detail: JSON.stringify(payload),
+          workspaceId,
+          to,
+          from: process.env.BREVO_FROM_EMAIL?.trim() || process.env.REVIEW_REQUEST_FROM_EMAIL?.trim() || "voice@noreply",
+          body: `${subject}\n\n${body}`,
+          status: "queued",
+          providerId: `voice-email:${Date.now()}`,
         },
       });
-      return { ok: true, queued: true };
+
+      let sendResult: { status: string; id?: string; error?: string } = { status: "queued" };
+      try {
+        const { sendTransactionalEmail } = await import("@/lib/email/brevo");
+        const result = await sendTransactionalEmail({
+          to,
+          subject,
+          htmlContent: `<p>${body.replace(/\n/g, "<br>")}</p>`,
+          textContent: body,
+        });
+        sendResult = { status: result.status, id: result.id, error: result.error };
+        if (result.status === "sent" || result.status === "queued") {
+          await prisma.message.update({
+            where: { id: pending.id },
+            data: { status: result.status, providerId: result.id },
+          });
+        } else if (result.status === "failed") {
+          await prisma.message.update({
+            where: { id: pending.id },
+            data: { status: "failed", providerId: result.id },
+          });
+        }
+      } catch (err) {
+        console.warn("[voice_send_email] send failed, record kept as queued", err);
+      }
+
+      await prisma.auditLog.create({
+        data: {
+          workspaceId,
+          event: "voice.email_queued",
+          detail: JSON.stringify({ ...payload, messageId: pending.id, sendResult }),
+        },
+      });
+
+      return { ok: true, queued: true, messageId: pending.id, sendResult };
     }
     case "list_cleanup": {
       const workspaceId = payload.workspaceId as string | undefined;

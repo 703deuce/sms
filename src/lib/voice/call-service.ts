@@ -44,6 +44,37 @@ export async function initiateOutboundCall(input: {
     throw new Error("Number is on suppression list");
   }
 
+  const complianceSettings = (compliance?.settings || {}) as {
+    internationalBlocked?: boolean;
+    blockedPrefixes?: string[];
+    spendLimitCents?: number | null;
+    requiredDisclosureText?: string;
+  };
+  if (complianceSettings.internationalBlocked !== false) {
+    // Allow US/CA (+1) by default when international is blocked.
+    if (!phone.startsWith("+1")) {
+      throw new Error("International calling is blocked for this workspace");
+    }
+  }
+  for (const prefix of complianceSettings.blockedPrefixes || []) {
+    const p = prefix.startsWith("+") ? prefix : `+${prefix}`;
+    if (phone.startsWith(p) || phone.replace("+", "").startsWith(prefix.replace("+", ""))) {
+      throw new Error(`Destination blocked by prefix ${prefix}`);
+    }
+  }
+  if (complianceSettings.spendLimitCents) {
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+    const spent = await prisma.voiceCall.aggregate({
+      where: { workspaceId: input.workspaceId, startedAt: { gte: startOfMonth } },
+      _sum: { costCents: true },
+    });
+    if ((spent._sum.costCents || 0) >= complianceSettings.spendLimitCents) {
+      throw new Error("Monthly voice spend limit reached");
+    }
+  }
+
   let fromE164 = "";
   let phoneNumberId: string | null = agent.phoneNumberId;
 

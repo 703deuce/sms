@@ -179,17 +179,31 @@ export async function processVoiceWebhookEvent(input: {
         return { ok: true, kind: "ivr_gather" };
       }
 
-      const { evaluateInboundRouting } = await import("../routing");
-      const routing = await evaluateInboundRouting({
-        workspaceId: pn.workspaceId,
-        fromE164: from,
-        toE164: to,
-        isKnownContact: false,
+      // Prefer AI agent when one is assigned to this number; otherwise softphone path.
+      const aiAgent = await prisma.voiceAgent.findFirst({
+        where: {
+          workspaceId: pn.workspaceId,
+          status: "ACTIVE",
+          OR: [
+            { phoneNumberId: pn.id },
+            { phoneAssignments: { some: { phoneNumberId: pn.id, inboundEnabled: true } } },
+          ],
+        },
       });
 
-      if (routing.action !== "ai_answer") {
-        const { handleInboundHumanCall } = await import("@/lib/phone/human-call-service");
-        await handleInboundHumanCall({
+      if (aiAgent) {
+        const { handleInboundCallEvent } = await import("../inbound");
+        const result = await handleInboundCallEvent({
+          workspaceId: pn.workspaceId,
+          fromE164: from,
+          toE164: to,
+          telnyxCallControlId: String(eventPayload.call_control_id || ""),
+          payload: eventPayload,
+        });
+        call = await prisma.voiceCall.findUnique({ where: { id: result.callId } });
+      } else {
+        const { processSoftphoneInbound } = await import("@/lib/phone/inbound-runtime");
+        await processSoftphoneInbound({
           workspaceId: pn.workspaceId,
           fromE164: from,
           toE164: to,
@@ -199,18 +213,8 @@ export async function processVoiceWebhookEvent(input: {
           where: { providerEventId: input.providerEventId },
           data: { status: "processed", processedAt: new Date() },
         });
-        return { ok: true, kind: "human_inbound" };
+        return { ok: true, kind: "softphone_inbound" };
       }
-
-      const { handleInboundCallEvent } = await import("../inbound");
-      const result = await handleInboundCallEvent({
-        workspaceId: pn.workspaceId,
-        fromE164: from,
-        toE164: to,
-        telnyxCallControlId: String(eventPayload.call_control_id || ""),
-        payload: eventPayload,
-      });
-      call = await prisma.voiceCall.findUnique({ where: { id: result.callId } });
     }
   }
 
@@ -223,6 +227,33 @@ export async function processVoiceWebhookEvent(input: {
   }
 
   const workspaceId = call.workspaceId;
+
+  // Warm transfer consult leg answered — bridge caller and destination.
+  const clientStateRaw = eventPayload.client_state;
+  let warmState: Record<string, unknown> = {};
+  if (typeof clientStateRaw === "string") {
+    try {
+      warmState = JSON.parse(Buffer.from(clientStateRaw, "base64").toString("utf8"));
+    } catch {
+      warmState = {};
+    }
+  }
+  if (
+    warmState.kind === "warm_transfer_consult" &&
+    (eventType === "call.answered" || eventType === "call.bridged") &&
+    warmState.transferId &&
+    warmState.callerControlId
+  ) {
+    const { handleWarmTransferConsultAnswered } = await import("../transfers");
+    await handleWarmTransferConsultAnswered({
+      workspaceId,
+      callId: String(warmState.callId || call.id),
+      transferId: String(warmState.transferId),
+      consultControlId: String(eventPayload.call_control_id || ""),
+      callerControlId: String(warmState.callerControlId),
+      summary: warmState.summary ? String(warmState.summary) : undefined,
+    }).catch((err) => console.warn("[voice/webhook] warm transfer bridge failed", err));
+  }
 
   await prisma.voiceCallEvent.create({
     data: {

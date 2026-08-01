@@ -8,6 +8,7 @@ import { getActiveWorkspaceId } from "@/lib/auth";
 import type { Contact, Conversation } from "@/lib/types";
 import { loadContactById, loadConversations } from "@/lib/workspace-data";
 import { formatPhone } from "@/lib/utils";
+import { ClickToCallButton } from "@/components/contacts/click-to-call-button";
 import { ArrowLeft, Mail, MessageSquare, Shield } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -126,6 +127,7 @@ export default async function ContactDetailPage({
                 Back
               </Button>
             </Link>
+            <ClickToCallButton phone={contact.phone} />
             {contact.status === "Subscribed" ? (
               <Link href="/send/quick">
                 <Button>

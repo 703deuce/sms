@@ -9,6 +9,40 @@ export async function GET(request: Request) {
     if ("error" in auth) return auth.error;
     const { searchParams } = new URL(request.url);
     const status = searchParams.get("status");
+    const q = searchParams.get("q")?.trim();
+    const phone = searchParams.get("phone")?.trim();
+
+    const include = { tagMembers: { include: { tag: true } } };
+
+    if (phone) {
+      const normalized = normalizeE164(phone);
+      const data = await getPrisma().contact.findMany({
+        where: { workspaceId: auth.workspaceId, phone: normalized },
+        include,
+        take: 5,
+      });
+      return NextResponse.json({ data });
+    }
+
+    if (q) {
+      const data = await getPrisma().contact.findMany({
+        where: {
+          workspaceId: auth.workspaceId,
+          OR: [
+            { firstName: { contains: q, mode: "insensitive" } },
+            { lastName: { contains: q, mode: "insensitive" } },
+            { phone: { contains: q } },
+            { email: { contains: q, mode: "insensitive" } },
+            { company: { contains: q, mode: "insensitive" } },
+          ],
+        },
+        include,
+        orderBy: { createdAt: "desc" },
+        take: 25,
+      });
+      return NextResponse.json({ data });
+    }
+
     const data = await getPrisma().contact.findMany({
       where: {
         workspaceId: auth.workspaceId,

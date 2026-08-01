@@ -32,7 +32,11 @@ export async function ringQueueMembers(input: {
   }
 
   let ordered = [...available];
-  if (queue.strategy === "round_robin" || queue.strategy === "sequential") {
+  if (
+    queue.strategy === "round_robin" ||
+    queue.strategy === "sequential" ||
+    queue.strategy === "linear"
+  ) {
     const cfg = (queue.configJson || {}) as { lastIndex?: number };
     const start = ((cfg.lastIndex || 0) + 1) % ordered.length;
     ordered = [...ordered.slice(start), ...ordered.slice(0, start)];
@@ -40,7 +44,9 @@ export async function ringQueueMembers(input: {
       where: { id: queue.id },
       data: { configJson: { ...cfg, lastIndex: start } },
     });
-    if (queue.strategy === "sequential") ordered = ordered.slice(0, 1);
+    if (queue.strategy === "sequential" || queue.strategy === "linear") {
+      ordered = ordered.slice(0, 1);
+    }
   } else if (queue.strategy === "longest_idle") {
     // Prefer users whose presence was updated longest ago while available.
     ordered.sort((a, b) => {
@@ -75,8 +81,8 @@ export async function ringQueueMembers(input: {
     },
   });
 
-  // Soft ring: create per-member presence busy candidates and leave call in ringing for softphone poll.
-  // For ring_all, all available members can answer; first answer wins.
+  // Softphone poll ring + optional PSTN/cellular dial for members with forwardToCellular / ringMobile.
+  const connectionId = process.env.TELNYX_CONNECTION_ID?.trim();
   for (const userId of ordered) {
     await prisma.softphonePresence.upsert({
       where: { workspaceId_userId: { workspaceId: input.workspaceId, userId } },
@@ -88,6 +94,36 @@ export async function ringQueueMembers(input: {
       },
       update: {},
     }).catch(() => undefined);
+
+    const userSettings = await prisma.softphoneUserSettings.findUnique({
+      where: { workspaceId_userId: { workspaceId: input.workspaceId, userId } },
+    });
+    if (
+      isTelnyxPhoneConfigured() &&
+      connectionId &&
+      userSettings?.ringMobile !== false &&
+      userSettings?.forwardToCellular
+    ) {
+      await telnyxRequest("/calls", {
+        method: "POST",
+        body: {
+          connection_id: connectionId,
+          from: (
+            await prisma.humanCall.findUnique({ where: { id: input.humanCallId } })
+          )?.to,
+          to: userSettings.forwardToCellular,
+          client_state: Buffer.from(
+            JSON.stringify({
+              workspaceId: input.workspaceId,
+              humanCallId: input.humanCallId,
+              kind: "queue_member_ring",
+              parentCallControlId: input.telnyxCallControlId,
+              userId,
+            }),
+          ).toString("base64"),
+        },
+      }).catch(() => undefined);
+    }
   }
 
   // Schedule overflow if nobody answers

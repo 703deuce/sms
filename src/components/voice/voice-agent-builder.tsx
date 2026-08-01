@@ -53,17 +53,19 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
   const [selectedKbIds, setSelectedKbIds] = useState<string[]>([]);
   const [toolOptions, setToolOptions] = useState<ToolOption[]>([]);
   const [selectedToolIds, setSelectedToolIds] = useState<string[]>([]);
+  const [agentOptions, setAgentOptions] = useState<Array<{ id: string; name: string; telnyxAssistantId?: string | null }>>([]);
   const [pronDictText, setPronDictText] = useState("{}");
   const [linkSaving, setLinkSaving] = useState(false);
 
   const load = useCallback(async () => {
-    const [aRes, pRes, kbRes, agentKbRes, toolsRes, agentToolsRes] = await Promise.all([
+    const [aRes, pRes, kbRes, agentKbRes, toolsRes, agentToolsRes, agentsRes] = await Promise.all([
       fetch(`/api/voice/agents/${agentId}`),
       fetch("/api/numbers"),
       fetch("/api/voice/knowledge"),
       fetch(`/api/voice/agents/${agentId}/knowledge`),
       fetch("/api/voice/tools"),
       fetch(`/api/voice/agents/${agentId}/tools`),
+      fetch("/api/voice/agents"),
     ]);
     const aJson = await aRes.json();
     if (!aRes.ok) throw new Error(aJson.error || "Failed to load");
@@ -94,6 +96,14 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
     if (agentToolsRes.ok) {
       const j = await agentToolsRes.json();
       setSelectedToolIds((j.data || []).map((l: { toolId: string }) => l.toolId));
+    }
+    if (agentsRes.ok) {
+      const j = await agentsRes.json();
+      setAgentOptions((j.data || []).map((a: { id: string; name: string; telnyxAssistantId?: string | null }) => ({
+        id: a.id,
+        name: a.name,
+        telnyxAssistantId: a.telnyxAssistantId,
+      })));
     }
   }, [agentId]);
 
@@ -795,12 +805,197 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
         )}
 
         {(section === "transfers" || section === "voicemail" || section === "compliance") && (
-          <Card className="p-5">
+          <Card className="space-y-4 p-5">
             <CardTitle>{SECTIONS.find((s) => s.id === section)?.label}</CardTitle>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Configure {section} rules in workspace voice settings. Agent-level overrides
-              are stored in draft config JSON.
-            </p>
+
+            {section === "transfers" && (
+              <>
+                <p className="text-sm text-muted-foreground">
+                  Transfer targets and handoff assistants sync to Telnyx on publish.
+                </p>
+                <div>
+                  <Label>Transfer targets</Label>
+                  {(cfg.transfers?.targets as Array<{ name: string; to: string }> | undefined)?.map((t, i) => (
+                    <div key={i} className="mt-2 flex flex-wrap gap-2">
+                      <Input
+                        placeholder="Name (e.g. Sales)"
+                        value={t.name}
+                        onChange={(e) => {
+                          const targets = [...((cfg.transfers?.targets as Array<{ name: string; to: string }>) || [])];
+                          targets[i] = { ...targets[i], name: e.target.value };
+                          updateConfig({ transfers: { ...cfg.transfers, targets } });
+                        }}
+                      />
+                      <Input
+                        placeholder="+1… or sip URI"
+                        value={t.to}
+                        onChange={(e) => {
+                          const targets = [...((cfg.transfers?.targets as Array<{ name: string; to: string }>) || [])];
+                          targets[i] = { ...targets[i], to: e.target.value };
+                          updateConfig({ transfers: { ...cfg.transfers, targets } });
+                        }}
+                      />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const targets = ((cfg.transfers?.targets as Array<{ name: string; to: string }>) || []).filter((_, j) => j !== i);
+                          updateConfig({ transfers: { ...cfg.transfers, targets } });
+                        }}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  ))}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-2"
+                    onClick={() => {
+                      const targets = [...((cfg.transfers?.targets as Array<{ name: string; to: string }>) || []), { name: "", to: "" }];
+                      updateConfig({ transfers: { ...cfg.transfers, targets } });
+                    }}
+                  >
+                    Add target
+                  </Button>
+                </div>
+                <div>
+                  <Label>Handoff assistants</Label>
+                  {(cfg.transfers?.handoffAssistants as Array<{ name: string; id: string }> | undefined)?.map((h, i) => (
+                    <div key={i} className="mt-2 flex flex-wrap gap-2">
+                      <Input
+                        placeholder="Label"
+                        value={h.name}
+                        onChange={(e) => {
+                          const handoffAssistants = [...((cfg.transfers?.handoffAssistants as Array<{ name: string; id: string }>) || [])];
+                          handoffAssistants[i] = { ...handoffAssistants[i], name: e.target.value };
+                          updateConfig({ transfers: { ...cfg.transfers, handoffAssistants } });
+                        }}
+                      />
+                      <select
+                        className="rounded-lg border border-border px-3 py-2 text-sm"
+                        value={h.id}
+                        onChange={(e) => {
+                          const handoffAssistants = [...((cfg.transfers?.handoffAssistants as Array<{ name: string; id: string }>) || [])];
+                          const picked = agentOptions.find((a) => a.telnyxAssistantId === e.target.value || a.id === e.target.value);
+                          handoffAssistants[i] = {
+                            name: handoffAssistants[i].name || picked?.name || "",
+                            id: e.target.value,
+                          };
+                          updateConfig({ transfers: { ...cfg.transfers, handoffAssistants } });
+                        }}
+                      >
+                        <option value="">Select agent / assistant id</option>
+                        {agentOptions.map((a) => (
+                          <option key={a.id} value={a.telnyxAssistantId || a.id}>
+                            {a.name}{a.telnyxAssistantId ? ` (${a.telnyxAssistantId})` : ""}
+                          </option>
+                        ))}
+                      </select>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const handoffAssistants = ((cfg.transfers?.handoffAssistants as Array<{ name: string; id: string }>) || []).filter((_, j) => j !== i);
+                          updateConfig({ transfers: { ...cfg.transfers, handoffAssistants } });
+                        }}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  ))}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-2"
+                    onClick={() => {
+                      const handoffAssistants = [...((cfg.transfers?.handoffAssistants as Array<{ name: string; id: string }>) || []), { name: "", id: "" }];
+                      updateConfig({ transfers: { ...cfg.transfers, handoffAssistants } });
+                    }}
+                  >
+                    Add handoff
+                  </Button>
+                </div>
+                <div>
+                  <Label>Warm transfer instructions</Label>
+                  <Textarea
+                    rows={3}
+                    value={(cfg.transfers?.warmTransferInstructions as string) || ""}
+                    onChange={(e) =>
+                      updateConfig({
+                        transfers: { ...cfg.transfers, warmTransferInstructions: e.target.value },
+                      })
+                    }
+                    placeholder="Briefly introduce the caller and summarize why they are calling…"
+                  />
+                </div>
+              </>
+            )}
+
+            {section === "voicemail" && (
+              <>
+                <div>
+                  <Label>Voicemail action</Label>
+                  <select
+                    className="mt-1 w-full rounded-lg border border-border px-3 py-2 text-sm"
+                    value={(cfg.voicemail?.action as string) || "record"}
+                    onChange={(e) =>
+                      updateConfig({ voicemail: { ...cfg.voicemail, action: e.target.value } })
+                    }
+                  >
+                    <option value="record">Record message</option>
+                    <option value="hangup">Hang up</option>
+                    <option value="callback">Request callback</option>
+                  </select>
+                </div>
+                <div>
+                  <Label>Greeting text</Label>
+                  <Textarea
+                    rows={3}
+                    value={(cfg.voicemail?.greetingText as string) || ""}
+                    onChange={(e) =>
+                      updateConfig({ voicemail: { ...cfg.voicemail, greetingText: e.target.value } })
+                    }
+                    placeholder="Please leave a message after the tone…"
+                  />
+                </div>
+              </>
+            )}
+
+            {section === "compliance" && (
+              <>
+                <div>
+                  <Label>Recording disclosure (spoken before AI starts)</Label>
+                  <Textarea
+                    rows={3}
+                    value={(cfg.compliance?.recordingDisclosureText as string) || ""}
+                    onChange={(e) =>
+                      updateConfig({
+                        compliance: { ...cfg.compliance, recordingDisclosureText: e.target.value },
+                      })
+                    }
+                    placeholder="This call may be recorded for quality and training purposes."
+                  />
+                </div>
+                <div>
+                  <Label>After-hours behavior</Label>
+                  <select
+                    className="mt-1 w-full rounded-lg border border-border px-3 py-2 text-sm"
+                    value={(cfg.compliance?.afterHoursBehavior as string) || "ai_answer"}
+                    onChange={(e) =>
+                      updateConfig({
+                        compliance: { ...cfg.compliance, afterHoursBehavior: e.target.value },
+                      })
+                    }
+                  >
+                    <option value="ai_answer">AI answers</option>
+                    <option value="human_first">Humans first, AI fallback</option>
+                    <option value="voicemail">Voicemail</option>
+                    <option value="hangup">Hang up</option>
+                  </select>
+                </div>
+              </>
+            )}
           </Card>
         )}
 

@@ -223,7 +223,9 @@ export function computeFreeSlots(
   durationMinutes: number,
   days: number,
   now = new Date(),
+  bufferMinutes = 0,
 ): Array<{ startsAt: string; endsAt: string }> {
+  const bufferMs = bufferMinutes * 60_000;
   const slots: Array<{ startsAt: string; endsAt: string }> = [];
   for (let d = 0; d < days; d += 1) {
     const day = new Date(now);
@@ -233,7 +235,11 @@ export function computeFreeSlots(
       start.setHours(hour, 0, 0, 0);
       const end = new Date(start.getTime() + durationMinutes * 60_000);
       if (start <= now) continue;
-      const overlaps = busy.some((b) => start < b.end && end > b.start);
+      const overlaps = busy.some((b) => {
+        const bufferedStart = new Date(b.start.getTime() - bufferMs);
+        const bufferedEnd = new Date(b.end.getTime() + bufferMs);
+        return start < bufferedEnd && end > bufferedStart;
+      });
       if (!overlaps) {
         slots.push({ startsAt: start.toISOString(), endsAt: end.toISOString() });
       }

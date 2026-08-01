@@ -65,6 +65,16 @@ export async function parkCall(input: {
     data: { onHold: true, parkSlotId: slot.id, status: "parked" },
   });
 
+  const { enqueueJob } = await import("@/lib/messaging/enqueue-advance");
+  await enqueueJob({
+    jobType: "phone_park_timeout",
+    queueName: "voice-calls",
+    workspaceId: input.workspaceId,
+    payload: { slotId: slot.id, workspaceId: input.workspaceId },
+    idempotencyKey: `park-timeout-${slot.id}`,
+    runAfter: timeoutAt,
+  });
+
   return slot;
 }
 

@@ -21,6 +21,7 @@ export function buildAssistantTools(input: {
   tools: ToolRow[];
   transferTargets?: Array<{ name: string; to: string }>;
   handoffAssistants?: Array<{ name: string; id: string }>;
+  warmTransferInstructions?: string;
 }) {
   const tools: Record<string, unknown>[] = [];
   const retrieval = retrievalToolForBuckets(input.bucketIds);
@@ -43,6 +44,7 @@ export function buildAssistantTools(input: {
         })),
         from: undefined,
         warm_transfer_instructions:
+          input.warmTransferInstructions ||
           "Briefly introduce the caller and summarize why they are calling before connecting.",
       },
     });

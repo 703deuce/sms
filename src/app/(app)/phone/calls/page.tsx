@@ -68,6 +68,34 @@ export default function PhoneCallsPage() {
     }
   }
 
+  async function returnCall(phone: string) {
+    await fetch("/api/phone/calls", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ to: phone }),
+    });
+    window.location.href = "/phone";
+  }
+
+  async function sendSms(phone: string) {
+    window.location.href = `/send/quick?to=${encodeURIComponent(phone)}`;
+  }
+
+  async function addToContacts(phone: string) {
+    const res = await fetch("/api/contacts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phone, firstName: "Unknown", lastName: "Caller" }),
+    });
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      alert(j.error || "Could not create contact");
+      return;
+    }
+    const j = await res.json();
+    if (j.data?.id) window.location.href = `/contacts/${j.data.id}`;
+  }
+
   return (
     <div>
       <PageHeader
@@ -127,17 +155,20 @@ export default function PhoneCallsPage() {
               <TH>Recording</TH>
               <TH>Disposition</TH>
               <TH>Started</TH>
+              <TH>Actions</TH>
             </TR>
           </THead>
           <TBody>
             {rows.length === 0 ? (
               <TR>
-                <TD colSpan={7} className="text-center text-muted-foreground py-8">
+                <TD colSpan={8} className="text-center text-muted-foreground py-8">
                   No calls yet
                 </TD>
               </TR>
             ) : (
-              rows.map((c) => (
+              rows.map((c) => {
+                const peer = c.direction === "inbound" ? c.from : c.to;
+                return (
                 <TR key={c.id}>
                   <TD className="capitalize">{c.direction}</TD>
                   <TD className="font-mono text-xs">{c.from}</TD>
@@ -165,8 +196,34 @@ export default function PhoneCallsPage() {
                   <TD className="text-muted-foreground text-xs">
                     {new Date(c.startedAt).toLocaleString()}
                   </TD>
+                  <TD>
+                    <div className="flex flex-wrap gap-1">
+                      <button
+                        type="button"
+                        className="rounded border border-border px-2 py-1 text-[11px]"
+                        onClick={() => void returnCall(peer)}
+                      >
+                        Return
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded border border-border px-2 py-1 text-[11px]"
+                        onClick={() => void sendSms(peer)}
+                      >
+                        SMS
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded border border-border px-2 py-1 text-[11px]"
+                        onClick={() => void addToContacts(peer)}
+                      >
+                        Add contact
+                      </button>
+                    </div>
+                  </TD>
                 </TR>
-              ))
+              );
+              })
             )}
           </TBody>
         </Table>

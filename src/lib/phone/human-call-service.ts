@@ -2,6 +2,7 @@ import { getPrisma } from "@/lib/db";
 import { telnyxRequest } from "@/lib/messaging/telnyx/client";
 import { getTelnyxApiKey } from "@/lib/messaging/telnyx/config";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
+import { markOnCall } from "./presence-service";
 import { resolveCallerIdNumber } from "./settings";
 
 export function isTelnyxPhoneConfigured() {
@@ -10,6 +11,10 @@ export function isTelnyxPhoneConfigured() {
 
 function encodeClientState(data: Record<string, unknown>) {
   return Buffer.from(JSON.stringify(data)).toString("base64");
+}
+
+async function markOnCallSafe(workspaceId: string, userId: string, onCall: boolean) {
+  await markOnCall(workspaceId, userId, onCall).catch(() => undefined);
 }
 
 export async function dialHumanCall(input: {
@@ -22,6 +27,23 @@ export async function dialHumanCall(input: {
   const to = normalizeE164(input.to);
   const from = await resolveCallerIdNumber(input.workspaceId, input.from);
   if (!from) throw new Error("No active caller ID number configured");
+
+  const userSettings = await prisma.softphoneUserSettings.findUnique({
+    where: {
+      workspaceId_userId: {
+        workspaceId: input.workspaceId,
+        userId: input.agentUserId,
+      },
+    },
+  });
+  if (userSettings?.dndEnabled) {
+    throw new Error("Cannot place calls while Do Not Disturb is enabled");
+  }
+  if (!to.startsWith("+1") && userSettings && userSettings.internationalEnabled === false) {
+    throw new Error("International calling is disabled for this user");
+  }
+
+  await markOnCallSafe(input.workspaceId, input.agentUserId, true);
 
   const call = await prisma.humanCall.create({
     data: {
@@ -354,7 +376,120 @@ export async function transferHumanCall(
   }
   return prisma.humanCall.update({
     where: { id: callId },
-    data: { status: "transferred", disposition: `transferred:${dest}` },
+    data: { status: "transferred", disposition: `transferred:${dest}`, endedAt: new Date() },
+  });
+}
+
+/** Warm transfer: hold customer, dial consult leg to target. */
+export async function startWarmTransfer(
+  callId: string,
+  workspaceId: string,
+  toE164: string,
+  note?: string | null,
+) {
+  const prisma = getPrisma();
+  const call = await prisma.humanCall.findFirst({ where: { id: callId, workspaceId } });
+  if (!call?.telnyxCallControlId) throw new Error("Call not active for warm transfer");
+  const dest = normalizeE164(toE164);
+  const controlId = call.telnyxCallControlId;
+
+  if (!controlId.startsWith("mock_")) {
+    await telnyxAction(controlId, "hold");
+    const from = call.callerIdNumber || call.from;
+    const connectionId = process.env.TELNYX_CONNECTION_ID!.trim();
+    const consultLeg = await telnyxRequest<{ data: { call_control_id: string } }>("/calls", {
+      method: "POST",
+      body: {
+        connection_id: connectionId,
+        from,
+        to: dest,
+        client_state: encodeClientState({
+          workspaceId,
+          humanCallId: call.id,
+          kind: "warm_transfer_consult",
+          customerControlId: controlId,
+        }),
+      },
+    });
+    const consultControlId = consultLeg.data?.call_control_id;
+    if (!consultControlId) throw new Error("Consult dial failed");
+
+    return prisma.humanCall.update({
+      where: { id: callId },
+      data: {
+        onHold: true,
+        status: "on_hold",
+        telnyxCallLegId: consultControlId,
+        notes: note
+          ? `${call.notes || ""}\n[Warm transfer to ${dest}: ${note}]`.trim()
+          : `${call.notes || ""}\n[Warm transfer consult:${dest}]`.trim(),
+      },
+    });
+  }
+
+  const mockConsult = `mock_consult_${call.id}`;
+  return prisma.humanCall.update({
+    where: { id: callId },
+    data: {
+      onHold: true,
+      status: "on_hold",
+      telnyxCallLegId: mockConsult,
+      notes: note
+        ? `${call.notes || ""}\n[Warm transfer to ${dest}: ${note}]`.trim()
+        : call.notes,
+    },
+  });
+}
+
+/** Bridge customer to consult leg and end agent involvement. */
+export async function completeWarmTransfer(callId: string, workspaceId: string) {
+  const prisma = getPrisma();
+  const call = await prisma.humanCall.findFirst({ where: { id: callId, workspaceId } });
+  if (!call?.telnyxCallControlId || !call.telnyxCallLegId) {
+    throw new Error("No warm transfer in progress");
+  }
+  const customerId = call.telnyxCallControlId;
+  const consultId = call.telnyxCallLegId;
+
+  if (!customerId.startsWith("mock_")) {
+    await telnyxAction(customerId, "unhold").catch(() => undefined);
+    await telnyxAction(customerId, "bridge", { call_control_id: consultId });
+    await telnyxAction(consultId, "hangup").catch(() => undefined);
+  }
+
+  return prisma.humanCall.update({
+    where: { id: callId },
+    data: {
+      status: "transferred",
+      disposition: `warm_transferred:${consultId}`,
+      telnyxCallLegId: null,
+      onHold: false,
+      endedAt: new Date(),
+    },
+  });
+}
+
+/** Cancel warm transfer: hang up consult and unhold customer. */
+export async function cancelWarmTransfer(callId: string, workspaceId: string) {
+  const prisma = getPrisma();
+  const call = await prisma.humanCall.findFirst({ where: { id: callId, workspaceId } });
+  if (!call) throw new Error("Call not found");
+  const consultId = call.telnyxCallLegId;
+
+  if (consultId && !consultId.startsWith("mock_")) {
+    await telnyxAction(consultId, "hangup");
+  }
+  if (call.telnyxCallControlId && !call.telnyxCallControlId.startsWith("mock_")) {
+    await telnyxAction(call.telnyxCallControlId, "unhold");
+  }
+
+  return prisma.humanCall.update({
+    where: { id: callId },
+    data: {
+      telnyxCallLegId: null,
+      onHold: false,
+      status: "in_progress",
+    },
   });
 }
 
@@ -380,14 +515,30 @@ export async function updateHumanCall(
     onHold?: boolean;
     transferTo?: string;
     record?: boolean;
+    warmTransferTo?: string;
+    consult?: boolean;
+    completeWarmTransfer?: boolean;
+    cancelWarmTransfer?: boolean;
+    switchLine?: boolean;
   },
 ) {
+  if (patch.completeWarmTransfer) return completeWarmTransfer(callId, workspaceId);
+  if (patch.cancelWarmTransfer) return cancelWarmTransfer(callId, workspaceId);
+  if (patch.consult && patch.warmTransferTo) {
+    return startWarmTransfer(callId, workspaceId, patch.warmTransferTo, patch.notes);
+  }
   if (patch.answer) return answerHumanCall(callId, workspaceId);
   if (patch.hangup) return hangupHumanCall(callId, workspaceId);
   if (patch.muted !== undefined) return muteHumanCall(callId, workspaceId, patch.muted);
   if (patch.onHold !== undefined) return holdHumanCall(callId, workspaceId, patch.onHold);
   if (patch.transferTo) return transferHumanCall(callId, workspaceId, patch.transferTo);
   if (patch.record !== undefined) return recordHumanCall(callId, workspaceId, patch.record);
+  if (patch.switchLine) {
+  // Client-driven line switch; acknowledge without server-side leg changes.
+    const call = await getPrisma().humanCall.findFirst({ where: { id: callId, workspaceId } });
+    if (!call) throw new Error("Call not found");
+    return call;
+  }
 
   const prisma = getPrisma();
   const data: Record<string, unknown> = {};

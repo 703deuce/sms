@@ -20,6 +20,11 @@ export async function PATCH(
       muted?: boolean;
       onHold?: boolean;
       transferTo?: string;
+      warmTransferTo?: string;
+      consult?: boolean;
+      completeWarmTransfer?: boolean;
+      cancelWarmTransfer?: boolean;
+      switchLine?: boolean;
       notes?: string | null;
       disposition?: string | null;
       dtmf?: string;
@@ -37,6 +42,11 @@ export async function PATCH(
       muted: body.muted,
       onHold: body.onHold,
       transferTo: body.transferTo,
+      warmTransferTo: body.warmTransferTo,
+      consult: body.consult,
+      completeWarmTransfer: body.completeWarmTransfer,
+      cancelWarmTransfer: body.cancelWarmTransfer,
+      switchLine: body.switchLine,
       notes: body.notes,
       disposition: body.disposition,
       record: body.record,

@@ -14,6 +14,8 @@ import {
   PhoneForwarded,
   PhoneOff,
   Play,
+  RotateCcw,
+  Star,
   Users,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -30,6 +32,7 @@ type ActiveCall = {
   mediaMode: MediaMode;
   startedAt: number;
   notes?: string;
+  warmTransferPending?: boolean;
 };
 
 type IncomingCall = {
@@ -39,6 +42,38 @@ type IncomingCall = {
   webrtcCall?: unknown;
 };
 
+type ContactRow = {
+  id: string;
+  phone: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  company?: string | null;
+  customFields?: Record<string, unknown> | null;
+  tagMembers?: { tag: { name: string } }[];
+};
+
+type RecentCall = {
+  id: string;
+  from: string;
+  to: string;
+  direction: string;
+  status: string;
+  startedAt: string;
+};
+
+type PresenceRow = {
+  userId: string;
+  status: string;
+  customLabel?: string | null;
+  queueAvailable?: boolean;
+};
+
+type UserSettingsRow = {
+  userId: string;
+  extension?: string | null;
+  forwardToCellular?: string | null;
+};
+
 const PAD_KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "*", "0", "#"];
 
 const PRESENCE_OPTIONS = [
@@ -46,13 +81,48 @@ const PRESENCE_OPTIONS = [
   { value: "away", label: "Away" },
   { value: "busy", label: "Busy" },
   { value: "on_call", label: "On call" },
+  { value: "dnd", label: "Do not disturb" },
   { value: "offline", label: "Offline" },
 ];
+
+type FavoriteEntry = { id: string; phone: string; name: string };
+
+const LS_FAVORITES = "softphone:favorites";
+const LS_LAST_DIALED = "softphone:lastDialed";
+const LS_AUDIO_IN = "softphone:audioInput";
+const LS_AUDIO_OUT = "softphone:audioOutput";
 
 function formatDuration(seconds: number) {
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
   return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+function contactName(c: ContactRow) {
+  const name = [c.firstName, c.lastName].filter(Boolean).join(" ");
+  return name || c.company || c.phone;
+}
+
+function readFavorites(): FavoriteEntry[] {
+  try {
+    const raw = localStorage.getItem(LS_FAVORITES);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.every((e) => typeof e === "object" && e.phone)) {
+      return parsed as FavoriteEntry[];
+    }
+    // legacy: array of ids only
+    if (Array.isArray(parsed) && parsed.every((e) => typeof e === "string")) {
+      return (parsed as string[]).map((id) => ({ id, phone: "", name: id }));
+    }
+    return [];
+  } catch {
+    return [];
+  }
+}
+
+function writeFavorites(entries: FavoriteEntry[]) {
+  localStorage.setItem(LS_FAVORITES, JSON.stringify(entries));
 }
 
 export function SoftphonePanel({
@@ -64,10 +134,13 @@ export function SoftphonePanel({
 }) {
   const [dialNumber, setDialNumber] = useState("");
   const [callerId, setCallerId] = useState(defaultCallerId || phoneNumbers[0]?.number || "");
-  const [activeCall, setActiveCall] = useState<ActiveCall | null>(null);
+  const [activeCalls, setActiveCalls] = useState<ActiveCall[]>([]);
+  const [activeLineId, setActiveLineId] = useState<string | null>(null);
+  const [waitingIncoming, setWaitingIncoming] = useState<IncomingCall[]>([]);
   const [incoming, setIncoming] = useState<IncomingCall | null>(null);
   const [showDtmf, setShowDtmf] = useState(false);
   const [transferTo, setTransferTo] = useState("");
+  const [transferMode, setTransferMode] = useState<"blind" | "warm">("blind");
   const [warmTransferNote, setWarmTransferNote] = useState("");
   const [myPhone, setMyPhone] = useState("");
   const [useCallMyPhone, setUseCallMyPhone] = useState(false);
@@ -78,17 +151,140 @@ export function SoftphonePanel({
   const [loading, setLoading] = useState(false);
   const [callNotes, setCallNotes] = useState("");
   const [presenceStatus, setPresenceStatus] = useState("available");
+  const [customStatus, setCustomStatus] = useState("");
   const [parkSlot, setParkSlot] = useState("");
   const [conferenceId, setConferenceId] = useState("");
   const [conferenceAddTo, setConferenceAddTo] = useState("");
   const [elapsed, setElapsed] = useState(0);
 
-  const telnyxClientRef = useRef<unknown>(null);
-  const webrtcCallRef = useRef<unknown>(null);
-  const activeCallRef = useRef<ActiveCall | null>(null);
-  const remoteAudioRef = useRef<HTMLAudioElement>(null);
+  const [contactQuery, setContactQuery] = useState("");
+  const [contactResults, setContactResults] = useState<ContactRow[]>([]);
+  const [favorites, setFavorites] = useState<FavoriteEntry[]>([]);
+  const [lastDialed, setLastDialed] = useState("");
+  const [recentCalls, setRecentCalls] = useState<RecentCall[]>([]);
+  const [presenceList, setPresenceList] = useState<PresenceRow[]>([]);
+  const [userSettings, setUserSettings] = useState<UserSettingsRow[]>([]);
+  const [screenPop, setScreenPop] = useState<ContactRow | null>(null);
 
-  activeCallRef.current = activeCall;
+  const [audioInputs, setAudioInputs] = useState<MediaDeviceInfo[]>([]);
+  const [audioOutputs, setAudioOutputs] = useState<MediaDeviceInfo[]>([]);
+  const [selectedMic, setSelectedMic] = useState("");
+  const [selectedSpeaker, setSelectedSpeaker] = useState("");
+
+  const telnyxClientRef = useRef<unknown>(null);
+  const webrtcCallsRef = useRef<Map<string, unknown>>(new Map());
+  const activeCallsRef = useRef<ActiveCall[]>([]);
+  const activeLineIdRef = useRef<string | null>(null);
+  const remoteAudioRef = useRef<HTMLAudioElement>(null);
+  const presenceManualRef = useRef(false);
+
+  const activeCall = activeCalls.find((c) => c.id === activeLineId) ?? null;
+
+  activeCallsRef.current = activeCalls;
+  activeLineIdRef.current = activeLineId;
+
+  const updateCall = useCallback((id: string, patch: Partial<ActiveCall>) => {
+    setActiveCalls((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
+  }, []);
+
+  const removeCall = useCallback((id: string) => {
+    webrtcCallsRef.current.delete(id);
+    setActiveCalls((prev) => prev.filter((c) => c.id !== id));
+    setActiveLineId((prev) => (prev === id ? null : prev));
+  }, []);
+
+  const applyAudioDevices = useCallback(async () => {
+    const audioEl = remoteAudioRef.current;
+    if (audioEl && selectedSpeaker && "setSinkId" in audioEl) {
+      try {
+        await (audioEl as HTMLAudioElement & { setSinkId: (id: string) => Promise<void> }).setSinkId(
+          selectedSpeaker,
+        );
+      } catch {
+        // sink not supported or device unavailable
+      }
+    }
+    const client = telnyxClientRef.current as {
+      setAudioSettings?: (s: { micId?: string }) => Promise<unknown>;
+      speaker?: string;
+    } | null;
+    if (client?.setAudioSettings && selectedMic) {
+      await client.setAudioSettings({ micId: selectedMic }).catch(() => undefined);
+    }
+    if (client && selectedSpeaker) {
+      try {
+        client.speaker = selectedSpeaker;
+      } catch {
+        // ignore
+      }
+    }
+    const lineId = activeLineIdRef.current;
+    const webrtcCall = lineId ? webrtcCallsRef.current.get(lineId) : null;
+    if (webrtcCall && selectedSpeaker) {
+      const call = webrtcCall as { setAudioOutDevice?: (id: string) => Promise<boolean> };
+      await call.setAudioOutDevice?.(selectedSpeaker).catch(() => undefined);
+    }
+    if (webrtcCall && selectedMic) {
+      const call = webrtcCall as { setAudioInDevice?: (id: string) => Promise<void> };
+      await call.setAudioInDevice?.(selectedMic).catch(() => undefined);
+    }
+  }, [selectedMic, selectedSpeaker]);
+
+  useEffect(() => {
+    applyAudioDevices();
+  }, [applyAudioDevices, activeLineId]);
+
+  useEffect(() => {
+    setFavorites(readFavorites());
+    const last = localStorage.getItem(LS_LAST_DIALED);
+    if (last) {
+      setDialNumber(last);
+      setLastDialed(last);
+    }
+    setSelectedMic(localStorage.getItem(LS_AUDIO_IN) || "");
+    setSelectedSpeaker(localStorage.getItem(LS_AUDIO_OUT) || "");
+
+    async function loadDevices() {
+      if (!navigator.mediaDevices?.enumerateDevices) return;
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      setAudioInputs(devices.filter((d) => d.kind === "audioinput"));
+      setAudioOutputs(devices.filter((d) => d.kind === "audiooutput"));
+    }
+    loadDevices().catch(() => undefined);
+    navigator.mediaDevices?.addEventListener?.("devicechange", loadDevices);
+    return () => navigator.mediaDevices?.removeEventListener?.("devicechange", loadDevices);
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/phone/calls?limit=10")
+      .then((r) => r.json())
+      .then((j) => setRecentCalls(j.data || []))
+      .catch(() => undefined);
+
+    fetch("/api/phone/presence")
+      .then((r) => r.json())
+      .then((j) => setPresenceList(j.data || []))
+      .catch(() => undefined);
+
+    fetch("/api/phone/admin")
+      .then((r) => r.json())
+      .then((j) => setUserSettings(j.data?.settings || []))
+      .catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    if (!contactQuery.trim()) {
+      setContactResults([]);
+      return;
+    }
+    const t = setTimeout(() => {
+      fetch(`/api/contacts?q=${encodeURIComponent(contactQuery.trim())}`)
+        .then((r) => r.json())
+        .then((j) => setContactResults(j.data || []))
+        .catch(() => undefined);
+    }, 250);
+    return () => clearTimeout(t);
+  }, [contactQuery]);
 
   useEffect(() => {
     fetch("/api/phone/webrtc-token")
@@ -127,23 +323,31 @@ export function SoftphonePanel({
             }) => {
               const call = notification.call;
               if (!call || notification.type !== "callUpdate") return;
+              const callId = call.id || `webrtc-${Date.now()}`;
 
               if (call.state === "ringing" && call.direction === "inbound") {
-                if (activeCallRef.current) return;
-                webrtcCallRef.current = call;
-                setIncoming({
-                  id: call.id || `webrtc-${Date.now()}`,
+                const hasActive = activeCallsRef.current.length > 0;
+                const incomingCall: IncomingCall = {
+                  id: callId,
                   from: call.remoteCallerNumber || "Unknown",
                   to: call.localCallerNumber || callerId,
                   webrtcCall: call,
-                });
+                };
+                webrtcCallsRef.current.set(callId, call);
+                if (hasActive) {
+                  setWaitingIncoming((prev) => [...prev, incomingCall]);
+                } else {
+                  setIncoming(incomingCall);
+                }
+                return;
               }
 
               if (call.state === "active" || call.state === "answered") {
-                webrtcCallRef.current = call;
-                if (!activeCallRef.current) {
-                  setActiveCall({
-                    id: call.id || `webrtc-${Date.now()}`,
+                webrtcCallsRef.current.set(callId, call);
+                const exists = activeCallsRef.current.some((c) => c.id === callId);
+                if (!exists) {
+                  const newCall: ActiveCall = {
+                    id: callId,
                     from: call.localCallerNumber || callerId,
                     to: call.remoteCallerNumber || dialNumber,
                     status: "in_progress",
@@ -151,18 +355,23 @@ export function SoftphonePanel({
                     onHold: false,
                     mediaMode: "webrtc",
                     startedAt: Date.now(),
-                  });
+                  };
+                  setActiveCalls((prev) => [...prev, newCall]);
+                  setActiveLineId(callId);
                   setIncoming(null);
+                  setWaitingIncoming((prev) => prev.filter((w) => w.id !== callId));
                 }
               }
 
               if (call.state === "hangup" || call.state === "destroy") {
-                if (webrtcCallRef.current === call) {
-                  webrtcCallRef.current = null;
-                  setActiveCall(null);
-                  setIncoming(null);
+                webrtcCallsRef.current.delete(callId);
+                setActiveCalls((prev) => prev.filter((c) => c.id !== callId));
+                setWaitingIncoming((prev) => prev.filter((w) => w.id !== callId));
+                if (activeLineIdRef.current === callId) {
+                  setActiveLineId(null);
                   setShowDtmf(false);
                 }
+                if (incoming?.id === callId) setIncoming(null);
               }
             });
 
@@ -181,17 +390,29 @@ export function SoftphonePanel({
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Poll for ringing inbound calls (Call Control fallback when WebRTC not handling).
   useEffect(() => {
-    if (activeCall || webrtcConnected) return;
+    if (activeCalls.length > 0 || webrtcConnected) return;
     let cancelled = false;
     const check = () => {
-      fetch("/api/phone/calls?direction=inbound&status=ringing&limit=1")
+      fetch("/api/phone/calls?direction=inbound&status=ringing&limit=3")
         .then((r) => r.json())
         .then((j) => {
           if (cancelled) return;
-          const call = (j.data || [])[0];
-          setIncoming(call ? { id: call.id, from: call.from, to: call.to } : null);
+          const rows = j.data || [];
+          if (rows.length === 0) {
+            if (!activeCallsRef.current.length) setIncoming(null);
+            return;
+          }
+          const first = rows[0];
+          const call: IncomingCall = { id: first.id, from: first.from, to: first.to };
+          if (activeCallsRef.current.length > 0) {
+            setWaitingIncoming((prev) => {
+              if (prev.some((p) => p.id === call.id)) return prev;
+              return [...prev, call];
+            });
+          } else {
+            setIncoming(call);
+          }
         })
         .catch(() => undefined);
     };
@@ -201,23 +422,28 @@ export function SoftphonePanel({
       cancelled = true;
       clearInterval(t);
     };
-  }, [activeCall, webrtcConnected]);
+  }, [activeCalls.length, webrtcConnected]);
 
-  // Call timer
   useEffect(() => {
     if (!activeCall) {
       setElapsed(0);
       return;
     }
     const startedAt = activeCall.startedAt;
-    const tick = () =>
-      setElapsed(Math.floor((Date.now() - startedAt) / 1000));
+    const tick = () => setElapsed(Math.floor((Date.now() - startedAt) / 1000));
     tick();
     const t = setInterval(tick, 1000);
     return () => clearInterval(t);
   }, [activeCall]);
 
-  // Load presence on mount
+  useEffect(() => {
+    if (activeCall) {
+      setCallNotes(activeCall.notes || "");
+    } else {
+      setCallNotes("");
+    }
+  }, [activeCall?.id, activeCall?.notes]);
+
   useEffect(() => {
     fetch("/api/phone/presence")
       .then((r) => r.json())
@@ -225,67 +451,125 @@ export function SoftphonePanel({
         const rows = j.data || [];
         const mine = rows[0];
         if (mine?.status) setPresenceStatus(mine.status);
+        if (mine?.customLabel) setCustomStatus(mine.customLabel);
       })
       .catch(() => undefined);
   }, []);
 
-  async function updatePresence(status: string) {
+  useEffect(() => {
+    const onCall = activeCalls.length > 0;
+    if (onCall && !presenceManualRef.current && presenceStatus !== "dnd") {
+      if (presenceStatus !== "on_call") {
+        updatePresence("on_call", customStatus);
+      }
+    } else if (!onCall && presenceStatus === "on_call" && !presenceManualRef.current) {
+      updatePresence("available", customStatus);
+    }
+  }, [activeCalls.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const phone = incoming?.from || waitingIncoming[0]?.from;
+    if (!phone) {
+      setScreenPop(null);
+      return;
+    }
+    fetch(`/api/contacts?phone=${encodeURIComponent(phone)}`)
+      .then((r) => r.json())
+      .then((j) => setScreenPop((j.data || [])[0] || null))
+      .catch(() => setScreenPop(null));
+  }, [incoming?.from, waitingIncoming]);
+
+  async function updatePresence(status: string, label?: string) {
     setPresenceStatus(status);
+  if (status !== "on_call") presenceManualRef.current = true;
     await fetch("/api/phone/presence", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status }),
+      body: JSON.stringify({
+        status,
+        customLabel: label || customStatus || undefined,
+        queueAvailable: status !== "dnd" && status !== "on_call",
+      }),
     }).catch(() => undefined);
   }
 
-  async function answerIncoming() {
-    if (!incoming) return;
+  async function patchCallById(callId: string, patch: Record<string, unknown>) {
+    const res = await fetch(`/api/phone/calls/${callId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || "Action failed");
+    return json.data;
+  }
+
+  async function answerIncomingCall(call: IncomingCall, holdCurrent = false) {
     setError("");
     try {
-      if (incoming.webrtcCall || webrtcConnected) {
-        const call = (incoming.webrtcCall || webrtcCallRef.current) as {
+      if (holdCurrent && activeLineId) {
+        await toggleHoldForLine(activeLineId, true);
+      }
+
+      if (call.webrtcCall || webrtcConnected) {
+        const webrtcCall = (call.webrtcCall || webrtcCallsRef.current.get(call.id)) as {
           answer?: (opts?: { remoteElement?: HTMLAudioElement }) => void;
         } | null;
         const audioEl = remoteAudioRef.current;
-        if (call?.answer) {
-          await call.answer(audioEl ? { remoteElement: audioEl } : undefined);
+        if (webrtcCall?.answer) {
+          await webrtcCall.answer(audioEl ? { remoteElement: audioEl } : undefined);
         }
-        webrtcCallRef.current = call;
-        setActiveCall({
-          id: incoming.id,
-          from: incoming.to,
-          to: incoming.from,
+        webrtcCallsRef.current.set(call.id, webrtcCall);
+        const newCall: ActiveCall = {
+          id: call.id,
+          from: call.to,
+          to: call.from,
           status: "in_progress",
           muted: false,
           onHold: false,
           mediaMode: "webrtc",
           startedAt: Date.now(),
-        });
+        };
+        setActiveCalls((prev) => [...prev, newCall]);
+        setActiveLineId(call.id);
         setIncoming(null);
+        setWaitingIncoming((prev) => prev.filter((w) => w.id !== call.id));
         return;
       }
 
-      const res = await fetch(`/api/phone/calls/${incoming.id}`, {
+      const res = await fetch(`/api/phone/calls/${call.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ answer: true }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Answer failed");
-      setActiveCall({
-        id: incoming.id,
-        from: incoming.from,
-        to: incoming.to,
+      const newCall: ActiveCall = {
+        id: call.id,
+        from: call.from,
+        to: call.to,
         status: "in_progress",
         muted: false,
         onHold: false,
         mediaMode: "call_control",
         startedAt: Date.now(),
-      });
+      };
+      setActiveCalls((prev) => [...prev, newCall]);
+      setActiveLineId(call.id);
       setIncoming(null);
+      setWaitingIncoming((prev) => prev.filter((w) => w.id !== call.id));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Answer failed");
     }
+  }
+
+  async function answerIncoming() {
+    if (!incoming) return;
+    await answerIncomingCall(incoming, false);
+  }
+
+  async function answerWaiting(call: IncomingCall) {
+    await answerIncomingCall(call, true);
   }
 
   async function declineIncoming() {
@@ -301,24 +585,44 @@ export function SoftphonePanel({
       }).catch(() => undefined);
     }
     setIncoming(null);
-    webrtcCallRef.current = null;
+    webrtcCallsRef.current.delete(incoming.id);
   }
 
-  const pressKey = useCallback((key: string) => {
-    setDialNumber((n) => n + key);
-    if (activeCall?.mediaMode === "webrtc" && webrtcCallRef.current) {
-      const call = webrtcCallRef.current as { dtmf?: (d: string) => void };
-      call.dtmf?.(key);
-      return;
-    }
-    if (activeCall) {
-      fetch(`/api/phone/calls/${activeCall.id}`, {
+  async function declineWaiting(call: IncomingCall) {
+    const wc = call.webrtcCall as { hangup?: () => void } | undefined;
+    if (wc?.hangup) wc.hangup();
+    else {
+      await fetch(`/api/phone/calls/${call.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dtmf: key }),
+        body: JSON.stringify({ hangup: true, disposition: "missed:declined" }),
       }).catch(() => undefined);
     }
-  }, [activeCall]);
+    setWaitingIncoming((prev) => prev.filter((w) => w.id !== call.id));
+    webrtcCallsRef.current.delete(call.id);
+  }
+
+  const pressKey = useCallback(
+    (key: string) => {
+      if (!activeCall) {
+        setDialNumber((n) => n + key);
+        return;
+      }
+      if (activeCall.mediaMode === "webrtc") {
+        const call = webrtcCallsRef.current.get(activeCall.id) as { dtmf?: (d: string) => void };
+        call?.dtmf?.(key);
+        return;
+      }
+      patchCallById(activeCall.id, { dtmf: key }).catch(() => undefined);
+    },
+    [activeCall],
+  );
+
+  function dialTo(number: string) {
+    setDialNumber(number);
+    setLastDialed(number);
+    localStorage.setItem(LS_LAST_DIALED, number);
+  }
 
   async function startCall() {
     if (!dialNumber.trim()) return;
@@ -328,11 +632,12 @@ export function SoftphonePanel({
     }
     setLoading(true);
     setError("");
+    const dest = dialNumber.trim();
+    localStorage.setItem(LS_LAST_DIALED, dest);
+    setLastDialed(dest);
     try {
-      const dest = dialNumber.trim();
       const from = callerId;
 
-      // WebRTC outbound (skip when bridging via personal phone).
       if (webrtcConnected && !useCallMyPhone && telnyxClientRef.current) {
         const client = telnyxClientRef.current as {
           newCall: (opts: {
@@ -347,10 +652,9 @@ export function SoftphonePanel({
           callerNumber: from,
           ...(audioEl ? { remoteElement: audioEl } : {}),
         });
-        webrtcCallRef.current = call;
-        const callId =
-          (call as { id?: string }).id || `webrtc-${Date.now()}`;
-        setActiveCall({
+        const callId = (call as { id?: string }).id || `webrtc-${Date.now()}`;
+        webrtcCallsRef.current.set(callId, call);
+        const newCall: ActiveCall = {
           id: callId,
           from,
           to: dest,
@@ -359,7 +663,9 @@ export function SoftphonePanel({
           onHold: false,
           mediaMode: "webrtc",
           startedAt: Date.now(),
-        });
+        };
+        setActiveCalls((prev) => [...prev, newCall]);
+        setActiveLineId(callId);
         setRecording(false);
         return;
       }
@@ -375,10 +681,8 @@ export function SoftphonePanel({
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Dial failed");
-      const mediaMode: MediaMode = useCallMyPhone
-        ? "call_my_phone"
-        : "call_control";
-      setActiveCall({
+      const mediaMode: MediaMode = useCallMyPhone ? "call_my_phone" : "call_control";
+      const newCall: ActiveCall = {
         id: json.data.id,
         from: json.data.from,
         to: json.data.to,
@@ -387,7 +691,9 @@ export function SoftphonePanel({
         onHold: false,
         mediaMode,
         startedAt: Date.now(),
-      });
+      };
+      setActiveCalls((prev) => [...prev, newCall]);
+      setActiveLineId(json.data.id);
       setRecording(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Dial failed");
@@ -396,109 +702,155 @@ export function SoftphonePanel({
     }
   }
 
-  async function patchCall(patch: Record<string, unknown>) {
-    if (!activeCall) return;
-    const res = await fetch(`/api/phone/calls/${activeCall.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(patch),
-    });
-    const json = await res.json();
-    if (!res.ok) throw new Error(json.error || "Action failed");
-    return json.data;
+  async function redial() {
+    const last = lastDialed || localStorage.getItem(LS_LAST_DIALED);
+    if (!last) return;
+    setDialNumber(last);
+    if (!activeCalls.length) await startCall();
   }
 
-  function clearCallState() {
-    setActiveCall(null);
-    setShowDtmf(false);
-    webrtcCallRef.current = null;
-    setConferenceId("");
+  async function toggleHoldForLine(callId: string, forceHold?: boolean) {
+    const call = activeCalls.find((c) => c.id === callId);
+    if (!call) return;
+    const onHold = forceHold ?? !call.onHold;
+    if (call.mediaMode === "webrtc") {
+      const wc = webrtcCallsRef.current.get(callId) as {
+        hold?: () => void;
+        unhold?: () => void;
+      };
+      if (onHold) await wc?.hold?.();
+      else await wc?.unhold?.();
+      updateCall(callId, { onHold, status: onHold ? "on_hold" : "in_progress" });
+      return;
+    }
+    const data = await patchCallById(callId, { onHold });
+    updateCall(callId, {
+      onHold: data?.onHold ?? onHold,
+      status: data?.status ?? call.status,
+    });
+  }
+
+  async function switchLine(callId: string) {
+    if (activeLineId && activeLineId !== callId) {
+      await toggleHoldForLine(activeLineId, true);
+    }
+    const target = activeCalls.find((c) => c.id === callId);
+    if (target?.onHold) {
+      await toggleHoldForLine(callId, false);
+    }
+    setActiveLineId(callId);
+    await patchCallById(callId, { switchLine: true }).catch(() => undefined);
+    const wc = webrtcCallsRef.current.get(callId);
+    const audioEl = remoteAudioRef.current;
+    if (wc && audioEl) {
+      const client = telnyxClientRef.current as { remoteElement?: HTMLAudioElement } | null;
+      if (client) client.remoteElement = audioEl;
+    }
   }
 
   async function hangup() {
     if (!activeCall) return;
     try {
-      if (activeCall.mediaMode === "webrtc" && webrtcCallRef.current) {
-        const call = webrtcCallRef.current as { hangup?: () => void };
-        await call.hangup?.();
+      if (activeCall.mediaMode === "webrtc") {
+        const call = webrtcCallsRef.current.get(activeCall.id) as { hangup?: () => void };
+        await call?.hangup?.();
       } else {
-        await patchCall({ hangup: true });
+        await patchCallById(activeCall.id, { hangup: true });
       }
     } catch {
       // still clear UI
     }
-    clearCallState();
+    removeCall(activeCall.id);
+    setShowDtmf(false);
+    setConferenceId("");
   }
 
   async function toggleMute() {
     if (!activeCall) return;
     const muted = !activeCall.muted;
-    if (activeCall.mediaMode === "webrtc" && webrtcCallRef.current) {
-      const call = webrtcCallRef.current as {
+    if (activeCall.mediaMode === "webrtc") {
+      const call = webrtcCallsRef.current.get(activeCall.id) as {
         muteAudio?: () => void;
         unmuteAudio?: () => void;
       };
-      if (muted) call.muteAudio?.();
-      else call.unmuteAudio?.();
-      setActiveCall({ ...activeCall, muted });
+      if (muted) call?.muteAudio?.();
+      else call?.unmuteAudio?.();
+      updateCall(activeCall.id, { muted });
       return;
     }
-    const data = await patchCall({ muted });
-    setActiveCall({ ...activeCall, muted: data?.muted ?? muted });
+    const data = await patchCallById(activeCall.id, { muted });
+    updateCall(activeCall.id, { muted: data?.muted ?? muted });
   }
 
   async function toggleHold() {
     if (!activeCall) return;
-    const onHold = !activeCall.onHold;
-    if (activeCall.mediaMode === "webrtc" && webrtcCallRef.current) {
-      const call = webrtcCallRef.current as {
-        hold?: () => void;
-        unhold?: () => void;
-      };
-      if (onHold) await call.hold?.();
-      else await call.unhold?.();
-      setActiveCall({
-        ...activeCall,
-        onHold,
-        status: onHold ? "on_hold" : "in_progress",
-      });
-      return;
-    }
-    const data = await patchCall({ onHold });
-    setActiveCall({
-      ...activeCall,
-      onHold: data?.onHold ?? onHold,
-      status: data?.status ?? activeCall.status,
-    });
+    await toggleHoldForLine(activeCall.id);
   }
 
-  async function transfer() {
+  async function blindTransfer() {
     if (!activeCall || !transferTo.trim()) return;
     try {
       const note = warmTransferNote.trim();
       if (note) {
-        await patchCall({
-          notes: `${callNotes}\n[Warm transfer note: ${note}]`.trim(),
+        await patchCallById(activeCall.id, {
+          notes: `${callNotes}\n[Transfer note: ${note}]`.trim(),
         });
       }
-      if (activeCall.mediaMode !== "webrtc") {
-        await patchCall({ transferTo: transferTo.trim() });
-      } else {
-        await patchCall({ transferTo: transferTo.trim() });
-      }
+      await patchCallById(activeCall.id, { transferTo: transferTo.trim() });
       setTransferTo("");
       setWarmTransferNote("");
-      clearCallState();
+      removeCall(activeCall.id);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Transfer failed");
+    }
+  }
+
+  async function startWarmTransfer() {
+    if (!activeCall || !transferTo.trim()) return;
+    try {
+      const note = warmTransferNote.trim();
+      await patchCallById(activeCall.id, {
+        warmTransferTo: transferTo.trim(),
+        consult: true,
+        notes: note || undefined,
+      });
+      updateCall(activeCall.id, { warmTransferPending: true, onHold: true, status: "on_hold" });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Warm transfer failed");
+    }
+  }
+
+  async function completeWarmTransfer() {
+    if (!activeCall) return;
+    try {
+      await patchCallById(activeCall.id, { completeWarmTransfer: true });
+      setTransferTo("");
+      setWarmTransferNote("");
+      removeCall(activeCall.id);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Complete transfer failed");
+    }
+  }
+
+  async function cancelWarmTransfer() {
+    if (!activeCall) return;
+    try {
+      await patchCallById(activeCall.id, { cancelWarmTransfer: true });
+      updateCall(activeCall.id, {
+        warmTransferPending: false,
+        onHold: false,
+        status: "in_progress",
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Cancel transfer failed");
     }
   }
 
   async function saveNotes() {
     if (!activeCall) return;
     try {
-      await patchCall({ notes: callNotes });
-      setActiveCall({ ...activeCall, notes: callNotes });
+      await patchCallById(activeCall.id, { notes: callNotes });
+      updateCall(activeCall.id, { notes: callNotes });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Notes save failed");
     }
@@ -515,7 +867,7 @@ export function SoftphonePanel({
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Park failed");
       setParkSlot(json.data?.slotCode || json.data?.code || "");
-      clearCallState();
+      removeCall(activeCall.id);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Park failed");
     }
@@ -577,12 +929,38 @@ export function SoftphonePanel({
     if (!activeCall || activeCall.mediaMode === "webrtc") return;
     const next = !recording;
     try {
-      await patchCall({ record: next });
+      await patchCallById(activeCall.id, { record: next });
       setRecording(next);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Recording failed");
     }
   }
+
+  function toggleFavorite(contact: ContactRow) {
+    setFavorites((prev) => {
+      const exists = prev.some((f) => f.id === contact.id);
+      const next = exists
+        ? prev.filter((f) => f.id !== contact.id)
+        : [
+            ...prev,
+            {
+              id: contact.id,
+              phone: contact.phone,
+              name: contactName(contact),
+            },
+          ];
+      writeFavorites(next);
+      return next;
+    });
+  }
+
+  function transferTargetForUser(userId: string) {
+    const settings = userSettings.find((s) => s.userId === userId);
+    return settings?.forwardToCellular || settings?.extension || "";
+  }
+
+  const favoriteContacts = favorites;
+  const hasDialBlock = activeCalls.length > 0;
 
   const modeLabel =
     webrtcMode === "telnyx" && webrtcConnected
@@ -594,54 +972,141 @@ export function SoftphonePanel({
           : "Mock (no Telnyx key)";
 
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
+    <div className="grid gap-4 lg:grid-cols-3">
       <audio ref={remoteAudioRef} autoPlay className="hidden" />
 
-      {incoming && !activeCall ? (
-        <Card className="lg:col-span-2 border-primary/40 bg-primary/5">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-                <Phone className="h-5 w-5 animate-pulse text-primary" />
-              </span>
-              <div>
-                <p className="text-sm font-semibold">Incoming call</p>
-                <p className="text-xs text-muted-foreground">
-                  {incoming.from} → {incoming.to}
-                </p>
+      {(incoming || waitingIncoming.length > 0) && (
+        <Card className="lg:col-span-3 border-primary/40 bg-primary/5">
+          {incoming && (
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
+                  <Phone className="h-5 w-5 animate-pulse text-primary" />
+                </span>
+                <div>
+                  <p className="text-sm font-semibold">Incoming call</p>
+                  <p className="text-xs text-muted-foreground">
+                    {incoming.from} → {incoming.to}
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button onClick={answerIncoming} className="gap-2">
+                  <Phone className="h-4 w-4" /> Answer
+                </Button>
+                <Button variant="danger" onClick={declineIncoming} className="gap-2">
+                  <PhoneOff className="h-4 w-4" /> Decline
+                </Button>
               </div>
             </div>
-            <div className="flex gap-2">
-              <Button onClick={answerIncoming} className="gap-2">
-                <Phone className="h-4 w-4" /> Answer
-              </Button>
-              <Button variant="danger" onClick={declineIncoming} className="gap-2">
-                <PhoneOff className="h-4 w-4" /> Decline
-              </Button>
+          )}
+          {waitingIncoming.length > 0 && (
+            <div className="mt-3 space-y-2 border-t border-border pt-3">
+              <p className="text-xs font-medium text-muted-foreground">Call waiting</p>
+              {waitingIncoming.map((w) => (
+                <div key={w.id} className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-sm">{w.from} → {w.to}</span>
+                  <div className="flex gap-2">
+                    <Button size="sm" onClick={() => answerWaiting(w)}>Answer (hold current)</Button>
+                    <Button size="sm" variant="outline" onClick={() => declineWaiting(w)}>Decline</Button>
+                  </div>
+                </div>
+              ))}
             </div>
-          </div>
+          )}
+          {screenPop && (
+            <div className="mt-3 rounded-lg border border-border bg-card p-3">
+              <p className="text-xs font-medium text-muted-foreground">CRM screen-pop</p>
+              <p className="text-sm font-semibold">{contactName(screenPop)}</p>
+              <p className="text-xs text-muted-foreground">{screenPop.phone}</p>
+              {screenPop.tagMembers?.length ? (
+                <p className="mt-1 text-xs">
+                  Tags: {screenPop.tagMembers.map((t) => t.tag.name).join(", ")}
+                </p>
+              ) : null}
+              {screenPop.customFields && Object.keys(screenPop.customFields).length > 0 ? (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Notes: {JSON.stringify(screenPop.customFields)}
+                </p>
+              ) : null}
+            </div>
+          )}
         </Card>
-      ) : null}
+      )}
 
-      <Card>
+      <Card className="lg:col-span-2">
         <CardTitle className="flex items-center gap-2">
           <Phone className="h-4 w-4" />
           Browser dialer
         </CardTitle>
         <p className="mt-1 text-xs text-muted-foreground">Mode: {modeLabel}</p>
 
-        <div className="mt-3">
-          <Label htmlFor="presence">Presence</Label>
-          <select
-            id="presence"
-            className="mt-1.5 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm"
-            value={presenceStatus}
-            onChange={(e) => updatePresence(e.target.value)}
-          >
-            {PRESENCE_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </select>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <div>
+            <Label htmlFor="presence">Presence</Label>
+            <select
+              id="presence"
+              className="mt-1.5 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm"
+              value={presenceStatus}
+              onChange={(e) => updatePresence(e.target.value, customStatus)}
+            >
+              {PRESENCE_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <Label htmlFor="customStatus">Custom status</Label>
+            <Input
+              id="customStatus"
+              className="mt-1.5"
+              value={customStatus}
+              onChange={(e) => setCustomStatus(e.target.value)}
+              onBlur={() => updatePresence(presenceStatus, customStatus)}
+              placeholder="e.g. Lunch break"
+            />
+          </div>
+        </div>
+
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <div>
+            <Label htmlFor="micSelect">Microphone</Label>
+            <select
+              id="micSelect"
+              className="mt-1.5 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm"
+              value={selectedMic}
+              onChange={(e) => {
+                setSelectedMic(e.target.value);
+                localStorage.setItem(LS_AUDIO_IN, e.target.value);
+              }}
+            >
+              <option value="">Default</option>
+              {audioInputs.map((d) => (
+                <option key={d.deviceId} value={d.deviceId}>
+                  {d.label || `Mic ${d.deviceId.slice(0, 6)}`}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <Label htmlFor="speakerSelect">Speaker</Label>
+            <select
+              id="speakerSelect"
+              className="mt-1.5 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm"
+              value={selectedSpeaker}
+              onChange={(e) => {
+                setSelectedSpeaker(e.target.value);
+                localStorage.setItem(LS_AUDIO_OUT, e.target.value);
+              }}
+            >
+              <option value="">Default</option>
+              {audioOutputs.map((d) => (
+                <option key={d.deviceId} value={d.deviceId}>
+                  {d.label || `Speaker ${d.deviceId.slice(0, 6)}`}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
         {phoneNumbers.length > 0 ? (
@@ -652,7 +1117,7 @@ export function SoftphonePanel({
               className="mt-1.5 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm"
               value={callerId}
               onChange={(e) => setCallerId(e.target.value)}
-              disabled={Boolean(activeCall)}
+              disabled={hasDialBlock}
             >
               {phoneNumbers.map((pn) => (
                 <option key={pn.id} value={pn.number}>
@@ -672,7 +1137,7 @@ export function SoftphonePanel({
             value={dialNumber}
             onChange={(e) => setDialNumber(e.target.value)}
             placeholder="+1..."
-            disabled={Boolean(activeCall)}
+            disabled={hasDialBlock}
           />
         </div>
 
@@ -681,7 +1146,7 @@ export function SoftphonePanel({
             type="checkbox"
             className="mt-0.5"
             checked={useCallMyPhone}
-            disabled={Boolean(activeCall)}
+            disabled={hasDialBlock}
             onChange={(e) => setUseCallMyPhone(e.target.checked)}
           />
           <span>
@@ -698,7 +1163,7 @@ export function SoftphonePanel({
               value={myPhone}
               onChange={(e) => setMyPhone(e.target.value)}
               placeholder="+1 your cell"
-              disabled={Boolean(activeCall)}
+              disabled={hasDialBlock}
             />
           </div>
         ) : null}
@@ -710,7 +1175,7 @@ export function SoftphonePanel({
               type="button"
               className="flex h-12 items-center justify-center rounded-lg border border-border bg-muted/50 text-lg font-semibold hover:bg-muted"
               onClick={() => pressKey(key)}
-              disabled={Boolean(activeCall) && !showDtmf}
+              disabled={hasDialBlock && !showDtmf}
             >
               {key}
             </button>
@@ -720,12 +1185,23 @@ export function SoftphonePanel({
         {error ? <p className="mt-3 text-sm text-danger">{error}</p> : null}
 
         <div className="mt-4 flex flex-wrap gap-2">
-          {!activeCall ? (
-            <Button onClick={startCall} disabled={loading || !dialNumber.trim()} className="gap-2">
-              <Phone className="h-4 w-4" />
-              {loading ? "Calling…" : "Call"}
-            </Button>
-          ) : (
+          {!hasDialBlock ? (
+            <>
+              <Button onClick={startCall} disabled={loading || !dialNumber.trim()} className="gap-2">
+                <Phone className="h-4 w-4" />
+                {loading ? "Calling…" : "Call"}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={redial}
+                disabled={!lastDialed}
+                className="gap-2"
+              >
+                <RotateCcw className="h-4 w-4" />
+                Redial
+              </Button>
+            </>
+          ) : activeCall ? (
             <>
               <Button variant="danger" onClick={hangup} className="gap-2">
                 <PhoneOff className="h-4 w-4" />
@@ -753,7 +1229,7 @@ export function SoftphonePanel({
                 DTMF
               </Button>
             </>
-          )}
+          ) : null}
         </div>
 
         {activeCall ? (
@@ -786,32 +1262,87 @@ export function SoftphonePanel({
               </Button>
             </div>
 
-            <div className="flex flex-wrap items-end gap-2">
-              <div className="min-w-[140px] flex-1">
-                <Label htmlFor="transferTo">Transfer to</Label>
-                <Input
-                  id="transferTo"
-                  type="tel"
-                  className="mt-1"
-                  value={transferTo}
-                  onChange={(e) => setTransferTo(e.target.value)}
-                  placeholder="+1..."
-                />
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant={transferMode === "blind" ? "primary" : "outline"}
+                  onClick={() => setTransferMode("blind")}
+                >
+                  Blind transfer
+                </Button>
+                <Button
+                  size="sm"
+                  variant={transferMode === "warm" ? "primary" : "outline"}
+                  onClick={() => setTransferMode("warm")}
+                >
+                  Warm transfer
+                </Button>
               </div>
-              <div className="min-w-[140px] flex-1">
-                <Label htmlFor="warmNote">Warm transfer note</Label>
-                <Input
-                  id="warmNote"
-                  className="mt-1"
-                  value={warmTransferNote}
-                  onChange={(e) => setWarmTransferNote(e.target.value)}
-                  placeholder="Context for agent…"
-                />
+              <div className="flex flex-wrap items-end gap-2">
+                <div className="min-w-[140px] flex-1">
+                  <Label htmlFor="transferTo">Transfer to</Label>
+                  <Input
+                    id="transferTo"
+                    type="tel"
+                    className="mt-1"
+                    value={transferTo}
+                    onChange={(e) => setTransferTo(e.target.value)}
+                    placeholder="+1..."
+                  />
+                </div>
+                <div className="min-w-[140px] flex-1">
+                  <Label htmlFor="warmNote">Transfer note</Label>
+                  <Input
+                    id="warmNote"
+                    className="mt-1"
+                    value={warmTransferNote}
+                    onChange={(e) => setWarmTransferNote(e.target.value)}
+                    placeholder="Context for agent…"
+                  />
+                </div>
+                {transferMode === "blind" ? (
+                  <Button variant="outline" size="sm" onClick={blindTransfer} className="gap-1">
+                    <PhoneForwarded className="h-4 w-4" />
+                    Transfer
+                  </Button>
+                ) : activeCall.warmTransferPending ? (
+                  <>
+                    <Button variant="outline" size="sm" onClick={completeWarmTransfer}>
+                      Complete transfer
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={cancelWarmTransfer}>
+                      Cancel transfer
+                    </Button>
+                  </>
+                ) : (
+                  <Button variant="outline" size="sm" onClick={startWarmTransfer} className="gap-1">
+                    <PhoneForwarded className="h-4 w-4" />
+                    Start consult
+                  </Button>
+                )}
               </div>
-              <Button variant="outline" size="sm" onClick={transfer} className="gap-1">
-                <PhoneForwarded className="h-4 w-4" />
-                Transfer
-              </Button>
+              {presenceList.length > 0 ? (
+                <div className="mt-2">
+                  <p className="text-xs text-muted-foreground mb-1">Transfer targets (presence)</p>
+                  <div className="flex flex-wrap gap-1">
+                    {presenceList.map((p) => {
+                      const target = transferTargetForUser(p.userId);
+                      return (
+                        <button
+                          key={p.userId}
+                          type="button"
+                          className="rounded border border-border px-2 py-1 text-xs hover:bg-muted"
+                          onClick={() => target && setTransferTo(target)}
+                        >
+                          {p.customLabel || p.userId.slice(0, 8)} · {p.status}
+                          {target ? ` (${target})` : ""}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
             </div>
 
             <div className="flex flex-wrap gap-2 border-t border-border pt-3">
@@ -861,7 +1392,7 @@ export function SoftphonePanel({
           </div>
         ) : null}
 
-        {!activeCall ? (
+        {!hasDialBlock ? (
           <div className="mt-4 flex flex-wrap items-end gap-2 border-t border-border pt-3">
             <div className="min-w-[120px] flex-1">
               <Label htmlFor="parkSlot">Retrieve parked call</Label>
@@ -881,30 +1412,123 @@ export function SoftphonePanel({
       </Card>
 
       <Card>
-        <CardTitle>Active line</CardTitle>
-        {activeCall ? (
-          <div className="mt-4 space-y-2">
-            <div
-              className={cn(
-                "rounded-lg p-4",
-                activeCall.onHold
-                  ? "border border-amber-200 bg-amber-50"
-                  : "border border-primary/20 bg-primary/5",
-              )}
-            >
-              <p className="text-lg font-semibold">{activeCall.to}</p>
-              <p className="text-sm text-muted-foreground">From {activeCall.from}</p>
-              <p className="mt-2 font-mono text-2xl tabular-nums">{formatDuration(elapsed)}</p>
-              <p className="mt-1 text-xs uppercase tracking-wide text-muted-foreground">
-                {activeCall.status}
-              </p>
+        <CardTitle>Lines & sidebar</CardTitle>
+
+        <div className="mt-4 space-y-2">
+          <Label>Active lines ({activeCalls.length})</Label>
+          {activeCalls.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No active calls.</p>
+          ) : (
+            activeCalls.map((line) => (
+              <button
+                key={line.id}
+                type="button"
+                onClick={() => switchLine(line.id)}
+                className={cn(
+                  "w-full rounded-lg border p-3 text-left transition-colors",
+                  line.id === activeLineId
+                    ? "border-primary bg-primary/5"
+                    : "border-border hover:bg-muted/50",
+                  line.onHold && "border-amber-200 bg-amber-50/50",
+                )}
+              >
+                <p className="text-sm font-semibold">{line.to}</p>
+                <p className="text-xs text-muted-foreground">From {line.from}</p>
+                <p className="mt-1 text-xs uppercase tracking-wide text-muted-foreground">
+                  {line.onHold ? "on hold" : line.status}
+                  {line.warmTransferPending ? " · warm transfer" : ""}
+                </p>
+              </button>
+            ))
+          )}
+        </div>
+
+        <div className="mt-4 border-t border-border pt-3">
+          <Label htmlFor="contactSearch">Contacts</Label>
+          <Input
+            id="contactSearch"
+            className="mt-1.5"
+            value={contactQuery}
+            onChange={(e) => setContactQuery(e.target.value)}
+            placeholder="Search name or number…"
+          />
+          {favoriteContacts.length > 0 ? (
+            <div className="mt-2">
+              <p className="text-xs text-muted-foreground mb-1">Favorites</p>
+              {favoriteContacts.map((c) => (
+                <div key={c.id} className="flex items-center justify-between gap-2 py-1">
+                  <button
+                    type="button"
+                    className="text-sm hover:underline"
+                    onClick={() => dialTo(c.phone)}
+                  >
+                    {c.name || c.phone}
+                  </button>
+                  <button type="button" onClick={() => toggleFavorite({ id: c.id, phone: c.phone, firstName: c.name })} aria-label="Unfavorite">
+                    <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
+                  </button>
+                </div>
+              ))}
             </div>
+          ) : null}
+          {contactResults.length > 0 ? (
+            <ul className="mt-2 max-h-40 space-y-1 overflow-y-auto">
+              {contactResults.map((c) => (
+                <li key={c.id} className="flex items-center justify-between gap-2">
+                  <button
+                    type="button"
+                    className="text-sm hover:underline"
+                    onClick={() => dialTo(c.phone)}
+                  >
+                    {contactName(c)} · {c.phone}
+                  </button>
+                  <button type="button" onClick={() => toggleFavorite(c)} aria-label="Favorite">
+                    <Star
+                      className={cn(
+                        "h-4 w-4",
+                        favorites.some((f) => f.id === c.id)
+                          ? "fill-amber-400 text-amber-400"
+                          : "text-muted-foreground",
+                      )}
+                    />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+
+        <div className="mt-4 border-t border-border pt-3">
+          <Label>Recent calls</Label>
+          {recentCalls.length === 0 ? (
+            <p className="mt-1 text-sm text-muted-foreground">No recent calls.</p>
+          ) : (
+            <ul className="mt-2 max-h-48 space-y-1 overflow-y-auto">
+              {recentCalls.map((rc) => {
+                const number = rc.direction === "outbound" ? rc.to : rc.from;
+                return (
+                  <li key={rc.id}>
+                    <button
+                      type="button"
+                      className="text-sm hover:underline"
+                      onClick={() => dialTo(number)}
+                    >
+                      {number} · {rc.direction} · {rc.status}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+
+        {activeCall ? (
+          <div className="mt-4 rounded-lg border border-primary/20 bg-primary/5 p-4">
+            <p className="text-lg font-semibold">{activeCall.to}</p>
+            <p className="text-sm text-muted-foreground">From {activeCall.from}</p>
+            <p className="mt-2 font-mono text-2xl tabular-nums">{formatDuration(elapsed)}</p>
           </div>
-        ) : (
-          <p className="mt-4 text-sm text-muted-foreground">
-            No active call. Enter a number and press Call.
-          </p>
-        )}
+        ) : null}
       </Card>
     </div>
   );

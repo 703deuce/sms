@@ -138,6 +138,9 @@ export async function syncTelnyxAssistant(
   const transferCfg = (config.transfers || {}) as {
     targets?: Array<{ name: string; to: string }>;
     handoffAssistants?: Array<{ name: string; id: string }>;
+    warmTransferInstructions?: string;
+    fallbackDestinations?: Array<{ to: string } | string>;
+    timeoutSeconds?: number;
   };
 
   const tools = buildAssistantTools({
@@ -147,6 +150,7 @@ export async function syncTelnyxAssistant(
     tools: agentTools,
     transferTargets: transferCfg.targets,
     handoffAssistants: transferCfg.handoffAssistants,
+    warmTransferInstructions: transferCfg.warmTransferInstructions,
   });
 
   const personality = [
@@ -190,7 +194,8 @@ export async function syncTelnyxAssistant(
       ? "You have a knowledge retrieval tool backed by the business document store. Use it for FAQs, policies, pricing, and detailed questions instead of guessing."
       : "",
     "Never claim an external action succeeded until the application tool confirms it.",
-    "Never tell a caller an appointment is booked until book_appointment returns success.",
+    "Never tell a caller an appointment is booked until book_appointment returns success with ok=true.",
+    "If book_appointment fails or returns an error, explain the issue and offer alternatives.",
   ]
     .filter(Boolean)
     .join("\n\n");
