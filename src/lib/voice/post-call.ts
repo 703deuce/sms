@@ -113,6 +113,8 @@ export async function processPostCall(callId: string) {
       publishTranscriptReady,
       publishAiSummaryReady,
       publishVoicemailReceived,
+      publishLeadCreated,
+      publishAppointmentBooked,
     } = await import("@/lib/crm/events");
     const direction =
       isMissed || call.voicemailDetected
@@ -162,6 +164,43 @@ export async function processPostCall(callId: string) {
         callId: call.id,
         aiSummary: insight.summary,
       }).catch(() => undefined);
+    }
+
+    if (insight?.isLead && call.contactId) {
+      const contact = await prisma.contact.findFirst({
+        where: { id: call.contactId, workspaceId: call.workspaceId },
+      });
+      await publishLeadCreated({
+        workspaceId: call.workspaceId,
+        contactId: call.contactId,
+        callId: call.id,
+        leadId: call.contactId,
+        firstName: contact?.firstName,
+        lastName: contact?.lastName,
+        phone: contact?.phone || call.fromE164 || call.toE164,
+        email: contact?.email,
+        company: contact?.company,
+        status: "Open",
+      }).catch(() => undefined);
+    }
+
+    if (call.appointmentBooked) {
+      const appt = await prisma.voiceAppointment.findFirst({
+        where: { callId: call.id, workspaceId: call.workspaceId },
+        orderBy: { createdAt: "desc" },
+      });
+      if (appt) {
+        await publishAppointmentBooked({
+          workspaceId: call.workspaceId,
+          contactId: call.contactId,
+          appointmentId: appt.id,
+          callId: call.id,
+          serviceName: appt.serviceName,
+          startsAt: appt.startsAt,
+          endsAt: appt.endsAt,
+          timezone: appt.timezone,
+        }).catch(() => undefined);
+      }
     }
   } catch {
     // CRM push is optional

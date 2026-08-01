@@ -529,17 +529,32 @@ export async function runCrmDiagnosticProbe(input: {
 
       case "webhook_delivery":
         return runTimed("webhook_delivery", async () => {
-          if (!isFeatureSupported(provider, "webhooks_inbound") || !connector.handleWebhook) {
+          if (!isFeatureSupported(provider, "webhooks_inbound")) {
             return {
               ok: true,
               skipped: true,
               message:
-                "Inbound CRM webhooks not wired for this provider — outbound Transovo events still push to the CRM",
+                "Inbound CRM webhooks unsupported for this provider edition — outbound Transovo events still push to the CRM",
             };
           }
+          if (!connector.handleWebhook) {
+            return {
+              ok: false,
+              message: "Adapter missing handleWebhook despite webhooks_inbound support",
+            };
+          }
+          const ctx = await buildCtx(workspaceId, provider);
+          const probe = await connector.handleWebhook(
+            ctx,
+            { "x-transovo-probe": "1" },
+            { source: "transovo_diagnostics", type: "probe" },
+          );
           return {
-            ok: true,
-            message: "Webhook handler present",
+            ok: Boolean(probe?.accepted),
+            message: probe?.accepted
+              ? "Webhook handler accepted diagnostics probe payload"
+              : "Webhook handler rejected probe payload",
+            raw: probe,
           };
         });
 

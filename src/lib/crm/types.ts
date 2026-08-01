@@ -101,6 +101,7 @@ export type CrmCompany = {
   phone?: string | null;
   website?: string | null;
   ownerExternalId?: string | null;
+  customFields?: Record<string, unknown>;
 };
 
 export type CrmLead = {
@@ -113,6 +114,7 @@ export type CrmLead = {
   source?: string | null;
   status?: string | null;
   ownerExternalId?: string | null;
+  customFields?: Record<string, unknown>;
 };
 
 export type CrmDeal = {
@@ -141,6 +143,7 @@ export type CrmTask = {
   ownerExternalId?: string | null;
   relatedType?: string | null;
   relatedExternalId?: string | null;
+  customFields?: Record<string, unknown>;
 };
 
 export type CrmNote = {
@@ -149,6 +152,7 @@ export type CrmNote = {
   contactExternalId?: string | null;
   relatedType?: string | null;
   relatedExternalId?: string | null;
+  customFields?: Record<string, unknown>;
 };
 
 export type CrmCallActivity = {
@@ -168,6 +172,7 @@ export type CrmCallActivity = {
   aiSummary?: string | null;
   contactExternalId?: string | null;
   subject?: string | null;
+  customFields?: Record<string, unknown>;
 };
 
 export type CrmSmsActivity = {
@@ -180,6 +185,7 @@ export type CrmSmsActivity = {
   status?: string | null;
   sentAt?: string | null;
   contactExternalId?: string | null;
+  customFields?: Record<string, unknown>;
 };
 
 export type CrmUser = {

@@ -379,15 +379,17 @@ export async function updateHumanCall(
     data,
   });
 
-  // A disposition marking the call as missed emits a call.missed automation
-  // event so follow-up flows (e.g. missed-call text-back) can fire.
-  if (patch.disposition && /missed|no[_ -]?answer|voicemail/i.test(patch.disposition)) {
+  // Disposition-driven product events (automation + CRM).
+  if (patch.disposition) {
     const customerPhone = updated.direction === "inbound" ? updated.from : updated.to;
     try {
       const contact = await prisma.contact.findFirst({
         where: { workspaceId, phone: customerPhone },
       });
-      if (contact) {
+      if (
+        contact &&
+        /missed|no[_ -]?answer|voicemail/i.test(patch.disposition)
+      ) {
         const { emitAutomationEvent } = await import("@/lib/automations/events");
         await emitAutomationEvent(workspaceId, "call.missed", contact.id, {
           humanCallId: updated.id,
@@ -395,8 +397,17 @@ export async function updateHumanCall(
           disposition: patch.disposition,
         }).catch(() => undefined);
       }
+      if (/callback/i.test(patch.disposition)) {
+        const { publishCallbackScheduled } = await import("@/lib/crm/events");
+        await publishCallbackScheduled({
+          workspaceId,
+          contactId: contact?.id || null,
+          callId: updated.id,
+          phone: customerPhone,
+        }).catch(() => undefined);
+      }
     } catch (err) {
-      console.warn("[human-call] disposition missed-call event failed", callId, err);
+      console.warn("[human-call] disposition event failed", callId, err);
     }
   }
 

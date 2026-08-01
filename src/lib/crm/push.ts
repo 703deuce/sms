@@ -21,7 +21,7 @@ import {
   persistMappedCallActivity,
   persistMappedSmsActivity,
 } from "./call-lifecycle";
-import { payloadSyncHash } from "./idempotency";
+import { crmWriteIdempotencyKey, payloadSyncHash } from "./idempotency";
 import {
   acquireCrmRateLimit,
   noteCrmRateLimitHit,
@@ -161,7 +161,7 @@ export async function pushCrmEventJob(payload: {
         if (tagNames.length) {
           mappedFields.tags = tagNames;
           mappedFields.Tag = tagNames;
-          mappedFields.label_ids = tagNames;
+          // Pipedrive label_ids must be numeric IDs — resolved inside the adapter.
         }
         const hash = payloadSyncHash(mappedFields as Record<string, unknown>);
 
@@ -395,9 +395,19 @@ export async function pushCrmEventJob(payload: {
         internalId: noteInternalId,
       });
       const noteBody =
-        (event.payload.notes as string) ||
-        (event.payload.body as string) ||
-        `Transovo ${event.type}${contactPhone ? ` (${contactPhone})` : ""}`;
+        event.type === "appointment.booked"
+          ? [
+              event.payload.subject || "Appointment booked",
+              event.payload.startsAt ? `Starts: ${String(event.payload.startsAt)}` : null,
+              event.payload.endsAt ? `Ends: ${String(event.payload.endsAt)}` : null,
+              event.payload.timezone ? `Timezone: ${String(event.payload.timezone)}` : null,
+              event.payload.serviceName ? `Service: ${String(event.payload.serviceName)}` : null,
+            ]
+              .filter(Boolean)
+              .join("\n")
+          : (event.payload.notes as string) ||
+            (event.payload.body as string) ||
+            `Transovo ${event.type}${contactPhone ? ` (${contactPhone})` : ""}`;
       let result;
       if (existingNote?.externalId && connector.updateNote) {
         result = await connector.updateNote(ctx, {
@@ -440,14 +450,24 @@ export async function pushCrmEventJob(payload: {
             ? `Requested callback${contactPhone ? ` (${contactPhone})` : ""}`
             : event.type === "voicemail.received"
               ? `Voicemail follow-up${contactPhone ? ` (${contactPhone})` : ""}`
-              : event.type === "task.completed"
-                ? `Completed: ${String(event.payload.subject || "Task")}`
-                : event.type.startsWith("task.")
-                  ? String(event.payload.subject || "Transovo task")
-                  : null;
+              : event.type === "appointment.booked"
+                ? String(event.payload.subject || "Appointment follow-up")
+                : event.type === "task.completed"
+                  ? `Completed: ${String(event.payload.subject || "Task")}`
+                  : event.type.startsWith("task.")
+                    ? String(event.payload.subject || "Transovo task")
+                    : null;
       if (taskSubject) {
         const taskInternalId = String(
-          event.payload.taskId || event.eventId || `${event.type}:${contactPhone || "na"}`,
+          event.payload.taskId ||
+            event.eventId ||
+            crmWriteIdempotencyKey({
+              workspaceId,
+              provider,
+              action: "create_task",
+              objectType: "task",
+              internalId: `${event.type}:${contactPhone || "na"}`,
+            }),
         );
         const existingTask = await getObjectMapping({
           workspaceId,

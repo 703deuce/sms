@@ -195,9 +195,12 @@ export async function upsertExternalContact(input: {
   lastName?: string | null;
   company?: string | null;
   source?: string;
+  /** When true, CRM values overwrite local non-null fields (apply_crm conflict policy). */
+  overwrite?: boolean;
 }): Promise<{ contactId: string; created: boolean } | null> {
   const prisma = getPrisma();
   const phone = input.phone ? normalizeE164(input.phone) : null;
+  const overwrite = Boolean(input.overwrite);
 
   // Match or create by email when there's no phone (CRM imports + email matching).
   if (!phone) {
@@ -209,9 +212,15 @@ export async function upsertExternalContact(input: {
       await prisma.contact.update({
         where: { id: byEmail.id },
         data: {
-          firstName: byEmail.firstName ?? input.firstName ?? null,
-          lastName: byEmail.lastName ?? input.lastName ?? null,
-          company: byEmail.company ?? input.company ?? null,
+          firstName: overwrite
+            ? input.firstName ?? byEmail.firstName ?? null
+            : byEmail.firstName ?? input.firstName ?? null,
+          lastName: overwrite
+            ? input.lastName ?? byEmail.lastName ?? null
+            : byEmail.lastName ?? input.lastName ?? null,
+          company: overwrite
+            ? input.company ?? byEmail.company ?? null
+            : byEmail.company ?? input.company ?? null,
         },
       });
       return { contactId: byEmail.id, created: false };
@@ -238,10 +247,18 @@ export async function upsertExternalContact(input: {
     await prisma.contact.update({
       where: { id: existing.id },
       data: {
-        firstName: existing.firstName ?? input.firstName ?? null,
-        lastName: existing.lastName ?? input.lastName ?? null,
-        email: existing.email ?? input.email ?? null,
-        company: existing.company ?? input.company ?? null,
+        firstName: overwrite
+          ? input.firstName ?? existing.firstName ?? null
+          : existing.firstName ?? input.firstName ?? null,
+        lastName: overwrite
+          ? input.lastName ?? existing.lastName ?? null
+          : existing.lastName ?? input.lastName ?? null,
+        email: overwrite
+          ? input.email ?? existing.email ?? null
+          : existing.email ?? input.email ?? null,
+        company: overwrite
+          ? input.company ?? existing.company ?? null
+          : existing.company ?? input.company ?? null,
       },
     });
     return { contactId: existing.id, created: false };

@@ -118,6 +118,18 @@ const DEFAULT_RULES: CrmIntegrationRule[] = [
     requiresPref: "createTasksOnCallback",
   },
   {
+    id: "appointment_note",
+    when: "appointment.booked",
+    then: ["create_note"],
+    requiresPref: "syncNotes",
+  },
+  {
+    id: "appointment_task",
+    when: "appointment.booked",
+    then: ["create_task"],
+    requiresPref: "syncTasks",
+  },
+  {
     id: "contact_upsert",
     when: ["contact.created", "contact.updated"],
     then: ["upsert_contact"],
@@ -126,7 +138,7 @@ const DEFAULT_RULES: CrmIntegrationRule[] = [
   {
     id: "lead_created",
     when: "lead.created",
-    then: ["create_lead"],
+    then: ["create_lead", "upsert_contact"],
     requiresPref: "autoCreateLeads",
   },
   {

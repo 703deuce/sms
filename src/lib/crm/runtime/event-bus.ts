@@ -7,6 +7,7 @@ import { randomBytes } from "crypto";
 import { getPrisma } from "@/lib/db";
 import type { InputJsonValue } from "@/lib/domain";
 import { enqueueJob } from "@/lib/messaging/enqueue-advance";
+import { crmEventIdempotencyKey } from "../idempotency";
 import { writeCrmAudit } from "../logging";
 import { recordCrmMetric } from "../metrics";
 import { CRM_PROVIDER_IDS } from "../registry";
@@ -72,7 +73,13 @@ export async function emitPlatformEvent(
         workspaceId: normalized.workspaceId,
         priority: priorityScoreForEvent(normalized.type),
         payload: jobPayload,
-        idempotencyKey: `crm-bus-${provider}-${normalized.type}-${eventId}`.slice(0, 180),
+        idempotencyKey: crmEventIdempotencyKey({
+          workspaceId: normalized.workspaceId,
+          provider,
+          type: normalized.type,
+          eventId,
+          objectId: normalized.contactId,
+        }),
       });
       enqueued += 1;
     } catch (err) {

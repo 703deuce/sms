@@ -283,7 +283,47 @@ ok("adapters expose inbound activity lists + updateNote", async () => {
     assert.equal(typeof c.listNotes, "function");
     assert.equal(typeof c.listActivities, "function");
     assert.equal(typeof c.updateNote, "function");
+    assert.equal(typeof c.handleWebhook, "function");
+    if (c.id !== "pipedrive") {
+      assert.equal(typeof c.upsertLead, "function");
+    }
   }
+});
+
+ok("mergeInboundContact prefers local filled fields", async () => {
+  const { mergeInboundContact } = await import("../src/lib/crm/conflict");
+  const merged = mergeInboundContact(
+    { firstName: "Local", lastName: null, email: "a@b.c", company: null },
+    { firstName: "Remote", lastName: "R", email: "r@b.c", companyName: "Acme" },
+  );
+  assert.equal(merged.firstName, "Local");
+  assert.equal(merged.lastName, "R");
+  assert.equal(merged.email, "a@b.c");
+  assert.equal(merged.company, "Acme");
+});
+
+ok("product CRM publishers exist for callback/appointment/lead/task", async () => {
+  const events = await import("../src/lib/crm/events");
+  assert.equal(typeof events.publishCallbackScheduled, "function");
+  assert.equal(typeof events.publishAppointmentBooked, "function");
+  assert.equal(typeof events.publishLeadCreated, "function");
+  assert.equal(typeof events.publishTaskEvent, "function");
+});
+
+ok("appointment + callback rules are wired", async () => {
+  const { defaultCrmRules } = await import("../src/lib/crm/runtime/rules");
+  const rules = defaultCrmRules();
+  assert.ok(rules.some((r) => r.id === "callback_task"));
+  assert.ok(rules.some((r) => r.id === "appointment_note"));
+  assert.ok(rules.some((r) => r.id === "appointment_task"));
+  assert.ok(rules.some((r) => r.id === "lead_created"));
+});
+
+ok("appointment.booked is a supported subscription event", async () => {
+  const { eventSupportLevel } = await import("../src/lib/crm/runtime/subscriptions");
+  assert.equal(eventSupportLevel("salesforce", "appointment.booked"), "supported");
+  assert.equal(eventSupportLevel("zoho", "callback.scheduled"), "supported");
+  assert.equal(eventSupportLevel("pipedrive", "lead.created"), "unsupported");
 });
 
 console.log(`\n${passed} CRM enterprise checks passed.`);

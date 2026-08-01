@@ -234,19 +234,23 @@ export const zohoConnector: CrmConnector = {
     if (isBigin(ctx)) {
       throw new Error("Bigin does not support Zoho CRM Leads — use Contacts/Pipelines");
     }
-    const body = {
-      data: [
-        {
-          id: lead.id || undefined,
-          First_Name: lead.firstName,
-          Last_Name: lead.lastName || "Unknown",
-          Phone: lead.phone,
-          Email: lead.email,
-          Company: lead.companyName || "Unknown",
-          Lead_Source: lead.source || "Transovo",
-        },
-      ],
-    };
+    const fields = await buildMappedPayload({
+      workspaceId: ctx.workspaceId,
+      provider: "zoho",
+      objectType: "lead",
+      base: {
+        id: lead.id || undefined,
+        First_Name: lead.firstName,
+        Last_Name: lead.lastName || "Unknown",
+        Phone: lead.phone,
+        Email: lead.email,
+        Company: lead.companyName || "Unknown",
+        Lead_Source: lead.source || "Transovo",
+        Lead_Status: lead.status || undefined,
+      },
+      customFields: lead.customFields,
+    });
+    const body = { data: [fields] };
     if (lead.id) {
       await crmFetch(`${apiBase(ctx)}/Leads`, {
         method: "PUT",
@@ -296,18 +300,21 @@ export const zohoConnector: CrmConnector = {
 
   async upsertDeal(ctx, deal) {
     const module = isBigin(ctx) ? "Pipelines" : "Deals";
-    const body = {
-      data: [
-        {
-          id: deal.id || undefined,
-          Deal_Name: deal.name,
-          Amount: deal.amount,
-          Stage: deal.stage,
-          Pipeline: deal.pipeline,
-          Closing_Date: deal.closeDate || undefined,
-        },
-      ],
-    };
+    const fields = await buildMappedPayload({
+      workspaceId: ctx.workspaceId,
+      provider: "zoho",
+      objectType: "deal",
+      base: {
+        id: deal.id || undefined,
+        Deal_Name: deal.name,
+        Amount: deal.amount,
+        Stage: deal.stage,
+        Pipeline: deal.pipeline,
+        Closing_Date: deal.closeDate || undefined,
+      },
+      customFields: deal.customFields,
+    });
+    const body = { data: [fields] };
     if (deal.id) {
       await crmFetch(`${apiBase(ctx)}/${module}`, {
         method: "PUT",
@@ -326,22 +333,25 @@ export const zohoConnector: CrmConnector = {
   },
 
   async createTask(ctx, task) {
+    const fields = await buildMappedPayload({
+      workspaceId: ctx.workspaceId,
+      provider: "zoho",
+      objectType: "task",
+      base: {
+        Subject: task.subject,
+        Description: task.description,
+        Due_Date: task.dueAt ? task.dueAt.slice(0, 10) : undefined,
+        Status: task.status || "Not Started",
+        Who_Id: task.contactExternalId || undefined,
+      },
+      customFields: task.customFields,
+    });
     const created = await crmFetch<{ data?: Array<{ details?: { id?: string } }> }>(
       `${apiBase(ctx)}/Tasks`,
       {
         method: "POST",
         accessToken: ctx.accessToken,
-        body: JSON.stringify({
-          data: [
-            {
-              Subject: task.subject,
-              Description: task.description,
-              Due_Date: task.dueAt ? task.dueAt.slice(0, 10) : undefined,
-              Status: task.status || "Not Started",
-              Who_Id: task.contactExternalId || undefined,
-            },
-          ],
-        }),
+        body: JSON.stringify({ data: [fields] }),
       },
     );
     const id = created.data?.[0]?.details?.id;
@@ -350,21 +360,24 @@ export const zohoConnector: CrmConnector = {
   },
 
   async createNote(ctx, note) {
+    const fields = await buildMappedPayload({
+      workspaceId: ctx.workspaceId,
+      provider: "zoho",
+      objectType: "note",
+      base: {
+        Note_Title: "Transovo note",
+        Note_Content: note.body,
+        Parent_Id: note.contactExternalId || undefined,
+        se_module: "Contacts",
+      },
+      customFields: note.customFields,
+    });
     const created = await crmFetch<{ data?: Array<{ details?: { id?: string } }> }>(
       `${apiBase(ctx)}/Notes`,
       {
         method: "POST",
         accessToken: ctx.accessToken,
-        body: JSON.stringify({
-          data: [
-            {
-              Note_Title: "Transovo note",
-              Note_Content: note.body,
-              Parent_Id: note.contactExternalId || undefined,
-              se_module: "Contacts",
-            },
-          ],
-        }),
+        body: JSON.stringify({ data: [fields] }),
       },
     );
     const id = created.data?.[0]?.details?.id;
@@ -373,20 +386,23 @@ export const zohoConnector: CrmConnector = {
   },
 
   async updateNote(ctx, note) {
+    const fields = await buildMappedPayload({
+      workspaceId: ctx.workspaceId,
+      provider: "zoho",
+      objectType: "note",
+      base: {
+        id: note.id,
+        Note_Title: "Transovo note",
+        Note_Content: note.body,
+        Parent_Id: note.contactExternalId || undefined,
+        se_module: "Contacts",
+      },
+      customFields: note.customFields,
+    });
     await crmFetch(`${apiBase(ctx)}/Notes`, {
       method: "PUT",
       accessToken: ctx.accessToken,
-      body: JSON.stringify({
-        data: [
-          {
-            id: note.id,
-            Note_Title: "Transovo note",
-            Note_Content: note.body,
-            Parent_Id: note.contactExternalId || undefined,
-            se_module: "Contacts",
-          },
-        ],
-      }),
+      body: JSON.stringify({ data: [fields] }),
     });
     return { externalId: note.id, created: false };
   },
@@ -505,17 +521,27 @@ export const zohoConnector: CrmConnector = {
           ? "Outbound"
           : "Inbound";
 
-    const record: Record<string, unknown> = {
-      Subject: call.subject || `${callType} call via Transovo`,
-      Call_Type: callType,
-      Call_Start_Time: call.startedAt || new Date().toISOString(),
-      Call_Duration: call.durationSeconds != null ? String(call.durationSeconds) : undefined,
-      Description: description,
-      Who_Id: call.contactExternalId ? { id: call.contactExternalId } : undefined,
-      Owner: ctx.preferences.defaultOwnerExternalId
-        ? { id: ctx.preferences.defaultOwnerExternalId }
-        : undefined,
-    };
+    const record = await buildMappedPayload({
+      workspaceId: ctx.workspaceId,
+      provider: "zoho",
+      objectType: "call",
+      base: {
+        Subject: call.subject || `${callType} call via Transovo`,
+        Call_Type: callType,
+        Call_Start_Time: call.startedAt || new Date().toISOString(),
+        Call_Duration: call.durationSeconds != null ? String(call.durationSeconds) : undefined,
+        Call_Result: call.disposition || undefined,
+        Description: description,
+        Who_Id: call.contactExternalId ? { id: call.contactExternalId } : undefined,
+        Owner: ctx.preferences.defaultOwnerExternalId
+          ? { id: ctx.preferences.defaultOwnerExternalId }
+          : undefined,
+      },
+      customFields: {
+        disposition: call.disposition,
+        ...(call.customFields || {}),
+      },
+    });
     if (call.id) record.id = call.id;
 
     try {
@@ -561,23 +587,26 @@ export const zohoConnector: CrmConnector = {
   },
 
   async updateTask(ctx, task) {
+    const fields = await buildMappedPayload({
+      workspaceId: ctx.workspaceId,
+      provider: "zoho",
+      objectType: "task",
+      base: {
+        id: task.id,
+        Subject: task.subject,
+        Description: task.description,
+        Status: task.status,
+        Due_Date: task.dueAt,
+        What_Id: task.contactExternalId
+          ? { id: task.contactExternalId }
+          : undefined,
+      },
+      customFields: task.customFields,
+    });
     await crmFetch(`${apiBase(ctx)}/Tasks`, {
       method: "PUT",
       accessToken: ctx.accessToken,
-      body: JSON.stringify({
-        data: [
-          {
-            id: task.id,
-            Subject: task.subject,
-            Description: task.description,
-            Status: task.status,
-            Due_Date: task.dueAt,
-            What_Id: task.contactExternalId
-              ? { id: task.contactExternalId }
-              : undefined,
-          },
-        ],
-      }),
+      body: JSON.stringify({ data: [fields] }),
     });
     return { externalId: task.id, created: false };
   },
@@ -590,22 +619,35 @@ export const zohoConnector: CrmConnector = {
     ]
       .filter(Boolean)
       .join("\n");
-    if (sms.id && zohoConnector.updateTask) {
-      return zohoConnector.updateTask(ctx, {
-        id: sms.id,
+    const customFields = await buildMappedPayload({
+      workspaceId: ctx.workspaceId,
+      provider: "zoho",
+      objectType: "sms",
+      base: {
         subject: `${sms.direction} SMS via Transovo`,
         description,
         status: "Completed",
+      },
+      customFields: sms.customFields,
+    });
+    if (sms.id && zohoConnector.updateTask) {
+      return zohoConnector.updateTask(ctx, {
+        id: sms.id,
+        subject: String(customFields.subject || `${sms.direction} SMS via Transovo`),
+        description: String(customFields.description || description),
+        status: "Completed",
         contactExternalId: sms.contactExternalId,
         dueAt: sms.sentAt,
+        customFields,
       });
     }
     return zohoConnector.createTask!(ctx, {
-      subject: `${sms.direction} SMS via Transovo`,
-      description,
+      subject: String(customFields.subject || `${sms.direction} SMS via Transovo`),
+      description: String(customFields.description || description),
       status: "Completed",
       contactExternalId: sms.contactExternalId,
       dueAt: sms.sentAt,
+      customFields,
     });
   },
 
@@ -638,16 +680,19 @@ export const zohoConnector: CrmConnector = {
   },
 
   async upsertCompany(ctx, company) {
-    const body = {
-      data: [
-        {
-          id: company.id || undefined,
-          Account_Name: company.name,
-          Phone: company.phone,
-          Website: company.website,
-        },
-      ],
-    };
+    const fields = await buildMappedPayload({
+      workspaceId: ctx.workspaceId,
+      provider: "zoho",
+      objectType: "company",
+      base: {
+        id: company.id || undefined,
+        Account_Name: company.name,
+        Phone: company.phone,
+        Website: company.website,
+      },
+      customFields: company.customFields,
+    });
+    const body = { data: [fields] };
     if (company.id) {
       await crmFetch(`${apiBase(ctx)}/Accounts`, {
         method: "PUT",
@@ -719,6 +764,7 @@ export const zohoConnector: CrmConnector = {
       }));
       return [{ id: module.toLowerCase(), name: module, stages }];
     } catch {
+      // INTENTIONAL: org may lack Stage picklist metadata — soft-empty, not a stub write path.
       return [];
     }
   },
@@ -735,6 +781,7 @@ export const zohoConnector: CrmConnector = {
         color: t.colour_code || null,
       })).filter((t) => t.name);
     } catch {
+      // INTENTIONAL: tags API unavailable on some Zoho/Bigin editions.
       return [];
     }
   },

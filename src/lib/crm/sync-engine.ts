@@ -9,7 +9,7 @@ import { enqueueJob } from "@/lib/messaging/enqueue-advance";
 import type { ConnectorContext } from "./connector";
 import { CrmHttpError } from "./http";
 import { appendSyncEvent, writeCrmAudit } from "./logging";
-import { resolveBothSidesConflict } from "./conflict";
+import { mergeInboundContact, resolveBothSidesConflict } from "./conflict";
 import { isFeatureSupported } from "./feature-matrix";
 import {
   fingerprintEmail,
@@ -218,7 +218,8 @@ export async function runCrmSyncJob(payload: {
       detail: { externalAccountId: health.externalAccountId },
     });
 
-    // Initial / manual / incremental / scheduled / webhook reconcile — never import historical activities unless enabled later.
+    // Initial / manual / incremental / scheduled / webhook reconcile.
+    // Historical activity import is gated by prefs.importHistoricalActivities inside ingest loops.
     if (kind !== "push") {
       // Users + pipelines first (owner / stage mapping metadata)
       if (connector.listUsers) {
@@ -849,6 +850,7 @@ async function ingestRemoteContact(
     .digest("hex")
     .slice(0, 32);
 
+  let applyCrmOverwrite = false;
   if (existingMap) {
     const prefs = await getCrmSyncPreferences(workspaceId, provider);
     const remoteChanged =
@@ -922,16 +924,38 @@ async function ingestRemoteContact(
       });
       return;
     }
+    applyCrmOverwrite = decision === "apply_crm" && localChanged && remoteChanged;
+  }
+
+  let merged = {
+    firstName: remote.firstName,
+    lastName: remote.lastName,
+    email: remote.email,
+    company: remote.companyName,
+  };
+  if (existingMap && !applyCrmOverwrite) {
+    const local = await getPrisma().contact.findFirst({
+      where: { id: existingMap.internalId, workspaceId },
+    });
+    if (local) {
+      merged = mergeInboundContact(local, {
+        firstName: remote.firstName,
+        lastName: remote.lastName,
+        email: remote.email,
+        companyName: remote.companyName,
+      });
+    }
   }
 
   const result = await upsertExternalContact({
     workspaceId,
     phone: remote.phone,
-    firstName: remote.firstName,
-    lastName: remote.lastName,
-    email: remote.email,
-    company: remote.companyName,
+    firstName: merged.firstName,
+    lastName: merged.lastName,
+    email: merged.email,
+    company: merged.company,
     source: `crm:${provider}`,
+    overwrite: applyCrmOverwrite,
   });
   if (!result) {
     stats.contactsSkipped += 1;

@@ -42,14 +42,15 @@ const COMMS: CrmPlatformEventType[] = [
   "sms.failed",
   "sms.received",
   "callback.scheduled",
-  "task.created",
-  "task.completed",
+  "appointment.booked",
   "contact.created",
   "contact.updated",
 ];
 
+/** Optional until a first-class Transovo Task / User sync product surface emits them. */
 const OPTIONAL_META: CrmPlatformEventType[] = [
-  "appointment.booked",
+  "task.created",
+  "task.completed",
   "user.created",
   "user.updated",
 ];

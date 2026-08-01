@@ -150,6 +150,71 @@ export async function publishCallbackScheduled(input: {
   });
 }
 
+export async function publishAppointmentBooked(input: {
+  workspaceId: string;
+  contactId?: string | null;
+  appointmentId: string;
+  callId?: string | null;
+  serviceName?: string | null;
+  startsAt?: string | Date | null;
+  endsAt?: string | Date | null;
+  timezone?: string | null;
+}) {
+  return emitTypedEvent("appointment.booked", {
+    workspaceId: input.workspaceId,
+    contactId: input.contactId,
+    eventId: `appt-${input.appointmentId}`,
+    payload: {
+      ...input,
+      startsAt:
+        input.startsAt instanceof Date ? input.startsAt.toISOString() : input.startsAt,
+      endsAt: input.endsAt instanceof Date ? input.endsAt.toISOString() : input.endsAt,
+      subject: input.serviceName
+        ? `Appointment: ${input.serviceName}`
+        : "Appointment booked",
+    },
+  });
+}
+
+export async function publishLeadCreated(input: {
+  workspaceId: string;
+  contactId?: string | null;
+  leadId?: string | null;
+  callId?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  company?: string | null;
+  status?: string | null;
+}) {
+  const anchor = input.leadId || input.contactId || input.callId || "lead";
+  return emitTypedEvent("lead.created", {
+    workspaceId: input.workspaceId,
+    contactId: input.contactId,
+    eventId: `lead-${anchor}`,
+    payload: { ...input, leadId: input.leadId || input.contactId || input.callId },
+  });
+}
+
+export async function publishTaskEvent(input: {
+  workspaceId: string;
+  contactId?: string | null;
+  taskId: string;
+  type: "task.created" | "task.completed";
+  subject?: string | null;
+  description?: string | null;
+  dueAt?: string | null;
+  status?: string | null;
+}) {
+  return emitTypedEvent(input.type, {
+    workspaceId: input.workspaceId,
+    contactId: input.contactId,
+    eventId: `${input.type}-${input.taskId}`,
+    payload: { ...input },
+  });
+}
+
 export async function publishContactEvent(input: {
   workspaceId: string;
   contactId: string;

@@ -1,5 +1,6 @@
 /**
  * Bulk / paged synchronization with checkpoint resume and progress reporting.
+ * Delegates page draining to sync-engine (adapters already paginate internally).
  */
 
 import { getPrisma } from "@/lib/db";
@@ -10,12 +11,13 @@ import type { CrmProviderId } from "../types";
 import { crmQueueName, priorityScoreForSyncKind } from "./priority";
 
 export type BulkCheckpoint = {
-  objectType: "contact" | "company" | "lead";
+  objectType: "contact" | "company" | "lead" | "deal" | "task" | "note" | "activity";
   cursor: string | null;
   imported: number;
   pages: number;
   done: boolean;
   updatedAt: string;
+  lastStats?: Record<string, number>;
 };
 
 export async function enqueueCrmBulkSync(input: {
@@ -57,6 +59,36 @@ export async function enqueueCrmBulkSync(input: {
   return run;
 }
 
+function importedFromSyncStats(stats: Record<string, unknown> | undefined): number {
+  if (!stats) return 0;
+  const keys = [
+    "contactsIn",
+    "contactsCreated",
+    "contactsUpdated",
+    "companiesIn",
+    "leadsIn",
+    "dealsIn",
+    "tasksIn",
+    "notesIn",
+    "activitiesIn",
+  ];
+  let n = 0;
+  for (const k of keys) {
+    const v = stats[k];
+    if (typeof v === "number") n += v;
+  }
+  // Prefer contact+company+lead inbound counts when present; avoid double-counting create+update.
+  const inbound =
+    Number(stats.contactsIn || 0) +
+    Number(stats.companiesIn || 0) +
+    Number(stats.leadsIn || 0) +
+    Number(stats.dealsIn || 0) +
+    Number(stats.tasksIn || 0) +
+    Number(stats.notesIn || 0) +
+    Number(stats.activitiesIn || 0);
+  return inbound > 0 ? inbound : n;
+}
+
 export async function runCrmBulkSyncPage(payload: {
   workspaceId: string;
   provider: CrmProviderId;
@@ -65,7 +97,6 @@ export async function runCrmBulkSyncPage(payload: {
   cursor?: string | null;
 }) {
   const { runCrmSyncJob } = await import("../sync-engine");
-  // Reuse sync engine for a page of work; checkpoint stored on connection + run.
   const prisma = getPrisma();
   const conn = await prisma.integrationConnection.findUnique({
     where: {
@@ -90,25 +121,33 @@ export async function runCrmBulkSyncPage(payload: {
     data: {
       status: "running",
       startedAt: new Date(),
-      statsJson: { bulk: true, checkpoint },
+      statsJson: { bulk: true, objectType: payload.objectType, checkpoint },
     },
   });
 
-  // Delegate contact/company ingest to standard sync for now (full incremental page).
+  // Sync-engine drains all adapter pages for the requested sync kind.
   const result = await runCrmSyncJob({
     workspaceId: payload.workspaceId,
     provider: payload.provider,
     syncRunId: payload.syncRunId,
-    kind: "incremental",
+    kind: "initial",
   });
+
+  const stats = ((result as { stats?: Record<string, unknown> })?.stats ||
+    {}) as Record<string, unknown>;
+  const pageImported = importedFromSyncStats(stats);
 
   const next: BulkCheckpoint = {
     objectType: payload.objectType,
     cursor: null,
-    imported: checkpoint.imported + Number((result as { stats?: { contactsIn?: number } })?.stats?.contactsIn || 0),
+    imported: checkpoint.imported + pageImported,
     pages: checkpoint.pages + 1,
-    done: true, // sync-engine currently drains pages internally; mark complete
+    // Engine already drains pagination; continuation only if a future adapter returns a resume cursor.
+    done: true,
     updatedAt: new Date().toISOString(),
+    lastStats: Object.fromEntries(
+      Object.entries(stats).filter(([, v]) => typeof v === "number"),
+    ) as Record<string, number>,
   };
 
   await upsertConnection({
@@ -123,11 +162,10 @@ export async function runCrmBulkSyncPage(payload: {
     provider: payload.provider,
     category: "sync",
     action: "bulk_page",
-    message: `Bulk sync progress: ${next.imported} imported, page ${next.pages}`,
+    message: `Bulk sync progress: ${next.imported} imported, page ${next.pages}, object=${next.objectType}`,
     detail: next as unknown as Record<string, unknown>,
   });
 
-  // If not done, re-enqueue continuation (future adapters can set done=false + cursor)
   if (!next.done) {
     await enqueueJob({
       jobType: "crm_bulk_sync",

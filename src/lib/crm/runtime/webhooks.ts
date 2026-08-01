@@ -183,7 +183,7 @@ export async function processCrmWebhookJob(payload: {
   });
 
   try {
-    // Trigger incremental sync — adapters may refine handleWebhook later.
+    // Trigger incremental sync after optional adapter-specific webhook parse.
     const { getConnector } = await import("../registry");
     const { ensureFreshCrmToken } = await import("../oauth");
     const { getCrmSyncPreferences } = await import("../settings");

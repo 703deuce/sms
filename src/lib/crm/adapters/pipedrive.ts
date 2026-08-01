@@ -166,6 +166,27 @@ export const pipedriveConnector: CrmConnector = {
       },
       customFields: contact.customFields,
     });
+    // Resolve tag names → Pipedrive personLabels IDs (never send raw names as label_ids).
+    if (contact.tags?.length) {
+      try {
+        const labels = (await this.listTags?.(ctx)) || [];
+        const byName = new Map<string, string>();
+        for (const t of labels) {
+          if (t.id && t.name) byName.set(t.name.toLowerCase(), t.id);
+        }
+        const ids = contact.tags
+          .map((name) => byName.get(name.toLowerCase()))
+          .filter((id): id is string => Boolean(id))
+          .map((id) => Number(id))
+          .filter((n) => Number.isFinite(n));
+        if (ids.length) body.label_ids = ids;
+        else delete body.label_ids;
+      } catch {
+        delete body.label_ids;
+      }
+    } else {
+      delete body.label_ids;
+    }
     if (contact.id) {
       await pd(ctx, `/persons/${contact.id}`, {
         method: "PUT",
@@ -211,16 +232,26 @@ export const pipedriveConnector: CrmConnector = {
   },
 
   async upsertCompany(ctx, company) {
+    const body = await buildMappedPayload({
+      workspaceId: ctx.workspaceId,
+      provider: "pipedrive",
+      objectType: "company",
+      base: {
+        name: company.name,
+        owner_id: company.ownerExternalId ? Number(company.ownerExternalId) : undefined,
+      },
+      customFields: company.customFields,
+    });
     if (company.id) {
       await pd(ctx, `/organizations/${company.id}`, {
         method: "PUT",
-        body: JSON.stringify({ name: company.name }),
+        body: JSON.stringify(body),
       });
       return { externalId: company.id, created: false };
     }
     const created = await pd<{ id: number }>(ctx, "/organizations", {
       method: "POST",
-      body: JSON.stringify({ name: company.name }),
+      body: JSON.stringify(body),
     });
     return { externalId: String(created.data.id), created: true };
   },
@@ -261,19 +292,26 @@ export const pipedriveConnector: CrmConnector = {
   },
 
   async upsertDeal(ctx, deal) {
-    const body = {
-      title: deal.name,
-      value: deal.amount ?? undefined,
-      currency: deal.currency || undefined,
-      stage_id: deal.stage ? Number(deal.stage) : undefined,
-      pipeline_id: deal.pipeline
-        ? Number(deal.pipeline)
-        : ctx.preferences.defaultPipelineId
-          ? Number(ctx.preferences.defaultPipelineId)
-          : undefined,
-      person_id: deal.contactExternalId ? Number(deal.contactExternalId) : undefined,
-      org_id: deal.companyExternalId ? Number(deal.companyExternalId) : undefined,
-    };
+    const body = await buildMappedPayload({
+      workspaceId: ctx.workspaceId,
+      provider: "pipedrive",
+      objectType: "deal",
+      base: {
+        title: deal.name,
+        value: deal.amount ?? undefined,
+        currency: deal.currency || undefined,
+        stage_id: deal.stage ? Number(deal.stage) : undefined,
+        pipeline_id: deal.pipeline
+          ? Number(deal.pipeline)
+          : ctx.preferences.defaultPipelineId
+            ? Number(ctx.preferences.defaultPipelineId)
+            : undefined,
+        person_id: deal.contactExternalId ? Number(deal.contactExternalId) : undefined,
+        org_id: deal.companyExternalId ? Number(deal.companyExternalId) : undefined,
+        status: deal.status || undefined,
+      },
+      customFields: deal.customFields,
+    });
     if (deal.id) {
       await pd(ctx, `/deals/${deal.id}`, { method: "PUT", body: JSON.stringify(body) });
       return { externalId: deal.id, created: false };
@@ -286,38 +324,59 @@ export const pipedriveConnector: CrmConnector = {
   },
 
   async createTask(ctx, task) {
-    const created = await pd<{ id: number }>(ctx, "/activities", {
-      method: "POST",
-      body: JSON.stringify({
+    const body = await buildMappedPayload({
+      workspaceId: ctx.workspaceId,
+      provider: "pipedrive",
+      objectType: "task",
+      base: {
         subject: task.subject,
         note: task.description,
         type: "task",
         due_date: task.dueAt ? task.dueAt.slice(0, 10) : undefined,
         person_id: task.contactExternalId ? Number(task.contactExternalId) : undefined,
         done: task.status === "Completed" ? 1 : 0,
-      }),
+      },
+      customFields: task.customFields,
+    });
+    const created = await pd<{ id: number }>(ctx, "/activities", {
+      method: "POST",
+      body: JSON.stringify(body),
     });
     return { externalId: String(created.data.id), created: true } satisfies UpsertResult;
   },
 
   async createNote(ctx, note) {
-    const created = await pd<{ id: number }>(ctx, "/notes", {
-      method: "POST",
-      body: JSON.stringify({
+    const body = await buildMappedPayload({
+      workspaceId: ctx.workspaceId,
+      provider: "pipedrive",
+      objectType: "note",
+      base: {
         content: note.body,
         person_id: note.contactExternalId ? Number(note.contactExternalId) : undefined,
-      }),
+      },
+      customFields: note.customFields,
+    });
+    const created = await pd<{ id: number }>(ctx, "/notes", {
+      method: "POST",
+      body: JSON.stringify(body),
     });
     return { externalId: String(created.data.id), created: true };
   },
 
   async updateNote(ctx, note) {
-    await pd(ctx, `/notes/${note.id}`, {
-      method: "PUT",
-      body: JSON.stringify({
+    const body = await buildMappedPayload({
+      workspaceId: ctx.workspaceId,
+      provider: "pipedrive",
+      objectType: "note",
+      base: {
         content: note.body,
         person_id: note.contactExternalId ? Number(note.contactExternalId) : undefined,
-      }),
+      },
+      customFields: note.customFields,
+    });
+    await pd(ctx, `/notes/${note.id}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
     });
     return { externalId: note.id, created: false };
   },
@@ -414,6 +473,7 @@ export const pipedriveConnector: CrmConnector = {
         color: (r.color as string) || null,
       })).filter((t) => t.name);
     } catch {
+      // INTENTIONAL: personLabels may be unavailable on some plans — degrade to no tags.
       return [];
     }
   },
@@ -438,14 +498,23 @@ export const pipedriveConnector: CrmConnector = {
     ]
       .filter(Boolean)
       .join("\n\n");
-    const body = {
-      subject: call.subject || `${call.direction} call via Transovo`,
-      type: "call",
-      note,
-      duration: call.durationSeconds ? Math.round(call.durationSeconds / 60) : undefined,
-      person_id: call.contactExternalId ? Number(call.contactExternalId) : undefined,
-      done: 1,
-    };
+    const body = await buildMappedPayload({
+      workspaceId: ctx.workspaceId,
+      provider: "pipedrive",
+      objectType: "call",
+      base: {
+        subject: call.subject || `${call.direction} call via Transovo`,
+        type: "call",
+        note,
+        duration: call.durationSeconds ? Math.round(call.durationSeconds / 60) : undefined,
+        person_id: call.contactExternalId ? Number(call.contactExternalId) : undefined,
+        done: 1,
+      },
+      customFields: {
+        disposition: call.disposition,
+        ...(call.customFields || {}),
+      },
+    });
     if (call.id) {
       await pd(ctx, `/activities/${call.id}`, {
         method: "PUT",
@@ -461,14 +530,21 @@ export const pipedriveConnector: CrmConnector = {
   },
 
   async updateTask(ctx, task) {
-    await pd(ctx, `/activities/${task.id}`, {
-      method: "PUT",
-      body: JSON.stringify({
+    const body = await buildMappedPayload({
+      workspaceId: ctx.workspaceId,
+      provider: "pipedrive",
+      objectType: "task",
+      base: {
         subject: task.subject,
         note: task.description,
         done: task.status === "Completed" ? 1 : 0,
         person_id: task.contactExternalId ? Number(task.contactExternalId) : undefined,
-      }),
+      },
+      customFields: task.customFields,
+    });
+    await pd(ctx, `/activities/${task.id}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
     });
     return { externalId: task.id, created: false };
   },
@@ -481,13 +557,19 @@ export const pipedriveConnector: CrmConnector = {
     ]
       .filter(Boolean)
       .join("\n");
-    const body = {
-      subject: `${sms.direction} SMS via Transovo`,
-      type: "sms",
-      note,
-      person_id: sms.contactExternalId ? Number(sms.contactExternalId) : undefined,
-      done: 1,
-    };
+    const body = await buildMappedPayload({
+      workspaceId: ctx.workspaceId,
+      provider: "pipedrive",
+      objectType: "sms",
+      base: {
+        subject: `${sms.direction} SMS via Transovo`,
+        type: "sms",
+        note,
+        person_id: sms.contactExternalId ? Number(sms.contactExternalId) : undefined,
+        done: 1,
+      },
+      customFields: sms.customFields,
+    });
     if (sms.id) {
       await pd(ctx, `/activities/${sms.id}`, {
         method: "PUT",

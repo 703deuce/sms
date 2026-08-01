@@ -220,31 +220,34 @@ export const salesforceConnector: CrmConnector = {
   },
 
   async upsertLead(ctx, lead) {
-    if (lead.id) {
-      await crmFetch(api(ctx, `/sobjects/Lead/${lead.id}`), {
-        method: "PATCH",
-        accessToken: ctx.accessToken,
-        body: JSON.stringify({
-          FirstName: lead.firstName,
-          LastName: lead.lastName || "Unknown",
-          Phone: lead.phone,
-          Email: lead.email,
-          Company: lead.companyName || "Unknown",
-        }),
-      });
-      return { externalId: lead.id, created: false };
-    }
-    const created = await crmFetch<{ id: string }>(api(ctx, "/sobjects/Lead"), {
-      method: "POST",
-      accessToken: ctx.accessToken,
-      body: JSON.stringify({
+    const body = await buildMappedPayload({
+      workspaceId: ctx.workspaceId,
+      provider: "salesforce",
+      objectType: "lead",
+      base: {
         FirstName: lead.firstName,
         LastName: lead.lastName || "Unknown",
         Phone: lead.phone,
         Email: lead.email,
         Company: lead.companyName || "Unknown",
         LeadSource: lead.source || "Transovo",
-      }),
+        Status: lead.status || undefined,
+        OwnerId: lead.ownerExternalId || ctx.preferences.defaultOwnerExternalId || undefined,
+      },
+      customFields: lead.customFields,
+    });
+    if (lead.id) {
+      await crmFetch(api(ctx, `/sobjects/Lead/${lead.id}`), {
+        method: "PATCH",
+        accessToken: ctx.accessToken,
+        body: JSON.stringify(body),
+      });
+      return { externalId: lead.id, created: false };
+    }
+    const created = await crmFetch<{ id: string }>(api(ctx, "/sobjects/Lead"), {
+      method: "POST",
+      accessToken: ctx.accessToken,
+      body: JSON.stringify(body),
     });
     return { externalId: created.id, created: true };
   },
@@ -276,36 +279,42 @@ export const salesforceConnector: CrmConnector = {
   },
 
   async upsertDeal(ctx, deal) {
+    const body = await buildMappedPayload({
+      workspaceId: ctx.workspaceId,
+      provider: "salesforce",
+      objectType: "deal",
+      base: {
+        Name: deal.name,
+        Amount: deal.amount,
+        StageName: deal.stage || "Prospecting",
+        CloseDate: deal.closeDate || new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10),
+        AccountId: deal.companyExternalId || undefined,
+        OwnerId: deal.ownerExternalId || ctx.preferences.defaultOwnerExternalId || undefined,
+      },
+      customFields: deal.customFields,
+    });
     if (deal.id) {
       await crmFetch(api(ctx, `/sobjects/Opportunity/${deal.id}`), {
         method: "PATCH",
         accessToken: ctx.accessToken,
-        body: JSON.stringify({
-          Name: deal.name,
-          Amount: deal.amount,
-          StageName: deal.stage,
-        }),
+        body: JSON.stringify(body),
       });
       return { externalId: deal.id, created: false };
     }
     const created = await crmFetch<{ id: string }>(api(ctx, "/sobjects/Opportunity"), {
       method: "POST",
       accessToken: ctx.accessToken,
-      body: JSON.stringify({
-        Name: deal.name,
-        Amount: deal.amount,
-        StageName: deal.stage || "Prospecting",
-        CloseDate: new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10),
-      }),
+      body: JSON.stringify(body),
     });
     return { externalId: created.id, created: true };
   },
 
   async createTask(ctx, task) {
-    const created = await crmFetch<{ id: string }>(api(ctx, "/sobjects/Task"), {
-      method: "POST",
-      accessToken: ctx.accessToken,
-      body: JSON.stringify({
+    const body = await buildMappedPayload({
+      workspaceId: ctx.workspaceId,
+      provider: "salesforce",
+      objectType: "task",
+      base: {
         Subject: task.subject,
         Description: task.description,
         Status: task.status || "Not Started",
@@ -313,7 +322,13 @@ export const salesforceConnector: CrmConnector = {
         ActivityDate: task.dueAt ? task.dueAt.slice(0, 10) : undefined,
         WhoId: task.contactExternalId || undefined,
         OwnerId: task.ownerExternalId || ctx.preferences.defaultOwnerExternalId || undefined,
-      }),
+      },
+      customFields: task.customFields,
+    });
+    const created = await crmFetch<{ id: string }>(api(ctx, "/sobjects/Task"), {
+      method: "POST",
+      accessToken: ctx.accessToken,
+      body: JSON.stringify(body),
     });
     return { externalId: created.id, created: true };
   },
@@ -379,17 +394,24 @@ export const salesforceConnector: CrmConnector = {
   },
 
   async updateTask(ctx, task) {
-    await crmFetch(api(ctx, `/sobjects/Task/${task.id}`), {
-      method: "PATCH",
-      accessToken: ctx.accessToken,
-      body: JSON.stringify({
+    const body = await buildMappedPayload({
+      workspaceId: ctx.workspaceId,
+      provider: "salesforce",
+      objectType: "task",
+      base: {
         Subject: task.subject,
         Description: task.description,
         Status: task.status,
         ActivityDate: task.dueAt ? task.dueAt.slice(0, 10) : undefined,
         WhoId: task.contactExternalId || undefined,
         OwnerId: task.ownerExternalId || undefined,
-      }),
+      },
+      customFields: task.customFields,
+    });
+    await crmFetch(api(ctx, `/sobjects/Task/${task.id}`), {
+      method: "PATCH",
+      accessToken: ctx.accessToken,
+      body: JSON.stringify(body),
     });
     return { externalId: task.id, created: false };
   },
@@ -508,7 +530,8 @@ export const salesforceConnector: CrmConnector = {
   },
 
   async listTags() {
-    // Salesforce has no universal Tags API across all orgs — disable rather than fake.
+    // INTENTIONAL: Salesforce has no universal Tags API across all orgs.
+    // Feature matrix marks tags unsupported — empty list is correct, not a stub.
     return [];
   },
 
@@ -541,21 +564,31 @@ export const salesforceConnector: CrmConnector = {
       .filter(Boolean)
       .join("\n\n");
 
-    const body = {
-      Subject: subject,
-      Description: description,
-      Status: "Completed",
-      TaskSubtype: "Call",
-      CallType:
-        call.direction === "inbound"
-          ? "Inbound"
-          : call.direction === "outbound"
-            ? "Outbound"
-            : undefined,
-      CallDurationInSeconds: call.durationSeconds ?? undefined,
-      WhoId: call.contactExternalId || undefined,
-      ActivityDate: (call.startedAt || new Date().toISOString()).slice(0, 10),
-    };
+    const body = await buildMappedPayload({
+      workspaceId: ctx.workspaceId,
+      provider: "salesforce",
+      objectType: "call",
+      base: {
+        Subject: subject,
+        Description: description,
+        Status: "Completed",
+        TaskSubtype: "Call",
+        CallType:
+          call.direction === "inbound"
+            ? "Inbound"
+            : call.direction === "outbound"
+              ? "Outbound"
+              : undefined,
+        CallDurationInSeconds: call.durationSeconds ?? undefined,
+        CallDisposition: call.disposition || undefined,
+        WhoId: call.contactExternalId || undefined,
+        ActivityDate: (call.startedAt || new Date().toISOString()).slice(0, 10),
+      },
+      customFields: {
+        disposition: call.disposition,
+        ...(call.customFields || {}),
+      },
+    });
 
     if (call.id) {
       await crmFetch(api(ctx, `/sobjects/Task/${call.id}`), {
@@ -575,15 +608,21 @@ export const salesforceConnector: CrmConnector = {
   },
 
   async logSms(ctx, sms) {
-    const body = {
-      Subject: `${sms.direction === "inbound" ? "Inbound" : "Outbound"} SMS via Transovo`,
-      Description: [sms.body, sms.mediaUrls?.length ? `Media: ${sms.mediaUrls.join(", ")}` : null]
-        .filter(Boolean)
-        .join("\n"),
-      Status: "Completed",
-      WhoId: sms.contactExternalId || undefined,
-      ActivityDate: (sms.sentAt || new Date().toISOString()).slice(0, 10),
-    };
+    const body = await buildMappedPayload({
+      workspaceId: ctx.workspaceId,
+      provider: "salesforce",
+      objectType: "sms",
+      base: {
+        Subject: `${sms.direction === "inbound" ? "Inbound" : "Outbound"} SMS via Transovo`,
+        Description: [sms.body, sms.mediaUrls?.length ? `Media: ${sms.mediaUrls.join(", ")}` : null]
+          .filter(Boolean)
+          .join("\n"),
+        Status: "Completed",
+        WhoId: sms.contactExternalId || undefined,
+        ActivityDate: (sms.sentAt || new Date().toISOString()).slice(0, 10),
+      },
+      customFields: sms.customFields,
+    });
     if (sms.id) {
       await crmFetch(api(ctx, `/sobjects/Task/${sms.id}`), {
         method: "PATCH",
@@ -629,18 +668,30 @@ export const salesforceConnector: CrmConnector = {
   },
 
   async upsertCompany(ctx, company) {
+    const body = await buildMappedPayload({
+      workspaceId: ctx.workspaceId,
+      provider: "salesforce",
+      objectType: "company",
+      base: {
+        Name: company.name,
+        Phone: company.phone,
+        Website: company.website,
+        OwnerId: company.ownerExternalId || ctx.preferences.defaultOwnerExternalId || undefined,
+      },
+      customFields: company.customFields,
+    });
     if (company.id) {
       await crmFetch(api(ctx, `/sobjects/Account/${company.id}`), {
         method: "PATCH",
         accessToken: ctx.accessToken,
-        body: JSON.stringify({ Name: company.name, Phone: company.phone, Website: company.website }),
+        body: JSON.stringify(body),
       });
       return { externalId: company.id, created: false };
     }
     const created = await crmFetch<{ id: string }>(api(ctx, "/sobjects/Account"), {
       method: "POST",
       accessToken: ctx.accessToken,
-      body: JSON.stringify({ Name: company.name, Phone: company.phone, Website: company.website }),
+      body: JSON.stringify(body),
     });
     return { externalId: created.id, created: true };
   },
