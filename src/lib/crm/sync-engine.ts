@@ -92,14 +92,20 @@ export async function runCrmSyncJob(payload: {
   const { workspaceId, provider, syncRunId } = payload;
   const kind = payload.kind || "manual";
 
+  const startedAt = new Date();
   await prisma.crmSyncRun.update({
     where: { id: syncRunId },
-    data: { status: "running", startedAt: new Date() },
+    data: {
+      status: "running",
+      startedAt,
+      attempts: { increment: 1 },
+      direction: kind === "push" ? "outbound" : "inbound",
+    },
   });
   await prisma.integrationConnection
     .updateMany({
       where: { workspaceId, provider },
-      data: { status: "syncing" },
+      data: { status: "syncing", syncStatus: "syncing" },
     })
     .catch(() => undefined);
 
@@ -108,6 +114,10 @@ export async function runCrmSyncJob(payload: {
     contactsCreated: 0,
     contactsUpdated: 0,
     contactsSkipped: 0,
+    companiesIn: 0,
+    usersIn: 0,
+    pipelinesIn: 0,
+    stagesIn: 0,
     leadsIn: 0,
     errors: 0,
   };
@@ -129,8 +139,89 @@ export async function runCrmSyncJob(payload: {
       detail: { externalAccountId: health.externalAccountId },
     });
 
-    // Inbound contact pull (initial / manual / incremental / scheduled)
+    // Initial / manual / incremental / scheduled — never import historical activities unless enabled later.
     if (kind !== "push" && kind !== "webhook") {
+      // Users + pipelines first (owner / stage mapping metadata)
+      if (connector.listUsers) {
+        const users = await connector.listUsers(ctx);
+        stats.usersIn = users.length;
+        for (const u of users) {
+          await upsertObjectMapping({
+            workspaceId,
+            provider,
+            objectType: "user",
+            internalId: `crm-user:${u.externalId}`,
+            externalId: u.externalId,
+            metadata: { name: u.name, email: u.email },
+          }).catch(() => undefined);
+        }
+        await appendSyncEvent({
+          workspaceId,
+          syncRunId,
+          provider,
+          action: "map",
+          objectType: "user",
+          message: `Mapped ${users.length} CRM users/owners`,
+        });
+      }
+
+      if (connector.listPipelines) {
+        const pipelines = await connector.listPipelines(ctx);
+        stats.pipelinesIn = pipelines.length;
+        for (const p of pipelines) {
+          await upsertObjectMapping({
+            workspaceId,
+            provider,
+            objectType: "pipeline",
+            internalId: `crm-pipeline:${p.id}`,
+            externalId: p.id,
+            metadata: { name: p.name },
+          }).catch(() => undefined);
+          for (const s of p.stages) {
+            stats.stagesIn += 1;
+            await upsertObjectMapping({
+              workspaceId,
+              provider,
+              objectType: "pipeline_stage",
+              internalId: `crm-stage:${p.id}:${s.id}`,
+              externalId: s.id,
+              metadata: { pipelineId: p.id, name: s.name, order: s.order },
+            }).catch(() => undefined);
+          }
+        }
+        await appendSyncEvent({
+          workspaceId,
+          syncRunId,
+          provider,
+          action: "map",
+          objectType: "pipeline",
+          message: `Mapped ${pipelines.length} pipeline(s), ${stats.stagesIn} stage(s)`,
+        });
+      }
+
+      if (connector.listCompanies && (kind === "initial" || ctx.preferences.autoCreateCompanies)) {
+        let cursor: string | null | undefined = null;
+        let pages = 0;
+        do {
+          const page = await connector.listCompanies(ctx, cursor);
+          for (const company of page.items) {
+            stats.companiesIn += 1;
+            if (company.id) {
+              await upsertObjectMapping({
+                workspaceId,
+                provider,
+                objectType: "company",
+                internalId: `crm-company:${company.id}`,
+                externalId: company.id,
+                metadata: { name: company.name },
+              }).catch(() => undefined);
+            }
+          }
+          cursor = page.nextCursor;
+          pages += 1;
+        } while (cursor && pages < (kind === "initial" ? 20 : 3));
+      }
+
       let cursor: string | null | undefined = null;
       let pages = 0;
       do {
@@ -171,15 +262,22 @@ export async function runCrmSyncJob(payload: {
 
     await prisma.integrationConnection.updateMany({
       where: { workspaceId, provider },
-      data: { status: "connected", lastSyncAt: new Date() },
+      data: {
+        status: "connected",
+        syncStatus: stats.errors > 0 ? "degraded" : "healthy",
+        lastSyncAt: new Date(),
+        lastError: null,
+      },
     });
 
     const status = stats.errors > 0 ? "partial" : "succeeded";
+    const finishedAt = new Date();
     await prisma.crmSyncRun.update({
       where: { id: syncRunId },
       data: {
         status,
-        finishedAt: new Date(),
+        finishedAt,
+        durationMs: finishedAt.getTime() - startedAt.getTime(),
         statsJson: stats,
         lastError: null,
       },
@@ -199,11 +297,13 @@ export async function runCrmSyncJob(payload: {
     const message = err instanceof Error ? err.message : String(err);
     const retryable = err instanceof CrmHttpError ? err.retryable : /rate|timeout|5\d\d/i.test(message);
 
+    const finishedAt = new Date();
     await prisma.crmSyncRun.update({
       where: { id: syncRunId },
       data: {
         status: "failed",
-        finishedAt: new Date(),
+        finishedAt,
+        durationMs: finishedAt.getTime() - startedAt.getTime(),
         lastError: message.slice(0, 500),
         statsJson: stats,
       },
@@ -213,9 +313,30 @@ export async function runCrmSyncJob(payload: {
         where: { workspaceId, provider },
         data: {
           status: /reauth|refresh|token/i.test(message) ? "needs_reauth" : "error",
+          syncStatus: "error",
+          lastFailedSyncAt: new Date(),
+          lastError: message.slice(0, 500),
         },
       })
       .catch(() => undefined);
+
+    // After max attempts, park in dead letter.
+    const run = await prisma.crmSyncRun.findUnique({ where: { id: syncRunId } });
+    if (run && run.attempts >= 5 && !retryable) {
+      await prisma.crmDeadLetter
+        .create({
+          data: {
+            workspaceId,
+            provider,
+            jobType: "crm_sync",
+            error: message.slice(0, 500),
+            attempts: run.attempts,
+            syncRunId,
+            payloadJson: { kind, stats },
+          },
+        })
+        .catch(() => undefined);
+    }
 
     await appendSyncEvent({
       workspaceId,

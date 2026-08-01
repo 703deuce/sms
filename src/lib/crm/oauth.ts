@@ -142,11 +142,13 @@ export async function completeCrmOAuth(code: string, state: string) {
   await upsertConnection({
     workspaceId,
     provider,
-    status: "connected",
+    status: "pending_oauth",
+    syncStatus: "idle",
     accessToken: parsedTokens.accessToken,
     refreshToken: parsedTokens.refreshToken ?? existing?.refreshToken ?? null,
     expiresAt: parsedTokens.expiresAt ?? null,
     externalId: parsedTokens.externalId ?? existing?.externalId ?? null,
+    lastError: null,
     config: {
       ...prevConfig,
       ...(parsedTokens.meta || {}),
@@ -160,12 +162,21 @@ export async function completeCrmOAuth(code: string, state: string) {
     workspaceId,
     provider,
     category: "oauth",
-    action: "connected",
-    message: `Connected ${connector.displayName}`,
+    action: "token_exchanged",
+    message: `OAuth tokens stored for ${connector.displayName} — running validation`,
     detail: { externalId: parsedTokens.externalId },
   });
 
-  return { workspaceId, provider };
+  // Production gate: do not mark Connected until validation passes.
+  const { validateCrmProductionConnection } = await import("./validate");
+  const validation = await validateCrmProductionConnection(workspaceId, provider);
+  if (!validation.ok) {
+    throw new Error(
+      validation.steps.find((s) => !s.ok)?.message || "CRM connection validation failed",
+    );
+  }
+
+  return { workspaceId, provider, validation };
 }
 
 /** Refresh access token when expired or near expiry. */

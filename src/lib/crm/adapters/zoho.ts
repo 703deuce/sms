@@ -4,8 +4,10 @@
 
 import type { CrmConnector, ConnectorContext, UpsertResult } from "../connector";
 import { crmFetch } from "../http";
+import { scopesForProvider } from "../scopes";
 import type {
   CrmCallActivity,
+  CrmCompany,
   CrmContact,
   CrmDeal,
   CrmLead,
@@ -26,12 +28,7 @@ export const zohoConnector: CrmConnector = {
   oauth: {
     authorizationUrl: "https://accounts.zoho.com/oauth/v2/auth",
     tokenUrl: "https://accounts.zoho.com/oauth/v2/token",
-    scopes: [
-      "ZohoCRM.modules.ALL",
-      "ZohoCRM.settings.ALL",
-      "ZohoCRM.users.READ",
-      "offline_access",
-    ],
+    scopes: scopesForProvider("zoho"),
     clientIdEnv: "ZOHO_CLIENT_ID",
     clientSecretEnv: "ZOHO_CLIENT_SECRET",
     authorizeParams: { access_type: "offline", prompt: "consent" },
@@ -326,6 +323,55 @@ export const zohoConnector: CrmConnector = {
       contactExternalId: sms.contactExternalId,
       dueAt: sms.sentAt,
     });
+  },
+
+  async listCompanies(ctx, cursor) {
+    const page = cursor ? Number(cursor) : 1;
+    const data = await crmFetch<{
+      data?: Array<Record<string, unknown>>;
+      info?: { more_records?: boolean };
+    }>(`${apiBase(ctx)}/Accounts?page=${page}&per_page=200`, {
+      accessToken: ctx.accessToken,
+    });
+    return {
+      items: (data.data || []).map(
+        (r): CrmCompany => ({
+          id: String(r.id),
+          name: String(r.Account_Name || r.name || "Account"),
+          phone: (r.Phone as string) || null,
+          website: (r.Website as string) || null,
+        }),
+      ),
+      nextCursor: data.info?.more_records ? String(page + 1) : null,
+    };
+  },
+
+  async upsertCompany(ctx, company) {
+    const body = {
+      data: [
+        {
+          id: company.id || undefined,
+          Account_Name: company.name,
+          Phone: company.phone,
+          Website: company.website,
+        },
+      ],
+    };
+    if (company.id) {
+      await crmFetch(`${apiBase(ctx)}/Accounts`, {
+        method: "PUT",
+        accessToken: ctx.accessToken,
+        body: JSON.stringify(body),
+      });
+      return { externalId: company.id, created: false };
+    }
+    const created = await crmFetch<{ data?: Array<{ details?: { id?: string } }> }>(
+      `${apiBase(ctx)}/Accounts`,
+      { method: "POST", accessToken: ctx.accessToken, body: JSON.stringify(body) },
+    );
+    const id = created.data?.[0]?.details?.id;
+    if (!id) throw new Error("Zoho account create failed");
+    return { externalId: id, created: true };
   },
 
   async listUsers(ctx) {

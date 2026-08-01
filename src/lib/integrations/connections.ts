@@ -102,6 +102,12 @@ export async function upsertConnection(input: {
   refreshToken?: string | null;
   expiresAt?: Date | null;
   mergeConfig?: boolean;
+  connectedUserId?: string | null;
+  connectedAccountName?: string | null;
+  lastFailedSyncAt?: Date | null;
+  lastError?: string | null;
+  syncStatus?: string | null;
+  lastSyncAt?: Date | null;
 }) {
   const prisma = getPrisma();
   const existing = await getConnection(input.workspaceId, input.provider);
@@ -120,6 +126,12 @@ export async function upsertConnection(input: {
       accessToken: input.accessToken ?? null,
       refreshToken: input.refreshToken ?? null,
       expiresAt: input.expiresAt ?? null,
+      connectedUserId: input.connectedUserId ?? null,
+      connectedAccountName: input.connectedAccountName ?? null,
+      lastError: input.lastError ?? null,
+      syncStatus: input.syncStatus ?? "idle",
+      lastSyncAt: input.lastSyncAt ?? null,
+      lastFailedSyncAt: input.lastFailedSyncAt ?? null,
       configJson: (config || {}) as object,
     },
     update: {
@@ -128,6 +140,18 @@ export async function upsertConnection(input: {
       ...(input.accessToken !== undefined ? { accessToken: input.accessToken } : {}),
       ...(input.refreshToken !== undefined ? { refreshToken: input.refreshToken } : {}),
       ...(input.expiresAt !== undefined ? { expiresAt: input.expiresAt } : {}),
+      ...(input.connectedUserId !== undefined
+        ? { connectedUserId: input.connectedUserId }
+        : {}),
+      ...(input.connectedAccountName !== undefined
+        ? { connectedAccountName: input.connectedAccountName }
+        : {}),
+      ...(input.lastError !== undefined ? { lastError: input.lastError } : {}),
+      ...(input.syncStatus !== undefined ? { syncStatus: input.syncStatus } : {}),
+      ...(input.lastSyncAt !== undefined ? { lastSyncAt: input.lastSyncAt } : {}),
+      ...(input.lastFailedSyncAt !== undefined
+        ? { lastFailedSyncAt: input.lastFailedSyncAt }
+        : {}),
       ...(config !== undefined ? { configJson: config as object } : {}),
     },
   });

@@ -112,3 +112,68 @@ export async function publishSmsEvent(input: {
     payload: { ...input },
   });
 }
+
+export async function publishRecordingReady(input: {
+  workspaceId: string;
+  contactId?: string | null;
+  callId: string;
+  recordingUrl: string;
+  direction?: "inbound" | "outbound" | "missed";
+}) {
+  return publishCrmEvent({
+    type: "recording.ready",
+    workspaceId: input.workspaceId,
+    contactId: input.contactId,
+    occurredAt: new Date().toISOString(),
+    payload: { ...input },
+  });
+}
+
+export async function publishTranscriptReady(input: {
+  workspaceId: string;
+  contactId?: string | null;
+  callId: string;
+  transcriptUrl?: string | null;
+  transcriptText?: string | null;
+  aiSummary?: string | null;
+}) {
+  return publishCrmEvent({
+    type: "transcript.ready",
+    workspaceId: input.workspaceId,
+    contactId: input.contactId,
+    occurredAt: new Date().toISOString(),
+    payload: { ...input },
+  });
+}
+
+export async function publishVoicemailReceived(input: {
+  workspaceId: string;
+  contactId?: string | null;
+  callId?: string | null;
+  from?: string | null;
+  to?: string | null;
+  recordingUrl?: string | null;
+}) {
+  return publishCrmEvent({
+    type: "voicemail.received",
+    workspaceId: input.workspaceId,
+    contactId: input.contactId,
+    occurredAt: new Date().toISOString(),
+    payload: { ...input, direction: "missed" },
+  });
+}
+
+export async function publishCallbackScheduled(input: {
+  workspaceId: string;
+  contactId?: string | null;
+  callId?: string | null;
+  phone?: string | null;
+}) {
+  return publishCrmEvent({
+    type: "callback.scheduled",
+    workspaceId: input.workspaceId,
+    contactId: input.contactId,
+    occurredAt: new Date().toISOString(),
+    payload: { ...input },
+  });
+}

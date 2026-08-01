@@ -4,12 +4,15 @@
 
 import type { CrmConnector, ConnectorContext, ListPage, UpsertResult } from "../connector";
 import { crmFetch } from "../http";
+import { scopesForProvider } from "../scopes";
 import type {
   CrmCallActivity,
+  CrmCompany,
   CrmContact,
   CrmDeal,
   CrmLead,
   CrmNote,
+  CrmPipeline,
   CrmSmsActivity,
   CrmTask,
   CrmUser,
@@ -32,7 +35,7 @@ export const salesforceConnector: CrmConnector = {
   oauth: {
     authorizationUrl: "https://login.salesforce.com/services/oauth2/authorize",
     tokenUrl: "https://login.salesforce.com/services/oauth2/token",
-    scopes: ["api", "refresh_token", "offline_access"],
+    scopes: scopesForProvider("salesforce"),
     clientIdEnv: "SALESFORCE_CLIENT_ID",
     clientSecretEnv: "SALESFORCE_CLIENT_SECRET",
     authorizeParams: { prompt: "login consent" },
@@ -365,6 +368,49 @@ export const salesforceConnector: CrmConnector = {
     return { externalId: created.id, created: true };
   },
 
+  async listCompanies(ctx, cursor) {
+    const soql =
+      "SELECT Id, Name, Phone, Website, OwnerId FROM Account ORDER BY LastModifiedDate DESC LIMIT 200";
+    const url = cursor || `${api(ctx, "/query")}?q=${encodeURIComponent(soql)}`;
+    const data = await crmFetch<{ records?: Array<Record<string, unknown>>; nextRecordsUrl?: string }>(
+      url.startsWith("http") ? url : `${instanceUrl(ctx)}${url}`,
+      { accessToken: ctx.accessToken },
+    );
+    return {
+      items: (data.records || []).map(
+        (r): CrmCompany => ({
+          id: String(r.Id),
+          name: String(r.Name || "Account"),
+          phone: (r.Phone as string) || null,
+          website: (r.Website as string) || null,
+          ownerExternalId: (r.OwnerId as string) || null,
+        }),
+      ),
+      nextCursor: data.nextRecordsUrl
+        ? data.nextRecordsUrl.startsWith("http")
+          ? data.nextRecordsUrl
+          : `${instanceUrl(ctx)}${data.nextRecordsUrl}`
+        : null,
+    };
+  },
+
+  async upsertCompany(ctx, company) {
+    if (company.id) {
+      await crmFetch(api(ctx, `/sobjects/Account/${company.id}`), {
+        method: "PATCH",
+        accessToken: ctx.accessToken,
+        body: JSON.stringify({ Name: company.name, Phone: company.phone, Website: company.website }),
+      });
+      return { externalId: company.id, created: false };
+    }
+    const created = await crmFetch<{ id: string }>(api(ctx, "/sobjects/Account"), {
+      method: "POST",
+      accessToken: ctx.accessToken,
+      body: JSON.stringify({ Name: company.name, Phone: company.phone, Website: company.website }),
+    });
+    return { externalId: created.id, created: true };
+  },
+
   async listUsers(ctx) {
     const soql = "SELECT Id, Name, Email FROM User WHERE IsActive = true LIMIT 200";
     const data = await crmFetch<{ records?: Array<Record<string, unknown>> }>(
@@ -378,5 +424,48 @@ export const salesforceConnector: CrmConnector = {
         email: (r.Email as string) || null,
       }),
     );
+  },
+
+  async listPipelines(ctx) {
+    // Salesforce uses Opportunity StageName picklist — expose as a single virtual pipeline.
+    const data = await crmFetch<{
+      records?: Array<{ Id?: string; ApiName?: string; MasterLabel?: string; SortOrder?: number }>;
+    }>(
+      `${api(ctx, "/query")}?q=${encodeURIComponent(
+        "SELECT Id, ApiName, MasterLabel, SortOrder FROM OpportunityStage WHERE IsActive = true ORDER BY SortOrder",
+      )}`,
+      { accessToken: ctx.accessToken },
+    ).catch(async () => {
+      const describe = await crmFetch<{
+        fields?: Array<{ name?: string; picklistValues?: Array<{ value: string; label: string }> }>;
+      }>(api(ctx, "/sobjects/Opportunity/describe"), { accessToken: ctx.accessToken });
+      const stage = describe.fields?.find((f) => f.name === "StageName");
+      return {
+        records: (stage?.picklistValues || []).map((p, i) => ({
+          ApiName: p.value,
+          MasterLabel: p.label,
+          SortOrder: i,
+        })),
+      };
+    });
+    return [
+      {
+        id: "opportunity",
+        name: "Opportunity",
+        stages: (data.records || []).map((r) => {
+          const row = r as {
+            Id?: string;
+            ApiName?: string;
+            MasterLabel?: string;
+            SortOrder?: number;
+          };
+          return {
+            id: String(row.ApiName || row.MasterLabel || row.Id),
+            name: String(row.MasterLabel || row.ApiName || "Stage"),
+            order: row.SortOrder != null ? Number(row.SortOrder) : undefined,
+          };
+        }),
+      } satisfies CrmPipeline,
+    ];
   },
 };

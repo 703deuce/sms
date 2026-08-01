@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
 import { isCrmProvider } from "@/lib/crm/registry";
-import { enqueueCrmSync, validateCrmConnection } from "@/lib/crm/sync-engine";
+import { enqueueCrmSync } from "@/lib/crm/sync-engine";
 import type { SyncKind } from "@/lib/crm/sync-engine";
+import { validateCrmProductionConnection } from "@/lib/crm/validate";
 
 export async function POST(request: Request) {
   try {
@@ -12,6 +13,7 @@ export async function POST(request: Request) {
       provider?: string;
       kind?: SyncKind;
       validateOnly?: boolean;
+      writeProbe?: boolean;
     };
     const provider = body.provider?.trim();
     if (!provider || !isCrmProvider(provider)) {
@@ -19,8 +21,10 @@ export async function POST(request: Request) {
     }
 
     if (body.validateOnly) {
-      const health = await validateCrmConnection(auth.workspaceId, provider);
-      return NextResponse.json({ data: health });
+      const result = await validateCrmProductionConnection(auth.workspaceId, provider, {
+        writeProbe: Boolean(body.writeProbe),
+      });
+      return NextResponse.json({ data: result }, { status: result.ok ? 200 : 422 });
     }
 
     const run = await enqueueCrmSync({

@@ -453,6 +453,25 @@ export async function processHumanCallWebhookEvent(input: {
     data: patch,
   });
 
+  if (input.eventType === "call.recording.saved" && patch.recordingUrl) {
+    try {
+      const customerPhone = call.direction === "inbound" ? call.from : call.to;
+      const contact = await prisma.contact.findFirst({
+        where: { workspaceId: call.workspaceId, phone: customerPhone },
+      });
+      const { publishRecordingReady } = await import("@/lib/crm/events");
+      await publishRecordingReady({
+        workspaceId: call.workspaceId,
+        contactId: contact?.id || null,
+        callId: call.id,
+        recordingUrl: String(patch.recordingUrl),
+        direction: call.direction === "outbound" ? "outbound" : "inbound",
+      }).catch(() => undefined);
+    } catch (err) {
+      console.warn("[human-call] crm recording event failed", call.id, err);
+    }
+  }
+
   // Call-my-phone: when the agent answers their cell, dial destination + bridge.
   if (input.eventType === "call.answered") {
     const clientStateRaw = input.eventPayload.client_state;

@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
-import { listConnections } from "@/lib/integrations/connections";
+import { getPrisma } from "@/lib/db";
 import { listConnectors, providerEnvReady } from "@/lib/crm/registry";
 import { connectionUiState, getCrmSyncPreferences } from "@/lib/crm/settings";
 import { listCrmSyncRuns } from "@/lib/crm/logging";
+import { scopeDocumentation } from "@/lib/crm/scopes";
 import type { CrmProviderId } from "@/lib/crm/types";
 
 export async function GET() {
@@ -11,31 +12,50 @@ export async function GET() {
     const auth = await requireSession();
     if ("error" in auth) return auth.error;
 
-    const connections = await listConnections(auth.workspaceId);
-    const byProvider = new Map(connections.map((c) => [c.provider, c]));
+    const rows = await getPrisma().integrationConnection.findMany({
+      where: { workspaceId: auth.workspaceId },
+    });
+    const byProvider = new Map(rows.map((c: { provider: string }) => [c.provider, c]));
 
     const providers = await Promise.all(
       listConnectors().map(async (c) => {
-        const conn = byProvider.get(c.id);
+        const conn = byProvider.get(c.id) as
+          | {
+              status: string;
+              syncStatus?: string | null;
+              lastSyncAt?: Date | null;
+              lastFailedSyncAt?: Date | null;
+              lastError?: string | null;
+              externalId?: string | null;
+              connectedAccountName?: string | null;
+              configJson?: unknown;
+            }
+          | undefined;
         const prefs = conn
           ? await getCrmSyncPreferences(auth.workspaceId, c.id as CrmProviderId)
           : null;
         const runs = await listCrmSyncRuns(auth.workspaceId, { provider: c.id, limit: 1 });
         const lastRun = runs[0] || null;
+        const cfg = (conn?.configJson || {}) as Record<string, unknown>;
         return {
           id: c.id,
           name: c.displayName,
           envConfigured: providerEnvReady(c.id),
           status: connectionUiState(conn?.status),
-          lastSyncAt: conn?.lastSyncAt || null,
+          syncStatus: conn?.syncStatus || "idle",
+          lastSyncAt: conn?.lastSyncAt?.toISOString() || null,
+          lastFailedSyncAt: conn?.lastFailedSyncAt?.toISOString() || null,
           lastError:
-            (conn?.config?.lastOAuthError as string | undefined) ||
+            conn?.lastError ||
+            (cfg.lastOAuthError as string | undefined) ||
             lastRun?.lastError ||
             null,
           lastRunStatus: lastRun?.status || null,
           externalId: conn?.externalId || null,
+          connectedAccountName: conn?.connectedAccountName || null,
           preferences: prefs,
           oauthScopes: c.oauth.scopes,
+          scopeDocs: scopeDocumentation(c.id as CrmProviderId),
         };
       }),
     );

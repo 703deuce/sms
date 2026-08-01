@@ -4,6 +4,7 @@
 
 import type { CrmConnector, ConnectorContext, UpsertResult } from "../connector";
 import { crmFetch } from "../http";
+import { scopesForProvider } from "../scopes";
 import type {
   CrmCallActivity,
   CrmCompany,
@@ -34,7 +35,7 @@ export const pipedriveConnector: CrmConnector = {
   oauth: {
     authorizationUrl: "https://oauth.pipedrive.com/oauth/authorize",
     tokenUrl: "https://oauth.pipedrive.com/oauth/token",
-    scopes: [],
+    scopes: scopesForProvider("pipedrive"),
     clientIdEnv: "PIPEDRIVE_CLIENT_ID",
     clientSecretEnv: "PIPEDRIVE_CLIENT_SECRET",
   },

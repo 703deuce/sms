@@ -8,3 +8,6 @@ export * from "./sync-engine";
 export * from "./events";
 export * from "./push";
 export * from "./logging";
+export * from "./scopes";
+export * from "./validate";
+export * from "./conflict";

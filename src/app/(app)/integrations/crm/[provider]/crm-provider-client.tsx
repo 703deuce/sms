@@ -48,12 +48,14 @@ const NAMES: Record<string, string> = {
 
 export function CrmProviderClient({ provider }: { provider: string }) {
   const name = NAMES[provider] || provider;
-  const [tab, setTab] = useState<"settings" | "logs" | "mappings">("settings");
+  const [tab, setTab] = useState<"settings" | "logs" | "mappings" | "health">("settings");
   const [status, setStatus] = useState("disconnected");
+  const [syncStatus, setSyncStatus] = useState("idle");
   const [prefs, setPrefs] = useState<Prefs | null>(null);
   const [runs, setRuns] = useState<SyncRun[]>([]);
   const [audit, setAudit] = useState<Array<Record<string, unknown>>>([]);
   const [fields, setFields] = useState<Array<Record<string, unknown>>>([]);
+  const [health, setHealth] = useState<Record<string, unknown> | null>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -94,9 +96,16 @@ export function CrmProviderClient({ provider }: { provider: string }) {
         const row = (j.data || []).find((p: { id: string }) => p.id === provider);
         if (row) {
           setStatus(row.status);
+          setSyncStatus(row.syncStatus || "idle");
           if (row.preferences) setPrefs(row.preferences);
         }
       });
+  }
+
+  function loadHealth() {
+    return fetch(`/api/crm/health?provider=${provider}`)
+      .then((r) => r.json())
+      .then((j) => setHealth((j.data || [])[0] || null));
   }
 
   function loadLogs() {
@@ -118,10 +127,12 @@ export function CrmProviderClient({ provider }: { provider: string }) {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("tab") === "logs") setTab("logs");
+    if (params.get("tab") === "health") setTab("health");
     if (params.get("wizard") === "1" || params.get("connected") === "1") setWizard(true);
     void loadProvider();
     void loadLogs();
     void loadMappings();
+    void loadHealth();
   }, [provider]);
 
   async function savePrefs() {
@@ -160,8 +171,36 @@ export function CrmProviderClient({ provider }: { provider: string }) {
       setMessage("Sync queued — workers process in the background");
       await loadLogs();
       await loadProvider();
+      await loadHealth();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Sync failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function revalidate(writeProbe = false) {
+    setBusy(true);
+    setError("");
+    try {
+      const res = await fetch("/api/crm/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider, validateOnly: true, writeProbe }),
+      });
+      const json = await res.json();
+      if (!res.ok && !json.data) throw new Error(json.error || "Validation failed");
+      const steps = (json.data?.steps || []) as Array<{ id: string; ok: boolean; message: string }>;
+      setMessage(
+        json.data?.ok
+          ? "Connection validated"
+          : `Validation failed: ${steps.find((s) => !s.ok)?.message || "see health"}`,
+      );
+      if (!json.data?.ok) setError(steps.find((s) => !s.ok)?.message || "Validation failed");
+      await loadProvider();
+      await loadHealth();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Validation failed");
     } finally {
       setBusy(false);
     }
@@ -230,9 +269,13 @@ export function CrmProviderClient({ provider }: { provider: string }) {
           ← All CRMs
         </Link>
         <StatusChip status={status === "connected" ? "Connected" : status.replace(/_/g, " ")} />
+        <span className="text-xs text-muted-foreground">sync: {syncStatus}</span>
         <div className="ml-auto flex flex-wrap gap-2">
           <Button size="sm" variant="secondary" disabled={busy} onClick={() => void syncNow()}>
             Sync Now
+          </Button>
+          <Button size="sm" variant="outline" disabled={busy} onClick={() => void revalidate(false)}>
+            Validate
           </Button>
           <Button size="sm" variant="outline" disabled={busy} onClick={() => void reconnect()}>
             Reconnect
@@ -270,7 +313,7 @@ export function CrmProviderClient({ provider }: { provider: string }) {
       {error ? <p className="mb-3 text-sm text-danger">{error}</p> : null}
 
       <div className="mb-4 flex gap-2 border-b border-border">
-        {(["settings", "logs", "mappings"] as const).map((t) => (
+        {(["settings", "health", "logs", "mappings"] as const).map((t) => (
           <button
             key={t}
             type="button"
@@ -283,6 +326,37 @@ export function CrmProviderClient({ provider }: { provider: string }) {
           </button>
         ))}
       </div>
+
+      {tab === "health" && health ? (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Card className="space-y-2 text-sm">
+            <CardTitle>Connection health</CardTitle>
+            <p>Token: {String(health.tokenStatus)}</p>
+            <p>Expires: {health.tokenExpiresAt ? String(health.tokenExpiresAt) : "—"}</p>
+            <p>Account: {String(health.connectedAccountName || "—")}</p>
+            <p>Last success: {String(health.lastSuccessfulSync || "Never")}</p>
+            <p>Last failure: {String(health.lastFailedSync || "—")}</p>
+            {health.lastError ? <p className="text-danger">{String(health.lastError)}</p> : null}
+            <Button size="sm" disabled={busy} onClick={() => void revalidate(true)}>
+              Validate + write probe
+            </Button>
+          </Card>
+          <Card className="space-y-2 text-sm">
+            <CardTitle>Queues</CardTitle>
+            <pre className="overflow-auto rounded bg-muted p-2 text-xs">
+              {JSON.stringify(health.queue, null, 2)}
+            </pre>
+            <CardTitle className="pt-2">OAuth scopes (least privilege)</CardTitle>
+            <ul className="space-y-1 text-xs text-muted-foreground">
+              {((health.scopes as Array<{ scope: string; why: string }>) || []).map((s) => (
+                <li key={s.scope}>
+                  <span className="font-mono text-foreground">{s.scope}</span> — {s.why}
+                </li>
+              ))}
+            </ul>
+          </Card>
+        </div>
+      ) : null}
 
       {tab === "settings" && prefs ? (
         <Card className="space-y-4">

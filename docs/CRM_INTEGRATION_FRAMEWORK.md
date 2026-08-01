@@ -1,8 +1,9 @@
 # Transovo CRM Integration Framework
 
-**Status:** Framework + Salesforce / Zoho / Pipedrive adapters shipped (OAuth + env).  
+**Status:** Framework + production configuration phase (scopes, validation gate, initial sync, monitoring).  
 **UI:** `/integrations/crm`  
-**Code:** `src/lib/crm/**`
+**Code:** `src/lib/crm/**`  
+**Production ops:** see `docs/CRM_PRODUCTION_CONFIGURATION.md`
 
 ## Project goal
 

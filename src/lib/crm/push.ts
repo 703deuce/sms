@@ -41,28 +41,38 @@ export async function pushCrmEventJob(payload: {
     const prefs = ctx.preferences;
 
     let contactExternalId: string | null = null;
-    let contactPhone: string | null = (event.payload.from as string) || (event.payload.to as string) || null;
+    let contactPhone: string | null =
+      (event.payload.from as string) || (event.payload.to as string) || null;
 
     if (event.contactId) {
-      const mapped = await getObjectMapping({
-        workspaceId,
-        provider,
-        objectType: "contact",
-        internalId: event.contactId,
-      });
-      contactExternalId = mapped?.externalId || null;
-
       const contact = await prisma.contact.findFirst({
         where: { id: event.contactId, workspaceId },
       });
       if (contact?.phone) contactPhone = contact.phone;
 
-      // Resolve or create CRM contact when auto-create is on.
-      if (!contactExternalId && contact && prefs.autoCreateContacts && connector.findContactByPhone) {
-        const found = await connector.findContactByPhone(ctx, contact.phone).catch(() => null);
-        if (found?.id) {
-          contactExternalId = found.id;
-        } else if (prefs.direction !== "inbound") {
+      if (contact && prefs.direction !== "inbound") {
+        const { resolveContactForOutbound } = await import("./conflict");
+        const resolved = await resolveContactForOutbound({
+          workspaceId,
+          provider,
+          ctx,
+          contactId: contact.id,
+          phone: contact.phone,
+          email: contact.email,
+          syncRunId: run.id,
+        });
+        if (resolved.action === "skip") {
+          await appendSyncEvent({
+            workspaceId,
+            syncRunId: run.id,
+            provider,
+            level: "warn",
+            action: "skip",
+            objectType: "contact",
+            internalId: contact.id,
+            message: resolved.reason,
+          });
+        } else if (resolved.action === "create_new") {
           const created = await connector.upsertContact(ctx, {
             firstName: contact.firstName,
             lastName: contact.lastName,
@@ -73,8 +83,6 @@ export async function pushCrmEventJob(payload: {
             ownerExternalId: prefs.defaultOwnerExternalId,
           });
           contactExternalId = created.externalId;
-        }
-        if (contactExternalId) {
           await upsertObjectMapping({
             workspaceId,
             provider,
@@ -83,13 +91,26 @@ export async function pushCrmEventJob(payload: {
             externalId: contactExternalId,
             fingerprint: fingerprintPhone(contact.phone),
           });
+        } else {
+          contactExternalId = resolved.externalId;
         }
+      } else {
+        const mapped = await getObjectMapping({
+          workspaceId,
+          provider,
+          objectType: "contact",
+          internalId: event.contactId,
+        });
+        contactExternalId = mapped?.externalId || null;
       }
     }
 
-    // Communications
+    // Communications (+ recording/transcript attach via call log update)
     if (
-      (event.type.startsWith("call.") || event.type === "voicemail.received") &&
+      (event.type.startsWith("call.") ||
+        event.type === "voicemail.received" ||
+        event.type === "recording.ready" ||
+        event.type === "transcript.ready") &&
       prefs.syncCalls &&
       connector.logCall
     ) {
