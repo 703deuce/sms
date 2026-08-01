@@ -244,15 +244,35 @@ export async function processVoiceWebhookEvent(input: {
         return { ok: true, kind: "ivr_gather" };
       }
 
-      // Phone-first: prefer softphone when humans are assigned or softphone devices exist.
-      // AI only when explicitly inbound-enabled on the number and softphone is not preferred.
-      const [humanAssignment, softphoneDeviceCount] = await Promise.all([
-        prisma.phoneNumberAssignment.findFirst({ where: { phoneNumberId: pn.id } }),
-        prisma.softphoneDevice.count({
-          where: { workspaceId: pn.workspaceId, active: true },
-        }),
-      ]);
-      const preferSoftphone = Boolean(humanAssignment) || softphoneDeviceCount > 0;
+      // Phone-first per number: softphone when this DID has a human assignment,
+      // queue/IVR path, or the assigned user's softphone device.
+      // Do NOT force softphone for every number just because some workspace device exists.
+      const humanAssignment = await prisma.phoneNumberAssignment.findFirst({
+        where: { phoneNumberId: pn.id },
+      });
+      let hasQueueOrIvr = false;
+      try {
+        const { resolveQueueForInbound } = await import("@/lib/phone/queue-service");
+        const { resolveIvrForNumber } = await import("@/lib/phone/ivr-service");
+        const [q, ivr] = await Promise.all([
+          resolveQueueForInbound(pn.workspaceId, to),
+          resolveIvrForNumber(pn.workspaceId, to),
+        ]);
+        hasQueueOrIvr = Boolean(q || ivr);
+      } catch {
+        // ignore resolution failures
+      }
+      const assignedDeviceCount = humanAssignment
+        ? await prisma.softphoneDevice.count({
+            where: {
+              workspaceId: pn.workspaceId,
+              active: true,
+              userId: humanAssignment.userId,
+            },
+          })
+        : 0;
+      const preferSoftphone =
+        Boolean(humanAssignment) || hasQueueOrIvr || assignedDeviceCount > 0;
 
       let aiAgent = null;
       if (!preferSoftphone) {

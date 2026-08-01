@@ -85,6 +85,8 @@ export async function resolveForwarding(input: {
     if (rule.mode === "unanswered" && input.unanswered) return rule;
     if (rule.mode === "offline" && input.offline) return rule;
     if (rule.mode === "after_hours" && input.afterHours) return rule;
+    // Holiday rules fire with after-hours / calendar closed windows.
+    if (rule.mode === "holiday" && input.afterHours) return rule;
     if (rule.mode === "simultaneous" || rule.mode === "sequential") return rule;
   }
   return null;

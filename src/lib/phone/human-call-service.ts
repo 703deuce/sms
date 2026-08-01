@@ -56,7 +56,7 @@ export async function dialHumanCall(input: {
 }) {
   const prisma = getPrisma();
   const to = normalizeE164(input.to);
-  const from = await resolveCallerIdNumber(input.workspaceId, input.from);
+  const from = await resolveCallerIdNumber(input.workspaceId, input.from, input.agentUserId);
   if (!from) throw new Error("No active caller ID number configured");
 
   const { getSoftphonePermissions, requireSoftphonePermission } = await import(
@@ -189,7 +189,11 @@ export async function createWebRtcHumanCall(input: {
 }) {
   const prisma = getPrisma();
   const to = normalizeE164(input.to);
-  const from = await resolveCallerIdNumber(input.workspaceId, input.from);
+  const from = await resolveCallerIdNumber(
+    input.workspaceId,
+    input.from,
+    input.agentUserId,
+  );
   if (!from) throw new Error("No active caller ID number configured");
 
   const { getSoftphonePermissions, requireSoftphonePermission } = await import(
@@ -426,14 +430,17 @@ export async function handleInboundHumanCall(input: {
   // Multi-device incoming-call push (best-effort; softphone also polls).
   try {
     const { notifyUsersForInboundCall } = await import("./incoming-notify");
-    const forwardUserMatch = String(note || "").match(/forward_user:([^\s]+)/);
+    const targetedUser =
+      String(note || "").match(/forward_user:([^\s]+)/)?.[1] ||
+      String(note || "").match(/screening:([^\s]+)/)?.[1] ||
+      null;
     await notifyUsersForInboundCall({
       workspaceId: input.workspaceId,
       humanCallId: call.id,
       fromE164: from,
       toE164: input.toE164,
       queueId,
-      userIds: forwardUserMatch?.[1] ? [forwardUserMatch[1]] : undefined,
+      userIds: targetedUser ? [targetedUser] : undefined,
     });
   } catch (err) {
     console.warn("[phone] incoming push notify failed", err);
@@ -566,11 +573,19 @@ export async function muteHumanCall(callId: string, workspaceId: string, muted: 
   const prisma = getPrisma();
   const call = await prisma.humanCall.findFirst({ where: { id: callId, workspaceId } });
   if (!call) throw new Error("Call not found");
-  if (call.telnyxCallControlId && !call.telnyxCallControlId.startsWith("mock_")) {
-    // Telnyx Call Control mute/unmute on the live leg.
-    await telnyxAction(call.telnyxCallControlId, muted ? "mute" : "unmute").catch((err) =>
-      console.warn("[human-call] mute action failed", err),
-    );
+  // Call-level mute/unmute is not a Telnyx Call Control action (conference-only).
+  // Browser softphone mutes local WebRTC tracks; Call Control / call-my-phone mute is DB state.
+  if (call.conferenceId && call.telnyxCallControlId && !call.telnyxCallControlId.startsWith("mock_")) {
+    const conf = await prisma.conferenceCall.findUnique({ where: { id: call.conferenceId } });
+    if (conf?.telnyxConferenceId && !conf.telnyxConferenceId.startsWith("mock_")) {
+      await telnyxRequest(
+        `/conferences/${conf.telnyxConferenceId}/actions/${muted ? "mute" : "unmute"}`,
+        {
+          method: "POST",
+          body: { call_control_ids: [call.telnyxCallControlId] },
+        },
+      ).catch((err) => console.warn("[human-call] conference mute failed", err));
+    }
   }
   return prisma.humanCall.update({
     where: { id: callId },
@@ -742,26 +757,23 @@ export async function whisperOnHumanCall(
   const text = message.trim();
   if (!text) throw new Error("Whisper message required");
 
-  // Prefer speaking on the agent/consult secondary leg when present; otherwise
-  // hold the shared customer leg so the coach note is not played to the caller.
+  // Coach note requires a secondary/consult leg — never speak on the customer leg alone.
   const speakTarget =
     call.telnyxCallLegId && !call.telnyxCallLegId.startsWith("mock_")
       ? call.telnyxCallLegId
-      : call.telnyxCallControlId;
+      : null;
+  if (!speakTarget) {
+    throw new Error(
+      "Coach note needs an active consult or flipped device leg — start a warm transfer first",
+    );
+  }
 
   if (!speakTarget.startsWith("mock_")) {
-    const heldCustomer = speakTarget === call.telnyxCallControlId && !call.onHold;
-    if (heldCustomer) {
-      await telnyxAction(call.telnyxCallControlId, "hold").catch(() => undefined);
-    }
     await telnyxAction(speakTarget, "speak", {
       payload: text,
       voice: "female",
       language: "en-US",
     }).catch(() => undefined);
-    if (heldCustomer) {
-      await telnyxAction(call.telnyxCallControlId, "unhold").catch(() => undefined);
-    }
   }
 
   return prisma.humanCall.update({
@@ -865,7 +877,11 @@ export async function dialCallMyPhoneBridge(input: {
   const prisma = getPrisma();
   const agentPhone = normalizeE164(input.agentPhone);
   const destination = normalizeE164(input.destination);
-  const from = await resolveCallerIdNumber(input.workspaceId, input.from);
+  const from = await resolveCallerIdNumber(
+    input.workspaceId,
+    input.from,
+    input.agentUserId,
+  );
   if (!from) throw new Error("No active caller ID number configured");
 
   const { getSoftphonePermissions, requireSoftphonePermission } = await import(
@@ -1441,6 +1457,29 @@ export async function processHumanCallWebhookEvent(input: {
   if (patch.status === "completed" || patch.status === "missed") {
     const refreshed = await prisma.humanCall.findUnique({ where: { id: call.id } });
     if (refreshed) await clearAgentPresence(refreshed);
+  }
+
+  // Primary hangup: tear down the secondary leg (consult / flip / call-my-phone dest).
+  if (
+    input.eventType === "call.hangup" &&
+    !isSecondaryLeg &&
+    call.telnyxCallLegId &&
+    call.telnyxCallLegId !== eventControlId
+  ) {
+    await hangupControlLeg(call.telnyxCallLegId);
+  }
+  // Secondary hangup on an active bridged call: hang up the customer/primary leg too
+  // (except warm consult cancel / dest-no-answer handled below).
+  if (
+    input.eventType === "call.hangup" &&
+    isSecondaryLeg &&
+    ["in_progress", "on_hold"].includes(call.status) &&
+    String(clientState.kind || "") !== "warm_transfer_consult" &&
+    String(clientState.kind || "") !== "human_bridge_dest" &&
+    call.telnyxCallControlId &&
+    call.telnyxCallControlId !== eventControlId
+  ) {
+    await hangupControlLeg(call.telnyxCallControlId);
   }
 
   if (input.eventType === "call.answered") {

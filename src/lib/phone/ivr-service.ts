@@ -431,21 +431,93 @@ export async function handleIvrGatherEnded(eventPayload: Record<string, unknown>
     return { handled: true as const, action: "submenu", digit: digits, target: result.target };
   }
 
-  // Hand off queue / agent selections into the human-call flow.
+  // Hand off queue / agent / voicemail into the human-call flow.
+  // IVR already answered the PSTN leg — hold for softphone/cellular pickup.
   if (result.action === "queue" || result.action === "agent" || result.action === "voicemail") {
     const { handleInboundHumanCall } = await import("./human-call-service");
+    const agentUserId =
+      result.action === "agent" && option.target ? String(option.target) : null;
     const note =
       result.action === "queue"
         ? `ivr:queue:${(result as { queueName?: string }).queueName || option.target}`
-        : `ivr:${result.action}`;
-    await handleInboundHumanCall({
+        : result.action === "agent"
+          ? agentUserId
+            ? `forward_user:${agentUserId}`
+            : "ivr:agent"
+          : "ivr:voicemail";
+
+    const human = await handleInboundHumanCall({
       workspaceId: number.workspaceId,
       fromE164: from,
       toE164: to,
       telnyxCallControlId: controlId,
       queueId: result.action === "queue" ? option.target || null : null,
       routingNote: note,
-    }).catch((err) => console.warn("[ivr] handoff failed", err));
+      // Leg already answered by IVR gather — do not re-answer; queues still ring members.
+      autoAnswer: result.action === "queue",
+    }).catch((err) => {
+      console.warn("[ivr] handoff failed", err);
+      return null;
+    });
+
+    if (human && result.action === "agent" && controlId && !controlId.startsWith("mock_")) {
+      const { telnyxRequest: tx } = await import("@/lib/messaging/telnyx/client");
+      await tx(`/calls/${controlId}/actions/hold`, { method: "POST", body: {} }).catch(
+        () => undefined,
+      );
+      await getPrisma().humanCall.update({
+        where: { id: human.callId },
+        data: {
+          status: "ringing",
+          onHold: true,
+          agentUserId: agentUserId || undefined,
+          notes: note,
+        },
+      }).catch(() => undefined);
+
+      // Prefer cellular bridge when the target has forwardToCellular configured.
+      if (agentUserId) {
+        const settings = await getPrisma().softphoneUserSettings.findUnique({
+          where: {
+            workspaceId_userId: {
+              workspaceId: number.workspaceId,
+              userId: agentUserId,
+            },
+          },
+        });
+        const cell = settings?.forwardToCellular;
+        const connectionId = process.env.TELNYX_CONNECTION_ID?.trim();
+        if (cell && connectionId) {
+          await tx("/calls", {
+            method: "POST",
+            body: {
+              connection_id: connectionId,
+              from: to,
+              to: cell,
+              client_state: Buffer.from(
+                JSON.stringify({
+                  workspaceId: number.workspaceId,
+                  humanCallId: human.callId,
+                  kind: "queue_member_ring",
+                  parentCallControlId: controlId,
+                  userId: agentUserId,
+                }),
+              ).toString("base64"),
+            },
+          }).catch(() => undefined);
+        }
+      }
+    }
+
+    if (human && result.action === "voicemail" && controlId) {
+      const { leaveVoicemailOnCall } = await import("./voicemail-service");
+      await leaveVoicemailOnCall({
+        workspaceId: number.workspaceId,
+        humanCallId: human.callId,
+        telnyxCallControlId: controlId,
+        userId: agentUserId,
+      }).catch(() => undefined);
+    }
   }
 
   return { handled: true as const, action: result.action, digit: digits };

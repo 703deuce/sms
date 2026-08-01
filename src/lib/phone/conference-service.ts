@@ -185,3 +185,44 @@ export async function removeConferenceParticipant(input: {
   });
   return { ok: true };
 }
+
+export async function endConference(input: {
+  workspaceId: string;
+  conferenceId: string;
+}) {
+  const prisma = getPrisma();
+  const conference = await prisma.conferenceCall.findFirst({
+    where: { id: input.conferenceId, workspaceId: input.workspaceId },
+    include: { participants: true },
+  });
+  if (!conference) throw new Error("Conference not found");
+
+  if (conference.telnyxConferenceId && isTelnyxPhoneConfigured()) {
+    if (!conference.telnyxConferenceId.startsWith("mock_")) {
+      await telnyxRequest(`/conferences/${conference.telnyxConferenceId}`, {
+        method: "DELETE",
+        body: {},
+      }).catch(async () => {
+        // Fallback: hang up every participant leg.
+        for (const p of conference.participants) {
+          if (p.telnyxCallControlId) {
+            await telnyxRequest(`/calls/${p.telnyxCallControlId}/actions/hangup`, {
+              method: "POST",
+              body: {},
+            }).catch(() => undefined);
+          }
+        }
+      });
+    }
+  }
+
+  await prisma.conferenceParticipant.updateMany({
+    where: { conferenceId: conference.id, status: { in: ["joined", "ringing"] } },
+    data: { status: "left", leftAt: new Date() },
+  });
+
+  return prisma.conferenceCall.update({
+    where: { id: conference.id },
+    data: { status: "ended", endedAt: new Date() },
+  });
+}

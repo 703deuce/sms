@@ -6,8 +6,11 @@ export async function setPresence(input: {
   status: string;
   customLabel?: string | null;
   queueAvailable?: boolean;
+  /** When false, leave existing customLabel untouched (used by softphone auto on_call). */
+  touchCustomLabel?: boolean;
 }) {
   const prisma = getPrisma();
+  const touchLabel = input.touchCustomLabel !== false;
   const row = await prisma.softphonePresence.upsert({
     where: {
       workspaceId_userId: { workspaceId: input.workspaceId, userId: input.userId },
@@ -21,7 +24,7 @@ export async function setPresence(input: {
     },
     update: {
       status: input.status,
-      customLabel: input.customLabel ?? undefined,
+      ...(touchLabel ? { customLabel: input.customLabel ?? null } : {}),
       queueAvailable: input.queueAvailable,
     },
   });
@@ -80,10 +83,39 @@ export async function listPresence(workspaceId: string) {
 }
 
 export async function markOnCall(workspaceId: string, userId: string, onCall: boolean) {
+  const prisma = getPrisma();
+  const existing = await prisma.softphonePresence.findUnique({
+    where: { workspaceId_userId: { workspaceId, userId } },
+  });
+
+  if (onCall) {
+    // Remember prior status so hangup can restore busy/away/dnd instead of forcing available.
+    const prior =
+      existing?.status && existing.status !== "on_call" ? existing.status : "available";
+    const label = existing?.customLabel || null;
+    const tagged =
+      label && label.startsWith("pre_call:")
+        ? label
+        : `pre_call:${prior}${label ? `|${label}` : ""}`;
+    return setPresence({
+      workspaceId,
+      userId,
+      status: "on_call",
+      customLabel: tagged,
+      queueAvailable: false,
+    });
+  }
+
+  // Leaving on_call: restore pre_call status when present; never wipe intentional DND.
+  const label = existing?.customLabel || "";
+  const match = label.match(/^pre_call:([^|]+)(?:\|(.*))?$/);
+  const restoreStatus = match?.[1] || "available";
+  const restoreLabel = match?.[2] || null;
   return setPresence({
     workspaceId,
     userId,
-    status: onCall ? "on_call" : "available",
-    queueAvailable: !onCall,
+    status: restoreStatus === "on_call" ? "available" : restoreStatus,
+    customLabel: restoreLabel,
+    queueAvailable: restoreStatus !== "dnd" && restoreStatus !== "offline",
   });
 }

@@ -39,6 +39,7 @@ export async function POST(request: Request) {
         auth.workspaceId,
         auth.session.userId,
         body.name,
+        body.greetingText,
       );
       return NextResponse.json({ data: box });
     }
@@ -82,11 +83,17 @@ export async function POST(request: Request) {
       if (typeof (body as { transcriptionEnabled?: boolean }).transcriptionEnabled === "boolean") {
         patch.transcriptionEnabled = (body as { transcriptionEnabled?: boolean }).transcriptionEnabled;
       }
-      const box = await getPrisma().voicemailBox.update({
-        where: { id: body.boxId },
+      const box = await getPrisma().voicemailBox.updateMany({
+        where: { id: body.boxId, workspaceId: auth.workspaceId },
         data: patch,
       });
-      return NextResponse.json({ data: box });
+      if (!box.count) {
+        return NextResponse.json({ error: "Mailbox not found" }, { status: 404 });
+      }
+      const updated = await getPrisma().voicemailBox.findFirst({
+        where: { id: body.boxId, workspaceId: auth.workspaceId },
+      });
+      return NextResponse.json({ data: updated });
     }
 
     if (body.action === "retranscribe" && body.messageId) {

@@ -317,8 +317,9 @@ async function ringExternalTargets(
   const connectionId = process.env.TELNYX_CONNECTION_ID?.trim();
   if (!connectionId || !input.telnyxCallControlId) return;
   const list = sequential ? targets.slice(0, 1) : targets;
+  const ringLegIds: string[] = [];
   for (const to of list) {
-    await telnyxRequest("/calls", {
+    const dialed = await telnyxRequest<{ data?: { call_control_id?: string } }>("/calls", {
       method: "POST",
       body: {
         connection_id: connectionId,
@@ -333,6 +334,21 @@ async function ringExternalTargets(
           }),
         ).toString("base64"),
       },
-    }).catch(() => undefined);
+    }).catch(() => null);
+    const legId = dialed?.data?.call_control_id;
+    if (legId) ringLegIds.push(legId);
+  }
+  if (humanCallId && ringLegIds.length) {
+    const call = await getPrisma().humanCall.findUnique({ where: { id: humanCallId } });
+    if (call) {
+      await getPrisma()
+        .humanCall.update({
+          where: { id: humanCallId },
+          data: {
+            notes: `${call.notes || ""}\n[ring_legs:${ringLegIds.join(",")}]`.trim(),
+          },
+        })
+        .catch(() => undefined);
+    }
   }
 }

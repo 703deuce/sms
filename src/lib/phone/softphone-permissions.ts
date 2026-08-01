@@ -74,7 +74,16 @@ const ROLE_DEFAULTS: Record<string, SoftphonePermission[]> = {
     "merge",
   ],
   CAMPAIGN_CREATOR: ["place_call", "record", "transfer", "park"],
-  INBOX_AGENT: ["place_call", "record", "transfer", "block_caller", "park", "conference", "flip"],
+  INBOX_AGENT: [
+    "place_call",
+    "record",
+    "transfer",
+    "block_caller",
+    "park",
+    "conference",
+    "flip",
+    "merge",
+  ],
   ANALYST: ["listen"],
   READ_ONLY: [],
 };

@@ -172,7 +172,12 @@ export default function PhoneCallsPage() {
                   <TD>{c.status}</TD>
                   <TD>
                     {c.recordingUrl ? (
-                      <audio controls preload="none" src={c.recordingUrl} className="h-8 w-44" />
+                      <audio
+                        controls
+                        preload="none"
+                        src={`/api/phone/calls/${c.id}/recording`}
+                        className="h-8 w-44"
+                      />
                     ) : (
                       <span className="text-xs text-muted-foreground">—</span>
                     )}

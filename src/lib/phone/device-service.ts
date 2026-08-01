@@ -45,6 +45,21 @@ export async function registerSoftphoneDevice(input: {
     },
   });
 
+  // Deactivate stale devices that stopped heartbeating (softphone posts every ~60s).
+  const staleBefore = new Date(Date.now() - 15 * 60_000);
+  await prisma.softphoneDevice
+    .updateMany({
+      where: {
+        workspaceId: input.workspaceId,
+        userId: input.userId,
+        active: true,
+        lastSeenAt: { lt: staleBefore },
+        deviceKey: { not: deviceKey },
+      },
+      data: { active: false },
+    })
+    .catch(() => undefined);
+
   const devices = await prisma.softphoneDevice.findMany({
     where: {
       workspaceId: input.workspaceId,

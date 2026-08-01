@@ -20,9 +20,14 @@ export async function GET() {
         where: { phoneNumberId: { in: numbers.map((n: { id: string }) => n.id) } },
       }),
     ]);
+    const { getSoftphonePermissions } = await import("@/lib/phone/softphone-permissions");
+    const perms = await getSoftphonePermissions(auth.workspaceId, auth.session.userId);
     return NextResponse.json({
       data: { settings, assignments, numbers },
       me: auth.session.userId,
+      permissions: [...perms.allowed],
+      mineSettings:
+        settings.find((s: { userId: string }) => s.userId === auth.session.userId) || null,
     });
   } catch (err) {
     return jsonError(err, 500);
@@ -48,7 +53,17 @@ export async function POST(request: Request) {
       ringMobile?: boolean;
     };
     const userId = body.userId || auth.session.userId;
-    const row = await getPrisma().softphoneUserSettings.upsert({
+    const prisma = getPrisma();
+    const existing = await prisma.softphoneUserSettings.findUnique({
+      where: { workspaceId_userId: { workspaceId: auth.workspaceId, userId } },
+    });
+    const mergedPerms = body.permissionsJson
+      ? {
+          ...((existing?.permissionsJson as object) || {}),
+          ...body.permissionsJson,
+        }
+      : existing?.permissionsJson;
+    const row = await prisma.softphoneUserSettings.upsert({
       where: {
         workspaceId_userId: { workspaceId: auth.workspaceId, userId },
       },
@@ -62,7 +77,7 @@ export async function POST(request: Request) {
         recordingEnabled: body.recordingEnabled ?? true,
         internationalEnabled: body.internationalEnabled ?? false,
         e911AddressJson: body.e911AddressJson as object | undefined,
-        permissionsJson: body.permissionsJson as object | undefined,
+        permissionsJson: (mergedPerms as object) || undefined,
         ringDesktop: body.ringDesktop ?? true,
         ringMobile: body.ringMobile ?? true,
       },
@@ -74,7 +89,7 @@ export async function POST(request: Request) {
         recordingEnabled: body.recordingEnabled,
         internationalEnabled: body.internationalEnabled,
         e911AddressJson: body.e911AddressJson as object | undefined,
-        permissionsJson: body.permissionsJson as object | undefined,
+        permissionsJson: mergedPerms as object | undefined,
         ringDesktop: body.ringDesktop,
         ringMobile: body.ringMobile,
       },

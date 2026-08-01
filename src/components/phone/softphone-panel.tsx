@@ -191,9 +191,13 @@ export function SoftphonePanel({
   const [presenceStatus, setPresenceStatus] = useState("available");
   const [customStatus, setCustomStatus] = useState("");
   const [parkSlot, setParkSlot] = useState("");
+  const [parkedSlots, setParkedSlots] = useState<
+    Array<{ slotCode: string; humanCallId?: string | null; parkedAt?: string }>
+  >([]);
   const [conferenceId, setConferenceId] = useState("");
   const [conferenceAddTo, setConferenceAddTo] = useState("");
   const [elapsed, setElapsed] = useState(0);
+  const [permissions, setPermissions] = useState<string[]>([]);
 
   const [contactQuery, setContactQuery] = useState("");
   const [contactResults, setContactResults] = useState<ContactRow[]>([]);
@@ -327,16 +331,19 @@ export function SoftphonePanel({
 
     // Register this browser as a softphone device + enable incoming-call push.
     const deviceKey = getOrCreateDeviceKey();
-    fetch("/api/phone/devices", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        deviceKey,
-        label: "Browser softphone",
-        platform: "browser",
-        userAgent: navigator.userAgent,
-      }),
-    }).catch(() => undefined);
+    const registerDevice = () =>
+      fetch("/api/phone/devices", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          deviceKey,
+          label: "Browser softphone",
+          platform: "browser",
+          userAgent: navigator.userAgent,
+        }),
+      }).catch(() => undefined);
+    registerDevice();
+    const heartbeat = setInterval(registerDevice, 60_000);
     import("@/lib/push/client-subscribe")
       .then(({ subscribeToPush }) => subscribeToPush().catch(() => undefined))
       .catch(() => undefined);
@@ -444,6 +451,7 @@ export function SoftphonePanel({
       window.removeEventListener("online", onOnline);
       window.removeEventListener("offline", onOffline);
       (window as Window & { __softphoneSwCleanup?: () => void }).__softphoneSwCleanup?.();
+      clearInterval(heartbeat);
     };
   }, []);
 
@@ -470,24 +478,39 @@ export function SoftphonePanel({
       .then((j) => {
         const settings = (j.data?.settings || []) as UserSettingsRow[];
         setUserSettings(settings);
+        setPermissions(Array.isArray(j.permissions) ? j.permissions : []);
         const me = j.me || sessionUserIdRef.current;
         if (me) {
           sessionUserIdRef.current = me;
           setSessionUserId(me);
         }
-        const mine = settings.find((s) => s.userId === me) || settings.find((s) => s.forwardToCellular);
+        const mine =
+          (j.mineSettings as UserSettingsRow | null) ||
+          settings.find((s) => s.userId === me) ||
+          settings.find((s) => s.forwardToCellular);
         if (mine?.forwardToCellular) {
           setMyPhone((prev) => prev || mine.forwardToCellular || "");
           setFlipNumber((prev) => prev || mine.forwardToCellular || "");
         }
+        const defaultCid = (mine as { defaultCallerId?: string | null } | undefined)
+          ?.defaultCallerId;
+        if (defaultCid) setCallerId((prev) => prev || defaultCid);
       })
       .catch(() => undefined);
+
+    const refreshParked = () =>
+      fetch("/api/phone/park")
+        .then((r) => r.json())
+        .then((j) => setParkedSlots(j.data || []))
+        .catch(() => undefined);
+    refreshParked();
 
     const presenceTimer = setInterval(() => {
       fetch("/api/phone/presence")
         .then((r) => r.json())
         .then((j) => setPresenceList(j.data || []))
         .catch(() => undefined);
+      refreshParked();
     }, 30_000);
     return () => clearInterval(presenceTimer);
   }, []);
@@ -820,6 +843,16 @@ export function SoftphonePanel({
           if (pending && notes.includes("[warm_consult_answered]")) {
             updateCall(pending.id, { transferPhase: "consult_answered" });
           }
+          const status = String(j.data.status || "");
+          if (
+            ["completed", "missed", "transferred", "voicemail", "failed"].includes(status)
+          ) {
+            removeCall(id);
+            if (pending?.id === id) {
+              setConferenceId("");
+            }
+            return;
+          }
           if (j.data.telnyxCallControlId) {
             setControlLinkedIds((prev) => ({ ...prev, [id]: true }));
           }
@@ -890,7 +923,10 @@ export function SoftphonePanel({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         status,
-        customLabel: label || customStatus || undefined,
+        // Auto presence must not wipe pre_call:* labels used to restore DND/busy.
+        ...(opts?.auto
+          ? {}
+          : { customLabel: label || customStatus || null }),
         queueAvailable: status !== "dnd" && status !== "on_call",
       }),
     }).catch(() => undefined);
@@ -1484,10 +1520,11 @@ export function SoftphonePanel({
     }
   }
 
-  async function retrievePark() {
-    if (!parkSlot.trim()) return;
+  async function retrievePark(slotOverride?: string) {
+    const slotCode = (slotOverride ?? parkSlot).trim();
+    if (!slotCode) return;
     try {
-      const slotCode = parkSlot.trim();
+      setParkSlot(slotCode);
       const res = await fetch("/api/phone/park", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1603,10 +1640,38 @@ export function SoftphonePanel({
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Merge failed");
       setConferenceId(json.data?.conference?.id || "");
-      updateCall(other.id, { onHold: false, status: "in_progress" });
+      // Drop secondary WebRTC media — both lines are now one conference on Call Control.
+      const otherWc = webrtcHandleFor(other.id, other.webrtcId) as { hangup?: () => void } | null;
+      detachWebrtcMedia(other.id, other.webrtcId);
+      await otherWc?.hangup?.();
+      removeCall(other.id);
+      updateCall(activeCall.id, { onHold: false, status: "in_progress" });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Merge failed");
     }
+  }
+
+  async function endConferenceCall() {
+    if (!conferenceId) return;
+    try {
+      const res = await fetch("/api/phone/conference", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "end", conferenceId }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "End conference failed");
+      setConferenceId("");
+      setConferenceAddTo("");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "End conference failed");
+    }
+  }
+
+  function can(perm: string) {
+    // Until permissions load, allow UI; server still enforces.
+    if (!permissions.length) return true;
+    return permissions.includes(perm);
   }
 
   async function flipCall() {
@@ -1924,14 +1989,16 @@ export function SoftphonePanel({
             Call my phone first, then bridge to the destination (for users without browser audio).
           </span>
         </label>
-        <label className="mt-2 flex items-center gap-2">
-          <input
-            type="checkbox"
-            checked={anonymousDial}
-            onChange={(e) => setAnonymousDial(e.target.checked)}
-          />
-          <span className="text-sm">Anonymous / private caller ID</span>
-        </label>
+        {can("anonymous_dial") ? (
+          <label className="mt-2 flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={anonymousDial}
+              onChange={(e) => setAnonymousDial(e.target.checked)}
+            />
+            <span className="text-sm">Anonymous / private caller ID</span>
+          </label>
+        ) : null}
         {useCallMyPhone ? (
           <div className="mt-2">
             <Label htmlFor="myPhone">Your phone</Label>
@@ -2002,7 +2069,7 @@ export function SoftphonePanel({
               <Button
                 variant="outline"
                 onClick={toggleRecord}
-                disabled={!controlReady}
+                disabled={!controlReady || !can("record")}
                 className="gap-2"
               >
                 {recording ? "Stop rec" : "Record"}
@@ -2094,7 +2161,7 @@ export function SoftphonePanel({
                     size="sm"
                     onClick={blindTransfer}
                     className="gap-1"
-                    disabled={!controlReady}
+                    disabled={!controlReady || !can("transfer")}
                   >
                     <PhoneForwarded className="h-4 w-4" />
                     Transfer
@@ -2127,7 +2194,7 @@ export function SoftphonePanel({
                     size="sm"
                     onClick={startWarmTransfer}
                     className="gap-1"
-                    disabled={!controlReady}
+                    disabled={!controlReady || !can("transfer")}
                   >
                     <PhoneForwarded className="h-4 w-4" />
                     Start consult
@@ -2160,7 +2227,12 @@ export function SoftphonePanel({
             </div>
 
             <div className="flex flex-wrap gap-2 border-t border-border pt-3">
-              <Button variant="outline" size="sm" onClick={parkCall} disabled={!controlReady}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={parkCall}
+                disabled={!controlReady || !can("park")}
+              >
                 Park call
               </Button>
               <Button
@@ -2168,15 +2240,25 @@ export function SoftphonePanel({
                 size="sm"
                 onClick={createConference}
                 className="gap-1"
-                disabled={!controlReady}
+                disabled={!controlReady || !can("conference")}
               >
                 <Users className="h-3 w-3" />
                 Start conference
               </Button>
-              <Button variant="outline" size="sm" onClick={mergeHeldLine} disabled={!controlReady}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={mergeHeldLine}
+                disabled={!controlReady || !can("merge")}
+              >
                 Merge held line
               </Button>
-              <Button variant="outline" size="sm" onClick={blockCaller}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={blockCaller}
+                disabled={!can("block_caller")}
+              >
                 Block caller
               </Button>
               <Button variant="outline" size="sm" onClick={refreshAiNotes} disabled={!controlReady}>
@@ -2197,32 +2279,32 @@ export function SoftphonePanel({
                     variant="outline"
                     size="sm"
                     onClick={flipCall}
-                    disabled={!controlReady}
+                    disabled={!controlReady || !can("flip")}
                   >
                     Flip
                   </Button>
                 </div>
               </div>
               <div>
-                <Label>Coach note (spoken to call)</Label>
+                <Label>Coach note (spoken on consult leg)</Label>
                 <div className="mt-1 flex gap-2">
                   <Input
                     value={whisperText}
                     onChange={(e) => setWhisperText(e.target.value)}
-                    placeholder="Short note spoken while caller is briefly held…"
-                    disabled={!controlReady}
+                    placeholder="Requires warm-transfer consult…"
+                    disabled={!controlReady || !can("whisper")}
                   />
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={sendWhisper}
-                    disabled={!controlReady}
+                    disabled={!controlReady || !can("whisper")}
                   >
                     Speak note
                   </Button>
                 </div>
                 <p className="mt-1 text-[11px] text-muted-foreground">
-                  Speaks a spoken note on the live leg (not a private supervisor channel).
+                  Speaks on the consult/device leg only — not a private supervisor channel.
                 </p>
               </div>
             </div>
@@ -2254,6 +2336,9 @@ export function SoftphonePanel({
                 <Button variant="outline" size="sm" onClick={addToConference}>
                   Add
                 </Button>
+                <Button variant="outline" size="sm" onClick={endConferenceCall}>
+                  End conference
+                </Button>
               </div>
             ) : null}
           </div>
@@ -2277,20 +2362,44 @@ export function SoftphonePanel({
           </div>
         ) : null}
 
-        <div className="mt-4 flex flex-wrap items-end gap-2 border-t border-border pt-3">
-          <div className="min-w-[120px] flex-1">
-            <Label htmlFor="parkSlot">Retrieve parked call</Label>
-            <Input
-              id="parkSlot"
-              className="mt-1 font-mono"
-              value={parkSlot}
-              onChange={(e) => setParkSlot(e.target.value)}
-              placeholder="Slot code"
-            />
+        <div className="mt-4 space-y-2 border-t border-border pt-3">
+          <Label>Parked calls</Label>
+          {parkedSlots.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No parked calls.</p>
+          ) : (
+            <ul className="space-y-1">
+              {parkedSlots.map((s) => (
+                <li
+                  key={s.slotCode}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded border border-border px-2 py-1.5 text-xs"
+                >
+                  <span className="font-mono font-semibold">{s.slotCode}</span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => void retrievePark(s.slotCode)}
+                  >
+                    Retrieve
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="min-w-[120px] flex-1">
+              <Label htmlFor="parkSlot">Or enter slot code</Label>
+              <Input
+                id="parkSlot"
+                className="mt-1 font-mono"
+                value={parkSlot}
+                onChange={(e) => setParkSlot(e.target.value)}
+                placeholder="Slot code"
+              />
+            </div>
+            <Button variant="outline" size="sm" onClick={() => void retrievePark()}>
+              Retrieve
+            </Button>
           </div>
-          <Button variant="outline" size="sm" onClick={retrievePark}>
-            Retrieve
-          </Button>
         </div>
       </Card>
 

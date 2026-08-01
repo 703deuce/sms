@@ -37,6 +37,10 @@ export function PhoneSettingsClient({
   const [cellular, setCellular] = useState("");
   const [dnd, setDnd] = useState(false);
   const [intl, setIntl] = useState(false);
+  const [recordingEnabled, setRecordingEnabled] = useState(true);
+  const [ringMobile, setRingMobile] = useState(true);
+  const [screening, setScreening] = useState(false);
+  const [defaultCallerIdUser, setDefaultCallerIdUser] = useState("");
 
   useEffect(() => {
     fetch("/api/phone/settings")
@@ -78,12 +82,19 @@ export function PhoneSettingsClient({
         .then((j) => {
           const settings = j.data?.settings || [];
           const s =
-            settings.find((row: { userId: string }) => row.userId === j.me) || settings[0];
+            j.mineSettings ||
+            settings.find((row: { userId: string }) => row.userId === j.me) ||
+            settings[0];
           if (s) {
             setExtension(s.extension || "");
             setCellular(s.forwardToCellular || "");
             setDnd(Boolean(s.dndEnabled));
             setIntl(Boolean(s.internationalEnabled));
+            setRecordingEnabled(s.recordingEnabled !== false);
+            setRingMobile(s.ringMobile !== false);
+            setDefaultCallerIdUser(s.defaultCallerId || "");
+            const perms = (s.permissionsJson || {}) as { screening?: boolean };
+            setScreening(Boolean(perms.screening));
           }
         })
         .catch(() => undefined);
@@ -162,6 +173,21 @@ export function PhoneSettingsClient({
     setSaved(true);
   }
 
+  async function deleteForwarding(id: string) {
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/phone/forwarding?id=${encodeURIComponent(id)}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Delete failed");
+      setRules((rs) => rs.filter((r) => String(r.id) !== id));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Delete failed");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function saveAdmin() {
     setSaving(true);
     try {
@@ -173,7 +199,10 @@ export function PhoneSettingsClient({
           forwardToCellular: cellular || null,
           dndEnabled: dnd,
           internationalEnabled: intl,
-          defaultCallerId: callerId || null,
+          defaultCallerId: defaultCallerIdUser || callerId || null,
+          recordingEnabled,
+          ringMobile,
+          permissionsJson: { screening },
         }),
       });
       if (!res.ok) throw new Error("Save failed");
@@ -301,9 +330,22 @@ export function PhoneSettingsClient({
           </Button>
           <ul className="space-y-2 text-sm">
             {rules.map((r) => (
-              <li key={String(r.id)} className="rounded border border-border px-3 py-2">
-                {String(r.mode)} → {String(r.targetType)}:{String(r.targetValue)}{" "}
-                {r.active === false ? "(inactive)" : ""}
+              <li
+                key={String(r.id)}
+                className="flex flex-wrap items-center justify-between gap-2 rounded border border-border px-3 py-2"
+              >
+                <span>
+                  {String(r.mode)} → {String(r.targetType)}:{String(r.targetValue)}{" "}
+                  {r.active === false ? "(inactive)" : ""}
+                </span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={saving}
+                  onClick={() => void deleteForwarding(String(r.id))}
+                >
+                  Delete
+                </Button>
               </li>
             ))}
           </ul>
@@ -367,7 +409,12 @@ export function PhoneSettingsClient({
                       ) : null}
                     </div>
                     {recordingUrl ? (
-                      <audio className="mt-2 w-full" controls preload="none" src={recordingUrl} />
+                      <audio
+                        className="mt-2 w-full"
+                        controls
+                        preload="none"
+                        src={`/api/phone/voicemail/${m.id}/recording`}
+                      />
                     ) : (
                       <p className="mt-1 text-xs text-muted-foreground">
                         Recording not available yet (waiting for carrier upload).
@@ -428,6 +475,21 @@ export function PhoneSettingsClient({
               <Input value={cellular} onChange={(e) => setCellular(e.target.value)} placeholder="+1…" />
             </div>
           </div>
+          <div>
+            <Label>Your default caller ID</Label>
+            <select
+              className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm"
+              value={defaultCallerIdUser}
+              onChange={(e) => setDefaultCallerIdUser(e.target.value)}
+            >
+              <option value="">Workspace default</option>
+              {phoneNumbers.map((n) => (
+                <option key={n.id} value={n.number}>
+                  {n.number}
+                </option>
+              ))}
+            </select>
+          </div>
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={dnd} onChange={(e) => setDnd(e.target.checked)} />
             Do not disturb
@@ -436,9 +498,32 @@ export function PhoneSettingsClient({
             <input type="checkbox" checked={intl} onChange={(e) => setIntl(e.target.checked)} />
             International calling enabled
           </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={recordingEnabled}
+              onChange={(e) => setRecordingEnabled(e.target.checked)}
+            />
+            Call recording allowed
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={ringMobile}
+              onChange={(e) => setRingMobile(e.target.checked)}
+            />
+            Ring my cellular on queue / inbound
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={screening}
+              onChange={(e) => setScreening(e.target.checked)}
+            />
+            Caller screening (press 1 to accept on cell)
+          </label>
           <p className="text-xs text-muted-foreground">
-            E911 address, recording permissions, and number assignments are stored on this profile.
-            Set emergency address via API field e911AddressJson when provisioning.
+            These settings drive softphone dial, queue cellular ring, and inbound screening.
           </p>
           <Button onClick={saveAdmin} disabled={saving}>
             Save admin settings

@@ -25,7 +25,7 @@ export async function PATCH(request: Request) {
     if ("error" in auth) return auth.error;
     const body = (await request.json()) as {
       status?: string;
-      customLabel?: string;
+      customLabel?: string | null;
       queueAvailable?: boolean;
       userId?: string;
     };
@@ -42,6 +42,8 @@ export async function PATCH(request: Request) {
       status: body.status,
       customLabel: body.customLabel,
       queueAvailable: body.queueAvailable,
+      // Softphone auto on_call omits customLabel so pre_call restore tags survive.
+      touchCustomLabel: Object.prototype.hasOwnProperty.call(body, "customLabel"),
     });
     return NextResponse.json({ data: row });
   } catch (err) {

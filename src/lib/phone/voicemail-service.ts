@@ -2,18 +2,34 @@ import { getPrisma } from "@/lib/db";
 import { telnyxRequest } from "@/lib/messaging/telnyx/client";
 import { isTelnyxPhoneConfigured } from "./human-call-service";
 
-export async function ensureUserVoicemailBox(workspaceId: string, userId: string, name?: string) {
+export async function ensureUserVoicemailBox(
+  workspaceId: string,
+  userId: string,
+  name?: string,
+  greetingText?: string | null,
+) {
   const prisma = getPrisma();
   const existing = await prisma.voicemailBox.findFirst({
     where: { workspaceId, ownerUserId: userId },
   });
-  if (existing) return existing;
+  if (existing) {
+    if (greetingText != null || name) {
+      return prisma.voicemailBox.update({
+        where: { id: existing.id },
+        data: {
+          ...(greetingText != null ? { greetingText } : {}),
+          ...(name ? { name } : {}),
+        },
+      });
+    }
+    return existing;
+  }
   return prisma.voicemailBox.create({
     data: {
       workspaceId,
       ownerUserId: userId,
       name: name || "Personal voicemail",
-      greetingText: "Please leave a message after the tone.",
+      greetingText: greetingText || "Please leave a message after the tone.",
       transcriptionEnabled: true,
     },
   });

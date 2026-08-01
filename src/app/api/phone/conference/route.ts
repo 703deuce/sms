@@ -3,6 +3,7 @@ import { requireSession, jsonError } from "@/lib/api-auth";
 import {
   addConferenceParticipant,
   createConferenceFromCall,
+  endConference,
   removeConferenceParticipant,
 } from "@/lib/phone/conference-service";
 import { getPrisma } from "@/lib/db";
@@ -73,6 +74,7 @@ export async function POST(request: Request) {
     }
 
     if (body.action === "remove") {
+      await requireSoftphonePermission(auth.workspaceId, auth.session.userId, "conference");
       if (!body.conferenceId || !body.participantId) {
         return NextResponse.json({ error: "conferenceId and participantId required" }, { status: 400 });
       }
@@ -81,6 +83,19 @@ export async function POST(request: Request) {
           workspaceId: auth.workspaceId,
           conferenceId: body.conferenceId,
           participantId: body.participantId,
+        }),
+      });
+    }
+
+    if (body.action === "end") {
+      await requireSoftphonePermission(auth.workspaceId, auth.session.userId, "conference");
+      if (!body.conferenceId) {
+        return NextResponse.json({ error: "conferenceId required" }, { status: 400 });
+      }
+      return NextResponse.json({
+        data: await endConference({
+          workspaceId: auth.workspaceId,
+          conferenceId: body.conferenceId,
         }),
       });
     }
