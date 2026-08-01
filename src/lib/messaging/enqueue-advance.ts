@@ -93,6 +93,14 @@ export async function enqueueJob(input: EnqueueJobInput) {
     } catch (err) {
       console.warn("[enqueueJob] BullMQ dual-write failed; DB queue still holds the job", err);
     }
+  } else {
+    // Web-container drain: kick soon so CRM/sync/push don't wait on the poll interval.
+    try {
+      const { scheduleJobDrain } = await import("@/lib/jobs/inprocess-worker");
+      scheduleJobDrain();
+    } catch {
+      // instrumentation may not have loaded yet during early boot — poller will catch up
+    }
   }
 
   return job;

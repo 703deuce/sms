@@ -20,7 +20,7 @@ Ignore Salesforce and Bigin for this pass.
 | Exact Zoho callback | `{APP_URL}/api/crm/zoho/callback` |
 | Exact Pipedrive callback | `{APP_URL}/api/crm/pipedrive/callback` |
 | DB apply | `npm run db:push` (fallback: `supabase/crm-integration.sql`) |
-| Worker | `npm run worker:all` |
+| Jobs | Processed **inside the web container** (Next.js instrumentation poller). Separate `npm run worker:all` is optional / not required. |
 
 Authorize and token exchange send `redirect_uri` = the **provider-specific** callback URL.
 These are **not** Coolify environment variables — only register them in Zoho / Pipedrive consoles.
@@ -30,24 +30,13 @@ Zoho regional Accounts: callback `accounts-server` / `location` used for code→
 
 ## Coolify services that need the vars + redeploy
 
-Add the variables to **every** process that runs CRM code, then **redeploy/restart** each:
+Add the variables to the **web application** Coolify service, then **redeploy/restart** it.
 
-1. Web application (`next start` / Coolify app)
-2. Worker (`npm run worker:all`) — this single process handles:
-   - `crm_sync` (initial / incremental / scheduled)
-   - `crm_push_event` (outbound writes)
-   - `crm_metadata_refresh`
-   - `crm_bulk_sync`
-   - `crm_webhook_process`
-   - `crm_scheduled_incremental` (on `maintenance` queue)
-3. Any cron that hits `POST /api/jobs/process` (needs same env + `CRON_SECRET`)
+Jobs (`crm_sync`, `crm_push_event`, `crm_metadata_refresh`, `crm_bulk_sync`, `crm_webhook_process`, campaigns, automations, etc.) run **in the web container** via the in-process poller. You do **not** need a separate `npm run worker:all` service for this live pass.
 
-There are **not** separate CRM sync / push / webhook worker binaries in this repo.  
-If Coolify was split into multiple workers by queue name, each worker still needs the same CRM env vars, and at least one consumer must drain:
+Optional: Coolify cron can still hit `POST /api/jobs/process` with `CRON_SECRET` as a backup drain; it is not required when the web poller is enabled (default).
 
-- `crm-zoho`
-- `crm-pipedrive`
-- `maintenance` (scheduled incremental tick)
+Set `DISABLE_INPROCESS_WORKER=1` on the web app only if you intentionally run a standalone worker again.
 
 ## Commands on the DB-capable host
 
@@ -58,7 +47,7 @@ git pull origin cursor/crm-integration-framework-b56f
 npm ci
 npm run db:push
 npm run crm:live-readiness
-npm run worker:all   # keep running
+# Jobs drain inside `next start` — no worker:all required
 ```
 
 `crm:live-readiness` prints SET/MISSING for each var (never values) and the exact callback URL.

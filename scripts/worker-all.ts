@@ -1,5 +1,11 @@
 /**
- * Worker process: drains DB job_queue, OR BullMQ when QUEUE_DRIVER=bullmq.
+ * Optional standalone worker process.
+ *
+ * Preferred default: the Next.js web container already drains jobs via
+ * `src/instrumentation.ts` + `src/lib/jobs/inprocess-worker.ts`.
+ * Only run this if you set DISABLE_INPROCESS_WORKER=1 on the web app.
+ *
+ * Drains DB job_queue, OR BullMQ when QUEUE_DRIVER=bullmq.
  * Never both — dual consumers double-send.
  *
  *   npm run worker:all
