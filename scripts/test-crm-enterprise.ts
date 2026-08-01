@@ -359,6 +359,14 @@ ok("BullMQ job ids cannot contain colon", async () => {
   assert.equal(toBullmqJobId("crm-sync-zoho-abc"), "crm-sync-zoho-abc");
 });
 
+ok("Zoho search DateTime format rejects ISO Z/millis", async () => {
+  const { zohoSearchDateTime } = await import("../src/lib/crm/adapters/zoho");
+  const formatted = zohoSearchDateTime(new Date("2026-08-01T23:08:19.748Z"));
+  assert.equal(formatted, "2026-08-01T23:08:19+00:00");
+  assert.equal(formatted.includes("Z"), false);
+  assert.equal(formatted.includes("."), false);
+});
+
 ok("crmFetch never returns null on empty success body", async () => {
   const { crmFetch } = await import("../src/lib/crm/http");
   const originalFetch = globalThis.fetch;
