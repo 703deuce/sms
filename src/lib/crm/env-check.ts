@@ -17,7 +17,9 @@ export type EnvCheckItem = {
 
 export type EnvCheckResult = {
   ok: boolean;
+  /** Template summary — prefer callbackUrls[provider]. */
   callbackUrl: string;
+  callbackUrls: Record<CrmProviderId, string>;
   items: EnvCheckItem[];
   providers: Array<{
     id: CrmProviderId;
@@ -25,6 +27,7 @@ export type EnvCheckResult = {
     oauthReady: boolean;
     missing: string[];
     scopes: string[];
+    callbackUrl: string;
   }>;
 };
 
@@ -32,10 +35,17 @@ function appUrl() {
   return (process.env.APP_URL || "").replace(/\/$/, "");
 }
 
+/** @deprecated Prefer getCrmCallbackUrlForProvider — kept for diagnostics summary. */
 export function getCrmCallbackUrl() {
   const base = appUrl();
-  if (!base) return "/api/crm/oauth/callback (set APP_URL)";
-  return `${base}/api/crm/oauth/callback`;
+  if (!base) return "/api/crm/{provider}/callback (set APP_URL)";
+  return `${base}/api/crm/{provider}/callback`;
+}
+
+export function getCrmCallbackUrlForProvider(provider: CrmProviderId) {
+  const base = appUrl();
+  if (!base) return `/api/crm/${provider}/callback (set APP_URL)`;
+  return `${base}/api/crm/${provider}/callback`;
 }
 
 export function checkCrmEnvironment(provider?: CrmProviderId): EnvCheckResult {
@@ -48,8 +58,8 @@ export function checkCrmEnvironment(provider?: CrmProviderId): EnvCheckResult {
     ok: Boolean(base),
     provider: "shared",
     message: base
-      ? `APP_URL is set (${base}). Callback must be registered exactly as ${base}/api/crm/oauth/callback`
-      : "APP_URL is missing. Set it to your public site origin (no trailing slash), e.g. https://app.transovo.com",
+      ? `APP_URL is set (${base}). Register provider callbacks as ${base}/api/crm/zoho/callback and ${base}/api/crm/pipedrive/callback`
+      : "APP_URL is missing. Set it to your public site origin (no trailing slash), e.g. https://transovo.ai",
   });
 
   items.push({
@@ -150,11 +160,17 @@ export function checkCrmEnvironment(provider?: CrmProviderId): EnvCheckResult {
         ...(!process.env.INTEGRATION_SECRET_KEY?.trim() ? ["INTEGRATION_SECRET_KEY"] : []),
       ],
       scopes: scopesForProvider(id),
+      callbackUrl: getCrmCallbackUrlForProvider(id),
     };
   });
 
   const ok = items.filter((i) => i.required).every((i) => i.ok);
-  return { ok, callbackUrl: getCrmCallbackUrl(), items, providers };
+  const callbackUrls = {
+    zoho: getCrmCallbackUrlForProvider("zoho"),
+    pipedrive: getCrmCallbackUrlForProvider("pipedrive"),
+    salesforce: getCrmCallbackUrlForProvider("salesforce"),
+  } satisfies Record<CrmProviderId, string>;
+  return { ok, callbackUrl: getCrmCallbackUrl(), callbackUrls, items, providers };
 }
 
 /** Throw a human-readable error when starting OAuth without env. */

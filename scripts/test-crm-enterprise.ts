@@ -337,4 +337,17 @@ ok("Zoho multi-DC accounts host resolution", async () => {
   assert.equal(resolveZohoAccountsServer({}), "https://accounts.zoho.com");
 });
 
+ok("provider-specific OAuth callback URLs", async () => {
+  const prev = process.env.APP_URL;
+  process.env.APP_URL = "https://transovo.ai";
+  const { crmOAuthCallbackUrl } = await import("../src/lib/crm/oauth");
+  assert.equal(crmOAuthCallbackUrl("zoho"), "https://transovo.ai/api/crm/zoho/callback");
+  assert.equal(
+    crmOAuthCallbackUrl("pipedrive"),
+    "https://transovo.ai/api/crm/pipedrive/callback",
+  );
+  if (prev === undefined) delete process.env.APP_URL;
+  else process.env.APP_URL = prev;
+});
+
 console.log(`\n${passed} CRM enterprise checks passed.`);

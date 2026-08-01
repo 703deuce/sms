@@ -4,8 +4,11 @@
  *   npx tsx scripts/crm-live-readiness.ts
  */
 
-import { checkCrmEnvironment, getCrmCallbackUrl } from "../src/lib/crm/env-check";
-import { resolveZohoAccountsServer } from "../src/lib/crm/oauth";
+import {
+  checkCrmEnvironment,
+  getCrmCallbackUrlForProvider,
+} from "../src/lib/crm/env-check";
+import { crmOAuthCallbackUrl, resolveZohoAccountsServer } from "../src/lib/crm/oauth";
 import { scopesForProvider } from "../src/lib/crm/scopes";
 import { crmQueueName } from "../src/lib/crm/runtime/priority";
 
@@ -44,11 +47,15 @@ for (const k of zoho) console.log(`  ${k}: ${presence(k)}`);
 console.log("\nPipedrive env presence:");
 for (const k of pipedrive) console.log(`  ${k}: ${presence(k)}`);
 
-const callback = getCrmCallbackUrl();
-console.log("\nExact OAuth callback URL (register this EXACTLY in both consoles):");
-console.log(`  ${callback}`);
+console.log("\nExact OAuth callback URLs (register these EXACTLY — no separate env var):");
+console.log(`  Zoho CRM:  ${getCrmCallbackUrlForProvider("zoho")}`);
+console.log(`  Pipedrive: ${getCrmCallbackUrlForProvider("pipedrive")}`);
 console.log("  Notes: APP_URL must have no trailing slash; callback path has no trailing slash.");
-console.log("  Authorization + token exchange both send redirect_uri = that exact URL.");
+console.log("  Authorization + token exchange both send redirect_uri = that exact per-provider URL.");
+if (process.env.APP_URL?.trim()) {
+  console.log(`  Code will send: ${crmOAuthCallbackUrl("zoho")}`);
+  console.log(`  Code will send: ${crmOAuthCallbackUrl("pipedrive")}`);
+}
 
 console.log("\nZoho Accounts host resolution (token exchange):");
 console.log(`  default/US: ${resolveZohoAccountsServer({})}`);

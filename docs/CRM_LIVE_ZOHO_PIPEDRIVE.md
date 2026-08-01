@@ -16,12 +16,14 @@ Ignore Salesforce and Bigin for this pass.
 | Shared webhook secret (optional) | `CRM_WEBHOOK_SECRET` |
 | App / redirect base | `APP_URL` (no trailing slash) |
 | Token encryption + OAuth state HMAC | `INTEGRATION_SECRET_KEY` |
-| OAuth callback route | `/api/crm/oauth/callback` |
-| Exact callback URL | `{APP_URL}/api/crm/oauth/callback` |
+| OAuth callback routes | `/api/crm/zoho/callback`, `/api/crm/pipedrive/callback` |
+| Exact Zoho callback | `{APP_URL}/api/crm/zoho/callback` |
+| Exact Pipedrive callback | `{APP_URL}/api/crm/pipedrive/callback` |
 | DB apply | `npm run db:push` (fallback: `supabase/crm-integration.sql`) |
 | Worker | `npm run worker:all` |
 
-Both authorize and token exchange send `redirect_uri` = that exact callback URL.
+Authorize and token exchange send `redirect_uri` = the **provider-specific** callback URL.
+These are **not** Coolify environment variables — only register them in Zoho / Pipedrive consoles.
 
 Zoho regional API: token response `api_domain` is stored and used for CRM API calls.  
 Zoho regional Accounts: callback `accounts-server` / `location` used for code→token and refresh.
@@ -63,10 +65,10 @@ npm run worker:all   # keep running
 
 ## Provider console checklist
 
-Register **exactly** the printed callback URL in:
+Register **exactly**:
 
-- Zoho API Console (CRM OAuth client; enable multi-DC if testing non-US)
-- Pipedrive Marketplace / OAuth app
+- Zoho API Console: `{APP_URL}/api/crm/zoho/callback`
+- Pipedrive OAuth app: `{APP_URL}/api/crm/pipedrive/callback`
 
 Scopes requested (code):
 

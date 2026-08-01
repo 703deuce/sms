@@ -6,7 +6,7 @@
 
 **Scopes:** `api`, `refresh_token` / `offline_access` (see `src/lib/crm/scopes.ts`).
 
-**Callback URL:** `{APP_BASE_URL}/api/crm/oauth/callback`
+**Callback URL:** `{APP_URL}/api/crm/salesforce/callback`
 
 **Env:**
 - `SALESFORCE_CLIENT_ID`
@@ -21,7 +21,7 @@
 
 **Scopes:** See `src/lib/crm/scopes.ts` (modules read/write, settings fields, users).
 
-**Callback URL:** `{APP_BASE_URL}/api/crm/oauth/callback`
+**Callback URL:** `{APP_URL}/api/crm/zoho/callback`
 
 **Env:**
 - `ZOHO_CLIENT_ID`
@@ -44,7 +44,7 @@
 
 **Required:** Company admin to authorize OAuth app with persons, organizations, deals, activities, notes, users, pipelines access.
 
-**Callback URL:** `{APP_BASE_URL}/api/crm/oauth/callback`
+**Callback URL:** `{APP_URL}/api/crm/pipedrive/callback`
 
 **Env:**
 - `PIPEDRIVE_CLIENT_ID`

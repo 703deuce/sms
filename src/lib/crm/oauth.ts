@@ -19,8 +19,12 @@ function secret() {
   return process.env.INTEGRATION_SECRET_KEY?.trim() || "transovo-dev-oauth";
 }
 
-export function crmOAuthCallbackUrl() {
-  return `${appUrl()}/api/crm/oauth/callback`;
+/**
+ * Provider-specific callback URLs registered in Zoho / Pipedrive / Salesforce consoles.
+ * Example: https://transovo.ai/api/crm/zoho/callback
+ */
+export function crmOAuthCallbackUrl(provider: CrmProviderId) {
+  return `${appUrl()}/api/crm/${provider}/callback`;
 }
 
 function makeState(workspaceId: string, provider: string) {
@@ -99,7 +103,7 @@ export async function startCrmOAuth(workspaceId: string, provider: CrmProviderId
   const state = makeState(workspaceId, provider);
   const params = new URLSearchParams({
     client_id: clientId,
-    redirect_uri: crmOAuthCallbackUrl(),
+    redirect_uri: crmOAuthCallbackUrl(provider),
     response_type: "code",
     state,
     ...(connector.oauth.authorizeParams || {}),
@@ -179,7 +183,7 @@ export async function completeCrmOAuth(
       code,
       client_id: clientId,
       client_secret: clientSecret,
-      redirect_uri: crmOAuthCallbackUrl(),
+      redirect_uri: crmOAuthCallbackUrl(provider),
     }),
   });
   const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
@@ -199,7 +203,7 @@ export async function completeCrmOAuth(
       category: "oauth",
       action: "token_exchange_failed",
       message: msg,
-      detail: { ...json, tokenUrl },
+      detail: { ...json, tokenUrl, redirect_uri: crmOAuthCallbackUrl(provider) },
     });
     throw new Error(msg);
   }
