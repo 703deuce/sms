@@ -171,6 +171,8 @@ export async function runCrmAcceptanceSuite(
         phone,
         email: `lookup-${marker}@example.com`,
       });
+      // Provider search indexes are briefly eventually-consistent after create.
+      await new Promise((r) => setTimeout(r, 1500));
       const byPhone = await connector.findContactByPhone(ctx, phone);
       items.push({
         id: "find_by_phone",
@@ -288,15 +290,25 @@ export async function runCrmAcceptanceSuite(
   }
 
   // Pipelines / stages / owners / fields
-  try {
-    if (connector.listPipelines) {
+    try {
+      if (connector.listPipelines) {
       const pipes = await connector.listPipelines(ctx);
       const stages = pipes.reduce((n, p) => n + (p.stages?.length || 0), 0);
-      items.push({
-        id: "pipelines_stages_read",
-        status: "Live tested and passed",
-        message: `${pipes.length} pipeline(s), ${stages} stage(s)`,
-      });
+      // Soft-empty from adapter 403 handling is not a pass for Pipedrive deals scope.
+      if (provider === "pipedrive" && pipes.length === 0) {
+        items.push({
+          id: "pipelines_stages_read",
+          status: "Blocked by provider permissions or plan",
+          message:
+            "0 pipelines — token likely missing deals:full (disconnect + reauthorize Pipedrive)",
+        });
+      } else {
+        items.push({
+          id: "pipelines_stages_read",
+          status: "Live tested and passed",
+          message: `${pipes.length} pipeline(s), ${stages} stage(s)`,
+        });
+      }
     } else {
       items.push({
         id: "pipelines_stages_read",
