@@ -32,6 +32,14 @@ function isBigin(ctx: ConnectorContext) {
   return ctx.preferences.zohoProduct === "bigin";
 }
 
+/**
+ * Zoho search criteria DateTime must be `yyyy-MM-ddTHH:mm:ss±HH:mm`.
+ * `Date.toISOString()` (`…Z` + millis) returns "Invalid query formed".
+ */
+export function zohoSearchDateTime(d: Date): string {
+  return d.toISOString().replace(/\.\d{3}Z$/, "+00:00");
+}
+
 export const zohoConnector: CrmConnector = {
   id: "zoho",
   displayName: "Zoho CRM",
@@ -86,7 +94,7 @@ export const zohoConnector: CrmConnector = {
     let path = `${apiBase(ctx)}/Contacts?page=${page}&per_page=200`;
     if (opts?.modifiedSince) {
       const criteria = encodeURIComponent(
-        `(Modified_Time:greater_equal:${opts.modifiedSince.toISOString()})`,
+        `(Modified_Time:greater_equal:${zohoSearchDateTime(opts.modifiedSince)})`,
       );
       path = `${apiBase(ctx)}/Contacts/search?criteria=${criteria}&page=${page}&per_page=200`;
     }
@@ -211,7 +219,7 @@ export const zohoConnector: CrmConnector = {
     let path = `${apiBase(ctx)}/Leads?page=${page}&per_page=200`;
     if (opts?.modifiedSince) {
       const criteria = encodeURIComponent(
-        `(Modified_Time:greater_equal:${opts.modifiedSince.toISOString()})`,
+        `(Modified_Time:greater_equal:${zohoSearchDateTime(opts.modifiedSince)})`,
       );
       path = `${apiBase(ctx)}/Leads/search?criteria=${criteria}&page=${page}&per_page=200`;
     }
@@ -280,7 +288,7 @@ export const zohoConnector: CrmConnector = {
     let path = `${apiBase(ctx)}/${module}?page=${page}&per_page=200`;
     if (opts?.modifiedSince) {
       const criteria = encodeURIComponent(
-        `(Modified_Time:greater_equal:${opts.modifiedSince.toISOString()})`,
+        `(Modified_Time:greater_equal:${zohoSearchDateTime(opts.modifiedSince)})`,
       );
       path = `${apiBase(ctx)}/${module}/search?criteria=${criteria}&page=${page}&per_page=200`;
     }
@@ -417,7 +425,7 @@ export const zohoConnector: CrmConnector = {
     let path = `${apiBase(ctx)}/Tasks?page=${page}&per_page=200`;
     if (opts?.modifiedSince) {
       const criteria = encodeURIComponent(
-        `(Modified_Time:greater_equal:${opts.modifiedSince.toISOString()})`,
+        `(Modified_Time:greater_equal:${zohoSearchDateTime(opts.modifiedSince)})`,
       );
       path = `${apiBase(ctx)}/Tasks/search?criteria=${criteria}&page=${page}&per_page=200`;
     }
@@ -661,7 +669,7 @@ export const zohoConnector: CrmConnector = {
     let path = `${apiBase(ctx)}/Accounts?page=${page}&per_page=200`;
     if (opts?.modifiedSince) {
       const criteria = encodeURIComponent(
-        `(Modified_Time:greater_equal:${opts.modifiedSince.toISOString()})`,
+        `(Modified_Time:greater_equal:${zohoSearchDateTime(opts.modifiedSince)})`,
       );
       path = `${apiBase(ctx)}/Accounts/search?criteria=${criteria}&page=${page}&per_page=200`;
     }
