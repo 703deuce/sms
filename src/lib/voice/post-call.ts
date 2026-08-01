@@ -109,6 +109,106 @@ export async function processPostCall(callId: string) {
     ).catch(() => undefined);
   }
 
+  // CRM framework — one call lifecycle + transcript/summary updates.
+  try {
+    const {
+      publishCallCompleted,
+      publishTranscriptReady,
+      publishAiSummaryReady,
+      publishVoicemailReceived,
+      publishLeadCreated,
+      publishAppointmentBooked,
+    } = await import("@/lib/crm/events");
+    const direction =
+      isMissed || call.voicemailDetected
+        ? "missed"
+        : call.direction === "OUTBOUND" || call.direction === "outbound"
+          ? "outbound"
+          : "inbound";
+    await publishCallCompleted({
+      workspaceId: call.workspaceId,
+      contactId: call.contactId,
+      callId: call.id,
+      direction,
+      from: call.fromE164,
+      to: call.toE164,
+      durationSeconds: duration,
+      disposition: call.outcome || call.status,
+      notes: insight?.summary || null,
+    }).catch(() => undefined);
+
+    if (call.voicemailDetected) {
+      await publishVoicemailReceived({
+        workspaceId: call.workspaceId,
+        contactId: call.contactId,
+        callId: call.id,
+        from: call.fromE164,
+        to: call.toE164,
+      }).catch(() => undefined);
+    }
+
+    const transcriptRow = await prisma.voiceTranscript.findFirst({
+      where: { callId: call.id },
+    });
+    const transcriptText = transcriptRow?.fullText || null;
+    if (transcriptText) {
+      await publishTranscriptReady({
+        workspaceId: call.workspaceId,
+        contactId: call.contactId,
+        callId: call.id,
+        transcriptText,
+        aiSummary: insight?.summary || null,
+      }).catch(() => undefined);
+    }
+    if (insight?.summary) {
+      await publishAiSummaryReady({
+        workspaceId: call.workspaceId,
+        contactId: call.contactId,
+        callId: call.id,
+        aiSummary: insight.summary,
+      }).catch(() => undefined);
+    }
+
+    if (insight?.isLead && call.contactId) {
+      const contact = await prisma.contact.findFirst({
+        where: { id: call.contactId, workspaceId: call.workspaceId },
+      });
+      await publishLeadCreated({
+        workspaceId: call.workspaceId,
+        contactId: call.contactId,
+        callId: call.id,
+        leadId: call.contactId,
+        firstName: contact?.firstName,
+        lastName: contact?.lastName,
+        phone: contact?.phone || call.fromE164 || call.toE164,
+        email: contact?.email,
+        company: contact?.company,
+        status: "Open",
+      }).catch(() => undefined);
+    }
+
+    if (call.appointmentBooked) {
+      const appt = await prisma.voiceAppointment.findFirst({
+        where: { callId: call.id, workspaceId: call.workspaceId },
+        orderBy: { createdAt: "desc" },
+      });
+      if (appt) {
+        await publishAppointmentBooked({
+          workspaceId: call.workspaceId,
+          contactId: call.contactId,
+          appointmentId: appt.id,
+          callId: call.id,
+          serviceName: appt.serviceName,
+          startsAt: appt.startsAt,
+          endsAt: appt.endsAt,
+          timezone: appt.timezone,
+        }).catch(() => undefined);
+      }
+    }
+  } catch {
+    // CRM push is optional
+  }
+
   return { ok: true, callId, missed: isMissed };
 }
 

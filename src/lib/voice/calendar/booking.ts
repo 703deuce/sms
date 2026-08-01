@@ -393,6 +393,23 @@ export async function bookAppointment(
     });
   }
 
+  // CRM push (optional)
+  try {
+    const { publishAppointmentBooked } = await import("@/lib/crm/events");
+    await publishAppointmentBooked({
+      workspaceId,
+      contactId,
+      appointmentId: appointment.id,
+      callId: callId || null,
+      serviceName,
+      startsAt: appointment.startsAt,
+      endsAt: appointment.endsAt,
+      timezone,
+    }).catch(() => undefined);
+  } catch {
+    // CRM push is optional
+  }
+
   return {
     ok: true,
     success: true,

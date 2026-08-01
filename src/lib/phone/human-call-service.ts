@@ -1414,15 +1414,17 @@ export async function updateHumanCall(
     data,
   });
 
-  // A disposition marking the call as missed emits a call.missed automation
-  // event so follow-up flows (e.g. missed-call text-back) can fire.
-  if (patch.disposition && /missed|no[_ -]?answer|voicemail/i.test(patch.disposition)) {
+  // Disposition-driven product events (automation + CRM).
+  if (patch.disposition) {
     const customerPhone = updated.direction === "inbound" ? updated.from : updated.to;
     try {
       const contact = await prisma.contact.findFirst({
         where: { workspaceId, phone: customerPhone },
       });
-      if (contact) {
+      if (
+        contact &&
+        /missed|no[_ -]?answer|voicemail/i.test(patch.disposition)
+      ) {
         const { emitAutomationEvent } = await import("@/lib/automations/events");
         await emitAutomationEvent(workspaceId, "call.missed", contact.id, {
           humanCallId: updated.id,
@@ -1430,8 +1432,17 @@ export async function updateHumanCall(
           disposition: patch.disposition,
         }).catch(() => undefined);
       }
+      if (/callback/i.test(patch.disposition)) {
+        const { publishCallbackScheduled } = await import("@/lib/crm/events");
+        await publishCallbackScheduled({
+          workspaceId,
+          contactId: contact?.id || null,
+          callId: updated.id,
+          phone: customerPhone,
+        }).catch(() => undefined);
+      }
     } catch (err) {
-      console.warn("[human-call] disposition missed-call event failed", callId, err);
+      console.warn("[human-call] disposition event failed", callId, err);
     }
   }
 
@@ -1617,6 +1628,26 @@ export async function processHumanCallWebhookEvent(input: {
     await hangupControlLeg(call.telnyxCallControlId);
   }
 
+  if (input.eventType === "call.recording.saved" && patch.recordingUrl) {
+    try {
+      const customerPhone = call.direction === "inbound" ? call.from : call.to;
+      const contact = await prisma.contact.findFirst({
+        where: { workspaceId: call.workspaceId, phone: customerPhone },
+      });
+      const { publishRecordingReady } = await import("@/lib/crm/events");
+      await publishRecordingReady({
+        workspaceId: call.workspaceId,
+        contactId: contact?.id || null,
+        callId: call.id,
+        recordingUrl: String(patch.recordingUrl),
+        direction: call.direction === "outbound" ? "outbound" : "inbound",
+      }).catch(() => undefined);
+    } catch (err) {
+      console.warn("[human-call] crm recording event failed", call.id, err);
+    }
+  }
+
+  // Call-my-phone: when the agent answers their cell, dial destination + bridge.
   if (input.eventType === "call.answered") {
     const kind = String(clientState.kind || "");
     const parentId = String(
@@ -1847,8 +1878,45 @@ export async function processHumanCallWebhookEvent(input: {
           cause,
         }).catch(() => undefined);
       }
+      const { publishCallCompleted } = await import("@/lib/crm/events");
+      await publishCallCompleted({
+        workspaceId: call.workspaceId,
+        contactId: contact?.id || null,
+        callId: call.id,
+        direction: "missed",
+        from: call.from,
+        to: call.to,
+        disposition: String(patch.disposition || "missed"),
+        notes: call.notes,
+      }).catch(() => undefined);
     } catch (err) {
       console.warn("[human-call] missed-call event failed", call.id, err);
+    }
+  } else if (input.eventType === "call.hangup" && wasAnswered) {
+    try {
+      const customerPhone = call.direction === "inbound" ? call.from : call.to;
+      const contact = await prisma.contact.findFirst({
+        where: { workspaceId: call.workspaceId, phone: customerPhone },
+      });
+      const durationSeconds =
+        call.answeredAt && patch.endedAt instanceof Date
+          ? Math.max(0, Math.round((patch.endedAt.getTime() - call.answeredAt.getTime()) / 1000))
+          : null;
+      const { publishCallCompleted } = await import("@/lib/crm/events");
+      await publishCallCompleted({
+        workspaceId: call.workspaceId,
+        contactId: contact?.id || null,
+        callId: call.id,
+        direction: call.direction === "outbound" ? "outbound" : "inbound",
+        from: call.from,
+        to: call.to,
+        durationSeconds,
+        disposition: call.disposition,
+        recordingUrl: (patch.recordingUrl as string) || call.recordingUrl,
+        notes: call.notes,
+      }).catch(() => undefined);
+    } catch (err) {
+      console.warn("[human-call] crm completed event failed", call.id, err);
     }
   }
 

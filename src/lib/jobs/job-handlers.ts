@@ -81,17 +81,32 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       const workspaceId = String(payload.workspaceId || "");
       if (!callId) throw new Error("callId required");
       const urls = payload.recordingUrl as Record<string, string> | undefined;
+      const storageUrl = urls?.mp3 || urls?.wav || null;
       await prisma.voiceRecording.create({
         data: {
           workspaceId,
           callId,
           provider: "telnyx",
           status: "ready",
-          storageUrl: urls?.mp3 || urls?.wav || null,
+          storageUrl,
           providerRecordingId: String(payload.providerRecordingId || ""),
           channels: 2,
         },
       });
+      if (storageUrl) {
+        const call = await prisma.voiceCall.findUnique({ where: { id: callId } });
+        const { publishRecordingReady } = await import("@/lib/crm/events");
+        await publishRecordingReady({
+          workspaceId,
+          contactId: call?.contactId || null,
+          callId,
+          recordingUrl: storageUrl,
+          direction:
+            call?.direction === "OUTBOUND" || call?.direction === "outbound"
+              ? "outbound"
+              : "inbound",
+        }).catch(() => undefined);
+      }
       return { ok: true };
     }
     case "voice_tool_execute": {
@@ -410,6 +425,72 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       const frequency = String(payload.frequency || "daily");
       return processNotificationDigests(frequency);
     }
+    case "crm_sync": {
+      const { getMaintenanceState } = await import("@/lib/platform-flags");
+      const maintenance = await getMaintenanceState().catch(() => ({ enabled: false }));
+      if (maintenance?.enabled && process.env.MAINTENANCE_MODE !== "0") {
+        return { ok: true, skipped: true, reason: "maintenance_mode" };
+      }
+      const { runCrmSyncJob } = await import("@/lib/crm/sync-engine");
+      return runCrmSyncJob({
+        workspaceId: String(payload.workspaceId || ""),
+        provider: payload.provider as "salesforce" | "zoho" | "pipedrive",
+        syncRunId: String(payload.syncRunId || ""),
+        kind: payload.kind as
+          | "initial"
+          | "incremental"
+          | "manual"
+          | "webhook"
+          | "scheduled"
+          | "push"
+          | undefined,
+      });
+    }
+    case "crm_push_event": {
+      const { getMaintenanceState } = await import("@/lib/platform-flags");
+      const maintenance = await getMaintenanceState().catch(() => ({ enabled: false }));
+      if (maintenance?.enabled && process.env.MAINTENANCE_MODE !== "0") {
+        // Live call/SMS CRM updates still run during maintenance unless hard-env lock.
+        if (process.env.MAINTENANCE_BLOCK_CRM === "1") {
+          return { ok: true, skipped: true, reason: "maintenance_mode" };
+        }
+      }
+      const { pushCrmEventJob } = await import("@/lib/crm/push");
+      return pushCrmEventJob({
+        workspaceId: String(payload.workspaceId || ""),
+        provider: payload.provider as "salesforce" | "zoho" | "pipedrive",
+        event: payload.event as import("@/lib/crm/types").CrmPlatformEvent,
+      });
+    }
+    case "crm_metadata_refresh": {
+      const { runCrmMetadataRefreshJob } = await import("@/lib/crm/runtime/metadata-refresh");
+      return runCrmMetadataRefreshJob({
+        workspaceId: String(payload.workspaceId || ""),
+        provider: payload.provider as "salesforce" | "zoho" | "pipedrive",
+      });
+    }
+    case "crm_bulk_sync": {
+      const { runCrmBulkSyncPage } = await import("@/lib/crm/runtime/bulk-sync");
+      return runCrmBulkSyncPage({
+        workspaceId: String(payload.workspaceId || ""),
+        provider: payload.provider as "salesforce" | "zoho" | "pipedrive",
+        syncRunId: String(payload.syncRunId || ""),
+        objectType: (payload.objectType as "contact" | "company" | "lead") || "contact",
+        cursor: (payload.cursor as string | null) || null,
+      });
+    }
+    case "crm_webhook_process": {
+      const { processCrmWebhookJob } = await import("@/lib/crm/runtime/webhooks");
+      return processCrmWebhookJob({
+        workspaceId: String(payload.workspaceId || ""),
+        provider: payload.provider as "salesforce" | "zoho" | "pipedrive",
+        webhookEventId: String(payload.webhookEventId || ""),
+      });
+    }
+    case "crm_scheduled_incremental": {
+      const { enqueueScheduledCrmIncrementalSyncs } = await import("@/lib/crm/scheduled-sync");
+      return enqueueScheduledCrmIncrementalSyncs();
+    }
     default:
       throw new Error(`Unknown job type: ${jobType}`);
   }
@@ -455,6 +536,15 @@ export async function processDueJobs(limit = 25) {
     queueName: "review-campaign",
     payload: { minuteKey },
     idempotencyKey: `campaign-recurrence:${minuteKey}`,
+  });
+
+  // Hourly CRM incremental reconcile across connected workspaces (complements webhooks).
+  const hourKey = new Date().toISOString().slice(0, 13);
+  await enqueueJob({
+    jobType: "crm_scheduled_incremental",
+    queueName: "crm-salesforce",
+    payload: { hourKey },
+    idempotencyKey: `crm-scheduled-tick:${hourKey}`,
   });
 
   // When BullMQ is the consumer, cron enqueues the minute batch and re-syncs the DB outbox.

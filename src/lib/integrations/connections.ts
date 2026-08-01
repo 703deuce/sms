@@ -8,9 +8,17 @@ export type ConnectionProvider =
   | "calendly"
   | "hubspot"
   | "salesforce"
-  | "shopify";
+  | "shopify"
+  | "zoho"
+  | "pipedrive";
 
-export type ConnectionStatus = "connected" | "disconnected" | "pending_oauth" | "error";
+export type ConnectionStatus =
+  | "connected"
+  | "disconnected"
+  | "pending_oauth"
+  | "needs_reauth"
+  | "syncing"
+  | "error";
 
 export type ConnectionView = {
   provider: string;
@@ -94,6 +102,12 @@ export async function upsertConnection(input: {
   refreshToken?: string | null;
   expiresAt?: Date | null;
   mergeConfig?: boolean;
+  connectedUserId?: string | null;
+  connectedAccountName?: string | null;
+  lastFailedSyncAt?: Date | null;
+  lastError?: string | null;
+  syncStatus?: string | null;
+  lastSyncAt?: Date | null;
 }) {
   const prisma = getPrisma();
   const existing = await getConnection(input.workspaceId, input.provider);
@@ -112,6 +126,12 @@ export async function upsertConnection(input: {
       accessToken: input.accessToken ?? null,
       refreshToken: input.refreshToken ?? null,
       expiresAt: input.expiresAt ?? null,
+      connectedUserId: input.connectedUserId ?? null,
+      connectedAccountName: input.connectedAccountName ?? null,
+      lastError: input.lastError ?? null,
+      syncStatus: input.syncStatus ?? "idle",
+      lastSyncAt: input.lastSyncAt ?? null,
+      lastFailedSyncAt: input.lastFailedSyncAt ?? null,
       configJson: (config || {}) as object,
     },
     update: {
@@ -120,6 +140,18 @@ export async function upsertConnection(input: {
       ...(input.accessToken !== undefined ? { accessToken: input.accessToken } : {}),
       ...(input.refreshToken !== undefined ? { refreshToken: input.refreshToken } : {}),
       ...(input.expiresAt !== undefined ? { expiresAt: input.expiresAt } : {}),
+      ...(input.connectedUserId !== undefined
+        ? { connectedUserId: input.connectedUserId }
+        : {}),
+      ...(input.connectedAccountName !== undefined
+        ? { connectedAccountName: input.connectedAccountName }
+        : {}),
+      ...(input.lastError !== undefined ? { lastError: input.lastError } : {}),
+      ...(input.syncStatus !== undefined ? { syncStatus: input.syncStatus } : {}),
+      ...(input.lastSyncAt !== undefined ? { lastSyncAt: input.lastSyncAt } : {}),
+      ...(input.lastFailedSyncAt !== undefined
+        ? { lastFailedSyncAt: input.lastFailedSyncAt }
+        : {}),
       ...(config !== undefined ? { configJson: config as object } : {}),
     },
   });
@@ -163,26 +195,48 @@ export async function upsertExternalContact(input: {
   lastName?: string | null;
   company?: string | null;
   source?: string;
+  /** When true, CRM values overwrite local non-null fields (apply_crm conflict policy). */
+  overwrite?: boolean;
 }): Promise<{ contactId: string; created: boolean } | null> {
   const prisma = getPrisma();
   const phone = input.phone ? normalizeE164(input.phone) : null;
+  const overwrite = Boolean(input.overwrite);
 
-  // Try to match an existing contact by email when there's no phone.
+  // Match or create by email when there's no phone (CRM imports + email matching).
   if (!phone) {
     if (!input.email) return null;
     const byEmail = await prisma.contact.findFirst({
       where: { workspaceId: input.workspaceId, email: input.email },
     });
-    if (!byEmail) return null;
-    await prisma.contact.update({
-      where: { id: byEmail.id },
+    if (byEmail) {
+      await prisma.contact.update({
+        where: { id: byEmail.id },
+        data: {
+          firstName: overwrite
+            ? input.firstName ?? byEmail.firstName ?? null
+            : byEmail.firstName ?? input.firstName ?? null,
+          lastName: overwrite
+            ? input.lastName ?? byEmail.lastName ?? null
+            : byEmail.lastName ?? input.lastName ?? null,
+          company: overwrite
+            ? input.company ?? byEmail.company ?? null
+            : byEmail.company ?? input.company ?? null,
+        },
+      });
+      return { contactId: byEmail.id, created: false };
+    }
+    const createdByEmail = await prisma.contact.create({
       data: {
-        firstName: byEmail.firstName ?? input.firstName ?? null,
-        lastName: byEmail.lastName ?? input.lastName ?? null,
-        company: byEmail.company ?? input.company ?? null,
+        workspaceId: input.workspaceId,
+        phone: `email:${input.email.toLowerCase()}`,
+        firstName: input.firstName ?? null,
+        lastName: input.lastName ?? null,
+        email: input.email,
+        company: input.company ?? null,
+        consentSource: input.source || "integration",
       },
     });
-    return { contactId: byEmail.id, created: false };
+    return { contactId: createdByEmail.id, created: true };
   }
 
   const existing = await prisma.contact.findUnique({
@@ -193,10 +247,18 @@ export async function upsertExternalContact(input: {
     await prisma.contact.update({
       where: { id: existing.id },
       data: {
-        firstName: existing.firstName ?? input.firstName ?? null,
-        lastName: existing.lastName ?? input.lastName ?? null,
-        email: existing.email ?? input.email ?? null,
-        company: existing.company ?? input.company ?? null,
+        firstName: overwrite
+          ? input.firstName ?? existing.firstName ?? null
+          : existing.firstName ?? input.firstName ?? null,
+        lastName: overwrite
+          ? input.lastName ?? existing.lastName ?? null
+          : existing.lastName ?? input.lastName ?? null,
+        email: overwrite
+          ? input.email ?? existing.email ?? null
+          : existing.email ?? input.email ?? null,
+        company: overwrite
+          ? input.company ?? existing.company ?? null
+          : existing.company ?? input.company ?? null,
       },
     });
     return { contactId: existing.id, created: false };

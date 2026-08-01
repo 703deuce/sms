@@ -231,6 +231,13 @@ model Workspace {
   softphonePresence SoftphonePresence[]
   softphoneDevices SoftphoneDevice[]
   softphoneUserSettings SoftphoneUserSettings[]
+  crmObjectMappings CrmObjectMapping[]
+  crmFieldMappings CrmFieldMapping[]
+  crmSyncRuns CrmSyncRun[]
+  crmSyncEvents CrmSyncEvent[]
+  crmAuditLogs CrmAuditLog[]
+  crmWebhookEvents CrmWebhookEvent[]
+  crmDeadLetters CrmDeadLetter[]
 }
 
 model SenderPool {
@@ -372,19 +379,27 @@ model ContestEntry {
 }
 
 model IntegrationConnection {
-  id           String    @id @default(cuid())
-  workspaceId  String
-  provider     String
-  status       String    @default("disconnected")
-  accessToken  String?
-  refreshToken String?
-  expiresAt    DateTime?
-  externalId   String?
-  configJson   Json?
-  lastSyncAt   DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  id                   String    @id @default(cuid())
+  workspaceId          String
+  provider             String
+  status               String    @default("disconnected")
+  accessToken          String?
+  refreshToken         String?
+  expiresAt            DateTime?
+  externalId           String?
+  /// CRM-connected user (external) who authorized OAuth.
+  connectedUserId      String?
+  /// CRM org / company / account display name.
+  connectedAccountName String?
+  configJson           Json?
+  lastSyncAt           DateTime?
+  lastFailedSyncAt     DateTime?
+  lastError            String?
+  /// idle | syncing | healthy | degraded | error
+  syncStatus           String    @default("idle")
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  workspace            Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@unique([workspaceId, provider])
   @@index([workspaceId])
@@ -811,6 +826,8 @@ model JobQueue {
   idempotencyKey String?      @unique
   attempts     Int            @default(0)
   maxAttempts  Int            @default(8)
+  /// Lower number = higher priority (CRM high=10, medium=50, low=90).
+  priority     Int            @default(50)
   runAfter     DateTime       @default(now())
   lockedAt     DateTime?
   lastError    String?
@@ -820,7 +837,7 @@ model JobQueue {
 
   workspace    Workspace?     @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
 
-  @@index([status, runAfter, queueName])
+  @@index([status, priority, runAfter, queueName])
   @@index([jobType, status])
   @@map("job_queue")
 }
@@ -2323,4 +2340,164 @@ model SupportTicket {
 
   @@index([status, createdAt])
   @@map("support_tickets")
+}
+
+/// Maps a Transovo object to an external CRM record (provider-agnostic).
+model CrmObjectMapping {
+  id                   String   @id @default(cuid())
+  workspaceId          String
+  provider             String
+  objectType           String // contact | company | lead | deal | task | activity | call | sms | note
+  internalId           String
+  externalId           String
+  externalUrl          String?
+  parentExternalId     String?
+  fingerprint          String? // phone/email hash for initial matching only
+  syncHash             String? // hash of last successfully synced payload
+  syncVersion          Int      @default(1)
+  syncStatus           String   @default("synced") // synced | pending | conflict | deleted_external | error
+  lastSyncedAt         DateTime?
+  lastCrmModifiedAt    DateTime?
+  lastInternalModifiedAt DateTime?
+  externalDeletedAt    DateTime?
+  syncDirection        String   @default("bidirectional") // inbound | outbound | bidirectional
+  metadataJson         Json?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  workspace            Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, provider, objectType, internalId])
+  @@unique([workspaceId, provider, objectType, externalId])
+  @@index([workspaceId, provider, fingerprint])
+  @@index([workspaceId, provider, objectType, syncStatus])
+  @@map("crm_object_mappings")
+}
+
+/// Admin-configurable field mappings between Transovo and a CRM provider.
+model CrmFieldMapping {
+  id              String   @id @default(cuid())
+  workspaceId     String
+  provider        String
+  objectType      String
+  internalField   String
+  externalField   String
+  transform       String? // none | e164 | lowercase | custom
+  direction       String   @default("bidirectional")
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, provider, objectType, internalField, direction])
+  @@index([workspaceId, provider])
+  @@map("crm_field_mappings")
+}
+
+/// One synchronization run (initial / incremental / manual / webhook / scheduled).
+model CrmSyncRun {
+  id            String   @id @default(cuid())
+  workspaceId   String
+  provider      String
+  kind          String // initial | incremental | manual | webhook | scheduled | push
+  /// inbound | outbound | bidirectional
+  direction     String   @default("bidirectional")
+  status        String   @default("queued") // queued | running | succeeded | failed | partial
+  objectType    String? // optional primary object focus
+  startedAt     DateTime?
+  finishedAt    DateTime?
+  durationMs    Int?
+  attempts      Int      @default(0)
+  statsJson     Json?
+  lastError     String?
+  cursorJson    Json?
+  triggeredBy   String? // userId | system | webhook
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  events        CrmSyncEvent[]
+
+  @@index([workspaceId, provider, createdAt])
+  @@index([status, createdAt])
+  @@map("crm_sync_runs")
+}
+
+model CrmSyncEvent {
+  id            String   @id @default(cuid())
+  workspaceId   String
+  syncRunId     String
+  provider      String
+  level         String   @default("info") // info | warn | error
+  action        String // create | update | skip | map | conflict | retry | push
+  objectType    String?
+  internalId    String?
+  externalId    String?
+  message       String
+  detailJson    Json?
+  createdAt     DateTime @default(now())
+  syncRun       CrmSyncRun @relation(fields: [syncRunId], references: [id], onDelete: Cascade)
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([syncRunId, createdAt])
+  @@index([workspaceId, provider, createdAt])
+  @@map("crm_sync_events")
+}
+
+/// Long-lived CRM audit trail (OAuth, conflicts, mapping decisions, webhook receipts).
+model CrmAuditLog {
+  id            String   @id @default(cuid())
+  workspaceId   String
+  provider      String?
+  category      String // oauth | sync | mapping | webhook | conflict | settings | push | permission
+  action        String
+  message       String
+  detailJson    Json?
+  actorUserId   String?
+  createdAt     DateTime @default(now())
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
+  @@index([workspaceId, provider, createdAt])
+  @@map("crm_audit_logs")
+}
+
+/// Inbound CRM provider webhook queue (before processing into sync jobs).
+model CrmWebhookEvent {
+  id            String   @id @default(cuid())
+  workspaceId   String
+  provider      String
+  status        String   @default("pending") // pending | processing | completed | failed | dead
+  eventType     String?
+  externalId    String?
+  payloadJson   Json
+  attempts      Int      @default(0)
+  lastError     String?
+  processedAt   DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, provider, status, createdAt])
+  @@map("crm_webhook_events")
+}
+
+/// Permanent CRM sync failures after retries exhausted (dead letter).
+model CrmDeadLetter {
+  id            String   @id @default(cuid())
+  workspaceId   String
+  provider      String
+  jobType       String
+  objectType    String?
+  internalId    String?
+  externalId    String?
+  payloadJson   Json?
+  error         String
+  attempts      Int      @default(0)
+  syncRunId     String?
+  resolvedAt    DateTime?
+  createdAt     DateTime @default(now())
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, provider, createdAt])
+  @@index([resolvedAt])
+  @@map("crm_dead_letters")
 }

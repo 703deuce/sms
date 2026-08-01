@@ -99,6 +99,23 @@ export async function POST(request: Request) {
       await emitAutomationEvent(auth.workspaceId, "customer.created", contact.id).catch(() => undefined);
     }
 
+    try {
+      const { publishContactEvent } = await import("@/lib/crm/events");
+      await publishContactEvent({
+        workspaceId: auth.workspaceId,
+        contactId: contact.id,
+        type: isNew ? "contact.created" : "contact.updated",
+        payload: {
+          firstName: contact.firstName,
+          lastName: contact.lastName,
+          phone: contact.phone,
+          email: contact.email,
+        },
+      });
+    } catch {
+      // CRM push is optional
+    }
+
     return NextResponse.json({ data: contact }, { status: 201 });
   } catch (err) {
     return jsonError(err, 400);

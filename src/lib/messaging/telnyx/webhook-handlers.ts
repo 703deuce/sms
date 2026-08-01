@@ -80,6 +80,7 @@ export async function handleTelnyxInbound(payload: unknown) {
     to: parsed.to,
     body: parsed.body,
     providerMessageId: parsed.providerMessageId,
+    mediaUrls: parsed.mediaUrls || null,
     registration: ctx.registration,
   });
 

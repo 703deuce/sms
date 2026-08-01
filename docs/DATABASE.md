@@ -48,6 +48,10 @@ npm run db:seed
 2. Run `npm run db:push`
 3. Commit the schema change
 
+CRM tables are included in that same push (no separate migration series).  
+Agent handoff for CRM: [CRM_DB_PUSH.md](./CRM_DB_PUSH.md).  
+SQL fallback only: `supabase/crm-integration.sql`.
+
 For production deploys with migration history later:
 
 ```bash
