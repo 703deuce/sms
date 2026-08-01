@@ -122,25 +122,31 @@ export const pipedriveConnector: CrmConnector = {
   },
 
   async findContactByPhone(ctx, phone) {
-    const res = await pd<Array<Record<string, unknown>>>(
-      ctx,
-      `/persons/search?term=${encodeURIComponent(phone)}&fields=phone&limit=1`,
-    ).catch(() => ({ data: [] as Array<Record<string, unknown>> }));
-    const hit = (res.data as unknown as Array<{ item?: Record<string, unknown> }>)?.[0];
-    const r = hit?.item || (res.data as Array<Record<string, unknown>>)?.[0];
-    if (!r) return null;
-    return {
-      id: String(r.id),
-      firstName: (r.first_name as string) || null,
-      lastName: (r.last_name as string) || (r.name as string) || null,
-      phone,
-    };
+    const digits = phone.replace(/\D/g, "");
+    const terms = [...new Set([phone, digits, digits.slice(-10)].filter(Boolean))];
+    for (const term of terms) {
+      const res = await pd<Array<Record<string, unknown>>>(
+        ctx,
+        `/persons/search?term=${encodeURIComponent(term)}&fields=phone&limit=1`,
+      ).catch(() => ({ data: [] as Array<Record<string, unknown>> }));
+      const hit = (res.data as unknown as Array<{ item?: Record<string, unknown> }>)?.[0];
+      const r = hit?.item || (res.data as Array<Record<string, unknown>>)?.[0];
+      if (r) {
+        return {
+          id: String(r.id),
+          firstName: (r.first_name as string) || null,
+          lastName: (r.last_name as string) || (r.name as string) || null,
+          phone,
+        };
+      }
+    }
+    return null;
   },
 
   async findContactByEmail(ctx, email) {
     const res = await pd<Array<Record<string, unknown>>>(
       ctx,
-      `/persons/search?term=${encodeURIComponent(email)}&fields=email&limit=1`,
+      `/persons/search?term=${encodeURIComponent(email)}&fields=email&exact_match=1&limit=1`,
     ).catch(() => ({ data: [] as Array<Record<string, unknown>> }));
     const hit = (res.data as unknown as Array<{ item?: Record<string, unknown> }>)?.[0];
     const r = hit?.item || (res.data as Array<Record<string, unknown>>)?.[0];

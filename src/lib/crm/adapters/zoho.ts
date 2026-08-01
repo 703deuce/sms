@@ -40,6 +40,65 @@ export function zohoSearchDateTime(d: Date): string {
   return d.toISOString().replace(/\.\d{3}Z$/, "+00:00");
 }
 
+function isInvalidZohoQuery(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return /invalid query formed/i.test(msg);
+}
+
+/**
+ * List a Zoho module page. Prefer Modified_Time search for incremental, but
+ * fall back to a normal page + client filter when search criteria is rejected
+ * (common on some orgs/modules even with a correctly formatted DateTime).
+ */
+async function zohoListPage(
+  ctx: ConnectorContext,
+  module: string,
+  page: number,
+  modifiedSince?: Date | null,
+): Promise<{
+  rows: Array<Record<string, unknown>>;
+  more: boolean;
+}> {
+  const perPage = 200;
+  if (modifiedSince) {
+    const dt = zohoSearchDateTime(modifiedSince);
+    // Zoho docs use double-parentheses around criteria expressions.
+    const criteria = encodeURIComponent(`((Modified_Time:greater_equal:${dt}))`);
+    try {
+      const data = await crmFetch<{
+        data?: Array<Record<string, unknown>>;
+        info?: { more_records?: boolean };
+      }>(`${apiBase(ctx)}/${module}/search?criteria=${criteria}&page=${page}&per_page=${perPage}`, {
+        accessToken: ctx.accessToken,
+      });
+      return {
+        rows: data?.data || [],
+        more: Boolean(data?.info?.more_records),
+      };
+    } catch (err) {
+      if (!isInvalidZohoQuery(err)) throw err;
+      // fall through to unfiltered list + client filter
+    }
+  }
+
+  const data = await crmFetch<{
+    data?: Array<Record<string, unknown>>;
+    info?: { more_records?: boolean };
+  }>(`${apiBase(ctx)}/${module}?page=${page}&per_page=${perPage}`, {
+    accessToken: ctx.accessToken,
+  });
+  let rows = data?.data || [];
+  if (modifiedSince) {
+    const sinceMs = modifiedSince.getTime();
+    rows = rows.filter((r) => {
+      const raw = r.Modified_Time ? String(r.Modified_Time) : "";
+      const t = raw ? new Date(raw).getTime() : 0;
+      return !t || t >= sinceMs;
+    });
+  }
+  return { rows, more: Boolean(data?.info?.more_records) };
+}
+
 export const zohoConnector: CrmConnector = {
   id: "zoho",
   displayName: "Zoho CRM",
@@ -91,21 +150,9 @@ export const zohoConnector: CrmConnector = {
 
   async listContacts(ctx, cursor, opts) {
     const page = cursor ? Number(cursor) : 1;
-    let path = `${apiBase(ctx)}/Contacts?page=${page}&per_page=200`;
-    if (opts?.modifiedSince) {
-      const criteria = encodeURIComponent(
-        `(Modified_Time:greater_equal:${zohoSearchDateTime(opts.modifiedSince)})`,
-      );
-      path = `${apiBase(ctx)}/Contacts/search?criteria=${criteria}&page=${page}&per_page=200`;
-    }
-    const data = await crmFetch<{
-      data?: Array<Record<string, unknown>>;
-      info?: { more_records?: boolean };
-    }>(path, {
-      accessToken: ctx.accessToken,
-    });
+    const { rows, more } = await zohoListPage(ctx, "Contacts", page, opts?.modifiedSince);
     return {
-      items: (data?.data || []).map(
+      items: rows.map(
         (r): CrmContact => ({
           id: String(r.id),
           firstName: (r.First_Name as string) || null,
@@ -125,17 +172,29 @@ export const zohoConnector: CrmConnector = {
           },
         }),
       ),
-      nextCursor: data?.info?.more_records ? String(page + 1) : null,
+      nextCursor: more ? String(page + 1) : null,
     };
   },
 
   async findContactByPhone(ctx, phone) {
     const digits = phone.replace(/\D/g, "").slice(-10);
-    const data = await crmFetch<{ data?: Array<Record<string, unknown>> }>(
-      `${apiBase(ctx)}/Contacts/search?phone=${encodeURIComponent(digits)}`,
-      { accessToken: ctx.accessToken },
-    ).catch(() => ({ data: [] as Array<Record<string, unknown>> }));
-    const r = data.data?.[0];
+    const variants = [...new Set([digits, phone, phone.replace(/\D/g, "")].filter(Boolean))];
+    let r: Record<string, unknown> | undefined;
+    for (const term of variants) {
+      const data = await crmFetch<{ data?: Array<Record<string, unknown>> }>(
+        `${apiBase(ctx)}/Contacts/search?phone=${encodeURIComponent(term)}`,
+        { accessToken: ctx.accessToken },
+      ).catch(() => ({ data: [] as Array<Record<string, unknown>> }));
+      r = data?.data?.[0];
+      if (r) break;
+      const criteria = encodeURIComponent(`((Phone:equals:${term})or(Mobile:equals:${term}))`);
+      const byCrit = await crmFetch<{ data?: Array<Record<string, unknown>> }>(
+        `${apiBase(ctx)}/Contacts/search?criteria=${criteria}`,
+        { accessToken: ctx.accessToken },
+      ).catch(() => ({ data: [] as Array<Record<string, unknown>> }));
+      r = byCrit?.data?.[0];
+      if (r) break;
+    }
     if (!r) return null;
     return {
       id: String(r.id),
@@ -216,19 +275,9 @@ export const zohoConnector: CrmConnector = {
       return { items: [], nextCursor: null };
     }
     const page = cursor ? Number(cursor) : 1;
-    let path = `${apiBase(ctx)}/Leads?page=${page}&per_page=200`;
-    if (opts?.modifiedSince) {
-      const criteria = encodeURIComponent(
-        `(Modified_Time:greater_equal:${zohoSearchDateTime(opts.modifiedSince)})`,
-      );
-      path = `${apiBase(ctx)}/Leads/search?criteria=${criteria}&page=${page}&per_page=200`;
-    }
-    const data = await crmFetch<{ data?: Array<Record<string, unknown>>; info?: { more_records?: boolean } }>(
-      path,
-      { accessToken: ctx.accessToken },
-    );
+    const { rows, more } = await zohoListPage(ctx, "Leads", page, opts?.modifiedSince);
     return {
-      items: (data?.data || []).map(
+      items: rows.map(
         (r): CrmLead => ({
           id: String(r.id),
           firstName: (r.First_Name as string) || null,
@@ -239,7 +288,7 @@ export const zohoConnector: CrmConnector = {
           source: (r.Lead_Source as string) || null,
         }),
       ),
-      nextCursor: data?.info?.more_records ? String(page + 1) : null,
+      nextCursor: more ? String(page + 1) : null,
     };
   },
 
@@ -285,19 +334,9 @@ export const zohoConnector: CrmConnector = {
     const page = cursor ? Number(cursor) : 1;
     // Bigin pipeline records use Pipelines module; Zoho CRM uses Deals.
     const module = isBigin(ctx) ? "Pipelines" : "Deals";
-    let path = `${apiBase(ctx)}/${module}?page=${page}&per_page=200`;
-    if (opts?.modifiedSince) {
-      const criteria = encodeURIComponent(
-        `(Modified_Time:greater_equal:${zohoSearchDateTime(opts.modifiedSince)})`,
-      );
-      path = `${apiBase(ctx)}/${module}/search?criteria=${criteria}&page=${page}&per_page=200`;
-    }
-    const data = await crmFetch<{ data?: Array<Record<string, unknown>>; info?: { more_records?: boolean } }>(
-      path,
-      { accessToken: ctx.accessToken },
-    );
+    const { rows, more } = await zohoListPage(ctx, module, page, opts?.modifiedSince);
     return {
-      items: (data?.data || []).map(
+      items: rows.map(
         (r): CrmDeal => ({
           id: String(r.id),
           name: String(r.Deal_Name || r.Pipeline_Name || r.Name || "Deal"),
@@ -307,7 +346,7 @@ export const zohoConnector: CrmConnector = {
           closeDate: (r.Closing_Date as string) || null,
         }),
       ),
-      nextCursor: data?.info?.more_records ? String(page + 1) : null,
+      nextCursor: more ? String(page + 1) : null,
     };
   },
 
@@ -422,19 +461,9 @@ export const zohoConnector: CrmConnector = {
 
   async listTasks(ctx, cursor, opts) {
     const page = cursor ? Number(cursor) : 1;
-    let path = `${apiBase(ctx)}/Tasks?page=${page}&per_page=200`;
-    if (opts?.modifiedSince) {
-      const criteria = encodeURIComponent(
-        `(Modified_Time:greater_equal:${zohoSearchDateTime(opts.modifiedSince)})`,
-      );
-      path = `${apiBase(ctx)}/Tasks/search?criteria=${criteria}&page=${page}&per_page=200`;
-    }
-    const data = await crmFetch<{
-      data?: Array<Record<string, unknown>>;
-      info?: { more_records?: boolean };
-    }>(path, { accessToken: ctx.accessToken });
+    const { rows, more } = await zohoListPage(ctx, "Tasks", page, opts?.modifiedSince);
     return {
-      items: (data?.data || []).map(
+      items: rows.map(
         (r): CrmTask => ({
           id: String(r.id),
           subject: String(r.Subject || "Task"),
@@ -447,7 +476,7 @@ export const zohoConnector: CrmConnector = {
               : null,
         }),
       ),
-      nextCursor: data?.info?.more_records ? String(page + 1) : null,
+      nextCursor: more ? String(page + 1) : null,
     };
   },
 
@@ -666,21 +695,9 @@ export const zohoConnector: CrmConnector = {
 
   async listCompanies(ctx, cursor, opts) {
     const page = cursor ? Number(cursor) : 1;
-    let path = `${apiBase(ctx)}/Accounts?page=${page}&per_page=200`;
-    if (opts?.modifiedSince) {
-      const criteria = encodeURIComponent(
-        `(Modified_Time:greater_equal:${zohoSearchDateTime(opts.modifiedSince)})`,
-      );
-      path = `${apiBase(ctx)}/Accounts/search?criteria=${criteria}&page=${page}&per_page=200`;
-    }
-    const data = await crmFetch<{
-      data?: Array<Record<string, unknown>>;
-      info?: { more_records?: boolean };
-    }>(path, {
-      accessToken: ctx.accessToken,
-    });
+    const { rows, more } = await zohoListPage(ctx, "Accounts", page, opts?.modifiedSince);
     return {
-      items: (data?.data || []).map(
+      items: rows.map(
         (r): CrmCompany => ({
           id: String(r.id),
           name: String(r.Account_Name || r.name || "Account"),
@@ -688,7 +705,7 @@ export const zohoConnector: CrmConnector = {
           website: (r.Website as string) || null,
         }),
       ),
-      nextCursor: data?.info?.more_records ? String(page + 1) : null,
+      nextCursor: more ? String(page + 1) : null,
     };
   },
 
@@ -699,12 +716,14 @@ export const zohoConnector: CrmConnector = {
       objectType: "company",
       base: {
         id: company.id || undefined,
-        Account_Name: company.name,
+        Account_Name: company.name || "Transovo Account",
         Phone: company.phone,
         Website: company.website,
       },
       customFields: company.customFields,
     });
+    // Ensure required Account_Name survives mapping strip/null cleanup.
+    if (!fields.Account_Name) fields.Account_Name = company.name || "Transovo Account";
     const body = { data: [fields] };
     if (company.id) {
       await crmFetch(`${apiBase(ctx)}/Accounts`, {
@@ -714,12 +733,22 @@ export const zohoConnector: CrmConnector = {
       });
       return { externalId: company.id, created: false };
     }
-    const created = await crmFetch<{ data?: Array<{ details?: { id?: string } }> }>(
-      `${apiBase(ctx)}/Accounts`,
-      { method: "POST", accessToken: ctx.accessToken, body: JSON.stringify(body) },
-    );
-    const id = created?.data?.[0]?.details?.id;
-    if (!id) throw new Error("Zoho account create failed");
+    const created = await crmFetch<{
+      data?: Array<{ details?: { id?: string }; code?: string; message?: string }>;
+    }>(`${apiBase(ctx)}/Accounts`, {
+      method: "POST",
+      accessToken: ctx.accessToken,
+      body: JSON.stringify(body),
+    });
+    const row = created?.data?.[0];
+    const id = row?.details?.id;
+    if (!id) {
+      throw new Error(
+        `Zoho account create failed${row?.code ? ` (${row.code})` : ""}${
+          row?.message ? `: ${row.message}` : ""
+        }`,
+      );
+    }
     return { externalId: id, created: true };
   },
 
