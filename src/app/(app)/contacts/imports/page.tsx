@@ -12,15 +12,7 @@ import { loadAuditLogs, loadLists } from "@/lib/workspace-data";
 type AuditLogRow = Awaited<ReturnType<typeof loadAuditLogs>>[number];
 type ContactListRow = Awaited<ReturnType<typeof loadLists>>[number];
 import Link from "next/link";
-
-const contactTabs = [
-  { label: "All Contacts", href: "/contacts" },
-  { label: "Lists", href: "/contacts/lists" },
-  { label: "Segments", href: "/contacts/segments" },
-  { label: "Tags", href: "/contacts/tags" },
-  { label: "Imports", href: "/contacts/imports" },
-  { label: "Custom Fields", href: "/contacts/fields" },
-];
+import { contactTabs } from "@/lib/contact-tabs";
 
 function formatDateTime(at: Date | string) {
   return new Date(at).toLocaleDateString(undefined, {

@@ -40,6 +40,8 @@ export const appNav: NavItem[] = [
     emphasize: true,
     children: [
       { label: "Inbox", href: "/inbox" },
+      { label: "Assigned to me", href: "/inbox/mine" },
+      { label: "Unassigned", href: "/inbox/unassigned" },
       { label: "Campaigns", href: "/campaigns" },
       { label: "Media & MMS", href: "/messaging/media" },
       { label: "Link tracking", href: "/messaging/links" },
@@ -62,6 +64,7 @@ export const appNav: NavItem[] = [
       { label: "Validation", href: "/contacts/validation" },
       { label: "Unsubscribed", href: "/contacts/unsubscribed" },
       { label: "Blocked", href: "/contacts/blocked" },
+      { label: "Invalid", href: "/contacts/invalid" },
     ],
   },
   {

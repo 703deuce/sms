@@ -9,19 +9,7 @@ import type { MessagingRegistration } from "@/lib/domain";
 import { Building2, CheckCircle2, Shield } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
-
-const settingsTabs = [
-  { label: "Business", href: "/settings/business" },
-  { label: "Messaging", href: "/settings/messaging" },
-  { label: "Users", href: "/settings/users" },
-  { label: "Workspaces", href: "/settings/workspaces" },
-  { label: "Notifications", href: "/settings/notifications" },
-  { label: "Billing", href: "/settings/billing" },
-  { label: "Limits", href: "/settings/limits" },
-  { label: "Security", href: "/settings/security" },
-  { label: "Branding", href: "/settings/branding" },
-  { label: "Data", href: "/settings/data" },
-];
+import { settingsTabs } from "@/lib/settings-tabs";
 
 type Props = {
   workspaceName: string;

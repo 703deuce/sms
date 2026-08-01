@@ -12,15 +12,7 @@ import { Tag, TagIcon } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-
-const contactTabs = [
-  { label: "All Contacts", href: "/contacts" },
-  { label: "Lists", href: "/contacts/lists" },
-  { label: "Segments", href: "/contacts/segments" },
-  { label: "Tags", href: "/contacts/tags" },
-  { label: "Imports", href: "/contacts/imports" },
-  { label: "Custom Fields", href: "/contacts/fields" },
-];
+import { contactTabs } from "@/lib/contact-tabs";
 
 type TagRow = {
   id: string;
@@ -146,9 +138,16 @@ export function TagsManager({ tags: initialTags }: Props) {
             </label>
             <Input
               id="new-tag"
+              name="name"
               placeholder="e.g. vip-customer"
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  void createTag();
+                }
+              }}
             />
           </div>
           <Button type="button" disabled={creating || !newName.trim()} onClick={createTag}>

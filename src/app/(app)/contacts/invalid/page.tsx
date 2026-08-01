@@ -3,7 +3,9 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatusChip } from "@/components/ui/status-chip";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+import { Tabs } from "@/components/ui/tabs";
 import { getActiveWorkspaceId } from "@/lib/auth";
+import { contactTabs } from "@/lib/contact-tabs";
 import type { Contact } from "@/lib/types";
 import { loadContacts } from "@/lib/workspace-data";
 import { formatPhone } from "@/lib/utils";
@@ -49,6 +51,7 @@ export default async function InvalidContactsPage() {
           </>
         }
       />
+      <Tabs items={contactTabs} />
 
       {filtered.length > 0 ? (
         <Table>

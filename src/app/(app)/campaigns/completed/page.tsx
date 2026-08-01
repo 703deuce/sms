@@ -11,16 +11,7 @@ import { loadCampaigns } from "@/lib/workspace-data";
 import { formatCurrency, formatNumber, formatPercent } from "@/lib/utils";
 import { CheckCircle2 } from "lucide-react";
 import Link from "next/link";
-
-const campaignTabs = [
-  { label: "Create", href: "/campaigns" },
-  { label: "All Campaigns", href: "/campaigns/all" },
-  { label: "Drafts", href: "/campaigns/drafts" },
-  { label: "Scheduled", href: "/campaigns/scheduled" },
-  { label: "Calendar", href: "/campaigns/calendar" },
-  { label: "Completed", href: "/campaigns/completed" },
-  { label: "Failed", href: "/campaigns/failed" },
-];
+import { campaignTabs } from "@/lib/campaign-tabs";
 
 function formatScheduled(at: string | null) {
   if (!at) return "—";

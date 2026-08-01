@@ -19,15 +19,7 @@ import { Filter, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-
-const contactTabs = [
-  { label: "All Contacts", href: "/contacts" },
-  { label: "Lists", href: "/contacts/lists" },
-  { label: "Segments", href: "/contacts/segments" },
-  { label: "Tags", href: "/contacts/tags" },
-  { label: "Imports", href: "/contacts/imports" },
-  { label: "Custom Fields", href: "/contacts/fields" },
-];
+import { contactTabs } from "@/lib/contact-tabs";
 
 const STATUS_OPTIONS = ["SUBSCRIBED", "UNSUBSCRIBED", "BLOCKED", "INVALID"];
 

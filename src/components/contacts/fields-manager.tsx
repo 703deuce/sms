@@ -11,15 +11,7 @@ import type { CustomFieldDefinition } from "@/lib/contacts/custom-fields";
 import { Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-
-const contactTabs = [
-  { label: "All Contacts", href: "/contacts" },
-  { label: "Lists", href: "/contacts/lists" },
-  { label: "Segments", href: "/contacts/segments" },
-  { label: "Tags", href: "/contacts/tags" },
-  { label: "Imports", href: "/contacts/imports" },
-  { label: "Custom Fields", href: "/contacts/fields" },
-];
+import { contactTabs } from "@/lib/contact-tabs";
 
 type Props = {
   initialFields: CustomFieldDefinition[];

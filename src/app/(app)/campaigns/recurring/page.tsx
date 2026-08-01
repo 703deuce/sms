@@ -5,6 +5,8 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatusChip } from "@/components/ui/status-chip";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+import { Tabs } from "@/components/ui/tabs";
+import { campaignTabs } from "@/lib/campaign-tabs";
 import { formatNumber } from "@/lib/utils";
 import { loadRecurringCampaigns, requireWorkspaceContext } from "@/lib/workspace-data";
 import { Repeat } from "lucide-react";
@@ -50,6 +52,8 @@ export default async function CampaignRecurringPage() {
           </>
         }
       />
+
+      <Tabs items={campaignTabs} />
 
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
         <Card>

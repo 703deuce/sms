@@ -3,7 +3,9 @@
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
+import { Tabs } from "@/components/ui/tabs";
 import { useEffect, useState } from "react";
+import { contactTabs } from "@/lib/contact-tabs";
 
 export default function ContactValidationPage() {
   const [data, setData] = useState<{
@@ -63,6 +65,8 @@ export default function ContactValidationPage() {
           </div>
         }
       />
+
+      <Tabs items={contactTabs} />
       <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Total" value={String(data?.total ?? 0)} />
         <StatCard label="Valid mobile" value={String(data?.valid ?? 0)} />

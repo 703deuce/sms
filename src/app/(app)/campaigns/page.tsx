@@ -11,15 +11,7 @@ import { cn } from "@/lib/utils";
 import { ArrowRight, LayoutList, Plus } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-
-const campaignTabs = [
-  { label: "Create", href: "/campaigns" },
-  { label: "All Campaigns", href: "/campaigns/all" },
-  { label: "Drafts", href: "/campaigns/drafts" },
-  { label: "Scheduled", href: "/campaigns/scheduled" },
-  { label: "Calendar", href: "/campaigns/calendar" },
-  { label: "Completed", href: "/campaigns/completed" },
-];
+import { campaignTabs } from "@/lib/campaign-tabs";
 
 type LiveCampaign = {
   id: string;

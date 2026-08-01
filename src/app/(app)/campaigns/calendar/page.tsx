@@ -9,16 +9,7 @@ import type { Campaign } from "@/lib/types";
 import { loadCampaigns } from "@/lib/workspace-data";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
-
-const campaignTabs = [
-  { label: "Create", href: "/campaigns" },
-  { label: "All Campaigns", href: "/campaigns/all" },
-  { label: "Drafts", href: "/campaigns/drafts" },
-  { label: "Scheduled", href: "/campaigns/scheduled" },
-  { label: "Calendar", href: "/campaigns/calendar" },
-  { label: "Completed", href: "/campaigns/completed" },
-  { label: "Failed", href: "/campaigns/failed" },
-];
+import { campaignTabs } from "@/lib/campaign-tabs";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 

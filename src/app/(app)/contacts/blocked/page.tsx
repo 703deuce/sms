@@ -1,9 +1,11 @@
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
+import { Tabs } from "@/components/ui/tabs";
 import { StatusChip } from "@/components/ui/status-chip";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { getActiveWorkspaceId } from "@/lib/auth";
+import { contactTabs } from "@/lib/contact-tabs";
 import type { Contact } from "@/lib/types";
 import { loadContacts } from "@/lib/workspace-data";
 import { formatPhone } from "@/lib/utils";
@@ -26,6 +28,8 @@ export default async function BlockedContactsPage() {
     return (
       <div>
         <PageHeader title="Blocked" description="Contacts blocked from messaging." />
+
+      <Tabs items={contactTabs} />
         <EmptyState title="No workspace selected" description="Select or create a workspace to view contacts." />
       </div>
     );

@@ -8,19 +8,7 @@ import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Tabs } from "@/components/ui/tabs";
 import { getActiveWorkspaceId } from "@/lib/auth";
 import { loadWorkspacesForUser, requireWorkspaceContext } from "@/lib/workspace-data";
-
-const settingsTabs = [
-  { label: "Business", href: "/settings/business" },
-  { label: "Messaging", href: "/settings/messaging" },
-  { label: "Users", href: "/settings/users" },
-  { label: "Workspaces", href: "/settings/workspaces" },
-  { label: "Notifications", href: "/settings/notifications" },
-  { label: "Billing", href: "/settings/billing" },
-  { label: "Limits", href: "/settings/limits" },
-  { label: "Security", href: "/settings/security" },
-  { label: "Branding", href: "/settings/branding" },
-  { label: "Data", href: "/settings/data" },
-];
+import { settingsTabs } from "@/lib/settings-tabs";
 
 export default async function SettingsWorkspacesPage() {
   const { session } = await requireWorkspaceContext();

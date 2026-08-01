@@ -8,13 +8,7 @@ import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Tabs } from "@/components/ui/tabs";
 import { Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
-
-const settingsTabs = [
-  { label: "Business", href: "/settings/business" },
-  { label: "Messaging", href: "/settings/messaging" },
-  { label: "Email-to-SMS", href: "/settings/email-to-sms" },
-  { label: "Users", href: "/settings/users" },
-];
+import { settingsTabs } from "@/lib/settings-tabs";
 
 type Row = {
   id: string;

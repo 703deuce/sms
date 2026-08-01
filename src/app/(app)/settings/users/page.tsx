@@ -8,19 +8,7 @@ import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Tabs } from "@/components/ui/tabs";
 import { loadTeamMembers, requireWorkspaceContext } from "@/lib/workspace-data";
 import { loadPendingInvites } from "@/lib/team/invites";
-
-const settingsTabs = [
-  { label: "Business", href: "/settings/business" },
-  { label: "Messaging", href: "/settings/messaging" },
-  { label: "Users", href: "/settings/users" },
-  { label: "Workspaces", href: "/settings/workspaces" },
-  { label: "Notifications", href: "/settings/notifications" },
-  { label: "Billing", href: "/settings/billing" },
-  { label: "Limits", href: "/settings/limits" },
-  { label: "Security", href: "/settings/security" },
-  { label: "Branding", href: "/settings/branding" },
-  { label: "Data", href: "/settings/data" },
-];
+import { settingsTabs } from "@/lib/settings-tabs";
 
 export default async function SettingsUsersPage() {
   const { workspaceId } = await requireWorkspaceContext();
