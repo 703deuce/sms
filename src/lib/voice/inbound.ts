@@ -107,7 +107,9 @@ async function startAiOnInboundCall(input: {
   payload?: Record<string, unknown>;
 }) {
   const prisma = getPrisma();
-  const agent = await prisma.voiceAgent.findUnique({ where: { id: input.agentId } });
+  const agent = await prisma.voiceAgent.findFirst({
+    where: { id: input.agentId, workspaceId: input.workspaceId },
+  });
   if (!agent) return { started: false, reason: "agent_missing" };
 
   if (isTelnyxVoiceConfigured() && input.telnyxCallControlId) {
@@ -539,8 +541,15 @@ export async function handleInboundCallEvent(input: InboundInput) {
   const { contact, contactTags, isKnownContact, department, language, intent } =
     await loadContactContext(input.workspaceId, from);
 
-  const forcedAgentId =
+  const forcedAgentIdRaw =
     typeof input.payload?.forcedAgentId === "string" ? input.payload.forcedAgentId : null;
+  const forcedAgent = forcedAgentIdRaw
+    ? await prisma.voiceAgent.findFirst({
+        where: { id: forcedAgentIdRaw, workspaceId: input.workspaceId },
+        select: { id: true },
+      })
+    : null;
+  const forcedAgentId = forcedAgent?.id || null;
 
   let routing = await evaluateInboundRouting({
     workspaceId: input.workspaceId,

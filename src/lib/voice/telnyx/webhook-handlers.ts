@@ -108,28 +108,56 @@ export async function processVoiceWebhookEvent(input: {
       }
     })();
     if (screeningState.kind === "call_screening") {
+      // Screening gather / answer can arrive as gather.ended on the agent leg,
+      // or as call.answered when the agent phone picks up (handled below via human webhook).
       const digit = String(eventPayload.digits || eventPayload.digit || "").trim();
-      const controlId = String(eventPayload.call_control_id || "");
+      const agentControlId = String(eventPayload.call_control_id || "");
       const humanCallId = String(screeningState.humanCallId || "");
-      if (digit === "2" && humanCallId && controlId) {
-        const { leaveVoicemailOnCall } = await import("@/lib/phone/voicemail-service");
-        await leaveVoicemailOnCall({
-          workspaceId: String(screeningState.workspaceId || input.workspaceId || ""),
-          humanCallId,
-          telnyxCallControlId: controlId,
-          userId: screeningState.userId ? String(screeningState.userId) : null,
-        }).catch(() => undefined);
-      } else if (digit === "1" && humanCallId) {
-        await prisma.humanCall.update({
-          where: { id: humanCallId },
-          data: { status: "ringing", notes: "screening:accepted" },
-        }).catch(() => undefined);
+      const parentId = String(screeningState.parentCallControlId || "");
+      const workspaceId = String(screeningState.workspaceId || input.workspaceId || "");
+
+      if (eventType === "call.gather.ended" || eventType === "call.dtmf.received") {
+        if ((digit === "2" || !digit) && humanCallId && parentId) {
+          const { leaveVoicemailOnCall } = await import("@/lib/phone/voicemail-service");
+          await leaveVoicemailOnCall({
+            workspaceId,
+            humanCallId,
+            telnyxCallControlId: parentId,
+            userId: screeningState.userId ? String(screeningState.userId) : null,
+          }).catch(() => undefined);
+          if (agentControlId) {
+            const { telnyxRequest } = await import("@/lib/messaging/telnyx/client");
+            await telnyxRequest(`/calls/${agentControlId}/actions/hangup`, {
+              method: "POST",
+              body: {},
+            }).catch(() => undefined);
+          }
+        } else if (digit === "1" && humanCallId && parentId && agentControlId) {
+          const { telnyxRequest } = await import("@/lib/messaging/telnyx/client");
+          await telnyxRequest(`/calls/${parentId}/actions/unhold`, {
+            method: "POST",
+            body: {},
+          }).catch(() => undefined);
+          await telnyxRequest(`/calls/${parentId}/actions/bridge`, {
+            method: "POST",
+            body: { call_control_id: agentControlId },
+          }).catch(() => undefined);
+          await prisma.humanCall.update({
+            where: { id: humanCallId },
+            data: {
+              status: "in_progress",
+              onHold: false,
+              answeredAt: new Date(),
+              notes: "screening:accepted",
+            },
+          }).catch(() => undefined);
+        }
+        await prisma.providerWebhookEvent.update({
+          where: { providerEventId: input.providerEventId },
+          data: { status: "processed", processedAt: new Date() },
+        });
+        return { ok: true, kind: "call_screening", digit };
       }
-      await prisma.providerWebhookEvent.update({
-        where: { providerEventId: input.providerEventId },
-        data: { status: "processed", processedAt: new Date() },
-      });
-      return { ok: true, kind: "call_screening", digit };
     }
   }
 
@@ -303,6 +331,10 @@ export async function processVoiceWebhookEvent(input: {
     },
   });
 
+  // Secondary legs (warm consult, etc.) must not overwrite the parent VoiceCall
+  // control id or mark the live AI/customer call completed on consult hangup.
+  const isSecondaryVoiceLeg = warmState.kind === "warm_transfer_consult";
+
   const statusMap: Record<string, string> = {
     "call.initiated": "INITIATED",
     "call.ringing": "RINGING",
@@ -314,12 +346,17 @@ export async function processVoiceWebhookEvent(input: {
     // recording.saved / transcription.completed must NOT end a live AI call.
   };
 
-  let nextStatus = statusMap[eventType];
+  let nextStatus = isSecondaryVoiceLeg ? undefined : statusMap[eventType];
   const patch: Record<string, unknown> = { updatedAt: new Date() };
 
   // On hangup, refine COMPLETED into a missed-call status when the call was
   // never answered, based on the provider hangup cause.
-  if (eventType === "call.hangup" && !call.answeredAt && !call.voicemailDetected) {
+  if (
+    !isSecondaryVoiceLeg &&
+    eventType === "call.hangup" &&
+    !call.answeredAt &&
+    !call.voicemailDetected
+  ) {
     const cause = String(
       eventPayload.hangup_cause || eventPayload.sip_hangup_cause || "",
     ).toLowerCase();
@@ -358,7 +395,7 @@ export async function processVoiceWebhookEvent(input: {
     }
   }
 
-  if (eventType.includes("machine") && eventType.includes("detection")) {
+  if (!isSecondaryVoiceLeg && eventType.includes("machine") && eventType.includes("detection")) {
     patch.voicemailDetected = true;
     patch.outcome = "voicemail";
     if (call.campaignId) {
@@ -372,17 +409,21 @@ export async function processVoiceWebhookEvent(input: {
     }
   }
 
-  if (eventPayload.call_control_id) {
+  // Never replace the customer/AI control id with a consult/secondary leg id.
+  if (eventPayload.call_control_id && !isSecondaryVoiceLeg) {
     patch.telnyxCallControlId = String(eventPayload.call_control_id);
   }
 
-  await prisma.voiceCall.update({
-    where: { id: call.id },
-    data: patch,
-  });
+  if (Object.keys(patch).length > 1 || nextStatus) {
+    await prisma.voiceCall.update({
+      where: { id: call.id },
+      data: patch,
+    });
+  }
 
   // Outbound (and any unanswered AI leg): when the callee answers, start the assistant.
   if (
+    !isSecondaryVoiceLeg &&
     (eventType === "call.answered" || eventType === "call.bridged") &&
     call.agentId &&
     !call.voicemailDetected
@@ -423,7 +464,10 @@ export async function processVoiceWebhookEvent(input: {
     }
   }
 
-  if (eventType === "call.hangup" || eventType === "call.machine.detection.ended") {
+  if (
+    !isSecondaryVoiceLeg &&
+    (eventType === "call.hangup" || eventType === "call.machine.detection.ended")
+  ) {
     await enqueueJob({
       jobType: "voice_post_call",
       queueName: "voice-calls",

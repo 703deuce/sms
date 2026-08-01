@@ -288,13 +288,30 @@ export async function executeIvrAction(input: {
 
   if (option.action === "submenu" && option.target) {
     if (depth >= 5) {
+      if (!isMock) {
+        await telnyxRequest(`/calls/${controlId}/actions/hangup`, {
+          method: "POST",
+          body: {},
+        }).catch(() => undefined);
+      }
       return { action: "hangup" as const, target: null, reason: "max_depth" };
     }
     const submenu = await getIvrMenu(workspaceId, option.target);
     if (submenu) {
+      // Honor after-hours options on nested menus too.
+      let greeting = submenu.greeting;
+      let options = submenu.options;
+      if (submenu.afterHoursOptions?.length) {
+        const runtime = await getMessagingRuntimeSettings(workspaceId).catch(() => null);
+        const withinHours = runtime ? isWithinBusinessHours(runtime, new Date()) : true;
+        if (!withinHours) {
+          greeting = submenu.afterHoursGreeting || greeting;
+          options = submenu.afterHoursOptions;
+        }
+      }
       await startIvrGather(
         controlId,
-        { greeting: submenu.greeting, options: submenu.options, id: submenu.id },
+        { greeting, options, id: submenu.id },
         { menuId: submenu.id, depth: depth + 1 },
       );
       return { action: "submenu" as const, target: option.target, depth: depth + 1 };

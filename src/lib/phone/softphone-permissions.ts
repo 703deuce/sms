@@ -21,6 +21,7 @@ type PermissionsJson = Partial<Record<SoftphonePermission, boolean>> & {
   canTransfer?: boolean;
   canInternational?: boolean;
   canWhisper?: boolean;
+  screening?: boolean;
 };
 
 const ROLE_DEFAULTS: Record<string, SoftphonePermission[]> = {
@@ -57,21 +58,44 @@ const ROLE_DEFAULTS: Record<string, SoftphonePermission[]> = {
     "anonymous_dial",
   ],
   CAMPAIGN_CREATOR: ["place_call", "record", "transfer"],
-  INBOX_AGENT: ["place_call", "record", "transfer"],
+  INBOX_AGENT: ["place_call", "record", "transfer", "block_caller"],
   ANALYST: ["listen"],
   READ_ONLY: [],
 };
 
-function legacyMap(perms: PermissionsJson): SoftphonePermission[] {
-  const out: SoftphonePermission[] = ["place_call"];
-  if (perms.record !== false && perms.canRecord !== false) out.push("record");
-  if (perms.transfer !== false && perms.canTransfer !== false) out.push("transfer");
-  if (perms.international || perms.canInternational) out.push("international");
-  if (perms.whisper || perms.canWhisper) out.push("whisper");
-  if (perms.listen) out.push("listen");
-  if (perms.admin_settings) out.push("admin_settings");
-  if (perms.block_caller !== false) out.push("block_caller");
-  if (perms.anonymous_dial) out.push("anonymous_dial");
+const ACL_KEYS: SoftphonePermission[] = [
+  "place_call",
+  "record",
+  "transfer",
+  "international",
+  "whisper",
+  "listen",
+  "admin_settings",
+  "block_caller",
+  "anonymous_dial",
+];
+
+function applyExplicitOverrides(
+  base: Set<SoftphonePermission>,
+  perms: PermissionsJson,
+): Set<SoftphonePermission> {
+  const out = new Set(base);
+  const legacy: Partial<Record<SoftphonePermission, boolean | undefined>> = {
+    record: perms.record ?? perms.canRecord,
+    transfer: perms.transfer ?? perms.canTransfer,
+    international: perms.international ?? perms.canInternational,
+    whisper: perms.whisper ?? perms.canWhisper,
+    place_call: perms.place_call,
+    listen: perms.listen,
+    admin_settings: perms.admin_settings,
+    block_caller: perms.block_caller,
+    anonymous_dial: perms.anonymous_dial,
+  };
+  for (const key of ACL_KEYS) {
+    const val = legacy[key];
+    if (val === true) out.add(key);
+    if (val === false) out.delete(key);
+  }
   return out;
 }
 
@@ -84,8 +108,13 @@ export async function getSoftphonePermissions(workspaceId: string, userId: strin
   });
 
   const perms = (settings?.permissionsJson || {}) as PermissionsJson;
-  const hasExplicit = Boolean(settings?.permissionsJson) && Object.keys(perms).length > 0;
-  const allowed = hasExplicit ? new Set(legacyMap(perms)) : roleAllowed;
+  const hasAclKeys = ACL_KEYS.some((k) => typeof (perms as Record<string, unknown>)[k] === "boolean")
+    || typeof perms.canRecord === "boolean"
+    || typeof perms.canTransfer === "boolean"
+    || typeof perms.canInternational === "boolean"
+    || typeof perms.canWhisper === "boolean";
+
+  const allowed = hasAclKeys ? applyExplicitOverrides(roleAllowed, perms) : roleAllowed;
 
   // Hard flags on settings override JSON for common dial/record/intl controls.
   if (settings?.recordingEnabled === false) allowed.delete("record");

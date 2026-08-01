@@ -346,6 +346,17 @@ export async function handleWarmTransferTimeoutJob(payload: {
   if (!transfer || transfer.status === "completed" || transfer.status === "cancelled") {
     return { skipped: true };
   }
+  const meta = (transfer.metadata || {}) as Record<string, unknown>;
+  // Give auto-complete a grace window after consult answer; if it never finishes, cancel.
+  if (
+    (transfer.status === "consult_answered" || meta.awaitingComplete) &&
+    meta.autoCompleteOnAnswer
+  ) {
+    const answeredAtMs = Number(meta.consultAnsweredAtMs || 0) || transfer.createdAt.getTime();
+    if (Date.now() - answeredAtMs < 20_000) {
+      return { skipped: true, reason: "awaiting_auto_complete" };
+    }
+  }
 
   return cancelWarmTransfer({
     workspaceId: payload.workspaceId,
@@ -392,6 +403,7 @@ export async function handleWarmTransferConsultAnswered(input: {
         callerControlId: input.callerControlId,
         summary: input.summary,
         awaitingComplete: true,
+        consultAnsweredAtMs: Date.now(),
       } as object,
     },
   });

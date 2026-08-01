@@ -44,13 +44,8 @@ export async function dialHumanCall(input: {
   if (userSettings?.dndEnabled) {
     throw new Error("Cannot place calls while Do Not Disturb is enabled");
   }
-  if (!to.startsWith("+1")) {
-    if (userSettings?.internationalEnabled === false || !allowed.has("international")) {
-      // Allow when settings unset (legacy default) unless role/settings explicitly deny.
-      if (userSettings?.internationalEnabled === false || userSettings?.permissionsJson) {
-        throw new Error("International calling is disabled for this user");
-      }
-    }
+  if (!to.startsWith("+1") && !allowed.has("international")) {
+    throw new Error("International calling is disabled for this user");
   }
 
   await markOnCallSafe(input.workspaceId, input.agentUserId, true);
@@ -201,10 +196,18 @@ export async function answerHumanCall(callId: string, workspaceId: string) {
   if (!call) throw new Error("Call not found");
   if (call.telnyxCallControlId) {
     await telnyxAction(call.telnyxCallControlId, "answer");
+    // Screening holds the caller until an agent accepts from softphone/UI.
+    if (call.onHold || (call.notes || "").includes("screening:")) {
+      await telnyxAction(call.telnyxCallControlId, "unhold").catch(() => undefined);
+    }
   }
   return prisma.humanCall.update({
     where: { id: callId },
-    data: { status: "in_progress" },
+    data: {
+      status: "in_progress",
+      onHold: false,
+      answeredAt: call.answeredAt || new Date(),
+    },
   });
 }
 
@@ -378,7 +381,7 @@ export async function mergeHumanCalls(
   return { conference, primaryCallId, secondaryCallId };
 }
 
-/** Supervisor whisper: speak privately to the agent leg (customer stays on hold/bridged). */
+/** Supervisor whisper: hold customer briefly, speak coach note, restore hold state. */
 export async function whisperOnHumanCall(
   callId: string,
   workspaceId: string,
@@ -390,18 +393,35 @@ export async function whisperOnHumanCall(
   const text = message.trim();
   if (!text) throw new Error("Whisper message required");
 
-  // Prefer Telnyx whisper action when available; fall back to speak on agent leg only.
-  if (!call.telnyxCallControlId.startsWith("mock_")) {
-    await telnyxAction(call.telnyxCallControlId, "speak", {
+  // Prefer speaking on the agent/consult secondary leg when present; otherwise
+  // hold the shared customer leg so the coach note is not played to the caller.
+  const speakTarget =
+    call.telnyxCallLegId && !call.telnyxCallLegId.startsWith("mock_")
+      ? call.telnyxCallLegId
+      : call.telnyxCallControlId;
+
+  if (!speakTarget.startsWith("mock_")) {
+    const heldCustomer = speakTarget === call.telnyxCallControlId && !call.onHold;
+    if (heldCustomer) {
+      await telnyxAction(call.telnyxCallControlId, "hold").catch(() => undefined);
+    }
+    await telnyxAction(speakTarget, "speak", {
       payload: text,
       voice: "female",
       language: "en-US",
     }).catch(() => undefined);
+    if (heldCustomer) {
+      await telnyxAction(call.telnyxCallControlId, "unhold").catch(() => undefined);
+    }
   }
 
   return prisma.humanCall.update({
     where: { id: callId },
-    data: { notes: `${call.notes || ""}\n[whisper:${text.slice(0, 120)}]`.trim() },
+    data: {
+      onHold: call.onHold,
+      status: call.status,
+      notes: `${call.notes || ""}\n[whisper:${text.slice(0, 120)}]`.trim(),
+    },
   });
 }
 
@@ -411,7 +431,7 @@ export async function blockCallerFromCall(callId: string, workspaceId: string) {
   const call = await prisma.humanCall.findFirst({ where: { id: callId, workspaceId } });
   if (!call) throw new Error("Call not found");
   const phone = call.direction === "inbound" ? call.from : call.to;
-  const suppressionKey = `p:${phone}`;
+  const suppressionKey = `${workspaceId}:p:${phone}`;
 
   await prisma.suppression.upsert({
     where: { suppressionKey },
@@ -422,7 +442,12 @@ export async function blockCallerFromCall(callId: string, workspaceId: string) {
       reason: "softphone_block",
       source: "softphone",
     },
-    update: { reason: "softphone_block", source: "softphone" },
+    update: {
+      workspaceId,
+      phone,
+      reason: "softphone_block",
+      source: "softphone",
+    },
   });
 
   if (call.telnyxCallControlId && !call.telnyxCallControlId.startsWith("mock_")) {
@@ -657,7 +682,7 @@ export async function startWarmTransfer(
     const consultControlId = consultLeg.data?.call_control_id;
     if (!consultControlId) throw new Error("Consult dial failed");
 
-    return prisma.humanCall.update({
+    const updated = await prisma.humanCall.update({
       where: { id: callId },
       data: {
         onHold: true,
@@ -668,6 +693,18 @@ export async function startWarmTransfer(
           : `${call.notes || ""}\n[Warm transfer consult:${dest}]`.trim(),
       },
     });
+
+    const { enqueueJob } = await import("@/lib/messaging/enqueue-advance");
+    await enqueueJob({
+      jobType: "phone_warm_transfer_timeout",
+      queueName: "voice-calls",
+      workspaceId,
+      payload: { workspaceId, humanCallId: callId, consultControlId },
+      idempotencyKey: `phone-warm-timeout-${callId}-${consultControlId}`,
+      runAfter: new Date(Date.now() + 45_000),
+    });
+
+    return updated;
   }
 
   const mockConsult = `mock_consult_${call.id}`;
@@ -868,10 +905,16 @@ export async function processHumanCallWebhookEvent(input: {
     "conference_leg",
     "warm_transfer_consult",
     "call_flip",
+    "call_screening",
     "human_bridge_dest",
     "human_bridge_agent",
   ]);
-  const isSecondaryLeg = secondaryKinds.has(String(clientState.kind || ""));
+  // After call flip, the flipped device becomes telnyxCallControlId but may still
+  // carry call_flip client_state — treat events on the active control id as primary.
+  const isActiveControl =
+    Boolean(eventControlId) && eventControlId === call.telnyxCallControlId;
+  const isSecondaryLeg =
+    secondaryKinds.has(String(clientState.kind || "")) && !isActiveControl;
 
   const statusMap: Record<string, string> = {
     "call.initiated": "initiated",
@@ -1016,12 +1059,43 @@ export async function processHumanCallWebhookEvent(input: {
           telnyxCallControlId: eventControlId,
           telnyxCallLegId: parentId,
           mediaMode: "call_my_phone",
+          // Mark flip completed so hangup on the active device is not treated as secondary.
+          notes: `${call.notes || ""}\n[call_flip_active]`.trim(),
         },
       });
     }
 
-    // Warm transfer consult answered: keep customer on hold; wait for completeWarmTransfer.
+    // Call screening: agent phone answered — gather accept/decline on the agent leg.
+    if (kind === "call_screening" && eventControlId) {
+      await telnyxAction(eventControlId, "gather_using_speak", {
+        payload: `Call from ${call.from}. Press 1 to accept, press 2 to send to voicemail.`,
+        voice: "female",
+        language: "en-US",
+        valid_digits: "12",
+        maximum_digits: 1,
+        minimum_digits: 1,
+        timeout_millis: 15000,
+        client_state: encodeClientState({
+          workspaceId: call.workspaceId,
+          humanCallId: call.id,
+          kind: "call_screening",
+          userId: clientState.userId || null,
+          parentCallControlId: clientState.parentCallControlId || call.telnyxCallControlId,
+        }),
+      }).catch(() => undefined);
+    }
+
+    // Warm transfer consult answered: speak note to consult; keep customer on hold.
     if (kind === "warm_transfer_consult" && eventControlId) {
+      const noteMatch = (call.notes || "").match(/\[Warm transfer[^\]]*:\s*([^\]]+)\]/i);
+      const coach = noteMatch?.[1]?.trim();
+      if (coach) {
+        await telnyxAction(eventControlId, "speak", {
+          payload: coach,
+          voice: "female",
+          language: "en-US",
+        }).catch(() => undefined);
+      }
       await prisma.humanCall.update({
         where: { id: call.id },
         data: {
@@ -1038,6 +1112,21 @@ export async function processHumanCallWebhookEvent(input: {
       const { startCallTranscription } = await import("@/lib/voice/telnyx/assistant-sync");
       await startCallTranscription(call.telnyxCallControlId).catch(() => undefined);
     }
+  }
+
+  // Screening agent hung up / declined without DTMF → send customer to voicemail.
+  if (
+    input.eventType === "call.hangup" &&
+    String(clientState.kind || "") === "call_screening" &&
+    call.telnyxCallControlId
+  ) {
+    const { leaveVoicemailOnCall } = await import("./voicemail-service");
+    await leaveVoicemailOnCall({
+      workspaceId: call.workspaceId,
+      humanCallId: call.id,
+      telnyxCallControlId: call.telnyxCallControlId,
+      userId: clientState.userId ? String(clientState.userId) : null,
+    }).catch(() => undefined);
   }
 
   if (isMissed) {

@@ -224,15 +224,17 @@ export async function processVoiceCampaignBatch() {
     });
     if (running >= campaign.concurrency) continue;
 
-    const contact = await prisma.voiceCampaignContact.findFirst({
+    // Rotate through pending contacts so TZ/cooldown skips don't starve later rows.
+    const candidates = await prisma.voiceCampaignContact.findMany({
       where: {
         campaignId: campaign.id,
         status: "pending",
         attemptCount: { lt: campaign.maxAttempts || 3 },
       },
-      orderBy: { createdAt: "asc" },
+      orderBy: [{ updatedAt: "asc" }, { createdAt: "asc" }],
+      take: 50,
     });
-    if (!contact) {
+    if (!candidates.length) {
       const stillPending = await prisma.voiceCampaignContact.count({
         where: { campaignId: campaign.id, status: "pending" },
       });
@@ -245,34 +247,6 @@ export async function processVoiceCampaignBatch() {
       continue;
     }
 
-    // DNC / suppression check
-    const suppressed = await prisma.suppression.findFirst({
-      where: {
-        workspaceId: campaign.workspaceId,
-        OR: [{ phone: contact.phone }, { suppressionKey: `p:${contact.phone}` }],
-      },
-    });
-    if (suppressed) {
-      await prisma.voiceCampaignContact.update({
-        where: { id: contact.id },
-        data: { status: "suppressed", lastOutcome: "dnc" },
-      });
-      continue;
-    }
-
-    const contactRow = contact.contactId
-      ? await prisma.contact.findUnique({ where: { id: contact.contactId } })
-      : null;
-    const recipientTz = contactTimezone(contact, contactRow, campaign.timezone);
-    const recipientWindow = isWithinCallingWindow({
-      timezone: recipientTz,
-      callingRules: campaign.callingRules,
-    });
-    if (!recipientWindow.allowed) {
-      continue;
-    }
-
-    // Cross-campaign frequency cap / per-contact cooldown (hours).
     const rules = (campaign.callingRules || {}) as {
       frequencyCapHours?: number;
       crossCampaignCooldownHours?: number;
@@ -280,45 +254,95 @@ export async function processVoiceCampaignBatch() {
     const cooldownHours = Number(
       rules.crossCampaignCooldownHours || rules.frequencyCapHours || 0,
     );
-    if (cooldownHours > 0) {
-      const since = new Date(Date.now() - cooldownHours * 3600_000);
-      const recent = await prisma.voiceCall.findFirst({
+
+    let dialedThisCampaign = false;
+    for (const contact of candidates) {
+      if (dialedThisCampaign) break;
+      if (running + (dialedThisCampaign ? 1 : 0) >= campaign.concurrency) break;
+
+      // DNC / suppression check
+      const suppressed = await prisma.suppression.findFirst({
         where: {
           workspaceId: campaign.workspaceId,
-          toE164: contact.phone,
-          createdAt: { gte: since },
+          OR: [
+            { phone: contact.phone },
+            { suppressionKey: `p:${contact.phone}` },
+            { suppressionKey: `${campaign.workspaceId}:p:${contact.phone}` },
+          ],
         },
-        orderBy: { createdAt: "desc" },
       });
-      if (recent) continue;
-    }
+      if (suppressed) {
+        await prisma.voiceCampaignContact.update({
+          where: { id: contact.id },
+          data: { status: "suppressed", lastOutcome: "dnc" },
+        });
+        continue;
+      }
 
-    try {
-      await initiateOutboundCall({
-        workspaceId: campaign.workspaceId,
-        agentId: campaign.agentId,
-        toPhone: contact.phone,
-        contactId: contact.contactId,
-        campaignId: campaign.id,
-        dynamicVariables: {
-          ...((contact.variables as Record<string, unknown>) || {}),
-          timezone: recipientTz,
-        },
+      const contactRow = contact.contactId
+        ? await prisma.contact.findUnique({ where: { id: contact.contactId } })
+        : null;
+      const recipientTz = contactTimezone(contact, contactRow, campaign.timezone);
+      const recipientWindow = isWithinCallingWindow({
+        timezone: recipientTz,
+        callingRules: campaign.callingRules,
       });
+      if (!recipientWindow.allowed) {
+        // Bump updatedAt so the next batch rotates past this contact.
+        await prisma.voiceCampaignContact.update({
+          where: { id: contact.id },
+          data: { updatedAt: new Date() },
+        });
+        continue;
+      }
 
-      await prisma.voiceCampaignContact.update({
-        where: { id: contact.id },
-        data: { status: "in_progress", attemptCount: { increment: 1 } },
-      });
-      initiated += 1;
-    } catch (err) {
-      await prisma.voiceCampaignContact.update({
-        where: { id: contact.id },
-        data: {
-          status: "failed",
-          lastOutcome: err instanceof Error ? err.message : "failed",
-        },
-      });
+      if (cooldownHours > 0) {
+        const since = new Date(Date.now() - cooldownHours * 3600_000);
+        const recent = await prisma.voiceCall.findFirst({
+          where: {
+            workspaceId: campaign.workspaceId,
+            toE164: contact.phone,
+            createdAt: { gte: since },
+          },
+          orderBy: { createdAt: "desc" },
+        });
+        if (recent) {
+          await prisma.voiceCampaignContact.update({
+            where: { id: contact.id },
+            data: { updatedAt: new Date() },
+          });
+          continue;
+        }
+      }
+
+      try {
+        await initiateOutboundCall({
+          workspaceId: campaign.workspaceId,
+          agentId: campaign.agentId,
+          toPhone: contact.phone,
+          contactId: contact.contactId,
+          campaignId: campaign.id,
+          dynamicVariables: {
+            ...((contact.variables as Record<string, unknown>) || {}),
+            timezone: recipientTz,
+          },
+        });
+
+        await prisma.voiceCampaignContact.update({
+          where: { id: contact.id },
+          data: { status: "in_progress", attemptCount: { increment: 1 } },
+        });
+        initiated += 1;
+        dialedThisCampaign = true;
+      } catch (err) {
+        await prisma.voiceCampaignContact.update({
+          where: { id: contact.id },
+          data: {
+            status: "failed",
+            lastOutcome: err instanceof Error ? err.message : "failed",
+          },
+        });
+      }
     }
   }
 

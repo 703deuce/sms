@@ -188,6 +188,33 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
         summary: payload.summary ? String(payload.summary) : undefined,
       });
     }
+    case "phone_warm_transfer_timeout": {
+      const { cancelWarmTransfer } = await import("@/lib/phone/human-call-service");
+      const { getPrisma } = await import("@/lib/db");
+      const humanCallId = String(payload.humanCallId || "");
+      const workspaceId = String(payload.workspaceId || "");
+      const consultControlId = payload.consultControlId
+        ? String(payload.consultControlId)
+        : "";
+      const call = await getPrisma().humanCall.findFirst({
+        where: { id: humanCallId, workspaceId },
+      });
+      if (!call?.telnyxCallLegId || call.status === "transferred" || call.status === "completed") {
+        return { skipped: true };
+      }
+      // Only cancel the original unanswered consult — not an answered consult or a later flip leg.
+      if (consultControlId && call.telnyxCallLegId !== consultControlId) {
+        return { skipped: true };
+      }
+      if ((call.notes || "").includes("[warm_consult_answered]")) {
+        return { skipped: true };
+      }
+      if (!(call.notes || "").includes("Warm transfer")) {
+        return { skipped: true };
+      }
+      await cancelWarmTransfer(humanCallId, workspaceId).catch(() => undefined);
+      return { ok: true, cancelled: true };
+    }
     case "voice_send_email": {
       const { getPrisma } = await import("@/lib/db");
       const prisma = getPrisma();
