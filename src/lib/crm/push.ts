@@ -1,5 +1,6 @@
 /**
  * Push a single Transovo platform event into one CRM provider.
+ * Rate-limited per provider; actions resolved via the rules engine.
  */
 
 import { getPrisma } from "@/lib/db";
@@ -14,6 +15,13 @@ import {
 import { isFeatureSupported } from "./feature-matrix";
 import { applyFieldMappingsOutbound, listFieldMappings } from "./mappings";
 import { getConnector } from "./registry";
+import {
+  acquireCrmRateLimit,
+  noteCrmRateLimitHit,
+  noteCrmRateLimitSuccess,
+} from "./runtime/rate-limit";
+import { resolveRulesForEvent } from "./runtime/rules";
+import { providerAcceptsEvent } from "./runtime/subscriptions";
 import { buildContext } from "./sync-engine";
 import type { CrmPlatformEvent, CrmProviderId } from "./types";
 
@@ -26,6 +34,18 @@ export async function pushCrmEventJob(payload: {
   const connector = getConnector(provider);
   const prisma = getPrisma();
 
+  if (!providerAcceptsEvent(provider, event.type)) {
+    return { ok: true, skipped: true, reason: "unsupported_event" };
+  }
+
+  const rate = acquireCrmRateLimit(workspaceId, provider);
+  if (!rate.ok) {
+    throw new JobDeferredError(
+      `crm_rate_limit:${rate.reason}`,
+      Math.max(1_000, rate.retryAfterMs),
+    );
+  }
+
   const run = await prisma.crmSyncRun.create({
     data: {
       workspaceId,
@@ -34,13 +54,40 @@ export async function pushCrmEventJob(payload: {
       status: "running",
       startedAt: new Date(),
       triggeredBy: "system",
-      statsJson: { eventType: event.type },
+      statsJson: { eventType: event.type, eventId: event.eventId },
     },
   });
 
   try {
+    const { actions, rulesApplied } = await resolveRulesForEvent({
+      workspaceId,
+      provider,
+      event,
+    });
+    if (!actions.length || (actions.length === 1 && actions[0] === "skip")) {
+      await prisma.crmSyncRun.update({
+        where: { id: run.id },
+        data: {
+          status: "succeeded",
+          finishedAt: new Date(),
+          statsJson: { eventType: event.type, skipped: true, rulesApplied },
+        },
+      });
+      return { ok: true, skipped: true, syncRunId: run.id };
+    }
+
     const ctx = await buildContext(workspaceId, provider);
     const prefs = ctx.preferences;
+    const wantUpsert =
+      actions.includes("upsert_contact") || actions.includes("create_lead");
+    const wantCall =
+      actions.includes("log_call") ||
+      actions.includes("attach_recording") ||
+      actions.includes("attach_transcript") ||
+      actions.includes("attach_ai_summary");
+    const wantSms = actions.includes("log_sms");
+    const wantTask = actions.includes("create_task");
+    const wantNote = actions.includes("create_note");
 
     let contactExternalId: string | null = null;
     let contactPhone: string | null =
@@ -52,7 +99,7 @@ export async function pushCrmEventJob(payload: {
       });
       if (contact?.phone) contactPhone = contact.phone;
 
-      if (contact && prefs.direction !== "inbound") {
+      if (contact && prefs.direction !== "inbound" && wantUpsert) {
         const { resolveContactForOutbound } = await import("./conflict");
         const resolved = await resolveContactForOutbound({
           workspaceId,
@@ -109,7 +156,7 @@ export async function pushCrmEventJob(payload: {
         } else {
           contactExternalId = resolved.externalId;
         }
-      } else {
+      } else if (event.contactId) {
         const mapped = await getObjectMapping({
           workspaceId,
           provider,
@@ -120,14 +167,8 @@ export async function pushCrmEventJob(payload: {
       }
     }
 
-    if (event.type === "voicemail.received" && !prefs.syncVoicemail) {
-      // Preference off — skip voicemail activity push (tasks may still fire below).
-    } else if (
-      (event.type.startsWith("call.") ||
-        event.type === "voicemail.received" ||
-        event.type === "recording.ready" ||
-        event.type === "transcript.ready") &&
-      prefs.syncCalls &&
+    if (
+      wantCall &&
       connector.logCall &&
       isFeatureSupported(provider, "calls")
     ) {
@@ -145,18 +186,26 @@ export async function pushCrmEventJob(payload: {
           event.payload.durationSeconds != null ? Number(event.payload.durationSeconds) : null,
         disposition: (event.payload.disposition as string) || null,
         notes: (event.payload.notes as string) || null,
-        recordingUrl: prefs.syncRecordings
+        recordingUrl: actions.includes("attach_recording")
           ? ((event.payload.recordingUrl as string) || null)
-          : null,
-        transcriptText: prefs.syncTranscripts
+          : prefs.syncRecordings
+            ? ((event.payload.recordingUrl as string) || null)
+            : null,
+        transcriptText: actions.includes("attach_transcript")
           ? ((event.payload.transcriptText as string) || null)
-          : null,
-        transcriptUrl: prefs.syncTranscripts
+          : prefs.syncTranscripts
+            ? ((event.payload.transcriptText as string) || null)
+            : null,
+        transcriptUrl: actions.includes("attach_transcript")
           ? ((event.payload.transcriptUrl as string) || null)
-          : null,
-        aiSummary: prefs.syncAiSummary
+          : prefs.syncTranscripts
+            ? ((event.payload.transcriptUrl as string) || null)
+            : null,
+        aiSummary: actions.includes("attach_ai_summary")
           ? ((event.payload.aiSummary as string) || null)
-          : null,
+          : prefs.syncAiSummary
+            ? ((event.payload.aiSummary as string) || null)
+            : null,
         contactExternalId,
         startedAt: event.occurredAt || new Date().toISOString(),
       });
@@ -171,12 +220,7 @@ export async function pushCrmEventJob(payload: {
       });
     }
 
-    if (
-      event.type.startsWith("sms.") &&
-      prefs.syncSms &&
-      connector.logSms &&
-      isFeatureSupported(provider, "sms")
-    ) {
+    if (wantSms && connector.logSms && isFeatureSupported(provider, "sms")) {
       const result = await connector.logSms(ctx, {
         direction: event.type === "sms.received" ? "inbound" : "outbound",
         from: (event.payload.from as string) || null,
@@ -197,23 +241,46 @@ export async function pushCrmEventJob(payload: {
       });
     }
 
-    // Task automation
-    if (connector.createTask && prefs.syncTasks && isFeatureSupported(provider, "tasks")) {
+    if (
+      wantNote &&
+      connector.createNote &&
+      isFeatureSupported(provider, "notes")
+    ) {
+      const result = await connector.createNote(ctx, {
+        body: `Transovo ${event.type}${contactPhone ? ` (${contactPhone})` : ""}`,
+        contactExternalId,
+      });
+      await appendSyncEvent({
+        workspaceId,
+        syncRunId: run.id,
+        provider,
+        action: "create",
+        objectType: "note",
+        externalId: result.externalId,
+        message: `Note from ${event.type}`,
+      });
+    }
+
+    if (wantTask && connector.createTask && isFeatureSupported(provider, "tasks")) {
       const taskSubject =
-        event.type === "call.missed" && prefs.createTasksOnMissedCall
+        event.type === "call.missed"
           ? `Follow up missed call${contactPhone ? ` (${contactPhone})` : ""}`
-          : event.type === "callback.scheduled" && prefs.createTasksOnCallback
+          : event.type === "callback.scheduled"
             ? `Requested callback${contactPhone ? ` (${contactPhone})` : ""}`
-            : event.type === "voicemail.received" && prefs.createTasksOnVoicemail
+            : event.type === "voicemail.received"
               ? `Voicemail follow-up${contactPhone ? ` (${contactPhone})` : ""}`
-              : null;
+              : event.type === "task.completed"
+                ? `Completed: ${String(event.payload.subject || "Task")}`
+                : event.type.startsWith("task.")
+                  ? String(event.payload.subject || "Transovo task")
+                  : null;
       if (taskSubject) {
         const due = new Date(Date.now() + 86400000).toISOString();
         const result = await connector.createTask(ctx, {
           subject: taskSubject,
           description: `Created automatically by Transovo from ${event.type}`,
           dueAt: due,
-          status: "Not Started",
+          status: event.type === "task.completed" ? "Completed" : "Not Started",
           contactExternalId,
           ownerExternalId: prefs.defaultOwnerExternalId,
         });
@@ -229,11 +296,40 @@ export async function pushCrmEventJob(payload: {
       }
     }
 
+    if (
+      actions.includes("create_lead") &&
+      connector.upsertLead &&
+      isFeatureSupported(provider, "leads")
+    ) {
+      const created = await connector.upsertLead(ctx, {
+        firstName: (event.payload.firstName as string) || null,
+        lastName: (event.payload.lastName as string) || "Lead",
+        phone: contactPhone,
+        email: (event.payload.email as string) || null,
+        source: "Transovo",
+        companyName: (event.payload.company as string) || null,
+      });
+      await appendSyncEvent({
+        workspaceId,
+        syncRunId: run.id,
+        provider,
+        action: "create",
+        objectType: "lead",
+        externalId: created.externalId,
+        message: `Lead from ${event.type}`,
+      });
+    }
+
+    await noteCrmRateLimitSuccess(workspaceId, provider);
     await prisma.crmSyncRun.update({
       where: { id: run.id },
-      data: { status: "succeeded", finishedAt: new Date() },
+      data: {
+        status: "succeeded",
+        finishedAt: new Date(),
+        statsJson: { eventType: event.type, rulesApplied, actions },
+      },
     });
-    return { ok: true, syncRunId: run.id };
+    return { ok: true, syncRunId: run.id, rulesApplied };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     await prisma.crmSyncRun.update({
@@ -252,6 +348,10 @@ export async function pushCrmEventJob(payload: {
       message,
       detail: { eventType: event.type },
     });
+    if (err instanceof CrmHttpError && err.status === 429) {
+      const hit = await noteCrmRateLimitHit(workspaceId, provider);
+      throw new JobDeferredError(`crm_push_429:${message.slice(0, 60)}`, hit.retryAfterMs);
+    }
     if (err instanceof CrmHttpError && err.retryable) {
       throw new JobDeferredError(`crm_push_retry:${message.slice(0, 80)}`, 60_000);
     }

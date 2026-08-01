@@ -1,76 +1,15 @@
 /**
- * Publish Transovo platform events to connected CRM adapters (async).
+ * CRM-facing publish helpers — all funnel through the unified event bus.
  */
 
-import { getPrisma } from "@/lib/db";
-import type { InputJsonValue } from "@/lib/domain";
-import { enqueueJob } from "@/lib/messaging/enqueue-advance";
-import { CRM_PROVIDER_IDS } from "./registry";
-import type { CrmPlatformEvent, CrmPlatformEventType, CrmProviderId } from "./types";
-import { writeCrmAudit } from "./logging";
+import { emitPlatformEvent, emitTypedEvent } from "./runtime/event-bus";
+import type { CrmPlatformEvent, CrmPlatformEventType } from "./types";
 
+/** @deprecated Prefer emitPlatformEvent — kept as stable alias for call sites. */
 export async function publishCrmEvent(event: CrmPlatformEvent) {
-  const connected = await getPrisma().integrationConnection.findMany({
-    where: {
-      workspaceId: event.workspaceId,
-      provider: { in: [...CRM_PROVIDER_IDS] },
-      status: { in: ["connected", "syncing"] },
-    },
-    select: { provider: true },
-  });
-
-  if (!connected.length) return { enqueued: 0 };
-
-  let enqueued = 0;
-  for (const row of connected) {
-    const provider = row.provider as CrmProviderId;
-    try {
-      const jobPayload = JSON.parse(
-        JSON.stringify({
-          workspaceId: event.workspaceId,
-          provider,
-          event: {
-            type: event.type,
-            workspaceId: event.workspaceId,
-            contactId: event.contactId ?? null,
-            occurredAt: event.occurredAt,
-            payload: event.payload,
-          },
-        }),
-      ) as InputJsonValue;
-      await enqueueJob({
-        jobType: "crm_push_event",
-        queueName: "integrations",
-        workspaceId: event.workspaceId,
-        payload: jobPayload,
-        idempotencyKey: `crm-push-${provider}-${event.type}-${event.contactId || "na"}-${event.occurredAt || Date.now()}`.slice(
-          0,
-          180,
-        ),
-      });
-      enqueued += 1;
-    } catch (err) {
-      console.warn("[crm] enqueue push failed", provider, err);
-    }
-  }
-
-  if (enqueued) {
-    await writeCrmAudit({
-      workspaceId: event.workspaceId,
-      category: "push",
-      action: event.type,
-      message: `Published ${event.type} to ${enqueued} CRM connector(s)`,
-      detail: {
-        contactId: event.contactId,
-        providers: connected.map((c: { provider: string }) => c.provider),
-      },
-    });
-  }
-
-  return { enqueued };
+  return emitPlatformEvent(event);
 }
 
-/** Convenience helpers used by phone/SMS call sites. */
 export async function publishCallCompleted(input: {
   workspaceId: string;
   contactId?: string | null;
@@ -84,13 +23,31 @@ export async function publishCallCompleted(input: {
   notes?: string | null;
 }) {
   const type: CrmPlatformEventType =
-    input.direction === "missed" ? "call.missed" : "call.completed";
-  return publishCrmEvent({
-    type,
+    input.direction === "missed"
+      ? "call.missed"
+      : input.direction === "outbound"
+        ? "call.outgoing"
+        : "call.completed";
+  return emitTypedEvent(type, {
     workspaceId: input.workspaceId,
     contactId: input.contactId,
-    occurredAt: new Date().toISOString(),
+    eventId: `call-${input.callId}-${type}`,
     payload: { ...input },
+  });
+}
+
+export async function publishCallIncoming(input: {
+  workspaceId: string;
+  contactId?: string | null;
+  callId: string;
+  from?: string | null;
+  to?: string | null;
+}) {
+  return emitTypedEvent("call.incoming", {
+    workspaceId: input.workspaceId,
+    contactId: input.contactId,
+    eventId: `call-${input.callId}-incoming`,
+    payload: { ...input, direction: "inbound" },
   });
 }
 
@@ -104,11 +61,14 @@ export async function publishSmsEvent(input: {
   status?: string | null;
   messageId?: string | null;
 }) {
-  return publishCrmEvent({
-    type: input.direction === "inbound" ? "sms.received" : "sms.sent",
+  let type: CrmPlatformEventType =
+    input.direction === "inbound" ? "sms.received" : "sms.sent";
+  if (input.status === "delivered") type = "sms.delivered";
+  if (input.status === "failed") type = "sms.failed";
+  return emitTypedEvent(type, {
     workspaceId: input.workspaceId,
     contactId: input.contactId,
-    occurredAt: new Date().toISOString(),
+    eventId: input.messageId ? `sms-${input.messageId}-${type}` : undefined,
     payload: { ...input },
   });
 }
@@ -120,11 +80,10 @@ export async function publishRecordingReady(input: {
   recordingUrl: string;
   direction?: "inbound" | "outbound" | "missed";
 }) {
-  return publishCrmEvent({
-    type: "recording.ready",
+  return emitTypedEvent("recording.ready", {
     workspaceId: input.workspaceId,
     contactId: input.contactId,
-    occurredAt: new Date().toISOString(),
+    eventId: `rec-${input.callId}`,
     payload: { ...input },
   });
 }
@@ -137,11 +96,24 @@ export async function publishTranscriptReady(input: {
   transcriptText?: string | null;
   aiSummary?: string | null;
 }) {
-  return publishCrmEvent({
-    type: "transcript.ready",
+  return emitTypedEvent("transcript.ready", {
     workspaceId: input.workspaceId,
     contactId: input.contactId,
-    occurredAt: new Date().toISOString(),
+    eventId: `tr-${input.callId}`,
+    payload: { ...input },
+  });
+}
+
+export async function publishAiSummaryReady(input: {
+  workspaceId: string;
+  contactId?: string | null;
+  callId: string;
+  aiSummary: string;
+}) {
+  return emitTypedEvent("ai_summary.ready", {
+    workspaceId: input.workspaceId,
+    contactId: input.contactId,
+    eventId: `ai-${input.callId}`,
     payload: { ...input },
   });
 }
@@ -154,11 +126,10 @@ export async function publishVoicemailReceived(input: {
   to?: string | null;
   recordingUrl?: string | null;
 }) {
-  return publishCrmEvent({
-    type: "voicemail.received",
+  return emitTypedEvent("voicemail.received", {
     workspaceId: input.workspaceId,
     contactId: input.contactId,
-    occurredAt: new Date().toISOString(),
+    eventId: input.callId ? `vm-${input.callId}` : undefined,
     payload: { ...input, direction: "missed" },
   });
 }
@@ -169,11 +140,26 @@ export async function publishCallbackScheduled(input: {
   callId?: string | null;
   phone?: string | null;
 }) {
-  return publishCrmEvent({
-    type: "callback.scheduled",
+  return emitTypedEvent("callback.scheduled", {
     workspaceId: input.workspaceId,
     contactId: input.contactId,
-    occurredAt: new Date().toISOString(),
+    eventId: input.callId ? `cb-${input.callId}` : undefined,
     payload: { ...input },
   });
 }
+
+export async function publishContactEvent(input: {
+  workspaceId: string;
+  contactId: string;
+  type: "contact.created" | "contact.updated";
+  payload?: Record<string, unknown>;
+}) {
+  return emitTypedEvent(input.type, {
+    workspaceId: input.workspaceId,
+    contactId: input.contactId,
+    eventId: `${input.type}-${input.contactId}`,
+    payload: input.payload || {},
+  });
+}
+
+export { emitPlatformEvent, emitTypedEvent };

@@ -2,12 +2,13 @@ import type { CrmConnector } from "./connector";
 import { salesforceConnector } from "./adapters/salesforce";
 import { zohoConnector } from "./adapters/zoho";
 import { pipedriveConnector } from "./adapters/pipedrive";
+import { defineCrmProvider } from "./sdk";
 import type { CrmProviderId } from "./types";
 
 const CONNECTORS: Record<CrmProviderId, CrmConnector> = {
-  salesforce: salesforceConnector,
-  zoho: zohoConnector,
-  pipedrive: pipedriveConnector,
+  salesforce: defineCrmProvider({ adapter: salesforceConnector }),
+  zoho: defineCrmProvider({ adapter: zohoConnector }),
+  pipedrive: defineCrmProvider({ adapter: pipedriveConnector }),
 };
 
 export const CRM_PROVIDER_IDS: CrmProviderId[] = ["salesforce", "zoho", "pipedrive"];

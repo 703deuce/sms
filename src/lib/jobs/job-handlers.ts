@@ -145,6 +145,31 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
         event: payload.event as import("@/lib/crm/types").CrmPlatformEvent,
       });
     }
+    case "crm_metadata_refresh": {
+      const { runCrmMetadataRefreshJob } = await import("@/lib/crm/runtime/metadata-refresh");
+      return runCrmMetadataRefreshJob({
+        workspaceId: String(payload.workspaceId || ""),
+        provider: payload.provider as "salesforce" | "zoho" | "pipedrive",
+      });
+    }
+    case "crm_bulk_sync": {
+      const { runCrmBulkSyncPage } = await import("@/lib/crm/runtime/bulk-sync");
+      return runCrmBulkSyncPage({
+        workspaceId: String(payload.workspaceId || ""),
+        provider: payload.provider as "salesforce" | "zoho" | "pipedrive",
+        syncRunId: String(payload.syncRunId || ""),
+        objectType: (payload.objectType as "contact" | "company" | "lead") || "contact",
+        cursor: (payload.cursor as string | null) || null,
+      });
+    }
+    case "crm_webhook_process": {
+      const { processCrmWebhookJob } = await import("@/lib/crm/runtime/webhooks");
+      return processCrmWebhookJob({
+        workspaceId: String(payload.workspaceId || ""),
+        provider: payload.provider as "salesforce" | "zoho" | "pipedrive",
+        webhookEventId: String(payload.webhookEventId || ""),
+      });
+    }
     default:
       throw new Error(`Unknown job type: ${jobType}`);
   }

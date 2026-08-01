@@ -13,6 +13,9 @@ export type CrmObjectType =
   | "deal"
   | "task"
   | "user"
+  | "pipeline"
+  | "stage"
+  | "note"
   | "call"
   | "sms"
   | "recording"
@@ -198,7 +201,7 @@ export const DEFAULT_SYNC_PREFERENCES: CrmSyncPreferences = {
   createTasksOnUnreadSms: false,
 };
 
-/** Transovo → CRM publishable events. */
+/** Transovo platform events — all integrations subscribe via the runtime event bus. */
 export type CrmPlatformEventType =
   | "call.incoming"
   | "call.outgoing"
@@ -207,20 +210,56 @@ export type CrmPlatformEventType =
   | "voicemail.received"
   | "recording.ready"
   | "transcript.ready"
+  | "ai_summary.ready"
   | "sms.sent"
+  | "sms.delivered"
+  | "sms.failed"
   | "sms.received"
   | "contact.created"
   | "contact.updated"
+  | "lead.created"
   | "task.created"
-  | "callback.scheduled";
+  | "task.completed"
+  | "callback.scheduled"
+  | "appointment.booked"
+  | "user.created"
+  | "user.updated";
+
+export const ALL_CRM_PLATFORM_EVENT_TYPES: CrmPlatformEventType[] = [
+  "call.incoming",
+  "call.outgoing",
+  "call.missed",
+  "call.completed",
+  "voicemail.received",
+  "recording.ready",
+  "transcript.ready",
+  "ai_summary.ready",
+  "sms.sent",
+  "sms.delivered",
+  "sms.failed",
+  "sms.received",
+  "contact.created",
+  "contact.updated",
+  "lead.created",
+  "task.created",
+  "task.completed",
+  "callback.scheduled",
+  "appointment.booked",
+  "user.created",
+  "user.updated",
+];
 
 export type CrmPlatformEvent = {
   type: CrmPlatformEventType;
   workspaceId: string;
   contactId?: string | null;
   occurredAt?: string;
+  /** Stable id for dedupe across bus → jobs → webhooks. */
+  eventId?: string;
   payload: Record<string, unknown>;
 };
+
+export type EventPriority = "high" | "medium" | "low";
 
 export type OAuthProviderConfig = {
   authorizationUrl: string;

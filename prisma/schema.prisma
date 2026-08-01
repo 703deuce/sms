@@ -793,6 +793,8 @@ model JobQueue {
   idempotencyKey String?      @unique
   attempts     Int            @default(0)
   maxAttempts  Int            @default(8)
+  /// Lower number = higher priority (CRM high=10, medium=50, low=90).
+  priority     Int            @default(50)
   runAfter     DateTime       @default(now())
   lockedAt     DateTime?
   lastError    String?
@@ -802,7 +804,7 @@ model JobQueue {
 
   workspace    Workspace?     @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
 
-  @@index([status, runAfter, queueName])
+  @@index([status, priority, runAfter, queueName])
   @@index([jobType, status])
   @@map("job_queue")
 }

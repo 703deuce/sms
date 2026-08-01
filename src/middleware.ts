@@ -31,6 +31,7 @@ function isPublicPath(pathname: string) {
   if (pathname.startsWith("/api/integrations/google/") && pathname.includes("/callback")) return true;
   // CRM OAuth callbacks (Salesforce / Zoho / Pipedrive)
   if (pathname.startsWith("/api/crm/oauth/callback")) return true;
+  if (pathname.startsWith("/api/crm/webhooks/")) return true;
   if (pathname.startsWith("/invite/")) return true;
   if (pathname.startsWith("/api/invite/")) return true;
   if (pathname.startsWith("/messaging/payments/mock/")) return true;

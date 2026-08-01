@@ -9,6 +9,8 @@ export type EnqueueJobInput = {
   idempotencyKey?: string;
   runAfter?: Date;
   maxAttempts?: number;
+  /** Lower = higher priority (default 50). */
+  priority?: number;
   /** Force wake an existing pending/deferred job to runAt. */
   wake?: boolean;
 };
@@ -37,6 +39,7 @@ export async function enqueueJob(input: EnqueueJobInput) {
             payload: input.payload,
             lastError: null,
             lockedAt: existing.status === "processing" ? existing.lockedAt : null,
+            ...(input.priority != null ? { priority: input.priority } : {}),
           },
         });
       } else {
@@ -57,6 +60,7 @@ export async function enqueueJob(input: EnqueueJobInput) {
           queueName,
           jobType: input.jobType,
           maxAttempts: input.maxAttempts ?? existing.maxAttempts,
+          priority: input.priority ?? existing.priority ?? 50,
         },
       });
     }
@@ -72,6 +76,7 @@ export async function enqueueJob(input: EnqueueJobInput) {
         idempotencyKey: input.idempotencyKey,
         runAfter,
         maxAttempts: input.maxAttempts ?? 8,
+        priority: input.priority ?? 50,
       },
     });
   }
@@ -134,7 +139,7 @@ export async function claimDueJobs(limit = 25) {
       status: { in: ["pending", "deferred"] },
       runAfter: { lte: now },
     },
-    orderBy: { runAfter: "asc" },
+    orderBy: [{ priority: "asc" }, { runAfter: "asc" }],
     take: limit,
   });
 

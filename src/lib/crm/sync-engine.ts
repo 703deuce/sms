@@ -56,10 +56,12 @@ export async function enqueueCrmSync(input: {
     },
   });
 
+  const { crmQueueName, priorityScoreForSyncKind } = await import("./runtime/priority");
   await enqueueJob({
     jobType: "crm_sync",
-    queueName: "integrations",
+    queueName: crmQueueName(input.provider),
     workspaceId: input.workspaceId,
+    priority: priorityScoreForSyncKind(kind),
     payload: {
       workspaceId: input.workspaceId,
       provider: input.provider,
