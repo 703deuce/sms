@@ -69,17 +69,42 @@ export async function resolveContactForOutbound(input: {
     if (byFp) {
       // Collision: another internal contact already maps to this CRM id.
       if (byFp.internalId !== input.contactId) {
-        await writeCrmAudit({
+        const fp = fpPhone || fpEmail;
+        const { enqueuePendingConflict, getRememberedDecision } = await import("./conflicts-ui");
+        const remembered = await getRememberedDecision(input.workspaceId, input.provider, fp);
+
+        if (remembered === "ignore") {
+          return { action: "skip", reason: "Duplicate ignored by remembered decision" };
+        }
+        if (remembered === "use_transovo") {
+          return { action: "create_new" };
+        }
+        if (remembered === "use_crm" || remembered === "merge") {
+          await upsertObjectMapping({
+            workspaceId: input.workspaceId,
+            provider: input.provider,
+            objectType: "contact",
+            internalId: input.contactId,
+            externalId: byFp.externalId,
+            fingerprint: fp,
+          });
+          return {
+            action: "use_fingerprint",
+            externalId: byFp.externalId,
+            mappingId: byFp.id,
+          };
+        }
+
+        await enqueuePendingConflict({
           workspaceId: input.workspaceId,
           provider: input.provider,
-          category: "conflict",
-          action: "phone_collision",
-          message: `Phone/email collision: contact ${input.contactId} collides with ${byFp.internalId}`,
-          detail: {
-            contactId: input.contactId,
-            existingInternalId: byFp.internalId,
-            externalId: byFp.externalId,
-          },
+          contactId: input.contactId,
+          existingInternalId: byFp.internalId,
+          externalId: byFp.externalId,
+          fingerprint: fp,
+          phone: input.phone,
+          email: input.email,
+          message: `Possible duplicate: Transovo contact matches CRM record already linked to another contact`,
         });
         if (input.syncRunId) {
           await appendSyncEvent({
@@ -91,9 +116,13 @@ export async function resolveContactForOutbound(input: {
             objectType: "contact",
             internalId: input.contactId,
             externalId: byFp.externalId,
-            message: "Phone/email collision — reusing existing CRM mapping",
+            message: "Duplicate detected — awaiting customer resolution in CRM Conflicts",
           });
         }
+        return {
+          action: "skip",
+          reason: "Duplicate detected — resolve in Integrations → CRM → Conflicts",
+        };
       }
       await upsertObjectMapping({
         workspaceId: input.workspaceId,

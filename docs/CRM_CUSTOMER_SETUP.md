@@ -21,11 +21,18 @@ If Connect is disabled or errors immediately, open **Integrations → CRM → [p
 
 1. Go to **Integrations → CRM**.
 2. Click **Connect** on Salesforce, Zoho, or Pipedrive.
-3. Sign in to the CRM and approve the requested permissions.
-4. You’ll return to Transovo’s connection wizard.
-5. Choose what to sync (calls, SMS, tasks, recording/transcript links, direction).
-6. **Save preferences**, then **Run initial sync**.
-7. Confirm status on the **Health** tab (Connected, last sync, objects synced).
+3. Sign in to the CRM and approve permissions.
+4. Complete the **setup wizard**:
+   1. Connected  
+   2. Detect account (users, pipelines, modules)  
+   3. Sync settings (unsupported options are disabled)  
+   4. Field mapping  
+   5. Owners & pipelines  
+   6. Initial sync  
+   7. Summary → Finish  
+5. Confirm status on the **Dashboard** tab.
+
+See also: `CRM_FIELD_MAPPING_GUIDE.md`, `CRM_SYNC_SETTINGS_GUIDE.md`, `CRM_FAQ.md`.
 
 ## After connect
 

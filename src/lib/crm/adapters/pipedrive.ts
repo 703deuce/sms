@@ -325,4 +325,29 @@ export const pipedriveConnector: CrmConnector = {
       }),
     );
   },
+
+  async listFields(ctx) {
+    const out: Array<{ objectType: string; name: string; label: string }> = [];
+    for (const [path, objectType] of [
+      ["/personFields", "contact"],
+      ["/organizationFields", "company"],
+      ["/dealFields", "deal"],
+    ] as const) {
+      try {
+        const res = await pd<Array<Record<string, unknown>>>(ctx, path);
+        for (const f of res.data || []) {
+          const key = String(f.key || f.name || "");
+          if (!key) continue;
+          out.push({
+            objectType,
+            name: key,
+            label: String(f.name || key),
+          });
+        }
+      } catch {
+        // continue
+      }
+    }
+    return out.slice(0, 400);
+  },
 };

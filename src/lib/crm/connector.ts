@@ -77,6 +77,11 @@ export interface CrmConnector {
   listUsers?(ctx: ConnectorContext): Promise<CrmUser[]>;
   listPipelines?(ctx: ConnectorContext): Promise<CrmPipeline[]>;
 
+  /** Optional field discovery for mapping UI (name = API field). */
+  listFields?(
+    ctx: ConnectorContext,
+  ): Promise<Array<{ objectType: string; name: string; label: string }>>;
+
   /** Optional provider webhook verification / ingest. */
   handleWebhook?(
     ctx: ConnectorContext,

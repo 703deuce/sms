@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
+import { getCapabilityMatrixTable } from "@/lib/crm/capability";
 import { getFeatureMatrix } from "@/lib/crm/feature-matrix";
 import { CRM_PROVIDER_IDS, isCrmProvider } from "@/lib/crm/registry";
 import type { CrmProviderId } from "@/lib/crm/types";
@@ -15,7 +16,11 @@ export async function GET(request: Request) {
         return NextResponse.json({ error: "Unsupported CRM provider" }, { status: 400 });
       }
       return NextResponse.json({
-        data: { provider: providerParam, features: getFeatureMatrix(providerParam) },
+        data: {
+          provider: providerParam,
+          features: getFeatureMatrix(providerParam),
+          matrix: getCapabilityMatrixTable(),
+        },
       });
     }
 
@@ -23,7 +28,10 @@ export async function GET(request: Request) {
       provider: id,
       features: getFeatureMatrix(id),
     }));
-    return NextResponse.json({ data });
+    return NextResponse.json({
+      data,
+      matrix: getCapabilityMatrixTable(),
+    });
   } catch (err) {
     return jsonError(err, 500);
   }

@@ -105,11 +105,11 @@ export function CrmIntegrationsClient() {
       ) : null}
 
       <div className="mb-6 rounded-xl border border-border bg-muted/30 p-4 text-sm text-muted-foreground">
-        <p className="font-medium text-foreground">How it works</p>
+        <p className="font-medium text-foreground">Customer setup</p>
         <p className="mt-1">
-          Transovo uses one provider-agnostic CRM framework. Each CRM is a thin adapter.
-          Connect with OAuth, choose sync preferences, and communication history flows
-          into your CRM automatically.
+          Click Connect to start the guided wizard: authorize → detect account → sync
+          settings → field mapping → owners/pipelines → initial sync. Unsupported options
+          for each CRM are hidden automatically via the capability matrix.
         </p>
       </div>
 

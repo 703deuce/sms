@@ -292,6 +292,15 @@ export async function runCrmSyncJob(payload: {
       detail: stats,
     });
 
+    const { recordCrmMetric } = await import("./metrics");
+    await recordCrmMetric({
+      workspaceId,
+      provider,
+      name: kind === "initial" ? "initial_sync" : "sync",
+      ms: finishedAt.getTime() - startedAt.getTime(),
+      ok: true,
+    }).catch(() => undefined);
+
     return { ok: true, stats, status };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -308,6 +317,14 @@ export async function runCrmSyncJob(payload: {
         statsJson: stats,
       },
     });
+    const { recordCrmMetric } = await import("./metrics");
+    await recordCrmMetric({
+      workspaceId,
+      provider,
+      name: kind === "initial" ? "initial_sync" : "sync",
+      ms: finishedAt.getTime() - startedAt.getTime(),
+      ok: false,
+    }).catch(() => undefined);
     await prisma.integrationConnection
       .updateMany({
         where: { workspaceId, provider },

@@ -12,6 +12,7 @@ import {
   upsertObjectMapping,
 } from "./mappings";
 import { isFeatureSupported } from "./feature-matrix";
+import { applyFieldMappingsOutbound, listFieldMappings } from "./mappings";
 import { getConnector } from "./registry";
 import { buildContext } from "./sync-engine";
 import type { CrmPlatformEvent, CrmProviderId } from "./types";
@@ -74,14 +75,27 @@ export async function pushCrmEventJob(payload: {
             message: resolved.reason,
           });
         } else if (resolved.action === "create_new") {
+          const fieldMaps = await listFieldMappings(workspaceId, provider);
+          const mapped = applyFieldMappingsOutbound(
+            {
+              firstName: contact.firstName,
+              lastName: contact.lastName,
+              phone: contact.phone,
+              email: contact.email,
+              company: contact.company,
+              source: "Transovo",
+            },
+            fieldMaps,
+          );
           const created = await connector.upsertContact(ctx, {
-            firstName: contact.firstName,
-            lastName: contact.lastName,
-            phone: contact.phone,
-            email: contact.email,
-            companyName: contact.company,
+            firstName: (mapped.firstName as string) || contact.firstName,
+            lastName: (mapped.lastName as string) || contact.lastName,
+            phone: (mapped.phone as string) || contact.phone,
+            email: (mapped.email as string) || contact.email,
+            companyName: (mapped.company as string) || contact.company,
             source: "Transovo",
             ownerExternalId: prefs.defaultOwnerExternalId,
+            customFields: mapped,
           });
           contactExternalId = created.externalId;
           await upsertObjectMapping({
@@ -106,8 +120,9 @@ export async function pushCrmEventJob(payload: {
       }
     }
 
-    // Communications (+ recording/transcript attach via call log update)
-    if (
+    if (event.type === "voicemail.received" && !prefs.syncVoicemail) {
+      // Preference off — skip voicemail activity push (tasks may still fire below).
+    } else if (
       (event.type.startsWith("call.") ||
         event.type === "voicemail.received" ||
         event.type === "recording.ready" ||
@@ -139,7 +154,9 @@ export async function pushCrmEventJob(payload: {
         transcriptUrl: prefs.syncTranscripts
           ? ((event.payload.transcriptUrl as string) || null)
           : null,
-        aiSummary: (event.payload.aiSummary as string) || null,
+        aiSummary: prefs.syncAiSummary
+          ? ((event.payload.aiSummary as string) || null)
+          : null,
         contactExternalId,
         startedAt: event.occurredAt || new Date().toISOString(),
       });

@@ -1,4 +1,5 @@
 import { getPrisma } from "@/lib/db";
+import { redactSensitive } from "./redact";
 
 export async function writeCrmAudit(input: {
   workspaceId: string;
@@ -10,6 +11,7 @@ export async function writeCrmAudit(input: {
   actorUserId?: string | null;
 }) {
   try {
+    const detail = input.detail ? redactSensitive(input.detail) : undefined;
     await getPrisma().crmAuditLog.create({
       data: {
         workspaceId: input.workspaceId,
@@ -17,12 +19,12 @@ export async function writeCrmAudit(input: {
         category: input.category,
         action: input.action,
         message: input.message,
-        detailJson: (input.detail || undefined) as object | undefined,
+        detailJson: (detail || undefined) as object | undefined,
         actorUserId: input.actorUserId || null,
       },
     });
   } catch (err) {
-    console.warn("[crm] audit write failed", err);
+    console.warn("[crm] audit write failed", err instanceof Error ? err.message : err);
   }
 }
 
@@ -50,11 +52,13 @@ export async function appendSyncEvent(input: {
         objectType: input.objectType || null,
         internalId: input.internalId || null,
         externalId: input.externalId || null,
-        detailJson: (input.detail || undefined) as object | undefined,
+        detailJson: (input.detail ? redactSensitive(input.detail) : undefined) as
+          | object
+          | undefined,
       },
     });
   } catch (err) {
-    console.warn("[crm] sync event write failed", err);
+    console.warn("[crm] sync event write failed", err instanceof Error ? err.message : err);
   }
 }
 

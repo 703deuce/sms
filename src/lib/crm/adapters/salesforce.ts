@@ -468,4 +468,26 @@ export const salesforceConnector: CrmConnector = {
       } satisfies CrmPipeline,
     ];
   },
+
+  async listFields(ctx) {
+    const out: Array<{ objectType: string; name: string; label: string }> = [];
+    for (const objectType of ["Contact", "Lead", "Task"] as const) {
+      try {
+        const describe = await crmFetch<{
+          fields?: Array<{ name?: string; label?: string; custom?: boolean; updateable?: boolean }>;
+        }>(api(ctx, `/sobjects/${objectType}/describe`), { accessToken: ctx.accessToken });
+        for (const f of describe.fields || []) {
+          if (!f.name || f.updateable === false) continue;
+          out.push({
+            objectType: objectType.toLowerCase(),
+            name: f.name,
+            label: f.label || f.name,
+          });
+        }
+      } catch {
+        // continue other objects
+      }
+    }
+    return out.slice(0, 400);
+  },
 };

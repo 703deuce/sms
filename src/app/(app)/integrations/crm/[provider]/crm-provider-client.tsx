@@ -7,27 +7,13 @@ import { PageHeader } from "@/components/ui/page-header";
 import { StatusChip } from "@/components/ui/status-chip";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import {
+  CrmOnboardingWizard,
+  type SetupDiscovery,
+  type WizardPrefs,
+} from "./crm-onboarding-wizard";
 
-type Prefs = {
-  autoCreateContacts: boolean;
-  autoCreateLeads: boolean;
-  autoCreateCompanies: boolean;
-  syncRecordings: boolean;
-  syncTranscripts: boolean;
-  syncNotes: boolean;
-  syncSms: boolean;
-  syncCalls: boolean;
-  syncTasks: boolean;
-  syncOpportunities: boolean;
-  direction: "inbound" | "outbound" | "bidirectional";
-  matchByPhone: boolean;
-  matchByEmail: boolean;
-  createTasksOnMissedCall: boolean;
-  createTasksOnCallback: boolean;
-  createTasksOnVoicemail: boolean;
-  createTasksOnUnreadSms: boolean;
-  defaultOwnerExternalId?: string | null;
-};
+type Prefs = WizardPrefs;
 
 type SyncRun = {
   id: string;
@@ -37,13 +23,8 @@ type SyncRun = {
   finishedAt?: string | null;
   lastError?: string | null;
   statsJson?: Record<string, unknown> | null;
+  durationMs?: number | null;
   createdAt: string;
-};
-
-const NAMES: Record<string, string> = {
-  salesforce: "Salesforce",
-  zoho: "Zoho CRM / Bigin",
-  pipedrive: "Pipedrive",
 };
 
 type ProbeResult = {
@@ -65,6 +46,29 @@ type FeatureRow = {
   notes?: string;
 };
 
+type MatrixRow = {
+  feature: string;
+  label: string;
+  cells: Record<string, { support: string; notes?: string }>;
+};
+
+type PendingConflict = {
+  id: string;
+  contactId: string;
+  existingInternalId: string;
+  externalId: string;
+  phone?: string | null;
+  email?: string | null;
+  message: string;
+  createdAt: string;
+};
+
+const NAMES: Record<string, string> = {
+  salesforce: "Salesforce",
+  zoho: "Zoho CRM / Bigin",
+  pipedrive: "Pipedrive",
+};
+
 const DIAG_PROBES: Array<{ id: string; label: string }> = [
   { id: "env", label: "Env vars" },
   { id: "oauth", label: "OAuth" },
@@ -83,21 +87,62 @@ const DIAG_PROBES: Array<{ id: string; label: string }> = [
   { id: "retry_failed", label: "Retry failed" },
 ];
 
+/** Client-side mirror of capability gates (must stay aligned with feature-matrix). */
+function preferenceGatesFor(provider: string): Record<string, boolean> {
+  const leads = provider !== "pipedrive";
+  return {
+    autoCreateContacts: true,
+    autoCreateLeads: leads,
+    autoCreateCompanies: true,
+    syncCalls: true,
+    syncSms: true,
+    syncVoicemail: true,
+    syncRecordings: true,
+    syncTranscripts: true,
+    syncAiSummary: true,
+    syncNotes: true,
+    syncTasks: true,
+    syncActivities: true,
+    syncOpportunities: true,
+    defaultOwnerExternalId: true,
+    defaultPipelineId: true,
+    defaultStageId: true,
+  };
+}
+
 export function CrmProviderClient({ provider }: { provider: string }) {
   const name = NAMES[provider] || provider;
+  const gates = useMemo(() => preferenceGatesFor(provider), [provider]);
   const [tab, setTab] = useState<
-    "settings" | "logs" | "mappings" | "health" | "diagnostics" | "features"
-  >("settings");
+    | "dashboard"
+    | "settings"
+    | "logs"
+    | "mappings"
+    | "diagnostics"
+    | "features"
+    | "conflicts"
+    | "support"
+  >("dashboard");
   const [status, setStatus] = useState("disconnected");
   const [syncStatus, setSyncStatus] = useState("idle");
   const [prefs, setPrefs] = useState<Prefs | null>(null);
   const [runs, setRuns] = useState<SyncRun[]>([]);
   const [audit, setAudit] = useState<Array<Record<string, unknown>>>([]);
   const [fields, setFields] = useState<Array<Record<string, unknown>>>([]);
+  const [presets, setPresets] = useState<
+    Array<{ objectType: string; internalField: string; externalField: string; label: string }>
+  >([]);
+  const [internalFields, setInternalFields] = useState<Array<{ value: string; label: string }>>(
+    [],
+  );
   const [health, setHealth] = useState<Record<string, unknown> | null>(null);
   const [diagSnapshot, setDiagSnapshot] = useState<Record<string, unknown> | null>(null);
   const [probeResults, setProbeResults] = useState<Record<string, ProbeResult>>({});
   const [features, setFeatures] = useState<FeatureRow[]>([]);
+  const [matrix, setMatrix] = useState<MatrixRow[]>([]);
+  const [conflicts, setConflicts] = useState<PendingConflict[]>([]);
+  const [discovery, setDiscovery] = useState<SetupDiscovery | null>(null);
+  const [supportPack, setSupportPack] = useState<Record<string, unknown> | null>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -109,20 +154,24 @@ export function CrmProviderClient({ provider }: { provider: string }) {
     internalField: "phone",
     externalField: "Phone",
   });
+  const [rememberConflict, setRememberConflict] = useState(true);
 
   const prefToggles = useMemo(
     () =>
       [
-        ["autoCreateContacts", "Auto-create contacts"],
-        ["autoCreateLeads", "Auto-create leads"],
-        ["autoCreateCompanies", "Auto-create companies"],
-        ["syncCalls", "Sync calls"],
-        ["syncSms", "Sync SMS"],
-        ["syncRecordings", "Sync recording links"],
-        ["syncTranscripts", "Sync transcripts"],
-        ["syncNotes", "Sync notes"],
-        ["syncTasks", "Sync / auto-create tasks"],
-        ["syncOpportunities", "Sync opportunities"],
+        ["autoCreateContacts", "Contact creation"],
+        ["autoCreateLeads", "Lead creation"],
+        ["autoCreateCompanies", "Company creation"],
+        ["syncTasks", "Task creation"],
+        ["syncCalls", "Call logging"],
+        ["syncSms", "SMS logging"],
+        ["syncVoicemail", "Voicemail logging"],
+        ["syncRecordings", "Recording links"],
+        ["syncTranscripts", "Transcript links"],
+        ["syncAiSummary", "AI summary"],
+        ["syncNotes", "Notes"],
+        ["syncActivities", "Activities"],
+        ["syncOpportunities", "Opportunity updates"],
         ["matchByPhone", "Match by phone"],
         ["matchByEmail", "Match by email"],
         ["createTasksOnMissedCall", "Task on missed call"],
@@ -178,14 +227,44 @@ export function CrmProviderClient({ provider }: { provider: string }) {
   function loadMappings() {
     return fetch(`/api/crm/mappings?provider=${provider}`)
       .then((r) => r.json())
-      .then((j) => setFields(j.data?.fields || []));
+      .then((j) => {
+        setFields(j.data?.fields || []);
+        setPresets(j.data?.presets || []);
+        setInternalFields(j.data?.internalFields || []);
+      });
+  }
+
+  function loadConflicts() {
+    return fetch(`/api/crm/conflicts?provider=${provider}`)
+      .then((r) => r.json())
+      .then((j) => setConflicts(j.data || []));
+  }
+
+  function loadFeatures() {
+    return fetch(`/api/crm/features?provider=${provider}`)
+      .then((r) => r.json())
+      .then((j) => {
+        if (j.data?.features) setFeatures(j.data.features);
+        if (j.data?.matrix) setMatrix(j.data.matrix);
+        else if (j.matrix) setMatrix(j.matrix);
+      });
   }
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const t = params.get("tab");
-    if (t === "logs" || t === "health" || t === "diagnostics" || t === "features" || t === "mappings") {
-      setTab(t);
+    if (
+      t === "logs" ||
+      t === "diagnostics" ||
+      t === "features" ||
+      t === "mappings" ||
+      t === "conflicts" ||
+      t === "support" ||
+      t === "settings" ||
+      t === "dashboard" ||
+      t === "health"
+    ) {
+      setTab(t === "health" ? "dashboard" : t);
     }
     if (params.get("wizard") === "1" || params.get("connected") === "1") {
       setWizard(true);
@@ -196,6 +275,8 @@ export function CrmProviderClient({ provider }: { provider: string }) {
     void loadMappings();
     void loadHealth();
     void loadDiagnostics();
+    void loadConflicts();
+    void loadFeatures();
   }, [provider]);
 
   async function savePrefs() {
@@ -212,7 +293,6 @@ export function CrmProviderClient({ provider }: { provider: string }) {
       if (!res.ok) throw new Error(json.error || "Save failed");
       setPrefs(json.data);
       setMessage("Preferences saved");
-      setWizard(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Save failed");
     } finally {
@@ -220,14 +300,14 @@ export function CrmProviderClient({ provider }: { provider: string }) {
     }
   }
 
-  async function syncNow() {
+  async function syncNow(kind: "initial" | "manual" = "manual") {
     setBusy(true);
     setError("");
     try {
       const res = await fetch("/api/crm/sync", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider, kind: wizard ? "initial" : "manual" }),
+        body: JSON.stringify({ provider, kind: wizard ? "initial" : kind }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Sync failed");
@@ -242,28 +322,36 @@ export function CrmProviderClient({ provider }: { provider: string }) {
     }
   }
 
-  async function revalidate(writeProbe = false) {
+  async function discoverSetup() {
     setBusy(true);
     setError("");
     try {
-      const res = await fetch("/api/crm/sync", {
+      const res = await fetch("/api/crm/setup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider, validateOnly: true, writeProbe }),
+        body: JSON.stringify({ provider, action: "discover", applyDefaults: true }),
       });
       const json = await res.json();
-      if (!res.ok && !json.data) throw new Error(json.error || "Validation failed");
-      const steps = (json.data?.steps || []) as Array<{ id: string; ok: boolean; message: string }>;
-      setMessage(
-        json.data?.ok
-          ? "Connection validated"
-          : `Validation failed: ${steps.find((s) => !s.ok)?.message || "see health"}`,
-      );
-      if (!json.data?.ok) setError(steps.find((s) => !s.ok)?.message || "Validation failed");
+      if (!res.ok) throw new Error(json.error || "Setup discovery failed");
+      setDiscovery(json.data);
+      if (json.data?.suggestedOwnerExternalId || json.data?.suggestedPipelineId) {
+        setPrefs((prev) =>
+          prev
+            ? {
+                ...prev,
+                defaultOwnerExternalId:
+                  prev.defaultOwnerExternalId || json.data.suggestedOwnerExternalId,
+                defaultPipelineId: prev.defaultPipelineId || json.data.suggestedPipelineId,
+                defaultStageId: prev.defaultStageId || json.data.suggestedStageId,
+              }
+            : prev,
+        );
+      }
+      await loadMappings();
       await loadProvider();
-      await loadHealth();
+      setMessage("Account detected and defaults prepared");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Validation failed");
+      setError(e instanceof Error ? e.message : "Setup discovery failed");
     } finally {
       setBusy(false);
     }
@@ -278,6 +366,7 @@ export function CrmProviderClient({ provider }: { provider: string }) {
       if (!res.ok) throw new Error(json.error || "Disconnect failed");
       setMessage("Disconnected");
       await loadProvider();
+      await loadHealth();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Disconnect failed");
     } finally {
@@ -320,11 +409,8 @@ export function CrmProviderClient({ provider }: { provider: string }) {
         durationMs: 0,
       }) as ProbeResult;
       setProbeResults((prev) => ({ ...prev, [probe]: result }));
-      if (!result.ok && !result.skipped) {
-        setError(result.humanMessage || result.message);
-      } else {
-        setMessage(result.humanMessage || result.message);
-      }
+      if (!result.ok && !result.skipped) setError(result.humanMessage || result.message);
+      else setMessage(result.humanMessage || result.message);
       await loadDiagnostics();
       await loadHealth();
       await loadLogs();
@@ -334,15 +420,6 @@ export function CrmProviderClient({ provider }: { provider: string }) {
     } finally {
       setProbeBusy(null);
     }
-  }
-
-  async function runCoreProbes() {
-    // Sequential so token refresh doesn't race other API probes.
-    await runProbe("env");
-    await runProbe("oauth");
-    await runProbe("token_refresh");
-    await runProbe("api_reachable");
-    await runProbe("rate_limit");
   }
 
   async function addFieldMapping() {
@@ -364,11 +441,110 @@ export function CrmProviderClient({ provider }: { provider: string }) {
     }
   }
 
+  async function applyPreset(preset: {
+    objectType: string;
+    internalField: string;
+    externalField: string;
+  }) {
+    setBusy(true);
+    try {
+      const res = await fetch("/api/crm/mappings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider, ...preset }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Preset failed");
+      await loadMappings();
+      setMessage("Preset mapping applied");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Preset failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function deleteMapping(id: string) {
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/crm/mappings?provider=${provider}&id=${id}`, {
+        method: "DELETE",
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Delete failed");
+      await loadMappings();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Delete failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function resolveConflict(
+    conflictId: string,
+    decision: "use_crm" | "use_transovo" | "merge" | "ignore",
+  ) {
+    setBusy(true);
+    try {
+      const res = await fetch("/api/crm/conflicts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          provider,
+          conflictId,
+          decision,
+          remember: rememberConflict,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Resolve failed");
+      setMessage(`Conflict resolved: ${decision}`);
+      await loadConflicts();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Resolve failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function loadSupport() {
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/crm/support?provider=${provider}`);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Support pack failed");
+      setSupportPack(json.data);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Support pack failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function finishWizard() {
+    await fetch("/api/crm/setup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        provider,
+        action: "set_step",
+        step: "done",
+        completed: true,
+      }),
+    }).catch(() => undefined);
+    setWizard(false);
+    setTab("dashboard");
+    setMessage("Setup complete");
+  }
+
+  const queue = (health?.queue || {}) as Record<string, number>;
+  const objectsSynced = (health?.objectsSynced || {}) as Record<string, number>;
+
   return (
     <div>
       <PageHeader
         title={name}
-        description="OAuth connection, sync preferences, field mappings, and sync health."
+        description="Connect, configure sync, map fields, and monitor CRM health — without developer tools."
       />
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <Link href="/integrations/crm" className="text-sm text-muted-foreground hover:underline">
@@ -376,12 +552,18 @@ export function CrmProviderClient({ provider }: { provider: string }) {
         </Link>
         <StatusChip status={status === "connected" ? "Connected" : status.replace(/_/g, " ")} />
         <span className="text-xs text-muted-foreground">sync: {syncStatus}</span>
+        {conflicts.length ? (
+          <button
+            type="button"
+            className="text-xs text-danger underline"
+            onClick={() => setTab("conflicts")}
+          >
+            {conflicts.length} duplicate(s) need review
+          </button>
+        ) : null}
         <div className="ml-auto flex flex-wrap gap-2">
           <Button size="sm" variant="secondary" disabled={busy} onClick={() => void syncNow()}>
             Sync Now
-          </Button>
-          <Button size="sm" variant="outline" disabled={busy} onClick={() => void revalidate(false)}>
-            Validate
           </Button>
           <Button size="sm" variant="outline" disabled={busy} onClick={() => void reconnect()}>
             Reconnect
@@ -392,61 +574,31 @@ export function CrmProviderClient({ provider }: { provider: string }) {
         </div>
       </div>
 
-      {wizard ? (
-        <Card className="mb-4 border-primary/30 bg-primary/5 space-y-3">
-          <CardTitle>Connection wizard</CardTitle>
-          <ol className="list-decimal space-y-2 pl-5 text-sm text-muted-foreground">
-            <li className={wizardStep >= 1 ? "text-foreground" : ""}>
-              Connected — OAuth and permissions validated
-            </li>
-            <li className={wizardStep >= 2 ? "text-foreground" : ""}>
-              Review sync preferences (calls, SMS, tasks, recordings)
-            </li>
-            <li className={wizardStep >= 3 ? "text-foreground" : ""}>
-              Save settings, then run initial sync
-            </li>
-            <li className={wizardStep >= 4 ? "text-foreground" : ""}>
-              Confirm sync status on the Health tab
-            </li>
-          </ol>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              size="sm"
-              disabled={busy}
-              onClick={async () => {
-                await savePrefs();
-                setWizardStep(3);
-              }}
-            >
-              Save preferences
-            </Button>
-            <Button
-              size="sm"
-              variant="secondary"
-              disabled={busy}
-              onClick={async () => {
-                await syncNow();
-                setWizardStep(4);
-                setTab("health");
-              }}
-            >
-              Run initial sync
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => {
-                setTab("diagnostics");
-                setWizard(false);
-              }}
-            >
-              Open diagnostics
-            </Button>
-            <Button size="sm" variant="ghost" onClick={() => setWizard(false)}>
-              Done
-            </Button>
-          </div>
-        </Card>
+      {wizard && prefs ? (
+        <CrmOnboardingWizard
+          name={name}
+          step={wizardStep}
+          setStep={setWizardStep}
+          prefs={prefs}
+          setPrefs={setPrefs}
+          discovery={discovery}
+          preferenceGates={gates}
+          busy={busy}
+          onDiscover={discoverSetup}
+          onSavePrefs={savePrefs}
+          onSync={() => syncNow("initial")}
+          onFinish={() => void finishWizard()}
+          onOpenMappings={() => {
+            setTab("mappings");
+            setWizardStep(4);
+          }}
+          status={status}
+          syncStatus={syncStatus}
+          lastSyncAt={
+            typeof health?.lastSuccessfulSync === "string" ? health.lastSuccessfulSync : null
+          }
+          objectsSynced={objectsSynced}
+        />
       ) : null}
 
       {message ? <p className="mb-3 text-sm text-muted-foreground">{message}</p> : null}
@@ -454,7 +606,16 @@ export function CrmProviderClient({ provider }: { provider: string }) {
 
       <div className="mb-4 flex flex-wrap gap-2 border-b border-border">
         {(
-          ["settings", "health", "diagnostics", "features", "logs", "mappings"] as const
+          [
+            "dashboard",
+            "settings",
+            "mappings",
+            "conflicts",
+            "features",
+            "diagnostics",
+            "support",
+            "logs",
+          ] as const
         ).map((t) => (
           <button
             key={t}
@@ -462,92 +623,378 @@ export function CrmProviderClient({ provider }: { provider: string }) {
             className={`px-3 py-2 text-sm capitalize ${
               tab === t ? "border-b-2 border-primary font-medium" : "text-muted-foreground"
             }`}
-            onClick={() => setTab(t)}
+            onClick={() => {
+              setTab(t);
+              if (t === "support") void loadSupport();
+            }}
           >
             {t}
+            {t === "conflicts" && conflicts.length ? ` (${conflicts.length})` : ""}
           </button>
         ))}
       </div>
 
-      {tab === "health" && health ? (
+      {tab === "dashboard" && health ? (
         <div className="grid gap-4 lg:grid-cols-2">
           <Card className="space-y-2 text-sm">
-            <CardTitle>Connection health</CardTitle>
-            <p>
-              Connected:{" "}
-              {String(health.connectionStatus) === "connected" ? "Yes" : String(health.connectionStatus)}
-            </p>
+            <CardTitle>Synchronization dashboard</CardTitle>
+            <p>Provider: {name}</p>
+            <p>Status: {String(health.connectionStatus)}</p>
             <p>
               Token: {String(health.tokenStatus)}{" "}
               {health.tokenValid ? "(valid)" : "(needs attention)"}
             </p>
-            <p>API: {String(health.apiStatus || "—")}</p>
-            <p>Expires: {health.tokenExpiresAt ? String(health.tokenExpiresAt) : "—"}</p>
-            <p>Account: {String(health.connectedAccountName || "—")}</p>
+            <p>API health: {String(health.apiStatus || "—")}</p>
             <p>Last sync: {String(health.lastSuccessfulSync || "Never")}</p>
-            <p>Last failure: {String(health.lastFailedSync || "—")}</p>
-            <p>Webhook: {String(health.webhookStatus || "—")}</p>
             <p>
-              Rate limit:{" "}
+              Rate limits:{" "}
               {String((health.rateLimit as { status?: string } | undefined)?.status || "ok")}
             </p>
             {health.lastError ? <p className="text-danger">{String(health.lastError)}</p> : null}
-            <Button size="sm" disabled={busy} onClick={() => void revalidate(true)}>
-              Validate + write probe
-            </Button>
+            <div className="flex flex-wrap gap-2 pt-2">
+              <Button size="sm" disabled={busy} onClick={() => void syncNow()}>
+                Manual sync
+              </Button>
+              <Button size="sm" variant="outline" disabled={busy} onClick={() => void reconnect()}>
+                Reconnect
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => {
+                  setWizard(true);
+                  setWizardStep(1);
+                }}
+              >
+                Restart setup wizard
+              </Button>
+            </div>
           </Card>
           <Card className="space-y-2 text-sm">
-            <CardTitle>Objects synced</CardTitle>
+            <CardTitle>Queues & objects</CardTitle>
+            <p>Pending: {queue.pendingJobs ?? 0}</p>
+            <p>Failed: {queue.failedJobs ?? 0}</p>
+            <p>Retries: {queue.retries ?? 0}</p>
+            <p>Dead letters: {queue.deadLetters ?? 0}</p>
             <pre className="overflow-auto rounded bg-muted p-2 text-xs">
-              {JSON.stringify(health.objectsSynced || {}, null, 2)}
+              {JSON.stringify(objectsSynced, null, 2)}
             </pre>
-            <CardTitle className="pt-2">Queues</CardTitle>
-            <pre className="overflow-auto rounded bg-muted p-2 text-xs">
-              {JSON.stringify(health.queue, null, 2)}
-            </pre>
-            <CardTitle className="pt-2">OAuth scopes (least privilege)</CardTitle>
-            <ul className="space-y-1 text-xs text-muted-foreground">
-              {((health.scopes as Array<{ scope: string; why: string }>) || []).map((s) => (
-                <li key={s.scope}>
-                  <span className="font-mono text-foreground">{s.scope}</span> — {s.why}
+          </Card>
+        </div>
+      ) : null}
+
+      {tab === "settings" && prefs ? (
+        <Card className="space-y-4">
+          <CardTitle>Sync preferences</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Options unavailable for {name} are disabled automatically by the capability matrix.
+          </p>
+          <div>
+            <Label>Sync direction</Label>
+            <select
+              className="mt-1 w-full max-w-sm rounded-lg border border-border bg-card px-3 py-2 text-sm"
+              value={prefs.direction}
+              onChange={(e) =>
+                setPrefs({
+                  ...prefs,
+                  direction: e.target.value as Prefs["direction"],
+                })
+              }
+            >
+              <option value="bidirectional">Bidirectional</option>
+              <option value="inbound">CRM → Transovo</option>
+              <option value="outbound">Transovo → CRM</option>
+            </select>
+          </div>
+          <div className="grid gap-2 md:grid-cols-2">
+            {prefToggles.map(([key, label]) => {
+              const supported = gates[key] !== false;
+              return (
+                <label
+                  key={key}
+                  className={`flex items-center gap-2 text-sm ${supported ? "" : "opacity-50"}`}
+                >
+                  <input
+                    type="checkbox"
+                    disabled={!supported}
+                    checked={Boolean(prefs[key]) && supported}
+                    onChange={(e) => setPrefs({ ...prefs, [key]: e.target.checked })}
+                  />
+                  {label}
+                  {!supported ? (
+                    <span className="text-[11px] text-muted-foreground">(not supported)</span>
+                  ) : null}
+                </label>
+              );
+            })}
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            <div>
+              <Label>Default owner external ID</Label>
+              <input
+                className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm"
+                value={prefs.defaultOwnerExternalId || ""}
+                onChange={(e) =>
+                  setPrefs({ ...prefs, defaultOwnerExternalId: e.target.value || null })
+                }
+                placeholder="CRM user id"
+              />
+            </div>
+            <div>
+              <Label>Default pipeline ID</Label>
+              <input
+                className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm"
+                value={prefs.defaultPipelineId || ""}
+                disabled={gates.defaultPipelineId === false}
+                onChange={(e) =>
+                  setPrefs({ ...prefs, defaultPipelineId: e.target.value || null })
+                }
+              />
+            </div>
+          </div>
+          <Button disabled={busy} onClick={() => void savePrefs()}>
+            Save settings
+          </Button>
+        </Card>
+      ) : null}
+
+      {tab === "mappings" ? (
+        <Card className="space-y-4">
+          <CardTitle>Field mapping</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Map Transovo fields to CRM fields through the UI. Suggested defaults are listed below.
+          </p>
+          <div className="grid gap-2 md:grid-cols-4">
+            <select
+              className="rounded-lg border border-border px-3 py-2 text-sm"
+              value={fieldForm.objectType}
+              onChange={(e) => setFieldForm({ ...fieldForm, objectType: e.target.value })}
+            >
+              <option value="contact">Contact</option>
+              <option value="lead">Lead</option>
+              <option value="call">Call</option>
+              <option value="deal">Deal</option>
+              <option value="company">Company</option>
+            </select>
+            <select
+              className="rounded-lg border border-border px-3 py-2 text-sm"
+              value={fieldForm.internalField}
+              onChange={(e) => setFieldForm({ ...fieldForm, internalField: e.target.value })}
+            >
+              {(internalFields.length
+                ? internalFields
+                : [{ value: "phone", label: "Phone" }]
+              ).map((f) => (
+                <option key={f.value} value={f.value}>
+                  {f.label}
+                </option>
+              ))}
+            </select>
+            <input
+              className="rounded-lg border border-border px-3 py-2 text-sm"
+              value={fieldForm.externalField}
+              onChange={(e) => setFieldForm({ ...fieldForm, externalField: e.target.value })}
+              placeholder="CRM field API name"
+            />
+            <Button size="sm" disabled={busy} onClick={() => void addFieldMapping()}>
+              Save mapping
+            </Button>
+          </div>
+          <div>
+            <p className="mb-2 text-xs font-medium uppercase text-muted-foreground">Suggested</p>
+            <ul className="space-y-1 text-sm">
+              {presets.map((p) => (
+                <li
+                  key={`${p.objectType}-${p.internalField}`}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded border border-border px-2 py-1"
+                >
+                  <span>
+                    {p.label}: {p.internalField} → {p.externalField}
+                  </span>
+                  <Button size="sm" variant="outline" onClick={() => void applyPreset(p)}>
+                    Apply
+                  </Button>
                 </li>
               ))}
             </ul>
-          </Card>
-        </div>
+          </div>
+          <div>
+            <p className="mb-2 text-xs font-medium uppercase text-muted-foreground">Active</p>
+            <ul className="space-y-1 text-sm">
+              {fields.map((f) => (
+                <li
+                  key={String(f.id)}
+                  className="flex items-center justify-between gap-2 font-mono text-xs"
+                >
+                  <span>
+                    {String(f.objectType)}: {String(f.internalField)} → {String(f.externalField)}
+                  </span>
+                  <Button size="sm" variant="ghost" onClick={() => void deleteMapping(String(f.id))}>
+                    Remove
+                  </Button>
+                </li>
+              ))}
+              {!fields.length ? (
+                <li className="text-muted-foreground">No mappings yet — apply suggestions above</li>
+              ) : null}
+            </ul>
+          </div>
+        </Card>
+      ) : null}
+
+      {tab === "conflicts" ? (
+        <Card className="space-y-4">
+          <CardTitle>Duplicate resolution</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            When Transovo finds a matching CRM contact already linked to another record, choose
+            how to proceed. Nothing is created until you decide.
+          </p>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={rememberConflict}
+              onChange={(e) => setRememberConflict(e.target.checked)}
+            />
+            Remember decision for similar matches
+          </label>
+          <ul className="space-y-3">
+            {conflicts.map((c) => (
+              <li key={c.id} className="rounded border border-border p-3 text-sm space-y-2">
+                <p className="font-medium">{c.message}</p>
+                <p className="text-xs text-muted-foreground">
+                  Contact {c.contactId} · CRM {c.externalId}
+                  {c.phone ? ` · ${c.phone}` : ""}
+                  {c.email ? ` · ${c.email}` : ""}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <Button size="sm" disabled={busy} onClick={() => void resolveConflict(c.id, "use_crm")}>
+                    Use CRM record
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={busy}
+                    onClick={() => void resolveConflict(c.id, "use_transovo")}
+                  >
+                    Use Transovo record
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={busy}
+                    onClick={() => void resolveConflict(c.id, "merge")}
+                  >
+                    Merge (link)
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={busy}
+                    onClick={() => void resolveConflict(c.id, "ignore")}
+                  >
+                    Ignore
+                  </Button>
+                </div>
+              </li>
+            ))}
+            {!conflicts.length ? (
+              <li className="text-sm text-muted-foreground">No pending duplicates</li>
+            ) : null}
+          </ul>
+        </Card>
+      ) : null}
+
+      {tab === "features" ? (
+        <Card className="space-y-3">
+          <CardTitle>CRM Capability Matrix</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Explicit support by provider. Settings above are gated from this matrix.
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-border text-xs text-muted-foreground">
+                  <th className="py-2 pr-3">Feature</th>
+                  <th className="py-2 pr-3">Salesforce</th>
+                  <th className="py-2 pr-3">Zoho</th>
+                  <th className="py-2">Pipedrive</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(matrix.length
+                  ? matrix
+                  : features.map((f) => ({
+                      feature: f.feature,
+                      label: f.label,
+                      cells: {
+                        [provider]: { support: f.support, notes: f.notes },
+                      },
+                    }))
+                ).map((row) => (
+                  <tr key={row.feature} className="border-b border-border/60 align-top">
+                    <td className="py-2 pr-3 font-medium">{row.label}</td>
+                    {(["salesforce", "zoho", "pipedrive"] as const).map((id) => {
+                      const cell = row.cells?.[id];
+                      const support = cell?.support || "—";
+                      const mark =
+                        support === "unsupported"
+                          ? "❌"
+                          : support === "read_only" || support === "link_only"
+                            ? "◐"
+                            : support === "—"
+                              ? "—"
+                              : "✅";
+                      return (
+                        <td key={id} className="py-2 pr-3 text-xs">
+                          <div>
+                            {mark} {support}
+                          </div>
+                          {cell?.notes ? (
+                            <div className="text-muted-foreground">{cell.notes}</div>
+                          ) : null}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
       ) : null}
 
       {tab === "diagnostics" ? (
         <div className="space-y-4">
           <Card className="space-y-3 text-sm">
-            <CardTitle>CRM Compatibility / Test Console</CardTitle>
+            <CardTitle>Diagnostics / Test Console</CardTitle>
             <p className="text-muted-foreground">
-              Run live probes against the connected CRM. Use this when a customer reports sync
-              issues — you should see OAuth, API, and feature failures without digging through logs.
+              Support-facing probes against the live CRM. Prefer this over SSH/logs.
             </p>
             {diagSnapshot ? (
-              <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-3 text-xs">
+              <div className="grid gap-2 md:grid-cols-3 text-xs">
                 <p>Connected: {diagSnapshot.connected ? "✅" : "❌"}</p>
                 <p>Token valid: {diagSnapshot.tokenValid ? "✅" : "❌"}</p>
                 <p>Env ready: {diagSnapshot.envReady ? "✅" : "❌"}</p>
-                <p>Last sync: {String(diagSnapshot.lastSyncAt || "Never")}</p>
-                <p>
-                  Queue failed:{" "}
-                  {String((diagSnapshot.queue as { failed?: number } | undefined)?.failed ?? 0)}
-                </p>
-                <p>
-                  Rate limit:{" "}
-                  {String(
-                    (diagSnapshot.rateLimit as { status?: string } | undefined)?.status || "ok",
-                  )}
-                </p>
               </div>
             ) : null}
-            {diagSnapshot?.lastError ? (
-              <p className="text-danger text-xs">{String(diagSnapshot.lastError)}</p>
-            ) : null}
             <div className="flex flex-wrap gap-2">
-              <Button size="sm" disabled={Boolean(probeBusy)} onClick={() => void runCoreProbes()}>
+              <Button
+                size="sm"
+                disabled={Boolean(probeBusy)}
+                onClick={() =>
+                  void (async () => {
+                    for (const p of [
+                      "env",
+                      "oauth",
+                      "token_refresh",
+                      "api_reachable",
+                      "rate_limit",
+                    ]) {
+                      await runProbe(p);
+                    }
+                  })()
+                }
+              >
                 Run core checks
               </Button>
               <Button
@@ -556,7 +1003,7 @@ export function CrmProviderClient({ provider }: { provider: string }) {
                 disabled={Boolean(probeBusy)}
                 onClick={() => void runProbe("force_resync")}
               >
-                Force initial resync
+                Force full sync
               </Button>
               <Button
                 size="sm"
@@ -564,20 +1011,14 @@ export function CrmProviderClient({ provider }: { provider: string }) {
                 disabled={Boolean(probeBusy)}
                 onClick={() => void runProbe("retry_failed")}
               >
-                Retry failed jobs
+                Retry failed
               </Button>
             </div>
           </Card>
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {DIAG_PROBES.map((p) => {
               const result = probeResults[p.id];
-              const mark = !result
-                ? "—"
-                : result.skipped
-                  ? "⊘"
-                  : result.ok
-                    ? "✅"
-                    : "❌";
+              const mark = !result ? "—" : result.skipped ? "⊘" : result.ok ? "✅" : "❌";
               return (
                 <Card key={p.id} className="space-y-2 text-sm">
                   <div className="flex items-center justify-between gap-2">
@@ -599,11 +1040,6 @@ export function CrmProviderClient({ provider }: { provider: string }) {
                         {result.humanMessage || result.message}
                         {result.durationMs != null ? ` · ${result.durationMs}ms` : ""}
                       </p>
-                      {result.externalId ? (
-                        <p className="font-mono text-[11px] text-muted-foreground">
-                          id: {result.externalId}
-                        </p>
-                      ) : null}
                       {result.raw != null ? (
                         <details>
                           <summary className="cursor-pointer text-xs text-muted-foreground">
@@ -625,88 +1061,30 @@ export function CrmProviderClient({ provider }: { provider: string }) {
         </div>
       ) : null}
 
-      {tab === "features" ? (
-        <Card className="space-y-3">
-          <CardTitle>Provider feature matrix</CardTitle>
-          <p className="text-sm text-muted-foreground">
-            Never assume parity across CRMs. Unsupported features are skipped gracefully during sync.
+      {tab === "support" ? (
+        <Card className="space-y-3 text-sm">
+          <CardTitle>Internal support tools</CardTitle>
+          <p className="text-muted-foreground">
+            Connection metadata, queues, performance, webhooks, and audit — secrets redacted.
           </p>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="border-b border-border text-xs text-muted-foreground">
-                  <th className="py-2 pr-3">Feature</th>
-                  <th className="py-2 pr-3">Support</th>
-                  <th className="py-2">Notes</th>
-                </tr>
-              </thead>
-              <tbody>
-                {features.map((f) => (
-                  <tr key={f.feature} className="border-b border-border/60">
-                    <td className="py-2 pr-3 font-medium">{f.label}</td>
-                    <td className="py-2 pr-3 font-mono text-xs">{f.support}</td>
-                    <td className="py-2 text-xs text-muted-foreground">{f.notes || "—"}</td>
-                  </tr>
-                ))}
-                {!features.length ? (
-                  <tr>
-                    <td colSpan={3} className="py-3 text-muted-foreground">
-                      Loading feature matrix…
-                    </td>
-                  </tr>
-                ) : null}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-      ) : null}
-
-      {tab === "settings" && prefs ? (
-        <Card className="space-y-4">
-          <CardTitle>Sync preferences</CardTitle>
-          <div>
-            <Label>Sync direction</Label>
-            <select
-              className="mt-1 w-full max-w-sm rounded-lg border border-border bg-card px-3 py-2 text-sm"
-              value={prefs.direction}
-              onChange={(e) =>
-                setPrefs({
-                  ...prefs,
-                  direction: e.target.value as Prefs["direction"],
-                })
-              }
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" disabled={busy} onClick={() => void loadSupport()}>
+              Refresh support pack
+            </Button>
+            <a
+              className="inline-flex h-8 items-center rounded-lg border border-border px-3 text-xs font-medium hover:bg-muted"
+              href={`/api/crm/support?provider=${provider}&download=1`}
             >
-              <option value="bidirectional">Bidirectional</option>
-              <option value="inbound">CRM → Transovo</option>
-              <option value="outbound">Transovo → CRM</option>
-            </select>
+              Download logs (JSON)
+            </a>
           </div>
-          <div className="grid gap-2 md:grid-cols-2">
-            {prefToggles.map(([key, label]) => (
-              <label key={key} className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={Boolean(prefs[key])}
-                  onChange={(e) => setPrefs({ ...prefs, [key]: e.target.checked })}
-                />
-                {label}
-              </label>
-            ))}
-          </div>
-          <div>
-            <Label>Default owner external ID (optional)</Label>
-            <input
-              className="mt-1 w-full max-w-md rounded-lg border border-border bg-card px-3 py-2 text-sm"
-              value={prefs.defaultOwnerExternalId || ""}
-              onChange={(e) =>
-                setPrefs({ ...prefs, defaultOwnerExternalId: e.target.value || null })
-              }
-              placeholder="CRM user id"
-            />
-          </div>
-          <Button disabled={busy} onClick={() => void savePrefs()}>
-            Save settings
-          </Button>
+          {supportPack ? (
+            <pre className="max-h-[480px] overflow-auto rounded bg-muted p-3 text-[11px]">
+              {JSON.stringify(supportPack, null, 2)}
+            </pre>
+          ) : (
+            <p className="text-muted-foreground">Load the support pack to inspect this connection.</p>
+          )}
         </Card>
       ) : null}
 
@@ -720,17 +1098,13 @@ export function CrmProviderClient({ provider }: { provider: string }) {
                   <div className="flex justify-between gap-2">
                     <span className="font-medium">
                       {r.kind} · {r.status}
+                      {r.durationMs != null ? ` · ${r.durationMs}ms` : ""}
                     </span>
                     <span className="text-xs text-muted-foreground">
                       {new Date(r.createdAt).toLocaleString()}
                     </span>
                   </div>
                   {r.lastError ? <p className="text-xs text-danger">{r.lastError}</p> : null}
-                  {r.statsJson ? (
-                    <p className="text-xs text-muted-foreground">
-                      {JSON.stringify(r.statsJson)}
-                    </p>
-                  ) : null}
                 </li>
               ))}
               {!runs.length ? <li className="text-muted-foreground">No sync runs yet</li> : null}
@@ -756,49 +1130,6 @@ export function CrmProviderClient({ provider }: { provider: string }) {
             </ul>
           </Card>
         </div>
-      ) : null}
-
-      {tab === "mappings" ? (
-        <Card className="space-y-4">
-          <CardTitle>Field mappings</CardTitle>
-          <p className="text-sm text-muted-foreground">
-            Map Transovo fields to CRM fields. Never hardcode customer-specific mappings in code.
-          </p>
-          <div className="grid gap-2 md:grid-cols-4">
-            <input
-              className="rounded-lg border border-border px-3 py-2 text-sm"
-              value={fieldForm.objectType}
-              onChange={(e) => setFieldForm({ ...fieldForm, objectType: e.target.value })}
-              placeholder="objectType"
-            />
-            <input
-              className="rounded-lg border border-border px-3 py-2 text-sm"
-              value={fieldForm.internalField}
-              onChange={(e) => setFieldForm({ ...fieldForm, internalField: e.target.value })}
-              placeholder="internal field"
-            />
-            <input
-              className="rounded-lg border border-border px-3 py-2 text-sm"
-              value={fieldForm.externalField}
-              onChange={(e) => setFieldForm({ ...fieldForm, externalField: e.target.value })}
-              placeholder="CRM field"
-            />
-            <Button size="sm" disabled={busy} onClick={() => void addFieldMapping()}>
-              Add mapping
-            </Button>
-          </div>
-          <ul className="space-y-1 text-sm">
-            {fields.map((f) => (
-              <li key={String(f.id)} className="font-mono text-xs">
-                {String(f.objectType)}: {String(f.internalField)} → {String(f.externalField)} (
-                {String(f.direction)})
-              </li>
-            ))}
-            {!fields.length ? (
-              <li className="text-muted-foreground">No custom mappings — adapters use defaults</li>
-            ) : null}
-          </ul>
-        </Card>
       ) : null}
     </div>
   );

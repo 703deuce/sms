@@ -1,4 +1,5 @@
 import { getConnection, upsertConnection } from "@/lib/integrations/connections";
+import { clampPreferencesToCapabilities } from "./capability";
 import { DEFAULT_SYNC_PREFERENCES, type CrmProviderId, type CrmSyncPreferences } from "./types";
 import { writeCrmAudit } from "./logging";
 
@@ -11,7 +12,10 @@ export async function getCrmSyncPreferences(
   const conn = await getConnection(workspaceId, provider);
   const cfg = (conn?.configJson || {}) as Record<string, unknown>;
   const stored = (cfg[SETTINGS_KEY] || {}) as Partial<CrmSyncPreferences>;
-  return { ...DEFAULT_SYNC_PREFERENCES, ...stored };
+  return clampPreferencesToCapabilities(provider, {
+    ...DEFAULT_SYNC_PREFERENCES,
+    ...stored,
+  });
 }
 
 export async function updateCrmSyncPreferences(
@@ -21,7 +25,7 @@ export async function updateCrmSyncPreferences(
   actorUserId?: string,
 ) {
   const current = await getCrmSyncPreferences(workspaceId, provider);
-  const next = { ...current, ...patch };
+  const next = clampPreferencesToCapabilities(provider, { ...current, ...patch });
   await upsertConnection({
     workspaceId,
     provider,

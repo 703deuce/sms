@@ -154,6 +154,12 @@ export type CrmSyncPreferences = {
   syncCalls: boolean;
   syncTasks: boolean;
   syncOpportunities: boolean;
+  /** Log voicemails as CRM activities/tasks. */
+  syncVoicemail: boolean;
+  /** Include AI call summary text when logging calls. */
+  syncAiSummary: boolean;
+  /** Generic activity logging preference (when supported). */
+  syncActivities: boolean;
   defaultOwnerExternalId?: string | null;
   defaultPipelineId?: string | null;
   defaultStageId?: string | null;
@@ -177,6 +183,9 @@ export const DEFAULT_SYNC_PREFERENCES: CrmSyncPreferences = {
   syncCalls: true,
   syncTasks: true,
   syncOpportunities: false,
+  syncVoicemail: true,
+  syncAiSummary: true,
+  syncActivities: true,
   defaultOwnerExternalId: null,
   defaultPipelineId: null,
   defaultStageId: null,

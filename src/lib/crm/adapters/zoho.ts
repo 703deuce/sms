@@ -387,4 +387,47 @@ export const zohoConnector: CrmConnector = {
       }),
     );
   },
+
+  async listFields(ctx) {
+    const out: Array<{ objectType: string; name: string; label: string }> = [];
+    for (const module of ["Contacts", "Leads", "Tasks", "Calls"] as const) {
+      try {
+        const data = await crmFetch<{
+          fields?: Array<{ api_name?: string; field_label?: string; display_label?: string }>;
+        }>(`${apiBase(ctx)}/settings/fields?module=${module}`, { accessToken: ctx.accessToken });
+        for (const f of data.fields || []) {
+          if (!f.api_name) continue;
+          out.push({
+            objectType: module.toLowerCase().replace(/s$/, ""),
+            name: f.api_name,
+            label: f.field_label || f.display_label || f.api_name,
+          });
+        }
+      } catch {
+        // continue
+      }
+    }
+    return out.slice(0, 400);
+  },
+
+  async listPipelines(ctx) {
+    // Zoho deal pipelines vary by org; expose a soft default when stages are readable.
+    try {
+      const data = await crmFetch<{
+        fields?: Array<{
+          api_name?: string;
+          pick_list_values?: Array<{ display_value?: string; actual_value?: string }>;
+        }>;
+      }>(`${apiBase(ctx)}/settings/fields?module=Deals`, { accessToken: ctx.accessToken });
+      const stage = data.fields?.find((f) => f.api_name === "Stage");
+      const stages = (stage?.pick_list_values || []).map((p, i) => ({
+        id: String(p.actual_value || p.display_value || i),
+        name: String(p.display_value || p.actual_value || "Stage"),
+        order: i,
+      }));
+      return [{ id: "deals", name: "Deals", stages }];
+    } catch {
+      return [];
+    }
+  },
 };
