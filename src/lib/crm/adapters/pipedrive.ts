@@ -515,6 +515,10 @@ export const pipedriveConnector: CrmConnector = {
     ]
       .filter(Boolean)
       .join("\n\n");
+    // Disposition/recording/transcript already go in `note` — Pipedrive rejects
+    // unknown activity fields like `disposition` with HTTP 400.
+    const safeCustom = { ...(call.customFields || {}) };
+    delete safeCustom.disposition;
     const body = await buildMappedPayload({
       workspaceId: ctx.workspaceId,
       provider: "pipedrive",
@@ -527,10 +531,7 @@ export const pipedriveConnector: CrmConnector = {
         person_id: call.contactExternalId ? Number(call.contactExternalId) : undefined,
         done: 1,
       },
-      customFields: {
-        disposition: call.disposition,
-        ...(call.customFields || {}),
-      },
+      customFields: safeCustom,
     });
     if (call.id) {
       await pd(ctx, `/activities/${call.id}`, {
