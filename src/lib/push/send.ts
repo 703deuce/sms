@@ -20,6 +20,9 @@ export type PushPayload = {
   body: string;
   url?: string;
   tag?: string;
+  kind?: string;
+  humanCallId?: string;
+  requireInteraction?: boolean;
 };
 
 export async function sendPushToUser(

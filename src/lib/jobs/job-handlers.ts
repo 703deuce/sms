@@ -81,17 +81,32 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       const workspaceId = String(payload.workspaceId || "");
       if (!callId) throw new Error("callId required");
       const urls = payload.recordingUrl as Record<string, string> | undefined;
+      const storageUrl = urls?.mp3 || urls?.wav || null;
       await prisma.voiceRecording.create({
         data: {
           workspaceId,
           callId,
           provider: "telnyx",
           status: "ready",
-          storageUrl: urls?.mp3 || urls?.wav || null,
+          storageUrl,
           providerRecordingId: String(payload.providerRecordingId || ""),
           channels: 2,
         },
       });
+      if (storageUrl) {
+        const call = await prisma.voiceCall.findUnique({ where: { id: callId } });
+        const { publishRecordingReady } = await import("@/lib/crm/events");
+        await publishRecordingReady({
+          workspaceId,
+          contactId: call?.contactId || null,
+          callId,
+          recordingUrl: storageUrl,
+          direction:
+            call?.direction === "OUTBOUND" || call?.direction === "outbound"
+              ? "outbound"
+              : "inbound",
+        }).catch(() => undefined);
+      }
       return { ok: true };
     }
     case "voice_tool_execute": {
@@ -103,6 +118,295 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       const sourceId = String(payload.sourceId || "");
       if (!sourceId) throw new Error("sourceId required");
       return processKnowledgeSource(sourceId);
+    }
+    case "phone_queue_overflow": {
+      const { handleQueueOverflowJob } = await import("@/lib/phone/queue-runtime");
+      return handleQueueOverflowJob({
+        workspaceId: String(payload.workspaceId || ""),
+        queueId: String(payload.queueId || ""),
+        humanCallId: String(payload.humanCallId || ""),
+        telnyxCallControlId: String(payload.telnyxCallControlId || ""),
+      });
+    }
+    case "phone_hunt_advance": {
+      const { advanceSequentialHunt } = await import("@/lib/phone/hunt-service");
+      return advanceSequentialHunt({
+        workspaceId: String(payload.workspaceId || ""),
+        humanCallId: String(payload.humanCallId || ""),
+        telnyxCallControlId: String(payload.telnyxCallControlId || ""),
+        toE164: String(payload.toE164 || ""),
+      });
+    }
+    case "phone_queue_callback": {
+      // Recorded callback request — automation / agent follow-up. No auto-dial here.
+      const { getPrisma } = await import("@/lib/db");
+      const humanCallId = String(payload.humanCallId || "");
+      const call = await getPrisma().humanCall.findUnique({ where: { id: humanCallId } });
+      if (!call) return { skipped: true };
+      await getPrisma().humanCall.update({
+        where: { id: humanCallId },
+        data: {
+          notes: `${call.notes || ""}\n[callback_due]`.trim(),
+        },
+      });
+      return { ok: true, callbackDue: true, toE164: payload.toE164 || call.from };
+    }
+    case "phone_park_timeout": {
+      const { getPrisma } = await import("@/lib/db");
+      const prisma = getPrisma();
+      const slotId = String(payload.slotId || "");
+      const slot = await prisma.callParkSlot.findUnique({ where: { id: slotId } });
+      if (!slot || slot.status !== "parked") return { skipped: true };
+      await prisma.callParkSlot.update({
+        where: { id: slotId },
+        data: { status: "timed_out" },
+      });
+      if (slot.telnyxCallControlId) {
+        const { telnyxRequest } = await import("@/lib/messaging/telnyx/client");
+        // Unhold before transfer/voicemail so the held leg can accept media actions.
+        await telnyxRequest(`/calls/${slot.telnyxCallControlId}/actions/unhold`, {
+          method: "POST",
+          body: {},
+        }).catch(() => undefined);
+        if (slot.fallbackTarget) {
+          await telnyxRequest(`/calls/${slot.telnyxCallControlId}/actions/transfer`, {
+            method: "POST",
+            body: { to: slot.fallbackTarget },
+          }).catch(() => undefined);
+        } else if (slot.humanCallId) {
+          const { leaveVoicemailOnCall } = await import("@/lib/phone/voicemail-service");
+          await leaveVoicemailOnCall({
+            workspaceId: slot.workspaceId,
+            humanCallId: slot.humanCallId,
+            telnyxCallControlId: slot.telnyxCallControlId,
+          }).catch(() => undefined);
+        }
+      }
+      if (slot.humanCallId) {
+        await prisma.humanCall.update({
+          where: { id: slot.humanCallId },
+          data: {
+            onHold: false,
+            parkSlotId: null,
+            status: slot.fallbackTarget ? "transferred" : "voicemail",
+            disposition: slot.fallbackTarget
+              ? `park_timeout:${slot.fallbackTarget}`
+              : "park_timeout_voicemail",
+          },
+        }).catch(() => undefined);
+      }
+      return { ok: true, slotId };
+    }
+    case "phone_softphone_ring_timeout": {
+      const { getPrisma } = await import("@/lib/db");
+      const { telnyxRequest } = await import("@/lib/messaging/telnyx/client");
+      const { resolveForwarding } = await import("@/lib/phone/forwarding-service");
+      const { leaveVoicemailOnCall } = await import("@/lib/phone/voicemail-service");
+      const prisma = getPrisma();
+      const humanCallId = String(payload.humanCallId || "");
+      const workspaceId = String(payload.workspaceId || "");
+      const controlId = String(payload.telnyxCallControlId || "");
+      const toE164 = String(payload.toE164 || "");
+      const call = await prisma.humanCall.findFirst({
+        where: { id: humanCallId, workspaceId },
+      });
+      if (
+        !call ||
+        !["ringing", "queued", "initiated"].includes(call.status) ||
+        ((call.notes || "").includes("screening:accepted") && call.answeredAt) ||
+        (call.answeredAt && !(call.notes || "").includes("screening:"))
+      ) {
+        return { skipped: true };
+      }
+      // Hang up hunt / screening / queue cellular ring legs before overflow.
+      const ringLegMatch = (call.notes || "").match(/\[ring_legs:([^\]]+)\]/);
+      if (ringLegMatch?.[1]) {
+        for (const legId of ringLegMatch[1]
+          .split(",")
+          .map((s: string) => s.trim())
+          .filter(Boolean)) {
+          await telnyxRequest(`/calls/${legId}/actions/hangup`, {
+            method: "POST",
+            body: {},
+          }).catch(() => undefined);
+        }
+      }
+      const pn = toE164
+        ? await prisma.phoneNumber.findFirst({ where: { workspaceId, e164: toE164 } })
+        : null;
+      const rule = await resolveForwarding({
+        workspaceId,
+        phoneNumberId: pn?.id,
+        userId: call.agentUserId,
+        unanswered: true,
+      }).catch(() => null);
+      if (rule?.targetType === "external" && rule.targetValue && controlId) {
+        await telnyxRequest(`/calls/${controlId}/actions/unhold`, {
+          method: "POST",
+          body: {},
+        }).catch(() => undefined);
+        await telnyxRequest(`/calls/${controlId}/actions/transfer`, {
+          method: "POST",
+          body: { to: rule.targetValue },
+        }).catch(() => undefined);
+        await prisma.humanCall.update({
+          where: { id: call.id },
+          data: {
+            status: "transferred",
+            disposition: `unanswered_forward:${rule.targetValue}`,
+            endedAt: new Date(),
+          },
+        });
+        return { ok: true, action: "forward" };
+      }
+      if (controlId) {
+        if (call.onHold || (call.notes || "").includes("screening:")) {
+          await telnyxRequest(`/calls/${controlId}/actions/unhold`, {
+            method: "POST",
+            body: {},
+          }).catch(() => undefined);
+        }
+        await leaveVoicemailOnCall({
+          workspaceId,
+          humanCallId: call.id,
+          telnyxCallControlId: controlId,
+          userId: call.agentUserId,
+        }).catch(async () => {
+          await telnyxRequest(`/calls/${controlId}/actions/hangup`, {
+            method: "POST",
+            body: {},
+          }).catch(() => undefined);
+          await prisma.humanCall.update({
+            where: { id: call.id },
+            data: {
+              status: "missed",
+              disposition: "missed:ring_timeout",
+              endedAt: new Date(),
+            },
+          });
+        });
+      } else {
+        await prisma.humanCall.update({
+          where: { id: call.id },
+          data: {
+            status: "missed",
+            disposition: "missed:ring_timeout",
+            endedAt: new Date(),
+          },
+        });
+      }
+      return { ok: true, action: "voicemail_or_missed" };
+    }
+    case "voice_human_first_timeout": {
+      const { handleHumanFirstTimeoutJob } = await import("@/lib/voice/inbound");
+      return handleHumanFirstTimeoutJob({
+        workspaceId: String(payload.workspaceId || ""),
+        callId: String(payload.callId || ""),
+        humanCallId: payload.humanCallId as string | undefined,
+        telnyxCallControlId: payload.telnyxCallControlId as string | undefined,
+        agentId: payload.agentId as string | undefined,
+      });
+    }
+    case "voice_warm_transfer_timeout": {
+      const { handleWarmTransferTimeoutJob } = await import("@/lib/voice/transfers");
+      return handleWarmTransferTimeoutJob({
+        workspaceId: String(payload.workspaceId || ""),
+        callId: String(payload.callId || ""),
+        transferId: String(payload.transferId || ""),
+      });
+    }
+    case "voice_warm_transfer_complete": {
+      const { completeWarmTransfer } = await import("@/lib/voice/transfers");
+      return completeWarmTransfer({
+        workspaceId: String(payload.workspaceId || ""),
+        callId: String(payload.callId || ""),
+        transferId: String(payload.transferId || ""),
+        consultControlId: String(payload.consultControlId || ""),
+        callerControlId: String(payload.callerControlId || ""),
+        summary: payload.summary ? String(payload.summary) : undefined,
+      });
+    }
+    case "phone_warm_transfer_timeout": {
+      const { cancelWarmTransfer } = await import("@/lib/phone/human-call-service");
+      const { getPrisma } = await import("@/lib/db");
+      const humanCallId = String(payload.humanCallId || "");
+      const workspaceId = String(payload.workspaceId || "");
+      const consultControlId = payload.consultControlId
+        ? String(payload.consultControlId)
+        : "";
+      const call = await getPrisma().humanCall.findFirst({
+        where: { id: humanCallId, workspaceId },
+      });
+      if (!call?.telnyxCallLegId || call.status === "transferred" || call.status === "completed") {
+        return { skipped: true };
+      }
+      // Only cancel the original unanswered consult — not an answered consult or a later flip leg.
+      if (consultControlId && call.telnyxCallLegId !== consultControlId) {
+        return { skipped: true };
+      }
+      if ((call.notes || "").includes("[warm_consult_answered]")) {
+        return { skipped: true };
+      }
+      if (!(call.notes || "").includes("Warm transfer")) {
+        return { skipped: true };
+      }
+      await cancelWarmTransfer(humanCallId, workspaceId).catch(() => undefined);
+      return { ok: true, cancelled: true };
+    }
+    case "voice_send_email": {
+      const { getPrisma } = await import("@/lib/db");
+      const prisma = getPrisma();
+      const workspaceId = String(payload.workspaceId || "") || null;
+      const to = String(payload.to || "");
+      const subject = String(payload.subject || "");
+      const body = String(payload.body || "");
+      if (!to || !subject || !body) throw new Error("to, subject, body required");
+
+      const pending = await prisma.message.create({
+        data: {
+          workspaceId,
+          to,
+          from: process.env.BREVO_FROM_EMAIL?.trim() || process.env.REVIEW_REQUEST_FROM_EMAIL?.trim() || "voice@noreply",
+          body: `${subject}\n\n${body}`,
+          status: "queued",
+          providerId: `voice-email:${Date.now()}`,
+        },
+      });
+
+      let sendResult: { status: string; id?: string; error?: string } = { status: "queued" };
+      try {
+        const { sendTransactionalEmail } = await import("@/lib/email/brevo");
+        const result = await sendTransactionalEmail({
+          to,
+          subject,
+          htmlContent: `<p>${body.replace(/\n/g, "<br>")}</p>`,
+          textContent: body,
+        });
+        sendResult = { status: result.status, id: result.id, error: result.error };
+        if (result.status === "sent" || result.status === "queued") {
+          await prisma.message.update({
+            where: { id: pending.id },
+            data: { status: result.status, providerId: result.id },
+          });
+        } else if (result.status === "failed") {
+          await prisma.message.update({
+            where: { id: pending.id },
+            data: { status: "failed", providerId: result.id },
+          });
+        }
+      } catch (err) {
+        console.warn("[voice_send_email] send failed, record kept as queued", err);
+      }
+
+      await prisma.auditLog.create({
+        data: {
+          workspaceId,
+          event: "voice.email_queued",
+          detail: JSON.stringify({ ...payload, messageId: pending.id, sendResult }),
+        },
+      });
+
+      return { ok: true, queued: true, messageId: pending.id, sendResult };
     }
     case "list_cleanup": {
       const workspaceId = payload.workspaceId as string | undefined;
@@ -120,6 +424,72 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       const { processNotificationDigests } = await import("@/lib/notifications/digest");
       const frequency = String(payload.frequency || "daily");
       return processNotificationDigests(frequency);
+    }
+    case "crm_sync": {
+      const { getMaintenanceState } = await import("@/lib/platform-flags");
+      const maintenance = await getMaintenanceState().catch(() => ({ enabled: false }));
+      if (maintenance?.enabled && process.env.MAINTENANCE_MODE !== "0") {
+        return { ok: true, skipped: true, reason: "maintenance_mode" };
+      }
+      const { runCrmSyncJob } = await import("@/lib/crm/sync-engine");
+      return runCrmSyncJob({
+        workspaceId: String(payload.workspaceId || ""),
+        provider: payload.provider as "salesforce" | "zoho" | "pipedrive",
+        syncRunId: String(payload.syncRunId || ""),
+        kind: payload.kind as
+          | "initial"
+          | "incremental"
+          | "manual"
+          | "webhook"
+          | "scheduled"
+          | "push"
+          | undefined,
+      });
+    }
+    case "crm_push_event": {
+      const { getMaintenanceState } = await import("@/lib/platform-flags");
+      const maintenance = await getMaintenanceState().catch(() => ({ enabled: false }));
+      if (maintenance?.enabled && process.env.MAINTENANCE_MODE !== "0") {
+        // Live call/SMS CRM updates still run during maintenance unless hard-env lock.
+        if (process.env.MAINTENANCE_BLOCK_CRM === "1") {
+          return { ok: true, skipped: true, reason: "maintenance_mode" };
+        }
+      }
+      const { pushCrmEventJob } = await import("@/lib/crm/push");
+      return pushCrmEventJob({
+        workspaceId: String(payload.workspaceId || ""),
+        provider: payload.provider as "salesforce" | "zoho" | "pipedrive",
+        event: payload.event as import("@/lib/crm/types").CrmPlatformEvent,
+      });
+    }
+    case "crm_metadata_refresh": {
+      const { runCrmMetadataRefreshJob } = await import("@/lib/crm/runtime/metadata-refresh");
+      return runCrmMetadataRefreshJob({
+        workspaceId: String(payload.workspaceId || ""),
+        provider: payload.provider as "salesforce" | "zoho" | "pipedrive",
+      });
+    }
+    case "crm_bulk_sync": {
+      const { runCrmBulkSyncPage } = await import("@/lib/crm/runtime/bulk-sync");
+      return runCrmBulkSyncPage({
+        workspaceId: String(payload.workspaceId || ""),
+        provider: payload.provider as "salesforce" | "zoho" | "pipedrive",
+        syncRunId: String(payload.syncRunId || ""),
+        objectType: (payload.objectType as "contact" | "company" | "lead") || "contact",
+        cursor: (payload.cursor as string | null) || null,
+      });
+    }
+    case "crm_webhook_process": {
+      const { processCrmWebhookJob } = await import("@/lib/crm/runtime/webhooks");
+      return processCrmWebhookJob({
+        workspaceId: String(payload.workspaceId || ""),
+        provider: payload.provider as "salesforce" | "zoho" | "pipedrive",
+        webhookEventId: String(payload.webhookEventId || ""),
+      });
+    }
+    case "crm_scheduled_incremental": {
+      const { enqueueScheduledCrmIncrementalSyncs } = await import("@/lib/crm/scheduled-sync");
+      return enqueueScheduledCrmIncrementalSyncs();
     }
     default:
       throw new Error(`Unknown job type: ${jobType}`);
@@ -166,6 +536,15 @@ export async function processDueJobs(limit = 25) {
     queueName: "review-campaign",
     payload: { minuteKey },
     idempotencyKey: `campaign-recurrence:${minuteKey}`,
+  });
+
+  // Hourly CRM incremental reconcile across connected workspaces (complements webhooks).
+  const hourKey = new Date().toISOString().slice(0, 13);
+  await enqueueJob({
+    jobType: "crm_scheduled_incremental",
+    queueName: "crm-salesforce",
+    payload: { hourKey },
+    idempotencyKey: `crm-scheduled-tick:${hourKey}`,
   });
 
   // When BullMQ is the consumer, cron enqueues the minute batch and re-syncs the DB outbox.

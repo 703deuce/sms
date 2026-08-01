@@ -88,6 +88,24 @@ export async function PATCH(
       }
     }
 
+    try {
+      const { publishContactEvent } = await import("@/lib/crm/events");
+      await publishContactEvent({
+        workspaceId: auth.workspaceId,
+        contactId: id,
+        type: "contact.updated",
+        payload: {
+          firstName: body.firstName,
+          lastName: body.lastName,
+          email: body.email,
+          company: body.company,
+          tags: body.tagNames,
+        },
+      });
+    } catch {
+      // CRM push is optional
+    }
+
     const data = await loadContactById(auth.workspaceId, id);
     return NextResponse.json({ data });
   } catch (err) {

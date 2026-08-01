@@ -94,6 +94,7 @@ const MODEL_TO_TABLE: Record<string, string> = {
   paymentLink: "payment_links",
   portRequest: "PortRequest",
   humanCall: "human_calls",
+  humanCallEvent: "human_call_events",
   pushSubscription: "push_subscriptions",
   workspaceNotificationPrefs: "workspace_notification_prefs",
   workspaceLimits: "workspace_limits",
@@ -111,6 +112,15 @@ const MODEL_TO_TABLE: Record<string, string> = {
   ivrMenu: "ivr_menus",
   platformSettings: "platform_settings",
   supportTicket: "support_tickets",
+  callParkSlot: "call_park_slots",
+  conferenceCall: "conference_calls",
+  conferenceParticipant: "conference_participants",
+  voicemailBox: "voicemail_boxes",
+  voicemailMessage: "voicemail_messages",
+  callForwardingRule: "call_forwarding_rules",
+  softphonePresence: "softphone_presence",
+  softphoneDevice: "softphone_devices",
+  softphoneUserSettings: "softphone_user_settings",
 };
 
 /** Relation name on a model → { table, fk on this model, pk on related }. */
@@ -122,6 +132,10 @@ const RELATIONS: Record<string, Record<string, { table: string; fk: string; pk?:
   phoneNumber: { workspace: { table: "Workspace", fk: "workspaceId" } },
   portRequest: { workspace: { table: "Workspace", fk: "workspaceId" } },
   humanCall: { workspace: { table: "Workspace", fk: "workspaceId" } },
+  humanCallEvent: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+    humanCall: { table: "human_calls", fk: "humanCallId" },
+  },
   pushSubscription: { workspace: { table: "Workspace", fk: "workspaceId" } },
   workspaceNotificationPrefs: { workspace: { table: "Workspace", fk: "workspaceId" } },
   workspaceLimits: { workspace: { table: "Workspace", fk: "workspaceId" } },
@@ -146,8 +160,27 @@ const RELATIONS: Record<string, Record<string, { table: string; fk: string; pk?:
   integrationConnection: { workspace: { table: "Workspace", fk: "workspaceId" } },
   callQueue: { workspace: { table: "Workspace", fk: "workspaceId" } },
   ivrMenu: { workspace: { table: "Workspace", fk: "workspaceId" } },
+  callParkSlot: { workspace: { table: "Workspace", fk: "workspaceId" } },
+  conferenceCall: { workspace: { table: "Workspace", fk: "workspaceId" } },
+  conferenceParticipant: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+    conference: { table: "conference_calls", fk: "conferenceId" },
+  },
+  voicemailBox: { workspace: { table: "Workspace", fk: "workspaceId" } },
+  voicemailMessage: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+    box: { table: "voicemail_boxes", fk: "boxId" },
+  },
+  callForwardingRule: { workspace: { table: "Workspace", fk: "workspaceId" } },
+  softphonePresence: { workspace: { table: "Workspace", fk: "workspaceId" } },
+  softphoneDevice: { workspace: { table: "Workspace", fk: "workspaceId" } },
+  softphoneUserSettings: { workspace: { table: "Workspace", fk: "workspaceId" } },
   supportTicket: {},
   contact: { workspace: { table: "Workspace", fk: "workspaceId" } },
+  contactTag: {
+    contact: { table: "Contact", fk: "contactId" },
+    tag: { table: "Tag", fk: "tagId" },
+  },
   campaign: { workspace: { table: "Workspace", fk: "workspaceId" } },
   campaignRecipient: {
     campaign: { table: "Campaign", fk: "campaignId" },
@@ -335,6 +368,15 @@ function formatOrAtom(key: string, value: unknown): string | null {
   if ("not" in value) {
     if (value.not === null) return `${key}.not.is.null`;
     return `${key}.neq.${value.not}`;
+  }
+  if ("contains" in value && typeof value.contains === "string") {
+    return `${key}.ilike.*${value.contains}*`;
+  }
+  if ("startsWith" in value && typeof value.startsWith === "string") {
+    return `${key}.ilike.${value.startsWith}*`;
+  }
+  if ("endsWith" in value && typeof value.endsWith === "string") {
+    return `${key}.ilike.*${value.endsWith}`;
   }
   return null;
 }
@@ -590,6 +632,48 @@ async function applyInclude(rows: Row[], include: Args | undefined, model: strin
         if (take != null) list = list.slice(0, take);
         return { ...r, messages: list };
       });
+      continue;
+    }
+
+    // One-to-many: contact.tagMembers (ContactTag.contactId) + nested tag
+    if (rel === "tagMembers" && model === "contact") {
+      const ids = out.map((r) => r.id as string);
+      const { data } = ids.length
+        ? await db.from("ContactTag").select("*").in("contactId", ids)
+        : { data: [] as Row[] };
+      let members = (data ?? []).map((r) => reviveRow(r as Row));
+      if (isObject(cfg) && isObject(cfg.include) && cfg.include.tag) {
+        const tagIds = [...new Set(members.map((m) => m.tagId).filter(Boolean))] as string[];
+        const { data: tags } = tagIds.length
+          ? await db.from("Tag").select("*").in("id", tagIds)
+          : { data: [] as Row[] };
+        const tagMap = new Map((tags ?? []).map((t) => [t.id as string, reviveRow(t as Row)]));
+        members = members.map((m) => ({ ...m, tag: tagMap.get(m.tagId as string) ?? null }));
+      }
+      const by = new Map<string, Row[]>();
+      for (const m of members) {
+        const list = by.get(m.contactId as string) ?? [];
+        list.push(m);
+        by.set(m.contactId as string, list);
+      }
+      out = out.map((r) => ({ ...r, tagMembers: by.get(r.id as string) ?? [] }));
+      continue;
+    }
+
+    // One-to-many: conferenceCall.participants
+    if (rel === "participants" && model === "conferenceCall") {
+      const ids = out.map((r) => r.id as string);
+      const { data } = ids.length
+        ? await db.from("conference_participants").select("*").in("conferenceId", ids)
+        : { data: [] as Row[] };
+      const by = new Map<string, Row[]>();
+      for (const p of data ?? []) {
+        const row = reviveRow(p as Row);
+        const list = by.get(row.conferenceId as string) ?? [];
+        list.push(row);
+        by.set(row.conferenceId as string, list);
+      }
+      out = out.map((r) => ({ ...r, participants: by.get(r.id as string) ?? [] }));
       continue;
     }
 

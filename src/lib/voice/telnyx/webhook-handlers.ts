@@ -96,6 +96,71 @@ export async function processVoiceWebhookEvent(input: {
   const prisma = getPrisma();
   const { eventType, callId, humanCallId, isHuman, eventPayload } = input;
 
+  // Softphone call screening gather (accept / voicemail).
+  if (eventType === "call.gather.ended" || eventType === "call.dtmf.received") {
+    const screeningState = (() => {
+      const raw = eventPayload.client_state;
+      if (typeof raw !== "string") return {};
+      try {
+        return JSON.parse(Buffer.from(raw, "base64").toString("utf8")) as Record<string, unknown>;
+      } catch {
+        return {};
+      }
+    })();
+    if (screeningState.kind === "call_screening") {
+      // Screening gather / answer can arrive as gather.ended on the agent leg,
+      // or as call.answered when the agent phone picks up (handled below via human webhook).
+      const digit = String(eventPayload.digits || eventPayload.digit || "").trim();
+      const agentControlId = String(eventPayload.call_control_id || "");
+      const humanCallId = String(screeningState.humanCallId || "");
+      const parentId = String(screeningState.parentCallControlId || "");
+      const workspaceId = String(screeningState.workspaceId || input.workspaceId || "");
+
+      if (eventType === "call.gather.ended" || eventType === "call.dtmf.received") {
+        if ((digit === "2" || !digit) && humanCallId && parentId) {
+          const { leaveVoicemailOnCall } = await import("@/lib/phone/voicemail-service");
+          await leaveVoicemailOnCall({
+            workspaceId,
+            humanCallId,
+            telnyxCallControlId: parentId,
+            userId: screeningState.userId ? String(screeningState.userId) : null,
+          }).catch(() => undefined);
+          if (agentControlId) {
+            const { telnyxRequest } = await import("@/lib/messaging/telnyx/client");
+            await telnyxRequest(`/calls/${agentControlId}/actions/hangup`, {
+              method: "POST",
+              body: {},
+            }).catch(() => undefined);
+          }
+        } else if (digit === "1" && humanCallId && parentId && agentControlId) {
+          const { telnyxRequest } = await import("@/lib/messaging/telnyx/client");
+          await telnyxRequest(`/calls/${parentId}/actions/unhold`, {
+            method: "POST",
+            body: {},
+          }).catch(() => undefined);
+          await telnyxRequest(`/calls/${parentId}/actions/bridge`, {
+            method: "POST",
+            body: { call_control_id: agentControlId },
+          }).catch(() => undefined);
+          await prisma.humanCall.update({
+            where: { id: humanCallId },
+            data: {
+              status: "in_progress",
+              onHold: false,
+              answeredAt: new Date(),
+              notes: "screening:accepted",
+            },
+          }).catch(() => undefined);
+        }
+        await prisma.providerWebhookEvent.update({
+          where: { providerEventId: input.providerEventId },
+          data: { status: "processed", processedAt: new Date() },
+        });
+        return { ok: true, kind: "call_screening", digit };
+      }
+    }
+  }
+
   // IVR keypad selection — route the caller to their chosen option.
   if (eventType === "call.gather.ended" || eventType === "call.dtmf.received") {
     const { handleIvrGatherEnded } = await import("@/lib/phone/ivr-service");
@@ -179,17 +244,65 @@ export async function processVoiceWebhookEvent(input: {
         return { ok: true, kind: "ivr_gather" };
       }
 
-      const { evaluateInboundRouting } = await import("../routing");
-      const routing = await evaluateInboundRouting({
-        workspaceId: pn.workspaceId,
-        fromE164: from,
-        toE164: to,
-        isKnownContact: false,
+      // Phone-first per number: softphone when this DID has a human assignment,
+      // queue/IVR path, or the assigned user's softphone device.
+      // Do NOT force softphone for every number just because some workspace device exists.
+      const humanAssignment = await prisma.phoneNumberAssignment.findFirst({
+        where: { phoneNumberId: pn.id },
       });
+      let hasQueueOrIvr = false;
+      try {
+        const { resolveQueueForInbound } = await import("@/lib/phone/queue-service");
+        const { resolveIvrForNumber } = await import("@/lib/phone/ivr-service");
+        const [q, ivr] = await Promise.all([
+          resolveQueueForInbound(pn.workspaceId, to),
+          resolveIvrForNumber(pn.workspaceId, to),
+        ]);
+        hasQueueOrIvr = Boolean(q || ivr);
+      } catch {
+        // ignore resolution failures
+      }
+      const assignedDeviceCount = humanAssignment
+        ? await prisma.softphoneDevice.count({
+            where: {
+              workspaceId: pn.workspaceId,
+              active: true,
+              userId: humanAssignment.userId,
+            },
+          })
+        : 0;
+      const preferSoftphone =
+        Boolean(humanAssignment) || hasQueueOrIvr || assignedDeviceCount > 0;
 
-      if (routing.action !== "ai_answer") {
-        const { handleInboundHumanCall } = await import("@/lib/phone/human-call-service");
-        await handleInboundHumanCall({
+      let aiAgent = null;
+      if (!preferSoftphone) {
+        const assignment = await prisma.voiceAgentPhoneNumber.findFirst({
+          where: {
+            workspaceId: pn.workspaceId,
+            phoneNumberId: pn.id,
+            inboundEnabled: true,
+          },
+        });
+        if (assignment?.agentId) {
+          aiAgent = await prisma.voiceAgent.findFirst({
+            where: { id: assignment.agentId, workspaceId: pn.workspaceId, status: "ACTIVE" },
+          });
+        }
+      }
+
+      if (aiAgent) {
+        const { handleInboundCallEvent } = await import("../inbound");
+        const result = await handleInboundCallEvent({
+          workspaceId: pn.workspaceId,
+          fromE164: from,
+          toE164: to,
+          telnyxCallControlId: String(eventPayload.call_control_id || ""),
+          payload: eventPayload,
+        });
+        call = await prisma.voiceCall.findUnique({ where: { id: result.callId } });
+      } else {
+        const { processSoftphoneInbound } = await import("@/lib/phone/inbound-runtime");
+        await processSoftphoneInbound({
           workspaceId: pn.workspaceId,
           fromE164: from,
           toE164: to,
@@ -199,18 +312,8 @@ export async function processVoiceWebhookEvent(input: {
           where: { providerEventId: input.providerEventId },
           data: { status: "processed", processedAt: new Date() },
         });
-        return { ok: true, kind: "human_inbound" };
+        return { ok: true, kind: "softphone_inbound" };
       }
-
-      const { handleInboundCallEvent } = await import("../inbound");
-      const result = await handleInboundCallEvent({
-        workspaceId: pn.workspaceId,
-        fromE164: from,
-        toE164: to,
-        telnyxCallControlId: String(eventPayload.call_control_id || ""),
-        payload: eventPayload,
-      });
-      call = await prisma.voiceCall.findUnique({ where: { id: result.callId } });
     }
   }
 
@@ -224,6 +327,34 @@ export async function processVoiceWebhookEvent(input: {
 
   const workspaceId = call.workspaceId;
 
+  // Warm transfer consult leg answered — speak summary to agent; keep caller on hold
+  // until completeWarmTransfer is invoked (true warm consult UX).
+  const clientStateRaw = eventPayload.client_state;
+  let warmState: Record<string, unknown> = {};
+  if (typeof clientStateRaw === "string") {
+    try {
+      warmState = JSON.parse(Buffer.from(clientStateRaw, "base64").toString("utf8"));
+    } catch {
+      warmState = {};
+    }
+  }
+  if (
+    warmState.kind === "warm_transfer_consult" &&
+    eventType === "call.answered" &&
+    warmState.transferId &&
+    warmState.callerControlId
+  ) {
+    const { handleWarmTransferConsultAnswered } = await import("../transfers");
+    await handleWarmTransferConsultAnswered({
+      workspaceId,
+      callId: String(warmState.callId || call.id),
+      transferId: String(warmState.transferId),
+      consultControlId: String(eventPayload.call_control_id || ""),
+      callerControlId: String(warmState.callerControlId),
+      summary: warmState.summary ? String(warmState.summary) : undefined,
+    }).catch((err) => console.warn("[voice/webhook] warm transfer consult failed", err));
+  }
+
   await prisma.voiceCallEvent.create({
     data: {
       workspaceId,
@@ -234,6 +365,10 @@ export async function processVoiceWebhookEvent(input: {
     },
   });
 
+  // Secondary legs (warm consult, etc.) must not overwrite the parent VoiceCall
+  // control id or mark the live AI/customer call completed on consult hangup.
+  const isSecondaryVoiceLeg = warmState.kind === "warm_transfer_consult";
+
   const statusMap: Record<string, string> = {
     "call.initiated": "INITIATED",
     "call.ringing": "RINGING",
@@ -242,16 +377,20 @@ export async function processVoiceWebhookEvent(input: {
     "call.hangup": "COMPLETED",
     "call.machine.detection.ended": "VOICEMAIL",
     "call.machine.premium.detection.ended": "VOICEMAIL",
-    "call.recording.saved": "COMPLETED",
-    "call.transcription.completed": "COMPLETED",
+    // recording.saved / transcription.completed must NOT end a live AI call.
   };
 
-  let nextStatus = statusMap[eventType];
+  let nextStatus = isSecondaryVoiceLeg ? undefined : statusMap[eventType];
   const patch: Record<string, unknown> = { updatedAt: new Date() };
 
   // On hangup, refine COMPLETED into a missed-call status when the call was
   // never answered, based on the provider hangup cause.
-  if (eventType === "call.hangup" && !call.answeredAt && !call.voicemailDetected) {
+  if (
+    !isSecondaryVoiceLeg &&
+    eventType === "call.hangup" &&
+    !call.answeredAt &&
+    !call.voicemailDetected
+  ) {
     const cause = String(
       eventPayload.hangup_cause || eventPayload.sip_hangup_cause || "",
     ).toLowerCase();
@@ -290,7 +429,7 @@ export async function processVoiceWebhookEvent(input: {
     }
   }
 
-  if (eventType.includes("machine") && eventType.includes("detection")) {
+  if (!isSecondaryVoiceLeg && eventType.includes("machine") && eventType.includes("detection")) {
     patch.voicemailDetected = true;
     patch.outcome = "voicemail";
     if (call.campaignId) {
@@ -304,17 +443,21 @@ export async function processVoiceWebhookEvent(input: {
     }
   }
 
-  if (eventPayload.call_control_id) {
+  // Never replace the customer/AI control id with a consult/secondary leg id.
+  if (eventPayload.call_control_id && !isSecondaryVoiceLeg) {
     patch.telnyxCallControlId = String(eventPayload.call_control_id);
   }
 
-  await prisma.voiceCall.update({
-    where: { id: call.id },
-    data: patch,
-  });
+  if (Object.keys(patch).length > 1 || nextStatus) {
+    await prisma.voiceCall.update({
+      where: { id: call.id },
+      data: patch,
+    });
+  }
 
   // Outbound (and any unanswered AI leg): when the callee answers, start the assistant.
   if (
+    !isSecondaryVoiceLeg &&
     (eventType === "call.answered" || eventType === "call.bridged") &&
     call.agentId &&
     !call.voicemailDetected
@@ -324,9 +467,11 @@ export async function processVoiceWebhookEvent(input: {
       const agent = await prisma.voiceAgent.findUnique({ where: { id: call.agentId } });
       const controlId = String(eventPayload.call_control_id || call.telnyxCallControlId || "");
       if (agent?.telnyxAssistantId && controlId) {
-        const { startAiAssistantOnCall, startCallRecording } = await import(
-          "../telnyx/assistant-sync"
-        );
+        const {
+          startAiAssistantOnCall,
+          startCallRecording,
+          startCallTranscription,
+        } = await import("../telnyx/assistant-sync");
         await startAiAssistantOnCall({
           callControlId: controlId,
           assistantId: agent.telnyxAssistantId,
@@ -337,17 +482,26 @@ export async function processVoiceWebhookEvent(input: {
           },
         }).catch((err) => console.error("[voice/webhook] ai_assistant_start", err));
         await startCallRecording(controlId);
+        await startCallTranscription(controlId);
         await prisma.voiceCall.update({
           where: { id: call.id },
           data: {
-            metadata: { ...meta, aiStarted: true, assistantId: agent.telnyxAssistantId } as object,
+            metadata: {
+              ...meta,
+              aiStarted: true,
+              assistantId: agent.telnyxAssistantId,
+              transcriptionStarted: true,
+            } as object,
           },
         });
       }
     }
   }
 
-  if (eventType === "call.hangup" || eventType === "call.machine.detection.ended") {
+  if (
+    !isSecondaryVoiceLeg &&
+    (eventType === "call.hangup" || eventType === "call.machine.detection.ended")
+  ) {
     await enqueueJob({
       jobType: "voice_post_call",
       queueName: "voice-calls",

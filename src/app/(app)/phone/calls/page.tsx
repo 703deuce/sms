@@ -35,9 +35,16 @@ const DISPOSITIONS = [
 export default function PhoneCallsPage() {
   const [rows, setRows] = useState<CallRow[]>([]);
   const [saving, setSaving] = useState<string | null>(null);
+  const [direction, setDirection] = useState("");
+  const [status, setStatus] = useState("");
+  const [q, setQ] = useState("");
 
   function load() {
-    fetch("/api/phone/calls?limit=100")
+    const params = new URLSearchParams({ limit: "100" });
+    if (direction) params.set("direction", direction);
+    if (status) params.set("status", status);
+    if (q.trim()) params.set("q", q.trim());
+    fetch(`/api/phone/calls?${params}`)
       .then((r) => r.json())
       .then((j) => setRows(j.data || []))
       .catch(() => undefined);
@@ -45,7 +52,7 @@ export default function PhoneCallsPage() {
 
   useEffect(() => {
     load();
-  }, []);
+  }, [direction, status]);
 
   async function setDisposition(id: string, disposition: string) {
     setSaving(id);
@@ -61,6 +68,30 @@ export default function PhoneCallsPage() {
     }
   }
 
+  async function returnCall(phone: string) {
+    // Open softphone with click-to-call so WebRTC / Call my phone owns media.
+    window.location.href = `/phone?dial=${encodeURIComponent(phone)}`;
+  }
+
+  async function sendSms(phone: string) {
+    window.location.href = `/send/quick?to=${encodeURIComponent(phone)}`;
+  }
+
+  async function addToContacts(phone: string) {
+    const res = await fetch("/api/contacts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phone, firstName: "Unknown", lastName: "Caller" }),
+    });
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      alert(j.error || "Could not create contact");
+      return;
+    }
+    const j = await res.json();
+    if (j.data?.id) window.location.href = `/contacts/${j.data.id}`;
+  }
+
   return (
     <div>
       <PageHeader
@@ -68,6 +99,48 @@ export default function PhoneCallsPage() {
         description="Human agent calls placed and received through the softphone. Play recordings and set dispositions."
       />
       <PhoneSubNav />
+      <Card className="mb-4 flex flex-wrap items-end gap-3 p-4">
+        <div>
+          <label className="text-xs text-muted-foreground">Direction</label>
+          <Select value={direction} onChange={(e) => setDirection(e.target.value)}>
+            <option value="">All</option>
+            <option value="inbound">Inbound</option>
+            <option value="outbound">Outbound</option>
+          </Select>
+        </div>
+        <div>
+          <label className="text-xs text-muted-foreground">Status</label>
+          <Select value={status} onChange={(e) => setStatus(e.target.value)}>
+            <option value="">All</option>
+            <option value="ringing">Ringing</option>
+            <option value="in_progress">In progress</option>
+            <option value="completed">Completed</option>
+            <option value="missed">Missed</option>
+            <option value="voicemail">Voicemail</option>
+            <option value="parked">Parked</option>
+            <option value="callback_requested">Callback requested</option>
+          </Select>
+        </div>
+        <div className="flex-1 min-w-[180px]">
+          <label className="text-xs text-muted-foreground">Search</label>
+          <input
+            className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Name / number / notes"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") load();
+            }}
+          />
+        </div>
+        <button
+          type="button"
+          className="rounded-lg border border-border px-3 py-2 text-sm"
+          onClick={load}
+        >
+          Apply
+        </button>
+      </Card>
       <Card className="overflow-hidden p-0">
         <Table>
           <THead>
@@ -79,17 +152,20 @@ export default function PhoneCallsPage() {
               <TH>Recording</TH>
               <TH>Disposition</TH>
               <TH>Started</TH>
+              <TH>Actions</TH>
             </TR>
           </THead>
           <TBody>
             {rows.length === 0 ? (
               <TR>
-                <TD colSpan={7} className="text-center text-muted-foreground py-8">
+                <TD colSpan={8} className="text-center text-muted-foreground py-8">
                   No calls yet
                 </TD>
               </TR>
             ) : (
-              rows.map((c) => (
+              rows.map((c) => {
+                const peer = c.direction === "inbound" ? c.from : c.to;
+                return (
                 <TR key={c.id}>
                   <TD className="capitalize">{c.direction}</TD>
                   <TD className="font-mono text-xs">{c.from}</TD>
@@ -97,7 +173,12 @@ export default function PhoneCallsPage() {
                   <TD>{c.status}</TD>
                   <TD>
                     {c.recordingUrl ? (
-                      <audio controls preload="none" src={c.recordingUrl} className="h-8 w-44" />
+                      <audio
+                        controls
+                        preload="none"
+                        src={`/api/phone/calls/${c.id}/recording`}
+                        className="h-8 w-44"
+                      />
                     ) : (
                       <span className="text-xs text-muted-foreground">—</span>
                     )}
@@ -117,8 +198,40 @@ export default function PhoneCallsPage() {
                   <TD className="text-muted-foreground text-xs">
                     {new Date(c.startedAt).toLocaleString()}
                   </TD>
+                  <TD>
+                    <div className="flex flex-wrap gap-1">
+                      <a
+                        href={`/phone/calls/${c.id}`}
+                        className="rounded border border-border px-2 py-1 text-[11px]"
+                      >
+                        Diagnostics
+                      </a>
+                      <button
+                        type="button"
+                        className="rounded border border-border px-2 py-1 text-[11px]"
+                        onClick={() => void returnCall(peer)}
+                      >
+                        {c.status === "callback_requested" ? "Call back" : "Return"}
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded border border-border px-2 py-1 text-[11px]"
+                        onClick={() => void sendSms(peer)}
+                      >
+                        SMS
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded border border-border px-2 py-1 text-[11px]"
+                        onClick={() => void addToContacts(peer)}
+                      >
+                        Add contact
+                      </button>
+                    </div>
+                  </TD>
                 </TR>
-              ))
+              );
+              })
             )}
           </TBody>
         </Table>

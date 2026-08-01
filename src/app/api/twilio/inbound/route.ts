@@ -87,12 +87,19 @@ export async function POST(request: Request) {
     }
 
     try {
+      const mediaCount = Number(params.NumMedia || 0);
+      const mediaUrls: string[] = [];
+      for (let i = 0; i < mediaCount; i += 1) {
+        const url = params[`MediaUrl${i}`];
+        if (url) mediaUrls.push(url);
+      }
       const result = await processInboundMessage({
         workspaceId: ctx.workspaceId,
         from,
         to: ctx.phoneE164 || to,
         body,
         providerMessageId: params.MessageSid,
+        mediaUrls,
         registration: ctx.registration,
       });
 

@@ -227,6 +227,27 @@ export async function sendQuickSms(input: QuickSendSmsInput) {
       console.warn("[sendQuickSms] credit deduction failed", pending.id, creditErr);
     }
 
+    // CRM framework — push outbound SMS/MMS to connected CRMs (async).
+    try {
+      const contactRow = await prisma.contact.findUnique({
+        where: { workspaceId_phone: { workspaceId: input.workspaceId, phone: to } },
+      });
+      const { publishSmsEvent } = await import("@/lib/crm/events");
+      await publishSmsEvent({
+        workspaceId: input.workspaceId,
+        contactId: contactRow?.id || null,
+        direction: "outbound",
+        from: poolFrom || reg!.phoneE164 || input.from || null,
+        to,
+        body: finalBody,
+        status: result.status || "sent",
+        messageId: pending.id,
+        mediaUrls: input.mediaUrls?.filter(Boolean),
+      });
+    } catch {
+      // CRM push is optional
+    }
+
     return { ...result, trackingToken, trackingUrl: trackedUrl, messageId: pending.id };
   } catch (err) {
     if (providerAccepted) {

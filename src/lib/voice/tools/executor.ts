@@ -78,7 +78,7 @@ async function runToolByType(
     case "transfer_call":
     case "warm_transfer":
     case "cold_transfer":
-      return await runTransferTool(input.workspaceId, config, input.callId, tool.toolType);
+      return await runTransferTool(input.workspaceId, config, input.callId, tool.toolType, input.input || {});
     case "book_appointment":
       const { bookAppointment } = await import("../calendar/booking");
       return await bookAppointment(input.workspaceId, input.input || {});
@@ -159,15 +159,23 @@ async function runTransferTool(
   config: Record<string, unknown>,
   callId?: string,
   transferType?: string,
+  input?: Record<string, unknown>,
 ) {
   if (!callId) throw new Error("callId required for transfer");
   const { initiateTransfer } = await import("../transfers");
+  const fallbacks = Array.isArray(config.fallbackDestinations)
+    ? config.fallbackDestinations.map((d) =>
+        typeof d === "string" ? d : String((d as { to?: string }).to || ""),
+      )
+    : [];
   return await initiateTransfer({
     workspaceId,
     callId,
-    destination: String(config.destination || config.to || ""),
+    destination: String(input?.destination || config.destination || config.to || ""),
     transferType: transferType || "cold_transfer",
-    summary: String(config.summary || ""),
+    summary: String(input?.summary || config.summary || ""),
+    fallbackDestinations: fallbacks.filter(Boolean),
+    timeoutSeconds: Number(config.timeoutSeconds || 30),
   });
 }
 

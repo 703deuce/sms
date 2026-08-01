@@ -4,6 +4,7 @@ import { getPrisma } from "@/lib/db";
 import {
   duplicateVoiceAgent,
   publishVoiceAgent,
+  rollbackVoiceAgent,
   updateVoiceAgentDraft,
 } from "@/lib/voice/agent-service";
 import { parseVoiceAgentConfig, VOICE_STATUS_MAP } from "@/lib/voice/types";
@@ -128,6 +129,17 @@ export async function PATCH(
         data: { status: "ARCHIVED", archivedAt: new Date() },
       });
       return NextResponse.json({ data: mapAgent(row) });
+    }
+    if (body.action === "rollback") {
+      const versionId = String(body.versionId || "");
+      if (!versionId) {
+        return NextResponse.json({ error: "versionId required" }, { status: 400 });
+      }
+      const result = await rollbackVoiceAgent(auth.workspaceId, id, versionId);
+      return NextResponse.json({
+        data: mapAgent(result.agent),
+        version: result.version.version,
+      });
     }
 
     const row = await updateVoiceAgentDraft(auth.workspaceId, id, {

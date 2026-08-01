@@ -36,23 +36,66 @@ type Billing = {
   stripeSubscriptionId: string | null;
 };
 
+type LedgerEntry = {
+  id: string;
+  amountCents: number;
+  balanceAfterCents?: number | null;
+  description: string;
+  source: string;
+  createdAt: string;
+};
+
+type Estimate = {
+  currency: string;
+  periodLabel: string;
+  lineItems: Array<{ id: string; label: string; amountCents: number; detail?: string }>;
+  subtotalCents: number;
+  estimatedTaxCents: number;
+  totalCents: number;
+  notes: string[];
+  invoices: Array<{
+    id: string;
+    number: string | null;
+    status: string | null;
+    amountDue: number;
+    amountPaid: number;
+    created: number;
+    hostedInvoiceUrl: string | null;
+    pdf: string | null;
+  }>;
+};
+
 function titleCasePlan(plan: string) {
   if (!plan) return "—";
   return plan.charAt(0).toUpperCase() + plan.slice(1);
+}
+
+function cents(n: number) {
+  return formatCurrency(n / 100);
 }
 
 export function BillingSettingsPanel() {
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [usage, setUsage] = useState<UsageRow[]>([]);
   const [billing, setBilling] = useState<Billing | null>(null);
+  const [ledger, setLedger] = useState<LedgerEntry[]>([]);
+  const [estimate, setEstimate] = useState<Estimate | null>(null);
   const [creditAmount, setCreditAmount] = useState(50);
   const [purchasing, setPurchasing] = useState(false);
   const [message, setMessage] = useState("");
 
-  function applyData(data: { metrics?: Metrics; usage?: UsageRow[]; billing?: Billing }) {
+  function applyData(data: {
+    metrics?: Metrics;
+    usage?: UsageRow[];
+    billing?: Billing;
+    ledger?: LedgerEntry[];
+    estimate?: Estimate;
+  }) {
     if (data.metrics) setMetrics(data.metrics);
     setUsage(data.usage || []);
     if (data.billing) setBilling(data.billing);
+    if (data.ledger) setLedger(data.ledger);
+    if (data.estimate) setEstimate(data.estimate);
   }
 
   useEffect(() => {
@@ -109,7 +152,7 @@ export function BillingSettingsPanel() {
     <div>
       <PageHeader
         title="Billing"
-        description="Plan, credits, payment method, and invoice history."
+        description="Plan, credits, itemized estimate, ledger, and invoices."
         actions={
           <Button onClick={purchaseCredits} disabled={purchasing}>
             {purchasing ? "Processing…" : "Add credits"}
@@ -134,53 +177,189 @@ export function BillingSettingsPanel() {
 
       <div className="grid gap-4 xl:grid-cols-2">
         <Card>
-          <CardTitle>Payment method</CardTitle>
-          <div className="mt-4 rounded-lg border border-border p-4">
-            <p className="text-sm text-muted-foreground">
-              {stripeConfigured
-                ? "Manage payment method, invoices, and subscription in the Stripe customer portal."
-                : "Stripe billing is not configured for this environment."}
-            </p>
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            className="mt-4"
-            onClick={openStripePortal}
-            disabled={!stripeConfigured}
-          >
-            Stripe customer portal
-          </Button>
+          <CardTitle>Upcoming bill estimate</CardTitle>
+          {estimate ? (
+            <div className="mt-4 space-y-3">
+              <p className="text-xs text-muted-foreground">Period {estimate.periodLabel}</p>
+              <div className="space-y-2">
+                {estimate.lineItems.map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex items-start justify-between gap-3 border-b border-border/60 pb-2 text-sm"
+                  >
+                    <div>
+                      <p className="font-medium">{item.label}</p>
+                      {item.detail ? (
+                        <p className="text-xs text-muted-foreground">{item.detail}</p>
+                      ) : null}
+                    </div>
+                    <span className="shrink-0 tabular-nums">{cents(item.amountCents)}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="space-y-1 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Subtotal</span>
+                  <span>{cents(estimate.subtotalCents)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Estimated tax</span>
+                  <span>{cents(estimate.estimatedTaxCents)}</span>
+                </div>
+                <div className="flex justify-between font-medium">
+                  <span>Estimated total</span>
+                  <span>{cents(estimate.totalCents)}</span>
+                </div>
+              </div>
+              <ul className="space-y-1 text-xs text-muted-foreground">
+                {estimate.notes.map((n) => (
+                  <li key={n}>{n}</li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            <p className="mt-4 text-sm text-muted-foreground">Loading estimate…</p>
+          )}
         </Card>
 
-        <Card>
-          <CardTitle>Add credits</CardTitle>
-          <div className="mt-4 flex flex-wrap items-end gap-4">
-            <div>
-              <Label htmlFor="creditAmount">Amount (USD)</Label>
-              <Input
-                id="creditAmount"
-                type="number"
-                value={creditAmount}
-                onChange={(e) => setCreditAmount(Number(e.target.value))}
-                min={10}
-                step={5}
-                className="w-32"
-              />
+        <div className="space-y-4">
+          <Card>
+            <CardTitle>Payment method</CardTitle>
+            <div className="mt-4 rounded-lg border border-border p-4">
+              <p className="text-sm text-muted-foreground">
+                {stripeConfigured
+                  ? "Manage payment method, invoices, and subscription in the Stripe customer portal."
+                  : "Stripe billing is not configured for this environment."}
+              </p>
             </div>
-            <Button type="button" onClick={purchaseCredits} disabled={purchasing}>
-              Purchase credits
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-4"
+              onClick={openStripePortal}
+              disabled={!stripeConfigured}
+            >
+              Stripe customer portal
             </Button>
-          </div>
-          <p className="mt-2 text-xs text-muted-foreground">
-            {stripeConfigured
-              ? "Redirects to Stripe Checkout to purchase prepaid messaging credits."
-              : "Creates a credit ledger entry when Stripe billing is not configured."}
-          </p>
-        </Card>
+          </Card>
+
+          <Card>
+            <CardTitle>Add credits</CardTitle>
+            <div className="mt-4 flex flex-wrap items-end gap-4">
+              <div>
+                <Label htmlFor="creditAmount">Amount (USD)</Label>
+                <Input
+                  id="creditAmount"
+                  type="number"
+                  value={creditAmount}
+                  onChange={(e) => setCreditAmount(Number(e.target.value))}
+                  min={10}
+                  step={5}
+                  className="w-32"
+                />
+              </div>
+              <Button type="button" onClick={purchaseCredits} disabled={purchasing}>
+                Purchase credits
+              </Button>
+            </div>
+            <p className="mt-2 text-xs text-muted-foreground">
+              {stripeConfigured
+                ? "Redirects to Stripe Checkout to purchase prepaid messaging credits."
+                : "Creates a credit ledger entry when Stripe billing is not configured."}
+            </p>
+          </Card>
+        </div>
       </div>
 
       {message ? <p className="mt-4 text-sm text-muted-foreground">{message}</p> : null}
+
+      <Card className="mt-4">
+        <CardTitle>Credit ledger</CardTitle>
+        {ledger.length === 0 ? (
+          <EmptyState
+            title="No ledger entries"
+            description="Purchases, usage deductions, and adjustments appear here."
+          />
+        ) : (
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="text-xs uppercase text-muted-foreground">
+                <tr>
+                  <th className="pb-2 pr-3 font-medium">When</th>
+                  <th className="pb-2 pr-3 font-medium">Description</th>
+                  <th className="pb-2 pr-3 font-medium">Source</th>
+                  <th className="pb-2 text-right font-medium">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ledger.map((row) => (
+                  <tr key={row.id} className="border-t border-border">
+                    <td className="py-2 pr-3 text-muted-foreground whitespace-nowrap">
+                      {new Date(row.createdAt).toLocaleString()}
+                    </td>
+                    <td className="py-2 pr-3">{row.description}</td>
+                    <td className="py-2 pr-3 text-muted-foreground">{row.source}</td>
+                    <td
+                      className={`py-2 text-right tabular-nums ${
+                        row.amountCents < 0 ? "text-rose-600" : "text-emerald-700"
+                      }`}
+                    >
+                      {row.amountCents >= 0 ? "+" : ""}
+                      {cents(row.amountCents)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+
+      <Card className="mt-4">
+        <CardTitle>Invoices</CardTitle>
+        {!estimate?.invoices?.length ? (
+          <p className="mt-4 text-sm text-muted-foreground">
+            {stripeConfigured
+              ? "No Stripe invoices found for this customer yet."
+              : "Connect Stripe to sync invoice history."}
+          </p>
+        ) : (
+          <div className="mt-4 space-y-2">
+            {estimate.invoices.map((inv) => (
+              <div
+                key={inv.id}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border px-4 py-3 text-sm"
+              >
+                <div>
+                  <p className="font-medium">
+                    {inv.number || inv.id} · {inv.status || "unknown"}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {new Date(inv.created * 1000).toLocaleDateString()} · due {cents(inv.amountDue)} ·
+                    paid {cents(inv.amountPaid)}
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  {inv.hostedInvoiceUrl ? (
+                    <a href={inv.hostedInvoiceUrl} target="_blank" rel="noreferrer">
+                      <Button size="sm" variant="outline">
+                        View
+                      </Button>
+                    </a>
+                  ) : null}
+                  {inv.pdf ? (
+                    <a href={inv.pdf} target="_blank" rel="noreferrer">
+                      <Button size="sm" variant="outline">
+                        PDF
+                      </Button>
+                    </a>
+                  ) : null}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
 
       <Card className="mt-4">
         <CardTitle>Usage periods</CardTitle>
@@ -194,7 +373,8 @@ export function BillingSettingsPanel() {
                 className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border px-4 py-3 text-sm"
               >
                 <span className="text-muted-foreground">
-                  {new Date(row.periodStart).toLocaleDateString()} – {new Date(row.periodEnd).toLocaleDateString()}
+                  {new Date(row.periodStart).toLocaleDateString()} –{" "}
+                  {new Date(row.periodEnd).toLocaleDateString()}
                 </span>
                 <span>
                   {formatNumber(row.outbound)} outbound · {formatCurrency(row.costCents / 100)}
@@ -205,7 +385,8 @@ export function BillingSettingsPanel() {
         )}
         {currentUsage ? (
           <p className="mt-4 text-xs text-muted-foreground">
-            Current period: {formatNumber(currentUsage.smsSegments)} SMS segments, {formatNumber(currentUsage.mmsMessages)} MMS.
+            Current period: {formatNumber(currentUsage.smsSegments)} SMS segments,{" "}
+            {formatNumber(currentUsage.mmsMessages)} MMS.
           </p>
         ) : null}
       </Card>

@@ -9,6 +9,40 @@ export async function GET(request: Request) {
     if ("error" in auth) return auth.error;
     const { searchParams } = new URL(request.url);
     const status = searchParams.get("status");
+    const q = searchParams.get("q")?.trim();
+    const phone = searchParams.get("phone")?.trim();
+
+    const include = { tagMembers: { include: { tag: true } } };
+
+    if (phone) {
+      const normalized = normalizeE164(phone);
+      const data = await getPrisma().contact.findMany({
+        where: { workspaceId: auth.workspaceId, phone: normalized },
+        include,
+        take: 5,
+      });
+      return NextResponse.json({ data });
+    }
+
+    if (q) {
+      const data = await getPrisma().contact.findMany({
+        where: {
+          workspaceId: auth.workspaceId,
+          OR: [
+            { firstName: { contains: q, mode: "insensitive" } },
+            { lastName: { contains: q, mode: "insensitive" } },
+            { phone: { contains: q } },
+            { email: { contains: q, mode: "insensitive" } },
+            { company: { contains: q, mode: "insensitive" } },
+          ],
+        },
+        include,
+        orderBy: { createdAt: "desc" },
+        take: 25,
+      });
+      return NextResponse.json({ data });
+    }
+
     const data = await getPrisma().contact.findMany({
       where: {
         workspaceId: auth.workspaceId,
@@ -63,6 +97,23 @@ export async function POST(request: Request) {
     if (isNew) {
       const { emitAutomationEvent } = await import("@/lib/automations/events");
       await emitAutomationEvent(auth.workspaceId, "customer.created", contact.id).catch(() => undefined);
+    }
+
+    try {
+      const { publishContactEvent } = await import("@/lib/crm/events");
+      await publishContactEvent({
+        workspaceId: auth.workspaceId,
+        contactId: contact.id,
+        type: isNew ? "contact.created" : "contact.updated",
+        payload: {
+          firstName: contact.firstName,
+          lastName: contact.lastName,
+          phone: contact.phone,
+          email: contact.email,
+        },
+      });
+    } catch {
+      // CRM push is optional
     }
 
     return NextResponse.json({ data: contact }, { status: 201 });

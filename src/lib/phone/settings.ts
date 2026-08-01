@@ -25,13 +25,30 @@ export async function upsertPhoneSettings(
   });
 }
 
-export async function resolveCallerIdNumber(workspaceId: string, requested?: string | null) {
+export async function resolveCallerIdNumber(
+  workspaceId: string,
+  requested?: string | null,
+  agentUserId?: string | null,
+) {
   const prisma = getPrisma();
   if (requested) {
     const pn = await prisma.phoneNumber.findFirst({
       where: { workspaceId, e164: requested, status: "Active" },
     });
     if (pn) return pn.e164;
+  }
+
+  // Per-user softphone default caller ID (before workspace default).
+  if (agentUserId) {
+    const userSettings = await prisma.softphoneUserSettings.findUnique({
+      where: { workspaceId_userId: { workspaceId, userId: agentUserId } },
+    });
+    if (userSettings?.defaultCallerId) {
+      const pn = await prisma.phoneNumber.findFirst({
+        where: { workspaceId, e164: userSettings.defaultCallerId, status: "Active" },
+      });
+      if (pn) return pn.e164;
+    }
   }
 
   const settings = await getPhoneSettings(workspaceId);

@@ -310,12 +310,13 @@ Build/manage is Full for each; **outbound send is Blocked** until number + A2P.
 | Developer logs | Full | |
 | Stripe (billing + text-to-pay) | Partial | Needs `STRIPE_*` |
 | HubSpot | Partial | API key + webhook + sync when keyed |
-| Salesforce | Partial | Token + sync when keyed |
+| CRM Framework (Salesforce / Zoho / Pipedrive) | Partial | OAuth adapters + sync/push jobs; needs provider app credentials |
+| Salesforce (legacy token) | Partial | Token + sync when keyed |
 | Shopify | Partial | Admin token + sync when keyed |
 | Calendly | Partial | Webhook + signing key |
 | Google Contacts | Partial | OAuth + sync |
 | Google Sheets | Partial | OAuth + spreadsheet ID + sync |
-| Zapier | Missing | Links to API docs only |
+| Zapier | Missing | Links to API docs only; CRM framework reduces need for normal Voice/SMS sync |
 
 ## 14. Settings / Auth / Billing
 

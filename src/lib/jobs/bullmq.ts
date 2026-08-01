@@ -37,11 +37,24 @@ async function syncDbJob(idempotencyKey: string | undefined, outcome: "completed
 export async function startBullmqWorkers() {
   const conn = connection();
 
-  const queues = ["review-campaign", "sms-send", "email-send", "review-import", "automations", "voice-calls"] as const;
+  const queues = [
+    "review-campaign",
+    "sms-send",
+    "email-send",
+    "review-import",
+    "automations",
+    "voice-calls",
+    // CRM provider-isolated queues (+ legacy "integrations")
+    "integrations",
+    "crm-salesforce",
+    "crm-zoho",
+    "crm-pipedrive",
+  ] as const;
 
   for (const name of queues) {
     void getQueue(name);
 
+    const isCrm = name.startsWith("crm-") || name === "integrations";
     void new Worker(
       name,
       async (job) => {
@@ -72,7 +85,8 @@ export async function startBullmqWorkers() {
       },
       {
         connection: conn,
-        concurrency: name.endsWith("send") ? 5 : 2,
+        // Isolate CRM concurrency per provider queue; send queues stay higher.
+        concurrency: name.endsWith("send") ? 5 : isCrm ? 3 : 2,
       },
     );
   }

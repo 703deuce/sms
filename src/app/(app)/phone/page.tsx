@@ -15,7 +15,7 @@ export default async function PhonePage() {
     <div>
       <PageHeader
         title="Softphone"
-        description="Place outbound calls and manage live calls from your browser."
+        description="Phone first: place and answer calls reliably. Run Phone readiness before go-live."
       />
       <PhoneSubNav />
       <SoftphonePanel

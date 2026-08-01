@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 
 const items = [
   { label: "Softphone", href: "/phone" },
+  { label: "Readiness", href: "/phone/readiness" },
   { label: "Call history", href: "/phone/calls" },
   { label: "Queues", href: "/phone/queues" },
   { label: "IVR menus", href: "/phone/ivr" },
@@ -18,7 +19,9 @@ export function PhoneSubNav() {
   return (
     <nav className="mb-6 flex flex-wrap gap-1 rounded-lg border border-border bg-card p-1 text-sm">
       {items.map((item) => {
-        const active = pathname === item.href;
+        const active =
+          pathname === item.href ||
+          (item.href !== "/phone" && pathname?.startsWith(`${item.href}/`));
         return (
           <Link
             key={item.href}

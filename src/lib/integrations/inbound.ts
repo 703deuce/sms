@@ -153,6 +153,21 @@ export async function ingestCalendlyWebhook(
       metadata: { source: "calendly", event } as object,
     },
   });
+  if (status !== "cancelled") {
+    try {
+      const { publishAppointmentBooked } = await import("@/lib/crm/events");
+      await publishAppointmentBooked({
+        workspaceId,
+        contactId: contact?.contactId || null,
+        appointmentId: created.id,
+        serviceName: created.serviceName,
+        startsAt: created.startsAt,
+        endsAt: created.endsAt,
+      }).catch(() => undefined);
+    } catch {
+      // CRM push is optional
+    }
+  }
   return { ok: true, appointmentId: created.id };
 }
 

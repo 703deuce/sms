@@ -6,6 +6,7 @@ import {
   createCreditsCheckoutSession,
   createSubscriptionCheckoutSession,
   getBillingSummary,
+  getUpcomingBillEstimate,
 } from "@/lib/settings/billing";
 import { isStripeConfigured } from "@/lib/stripe/client";
 import { loadDashboardMetrics, loadUsage } from "@/lib/workspace-data";
@@ -15,10 +16,11 @@ export async function GET() {
     const auth = await requireSession();
     if ("error" in auth) return auth.error;
 
-    const [metrics, usage, billing] = await Promise.all([
+    const [metrics, usage, billing, estimate] = await Promise.all([
       loadDashboardMetrics(auth.workspaceId),
       loadUsage(auth.workspaceId),
       getBillingSummary(auth.workspaceId),
+      getUpcomingBillEstimate(auth.workspaceId),
     ]);
 
     return NextResponse.json({
@@ -27,6 +29,7 @@ export async function GET() {
         usage,
         billing,
         ledger: billing.ledger,
+        estimate,
       },
     });
   } catch (err) {

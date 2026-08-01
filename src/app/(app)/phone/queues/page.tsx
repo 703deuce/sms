@@ -35,6 +35,8 @@ const OVERFLOWS = [
   { value: "voicemail", label: "Send to voicemail" },
   { value: "forward", label: "Forward to number" },
   { value: "hangup", label: "Hang up" },
+  { value: "ai_agent", label: "Hand off to AI agent" },
+  { value: "callback", label: "Offer callback" },
 ];
 
 const emptyForm = {
@@ -201,13 +203,15 @@ export default function PhoneQueuesPage() {
               ))}
             </Select>
           </div>
-          {form.overflowAction === "forward" && (
+          {(form.overflowAction === "forward" || form.overflowAction === "ai_agent") && (
             <div>
-              <Label>Forward to number</Label>
+              <Label>
+                {form.overflowAction === "ai_agent" ? "AI agent id" : "Forward to number"}
+              </Label>
               <Input
                 value={form.overflowTarget}
                 onChange={(e) => setForm({ ...form, overflowTarget: e.target.value })}
-                placeholder="+1..."
+                placeholder={form.overflowAction === "ai_agent" ? "agent id" : "+1..."}
               />
             </div>
           )}

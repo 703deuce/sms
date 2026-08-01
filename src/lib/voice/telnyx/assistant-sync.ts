@@ -1,6 +1,8 @@
 import { telnyxRequest } from "@/lib/messaging/telnyx/client";
 import { getTelnyxApiKey } from "@/lib/messaging/telnyx/config";
 import type { VoiceAgentConfig } from "../types";
+import { getAgentRagBucketIds } from "../knowledge-processor";
+import { buildAssistantTools } from "./assistant-tools";
 
 type AgentRow = {
   id: string;
@@ -15,12 +17,11 @@ export function isTelnyxVoiceConfigured() {
   return Boolean(getTelnyxApiKey() && process.env.TELNYX_CONNECTION_ID?.trim());
 }
 
-/** Pull indexed knowledge text so the Telnyx assistant has business context on-call. */
-async function buildKnowledgeContext(workspaceId: string, agentId: string): Promise<string> {
+/** Short FAQ digest only — long docs use Telnyx RAG retrieval tool. */
+async function buildShortKnowledgeDigest(workspaceId: string, agentId: string): Promise<string> {
   try {
     const { getPrisma } = await import("@/lib/db");
     const prisma = getPrisma();
-    // Prefer agent-linked KBs when join rows exist; otherwise use workspace KBs.
     type KbLink = { knowledgeBaseId: string };
     type KbSource = { contentText: string | null; name: string; extractedPreview: string | null };
     const links = (await prisma.voiceAgentKnowledgeBase
@@ -31,27 +32,94 @@ async function buildKnowledgeContext(workspaceId: string, agentId: string): Prom
       where: {
         workspaceId,
         status: "indexed",
+        sourceType: { in: ["text", "faq"] },
         ...(kbIds.length ? { knowledgeBaseId: { in: kbIds } } : {}),
       },
       orderBy: { updatedAt: "desc" },
-      take: 8,
+      take: 3,
       select: { contentText: true, name: true, extractedPreview: true },
     })) as KbSource[];
     const chunks = sources
       .map((s: KbSource) => {
-        const body = (s.contentText || s.extractedPreview || "").trim().slice(0, 2500);
+        const body = (s.contentText || s.extractedPreview || "").trim().slice(0, 600);
         if (!body) return "";
-        return `### ${s.name || "Source"}\n${body}`;
+        return `### ${s.name || "FAQ"}\n${body}`;
       })
       .filter(Boolean);
     if (!chunks.length) return "";
     return [
-      "Business knowledge (use this to answer FAQs accurately; do not invent facts):",
+      "Quick FAQ digest (for longer documents, use the retrieval knowledge tool — do not invent facts):",
       ...chunks,
     ].join("\n\n");
   } catch {
     return "";
   }
+}
+
+async function loadAgentTools(workspaceId: string, agentId: string, config: VoiceAgentConfig) {
+  const { getPrisma } = await import("@/lib/db");
+  const prisma = getPrisma();
+  const links = await prisma.voiceAgentTool.findMany({
+    where: { agentId, workspaceId },
+    include: {
+      tool: {
+        select: {
+          id: true,
+          name: true,
+          description: true,
+          toolType: true,
+          config: true,
+          inputSchema: true,
+          status: true,
+        },
+      },
+    },
+  });
+  let tools = links
+    .map((l: (typeof links)[number]) => l.tool)
+    .filter((t: (typeof links)[number]["tool"]) => t && t.status === "active");
+
+  if (!tools.length && config.toolIds?.length) {
+    tools = await prisma.voiceTool.findMany({
+      where: { workspaceId, id: { in: config.toolIds }, status: "active" },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        toolType: true,
+        config: true,
+        inputSchema: true,
+        status: true,
+      },
+    });
+  }
+
+  if (!tools.length) {
+    // Attach all active workspace tools (bounded) so publish is useful out of the box.
+    tools = await prisma.voiceTool.findMany({
+      where: { workspaceId, status: "active" },
+      take: 20,
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        toolType: true,
+        config: true,
+        inputSchema: true,
+        status: true,
+      },
+    });
+  }
+
+  return tools;
+}
+
+function greetingFromConfig(config: VoiceAgentConfig, agentName: string) {
+  const greeting =
+    (config.callHandling?.greeting as string | undefined) ||
+    (config.conversationFlow?.sections?.find((s) => s.type === "greeting")?.config
+      ?.text as string | undefined);
+  return greeting || `Thank you for calling. This is ${agentName}. How can I help you today?`;
 }
 
 export async function syncTelnyxAssistant(
@@ -63,31 +131,80 @@ export async function syncTelnyxAssistant(
     return { mode: "mock", assistantId: agent.telnyxAssistantId };
   }
 
-  const knowledge = await buildKnowledgeContext(workspaceId, agent.id);
-  const instructions =
-    [
-      config.instructions?.raw ||
-        [
-          config.instructions?.system,
-          config.instructions?.role,
-          agent.purpose ? `Purpose: ${agent.purpose}` : "",
-          config.instructions?.goals,
-          config.instructions?.prohibited?.length
-            ? `Never: ${config.instructions.prohibited.join("; ")}`
-            : "",
-        ]
-          .filter(Boolean)
-          .join("\n\n"),
-      knowledge,
-      "Never claim an external action succeeded until the application confirms it.",
-    ]
-      .filter(Boolean)
-      .join("\n\n");
+  const digest = await buildShortKnowledgeDigest(workspaceId, agent.id);
+  const bucketIds = await getAgentRagBucketIds(workspaceId, agent.id);
+  const agentTools = await loadAgentTools(workspaceId, agent.id, config);
+
+  const transferCfg = (config.transfers || {}) as {
+    targets?: Array<{ name: string; to: string }>;
+    handoffAssistants?: Array<{ name: string; id: string }>;
+    warmTransferInstructions?: string;
+    fallbackDestinations?: Array<{ to: string } | string>;
+    timeoutSeconds?: number;
+  };
+
+  const tools = buildAssistantTools({
+    workspaceId,
+    agentId: agent.id,
+    bucketIds,
+    tools: agentTools,
+    transferTargets: transferCfg.targets,
+    handoffAssistants: transferCfg.handoffAssistants,
+    warmTransferInstructions: transferCfg.warmTransferInstructions,
+  });
+
+  const personality = [
+    config.instructions?.tone ? `Tone: ${config.instructions.tone}.` : "",
+    config.instructions?.style ? `Style: ${config.instructions.style}.` : "",
+    config.instructions?.responseLength
+      ? `Response length: ${config.instructions.responseLength}.`
+      : "",
+    config.voiceLanguage?.interruptionHandling
+      ? `Interruption handling: ${config.voiceLanguage.interruptionHandling}.`
+      : "",
+    config.instructions?.pronunciation
+      ? `Pronunciation notes: ${config.instructions.pronunciation}.`
+      : "",
+    config.voiceLanguage?.pronunciationDictionary
+      ? `Pronunciation dictionary: ${JSON.stringify(config.voiceLanguage.pronunciationDictionary)}.`
+      : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const instructions = [
+    config.instructions?.raw ||
+      [
+        config.instructions?.system,
+        config.instructions?.role,
+        agent.purpose ? `Purpose: ${agent.purpose}` : "",
+        config.instructions?.goals,
+        personality,
+        config.instructions?.prohibited?.length
+          ? `Never: ${config.instructions.prohibited.join("; ")}`
+          : "",
+        config.instructions?.escalation
+          ? `Escalation: ${config.instructions.escalation}`
+          : "",
+      ]
+        .filter(Boolean)
+        .join("\n\n"),
+    digest,
+    bucketIds.length
+      ? "You have a knowledge retrieval tool backed by the business document store. Use it for FAQs, policies, pricing, and detailed questions instead of guessing."
+      : "",
+    "Never claim an external action succeeded until the application tool confirms it.",
+    "Never tell a caller an appointment is booked until book_appointment returns success with ok=true.",
+    "If book_appointment fails or returns an error, explain the issue and offer alternatives.",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 
   const payload: Record<string, unknown> = {
     name: `${agent.name} (${workspaceId.slice(0, 8)})`,
     model: config.model?.modelId || "meta-llama/llama-3.3-70b-instruct",
     instructions,
+    greeting: greetingFromConfig(config, agent.name),
     voice_settings: {
       voice: config.voiceLanguage?.voiceId || "Telnyx.NaturalHD.andromeda",
       speed: config.voiceLanguage?.speed ?? 1,
@@ -97,7 +214,23 @@ export async function syncTelnyxAssistant(
     telephony_settings: {
       default_texml_app_id: process.env.TELNYX_CONNECTION_ID?.trim(),
     },
+    tools,
   };
+
+  if (config.voiceLanguage?.additionalLanguages?.length) {
+    payload.additional_languages = config.voiceLanguage.additionalLanguages;
+  }
+  if (config.voiceLanguage?.autoLanguageDetection) {
+    // Best-effort; ignored if unsupported by the account model.
+    payload.auto_detect_language = true;
+  }
+  if (config.voiceLanguage?.silenceTimeoutMs) {
+    payload.insights_settings = {
+      ...(typeof payload.insights_settings === "object" ? payload.insights_settings : {}),
+    };
+    (payload as { silence_timeout_ms?: number }).silence_timeout_ms =
+      config.voiceLanguage.silenceTimeoutMs;
+  }
 
   const { getPrisma } = await import("@/lib/db");
   const prisma = getPrisma();
@@ -107,7 +240,12 @@ export async function syncTelnyxAssistant(
       method: "PATCH",
       body: payload,
     });
-    return { mode: "telnyx", assistantId: agent.telnyxAssistantId };
+    return {
+      mode: "telnyx",
+      assistantId: agent.telnyxAssistantId,
+      bucketIds,
+      toolCount: tools.length,
+    };
   }
 
   const created = await telnyxRequest<{ data: { id: string } }>("/ai/assistants", {
@@ -125,7 +263,7 @@ export async function syncTelnyxAssistant(
     },
   });
 
-  return { mode: "telnyx", assistantId };
+  return { mode: "telnyx", assistantId, bucketIds, toolCount: tools.length };
 }
 
 export async function dialOutboundCall(input: {
@@ -158,10 +296,13 @@ export async function dialOutboundCall(input: {
   };
 
   if (input.assistantId) {
-    // Detect AMD; AI assistant is started when the call is answered (webhook).
-    body.answering_machine_detection = "detect";
+    body.answering_machine_detection = "detect_words";
     body.answering_machine_detection_config = {
       total_analysis_time_millis: 3500,
+      after_greeting_silence_millis: 800,
+      between_words_silence_millis: 50,
+      greeting_duration_millis: 3000,
+      initial_silence_millis: 2500,
     };
     body.assistant_id = input.assistantId;
   }
@@ -210,7 +351,6 @@ export async function startAiAssistantOnCall(input: {
     });
     return { mode: "telnyx" as const };
   } catch (err) {
-    // Some Call Control apps expose start_ai_assistant instead.
     try {
       await telnyxRequest(`/calls/${input.callControlId}/actions/start_ai_assistant`, {
         method: "POST",
@@ -236,6 +376,22 @@ export async function startCallRecording(callControlId: string) {
   return { mode: "telnyx" as const };
 }
 
+/** Start live transcription on a call control leg. */
+export async function startCallTranscription(callControlId: string) {
+  if (!callControlId || callControlId.startsWith("mock_") || !isTelnyxVoiceConfigured()) {
+    return { mode: "mock" as const };
+  }
+  await telnyxRequest(`/calls/${callControlId}/actions/transcription_start`, {
+    method: "POST",
+    body: {
+      language: "en",
+      transcription_engine: "A",
+      transcription_tracks: "both",
+    },
+  }).catch((err) => console.warn("[voice] transcription_start failed", err));
+  return { mode: "telnyx" as const };
+}
+
 async function mockOutboundDial(input: {
   workspaceId: string;
   callId: string;
@@ -254,7 +410,6 @@ async function mockOutboundDial(input: {
     },
   });
 
-  // Simulate async lifecycle for tests/workers
   const { enqueueJob } = await import("@/lib/messaging/enqueue-advance");
   await enqueueJob({
     jobType: "voice_mock_call_complete",

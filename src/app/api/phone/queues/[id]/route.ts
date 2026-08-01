@@ -29,6 +29,8 @@ export async function PATCH(
   try {
     const auth = await requireSession();
     if ("error" in auth) return auth.error;
+    const { requireWorkspacePhoneAdmin } = await import("@/lib/phone/softphone-permissions");
+    await requireWorkspacePhoneAdmin(auth.workspaceId, auth.session.userId);
     const { id } = await params;
     const body = await request.json();
     const data = await updateCallQueue(auth.workspaceId, id, body);
@@ -45,6 +47,8 @@ export async function DELETE(
   try {
     const auth = await requireSession();
     if ("error" in auth) return auth.error;
+    const { requireWorkspacePhoneAdmin } = await import("@/lib/phone/softphone-permissions");
+    await requireWorkspacePhoneAdmin(auth.workspaceId, auth.session.userId);
     const { id } = await params;
     const data = await deleteCallQueue(auth.workspaceId, id);
     return NextResponse.json({ data });

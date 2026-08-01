@@ -13,6 +13,8 @@ const SECTIONS = [
   { id: "instructions", label: "Instructions" },
   { id: "conversationFlow", label: "Conversation Flow" },
   { id: "voiceLanguage", label: "Voice & Language" },
+  { id: "knowledge", label: "Knowledge" },
+  { id: "tools", label: "Tools" },
   { id: "model", label: "Model" },
   { id: "transfers", label: "Transfers" },
   { id: "voicemail", label: "Voicemail" },
@@ -36,6 +38,9 @@ type AgentDetail = {
   versions?: Array<{ id: string; version: number; publishedAt: string }>;
 };
 
+type KbOption = { id: string; name: string; status: string };
+type ToolOption = { id: string; name: string; toolType: string; status: string };
+
 export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
   const [agent, setAgent] = useState<AgentDetail | null>(null);
   const [section, setSection] = useState<string>("identity");
@@ -44,20 +49,60 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
   const [saveState, setSaveState] = useState<"saved" | "unsaved" | "saving" | "error">("saved");
   const [error, setError] = useState<string | null>(null);
   const [phones, setPhones] = useState<Array<{ id: string; e164: string }>>([]);
+  const [kbOptions, setKbOptions] = useState<KbOption[]>([]);
+  const [selectedKbIds, setSelectedKbIds] = useState<string[]>([]);
+  const [toolOptions, setToolOptions] = useState<ToolOption[]>([]);
+  const [selectedToolIds, setSelectedToolIds] = useState<string[]>([]);
+  const [agentOptions, setAgentOptions] = useState<Array<{ id: string; name: string; telnyxAssistantId?: string | null }>>([]);
+  const [pronDictText, setPronDictText] = useState("{}");
+  const [linkSaving, setLinkSaving] = useState(false);
 
   const load = useCallback(async () => {
-    const [aRes, pRes] = await Promise.all([
+    const [aRes, pRes, kbRes, agentKbRes, toolsRes, agentToolsRes, agentsRes] = await Promise.all([
       fetch(`/api/voice/agents/${agentId}`),
       fetch("/api/numbers"),
+      fetch("/api/voice/knowledge"),
+      fetch(`/api/voice/agents/${agentId}/knowledge`),
+      fetch("/api/voice/tools"),
+      fetch(`/api/voice/agents/${agentId}/tools`),
+      fetch("/api/voice/agents"),
     ]);
     const aJson = await aRes.json();
     if (!aRes.ok) throw new Error(aJson.error || "Failed to load");
     setAgent(aJson.data);
+    setPronDictText(
+      JSON.stringify(aJson.data.draftConfig?.voiceLanguage?.pronunciationDictionary || {}, null, 2),
+    );
+
     if (pRes.ok) {
       const pJson = await pRes.json();
       setPhones((pJson.data || []).map((p: { id: string; number?: string; e164?: string }) => ({
         id: p.id,
         e164: p.number || p.e164 || "",
+      })));
+    }
+    if (kbRes.ok) {
+      const kbJson = await kbRes.json();
+      setKbOptions(kbJson.data || []);
+    }
+    if (agentKbRes.ok) {
+      const j = await agentKbRes.json();
+      setSelectedKbIds((j.data || []).map((l: { knowledgeBaseId: string }) => l.knowledgeBaseId));
+    }
+    if (toolsRes.ok) {
+      const tJson = await toolsRes.json();
+      setToolOptions(tJson.data || []);
+    }
+    if (agentToolsRes.ok) {
+      const j = await agentToolsRes.json();
+      setSelectedToolIds((j.data || []).map((l: { toolId: string }) => l.toolId));
+    }
+    if (agentsRes.ok) {
+      const j = await agentsRes.json();
+      setAgentOptions((j.data || []).map((a: { id: string; name: string; telnyxAssistantId?: string | null }) => ({
+        id: a.id,
+        name: a.name,
+        telnyxAssistantId: a.telnyxAssistantId,
       })));
     }
   }, [agentId]);
@@ -123,6 +168,98 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
     await load();
   }
 
+  async function agentAction(action: string, extra?: Record<string, unknown>) {
+    const res = await fetch(`/api/voice/agents/${agentId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action, ...extra }),
+    });
+    const json = await res.json();
+    if (!res.ok) {
+      setError(json.error || `${action} failed`);
+      return;
+    }
+    if (action === "duplicate") {
+      window.location.href = `/voice/agents/${json.data.id}`;
+      return;
+    }
+    await load();
+  }
+
+  async function saveKnowledgeBases() {
+    setLinkSaving(true);
+    try {
+      const res = await fetch(`/api/voice/agents/${agentId}/knowledge`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ knowledgeBaseIds: selectedKbIds }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Save failed");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Knowledge save failed");
+    } finally {
+      setLinkSaving(false);
+    }
+  }
+
+  async function saveTools() {
+    setLinkSaving(true);
+    try {
+      const res = await fetch(`/api/voice/agents/${agentId}/tools`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ toolIds: selectedToolIds }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Save failed");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Tools save failed");
+    } finally {
+      setLinkSaving(false);
+    }
+  }
+
+  function toggleKbId(id: string) {
+    setSelectedKbIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
+  }
+
+  function toggleToolId(id: string) {
+    setSelectedToolIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
+  }
+
+  function updateDirections(dir: "inbound" | "outbound", checked: boolean) {
+    if (!agent) return;
+    const current = agent.draftConfig.identity?.directions || agent.directions || [];
+    const next = checked
+      ? [...new Set([...current, dir])]
+      : current.filter((d) => d !== dir);
+    updateConfig({
+      identity: { ...agent.draftConfig.identity, directions: next as ("inbound" | "outbound")[] },
+    });
+  }
+
+  function updatePronDict(text: string) {
+    setPronDictText(text);
+    try {
+      const parsed = JSON.parse(text);
+      if (typeof parsed === "object" && parsed !== null) {
+        updateConfig({
+          voiceLanguage: {
+            ...agent?.draftConfig.voiceLanguage,
+            pronunciationDictionary: parsed as Record<string, string>,
+          },
+        });
+      }
+    } catch {
+      // wait for valid JSON
+    }
+  }
+
   useEffect(() => {
     if (!dirty) return;
     const t = setTimeout(() => saveDraft(), 2000);
@@ -133,6 +270,9 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
   if (!agent) return <p className="text-rose-600">{error}</p>;
 
   const cfg = agent.draftConfig;
+  const directions = cfg.identity?.directions || agent.directions || [];
+  const greeting =
+    (cfg.callHandling?.greeting as string | undefined) || "";
 
   return (
     <div className="flex flex-col gap-4 lg:flex-row">
@@ -172,9 +312,18 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
             <h2 className="text-xl font-semibold">{agent.name}</h2>
             <p className="text-sm text-muted-foreground">Status: {agent.status}</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button variant="outline" disabled={saving} onClick={saveDraft}>Save</Button>
             <Button disabled={saving} onClick={publish}>Publish</Button>
+            {agent.rawStatus === "ACTIVE" ? (
+              <Button variant="outline" size="sm" onClick={() => agentAction("pause")}>Pause</Button>
+            ) : agent.rawStatus === "PAUSED" ? (
+              <Button variant="outline" size="sm" onClick={() => agentAction("activate")}>Activate</Button>
+            ) : null}
+            {agent.rawStatus !== "ARCHIVED" ? (
+              <Button variant="outline" size="sm" onClick={() => agentAction("archive")}>Archive</Button>
+            ) : null}
+            <Button variant="outline" size="sm" onClick={() => agentAction("duplicate")}>Duplicate</Button>
           </div>
         </div>
 
@@ -216,6 +365,27 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
               </select>
             </div>
             <div>
+              <Label>Call directions</Label>
+              <div className="mt-2 flex flex-wrap gap-4">
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={directions.includes("inbound")}
+                    onChange={(e) => updateDirections("inbound", e.target.checked)}
+                  />
+                  Inbound
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={directions.includes("outbound")}
+                    onChange={(e) => updateDirections("outbound", e.target.checked)}
+                  />
+                  Outbound
+                </label>
+              </div>
+            </div>
+            <div>
               <Label>Default phone number</Label>
               <select
                 className="mt-1 w-full rounded-lg border border-border px-3 py-2 text-sm"
@@ -237,6 +407,19 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
             )}
             </div>
             <div>
+              <Label>Greeting</Label>
+              <Textarea
+                rows={2}
+                value={greeting}
+                onChange={(e) =>
+                  updateConfig({
+                    callHandling: { ...cfg.callHandling, greeting: e.target.value },
+                  })
+                }
+                placeholder="Thank you for calling. How can I help you today?"
+              />
+            </div>
+            <div>
               <Label>Purpose</Label>
               <Textarea
                 rows={3}
@@ -254,6 +437,18 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
           <Card className="space-y-4 p-5">
             <CardTitle>Instructions</CardTitle>
             <div>
+              <Label>Role</Label>
+              <Input
+                value={cfg.instructions?.role || ""}
+                onChange={(e) =>
+                  updateConfig({
+                    instructions: { ...cfg.instructions, role: e.target.value },
+                  })
+                }
+                placeholder="e.g. receptionist, sales assistant"
+              />
+            </div>
+            <div>
               <Label>System instructions</Label>
               <Textarea
                 rows={6}
@@ -264,6 +459,53 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
                   })
                 }
               />
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <Label>Tone</Label>
+                <Input
+                  value={cfg.instructions?.tone || ""}
+                  onChange={(e) =>
+                    updateConfig({
+                      instructions: { ...cfg.instructions, tone: e.target.value },
+                    })
+                  }
+                />
+              </div>
+              <div>
+                <Label>Style</Label>
+                <Input
+                  value={cfg.instructions?.style || ""}
+                  onChange={(e) =>
+                    updateConfig({
+                      instructions: { ...cfg.instructions, style: e.target.value },
+                    })
+                  }
+                />
+              </div>
+              <div>
+                <Label>Response length</Label>
+                <Input
+                  value={cfg.instructions?.responseLength || ""}
+                  onChange={(e) =>
+                    updateConfig({
+                      instructions: { ...cfg.instructions, responseLength: e.target.value },
+                    })
+                  }
+                  placeholder="short, medium, long"
+                />
+              </div>
+              <div>
+                <Label>Pronunciation notes</Label>
+                <Input
+                  value={cfg.instructions?.pronunciation || ""}
+                  onChange={(e) =>
+                    updateConfig({
+                      instructions: { ...cfg.instructions, pronunciation: e.target.value },
+                    })
+                  }
+                />
+              </div>
             </div>
             <div>
               <Label>Goals</Label>
@@ -336,32 +578,114 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
             <CardTitle>Voice & language</CardTitle>
             <div>
               <Label>Voice ID (Telnyx)</Label>
-              <Input
-                value={cfg.voiceLanguage?.voiceId || ""}
-                onChange={(e) =>
-                  updateConfig({
-                    voiceLanguage: { ...cfg.voiceLanguage, voiceId: e.target.value },
-                  })
-                }
-              />
+              <div className="flex gap-2">
+                <Input
+                  value={cfg.voiceLanguage?.voiceId || ""}
+                  onChange={(e) =>
+                    updateConfig({
+                      voiceLanguage: { ...cfg.voiceLanguage, voiceId: e.target.value },
+                    })
+                  }
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={async () => {
+                    try {
+                      const res = await fetch("/api/voice/tts-preview", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          voice: cfg.voiceLanguage?.voiceId || undefined,
+                          text: "Hello, this is a preview of your AI voice agent.",
+                        }),
+                      });
+                      const json = await res.json();
+                      if (!res.ok) throw new Error(json.error || "Preview failed");
+                      if (json.data?.audioUrl) {
+                        const audio = new Audio(json.data.audioUrl);
+                        await audio.play().catch(() => undefined);
+                      } else {
+                        alert(
+                          json.data?.message ||
+                            `Preview ready (${json.data?.mode}). Text: ${json.data?.text}`,
+                        );
+                      }
+                    } catch (e) {
+                      alert(e instanceof Error ? e.message : "Preview failed");
+                    }
+                  }}
+                >
+                  Preview
+                </Button>
+              </div>
             </div>
-            <div>
-              <Label>Speaking speed</Label>
-              <Input
-                type="number"
-                step="0.1"
-                min="0.5"
-                max="2"
-                value={cfg.voiceLanguage?.speed ?? 1}
-                onChange={(e) =>
-                  updateConfig({
-                    voiceLanguage: {
-                      ...cfg.voiceLanguage,
-                      speed: Number(e.target.value),
-                    },
-                  })
-                }
-              />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <Label>Speaking speed</Label>
+                <Input
+                  type="number"
+                  step="0.1"
+                  min="0.5"
+                  max="2"
+                  value={cfg.voiceLanguage?.speed ?? 1}
+                  onChange={(e) =>
+                    updateConfig({
+                      voiceLanguage: {
+                        ...cfg.voiceLanguage,
+                        speed: Number(e.target.value),
+                      },
+                    })
+                  }
+                />
+              </div>
+              <div>
+                <Label>Silence timeout (ms)</Label>
+                <Input
+                  type="number"
+                  min="1000"
+                  step="500"
+                  value={cfg.voiceLanguage?.silenceTimeoutMs ?? 8000}
+                  onChange={(e) =>
+                    updateConfig({
+                      voiceLanguage: {
+                        ...cfg.voiceLanguage,
+                        silenceTimeoutMs: Number(e.target.value),
+                      },
+                    })
+                  }
+                />
+              </div>
+              <div>
+                <Label>Interruption handling</Label>
+                <Input
+                  value={cfg.voiceLanguage?.interruptionHandling || ""}
+                  onChange={(e) =>
+                    updateConfig({
+                      voiceLanguage: {
+                        ...cfg.voiceLanguage,
+                        interruptionHandling: e.target.value,
+                      },
+                    })
+                  }
+                  placeholder="e.g. polite, assertive"
+                />
+              </div>
+              <div>
+                <Label>Responsiveness</Label>
+                <Input
+                  value={cfg.voiceLanguage?.responsiveness || ""}
+                  onChange={(e) =>
+                    updateConfig({
+                      voiceLanguage: {
+                        ...cfg.voiceLanguage,
+                        responsiveness: e.target.value,
+                      },
+                    })
+                  }
+                  placeholder="e.g. fast, balanced"
+                />
+              </div>
             </div>
             <div>
               <Label>Primary language</Label>
@@ -377,6 +701,109 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
                 }
               />
             </div>
+            <div>
+              <Label>Additional languages (comma-separated)</Label>
+              <Input
+                value={(cfg.voiceLanguage?.additionalLanguages || []).join(", ")}
+                onChange={(e) =>
+                  updateConfig({
+                    voiceLanguage: {
+                      ...cfg.voiceLanguage,
+                      additionalLanguages: e.target.value
+                        .split(",")
+                        .map((s) => s.trim())
+                        .filter(Boolean),
+                    },
+                  })
+                }
+                placeholder="es-US, fr-FR"
+              />
+            </div>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={cfg.voiceLanguage?.autoLanguageDetection ?? false}
+                onChange={(e) =>
+                  updateConfig({
+                    voiceLanguage: {
+                      ...cfg.voiceLanguage,
+                      autoLanguageDetection: e.target.checked,
+                    },
+                  })
+                }
+              />
+              Auto language detection
+            </label>
+            <div>
+              <Label>Pronunciation dictionary (JSON)</Label>
+              <Textarea
+                rows={5}
+                className="font-mono text-xs"
+                value={pronDictText}
+                onChange={(e) => updatePronDict(e.target.value)}
+                placeholder='{"Telnyx": "tell-nicks"}'
+              />
+            </div>
+          </Card>
+        )}
+
+        {section === "knowledge" && (
+          <Card className="space-y-4 p-5">
+            <CardTitle>Knowledge bases</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Link knowledge bases for RAG retrieval during calls.
+            </p>
+            {kbOptions.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No knowledge bases yet.</p>
+            ) : (
+              <div className="space-y-2">
+                {kbOptions.map((kb) => (
+                  <label key={kb.id} className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={selectedKbIds.includes(kb.id)}
+                      onChange={() => toggleKbId(kb.id)}
+                    />
+                    {kb.name}
+                    <span className="text-muted-foreground">({kb.status})</span>
+                  </label>
+                ))}
+              </div>
+            )}
+            <Button disabled={linkSaving} onClick={saveKnowledgeBases}>
+              {linkSaving ? "Saving…" : "Save knowledge links"}
+            </Button>
+          </Card>
+        )}
+
+        {section === "tools" && (
+          <Card className="space-y-4 p-5">
+            <CardTitle>Tools</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Enable tools the agent can invoke during conversations.
+            </p>
+            {toolOptions.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No tools configured yet.</p>
+            ) : (
+              <div className="space-y-2">
+                {toolOptions.map((tool) => (
+                  <label key={tool.id} className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={selectedToolIds.includes(tool.id)}
+                      onChange={() => toggleToolId(tool.id)}
+                    />
+                    {tool.name}
+                    <span className="text-muted-foreground">
+                      ({tool.toolType} · {tool.status})
+                    </span>
+                  </label>
+                ))}
+              </div>
+            )}
+            <Button disabled={linkSaving} onClick={saveTools}>
+              {linkSaving ? "Saving…" : "Save tool links"}
+            </Button>
           </Card>
         )}
 
@@ -411,12 +838,197 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
         )}
 
         {(section === "transfers" || section === "voicemail" || section === "compliance") && (
-          <Card className="p-5">
+          <Card className="space-y-4 p-5">
             <CardTitle>{SECTIONS.find((s) => s.id === section)?.label}</CardTitle>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Configure {section} rules in workspace voice settings. Agent-level overrides
-              are stored in draft config JSON.
-            </p>
+
+            {section === "transfers" && (
+              <>
+                <p className="text-sm text-muted-foreground">
+                  Transfer targets and handoff assistants sync to Telnyx on publish.
+                </p>
+                <div>
+                  <Label>Transfer targets</Label>
+                  {(cfg.transfers?.targets as Array<{ name: string; to: string }> | undefined)?.map((t, i) => (
+                    <div key={i} className="mt-2 flex flex-wrap gap-2">
+                      <Input
+                        placeholder="Name (e.g. Sales)"
+                        value={t.name}
+                        onChange={(e) => {
+                          const targets = [...((cfg.transfers?.targets as Array<{ name: string; to: string }>) || [])];
+                          targets[i] = { ...targets[i], name: e.target.value };
+                          updateConfig({ transfers: { ...cfg.transfers, targets } });
+                        }}
+                      />
+                      <Input
+                        placeholder="+1… or sip URI"
+                        value={t.to}
+                        onChange={(e) => {
+                          const targets = [...((cfg.transfers?.targets as Array<{ name: string; to: string }>) || [])];
+                          targets[i] = { ...targets[i], to: e.target.value };
+                          updateConfig({ transfers: { ...cfg.transfers, targets } });
+                        }}
+                      />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const targets = ((cfg.transfers?.targets as Array<{ name: string; to: string }>) || []).filter((_, j) => j !== i);
+                          updateConfig({ transfers: { ...cfg.transfers, targets } });
+                        }}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  ))}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-2"
+                    onClick={() => {
+                      const targets = [...((cfg.transfers?.targets as Array<{ name: string; to: string }>) || []), { name: "", to: "" }];
+                      updateConfig({ transfers: { ...cfg.transfers, targets } });
+                    }}
+                  >
+                    Add target
+                  </Button>
+                </div>
+                <div>
+                  <Label>Handoff assistants</Label>
+                  {(cfg.transfers?.handoffAssistants as Array<{ name: string; id: string }> | undefined)?.map((h, i) => (
+                    <div key={i} className="mt-2 flex flex-wrap gap-2">
+                      <Input
+                        placeholder="Label"
+                        value={h.name}
+                        onChange={(e) => {
+                          const handoffAssistants = [...((cfg.transfers?.handoffAssistants as Array<{ name: string; id: string }>) || [])];
+                          handoffAssistants[i] = { ...handoffAssistants[i], name: e.target.value };
+                          updateConfig({ transfers: { ...cfg.transfers, handoffAssistants } });
+                        }}
+                      />
+                      <select
+                        className="rounded-lg border border-border px-3 py-2 text-sm"
+                        value={h.id}
+                        onChange={(e) => {
+                          const handoffAssistants = [...((cfg.transfers?.handoffAssistants as Array<{ name: string; id: string }>) || [])];
+                          const picked = agentOptions.find((a) => a.telnyxAssistantId === e.target.value || a.id === e.target.value);
+                          handoffAssistants[i] = {
+                            name: handoffAssistants[i].name || picked?.name || "",
+                            id: e.target.value,
+                          };
+                          updateConfig({ transfers: { ...cfg.transfers, handoffAssistants } });
+                        }}
+                      >
+                        <option value="">Select agent / assistant id</option>
+                        {agentOptions.map((a) => (
+                          <option key={a.id} value={a.telnyxAssistantId || a.id}>
+                            {a.name}{a.telnyxAssistantId ? ` (${a.telnyxAssistantId})` : ""}
+                          </option>
+                        ))}
+                      </select>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const handoffAssistants = ((cfg.transfers?.handoffAssistants as Array<{ name: string; id: string }>) || []).filter((_, j) => j !== i);
+                          updateConfig({ transfers: { ...cfg.transfers, handoffAssistants } });
+                        }}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  ))}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-2"
+                    onClick={() => {
+                      const handoffAssistants = [...((cfg.transfers?.handoffAssistants as Array<{ name: string; id: string }>) || []), { name: "", id: "" }];
+                      updateConfig({ transfers: { ...cfg.transfers, handoffAssistants } });
+                    }}
+                  >
+                    Add handoff
+                  </Button>
+                </div>
+                <div>
+                  <Label>Warm transfer instructions</Label>
+                  <Textarea
+                    rows={3}
+                    value={(cfg.transfers?.warmTransferInstructions as string) || ""}
+                    onChange={(e) =>
+                      updateConfig({
+                        transfers: { ...cfg.transfers, warmTransferInstructions: e.target.value },
+                      })
+                    }
+                    placeholder="Briefly introduce the caller and summarize why they are calling…"
+                  />
+                </div>
+              </>
+            )}
+
+            {section === "voicemail" && (
+              <>
+                <div>
+                  <Label>Voicemail action</Label>
+                  <select
+                    className="mt-1 w-full rounded-lg border border-border px-3 py-2 text-sm"
+                    value={(cfg.voicemail?.action as string) || "record"}
+                    onChange={(e) =>
+                      updateConfig({ voicemail: { ...cfg.voicemail, action: e.target.value } })
+                    }
+                  >
+                    <option value="record">Record message</option>
+                    <option value="hangup">Hang up</option>
+                    <option value="callback">Request callback</option>
+                  </select>
+                </div>
+                <div>
+                  <Label>Greeting text</Label>
+                  <Textarea
+                    rows={3}
+                    value={(cfg.voicemail?.greetingText as string) || ""}
+                    onChange={(e) =>
+                      updateConfig({ voicemail: { ...cfg.voicemail, greetingText: e.target.value } })
+                    }
+                    placeholder="Please leave a message after the tone…"
+                  />
+                </div>
+              </>
+            )}
+
+            {section === "compliance" && (
+              <>
+                <div>
+                  <Label>Recording disclosure (spoken before AI starts)</Label>
+                  <Textarea
+                    rows={3}
+                    value={(cfg.compliance?.recordingDisclosureText as string) || ""}
+                    onChange={(e) =>
+                      updateConfig({
+                        compliance: { ...cfg.compliance, recordingDisclosureText: e.target.value },
+                      })
+                    }
+                    placeholder="This call may be recorded for quality and training purposes."
+                  />
+                </div>
+                <div>
+                  <Label>After-hours behavior</Label>
+                  <select
+                    className="mt-1 w-full rounded-lg border border-border px-3 py-2 text-sm"
+                    value={(cfg.compliance?.afterHoursBehavior as string) || "ai_answer"}
+                    onChange={(e) =>
+                      updateConfig({
+                        compliance: { ...cfg.compliance, afterHoursBehavior: e.target.value },
+                      })
+                    }
+                  >
+                    <option value="ai_answer">AI answers</option>
+                    <option value="human_first">Humans first, AI fallback</option>
+                    <option value="voicemail">Voicemail</option>
+                    <option value="hangup">Hang up</option>
+                  </select>
+                </div>
+              </>
+            )}
           </Card>
         )}
 
@@ -435,9 +1047,18 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
         {agent.versions?.length ? (
           <Card className="p-5">
             <CardTitle>Version history</CardTitle>
-            <ul className="mt-2 space-y-1 text-sm">
+            <ul className="mt-2 space-y-2 text-sm">
               {agent.versions.map((v) => (
-                <li key={v.id}>v{v.version} — {new Date(v.publishedAt).toLocaleString()}</li>
+                <li key={v.id} className="flex flex-wrap items-center justify-between gap-2">
+                  <span>v{v.version} — {new Date(v.publishedAt).toLocaleString()}</span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => agentAction("rollback", { versionId: v.id })}
+                  >
+                    Rollback
+                  </Button>
+                </li>
               ))}
             </ul>
           </Card>
