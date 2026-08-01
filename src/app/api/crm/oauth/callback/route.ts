@@ -28,7 +28,16 @@ export async function GET(request: Request) {
   }
 
   try {
-    const { workspaceId, provider } = await completeCrmOAuth(code, state);
+    // Zoho multi-DC returns location + accounts-server on the callback; token exchange
+    // must hit that regional Accounts host (not always accounts.zoho.com).
+    const accountsServer =
+      url.searchParams.get("accounts-server") ||
+      url.searchParams.get("accounts_server");
+    const location = url.searchParams.get("location");
+    const { workspaceId, provider } = await completeCrmOAuth(code, state, {
+      accountsServer,
+      location,
+    });
     // Kick off initial sync in the background after connect.
     await enqueueCrmSync({
       workspaceId,

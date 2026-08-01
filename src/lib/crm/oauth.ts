@@ -50,6 +50,47 @@ function envOrThrow(name: string) {
   return v;
 }
 
+/** Zoho multi-DC: map callback `location` → Accounts host for token exchange. */
+const ZOHO_ACCOUNTS_BY_LOCATION: Record<string, string> = {
+  us: "https://accounts.zoho.com",
+  eu: "https://accounts.zoho.eu",
+  in: "https://accounts.zoho.in",
+  au: "https://accounts.zoho.com.au",
+  jp: "https://accounts.zoho.jp",
+  ca: "https://accounts.zohocloud.ca",
+  sa: "https://accounts.zoho.sa",
+  uk: "https://accounts.zoho.uk",
+  cn: "https://accounts.zoho.com.cn",
+};
+
+export function resolveZohoAccountsServer(input?: {
+  accountsServer?: string | null;
+  location?: string | null;
+}): string {
+  const fromEnv = process.env.ZOHO_ACCOUNTS_DOMAIN?.trim();
+  if (fromEnv) return fromEnv.replace(/\/$/, "");
+  const explicit = input?.accountsServer?.trim();
+  if (explicit) return explicit.replace(/\/$/, "");
+  const loc = (input?.location || "").trim().toLowerCase();
+  if (loc && ZOHO_ACCOUNTS_BY_LOCATION[loc]) return ZOHO_ACCOUNTS_BY_LOCATION[loc];
+  return "https://accounts.zoho.com";
+}
+
+function tokenEndpointForProvider(
+  provider: CrmProviderId,
+  connectorTokenUrl: string,
+  opts?: { accountsServer?: string | null; location?: string | null; storedAccountsServer?: string | null },
+) {
+  if (provider === "zoho") {
+    const host = resolveZohoAccountsServer({
+      accountsServer: opts?.accountsServer || opts?.storedAccountsServer,
+      location: opts?.location,
+    });
+    return `${host}/oauth/v2/token`;
+  }
+  return connectorTokenUrl;
+}
+
 /** Build the provider authorize URL and mark connection pending_oauth. */
 export async function startCrmOAuth(workspaceId: string, provider: CrmProviderId) {
   assertCrmOAuthEnv(provider);
@@ -106,7 +147,11 @@ export async function startCrmOAuth(workspaceId: string, provider: CrmProviderId
   };
 }
 
-export async function completeCrmOAuth(code: string, state: string) {
+export async function completeCrmOAuth(
+  code: string,
+  state: string,
+  opts?: { accountsServer?: string | null; location?: string | null },
+) {
   const parsed = parseCrmOAuthState(state);
   if (!parsed) throw new Error("Invalid OAuth state");
   const { workspaceId, provider } = parsed;
@@ -114,7 +159,16 @@ export async function completeCrmOAuth(code: string, state: string) {
   const clientId = envOrThrow(connector.oauth.clientIdEnv);
   const clientSecret = envOrThrow(connector.oauth.clientSecretEnv);
 
-  const res = await fetch(connector.oauth.tokenUrl, {
+  const existing = await getConnection(workspaceId, provider);
+  const prevConfig = (existing?.configJson || {}) as Record<string, unknown>;
+  const tokenUrl = tokenEndpointForProvider(provider, connector.oauth.tokenUrl, {
+    accountsServer: opts?.accountsServer,
+    location: opts?.location,
+    storedAccountsServer:
+      typeof prevConfig.accountsServer === "string" ? prevConfig.accountsServer : null,
+  });
+
+  const res = await fetch(tokenUrl, {
     method: "POST",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
@@ -136,7 +190,7 @@ export async function completeCrmOAuth(code: string, state: string) {
       workspaceId,
       provider,
       status: "error",
-      config: { lastOAuthError: msg },
+      config: { lastOAuthError: msg, accountsServerUsed: tokenUrl },
       mergeConfig: true,
     });
     await writeCrmAudit({
@@ -145,14 +199,25 @@ export async function completeCrmOAuth(code: string, state: string) {
       category: "oauth",
       action: "token_exchange_failed",
       message: msg,
-      detail: json,
+      detail: { ...json, tokenUrl },
     });
     throw new Error(msg);
   }
 
   const parsedTokens = connector.parseTokenResponse(json);
-  const existing = await getConnection(workspaceId, provider);
-  const prevConfig = (existing?.configJson || {}) as Record<string, unknown>;
+  const accountsServer =
+    provider === "zoho"
+      ? resolveZohoAccountsServer({
+          accountsServer:
+            (typeof json.accounts_server === "string" && json.accounts_server) ||
+            opts?.accountsServer ||
+            (typeof parsedTokens.meta?.accountsServer === "string"
+              ? String(parsedTokens.meta.accountsServer)
+              : null),
+          location:
+            (typeof json.location === "string" && json.location) || opts?.location || null,
+        })
+      : null;
 
   const priorRefresh = decryptCrmSecret(existing?.refreshToken) || existing?.refreshToken || null;
   await upsertConnection({
@@ -168,6 +233,8 @@ export async function completeCrmOAuth(code: string, state: string) {
     config: {
       ...prevConfig,
       ...(parsedTokens.meta || {}),
+      ...(accountsServer ? { accountsServer } : {}),
+      ...(opts?.location ? { zohoLocation: opts.location } : {}),
       lastOAuthError: null,
       connectedAt: new Date().toISOString(),
       tokensEncrypted: Boolean(process.env.INTEGRATION_SECRET_KEY?.trim()),
@@ -218,7 +285,12 @@ export async function refreshCrmAccessToken(workspaceId: string, provider: CrmPr
 
   const clientId = envOrThrow(connector.oauth.clientIdEnv);
   const clientSecret = envOrThrow(connector.oauth.clientSecretEnv);
-  const res = await fetch(connector.oauth.tokenUrl, {
+  const cfg = (conn.configJson || {}) as Record<string, unknown>;
+  const tokenUrl = tokenEndpointForProvider(provider, connector.oauth.tokenUrl, {
+    storedAccountsServer: typeof cfg.accountsServer === "string" ? cfg.accountsServer : null,
+    location: typeof cfg.zohoLocation === "string" ? cfg.zohoLocation : null,
+  });
+  const res = await fetch(tokenUrl, {
     method: "POST",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
@@ -240,7 +312,7 @@ export async function refreshCrmAccessToken(workspaceId: string, provider: CrmPr
       category: "oauth",
       action: "refresh_failed",
       message: String(json.error_description || json.error || "Refresh failed"),
-      detail: json,
+      detail: { ...json, tokenUrl },
     });
     throw new Error("Token refresh failed — reconnect required");
   }
@@ -253,7 +325,11 @@ export async function refreshCrmAccessToken(workspaceId: string, provider: CrmPr
     accessToken: encryptCrmSecret(parsedTokens.accessToken),
     refreshToken: encryptCrmSecret(parsedTokens.refreshToken ?? conn.refreshToken),
     expiresAt: parsedTokens.expiresAt ?? null,
-    config: parsedTokens.meta || {},
+    config: {
+      ...(parsedTokens.meta || {}),
+      ...(typeof cfg.accountsServer === "string" ? { accountsServer: cfg.accountsServer } : {}),
+      ...(typeof cfg.zohoLocation === "string" ? { zohoLocation: cfg.zohoLocation } : {}),
+    },
     mergeConfig: true,
   });
 

@@ -72,6 +72,16 @@ export function checkCrmEnvironment(provider?: CrmProviderId): EnvCheckResult {
       : "DATABASE_URL is missing. CRM tables require Prisma db:push against Postgres.",
   });
 
+  items.push({
+    key: "CRM_WEBHOOK_SECRET",
+    required: false,
+    ok: Boolean(process.env.CRM_WEBHOOK_SECRET?.trim()),
+    provider: "shared",
+    message: process.env.CRM_WEBHOOK_SECRET?.trim()
+      ? "CRM_WEBHOOK_SECRET is set (shared inbound webhook HMAC)"
+      : "CRM_WEBHOOK_SECRET optional — set for signed inbound CRM webhooks",
+  });
+
   const ids = provider ? [provider] : [...CRM_PROVIDER_IDS];
   const providers = ids.map((id) => {
     const c = getConnector(id);
@@ -97,6 +107,38 @@ export function checkCrmEnvironment(provider?: CrmProviderId): EnvCheckResult {
         ? `${c.oauth.clientSecretEnv} missing — paste the client secret from the ${c.displayName} OAuth app`
         : `${c.oauth.clientSecretEnv} is set`,
     });
+
+    if (id === "zoho") {
+      items.push({
+        key: "ZOHO_ACCOUNTS_DOMAIN",
+        required: false,
+        ok: true,
+        provider: id,
+        message: process.env.ZOHO_ACCOUNTS_DOMAIN?.trim()
+          ? `ZOHO_ACCOUNTS_DOMAIN override set — token exchange forced to that host`
+          : "ZOHO_ACCOUNTS_DOMAIN unset — regional Accounts host taken from OAuth callback (accounts-server / location)",
+      });
+      items.push({
+        key: "ZOHO_WEBHOOK_SECRET",
+        required: false,
+        ok: Boolean(process.env.ZOHO_WEBHOOK_SECRET?.trim()),
+        provider: id,
+        message: process.env.ZOHO_WEBHOOK_SECRET?.trim()
+          ? "ZOHO_WEBHOOK_SECRET is set"
+          : "ZOHO_WEBHOOK_SECRET optional",
+      });
+    }
+    if (id === "pipedrive") {
+      items.push({
+        key: "PIPEDRIVE_WEBHOOK_SECRET",
+        required: false,
+        ok: Boolean(process.env.PIPEDRIVE_WEBHOOK_SECRET?.trim()),
+        provider: id,
+        message: process.env.PIPEDRIVE_WEBHOOK_SECRET?.trim()
+          ? "PIPEDRIVE_WEBHOOK_SECRET is set"
+          : "PIPEDRIVE_WEBHOOK_SECRET optional",
+      });
+    }
 
     return {
       id,

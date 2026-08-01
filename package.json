@@ -28,7 +28,8 @@
     "test:voice-full": "tsx scripts/test-voice-full.ts",
     "test:voice-audit": "tsx scripts/test-voice-api-audit.ts",
     "test:product-suite": "tsx scripts/test-product-suite.ts",
-    "test:crm-enterprise": "tsx scripts/test-crm-enterprise.ts"
+    "test:crm-enterprise": "tsx scripts/test-crm-enterprise.ts",
+    "crm:live-readiness": "tsx scripts/crm-live-readiness.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.19.0",

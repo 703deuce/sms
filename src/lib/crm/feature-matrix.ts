@@ -97,7 +97,7 @@ const MATRIX: Record<CrmProviderId, FeatureRow[]> = {
     { feature: "pipelines", label: "Pipelines", support: "read_only", notes: "Deal Pipeline field when available; Bigin uses Pipelines module" },
     { feature: "stages", label: "Stages", support: "read_only" },
     { feature: "owners", label: "Owners", support: "read_only" },
-    { feature: "webhooks_inbound", label: "Inbound webhooks", support: "beta", notes: "Queue + delete handling; Zoho notification channel subscription pending" },
+    { feature: "webhooks_inbound", label: "Inbound webhooks", support: "beta", notes: "HTTP ingest + delete handling implemented; provider webhook registration is manual in Zoho admin (not auto-created)" },
     { feature: "incremental_sync", label: "Incremental sync", support: "beta", notes: "Modified_Time search criteria + checkpoints" },
     { feature: "bidirectional_sync", label: "Bidirectional sync", support: "beta" },
   ],

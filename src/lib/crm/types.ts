@@ -45,6 +45,8 @@ export type CrmContact = {
   phone?: string | null;
   email?: string | null;
   companyName?: string | null;
+  /** External Account / Organization id to associate on write. */
+  companyExternalId?: string | null;
   ownerExternalId?: string | null;
   customFields?: Record<string, unknown>;
   source?: string | null;

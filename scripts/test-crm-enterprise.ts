@@ -326,4 +326,15 @@ ok("appointment.booked is a supported subscription event", async () => {
   assert.equal(eventSupportLevel("pipedrive", "lead.created"), "unsupported");
 });
 
+ok("Zoho multi-DC accounts host resolution", async () => {
+  const { resolveZohoAccountsServer } = await import("../src/lib/crm/oauth");
+  assert.equal(resolveZohoAccountsServer({ location: "eu" }), "https://accounts.zoho.eu");
+  assert.equal(resolveZohoAccountsServer({ location: "in" }), "https://accounts.zoho.in");
+  assert.equal(
+    resolveZohoAccountsServer({ accountsServer: "https://accounts.zoho.com.au/" }),
+    "https://accounts.zoho.com.au",
+  );
+  assert.equal(resolveZohoAccountsServer({}), "https://accounts.zoho.com");
+});
+
 console.log(`\n${passed} CRM enterprise checks passed.`);

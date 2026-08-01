@@ -158,6 +158,7 @@ export const pipedriveConnector: CrmConnector = {
         last_name: contact.lastName || undefined,
         phone: contact.phone ? [{ value: contact.phone, primary: true }] : undefined,
         email: contact.email ? [{ value: contact.email, primary: true }] : undefined,
+        org_id: contact.companyExternalId ? Number(contact.companyExternalId) : undefined,
         owner_id: contact.ownerExternalId
           ? Number(contact.ownerExternalId)
           : ctx.preferences.defaultOwnerExternalId
