@@ -1,8 +1,18 @@
 import { getPrisma } from "@/lib/db";
 import { telnyxRequest } from "@/lib/messaging/telnyx/client";
+import {
+  getMessagingRuntimeSettings,
+  isWithinBusinessHours,
+} from "@/lib/messaging/messaging-settings";
 import { assignNumbers, getNumberAssignments } from "./queue-service";
 
-export type IvrAction = "queue" | "forward" | "voicemail" | "agent" | "hangup";
+export type IvrAction =
+  | "queue"
+  | "forward"
+  | "voicemail"
+  | "agent"
+  | "hangup"
+  | "submenu";
 
 export type IvrOption = {
   digit: string;
@@ -11,15 +21,30 @@ export type IvrOption = {
   label?: string | null;
 };
 
+export type IvrMenuPayload = {
+  options: IvrOption[];
+  afterHoursGreeting?: string | null;
+  afterHoursOptions?: IvrOption[];
+};
+
 export type IvrMenuInput = {
   name: string;
   greeting?: string | null;
   options?: IvrOption[];
+  afterHoursGreeting?: string | null;
+  afterHoursOptions?: IvrOption[];
   active?: boolean;
   phoneNumberIds?: string[];
 };
 
-const VALID_ACTIONS: IvrAction[] = ["queue", "forward", "voicemail", "agent", "hangup"];
+const VALID_ACTIONS: IvrAction[] = [
+  "queue",
+  "forward",
+  "voicemail",
+  "agent",
+  "hangup",
+  "submenu",
+];
 
 function sanitizeOptions(options?: IvrOption[]): IvrOption[] {
   if (!Array.isArray(options)) return [];
@@ -33,26 +58,71 @@ function sanitizeOptions(options?: IvrOption[]): IvrOption[] {
     .filter((o) => /^[0-9*#]$/.test(o.digit));
 }
 
+function packOptionsJson(input: {
+  options?: IvrOption[];
+  afterHoursGreeting?: string | null;
+  afterHoursOptions?: IvrOption[];
+}): object {
+  const payload: IvrMenuPayload = {
+    options: sanitizeOptions(input.options),
+    afterHoursGreeting: input.afterHoursGreeting?.trim() || null,
+    afterHoursOptions: sanitizeOptions(input.afterHoursOptions),
+  };
+  return payload as object;
+}
+
+function parseMenuPayload(optionsJson: unknown): IvrMenuPayload {
+  if (Array.isArray(optionsJson)) {
+    return { options: sanitizeOptions(optionsJson as IvrOption[]) };
+  }
+  if (optionsJson && typeof optionsJson === "object") {
+    const obj = optionsJson as Record<string, unknown>;
+    if (Array.isArray(obj.options)) {
+      return {
+        options: sanitizeOptions(obj.options as IvrOption[]),
+        afterHoursGreeting:
+          typeof obj.afterHoursGreeting === "string" ? obj.afterHoursGreeting : null,
+        afterHoursOptions: sanitizeOptions(obj.afterHoursOptions as IvrOption[] | undefined),
+      };
+    }
+  }
+  return { options: [] };
+}
+
+function parseOptions(optionsJson: unknown): IvrOption[] {
+  return parseMenuPayload(optionsJson).options;
+}
+
 export async function listIvrMenus(workspaceId: string) {
   const menus = await getPrisma().ivrMenu.findMany({
     where: { workspaceId },
     orderBy: { createdAt: "desc" },
   });
   const assignments = await getNumberAssignments(workspaceId, "ivrMenuId");
-  return (menus as Array<{ id: string; optionsJson: unknown }>).map((m) => ({
-    ...m,
-    options: parseOptions(m.optionsJson),
-    phoneNumberIds: assignments[m.id] || [],
-  }));
+  return (menus as Array<{ id: string; optionsJson: unknown; greeting: string | null }>).map(
+    (m) => {
+      const payload = parseMenuPayload(m.optionsJson);
+      return {
+        ...m,
+        options: payload.options,
+        afterHoursGreeting: payload.afterHoursGreeting || null,
+        afterHoursOptions: payload.afterHoursOptions || [],
+        phoneNumberIds: assignments[m.id] || [],
+      };
+    },
+  );
 }
 
 export async function getIvrMenu(workspaceId: string, id: string) {
   const menu = await getPrisma().ivrMenu.findFirst({ where: { id, workspaceId } });
   if (!menu) return null;
   const assignments = await getNumberAssignments(workspaceId, "ivrMenuId");
+  const payload = parseMenuPayload(menu.optionsJson);
   return {
     ...menu,
-    options: parseOptions(menu.optionsJson),
+    options: payload.options,
+    afterHoursGreeting: payload.afterHoursGreeting || null,
+    afterHoursOptions: payload.afterHoursOptions || [],
     phoneNumberIds: assignments[menu.id] || [],
   };
 }
@@ -64,7 +134,7 @@ export async function createIvrMenu(workspaceId: string, input: IvrMenuInput) {
       workspaceId,
       name: input.name.trim(),
       greeting: input.greeting?.trim() || null,
-      optionsJson: sanitizeOptions(input.options) as object,
+      optionsJson: packOptionsJson(input),
       active: input.active ?? true,
     },
   });
@@ -81,7 +151,21 @@ export async function updateIvrMenu(workspaceId: string, id: string, input: IvrM
   const data: Record<string, unknown> = {};
   if (input.name !== undefined) data.name = input.name.trim();
   if (input.greeting !== undefined) data.greeting = input.greeting?.trim() || null;
-  if (input.options !== undefined) data.optionsJson = sanitizeOptions(input.options) as object;
+  if (
+    input.options !== undefined ||
+    input.afterHoursGreeting !== undefined ||
+    input.afterHoursOptions !== undefined
+  ) {
+    const current = parseMenuPayload(existing.optionsJson);
+    data.optionsJson = packOptionsJson({
+      options: input.options ?? current.options,
+      afterHoursGreeting:
+        input.afterHoursGreeting !== undefined
+          ? input.afterHoursGreeting
+          : current.afterHoursGreeting,
+      afterHoursOptions: input.afterHoursOptions ?? current.afterHoursOptions,
+    });
+  }
   if (input.active !== undefined) data.active = input.active;
 
   await getPrisma().ivrMenu.update({ where: { id }, data });
@@ -97,11 +181,6 @@ export async function deleteIvrMenu(workspaceId: string, id: string) {
   await assignNumbers(workspaceId, "ivrMenuId", id, []);
   await getPrisma().ivrMenu.delete({ where: { id } });
   return { ok: true };
-}
-
-function parseOptions(optionsJson: unknown): IvrOption[] {
-  if (!Array.isArray(optionsJson)) return [];
-  return sanitizeOptions(optionsJson as IvrOption[]);
 }
 
 /** Resolve the active IVR menu assigned to an inbound number, if any. */
@@ -121,7 +200,22 @@ export async function resolveIvrForNumber(workspaceId: string, toE164: string) {
     where: { id: ivrMenuId, workspaceId, active: true },
   });
   if (!menu) return null;
-  return { ...menu, options: parseOptions(menu.optionsJson) };
+
+  const payload = parseMenuPayload(menu.optionsJson);
+  let greeting = menu.greeting;
+  let options = payload.options;
+
+  // After-hours menus when configured.
+  if (payload.afterHoursOptions?.length) {
+    const runtime = await getMessagingRuntimeSettings(workspaceId).catch(() => null);
+    const withinHours = runtime ? isWithinBusinessHours(runtime, new Date()) : true;
+    if (!withinHours) {
+      greeting = payload.afterHoursGreeting || greeting;
+      options = payload.afterHoursOptions;
+    }
+  }
+
+  return { ...menu, greeting, options, payload };
 }
 
 /**
@@ -130,7 +224,8 @@ export async function resolveIvrForNumber(workspaceId: string, toE164: string) {
  */
 export async function startIvrGather(
   controlId: string,
-  menu: { greeting?: string | null; options: IvrOption[] },
+  menu: { greeting?: string | null; options: IvrOption[]; id?: string },
+  meta?: { menuId?: string; depth?: number },
 ) {
   if (!controlId || controlId.startsWith("mock_")) return { mode: "mock" as const };
 
@@ -140,7 +235,6 @@ export async function startIvrGather(
     "Thank you for calling. Please listen to the following options.";
 
   try {
-    // Ensure the leg is answered before gathering.
     await telnyxRequest(`/calls/${controlId}/actions/answer`, {
       method: "POST",
       body: {},
@@ -156,6 +250,13 @@ export async function startIvrGather(
         maximum_digits: 1,
         minimum_digits: 1,
         timeout_millis: 10000,
+        client_state: Buffer.from(
+          JSON.stringify({
+            kind: "ivr_gather",
+            menuId: meta?.menuId || menu.id || null,
+            depth: meta?.depth || 0,
+          }),
+        ).toString("base64"),
       },
     });
     return { mode: "telnyx" as const };
@@ -179,9 +280,26 @@ export async function executeIvrAction(input: {
   workspaceId: string;
   controlId: string;
   option: IvrOption;
+  depth?: number;
 }) {
   const { workspaceId, controlId, option } = input;
   const isMock = !controlId || controlId.startsWith("mock_");
+  const depth = input.depth || 0;
+
+  if (option.action === "submenu" && option.target) {
+    if (depth >= 5) {
+      return { action: "hangup" as const, target: null, reason: "max_depth" };
+    }
+    const submenu = await getIvrMenu(workspaceId, option.target);
+    if (submenu) {
+      await startIvrGather(
+        controlId,
+        { greeting: submenu.greeting, options: submenu.options, id: submenu.id },
+        { menuId: submenu.id, depth: depth + 1 },
+      );
+      return { action: "submenu" as const, target: option.target, depth: depth + 1 };
+    }
+  }
 
   if (option.action === "forward" && option.target) {
     if (!isMock) {
@@ -190,14 +308,14 @@ export async function executeIvrAction(input: {
         body: { to: option.target },
       }).catch((err) => console.warn("[ivr] forward failed", err));
     }
-    return { action: "forward", target: option.target };
+    return { action: "forward" as const, target: option.target };
   }
 
   if (option.action === "queue" && option.target) {
     const queue = await getPrisma().callQueue.findFirst({
       where: { id: option.target, workspaceId, active: true },
     });
-    return { action: "queue", target: option.target, queueName: queue?.name };
+    return { action: "queue" as const, target: option.target, queueName: queue?.name };
   }
 
   if (option.action === "voicemail") {
@@ -215,7 +333,7 @@ export async function executeIvrAction(input: {
         body: { format: "mp3", channels: "single" },
       }).catch(() => undefined);
     }
-    return { action: "voicemail", target: null };
+    return { action: "voicemail" as const, target: null };
   }
 
   if (option.action === "hangup") {
@@ -225,7 +343,7 @@ export async function executeIvrAction(input: {
         body: {},
       }).catch(() => undefined);
     }
-    return { action: "hangup", target: null };
+    return { action: "hangup" as const, target: null };
   }
 
   // agent — leave the leg answered for a human/AI agent to pick up.
@@ -249,18 +367,38 @@ export async function handleIvrGatherEnded(eventPayload: Record<string, unknown>
   const number = await prisma.phoneNumber.findFirst({ where: { e164: to } });
   if (!number) return { handled: false as const };
 
-  const menu = await resolveIvrForNumber(number.workspaceId, to);
+  let depth = 0;
+  let menuId: string | null = null;
+  if (typeof eventPayload.client_state === "string") {
+    try {
+      const state = JSON.parse(
+        Buffer.from(eventPayload.client_state, "base64").toString("utf8"),
+      ) as Record<string, unknown>;
+      if (state.kind && state.kind !== "ivr_gather") {
+        return { handled: false as const };
+      }
+      if (typeof state.menuId === "string") menuId = state.menuId;
+      if (typeof state.depth === "number") depth = state.depth;
+    } catch {
+      // ignore
+    }
+  }
+
+  let menu =
+    menuId != null
+      ? await getIvrMenu(number.workspaceId, menuId)
+      : await resolveIvrForNumber(number.workspaceId, to);
   if (!menu) return { handled: false as const };
 
   // No / invalid digit — replay the greeting once, then continue.
   if (!digits || status === "timeout" || status === "no_input") {
-    await startIvrGather(controlId, menu);
+    await startIvrGather(controlId, menu, { menuId: menu.id, depth });
     return { handled: true as const, action: "reprompt" };
   }
 
   const option = resolveIvrOption(menu, digits);
   if (!option) {
-    await startIvrGather(controlId, menu);
+    await startIvrGather(controlId, menu, { menuId: menu.id, depth });
     return { handled: true as const, action: "reprompt" };
   }
 
@@ -268,7 +406,13 @@ export async function handleIvrGatherEnded(eventPayload: Record<string, unknown>
     workspaceId: number.workspaceId,
     controlId,
     option,
+    depth,
   });
+
+  // Submenu already started a new gather.
+  if (result.action === "submenu") {
+    return { handled: true as const, action: "submenu", digit: digits, target: result.target };
+  }
 
   // Hand off queue / agent selections into the human-call flow.
   if (result.action === "queue" || result.action === "agent" || result.action === "voicemail") {

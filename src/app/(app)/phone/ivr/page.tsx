@@ -15,6 +15,8 @@ type IvrMenu = {
   name: string;
   greeting: string | null;
   options: IvrOption[];
+  afterHoursGreeting?: string | null;
+  afterHoursOptions?: IvrOption[];
   active: boolean;
   phoneNumberIds: string[];
 };
@@ -26,6 +28,7 @@ const ACTIONS = [
   { value: "queue", label: "Send to queue" },
   { value: "forward", label: "Forward to number" },
   { value: "voicemail", label: "Voicemail" },
+  { value: "submenu", label: "Nested submenu" },
   { value: "hangup", label: "Hang up" },
 ];
 
@@ -33,6 +36,8 @@ const emptyForm = {
   name: "",
   greeting: "Thanks for calling. Press 1 for sales, press 2 for support.",
   options: [{ digit: "1", action: "agent", target: "", label: "" }] as IvrOption[],
+  afterHoursGreeting: "",
+  afterHoursOptions: [] as IvrOption[],
   active: true,
   phoneNumberIds: [] as string[],
 };
@@ -57,7 +62,11 @@ export default function PhoneIvrPage() {
   }, []);
 
   function resetForm() {
-    setForm({ ...emptyForm, options: [{ digit: "1", action: "agent", target: "", label: "" }] });
+    setForm({
+      ...emptyForm,
+      options: [{ digit: "1", action: "agent", target: "", label: "" }],
+      afterHoursOptions: [],
+    });
     setEditingId(null);
     setError("");
   }
@@ -68,6 +77,12 @@ export default function PhoneIvrPage() {
       name: m.name,
       greeting: m.greeting || "",
       options: m.options.length ? m.options.map((o) => ({ ...o, target: o.target || "", label: o.label || "" })) : [{ digit: "1", action: "agent", target: "", label: "" }],
+      afterHoursGreeting: m.afterHoursGreeting || "",
+      afterHoursOptions: (m.afterHoursOptions || []).map((o) => ({
+        ...o,
+        target: o.target || "",
+        label: o.label || "",
+      })),
       active: m.active,
       phoneNumberIds: m.phoneNumberIds || [],
     });
@@ -117,6 +132,13 @@ export default function PhoneIvrPage() {
             target: o.target || null,
             label: o.label || null,
           })),
+          afterHoursGreeting: form.afterHoursGreeting || null,
+          afterHoursOptions: form.afterHoursOptions.map((o) => ({
+            digit: o.digit,
+            action: o.action,
+            target: o.target || null,
+            label: o.label || null,
+          })),
         }),
       });
       const json = await res.json();
@@ -141,8 +163,18 @@ export default function PhoneIvrPage() {
     const base = ACTIONS.find((a) => a.value === o.action)?.label || o.action;
     if (o.action === "queue") return `${base}: ${queues.find((q) => q.id === o.target)?.name || o.target || "?"}`;
     if (o.action === "forward") return `${base}: ${o.target || "?"}`;
+    if (o.action === "submenu") {
+      return `${base}: ${menus.find((m) => m.id === o.target)?.name || o.target || "?"}`;
+    }
     return base;
   };
+
+  function updateAfterHoursOption(idx: number, patch: Partial<IvrOption>) {
+    setForm((f) => ({
+      ...f,
+      afterHoursOptions: f.afterHoursOptions.map((o, i) => (i === idx ? { ...o, ...patch } : o)),
+    }));
+  }
 
   return (
     <div>
@@ -201,11 +233,88 @@ export default function PhoneIvrPage() {
                       placeholder="Forward to +1..."
                     />
                   )}
+                  {o.action === "submenu" && (
+                    <Select value={o.target || ""} onChange={(e) => updateOption(idx, { target: e.target.value })}>
+                      <option value="">Select submenu…</option>
+                      {menus
+                        .filter((m) => m.id !== editingId)
+                        .map((m) => (
+                          <option key={m.id} value={m.id}>{m.name}</option>
+                        ))}
+                    </Select>
+                  )}
                 </div>
               ))}
             </div>
             <Button variant="outline" size="sm" onClick={addOption} className="mt-2 gap-1">
               <Plus className="h-3.5 w-3.5" /> Add option
+            </Button>
+          </div>
+
+          <div>
+            <Label>After-hours greeting (optional)</Label>
+            <Textarea
+              value={form.afterHoursGreeting}
+              onChange={(e) => setForm({ ...form, afterHoursGreeting: e.target.value })}
+              placeholder="We're closed. Press 1 for voicemail…"
+            />
+            <Label className="mt-2 block">After-hours options</Label>
+            <div className="space-y-2">
+              {form.afterHoursOptions.map((o, idx) => (
+                <div key={`ah-${idx}`} className="rounded-lg border border-border p-2 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Input
+                      className="w-14 text-center"
+                      value={o.digit}
+                      maxLength={1}
+                      onChange={(e) => updateAfterHoursOption(idx, { digit: e.target.value })}
+                    />
+                    <Select
+                      value={o.action}
+                      onChange={(e) => updateAfterHoursOption(idx, { action: e.target.value })}
+                    >
+                      {ACTIONS.map((a) => (
+                        <option key={a.value} value={a.value}>{a.label}</option>
+                      ))}
+                    </Select>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() =>
+                        setForm((f) => ({
+                          ...f,
+                          afterHoursOptions: f.afterHoursOptions.filter((_, i) => i !== idx),
+                        }))
+                      }
+                    >
+                      <Trash2 className="h-4 w-4 text-danger" />
+                    </Button>
+                  </div>
+                  {(o.action === "forward" || o.action === "queue" || o.action === "submenu") && (
+                    <Input
+                      value={o.target || ""}
+                      onChange={(e) => updateAfterHoursOption(idx, { target: e.target.value })}
+                      placeholder={o.action === "forward" ? "+1..." : "Target id"}
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-2"
+              onClick={() =>
+                setForm((f) => ({
+                  ...f,
+                  afterHoursOptions: [
+                    ...f.afterHoursOptions,
+                    { digit: "1", action: "voicemail", target: "", label: "" },
+                  ],
+                }))
+              }
+            >
+              Add after-hours option
             </Button>
           </div>
 

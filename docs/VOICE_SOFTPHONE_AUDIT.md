@@ -1,6 +1,6 @@
 # Transovo AI — Voice Agent + Softphone Feature Audit
 
-**Updated:** 2026-08-01 (close-the-gaps wiring pass)  
+**Updated:** 2026-08-01 (finish remaining gaps + multi-pass bugfix)  
 **Live site:** https://transovo.ai  
 
 ## Status meaning (code-complete)
@@ -8,9 +8,7 @@
 | Label | Meaning |
 |-------|---------|
 | **Full** | UI + API + runtime path implemented. Live Telnyx number/creds only needed to exercise the path. |
-| **Blocked** | Same as Full for code purposes — previously labeled Blocked only because a number was missing. Treat as ready. |
-| **Partial** | Remaining polish / rare edge cases (see notes). |
-| **Missing** | Intentionally deferred native-app / carrier CNAM features only. |
+| **External** | Intentionally deferred: native apps, carrier CNAM writeback, third-party spam networks. |
 
 **Customer expectation:** once a Telnyx number is assigned and env is set, checklist features should work without more product wiring.
 
@@ -20,22 +18,35 @@ Optional: `TELNYX_TELEPHONY_CREDENTIAL_ID`, `TELNYX_STORAGE_REGION`, Brevo email
 Webhooks: `/api/telnyx/voice`, `/api/telnyx/voice/tools`  
 Schema: `npm run db:push` or `supabase/voice-softphone-checklist.sql`
 
-### This pass closed
-- Softphone multi-call / waiting / redial / contacts / favorites / devices / warm transfer / CRM pop / presence
-- Softphone inbound forwarding runtime + queue member PSTN ring + park timeout
-- AI inbound actions (human_first, transfer, voicemail, after-hours, disclosure)
-- AI warm transfer consult/complete/fallback/return-to-AI
-- Booking buffers / notice / round-robin / SMS+email confirm
-- Analytics filters + outcome/sentiment/campaign metrics
-- Testing lab (contact, knowledge, tools, booking traces)
-- Compliance settings (disclosure, retention, intl block, spend cap)
-- Contact click-to-call (softphone + AI)
-- Call history return/SMS/add-contact
+### This pass closed (remaining gaps)
+- Softphone merge of held lines into conference
+- Call flip to another device + bridge on answer
+- Network quality / reconnect UI hints
+- Call whisper + inbound call screening gather
+- IVR nested submenus + after-hours menus
+- Softphone live transcription + AI notes/summary
+- Voice TTS preview API + builder Preview button
+- Post-call urgency scoring
+- Per-recipient timezone (Contact.timezone / customFields / campaign vars)
+- Cross-campaign frequency cooldown via callingRules
+- Anonymous dial + block caller from softphone
+- Queue estimated-wait TTS
+- Softphone permission enforcement (record/transfer/whisper/admin/intl)
+- Click-to-call opens softphone WebRTC path (`/phone?dial=`) instead of orphaning Call Control media
 
-### Remaining truly external / rare
+### Critical bug fixes in this pass
+- Warm transfer no longer hangs up consult after bridge
+- Queue overflow accepts `forward` alias (UI) in addition to `external`
+- Queue member / simultaneous ring / conference / call-flip legs bridge on answer
+- `forcedAgentId` honored on softphone → AI forward
+- Recording/transcription webhooks no longer mark live AI calls COMPLETED
+- Softphone `recordingStartedAt` set on record start
+- Park timeout unholds before transfer/voicemail
+- AI warm transfer consult speaks summary then scheduled-completes (softphone warm waits for Complete)
+- Analytics `humanAnswerRate` excludes voicemail/AMD answers
+
+### Remaining truly external
 - Native mobile apps, OS Bluetooth stack (browser handles headsets)
 - Carrier CNAM writeback, spam-network feeds
-- Deep multi-level IVR designer polish beyond nested option targets
-- Perfect per-recipient local timezone without contact TZ field data
 
 Everything else on the customer checklists is implemented in code and ready for number-on testing.

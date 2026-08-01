@@ -204,6 +204,8 @@ async function initiateWarmTransfer(input: {
         fallbackDestinations: input.fallbacks,
         timeoutSeconds: input.timeoutSeconds,
         summary: input.summary,
+        // AI voice path has no "Complete transfer" UI — auto-bridge after consult hears summary.
+        autoCompleteOnAnswer: true,
       } as object,
     },
   });
@@ -362,14 +364,63 @@ export async function handleWarmTransferConsultAnswered(input: {
   callerControlId: string;
   summary?: string;
 }) {
-  return completeWarmTransfer({
-    workspaceId: input.workspaceId,
-    callId: input.callId,
-    transferId: input.transferId,
-    consultControlId: input.consultControlId,
-    callerControlId: input.callerControlId,
-    summary: input.summary,
+  const prisma = getPrisma();
+  // Consult answered: whisper/speak context to the destination agent, keep caller held.
+  if (input.summary && isTelnyxVoiceConfigured()) {
+    await telnyxRequest(`/calls/${input.consultControlId}/actions/speak`, {
+      method: "POST",
+      body: {
+        payload: input.summary,
+        voice: "female",
+        language: "en-US",
+      },
+    }).catch(() => undefined);
+  }
+
+  const transfer = await prisma.voiceTransfer.findFirst({
+    where: { id: input.transferId, workspaceId: input.workspaceId },
   });
+  const meta = (transfer?.metadata || {}) as Record<string, unknown>;
+  await prisma.voiceTransfer.update({
+    where: { id: input.transferId },
+    data: {
+      status: "consult_answered",
+      answered: true,
+      metadata: {
+        ...meta,
+        consultControlId: input.consultControlId,
+        callerControlId: input.callerControlId,
+        summary: input.summary,
+        awaitingComplete: true,
+      } as object,
+    },
+  });
+  await logTransferEvent(input.workspaceId, input.callId, input.transferId, "consult_answered", {
+    consultControlId: input.consultControlId,
+  });
+
+  // AI warm transfers auto-bridge after the summary speaks (give TTS a moment).
+  if (meta.autoCompleteOnAnswer) {
+    const { enqueueJob } = await import("@/lib/messaging/enqueue-advance");
+    await enqueueJob({
+      jobType: "voice_warm_transfer_complete",
+      queueName: "voice-calls",
+      workspaceId: input.workspaceId,
+      payload: {
+        workspaceId: input.workspaceId,
+        callId: input.callId,
+        transferId: input.transferId,
+        consultControlId: input.consultControlId,
+        callerControlId: input.callerControlId,
+        // Summary already spoken on consult answer — avoid double TTS.
+      },
+      idempotencyKey: `warm-transfer-complete-${input.transferId}`,
+      runAfter: new Date(Date.now() + 4500),
+    });
+    return { ok: true, awaitingComplete: true, scheduledComplete: true };
+  }
+
+  return { ok: true, awaitingComplete: true };
 }
 
 export async function handleTransferAmdResult(

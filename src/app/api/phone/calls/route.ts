@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
 import { getPrisma } from "@/lib/db";
-import { dialCallMyPhoneBridge, dialHumanCall } from "@/lib/phone/human-call-service";
+import {
+  dialCallMyPhoneBridge,
+  dialHumanCall,
+  mergeHumanCalls,
+} from "@/lib/phone/human-call-service";
+import { requireSoftphonePermission } from "@/lib/phone/softphone-permissions";
 
 export async function GET(request: Request) {
   try {
@@ -47,10 +52,25 @@ export async function POST(request: Request) {
       to?: string;
       from?: string;
       callMyPhone?: string;
+      anonymous?: boolean;
+      mergeCallIds?: [string, string];
     };
+
+    if (body.mergeCallIds?.length === 2) {
+      const result = await mergeHumanCalls(
+        auth.workspaceId,
+        auth.session.userId,
+        body.mergeCallIds[0],
+        body.mergeCallIds[1],
+      );
+      return NextResponse.json({ data: result }, { status: 201 });
+    }
+
     if (!body.to?.trim()) {
       return NextResponse.json({ error: "to is required" }, { status: 400 });
     }
+
+    await requireSoftphonePermission(auth.workspaceId, auth.session.userId, "place_call");
 
     if (body.callMyPhone?.trim()) {
       const result = await dialCallMyPhoneBridge({
@@ -71,6 +91,7 @@ export async function POST(request: Request) {
       agentUserId: auth.session.userId,
       to: body.to.trim(),
       from: body.from,
+      anonymous: Boolean(body.anonymous),
     });
 
     return NextResponse.json({ data: result.call, mode: result.mode }, { status: 201 });

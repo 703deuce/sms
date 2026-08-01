@@ -3,6 +3,51 @@ import { enqueueJob } from "@/lib/messaging/enqueue-advance";
 import { dialOutboundCall } from "./telnyx/assistant-sync";
 import { getPublishedConfig } from "./agent-service";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
+/** Midnight (start of local day) for a campaign timezone. */
+export function startOfDayInTimezone(timezone: string, now = new Date()): Date {
+  try {
+    const fmt = new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+    const parts = fmt.formatToParts(now);
+    const y = parts.find((p) => p.type === "year")?.value;
+    const m = parts.find((p) => p.type === "month")?.value;
+    const d = parts.find((p) => p.type === "day")?.value;
+    // Approximate: construct a UTC instant that is midnight in that zone via iterative offset.
+    const guess = new Date(`${y}-${m}-${d}T00:00:00.000Z`);
+    const local = new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone,
+      hour: "numeric",
+      hour12: false,
+      minute: "numeric",
+    }).formatToParts(guess);
+    const hour = Number(local.find((p) => p.type === "hour")?.value || 0);
+    const minute = Number(local.find((p) => p.type === "minute")?.value || 0);
+    return new Date(guess.getTime() - (hour * 60 + minute) * 60_000);
+  } catch {
+    const start = new Date(now);
+    start.setHours(0, 0, 0, 0);
+    return start;
+  }
+}
+
+function contactTimezone(
+  contact: { variables?: unknown; contactId?: string | null },
+  contactRow?: { customFields?: unknown; timezone?: string | null } | null,
+  campaignTz?: string | null,
+) {
+  const vars = (contact.variables || {}) as Record<string, unknown>;
+  if (typeof vars.timezone === "string" && vars.timezone) return vars.timezone;
+  if (contactRow && "timezone" in contactRow && contactRow.timezone) {
+    return String(contactRow.timezone);
+  }
+  const cf = (contactRow?.customFields || {}) as Record<string, unknown>;
+  if (typeof cf.timezone === "string" && cf.timezone) return cf.timezone;
+  return campaignTz || "America/New_York";
+}
 
 export async function initiateOutboundCall(input: {
   workspaceId: string;
@@ -156,8 +201,7 @@ export async function processVoiceCampaignBatch() {
     if (!window.allowed) continue;
 
     if (campaign.dailyLimit) {
-      const startOfDay = new Date();
-      startOfDay.setHours(0, 0, 0, 0);
+      const startOfDay = startOfDayInTimezone(campaign.timezone || "America/New_York");
       const todayCount = await prisma.voiceCall.count({
         where: {
           campaignId: campaign.id,
@@ -203,7 +247,10 @@ export async function processVoiceCampaignBatch() {
 
     // DNC / suppression check
     const suppressed = await prisma.suppression.findFirst({
-      where: { workspaceId: campaign.workspaceId, phone: contact.phone },
+      where: {
+        workspaceId: campaign.workspaceId,
+        OR: [{ phone: contact.phone }, { suppressionKey: `p:${contact.phone}` }],
+      },
     });
     if (suppressed) {
       await prisma.voiceCampaignContact.update({
@@ -213,6 +260,39 @@ export async function processVoiceCampaignBatch() {
       continue;
     }
 
+    const contactRow = contact.contactId
+      ? await prisma.contact.findUnique({ where: { id: contact.contactId } })
+      : null;
+    const recipientTz = contactTimezone(contact, contactRow, campaign.timezone);
+    const recipientWindow = isWithinCallingWindow({
+      timezone: recipientTz,
+      callingRules: campaign.callingRules,
+    });
+    if (!recipientWindow.allowed) {
+      continue;
+    }
+
+    // Cross-campaign frequency cap / per-contact cooldown (hours).
+    const rules = (campaign.callingRules || {}) as {
+      frequencyCapHours?: number;
+      crossCampaignCooldownHours?: number;
+    };
+    const cooldownHours = Number(
+      rules.crossCampaignCooldownHours || rules.frequencyCapHours || 0,
+    );
+    if (cooldownHours > 0) {
+      const since = new Date(Date.now() - cooldownHours * 3600_000);
+      const recent = await prisma.voiceCall.findFirst({
+        where: {
+          workspaceId: campaign.workspaceId,
+          toE164: contact.phone,
+          createdAt: { gte: since },
+        },
+        orderBy: { createdAt: "desc" },
+      });
+      if (recent) continue;
+    }
+
     try {
       await initiateOutboundCall({
         workspaceId: campaign.workspaceId,
@@ -220,7 +300,10 @@ export async function processVoiceCampaignBatch() {
         toPhone: contact.phone,
         contactId: contact.contactId,
         campaignId: campaign.id,
-        dynamicVariables: (contact.variables as Record<string, unknown>) || {},
+        dynamicVariables: {
+          ...((contact.variables as Record<string, unknown>) || {}),
+          timezone: recipientTz,
+        },
       });
 
       await prisma.voiceCampaignContact.update({

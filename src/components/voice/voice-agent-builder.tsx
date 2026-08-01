@@ -578,14 +578,47 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
             <CardTitle>Voice & language</CardTitle>
             <div>
               <Label>Voice ID (Telnyx)</Label>
-              <Input
-                value={cfg.voiceLanguage?.voiceId || ""}
-                onChange={(e) =>
-                  updateConfig({
-                    voiceLanguage: { ...cfg.voiceLanguage, voiceId: e.target.value },
-                  })
-                }
-              />
+              <div className="flex gap-2">
+                <Input
+                  value={cfg.voiceLanguage?.voiceId || ""}
+                  onChange={(e) =>
+                    updateConfig({
+                      voiceLanguage: { ...cfg.voiceLanguage, voiceId: e.target.value },
+                    })
+                  }
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={async () => {
+                    try {
+                      const res = await fetch("/api/voice/tts-preview", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          voice: cfg.voiceLanguage?.voiceId || undefined,
+                          text: "Hello, this is a preview of your AI voice agent.",
+                        }),
+                      });
+                      const json = await res.json();
+                      if (!res.ok) throw new Error(json.error || "Preview failed");
+                      if (json.data?.audioUrl) {
+                        const audio = new Audio(json.data.audioUrl);
+                        await audio.play().catch(() => undefined);
+                      } else {
+                        alert(
+                          json.data?.message ||
+                            `Preview ready (${json.data?.mode}). Text: ${json.data?.text}`,
+                        );
+                      }
+                    } catch (e) {
+                      alert(e instanceof Error ? e.message : "Preview failed");
+                    }
+                  }}
+                >
+                  Preview
+                </Button>
+              </div>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div>

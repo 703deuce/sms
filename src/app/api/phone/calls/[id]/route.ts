@@ -4,6 +4,7 @@ import {
   sendDtmf,
   updateHumanCall,
 } from "@/lib/phone/human-call-service";
+import { requireSoftphonePermission } from "@/lib/phone/softphone-permissions";
 
 export async function PATCH(
   request: Request,
@@ -29,7 +30,25 @@ export async function PATCH(
       disposition?: string | null;
       dtmf?: string;
       record?: boolean;
+      flipTo?: string;
+      whisper?: string;
+      blockCaller?: boolean;
+      startTranscription?: boolean;
+      generateAiSummary?: boolean;
     };
+
+    if (body.record) {
+      await requireSoftphonePermission(auth.workspaceId, auth.session.userId, "record");
+    }
+    if (body.transferTo || body.warmTransferTo || body.completeWarmTransfer) {
+      await requireSoftphonePermission(auth.workspaceId, auth.session.userId, "transfer");
+    }
+    if (body.whisper) {
+      await requireSoftphonePermission(auth.workspaceId, auth.session.userId, "whisper");
+    }
+    if (body.blockCaller) {
+      await requireSoftphonePermission(auth.workspaceId, auth.session.userId, "block_caller");
+    }
 
     if (body.dtmf) {
       const call = await sendDtmf(id, auth.workspaceId, body.dtmf);
@@ -50,6 +69,11 @@ export async function PATCH(
       notes: body.notes,
       disposition: body.disposition,
       record: body.record,
+      flipTo: body.flipTo,
+      whisper: body.whisper,
+      blockCaller: body.blockCaller,
+      startTranscription: body.startTranscription,
+      generateAiSummary: body.generateAiSummary,
     });
 
     return NextResponse.json({ data: call });

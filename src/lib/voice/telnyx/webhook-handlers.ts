@@ -96,6 +96,43 @@ export async function processVoiceWebhookEvent(input: {
   const prisma = getPrisma();
   const { eventType, callId, humanCallId, isHuman, eventPayload } = input;
 
+  // Softphone call screening gather (accept / voicemail).
+  if (eventType === "call.gather.ended" || eventType === "call.dtmf.received") {
+    const screeningState = (() => {
+      const raw = eventPayload.client_state;
+      if (typeof raw !== "string") return {};
+      try {
+        return JSON.parse(Buffer.from(raw, "base64").toString("utf8")) as Record<string, unknown>;
+      } catch {
+        return {};
+      }
+    })();
+    if (screeningState.kind === "call_screening") {
+      const digit = String(eventPayload.digits || eventPayload.digit || "").trim();
+      const controlId = String(eventPayload.call_control_id || "");
+      const humanCallId = String(screeningState.humanCallId || "");
+      if (digit === "2" && humanCallId && controlId) {
+        const { leaveVoicemailOnCall } = await import("@/lib/phone/voicemail-service");
+        await leaveVoicemailOnCall({
+          workspaceId: String(screeningState.workspaceId || input.workspaceId || ""),
+          humanCallId,
+          telnyxCallControlId: controlId,
+          userId: screeningState.userId ? String(screeningState.userId) : null,
+        }).catch(() => undefined);
+      } else if (digit === "1" && humanCallId) {
+        await prisma.humanCall.update({
+          where: { id: humanCallId },
+          data: { status: "ringing", notes: "screening:accepted" },
+        }).catch(() => undefined);
+      }
+      await prisma.providerWebhookEvent.update({
+        where: { providerEventId: input.providerEventId },
+        data: { status: "processed", processedAt: new Date() },
+      });
+      return { ok: true, kind: "call_screening", digit };
+    }
+  }
+
   // IVR keypad selection — route the caller to their chosen option.
   if (eventType === "call.gather.ended" || eventType === "call.dtmf.received") {
     const { handleIvrGatherEnded } = await import("@/lib/phone/ivr-service");
@@ -228,7 +265,8 @@ export async function processVoiceWebhookEvent(input: {
 
   const workspaceId = call.workspaceId;
 
-  // Warm transfer consult leg answered — bridge caller and destination.
+  // Warm transfer consult leg answered — speak summary to agent; keep caller on hold
+  // until completeWarmTransfer is invoked (true warm consult UX).
   const clientStateRaw = eventPayload.client_state;
   let warmState: Record<string, unknown> = {};
   if (typeof clientStateRaw === "string") {
@@ -240,7 +278,7 @@ export async function processVoiceWebhookEvent(input: {
   }
   if (
     warmState.kind === "warm_transfer_consult" &&
-    (eventType === "call.answered" || eventType === "call.bridged") &&
+    eventType === "call.answered" &&
     warmState.transferId &&
     warmState.callerControlId
   ) {
@@ -252,7 +290,7 @@ export async function processVoiceWebhookEvent(input: {
       consultControlId: String(eventPayload.call_control_id || ""),
       callerControlId: String(warmState.callerControlId),
       summary: warmState.summary ? String(warmState.summary) : undefined,
-    }).catch((err) => console.warn("[voice/webhook] warm transfer bridge failed", err));
+    }).catch((err) => console.warn("[voice/webhook] warm transfer consult failed", err));
   }
 
   await prisma.voiceCallEvent.create({
@@ -273,8 +311,7 @@ export async function processVoiceWebhookEvent(input: {
     "call.hangup": "COMPLETED",
     "call.machine.detection.ended": "VOICEMAIL",
     "call.machine.premium.detection.ended": "VOICEMAIL",
-    "call.recording.saved": "COMPLETED",
-    "call.transcription.completed": "COMPLETED",
+    // recording.saved / transcription.completed must NOT end a live AI call.
   };
 
   let nextStatus = statusMap[eventType];

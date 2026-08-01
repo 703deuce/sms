@@ -64,7 +64,10 @@ export async function processPostCall(callId: string) {
         topics: insight.topics as object,
         objections: insight.objections as object,
         actionItems: (insight.actionItems || []) as object,
-        needsReview: insight.needsReview,
+        customFields: {
+          urgency: insight.urgency,
+        } as object,
+        needsReview: insight.needsReview || insight.urgency === "high",
         confidence: insight.confidence,
       },
     });
@@ -142,6 +145,8 @@ async function generateCallInsights(
 
   const isLead = leadScore >= 40 && !call.voicemailDetected;
 
+  const urgency = heuristicUrgency(text, call);
+
   // Structured heuristic baseline (always available, no external deps).
   const heuristic = {
     summary: text
@@ -155,13 +160,14 @@ async function generateCallInsights(
           ? "quote_request"
           : "general_inquiry",
     sentiment: heuristicSentiment(text),
+    urgency,
     isLead,
     leadScore,
     qualification,
     topics: heuristicTopics(text),
     objections: heuristicObjections(text),
     actionItems: call.appointmentBooked ? ["Appointment booked — send confirmation"] : [],
-    needsReview: leadScore > 0 && leadScore < 40,
+    needsReview: leadScore > 0 && leadScore < 40 || urgency === "high",
     confidence: text ? 0.75 : 0.4,
   };
 
@@ -175,6 +181,7 @@ async function generateCallInsights(
           summary: llm.summary || heuristic.summary,
           intent: llm.intent || heuristic.intent,
           sentiment: llm.sentiment || heuristic.sentiment,
+          urgency: llm.urgency || heuristic.urgency,
           topics: llm.topics?.length ? llm.topics : heuristic.topics,
           objections: llm.objections?.length ? llm.objections : heuristic.objections,
           actionItems: llm.actionItems?.length ? llm.actionItems : heuristic.actionItems,
@@ -196,6 +203,22 @@ function heuristicSentiment(text: string): string {
   if (negative && !positive) return "negative";
   if (positive && !negative) return "positive";
   return "neutral";
+}
+
+function heuristicUrgency(
+  text: string,
+  call: { appointmentBooked: boolean; transferred: boolean },
+): "high" | "normal" | "low" {
+  if (
+    /(urgent|asap|emergency|right now|immediately|can't wait|today only)/i.test(text) ||
+    call.transferred
+  ) {
+    return "high";
+  }
+  if (call.appointmentBooked || /(next week|whenever|no rush|flexible)/i.test(text)) {
+    return "low";
+  }
+  return "normal";
 }
 
 function heuristicTopics(text: string): string[] {
@@ -228,7 +251,7 @@ async function llmInsights(text: string, direction: string) {
   const system =
     "You analyze phone call transcripts and return ONLY strict JSON with keys: " +
     "summary (string, 1-2 sentences), intent (short snake_case string), " +
-    "sentiment (positive|neutral|negative), topics (string array), " +
+    "sentiment (positive|neutral|negative), urgency (high|normal|low), topics (string array), " +
     "objections (string array), actionItems (string array). No markdown.";
   const user = `Direction: ${direction}\nTranscript:\n${text.slice(0, 6000)}`;
 
@@ -240,6 +263,7 @@ async function llmInsights(text: string, direction: string) {
     summary?: string;
     intent?: string;
     sentiment?: string;
+    urgency?: string;
     topics?: string[];
     objections?: string[];
     actionItems?: string[];
@@ -249,6 +273,9 @@ async function llmInsights(text: string, direction: string) {
     intent: parsed.intent,
     sentiment: ["positive", "neutral", "negative"].includes(parsed.sentiment || "")
       ? parsed.sentiment
+      : undefined,
+    urgency: ["high", "normal", "low"].includes(parsed.urgency || "")
+      ? (parsed.urgency as "high" | "normal" | "low")
       : undefined,
     topics: Array.isArray(parsed.topics) ? parsed.topics.slice(0, 8) : [],
     objections: Array.isArray(parsed.objections) ? parsed.objections.slice(0, 8) : [],

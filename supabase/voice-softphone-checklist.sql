@@ -153,3 +153,5 @@ CREATE TABLE IF NOT EXISTS "softphone_user_settings" (
   "updatedAt" timestamptz NOT NULL DEFAULT NOW(),
   UNIQUE("workspaceId", "userId")
 );
+
+ALTER TABLE "Contact" ADD COLUMN IF NOT EXISTS "timezone" text;

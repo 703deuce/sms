@@ -25,14 +25,10 @@ export function ClickToCallButton({ phone }: { phone: string }) {
         router.push(json.data?.id ? `/voice/calls/${json.data.id}` : "/voice/calls");
         return;
       }
-      const res = await fetch("/api/phone/calls", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ to: phone }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Dial failed");
-      router.push("/phone");
+      // Softphone: hand off to the WebRTC panel so media stays in-browser.
+      // Do not place a Call Control dial here — that orphans the media path.
+      const params = new URLSearchParams({ dial: phone });
+      router.push(`/phone?${params.toString()}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Dial failed");
     } finally {
@@ -50,7 +46,7 @@ export function ClickToCallButton({ phone }: { phone: string }) {
           className="gap-1"
         >
           <Phone className="h-3.5 w-3.5" />
-          {loading === "softphone" ? "Dialing…" : "Call"}
+          {loading === "softphone" ? "Opening…" : "Call"}
         </Button>
         <Button
           size="sm"

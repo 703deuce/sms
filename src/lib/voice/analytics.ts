@@ -119,7 +119,15 @@ export async function loadVoiceAnalytics(
     inbound,
     outbound,
     answerRate: total ? answered / total : 0,
-    humanAnswerRate: total ? answered / total : 0,
+    // Human answer rate excludes AMD/voicemail answers.
+    humanAnswerRate: total
+      ? calls.filter(
+          (c) =>
+            Boolean(c.answeredAt) &&
+            !c.voicemailDetected &&
+            !["VOICEMAIL", "NO_ANSWER", "BUSY", "FAILED", "CANCELLED"].includes(c.status),
+        ).length / total
+      : 0,
     noAnswerRate: total ? noAnswer / total : 0,
     failureRate: total ? failed / total : 0,
     voicemailRate: total ? voicemail / total : 0,

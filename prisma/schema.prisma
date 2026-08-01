@@ -467,6 +467,8 @@ model Contact {
   lastReply     DateTime?
   assignedUser  String?
   company       String?
+  /// IANA timezone for campaign calling windows (e.g. America/Chicago).
+  timezone      String?
   customFields  Json?
   createdAt     DateTime      @default(now())
   workspace     Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)

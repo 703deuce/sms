@@ -56,8 +56,34 @@ export async function ringQueueMembers(input: {
     });
   }
 
-  // Play hold music / announcement while ringing
+  // Estimated wait TTS + hold music / announcement while ringing
   if (isTelnyxPhoneConfigured()) {
+    const waitingAhead = await prisma.humanCall.count({
+      where: {
+        workspaceId: input.workspaceId,
+        queueId: queue.id,
+        status: { in: ["queued", "ringing"] },
+        id: { not: input.humanCallId },
+      },
+    });
+    const avgHandleSeconds = Number(
+      ((queue.configJson || {}) as { avgHandleSeconds?: number }).avgHandleSeconds ||
+        queue.timeoutSeconds ||
+        120,
+    );
+    const etaMinutes = Math.max(
+      1,
+      Math.ceil(((waitingAhead + 1) * avgHandleSeconds) / 60),
+    );
+    await telnyxRequest(`/calls/${input.telnyxCallControlId}/actions/speak`, {
+      method: "POST",
+      body: {
+        payload: `Please hold. Your estimated wait time is about ${etaMinutes} minute${etaMinutes === 1 ? "" : "s"}.`,
+        voice: "female",
+        language: "en-US",
+      },
+    }).catch(() => undefined);
+
     if (queue.announcementUrl) {
       await telnyxRequest(`/calls/${input.telnyxCallControlId}/actions/playback_start`, {
         method: "POST",
@@ -173,7 +199,12 @@ async function overflowQueue(
     return { rang: [], overflow: true as const, action };
   }
 
-  if (action === "external" && queue.overflowTarget && isTelnyxPhoneConfigured()) {
+  // UI historically used "forward"; runtime also accepts "external".
+  if (
+    (action === "external" || action === "forward") &&
+    queue.overflowTarget &&
+    isTelnyxPhoneConfigured()
+  ) {
     await telnyxRequest(`/calls/${input.telnyxCallControlId}/actions/transfer`, {
       method: "POST",
       body: { to: queue.overflowTarget },
@@ -182,7 +213,7 @@ async function overflowQueue(
       where: { id: input.humanCallId },
       data: { status: "transferred", disposition: `overflow:${queue.overflowTarget}` },
     });
-    return { rang: [], overflow: true as const, action };
+    return { rang: [], overflow: true as const, action: "forward" };
   }
 
   if (action === "ai_agent" && queue.overflowTarget) {

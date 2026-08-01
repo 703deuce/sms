@@ -27,6 +27,21 @@ export async function processSoftphoneInbound(input: {
     where: { workspaceId: input.workspaceId, e164: to },
   });
 
+  // Blocked / suppressed callers — hang up immediately.
+  const blocked = await prisma.suppression.findFirst({
+    where: {
+      workspaceId: input.workspaceId,
+      OR: [{ phone: from }, { suppressionKey: `p:${from}` }],
+    },
+  });
+  if (blocked && input.telnyxCallControlId && isTelnyxPhoneConfigured()) {
+    await telnyxRequest(`/calls/${input.telnyxCallControlId}/actions/hangup`, {
+      method: "POST",
+      body: {},
+    }).catch(() => undefined);
+    return { blocked: true as const, from };
+  }
+
   const settings = await getMessagingRuntimeSettings(input.workspaceId).catch(() => null);
   const withinHours = settings
     ? isWithinBusinessHours(settings, new Date())
@@ -127,6 +142,26 @@ export async function processSoftphoneInbound(input: {
     }
   }
 
+  // Call screening: announce caller and gather accept/decline before ringing agents.
+  if (assignedUserId && input.telnyxCallControlId && isTelnyxPhoneConfigured()) {
+    const userSettings = await prisma.softphoneUserSettings.findUnique({
+      where: {
+        workspaceId_userId: { workspaceId: input.workspaceId, userId: assignedUserId },
+      },
+    });
+    const perms = (userSettings?.permissionsJson || {}) as { screening?: boolean };
+    if (perms.screening) {
+      await screenInboundCall({
+        workspaceId: input.workspaceId,
+        fromE164: from,
+        toE164: to,
+        telnyxCallControlId: input.telnyxCallControlId,
+        userId: assignedUserId,
+      });
+      return { screened: true as const, from };
+    }
+  }
+
   // Default: normal human inbound (+ queue resolution inside)
   return handleInboundHumanCall({
     workspaceId: input.workspaceId,
@@ -135,6 +170,50 @@ export async function processSoftphoneInbound(input: {
     telnyxCallControlId: input.telnyxCallControlId,
     routingNote: withinHours ? "business_hours" : "after_hours",
   });
+}
+
+async function screenInboundCall(input: {
+  workspaceId: string;
+  fromE164: string;
+  toE164: string;
+  telnyxCallControlId: string;
+  userId: string;
+}) {
+  const human = await handleInboundHumanCall({
+    workspaceId: input.workspaceId,
+    fromE164: input.fromE164,
+    toE164: input.toE164,
+    telnyxCallControlId: input.telnyxCallControlId,
+    routingNote: `screening:${input.userId}`,
+  });
+
+  await telnyxRequest(`/calls/${input.telnyxCallControlId}/actions/answer`, {
+    method: "POST",
+    body: {},
+  }).catch(() => undefined);
+
+  await telnyxRequest(`/calls/${input.telnyxCallControlId}/actions/gather_using_speak`, {
+    method: "POST",
+    body: {
+      payload: `Call from ${input.fromE164}. Press 1 to accept, press 2 to send to voicemail.`,
+      voice: "female",
+      language: "en-US",
+      valid_digits: "12",
+      maximum_digits: 1,
+      minimum_digits: 1,
+      timeout_millis: 15000,
+      client_state: Buffer.from(
+        JSON.stringify({
+          workspaceId: input.workspaceId,
+          humanCallId: human.callId,
+          kind: "call_screening",
+          userId: input.userId,
+        }),
+      ).toString("base64"),
+    },
+  }).catch(() => undefined);
+
+  return human;
 }
 
 async function forwardExternal(

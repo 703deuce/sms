@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
 import { getPrisma } from "@/lib/db";
+import { requireWorkspacePhoneAdmin } from "@/lib/phone/softphone-permissions";
 
 export async function GET() {
   try {
     const auth = await requireSession();
     if ("error" in auth) return auth.error;
+    // Directory read is available to all members (transfer targets / presence helpers).
+    // Mutations below require phone admin.
     const prisma = getPrisma();
     const numbers = await prisma.phoneNumber.findMany({
       where: { workspaceId: auth.workspaceId },
@@ -27,6 +30,7 @@ export async function POST(request: Request) {
   try {
     const auth = await requireSession();
     if ("error" in auth) return auth.error;
+    await requireWorkspacePhoneAdmin(auth.workspaceId, auth.session.userId);
     const body = (await request.json()) as {
       userId?: string;
       extension?: string;

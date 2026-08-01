@@ -33,6 +33,8 @@ type ActiveCall = {
   startedAt: number;
   notes?: string;
   warmTransferPending?: boolean;
+  transcriptText?: string | null;
+  aiSummary?: string | null;
 };
 
 type IncomingCall = {
@@ -170,6 +172,13 @@ export function SoftphonePanel({
   const [audioOutputs, setAudioOutputs] = useState<MediaDeviceInfo[]>([]);
   const [selectedMic, setSelectedMic] = useState("");
   const [selectedSpeaker, setSelectedSpeaker] = useState("");
+  const [anonymousDial, setAnonymousDial] = useState(false);
+  const [flipNumber, setFlipNumber] = useState("");
+  const [whisperText, setWhisperText] = useState("");
+  const [networkQuality, setNetworkQuality] = useState("unknown");
+  const [reconnectHint, setReconnectHint] = useState("");
+  const [aiSummary, setAiSummary] = useState("");
+  const [liveTranscript, setLiveTranscript] = useState("");
 
   const telnyxClientRef = useRef<unknown>(null);
   const webrtcCallsRef = useRef<Map<string, unknown>>(new Map());
@@ -244,6 +253,26 @@ export function SoftphonePanel({
     setSelectedMic(localStorage.getItem(LS_AUDIO_IN) || "");
     setSelectedSpeaker(localStorage.getItem(LS_AUDIO_OUT) || "");
 
+    // Click-to-call / deep-link: /phone?dial=+1...
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const dialParam = params.get("dial");
+      if (dialParam) {
+        setDialNumber(dialParam);
+        setLastDialed(dialParam);
+        localStorage.setItem(LS_LAST_DIALED, dialParam);
+        // Clear query so refresh doesn't re-dial.
+        const url = new URL(window.location.href);
+        url.searchParams.delete("dial");
+        window.history.replaceState({}, "", url.pathname + url.search);
+        // Auto-start after WebRTC token bootstrap settles.
+        setTimeout(() => {
+          const btn = document.getElementById("softphone-start-call");
+          btn?.click();
+        }, 900);
+      }
+    }
+
     async function loadDevices() {
       if (!navigator.mediaDevices?.enumerateDevices) return;
       const devices = await navigator.mediaDevices.enumerateDevices();
@@ -252,7 +281,32 @@ export function SoftphonePanel({
     }
     loadDevices().catch(() => undefined);
     navigator.mediaDevices?.addEventListener?.("devicechange", loadDevices);
-    return () => navigator.mediaDevices?.removeEventListener?.("devicechange", loadDevices);
+
+    const conn = (navigator as Navigator & {
+      connection?: { effectiveType?: string; addEventListener?: (t: string, fn: () => void) => void; removeEventListener?: (t: string, fn: () => void) => void };
+    }).connection;
+    const updateNet = () => {
+      const t = conn?.effectiveType || "unknown";
+      setNetworkQuality(t);
+      setReconnectHint(t === "2g" || t === "slow-2g" ? "Poor network — call may reconnect" : "");
+    };
+    updateNet();
+    conn?.addEventListener?.("change", updateNet);
+
+    const onOnline = () => {
+      setReconnectHint("Back online — softphone reconnecting…");
+      setTimeout(() => setReconnectHint(""), 4000);
+    };
+    const onOffline = () => setReconnectHint("Offline — waiting to reconnect");
+    window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOffline);
+
+    return () => {
+      navigator.mediaDevices?.removeEventListener?.("devicechange", loadDevices);
+      conn?.removeEventListener?.("change", updateNet);
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("offline", onOffline);
+    };
   }, []);
 
   useEffect(() => {
@@ -676,6 +730,7 @@ export function SoftphonePanel({
         body: JSON.stringify({
           to: dest,
           from,
+          anonymous: anonymousDial,
           ...(useCallMyPhone ? { callMyPhone: myPhone.trim() } : {}),
         }),
       });
@@ -925,6 +980,73 @@ export function SoftphonePanel({
     }
   }
 
+  async function mergeHeldLine() {
+    if (!activeCall) return;
+    const other = activeCalls.find((c) => c.id !== activeCall.id && c.onHold);
+    if (!other) {
+      setError("Hold a second line, then merge.");
+      return;
+    }
+    try {
+      const res = await fetch("/api/phone/calls", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mergeCallIds: [activeCall.id, other.id] }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Merge failed");
+      setConferenceId(json.data?.conference?.id || "");
+      updateCall(other.id, { onHold: false, status: "in_progress" });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Merge failed");
+    }
+  }
+
+  async function flipCall() {
+    if (!activeCall || !flipNumber.trim()) return;
+    try {
+      await patchCallById(activeCall.id, { flipTo: flipNumber.trim() });
+      updateCall(activeCall.id, { onHold: true, status: "on_hold", mediaMode: "call_my_phone" });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Call flip failed");
+    }
+  }
+
+  async function sendWhisper() {
+    if (!activeCall || !whisperText.trim()) return;
+    try {
+      await patchCallById(activeCall.id, { whisper: whisperText.trim() });
+      setWhisperText("");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Whisper failed");
+    }
+  }
+
+  async function blockCaller() {
+    if (!activeCall) return;
+    try {
+      await patchCallById(activeCall.id, { blockCaller: true });
+      removeCall(activeCall.id);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Block failed");
+    }
+  }
+
+  async function refreshAiNotes() {
+    if (!activeCall || activeCall.mediaMode === "webrtc") return;
+    try {
+      await patchCallById(activeCall.id, { startTranscription: true }).catch(() => undefined);
+      const res = await fetch(`/api/phone/calls?limit=20`);
+      const json = await res.json();
+      const row = (json.data || []).find((c: { id: string }) => c.id === activeCall.id);
+      if (row?.transcriptText) setLiveTranscript(row.transcriptText);
+      const sum = await patchCallById(activeCall.id, { generateAiSummary: true });
+      setAiSummary(sum?.aiSummary || "");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "AI notes failed");
+    }
+  }
+
   async function toggleRecord() {
     if (!activeCall || activeCall.mediaMode === "webrtc") return;
     const next = !recording;
@@ -1039,7 +1161,14 @@ export function SoftphonePanel({
           <Phone className="h-4 w-4" />
           Browser dialer
         </CardTitle>
-        <p className="mt-1 text-xs text-muted-foreground">Mode: {modeLabel}</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Mode: {modeLabel}
+          {" · "}
+          Network: {networkQuality}
+        </p>
+        {reconnectHint ? (
+          <p className="mt-1 text-xs text-amber-700">{reconnectHint}</p>
+        ) : null}
 
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
           <div>
@@ -1153,6 +1282,15 @@ export function SoftphonePanel({
             Call my phone first, then bridge to the destination (for users without browser audio).
           </span>
         </label>
+        <label className="mt-2 flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={anonymousDial}
+            disabled={hasDialBlock}
+            onChange={(e) => setAnonymousDial(e.target.checked)}
+          />
+          <span className="text-sm">Anonymous / private caller ID</span>
+        </label>
         {useCallMyPhone ? (
           <div className="mt-2">
             <Label htmlFor="myPhone">Your phone</Label>
@@ -1187,7 +1325,12 @@ export function SoftphonePanel({
         <div className="mt-4 flex flex-wrap gap-2">
           {!hasDialBlock ? (
             <>
-              <Button onClick={startCall} disabled={loading || !dialNumber.trim()} className="gap-2">
+              <Button
+                id="softphone-start-call"
+                onClick={startCall}
+                disabled={loading || !dialNumber.trim()}
+                className="gap-2"
+              >
                 <Phone className="h-4 w-4" />
                 {loading ? "Calling…" : "Call"}
               </Button>
@@ -1353,7 +1496,58 @@ export function SoftphonePanel({
                 <Users className="h-3 w-3" />
                 Start conference
               </Button>
+              <Button variant="outline" size="sm" onClick={mergeHeldLine}>
+                Merge held line
+              </Button>
+              <Button variant="outline" size="sm" onClick={blockCaller}>
+                Block caller
+              </Button>
+              <Button variant="outline" size="sm" onClick={refreshAiNotes}>
+                AI notes
+              </Button>
             </div>
+
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              <div>
+                <Label>Call flip to device</Label>
+                <div className="mt-1 flex gap-2">
+                  <Input
+                    value={flipNumber}
+                    onChange={(e) => setFlipNumber(e.target.value)}
+                    placeholder="+1 your cell"
+                  />
+                  <Button variant="outline" size="sm" onClick={flipCall}>
+                    Flip
+                  </Button>
+                </div>
+              </div>
+              <div>
+                <Label>Whisper to agent</Label>
+                <div className="mt-1 flex gap-2">
+                  <Input
+                    value={whisperText}
+                    onChange={(e) => setWhisperText(e.target.value)}
+                    placeholder="Private coach note…"
+                  />
+                  <Button variant="outline" size="sm" onClick={sendWhisper}>
+                    Whisper
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            {(liveTranscript || aiSummary) && (
+              <div className="mt-3 rounded-lg border border-border p-3 text-sm">
+                {aiSummary ? (
+                  <p className="font-medium">AI summary: {aiSummary}</p>
+                ) : null}
+                {liveTranscript ? (
+                  <p className="mt-1 max-h-24 overflow-y-auto text-xs text-muted-foreground whitespace-pre-wrap">
+                    {liveTranscript}
+                  </p>
+                ) : null}
+              </div>
+            )}
 
             {conferenceId ? (
               <div className="flex flex-wrap items-end gap-2">

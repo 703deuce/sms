@@ -123,18 +123,38 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
         where: { id: slotId },
         data: { status: "timed_out" },
       });
-      if (slot.fallbackTarget && slot.telnyxCallControlId) {
+      if (slot.telnyxCallControlId) {
         const { telnyxRequest } = await import("@/lib/messaging/telnyx/client");
-        await telnyxRequest(`/calls/${slot.telnyxCallControlId}/actions/transfer`, {
+        // Unhold before transfer/voicemail so the held leg can accept media actions.
+        await telnyxRequest(`/calls/${slot.telnyxCallControlId}/actions/unhold`, {
           method: "POST",
-          body: { to: slot.fallbackTarget },
+          body: {},
         }).catch(() => undefined);
-      } else if (slot.telnyxCallControlId && slot.humanCallId) {
-        const { leaveVoicemailOnCall } = await import("@/lib/phone/voicemail-service");
-        await leaveVoicemailOnCall({
-          workspaceId: slot.workspaceId,
-          humanCallId: slot.humanCallId,
-          telnyxCallControlId: slot.telnyxCallControlId,
+        if (slot.fallbackTarget) {
+          await telnyxRequest(`/calls/${slot.telnyxCallControlId}/actions/transfer`, {
+            method: "POST",
+            body: { to: slot.fallbackTarget },
+          }).catch(() => undefined);
+        } else if (slot.humanCallId) {
+          const { leaveVoicemailOnCall } = await import("@/lib/phone/voicemail-service");
+          await leaveVoicemailOnCall({
+            workspaceId: slot.workspaceId,
+            humanCallId: slot.humanCallId,
+            telnyxCallControlId: slot.telnyxCallControlId,
+          }).catch(() => undefined);
+        }
+      }
+      if (slot.humanCallId) {
+        await prisma.humanCall.update({
+          where: { id: slot.humanCallId },
+          data: {
+            onHold: false,
+            parkSlotId: null,
+            status: slot.fallbackTarget ? "transferred" : "voicemail",
+            disposition: slot.fallbackTarget
+              ? `park_timeout:${slot.fallbackTarget}`
+              : "park_timeout_voicemail",
+          },
         }).catch(() => undefined);
       }
       return { ok: true, slotId };
@@ -155,6 +175,17 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
         workspaceId: String(payload.workspaceId || ""),
         callId: String(payload.callId || ""),
         transferId: String(payload.transferId || ""),
+      });
+    }
+    case "voice_warm_transfer_complete": {
+      const { completeWarmTransfer } = await import("@/lib/voice/transfers");
+      return completeWarmTransfer({
+        workspaceId: String(payload.workspaceId || ""),
+        callId: String(payload.callId || ""),
+        transferId: String(payload.transferId || ""),
+        consultControlId: String(payload.consultControlId || ""),
+        callerControlId: String(payload.callerControlId || ""),
+        summary: payload.summary ? String(payload.summary) : undefined,
       });
     }
     case "voice_send_email": {

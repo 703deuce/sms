@@ -539,7 +539,10 @@ export async function handleInboundCallEvent(input: InboundInput) {
   const { contact, contactTags, isKnownContact, department, language, intent } =
     await loadContactContext(input.workspaceId, from);
 
-  const routing = await evaluateInboundRouting({
+  const forcedAgentId =
+    typeof input.payload?.forcedAgentId === "string" ? input.payload.forcedAgentId : null;
+
+  let routing = await evaluateInboundRouting({
     workspaceId: input.workspaceId,
     fromE164: from,
     toE164: to,
@@ -551,6 +554,15 @@ export async function handleInboundCallEvent(input: InboundInput) {
     intent,
   });
 
+  if (forcedAgentId) {
+    routing = {
+      ...routing,
+      action: "ai_answer",
+      agentId: forcedAgentId,
+      actions: { ...(routing.actions || {}), agentId: forcedAgentId, forced: true },
+    };
+  }
+
   const pn = await prisma.phoneNumber.findFirst({
     where: { workspaceId: input.workspaceId, e164: to },
   });
@@ -558,7 +570,7 @@ export async function handleInboundCallEvent(input: InboundInput) {
   const call = await prisma.voiceCall.create({
     data: {
       workspaceId: input.workspaceId,
-      agentId: routing.agentId,
+      agentId: forcedAgentId || routing.agentId,
       contactId: contact?.id,
       direction: "INBOUND",
       status: "RINGING",
