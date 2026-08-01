@@ -45,6 +45,17 @@ export async function dialHumanCall(input: {
   if (userSettings?.dndEnabled) {
     throw new Error("Cannot place calls while Do Not Disturb is enabled");
   }
+  const presence = await prisma.softphonePresence.findUnique({
+    where: {
+      workspaceId_userId: {
+        workspaceId: input.workspaceId,
+        userId: input.agentUserId,
+      },
+    },
+  });
+  if (presence?.status === "dnd") {
+    throw new Error("Cannot place calls while presence is Do Not Disturb");
+  }
   if (!to.startsWith("+1") && !allowed.has("international")) {
     throw new Error("International calling is disabled for this user");
   }
@@ -68,6 +79,7 @@ export async function dialHumanCall(input: {
       status: "initiated",
       agentUserId: input.agentUserId,
       callerIdNumber: from,
+      mediaMode: "call_control",
       notes: input.anonymous ? "[anonymous_dial]" : null,
       contactId,
     },
@@ -152,10 +164,23 @@ export async function createWebRtcHumanCall(input: {
     input.workspaceId,
     input.agentUserId,
   );
-  if (userSettings?.dndEnabled) {
+  if (userSettings?.dndEnabled && input.direction !== "inbound") {
     throw new Error("Cannot place calls while Do Not Disturb is enabled");
   }
-  if (!to.startsWith("+1") && !allowed.has("international")) {
+  if (input.direction !== "inbound") {
+    const presence = await prisma.softphonePresence.findUnique({
+      where: {
+        workspaceId_userId: {
+          workspaceId: input.workspaceId,
+          userId: input.agentUserId,
+        },
+      },
+    });
+    if (presence?.status === "dnd") {
+      throw new Error("Cannot place calls while presence is Do Not Disturb");
+    }
+  }
+  if (!to.startsWith("+1") && !allowed.has("international") && input.direction !== "inbound") {
     throw new Error("International calling is disabled for this user");
   }
 
@@ -164,10 +189,8 @@ export async function createWebRtcHumanCall(input: {
   let contactId: string | null = null;
   try {
     const { resolveContactIdForPhone } = await import("@/lib/contacts/activity-timeline");
-    contactId = await resolveContactIdForPhone(
-      input.workspaceId,
-      input.direction === "inbound" ? from : to,
-    );
+    // For both outbound dial and inbound register, `to` is the remote/customer party.
+    contactId = await resolveContactIdForPhone(input.workspaceId, to);
   } catch {
     // best-effort
   }
@@ -419,12 +442,10 @@ export async function muteHumanCall(callId: string, workspaceId: string, muted: 
   const prisma = getPrisma();
   const call = await prisma.humanCall.findFirst({ where: { id: callId, workspaceId } });
   if (!call) throw new Error("Call not found");
-  if (call.telnyxCallControlId) {
+  if (call.telnyxCallControlId && !call.telnyxCallControlId.startsWith("mock_")) {
     // Telnyx Call Control mute/unmute on the live leg.
-    await telnyxAction(call.telnyxCallControlId, muted ? "mute" : "unmute").catch(() =>
-      telnyxAction(call.telnyxCallControlId!, muted ? "mute_client" : "unmute_client").catch(
-        () => undefined,
-      ),
+    await telnyxAction(call.telnyxCallControlId, muted ? "mute" : "unmute").catch((err) =>
+      console.warn("[human-call] mute action failed", err),
     );
   }
   return prisma.humanCall.update({
@@ -857,9 +878,12 @@ export async function transferHumanCall(
   const call = await prisma.humanCall.findFirst({ where: { id: callId, workspaceId } });
   if (!call) throw new Error("Call not found");
   const dest = normalizeE164(toE164);
-  if (call.telnyxCallControlId) {
-    await telnyxAction(call.telnyxCallControlId, "transfer", { to: dest });
+  if (!call.telnyxCallControlId) {
+    throw new Error(
+      "Call control not linked yet — wait a moment after WebRTC connects, then transfer again",
+    );
   }
+  await telnyxAction(call.telnyxCallControlId, "transfer", { to: dest });
   return prisma.humanCall.update({
     where: { id: callId },
     data: { status: "transferred", disposition: `transferred:${dest}`, endedAt: new Date() },
@@ -959,7 +983,7 @@ export async function completeWarmTransfer(callId: string, workspaceId: string) 
 
   if (!customerId.startsWith("mock_")) {
     await telnyxAction(customerId, "unhold").catch(() => undefined);
-    // Bridge only — do NOT hang up the consult leg (that would kill the transferred call).
+    // Bridge customer ↔ consult. Agent WebRTC media is ended client-side after success.
     await telnyxAction(customerId, "bridge", { call_control_id: consultId });
   }
 
@@ -977,6 +1001,7 @@ export async function completeWarmTransfer(callId: string, workspaceId: string) 
       telnyxCallLegId: null,
       onHold: false,
       endedAt: new Date(),
+      notes: `${call.notes || ""}\n[warm_transfer_complete]`.trim(),
     },
   });
 }

@@ -6,6 +6,7 @@ import {
   removeConferenceParticipant,
 } from "@/lib/phone/conference-service";
 import { getPrisma } from "@/lib/db";
+import { requireSoftphonePermission } from "@/lib/phone/softphone-permissions";
 
 export async function GET(request: Request) {
   try {
@@ -45,6 +46,7 @@ export async function POST(request: Request) {
     };
 
     if (body.action === "create") {
+      await requireSoftphonePermission(auth.workspaceId, auth.session.userId, "conference");
       if (!body.humanCallId) {
         return NextResponse.json({ error: "humanCallId required" }, { status: 400 });
       }
@@ -58,6 +60,7 @@ export async function POST(request: Request) {
     }
 
     if (body.action === "add") {
+      await requireSoftphonePermission(auth.workspaceId, auth.session.userId, "conference");
       if (!body.conferenceId || !body.to) {
         return NextResponse.json({ error: "conferenceId and to required" }, { status: 400 });
       }

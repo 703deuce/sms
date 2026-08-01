@@ -71,4 +71,14 @@ See `docs/PRODUCT_POSITIONING.md`. Phone reliability outranks AI. New launch sur
 - Phone-first inbound: softphone preferred when human assignment or softphone devices exist
 - prisma-compat: OR `contains`, contact `tagMembers`, conference `participants`
 
+### Softphone full-feature hardening pass
+- Multi-line outbound (auto-hold active line; Call button stays available)
+- Call Control answer without WebRTC refuses unless Call-my-phone / cellular bridge available
+- Control-link gate for park/transfer/record/flip/coach note; UI shows linking state
+- Park keeps WebRTC handle by slot for retrieve; flip/warm-complete hang up browser media
+- Presence DND syncs `softphoneUserSettings.dndEnabled`; presence PATCH admin-only for other users
+- Permissions: park, conference, flip, merge enforced; conference create fails hard without Telnyx id
+- Decline always PATCHes HumanCall; anonymous WebRTC sets callerName; live transcript polls while on call
+- Coach note labeled as spoken note (not private supervisor channel)
+
 Everything else on the customer checklists is implemented in code and ready for number-on testing.

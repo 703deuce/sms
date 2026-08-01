@@ -14,7 +14,11 @@ export type SoftphonePermission =
   | "listen"
   | "admin_settings"
   | "block_caller"
-  | "anonymous_dial";
+  | "anonymous_dial"
+  | "park"
+  | "conference"
+  | "flip"
+  | "merge";
 
 type PermissionsJson = Partial<Record<SoftphonePermission, boolean>> & {
   canRecord?: boolean;
@@ -35,6 +39,10 @@ const ROLE_DEFAULTS: Record<string, SoftphonePermission[]> = {
     "admin_settings",
     "block_caller",
     "anonymous_dial",
+    "park",
+    "conference",
+    "flip",
+    "merge",
   ],
   ADMINISTRATOR: [
     "place_call",
@@ -46,6 +54,10 @@ const ROLE_DEFAULTS: Record<string, SoftphonePermission[]> = {
     "admin_settings",
     "block_caller",
     "anonymous_dial",
+    "park",
+    "conference",
+    "flip",
+    "merge",
   ],
   MANAGER: [
     "place_call",
@@ -56,9 +68,13 @@ const ROLE_DEFAULTS: Record<string, SoftphonePermission[]> = {
     "listen",
     "block_caller",
     "anonymous_dial",
+    "park",
+    "conference",
+    "flip",
+    "merge",
   ],
-  CAMPAIGN_CREATOR: ["place_call", "record", "transfer"],
-  INBOX_AGENT: ["place_call", "record", "transfer", "block_caller"],
+  CAMPAIGN_CREATOR: ["place_call", "record", "transfer", "park"],
+  INBOX_AGENT: ["place_call", "record", "transfer", "block_caller", "park", "conference", "flip"],
   ANALYST: ["listen"],
   READ_ONLY: [],
 };
@@ -73,6 +89,10 @@ const ACL_KEYS: SoftphonePermission[] = [
   "admin_settings",
   "block_caller",
   "anonymous_dial",
+  "park",
+  "conference",
+  "flip",
+  "merge",
 ];
 
 function applyExplicitOverrides(
@@ -90,6 +110,10 @@ function applyExplicitOverrides(
     admin_settings: perms.admin_settings,
     block_caller: perms.block_caller,
     anonymous_dial: perms.anonymous_dial,
+    park: perms.park,
+    conference: perms.conference,
+    flip: perms.flip,
+    merge: perms.merge,
   };
   for (const key of ACL_KEYS) {
     const val = legacy[key];

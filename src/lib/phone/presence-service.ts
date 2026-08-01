@@ -7,7 +7,8 @@ export async function setPresence(input: {
   customLabel?: string | null;
   queueAvailable?: boolean;
 }) {
-  return getPrisma().softphonePresence.upsert({
+  const prisma = getPrisma();
+  const row = await prisma.softphonePresence.upsert({
     where: {
       workspaceId_userId: { workspaceId: input.workspaceId, userId: input.userId },
     },
@@ -24,6 +25,27 @@ export async function setPresence(input: {
       queueAvailable: input.queueAvailable,
     },
   });
+
+  // Keep softphoneUserSettings.dndEnabled in sync so dial guards honor presence DND.
+  if (input.status === "dnd" || input.status === "available" || input.status === "away") {
+    await prisma.softphoneUserSettings
+      .upsert({
+        where: {
+          workspaceId_userId: { workspaceId: input.workspaceId, userId: input.userId },
+        },
+        create: {
+          workspaceId: input.workspaceId,
+          userId: input.userId,
+          dndEnabled: input.status === "dnd",
+        },
+        update: {
+          dndEnabled: input.status === "dnd",
+        },
+      })
+      .catch(() => undefined);
+  }
+
+  return row;
 }
 
 export type PresenceRow = {

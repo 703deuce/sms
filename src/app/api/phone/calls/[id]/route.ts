@@ -70,6 +70,9 @@ export async function PATCH(
     if (body.blockCaller) {
       await requireSoftphonePermission(auth.workspaceId, auth.session.userId, "block_caller");
     }
+    if (body.flipTo) {
+      await requireSoftphonePermission(auth.workspaceId, auth.session.userId, "flip");
+    }
 
     if (body.dtmf) {
       const call = await sendDtmf(id, auth.workspaceId, body.dtmf);

@@ -30,9 +30,15 @@ export async function PATCH(request: Request) {
       userId?: string;
     };
     if (!body.status) return NextResponse.json({ error: "status required" }, { status: 400 });
+    const targetUserId = body.userId || auth.session.userId;
+    // Only admins may set another user's presence.
+    if (targetUserId !== auth.session.userId) {
+      const { requireSoftphonePermission } = await import("@/lib/phone/softphone-permissions");
+      await requireSoftphonePermission(auth.workspaceId, auth.session.userId, "admin_settings");
+    }
     const row = await setPresence({
       workspaceId: auth.workspaceId,
-      userId: body.userId || auth.session.userId,
+      userId: targetUserId,
       status: body.status,
       customLabel: body.customLabel,
       queueAvailable: body.queueAvailable,

@@ -64,6 +64,7 @@ export async function POST(request: Request) {
     };
 
     if (body.mergeCallIds?.length === 2) {
+      await requireSoftphonePermission(auth.workspaceId, auth.session.userId, "merge");
       const result = await mergeHumanCalls(
         auth.workspaceId,
         auth.session.userId,

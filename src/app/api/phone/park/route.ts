@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
 import { listParkedCalls, parkCall, retrieveParkedCall } from "@/lib/phone/park-service";
+import { requireSoftphonePermission } from "@/lib/phone/softphone-permissions";
 
 export async function GET() {
   try {
@@ -16,6 +17,7 @@ export async function POST(request: Request) {
   try {
     const auth = await requireSession();
     if ("error" in auth) return auth.error;
+    await requireSoftphonePermission(auth.workspaceId, auth.session.userId, "park");
     const body = (await request.json()) as {
       action?: string;
       humanCallId?: string;

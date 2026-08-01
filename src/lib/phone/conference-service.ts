@@ -31,9 +31,18 @@ export async function createConferenceFromCall(input: {
         },
       );
       telnyxConferenceId = res.data?.id || res.data?.conference_id || null;
+      if (!telnyxConferenceId) {
+        throw new Error("Telnyx conference create returned no conference id");
+      }
     } catch (err) {
-      console.warn("[conference] create failed, tracking locally", err);
+      throw new Error(
+        err instanceof Error
+          ? `Conference create failed: ${err.message}`
+          : "Conference create failed",
+      );
     }
+  } else {
+    telnyxConferenceId = `mock_conf_${call.id}`;
   }
 
   const conference = await prisma.conferenceCall.create({
@@ -143,13 +152,7 @@ export async function addConferenceParticipant(input: {
     },
   });
 
-  // Join into conference when answered — handled in webhook; optimistic join if id known
-  if (conference.telnyxConferenceId && controlId) {
-    await telnyxRequest(`/conferences/${conference.telnyxConferenceId}/actions/join`, {
-      method: "POST",
-      body: { call_control_id: controlId },
-    }).catch(() => undefined);
-  }
+  // Join is performed on call.answered in processHumanCallWebhookEvent (not optimistically).
 
   return { call, mode: "telnyx" };
 }

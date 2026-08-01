@@ -17,7 +17,12 @@ export async function parkCall(input: {
   const call = await prisma.humanCall.findFirst({
     where: { id: input.humanCallId, workspaceId: input.workspaceId },
   });
-  if (!call?.telnyxCallControlId) throw new Error("Call not found or missing control id");
+  if (!call) throw new Error("Call not found");
+  if (!call.telnyxCallControlId) {
+    throw new Error(
+      "Call control not linked yet — wait for WebRTC to finish connecting, then park again",
+    );
+  }
 
   let slotCode = nextSlotCode();
   for (let i = 0; i < 5; i++) {
