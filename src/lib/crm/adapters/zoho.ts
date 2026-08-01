@@ -34,7 +34,7 @@ function isBigin(ctx: ConnectorContext) {
 
 export const zohoConnector: CrmConnector = {
   id: "zoho",
-  displayName: "Zoho CRM / Bigin",
+  displayName: "Zoho CRM",
   oauth: {
     authorizationUrl: "https://accounts.zoho.com/oauth/v2/auth",
     tokenUrl: "https://accounts.zoho.com/oauth/v2/token",
@@ -166,6 +166,11 @@ export const zohoConnector: CrmConnector = {
         Phone: contact.phone,
         Email: contact.email,
         Lead_Source: contact.source || "Transovo",
+        Account_Name: contact.companyExternalId
+          ? { id: contact.companyExternalId }
+          : contact.companyName
+            ? contact.companyName
+            : undefined,
         Tag: contact.tags?.length ? contact.tags.map((name) => ({ name })) : undefined,
         Owner: contact.ownerExternalId
           ? { id: contact.ownerExternalId }

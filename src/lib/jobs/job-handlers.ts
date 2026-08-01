@@ -539,10 +539,11 @@ export async function processDueJobs(limit = 25) {
   });
 
   // Hourly CRM incremental reconcile across connected workspaces (complements webhooks).
+  // Neutral queue — must not depend on Salesforce being deployed.
   const hourKey = new Date().toISOString().slice(0, 13);
   await enqueueJob({
     jobType: "crm_scheduled_incremental",
-    queueName: "crm-salesforce",
+    queueName: "maintenance",
     payload: { hourKey },
     idempotencyKey: `crm-scheduled-tick:${hourKey}`,
   });

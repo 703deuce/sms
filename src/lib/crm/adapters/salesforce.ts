@@ -163,6 +163,7 @@ export const salesforceConnector: CrmConnector = {
         Phone: contact.phone,
         Email: contact.email,
         LeadSource: contact.source || "Transovo",
+        AccountId: contact.companyExternalId || undefined,
         OwnerId: contact.ownerExternalId || ctx.preferences.defaultOwnerExternalId || undefined,
       },
       customFields: contact.customFields,

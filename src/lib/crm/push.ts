@@ -597,6 +597,20 @@ export async function pushCrmEventJob(payload: {
           externalId: companyResult.externalId,
           syncStatus: "synced",
         });
+        // Link the CRM person/contact to the organization/account (idempotent update).
+        if (contactExternalId && companyResult.externalId) {
+          await connector.upsertContact(ctx, {
+            id: contactExternalId,
+            firstName: contact.firstName,
+            lastName: contact.lastName,
+            phone: contact.phone,
+            email: contact.email,
+            companyName: contact.company,
+            companyExternalId: companyResult.externalId,
+            ownerExternalId: prefs.defaultOwnerExternalId,
+            source: "Transovo",
+          });
+        }
       }
     }
 
