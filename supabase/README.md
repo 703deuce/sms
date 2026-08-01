@@ -4,6 +4,8 @@ This app talks to Supabase the same way Local SEO Express does — via `@supabas
 
 **Preferred schema path (no SQL editor):** set `DATABASE_URL` (Session pooler) and run `npm run db:push`. See [docs/DATABASE.md](../docs/DATABASE.md).
 
+**CRM tables:** included in `db:push`. One-file SQL fallback: [`crm-integration.sql`](./crm-integration.sql). Handoff: [docs/CRM_DB_PUSH.md](../docs/CRM_DB_PUSH.md).
+
 ```bash
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
