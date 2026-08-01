@@ -2,6 +2,7 @@ import { getPrisma } from "@/lib/db";
 import { telnyxRequest } from "@/lib/messaging/telnyx/client";
 import { getTelnyxApiKey } from "@/lib/messaging/telnyx/config";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
+import { logHumanCallEvent } from "./call-events";
 import { markOnCall } from "./presence-service";
 import { resolveCallerIdNumber } from "./settings";
 
@@ -102,6 +103,13 @@ export async function dialHumanCall(input: {
     data: { telnyxCallControlId: controlId, status: "ringing" },
   });
 
+  await logHumanCallEvent(input.workspaceId, call.id, "outbound.dialed", {
+    to,
+    from,
+    controlId,
+    anonymous: Boolean(input.anonymous),
+  });
+
   return { call: updated, mode: "telnyx" };
 }
 
@@ -184,6 +192,9 @@ export async function hangupHumanCall(callId: string, workspaceId: string) {
   if (call.telnyxCallControlId) {
     await telnyxAction(call.telnyxCallControlId, "hangup");
   }
+  await logHumanCallEvent(workspaceId, callId, "call.hangup_requested", {
+    controlId: call.telnyxCallControlId,
+  });
   return prisma.humanCall.update({
     where: { id: callId },
     data: { status: "completed", endedAt: new Date() },
@@ -201,12 +212,18 @@ export async function answerHumanCall(callId: string, workspaceId: string) {
       await telnyxAction(call.telnyxCallControlId, "unhold").catch(() => undefined);
     }
   }
+  const answeredAt = call.answeredAt || new Date();
+  await logHumanCallEvent(workspaceId, callId, "call.answered", {
+    controlId: call.telnyxCallControlId,
+    answerToDbMs: Date.now() - new Date(call.startedAt).getTime(),
+    screening: (call.notes || "").includes("screening:"),
+  });
   return prisma.humanCall.update({
     where: { id: callId },
     data: {
       status: "in_progress",
       onHold: false,
-      answeredAt: call.answeredAt || new Date(),
+      answeredAt,
     },
   });
 }
@@ -694,6 +711,14 @@ export async function startWarmTransfer(
       },
     });
 
+    await logHumanCallEvent(workspaceId, callId, "transfer.warm.started", {
+      destination: dest,
+      customerControlId: controlId,
+      consultControlId,
+      note: note || null,
+      phase: "caller_held_consult_ringing",
+    });
+
     const { enqueueJob } = await import("@/lib/messaging/enqueue-advance");
     await enqueueJob({
       jobType: "phone_warm_transfer_timeout",
@@ -737,6 +762,12 @@ export async function completeWarmTransfer(callId: string, workspaceId: string) 
     await telnyxAction(customerId, "bridge", { call_control_id: consultId });
   }
 
+  await logHumanCallEvent(workspaceId, callId, "transfer.warm.completed", {
+    customerControlId: customerId,
+    consultControlId: consultId,
+    phase: "bridged",
+  });
+
   return prisma.humanCall.update({
     where: { id: callId },
     data: {
@@ -762,6 +793,11 @@ export async function cancelWarmTransfer(callId: string, workspaceId: string) {
   if (call.telnyxCallControlId && !call.telnyxCallControlId.startsWith("mock_")) {
     await telnyxAction(call.telnyxCallControlId, "unhold");
   }
+
+  await logHumanCallEvent(workspaceId, callId, "transfer.warm.cancelled", {
+    consultControlId: consultId,
+    phase: "returned_caller_to_agent",
+  });
 
   return prisma.humanCall.update({
     where: { id: callId },
@@ -1104,6 +1140,10 @@ export async function processHumanCallWebhookEvent(input: {
           onHold: true,
           notes: `${call.notes || ""}\n[warm_consult_answered]`.trim(),
         },
+      });
+      await logHumanCallEvent(call.workspaceId, call.id, "transfer.warm.consult_answered", {
+        consultControlId: eventControlId,
+        phase: "consult_answered_caller_still_held",
       });
     }
 

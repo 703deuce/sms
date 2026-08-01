@@ -33,6 +33,16 @@ type ActiveCall = {
   startedAt: number;
   notes?: string;
   warmTransferPending?: boolean;
+  /** Explicit warm-transfer lifecycle for support-grade UX. */
+  transferPhase?:
+    | "idle"
+    | "holding_caller"
+    | "ringing_consult"
+    | "consult_answered"
+    | "completing"
+    | "completed"
+    | "failed"
+    | "cancelled";
   transcriptText?: string | null;
   aiSummary?: string | null;
 };
@@ -869,8 +879,14 @@ export function SoftphonePanel({
         consult: true,
         notes: note || undefined,
       });
-      updateCall(activeCall.id, { warmTransferPending: true, onHold: true, status: "on_hold" });
+      updateCall(activeCall.id, {
+        warmTransferPending: true,
+        onHold: true,
+        status: "on_hold",
+        transferPhase: "ringing_consult",
+      });
     } catch (e) {
+      updateCall(activeCall.id, { transferPhase: "failed", warmTransferPending: false });
       setError(e instanceof Error ? e.message : "Warm transfer failed");
     }
   }
@@ -878,11 +894,14 @@ export function SoftphonePanel({
   async function completeWarmTransfer() {
     if (!activeCall) return;
     try {
+      updateCall(activeCall.id, { transferPhase: "completing" });
       await patchCallById(activeCall.id, { completeWarmTransfer: true });
+      updateCall(activeCall.id, { transferPhase: "completed", warmTransferPending: false });
       setTransferTo("");
       setWarmTransferNote("");
       removeCall(activeCall.id);
     } catch (e) {
+      updateCall(activeCall.id, { transferPhase: "failed" });
       setError(e instanceof Error ? e.message : "Complete transfer failed");
     }
   }
@@ -895,9 +914,32 @@ export function SoftphonePanel({
         warmTransferPending: false,
         onHold: false,
         status: "in_progress",
+        transferPhase: "cancelled",
       });
     } catch (e) {
+      updateCall(activeCall.id, { transferPhase: "failed" });
       setError(e instanceof Error ? e.message : "Cancel transfer failed");
+    }
+  }
+
+  function transferPhaseLabel(phase?: ActiveCall["transferPhase"]) {
+    switch (phase) {
+      case "holding_caller":
+        return "Caller on hold";
+      case "ringing_consult":
+        return "Caller on hold · contacting employee";
+      case "consult_answered":
+        return "Employee answered · caller still held";
+      case "completing":
+        return "Bridging transfer…";
+      case "completed":
+        return "Transfer completed";
+      case "cancelled":
+        return "Transfer cancelled · caller returned to you";
+      case "failed":
+        return "Transfer failed — caller should still be with you";
+      default:
+        return null;
     }
   }
 
@@ -1450,14 +1492,22 @@ export function SoftphonePanel({
                     Transfer
                   </Button>
                 ) : activeCall.warmTransferPending ? (
-                  <>
-                    <Button variant="outline" size="sm" onClick={completeWarmTransfer}>
-                      Complete transfer
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={cancelWarmTransfer}>
-                      Cancel transfer
-                    </Button>
-                  </>
+                  <div className="w-full space-y-2">
+                    <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                      {transferPhaseLabel(activeCall.transferPhase) ||
+                        "Caller on hold · contacting employee"}
+                      . Do not close this panel — the customer stays held until you complete
+                      or cancel.
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <Button variant="outline" size="sm" onClick={completeWarmTransfer}>
+                        Complete transfer
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={cancelWarmTransfer}>
+                        Cancel — return caller to me
+                      </Button>
+                    </div>
+                  </div>
                 ) : (
                   <Button variant="outline" size="sm" onClick={startWarmTransfer} className="gap-1">
                     <PhoneForwarded className="h-4 w-4" />

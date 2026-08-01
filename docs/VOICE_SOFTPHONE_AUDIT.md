@@ -49,4 +49,10 @@ Schema: `npm run db:push` or `supabase/voice-softphone-checklist.sql`
 - Native mobile apps, OS Bluetooth stack (browser handles headsets)
 - Carrier CNAM writeback, spam-network feeds
 
+### Product positioning (2026-08-01)
+See `docs/PRODUCT_POSITIONING.md`. Phone reliability outranks AI. New launch surfaces:
+- `/phone/readiness` — Phone Readiness Test
+- `/phone/calls/[id]` — softphone call-path diagnostics for support
+- Explicit warm-transfer state copy in the softphone UI
+
 Everything else on the customer checklists is implemented in code and ready for number-on testing.

@@ -155,3 +155,16 @@ CREATE TABLE IF NOT EXISTS "softphone_user_settings" (
 );
 
 ALTER TABLE "Contact" ADD COLUMN IF NOT EXISTS "timezone" text;
+
+CREATE TABLE IF NOT EXISTS "human_call_events" (
+  "id" text PRIMARY KEY,
+  "workspaceId" text NOT NULL REFERENCES "Workspace"("id") ON DELETE CASCADE,
+  "humanCallId" text NOT NULL REFERENCES "human_calls"("id") ON DELETE CASCADE,
+  "eventType" text NOT NULL,
+  "payload" jsonb,
+  "createdAt" timestamptz NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS "human_call_events_humanCallId_createdAt_idx"
+  ON "human_call_events" ("humanCallId", "createdAt");
+CREATE INDEX IF NOT EXISTS "human_call_events_workspaceId_createdAt_idx"
+  ON "human_call_events" ("workspaceId", "createdAt");

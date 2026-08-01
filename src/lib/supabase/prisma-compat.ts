@@ -94,6 +94,7 @@ const MODEL_TO_TABLE: Record<string, string> = {
   paymentLink: "payment_links",
   portRequest: "PortRequest",
   humanCall: "human_calls",
+  humanCallEvent: "human_call_events",
   pushSubscription: "push_subscriptions",
   workspaceNotificationPrefs: "workspace_notification_prefs",
   workspaceLimits: "workspace_limits",
@@ -122,6 +123,10 @@ const RELATIONS: Record<string, Record<string, { table: string; fk: string; pk?:
   phoneNumber: { workspace: { table: "Workspace", fk: "workspaceId" } },
   portRequest: { workspace: { table: "Workspace", fk: "workspaceId" } },
   humanCall: { workspace: { table: "Workspace", fk: "workspaceId" } },
+  humanCallEvent: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+    humanCall: { table: "human_calls", fk: "humanCallId" },
+  },
   pushSubscription: { workspace: { table: "Workspace", fk: "workspaceId" } },
   workspaceNotificationPrefs: { workspace: { table: "Workspace", fk: "workspaceId" } },
   workspaceLimits: { workspace: { table: "Workspace", fk: "workspaceId" } },

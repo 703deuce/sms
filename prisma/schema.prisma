@@ -208,6 +208,7 @@ model Workspace {
   paymentLinks PaymentLink[]
   portRequests PortRequest[]
   humanCalls HumanCall[]
+  humanCallEvents HumanCallEvent[]
   pushSubscriptions PushSubscription[]
   notificationPrefs WorkspaceNotificationPrefs[]
   workspaceLimits WorkspaceLimits?
@@ -2004,11 +2005,28 @@ model HumanCall {
   callerIdNumber      String?
   mediaMode           String    @default("call_control") // call_control | webrtc | call_my_phone
   workspace           Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  events              HumanCallEvent[]
 
   @@index([workspaceId, startedAt])
   @@index([telnyxCallControlId])
   @@index([queueId])
   @@map("human_calls")
+}
+
+/// Softphone / human-call path events for support diagnostics.
+model HumanCallEvent {
+  id          String   @id @default(cuid())
+  workspaceId String
+  humanCallId String
+  eventType   String
+  payload     Json?
+  createdAt   DateTime @default(now())
+  humanCall   HumanCall @relation(fields: [humanCallId], references: [id], onDelete: Cascade)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([humanCallId, createdAt])
+  @@index([workspaceId, createdAt])
+  @@map("human_call_events")
 }
 
 model CallParkSlot {

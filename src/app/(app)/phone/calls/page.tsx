@@ -198,6 +198,12 @@ export default function PhoneCallsPage() {
                   </TD>
                   <TD>
                     <div className="flex flex-wrap gap-1">
+                      <a
+                        href={`/phone/calls/${c.id}`}
+                        className="rounded border border-border px-2 py-1 text-[11px]"
+                      >
+                        Diagnostics
+                      </a>
                       <button
                         type="button"
                         className="rounded border border-border px-2 py-1 text-[11px]"
