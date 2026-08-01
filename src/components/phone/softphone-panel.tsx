@@ -41,6 +41,9 @@ export function SoftphonePanel({
   const [incoming, setIncoming] = useState<{ id: string; from: string; to: string } | null>(null);
   const [showDtmf, setShowDtmf] = useState(false);
   const [transferTo, setTransferTo] = useState("");
+  const [myPhone, setMyPhone] = useState("");
+  const [useCallMyPhone, setUseCallMyPhone] = useState(false);
+  const [recording, setRecording] = useState(false);
   const [webrtcMode, setWebrtcMode] = useState<string>("mock");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -141,13 +144,21 @@ export function SoftphonePanel({
 
   async function startCall() {
     if (!dialNumber.trim()) return;
+    if (useCallMyPhone && !myPhone.trim()) {
+      setError("Enter your phone number for Call my phone.");
+      return;
+    }
     setLoading(true);
     setError("");
     try {
       const res = await fetch("/api/phone/calls", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ to: dialNumber.trim(), from: callerId }),
+        body: JSON.stringify({
+          to: dialNumber.trim(),
+          from: callerId,
+          ...(useCallMyPhone ? { callMyPhone: myPhone.trim() } : {}),
+        }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Dial failed");
@@ -159,6 +170,7 @@ export function SoftphonePanel({
         muted: false,
         onHold: false,
       });
+      setRecording(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Dial failed");
     } finally {
@@ -211,6 +223,17 @@ export function SoftphonePanel({
       setActiveCall(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Transfer failed");
+    }
+  }
+
+  async function toggleRecord() {
+    if (!activeCall) return;
+    const next = !recording;
+    try {
+      await patchCall({ record: next });
+      setRecording(next);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Recording failed");
     }
   }
 
@@ -282,6 +305,33 @@ export function SoftphonePanel({
           />
         </div>
 
+        <label className="mt-3 flex items-start gap-2 text-xs text-muted-foreground">
+          <input
+            type="checkbox"
+            className="mt-0.5"
+            checked={useCallMyPhone}
+            disabled={Boolean(activeCall)}
+            onChange={(e) => setUseCallMyPhone(e.target.checked)}
+          />
+          <span>
+            Call my phone first, then bridge to the destination (for users without browser audio).
+          </span>
+        </label>
+        {useCallMyPhone ? (
+          <div className="mt-2">
+            <Label htmlFor="myPhone">Your phone</Label>
+            <Input
+              id="myPhone"
+              type="tel"
+              className="mt-1.5 font-mono"
+              value={myPhone}
+              onChange={(e) => setMyPhone(e.target.value)}
+              placeholder="+1 your cell"
+              disabled={Boolean(activeCall)}
+            />
+          </div>
+        ) : null}
+
         <div className="mt-4 grid grid-cols-3 gap-2">
           {PAD_KEYS.map((key) => (
             <button
@@ -317,6 +367,9 @@ export function SoftphonePanel({
               <Button variant="outline" onClick={toggleHold} className="gap-2">
                 {activeCall.onHold ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
                 {activeCall.onHold ? "Resume" : "Hold"}
+              </Button>
+              <Button variant="outline" onClick={toggleRecord} className="gap-2">
+                {recording ? "Stop rec" : "Record"}
               </Button>
               <Button
                 variant="outline"

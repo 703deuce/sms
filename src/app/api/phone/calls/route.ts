@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
 import { getPrisma } from "@/lib/db";
-import { dialHumanCall } from "@/lib/phone/human-call-service";
+import { dialCallMyPhoneBridge, dialHumanCall } from "@/lib/phone/human-call-service";
 
 export async function GET(request: Request) {
   try {
@@ -34,9 +34,27 @@ export async function POST(request: Request) {
     const auth = await requireSession();
     if ("error" in auth) return auth.error;
 
-    const body = (await request.json()) as { to?: string; from?: string };
+    const body = (await request.json()) as {
+      to?: string;
+      from?: string;
+      callMyPhone?: string;
+    };
     if (!body.to?.trim()) {
       return NextResponse.json({ error: "to is required" }, { status: 400 });
+    }
+
+    if (body.callMyPhone?.trim()) {
+      const result = await dialCallMyPhoneBridge({
+        workspaceId: auth.workspaceId,
+        agentUserId: auth.session.userId,
+        agentPhone: body.callMyPhone.trim(),
+        destination: body.to.trim(),
+        from: body.from,
+      });
+      return NextResponse.json(
+        { data: result.call, mode: result.mode, bridge: true },
+        { status: 201 },
+      );
     }
 
     const result = await dialHumanCall({

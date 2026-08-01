@@ -23,6 +23,7 @@ export async function PATCH(
       notes?: string | null;
       disposition?: string | null;
       dtmf?: string;
+      record?: boolean;
     };
 
     if (body.dtmf) {
@@ -38,6 +39,7 @@ export async function PATCH(
       transferTo: body.transferTo,
       notes: body.notes,
       disposition: body.disposition,
+      record: body.record,
     });
 
     return NextResponse.json({ data: call });

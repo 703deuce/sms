@@ -313,6 +313,40 @@ export async function processVoiceWebhookEvent(input: {
     data: patch,
   });
 
+  // Outbound (and any unanswered AI leg): when the callee answers, start the assistant.
+  if (
+    (eventType === "call.answered" || eventType === "call.bridged") &&
+    call.agentId &&
+    !call.voicemailDetected
+  ) {
+    const meta = (call.metadata || {}) as Record<string, unknown>;
+    if (!meta.aiStarted) {
+      const agent = await prisma.voiceAgent.findUnique({ where: { id: call.agentId } });
+      const controlId = String(eventPayload.call_control_id || call.telnyxCallControlId || "");
+      if (agent?.telnyxAssistantId && controlId) {
+        const { startAiAssistantOnCall, startCallRecording } = await import(
+          "../telnyx/assistant-sync"
+        );
+        await startAiAssistantOnCall({
+          callControlId: controlId,
+          assistantId: agent.telnyxAssistantId,
+          clientState: {
+            workspaceId,
+            callId: call.id,
+            agentId: agent.id,
+          },
+        }).catch((err) => console.error("[voice/webhook] ai_assistant_start", err));
+        await startCallRecording(controlId);
+        await prisma.voiceCall.update({
+          where: { id: call.id },
+          data: {
+            metadata: { ...meta, aiStarted: true, assistantId: agent.telnyxAssistantId } as object,
+          },
+        });
+      }
+    }
+  }
+
   if (eventType === "call.hangup" || eventType === "call.machine.detection.ended") {
     await enqueueJob({
       jobType: "voice_post_call",

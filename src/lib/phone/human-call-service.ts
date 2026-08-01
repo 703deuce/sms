@@ -153,10 +153,159 @@ export async function muteHumanCall(callId: string, workspaceId: string, muted: 
   const prisma = getPrisma();
   const call = await prisma.humanCall.findFirst({ where: { id: callId, workspaceId } });
   if (!call) throw new Error("Call not found");
+  if (call.telnyxCallControlId) {
+    // Telnyx Call Control mute/unmute on the live leg.
+    await telnyxAction(call.telnyxCallControlId, muted ? "mute" : "unmute").catch(() =>
+      telnyxAction(call.telnyxCallControlId!, muted ? "mute_client" : "unmute_client").catch(
+        () => undefined,
+      ),
+    );
+  }
   return prisma.humanCall.update({
     where: { id: callId },
     data: { muted },
   });
+}
+
+/** Start dual-channel recording on an active softphone call. */
+export async function recordHumanCall(callId: string, workspaceId: string, start: boolean) {
+  const prisma = getPrisma();
+  const call = await prisma.humanCall.findFirst({ where: { id: callId, workspaceId } });
+  if (!call?.telnyxCallControlId) throw new Error("Call not active");
+  if (!call.telnyxCallControlId.startsWith("mock_")) {
+    await telnyxAction(
+      call.telnyxCallControlId,
+      start ? "record_start" : "record_stop",
+      start ? { format: "mp3", channels: "dual" } : {},
+    );
+  }
+  return prisma.humanCall.update({
+    where: { id: callId },
+    data: {
+      notes: start
+        ? `${call.notes || ""} [recording:on]`.trim()
+        : `${call.notes || ""} [recording:off]`.trim(),
+    },
+  });
+}
+
+/**
+ * "Call my phone" bridge: dial the agent's cell first, then dial the destination
+ * and bridge the two legs when the agent answers.
+ */
+export async function dialCallMyPhoneBridge(input: {
+  workspaceId: string;
+  agentUserId: string;
+  agentPhone: string;
+  destination: string;
+  from?: string | null;
+}) {
+  const prisma = getPrisma();
+  const agentPhone = normalizeE164(input.agentPhone);
+  const destination = normalizeE164(input.destination);
+  const from = await resolveCallerIdNumber(input.workspaceId, input.from);
+  if (!from) throw new Error("No active caller ID number configured");
+
+  const call = await prisma.humanCall.create({
+    data: {
+      workspaceId: input.workspaceId,
+      from,
+      to: destination,
+      direction: "outbound",
+      status: "initiated",
+      agentUserId: input.agentUserId,
+      callerIdNumber: from,
+      notes: `call_my_phone:${agentPhone}`,
+    },
+  });
+
+  if (!isTelnyxPhoneConfigured()) {
+    const mockId = `mock_${call.id}`;
+    await prisma.humanCall.update({
+      where: { id: call.id },
+      data: { telnyxCallControlId: mockId, status: "ringing" },
+    });
+    return { call: { ...call, telnyxCallControlId: mockId, status: "ringing" }, mode: "mock" };
+  }
+
+  const connectionId = process.env.TELNYX_CONNECTION_ID!.trim();
+  // Leg 1: ring the agent's personal phone.
+  const agentLeg = await telnyxRequest<{ data: { call_control_id: string } }>("/calls", {
+    method: "POST",
+    body: {
+      connection_id: connectionId,
+      from,
+      to: agentPhone,
+      client_state: encodeClientState({
+        workspaceId: input.workspaceId,
+        humanCallId: call.id,
+        kind: "human_bridge_agent",
+        destination,
+      }),
+    },
+  });
+  const agentControlId = agentLeg.data?.call_control_id;
+  if (!agentControlId) throw new Error("Telnyx dial returned no call_control_id");
+
+  const updated = await prisma.humanCall.update({
+    where: { id: call.id },
+    data: {
+      telnyxCallControlId: agentControlId,
+      status: "ringing",
+      notes: `call_my_phone:${agentPhone}|dest:${destination}|agent_leg:${agentControlId}`,
+    },
+  });
+
+  return { call: updated, mode: "telnyx", bridge: true };
+}
+
+/** Continue call-my-phone after the agent answers: dial destination and bridge. */
+export async function continueCallMyPhoneBridge(input: {
+  workspaceId: string;
+  humanCallId: string;
+  agentCallControlId: string;
+  destination: string;
+}) {
+  if (!isTelnyxPhoneConfigured()) return { mode: "mock" };
+  const prisma = getPrisma();
+  const call = await prisma.humanCall.findFirst({
+    where: { id: input.humanCallId, workspaceId: input.workspaceId },
+  });
+  if (!call) throw new Error("Call not found");
+  const from = call.callerIdNumber || call.from;
+  const connectionId = process.env.TELNYX_CONNECTION_ID!.trim();
+
+  const destLeg = await telnyxRequest<{ data: { call_control_id: string } }>("/calls", {
+    method: "POST",
+    body: {
+      connection_id: connectionId,
+      from,
+      to: normalizeE164(input.destination),
+      client_state: encodeClientState({
+        workspaceId: input.workspaceId,
+        humanCallId: call.id,
+        kind: "human_bridge_dest",
+        agentCallControlId: input.agentCallControlId,
+      }),
+    },
+  });
+  const destControlId = destLeg.data?.call_control_id;
+  if (!destControlId) throw new Error("Destination dial failed");
+
+  // Bridge when destination answers is handled in webhook; try immediate bridge too.
+  await telnyxAction(input.agentCallControlId, "bridge", {
+    call_control_id: destControlId,
+  }).catch(() => undefined);
+
+  await prisma.humanCall.update({
+    where: { id: call.id },
+    data: {
+      status: "in_progress",
+      notes: `${call.notes || ""}|dest_leg:${destControlId}`,
+    },
+  });
+
+  return { mode: "telnyx", destControlId };
 }
 
 export async function holdHumanCall(callId: string, workspaceId: string, onHold: boolean) {
@@ -211,6 +360,7 @@ export async function updateHumanCall(
     muted?: boolean;
     onHold?: boolean;
     transferTo?: string;
+    record?: boolean;
   },
 ) {
   if (patch.answer) return answerHumanCall(callId, workspaceId);
@@ -218,6 +368,7 @@ export async function updateHumanCall(
   if (patch.muted !== undefined) return muteHumanCall(callId, workspaceId, patch.muted);
   if (patch.onHold !== undefined) return holdHumanCall(callId, workspaceId, patch.onHold);
   if (patch.transferTo) return transferHumanCall(callId, workspaceId, patch.transferTo);
+  if (patch.record !== undefined) return recordHumanCall(callId, workspaceId, patch.record);
 
   const prisma = getPrisma();
   const data: Record<string, unknown> = {};
@@ -301,6 +452,36 @@ export async function processHumanCallWebhookEvent(input: {
     where: { id: call.id },
     data: patch,
   });
+
+  // Call-my-phone: when the agent answers their cell, dial destination + bridge.
+  if (input.eventType === "call.answered") {
+    const clientStateRaw = input.eventPayload.client_state;
+    let clientState: Record<string, unknown> = {};
+    if (typeof clientStateRaw === "string") {
+      try {
+        clientState = JSON.parse(Buffer.from(clientStateRaw, "base64").toString("utf8"));
+      } catch {
+        clientState = {};
+      }
+    }
+    if (clientState.kind === "human_bridge_agent" && clientState.destination) {
+      await continueCallMyPhoneBridge({
+        workspaceId: call.workspaceId,
+        humanCallId: call.id,
+        agentCallControlId: String(input.eventPayload.call_control_id || call.telnyxCallControlId),
+        destination: String(clientState.destination),
+      }).catch((err) => console.warn("[human-call] bridge continue failed", err));
+    }
+    if (
+      clientState.kind === "human_bridge_dest" &&
+      clientState.agentCallControlId &&
+      input.eventPayload.call_control_id
+    ) {
+      await telnyxAction(String(clientState.agentCallControlId), "bridge", {
+        call_control_id: String(input.eventPayload.call_control_id),
+      }).catch(() => undefined);
+    }
+  }
 
   if (isMissed) {
     // The customer number differs by direction.
