@@ -6,7 +6,7 @@ import {
   generateCode,
   normalizePhone,
 } from "@/lib/auth/phone-otp";
-import { BRAND_NAME } from "@/lib/brand";
+import { smsOtpMessage } from "@/lib/auth/sms-opt-in-copy";
 import { getTelnyxApiBaseUrl, getTelnyxApiKey } from "@/lib/messaging/telnyx/config";
 
 /**
@@ -49,7 +49,7 @@ export async function POST(request: Request) {
         body: JSON.stringify({
           from,
           to: phone,
-          text: `Your ${BRAND_NAME} verification code is ${code}. Reply STOP to opt out, HELP for help.`,
+          text: smsOtpMessage(code),
         }),
       });
       delivered = res.ok;

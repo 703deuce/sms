@@ -1,11 +1,12 @@
 import { SmsOptIn } from "@/components/auth/sms-opt-in";
+import { SMS_OPT_IN_DISCLOSURE } from "@/lib/auth/sms-opt-in-copy";
 import { BRAND_NAME } from "@/lib/brand";
 import Link from "next/link";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "SMS Opt-In & Phone Verification",
-  description: `Opt in to receive a one-time verification code from ${BRAND_NAME} by SMS. Message and data rates may apply. Reply STOP to opt out, HELP for help.`,
+  description: SMS_OPT_IN_DISCLOSURE,
 };
 
 export default function SmsOptInPage() {
@@ -26,9 +27,7 @@ export default function SmsOptInPage() {
           <SmsOptIn />
 
           <p className="mt-6 border-t border-border pt-4 text-center text-[11px] leading-5 text-muted-foreground">
-            By entering your mobile number and requesting a code, you agree to receive a one-time
-            verification code from {BRAND_NAME} by SMS. Message and data rates may apply. Message
-            frequency varies. Reply STOP to opt out and HELP for help. View our{" "}
+            {SMS_OPT_IN_DISCLOSURE} View our{" "}
             <Link href="/terms" className="text-primary hover:underline">
               Terms
             </Link>{" "}

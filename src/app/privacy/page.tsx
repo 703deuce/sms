@@ -104,13 +104,14 @@ export default function PrivacyPage() {
 
       <h3>Account phone verification and one-time SMS codes</h3>
       <p>
-        When you provide your mobile number to verify your account (for example         on our sign-in page
-        or at <a href="/sms-opt-in">/sms-opt-in</a>), you are opting in to receive a one-time
-        verification code from {BRAND_NAME} by SMS. Message and data rates may apply. Message
-        frequency varies. You can reply STOP to opt out and HELP for help. These verification
-        messages are transactional and are sent only in response to your request. We use the number
-        to confirm ownership of the device and to secure your account; we do not sell it or use it
-        for third-party marketing. See our <a href="/terms">Terms of Service</a> for more detail.
+        When you provide your mobile number to verify your account (for example on our sign-in page
+        or at <a href="/sms-opt-in">/sms-opt-in</a>), you are opting in to receive SMS verification
+        codes from {BRAND_NAME}. Example message: &ldquo;{BRAND_NAME}: You requested SMS verification
+        codes for your account. Message frequency varies. Msg &amp; data rates may apply. Reply STOP
+        to opt out or HELP for help.&rdquo; These verification messages are transactional and are
+        sent only in response to your request. We use the number to confirm ownership of the device
+        and to secure your account; we do not sell it or use it for third-party marketing. See our{" "}
+        <a href="/terms">Terms of Service</a> for more detail.
       </p>
 
       <h2>5. How we share information</h2>

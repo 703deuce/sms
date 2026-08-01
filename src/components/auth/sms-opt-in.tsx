@@ -1,6 +1,6 @@
 "use client";
 
-import { BRAND_NAME } from "@/lib/brand";
+import { SMS_OPT_IN_DISCLOSURE } from "@/lib/auth/sms-opt-in-copy";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
 import Link from "next/link";
@@ -95,9 +95,7 @@ export function SmsOptIn({ onVerified }: { onVerified?: (phone: string) => void 
                   onChange={(e) => setConsent(e.target.checked)}
                 />
                 <span>
-                  Enter your mobile number to receive a one-time verification code from {BRAND_NAME}{" "}
-                  by SMS. Message and data rates may apply. Message frequency varies. Reply STOP to
-                  opt out and HELP for help. View our{" "}
+                  {SMS_OPT_IN_DISCLOSURE} View our{" "}
                   <Link href="/terms" className="text-primary hover:underline">
                     Terms
                   </Link>{" "}

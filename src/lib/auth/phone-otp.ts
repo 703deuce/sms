@@ -6,15 +6,13 @@
  * works without a DB write and cannot be tampered with client-side.
  */
 import crypto from "crypto";
-import { BRAND_NAME } from "@/lib/brand";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
+
+export { SMS_OPT_IN_DISCLOSURE, smsOtpMessage } from "@/lib/auth/sms-opt-in-copy";
 
 export const PHONE_OTP_COOKIE = "transovo_phone_otp";
 export const PHONE_VERIFIED_COOKIE = "transovo_phone_verified";
 export const OTP_TTL_SECONDS = 600;
-
-/** Required Telnyx / carrier consent language shown at the point of collection. */
-export const SMS_OPT_IN_DISCLOSURE = `Enter your mobile number to receive a one-time verification code from ${BRAND_NAME} by SMS. Message and data rates may apply. Message frequency varies. Reply STOP to opt out and HELP for help.`;
 
 type OtpPayload = { p: string; c: string; exp: number };
 

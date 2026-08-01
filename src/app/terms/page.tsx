@@ -104,11 +104,11 @@ export default function TermsPage() {
       <h3>SMS phone verification and consent</h3>
       <p>
         When you enter your mobile number to verify your account (for example on our sign-in page or
-        at <a href="/sms-opt-in">/sms-opt-in</a>), you expressly consent to receive a one-time
-        verification code from {BRAND_NAME} by SMS. Message and data rates may apply. Message
-        frequency varies. Reply STOP to opt out and HELP for help. These are transactional messages
-        sent only when you request a code, and consent to receive them is not a condition of any
-        purchase.
+        at <a href="/sms-opt-in">/sms-opt-in</a>), you expressly consent to receive SMS verification
+        codes from {BRAND_NAME}. Example message: &ldquo;{BRAND_NAME}: You requested SMS verification
+        codes for your account. Message frequency varies. Msg &amp; data rates may apply. Reply STOP
+        to opt out or HELP for help.&rdquo; These are transactional messages sent only when you
+        request a code, and consent to receive them is not a condition of any purchase.
       </p>
 
       <h2>6. Acceptable use</h2>
