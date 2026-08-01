@@ -419,6 +419,23 @@ export async function processInboundMessage(input: {
     const contactName =
       [contact.firstName, contact.lastName].filter(Boolean).join(" ") || from;
 
+    // CRM framework — push inbound SMS to connected CRMs (async).
+    try {
+      const { publishSmsEvent } = await import("@/lib/crm/events");
+      await publishSmsEvent({
+        workspaceId: input.workspaceId,
+        contactId: contact.id,
+        direction: "inbound",
+        from,
+        to: input.to,
+        body: body || null,
+        status: "received",
+        messageId: input.providerMessageId || null,
+      });
+    } catch {
+      // CRM push is optional
+    }
+
     // Web push for new inbound conversation message
     try {
       const { sendPushToWorkspaceAgents } = await import("@/lib/push/send");

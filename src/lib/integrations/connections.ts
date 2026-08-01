@@ -8,9 +8,17 @@ export type ConnectionProvider =
   | "calendly"
   | "hubspot"
   | "salesforce"
-  | "shopify";
+  | "shopify"
+  | "zoho"
+  | "pipedrive";
 
-export type ConnectionStatus = "connected" | "disconnected" | "pending_oauth" | "error";
+export type ConnectionStatus =
+  | "connected"
+  | "disconnected"
+  | "pending_oauth"
+  | "needs_reauth"
+  | "syncing"
+  | "error";
 
 export type ConnectionView = {
   provider: string;

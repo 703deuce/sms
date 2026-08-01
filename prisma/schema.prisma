@@ -221,6 +221,11 @@ model Workspace {
   integrationConnections IntegrationConnection[]
   callQueues CallQueue[]
   ivrMenus IvrMenu[]
+  crmObjectMappings CrmObjectMapping[]
+  crmFieldMappings CrmFieldMapping[]
+  crmSyncRuns CrmSyncRun[]
+  crmSyncEvents CrmSyncEvent[]
+  crmAuditLogs CrmAuditLog[]
 }
 
 model SenderPool {
@@ -2068,4 +2073,109 @@ model SupportTicket {
 
   @@index([status, createdAt])
   @@map("support_tickets")
+}
+
+/// Maps a Transovo object to an external CRM record (provider-agnostic).
+model CrmObjectMapping {
+  id             String   @id @default(cuid())
+  workspaceId    String
+  provider       String
+  objectType     String // contact | company | lead | deal | task | activity | call | sms | note
+  internalId     String
+  externalId     String
+  externalUrl    String?
+  fingerprint    String? // phone/email hash for duplicate detection
+  lastSyncedAt   DateTime?
+  syncDirection  String   @default("bidirectional") // inbound | outbound | bidirectional
+  metadataJson   Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  workspace      Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, provider, objectType, internalId])
+  @@unique([workspaceId, provider, objectType, externalId])
+  @@index([workspaceId, provider, fingerprint])
+  @@map("crm_object_mappings")
+}
+
+/// Admin-configurable field mappings between Transovo and a CRM provider.
+model CrmFieldMapping {
+  id              String   @id @default(cuid())
+  workspaceId     String
+  provider        String
+  objectType      String
+  internalField   String
+  externalField   String
+  transform       String? // none | e164 | lowercase | custom
+  direction       String   @default("bidirectional")
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, provider, objectType, internalField, direction])
+  @@index([workspaceId, provider])
+  @@map("crm_field_mappings")
+}
+
+/// One synchronization run (initial / incremental / manual / webhook / scheduled).
+model CrmSyncRun {
+  id            String   @id @default(cuid())
+  workspaceId   String
+  provider      String
+  kind          String // initial | incremental | manual | webhook | scheduled | push
+  status        String   @default("queued") // queued | running | succeeded | failed | partial
+  startedAt     DateTime?
+  finishedAt    DateTime?
+  statsJson     Json?
+  lastError     String?
+  cursorJson    Json?
+  triggeredBy   String? // userId | system | webhook
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  events        CrmSyncEvent[]
+
+  @@index([workspaceId, provider, createdAt])
+  @@index([status, createdAt])
+  @@map("crm_sync_runs")
+}
+
+model CrmSyncEvent {
+  id            String   @id @default(cuid())
+  workspaceId   String
+  syncRunId     String
+  provider      String
+  level         String   @default("info") // info | warn | error
+  action        String // create | update | skip | map | conflict | retry | push
+  objectType    String?
+  internalId    String?
+  externalId    String?
+  message       String
+  detailJson    Json?
+  createdAt     DateTime @default(now())
+  syncRun       CrmSyncRun @relation(fields: [syncRunId], references: [id], onDelete: Cascade)
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([syncRunId, createdAt])
+  @@index([workspaceId, provider, createdAt])
+  @@map("crm_sync_events")
+}
+
+/// Long-lived CRM audit trail (OAuth, conflicts, mapping decisions, webhook receipts).
+model CrmAuditLog {
+  id            String   @id @default(cuid())
+  workspaceId   String
+  provider      String?
+  category      String // oauth | sync | mapping | webhook | conflict | settings | push
+  action        String
+  message       String
+  detailJson    Json?
+  actorUserId   String?
+  createdAt     DateTime @default(now())
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
+  @@index([workspaceId, provider, createdAt])
+  @@map("crm_audit_logs")
 }

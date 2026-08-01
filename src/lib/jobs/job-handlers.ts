@@ -121,6 +121,30 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       const frequency = String(payload.frequency || "daily");
       return processNotificationDigests(frequency);
     }
+    case "crm_sync": {
+      const { runCrmSyncJob } = await import("@/lib/crm/sync-engine");
+      return runCrmSyncJob({
+        workspaceId: String(payload.workspaceId || ""),
+        provider: payload.provider as "salesforce" | "zoho" | "pipedrive",
+        syncRunId: String(payload.syncRunId || ""),
+        kind: payload.kind as
+          | "initial"
+          | "incremental"
+          | "manual"
+          | "webhook"
+          | "scheduled"
+          | "push"
+          | undefined,
+      });
+    }
+    case "crm_push_event": {
+      const { pushCrmEventJob } = await import("@/lib/crm/push");
+      return pushCrmEventJob({
+        workspaceId: String(payload.workspaceId || ""),
+        provider: payload.provider as "salesforce" | "zoho" | "pipedrive",
+        event: payload.event as import("@/lib/crm/types").CrmPlatformEvent,
+      });
+    }
     default:
       throw new Error(`Unknown job type: ${jobType}`);
   }

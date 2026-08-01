@@ -154,7 +154,18 @@ export const appNav: NavItem[] = [
     ],
   },
   { label: "Compliance", href: "/compliance", icon: ShieldCheck },
-  { label: "Integrations", href: "/integrations", icon: Puzzle },
+  {
+    label: "Integrations",
+    href: "/integrations",
+    icon: Puzzle,
+    children: [
+      { label: "Directory", href: "/integrations" },
+      { label: "CRM", href: "/integrations/crm" },
+      { label: "API Keys", href: "/integrations/api" },
+      { label: "Webhooks", href: "/integrations/webhooks" },
+      { label: "Developer Logs", href: "/integrations/logs" },
+    ],
+  },
   { label: "Settings", href: "/settings/business", icon: Settings },
 ];
 
@@ -267,6 +278,7 @@ export const pageTitles: Record<string, string> = {
   "/compliance/suppression": "Suppression List",
   "/compliance/events": "Compliance Events",
   "/integrations": "Integrations",
+  "/integrations/crm": "CRM Integrations",
   "/integrations/api": "API Keys",
   "/integrations/webhooks": "Webhooks",
   "/integrations/logs": "Developer Logs",

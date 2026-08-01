@@ -498,8 +498,45 @@ export async function processHumanCallWebhookEvent(input: {
           cause,
         }).catch(() => undefined);
       }
+      const { publishCallCompleted } = await import("@/lib/crm/events");
+      await publishCallCompleted({
+        workspaceId: call.workspaceId,
+        contactId: contact?.id || null,
+        callId: call.id,
+        direction: "missed",
+        from: call.from,
+        to: call.to,
+        disposition: String(patch.disposition || "missed"),
+        notes: call.notes,
+      }).catch(() => undefined);
     } catch (err) {
       console.warn("[human-call] missed-call event failed", call.id, err);
+    }
+  } else if (input.eventType === "call.hangup" && wasAnswered) {
+    try {
+      const customerPhone = call.direction === "inbound" ? call.from : call.to;
+      const contact = await prisma.contact.findFirst({
+        where: { workspaceId: call.workspaceId, phone: customerPhone },
+      });
+      const durationSeconds =
+        call.answeredAt && patch.endedAt instanceof Date
+          ? Math.max(0, Math.round((patch.endedAt.getTime() - call.answeredAt.getTime()) / 1000))
+          : null;
+      const { publishCallCompleted } = await import("@/lib/crm/events");
+      await publishCallCompleted({
+        workspaceId: call.workspaceId,
+        contactId: contact?.id || null,
+        callId: call.id,
+        direction: call.direction === "outbound" ? "outbound" : "inbound",
+        from: call.from,
+        to: call.to,
+        durationSeconds,
+        disposition: call.disposition,
+        recordingUrl: (patch.recordingUrl as string) || call.recordingUrl,
+        notes: call.notes,
+      }).catch(() => undefined);
+    } catch (err) {
+      console.warn("[human-call] crm completed event failed", call.id, err);
     }
   }
 
