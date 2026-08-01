@@ -118,6 +118,7 @@ export default function PhoneCallsPage() {
             <option value="missed">Missed</option>
             <option value="voicemail">Voicemail</option>
             <option value="parked">Parked</option>
+            <option value="callback_requested">Callback requested</option>
           </Select>
         </div>
         <div className="flex-1 min-w-[180px]">
@@ -210,7 +211,7 @@ export default function PhoneCallsPage() {
                         className="rounded border border-border px-2 py-1 text-[11px]"
                         onClick={() => void returnCall(peer)}
                       >
-                        Return
+                        {c.status === "callback_requested" ? "Call back" : "Return"}
                       </button>
                       <button
                         type="button"

@@ -56,6 +56,11 @@ export async function PATCH(
       generateAiSummary?: boolean;
       telnyxCallControlId?: string;
       webrtcCallId?: string;
+      acceptScreening?: boolean;
+      declineScreening?: boolean;
+      supervisorRole?: "monitor" | "whisper" | "barge";
+      supervisorPhone?: string;
+      supervisorControlId?: string;
     };
 
     const mutatesLiveCall = Boolean(
@@ -73,7 +78,10 @@ export async function PATCH(
         body.whisper ||
         body.blockCaller ||
         body.startTranscription ||
-        body.telnyxCallControlId,
+        body.telnyxCallControlId ||
+        body.acceptScreening ||
+        body.declineScreening ||
+        body.supervisorRole,
     );
     if (mutatesLiveCall) {
       await requireSoftphonePermission(auth.workspaceId, auth.session.userId, "place_call");
@@ -84,8 +92,11 @@ export async function PATCH(
     if (body.transferTo || body.warmTransferTo || body.completeWarmTransfer) {
       await requireSoftphonePermission(auth.workspaceId, auth.session.userId, "transfer");
     }
-    if (body.whisper) {
+    if (body.whisper || body.supervisorRole === "whisper") {
       await requireSoftphonePermission(auth.workspaceId, auth.session.userId, "whisper");
+    }
+    if (body.supervisorRole === "monitor" || body.supervisorRole === "barge") {
+      await requireSoftphonePermission(auth.workspaceId, auth.session.userId, "listen");
     }
     if (body.blockCaller) {
       await requireSoftphonePermission(auth.workspaceId, auth.session.userId, "block_caller");
@@ -102,7 +113,7 @@ export async function PATCH(
     const call = await updateHumanCall(id, auth.workspaceId, {
       hangup: body.hangup,
       answer: body.answer,
-      agentUserId: body.answer ? auth.session.userId : undefined,
+      agentUserId: auth.session.userId,
       muted: body.muted,
       onHold: body.onHold,
       transferTo: body.transferTo,
@@ -121,6 +132,11 @@ export async function PATCH(
       generateAiSummary: body.generateAiSummary,
       telnyxCallControlId: body.telnyxCallControlId,
       webrtcCallId: body.webrtcCallId,
+      acceptScreening: body.acceptScreening,
+      declineScreening: body.declineScreening,
+      supervisorRole: body.supervisorRole,
+      supervisorPhone: body.supervisorPhone,
+      supervisorControlId: body.supervisorControlId,
     });
 
     return NextResponse.json({ data: call });

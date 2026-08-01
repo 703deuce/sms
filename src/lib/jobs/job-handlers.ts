@@ -113,6 +113,29 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
         telnyxCallControlId: String(payload.telnyxCallControlId || ""),
       });
     }
+    case "phone_hunt_advance": {
+      const { advanceSequentialHunt } = await import("@/lib/phone/hunt-service");
+      return advanceSequentialHunt({
+        workspaceId: String(payload.workspaceId || ""),
+        humanCallId: String(payload.humanCallId || ""),
+        telnyxCallControlId: String(payload.telnyxCallControlId || ""),
+        toE164: String(payload.toE164 || ""),
+      });
+    }
+    case "phone_queue_callback": {
+      // Recorded callback request — automation / agent follow-up. No auto-dial here.
+      const { getPrisma } = await import("@/lib/db");
+      const humanCallId = String(payload.humanCallId || "");
+      const call = await getPrisma().humanCall.findUnique({ where: { id: humanCallId } });
+      if (!call) return { skipped: true };
+      await getPrisma().humanCall.update({
+        where: { id: humanCallId },
+        data: {
+          notes: `${call.notes || ""}\n[callback_due]`.trim(),
+        },
+      });
+      return { ok: true, callbackDue: true, toE164: payload.toE164 || call.from };
+    }
     case "phone_park_timeout": {
       const { getPrisma } = await import("@/lib/db");
       const prisma = getPrisma();
@@ -175,9 +198,23 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       if (
         !call ||
         !["ringing", "queued", "initiated"].includes(call.status) ||
-        call.answeredAt
+        ((call.notes || "").includes("screening:accepted") && call.answeredAt) ||
+        (call.answeredAt && !(call.notes || "").includes("screening:"))
       ) {
         return { skipped: true };
+      }
+      // Hang up hunt / screening / queue cellular ring legs before overflow.
+      const ringLegMatch = (call.notes || "").match(/\[ring_legs:([^\]]+)\]/);
+      if (ringLegMatch?.[1]) {
+        for (const legId of ringLegMatch[1]
+          .split(",")
+          .map((s: string) => s.trim())
+          .filter(Boolean)) {
+          await telnyxRequest(`/calls/${legId}/actions/hangup`, {
+            method: "POST",
+            body: {},
+          }).catch(() => undefined);
+        }
       }
       const pn = toE164
         ? await prisma.phoneNumber.findFirst({ where: { workspaceId, e164: toE164 } })
@@ -189,6 +226,10 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
         unanswered: true,
       }).catch(() => null);
       if (rule?.targetType === "external" && rule.targetValue && controlId) {
+        await telnyxRequest(`/calls/${controlId}/actions/unhold`, {
+          method: "POST",
+          body: {},
+        }).catch(() => undefined);
         await telnyxRequest(`/calls/${controlId}/actions/transfer`, {
           method: "POST",
           body: { to: rule.targetValue },
@@ -204,6 +245,12 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
         return { ok: true, action: "forward" };
       }
       if (controlId) {
+        if (call.onHold || (call.notes || "").includes("screening:")) {
+          await telnyxRequest(`/calls/${controlId}/actions/unhold`, {
+            method: "POST",
+            body: {},
+          }).catch(() => undefined);
+        }
         await leaveVoicemailOnCall({
           workspaceId,
           humanCallId: call.id,

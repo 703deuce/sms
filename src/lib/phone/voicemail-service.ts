@@ -154,6 +154,25 @@ export async function attachVoicemailRecordingAndTranscribe(input: {
     },
   });
 
+  // Optional email notify when the box has emailNotify configured (Brevo when keyed).
+  if (box?.emailNotify) {
+    try {
+      const { sendTransactionalEmail } = await import("@/lib/email/brevo");
+      const appUrl = process.env.APP_URL?.replace(/\/$/, "") || "";
+      await sendTransactionalEmail({
+        to: String(box.emailNotify),
+        subject: `New voicemail from ${updated.fromE164 || "unknown"}`,
+        htmlContent: `<p>New voicemail on <strong>${box.name}</strong>.</p>
+<p>From: ${updated.fromE164 || "unknown"}</p>
+<p>Duration: ${updated.durationSeconds ?? "—"}s</p>
+${appUrl ? `<p><a href="${appUrl}/phone/settings">Open voicemail</a></p>` : ""}`,
+        textContent: `New voicemail on ${box.name} from ${updated.fromE164 || "unknown"}`,
+      });
+    } catch (err) {
+      console.warn("[voicemail] email notify failed", err);
+    }
+  }
+
   if (!box?.transcriptionEnabled) return updated;
   if (updated.transcriptText) return updated;
 

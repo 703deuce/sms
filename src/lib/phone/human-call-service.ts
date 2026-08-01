@@ -428,22 +428,24 @@ export async function handleInboundHumanCall(input: {
   }
 
   // Multi-device incoming-call push (best-effort; softphone also polls).
-  try {
-    const { notifyUsersForInboundCall } = await import("./incoming-notify");
-    const targetedUser =
-      String(note || "").match(/forward_user:([^\s]+)/)?.[1] ||
-      String(note || "").match(/screening:([^\s]+)/)?.[1] ||
-      null;
-    await notifyUsersForInboundCall({
-      workspaceId: input.workspaceId,
-      humanCallId: call.id,
-      fromE164: from,
-      toE164: input.toE164,
-      queueId,
-      userIds: targetedUser ? [targetedUser] : undefined,
-    });
-  } catch (err) {
-    console.warn("[phone] incoming push notify failed", err);
+  // Queue rings notify from ringQueueMembers (current hunt member only).
+  if (!queueId) {
+    try {
+      const { notifyUsersForInboundCall } = await import("./incoming-notify");
+      const targetedUser =
+        String(note || "").match(/forward_user:([^\s]+)/)?.[1] ||
+        String(note || "").match(/screening:([^\s]+)/)?.[1] ||
+        null;
+      await notifyUsersForInboundCall({
+        workspaceId: input.workspaceId,
+        humanCallId: call.id,
+        fromE164: from,
+        toE164: input.toE164,
+        userIds: targetedUser ? [targetedUser] : undefined,
+      });
+    } catch (err) {
+      console.warn("[phone] incoming push notify failed", err);
+    }
   }
 
   // Unanswered timeout for non-queue softphone rings (forwarding "unanswered" rules).
@@ -569,20 +571,48 @@ export async function answerHumanCall(
   });
 }
 
-export async function muteHumanCall(callId: string, workspaceId: string, muted: boolean) {
+export async function muteHumanCall(
+  callId: string,
+  workspaceId: string,
+  muted: boolean,
+  agentUserId?: string | null,
+) {
   const prisma = getPrisma();
-  const call = await prisma.humanCall.findFirst({ where: { id: callId, workspaceId } });
+  let call = await prisma.humanCall.findFirst({ where: { id: callId, workspaceId } });
   if (!call) throw new Error("Call not found");
-  // Call-level mute/unmute is not a Telnyx Call Control action (conference-only).
-  // Browser softphone mutes local WebRTC tracks; Call Control / call-my-phone mute is DB state.
-  if (call.conferenceId && call.telnyxCallControlId && !call.telnyxCallControlId.startsWith("mock_")) {
+
+  // For Call Control / call-my-phone, promote into a conference so mute can target the agent leg.
+  if (
+    muted &&
+    !call.conferenceId &&
+    call.mediaMode !== "webrtc" &&
+    call.telnyxCallControlId &&
+    !call.telnyxCallControlId.startsWith("mock_") &&
+    isTelnyxPhoneConfigured()
+  ) {
+    const { createConferenceFromCall } = await import("./conference-service");
+    await createConferenceFromCall({
+      workspaceId,
+      hostUserId: agentUserId || call.agentUserId || "system",
+      humanCallId: call.id,
+      name: `Mute ${call.to}`,
+    }).catch((err) => console.warn("[human-call] mute conference create failed", err));
+    call = (await prisma.humanCall.findFirst({ where: { id: callId, workspaceId } })) || call;
+  }
+
+  const muteControlId =
+    call.mediaMode === "call_my_phone" && call.telnyxCallLegId
+      ? call.telnyxCallLegId
+      : call.telnyxCallControlId;
+
+  if (call.conferenceId && muteControlId && !muteControlId.startsWith("mock_")) {
     const conf = await prisma.conferenceCall.findUnique({ where: { id: call.conferenceId } });
     if (conf?.telnyxConferenceId && !conf.telnyxConferenceId.startsWith("mock_")) {
       await telnyxRequest(
         `/conferences/${conf.telnyxConferenceId}/actions/${muted ? "mute" : "unmute"}`,
         {
           method: "POST",
-          body: { call_control_ids: [call.telnyxCallControlId] },
+          body: { call_control_ids: [muteControlId] },
         },
       ).catch((err) => console.warn("[human-call] conference mute failed", err));
     }
@@ -1227,6 +1257,13 @@ export async function updateHumanCall(
     warmTransferTo?: string;
     consult?: boolean;
     completeWarmTransfer?: boolean;
+    /** Softphone screening accept (unhold + bridge path for softphone-only screening). */
+    acceptScreening?: boolean;
+    declineScreening?: boolean;
+    /** Supervisor session: monitor | whisper | barge + phone */
+    supervisorRole?: "monitor" | "whisper" | "barge";
+    supervisorPhone?: string;
+    supervisorControlId?: string;
     cancelWarmTransfer?: boolean;
     switchLine?: boolean;
     flipTo?: string;
@@ -1253,14 +1290,111 @@ export async function updateHumanCall(
   }
   if (patch.blockCaller) return blockCallerFromCall(callId, workspaceId);
   if (patch.whisper) return whisperOnHumanCall(callId, workspaceId, patch.whisper);
+  // acceptScreening may include flipTo for Call Control → cellular audio — handle before bare flipTo.
+  if (patch.acceptScreening) {
+    const prisma = getPrisma();
+    const call = await prisma.humanCall.findFirst({ where: { id: callId, workspaceId } });
+    if (!call?.telnyxCallControlId) throw new Error("Call not found");
+    const bridgeTo =
+      patch.flipTo ||
+      (
+        await prisma.softphoneUserSettings.findUnique({
+          where: {
+            workspaceId_userId: {
+              workspaceId,
+              userId: patch.agentUserId || call.agentUserId || "",
+            },
+          },
+        })
+      )?.forwardToCellular ||
+      null;
+    if (!bridgeTo) {
+      throw new Error(
+        "Set Call my phone / cellular number to accept screened calls (no browser audio on held Call Control legs).",
+      );
+    }
+    await telnyxAction(call.telnyxCallControlId, "unhold").catch(() => undefined);
+    await prisma.humanCall.update({
+      where: { id: callId },
+      data: {
+        status: "in_progress",
+        onHold: false,
+        answeredAt: call.answeredAt || new Date(),
+        agentUserId: patch.agentUserId || call.agentUserId,
+        notes: `${call.notes || ""}\nscreening:accepted`.trim(),
+      },
+    });
+    return flipHumanCall(callId, workspaceId, bridgeTo);
+  }
   if (patch.flipTo) return flipHumanCall(callId, workspaceId, patch.flipTo);
   if (patch.startTranscription) return startHumanCallTranscription(callId, workspaceId);
   if (patch.generateAiSummary) return generateHumanCallAiSummary(callId, workspaceId);
+
+  if (patch.supervisorRole && patch.supervisorPhone) {
+    const { startSupervisorSession } = await import("./supervisor-service");
+    const result = await startSupervisorSession({
+      workspaceId,
+      supervisorUserId: patch.agentUserId || "supervisor",
+      humanCallId: callId,
+      role: patch.supervisorRole,
+      supervisorPhone: patch.supervisorPhone,
+    });
+    return getPrisma()
+      .humanCall.findFirst({ where: { id: callId, workspaceId } })
+      .then((c: { id: string } | null) => {
+        if (!c) throw new Error("Call not found");
+        return { ...c, supervisorControlId: result.supervisorControlId };
+      });
+  }
+  if (patch.supervisorRole && patch.supervisorControlId) {
+    const { updateSupervisorRole } = await import("./supervisor-service");
+    await updateSupervisorRole({
+      workspaceId,
+      humanCallId: callId,
+      supervisorControlId: patch.supervisorControlId,
+      role: patch.supervisorRole,
+    });
+    const call = await getPrisma().humanCall.findFirst({ where: { id: callId, workspaceId } });
+    if (!call) throw new Error("Call not found");
+    return call;
+  }
+
+  if (patch.declineScreening) {
+    const prisma = getPrisma();
+    const call = await prisma.humanCall.findFirst({ where: { id: callId, workspaceId } });
+    if (!call?.telnyxCallControlId) throw new Error("Call not found");
+    const ringLegMatch = (call.notes || "").match(/\[ring_legs:([^\]]+)\]/);
+    if (ringLegMatch?.[1] && isTelnyxPhoneConfigured()) {
+      for (const legId of ringLegMatch[1]
+        .split(",")
+        .map((s: string) => s.trim())
+        .filter(Boolean)) {
+        await telnyxRequest(`/calls/${legId}/actions/hangup`, {
+          method: "POST",
+          body: {},
+        }).catch(() => undefined);
+      }
+    }
+    await telnyxAction(call.telnyxCallControlId, "unhold").catch(() => undefined);
+    const { leaveVoicemailOnCall } = await import("./voicemail-service");
+    await leaveVoicemailOnCall({
+      workspaceId,
+      humanCallId: callId,
+      telnyxCallControlId: call.telnyxCallControlId,
+      userId: patch.agentUserId || call.agentUserId,
+    });
+    const declined = await prisma.humanCall.findFirst({ where: { id: callId, workspaceId } });
+    if (!declined) throw new Error("Call not found");
+    return declined;
+  }
+
   if (patch.answer) {
     return answerHumanCall(callId, workspaceId, patch.agentUserId);
   }
   if (patch.hangup) return hangupHumanCall(callId, workspaceId, patch.disposition);
-  if (patch.muted !== undefined) return muteHumanCall(callId, workspaceId, patch.muted);
+  if (patch.muted !== undefined) {
+    return muteHumanCall(callId, workspaceId, patch.muted, patch.agentUserId);
+  }
   if (patch.onHold !== undefined) return holdHumanCall(callId, workspaceId, patch.onHold);
   if (patch.transferTo) return transferHumanCall(callId, workspaceId, patch.transferTo);
   if (patch.record !== undefined) return recordHumanCall(callId, workspaceId, patch.record);
@@ -1344,6 +1478,7 @@ export async function processHumanCallWebhookEvent(input: {
     "queue_member_ring",
     "simultaneous_ring",
     "conference_leg",
+    "supervisor_leg",
     "warm_transfer_consult",
     "call_flip",
     "call_screening",
@@ -1565,6 +1700,21 @@ export async function processHumanCallWebhookEvent(input: {
         where: { id: call.id },
         data: { status: "in_progress", answeredAt: new Date() },
       });
+    }
+
+    // Supervisor listen / whisper / barge leg answered → join with supervisor_role.
+    if (kind === "supervisor_leg" && eventControlId) {
+      const role = String(clientState.supervisorRole || "monitor") as
+        | "monitor"
+        | "whisper"
+        | "barge";
+      const { joinSupervisorOnAnswer } = await import("./supervisor-service");
+      await joinSupervisorOnAnswer({
+        workspaceId: call.workspaceId,
+        humanCallId: call.id,
+        supervisorControlId: eventControlId,
+        role,
+      }).catch((err) => console.warn("[human-call] supervisor join failed", err));
     }
 
     // Call flip: bridge device leg to held customer, then swap media to the flip leg.

@@ -24,10 +24,16 @@ export async function POST(request: Request) {
     const auth = await requireSession();
     if ("error" in auth) return auth.error;
     const body = (await request.json()) as Record<string, unknown>;
+    const targetUserId = (body.userId as string) || auth.session.userId;
+    // Workspace-wide / other-user / number-level rules need phone admin.
+    if (targetUserId !== auth.session.userId || body.phoneNumberId) {
+      const { requireWorkspacePhoneAdmin } = await import("@/lib/phone/softphone-permissions");
+      await requireWorkspacePhoneAdmin(auth.workspaceId, auth.session.userId);
+    }
     const row = await upsertForwardingRule({
       workspaceId: auth.workspaceId,
       id: body.id as string | undefined,
-      userId: (body.userId as string) || auth.session.userId,
+      userId: targetUserId,
       phoneNumberId: (body.phoneNumberId as string) || null,
       mode: String(body.mode || "always"),
       targetType: String(body.targetType || "external"),
@@ -50,7 +56,16 @@ export async function DELETE(request: Request) {
     const url = new URL(request.url);
     const id = url.searchParams.get("id");
     if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
-    await getPrisma().callForwardingRule.deleteMany({
+    const prisma = getPrisma();
+    const existing = await prisma.callForwardingRule.findFirst({
+      where: { id, workspaceId: auth.workspaceId },
+    });
+    if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    if (existing.userId !== auth.session.userId || existing.phoneNumberId) {
+      const { requireWorkspacePhoneAdmin } = await import("@/lib/phone/softphone-permissions");
+      await requireWorkspacePhoneAdmin(auth.workspaceId, auth.session.userId);
+    }
+    await prisma.callForwardingRule.deleteMany({
       where: { id, workspaceId: auth.workspaceId },
     });
     return NextResponse.json({ ok: true });

@@ -17,6 +17,8 @@ export async function POST(request: Request) {
   try {
     const auth = await requireSession();
     if ("error" in auth) return auth.error;
+    const { requireWorkspacePhoneAdmin } = await import("@/lib/phone/softphone-permissions");
+    await requireWorkspacePhoneAdmin(auth.workspaceId, auth.session.userId);
     const body = await request.json();
     const data = await createIvrMenu(auth.workspaceId, body);
     return NextResponse.json({ data }, { status: 201 });

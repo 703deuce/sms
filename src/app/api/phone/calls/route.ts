@@ -41,7 +41,20 @@ export async function GET(request: Request) {
       take: limit,
     });
 
-    return NextResponse.json({ data: rows });
+    // Sequential/linear queue: only the active hunt member should see the ring banner.
+    const ringingOrQueued =
+      status &&
+      status.split(",").some((s) => ["ringing", "queued"].includes(s.trim()));
+    const filtered = ringingOrQueued
+      ? rows.filter((row: { notes?: string | null; status: string }) => {
+          if (!["ringing", "queued"].includes(row.status)) return true;
+          const active = (row.notes || "").match(/\[queue_active_user:([^\]]+)\]/)?.[1];
+          if (!active) return true;
+          return active === auth.session.userId;
+        })
+      : rows;
+
+    return NextResponse.json({ data: filtered });
   } catch (err) {
     return jsonError(err, 500);
   }

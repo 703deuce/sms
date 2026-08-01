@@ -160,6 +160,11 @@ export async function notifyIncomingSoftphoneCall(input: {
     });
     if (presence?.status === "dnd" || presence?.status === "offline") continue;
 
+    const settings = await prisma.softphoneUserSettings.findUnique({
+      where: { workspaceId_userId: { workspaceId: input.workspaceId, userId } },
+    });
+    if (settings?.ringDesktop === false) continue;
+
     const result = await sendPushToUser(input.workspaceId, userId, {
       title: "Incoming call",
       body: `${input.fromE164} → ${input.toE164}`,

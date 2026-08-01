@@ -191,13 +191,24 @@ export function SoftphonePanel({
   const [presenceStatus, setPresenceStatus] = useState("available");
   const [customStatus, setCustomStatus] = useState("");
   const [parkSlot, setParkSlot] = useState("");
+  const [parkFallback, setParkFallback] = useState("");
+  const [parkTimeoutSec, setParkTimeoutSec] = useState("180");
   const [parkedSlots, setParkedSlots] = useState<
     Array<{ slotCode: string; humanCallId?: string | null; parkedAt?: string }>
   >([]);
   const [conferenceId, setConferenceId] = useState("");
   const [conferenceAddTo, setConferenceAddTo] = useState("");
+  const [conferenceParticipants, setConferenceParticipants] = useState<
+    Array<{ id: string; displayName?: string | null; status?: string }>
+  >([]);
   const [elapsed, setElapsed] = useState(0);
   const [permissions, setPermissions] = useState<string[]>([]);
+  const [permissionsLoaded, setPermissionsLoaded] = useState(false);
+  const [supervisorControlId, setSupervisorControlId] = useState("");
+  const [screeningIncoming, setScreeningIncoming] = useState(false);
+  const [pendingCallbacks, setPendingCallbacks] = useState<
+    Array<{ id: string; from: string; to: string; notes?: string | null }>
+  >([]);
 
   const [contactQuery, setContactQuery] = useState("");
   const [contactResults, setContactResults] = useState<ContactRow[]>([]);
@@ -479,6 +490,7 @@ export function SoftphonePanel({
         const settings = (j.data?.settings || []) as UserSettingsRow[];
         setUserSettings(settings);
         setPermissions(Array.isArray(j.permissions) ? j.permissions : []);
+        setPermissionsLoaded(true);
         const me = j.me || sessionUserIdRef.current;
         if (me) {
           sessionUserIdRef.current = me;
@@ -733,13 +745,19 @@ export function SoftphonePanel({
         .then((r) => r.json())
         .then((j) => {
           if (cancelled) return;
-          const rows = (j.data || []) as Array<{ id: string; from: string; to: string }>;
+          const rows = (j.data || []) as Array<{
+            id: string;
+            from: string;
+            to: string;
+            notes?: string | null;
+          }>;
           const activeIds = new Set(activeCallsRef.current.map((c) => c.id));
           const available = rows.filter((r) => !activeIds.has(r.id));
           if (available.length === 0) {
             // Keep a WebRTC-only banner; clear Call Control banner only when gone.
             setIncoming((prev) => (prev?.webrtcCall ? prev : null));
             setWaitingIncoming((prev) => prev.filter((w) => Boolean(w.webrtcCall)));
+            setScreeningIncoming(false);
             return;
           }
           const availableIds = new Set(available.map((r) => r.id));
@@ -753,6 +771,10 @@ export function SoftphonePanel({
             to: first.to,
             humanCallId: first.id,
           };
+          const rowNotes = String(first.notes || "");
+          setScreeningIncoming(
+            rowNotes.includes("screening:") && !rowNotes.includes("screening:accepted"),
+          );
           if (activeCallsRef.current.length > 0) {
             setWaitingIncoming((prev) => {
               if (prev.some((p) => p.id === call.id)) return prev;
@@ -772,6 +794,35 @@ export function SoftphonePanel({
     };
     check();
     const t = setInterval(check, 3000);
+    return () => {
+      cancelled = true;
+      clearInterval(t);
+    };
+  }, []);
+
+  // Queue callback overflow requests — agent one-click dial-back.
+  useEffect(() => {
+    let cancelled = false;
+    const load = () => {
+      fetch("/api/phone/calls?status=callback_requested&limit=10")
+        .then((r) => r.json())
+        .then((j) => {
+          if (cancelled) return;
+          setPendingCallbacks(
+            (j.data || []).map(
+              (r: { id: string; from: string; to: string; notes?: string | null }) => ({
+                id: r.id,
+                from: r.from,
+                to: r.to,
+                notes: r.notes,
+              }),
+            ),
+          );
+        })
+        .catch(() => undefined);
+    };
+    load();
+    const t = setInterval(load, 15000);
     return () => {
       cancelled = true;
       clearInterval(t);
@@ -1497,7 +1548,11 @@ export function SoftphonePanel({
       const res = await fetch("/api/phone/park", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ humanCallId: activeCall.id }),
+        body: JSON.stringify({
+          humanCallId: activeCall.id,
+          timeoutSeconds: Number(parkTimeoutSec) || 180,
+          fallbackTarget: parkFallback.trim() || undefined,
+        }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Park failed");
@@ -1551,15 +1606,14 @@ export function SoftphonePanel({
         // Other browser/device: unhold Call Control but need cellular/flip for audio.
         if (!parked?.handle) {
           const bridgeTo = myCellularNumber();
-          if (bridgeTo && human.telnyxCallControlId) {
-            await patchCallById(human.id, { flipTo: bridgeTo }).catch(() => undefined);
-            mediaMode = "call_my_phone";
-            setError("Park retrieved — ringing your phone for audio.");
-          } else {
-            setError(
-              "Park retrieved on Call Control. Use this browser’s park slot, or set Call my phone / flip number for audio.",
+          if (!bridgeTo) {
+            throw new Error(
+              "No local WebRTC media for this park slot. Set Call my phone / cellular, then retrieve again.",
             );
           }
+          await patchCallById(human.id, { flipTo: bridgeTo });
+          mediaMode = "call_my_phone";
+          setError("Park retrieved — ringing your phone for audio.");
         }
         const restored: ActiveCall = {
           id: human.id,
@@ -1599,6 +1653,7 @@ export function SoftphonePanel({
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Conference create failed");
       setConferenceId(json.data?.id || "");
+      setTimeout(() => void refreshConferenceParticipants(), 500);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Conference create failed");
     }
@@ -1669,9 +1724,99 @@ export function SoftphonePanel({
   }
 
   function can(perm: string) {
-    // Until permissions load, allow UI; server still enforces.
-    if (!permissions.length) return true;
+    if (!permissionsLoaded) return true;
     return permissions.includes(perm);
+  }
+
+  async function acceptScreeningCall(call: IncomingCall) {
+    try {
+      const bridgeTo = myCellularNumber();
+      if (!bridgeTo) {
+        throw new Error(
+          "Set Call my phone / cellular number to accept screened calls (held Call Control has no browser audio).",
+        );
+      }
+      await patchCallById(call.id, { acceptScreening: true, flipTo: bridgeTo });
+      setError("Accepted — ringing your phone for audio.");
+      setActiveCalls((prev) => [
+        ...prev,
+        {
+          id: call.id,
+          from: call.from,
+          to: call.to,
+          status: "in_progress",
+          muted: false,
+          onHold: true,
+          mediaMode: "call_my_phone",
+          startedAt: Date.now(),
+        },
+      ]);
+      setActiveLineId(call.id);
+      setIncoming(null);
+      setScreeningIncoming(false);
+      setControlLinkedIds((prev) => ({ ...prev, [call.id]: true }));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Accept failed");
+    }
+  }
+
+  async function declineScreeningCall(call: IncomingCall) {
+    try {
+      await patchCallById(call.id, { declineScreening: true });
+      setIncoming(null);
+      setScreeningIncoming(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Decline failed");
+    }
+  }
+
+  async function startListen(role: "monitor" | "whisper" | "barge") {
+    if (!activeCall) return;
+    const phone = myCellularNumber();
+    if (!phone) {
+      setError("Set Call my phone / cellular number to listen on a device.");
+      return;
+    }
+    try {
+      const data = await patchCallById(activeCall.id, {
+        supervisorRole: role,
+        supervisorPhone: phone,
+      });
+      if (data?.supervisorControlId) setSupervisorControlId(String(data.supervisorControlId));
+      setConferenceId(data?.conferenceId || conferenceId);
+      setError(
+        role === "monitor"
+          ? "Listen — answer on your phone (muted monitor)."
+          : role === "whisper"
+            ? "Whisper — answer on your phone (agent hears you)."
+            : "Barge — answer on your phone (all parties hear you).",
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Supervisor join failed");
+    }
+  }
+
+  async function refreshConferenceParticipants() {
+    if (!conferenceId) return;
+    const res = await fetch(`/api/phone/conference?id=${encodeURIComponent(conferenceId)}`);
+    const json = await res.json().catch(() => ({}));
+    setConferenceParticipants(json.data?.participants || []);
+  }
+
+  async function removeConferenceParticipant(participantId: string) {
+    if (!conferenceId) return;
+    try {
+      const res = await fetch("/api/phone/conference", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "remove", conferenceId, participantId }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Remove failed");
+      await refreshConferenceParticipants();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Remove failed");
+    }
   }
 
   async function flipCall() {
@@ -1807,6 +1952,43 @@ export function SoftphonePanel({
     <div className="grid gap-4 lg:grid-cols-3">
       <audio ref={remoteAudioRef} autoPlay className="hidden" />
 
+      {pendingCallbacks.length > 0 && (
+        <Card className="lg:col-span-3 border-amber-500/40 bg-amber-500/5">
+          <p className="mb-2 text-sm font-semibold">Queue callbacks due</p>
+          <ul className="space-y-2">
+            {pendingCallbacks.map((cb) => {
+              const phone =
+                (cb.notes || "").match(/\[callback_requested:([^\]]+)\]/)?.[1] || cb.from;
+              return (
+                <li key={cb.id} className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="font-mono text-xs">{phone}</span>
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      setDialNumber(phone);
+                      setPendingCallbacks((prev) => prev.filter((p) => p.id !== cb.id));
+                      void fetch(`/api/phone/calls/${cb.id}`, {
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          disposition: "callback_in_progress",
+                          notes: `${cb.notes || ""}\n[callback_claimed]`.trim(),
+                        }),
+                      }).catch(() => undefined);
+                      setTimeout(() => {
+                        document.getElementById("softphone-start-call")?.click();
+                      }, 100);
+                    }}
+                  >
+                    Call back
+                  </Button>
+                </li>
+              );
+            })}
+          </ul>
+        </Card>
+      )}
+
       {(incoming || waitingIncoming.length > 0) && (
         <Card className="lg:col-span-3 border-primary/40 bg-primary/5">
           {incoming && (
@@ -1823,12 +2005,29 @@ export function SoftphonePanel({
                 </div>
               </div>
               <div className="flex gap-2">
-                <Button onClick={answerIncoming} className="gap-2">
-                  <Phone className="h-4 w-4" /> Answer
-                </Button>
-                <Button variant="danger" onClick={declineIncoming} className="gap-2">
-                  <PhoneOff className="h-4 w-4" /> Decline
-                </Button>
+                {screeningIncoming ? (
+                  <>
+                    <Button onClick={() => void acceptScreeningCall(incoming)} className="gap-2">
+                      <Phone className="h-4 w-4" /> Accept
+                    </Button>
+                    <Button
+                      variant="danger"
+                      onClick={() => void declineScreeningCall(incoming)}
+                      className="gap-2"
+                    >
+                      <PhoneOff className="h-4 w-4" /> Voicemail
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Button onClick={answerIncoming} className="gap-2">
+                      <Phone className="h-4 w-4" /> Answer
+                    </Button>
+                    <Button variant="danger" onClick={declineIncoming} className="gap-2">
+                      <PhoneOff className="h-4 w-4" /> Decline
+                    </Button>
+                  </>
+                )}
               </div>
             </div>
           )}
@@ -2323,24 +2522,107 @@ export function SoftphonePanel({
             )}
 
             {conferenceId ? (
-              <div className="flex flex-wrap items-end gap-2">
-                <div className="min-w-[140px] flex-1">
-                  <Label>Add to conference</Label>
-                  <Input
-                    className="mt-1"
-                    value={conferenceAddTo}
-                    onChange={(e) => setConferenceAddTo(e.target.value)}
-                    placeholder="+1..."
-                  />
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-end gap-2">
+                  <div className="min-w-[140px] flex-1">
+                    <Label>Add to conference</Label>
+                    <Input
+                      className="mt-1"
+                      value={conferenceAddTo}
+                      onChange={(e) => setConferenceAddTo(e.target.value)}
+                      placeholder="+1..."
+                    />
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      void addToConference().then(() => refreshConferenceParticipants());
+                    }}
+                  >
+                    Add
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => void refreshConferenceParticipants()}
+                  >
+                    Refresh
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={endConferenceCall}>
+                    End conference
+                  </Button>
                 </div>
-                <Button variant="outline" size="sm" onClick={addToConference}>
-                  Add
-                </Button>
-                <Button variant="outline" size="sm" onClick={endConferenceCall}>
-                  End conference
-                </Button>
+                {conferenceParticipants.length > 0 ? (
+                  <ul className="space-y-1 text-xs">
+                    {conferenceParticipants.map((p) => (
+                      <li
+                        key={p.id}
+                        className="flex items-center justify-between gap-2 rounded border border-border px-2 py-1"
+                      >
+                        <span>
+                          {p.displayName || p.id.slice(0, 8)} · {p.status || "joined"}
+                        </span>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => void removeConferenceParticipant(p.id)}
+                        >
+                          Remove
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
               </div>
             ) : null}
+
+            <div className="mt-3 flex flex-wrap gap-2">
+              {can("listen") ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={!controlReady}
+                  onClick={() => void startListen("monitor")}
+                >
+                  Listen
+                </Button>
+              ) : null}
+              {can("whisper") ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={!controlReady}
+                  onClick={() => void startListen("whisper")}
+                >
+                  Whisper
+                </Button>
+              ) : null}
+              {can("listen") ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={!controlReady}
+                  onClick={() => void startListen("barge")}
+                >
+                  Barge
+                </Button>
+              ) : null}
+              {supervisorControlId && can("listen") ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    void patchCallById(activeCall.id, {
+                      supervisorRole: "barge",
+                      supervisorControlId,
+                    })
+                  }
+                >
+                  Upgrade to barge
+                </Button>
+              ) : null}
+            </div>
           </div>
         ) : null}
 
@@ -2385,6 +2667,26 @@ export function SoftphonePanel({
               ))}
             </ul>
           )}
+          <div className="grid gap-2 sm:grid-cols-2">
+            <div>
+              <Label>Park timeout (seconds)</Label>
+              <Input
+                className="mt-1"
+                value={parkTimeoutSec}
+                onChange={(e) => setParkTimeoutSec(e.target.value)}
+                placeholder="180"
+              />
+            </div>
+            <div>
+              <Label>Park fallback number</Label>
+              <Input
+                className="mt-1"
+                value={parkFallback}
+                onChange={(e) => setParkFallback(e.target.value)}
+                placeholder="+1… or blank for voicemail"
+              />
+            </div>
+          </div>
           <div className="flex flex-wrap items-end gap-2">
             <div className="min-w-[120px] flex-1">
               <Label htmlFor="parkSlot">Or enter slot code</Label>

@@ -138,10 +138,46 @@ export async function processSoftphoneInbound(input: {
         routingNote: `forward_user:${rule.targetValue}`,
       });
     }
+    if (rule.targetType === "device" && rule.targetValue) {
+      // Device key → owning user softphone notify (+ cellular if set).
+      const device = await prisma.softphoneDevice.findFirst({
+        where: {
+          workspaceId: input.workspaceId,
+          deviceKey: rule.targetValue,
+          active: true,
+        },
+      });
+      if (device) {
+        return handleInboundHumanCall({
+          workspaceId: input.workspaceId,
+          fromE164: from,
+          toE164: to,
+          telnyxCallControlId: input.telnyxCallControlId,
+          routingNote: `forward_user:${device.userId}`,
+        });
+      }
+    }
     if (rule.mode === "simultaneous" || rule.mode === "sequential") {
-      // Multi-target ring via queue members if configured in configJson
       const cfg = (rule.configJson || {}) as { userIds?: string[]; targets?: string[] };
-      if (cfg.targets?.length && input.telnyxCallControlId && isTelnyxPhoneConfigured()) {
+      // Targets from configJson, or comma-separated targetValue, or single external target.
+      const targets = [
+        ...(cfg.targets || []),
+        ...(rule.targetValue
+          ? String(rule.targetValue)
+              .split(/[,\n]/)
+              .map((s: string) => s.trim())
+              .filter((s: string) => s.startsWith("+"))
+          : []),
+      ];
+      // Resolve userIds → cellular numbers for multi-ring.
+      for (const uid of cfg.userIds || []) {
+        const us = await prisma.softphoneUserSettings.findUnique({
+          where: { workspaceId_userId: { workspaceId: input.workspaceId, userId: uid } },
+        });
+        if (us?.forwardToCellular) targets.push(us.forwardToCellular);
+      }
+      const uniqueTargets = [...new Set(targets.filter(Boolean))];
+      if (uniqueTargets.length && input.telnyxCallControlId && isTelnyxPhoneConfigured()) {
         const human = await handleInboundHumanCall({
           workspaceId: input.workspaceId,
           fromE164: from,
@@ -150,9 +186,13 @@ export async function processSoftphoneInbound(input: {
           routingNote: `forward_${rule.mode}`,
           autoAnswer: true,
         });
+        await telnyxRequest(`/calls/${input.telnyxCallControlId}/actions/hold`, {
+          method: "POST",
+          body: {},
+        }).catch(() => undefined);
         await ringExternalTargets(
           input,
-          cfg.targets,
+          uniqueTargets,
           rule.mode === "sequential",
           human.callId,
         );
@@ -216,15 +256,7 @@ async function screenInboundCall(input: {
   const agentPhone = userSettings?.forwardToCellular;
   const connectionId = process.env.TELNYX_CONNECTION_ID?.trim();
 
-  // Softphone-only screening: ring the browser agent with CRM pop; do not hold forever.
-  if (!agentPhone || !connectionId) {
-    await prisma.humanCall.update({
-      where: { id: human.callId },
-      data: { status: "ringing", notes: `screening:${input.userId}` },
-    });
-    return human;
-  }
-
+  // Always answer + hold the caller while screening (softphone Accept/Decline or cell DTMF).
   await telnyxRequest(`/calls/${input.telnyxCallControlId}/actions/answer`, {
     method: "POST",
     body: {},
@@ -242,28 +274,59 @@ async function screenInboundCall(input: {
     body: {},
   }).catch(() => undefined);
 
-  await telnyxRequest("/calls", {
-    method: "POST",
-    body: {
-      connection_id: connectionId,
-      from: input.toE164,
-      to: normalizeE164(agentPhone),
-      client_state: Buffer.from(
-        JSON.stringify({
-          workspaceId: input.workspaceId,
-          humanCallId: human.callId,
-          kind: "call_screening",
-          userId: input.userId,
-          parentCallControlId: input.telnyxCallControlId,
-        }),
-      ).toString("base64"),
-    },
-  }).catch(() => undefined);
+  let screeningLegId: string | null = null;
+  if (agentPhone && connectionId) {
+    const dialed = await telnyxRequest<{ data?: { call_control_id?: string } }>("/calls", {
+      method: "POST",
+      body: {
+        connection_id: connectionId,
+        from: input.toE164,
+        to: normalizeE164(agentPhone),
+        client_state: Buffer.from(
+          JSON.stringify({
+            workspaceId: input.workspaceId,
+            humanCallId: human.callId,
+            kind: "call_screening",
+            userId: input.userId,
+            parentCallControlId: input.telnyxCallControlId,
+          }),
+        ).toString("base64"),
+      },
+    }).catch(() => null);
+    screeningLegId = dialed?.data?.call_control_id || null;
+  }
 
   await prisma.humanCall.update({
     where: { id: human.callId },
-    data: { status: "ringing", onHold: true, notes: `screening:${input.userId}` },
+    data: {
+      status: "ringing",
+      onHold: true,
+      agentUserId: input.userId,
+      notes: `screening:${input.userId}${agentPhone ? "" : " softphone_accept"}${
+        screeningLegId ? ` [ring_legs:${screeningLegId}]` : ""
+      }`,
+    },
   });
+
+  // Softphone-only screening timeout → voicemail if nobody Accepts.
+  try {
+    const { enqueueJob } = await import("@/lib/messaging/enqueue-advance");
+    await enqueueJob({
+      jobType: "phone_softphone_ring_timeout",
+      queueName: "voice-calls",
+      workspaceId: input.workspaceId,
+      payload: {
+        workspaceId: input.workspaceId,
+        humanCallId: human.callId,
+        telnyxCallControlId: input.telnyxCallControlId,
+        toE164: input.toE164,
+      },
+      idempotencyKey: `screening-timeout-${human.callId}`,
+      runAfter: new Date(Date.now() + 30_000),
+    });
+  } catch {
+    // ignore
+  }
 
   return human;
 }
@@ -314,41 +377,55 @@ async function ringExternalTargets(
   sequential: boolean,
   humanCallId?: string,
 ) {
-  const connectionId = process.env.TELNYX_CONNECTION_ID?.trim();
-  if (!connectionId || !input.telnyxCallControlId) return;
+  if (!input.telnyxCallControlId || !humanCallId) return;
+  const { dialHuntTarget } = await import("./hunt-service");
   const list = sequential ? targets.slice(0, 1) : targets;
   const ringLegIds: string[] = [];
   for (const to of list) {
-    const dialed = await telnyxRequest<{ data?: { call_control_id?: string } }>("/calls", {
-      method: "POST",
-      body: {
-        connection_id: connectionId,
-        from: input.toE164,
-        to: normalizeE164(to),
-        client_state: Buffer.from(
-          JSON.stringify({
-            workspaceId: input.workspaceId,
-            humanCallId: humanCallId || null,
-            kind: "simultaneous_ring",
-            parentCallControlId: input.telnyxCallControlId,
-          }),
-        ).toString("base64"),
-      },
-    }).catch(() => null);
-    const legId = dialed?.data?.call_control_id;
+    const legId = await dialHuntTarget({
+      workspaceId: input.workspaceId,
+      humanCallId,
+      parentCallControlId: input.telnyxCallControlId,
+      fromE164: input.toE164,
+      target: to,
+      sequential,
+    });
     if (legId) ringLegIds.push(legId);
   }
-  if (humanCallId && ringLegIds.length) {
-    const call = await getPrisma().humanCall.findUnique({ where: { id: humanCallId } });
-    if (call) {
-      await getPrisma()
-        .humanCall.update({
-          where: { id: humanCallId },
-          data: {
-            notes: `${call.notes || ""}\n[ring_legs:${ringLegIds.join(",")}]`.trim(),
-          },
-        })
-        .catch(() => undefined);
-    }
+  const huntNote = `[hunt_targets:${targets.join(",")}] [hunt_index:0] [hunt_mode:${sequential ? "sequential" : "simultaneous"}]`;
+  const call = await getPrisma().humanCall.findUnique({ where: { id: humanCallId } });
+  if (call) {
+    await getPrisma()
+      .humanCall.update({
+        where: { id: humanCallId },
+        data: {
+          onHold: true,
+          notes: `${call.notes || ""}\n${huntNote}${ringLegIds.length ? ` [ring_legs:${ringLegIds.join(",")}]` : ""}`.trim(),
+        },
+      })
+      .catch(() => undefined);
+  }
+
+  // Sequential: advance to next target if this one does not answer.
+  // Simultaneous: unanswered overflow after ring window.
+  try {
+    const { enqueueJob } = await import("@/lib/messaging/enqueue-advance");
+    await enqueueJob({
+      jobType: sequential ? "phone_hunt_advance" : "phone_softphone_ring_timeout",
+      queueName: "voice-calls",
+      workspaceId: input.workspaceId,
+      payload: {
+        workspaceId: input.workspaceId,
+        humanCallId,
+        telnyxCallControlId: input.telnyxCallControlId,
+        toE164: input.toE164,
+      },
+      idempotencyKey: sequential
+        ? `hunt-advance-${humanCallId}-0`
+        : `hunt-sim-timeout-${humanCallId}`,
+      runAfter: new Date(Date.now() + 25_000),
+    });
+  } catch {
+    // ignore
   }
 }
