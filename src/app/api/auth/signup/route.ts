@@ -1,6 +1,12 @@
 import { hash } from "bcryptjs";
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { encodeSession, SESSION_COOKIE, WORKSPACE_COOKIE } from "@/lib/auth";
+import {
+  PHONE_VERIFIED_COOKIE,
+  normalizePhone,
+  readVerifiedPhone,
+} from "@/lib/auth/phone-otp";
 import { getPrisma } from "@/lib/db";
 import { getMaintenanceState, getTrialLimits } from "@/lib/platform-flags";
 import { grantCredits } from "@/lib/settings/billing";
@@ -30,10 +36,27 @@ export async function POST(request: Request) {
       email?: string;
       password?: string;
       businessName?: string;
+      phone?: string;
       stripePaymentMethodId?: string;
     };
     if (!body.email || !body.password || !body.name) {
       return NextResponse.json({ error: "Name, email, and password required" }, { status: 400 });
+    }
+    if (!body.phone) {
+      return NextResponse.json(
+        { error: "Verify your mobile number with an SMS code to continue." },
+        { status: 400 },
+      );
+    }
+
+    const phone = normalizePhone(body.phone);
+    const store = await cookies();
+    const verifiedPhone = readVerifiedPhone(store.get(PHONE_VERIFIED_COOKIE)?.value);
+    if (!verifiedPhone || verifiedPhone !== phone) {
+      return NextResponse.json(
+        { error: "Verify your mobile number with an SMS code to continue." },
+        { status: 400 },
+      );
     }
 
     const trial = await getTrialLimits();
@@ -50,14 +73,30 @@ export async function POST(request: Request) {
     const slugTaken = await prisma.workspace.findUnique({ where: { slug } });
     if (slugTaken) slug = `${slug}-${Date.now().toString(36)}`;
 
-    const user = await prisma.user.create({
-      data: {
-        email,
-        name: body.name.trim(),
-        passwordHash,
-        isPlatformAdmin: false,
-      },
-    });
+    let user;
+    try {
+      user = await prisma.user.create({
+        data: {
+          email,
+          name: body.name.trim(),
+          passwordHash,
+          phone,
+          phoneVerifiedAt: new Date(),
+          isPlatformAdmin: false,
+        },
+      });
+    } catch (err) {
+      // Soft-fallback if phone columns are not migrated yet.
+      console.warn("[auth/signup] phone fields unavailable, retrying without", err);
+      user = await prisma.user.create({
+        data: {
+          email,
+          name: body.name.trim(),
+          passwordHash,
+          isPlatformAdmin: false,
+        },
+      });
+    }
 
     const workspace = await prisma.workspace.create({
       data: {

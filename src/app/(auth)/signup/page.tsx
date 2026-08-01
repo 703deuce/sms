@@ -1,5 +1,6 @@
 "use client";
 
+import { SmsOptIn } from "@/components/auth/sms-opt-in";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
 import Link from "next/link";
@@ -10,11 +11,18 @@ export default function SignupPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [phone, setPhone] = useState("");
+  const [phoneVerified, setPhoneVerified] = useState(false);
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setLoading(true);
     setError("");
+    if (!phoneVerified || !phone) {
+      setLoading(false);
+      setError("Verify your mobile number with an SMS code before creating your account.");
+      return;
+    }
     const form = new FormData(e.currentTarget);
     const res = await fetch("/api/auth/signup", {
       method: "POST",
@@ -24,11 +32,13 @@ export default function SignupPage() {
         email: form.get("email"),
         password: form.get("password"),
         businessName: form.get("businessName"),
+        phone,
       }),
     });
     setLoading(false);
     if (!res.ok) {
-      setError("Unable to create account.");
+      const json = (await res.json().catch(() => ({}))) as { error?: string };
+      setError(json.error || "Unable to create account.");
       return;
     }
     router.push("/getting-started");
@@ -43,7 +53,7 @@ export default function SignupPage() {
         </p>
         <h1 className="mt-3 font-display text-xl font-semibold">Start texting compliantly</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Register, get a number, import contacts, and send your first campaign.
+          Register, verify your phone, get a number, and send your first campaign.
         </p>
       </div>
       <form className="space-y-4" onSubmit={onSubmit}>
@@ -68,8 +78,22 @@ export default function SignupPage() {
           <Label htmlFor="password">Password</Label>
           <Input id="password" name="password" type="password" required minLength={8} />
         </div>
+
+        <div className="rounded-lg border border-border p-4">
+          <p className="mb-3 text-xs leading-5 text-muted-foreground">
+            Before we create your account, enter your mobile number. Transovo AI will send a
+            one-time verification code by SMS only after you request it.
+          </p>
+          <SmsOptIn
+            onVerified={(verifiedPhone) => {
+              setPhone(verifiedPhone);
+              setPhoneVerified(true);
+            }}
+          />
+        </div>
+
         {error ? <p className="text-sm text-danger">{error}</p> : null}
-        <Button type="submit" className="w-full" disabled={loading}>
+        <Button type="submit" className="w-full" disabled={loading || !phoneVerified}>
           {loading ? "Creating..." : "Create account"}
         </Button>
       </form>

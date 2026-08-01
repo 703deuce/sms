@@ -285,7 +285,7 @@ export async function processInboundMessage(input: {
       kind: "help",
       replyText:
         input.registration?.helpMessage ||
-        `${input.registration?.legalBusinessName || "Support"}: For help contact ${input.registration?.contactEmail || "support@transovo.ai"}. Reply STOP to opt out. Msg&data rates may apply.`,
+        `${input.registration?.legalBusinessName || "Transovo AI"} Support: For assistance, visit https://transovo.ai or email ${input.registration?.contactEmail || "support@transovo.ai"}. Reply STOP to opt out.`,
     };
   }
 

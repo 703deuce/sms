@@ -102,16 +102,29 @@ export default function PrivacyPage() {
         the sending business and route the request.
       </p>
 
-      <h3>Account phone verification and one-time SMS codes</h3>
+      <h3>Account phone verification and one-time SMS codes (2FA)</h3>
       <p>
-        When you provide your mobile number to verify your account (for example on our sign-in page
-        or at <a href="/sms-opt-in">/sms-opt-in</a>), you are opting in to receive SMS verification
-        codes from {BRAND_NAME}. Example message: &ldquo;{BRAND_NAME}: You requested SMS verification
-        codes for your account. Message frequency varies. Msg &amp; data rates may apply. Reply STOP
-        to opt out or HELP for help.&rdquo; These verification messages are transactional and are
-        sent only in response to your request. We use the number to confirm ownership of the device
-        and to secure your account; we do not sell it or use it for third-party marketing. See our{" "}
-        <a href="/terms">Terms of Service</a> for more detail.
+        {BRAND_NAME} sends one-time verification codes to users who request them when signing in,
+        verifying their phone number, or resetting their password. You may enter your mobile number
+        during account registration, sign-in verification, at{" "}
+        <a href="/sms-opt-in">/sms-opt-in</a>, or during password recovery at{" "}
+        <a href="/forgot-password">/forgot-password</a>. Before requesting a code, you are informed
+        that {BRAND_NAME} will send a one-time verification code by SMS; the message is sent only
+        after you actively request it.
+      </p>
+      <p>
+        Sample verification message: &ldquo;Your {BRAND_NAME} verification code is 123456. This code
+        expires in 10 minutes. Do not share this code with anyone.&rdquo; Opt-in disclosure: &ldquo;
+        {BRAND_NAME}: You requested SMS verification codes for your account. Message frequency
+        varies. Msg &amp; data rates may apply. Reply STOP to opt out or HELP for help.&rdquo; Help
+        reply: &ldquo;{BRAND_NAME} Support: For assistance, visit https://transovo.ai or email
+        support@transovo.ai. Reply STOP to opt out.&rdquo;
+      </p>
+      <p>
+        These messages are transactional. Your number will not be used for advertising, promotional
+        campaigns, or unsolicited messages. We use it to confirm ownership of the device and to
+        secure your account; we do not sell it. See our <a href="/terms">Terms of Service</a> for
+        more detail.
       </p>
 
       <h2>5. How we share information</h2>

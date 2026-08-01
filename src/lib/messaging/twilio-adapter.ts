@@ -308,7 +308,7 @@ export const twilioAdapter = {
       optOutMessage: reg.stopMessage || "You are unsubscribed and will no longer receive messages. Reply START to re-subscribe.",
       helpMessage:
         reg.helpMessage ||
-        `${reg.legalBusinessName || "Support"}: For help reply HELP or contact ${reg.contactEmail || "support"}. Msg&data rates may apply.`,
+        `${reg.legalBusinessName || "Transovo AI"} Support: For assistance, visit https://transovo.ai or email ${reg.contactEmail || "support@transovo.ai"}. Reply STOP to opt out.`,
     });
 
     return {

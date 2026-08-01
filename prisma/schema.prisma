@@ -100,6 +100,8 @@ model User {
   email               String       @unique
   name                String
   passwordHash        String?
+  phone               String?
+  phoneVerifiedAt     DateTime?
   isPlatformAdmin     Boolean      @default(false)
   totpSecretEnc       String?
   totpEnabled         Boolean      @default(false)
@@ -112,6 +114,8 @@ model User {
   phoneAssignments    PhoneNumberAssignment[]
   inAppNotifications  InAppNotification[]
   invitesSent         WorkspaceInvite[] @relation("InviteSender")
+
+  @@index([phone])
 }
 
 model Workspace {

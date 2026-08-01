@@ -316,7 +316,7 @@ export const telnyxProvider: MessagingProvider = {
       : "uncertified";
     const helpMessage =
       reg.helpMessage ||
-      "Reply HELP for help. Reply STOP to opt out. Message and data rates may apply.";
+      "Transovo AI Support: For assistance, visit https://transovo.ai or email support@transovo.ai. Reply STOP to opt out.";
     const optoutMessage =
       reg.stopMessage ||
       "You are unsubscribed and will no longer receive messages. Reply START to re-subscribe.";

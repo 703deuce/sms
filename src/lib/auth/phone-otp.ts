@@ -86,3 +86,19 @@ export function createVerifiedToken(phone: string): string {
   const body = Buffer.from(JSON.stringify({ p: phone, t: Date.now() })).toString("base64url");
   return `${body}.${sign(body)}`;
 }
+
+/** Returns the E.164 phone from a verified cookie, or null if invalid/expired. */
+export function readVerifiedPhone(token: string | undefined, maxAgeMs = 60 * 60 * 24 * 30 * 1000): string | null {
+  if (!token) return null;
+  const [body, sig] = token.split(".");
+  if (!body || !sig) return null;
+  if (!safeEqual(sig, sign(body))) return null;
+  try {
+    const payload = JSON.parse(Buffer.from(body, "base64url").toString()) as { p?: string; t?: number };
+    if (!payload.p || typeof payload.t !== "number") return null;
+    if (Date.now() - payload.t > maxAgeMs) return null;
+    return payload.p;
+  } catch {
+    return null;
+  }
+}

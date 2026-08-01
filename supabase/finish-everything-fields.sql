@@ -15,11 +15,14 @@ ALTER TABLE "Workspace" ADD COLUMN IF NOT EXISTS "billingPlan" TEXT DEFAULT 'gro
 ALTER TABLE "Workspace" ADD COLUMN IF NOT EXISTS "creditBalanceCents" INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE "Workspace" ADD COLUMN IF NOT EXISTS "activeFromNumberId" TEXT;
 
--- User 2FA / deletion
+-- User 2FA / deletion / SMS phone verification
 ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "totpSecretEnc" TEXT;
 ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "totpEnabled" BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "totpBackupCodes" TEXT[] DEFAULT ARRAY[]::TEXT[];
 ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "deletionRequestedAt" TIMESTAMP(3);
+ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "phone" TEXT;
+ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "phoneVerifiedAt" TIMESTAMP(3);
+CREATE INDEX IF NOT EXISTS "User_phone_idx" ON "User"("phone");
 
 -- Phone number extras
 ALTER TABLE "PhoneNumber" ADD COLUMN IF NOT EXISTS "voiceForwardTo" TEXT;

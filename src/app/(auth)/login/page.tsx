@@ -74,6 +74,11 @@ function LoginForm() {
             required
             placeholder="••••••••"
           />
+          <p className="mt-1 text-right text-xs">
+            <Link href="/forgot-password" className="text-primary hover:underline">
+              Forgot password?
+            </Link>
+          </p>
         </div>
         {requires2fa ? (
           <div>
@@ -97,9 +102,10 @@ function LoginForm() {
         </Button>
       </form>
       <div className="mt-6 border-t border-border pt-6">
-        <h2 className="text-center text-sm font-semibold">Verify your mobile number</h2>
+        <h2 className="text-center text-sm font-semibold">Sign-in phone verification</h2>
         <p className="mb-4 mt-1 text-center text-xs text-muted-foreground">
-          Confirm your phone with a one-time SMS code — like verifying an email.
+          Optionally confirm your mobile number with a one-time SMS code from Transovo AI. The
+          message is sent only after you request it.
         </p>
         <SmsOptIn />
       </div>

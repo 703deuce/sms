@@ -101,14 +101,29 @@ export default function TermsPage() {
         registries, and related partners.
       </p>
 
-      <h3>SMS phone verification and consent</h3>
+      <h3>SMS phone verification and consent (2FA)</h3>
       <p>
-        When you enter your mobile number to verify your account (for example on our sign-in page or
-        at <a href="/sms-opt-in">/sms-opt-in</a>), you expressly consent to receive SMS verification
-        codes from {BRAND_NAME}. Example message: &ldquo;{BRAND_NAME}: You requested SMS verification
-        codes for your account. Message frequency varies. Msg &amp; data rates may apply. Reply STOP
-        to opt out or HELP for help.&rdquo; These are transactional messages sent only when you
-        request a code, and consent to receive them is not a condition of any purchase.
+        {BRAND_NAME} sends one-time verification codes to users who request them when signing in,
+        verifying their phone number, or resetting their password. Users enter their mobile phone
+        number during account registration, sign-in verification, phone-number verification (see{" "}
+        <a href="/sms-opt-in">/sms-opt-in</a>), or password recovery (
+        <a href="/forgot-password">/forgot-password</a>). Before requesting the code, users are
+        informed that {BRAND_NAME} will send a one-time verification code by SMS. The message is sent
+        only after the user actively requests it.
+      </p>
+      <p>
+        Sample verification message: &ldquo;Your {BRAND_NAME} verification code is 123456. This code
+        expires in 10 minutes. Do not share this code with anyone.&rdquo; Opt-in disclosure: &ldquo;
+        {BRAND_NAME}: You requested SMS verification codes for your account. Message frequency
+        varies. Msg &amp; data rates may apply. Reply STOP to opt out or HELP for help.&rdquo; Help
+        reply: &ldquo;{BRAND_NAME} Support: For assistance, visit https://transovo.ai or email
+        support@transovo.ai. Reply STOP to opt out.&rdquo;
+      </p>
+      <p>
+        Messages are transactional and are sent only after a user enters their phone number and
+        requests a verification code. The number will not be used for advertising, promotional
+        campaigns, or unsolicited messages. Consent to receive these codes is not a condition of any
+        purchase. Opt-in keywords are not used for this 2FA program (N/A). Age-gated content: No.
       </p>
 
       <h2>6. Acceptable use</h2>

@@ -1,6 +1,8 @@
 import { compare } from "bcryptjs";
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { encodeSession, SESSION_COOKIE, WORKSPACE_COOKIE } from "@/lib/auth";
+import { PHONE_VERIFIED_COOKIE, readVerifiedPhone } from "@/lib/auth/phone-otp";
 import { getPrisma } from "@/lib/db";
 import { consumeBackupCode, decryptSecret, verifyTotp } from "@/lib/auth/totp";
 
@@ -61,6 +63,20 @@ export async function POST(request: Request) {
     });
     if (!membership) {
       return NextResponse.json({ error: "No workspace for this account" }, { status: 403 });
+    }
+
+    // If the user verified a mobile number on the sign-in page, attach it.
+    const store = await cookies();
+    const verifiedPhone = readVerifiedPhone(store.get(PHONE_VERIFIED_COOKIE)?.value);
+    if (verifiedPhone && user.phone !== verifiedPhone) {
+      try {
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { phone: verifiedPhone, phoneVerifiedAt: new Date() },
+        });
+      } catch (err) {
+        console.warn("[auth/login] phone attach skipped", err);
+      }
     }
 
     const session = {

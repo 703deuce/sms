@@ -4,6 +4,7 @@ const publicExact = new Set([
   "/",
   "/login",
   "/signup",
+  "/forgot-password",
   "/sms-opt-in",
   "/privacy",
   "/terms",
@@ -12,7 +13,7 @@ const publicExact = new Set([
   "/maintenance",
 ]);
 
-const authPages = new Set(["/login", "/signup"]);
+const authPages = new Set(["/login", "/signup", "/forgot-password"]);
 
 function isPublicPath(pathname: string) {
   if (publicExact.has(pathname)) return true;
