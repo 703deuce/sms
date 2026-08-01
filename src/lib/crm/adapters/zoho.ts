@@ -17,10 +17,19 @@ import type {
   CrmTask,
   CrmUser,
 } from "../types";
+// CrmTask used by listTasks mapping
 
 function apiBase(ctx: ConnectorContext) {
   const domain = String(ctx.meta.apiDomain || "https://www.zohoapis.com").replace(/\/$/, "");
+  // Bigin uses a separate API root — do not call Zoho CRM Leads modules.
+  if (ctx.preferences.zohoProduct === "bigin") {
+    return `${domain}/bigin/v2`;
+  }
   return `${domain}/crm/v2`;
+}
+
+function isBigin(ctx: ConnectorContext) {
+  return ctx.preferences.zohoProduct === "bigin";
 }
 
 export const zohoConnector: CrmConnector = {
@@ -157,6 +166,7 @@ export const zohoConnector: CrmConnector = {
         Phone: contact.phone,
         Email: contact.email,
         Lead_Source: contact.source || "Transovo",
+        Tag: contact.tags?.length ? contact.tags.map((name) => ({ name })) : undefined,
         Owner: contact.ownerExternalId
           ? { id: contact.ownerExternalId }
           : ctx.preferences.defaultOwnerExternalId
@@ -188,6 +198,10 @@ export const zohoConnector: CrmConnector = {
   },
 
   async listLeads(ctx, cursor, opts) {
+    if (isBigin(ctx)) {
+      // Bigin has no native Leads module equivalent to Zoho CRM Leads.
+      return { items: [], nextCursor: null };
+    }
     const page = cursor ? Number(cursor) : 1;
     let path = `${apiBase(ctx)}/Leads?page=${page}&per_page=200`;
     if (opts?.modifiedSince) {
@@ -217,6 +231,9 @@ export const zohoConnector: CrmConnector = {
   },
 
   async upsertLead(ctx, lead) {
+    if (isBigin(ctx)) {
+      throw new Error("Bigin does not support Zoho CRM Leads — use Contacts/Pipelines");
+    }
     const body = {
       data: [
         {
@@ -249,12 +266,14 @@ export const zohoConnector: CrmConnector = {
 
   async listDeals(ctx, cursor, opts) {
     const page = cursor ? Number(cursor) : 1;
-    let path = `${apiBase(ctx)}/Deals?page=${page}&per_page=200`;
+    // Bigin pipeline records use Pipelines module; Zoho CRM uses Deals.
+    const module = isBigin(ctx) ? "Pipelines" : "Deals";
+    let path = `${apiBase(ctx)}/${module}?page=${page}&per_page=200`;
     if (opts?.modifiedSince) {
       const criteria = encodeURIComponent(
         `(Modified_Time:greater_equal:${opts.modifiedSince.toISOString()})`,
       );
-      path = `${apiBase(ctx)}/Deals/search?criteria=${criteria}&page=${page}&per_page=200`;
+      path = `${apiBase(ctx)}/${module}/search?criteria=${criteria}&page=${page}&per_page=200`;
     }
     const data = await crmFetch<{ data?: Array<Record<string, unknown>>; info?: { more_records?: boolean } }>(
       path,
@@ -264,10 +283,11 @@ export const zohoConnector: CrmConnector = {
       items: (data.data || []).map(
         (r): CrmDeal => ({
           id: String(r.id),
-          name: String(r.Deal_Name || "Deal"),
+          name: String(r.Deal_Name || r.Pipeline_Name || r.Name || "Deal"),
           amount: r.Amount != null ? Number(r.Amount) : null,
           stage: (r.Stage as string) || null,
           pipeline: (r.Pipeline as string) || null,
+          closeDate: (r.Closing_Date as string) || null,
         }),
       ),
       nextCursor: data.info?.more_records ? String(page + 1) : null,
@@ -275,6 +295,7 @@ export const zohoConnector: CrmConnector = {
   },
 
   async upsertDeal(ctx, deal) {
+    const module = isBigin(ctx) ? "Pipelines" : "Deals";
     const body = {
       data: [
         {
@@ -283,11 +304,12 @@ export const zohoConnector: CrmConnector = {
           Amount: deal.amount,
           Stage: deal.stage,
           Pipeline: deal.pipeline,
+          Closing_Date: deal.closeDate || undefined,
         },
       ],
     };
     if (deal.id) {
-      await crmFetch(`${apiBase(ctx)}/Deals`, {
+      await crmFetch(`${apiBase(ctx)}/${module}`, {
         method: "PUT",
         accessToken: ctx.accessToken,
         body: JSON.stringify(body),
@@ -295,11 +317,11 @@ export const zohoConnector: CrmConnector = {
       return { externalId: deal.id, created: false };
     }
     const created = await crmFetch<{ data?: Array<{ details?: { id?: string } }> }>(
-      `${apiBase(ctx)}/Deals`,
+      `${apiBase(ctx)}/${module}`,
       { method: "POST", accessToken: ctx.accessToken, body: JSON.stringify(body) },
     );
     const id = created.data?.[0]?.details?.id;
-    if (!id) throw new Error("Zoho deal create failed");
+    if (!id) throw new Error("Zoho/Bigin deal create failed");
     return { externalId: id, created: true };
   },
 
@@ -348,6 +370,117 @@ export const zohoConnector: CrmConnector = {
     const id = created.data?.[0]?.details?.id;
     if (!id) throw new Error("Zoho note create failed");
     return { externalId: id, created: true };
+  },
+
+  async updateNote(ctx, note) {
+    await crmFetch(`${apiBase(ctx)}/Notes`, {
+      method: "PUT",
+      accessToken: ctx.accessToken,
+      body: JSON.stringify({
+        data: [
+          {
+            id: note.id,
+            Note_Title: "Transovo note",
+            Note_Content: note.body,
+            Parent_Id: note.contactExternalId || undefined,
+            se_module: "Contacts",
+          },
+        ],
+      }),
+    });
+    return { externalId: note.id, created: false };
+  },
+
+  async listTasks(ctx, cursor, opts) {
+    const page = cursor ? Number(cursor) : 1;
+    let path = `${apiBase(ctx)}/Tasks?page=${page}&per_page=200`;
+    if (opts?.modifiedSince) {
+      const criteria = encodeURIComponent(
+        `(Modified_Time:greater_equal:${opts.modifiedSince.toISOString()})`,
+      );
+      path = `${apiBase(ctx)}/Tasks/search?criteria=${criteria}&page=${page}&per_page=200`;
+    }
+    const data = await crmFetch<{
+      data?: Array<Record<string, unknown>>;
+      info?: { more_records?: boolean };
+    }>(path, { accessToken: ctx.accessToken });
+    return {
+      items: (data.data || []).map(
+        (r): CrmTask => ({
+          id: String(r.id),
+          subject: String(r.Subject || "Task"),
+          description: (r.Description as string) || null,
+          status: (r.Status as string) || null,
+          dueAt: (r.Due_Date as string) || null,
+          contactExternalId:
+            typeof r.Who_Id === "object" && r.Who_Id
+              ? String((r.Who_Id as { id?: string }).id || "") || null
+              : null,
+        }),
+      ),
+      nextCursor: data.info?.more_records ? String(page + 1) : null,
+    };
+  },
+
+  async listNotes(ctx, cursor) {
+    const page = cursor ? Number(cursor) : 1;
+    const data = await crmFetch<{
+      data?: Array<Record<string, unknown>>;
+      info?: { more_records?: boolean };
+    }>(`${apiBase(ctx)}/Notes?page=${page}&per_page=200`, { accessToken: ctx.accessToken });
+    return {
+      items: (data.data || []).map((r) => ({
+        id: String(r.id),
+        body: String(r.Note_Content || r.Note_Title || ""),
+        contactExternalId:
+          typeof r.Parent_Id === "object" && r.Parent_Id
+            ? String((r.Parent_Id as { id?: string }).id || "") || null
+            : null,
+        updatedAt: (r.Modified_Time as string) || null,
+      })),
+      nextCursor: data.info?.more_records ? String(page + 1) : null,
+    };
+  },
+
+  async listActivities(ctx, cursor, opts) {
+    // Prefer Calls module as communication activities; fall back to Tasks page.
+    try {
+      const page = cursor ? Number(cursor) : 1;
+      const data = await crmFetch<{
+        data?: Array<Record<string, unknown>>;
+        info?: { more_records?: boolean };
+      }>(`${apiBase(ctx)}/Calls?page=${page}&per_page=200`, { accessToken: ctx.accessToken });
+      return {
+        items: (data.data || []).map((r) => ({
+          id: String(r.id),
+          type: "call" as const,
+          subject: String(r.Subject || "Call"),
+          body: (r.Description as string) || null,
+          status: (r.Call_Status as string) || null,
+          startedAt: (r.Call_Start_Time as string) || null,
+          contactExternalId:
+            typeof r.Who_Id === "object" && r.Who_Id
+              ? String((r.Who_Id as { id?: string }).id || "") || null
+              : null,
+          updatedAt: (r.Modified_Time as string) || null,
+        })),
+        nextCursor: data.info?.more_records ? String(page + 1) : null,
+      };
+    } catch {
+      const tasks = await zohoConnector.listTasks!(ctx, cursor, opts);
+      return {
+        items: tasks.items.map((t) => ({
+          id: t.id,
+          type: "task" as const,
+          subject: t.subject,
+          body: t.description,
+          status: t.status,
+          dueAt: t.dueAt,
+          contactExternalId: t.contactExternalId,
+        })),
+        nextCursor: tasks.nextCursor,
+      };
+    }
   },
 
   async logCall(ctx, call) {
@@ -570,22 +703,48 @@ export const zohoConnector: CrmConnector = {
 
   async listPipelines(ctx) {
     // Zoho deal pipelines vary by org; expose a soft default when stages are readable.
+    const module = isBigin(ctx) ? "Pipelines" : "Deals";
     try {
       const data = await crmFetch<{
         fields?: Array<{
           api_name?: string;
           pick_list_values?: Array<{ display_value?: string; actual_value?: string }>;
         }>;
-      }>(`${apiBase(ctx)}/settings/fields?module=Deals`, { accessToken: ctx.accessToken });
+      }>(`${apiBase(ctx)}/settings/fields?module=${module}`, { accessToken: ctx.accessToken });
       const stage = data.fields?.find((f) => f.api_name === "Stage");
       const stages = (stage?.pick_list_values || []).map((p, i) => ({
         id: String(p.actual_value || p.display_value || i),
         name: String(p.display_value || p.actual_value || "Stage"),
         order: i,
       }));
-      return [{ id: "deals", name: "Deals", stages }];
+      return [{ id: module.toLowerCase(), name: module, stages }];
     } catch {
       return [];
     }
+  },
+
+  async listTags(ctx) {
+    // Zoho tags are module-attached; expose from Contacts Tag field when available.
+    try {
+      const data = await crmFetch<{
+        tags?: Array<{ name?: string; id?: string; colour_code?: string }>;
+      }>(`${apiBase(ctx)}/settings/tags?module=Contacts`, { accessToken: ctx.accessToken });
+      return (data.tags || []).map((t) => ({
+        id: t.id ? String(t.id) : undefined,
+        name: String(t.name || ""),
+        color: t.colour_code || null,
+      })).filter((t) => t.name);
+    } catch {
+      return [];
+    }
+  },
+
+  async handleWebhook(_ctx, _headers, body) {
+    const payload = (body || {}) as Record<string, unknown>;
+    const events = Array.isArray(payload) ? payload : [payload];
+    return {
+      accepted: true,
+      events: events.map((e) => (typeof e === "object" && e ? (e as Record<string, unknown>) : {})),
+    };
   },
 };

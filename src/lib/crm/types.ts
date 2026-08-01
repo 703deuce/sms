@@ -14,17 +14,19 @@ export type CrmObjectType =
   | "task"
   | "user"
   | "pipeline"
+  | "pipeline_stage"
   | "stage"
   | "note"
   | "call"
   | "sms"
   | "recording"
   | "transcript"
-  | "note"
   | "activity"
   | "callback"
-  | "pipeline"
-  | "pipeline_stage";
+  | "tag"
+  | "custom_field"
+  | "disposition"
+  | "attachment";
 
 export type CrmConnectionState =
   | "disconnected"
@@ -46,6 +48,51 @@ export type CrmContact = {
   ownerExternalId?: string | null;
   customFields?: Record<string, unknown>;
   source?: string | null;
+  tags?: string[];
+  status?: string | null;
+};
+
+export type CrmTag = {
+  id?: string;
+  name: string;
+  color?: string | null;
+};
+
+export type CrmCustomFieldDefinition = {
+  objectType: string;
+  name: string;
+  label: string;
+  dataType:
+    | "text"
+    | "number"
+    | "boolean"
+    | "date"
+    | "datetime"
+    | "url"
+    | "picklist"
+    | "multipicklist"
+    | "owner"
+    | "unknown";
+  required?: boolean;
+  picklistValues?: string[];
+};
+
+export type CrmActivity = {
+  id?: string;
+  type: "task" | "note" | "call" | "sms" | "meeting" | "other";
+  subject?: string | null;
+  body?: string | null;
+  status?: string | null;
+  dueAt?: string | null;
+  startedAt?: string | null;
+  contactExternalId?: string | null;
+  ownerExternalId?: string | null;
+  updatedAt?: string | null;
+};
+
+export type CrmDisposition = {
+  code: string;
+  label: string;
 };
 
 export type CrmCompany = {
@@ -79,6 +126,8 @@ export type CrmDeal = {
   companyExternalId?: string | null;
   ownerExternalId?: string | null;
   status?: string | null;
+  closeDate?: string | null;
+  customFields?: Record<string, unknown>;
 };
 
 export type CrmTask = {

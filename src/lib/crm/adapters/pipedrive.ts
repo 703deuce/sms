@@ -17,6 +17,7 @@ import type {
   CrmTask,
   CrmUser,
 } from "../types";
+// CrmTask used by listTasks
 
 function apiBase(ctx: ConnectorContext) {
   const domain = String(ctx.meta.apiDomain || "https://api.pipedrive.com").replace(/\/$/, "");
@@ -308,6 +309,119 @@ export const pipedriveConnector: CrmConnector = {
       }),
     });
     return { externalId: String(created.data.id), created: true };
+  },
+
+  async updateNote(ctx, note) {
+    await pd(ctx, `/notes/${note.id}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        content: note.body,
+        person_id: note.contactExternalId ? Number(note.contactExternalId) : undefined,
+      }),
+    });
+    return { externalId: note.id, created: false };
+  },
+
+  async listTasks(ctx, cursor, opts) {
+    const start = cursor ? Number(cursor) : 0;
+    const res = await pd<Array<Record<string, unknown>>>(
+      ctx,
+      `/activities?start=${start}&limit=100&type=task&sort=update_time DESC`,
+    );
+    const sinceMs = opts?.modifiedSince?.getTime() ?? null;
+    let stoppedEarly = false;
+    const items: CrmTask[] = [];
+    for (const r of res.data || []) {
+      const updated = r.update_time ? new Date(String(r.update_time)).getTime() : 0;
+      if (sinceMs != null && updated && updated < sinceMs) {
+        stoppedEarly = true;
+        break;
+      }
+      items.push({
+        id: String(r.id),
+        subject: String(r.subject || "Task"),
+        description: (r.note as string) || null,
+        status: r.done ? "Completed" : "Not Started",
+        dueAt: (r.due_date as string) || null,
+        contactExternalId: r.person_id != null ? String(r.person_id) : null,
+      });
+    }
+    const next = stoppedEarly ? null : res.additional_data?.pagination?.next_start;
+    return { items, nextCursor: next != null ? String(next) : null };
+  },
+
+  async listNotes(ctx, cursor) {
+    const start = cursor ? Number(cursor) : 0;
+    const res = await pd<Array<Record<string, unknown>>>(ctx, `/notes?start=${start}&limit=100`);
+    return {
+      items: (res.data || []).map((r) => ({
+        id: String(r.id),
+        body: String(r.content || ""),
+        contactExternalId: r.person_id != null ? String(r.person_id) : null,
+        updatedAt: (r.update_time as string) || null,
+      })),
+      nextCursor:
+        res.additional_data?.pagination?.next_start != null
+          ? String(res.additional_data.pagination.next_start)
+          : null,
+    };
+  },
+
+  async listActivities(ctx, cursor, opts) {
+    const start = cursor ? Number(cursor) : 0;
+    const res = await pd<Array<Record<string, unknown>>>(
+      ctx,
+      `/activities?start=${start}&limit=100&sort=update_time DESC`,
+    );
+    const sinceMs = opts?.modifiedSince?.getTime() ?? null;
+    let stoppedEarly = false;
+    const items = [];
+    for (const r of res.data || []) {
+      const updated = r.update_time ? new Date(String(r.update_time)).getTime() : 0;
+      if (sinceMs != null && updated && updated < sinceMs) {
+        stoppedEarly = true;
+        break;
+      }
+      const type = String(r.type || "other");
+      items.push({
+        id: String(r.id),
+        type:
+          type === "call"
+            ? ("call" as const)
+            : type === "sms"
+              ? ("sms" as const)
+              : type === "task"
+                ? ("task" as const)
+                : ("other" as const),
+        subject: String(r.subject || "Activity"),
+        body: (r.note as string) || null,
+        status: r.done ? "Completed" : "Open",
+        dueAt: (r.due_date as string) || null,
+        contactExternalId: r.person_id != null ? String(r.person_id) : null,
+        updatedAt: (r.update_time as string) || null,
+      });
+    }
+    const next = stoppedEarly ? null : res.additional_data?.pagination?.next_start;
+    return { items, nextCursor: next != null ? String(next) : null };
+  },
+
+  async listTags(ctx) {
+    try {
+      const res = await pd<Array<Record<string, unknown>>>(ctx, "/personLabels");
+      return (res.data || []).map((r) => ({
+        id: String(r.id),
+        name: String(r.name || r.label || ""),
+        color: (r.color as string) || null,
+      })).filter((t) => t.name);
+    } catch {
+      return [];
+    }
+  },
+
+  async handleWebhook(_ctx, _headers, body) {
+    const payload = (body || {}) as Record<string, unknown>;
+    const current = (payload.current || payload) as Record<string, unknown>;
+    return { accepted: true, events: [current] };
   },
 
   async logCall(ctx, call) {

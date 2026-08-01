@@ -1077,6 +1077,34 @@ export function CrmProviderClient({ provider }: { provider: string }) {
               >
                 Retry failed
               </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={busy}
+                onClick={() =>
+                  void (async () => {
+                    setBusy(true);
+                    setError("");
+                    try {
+                      const res = await fetch("/api/crm/diagnostics", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ provider, action: "clear_quarantine" }),
+                      });
+                      const json = await res.json();
+                      if (!res.ok) throw new Error(json.error || "Failed to clear quarantine");
+                      setMessage("Quarantine cleared — sync can resume");
+                      await loadHealth();
+                    } catch (e) {
+                      setError(e instanceof Error ? e.message : String(e));
+                    } finally {
+                      setBusy(false);
+                    }
+                  })()
+                }
+              >
+                Clear quarantine
+              </Button>
             </div>
           </Card>
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">

@@ -83,6 +83,38 @@ export const ZOHO_SCOPES: ScopeDoc[] = [
 
 /** Intentionally NOT requested: ZohoCRM.modules.ALL, ZohoCRM.settings.ALL, org.ALL, bulk.*, coql.* */
 
+/** Bigin scopes — separate product; no Leads module. */
+export const BIGIN_SCOPES: ScopeDoc[] = [
+  {
+    scope: "ZohoBigin.modules.contacts.ALL",
+    why: "Contacts sync for Bigin.",
+  },
+  {
+    scope: "ZohoBigin.modules.accounts.ALL",
+    why: "Companies (Accounts) sync for Bigin.",
+  },
+  {
+    scope: "ZohoBigin.modules.pipelines.ALL",
+    why: "Pipeline records / deals for Bigin.",
+  },
+  {
+    scope: "ZohoBigin.modules.tasks.ALL",
+    why: "Tasks / follow-ups.",
+  },
+  {
+    scope: "ZohoBigin.modules.notes.ALL",
+    why: "Notes.",
+  },
+  {
+    scope: "ZohoBigin.modules.calls.ALL",
+    why: "Call activities when available.",
+  },
+  {
+    scope: "ZohoBigin.users.READ",
+    why: "Owner mapping.",
+  },
+];
+
 export const PIPEDRIVE_SCOPES: ScopeDoc[] = [
   {
     scope: "base",
@@ -108,12 +140,15 @@ export const PIPEDRIVE_SCOPES: ScopeDoc[] = [
 
 /** Intentionally NOT requested: mail:*, products:*, admin:*, deals:read-only when write required. */
 
-export function scopesForProvider(provider: CrmProviderId): string[] {
+export function scopesForProvider(
+  provider: CrmProviderId,
+  opts?: { zohoProduct?: "crm" | "bigin" },
+): string[] {
   switch (provider) {
     case "salesforce":
       return SALESFORCE_SCOPES.map((s) => s.scope);
     case "zoho":
-      return ZOHO_SCOPES.map((s) => s.scope);
+      return (opts?.zohoProduct === "bigin" ? BIGIN_SCOPES : ZOHO_SCOPES).map((s) => s.scope);
     case "pipedrive":
       return PIPEDRIVE_SCOPES.map((s) => s.scope);
   }

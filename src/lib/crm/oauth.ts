@@ -63,8 +63,20 @@ export async function startCrmOAuth(workspaceId: string, provider: CrmProviderId
     state,
     ...(connector.oauth.authorizeParams || {}),
   });
-  if (connector.oauth.scopes.length) {
-    params.set("scope", connector.oauth.scopes.join(" "));
+  // Bigin uses ZohoBigin.* scopes when the workspace selected that product profile.
+  let scopes = connector.oauth.scopes;
+  if (provider === "zoho") {
+    try {
+      const { getCrmSyncPreferences } = await import("./settings");
+      const { scopesForProvider } = await import("./scopes");
+      const prefs = await getCrmSyncPreferences(workspaceId, provider);
+      scopes = scopesForProvider("zoho", { zohoProduct: prefs.zohoProduct || "crm" });
+    } catch {
+      // keep connector defaults
+    }
+  }
+  if (scopes.length) {
+    params.set("scope", scopes.join(" "));
   }
   // Google-style offline access when requested by adapter authorizeParams or Salesforce/Zoho.
   if (!params.has("access_type") && connector.oauth.scopes.includes("offline_access")) {

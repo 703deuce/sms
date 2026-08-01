@@ -1,8 +1,10 @@
 import type {
   ConnectorHealth,
+  CrmActivity,
   CrmCallActivity,
   CrmCompany,
   CrmContact,
+  CrmCustomFieldDefinition,
   CrmDeal,
   CrmLead,
   CrmNote,
@@ -10,6 +12,7 @@ import type {
   CrmProviderId,
   CrmSmsActivity,
   CrmSyncPreferences,
+  CrmTag,
   CrmTask,
   CrmUser,
   OAuthProviderConfig,
@@ -88,17 +91,35 @@ export interface CrmConnector {
   createTask?(ctx: ConnectorContext, task: CrmTask): Promise<UpsertResult>;
   updateTask?(ctx: ConnectorContext, task: CrmTask & { id: string }): Promise<UpsertResult>;
   createNote?(ctx: ConnectorContext, note: CrmNote): Promise<UpsertResult>;
+  updateNote?(ctx: ConnectorContext, note: CrmNote & { id: string }): Promise<UpsertResult>;
   /** Create or update call activity — when call.id is set, must update that record. */
   logCall?(ctx: ConnectorContext, call: CrmCallActivity): Promise<UpsertResult>;
   logSms?(ctx: ConnectorContext, sms: CrmSmsActivity): Promise<UpsertResult>;
 
+  listTasks?(
+    ctx: ConnectorContext,
+    cursor?: string | null,
+    opts?: { modifiedSince?: Date | null },
+  ): Promise<ListPage<CrmTask>>;
+  listNotes?(
+    ctx: ConnectorContext,
+    cursor?: string | null,
+    opts?: { modifiedSince?: Date | null },
+  ): Promise<ListPage<CrmNote & { updatedAt?: string | null }>>;
+  listActivities?(
+    ctx: ConnectorContext,
+    cursor?: string | null,
+    opts?: { modifiedSince?: Date | null },
+  ): Promise<ListPage<CrmActivity>>;
+
   listUsers?(ctx: ConnectorContext): Promise<CrmUser[]>;
   listPipelines?(ctx: ConnectorContext): Promise<CrmPipeline[]>;
+  listTags?(ctx: ConnectorContext): Promise<CrmTag[]>;
 
   /** Optional field discovery for mapping UI (name = API field). */
   listFields?(
     ctx: ConnectorContext,
-  ): Promise<Array<{ objectType: string; name: string; label: string }>>;
+  ): Promise<Array<{ objectType: string; name: string; label: string } | CrmCustomFieldDefinition>>;
 
   /** Optional provider webhook verification / ingest. */
   handleWebhook?(

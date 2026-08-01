@@ -45,15 +45,19 @@ export async function pushCrmEventJob(payload: {
     return { ok: true, skipped: true, reason: "unsupported_event" };
   }
 
-  // Gate writes early — paused / outbound-disabled connections must not hit CRM APIs.
+  // Gate writes early — paused / outbound-disabled / quarantined connections must not hit CRM APIs.
   {
     const { getCrmSyncPreferences } = await import("./settings");
+    const { isCrmQuarantined } = await import("./circuit-breaker");
     const prefsEarly = await getCrmSyncPreferences(workspaceId, provider);
     if (prefsEarly.syncPaused) {
       return { ok: true, skipped: true, reason: "sync_paused" };
     }
     if (prefsEarly.disableWrites || prefsEarly.direction === "inbound") {
       return { ok: true, skipped: true, reason: "writes_disabled" };
+    }
+    if (await isCrmQuarantined(workspaceId, provider)) {
+      return { ok: true, skipped: true, reason: "quarantined" };
     }
   }
 
@@ -126,6 +130,21 @@ export async function pushCrmEventJob(payload: {
           internalId: contact.id,
         });
 
+        const tagRows = await prisma.contactTag
+          .findMany({
+            where: { contactId: contact.id },
+            include: { tag: true },
+          })
+          .catch(
+            () =>
+              [] as Array<{
+                tag: { name: string };
+              }>,
+          );
+        const tagNames = tagRows
+          .map((t: { tag: { name: string } }) => t.tag.name)
+          .filter(Boolean);
+
         const fieldMaps = await listFieldMappings(workspaceId, provider);
         const mappedFields = applyFieldMappingsOutbound(
           {
@@ -135,9 +154,15 @@ export async function pushCrmEventJob(payload: {
             email: contact.email,
             company: contact.company,
             source: "Transovo",
+            tags: tagNames.join(", "),
           },
           fieldMaps,
         );
+        if (tagNames.length) {
+          mappedFields.tags = tagNames;
+          mappedFields.Tag = tagNames;
+          mappedFields.label_ids = tagNames;
+        }
         const hash = payloadSyncHash(mappedFields as Record<string, unknown>);
 
         if (existingMap?.externalId && !existingMap.externalDeletedAt) {
@@ -153,6 +178,7 @@ export async function pushCrmEventJob(payload: {
                 companyName: (mappedFields.company as string) || contact.company,
                 source: "Transovo",
                 ownerExternalId: prefs.defaultOwnerExternalId,
+                tags: tagNames,
                 customFields: mappedFields,
               });
               await upsertObjectMapping({
@@ -355,20 +381,53 @@ export async function pushCrmEventJob(payload: {
 
     if (
       wantNote &&
+      prefs.syncNotes &&
       connector.createNote &&
       isFeatureSupported(provider, "notes")
     ) {
-      const result = await connector.createNote(ctx, {
-        body: `Transovo ${event.type}${contactPhone ? ` (${contactPhone})` : ""}`,
-        contactExternalId,
+      const noteInternalId = String(
+        event.payload.noteId || event.eventId || `${event.type}:note:${contactPhone || "na"}`,
+      );
+      const existingNote = await getObjectMapping({
+        workspaceId,
+        provider,
+        objectType: "note",
+        internalId: noteInternalId,
+      });
+      const noteBody =
+        (event.payload.notes as string) ||
+        (event.payload.body as string) ||
+        `Transovo ${event.type}${contactPhone ? ` (${contactPhone})` : ""}`;
+      let result;
+      if (existingNote?.externalId && connector.updateNote) {
+        result = await connector.updateNote(ctx, {
+          id: existingNote.externalId,
+          body: noteBody,
+          contactExternalId,
+        });
+      } else {
+        result = await connector.createNote(ctx, {
+          body: noteBody,
+          contactExternalId,
+        });
+      }
+      await upsertObjectMapping({
+        workspaceId,
+        provider,
+        objectType: "note",
+        internalId: noteInternalId,
+        externalId: result.externalId,
+        parentExternalId: contactExternalId,
+        syncStatus: "synced",
       });
       await appendSyncEvent({
         workspaceId,
         syncRunId: run.id,
         provider,
-        action: "create",
+        action: result.created ? "create" : "update",
         objectType: "note",
         externalId: result.externalId,
+        internalId: noteInternalId,
         message: `Note from ${event.type}`,
       });
     }

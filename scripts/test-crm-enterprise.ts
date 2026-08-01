@@ -242,4 +242,48 @@ ok("MMS preference defaults on", () => {
   assert.equal(DEFAULT_SYNC_PREFERENCES.syncMms, true);
 });
 
+ok("rules split missed call log vs task", async () => {
+  const { defaultCrmRules } = await import("../src/lib/crm/runtime/rules");
+  const rules = defaultCrmRules();
+  assert.ok(rules.some((r) => r.id === "missed_call_log" && r.requiresPref === "syncCalls"));
+  assert.ok(
+    rules.some((r) => r.id === "missed_call_task" && r.requiresPref === "createTasksOnMissedCall"),
+  );
+  assert.ok(rules.some((r) => r.id === "sms_unread_task"));
+  assert.ok(rules.some((r) => r.id === "voicemail_task"));
+});
+
+ok("Bigin API base helper branches", async () => {
+  const { zohoConnector } = await import("../src/lib/crm/adapters/zoho");
+  // Smoke: listLeads returns empty for Bigin preferences without network
+  const empty = await zohoConnector.listLeads!(
+    {
+      workspaceId: "w",
+      accessToken: "t",
+      meta: {},
+      preferences: { ...DEFAULT_SYNC_PREFERENCES, zohoProduct: "bigin" },
+    },
+    null,
+  );
+  assert.deepEqual(empty.items, []);
+});
+
+ok("quarantine clear exported", async () => {
+  const mod = await import("../src/lib/crm/circuit-breaker");
+  assert.equal(typeof mod.clearCrmQuarantine, "function");
+  assert.equal(typeof mod.notifyCrmHealthAlert, "function");
+});
+
+ok("adapters expose inbound activity lists + updateNote", async () => {
+  const { salesforceConnector } = await import("../src/lib/crm/adapters/salesforce");
+  const { zohoConnector } = await import("../src/lib/crm/adapters/zoho");
+  const { pipedriveConnector } = await import("../src/lib/crm/adapters/pipedrive");
+  for (const c of [salesforceConnector, zohoConnector, pipedriveConnector]) {
+    assert.equal(typeof c.listTasks, "function");
+    assert.equal(typeof c.listNotes, "function");
+    assert.equal(typeof c.listActivities, "function");
+    assert.equal(typeof c.updateNote, "function");
+  }
+});
+
 console.log(`\n${passed} CRM enterprise checks passed.`);

@@ -47,6 +47,12 @@ export async function noteCrmPermanentFailure(input: {
       message: `Connection quarantined after ${failures} permanent failures`,
       detail: { lastError: input.message.slice(0, 200) },
     }).catch(() => undefined);
+    await notifyCrmHealthAlert({
+      workspaceId: input.workspaceId,
+      provider: input.provider,
+      title: `${input.provider} CRM quarantined`,
+      body: `Sync paused after repeated permanent failures: ${input.message.slice(0, 160)}`,
+    });
   }
   return { failures, quarantined };
 }
@@ -77,4 +83,51 @@ export async function isCrmQuarantined(
     circuit?: { quarantinedAt?: string | null; failures?: number };
   };
   return Boolean(cfg.circuit?.quarantinedAt) || (cfg.circuit?.failures || 0) >= QUARANTINE_THRESHOLD;
+}
+
+/** Admin action — clear quarantine so sync/push can resume after CRM access is fixed. */
+export async function clearCrmQuarantine(input: {
+  workspaceId: string;
+  provider: CrmProviderId;
+  actorUserId?: string | null;
+}) {
+  await upsertConnection({
+    workspaceId: input.workspaceId,
+    provider: input.provider,
+    status: "connected",
+    syncStatus: "idle",
+    lastError: null,
+    config: {
+      circuit: { failures: 0, quarantinedAt: null, lastError: null },
+    },
+    mergeConfig: true,
+  });
+  await writeCrmAudit({
+    workspaceId: input.workspaceId,
+    provider: input.provider,
+    category: "health",
+    action: "quarantine_cleared",
+    message: "CRM quarantine cleared",
+    actorUserId: input.actorUserId || undefined,
+  }).catch(() => undefined);
+  return { ok: true };
+}
+
+export async function notifyCrmHealthAlert(input: {
+  workspaceId: string;
+  provider: CrmProviderId;
+  title: string;
+  body: string;
+}) {
+  try {
+    const { notifyWorkspace } = await import("@/lib/notifications/in-app");
+    await notifyWorkspace(input.workspaceId, {
+      type: "system",
+      title: input.title,
+      body: input.body,
+      href: `/integrations/crm/${input.provider}`,
+    });
+  } catch {
+    // notifications are best-effort
+  }
 }

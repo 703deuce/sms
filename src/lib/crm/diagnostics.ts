@@ -385,6 +385,15 @@ export async function runCrmDiagnosticProbe(input: {
             contactExternalId: null,
             startedAt: new Date().toISOString(),
           });
+          if (created.externalId) {
+            const { persistMappedCallActivity } = await import("./call-lifecycle");
+            await persistMappedCallActivity({
+              workspaceId,
+              provider,
+              callId: `diag-call-${marker}`,
+              externalId: created.externalId,
+            }).catch(() => undefined);
+          }
           return {
             ok: Boolean(created.externalId),
             message: "Probe call logged",
@@ -430,7 +439,16 @@ export async function runCrmDiagnosticProbe(input: {
             };
           }
           const ctx = await buildCtx(workspaceId, provider);
-          const created = await connector.logCall(ctx, {
+          const { getMappedCallActivity, persistMappedCallActivity } = await import(
+            "./call-lifecycle"
+          );
+          const mapped = await getMappedCallActivity({
+            workspaceId,
+            provider,
+            callId: `diag-call-${marker}`,
+          });
+          const result = await connector.logCall(ctx, {
+            id: mapped?.externalId || undefined,
             direction: "inbound",
             from: "+15555550111",
             to: "+15555550122",
@@ -444,11 +462,19 @@ export async function runCrmDiagnosticProbe(input: {
             contactExternalId: null,
             startedAt: new Date().toISOString(),
           });
+          await persistMappedCallActivity({
+            workspaceId,
+            provider,
+            callId: `diag-call-${marker}`,
+            externalId: result.externalId,
+          }).catch(() => undefined);
           return {
-            ok: Boolean(created.externalId),
-            message: "Probe call with recording URL logged",
-            externalId: created.externalId,
-            raw: created,
+            ok: Boolean(result.externalId),
+            message: mapped?.externalId
+              ? "Updated existing probe call with recording URL"
+              : "Probe call with recording URL logged",
+            externalId: result.externalId,
+            raw: result,
           };
         });
 
@@ -462,7 +488,16 @@ export async function runCrmDiagnosticProbe(input: {
             };
           }
           const ctx = await buildCtx(workspaceId, provider);
-          const created = await connector.logCall(ctx, {
+          const { getMappedCallActivity, persistMappedCallActivity } = await import(
+            "./call-lifecycle"
+          );
+          const mapped = await getMappedCallActivity({
+            workspaceId,
+            provider,
+            callId: `diag-call-${marker}`,
+          });
+          const result = await connector.logCall(ctx, {
+            id: mapped?.externalId || undefined,
             direction: "inbound",
             from: "+15555550133",
             to: "+15555550144",
@@ -476,11 +511,19 @@ export async function runCrmDiagnosticProbe(input: {
             contactExternalId: null,
             startedAt: new Date().toISOString(),
           });
+          await persistMappedCallActivity({
+            workspaceId,
+            provider,
+            callId: `diag-call-${marker}`,
+            externalId: result.externalId,
+          }).catch(() => undefined);
           return {
-            ok: Boolean(created.externalId),
-            message: "Probe call with transcript URL logged",
-            externalId: created.externalId,
-            raw: created,
+            ok: Boolean(result.externalId),
+            message: mapped?.externalId
+              ? "Updated existing probe call with transcript URL"
+              : "Probe call with transcript URL logged",
+            externalId: result.externalId,
+            raw: result,
           };
         });
 

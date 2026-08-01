@@ -26,13 +26,22 @@ export type CrmIntegrationRule = {
   enabled?: boolean;
   /** Optional preference gate — rule skipped when preference is false. */
   requiresPref?: keyof Awaited<ReturnType<typeof getCrmSyncPreferences>>;
+  /** Extra preference gates — all must be true (or undefined). */
+  requiresPrefs?: Array<keyof Awaited<ReturnType<typeof getCrmSyncPreferences>>>;
 };
 
 const DEFAULT_RULES: CrmIntegrationRule[] = [
+  // Missed calls always log when call sync is on; task is a separate toggle.
+  {
+    id: "missed_call_log",
+    when: "call.missed",
+    then: ["log_call"],
+    requiresPref: "syncCalls",
+  },
   {
     id: "missed_call_task",
     when: "call.missed",
-    then: ["log_call", "create_task"],
+    then: ["create_task"],
     requiresPref: "createTasksOnMissedCall",
   },
   {
@@ -42,28 +51,40 @@ const DEFAULT_RULES: CrmIntegrationRule[] = [
     requiresPref: "syncCalls",
   },
   {
-    id: "voicemail",
+    id: "voicemail_log",
     when: "voicemail.received",
-    then: ["log_call", "create_note", "create_task"],
+    then: ["log_call"],
     requiresPref: "syncVoicemail",
+  },
+  {
+    id: "voicemail_note",
+    when: "voicemail.received",
+    then: ["create_note"],
+    requiresPrefs: ["syncVoicemail", "syncNotes"],
+  },
+  {
+    id: "voicemail_task",
+    when: "voicemail.received",
+    then: ["create_task"],
+    requiresPrefs: ["syncVoicemail", "createTasksOnVoicemail"],
   },
   {
     id: "recording",
     when: "recording.ready",
     then: ["log_call", "attach_recording"],
-    requiresPref: "syncRecordings",
+    requiresPrefs: ["syncCalls", "syncRecordings"],
   },
   {
     id: "transcript",
     when: "transcript.ready",
     then: ["log_call", "attach_transcript"],
-    requiresPref: "syncTranscripts",
+    requiresPrefs: ["syncCalls", "syncTranscripts"],
   },
   {
     id: "ai_summary",
     when: "ai_summary.ready",
     then: ["log_call", "attach_ai_summary"],
-    requiresPref: "syncAiSummary",
+    requiresPrefs: ["syncCalls", "syncAiSummary"],
   },
   {
     id: "sms_in",
@@ -76,6 +97,12 @@ const DEFAULT_RULES: CrmIntegrationRule[] = [
     when: ["sms.sent", "sms.delivered", "sms.failed"],
     then: ["log_sms"],
     requiresPref: "syncSms",
+  },
+  {
+    id: "sms_unread_task",
+    when: "sms.received",
+    then: ["create_task"],
+    requiresPref: "createTasksOnUnreadSms",
   },
   {
     id: "sms_to_lead",
@@ -115,6 +142,19 @@ function matches(rule: CrmIntegrationRule, type: CrmPlatformEventType) {
   return when.includes(type);
 }
 
+function prefsAllow(
+  prefs: Awaited<ReturnType<typeof getCrmSyncPreferences>>,
+  rule: CrmIntegrationRule,
+) {
+  if (rule.requiresPref && prefs[rule.requiresPref] === false) return false;
+  if (rule.requiresPrefs) {
+    for (const key of rule.requiresPrefs) {
+      if (prefs[key] === false) return false;
+    }
+  }
+  return true;
+}
+
 export async function resolveRulesForEvent(input: {
   workspaceId: string;
   provider: CrmProviderId;
@@ -132,12 +172,25 @@ export async function resolveRulesForEvent(input: {
   for (const rule of rules) {
     if (rule.enabled === false) continue;
     if (!matches(rule, input.event.type)) continue;
-    if (rule.requiresPref && prefs[rule.requiresPref] === false) continue;
+    if (!prefsAllow(prefs, rule)) continue;
     rulesApplied.push(rule.id);
     for (const a of rule.then) actions.add(a);
   }
 
-  // Always allow graceful empty — unsupported/optional with no matching prefs.
+  // Hard gates — never create notes/tasks/calls/sms when the matching object sync is off.
+  if (!prefs.syncNotes) actions.delete("create_note");
+  if (!prefs.syncTasks) actions.delete("create_task");
+  if (!prefs.syncCalls) {
+    actions.delete("log_call");
+    actions.delete("attach_recording");
+    actions.delete("attach_transcript");
+    actions.delete("attach_ai_summary");
+  }
+  if (!prefs.syncSms) actions.delete("log_sms");
+  if (!prefs.syncActivities && !prefs.syncCalls && !prefs.syncSms) {
+    // activities master switch when neither call nor sms logging is active
+  }
+
   return { actions: [...actions], rulesApplied };
 }
 

@@ -10,6 +10,7 @@ import type { ConnectorContext } from "./connector";
 import { CrmHttpError } from "./http";
 import { appendSyncEvent, writeCrmAudit } from "./logging";
 import { resolveBothSidesConflict } from "./conflict";
+import { isFeatureSupported } from "./feature-matrix";
 import {
   fingerprintEmail,
   fingerprintPhone,
@@ -181,16 +182,26 @@ export async function runCrmSyncJob(payload: {
       return { ok: true, skipped: true, reason: "sync_paused" };
     }
 
-    if (kind !== "push" && ctx.preferences.disableReads) {
+    if (
+      kind !== "push" &&
+      (ctx.preferences.disableReads || ctx.preferences.direction === "outbound")
+    ) {
       await prisma.crmSyncRun.update({
         where: { id: syncRunId },
         data: {
           status: "succeeded",
           finishedAt: new Date(),
-          statsJson: { skipped: true, reason: "reads_disabled" },
+          statsJson: {
+            skipped: true,
+            reason: ctx.preferences.disableReads ? "reads_disabled" : "outbound_only",
+          },
         },
       });
-      return { ok: true, skipped: true, reason: "reads_disabled" };
+      return {
+        ok: true,
+        skipped: true,
+        reason: ctx.preferences.disableReads ? "reads_disabled" : "outbound_only",
+      };
     }
 
     const health = await connector.validateConnection(ctx);
@@ -285,7 +296,8 @@ export async function runCrmSyncJob(payload: {
       const { acquireCrmRateLimit } = await import("./runtime/rate-limit");
       const { JobDeferredError } = await import("@/lib/messaging/types");
 
-      if (connector.listCompanies && (kind === "initial" || ctx.preferences.autoCreateCompanies)) {
+      // Always import company metadata on inbound sync; materialize Transovo rows when autoCreateCompanies.
+      if (connector.listCompanies) {
         let cursor: string | null | undefined = null;
         let pages = 0;
         const companySince =
@@ -303,52 +315,55 @@ export async function runCrmSyncJob(payload: {
           for (const company of page.items) {
             stats.companiesIn += 1;
             if (!company.id) continue;
-            // Persist a real Transovo contact row representing the company (phone optional).
-            const companyPhone =
-              company.phone?.trim() || `crm-company:${provider}:${company.id}`;
-            let companyContact = await prisma.contact.findFirst({
-              where: { workspaceId, phone: companyPhone },
-            });
-            if (!companyContact && company.name) {
-              companyContact = await prisma.contact
-                .create({
-                  data: {
-                    workspaceId,
-                    phone: companyPhone,
-                    firstName: null,
-                    lastName: company.name,
-                    company: company.name,
-                    consentSource: `crm:${provider}:company`,
-                    customFields: {
-                      crmCompany: true,
-                      website: company.website || null,
-                      ownerExternalId: company.ownerExternalId || null,
+            let companyContactId: string | null = null;
+            if (ctx.preferences.autoCreateCompanies) {
+              const companyPhone =
+                company.phone?.trim() || `crm-company:${provider}:${company.id}`;
+              let companyContact = await prisma.contact.findFirst({
+                where: { workspaceId, phone: companyPhone },
+              });
+              if (!companyContact && company.name) {
+                companyContact = await prisma.contact
+                  .create({
+                    data: {
+                      workspaceId,
+                      phone: companyPhone,
+                      firstName: null,
+                      lastName: company.name,
+                      company: company.name,
+                      consentSource: `crm:${provider}:company`,
+                      customFields: {
+                        crmCompany: true,
+                        website: company.website || null,
+                        ownerExternalId: company.ownerExternalId || null,
+                      },
                     },
-                  },
-                })
-                .catch(() => null);
-            } else if (companyContact) {
-              await prisma.contact
-                .update({
-                  where: { id: companyContact.id },
-                  data: {
-                    company: company.name || companyContact.company,
-                    lastName: companyContact.lastName || company.name,
-                    customFields: {
-                      ...((companyContact.customFields as object) || {}),
-                      crmCompany: true,
-                      website: company.website || null,
-                      ownerExternalId: company.ownerExternalId || null,
+                  })
+                  .catch(() => null);
+              } else if (companyContact) {
+                await prisma.contact
+                  .update({
+                    where: { id: companyContact.id },
+                    data: {
+                      company: company.name || companyContact.company,
+                      lastName: companyContact.lastName || company.name,
+                      customFields: {
+                        ...((companyContact.customFields as object) || {}),
+                        crmCompany: true,
+                        website: company.website || null,
+                        ownerExternalId: company.ownerExternalId || null,
+                      },
                     },
-                  },
-                })
-                .catch(() => undefined);
+                  })
+                  .catch(() => undefined);
+              }
+              companyContactId = companyContact?.id || null;
             }
             await upsertObjectMapping({
               workspaceId,
               provider,
               objectType: "company",
-              internalId: companyContact?.id || `crm-company:${company.id}`,
+              internalId: companyContactId || `crm-company:${company.id}`,
               externalId: company.id,
               syncStatus: "synced",
               metadata: {
@@ -508,6 +523,7 @@ export async function runCrmSyncJob(payload: {
                 pipeline: deal.pipeline,
                 status: deal.status,
                 ownerExternalId: deal.ownerExternalId,
+                closeDate: deal.closeDate,
               },
             }).catch(() => undefined);
           }
@@ -515,6 +531,137 @@ export async function runCrmSyncJob(payload: {
           pages += 1;
         } while (cursor && pages < (kind === "initial" ? 20 : 5));
         checkpoints.deal = new Date().toISOString();
+      }
+
+      // Optional historical / inbound activity sync (large — off by default).
+      const pullActivities =
+        ctx.preferences.importHistoricalActivities ||
+        (kind === "incremental" &&
+          (ctx.preferences.syncTasks ||
+            ctx.preferences.syncNotes ||
+            ctx.preferences.syncActivities));
+      if (pullActivities) {
+        if (connector.listTasks && ctx.preferences.syncTasks) {
+          cursor = null;
+          pages = 0;
+          do {
+            const gate = acquireCrmRateLimit(workspaceId, provider);
+            if (!gate.ok) {
+              throw new JobDeferredError(`crm_sync_rate:${gate.reason}`, gate.retryAfterMs);
+            }
+            const page = await connector.listTasks!(ctx, cursor, {
+              modifiedSince:
+                useIncremental && checkpoints.task
+                  ? new Date(checkpoints.task)
+                  : null,
+            });
+            for (const task of page.items) {
+              if (!task.id) continue;
+              await upsertObjectMapping({
+                workspaceId,
+                provider,
+                objectType: "task",
+                internalId: `crm-task:${task.id}`,
+                externalId: task.id,
+                parentExternalId: task.contactExternalId || null,
+                syncStatus: "synced",
+                metadata: {
+                  subject: task.subject,
+                  status: task.status,
+                  dueAt: task.dueAt,
+                },
+              }).catch(() => undefined);
+            }
+            cursor = page.nextCursor;
+            pages += 1;
+          } while (cursor && pages < (ctx.preferences.importHistoricalActivities ? 20 : 5));
+          checkpoints.task = new Date().toISOString();
+        }
+
+        if (connector.listNotes && ctx.preferences.syncNotes) {
+          cursor = null;
+          pages = 0;
+          do {
+            const gate = acquireCrmRateLimit(workspaceId, provider);
+            if (!gate.ok) {
+              throw new JobDeferredError(`crm_sync_rate:${gate.reason}`, gate.retryAfterMs);
+            }
+            const page = await connector.listNotes!(ctx, cursor);
+            for (const note of page.items) {
+              if (!note.id) continue;
+              await upsertObjectMapping({
+                workspaceId,
+                provider,
+                objectType: "note",
+                internalId: `crm-note:${note.id}`,
+                externalId: note.id,
+                parentExternalId: note.contactExternalId || null,
+                syncStatus: "synced",
+                metadata: { preview: String(note.body || "").slice(0, 200) },
+              }).catch(() => undefined);
+            }
+            cursor = page.nextCursor;
+            pages += 1;
+          } while (cursor && pages < (ctx.preferences.importHistoricalActivities ? 20 : 5));
+          checkpoints.note = new Date().toISOString();
+        }
+
+        if (connector.listActivities && ctx.preferences.syncActivities) {
+          cursor = null;
+          pages = 0;
+          do {
+            const gate = acquireCrmRateLimit(workspaceId, provider);
+            if (!gate.ok) {
+              throw new JobDeferredError(`crm_sync_rate:${gate.reason}`, gate.retryAfterMs);
+            }
+            const page = await connector.listActivities!(ctx, cursor, {
+              modifiedSince:
+                useIncremental && checkpoints.activity
+                  ? new Date(checkpoints.activity)
+                  : null,
+            });
+            for (const activity of page.items) {
+              if (!activity.id) continue;
+              await upsertObjectMapping({
+                workspaceId,
+                provider,
+                objectType: "activity",
+                internalId: `crm-activity:${activity.id}`,
+                externalId: activity.id,
+                parentExternalId: activity.contactExternalId || null,
+                syncStatus: "synced",
+                metadata: {
+                  type: activity.type,
+                  subject: activity.subject,
+                  status: activity.status,
+                },
+              }).catch(() => undefined);
+            }
+            cursor = page.nextCursor;
+            pages += 1;
+          } while (cursor && pages < (ctx.preferences.importHistoricalActivities ? 20 : 5));
+          checkpoints.activity = new Date().toISOString();
+        }
+      }
+
+      if (connector.listTags && isFeatureSupported(provider, "contacts")) {
+        try {
+          const tags = await connector.listTags(ctx);
+          for (const tag of tags) {
+            if (!tag.name) continue;
+            await upsertObjectMapping({
+              workspaceId,
+              provider,
+              objectType: "tag",
+              internalId: `crm-tag:${tag.id || tag.name}`,
+              externalId: String(tag.id || tag.name),
+              syncStatus: "synced",
+              metadata: { name: tag.name, color: tag.color },
+            }).catch(() => undefined);
+          }
+        } catch {
+          // tags unsupported on this org — ignore
+        }
       }
 
       await prisma.integrationConnection.updateMany({

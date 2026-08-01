@@ -33,7 +33,8 @@ export type ProviderFeature =
   | "owners"
   | "webhooks_inbound"
   | "incremental_sync"
-  | "bidirectional_sync";
+  | "bidirectional_sync"
+  | "tags";
 
 export type FeatureRow = {
   feature: ProviderFeature;
@@ -66,6 +67,7 @@ const MATRIX: Record<CrmProviderId, FeatureRow[]> = {
     { feature: "recording_links", label: "Recording links", support: "link_only", notes: "URL in activity description; no binary upload" },
     { feature: "transcript_links", label: "Transcript links", support: "link_only" },
     { feature: "custom_fields", label: "Custom fields", support: "beta", notes: "Field mappings applied to create/update payloads" },
+    { feature: "tags", label: "Tags / labels", support: "unsupported", notes: "No universal Salesforce Tags API; map tags to a text/multipicklist field instead" },
     { feature: "pipelines", label: "Pipelines", support: "read_only", notes: "Virtual Opportunity pipeline" },
     { feature: "stages", label: "Stages", support: "read_only", notes: "OpportunityStage / StageName picklist" },
     { feature: "owners", label: "Owners", support: "read_only" },
@@ -91,7 +93,8 @@ const MATRIX: Record<CrmProviderId, FeatureRow[]> = {
     { feature: "recording_links", label: "Recording links", support: "link_only" },
     { feature: "transcript_links", label: "Transcript links", support: "link_only" },
     { feature: "custom_fields", label: "Custom fields", support: "beta", notes: "Via field mappings + settings.fields.READ" },
-    { feature: "pipelines", label: "Pipelines", support: "read_only", notes: "Deal Pipeline field when available" },
+    { feature: "tags", label: "Tags / labels", support: "beta", notes: "settings/tags when available; Bigin may differ" },
+    { feature: "pipelines", label: "Pipelines", support: "read_only", notes: "Deal Pipeline field when available; Bigin uses Pipelines module" },
     { feature: "stages", label: "Stages", support: "read_only" },
     { feature: "owners", label: "Owners", support: "read_only" },
     { feature: "webhooks_inbound", label: "Inbound webhooks", support: "beta", notes: "Queue + delete handling; Zoho notification channel subscription pending" },
@@ -111,6 +114,7 @@ const MATRIX: Record<CrmProviderId, FeatureRow[]> = {
     { feature: "recording_links", label: "Recording links", support: "link_only" },
     { feature: "transcript_links", label: "Transcript links", support: "link_only" },
     { feature: "custom_fields", label: "Custom fields", support: "beta", notes: "Via field mappings" },
+    { feature: "tags", label: "Tags / labels", support: "beta", notes: "personLabels when available; outbound maps names via field mappings" },
     { feature: "pipelines", label: "Pipelines", support: "read_write" },
     { feature: "stages", label: "Stages", support: "read_only" },
     { feature: "owners", label: "Owners", support: "read_only" },

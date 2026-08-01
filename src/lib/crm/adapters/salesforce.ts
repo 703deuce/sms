@@ -394,6 +394,129 @@ export const salesforceConnector: CrmConnector = {
     return { externalId: task.id, created: false };
   },
 
+  async updateNote(ctx, note) {
+    try {
+      await crmFetch(api(ctx, `/sobjects/ContentNote/${note.id}`), {
+        method: "PATCH",
+        accessToken: ctx.accessToken,
+        body: JSON.stringify({
+          Title: "Transovo note",
+          Content: Buffer.from(note.body, "utf8").toString("base64"),
+        }),
+      });
+      return { externalId: note.id, created: false };
+    } catch {
+      await crmFetch(api(ctx, `/sobjects/Task/${note.id}`), {
+        method: "PATCH",
+        accessToken: ctx.accessToken,
+        body: JSON.stringify({
+          Subject: "Transovo note",
+          Description: note.body,
+          Status: "Completed",
+          WhoId: note.contactExternalId || undefined,
+        }),
+      });
+      return { externalId: note.id, created: false };
+    }
+  },
+
+  async listTasks(ctx, cursor, opts) {
+    const since = opts?.modifiedSince
+      ? ` WHERE LastModifiedDate > ${soqlDate(opts.modifiedSince)}`
+      : "";
+    const soql = `SELECT Id, Subject, Description, Status, ActivityDate, WhoId, OwnerId, LastModifiedDate FROM Task${since} ORDER BY LastModifiedDate DESC LIMIT 200`;
+    const url = cursor || `${api(ctx, "/query")}?q=${encodeURIComponent(soql)}`;
+    const data = await crmFetch<{ records?: Array<Record<string, unknown>>; nextRecordsUrl?: string }>(
+      url.startsWith("http") ? url : `${instanceUrl(ctx)}${url}`,
+      { accessToken: ctx.accessToken },
+    );
+    return {
+      items: (data.records || []).map(
+        (r): CrmTask => ({
+          id: String(r.Id),
+          subject: String(r.Subject || "Task"),
+          description: (r.Description as string) || null,
+          status: (r.Status as string) || null,
+          dueAt: (r.ActivityDate as string) || null,
+          contactExternalId: (r.WhoId as string) || null,
+          ownerExternalId: (r.OwnerId as string) || null,
+        }),
+      ),
+      nextCursor: data.nextRecordsUrl
+        ? data.nextRecordsUrl.startsWith("http")
+          ? data.nextRecordsUrl
+          : `${instanceUrl(ctx)}${data.nextRecordsUrl}`
+        : null,
+    };
+  },
+
+  async listNotes(ctx, cursor) {
+    const soql =
+      "SELECT Id, Title, TextPreview, LastModifiedDate FROM ContentNote ORDER BY LastModifiedDate DESC LIMIT 100";
+    const url = cursor || `${api(ctx, "/query")}?q=${encodeURIComponent(soql)}`;
+    try {
+      const data = await crmFetch<{
+        records?: Array<Record<string, unknown>>;
+        nextRecordsUrl?: string;
+      }>(url.startsWith("http") ? url : `${instanceUrl(ctx)}${url}`, {
+        accessToken: ctx.accessToken,
+      });
+      return {
+        items: (data.records || []).map((r) => ({
+          id: String(r.Id),
+          body: String(r.TextPreview || r.Title || ""),
+          updatedAt: (r.LastModifiedDate as string) || null,
+        })),
+        nextCursor: data.nextRecordsUrl
+          ? data.nextRecordsUrl.startsWith("http")
+            ? data.nextRecordsUrl
+            : `${instanceUrl(ctx)}${data.nextRecordsUrl}`
+          : null,
+      };
+    } catch {
+      return { items: [], nextCursor: null };
+    }
+  },
+
+  async listActivities(ctx, cursor, opts) {
+    const since = opts?.modifiedSince
+      ? ` WHERE LastModifiedDate > ${soqlDate(opts.modifiedSince)}`
+      : "";
+    const soql = `SELECT Id, Subject, Description, Status, ActivityDate, WhoId, TaskSubtype, LastModifiedDate FROM Task${since} ORDER BY LastModifiedDate DESC LIMIT 200`;
+    const url = cursor || `${api(ctx, "/query")}?q=${encodeURIComponent(soql)}`;
+    const data = await crmFetch<{ records?: Array<Record<string, unknown>>; nextRecordsUrl?: string }>(
+      url.startsWith("http") ? url : `${instanceUrl(ctx)}${url}`,
+      { accessToken: ctx.accessToken },
+    );
+    return {
+      items: (data.records || []).map((r) => ({
+        id: String(r.Id),
+        type: String(r.TaskSubtype || "").toLowerCase() === "call" ? ("call" as const) : ("task" as const),
+        subject: String(r.Subject || "Activity"),
+        body: (r.Description as string) || null,
+        status: (r.Status as string) || null,
+        dueAt: (r.ActivityDate as string) || null,
+        contactExternalId: (r.WhoId as string) || null,
+        updatedAt: (r.LastModifiedDate as string) || null,
+      })),
+      nextCursor: data.nextRecordsUrl
+        ? data.nextRecordsUrl.startsWith("http")
+          ? data.nextRecordsUrl
+          : `${instanceUrl(ctx)}${data.nextRecordsUrl}`
+        : null,
+    };
+  },
+
+  async listTags() {
+    // Salesforce has no universal Tags API across all orgs — disable rather than fake.
+    return [];
+  },
+
+  async handleWebhook(_ctx, _headers, body) {
+    const payload = (body || {}) as Record<string, unknown>;
+    return { accepted: true, events: [payload] };
+  },
+
   async logCall(ctx, call) {
     const subject =
       call.subject ||

@@ -36,12 +36,32 @@ export async function POST(request: Request) {
   try {
     const auth = await requireSession();
     if ("error" in auth) return auth.error;
-    const body = (await request.json()) as { provider?: string; probe?: string };
+    const body = (await request.json()) as {
+      provider?: string;
+      probe?: string;
+      action?: string;
+    };
     const provider = body.provider?.trim();
-    const probe = body.probe?.trim() as ProbeId | undefined;
     if (!provider || !isCrmProvider(provider)) {
       return NextResponse.json({ error: "Unsupported CRM provider" }, { status: 400 });
     }
+
+    if (body.action === "clear_quarantine") {
+      const { requireCrmPermission } = await import("@/lib/crm/permissions");
+      await requireCrmPermission(auth.session.userId, auth.workspaceId, "configure_crm");
+      const { clearCrmQuarantine } = await import("@/lib/crm/circuit-breaker");
+      const result = await clearCrmQuarantine({
+        workspaceId: auth.workspaceId,
+        provider,
+        actorUserId: auth.session.userId,
+      });
+      return NextResponse.json({ data: result });
+    }
+
+    const { requireCrmPermission } = await import("@/lib/crm/permissions");
+    await requireCrmPermission(auth.session.userId, auth.workspaceId, "access_crm_diagnostics");
+
+    const probe = body.probe?.trim() as ProbeId | undefined;
     if (!probe || !DIAGNOSTIC_PROBE_IDS.includes(probe)) {
       return NextResponse.json(
         { error: `Unknown probe. Allowed: ${DIAGNOSTIC_PROBE_IDS.join(", ")}` },

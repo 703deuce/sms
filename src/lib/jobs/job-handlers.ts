@@ -137,6 +137,11 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       return processNotificationDigests(frequency);
     }
     case "crm_sync": {
+      const { getMaintenanceState } = await import("@/lib/platform-flags");
+      const maintenance = await getMaintenanceState().catch(() => ({ enabled: false }));
+      if (maintenance?.enabled && process.env.MAINTENANCE_MODE !== "0") {
+        return { ok: true, skipped: true, reason: "maintenance_mode" };
+      }
       const { runCrmSyncJob } = await import("@/lib/crm/sync-engine");
       return runCrmSyncJob({
         workspaceId: String(payload.workspaceId || ""),
@@ -153,6 +158,14 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       });
     }
     case "crm_push_event": {
+      const { getMaintenanceState } = await import("@/lib/platform-flags");
+      const maintenance = await getMaintenanceState().catch(() => ({ enabled: false }));
+      if (maintenance?.enabled && process.env.MAINTENANCE_MODE !== "0") {
+        // Live call/SMS CRM updates still run during maintenance unless hard-env lock.
+        if (process.env.MAINTENANCE_BLOCK_CRM === "1") {
+          return { ok: true, skipped: true, reason: "maintenance_mode" };
+        }
+      }
       const { pushCrmEventJob } = await import("@/lib/crm/push");
       return pushCrmEventJob({
         workspaceId: String(payload.workspaceId || ""),
