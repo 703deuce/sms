@@ -12,10 +12,19 @@ export async function GET(request: Request) {
     const limit = Math.min(Number(url.searchParams.get("limit") || 50), 200);
     const direction = url.searchParams.get("direction");
     const status = url.searchParams.get("status");
+    const q = url.searchParams.get("q")?.trim();
 
     const where: Record<string, unknown> = { workspaceId: auth.workspaceId };
     if (direction) where.direction = direction;
     if (status) where.status = status;
+    if (q) {
+      where.OR = [
+        { from: { contains: q, mode: "insensitive" } },
+        { to: { contains: q, mode: "insensitive" } },
+        { notes: { contains: q, mode: "insensitive" } },
+        { disposition: { contains: q, mode: "insensitive" } },
+      ];
+    }
 
     const rows = await getPrisma().humanCall.findMany({
       where,

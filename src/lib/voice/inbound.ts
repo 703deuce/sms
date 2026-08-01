@@ -4,6 +4,7 @@ import {
   isTelnyxVoiceConfigured,
   startAiAssistantOnCall,
   startCallRecording,
+  startCallTranscription,
 } from "./telnyx/assistant-sync";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import { parseVoiceAgentConfig } from "./types";
@@ -78,6 +79,7 @@ export async function handleInboundCallEvent(input: {
         }).catch((err) => console.error("[voice/inbound] ai_assistant_start", err));
 
         await startCallRecording(input.telnyxCallControlId);
+        await startCallTranscription(input.telnyxCallControlId);
 
         await prisma.voiceCall.update({
           where: { id: call.id },
@@ -89,6 +91,7 @@ export async function handleInboundCallEvent(input: {
               payload: input.payload,
               aiStarted: true,
               assistantId: agent.telnyxAssistantId,
+              transcriptionStarted: true,
             } as object,
           },
         });

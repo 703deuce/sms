@@ -221,6 +221,14 @@ model Workspace {
   integrationConnections IntegrationConnection[]
   callQueues CallQueue[]
   ivrMenus IvrMenu[]
+  callParkSlots CallParkSlot[]
+  conferenceCalls ConferenceCall[]
+  conferenceParticipants ConferenceParticipant[]
+  voicemailBoxes VoicemailBox[]
+  voicemailMessages VoicemailMessage[]
+  callForwardingRules CallForwardingRule[]
+  softphonePresence SoftphonePresence[]
+  softphoneUserSettings SoftphoneUserSettings[]
 }
 
 model SenderPool {
@@ -385,12 +393,17 @@ model CallQueue {
   id              String   @id @default(cuid())
   workspaceId     String
   name            String
-  strategy        String   @default("ring_all")
+  strategy        String   @default("ring_all") // ring_all | round_robin | longest_idle | sequential
   timeoutSeconds  Int      @default(30)
+  maxWaitSeconds  Int      @default(300)
   memberUserIds   String[] @default([])
-  overflowAction  String   @default("voicemail")
+  overflowAction  String   @default("voicemail") // voicemail | external | ai_agent | hangup | callback
   overflowTarget  String?
+  holdMusicUrl    String?
+  announcementUrl String?
+  callbackEnabled Boolean  @default(false)
   active          Boolean  @default(true)
+  configJson      Json?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
   workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -1245,6 +1258,11 @@ model VoiceKnowledgeBase {
   name        String
   description String?
   status      String   @default("active")
+  /// Telnyx Cloud Storage bucket used for RAG embeddings (bucket_ids on retrieval tool).
+  telnyxBucketName String?
+  telnyxEmbeddingStatus String?
+  telnyxEmbeddingTaskId String?
+  lastEmbeddedAt DateTime?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -1268,6 +1286,8 @@ model VoiceKnowledgeSource {
   crawlUrl        String?
   extractedPreview String?
   chunkCount      Int      @default(0)
+  /// Object key inside the Telnyx storage bucket (for file/text uploads).
+  telnyxObjectKey String?
   lastSyncedAt    DateTime?
   errorMessage    String?
   createdAt       DateTime @default(now())
@@ -1962,7 +1982,17 @@ model HumanCall {
   status              String    @default("initiated")
   agentUserId         String?
   telnyxCallControlId String?
+  /// Secondary leg for bridge / warm transfer / conference.
+  telnyxCallLegId     String?
+  conferenceId        String?
+  parkSlotId          String?
+  queueId             String?
+  contactId           String?
+  recordingStartedAt  DateTime?
+  transcriptText      String?
+  aiSummary           String?
   startedAt           DateTime  @default(now())
+  answeredAt          DateTime?
   endedAt             DateTime?
   recordingUrl        String?
   notes               String?
@@ -1970,11 +2000,173 @@ model HumanCall {
   muted               Boolean   @default(false)
   onHold              Boolean   @default(false)
   callerIdNumber      String?
+  mediaMode           String    @default("call_control") // call_control | webrtc | call_my_phone
   workspace           Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@index([workspaceId, startedAt])
   @@index([telnyxCallControlId])
+  @@index([queueId])
   @@map("human_calls")
+}
+
+model CallParkSlot {
+  id                  String    @id @default(cuid())
+  workspaceId         String
+  slotCode            String
+  humanCallId         String?
+  telnyxCallControlId String?
+  parkedByUserId      String?
+  status              String    @default("available") // available | parked | retrieved | timed_out
+  parkedAt            DateTime?
+  timeoutAt           DateTime?
+  fallbackTarget      String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  workspace           Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, slotCode])
+  @@index([workspaceId, status])
+  @@map("call_park_slots")
+}
+
+model ConferenceCall {
+  id                   String   @id @default(cuid())
+  workspaceId          String
+  name                 String?
+  telnyxConferenceId   String?
+  hostUserId           String?
+  hostHumanCallId      String?
+  status               String   @default("active")
+  recordingUrl         String?
+  startedAt            DateTime @default(now())
+  endedAt              DateTime?
+  workspace            Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  participants         ConferenceParticipant[]
+
+  @@index([workspaceId, status])
+  @@map("conference_calls")
+}
+
+model ConferenceParticipant {
+  id                  String   @id @default(cuid())
+  workspaceId         String
+  conferenceId        String
+  humanCallId         String?
+  telnyxCallControlId String?
+  displayName         String?
+  role                String   @default("participant") // host | participant
+  status              String   @default("joined")
+  muted               Boolean  @default(false)
+  onHold              Boolean  @default(false)
+  joinedAt            DateTime @default(now())
+  leftAt              DateTime?
+  conference          ConferenceCall @relation(fields: [conferenceId], references: [id], onDelete: Cascade)
+  workspace           Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([conferenceId])
+  @@index([workspaceId])
+  @@map("conference_participants")
+}
+
+model VoicemailBox {
+  id              String   @id @default(cuid())
+  workspaceId     String
+  name            String
+  ownerUserId     String?
+  queueId         String?
+  phoneNumberId   String?
+  greetingText    String?
+  greetingUrl     String?
+  afterHoursGreetingUrl String?
+  emailNotify     String?
+  transcriptionEnabled Boolean @default(true)
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  messages        VoicemailMessage[]
+
+  @@index([workspaceId])
+  @@map("voicemail_boxes")
+}
+
+model VoicemailMessage {
+  id              String   @id @default(cuid())
+  workspaceId     String
+  boxId           String
+  fromE164        String?
+  toE164          String?
+  recordingUrl    String?
+  durationSeconds Int?
+  transcriptText  String?
+  isRead          Boolean  @default(false)
+  forwardedTo     String?
+  humanCallId     String?
+  createdAt       DateTime @default(now())
+  box             VoicemailBox @relation(fields: [boxId], references: [id], onDelete: Cascade)
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([boxId, isRead])
+  @@index([workspaceId, createdAt])
+  @@map("voicemail_messages")
+}
+
+model CallForwardingRule {
+  id              String   @id @default(cuid())
+  workspaceId     String
+  userId          String?
+  phoneNumberId   String?
+  mode            String   // always | busy | unanswered | offline | simultaneous | sequential | after_hours | holiday
+  targetType      String   // user | external | queue | voicemail | ai_agent | device
+  targetValue     String
+  ringSeconds     Int      @default(25)
+  priority        Int      @default(100)
+  active          Boolean  @default(true)
+  configJson      Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, active])
+  @@map("call_forwarding_rules")
+}
+
+model SoftphonePresence {
+  id          String   @id @default(cuid())
+  workspaceId String
+  userId      String
+  status      String   @default("available") // available | busy | on_call | away | dnd | offline | custom
+  customLabel String?
+  queueAvailable Boolean @default(true)
+  deviceIds   String[] @default([])
+  updatedAt   DateTime @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@index([workspaceId, status])
+  @@map("softphone_presence")
+}
+
+model SoftphoneUserSettings {
+  id                String   @id @default(cuid())
+  workspaceId       String
+  userId            String
+  extension         String?
+  defaultCallerId   String?
+  ringDesktop       Boolean  @default(true)
+  ringMobile        Boolean  @default(true)
+  forwardToCellular String?
+  dndEnabled        Boolean  @default(false)
+  e911AddressJson   Json?
+  permissionsJson   Json?
+  recordingEnabled  Boolean  @default(true)
+  internationalEnabled Boolean @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  workspace         Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@map("softphone_user_settings")
 }
 
 model PushSubscription {

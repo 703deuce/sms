@@ -104,6 +104,27 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       if (!sourceId) throw new Error("sourceId required");
       return processKnowledgeSource(sourceId);
     }
+    case "phone_queue_overflow": {
+      const { handleQueueOverflowJob } = await import("@/lib/phone/queue-runtime");
+      return handleQueueOverflowJob({
+        workspaceId: String(payload.workspaceId || ""),
+        queueId: String(payload.queueId || ""),
+        humanCallId: String(payload.humanCallId || ""),
+        telnyxCallControlId: String(payload.telnyxCallControlId || ""),
+      });
+    }
+    case "voice_send_email": {
+      // Queued email follow-up from AI tools — log for ops until SMTP integration is bound.
+      const { getPrisma } = await import("@/lib/db");
+      await getPrisma().auditLog.create({
+        data: {
+          workspaceId: String(payload.workspaceId || "") || null,
+          event: "voice.email_queued",
+          detail: JSON.stringify(payload),
+        },
+      });
+      return { ok: true, queued: true };
+    }
     case "list_cleanup": {
       const workspaceId = payload.workspaceId as string | undefined;
       const { runListCleanup, runListCleanupAllWorkspaces } = await import("@/lib/contacts/cleanup-list");

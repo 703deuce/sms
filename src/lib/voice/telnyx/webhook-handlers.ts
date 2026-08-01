@@ -324,9 +324,11 @@ export async function processVoiceWebhookEvent(input: {
       const agent = await prisma.voiceAgent.findUnique({ where: { id: call.agentId } });
       const controlId = String(eventPayload.call_control_id || call.telnyxCallControlId || "");
       if (agent?.telnyxAssistantId && controlId) {
-        const { startAiAssistantOnCall, startCallRecording } = await import(
-          "../telnyx/assistant-sync"
-        );
+        const {
+          startAiAssistantOnCall,
+          startCallRecording,
+          startCallTranscription,
+        } = await import("../telnyx/assistant-sync");
         await startAiAssistantOnCall({
           callControlId: controlId,
           assistantId: agent.telnyxAssistantId,
@@ -337,10 +339,16 @@ export async function processVoiceWebhookEvent(input: {
           },
         }).catch((err) => console.error("[voice/webhook] ai_assistant_start", err));
         await startCallRecording(controlId);
+        await startCallTranscription(controlId);
         await prisma.voiceCall.update({
           where: { id: call.id },
           data: {
-            metadata: { ...meta, aiStarted: true, assistantId: agent.telnyxAssistantId } as object,
+            metadata: {
+              ...meta,
+              aiStarted: true,
+              assistantId: agent.telnyxAssistantId,
+              transcriptionStarted: true,
+            } as object,
           },
         });
       }

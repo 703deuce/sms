@@ -108,8 +108,27 @@ export async function handleInboundHumanCall(input: {
       telnyxCallControlId: input.telnyxCallControlId,
       callerIdNumber: input.toE164,
       notes: note,
+      queueId: queueId || null,
     },
   });
+
+  // Answer + ring queue members (or leave ringing for softphone poll).
+  if (input.telnyxCallControlId && isTelnyxPhoneConfigured()) {
+    await telnyxRequest(`/calls/${input.telnyxCallControlId}/actions/answer`, {
+      method: "POST",
+      body: {},
+    }).catch(() => undefined);
+
+    if (queueId) {
+      const { ringQueueMembers } = await import("./queue-runtime");
+      await ringQueueMembers({
+        workspaceId: input.workspaceId,
+        queueId,
+        humanCallId: call.id,
+        telnyxCallControlId: input.telnyxCallControlId,
+      }).catch((err) => console.warn("[phone] queue ring failed", err));
+    }
+  }
 
   return { callId: call.id, call, queueId };
 }

@@ -137,6 +137,34 @@ export async function publishVoiceAgent(
   return { agent: updated, version: versionRow };
 }
 
+export async function rollbackVoiceAgent(
+  workspaceId: string,
+  agentId: string,
+  versionId: string,
+) {
+  const prisma = getPrisma();
+  const agent = await prisma.voiceAgent.findFirst({
+    where: { id: agentId, workspaceId },
+  });
+  if (!agent) throw new Error("Agent not found");
+  const version = await prisma.voiceAgentVersion.findFirst({
+    where: { id: versionId, agentId, workspaceId },
+  });
+  if (!version) throw new Error("Version not found");
+
+  const config = parseVoiceAgentConfig(version.config);
+  await prisma.voiceAgent.update({
+    where: { id: agentId },
+    data: {
+      draftConfig: config as object,
+      status: "DRAFT",
+    },
+  });
+
+  // Re-publish the rolled-back config so Telnyx stays in sync.
+  return publishVoiceAgent(workspaceId, agentId, "rollback");
+}
+
 export async function duplicateVoiceAgent(workspaceId: string, agentId: string) {
   const prisma = getPrisma();
   const agent = await prisma.voiceAgent.findFirst({

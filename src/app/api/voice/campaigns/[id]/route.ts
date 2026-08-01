@@ -2,8 +2,10 @@ import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
 import { getPrisma } from "@/lib/db";
 import {
+  cancelCampaign,
   enrollCampaignAudience,
   pauseCampaign,
+  resumeCampaign,
   startCampaign,
 } from "@/lib/voice/campaigns";
 import { requireVoicePermission } from "@/lib/voice/permissions";
@@ -36,6 +38,14 @@ export async function PATCH(
     if (body.action === "pause") {
       await requireVoicePermission(auth.session.userId, auth.workspaceId, "start_campaign");
       return NextResponse.json({ data: await pauseCampaign(auth.workspaceId, id) });
+    }
+    if (body.action === "resume") {
+      await requireVoicePermission(auth.session.userId, auth.workspaceId, "start_campaign");
+      return NextResponse.json({ data: await resumeCampaign(auth.workspaceId, id) });
+    }
+    if (body.action === "cancel") {
+      await requireVoicePermission(auth.session.userId, auth.workspaceId, "start_campaign");
+      return NextResponse.json({ data: await cancelCampaign(auth.workspaceId, id) });
     }
     if (body.action === "enroll") {
       await requireVoicePermission(auth.session.userId, auth.workspaceId, "start_campaign");

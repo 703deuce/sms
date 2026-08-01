@@ -103,13 +103,44 @@ export async function initiateOutboundCall(input: {
 
 export async function processVoiceCampaignBatch() {
   const prisma = getPrisma();
+  const { isWithinCallingWindow } = await import("./campaigns");
   const campaigns = await prisma.voiceCampaign.findMany({
-    where: { status: "RUNNING" },
+    where: { status: { in: ["RUNNING", "SCHEDULED"] } },
     take: 10,
   });
 
   let initiated = 0;
   for (const campaign of campaigns) {
+    if (campaign.status === "SCHEDULED") {
+      const schedule = (campaign.scheduleConfig || {}) as { startAt?: string; runAt?: string };
+      const startAt = schedule.startAt || schedule.runAt;
+      if (startAt && new Date(startAt).getTime() > Date.now()) continue;
+      await prisma.voiceCampaign.update({
+        where: { id: campaign.id },
+        data: { status: "RUNNING", startedAt: new Date() },
+      });
+    }
+
+    const window = isWithinCallingWindow(campaign);
+    if (!window.allowed) continue;
+
+    if (campaign.dailyLimit) {
+      const startOfDay = new Date();
+      startOfDay.setHours(0, 0, 0, 0);
+      const todayCount = await prisma.voiceCall.count({
+        where: {
+          campaignId: campaign.id,
+          createdAt: { gte: startOfDay },
+        },
+      });
+      if (todayCount >= campaign.dailyLimit) continue;
+    }
+
+    const compliance = await prisma.voiceComplianceProfile.findUnique({
+      where: { workspaceId: campaign.workspaceId },
+    });
+    if (compliance?.emergencyStop) continue;
+
     const running = await prisma.voiceCall.count({
       where: {
         campaignId: campaign.id,
@@ -119,22 +150,39 @@ export async function processVoiceCampaignBatch() {
     if (running >= campaign.concurrency) continue;
 
     const contact = await prisma.voiceCampaignContact.findFirst({
-      where: { campaignId: campaign.id, status: "pending" },
+      where: {
+        campaignId: campaign.id,
+        status: "pending",
+        attemptCount: { lt: campaign.maxAttempts || 3 },
+      },
       orderBy: { createdAt: "asc" },
     });
     if (!contact) {
-      await prisma.voiceCampaign.update({
-        where: { id: campaign.id },
-        data: { status: "COMPLETED", completedAt: new Date() },
+      const stillPending = await prisma.voiceCampaignContact.count({
+        where: { campaignId: campaign.id, status: "pending" },
+      });
+      if (!stillPending) {
+        await prisma.voiceCampaign.update({
+          where: { id: campaign.id },
+          data: { status: "COMPLETED", completedAt: new Date() },
+        });
+      }
+      continue;
+    }
+
+    // DNC / suppression check
+    const suppressed = await prisma.suppression.findFirst({
+      where: { workspaceId: campaign.workspaceId, phone: contact.phone },
+    });
+    if (suppressed) {
+      await prisma.voiceCampaignContact.update({
+        where: { id: contact.id },
+        data: { status: "suppressed", lastOutcome: "dnc" },
       });
       continue;
     }
 
     try {
-      const c = contact.contactId
-        ? await prisma.contact.findUnique({ where: { id: contact.contactId } })
-        : null;
-
       await initiateOutboundCall({
         workspaceId: campaign.workspaceId,
         agentId: campaign.agentId,
