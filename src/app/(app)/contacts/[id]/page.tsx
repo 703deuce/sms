@@ -9,7 +9,8 @@ import type { Contact, Conversation } from "@/lib/types";
 import { loadContactById, loadConversations } from "@/lib/workspace-data";
 import { formatPhone } from "@/lib/utils";
 import { ClickToCallButton } from "@/components/contacts/click-to-call-button";
-import { ArrowLeft, Mail, MessageSquare, Shield } from "lucide-react";
+import { ContactActivityTimeline } from "@/components/contacts/contact-activity-timeline";
+import { ArrowLeft, MessageSquare, Shield } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -217,62 +218,23 @@ export default async function ContactDetailPage({
 
           <Card>
             <CardTitle>Activity</CardTitle>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Unified timeline of SMS, softphone calls, AI voice, and voicemail.
+            </p>
             {conversation ? (
-              <div className="mt-4 space-y-4">
-                <div className="rounded-lg border border-border bg-muted/30 p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="font-medium">Inbox conversation</p>
-                    <StatusChip status={conversation.status} />
-                  </div>
-                  <p className="mt-2 text-sm text-muted-foreground">{conversation.lastMessage}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Updated {formatDateTime(conversation.updatedAt)}
-                  </p>
-                  <Link href="/inbox" className="mt-3 inline-block">
-                    <Button variant="outline" size="sm">
-                      Open in inbox
-                    </Button>
-                  </Link>
+              <div className="mt-3 rounded-lg border border-border bg-muted/30 p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-medium">Open inbox thread</p>
+                  <StatusChip status={conversation.status} />
                 </div>
-
-                {conversation.messages && conversation.messages.length > 0 ? (
-                  <div>
-                    <p className="mb-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                      Recent messages
-                    </p>
-                    <div className="space-y-2">
-                      {conversation.messages.slice(-3).map((msg) => (
-                        <div
-                          key={msg.id}
-                          className={`rounded-lg px-3 py-2 text-sm ${
-                            msg.direction === "in"
-                              ? "bg-muted/60"
-                              : msg.direction === "note"
-                                ? "border border-dashed border-border bg-card italic text-muted-foreground"
-                                : "bg-primary/10 text-foreground"
-                          }`}
-                        >
-                          <p>{msg.body}</p>
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            {msg.direction === "note" ? `Note · ${msg.user}` : msg.direction === "in" ? "Inbound" : "Outbound"}
-                            {" · "}
-                            {formatDateTime(msg.at)}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
+                <Link href="/inbox" className="mt-2 inline-block">
+                  <Button variant="outline" size="sm">
+                    Open in inbox
+                  </Button>
+                </Link>
               </div>
-            ) : (
-              <EmptyState
-                icon={<Mail className="h-8 w-8" />}
-                title="No activity yet"
-                description="Messages and inbox threads for this contact will appear here."
-                actionLabel="Send a message"
-                actionHref="/send/quick"
-              />
-            )}
+            ) : null}
+            <ContactActivityTimeline contactId={contact.id} />
           </Card>
         </div>
 

@@ -15,7 +15,7 @@ export async function GET() {
     const prisma = getPrisma();
     const workspaceId = auth.workspaceId;
 
-    const [numbers, presence, settings, recentCall, pushSubs] = await Promise.all([
+    const [numbers, presence, settings, recentCall, pushSubs, deviceCount] = await Promise.all([
       prisma.phoneNumber.findMany({
         where: { workspaceId },
         select: { id: true, e164: true, status: true },
@@ -44,6 +44,9 @@ export async function GET() {
       }),
       prisma.pushSubscription.count({
         where: { workspaceId, userId: auth.session.userId },
+      }),
+      prisma.softphoneDevice.count({
+        where: { workspaceId, userId: auth.session.userId, active: true },
       }),
     ]);
 
@@ -88,6 +91,7 @@ export async function GET() {
           : null,
         lastCall: recentCall,
         pushSubscriptionCount: pushSubs,
+        deviceCount,
         checks: {
           hasActiveNumber: numbers.length > 0 || activeNumbers.length > 0,
           telnyxReady: telnyxConfigured && publicKeyPresent,
@@ -95,8 +99,11 @@ export async function GET() {
           presenceFresh: presence
             ? Date.now() - new Date(presence.updatedAt).getTime() < 15 * 60_000
             : false,
-          // Softphone call push not yet wired — surface honestly.
-          incomingCallPush: false,
+          incomingCallPush:
+            deviceCount > 0 &&
+            pushSubs > 0 &&
+            Boolean(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY?.trim()) &&
+            Boolean(process.env.VAPID_PRIVATE_KEY?.trim()),
         },
       },
     });

@@ -55,4 +55,11 @@ See `docs/PRODUCT_POSITIONING.md`. Phone reliability outranks AI. New launch sur
 - `/phone/calls/[id]` — softphone call-path diagnostics for support
 - Explicit warm-transfer state copy in the softphone UI
 
+### Closed in finish-five-gaps pass
+- Incoming-call web push + multi-device registration (`softphone_devices`, `/api/phone/devices`, SW click → `/phone?incoming=`)
+- Unified contact timeline (SMS + softphone + AI voice + voicemail) on contact detail
+- Porting status center (timeline, docs checklist, FOC, rejection, temp forward — no auto-complete)
+- Voicemail recording attach + Whisper transcription pipeline on `call.recording.saved`
+- Billing itemized upcoming estimate + credit ledger + Stripe invoices
+
 Everything else on the customer checklists is implemented in code and ready for number-on testing.

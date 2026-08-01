@@ -229,6 +229,7 @@ model Workspace {
   voicemailMessages VoicemailMessage[]
   callForwardingRules CallForwardingRule[]
   softphonePresence SoftphonePresence[]
+  softphoneDevices SoftphoneDevice[]
   softphoneUserSettings SoftphoneUserSettings[]
 }
 
@@ -447,11 +448,27 @@ model PortRequest {
   billingPhone   String?
   businessName   String?
   address        String?
+  /// pending | docs_needed | submitted | in_progress | foc_confirmed | completed | rejected | cancelled
   status         String   @default("pending")
+  authorizedName String?
+  numberType     String?
+  notes          String?
+  rejectionReason String?
+  /// Estimated FOC / cutover date when known (never a fake promise).
+  focDate        DateTime?
+  temporaryForwardNumber String?
+  providerPortId String?
+  requestedByUserId String?
+  /// Timeline of status changes for the porting center.
+  statusHistoryJson Json     @default("[]")
+  /// Checklist / docs required and uploaded metadata.
+  documentsJson  Json     @default("[]")
   createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
   workspace      Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
-  @@index([workspaceId])
+  @@index([workspaceId, status])
+  @@index([workspaceId, createdAt])
 }
 
 model Contact {
@@ -2159,12 +2176,38 @@ model SoftphonePresence {
   customLabel String?
   queueAvailable Boolean @default(true)
   deviceIds   String[] @default([])
+  lastRegisteredAt DateTime?
+  lastPushAckAt DateTime?
   updatedAt   DateTime @updatedAt
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@unique([workspaceId, userId])
   @@index([workspaceId, status])
   @@map("softphone_presence")
+}
+
+/// Browser / mobile softphone device registration for multi-device ring + push targeting.
+model SoftphoneDevice {
+  id            String   @id @default(cuid())
+  workspaceId   String
+  userId        String
+  /// Stable client-generated key (localStorage) unique per browser/profile.
+  deviceKey     String
+  label         String?
+  platform      String   @default("browser") // browser | ios | android | desktop
+  userAgent     String?
+  lastSeenAt    DateTime @default(now())
+  lastPushAt    DateTime?
+  lastAckAt     DateTime?
+  lastIncomingCallId String?
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId, deviceKey])
+  @@index([workspaceId, userId, active])
+  @@map("softphone_devices")
 }
 
 model SoftphoneUserSettings {

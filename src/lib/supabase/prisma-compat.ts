@@ -112,6 +112,15 @@ const MODEL_TO_TABLE: Record<string, string> = {
   ivrMenu: "ivr_menus",
   platformSettings: "platform_settings",
   supportTicket: "support_tickets",
+  callParkSlot: "call_park_slots",
+  conferenceCall: "conference_calls",
+  conferenceParticipant: "conference_participants",
+  voicemailBox: "voicemail_boxes",
+  voicemailMessage: "voicemail_messages",
+  callForwardingRule: "call_forwarding_rules",
+  softphonePresence: "softphone_presence",
+  softphoneDevice: "softphone_devices",
+  softphoneUserSettings: "softphone_user_settings",
 };
 
 /** Relation name on a model → { table, fk on this model, pk on related }. */
@@ -151,6 +160,21 @@ const RELATIONS: Record<string, Record<string, { table: string; fk: string; pk?:
   integrationConnection: { workspace: { table: "Workspace", fk: "workspaceId" } },
   callQueue: { workspace: { table: "Workspace", fk: "workspaceId" } },
   ivrMenu: { workspace: { table: "Workspace", fk: "workspaceId" } },
+  callParkSlot: { workspace: { table: "Workspace", fk: "workspaceId" } },
+  conferenceCall: { workspace: { table: "Workspace", fk: "workspaceId" } },
+  conferenceParticipant: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+    conference: { table: "conference_calls", fk: "conferenceId" },
+  },
+  voicemailBox: { workspace: { table: "Workspace", fk: "workspaceId" } },
+  voicemailMessage: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+    box: { table: "voicemail_boxes", fk: "boxId" },
+  },
+  callForwardingRule: { workspace: { table: "Workspace", fk: "workspaceId" } },
+  softphonePresence: { workspace: { table: "Workspace", fk: "workspaceId" } },
+  softphoneDevice: { workspace: { table: "Workspace", fk: "workspaceId" } },
+  softphoneUserSettings: { workspace: { table: "Workspace", fk: "workspaceId" } },
   supportTicket: {},
   contact: { workspace: { table: "Workspace", fk: "workspaceId" } },
   campaign: { workspace: { table: "Workspace", fk: "workspaceId" } },

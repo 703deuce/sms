@@ -51,6 +51,14 @@ export async function dialHumanCall(input: {
 
   await markOnCallSafe(input.workspaceId, input.agentUserId, true);
 
+  let contactId: string | null = null;
+  try {
+    const { resolveContactIdForPhone } = await import("@/lib/contacts/activity-timeline");
+    contactId = await resolveContactIdForPhone(input.workspaceId, to);
+  } catch {
+    // best-effort contact attach
+  }
+
   const call = await prisma.humanCall.create({
     data: {
       workspaceId: input.workspaceId,
@@ -61,6 +69,7 @@ export async function dialHumanCall(input: {
       agentUserId: input.agentUserId,
       callerIdNumber: from,
       notes: input.anonymous ? "[anonymous_dial]" : null,
+      contactId,
     },
   });
 
@@ -141,6 +150,14 @@ export async function handleInboundHumanCall(input: {
     }
   }
 
+  let contactId: string | null = null;
+  try {
+    const { resolveContactIdForPhone } = await import("@/lib/contacts/activity-timeline");
+    contactId = await resolveContactIdForPhone(input.workspaceId, from);
+  } catch {
+    // best-effort contact attach
+  }
+
   const call = await prisma.humanCall.create({
     data: {
       workspaceId: input.workspaceId,
@@ -152,6 +169,7 @@ export async function handleInboundHumanCall(input: {
       callerIdNumber: input.toE164,
       notes: note,
       queueId: queueId || null,
+      contactId,
     },
   });
 
@@ -171,6 +189,20 @@ export async function handleInboundHumanCall(input: {
         telnyxCallControlId: input.telnyxCallControlId,
       }).catch((err) => console.warn("[phone] queue ring failed", err));
     }
+  }
+
+  // Multi-device incoming-call push (best-effort; softphone also polls).
+  try {
+    const { notifyUsersForInboundCall } = await import("./incoming-notify");
+    await notifyUsersForInboundCall({
+      workspaceId: input.workspaceId,
+      humanCallId: call.id,
+      fromE164: from,
+      toE164: input.toE164,
+      queueId,
+    });
+  } catch (err) {
+    console.warn("[phone] incoming push notify failed", err);
   }
 
   return { callId: call.id, call, queueId };
@@ -978,6 +1010,25 @@ export async function processHumanCallWebhookEvent(input: {
     const urls = input.eventPayload.recording_urls as Record<string, string> | undefined;
     patch.recordingUrl = urls?.mp3 || urls?.wav || null;
     // Do not mark call completed on recording.saved.
+    const recordingUrl = (patch.recordingUrl as string | null) || null;
+    const isVoicemail =
+      call.status === "voicemail" ||
+      String(call.disposition || "").startsWith("voicemail:");
+    if (recordingUrl && isVoicemail) {
+      const duration =
+        Number(
+          (input.eventPayload as { recording_duration_ms?: number }).recording_duration_ms ||
+            (input.eventPayload as { duration_millis?: number }).duration_millis ||
+            0,
+        ) || null;
+      const { attachVoicemailRecordingAndTranscribe } = await import("./voicemail-service");
+      await attachVoicemailRecordingAndTranscribe({
+        workspaceId: call.workspaceId,
+        humanCallId: call.id,
+        recordingUrl,
+        durationSeconds: duration ? Math.round(duration / 1000) : null,
+      }).catch((err) => console.warn("[phone] voicemail transcript failed", err));
+    }
   }
   if (input.eventType === "call.transcription" || input.eventType === "call.transcription.received") {
     const transcript =

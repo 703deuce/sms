@@ -1,10 +1,29 @@
 import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
+import { getPrisma } from "@/lib/db";
 import {
   sendDtmf,
   updateHumanCall,
 } from "@/lib/phone/human-call-service";
 import { requireSoftphonePermission } from "@/lib/phone/softphone-permissions";
+
+export async function GET(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    const auth = await requireSession();
+    if ("error" in auth) return auth.error;
+    const { id } = await params;
+    const call = await getPrisma().humanCall.findFirst({
+      where: { id, workspaceId: auth.workspaceId },
+    });
+    if (!call) return NextResponse.json({ error: "Call not found" }, { status: 404 });
+    return NextResponse.json({ data: call });
+  } catch (err) {
+    return jsonError(err, 500);
+  }
+}
 
 export async function PATCH(
   request: Request,

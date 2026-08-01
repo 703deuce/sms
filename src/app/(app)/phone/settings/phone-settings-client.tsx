@@ -330,15 +330,62 @@ export function PhoneSettingsClient({
           </div>
           <div>
             <p className="mb-2 text-sm font-medium">Recent messages</p>
-            <ul className="space-y-2 text-sm">
-              {messages.map((m) => (
-                <li key={String(m.id)} className="rounded border border-border px-3 py-2">
-                  {String(m.fromE164 || "unknown")} · {m.isRead ? "read" : "unread"}
-                  {m.transcriptText ? (
-                    <p className="mt-1 text-muted-foreground">{String(m.transcriptText).slice(0, 160)}</p>
-                  ) : null}
-                </li>
-              ))}
+            <ul className="space-y-3 text-sm">
+              {messages.map((m) => {
+                const recordingUrl =
+                  typeof m.recordingUrl === "string" ? m.recordingUrl : null;
+                const duration =
+                  typeof m.durationSeconds === "number" ? m.durationSeconds : null;
+                return (
+                  <li key={String(m.id)} className="rounded border border-border px-3 py-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span>
+                        {String(m.fromE164 || "unknown")} · {m.isRead ? "read" : "unread"}
+                        {duration != null ? ` · ${duration}s` : ""}
+                      </span>
+                      {!m.isRead ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={async () => {
+                            await fetch("/api/phone/voicemail", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({
+                                action: "mark_read",
+                                messageId: m.id,
+                              }),
+                            });
+                            const j = await fetch("/api/phone/voicemail").then((r) => r.json());
+                            setMessages(j.data?.messages || []);
+                          }}
+                        >
+                          Mark read
+                        </Button>
+                      ) : null}
+                    </div>
+                    {recordingUrl ? (
+                      <audio className="mt-2 w-full" controls preload="none" src={recordingUrl} />
+                    ) : (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Recording not available yet (waiting for carrier upload).
+                      </p>
+                    )}
+                    {m.transcriptText ? (
+                      <p className="mt-2 text-muted-foreground">
+                        Transcript: {String(m.transcriptText)}
+                      </p>
+                    ) : recordingUrl ? (
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        Transcript pending — transcription runs when the recording is saved
+                        {boxes.some((b) => b.transcriptionEnabled !== false)
+                          ? " (Whisper when OPENAI_API_KEY is set)."
+                          : "."}
+                      </p>
+                    ) : null}
+                  </li>
+                );
+              })}
               {!messages.length ? <li className="text-muted-foreground">No messages yet</li> : null}
             </ul>
           </div>

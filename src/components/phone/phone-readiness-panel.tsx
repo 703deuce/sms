@@ -24,6 +24,7 @@ type ServerReadiness = {
   } | null;
   lastCall: { id: string; status: string; startedAt: string; mediaMode: string } | null;
   pushSubscriptionCount: number;
+  deviceCount?: number;
   checks: {
     hasActiveNumber: boolean;
     telnyxReady: boolean;
@@ -189,8 +190,8 @@ export function PhoneReadinessPanel() {
         label: "Incoming-call push readiness",
         status: data.checks.incomingCallPush ? "pass" : "warn",
         detail: data.checks.incomingCallPush
-          ? "Call push registered"
-          : `Inbox push subs: ${data.pushSubscriptionCount}. Softphone incoming-call push is not fully wired yet — keep the softphone tab open for browser ringing.`,
+          ? `Devices + VAPID push ready (${data.deviceCount ?? 0} device(s), ${data.pushSubscriptionCount} sub(s))`
+          : `Need active softphone device registration + browser push subscription (devices: ${data.deviceCount ?? 0}, push: ${data.pushSubscriptionCount}). Open /phone once and allow notifications.`,
       });
       if (data.lastCall) {
         next.push({

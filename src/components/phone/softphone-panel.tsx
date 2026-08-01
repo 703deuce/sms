@@ -103,6 +103,23 @@ const LS_FAVORITES = "softphone:favorites";
 const LS_LAST_DIALED = "softphone:lastDialed";
 const LS_AUDIO_IN = "softphone:audioInput";
 const LS_AUDIO_OUT = "softphone:audioOutput";
+const LS_DEVICE_KEY = "softphone:deviceKey";
+
+function getOrCreateDeviceKey() {
+  try {
+    let key = localStorage.getItem(LS_DEVICE_KEY);
+    if (!key) {
+      key =
+        typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : `dev_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+      localStorage.setItem(LS_DEVICE_KEY, key);
+    }
+    return key;
+  } catch {
+    return `dev_${Date.now()}`;
+  }
+}
 
 function formatDuration(seconds: number) {
   const m = Math.floor(seconds / 60);
@@ -263,10 +280,27 @@ export function SoftphonePanel({
     setSelectedMic(localStorage.getItem(LS_AUDIO_IN) || "");
     setSelectedSpeaker(localStorage.getItem(LS_AUDIO_OUT) || "");
 
-    // Click-to-call / deep-link: /phone?dial=+1...
+    // Register this browser as a softphone device + enable incoming-call push.
+    const deviceKey = getOrCreateDeviceKey();
+    fetch("/api/phone/devices", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        deviceKey,
+        label: "Browser softphone",
+        platform: "browser",
+        userAgent: navigator.userAgent,
+      }),
+    }).catch(() => undefined);
+    import("@/lib/push/client-subscribe")
+      .then(({ subscribeToPush }) => subscribeToPush().catch(() => undefined))
+      .catch(() => undefined);
+
+    // Click-to-call / deep-link: /phone?dial=+1... or /phone?incoming=<callId>
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       const dialParam = params.get("dial");
+      const incomingParam = params.get("incoming");
       if (dialParam) {
         setDialNumber(dialParam);
         setLastDialed(dialParam);
@@ -281,6 +315,51 @@ export function SoftphonePanel({
           btn?.click();
         }, 900);
       }
+      if (incomingParam) {
+        fetch(`/api/phone/calls/${incomingParam}`)
+          .then((r) => r.json())
+          .then((j) => {
+            const row = j.data;
+            if (!row) return;
+            setIncoming({
+              id: row.id,
+              from: row.from,
+              to: row.to,
+            });
+          })
+          .catch(() => undefined);
+        fetch("/api/phone/devices/ack", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ deviceKey, humanCallId: incomingParam }),
+        }).catch(() => undefined);
+        const url = new URL(window.location.href);
+        url.searchParams.delete("incoming");
+        window.history.replaceState({}, "", url.pathname + url.search);
+      }
+
+      const onSwMessage = (event: MessageEvent) => {
+        const data = event.data as { type?: string; humanCallId?: string } | null;
+        if (data?.type !== "incoming_call_click" || !data.humanCallId) return;
+        const key = getOrCreateDeviceKey();
+        fetch("/api/phone/devices/ack", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ deviceKey: key, humanCallId: data.humanCallId }),
+        }).catch(() => undefined);
+        fetch(`/api/phone/calls/${data.humanCallId}`)
+          .then((r) => r.json())
+          .then((j) => {
+            const row = j.data;
+            if (!row) return;
+            setIncoming({ id: row.id, from: row.from, to: row.to });
+          })
+          .catch(() => undefined);
+      };
+      navigator.serviceWorker?.addEventListener?.("message", onSwMessage);
+      (window as Window & { __softphoneSwCleanup?: () => void }).__softphoneSwCleanup = () => {
+        navigator.serviceWorker?.removeEventListener?.("message", onSwMessage);
+      };
     }
 
     async function loadDevices() {
@@ -316,6 +395,7 @@ export function SoftphonePanel({
       conn?.removeEventListener?.("change", updateNet);
       window.removeEventListener("online", onOnline);
       window.removeEventListener("offline", onOffline);
+      (window as Window & { __softphoneSwCleanup?: () => void }).__softphoneSwCleanup?.();
     };
   }, []);
 

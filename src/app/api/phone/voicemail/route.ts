@@ -73,16 +73,45 @@ export async function POST(request: Request) {
     }
 
     if (body.action === "update_box" && body.boxId) {
+      const patch: Record<string, unknown> = {
+        greetingText: body.greetingText,
+        greetingUrl: body.greetingUrl,
+        emailNotify: body.emailNotify,
+        name: body.name,
+      };
+      if (typeof (body as { transcriptionEnabled?: boolean }).transcriptionEnabled === "boolean") {
+        patch.transcriptionEnabled = (body as { transcriptionEnabled?: boolean }).transcriptionEnabled;
+      }
       const box = await getPrisma().voicemailBox.update({
         where: { id: body.boxId },
-        data: {
-          greetingText: body.greetingText,
-          greetingUrl: body.greetingUrl,
-          emailNotify: body.emailNotify,
-          name: body.name,
-        },
+        data: patch,
       });
       return NextResponse.json({ data: box });
+    }
+
+    if (body.action === "retranscribe" && body.messageId) {
+      const msg = await getPrisma().voicemailMessage.findFirst({
+        where: { id: body.messageId, workspaceId: auth.workspaceId },
+      });
+      if (!msg?.recordingUrl) {
+        return NextResponse.json({ error: "Message has no recording yet" }, { status: 400 });
+      }
+      const { attachVoicemailRecordingAndTranscribe } = await import(
+        "@/lib/phone/voicemail-service"
+      );
+      // Clear prior transcript so attach re-runs Whisper.
+      await getPrisma().voicemailMessage.update({
+        where: { id: msg.id },
+        data: { transcriptText: null },
+      });
+      const updated = await attachVoicemailRecordingAndTranscribe({
+        workspaceId: auth.workspaceId,
+        messageId: msg.id,
+        humanCallId: msg.humanCallId,
+        recordingUrl: msg.recordingUrl,
+        durationSeconds: msg.durationSeconds,
+      });
+      return NextResponse.json({ data: updated });
     }
 
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });

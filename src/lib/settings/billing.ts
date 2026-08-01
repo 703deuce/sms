@@ -268,6 +268,230 @@ export async function getBillingSummary(workspaceId: string): Promise<BillingSum
   };
 }
 
+export type BillingLineItem = {
+  id: string;
+  label: string;
+  amountCents: number;
+  detail?: string;
+};
+
+export type UpcomingBillEstimate = {
+  currency: string;
+  periodLabel: string;
+  lineItems: BillingLineItem[];
+  subtotalCents: number;
+  estimatedTaxCents: number;
+  totalCents: number;
+  notes: string[];
+  invoices: Array<{
+    id: string;
+    number: string | null;
+    status: string | null;
+    amountDue: number;
+    amountPaid: number;
+    created: number;
+    hostedInvoiceUrl: string | null;
+    pdf: string | null;
+  }>;
+};
+
+/** Plan base fee in cents when Stripe price is unavailable (env PLAN_FEE_<PLAN>_CENTS). */
+function planFeeCents(plan: string): number {
+  const envKey = `PLAN_FEE_${plan.toUpperCase()}_CENTS`;
+  const raw = Number(process.env[envKey]);
+  if (Number.isFinite(raw) && raw >= 0) return Math.round(raw);
+  const defaults: Record<string, number> = {
+    starter: 4900,
+    growth: 9900,
+    scale: 24900,
+    enterprise: 0,
+  };
+  return defaults[plan.toLowerCase()] ?? 9900;
+}
+
+function numberMonthlyFeeCents(): number {
+  const raw = Number(process.env.NUMBER_MONTHLY_FEE_CENTS);
+  if (Number.isFinite(raw) && raw >= 0) return Math.round(raw);
+  return 200; // $2 / number default estimate
+}
+
+/**
+ * Itemized upcoming bill estimate: subscription + numbers + period SMS usage + tax placeholder.
+ * Pulls Stripe invoices when configured; never invents paid invoice rows.
+ */
+export async function getUpcomingBillEstimate(workspaceId: string): Promise<UpcomingBillEstimate> {
+  const prisma = getPrisma();
+  const workspace = await prisma.workspace.findUnique({ where: { id: workspaceId } });
+  const plan = (workspace?.billingPlan as string) || "growth";
+  const now = new Date();
+  const periodStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  const periodEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+
+  const [numbers, usageRows] = await Promise.all([
+    prisma.phoneNumber.findMany({
+      where: { workspaceId },
+      select: { id: true, e164: true, status: true },
+    }),
+    prisma.usageRecord.findMany({
+      where: {
+        workspaceId,
+        periodStart: { lte: periodEnd },
+        periodEnd: { gte: periodStart },
+      },
+      orderBy: { periodStart: "desc" },
+      take: 5,
+    }),
+  ]);
+
+  const activeNumbers = numbers.filter((n: { status: string }) =>
+    /active|in[-_]?use|assigned/i.test(n.status || "active"),
+  );
+  const numberCount = activeNumbers.length || numbers.length;
+  const perNumber = numberMonthlyFeeCents();
+  const numbersCents = numberCount * perNumber;
+
+  const usage = usageRows[0];
+  const smsSegments = Number(usage?.smsSegments ?? 0);
+  const mmsMessages = Number(usage?.mmsMessages ?? 0);
+  const usageCostFromRecord = Number(usage?.costCents ?? 0);
+  const smsEstimate =
+    usageCostFromRecord > 0
+      ? usageCostFromRecord
+      : smsSegments * smsCostCents() + mmsMessages * Math.max(smsCostCents() * 3, 3);
+
+  const lineItems: BillingLineItem[] = [
+    {
+      id: "subscription",
+      label: `${plan.charAt(0).toUpperCase()}${plan.slice(1)} plan`,
+      amountCents: planFeeCents(plan),
+      detail: "Base subscription (estimate if Stripe price not loaded)",
+    },
+    {
+      id: "numbers",
+      label: `Phone numbers (${numberCount})`,
+      amountCents: numbersCents,
+      detail: `${(perNumber / 100).toFixed(2)} USD each / month`,
+    },
+    {
+      id: "sms_usage",
+      label: "Messaging usage (this period)",
+      amountCents: smsEstimate,
+      detail: `${smsSegments} SMS segments · ${mmsMessages} MMS`,
+    },
+  ];
+
+  // Voice usage records when present
+  try {
+    const voiceUsage = await prisma.voiceUsageRecord.findMany({
+      where: {
+        workspaceId,
+        createdAt: { gte: periodStart },
+      },
+      take: 200,
+    });
+    const voiceCents = voiceUsage.reduce(
+      (sum: number, r: { billedCostCents?: number | null; providerCostCents?: number | null }) =>
+        sum + Number(r.billedCostCents ?? r.providerCostCents ?? 0),
+      0,
+    );
+    if (voiceCents > 0) {
+      lineItems.push({
+        id: "voice_usage",
+        label: "Voice usage (this period)",
+        amountCents: voiceCents,
+        detail: `${voiceUsage.length} usage row(s)`,
+      });
+    }
+  } catch {
+    // voice usage table may be empty / unavailable
+  }
+
+  const subtotalCents = lineItems.reduce((s, i) => s + i.amountCents, 0);
+  const taxRate = Number(process.env.BILLING_ESTIMATED_TAX_RATE || 0);
+  const estimatedTaxCents =
+    Number.isFinite(taxRate) && taxRate > 0 ? Math.round(subtotalCents * taxRate) : 0;
+
+  const invoices: UpcomingBillEstimate["invoices"] = [];
+  const notes: string[] = [
+    "Estimate only — final invoice amounts come from Stripe when billing is configured.",
+    "Taxes shown only when BILLING_ESTIMATED_TAX_RATE is set (e.g. 0.08).",
+  ];
+
+  const stripe = getStripe();
+  const customerId = workspace?.stripeCustomerId as string | null;
+  if (stripe && customerId) {
+    try {
+      const list = await stripe.invoices.list({ customer: customerId, limit: 12 });
+      for (const inv of list.data) {
+        invoices.push({
+          id: inv.id,
+          number: inv.number ?? null,
+          status: inv.status ?? null,
+          amountDue: inv.amount_due,
+          amountPaid: inv.amount_paid,
+          created: inv.created,
+          hostedInvoiceUrl: inv.hosted_invoice_url ?? null,
+          pdf: inv.invoice_pdf ?? null,
+        });
+      }
+      const upcoming = await stripe.invoices
+        .createPreview({ customer: customerId })
+        .catch(() => null);
+      if (upcoming) {
+        notes.unshift(
+          `Stripe upcoming invoice total: $${(upcoming.amount_due / 100).toFixed(2)} (authoritative when present).`,
+        );
+        // Prefer Stripe line items when available
+        if (upcoming.lines?.data?.length) {
+          lineItems.length = 0;
+          for (const line of upcoming.lines.data) {
+            lineItems.push({
+              id: line.id,
+              label: line.description || "Line item",
+              amountCents: line.amount,
+              detail: line.period
+                ? `${new Date(line.period.start * 1000).toLocaleDateString()} – ${new Date(line.period.end * 1000).toLocaleDateString()}`
+                : undefined,
+            });
+          }
+          return {
+            currency: upcoming.currency || "usd",
+            periodLabel: `${periodStart.toISOString().slice(0, 10)} → ${periodEnd.toISOString().slice(0, 10)}`,
+            lineItems,
+            subtotalCents: upcoming.subtotal ?? lineItems.reduce((s, i) => s + i.amountCents, 0),
+            estimatedTaxCents: Number(
+              (upcoming as { total_taxes?: Array<{ amount?: number }> }).total_taxes?.reduce(
+                (s, t) => s + Number(t.amount || 0),
+                0,
+              ) ?? 0,
+            ),
+            totalCents: upcoming.amount_due,
+            notes,
+            invoices,
+          };
+        }
+      }
+    } catch (err) {
+      notes.push(
+        `Stripe invoice sync unavailable: ${err instanceof Error ? err.message.slice(0, 80) : "error"}`,
+      );
+    }
+  } else if (!isStripeConfigured()) {
+    notes.push("Stripe is not configured — showing local estimate from plan + numbers + usage.");
+  }
+
+  return {
+    currency: "usd",
+    periodLabel: `${periodStart.toISOString().slice(0, 10)} → ${periodEnd.toISOString().slice(0, 10)}`,
+    lineItems,
+    subtotalCents,
+    estimatedTaxCents,
+    totalCents: subtotalCents + estimatedTaxCents,
+    notes,
+    invoices,
+  };
+}
+
 /** Grant credits (trial, admin adjust, or local mock top-up). Updates ledger + balance. */
 export async function grantCredits(
   workspaceId: string,

@@ -168,3 +168,40 @@ CREATE INDEX IF NOT EXISTS "human_call_events_humanCallId_createdAt_idx"
   ON "human_call_events" ("humanCallId", "createdAt");
 CREATE INDEX IF NOT EXISTS "human_call_events_workspaceId_createdAt_idx"
   ON "human_call_events" ("workspaceId", "createdAt");
+
+ALTER TABLE "PortRequest"
+  ADD COLUMN IF NOT EXISTS "authorizedName" text,
+  ADD COLUMN IF NOT EXISTS "numberType" text,
+  ADD COLUMN IF NOT EXISTS "notes" text,
+  ADD COLUMN IF NOT EXISTS "rejectionReason" text,
+  ADD COLUMN IF NOT EXISTS "focDate" timestamptz,
+  ADD COLUMN IF NOT EXISTS "temporaryForwardNumber" text,
+  ADD COLUMN IF NOT EXISTS "providerPortId" text,
+  ADD COLUMN IF NOT EXISTS "requestedByUserId" text,
+  ADD COLUMN IF NOT EXISTS "statusHistoryJson" jsonb DEFAULT '[]'::jsonb,
+  ADD COLUMN IF NOT EXISTS "documentsJson" jsonb DEFAULT '[]'::jsonb,
+  ADD COLUMN IF NOT EXISTS "updatedAt" timestamptz DEFAULT NOW();
+
+ALTER TABLE "softphone_presence"
+  ADD COLUMN IF NOT EXISTS "lastRegisteredAt" timestamptz,
+  ADD COLUMN IF NOT EXISTS "lastPushAckAt" timestamptz;
+
+CREATE TABLE IF NOT EXISTS "softphone_devices" (
+  "id" text PRIMARY KEY,
+  "workspaceId" text NOT NULL REFERENCES "Workspace"("id") ON DELETE CASCADE,
+  "userId" text NOT NULL,
+  "deviceKey" text NOT NULL,
+  "label" text,
+  "platform" text NOT NULL DEFAULT 'browser',
+  "userAgent" text,
+  "lastSeenAt" timestamptz NOT NULL DEFAULT NOW(),
+  "lastPushAt" timestamptz,
+  "lastAckAt" timestamptz,
+  "lastIncomingCallId" text,
+  "active" boolean NOT NULL DEFAULT true,
+  "createdAt" timestamptz NOT NULL DEFAULT NOW(),
+  "updatedAt" timestamptz NOT NULL DEFAULT NOW(),
+  UNIQUE("workspaceId", "userId", "deviceKey")
+);
+CREATE INDEX IF NOT EXISTS "softphone_devices_workspace_user_active_idx"
+  ON "softphone_devices" ("workspaceId", "userId", "active");

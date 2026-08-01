@@ -99,3 +99,72 @@ export async function listVoicemailMessages(workspaceId: string, boxId?: string)
     take: 100,
   });
 }
+
+/**
+ * Attach recording to the voicemail row for a human call, then transcribe when enabled.
+ */
+export async function attachVoicemailRecordingAndTranscribe(input: {
+  workspaceId: string;
+  humanCallId?: string | null;
+  messageId?: string | null;
+  recordingUrl: string;
+  durationSeconds?: number | null;
+}) {
+  const prisma = getPrisma();
+  const msg = input.messageId
+    ? await prisma.voicemailMessage.findFirst({
+        where: { id: input.messageId, workspaceId: input.workspaceId },
+      })
+    : input.humanCallId
+      ? await prisma.voicemailMessage.findFirst({
+          where: {
+            workspaceId: input.workspaceId,
+            humanCallId: input.humanCallId,
+          },
+          orderBy: { createdAt: "desc" },
+        })
+      : null;
+  if (!msg) return null;
+
+  const box = await prisma.voicemailBox.findFirst({
+    where: { id: msg.boxId, workspaceId: input.workspaceId },
+  });
+
+  const updated = await prisma.voicemailMessage.update({
+    where: { id: msg.id },
+    data: {
+      recordingUrl: input.recordingUrl,
+      durationSeconds: input.durationSeconds ?? msg.durationSeconds,
+    },
+  });
+
+  if (!box?.transcriptionEnabled) return updated;
+  if (updated.transcriptText) return updated;
+
+  try {
+    const { transcribeAudioUrl } = await import("./voicemail-transcribe");
+    const transcript = await transcribeAudioUrl(input.recordingUrl);
+    if (!transcript) {
+      // No OpenAI key — leave recording playable; UI shows "transcription pending".
+      return prisma.voicemailMessage.update({
+        where: { id: msg.id },
+        data: {
+          transcriptText:
+            "[Transcription pending — set OPENAI_API_KEY to enable Whisper transcripts]",
+        },
+      });
+    }
+    return prisma.voicemailMessage.update({
+      where: { id: msg.id },
+      data: { transcriptText: transcript },
+    });
+  } catch (err) {
+    console.warn("[voicemail] transcription failed", err);
+    return prisma.voicemailMessage.update({
+      where: { id: msg.id },
+      data: {
+        transcriptText: `[Transcription failed: ${err instanceof Error ? err.message.slice(0, 120) : "error"}]`,
+      },
+    });
+  }
+}
