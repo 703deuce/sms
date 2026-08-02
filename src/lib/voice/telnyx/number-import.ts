@@ -152,46 +152,11 @@ export async function importTelnyxNumbersIntoWorkspace(input: {
     });
   }
 
-  // Ensure Call Control Application webhook points at Transovo after attach.
-  let webhookEnsured: { ok: boolean; url: string; error?: string } | null = null;
-  if (connectionId && imported.some((n) => n.attached)) {
-    const voiceUrl = getTelnyxWebhookUrls().voice;
-    try {
-      const current = await telnyxRequest<{ data?: Record<string, unknown> }>(
-        `/call_control_applications/${encodeURIComponent(connectionId)}`,
-      );
-      const app = current.data || {};
-      const have = String(app.webhook_event_url || "").replace(/\/$/, "");
-      const want = voiceUrl.replace(/\/$/, "");
-      if (have !== want || app.active === false || String(app.webhook_api_version) !== "2") {
-        await telnyxRequest(
-          `/call_control_applications/${encodeURIComponent(connectionId)}`,
-          {
-            method: "PATCH",
-            body: {
-              application_name:
-                String(app.application_name || "").trim() || "Transovo Voice",
-              webhook_event_url: want,
-              webhook_api_version: "2",
-              active: true,
-            },
-          },
-        );
-      }
-      webhookEnsured = { ok: true, url: want };
-    } catch (err) {
-      webhookEnsured = {
-        ok: false,
-        url: voiceUrl,
-        error: err instanceof Error ? err.message : String(err),
-      };
-    }
-  }
-
+  // Prefer diagnosing Call Control routing via inbound-diagnostics when asked
+  // (sync route passes repairInbound). Avoid PATCHing credential connections.
   return {
     telnyxCount: owned.length,
     imported,
     connectionId: connectionId || null,
-    webhookEnsured,
   };
 }

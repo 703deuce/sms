@@ -1,7 +1,7 @@
 /**
  * Diagnose + repair Telnyx inbound PSTN routing for a workspace DID.
- * Ensures the number is attached to TELNYX_CONNECTION_ID and that the Call
- * Control Application webhook points at /api/telnyx/voice.
+ * Ensures the number is attached to a Call Control Application (not a
+ * softphone credential connection) with webhook → /api/telnyx/voice.
  */
 
 import { getPrisma } from "@/lib/db";
@@ -23,7 +23,10 @@ export type InboundDiagResult = {
   e164: string;
   appBaseUrl: string;
   expectedWebhookUrl: string;
+  /** Coolify TELNYX_CONNECTION_ID (may be a softphone credential connection). */
   expectedConnectionId: string | null;
+  /** Call Control Application id the DID should use (created/found during repair). */
+  recommendedConnectionId: string | null;
   phoneNumber: Record<string, unknown> | null;
   voiceSettings: Record<string, unknown> | null;
   callControlApp: Record<string, unknown> | null;
@@ -46,6 +49,23 @@ function asRecord(v: unknown): Record<string, unknown> | null {
     : null;
 }
 
+function isCredentialLike(app: Record<string, unknown> | null): boolean {
+  if (!app) return false;
+  const source = String(app._source || "");
+  const connType = String(
+    app.connection_type || app.record_type || source || "",
+  );
+  if (source === "connections") return true;
+  return /credential|ip_connection|fqdn|sip_connection/i.test(connType);
+}
+
+function isCallControlApp(app: Record<string, unknown> | null): boolean {
+  if (!app) return false;
+  if (isCredentialLike(app)) return false;
+  const rt = String(app.record_type || "");
+  return rt === "call_control_application" || Boolean(app.application_name && app.id);
+}
+
 async function fetchPhoneNumber(providerNumberId: string) {
   const res = await telnyxRequest<{ data?: Record<string, unknown> }>(
     `/phone_numbers/${encodeURIComponent(providerNumberId)}`,
@@ -64,35 +84,54 @@ async function fetchVoiceSettings(providerNumberId: string) {
   }
 }
 
-async function fetchCallControlApp(connectionId: string) {
+async function fetchConnectionOrApp(connectionId: string) {
   try {
     const res = await telnyxRequest<{ data?: Record<string, unknown> }>(
       `/call_control_applications/${encodeURIComponent(connectionId)}`,
     );
-    return asRecord(res.data);
-  } catch (err) {
-    // Some accounts expose the same id under /connections (SIP / credential / IP)
-    try {
-      const res = await telnyxRequest<{ data?: Record<string, unknown> }>(
-        `/connections/${encodeURIComponent(connectionId)}`,
-      );
-      const conn = asRecord(res.data);
-      if (conn) {
-        // Surface connection_type so we can detect credential SIP trunks that
-        // require a registered softphone (common cause of "as dialed" rejects).
-        return {
-          ...conn,
-          application_name:
-            conn.application_name || conn.connection_name || conn.name || "connection",
-          webhook_event_url: conn.webhook_event_url || conn.webhook_url || "",
-          _source: "connections",
-        };
-      }
-      return null;
-    } catch {
-      throw err;
-    }
+    const app = asRecord(res.data);
+    if (app) return { ...app, _source: "call_control_applications" };
+  } catch {
+    // fall through
   }
+  try {
+    const res = await telnyxRequest<{ data?: Record<string, unknown> }>(
+      `/connections/${encodeURIComponent(connectionId)}`,
+    );
+    const conn = asRecord(res.data);
+    if (conn) {
+      return {
+        ...conn,
+        application_name:
+          conn.application_name || conn.connection_name || conn.name || "connection",
+        webhook_event_url: conn.webhook_event_url || conn.webhook_url || "",
+        _source: "connections",
+      };
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
+async function listCallControlApplications(): Promise<Record<string, unknown>[]> {
+  const out: Record<string, unknown>[] = [];
+  let page = 1;
+  for (;;) {
+    const res = await telnyxRequest<{
+      data?: Array<Record<string, unknown>>;
+      meta?: { total_pages?: number };
+    }>("/call_control_applications", {
+      query: { "page[number]": page, "page[size]": 50 },
+    });
+    const rows = res.data || [];
+    for (const row of rows) out.push({ ...row, _source: "call_control_applications" });
+    const totalPages = Number(res.meta?.total_pages || 1);
+    if (page >= totalPages || rows.length === 0) break;
+    page += 1;
+    if (page > 10) break;
+  }
+  return out;
 }
 
 async function attachConnection(providerNumberId: string, connectionId: string) {
@@ -102,45 +141,72 @@ async function attachConnection(providerNumberId: string, connectionId: string) 
   });
 }
 
-async function ensureCallControlWebhook(connectionId: string, webhookUrl: string) {
-  const app = await fetchCallControlApp(connectionId);
-  if (!app) throw new Error(`Call Control application ${connectionId} not found`);
-
-  const currentUrl = String(app.webhook_event_url || "").replace(/\/$/, "");
+/**
+ * Find or create a Call Control Application with the Transovo voice webhook.
+ */
+async function ensureVoiceCallControlApplication(webhookUrl: string): Promise<{
+  app: Record<string, unknown>;
+  created: boolean;
+  updated: boolean;
+}> {
   const want = webhookUrl.replace(/\/$/, "");
-  const active = app.active !== false;
-  const apiVersion = String(app.webhook_api_version || "2");
-  const applicationName =
-    String(app.application_name || "").trim() || "Transovo Voice";
+  const apps = await listCallControlApplications();
 
-  const needsUpdate =
-    currentUrl !== want || !active || (apiVersion !== "1" && apiVersion !== "2");
+  const byWebhook = apps.find(
+    (a) => String(a.webhook_event_url || "").replace(/\/$/, "") === want,
+  );
+  const byName = apps.find((a) =>
+    /transovo/i.test(String(a.application_name || "")),
+  );
+  let app = byWebhook || byName || null;
+  let created = false;
+  let updated = false;
 
-  // Prefer v2 webhooks (our handler expects the v2 envelope).
-  if (currentUrl === want && active && apiVersion === "2") {
-    return { app, updated: false as const };
+  if (!app) {
+    const createdRes = await telnyxRequest<{ data?: Record<string, unknown> }>(
+      "/call_control_applications",
+      {
+        method: "POST",
+        body: {
+          application_name: "Transovo Voice",
+          webhook_event_url: want,
+          webhook_api_version: "2",
+          active: true,
+          first_command_timeout: true,
+          first_command_timeout_secs: 30,
+        },
+      },
+    );
+    app = asRecord(createdRes.data);
+    if (!app?.id) throw new Error("Failed to create Call Control Application");
+    app = { ...app, _source: "call_control_applications" };
+    created = true;
+    return { app, created, updated: false };
   }
 
-  const updated = await telnyxRequest<{ data?: Record<string, unknown> }>(
-    `/call_control_applications/${encodeURIComponent(connectionId)}`,
-    {
-      method: "PATCH",
-      body: {
-        application_name: applicationName,
-        webhook_event_url: want,
-        webhook_api_version: "2",
-        active: true,
-        ...(app.webhook_event_failover_url
-          ? { webhook_event_failover_url: app.webhook_event_failover_url }
-          : {}),
-        ...(app.webhook_timeout_secs != null
-          ? { webhook_timeout_secs: app.webhook_timeout_secs }
-          : {}),
+  const id = String(app.id);
+  const currentUrl = String(app.webhook_event_url || "").replace(/\/$/, "");
+  const active = app.active !== false;
+  const apiVersion = String(app.webhook_api_version || "");
+  if (currentUrl !== want || !active || apiVersion !== "2") {
+    const patched = await telnyxRequest<{ data?: Record<string, unknown> }>(
+      `/call_control_applications/${encodeURIComponent(id)}`,
+      {
+        method: "PATCH",
+        body: {
+          application_name:
+            String(app.application_name || "").trim() || "Transovo Voice",
+          webhook_event_url: want,
+          webhook_api_version: "2",
+          active: true,
+        },
       },
-    },
-  );
+    );
+    app = { ...(asRecord(patched.data) || app), _source: "call_control_applications" };
+    updated = true;
+  }
 
-  return { app: asRecord(updated.data) || app, updated: needsUpdate || true };
+  return { app, created, updated };
 }
 
 /**
@@ -153,9 +219,10 @@ export async function diagnoseAndRepairInboundNumber(input: {
 }): Promise<InboundDiagResult> {
   const e164 = normalizeE164(input.e164);
   const expectedWebhookUrl = getTelnyxWebhookUrls().voice;
-  const expectedConnectionId = process.env.TELNYX_CONNECTION_ID?.trim() || null;
+  const envConnectionId = process.env.TELNYX_CONNECTION_ID?.trim() || null;
   const issues: InboundDiagIssue[] = [];
   const repairs: string[] = [];
+  let recommendedConnectionId: string | null = null;
 
   if (!getTelnyxApiKey()) {
     issues.push({
@@ -164,11 +231,12 @@ export async function diagnoseAndRepairInboundNumber(input: {
       message: "TELNYX_API_KEY is not configured on the server",
     });
   }
-  if (!expectedConnectionId) {
+  if (!envConnectionId) {
     issues.push({
       code: "missing_connection_id",
-      severity: "error",
-      message: "TELNYX_CONNECTION_ID is not configured on the server",
+      severity: "warn",
+      message:
+        "TELNYX_CONNECTION_ID is not set — inbound can still work if the DID is on a Call Control app",
     });
   }
 
@@ -241,7 +309,6 @@ export async function diagnoseAndRepairInboundNumber(input: {
   const providerNumberId =
     workspaceNumber?.providerNumberId ||
     (await (async () => {
-      // Fall back to Telnyx list lookup by E.164
       try {
         const listed = await telnyxRequest<{
           data?: Array<Record<string, unknown>>;
@@ -271,6 +338,62 @@ export async function diagnoseAndRepairInboundNumber(input: {
       return null;
     });
 
+    // Resolve env connection type up front.
+    let envApp: Record<string, unknown> | null = null;
+    if (envConnectionId) {
+      envApp = await fetchConnectionOrApp(envConnectionId);
+      if (isCredentialLike(envApp)) {
+        issues.push({
+          code: "connection_not_call_control",
+          severity: input.repair ? "warn" : "error",
+          message:
+            `TELNYX_CONNECTION_ID (${envConnectionId}) is a SIP/credential connection, not a Call Control Application. ` +
+            `Inbound PSTN fails with "cannot be completed as dialed" unless a softphone is registered.`,
+        });
+      }
+    }
+
+    // Ensure we have a real Call Control Application for inbound voice.
+    try {
+      if (input.repair) {
+        const ensured = await ensureVoiceCallControlApplication(expectedWebhookUrl);
+        callControlApp = ensured.app;
+        recommendedConnectionId = String(ensured.app.id);
+        if (ensured.created) {
+          repairs.push(
+            `Created Call Control Application ${recommendedConnectionId} (Transovo Voice)`,
+          );
+        } else if (ensured.updated) {
+          repairs.push(`Updated Call Control webhook to ${expectedWebhookUrl}`);
+        }
+      } else if (envApp && isCallControlApp(envApp)) {
+        callControlApp = envApp;
+        recommendedConnectionId = String(envApp.id);
+      } else {
+        // Diagnose-only: look for an existing Transovo / matching-webhook CC app.
+        const apps = await listCallControlApplications().catch(() => []);
+        const want = expectedWebhookUrl.replace(/\/$/, "");
+        const found =
+          apps.find(
+            (a) => String(a.webhook_event_url || "").replace(/\/$/, "") === want,
+          ) ||
+          apps.find((a) => /transovo/i.test(String(a.application_name || ""))) ||
+          null;
+        if (found) {
+          callControlApp = found;
+          recommendedConnectionId = String(found.id);
+        } else if (envApp) {
+          callControlApp = envApp;
+        }
+      }
+    } catch (err) {
+      issues.push({
+        code: "connection_fetch_failed",
+        severity: "error",
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
+
     if (phoneNumber) {
       const status = String(phoneNumber.status || "");
       if (status && status !== "active") {
@@ -282,7 +405,7 @@ export async function diagnoseAndRepairInboundNumber(input: {
       }
 
       const caps = asRecord(phoneNumber.capabilities);
-      const connectionId = phoneNumber.connection_id
+      const numberConnId = phoneNumber.connection_id
         ? String(phoneNumber.connection_id)
         : "";
 
@@ -294,31 +417,36 @@ export async function diagnoseAndRepairInboundNumber(input: {
         });
       }
 
-      if (!connectionId) {
+      const targetCcId = recommendedConnectionId;
+
+      if (!numberConnId) {
         issues.push({
           code: "no_connection",
           severity: "error",
           message:
             "Number has no Call Control connection — inbound PSTN cannot route to Transovo",
         });
-      } else if (
-        expectedConnectionId &&
-        connectionId !== expectedConnectionId
-      ) {
-        issues.push({
-          code: "wrong_connection",
-          severity: "error",
-          message: `Number is on connection ${connectionId}, expected ${expectedConnectionId}`,
-        });
+      } else if (targetCcId && numberConnId !== targetCcId) {
+        // Number may be on the softphone credential connection.
+        const numberConn = await fetchConnectionOrApp(numberConnId);
+        if (isCredentialLike(numberConn) || numberConnId === envConnectionId) {
+          issues.push({
+            code: "number_on_credential_connection",
+            severity: input.repair ? "warn" : "error",
+            message: `Number is attached to connection ${numberConnId} (credential/softphone). It must use Call Control ${targetCcId}.`,
+          });
+        } else {
+          issues.push({
+            code: "wrong_connection",
+            severity: input.repair ? "warn" : "error",
+            message: `Number is on connection ${numberConnId}, expected Call Control ${targetCcId}`,
+          });
+        }
       }
 
-      if (
-        input.repair &&
-        expectedConnectionId &&
-        connectionId !== expectedConnectionId
-      ) {
-        await attachConnection(providerNumberId, expectedConnectionId);
-        repairs.push(`Attached number to connection ${expectedConnectionId}`);
+      if (input.repair && targetCcId && numberConnId !== targetCcId) {
+        await attachConnection(providerNumberId, targetCcId);
+        repairs.push(`Attached number to Call Control Application ${targetCcId}`);
         phoneNumber = await fetchPhoneNumber(providerNumberId);
       }
 
@@ -344,93 +472,42 @@ export async function diagnoseAndRepairInboundNumber(input: {
             voiceSettings = await fetchVoiceSettings(providerNumberId);
           }
         }
-
-        const voiceConn = voiceSettings?.connection_id
-          ? String(voiceSettings.connection_id)
-          : "";
-        if (
-          expectedConnectionId &&
-          voiceConn &&
-          voiceConn !== expectedConnectionId
-        ) {
-          issues.push({
-            code: "voice_wrong_connection",
-            severity: "error",
-            message: `Voice settings connection_id is ${voiceConn}, expected ${expectedConnectionId}`,
-          });
-        }
       }
     }
 
-    if (expectedConnectionId) {
-      try {
-        if (input.repair) {
-          const { app, updated } = await ensureCallControlWebhook(
-            expectedConnectionId,
-            expectedWebhookUrl,
-          );
-          callControlApp = app;
-          if (updated) {
-            repairs.push(`Set Call Control webhook to ${expectedWebhookUrl}`);
-          }
-        } else {
-          callControlApp = await fetchCallControlApp(expectedConnectionId);
-        }
-
-        if (callControlApp) {
-          const source = String(callControlApp._source || "call_control_applications");
-          const connType = String(
-            callControlApp.connection_type ||
-              callControlApp.record_type ||
-              source,
-          );
-          if (
-            /credential|ip_connection|fqdn|sip_connection/i.test(connType) ||
-            source === "connections"
-          ) {
-            issues.push({
-              code: "connection_not_call_control",
-              severity: "error",
-              message:
-                `TELNYX_CONNECTION_ID looks like a SIP/credential connection (${connType}), not a Call Control Application. ` +
-                `Inbound PSTN fails with "cannot be completed as dialed" unless a softphone is registered — ` +
-                `point the DID at a Call Control app with webhook ${expectedWebhookUrl}`,
-            });
-          }
-          if (callControlApp.active === false) {
-            issues.push({
-              code: "connection_inactive",
-              severity: "error",
-              message: "Call Control application is inactive",
-            });
-          }
-          const wh = String(callControlApp.webhook_event_url || "").replace(
-            /\/$/,
-            "",
-          );
-          if (wh !== expectedWebhookUrl.replace(/\/$/, "")) {
-            issues.push({
-              code: "webhook_mismatch",
-              severity: "error",
-              message: `Call Control webhook is "${wh || "(empty)"}", expected "${expectedWebhookUrl}"`,
-            });
-          }
-          const ver = String(callControlApp.webhook_api_version || "");
-          if (ver && ver !== "2") {
-            issues.push({
-              code: "webhook_api_version",
-              severity: "warn",
-              message: `webhook_api_version is ${ver}; Transovo expects v2`,
-            });
-          }
-        }
-      } catch (err) {
+    if (callControlApp && isCallControlApp(callControlApp)) {
+      if (callControlApp.active === false) {
         issues.push({
-          code: "connection_fetch_failed",
+          code: "connection_inactive",
           severity: "error",
-          message: err instanceof Error ? err.message : String(err),
+          message: "Call Control application is inactive",
         });
       }
+      const wh = String(callControlApp.webhook_event_url || "").replace(/\/$/, "");
+      if (wh !== expectedWebhookUrl.replace(/\/$/, "")) {
+        issues.push({
+          code: "webhook_mismatch",
+          severity: "error",
+          message: `Call Control webhook is "${wh || "(empty)"}", expected "${expectedWebhookUrl}"`,
+        });
+      }
+      if (
+        envConnectionId &&
+        recommendedConnectionId &&
+        envConnectionId !== recommendedConnectionId
+      ) {
+        issues.push({
+          code: "update_coolify_connection_id",
+          severity: "warn",
+          message: `Set Coolify env TELNYX_CONNECTION_ID=${recommendedConnectionId} (replace softphone credential id) then redeploy. Inbound may already work; outbound dials need the new id.`,
+        });
+      }
+    } else if (!callControlApp) {
+      issues.push({
+        code: "no_call_control_app",
+        severity: "error",
+        message: `No Call Control Application found for webhook ${expectedWebhookUrl}`,
+      });
     }
   }
 
@@ -441,7 +518,12 @@ export async function diagnoseAndRepairInboundNumber(input: {
       e164,
       repair: false,
     });
-    return { ...again, repairs };
+    return {
+      ...again,
+      repairs,
+      recommendedConnectionId:
+        again.recommendedConnectionId || recommendedConnectionId,
+    };
   }
 
   const finalConn = phoneNumber?.connection_id
@@ -453,8 +535,9 @@ export async function diagnoseAndRepairInboundNumber(input: {
   const blockingErrors = issues.filter((i) => i.severity === "error");
   const ready =
     Boolean(e164) &&
-    Boolean(expectedConnectionId) &&
-    finalConn === expectedConnectionId &&
+    isCallControlApp(callControlApp) &&
+    Boolean(recommendedConnectionId) &&
+    finalConn === recommendedConnectionId &&
     finalWh === expectedWebhookUrl.replace(/\/$/, "") &&
     callControlApp?.active !== false &&
     blockingErrors.length === 0;
@@ -463,7 +546,8 @@ export async function diagnoseAndRepairInboundNumber(input: {
     e164,
     appBaseUrl: getAppBaseUrl(),
     expectedWebhookUrl,
-    expectedConnectionId,
+    expectedConnectionId: envConnectionId,
+    recommendedConnectionId,
     phoneNumber: phoneNumber
       ? {
           id: phoneNumber.id,
@@ -492,8 +576,9 @@ export async function diagnoseAndRepairInboundNumber(input: {
           webhook_event_url: callControlApp.webhook_event_url,
           webhook_api_version: callControlApp.webhook_api_version,
           webhook_event_failover_url: callControlApp.webhook_event_failover_url,
-          first_command_timeout: callControlApp.first_command_timeout,
-          first_command_timeout_secs: callControlApp.first_command_timeout_secs,
+          record_type: callControlApp.record_type,
+          connection_type: callControlApp.connection_type,
+          _source: callControlApp._source,
         }
       : null,
     workspaceNumber,
