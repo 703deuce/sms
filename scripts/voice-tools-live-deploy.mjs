@@ -344,6 +344,19 @@ async function main() {
       : JSON.stringify(tools.json).slice(0, 200),
   );
 
+  // Visual flow: full receptionist (human-first + FAQ/router conversation)
+  const flow = await api(jar, `/api/voice/agents/${agent.id}/flows`, {
+    method: "PUT",
+    body: { templateId: "full_receptionist", apply: true },
+  });
+  log(
+    flow.res.ok,
+    "apply visual flow template",
+    flow.res.ok
+      ? `routingMode=${flow.json?.applied?.routingMode} tools=${(flow.json?.applied?.enabledBuiltinTools || []).length}`
+      : JSON.stringify(flow.json).slice(0, 220),
+  );
+
   // Ensure a local test contact exists for CRM search demos.
   const testContact = await api(jar, "/api/contacts", {
     method: "POST",

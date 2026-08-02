@@ -17,6 +17,25 @@ export async function createVoiceAgent(
     ? templateConfig(input.templateId)
     : parseVoiceAgentConfig(null);
 
+  // Attach a default visual flow bundle for the agent type / template.
+  try {
+    const { defaultFlowBundleForAgentType, getVoiceFlowTemplate } = await import(
+      "./flow/templates"
+    );
+    const flowTemplate = input.templateId
+      ? getVoiceFlowTemplate(input.templateId) ||
+        getVoiceFlowTemplate(
+          input.templateId === "receptionist" ? "full_receptionist" : "answering_machine",
+        )
+      : null;
+    const bundle =
+      flowTemplate?.bundle ||
+      defaultFlowBundleForAgentType(input.agentType || input.templateId);
+    (config as VoiceAgentConfig).flows = bundle;
+  } catch {
+    // optional
+  }
+
   return prisma.voiceAgent.create({
     data: {
       workspaceId,
@@ -128,7 +147,16 @@ export async function buildVoiceAgentForTest(
   if (!agent) throw new Error("Agent not found");
   if (agent.emergencyDisabled) throw new Error("Agent emergency-disabled");
 
-  const config = parseVoiceAgentConfig(agent.draftConfig);
+  // Compile visual flows → instructions, tools, routing before Telnyx sync.
+  const { applyFlowToAgentDraft } = await import("./flow/apply");
+  const applied = await applyFlowToAgentDraft({
+    workspaceId,
+    agentId,
+    agentType: agent.agentType,
+    draftConfig: parseVoiceAgentConfig(agent.draftConfig),
+    strict: false,
+  });
+  const config = applied.config;
   const issues = validateAgentForPublish(agent.name, config, {
     requirePhone: false,
     phoneNumberId: agent.phoneNumberId,
@@ -219,7 +247,18 @@ export async function publishVoiceAgent(
   });
   if (!agent) throw new Error("Agent not found");
 
-  const config = parseVoiceAgentConfig(agent.draftConfig);
+  const { applyFlowToAgentDraft } = await import("./flow/apply");
+  const applied = await applyFlowToAgentDraft({
+    workspaceId,
+    agentId,
+    agentType: agent.agentType,
+    draftConfig: parseVoiceAgentConfig(agent.draftConfig),
+    strict: true,
+  }).catch((err) => {
+    if (err && typeof err === "object" && "issues" in err) throw err;
+    throw err;
+  });
+  const config = applied.config;
   const issues = validateAgentForPublish(agent.name, config, {
     requirePhone:
       !config.identity?.directions?.length ||

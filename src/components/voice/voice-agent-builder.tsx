@@ -15,6 +15,7 @@ import {
   defaultBuiltinToolsForAgentType,
   type CatalogToolDef,
 } from "@/lib/voice/tools/catalog";
+import { VoiceFlowBuilder } from "@/components/voice/flow-builder/voice-flow-builder";
 import { toErrorMessage } from "@/lib/errors";
 import { voiceLabel } from "@/lib/voice/telnyx/voices";
 import { cn } from "@/lib/utils";
@@ -23,7 +24,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 const SECTIONS = [
   { id: "identity", label: "Identity" },
   { id: "instructions", label: "Instructions" },
-  { id: "conversationFlow", label: "Conversation Flow" },
+  { id: "flow", label: "Visual Flow" },
+  { id: "conversationFlow", label: "Flow sections" },
   { id: "voiceLanguage", label: "Voice & Language" },
   { id: "transcription", label: "Transcription" },
   { id: "knowledge", label: "Knowledge" },
@@ -825,9 +827,35 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
           </Card>
         )}
 
+        {section === "flow" && (
+          <div className="space-y-3">
+            <Card className="space-y-2 p-5">
+              <CardTitle>Visual call flow</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Build Call Routing (who answers) and AI Conversation (what the agent does) as
+                separate layers. Save &amp; compile syncs tools, instructions, and routing rules.
+                Publish / Build for test deploys the compiled flow to Telnyx.
+              </p>
+            </Card>
+            <VoiceFlowBuilder
+              agentId={agentId}
+              agentType={agent?.agentType}
+              initialBundle={cfg.flows}
+              onSaved={(bundle) =>
+                updateConfig({
+                  flows: bundle,
+                })
+              }
+            />
+          </div>
+        )}
+
         {section === "conversationFlow" && (
           <Card className="space-y-3 p-5">
-            <CardTitle>Conversation flow</CardTitle>
+            <CardTitle>Compiled flow sections</CardTitle>
+            <p className="text-xs text-muted-foreground">
+              These reflect the visual conversation flow after compile. Prefer editing Visual Flow.
+            </p>
             {(cfg.conversationFlow?.sections || []).map((sec) => (
               <label key={sec.id} className="flex items-center gap-2 text-sm">
                 <input

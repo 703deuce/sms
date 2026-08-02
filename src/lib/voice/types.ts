@@ -18,6 +18,7 @@ export type FormFieldKey = never; // avoid collision — voice uses VoiceSection
 export type VoiceSectionKey =
   | "identity"
   | "instructions"
+  | "flow"
   | "conversationFlow"
   | "voiceLanguage"
   | "transcription"
@@ -146,6 +147,15 @@ export type VoiceAgentConfig = {
    * never the full catalog.
    */
   enabledBuiltinTools?: string[];
+  /**
+   * Visual flow bundle: routing graph + conversation graph + global rules.
+   * Compiled on build/publish into instructions, tools, and VoiceRoutingRule rows.
+   */
+  flows?: {
+    routing?: unknown;
+    conversation?: unknown;
+    globalRules?: unknown;
+  };
 };
 
 export const DEFAULT_VOICE_CONFIG: VoiceAgentConfig = {
@@ -193,6 +203,7 @@ export const DEFAULT_VOICE_CONFIG: VoiceAgentConfig = {
   callHandling: {
     greeting:
       "Thank you for calling. I'm the virtual assistant, and I can answer questions or take a message. How can I help you today?",
+    closingStatement: "Thanks for calling. Goodbye.",
     startupGreeting: {
       enabled: true,
       mode: "ai",
@@ -280,6 +291,9 @@ export function parseVoiceAgentConfig(raw: unknown): VoiceAgentConfig {
     },
     multiParty: { ...base.multiParty, ...obj.multiParty },
     postCall: { ...base.postCall, ...obj.postCall },
+    enabledBuiltinTools: obj.enabledBuiltinTools ?? base.enabledBuiltinTools,
+    flows: obj.flows ?? base.flows,
+    toolIds: obj.toolIds ?? base.toolIds,
   };
 }
 
