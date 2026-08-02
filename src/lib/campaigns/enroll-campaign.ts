@@ -227,8 +227,18 @@ export async function enrollSegmentInCampaign(
     return { enrolled: 0, rejected: [] as Array<BulkRecipient & { reason: string }> };
   }
 
+  const { freezeCampaignAudienceSnapshot } = await import(
+    "@/lib/integrations/framework/campaign-snapshot"
+  );
+  const snapshot = await freezeCampaignAudienceSnapshot({
+    workspaceId,
+    campaignId,
+    contactIds,
+    source: { kind: "segment", segmentId },
+  });
+
   const contacts = await prisma.contact.findMany({
-    where: { id: { in: contactIds }, workspaceId },
+    where: { id: { in: snapshot.acceptedContactIds }, workspaceId },
   });
   const recipients: BulkRecipient[] = (contacts as Array<{ id: string; phone: string; firstName: string | null; lastName: string | null }>)
     .filter((c) => c.phone)
@@ -239,6 +249,13 @@ export async function enrollSegmentInCampaign(
     }));
 
   const { accepted, rejected } = await validateBulkRecipients(workspaceId, campaignId, recipients);
+  for (const ex of snapshot.excluded) {
+    rejected.push({
+      phone: ex.phone || "",
+      contactId: ex.contactId || undefined,
+      reason: ex.reason,
+    });
+  }
   const enrolled = [];
   for (const r of accepted) {
     enrolled.push(

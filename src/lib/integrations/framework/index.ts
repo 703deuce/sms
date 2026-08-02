@@ -40,3 +40,13 @@ export {
 } from "./automation-bridge";
 export * from "./contact-links";
 export * from "./product-persist";
+export * from "./ai-policy";
+export * from "./action-log";
+export * from "./consent-gate";
+export * from "./alerts";
+export * from "./context-cache";
+export * from "./capability-truth";
+export * from "./supervised-ai";
+export * from "./campaign-snapshot";
+export * from "./analytics";
+export * from "./crm-task-bridge";

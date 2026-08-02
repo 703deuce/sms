@@ -1,5 +1,10 @@
 import { getPrisma } from "@/lib/db";
-import type { NormalizedAppointment, NormalizedEvent, NormalizedFormSubmission } from "./types";
+import type {
+  NormalizedAppointment,
+  NormalizedEvent,
+  NormalizedFormSubmission,
+  NormalizedOrder,
+} from "./types";
 import { upsertExternalMapping } from "./mappings";
 
 /**
@@ -211,5 +216,176 @@ export async function persistProductFromNormalizedEvent(
     });
   }
 
+  if (
+    event.eventType.startsWith("order.") &&
+    (event.externalObjectType === "order" || event.externalObjectType === "ecommerce_customer")
+  ) {
+    return persistOrderFromIntegration({
+      workspaceId: event.workspaceId,
+      provider: event.provider,
+      contactId,
+      order: {
+        id: event.externalObjectId,
+        number: String(event.payload.number || event.payload.orderNumber || event.externalObjectId),
+        status: String(event.payload.status || "unknown"),
+        total: event.payload.total != null ? String(event.payload.total) : null,
+        currency: (event.payload.currency as string) || null,
+        customerEmail: event.email,
+        customerPhone: event.phone,
+        customerName: (event.payload.customerName as string) || null,
+        paidAt: (event.payload.paidAt as string) || null,
+        completedAt: (event.payload.completedAt as string) || null,
+        createdAt: event.occurredAt,
+        providerUrl: (event.payload.providerUrl as string) || null,
+        lineItems: event.payload.lineItems,
+        shippingAddress: event.payload.shippingAddress || event.payload.shipping,
+        raw: event.payload,
+      },
+    });
+  }
+
+  if (event.eventType === "task.created" || event.externalObjectType === "task") {
+    return persistTaskFromIntegration({
+      workspaceId: event.workspaceId,
+      provider: event.provider,
+      contactId,
+      task: {
+        id: event.externalObjectId,
+        title: String(event.payload.title || event.payload.subject || "Task"),
+        description: (event.payload.description as string) || null,
+        status: (event.payload.status as string) || "open",
+        dueAt: (event.payload.dueAt as string) || null,
+        ownerName: (event.payload.ownerName as string) || null,
+        providerUrl: (event.payload.providerUrl as string) || null,
+        raw: event.payload,
+      },
+    });
+  }
+
   return null;
+}
+
+export type NormalizedTaskInput = {
+  id?: string | null;
+  externalId?: string | null;
+  title?: string | null;
+  description?: string | null;
+  status?: string | null;
+  priority?: string | null;
+  dueAt?: string | null;
+  completedAt?: string | null;
+  ownerExternalId?: string | null;
+  ownerName?: string | null;
+  relatedDealId?: string | null;
+  relatedCompanyId?: string | null;
+  relatedTicketId?: string | null;
+  providerUrl?: string | null;
+  raw?: Record<string, unknown>;
+};
+
+/** Persist provider tasks into IntegrationTask (unified tasks UI). */
+export async function persistTaskFromIntegration(input: {
+  workspaceId: string;
+  provider: string;
+  contactId?: string | null;
+  task: NormalizedTaskInput;
+}) {
+  const prisma = getPrisma();
+  const externalId = String(input.task.externalId || input.task.id || "").trim();
+  if (!externalId) return null;
+
+  const existing = await prisma.integrationTask.findFirst({
+    where: { workspaceId: input.workspaceId, provider: input.provider, externalId },
+  });
+
+  const data = {
+    contactId: input.contactId || null,
+    title: input.task.title || "Untitled task",
+    status: input.task.status || "open",
+    priority: input.task.priority || null,
+    dueAt: input.task.dueAt ? new Date(input.task.dueAt) : null,
+    ownerExternalId: input.task.ownerExternalId || null,
+    ownerName: input.task.ownerName || null,
+    relatedDealId: input.task.relatedDealId || null,
+    relatedCompanyId: input.task.relatedCompanyId || null,
+    relatedTicketId: input.task.relatedTicketId || null,
+    syncStatus: "synced",
+    externalUrl: input.task.providerUrl || null,
+    metadataJson: {
+      description: input.task.description || null,
+      completedAt: input.task.completedAt || null,
+      raw: input.task.raw || undefined,
+    } as object,
+    lastSyncedAt: new Date(),
+  };
+
+  if (existing) {
+    return prisma.integrationTask.update({ where: { id: existing.id }, data });
+  }
+  return prisma.integrationTask.create({
+    data: {
+      workspaceId: input.workspaceId,
+      provider: input.provider,
+      externalId,
+      ...data,
+    },
+  });
+}
+
+/** Persist commerce orders into IntegrationOrder. */
+export async function persistOrderFromIntegration(input: {
+  workspaceId: string;
+  provider: string;
+  contactId?: string | null;
+  order: NormalizedOrder & {
+    lineItems?: unknown;
+    shippingAddress?: unknown;
+    completedAt?: string | null;
+    providerUrl?: string | null;
+    createdAt?: string | null;
+  };
+}) {
+  const prisma = getPrisma();
+  const externalId = String(input.order.id || "").trim();
+  if (!externalId) return null;
+
+  const existing = await prisma.integrationOrder.findFirst({
+    where: { workspaceId: input.workspaceId, provider: input.provider, externalId },
+  });
+
+  const data = {
+    contactId: input.contactId || null,
+    orderNumber: input.order.number || null,
+    status: input.order.status || "unknown",
+    total: input.order.total != null ? String(input.order.total) : null,
+    currency: input.order.currency || null,
+    customerName: input.order.customerName || null,
+    customerEmail: input.order.customerEmail || null,
+    customerPhone: input.order.customerPhone || null,
+    paidAt: input.order.paidAt ? new Date(input.order.paidAt) : null,
+    completedAt: input.order.completedAt ? new Date(input.order.completedAt) : null,
+    createdExternalAt: input.order.createdAt
+      ? new Date(input.order.createdAt)
+      : input.order.updatedAt
+        ? new Date(input.order.updatedAt)
+        : null,
+    syncStatus: "synced",
+    externalUrl: input.order.providerUrl || null,
+    lineItemsJson: (input.order.lineItems || undefined) as object | undefined,
+    shippingJson: (input.order.shippingAddress || undefined) as object | undefined,
+    metadataJson: (input.order.raw || undefined) as object | undefined,
+    lastSyncedAt: new Date(),
+  };
+
+  if (existing) {
+    return prisma.integrationOrder.update({ where: { id: existing.id }, data });
+  }
+  return prisma.integrationOrder.create({
+    data: {
+      workspaceId: input.workspaceId,
+      provider: input.provider,
+      externalId,
+      ...data,
+    },
+  });
 }

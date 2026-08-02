@@ -238,6 +238,13 @@ model Workspace {
   crmAuditLogs CrmAuditLog[]
   crmWebhookEvents CrmWebhookEvent[]
   crmDeadLetters CrmDeadLetter[]
+  integrationActionLogs IntegrationActionLog[]
+  aiActionApprovals AiActionApproval[]
+  integrationAlerts IntegrationAlert[]
+  integrationContextCaches IntegrationContextCache[]
+  integrationTasks IntegrationTask[]
+  integrationOrders IntegrationOrder[]
+  workspaceAiIntegrationPolicy WorkspaceAiIntegrationPolicy?
 }
 
 model SenderPool {
@@ -2500,4 +2507,182 @@ model CrmDeadLetter {
   @@index([workspaceId, provider, createdAt])
   @@index([resolvedAt])
   @@map("crm_dead_letters")
+}
+
+/// Every human / AI / automation / API integration action.
+model IntegrationActionLog {
+  id                String    @id @default(cuid())
+  workspaceId       String
+  provider          String
+  connectionId      String?
+  /// human | ai | automation | api
+  source            String
+  actorUserId       String?
+  automationFlowId  String?
+  actionId          String
+  /// 1 | 2 | 3 | 4
+  riskLevel         Int       @default(3)
+  inputSummaryJson  Json?
+  objectType        String?
+  objectIdsJson     Json?
+  contactId         String?
+  approvalId        String?
+  policyJson        Json?
+  idempotencyKey    String?
+  providerRequestId String?
+  /// queued | running | succeeded | failed | rejected | cancelled
+  result            String    @default("queued")
+  failureReason     String?
+  retryCount        Int       @default(0)
+  reversible        Boolean   @default(false)
+  undoJson          Json?
+  createdAt         DateTime  @default(now())
+  completedAt       DateTime?
+  workspace         Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, idempotencyKey])
+  @@index([workspaceId, provider, createdAt])
+  @@index([workspaceId, source, result])
+  @@index([workspaceId, contactId])
+  @@map("integration_action_logs")
+}
+
+/// Explicit approval for AI / high-risk integration actions.
+model AiActionApproval {
+  id              String    @id @default(cuid())
+  workspaceId     String
+  requestedByUserId String
+  provider        String
+  connectionId    String?
+  actionId        String
+  payloadHash     String
+  payloadJson     Json
+  riskLevel       Int
+  /// pending | approved | rejected | expired | consumed
+  status          String    @default("pending")
+  expiresAt       DateTime
+  approvedAt      DateTime?
+  approverUserId  String?
+  previewJson     Json?
+  createdAt       DateTime  @default(now())
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, status, expiresAt])
+  @@index([workspaceId, payloadHash])
+  @@map("ai_action_approvals")
+}
+
+/// Customer-facing and operator integration health alerts.
+model IntegrationAlert {
+  id             String    @id @default(cuid())
+  workspaceId    String
+  provider       String?
+  connectionId   String?
+  /// info | warn | error | critical
+  severity       String    @default("warn")
+  /// oauth_expired | credential_revoked | scope_missing | webhook_failing | ...
+  kind           String
+  message        String
+  detailJson     Json?
+  /// customer | operator | business
+  audience       String    @default("customer")
+  acknowledgedAt DateTime?
+  createdAt      DateTime  @default(now())
+  workspace      Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, acknowledgedAt, createdAt])
+  @@index([workspaceId, kind])
+  @@map("integration_alerts")
+}
+
+/// Cached per-contact integration summary for Messenger/phone (no live provider calls).
+model IntegrationContextCache {
+  id          String   @id @default(cuid())
+  workspaceId String
+  contactId   String
+  summaryJson Json
+  refreshedAt DateTime @default(now())
+  staleAt     DateTime?
+  lastError   String?
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, contactId])
+  @@index([workspaceId, refreshedAt])
+  @@map("integration_context_caches")
+}
+
+/// Normalized provider tasks (Close, HighLevel, Zoho, Pipedrive, …).
+model IntegrationTask {
+  id               String    @id @default(cuid())
+  workspaceId      String
+  provider         String
+  externalId       String
+  contactId        String?
+  title            String
+  status           String    @default("open")
+  dueAt            DateTime?
+  ownerExternalId  String?
+  ownerName        String?
+  priority         String?
+  relatedDealId    String?
+  relatedCompanyId String?
+  relatedTicketId  String?
+  syncStatus       String    @default("synced")
+  externalUrl      String?
+  metadataJson     Json?
+  lastSyncedAt     DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  workspace        Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, provider, externalId])
+  @@index([workspaceId, status, dueAt])
+  @@index([workspaceId, contactId])
+  @@map("integration_tasks")
+}
+
+/// Normalized commerce orders (WooCommerce + Klaviyo commerce events).
+model IntegrationOrder {
+  id                String    @id @default(cuid())
+  workspaceId       String
+  provider          String
+  externalId        String
+  contactId         String?
+  orderNumber       String?
+  status            String?
+  total             String?
+  currency          String?
+  customerEmail     String?
+  customerPhone     String?
+  customerName      String?
+  paidAt            DateTime?
+  completedAt       DateTime?
+  createdExternalAt DateTime?
+  syncStatus        String    @default("synced")
+  externalUrl       String?
+  lineItemsJson     Json?
+  shippingJson      Json?
+  metadataJson      Json?
+  lastSyncedAt      DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  workspace         Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, provider, externalId])
+  @@index([workspaceId, status, createdAt])
+  @@index([workspaceId, contactId])
+  @@index([workspaceId, orderNumber])
+  @@map("integration_orders")
+}
+
+/// Per-workspace AI + integration action safety policy.
+model WorkspaceAiIntegrationPolicy {
+  id          String   @id @default(cuid())
+  workspaceId String   @unique
+  policyJson  Json     @default("{}")
+  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("workspace_ai_integration_policies")
 }

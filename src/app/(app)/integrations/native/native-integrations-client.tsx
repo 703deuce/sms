@@ -124,6 +124,21 @@ export function NativeIntegrationsClient() {
         <Link href="/integrations/native/appointments" className="underline">
           Appointments
         </Link>
+        <Link href="/integrations/native/tasks" className="underline">
+          Tasks
+        </Link>
+        <Link href="/integrations/native/orders" className="underline">
+          Orders
+        </Link>
+        <Link href="/integrations/native/audit" className="underline">
+          Action audit
+        </Link>
+        <Link href="/integrations/native/ai-policy" className="underline">
+          AI safety
+        </Link>
+        <Link href="/reports/integrations" className="underline">
+          Analytics
+        </Link>
         <Link href="/integrations" className="underline">
           All integrations
         </Link>

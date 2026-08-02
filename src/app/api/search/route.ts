@@ -4,7 +4,17 @@ import { getPrisma } from "@/lib/db";
 
 export type SearchResult = {
   id: string;
-  type: "contact" | "campaign" | "conversation" | "appointment" | "form_submission" | "external";
+  type:
+    | "contact"
+    | "campaign"
+    | "conversation"
+    | "appointment"
+    | "form_submission"
+    | "external"
+    | "task"
+    | "order"
+    | "deal"
+    | "ticket";
   title: string;
   subtitle: string;
   href: string;
@@ -166,12 +176,13 @@ export async function GET(request: Request) {
       });
     }
 
-    // External IDs from mappings
+    // External IDs from mappings (local only — no live provider calls)
     const mappings = (await prisma.crmObjectMapping.findMany({
       where: {
         workspaceId,
         OR: [
           { externalId: { contains: q, mode: "insensitive" } },
+          { provider: { contains: q, mode: "insensitive" } },
         ],
       },
       take: PER_TYPE,
@@ -184,12 +195,77 @@ export async function GET(request: Request) {
       internalId: string;
     }>;
     for (const m of mappings) {
+      const type =
+        m.objectType === "deal"
+          ? ("deal" as const)
+          : m.objectType === "support_ticket"
+            ? ("ticket" as const)
+            : ("external" as const);
       results.push({
         id: m.id,
-        type: "external",
+        type,
         title: `${m.provider} ${m.objectType}`,
         subtitle: m.externalId,
         href: `/contacts/${m.internalId}`,
+      });
+    }
+
+    const tasks = (await prisma.integrationTask.findMany({
+      where: {
+        workspaceId,
+        OR: [
+          { title: { contains: q, mode: "insensitive" } },
+          { externalId: { contains: q, mode: "insensitive" } },
+          { provider: { contains: q, mode: "insensitive" } },
+        ],
+      },
+      take: PER_TYPE,
+      orderBy: { updatedAt: "desc" },
+    })) as Array<{
+      id: string;
+      title: string;
+      provider: string;
+      externalId: string;
+      contactId: string | null;
+    }>;
+    for (const t of tasks) {
+      results.push({
+        id: t.id,
+        type: "task",
+        title: t.title,
+        subtitle: `${t.provider} · ${t.externalId}`,
+        href: t.contactId ? `/contacts/${t.contactId}` : "/integrations/native/tasks",
+      });
+    }
+
+    const orders = (await prisma.integrationOrder.findMany({
+      where: {
+        workspaceId,
+        OR: [
+          { orderNumber: { contains: q, mode: "insensitive" } },
+          { externalId: { contains: q, mode: "insensitive" } },
+          { customerEmail: { contains: q, mode: "insensitive" } },
+          { customerPhone: { contains: q, mode: "insensitive" } },
+          { customerName: { contains: q, mode: "insensitive" } },
+          { provider: { contains: q, mode: "insensitive" } },
+        ],
+      },
+      take: PER_TYPE,
+      orderBy: { createdAt: "desc" },
+    })) as Array<{
+      id: string;
+      orderNumber: string | null;
+      provider: string;
+      externalId: string;
+      contactId: string | null;
+    }>;
+    for (const o of orders) {
+      results.push({
+        id: o.id,
+        type: "order",
+        title: `Order ${o.orderNumber || o.externalId}`,
+        subtitle: o.provider,
+        href: o.contactId ? `/contacts/${o.contactId}` : "/integrations/native/orders",
       });
     }
 

@@ -217,28 +217,39 @@ export async function runIntegrationSyncJob(payload: {
     }
 
     if (adapter.listOrders) {
+      const { persistOrderFromIntegration } = await import("./product-persist");
       let cursor: string | null | undefined = null;
       do {
         const page = await adapter.listOrders(ctx, cursor, { modifiedSince });
         for (const o of page.items) {
           stats.orders++;
           if (!o.customerPhone && !o.customerEmail) continue;
-          const matched = await upsertExternalContact({
-            workspaceId,
-            phone: o.customerPhone,
-            email: o.customerEmail,
-            firstName: o.customerName?.split(" ")[0],
-            lastName: o.customerName?.split(" ").slice(1).join(" ") || null,
-            source: provider,
-          });
-          if (matched && o.id) {
-            await upsertExternalMapping({
+          try {
+            const matched = await upsertExternalContact({
               workspaceId,
-              provider,
-              objectType: "order",
-              internalId: matched.contactId,
-              externalId: String(o.id),
+              phone: o.customerPhone,
+              email: o.customerEmail,
+              firstName: o.customerName?.split(" ")[0],
+              lastName: o.customerName?.split(" ").slice(1).join(" ") || null,
+              source: provider,
             });
+            if (matched && o.id) {
+              await upsertExternalMapping({
+                workspaceId,
+                provider,
+                objectType: "order",
+                internalId: matched.contactId,
+                externalId: String(o.id),
+              });
+              await persistOrderFromIntegration({
+                workspaceId,
+                provider,
+                contactId: matched.contactId,
+                order: o,
+              });
+            }
+          } catch {
+            stats.errors++;
           }
         }
         cursor = page.nextCursor;

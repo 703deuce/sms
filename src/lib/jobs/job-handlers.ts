@@ -534,7 +534,28 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
         params: (payload.params as Record<string, unknown>) || {},
         contactId: (payload.contactId as string | null) || null,
         actorUserId: (payload.actorUserId as string | null) || null,
+        source: (payload.source as "human" | "ai" | "automation" | "api") || "automation",
+        role: (payload.role as string | null) || null,
+        approvalId: (payload.approvalId as string | null) || null,
+        payloadHash: (payload.payloadHash as string | null) || null,
+        automationFlowId: (payload.automationFlowId as string | null) || null,
+        idempotencyKey: (payload.idempotencyKey as string | null) || null,
+        connectionId: (payload.connectionId as string | null) || null,
+        recordCount: typeof payload.recordCount === "number" ? payload.recordCount : 1,
       });
+    }
+    case "integration_context_refresh": {
+      const { refreshIntegrationContextCache } = await import(
+        "@/lib/integrations/framework/context-cache"
+      );
+      return refreshIntegrationContextCache(
+        String(payload.workspaceId || ""),
+        String(payload.contactId || ""),
+      );
+    }
+    case "integration_health_scan": {
+      const { scanIntegrationHealth } = await import("@/lib/integrations/framework/alerts");
+      return scanIntegrationHealth(String(payload.workspaceId || ""));
     }
     default:
       throw new Error(`Unknown job type: ${jobType}`);

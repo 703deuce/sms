@@ -129,6 +129,13 @@ const MODEL_TO_TABLE: Record<string, string> = {
   crmAuditLog: "crm_audit_logs",
   crmWebhookEvent: "crm_webhook_events",
   crmDeadLetter: "crm_dead_letters",
+  integrationActionLog: "integration_action_logs",
+  aiActionApproval: "ai_action_approvals",
+  integrationAlert: "integration_alerts",
+  integrationContextCache: "integration_context_caches",
+  integrationTask: "integration_tasks",
+  integrationOrder: "integration_orders",
+  workspaceAiIntegrationPolicy: "workspace_ai_integration_policies",
 };
 
 /** Relation name on a model → { table, fk on this model, pk on related }. */
@@ -197,6 +204,13 @@ const RELATIONS: Record<string, Record<string, { table: string; fk: string; pk?:
   crmAuditLog: { workspace: { table: "Workspace", fk: "workspaceId" } },
   crmWebhookEvent: { workspace: { table: "Workspace", fk: "workspaceId" } },
   crmDeadLetter: { workspace: { table: "Workspace", fk: "workspaceId" } },
+  integrationActionLog: { workspace: { table: "Workspace", fk: "workspaceId" } },
+  aiActionApproval: { workspace: { table: "Workspace", fk: "workspaceId" } },
+  integrationAlert: { workspace: { table: "Workspace", fk: "workspaceId" } },
+  integrationContextCache: { workspace: { table: "Workspace", fk: "workspaceId" } },
+  integrationTask: { workspace: { table: "Workspace", fk: "workspaceId" } },
+  integrationOrder: { workspace: { table: "Workspace", fk: "workspaceId" } },
+  workspaceAiIntegrationPolicy: { workspace: { table: "Workspace", fk: "workspaceId" } },
   contact: { workspace: { table: "Workspace", fk: "workspaceId" } },
   contactTag: {
     contact: { table: "Contact", fk: "contactId" },

@@ -101,6 +101,7 @@ export type NormalizedActionId =
   | "upsert_ticket"
   | "add_ticket_comment"
   | "upsert_customer"
+  | "add_order_note"
   | "update_order_metadata"
   | "create_scheduling_link"
   | "subscribe_marketing"

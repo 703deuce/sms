@@ -32,6 +32,10 @@ type Context = {
     createdAt: string;
   }>;
   providerBadges: Array<{ provider: string; displayName: string; native: boolean }>;
+  refreshedAt?: string;
+  stale?: boolean;
+  lastError?: string | null;
+  source?: string;
 };
 
 export function ContactIntegrationsPanel({
@@ -44,21 +48,22 @@ export function ContactIntegrationsPanel({
   const [data, setData] = useState<Context | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    fetch(`/api/contacts/${contactId}/integrations`)
+  function load(refresh = false) {
+    fetch(`/api/contacts/${contactId}/integrations${refresh ? "?refresh=1" : ""}`)
       .then((r) => r.json())
       .then((j) => {
-        if (cancelled) return;
         if (j.error) setError(j.error);
-        else setData(j.data || null);
+        else {
+          setError(null);
+          setData(j.data || null);
+        }
       })
-      .catch(() => {
-        if (!cancelled) setError("Failed to load integrations");
-      });
-    return () => {
-      cancelled = true;
-    };
+      .catch(() => setError("Failed to load integrations"));
+  }
+
+  useEffect(() => {
+    load(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contactId]);
 
   if (error) {
@@ -86,6 +91,16 @@ export function ContactIntegrationsPanel({
 
   return (
     <div className={compact ? "space-y-2" : "space-y-4"}>
+      <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+        <span>
+          {data.stale ? "Stale local cache" : "Local cache"}
+          {data.refreshedAt ? ` · ${new Date(data.refreshedAt).toLocaleString()}` : ""}
+        </span>
+        <button type="button" className="underline" onClick={() => load(true)}>
+          Refresh
+        </button>
+        {data.lastError ? <span className="text-amber-700">Provider health: {data.lastError}</span> : null}
+      </div>
       {data.providerBadges.length ? (
         <div className="flex flex-wrap gap-1.5">
           {data.providerBadges.map((b) => (

@@ -9,7 +9,11 @@ export type SegmentOperator =
   | "not_exists";
 
 export type SegmentRule = {
-  /** "status" | "tag" | "source" | "provider" | "custom:<fieldKey>" */
+  /**
+   * status | tag | source | provider | connection | external_list | external_tag |
+   * form | appointment_status | order_status | deal_stage | ticket_status | consent_status |
+   * custom:<fieldKey>
+   */
   field: string;
   op: SegmentOperator;
   value?: string;
@@ -53,7 +57,39 @@ type EvaluableContact = {
   source?: string | null;
   /** Connected integration provider ids (from external mappings). */
   providers?: string[];
+  connectionIds?: string[];
+  externalLists?: string[];
+  externalTags?: string[];
+  forms?: string[];
+  appointmentStatuses?: string[];
+  orderStatuses?: string[];
+  dealStages?: string[];
+  ticketStatuses?: string[];
+  consentStatus?: string | null;
 };
+
+function matchListField(
+  values: string[] | undefined,
+  rule: SegmentRule,
+): boolean {
+  const names = (values || []).map((n) => n.toLowerCase());
+  const target = (rule.value ?? "").trim().toLowerCase();
+  const has = target ? names.includes(target) : names.length > 0;
+  switch (rule.op) {
+    case "equals":
+    case "contains":
+      return has;
+    case "not_equals":
+    case "not_contains":
+      return !has;
+    case "exists":
+      return names.length > 0;
+    case "not_exists":
+      return names.length === 0;
+    default:
+      return has;
+  }
+}
 
 function stringVal(v: unknown): string {
   if (v == null) return "";
@@ -122,21 +158,45 @@ function evaluateRule(contact: EvaluableContact, rule: SegmentRule): boolean {
   }
 
   if (rule.field === "provider") {
-    const providers = (contact.providers || []).map((p) => p.toLowerCase());
-    const has = target ? providers.includes(targetLc) : providers.length > 0;
+    return matchListField(contact.providers, rule);
+  }
+  if (rule.field === "connection") {
+    return matchListField(contact.connectionIds, rule);
+  }
+  if (rule.field === "external_list") {
+    return matchListField(contact.externalLists, rule);
+  }
+  if (rule.field === "external_tag") {
+    return matchListField(contact.externalTags, rule);
+  }
+  if (rule.field === "form") {
+    return matchListField(contact.forms, rule);
+  }
+  if (rule.field === "appointment_status" || rule.field === "appointment_type") {
+    return matchListField(contact.appointmentStatuses, rule);
+  }
+  if (rule.field === "order_status") {
+    return matchListField(contact.orderStatuses, rule);
+  }
+  if (rule.field === "deal_stage") {
+    return matchListField(contact.dealStages, rule);
+  }
+  if (rule.field === "ticket_status") {
+    return matchListField(contact.ticketStatuses, rule);
+  }
+  if (rule.field === "consent_status") {
+    const status = stringVal(contact.consentStatus || contact.status).toLowerCase();
     switch (rule.op) {
       case "equals":
-      case "contains":
-        return has;
+        return status === targetLc;
       case "not_equals":
-      case "not_contains":
-        return !has;
+        return status !== targetLc;
       case "exists":
-        return providers.length > 0;
+        return Boolean(status);
       case "not_exists":
-        return providers.length === 0;
+        return !status;
       default:
-        return has;
+        return status.includes(targetLc);
     }
   }
 
@@ -212,10 +272,24 @@ export async function resolveSegmentContactIds(
   // Load tag names per contact only when a tag rule is present (avoids extra
   // queries otherwise). The Supabase compat layer does not hydrate nested
   // relations via `select`, so we resolve the join manually.
-  const needsTags = parsed.rules.some((r) => r.field === "tag");
-  const needsProviders = parsed.rules.some((r) => r.field === "provider");
+  const needsTags = parsed.rules.some((r) => r.field === "tag" || r.field === "external_tag");
+  const needsProviders = parsed.rules.some(
+    (r) => r.field === "provider" || r.field === "connection" || r.field === "external_list" || r.field === "deal_stage" || r.field === "ticket_status",
+  );
+  const needsForms = parsed.rules.some((r) => r.field === "form");
+  const needsAppt = parsed.rules.some(
+    (r) => r.field === "appointment_status" || r.field === "appointment_type",
+  );
+  const needsOrders = parsed.rules.some((r) => r.field === "order_status");
   const tagNamesByContact = new Map<string, string[]>();
   const providersByContact = new Map<string, string[]>();
+  const connectionsByContact = new Map<string, string[]>();
+  const listsByContact = new Map<string, string[]>();
+  const dealStagesByContact = new Map<string, string[]>();
+  const ticketStatusesByContact = new Map<string, string[]>();
+  const formsByContact = new Map<string, string[]>();
+  const apptByContact = new Map<string, string[]>();
+  const ordersByContact = new Map<string, string[]>();
   const contactIds = rawContacts.map((c) => c.id);
   if (needsTags && rawContacts.length) {
     const contactTags = (await prisma.contactTag.findMany({
@@ -241,11 +315,85 @@ export async function resolveSegmentContactIds(
   if (needsProviders && contactIds.length) {
     const mappings = (await prisma.crmObjectMapping.findMany({
       where: { workspaceId, internalId: { in: contactIds } },
-    })) as Array<{ internalId: string; provider: string }>;
+    })) as Array<{
+      internalId: string;
+      provider: string;
+      objectType: string;
+      externalId: string;
+      metadataJson: unknown;
+    }>;
     for (const m of mappings) {
       const list = providersByContact.get(m.internalId) || [];
       if (!list.includes(m.provider)) list.push(m.provider);
       providersByContact.set(m.internalId, list);
+      // connection surrogate: provider:objectType for audience filtering
+      const connKey = `${m.provider}:${m.objectType}`;
+      const cl = connectionsByContact.get(m.internalId) || [];
+      if (!cl.includes(connKey)) cl.push(connKey);
+      connectionsByContact.set(m.internalId, cl);
+      if (m.objectType === "audience" || m.objectType === "segment") {
+        const ll = listsByContact.get(m.internalId) || [];
+        if (!ll.includes(m.externalId)) ll.push(m.externalId);
+        listsByContact.set(m.internalId, ll);
+      }
+      const meta = (m.metadataJson || {}) as Record<string, unknown>;
+      if (m.objectType === "deal" && meta.stageId) {
+        const dl = dealStagesByContact.get(m.internalId) || [];
+        const stage = String(meta.stageId);
+        if (!dl.includes(stage)) dl.push(stage);
+        dealStagesByContact.set(m.internalId, dl);
+      }
+      if (m.objectType === "support_ticket" && meta.status) {
+        const tl = ticketStatusesByContact.get(m.internalId) || [];
+        const st = String(meta.status);
+        if (!tl.includes(st)) tl.push(st);
+        ticketStatusesByContact.set(m.internalId, tl);
+      }
+    }
+  }
+
+  if (needsForms && contactIds.length) {
+    const subs = (await prisma.formSubmission.findMany({
+      where: { workspaceId, contactId: { in: contactIds } },
+      include: { form: true },
+      take: 5000,
+    })) as Array<{ contactId: string | null; form: { name: string; slug: string | null } }>;
+    for (const s of subs) {
+      if (!s.contactId) continue;
+      const fl = formsByContact.get(s.contactId) || [];
+      const name = s.form.slug || s.form.name;
+      if (!fl.includes(name)) fl.push(name);
+      formsByContact.set(s.contactId, fl);
+    }
+  }
+
+  if (needsAppt && contactIds.length) {
+    const appts = (await prisma.voiceAppointment.findMany({
+      where: { workspaceId, contactId: { in: contactIds } },
+      select: { contactId: true, status: true, serviceName: true },
+      take: 5000,
+    })) as Array<{ contactId: string | null; status: string; serviceName: string | null }>;
+    for (const a of appts) {
+      if (!a.contactId) continue;
+      const al = apptByContact.get(a.contactId) || [];
+      for (const v of [a.status, a.serviceName].filter(Boolean) as string[]) {
+        if (!al.includes(v)) al.push(v);
+      }
+      apptByContact.set(a.contactId, al);
+    }
+  }
+
+  if (needsOrders && contactIds.length) {
+    const orders = (await prisma.integrationOrder.findMany({
+      where: { workspaceId, contactId: { in: contactIds } },
+      select: { contactId: true, status: true },
+      take: 5000,
+    })) as Array<{ contactId: string | null; status: string | null }>;
+    for (const o of orders) {
+      if (!o.contactId || !o.status) continue;
+      const ol = ordersByContact.get(o.contactId) || [];
+      if (!ol.includes(o.status)) ol.push(o.status);
+      ordersByContact.set(o.contactId, ol);
     }
   }
 
@@ -256,6 +404,15 @@ export async function resolveSegmentContactIds(
     tagNames: tagNamesByContact.get(c.id) || [],
     source: c.consentSource || null,
     providers: providersByContact.get(c.id) || [],
+    connectionIds: connectionsByContact.get(c.id) || [],
+    externalLists: listsByContact.get(c.id) || [],
+    externalTags: tagNamesByContact.get(c.id) || [],
+    forms: formsByContact.get(c.id) || [],
+    appointmentStatuses: apptByContact.get(c.id) || [],
+    orderStatuses: ordersByContact.get(c.id) || [],
+    dealStages: dealStagesByContact.get(c.id) || [],
+    ticketStatuses: ticketStatusesByContact.get(c.id) || [],
+    consentStatus: c.status,
   }));
 
   return contacts

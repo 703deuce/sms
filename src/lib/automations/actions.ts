@@ -423,6 +423,8 @@ export async function runNodeAction(
           actionId,
           params,
           contactId: ctx.contactId,
+          source: "automation",
+          automationFlowId: ctx.flowId,
         }),
       ),
       idempotencyKey: `int-act:${ctx.executionId}:${node.id}`,

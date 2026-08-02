@@ -25,6 +25,7 @@ const caps: CapabilityDefinition = {
   },
   actions: {
     upsert_customer: "read_write",
+    add_order_note: "read_write",
     update_order_metadata: "scope_dependent",
   },
   webhooks: "read_write",

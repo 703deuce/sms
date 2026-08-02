@@ -4,6 +4,20 @@ import { getIntegrationPreferences } from "./settings";
 import type { ExternalProviderId, FeatureSupport } from "./types";
 import { writeIntegrationAudit } from "./audit";
 import { upsertExternalMapping } from "./mappings";
+import { getActionCapabilityTruth } from "./capability-truth";
+import {
+  buildActionPreview,
+  classifyActionRisk,
+  evaluateActionPolicy,
+  hashActionPayload,
+} from "./ai-policy";
+import {
+  completeIntegrationActionLog,
+  createIntegrationActionLog,
+} from "./action-log";
+import { raiseIntegrationAlert } from "./alerts";
+import { checkCommunicationConsent } from "./consent-gate";
+import { persistTaskFromIntegration } from "./product-persist";
 
 export type IntegrationActionId =
   | "contact.upsert"
@@ -253,19 +267,144 @@ export async function executeIntegrationAction(input: {
   params: Record<string, unknown>;
   contactId?: string | null;
   actorUserId?: string | null;
+  source?: "human" | "ai" | "automation" | "api";
+  role?: string | null;
+  approvalId?: string | null;
+  payloadHash?: string | null;
+  automationFlowId?: string | null;
+  idempotencyKey?: string | null;
+  connectionId?: string | null;
+  recordCount?: number;
 }): Promise<
-  | { ok: true; externalId?: string; created?: boolean }
-  | { ok: false; code: "UNSUPPORTED" | "PAUSED" | "WRITES_DISABLED" | "ERROR"; message: string }
+  | { ok: true; externalId?: string; created?: boolean; actionLogId?: string }
+  | {
+      ok: false;
+      code:
+        | "UNSUPPORTED"
+        | "PAUSED"
+        | "WRITES_DISABLED"
+        | "POLICY"
+        | "CONSENT"
+        | "ERROR";
+      message: string;
+      actionLogId?: string;
+    }
 > {
+  const source = input.source || "api";
   const def = INTEGRATION_ACTIONS.find((a) => a.id === input.actionId);
   if (!def || !def.providers.includes(input.provider)) {
     return { ok: false, code: "UNSUPPORTED", message: `Action ${input.actionId} unsupported` };
   }
+
+  const truth = getActionCapabilityTruth(input.provider, input.actionId);
+  if (!truth.supported) {
+    return { ok: false, code: "UNSUPPORTED", message: truth.reason || "Unsupported" };
+  }
+
+  const riskLevel = classifyActionRisk(input.actionId, { recordCount: input.recordCount });
+  const payloadHash =
+    input.payloadHash ||
+    hashActionPayload({
+      provider: input.provider,
+      actionId: input.actionId,
+      params: input.params,
+      contactId: input.contactId || null,
+    });
+
+  const policy = await evaluateActionPolicy({
+    workspaceId: input.workspaceId,
+    provider: input.provider,
+    actionId: input.actionId,
+    source,
+    role: input.role,
+    recordCount: input.recordCount || 1,
+    approvalId: input.approvalId,
+    payloadHash,
+  });
+  if (!policy.allowed) {
+    const log = await createIntegrationActionLog({
+      workspaceId: input.workspaceId,
+      provider: input.provider,
+      connectionId: input.connectionId,
+      source,
+      actorUserId: input.actorUserId,
+      automationFlowId: input.automationFlowId,
+      actionId: input.actionId,
+      riskLevel,
+      inputSummary: input.params,
+      contactId: input.contactId,
+      approvalId: input.approvalId,
+      idempotencyKey: input.idempotencyKey || `reject-${payloadHash.slice(0, 24)}`,
+      result: "rejected",
+      policy: { code: policy.code, message: policy.message },
+    });
+    await completeIntegrationActionLog(log.id, {
+      result: "rejected",
+      failureReason: policy.message,
+    });
+    return {
+      ok: false,
+      code: "POLICY",
+      message: policy.message,
+      actionLogId: log.id,
+    };
+  }
+
+  if (String(input.actionId).includes("sms")) {
+    const consent = await checkCommunicationConsent({
+      workspaceId: input.workspaceId,
+      contactId: input.contactId,
+      phone: (input.params.phone as string) || null,
+      channel: "sms",
+    });
+    if (!consent.allowed) {
+      return {
+        ok: false,
+        code: "CONSENT",
+        message: `Communication blocked: ${consent.reason}`,
+      };
+    }
+  }
+
   const prefs = await getIntegrationPreferences(input.workspaceId, input.provider);
   if (prefs.paused) return { ok: false, code: "PAUSED", message: "Connection paused" };
   if (!prefs.enableWrites) {
     return { ok: false, code: "WRITES_DISABLED", message: "Writes disabled in settings" };
   }
+
+  const preview = buildActionPreview({
+    actionId: input.actionId,
+    provider: input.provider,
+    params: input.params,
+    contactId: input.contactId,
+    riskLevel,
+  });
+
+  const actionLog = await createIntegrationActionLog({
+    workspaceId: input.workspaceId,
+    provider: input.provider,
+    connectionId: input.connectionId,
+    source,
+    actorUserId: input.actorUserId,
+    automationFlowId: input.automationFlowId,
+    actionId: input.actionId,
+    riskLevel,
+    inputSummary: { params: input.params, preview },
+    objectType: input.actionId.split(".")[0],
+    objectIds: input.contactId ? [input.contactId] : [],
+    contactId: input.contactId,
+    approvalId: input.approvalId,
+    idempotencyKey: input.idempotencyKey || `exec-${payloadHash.slice(0, 40)}`,
+    reversible: preview.reversible,
+    undoJson: preview.reversible
+      ? {
+          actionId: input.actionId,
+          params: input.params,
+          note: "Compensation metadata captured at enqueue",
+        }
+      : { irreversible: true, message: "This cannot be automatically undone." },
+    result: "running",
+  });
 
   const adapter = getAdapter(input.provider);
   const ctx = await buildAdapterContext(input.workspaceId, input.provider);
@@ -273,6 +412,9 @@ export async function executeIntegrationAction(input: {
 
   try {
     let result: { externalId: string; created: boolean } | undefined;
+    let undoJson: Record<string, unknown> | null = preview.reversible
+      ? { actionId: input.actionId, params: input.params }
+      : { irreversible: true, message: "This cannot be automatically undone." };
 
     switch (input.actionId) {
       case "contact.upsert": {
@@ -311,14 +453,34 @@ export async function executeIntegrationAction(input: {
         break;
       }
       case "contact.add_tag":
-        if (!adapter.addTag) return { ok: false, code: "UNSUPPORTED", message: "addTag unsupported" };
+        if (!adapter.addTag) {
+          await completeIntegrationActionLog(actionLog.id, {
+            result: "failed",
+            failureReason: "addTag unsupported",
+          });
+          return { ok: false, code: "UNSUPPORTED", message: "addTag unsupported", actionLogId: actionLog.id };
+        }
         await adapter.addTag(ctx, String(p.externalContactId), String(p.tag));
+        undoJson = {
+          actionId: "contact.remove_tag",
+          params: { externalContactId: p.externalContactId, tag: p.tag },
+          reversible: true,
+        };
         break;
       case "contact.remove_tag":
         if (!adapter.removeTag) {
-          return { ok: false, code: "UNSUPPORTED", message: "removeTag unsupported" };
+          await completeIntegrationActionLog(actionLog.id, {
+            result: "failed",
+            failureReason: "removeTag unsupported",
+          });
+          return { ok: false, code: "UNSUPPORTED", message: "removeTag unsupported", actionLogId: actionLog.id };
         }
         await adapter.removeTag(ctx, String(p.externalContactId), String(p.tag));
+        undoJson = {
+          actionId: "contact.add_tag",
+          params: { externalContactId: p.externalContactId, tag: p.tag },
+          reversible: true,
+        };
         break;
       case "contact.add_to_list":
         if (!adapter.addToList) {
@@ -348,7 +510,11 @@ export async function executeIntegrationAction(input: {
         break;
       case "task.create":
         if (!adapter.createTask) {
-          return { ok: false, code: "UNSUPPORTED", message: "createTask unsupported" };
+          await completeIntegrationActionLog(actionLog.id, {
+            result: "failed",
+            failureReason: "createTask unsupported",
+          });
+          return { ok: false, code: "UNSUPPORTED", message: "createTask unsupported", actionLogId: actionLog.id };
         }
         result = await adapter.createTask(ctx, {
           title: String(p.title || "Task"),
@@ -356,10 +522,34 @@ export async function executeIntegrationAction(input: {
           dueAt: (p.dueAt as string) || undefined,
           contactId: (p.contactId as string) || undefined,
         });
+        if (result?.externalId) {
+          await persistTaskFromIntegration({
+            workspaceId: input.workspaceId,
+            provider: input.provider,
+            contactId: input.contactId,
+            task: {
+              externalId: result.externalId,
+              title: String(p.title || "Task"),
+              description: (p.description as string) || null,
+              dueAt: (p.dueAt as string) || null,
+              status: "open",
+            },
+          });
+          undoJson = {
+            actionId: "task.create",
+            externalId: result.externalId,
+            compensation: "reopen_or_complete_externally",
+            note: "Provider task created; mark complete in provider to compensate if needed",
+          };
+        }
         break;
       case "note.create":
         if (!adapter.createNote) {
-          return { ok: false, code: "UNSUPPORTED", message: "createNote unsupported" };
+          await completeIntegrationActionLog(actionLog.id, {
+            result: "failed",
+            failureReason: "createNote unsupported",
+          });
+          return { ok: false, code: "UNSUPPORTED", message: "createNote unsupported", actionLogId: actionLog.id };
         }
         result = await adapter.createNote(ctx, {
           body: String(p.body || ""),
@@ -425,16 +615,45 @@ export async function executeIntegrationAction(input: {
       category: "push",
       action: input.actionId,
       message: `Executed ${input.actionId}`,
-      detail: { externalId: result?.externalId, created: result?.created },
+      detail: {
+        externalId: result?.externalId,
+        created: result?.created,
+        source,
+        riskLevel,
+        actionLogId: actionLog.id,
+      },
       actorUserId: input.actorUserId,
     });
 
-    return { ok: true, externalId: result?.externalId, created: result?.created };
+    await completeIntegrationActionLog(actionLog.id, {
+      result: "succeeded",
+      providerRequestId: result?.externalId || null,
+      undoJson,
+    });
+
+    return {
+      ok: true,
+      externalId: result?.externalId,
+      created: result?.created,
+      actionLogId: actionLog.id,
+    };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    await completeIntegrationActionLog(actionLog.id, {
+      result: "failed",
+      failureReason: message,
+    });
+    await raiseIntegrationAlert({
+      workspaceId: input.workspaceId,
+      provider: input.provider,
+      kind: "action_failure_repeated",
+      severity: "warn",
+      audience: "operator",
+      message: `${input.actionId} failed: ${message.slice(0, 160)}`,
+    });
     if (message.startsWith("UNSUPPORTED:")) {
-      return { ok: false, code: "UNSUPPORTED", message };
+      return { ok: false, code: "UNSUPPORTED", message, actionLogId: actionLog.id };
     }
-    return { ok: false, code: "ERROR", message };
+    return { ok: false, code: "ERROR", message, actionLogId: actionLog.id };
   }
 }
