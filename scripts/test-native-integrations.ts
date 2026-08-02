@@ -567,11 +567,14 @@ async function main() {
     assert.deepEqual([...CALENDLY_WEBHOOK_SIGNING_KEY_ENVS], [
       "CALENDLY_WEBHOOK_SIGNING_KEY",
       "CALENDLY_WEBHOOK_SECRET",
+      "CALENDY_WEBHOOK_SIGNING_KEY",
     ]);
     const prevA = process.env.CALENDLY_WEBHOOK_SIGNING_KEY;
     const prevB = process.env.CALENDLY_WEBHOOK_SECRET;
+    const prevTypo = process.env.CALENDY_WEBHOOK_SIGNING_KEY;
     delete process.env.CALENDLY_WEBHOOK_SIGNING_KEY;
     delete process.env.CALENDLY_WEBHOOK_SECRET;
+    delete process.env.CALENDY_WEBHOOK_SIGNING_KEY;
     assert.equal(resolveCalendlyWebhookSigningKey(null), null);
     process.env.CALENDLY_WEBHOOK_SIGNING_KEY = "  runtime-key  ";
     assert.equal(resolveCalendlyWebhookSigningKey(null), "runtime-key");
@@ -579,10 +582,16 @@ async function main() {
       resolveCalendlyWebhookSigningKey({ signingKey: "from-config" }),
       "from-config",
     );
+    // Coolify typo alias (missing L): CALENDY_WEBHOOK_SIGNING_KEY
+    delete process.env.CALENDLY_WEBHOOK_SIGNING_KEY;
+    process.env.CALENDY_WEBHOOK_SIGNING_KEY = "  typo-key  ";
+    assert.equal(resolveCalendlyWebhookSigningKey(null), "typo-key");
     if (prevA === undefined) delete process.env.CALENDLY_WEBHOOK_SIGNING_KEY;
     else process.env.CALENDLY_WEBHOOK_SIGNING_KEY = prevA;
     if (prevB === undefined) delete process.env.CALENDLY_WEBHOOK_SECRET;
     else process.env.CALENDLY_WEBHOOK_SECRET = prevB;
+    if (prevTypo === undefined) delete process.env.CALENDY_WEBHOOK_SIGNING_KEY;
+    else process.env.CALENDY_WEBHOOK_SIGNING_KEY = prevTypo;
   });
 
   console.log(`\n${passed} tests passed`);

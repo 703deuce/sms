@@ -275,11 +275,13 @@ export function NativeProviderClient({ provider }: { provider: string }) {
                 {snapshot.calendly.webhookSigningKeyPresent ? "present" : "missing"}
                 {!snapshot.calendly.webhookSigningKeyPresent ? (
                   <span className="block text-xs text-amber-700">
-                    Coolify has not injected this into the <strong>running web</strong>{" "}
-                    container. Exact key name must be{" "}
-                    <code>CALENDLY_WEBHOOK_SIGNING_KEY</code> (or{" "}
-                    <code>CALENDLY_WEBHOOK_SECRET</code>), non-empty, on the same app that
-                    serves transovo.ai, then <strong>restart/redeploy</strong>.
+                    Coolify has not injected a recognized signing-key env into the{" "}
+                    <strong>running web</strong> container. Preferred name:{" "}
+                    <code>CALENDLY_WEBHOOK_SIGNING_KEY</code> (note the{" "}
+                    <strong>L</strong> in CALEND<strong>L</strong>Y — not{" "}
+                    <code>CALENDY_…</code>). Alias:{" "}
+                    <code>CALENDLY_WEBHOOK_SECRET</code>. Same app as transovo.ai, then{" "}
+                    <strong>restart/redeploy</strong>.
                   </span>
                 ) : null}
                 {snapshot.calendly.webhookSigningKeyEnv ? (

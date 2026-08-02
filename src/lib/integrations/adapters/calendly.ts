@@ -78,8 +78,10 @@ function api(path: string, ctx: AdapterContext, init?: RequestInit) {
 }
 
 /**
- * App-level signing key from Coolify (Calendly developer portal) or legacy alias.
- * Exact names: CALENDLY_WEBHOOK_SIGNING_KEY | CALENDLY_WEBHOOK_SECRET
+ * App-level signing key from Coolify (Calendly developer portal) or aliases.
+ * Preferred: CALENDLY_WEBHOOK_SIGNING_KEY
+ * Aliases: CALENDLY_WEBHOOK_SECRET,
+ *          CALENDY_WEBHOOK_SIGNING_KEY (common Coolify typo — missing L)
  *
  * Use dynamic `process.env[name]` access — Next.js inlines static
  * `process.env.FOO` at build time, so keys added later in Coolify would
@@ -88,6 +90,8 @@ function api(path: string, ctx: AdapterContext, init?: RequestInit) {
 export const CALENDLY_WEBHOOK_SIGNING_KEY_ENVS = [
   "CALENDLY_WEBHOOK_SIGNING_KEY",
   "CALENDLY_WEBHOOK_SECRET",
+  /** Typo seen in Coolify builds — keep until operators rename. */
+  "CALENDY_WEBHOOK_SIGNING_KEY",
 ] as const;
 
 export function calendlyWebhookSigningKeyEnvPresence(): Record<string, boolean> {
@@ -98,10 +102,10 @@ export function calendlyWebhookSigningKeyEnvPresence(): Record<string, boolean> 
   return out;
 }
 
-/** Presence-only list of CALENDLY_* env names visible to this process (never values). */
+/** Presence-only list of CALENDLY_* / CALENDY_* env names visible to this process (never values). */
 export function listCalendlyEnvNamesPresent(): string[] {
   return Object.keys(process.env)
-    .filter((k) => /^CALENDLY_/i.test(k) && Boolean(process.env[k]?.trim()))
+    .filter((k) => /^CALENDL?Y_/i.test(k) && Boolean(process.env[k]?.trim()))
     .sort();
 }
 

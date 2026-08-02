@@ -10,8 +10,9 @@ Developer accounts are separate from regular Calendly accounts. Create the OAuth
 |----------|----------|--------|
 | `CALENDLY_CLIENT_ID` | Yes | Web app + Coolify |
 | `CALENDLY_CLIENT_SECRET` | Yes | Web app + Coolify |
-| `CALENDLY_WEBHOOK_SIGNING_KEY` | Recommended | From OAuth app; used to verify `Calendly-Webhook-Signature` |
+| `CALENDLY_WEBHOOK_SIGNING_KEY` | Recommended | From OAuth app; used to verify `Calendly-Webhook-Signature`. **Spelling:** `CALENDLY_` (with **L**), not `CALENDY_` |
 | `CALENDLY_WEBHOOK_SECRET` | Optional alias | Same purpose as signing key |
+| `CALENDY_WEBHOOK_SIGNING_KEY` | Typo alias | Accepted for Coolify mistypes; rename to `CALENDLY_WEBHOOK_SIGNING_KEY` when you can |
 | `APP_URL` | Yes | Public origin, no trailing slash |
 | `INTEGRATION_SECRET_KEY` | Yes | Token encryption + OAuth state HMAC |
 | `DATABASE_URL` | Yes | Connections + appointments |
