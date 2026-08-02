@@ -151,16 +151,13 @@ export function AgentTestPanel({
     <Card className="space-y-3 p-5">
       <div className="flex items-start justify-between gap-2">
         <div>
-          <CardTitle>Test conversation</CardTitle>
+          <CardTitle>Text fallback (optional)</CardTitle>
           <p className="mt-1 text-sm text-muted-foreground">
-            Build the agent first, then talk here before deploying to a number.
+            Prefer <strong>Call agent</strong> above for real voice. This text path is only a backup
+            when you cannot use the mic.
             {!ready
-              ? " Click “Build & test” above to sync the assistant to Telnyx."
-              : status === "TESTING"
-                ? " Testing build — chat or use your mic, then Deploy to number when ready."
-                : status === "ACTIVE"
-                  ? " Live agent — you can still preview chat here."
-                  : " Ready — chat or use your mic."}
+              ? " Build & test first."
+              : " Ready for typed questions if needed."}
           </p>
         </div>
         <audio ref={audioRef} className="hidden" />

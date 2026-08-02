@@ -568,6 +568,11 @@ export async function POST(request: Request) {
           data: await runVoiceAiRetention(workspaceId),
         });
       }
+      case "enable_web_calls":
+      case "sync_voice":
+        return NextResponse.json({
+          data: await platform.enableWebCallsAndSyncVoice(workspaceId, agentId),
+        });
       case "probe_assistant_create": {
         // Live diagnostics: try minimal Telnyx create variants and return each result.
         if (!ai.isTelnyxAiConfigured()) {

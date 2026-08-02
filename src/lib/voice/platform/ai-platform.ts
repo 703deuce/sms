@@ -1382,6 +1382,52 @@ export async function cloneAgentFull(workspaceId: string, agentId: string) {
   return copy;
 }
 
+/**
+ * Enable TelnyxRTC anonymous browser calls + push current voice_settings.
+ * Safe to call before every in-app test call.
+ */
+export async function enableWebCallsAndSyncVoice(
+  workspaceId: string,
+  agentId: string,
+) {
+  const agent = await requireAgent(workspaceId, agentId);
+  if (!agent.telnyxAssistantId) {
+    throw new Error("Build the agent first so Telnyx can sync the assistant");
+  }
+  if (!ai.isTelnyxAiConfigured()) {
+    return { skipped: true, reason: "telnyx_not_configured" };
+  }
+  const { parseVoiceAgentConfig } = await import("../types");
+  const { DEFAULT_AGENT_VOICE_ID, isUltraVoice } = await import(
+    "../telnyx/voices"
+  );
+  const config = parseVoiceAgentConfig(agent.draftConfig);
+  const voiceId = config.voiceLanguage?.voiceId || DEFAULT_AGENT_VOICE_ID;
+  const connectionId =
+    agent.telnyxConnectionId || process.env.TELNYX_CONNECTION_ID?.trim() || "";
+  const body: Record<string, unknown> = {
+    voice_settings: {
+      voice: voiceId,
+      ...(config.voiceLanguage?.speed != null
+        ? { voice_speed: config.voiceLanguage.speed }
+        : {}),
+      ...(isUltraVoice(voiceId) ? { expressive_mode: true } : {}),
+    },
+    telephony_settings: {
+      supports_unauthenticated_web_calls: true,
+      ...(connectionId ? { default_texml_app_id: connectionId } : {}),
+    },
+    enabled_features: ["telephony", "transcription"],
+  };
+  const remote = await ai.updateAssistant(agent.telnyxAssistantId, body);
+  return {
+    ok: true,
+    telnyxAssistantId: agent.telnyxAssistantId,
+    voiceId,
+    remote: asData(remote),
+  };
+}
+
 export async function chatPreview(
   workspaceId: string,
   agentId: string,

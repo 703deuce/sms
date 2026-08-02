@@ -237,6 +237,34 @@ async function main() {
   ok("handoff hangup loop limit", /hops > 3/.test(webhookSrc));
   const jobsSrc = fs.readFileSync(path.join(root, "src/lib/jobs/job-handlers.ts"), "utf8");
   ok("regression recurring re-enqueue", /recurring:\s*true/.test(jobsSrc));
+  ok(
+    "AgentBrowserCall component",
+    fs.existsSync(path.join(root, "src/components/voice/agent-browser-call.tsx")),
+  );
+  ok(
+    "VoicePicker component",
+    fs.existsSync(path.join(root, "src/components/voice/voice-picker.tsx")),
+  );
+  const browserCall = fs.readFileSync(
+    path.join(root, "src/components/voice/agent-browser-call.tsx"),
+    "utf8",
+  );
+  ok("browser call anonymous_login", /anonymous_login/.test(browserCall));
+  ok("browser call ai_assistant", /ai_assistant/.test(browserCall));
+  ok(
+    "voices API route",
+    fs.existsSync(path.join(root, "src/app/api/voice/voices/route.ts")),
+  );
+  const syncSrc = fs.readFileSync(
+    path.join(root, "src/lib/voice/telnyx/assistant-sync.ts"),
+    "utf8",
+  );
+  ok(
+    "web calls enabled on sync",
+    /supports_unauthenticated_web_calls:\s*true/.test(syncSrc),
+  );
+  ok("builder VoicePicker", /VoicePicker/.test(builderSrc2));
+  ok("builder AgentBrowserCall", /AgentBrowserCall/.test(builderSrc2));
 
   if (failures.length) {
     console.error("\nFAILED", failures.length, failures);

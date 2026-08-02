@@ -4,6 +4,7 @@ import type { VoiceAgentConfig } from "../types";
 import { getAgentRagBucketIds } from "../knowledge-processor";
 import { buildAssistantTools } from "./assistant-tools";
 import * as ai from "./ai-client";
+import { DEFAULT_AGENT_VOICE_ID, isUltraVoice } from "./voices";
 
 function unwrapTelnyxId(res: unknown): string | null {
   if (!res || typeof res !== "object") return null;
@@ -270,14 +271,21 @@ export async function syncTelnyxAssistant(
     corePayload.llm_api_key_ref = config.model.customApiKeyRef;
   }
 
+  const voiceId = config.voiceLanguage?.voiceId || DEFAULT_AGENT_VOICE_ID;
   const enrichPayload: Record<string, unknown> = {
     voice_settings: {
-      voice: config.voiceLanguage?.voiceId || "Telnyx.NaturalHD.andromeda",
+      voice: voiceId,
       ...(config.voiceLanguage?.speed != null
-        ? { speed: config.voiceLanguage.speed }
+        ? { voice_speed: config.voiceLanguage.speed }
         : {}),
+      ...(isUltraVoice(voiceId) ? { expressive_mode: true } : {}),
     },
     enabled_features: ["telephony"] as string[],
+    // Required for in-app browser test calls (TelnyxRTC anonymous_login).
+    telephony_settings: {
+      supports_unauthenticated_web_calls: true,
+      ...(connectionId ? { default_texml_app_id: connectionId } : {}),
+    },
     tools: [
       {
         type: "hangup",
@@ -292,11 +300,6 @@ export async function syncTelnyxAssistant(
   };
   if (transcription.enabled !== false) {
     (enrichPayload.enabled_features as string[]).push("transcription");
-  }
-  if (connectionId) {
-    enrichPayload.telephony_settings = {
-      default_texml_app_id: connectionId,
-    };
   }
   if (transcription.sttModel || transcription.keyterms?.length) {
     enrichPayload.transcription = {
@@ -329,6 +332,10 @@ export async function syncTelnyxAssistant(
         await ai.updateAssistant(assistantId, {
           voice_settings: enrichPayload.voice_settings,
           enabled_features: ["telephony"],
+          telephony_settings: {
+            supports_unauthenticated_web_calls: true,
+            ...(connectionId ? { default_texml_app_id: connectionId } : {}),
+          },
           tools: [
             {
               type: "hangup",
@@ -337,9 +344,6 @@ export async function syncTelnyxAssistant(
               },
             },
           ],
-          ...(connectionId
-            ? { telephony_settings: { default_texml_app_id: connectionId } }
-            : {}),
         });
         return {
           enriched: "partial" as const,

@@ -3,9 +3,12 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
 import { Input, Label, Textarea } from "@/components/ui/input";
+import { AgentBrowserCall } from "@/components/voice/agent-browser-call";
 import { AgentTestPanel } from "@/components/voice/agent-test-panel";
+import { VoicePicker } from "@/components/voice/voice-picker";
 import type { VoiceAgentConfig } from "@/lib/voice/types";
 import { AGENT_TYPE_LABELS } from "@/lib/voice/types";
+import { voiceLabel } from "@/lib/voice/telnyx/voices";
 import { cn } from "@/lib/utils";
 import { useCallback, useEffect, useState } from "react";
 
@@ -488,25 +491,34 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
         <Card className="space-y-2 border-emerald-800/20 bg-emerald-50/40 p-4 dark:bg-emerald-950/20">
           <p className="text-sm font-medium">Flow</p>
           <ol className="list-decimal space-y-1 pl-5 text-xs text-muted-foreground">
-            <li>Configure instructions, knowledge, voice, and tools — Save draft.</li>
+            <li>Instructions + knowledge (PDF/RAG) + pick a voice (Play a clip) — Save draft.</li>
             <li>
-              <strong>Build &amp; test</strong> syncs the assistant to Telnyx (status: Testing) —
-              talk below before going live.
+              <strong>Build &amp; test</strong>, then <strong>Call agent</strong> in the browser —
+              real mic conversation with the same Telnyx voice as phone.
             </li>
             <li>
-              Pick a phone number under Identity, then <strong>Deploy to number</strong> for
-              production inbound (status: Active).
+              Assign a number under Identity → <strong>Deploy to number</strong> when it sounds right.
             </li>
           </ol>
         </Card>
 
-        <AgentTestPanel
+        <AgentBrowserCall
           agentId={agentId}
           telnyxAssistantId={agent.telnyxAssistantId}
-          voiceId={cfg.voiceLanguage?.voiceId}
-          language={cfg.voiceLanguage?.primaryLanguage}
+          voiceLabel={voiceLabel(cfg.voiceLanguage?.voiceId || "")}
           status={agent.rawStatus}
+          onNeedBuild={() => void buildForTest()}
         />
+
+        {(section === "tests" || section === "messaging") && (
+          <AgentTestPanel
+            agentId={agentId}
+            telnyxAssistantId={agent.telnyxAssistantId}
+            voiceId={cfg.voiceLanguage?.voiceId}
+            language={cfg.voiceLanguage?.primaryLanguage}
+            status={agent.rawStatus}
+          />
+        )}
 
         {section === "identity" && (
           <Card className="space-y-4 p-5">
@@ -755,50 +767,19 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
         {section === "voiceLanguage" && (
           <Card className="space-y-4 p-5">
             <CardTitle>Voice & language</CardTitle>
-            <div>
-              <Label>Voice ID (Telnyx)</Label>
-              <div className="flex gap-2">
-                <Input
-                  value={cfg.voiceLanguage?.voiceId || ""}
-                  onChange={(e) =>
-                    updateConfig({
-                      voiceLanguage: { ...cfg.voiceLanguage, voiceId: e.target.value },
-                    })
-                  }
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={async () => {
-                    try {
-                      const res = await fetch("/api/voice/tts-preview", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                          voice: cfg.voiceLanguage?.voiceId || undefined,
-                          text: "Hello, this is a preview of your AI voice agent.",
-                        }),
-                      });
-                      const json = await res.json();
-                      if (!res.ok) throw new Error(json.error || "Preview failed");
-                      if (json.data?.audioUrl) {
-                        const audio = new Audio(json.data.audioUrl);
-                        await audio.play().catch(() => undefined);
-                      } else {
-                        alert(
-                          json.data?.message ||
-                            `Preview ready (${json.data?.mode}). Text: ${json.data?.text}`,
-                        );
-                      }
-                    } catch (e) {
-                      alert(e instanceof Error ? e.message : "Preview failed");
-                    }
-                  }}
-                >
-                  Preview
-                </Button>
-              </div>
-            </div>
+            <VoicePicker
+              value={cfg.voiceLanguage?.voiceId}
+              language={cfg.voiceLanguage?.primaryLanguage}
+              onChange={(voiceId) =>
+                updateConfig({
+                  voiceLanguage: { ...cfg.voiceLanguage, voiceId },
+                })
+              }
+            />
+            <p className="text-xs text-muted-foreground">
+              After changing voice, click <strong>Build &amp; test</strong> (or Call agent) so Telnyx
+              picks up the new voice before you talk.
+            </p>
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <Label>Speaking speed</Label>
