@@ -233,6 +233,7 @@ export type TestSessionQuality = {
   connectionState?: string | null;
   mediaReadyAtMs?: number | null;
   firstAudioAtMs?: number | null;
+  firstCleanAudioAtMs?: number | null;
   greetingGateMs?: number | null;
   stabilizeMs?: number | null;
   inputDeviceLabel?: string | null;
@@ -251,6 +252,8 @@ export async function endVoiceTestSession(input: {
   conversationId?: string | null;
   error?: string | null;
   quality?: TestSessionQuality | null;
+  qualityReport?: Record<string, unknown> | null;
+  timeline?: Record<string, unknown> | null;
 }) {
   const quality = input.quality
     ? {
@@ -270,6 +273,7 @@ export async function endVoiceTestSession(input: {
         connectionState: input.quality.connectionState ?? null,
         mediaReadyAtMs: input.quality.mediaReadyAtMs ?? null,
         firstAudioAtMs: input.quality.firstAudioAtMs ?? null,
+        firstCleanAudioAtMs: input.quality.firstCleanAudioAtMs ?? null,
         greetingGateMs: input.quality.greetingGateMs ?? null,
         stabilizeMs: input.quality.stabilizeMs ?? null,
         inputDeviceLabel: input.quality.inputDeviceLabel ?? null,
@@ -280,6 +284,8 @@ export async function endVoiceTestSession(input: {
         sampledAt: input.quality.sampledAt ?? new Date().toISOString(),
       }
     : null;
+  const qualityReport = input.qualityReport || null;
+  const timeline = input.timeline || null;
 
   await platform
     .recordFailureDiagnostic({
@@ -295,6 +301,8 @@ export async function endVoiceTestSession(input: {
         durationSec: input.durationSec ?? null,
         conversationId: input.conversationId ?? null,
         quality,
+        qualityReport,
+        timeline,
       },
     })
     .catch(() => undefined);
@@ -324,6 +332,8 @@ export async function endVoiceTestSession(input: {
               test: true,
               durationSec: input.durationSec ?? null,
               ...(quality ? { webrtcQuality: quality } : {}),
+              ...(qualityReport ? { voiceQualityReport: qualityReport } : {}),
+              ...(timeline ? { mediaTimeline: timeline } : {}),
             } as object,
           },
         })
@@ -344,6 +354,8 @@ export async function endVoiceTestSession(input: {
               test: true,
               durationSec: input.durationSec ?? null,
               ...(quality ? { webrtcQuality: quality } : {}),
+              ...(qualityReport ? { voiceQualityReport: qualityReport } : {}),
+              ...(timeline ? { mediaTimeline: timeline } : {}),
             } as object,
           },
         })
@@ -382,6 +394,8 @@ export async function endVoiceTestSession(input: {
     transcript,
     labeledTest: true,
     quality,
+    qualityReport,
+    timeline,
   };
 }
 

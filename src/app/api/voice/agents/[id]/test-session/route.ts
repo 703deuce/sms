@@ -60,6 +60,8 @@ export async function PATCH(
       error?: string | null;
       action?: string;
       quality?: Record<string, unknown> | null;
+      qualityReport?: Record<string, unknown> | null;
+      timeline?: Record<string, unknown> | null;
     };
     if (!body.sessionId) {
       return NextResponse.json({ error: "sessionId required" }, { status: 400 });
@@ -83,6 +85,8 @@ export async function PATCH(
       conversationId: body.conversationId,
       error: body.error,
       quality: body.quality as Parameters<typeof endVoiceTestSession>[0]["quality"],
+      qualityReport: body.qualityReport ?? null,
+      timeline: body.timeline ?? null,
     });
     return NextResponse.json({ data });
   } catch (err) {

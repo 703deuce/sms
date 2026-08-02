@@ -627,7 +627,7 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
             )}
             </div>
             <div>
-              <Label>Greeting</Label>
+              <Label>AI greeting</Label>
               <Textarea
                 rows={2}
                 value={greeting}
@@ -638,7 +638,20 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
                 }
                 placeholder="Thank you for calling. How can I help you today?"
               />
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                Spoken by the AI after the media path is ready (and after any startup mask).
+              </p>
             </div>
+            <StartupGreetingEditor
+              value={
+                (cfg.callHandling?.startupGreeting || {}) as Record<string, unknown>
+              }
+              onChange={(startupGreeting) =>
+                updateConfig({
+                  callHandling: { ...cfg.callHandling, startupGreeting },
+                })
+              }
+            />
             <div>
               <Label>Purpose</Label>
               <Textarea
@@ -1962,6 +1975,126 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
           </Card>
         ) : null}
       </div>
+    </div>
+  );
+}
+
+/** Pre-AI call mask — hides media setup behind a short professional line. */
+function StartupGreetingEditor({
+  value,
+  onChange,
+}: {
+  value: Record<string, unknown>;
+  onChange: (next: Record<string, unknown>) => void;
+}) {
+  const enabled = value.enabled !== false && value.mode !== "none";
+  const mode = String(value.mode || "tts");
+  const text = String(value.text || "Thank you for calling.");
+  const audioUrl = String(value.audioUrl || "");
+  const delayMs = value.delayMs === undefined || value.delayMs === "auto" ? "auto" : String(value.delayMs);
+  const handOffWhenReady = value.handOffWhenReady !== false;
+
+  function patch(partial: Record<string, unknown>) {
+    onChange({
+      enabled,
+      mode,
+      text,
+      audioUrl,
+      delayMs: value.delayMs === undefined ? "auto" : value.delayMs,
+      handOffWhenReady,
+      ...partial,
+    });
+  }
+
+  return (
+    <div className="space-y-3 rounded border border-border p-3">
+      <div>
+        <p className="text-sm font-medium">Startup greeting (call mask)</p>
+        <p className="mt-0.5 text-[11px] text-muted-foreground">
+          Plays the instant the call is answered so callers never hear WebRTC/media
+          initialization. AI takes over when ready.
+        </p>
+      </div>
+      <label className="flex items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={enabled}
+          onChange={(e) =>
+            patch({
+              enabled: e.target.checked,
+              mode: e.target.checked ? (mode === "none" ? "tts" : mode) : "none",
+            })
+          }
+        />
+        Greeting enabled
+      </label>
+      {enabled ? (
+        <>
+          <div>
+            <Label>Greeting type</Label>
+            <select
+              className="mt-1 w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm"
+              value={mode}
+              onChange={(e) => patch({ mode: e.target.value })}
+            >
+              <option value="tts">Text-to-speech (short mask)</option>
+              <option value="audio_url">Upload / audio URL (MP3/WAV)</option>
+              <option value="ai">AI-generated only (no pre-mask)</option>
+              <option value="none">None</option>
+            </select>
+          </div>
+          {mode === "tts" ? (
+            <div>
+              <Label>Mask text</Label>
+              <Input
+                value={text}
+                onChange={(e) => patch({ text: e.target.value })}
+                placeholder="Thank you for calling."
+              />
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                Keep it short (0.5–2s). Example: “Thank you for calling.”
+              </p>
+            </div>
+          ) : null}
+          {mode === "audio_url" ? (
+            <div>
+              <Label>Audio URL</Label>
+              <Input
+                value={audioUrl}
+                onChange={(e) => patch({ audioUrl: e.target.value })}
+                placeholder="https://…/greeting.mp3"
+              />
+            </div>
+          ) : null}
+          <div>
+            <Label>Greeting delay</Label>
+            <select
+              className="mt-1 w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm"
+              value={delayMs}
+              onChange={(e) =>
+                patch({
+                  delayMs:
+                    e.target.value === "auto" ? "auto" : Number(e.target.value),
+                })
+              }
+            >
+              <option value="auto">Auto (recommended)</option>
+              <option value="800">0.8 s</option>
+              <option value="1200">1.2 s</option>
+              <option value="2000">2.0 s</option>
+              <option value="3000">3.0 s</option>
+            </select>
+          </div>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={handOffWhenReady}
+              onChange={(e) => patch({ handOffWhenReady: e.target.checked })}
+            />
+            Hand off when AI ready (wait for mask, then start assistant)
+          </label>
+        </>
+      ) : null}
     </div>
   );
 }

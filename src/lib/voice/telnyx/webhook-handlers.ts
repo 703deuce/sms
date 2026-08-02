@@ -494,6 +494,16 @@ export async function processVoiceWebhookEvent(input: {
           direction: call.direction,
           overrides: storedVars,
         });
+        const { parseVoiceAgentConfig } = await import("../types");
+        const { playStartupGreetingMask } = await import("../startup-greeting-runtime");
+        const cfg = parseVoiceAgentConfig(agent.draftConfig);
+        const maskResult = await playStartupGreetingMask({
+          workspaceId,
+          callId: call.id,
+          callControlId: controlId,
+          config: cfg,
+        });
+        const aiHandoffAt = Date.now();
         try {
           await startAiAssistantOnCall({
             callControlId: controlId,
@@ -516,6 +526,21 @@ export async function processVoiceWebhookEvent(input: {
             message: err instanceof Error ? err.message : String(err),
           }).catch(() => undefined);
         }
+        await prisma.voiceCallEvent
+          .create({
+            data: {
+              workspaceId,
+              callId: call.id,
+              eventType: "media.ai_assistant_start",
+              payload: {
+                at: aiHandoffAt,
+                startupMask: maskResult,
+                transcodesEstimate: 1,
+                path: "answered_webhook",
+              } as object,
+            },
+          })
+          .catch(() => undefined);
         await startCallRecording(controlId);
         await startCallTranscription(controlId);
         const { resolveAiVersionStamp } = await import("../platform/admission");
@@ -537,6 +562,11 @@ export async function processVoiceWebhookEvent(input: {
               assistantVersionId: versionStamp.assistantVersionId,
               canaryVersionId: versionStamp.canaryVersionId,
               canaryActive: versionStamp.canaryActive,
+              mediaPipeline: {
+                aiHandoffAt,
+                startupMask: maskResult,
+                transcodesEstimate: 1,
+              },
             } as object,
           },
         });

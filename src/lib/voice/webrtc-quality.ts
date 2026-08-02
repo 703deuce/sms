@@ -14,6 +14,7 @@ export type WebrtcQualitySnapshot = {
   negotiatedCodec: string | null;
   preferredCodec: string | null;
   opusNegotiated: boolean | null;
+  sampleRateHz: number | null;
   mos: number | null;
   mosLabel: string | null;
   connectionGrade: ConnectionGrade;
@@ -26,10 +27,20 @@ export type WebrtcQualitySnapshot = {
   inboundAudioLevel: number | null;
   iceState: string | null;
   connectionState: string | null;
+  dtlsState: string | null;
   mediaReadyAtMs: number | null;
   firstAudioAtMs: number | null;
+  firstInboundPacketAtMs: number | null;
+  firstOutboundPacketAtMs: number | null;
+  firstCleanAudioAtMs: number | null;
+  iceConnectedAtMs: number | null;
+  dtlsConnectedAtMs: number | null;
+  mediaFlowingAtMs: number | null;
+  remoteUnmutedAtMs: number | null;
   greetingGateMs: number | null;
   stabilizeMs: number | null;
+  /** Browser Opus↔Telnyx AI is typically one intentional hop; PSTN adds carrier hops. */
+  transcodesEstimate: number | null;
   inputDeviceLabel: string | null;
   outputDeviceLabel: string | null;
   inputLooksBluetooth: boolean;
@@ -396,15 +407,20 @@ export function parseRtcStatsReport(
   let outboundBytes: number | null = null;
   let inboundAudioLevel: number | null = null;
   let negotiatedCodec: string | null = prev?.negotiatedCodec ?? null;
+  let sampleRateHz: number | null = prev?.sampleRateHz ?? null;
   let iceState: string | null = prev?.iceState ?? null;
   let connectionState: string | null = prev?.connectionState ?? null;
+  let dtlsState: string | null = prev?.dtlsState ?? null;
   let targetBitrate: number | null = null;
-  const codecMap = new Map<string, string>();
+  const codecMap = new Map<string, { mime: string; clockRate?: number }>();
 
   report.forEach((s) => {
     const row = s as Record<string, unknown>;
     if (row.type === "codec" && row.id && row.mimeType) {
-      codecMap.set(String(row.id), String(row.mimeType));
+      codecMap.set(String(row.id), {
+        mime: String(row.mimeType),
+        clockRate: typeof row.clockRate === "number" ? row.clockRate : undefined,
+      });
     }
   });
 
@@ -420,6 +436,7 @@ export function parseRtcStatsReport(
     }
     if (row.type === "transport") {
       if (typeof row.iceState === "string") iceState = row.iceState;
+      if (typeof row.dtlsState === "string") dtlsState = row.dtlsState;
     }
     if (row.type === "inbound-rtp" && (row.kind === "audio" || row.mediaType === "audio")) {
       if (typeof row.jitter === "number") jitterMs = Math.round(row.jitter * 1000);
@@ -428,14 +445,23 @@ export function parseRtcStatsReport(
       if (typeof row.bytesReceived === "number") inboundBytes = row.bytesReceived;
       if (typeof row.audioLevel === "number") inboundAudioLevel = row.audioLevel;
       if (row.codecId && codecMap.has(String(row.codecId))) {
-        negotiatedCodec = codecMap.get(String(row.codecId)) || negotiatedCodec;
+        const c = codecMap.get(String(row.codecId))!;
+        negotiatedCodec = c.mime || negotiatedCodec;
+        if (c.clockRate) sampleRateHz = c.clockRate;
       }
     }
     if (row.type === "outbound-rtp" && (row.kind === "audio" || row.mediaType === "audio")) {
       if (typeof row.bytesSent === "number") outboundBytes = row.bytesSent;
       if (typeof row.targetBitrate === "number") targetBitrate = row.targetBitrate;
       if (!negotiatedCodec && row.codecId && codecMap.has(String(row.codecId))) {
-        negotiatedCodec = codecMap.get(String(row.codecId)) || negotiatedCodec;
+        const c = codecMap.get(String(row.codecId))!;
+        negotiatedCodec = c.mime || negotiatedCodec;
+        if (c.clockRate) sampleRateHz = c.clockRate;
+      }
+    }
+    if (row.type === "media-source" && (row.kind === "audio" || row.mediaType === "audio")) {
+      if (typeof row.audioLevel === "number" && inboundAudioLevel == null) {
+        // local mic level — ignore for inbound clean detection
       }
     }
   });
@@ -488,6 +514,7 @@ export function parseRtcStatsReport(
 
   return {
     negotiatedCodec,
+    sampleRateHz,
     opusNegotiated,
     mos,
     mosLabel: mosLabel(mos),
@@ -501,9 +528,43 @@ export function parseRtcStatsReport(
     inboundAudioLevel,
     iceState,
     connectionState,
+    dtlsState,
     highQualityAudio,
     warnings,
+    // Browser WebRTC → Telnyx AI: one intentional Opus↔PCM hop on the AI edge.
+    transcodesEstimate: prev?.transcodesEstimate ?? 1,
   };
+}
+
+/**
+ * Heuristic: inbound bytes growing, level present but not clipped, ICE/DTLS up.
+ * Used to unmute remote audio only after the static/settle window.
+ */
+export function isCleanInboundAudio(input: {
+  inboundBytes: number | null;
+  prevInboundBytes: number | null;
+  inboundAudioLevel: number | null;
+  iceState: string | null;
+  connectionState: string | null;
+  dtlsState: string | null;
+}): boolean {
+  const iceOk =
+    input.iceState === "connected" ||
+    input.iceState === "completed" ||
+    input.connectionState === "connected";
+  const dtlsOk =
+    !input.dtlsState ||
+    input.dtlsState === "connected" ||
+    input.dtlsState === "completed";
+  if (!iceOk || !dtlsOk) return false;
+  const growing =
+    input.inboundBytes != null &&
+    input.prevInboundBytes != null &&
+    input.inboundBytes > input.prevInboundBytes;
+  const hasBytes = (input.inboundBytes || 0) > 500;
+  const level = input.inboundAudioLevel;
+  const notClipped = level == null || (level > 0.001 && level < 0.98);
+  return (growing || hasBytes) && notClipped;
 }
 
 export async function getPeerConnectionStats(

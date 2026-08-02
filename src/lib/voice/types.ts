@@ -174,6 +174,17 @@ export const DEFAULT_VOICE_CONFIG: VoiceAgentConfig = {
     temperature: 0.4,
     maxTokens: 1024,
   },
+  callHandling: {
+    greeting: "Thank you for calling. How can I help you today?",
+    startupGreeting: {
+      enabled: true,
+      mode: "tts",
+      text: "Thank you for calling.",
+      audioUrl: "",
+      delayMs: "auto",
+      handOffWhenReady: true,
+    },
+  },
   postCall: {
     scoringRules: [
       { field: "service_requested", points: 25 },
@@ -220,6 +231,16 @@ export function parseVoiceAgentConfig(raw: unknown): VoiceAgentConfig {
     voiceLanguage: { ...base.voiceLanguage, ...obj.voiceLanguage },
     transcription: { ...base.transcription, ...obj.transcription },
     model: { ...base.model, ...obj.model },
+    callHandling: {
+      ...(base.callHandling || {}),
+      ...(obj.callHandling || {}),
+      startupGreeting: {
+        ...((base.callHandling as { startupGreeting?: object } | undefined)
+          ?.startupGreeting || {}),
+        ...((obj.callHandling as { startupGreeting?: object } | undefined)
+          ?.startupGreeting || {}),
+      },
+    },
     multiParty: { ...base.multiParty, ...obj.multiParty },
     postCall: { ...base.postCall, ...obj.postCall },
   };

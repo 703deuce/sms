@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
 import { Input, Label } from "@/components/ui/input";
 import { toErrorMessage } from "@/lib/errors";
+import { VoiceQualityReportCard } from "@/components/voice/voice-quality-report-card";
 import {
   HIGH_QUALITY_AUDIO_DEFAULTS,
   MEDIA_STABILIZE,
@@ -12,12 +13,19 @@ import {
   audioConstraintsForSettings,
   connectionGradeLabel,
   getPeerConnectionStats,
+  isCleanInboundAudio,
   looksLikeBluetooth,
   parseRtcStatsReport,
   pickPreferredOpusCodec,
   type PreferredAudioCodec,
   type WebrtcQualitySnapshot,
 } from "@/lib/voice/webrtc-quality";
+import {
+  buildVoiceQualityReport,
+  emptyTimeline,
+  type MediaTimeline,
+  type VoiceQualityReport,
+} from "@/lib/voice/voice-quality-report";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 type CallPhase =
@@ -43,6 +51,7 @@ type TestResult = {
   transcript: Array<{ role: string; content: string }>;
   synced: boolean | null;
   quality: WebrtcQualitySnapshot | null;
+  qualityReport: VoiceQualityReport | null;
 };
 
 type CallHandle = {
@@ -62,6 +71,7 @@ const emptyQuality = (highQualityAudio = true): WebrtcQualitySnapshot => ({
   negotiatedCodec: null,
   preferredCodec: null,
   opusNegotiated: null,
+  sampleRateHz: null,
   mos: null,
   mosLabel: null,
   connectionGrade: "unknown",
@@ -74,10 +84,19 @@ const emptyQuality = (highQualityAudio = true): WebrtcQualitySnapshot => ({
   inboundAudioLevel: null,
   iceState: null,
   connectionState: null,
+  dtlsState: null,
   mediaReadyAtMs: null,
   firstAudioAtMs: null,
+  firstInboundPacketAtMs: null,
+  firstOutboundPacketAtMs: null,
+  firstCleanAudioAtMs: null,
+  iceConnectedAtMs: null,
+  dtlsConnectedAtMs: null,
+  mediaFlowingAtMs: null,
+  remoteUnmutedAtMs: null,
   greetingGateMs: null,
   stabilizeMs: null,
+  transcodesEstimate: 1,
   inputDeviceLabel: null,
   outputDeviceLabel: null,
   inputLooksBluetooth: false,
@@ -144,6 +163,8 @@ export function AgentBrowserCall({
   const [highQualityAudio, setHighQualityAudio] = useState(true);
   const highQualityRef = useRef(true);
   const statsSampleAtRef = useRef<number | null>(null);
+  const timelineRef = useRef<MediaTimeline>(emptyTimeline());
+  const remoteMutedUntilCleanRef = useRef(true);
 
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
   const clientRef = useRef<{
@@ -326,6 +347,15 @@ export function AgentBrowserCall({
           opts?.conversationId ?? conversationIdRef.current ?? null,
         error: opts?.error ?? null,
         quality: qualityRef.current,
+        qualityReport: buildVoiceQualityReport({
+          quality: qualityRef.current,
+          timeline: timelineRef.current,
+          voiceModel: voiceLabel || null,
+          channel: "browser_webrtc",
+          sampleRateHz: qualityRef.current.sampleRateHz,
+          transcodes: qualityRef.current.transcodesEstimate ?? 1,
+        }),
+        timeline: timelineRef.current,
       }),
     }).catch(() => null);
     if (!res) return null;
@@ -402,13 +432,25 @@ export function AgentBrowserCall({
     if (mountedRef.current) setQuality(next);
   }
 
+  function setRemoteMuted(muted: boolean) {
+    const el = remoteAudioRef.current;
+    if (!el) return;
+    el.muted = muted;
+  }
+
   async function waitForMediaReady(call: CallHandle, connectStartedAt: number) {
     const hq = highQualityRef.current;
     const deadline = Date.now() + 12000;
     let sawInbound = false;
     let iceState: string | null = null;
     let connectionState: string | null = null;
+    let dtlsState: string | null = null;
+    let prevInboundBytes: number | null = null;
     const waitStarted = Date.now();
+
+    // Hide startup static — keep Telnyx remote audio muted until clean.
+    remoteMutedUntilCleanRef.current = true;
+    setRemoteMuted(true);
 
     while (Date.now() < deadline && mountedRef.current) {
       const peer = call.peer?.instance as RTCPeerConnection | undefined;
@@ -426,21 +468,64 @@ export function AgentBrowserCall({
         statsSampleAtRef.current = Date.now();
         iceState = parsed.iceState || iceState;
         connectionState = parsed.connectionState || connectionState;
+        dtlsState = parsed.dtlsState || dtlsState;
+
+        const elapsed = Date.now() - connectStartedAt;
+        if (
+          (iceState === "connected" || iceState === "completed") &&
+          timelineRef.current.iceConnectedAtMs == null
+        ) {
+          timelineRef.current.iceConnectedAtMs = elapsed;
+        }
+        if (
+          (dtlsState === "connected" || dtlsState === "completed") &&
+          timelineRef.current.dtlsConnectedAtMs == null
+        ) {
+          timelineRef.current.dtlsConnectedAtMs = elapsed;
+        }
+        if (
+          (parsed.inboundBytes || 0) > 0 &&
+          timelineRef.current.firstInboundPacketAtMs == null
+        ) {
+          timelineRef.current.firstInboundPacketAtMs = elapsed;
+        }
+        if (
+          (parsed.outboundBytes || 0) > 0 &&
+          timelineRef.current.firstOutboundPacketAtMs == null
+        ) {
+          timelineRef.current.firstOutboundPacketAtMs = elapsed;
+        }
+        if (
+          ((parsed.inboundBytes || 0) > 0 || (parsed.outboundBytes || 0) > 0) &&
+          timelineRef.current.mediaFlowingAtMs == null
+        ) {
+          timelineRef.current.mediaFlowingAtMs = elapsed;
+        }
+
         patchQuality({
           ...parsed,
           preferredCodec: preferredOpusRef.current?.mimeType || "audio/opus",
           iceState,
           connectionState,
+          dtlsState,
+          iceConnectedAtMs: timelineRef.current.iceConnectedAtMs,
+          dtlsConnectedAtMs: timelineRef.current.dtlsConnectedAtMs,
+          mediaFlowingAtMs: timelineRef.current.mediaFlowingAtMs,
+          firstInboundPacketAtMs: timelineRef.current.firstInboundPacketAtMs,
+          firstOutboundPacketAtMs: timelineRef.current.firstOutboundPacketAtMs,
           inputDeviceLabel: selectedMicLabel,
           outputDeviceLabel: selectedSpeakerLabel,
           inputLooksBluetooth: micIsBluetooth,
           outputLooksBluetooth: speakerIsBluetooth,
           highQualityAudio: hq,
+          transcodesEstimate: 1,
         });
         if ((parsed.inboundBytes || 0) > 0 || (parsed.inboundAudioLevel || 0) > 0) {
           sawInbound = true;
           if (qualityRef.current.firstAudioAtMs == null) {
-            patchQuality({ firstAudioAtMs: Date.now() - connectStartedAt });
+            const firstAudioAtMs = elapsed;
+            timelineRef.current.firstAiAudioAtMs = firstAudioAtMs;
+            patchQuality({ firstAudioAtMs });
           }
         }
         if (
@@ -451,6 +536,7 @@ export function AgentBrowserCall({
         ) {
           break;
         }
+        prevInboundBytes = parsed.inboundBytes ?? prevInboundBytes;
       }
       await new Promise((r) => setTimeout(r, 100));
     }
@@ -473,10 +559,61 @@ export function AgentBrowserCall({
     if (stabilizeMs > 0) {
       await new Promise((r) => setTimeout(r, stabilizeMs));
     }
+
+    // Extra clean-audio poll (cap ~1.5s) before unmuting remote AI audio.
+    const cleanDeadline = Date.now() + (hq ? 1500 : 300);
+    while (Date.now() < cleanDeadline && mountedRef.current) {
+      const report = await getPeerConnectionStats(call);
+      if (report) {
+        const parsed = parseRtcStatsReport(report, qualityRef.current, {
+          highQualityAudio: hq,
+          prevSampleAtMs: statsSampleAtRef.current ?? undefined,
+        });
+        statsSampleAtRef.current = Date.now();
+        const clean = isCleanInboundAudio({
+          inboundBytes: parsed.inboundBytes ?? null,
+          prevInboundBytes,
+          inboundAudioLevel: parsed.inboundAudioLevel ?? null,
+          iceState: parsed.iceState || iceState,
+          connectionState: parsed.connectionState || connectionState,
+          dtlsState: parsed.dtlsState || dtlsState,
+        });
+        prevInboundBytes = parsed.inboundBytes ?? prevInboundBytes;
+        if (clean || (parsed.inboundBytes || 0) > 2000) {
+          const firstCleanAudioAtMs = Date.now() - connectStartedAt;
+          timelineRef.current.firstCleanAudioAtMs = firstCleanAudioAtMs;
+          patchQuality({ firstCleanAudioAtMs, ...parsed });
+          break;
+        }
+      }
+      await new Promise((r) => setTimeout(r, 80));
+    }
+
+    if (timelineRef.current.firstCleanAudioAtMs == null) {
+      timelineRef.current.firstCleanAudioAtMs = Date.now() - connectStartedAt;
+      patchQuality({ firstCleanAudioAtMs: timelineRef.current.firstCleanAudioAtMs });
+    }
+
+    const remoteUnmutedAtMs = Date.now() - connectStartedAt;
+    timelineRef.current.remoteUnmutedAtMs = remoteUnmutedAtMs;
+    remoteMutedUntilCleanRef.current = false;
+    setRemoteMuted(false);
+    void remoteAudioRef.current?.play().catch(() => undefined);
+
     patchQuality({
-      greetingGateMs: Date.now() - connectStartedAt,
+      greetingGateMs: remoteUnmutedAtMs,
       mediaReadyAtMs,
       stabilizeMs,
+      remoteUnmutedAtMs,
+      firstCleanAudioAtMs: timelineRef.current.firstCleanAudioAtMs,
+      iceConnectedAtMs: timelineRef.current.iceConnectedAtMs,
+      dtlsConnectedAtMs: timelineRef.current.dtlsConnectedAtMs,
+      mediaFlowingAtMs: timelineRef.current.mediaFlowingAtMs,
+      firstInboundPacketAtMs: timelineRef.current.firstInboundPacketAtMs,
+      firstOutboundPacketAtMs: timelineRef.current.firstOutboundPacketAtMs,
+      firstAudioAtMs:
+        qualityRef.current.firstAudioAtMs ?? timelineRef.current.firstAiAudioAtMs,
+      transcodesEstimate: 1,
     });
     mediaReadyRef.current = true;
   }
@@ -493,6 +630,10 @@ export function AgentBrowserCall({
     setQuality(qualityRef.current);
     mediaReadyRef.current = false;
     statsSampleAtRef.current = null;
+    timelineRef.current = emptyTimeline();
+    timelineRef.current.connectStartedAtMs = 0;
+    remoteMutedUntilCleanRef.current = true;
+    setRemoteMuted(true);
 
     if (!telnyxAssistantId && !assistantId) {
       setError("Build & test first so Telnyx can sync the assistant.");
@@ -710,6 +851,8 @@ export function AgentBrowserCall({
       const peer = call.peer?.instance as RTCPeerConnection | undefined;
       applyHighQualitySenderPrefs(peer, hq);
 
+      // Keep remote muted until waitForMediaReady marks audio clean.
+      setRemoteMuted(true);
       if (remoteAudioRef.current) {
         void remoteAudioRef.current.play().catch(() => undefined);
       }
@@ -788,6 +931,18 @@ export function AgentBrowserCall({
     const cid = conversationIdRef.current;
     const sid = sessionIdRef.current;
     const finalQuality = { ...qualityRef.current };
+    const qualityReport = buildVoiceQualityReport({
+      quality: finalQuality,
+      timeline: timelineRef.current,
+      voiceModel: voiceLabel || null,
+      channel: "browser_webrtc",
+      sampleRateHz: finalQuality.sampleRateHz,
+      transcodes: finalQuality.transcodesEstimate ?? 1,
+      notes: [
+        "Browser path prefers a single Opus↔PCM hop at Telnyx AI — avoid extra local encode loops.",
+        ...(finalQuality.warnings || []).map((w) => w.message),
+      ],
+    });
     const ended = await endSession({
       error: failedMessage || null,
       conversationId: cid,
@@ -803,6 +958,7 @@ export function AgentBrowserCall({
       transcript: ended?.transcript || [],
       synced: lastSynced,
       quality: finalQuality,
+      qualityReport,
     });
     sessionIdRef.current = null;
     setSessionId(null);
@@ -1186,7 +1342,9 @@ export function AgentBrowserCall({
               Voice: {result.voiceDisplayName}
             </p>
           ) : null}
-          {result.quality ? (
+          {result.qualityReport ? (
+            <VoiceQualityReportCard report={result.qualityReport} />
+          ) : result.quality ? (
             <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
               <ConnectionBadge grade={result.quality.connectionGrade} />
               <span>

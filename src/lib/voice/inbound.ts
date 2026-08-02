@@ -13,6 +13,7 @@ import {
   startCallTranscription,
 } from "./telnyx/assistant-sync";
 import { parseVoiceAgentConfig } from "./types";
+import { playStartupGreetingMask } from "./startup-greeting-runtime";
 
 type InboundInput = {
   workspaceId: string;
@@ -124,9 +125,19 @@ async function startAiOnInboundCall(input: {
   }
 
   if (isTelnyxVoiceConfigured() && input.telnyxCallControlId) {
+    const answerAt = Date.now();
     await telnyxRequest(`/calls/${input.telnyxCallControlId}/actions/answer`, {
       method: "POST",
       body: {},
+    }).catch(() => undefined);
+
+    await prisma.voiceCallEvent.create({
+      data: {
+        workspaceId: input.workspaceId,
+        callId: input.callId,
+        eventType: "media.answer_sent",
+        payload: { at: answerAt } as object,
+      },
     }).catch(() => undefined);
 
     await speakRecordingDisclosure(
@@ -137,6 +148,14 @@ async function startAiOnInboundCall(input: {
     );
 
     if (agent.telnyxAssistantId) {
+      const cfg = parseVoiceAgentConfig(agent.draftConfig);
+      const maskResult = await playStartupGreetingMask({
+        workspaceId: input.workspaceId,
+        callId: input.callId,
+        callControlId: input.telnyxCallControlId,
+        config: cfg,
+      });
+
       const callRow = await prisma.voiceCall.findUnique({ where: { id: input.callId } });
       const { resolveCallDynamicVariables } = await import("./dynamic-variables");
       const dynamicVariables = await resolveCallDynamicVariables({
@@ -154,6 +173,8 @@ async function startAiOnInboundCall(input: {
       const personalized = input.contactName
         ? `Hi ${input.contactName}, thanks for calling.`
         : undefined;
+
+      const aiHandoffAt = Date.now();
       await startAiAssistantOnCall({
         callControlId: input.telnyxCallControlId,
         assistantId: agent.telnyxAssistantId,
@@ -165,6 +186,21 @@ async function startAiOnInboundCall(input: {
           agentId: agent.id,
         },
       }).catch((err) => console.error("[voice/inbound] ai_assistant_start", err));
+
+      await prisma.voiceCallEvent.create({
+        data: {
+          workspaceId: input.workspaceId,
+          callId: input.callId,
+          eventType: "media.ai_assistant_start",
+          payload: {
+            at: aiHandoffAt,
+            answerToAiMs: aiHandoffAt - answerAt,
+            startupMask: maskResult,
+            // Ideal path: PSTN ↔ Telnyx ↔ PCM ↔ AI (no extra app-side encodes).
+            transcodesEstimate: 1,
+          } as object,
+        },
+      }).catch(() => undefined);
 
       await startCallRecording(input.telnyxCallControlId);
       await startCallTranscription(input.telnyxCallControlId);
@@ -192,6 +228,13 @@ async function startAiOnInboundCall(input: {
             assistantVersionId: versionStamp.assistantVersionId,
             canaryVersionId: versionStamp.canaryVersionId,
             canaryActive: versionStamp.canaryActive,
+            mediaPipeline: {
+              answerAt,
+              aiHandoffAt,
+              answerToAiMs: aiHandoffAt - answerAt,
+              startupMask: maskResult,
+              transcodesEstimate: 1,
+            },
           } as object,
         },
       });
