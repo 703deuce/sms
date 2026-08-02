@@ -69,7 +69,8 @@ export async function upsertObjectMapping(input: {
   externalDeletedAt?: Date | null;
   metadata?: Record<string, unknown>;
 }) {
-  return getPrisma().crmObjectMapping.upsert({
+  const prisma = getPrisma();
+  const byInternal = await prisma.crmObjectMapping.findUnique({
     where: {
       workspaceId_provider_objectType_internalId: {
         workspaceId: input.workspaceId,
@@ -78,47 +79,119 @@ export async function upsertObjectMapping(input: {
         internalId: input.internalId,
       },
     },
-    create: {
-      workspaceId: input.workspaceId,
-      provider: input.provider,
-      objectType: input.objectType,
-      internalId: input.internalId,
-      externalId: input.externalId,
-      externalUrl: input.externalUrl || null,
-      parentExternalId: input.parentExternalId || null,
-      fingerprint: input.fingerprint || null,
-      syncHash: input.syncHash || null,
-      syncStatus: input.syncStatus || "synced",
-      syncDirection: input.syncDirection || "bidirectional",
-      lastCrmModifiedAt: input.lastCrmModifiedAt || null,
-      lastInternalModifiedAt: input.lastInternalModifiedAt || null,
-      externalDeletedAt: input.externalDeletedAt || null,
-      metadataJson: (input.metadata || undefined) as object | undefined,
-      lastSyncedAt: new Date(),
-    },
-    update: {
-      externalId: input.externalId,
-      externalUrl: input.externalUrl || null,
-      fingerprint: input.fingerprint || null,
-      lastSyncedAt: new Date(),
-      syncVersion: { increment: 1 },
-      ...(input.parentExternalId !== undefined
-        ? { parentExternalId: input.parentExternalId }
-        : {}),
-      ...(input.syncHash !== undefined ? { syncHash: input.syncHash } : {}),
-      ...(input.syncStatus !== undefined ? { syncStatus: input.syncStatus } : {}),
-      ...(input.lastCrmModifiedAt !== undefined
-        ? { lastCrmModifiedAt: input.lastCrmModifiedAt }
-        : {}),
-      ...(input.lastInternalModifiedAt !== undefined
-        ? { lastInternalModifiedAt: input.lastInternalModifiedAt }
-        : {}),
-      ...(input.externalDeletedAt !== undefined
-        ? { externalDeletedAt: input.externalDeletedAt }
-        : {}),
-      ...(input.metadata ? { metadataJson: input.metadata as object } : {}),
+  });
+  const byExternal = await prisma.crmObjectMapping.findUnique({
+    where: {
+      workspaceId_provider_objectType_externalId: {
+        workspaceId: input.workspaceId,
+        provider: input.provider,
+        objectType: input.objectType,
+        externalId: input.externalId,
+      },
     },
   });
+
+  const updateData = {
+    externalId: input.externalId,
+    internalId: input.internalId,
+    externalUrl: input.externalUrl || null,
+    fingerprint: input.fingerprint || null,
+    lastSyncedAt: new Date(),
+    syncVersion: { increment: 1 },
+    ...(input.parentExternalId !== undefined
+      ? { parentExternalId: input.parentExternalId }
+      : {}),
+    ...(input.syncHash !== undefined ? { syncHash: input.syncHash } : {}),
+    ...(input.syncStatus !== undefined ? { syncStatus: input.syncStatus } : {}),
+    ...(input.lastCrmModifiedAt !== undefined
+      ? { lastCrmModifiedAt: input.lastCrmModifiedAt }
+      : {}),
+    ...(input.lastInternalModifiedAt !== undefined
+      ? { lastInternalModifiedAt: input.lastInternalModifiedAt }
+      : {}),
+    ...(input.externalDeletedAt !== undefined
+      ? { externalDeletedAt: input.externalDeletedAt }
+      : {}),
+    ...(input.metadata ? { metadataJson: input.metadata as object } : {}),
+  };
+
+  if (byInternal && byExternal && byInternal.id !== byExternal.id) {
+    await prisma.crmObjectMapping.delete({ where: { id: byInternal.id } });
+    return prisma.crmObjectMapping.update({
+      where: { id: byExternal.id },
+      data: updateData,
+    });
+  }
+  if (byInternal) {
+    return prisma.crmObjectMapping.update({
+      where: { id: byInternal.id },
+      data: updateData,
+    });
+  }
+  if (byExternal) {
+    return prisma.crmObjectMapping.update({
+      where: { id: byExternal.id },
+      data: updateData,
+    });
+  }
+
+  try {
+    return await prisma.crmObjectMapping.create({
+      data: {
+        workspaceId: input.workspaceId,
+        provider: input.provider,
+        objectType: input.objectType,
+        internalId: input.internalId,
+        externalId: input.externalId,
+        externalUrl: input.externalUrl || null,
+        parentExternalId: input.parentExternalId || null,
+        fingerprint: input.fingerprint || null,
+        syncHash: input.syncHash || null,
+        syncStatus: input.syncStatus || "synced",
+        syncDirection: input.syncDirection || "bidirectional",
+        lastCrmModifiedAt: input.lastCrmModifiedAt || null,
+        lastInternalModifiedAt: input.lastInternalModifiedAt || null,
+        externalDeletedAt: input.externalDeletedAt || null,
+        metadataJson: (input.metadata || undefined) as object | undefined,
+        lastSyncedAt: new Date(),
+      },
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    const unique =
+      /unique constraint|duplicate key|P2002/i.test(msg) ||
+      (typeof err === "object" &&
+        err !== null &&
+        "code" in err &&
+        (err as { code?: string }).code === "P2002");
+    if (!unique) throw err;
+    const row =
+      (await prisma.crmObjectMapping.findUnique({
+        where: {
+          workspaceId_provider_objectType_internalId: {
+            workspaceId: input.workspaceId,
+            provider: input.provider,
+            objectType: input.objectType,
+            internalId: input.internalId,
+          },
+        },
+      })) ||
+      (await prisma.crmObjectMapping.findUnique({
+        where: {
+          workspaceId_provider_objectType_externalId: {
+            workspaceId: input.workspaceId,
+            provider: input.provider,
+            objectType: input.objectType,
+            externalId: input.externalId,
+          },
+        },
+      }));
+    if (!row) throw err;
+    return prisma.crmObjectMapping.update({
+      where: { id: row.id },
+      data: updateData,
+    });
+  }
 }
 
 export async function listFieldMappings(workspaceId: string, provider: CrmProviderId) {

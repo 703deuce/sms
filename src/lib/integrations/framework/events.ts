@@ -49,15 +49,46 @@ export async function publishNormalizedEvent(event: NormalizedEvent) {
     contactId = matched?.contactId || null;
   }
 
+  // Only map contactId when the external object itself is contact-like.
+  // Appointment/order/form external IDs are bound later in product-persist to
+  // VoiceAppointment / FormSubmission / etc. Mapping contactId under those
+  // object types collides on unique (workspace, provider, objectType, externalId).
   if (contactId && event.externalObjectId) {
-    await upsertExternalMapping({
-      workspaceId: event.workspaceId,
-      provider: event.provider,
-      objectType: event.externalObjectType,
-      internalId: contactId,
-      externalId: event.externalObjectId,
-      metadata: { eventType: event.eventType },
-    });
+    const t = String(event.externalObjectType || "");
+    const contactLike = new Set([
+      "contact",
+      "lead",
+      "person",
+      "customer",
+      "ecommerce_customer",
+    ]);
+    if (contactLike.has(t)) {
+      await upsertExternalMapping({
+        workspaceId: event.workspaceId,
+        provider: event.provider,
+        objectType: t,
+        internalId: contactId,
+        externalId: event.externalObjectId,
+        metadata: { eventType: event.eventType },
+      });
+    } else {
+      // Secondary invitee/contact binding when the payload carries a distinct
+      // invitee URI (Calendly) — keep objectType=contact so it cannot collide
+      // with the appointment mapping written by product-persist.
+      const inviteeUri =
+        (typeof event.payload?.inviteeUri === "string" && event.payload.inviteeUri) ||
+        null;
+      if (inviteeUri) {
+        await upsertExternalMapping({
+          workspaceId: event.workspaceId,
+          provider: event.provider,
+          objectType: "contact",
+          internalId: contactId,
+          externalId: inviteeUri,
+          metadata: { eventType: event.eventType, via: "invitee" },
+        });
+      }
+    }
   }
 
   const row = await prisma.crmWebhookEvent.create({
