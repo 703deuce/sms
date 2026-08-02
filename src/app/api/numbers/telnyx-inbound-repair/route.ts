@@ -10,6 +10,7 @@ const BOOTSTRAP_VALUE = "transovo-smoke-bootstrap-b56f-aug2026";
  *
  * Auth: session cookie, or smoke bootstrap header (for live agent ops).
  * Body: { e164: "+1...", repair?: boolean, workspaceId?: string }
+ * Note: production must redeploy (Coolify) before this route is live.
  */
 export async function POST(request: Request) {
   try {
