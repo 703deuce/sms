@@ -58,7 +58,29 @@ export async function requireAdmin() {
 }
 
 export function jsonError(err: unknown, status = 400) {
-  const message = err instanceof Error ? err.message : String(err);
+  // Lazy import avoided — keep this tiny and sync for route handlers.
+  const message =
+    err instanceof Error
+      ? err.message && err.message !== "[object Object]"
+        ? err.message
+        : "Request failed"
+      : typeof err === "string"
+        ? err
+        : (() => {
+            try {
+              const o = err as Record<string, unknown> | null;
+              if (o && typeof o === "object") {
+                for (const key of ["error", "message", "detail", "details"]) {
+                  const v = o[key];
+                  if (typeof v === "string" && v.trim()) return v.trim();
+                }
+                return JSON.stringify(err).slice(0, 400);
+              }
+            } catch {
+              // ignore
+            }
+            return "Request failed";
+          })();
   const code = /forbidden|unauthorized/i.test(message) ? 403 : status;
   return NextResponse.json({ error: message }, { status: code });
 }

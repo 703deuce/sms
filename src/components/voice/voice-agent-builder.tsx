@@ -8,6 +8,7 @@ import { AgentTestPanel } from "@/components/voice/agent-test-panel";
 import { VoicePicker } from "@/components/voice/voice-picker";
 import type { VoiceAgentConfig } from "@/lib/voice/types";
 import { AGENT_TYPE_LABELS } from "@/lib/voice/types";
+import { toErrorMessage } from "@/lib/errors";
 import { voiceLabel } from "@/lib/voice/telnyx/voices";
 import { cn } from "@/lib/utils";
 import { useCallback, useEffect, useState } from "react";
@@ -143,7 +144,7 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
       fetch("/api/voice/agents"),
     ]);
     const aJson = await aRes.json();
-    if (!aRes.ok) throw new Error(aJson.error || "Failed to load");
+    if (!aRes.ok) throw new Error(toErrorMessage(aJson.error ?? aJson, "Failed to load"));
     setAgent(aJson.data);
     void loadPlatform();
     setPronDictText(
@@ -184,7 +185,7 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
   }, [agentId, loadPlatform]);
 
   useEffect(() => {
-    load().catch((e) => setError(e instanceof Error ? e.message : "Load failed"));
+    load().catch((e) => setError(toErrorMessage(e, "Load failed")));
   }, [load]);
 
   useEffect(() => {
@@ -201,7 +202,7 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
         body: JSON.stringify({ action, agentId, ...extra }),
       });
       const j = await res.json();
-      if (!res.ok) throw new Error(j.error || `Failed ${action}`);
+      if (!res.ok) throw new Error(toErrorMessage(j.error ?? j, `Failed ${action}`));
       if (action === "compare_versions") {
         setCompareResult(j.data || null);
         setPlatformMsg(`compare_versions: ${j.data?.diffCount ?? 0} diffs`);
@@ -211,7 +212,7 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
       await loadPlatform();
       if (action === "sync_versions") await loadRemoteVersions();
     } catch (err) {
-      setPlatformMsg(err instanceof Error ? err.message : String(err));
+      setPlatformMsg(toErrorMessage(err, `${action} failed`));
     } finally {
       setPlatformBusy("");
     }
@@ -246,14 +247,15 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
         }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Save failed");
+      if (!res.ok) throw new Error(toErrorMessage(json.error ?? json, "Save failed"));
       setAgent(json.data);
       setDirty(false);
       setSaveState("saved");
     } catch (err) {
       setSaveState("error");
-      setError(err instanceof Error ? err.message : "Save failed");
-      throw err instanceof Error ? err : new Error("Save failed");
+      const msg = toErrorMessage(err, "Save failed");
+      setError(msg);
+      throw err instanceof Error ? err : new Error(msg);
     } finally {
       setSaving(false);
     }
@@ -273,14 +275,17 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
       });
       const json = await res.json();
       if (!res.ok) {
-        setError(json.error || "Build failed");
-        if (json.issues) setError(`Build blocked: ${JSON.stringify(json.issues)}`);
+        if (json.issues) {
+          setError(`Build blocked: ${JSON.stringify(json.issues)}`);
+        } else {
+          setError(toErrorMessage(json.error ?? json, "Build failed"));
+        }
         return;
       }
       // Stay on the builder — Test Voice Agent is always at the top.
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Build failed");
+      setError(toErrorMessage(err, "Build failed"));
     } finally {
       setSaving(false);
     }
@@ -298,13 +303,16 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
       });
       const json = await res.json();
       if (!res.ok) {
-        setError(json.error || "Deploy failed");
-        if (json.issues) setError(`Deploy blocked: ${JSON.stringify(json.issues)}`);
+        if (json.issues) {
+          setError(`Deploy blocked: ${JSON.stringify(json.issues)}`);
+        } else {
+          setError(toErrorMessage(json.error ?? json, "Deploy failed"));
+        }
         return;
       }
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Deploy failed");
+      setError(toErrorMessage(err, "Deploy failed"));
     } finally {
       setSaving(false);
     }
@@ -318,7 +326,7 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
     });
     const json = await res.json();
     if (!res.ok) {
-      setError(json.error || `${action} failed`);
+      setError(toErrorMessage(json.error ?? json, `${action} failed`));
       return;
     }
     if (action === "duplicate") {
@@ -337,9 +345,9 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
         body: JSON.stringify({ knowledgeBaseIds: selectedKbIds }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Save failed");
+      if (!res.ok) throw new Error(toErrorMessage(json.error ?? json, "Save failed"));
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Knowledge save failed");
+      setError(toErrorMessage(e, "Knowledge save failed"));
     } finally {
       setLinkSaving(false);
     }
@@ -354,9 +362,9 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
         body: JSON.stringify({ toolIds: selectedToolIds }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Save failed");
+      if (!res.ok) throw new Error(toErrorMessage(json.error ?? json, "Save failed"));
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Tools save failed");
+      setError(toErrorMessage(e, "Tools save failed"));
     } finally {
       setLinkSaving(false);
     }

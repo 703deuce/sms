@@ -8,6 +8,7 @@ import {
   type TelnyxVoiceOption,
   voiceLabel,
 } from "@/lib/voice/telnyx/voices";
+import { toErrorMessage } from "@/lib/errors";
 import { cn } from "@/lib/utils";
 import { useEffect, useRef, useState } from "react";
 
@@ -57,11 +58,16 @@ export function VoicePicker({
         }),
       });
       const j = await res.json();
-      if (!res.ok) throw new Error(j.error || j.detail || "Preview failed");
+      if (!res.ok) {
+        throw new Error(toErrorMessage(j.error ?? j.detail ?? j, "Preview failed"));
+      }
       const url = j.data?.audioUrl;
       if (!url) {
         throw new Error(
-          j.data?.message || "This voice is temporarily unavailable. Choose another voice.",
+          toErrorMessage(
+            j.data?.message,
+            "This voice is temporarily unavailable. Choose another voice.",
+          ),
         );
       }
       if (audioRef.current) {
@@ -70,7 +76,7 @@ export function VoicePicker({
         await audioRef.current.play();
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(toErrorMessage(err, "Preview failed"));
     } finally {
       setPreviewing(null);
     }

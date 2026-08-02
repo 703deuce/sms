@@ -3,6 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/input";
+import { toErrorMessage } from "@/lib/errors";
 import { useEffect, useRef, useState } from "react";
 
 type Msg = { role: "user" | "assistant"; text: string };
@@ -87,7 +88,7 @@ export function AgentTestPanel({
         }),
       });
       const j = await res.json();
-      if (!res.ok) throw new Error(j.error || "Chat failed");
+      if (!res.ok) throw new Error(toErrorMessage(j.error ?? j, "Chat failed"));
       const data = j.data;
       if (data?.conversation_id || data?.id) {
         setConversationId(String(data.conversation_id || data.id));
@@ -107,7 +108,7 @@ export function AgentTestPanel({
       setMessages((prev) => [...prev, { role: "assistant", text: textReply }]);
       await speak(textReply);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(toErrorMessage(err, "Chat failed"));
     } finally {
       setBusy(false);
     }

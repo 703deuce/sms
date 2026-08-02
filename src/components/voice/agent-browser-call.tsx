@@ -3,6 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
 import { Input, Label } from "@/components/ui/input";
+import { toErrorMessage } from "@/lib/errors";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 type CallPhase =
@@ -380,10 +381,12 @@ export function AgentBrowserCall({
       const sessionJson = await sessionRes.json();
       if (!sessionRes.ok) {
         throw new Error(
-          sessionJson.error ||
-            (sessionJson.code === "not_built"
+          toErrorMessage(
+            sessionJson.error ?? sessionJson,
+            sessionJson.code === "not_built"
               ? "Build & test first so Telnyx can sync the assistant."
-              : "Could not authorize test session"),
+              : "Could not authorize test session",
+          ),
         );
       }
 
@@ -443,7 +446,11 @@ export function AgentBrowserCall({
         });
         client.on("telnyx.error", (err: unknown) => {
           clearTimeout(t);
-          reject(err instanceof Error ? err : new Error(String(err)));
+          reject(
+            err instanceof Error
+              ? err
+              : new Error(toErrorMessage(err, "WebRTC connection failed")),
+          );
         });
         client.connect();
       });
@@ -860,7 +867,10 @@ export function AgentBrowserCall({
 }
 
 function friendlyError(err: unknown) {
-  const raw = err instanceof Error ? err.message : String(err);
+  const raw = toErrorMessage(
+    err,
+    "The browser could not connect to the voice service. Try again.",
+  );
   const lower = raw.toLowerCase();
   if (lower.includes("permission") || lower.includes("notallowed")) {
     return "Microphone access is required to test this voice agent.";
@@ -888,5 +898,8 @@ function friendlyError(err: unknown) {
   if (lower.includes("temporarily unavailable") || lower.includes("voice is")) {
     return "This voice is temporarily unavailable. Choose another voice.";
   }
-  return raw || "The browser could not connect to the voice service. Try again.";
+  if (raw === "[object Object]") {
+    return "The browser could not connect to the voice service. Try again.";
+  }
+  return raw;
 }
