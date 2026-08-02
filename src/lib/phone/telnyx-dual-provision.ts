@@ -431,19 +431,25 @@ export async function provisionPurchasedNumber(input: {
   }
 
   const connectionId = await resolveVoiceConnectionId();
-  const profileId = await ensureWorkspaceMessagingProfileId(input.workspaceId);
-
   const current = await fetchTelnyxNumber(row.providerNumberId);
   if (current && connectionId && current.connectionId !== connectionId) {
     await assignVoiceConnection(row.providerNumberId, connectionId);
   }
-  if (profileId) {
-    const msgId =
-      current?.messagingProfileId ||
-      (await fetchMessagingAssignment(row.providerNumberId));
-    if (msgId !== profileId) {
-      await assignMessagingProfile(row.providerNumberId, profileId);
+
+  // Messaging profile is best-effort — voice must still succeed if profile create fails.
+  let profileId: string | null = null;
+  try {
+    profileId = await ensureWorkspaceMessagingProfileId(input.workspaceId);
+    if (profileId) {
+      const msgId =
+        current?.messagingProfileId ||
+        (await fetchMessagingAssignment(row.providerNumberId));
+      if (msgId !== profileId) {
+        await assignMessagingProfile(row.providerNumberId, profileId);
+      }
     }
+  } catch (err) {
+    console.error("[dual-provision] messaging attach", err);
   }
 
   // Ensure messaging attach flag on registration when this is the reg number.

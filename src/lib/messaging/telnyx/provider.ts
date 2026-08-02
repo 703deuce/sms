@@ -254,6 +254,8 @@ export const telnyxProvider: MessagingProvider = {
         method: "POST",
         body: {
           name,
+          // Required by Telnyx — ISO country codes (or ["*"]).
+          whitelisted_destinations: ["US"],
           // Single profile webhook receives inbound + delivery lifecycle events.
           webhook_url: urls.messaging,
           webhook_failover_url: urls.messaging,
