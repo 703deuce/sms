@@ -4,7 +4,11 @@ import type { VoiceAgentConfig } from "../types";
 import { getAgentRagBucketIds } from "../knowledge-processor";
 import { buildAssistantTools } from "./assistant-tools";
 import * as ai from "./ai-client";
-import { DEFAULT_AGENT_VOICE_ID, isUltraVoice } from "./voices";
+import {
+  DEFAULT_AGENT_VOICE_ID,
+  isUltraVoice,
+  resolveProviderVoiceId,
+} from "./voices";
 
 function unwrapTelnyxId(res: unknown): string | null {
   if (!res || typeof res !== "object") return null;
@@ -271,7 +275,9 @@ export async function syncTelnyxAssistant(
     corePayload.llm_api_key_ref = config.model.customApiKeyRef;
   }
 
-  const voiceId = config.voiceLanguage?.voiceId || DEFAULT_AGENT_VOICE_ID;
+  const voiceId = resolveProviderVoiceId(
+    config.voiceLanguage?.voiceId || DEFAULT_AGENT_VOICE_ID,
+  );
   const enrichPayload: Record<string, unknown> = {
     voice_settings: {
       voice: voiceId,

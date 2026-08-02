@@ -160,7 +160,7 @@ export const DEFAULT_VOICE_CONFIG: VoiceAgentConfig = {
   },
   voiceLanguage: {
     voiceProvider: "telnyx",
-    voiceId: "Telnyx.Ultra.Clara",
+    voiceId: "ava-warm-us",
     speed: 1,
     primaryLanguage: "en-US",
     silenceTimeoutMs: 8000,

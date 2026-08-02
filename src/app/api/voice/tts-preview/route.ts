@@ -1,35 +1,101 @@
 import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
 import { getTelnyxApiBaseUrl, getTelnyxApiKey } from "@/lib/messaging/telnyx/config";
-import { DEFAULT_AGENT_VOICE_ID } from "@/lib/voice/telnyx/voices";
+import {
+  DEFAULT_VOICE_PREVIEW_TEXT,
+  getCuratedVoice,
+  isApprovedVoiceId,
+  resolveProviderVoiceId,
+} from "@/lib/voice/telnyx/voices";
+import { getCachedPreview, setCachedPreview } from "@/lib/voice/platform/preview-cache";
+
+const previewHits = new Map<string, { count: number; windowStart: number }>();
+
+function previewRateOk(userId: string, limit = 30) {
+  const now = Date.now();
+  const row = previewHits.get(userId);
+  if (!row || now - row.windowStart > 60_000) {
+    previewHits.set(userId, { count: 1, windowStart: now });
+    return true;
+  }
+  if (row.count >= limit) return false;
+  row.count += 1;
+  return true;
+}
 
 /**
- * Preview a Telnyx TTS voice (real Ultra/NaturalHD audio — not browser speechSynthesis).
- * Returns a data:audio URL when Telnyx streams MPEG bytes.
+ * Preview a curated Telnyx voice (real Ultra/NaturalHD — never browser speechSynthesis).
+ * Only approved catalog / Telnyx provider IDs are accepted.
  */
 export async function POST(request: Request) {
   try {
     const auth = await requireSession();
     if ("error" in auth) return auth.error;
 
+    if (!previewRateOk(auth.session.userId)) {
+      return NextResponse.json(
+        { error: "Too many voice previews — wait a minute and try again." },
+        { status: 429 },
+      );
+    }
+
     const body = (await request.json()) as {
       text?: string;
       voice?: string;
       language?: string;
+      speed?: number;
     };
-    const text = (body.text || "Hi, thanks for calling. This is how I sound.")
+
+    const requested = String(body.voice || "").trim();
+    if (!requested || !isApprovedVoiceId(requested)) {
+      return NextResponse.json(
+        { error: "Voice is not in the approved catalog." },
+        { status: 400 },
+      );
+    }
+
+    const curated = getCuratedVoice(requested);
+    const providerVoice = resolveProviderVoiceId(requested);
+    const text = (
+      body.text ||
+      curated?.previewText ||
+      DEFAULT_VOICE_PREVIEW_TEXT
+    )
       .trim()
       .slice(0, 280);
-    const voice = (body.voice || DEFAULT_AGENT_VOICE_ID).trim();
-    const language = (body.language || "en-US").trim();
-    const apiKey = getTelnyxApiKey();
+    const language = (body.language || curated?.locale || "en-US").trim();
+    const speed =
+      typeof body.speed === "number" && Number.isFinite(body.speed)
+        ? Math.min(2, Math.max(0.5, body.speed))
+        : 1;
 
+    const cached = await getCachedPreview({
+      voiceId: providerVoice,
+      text,
+      speed,
+    });
+    if (cached) {
+      return NextResponse.json({
+        data: {
+          mode: "cache",
+          text,
+          voice: providerVoice,
+          catalogId: curated?.catalogId || null,
+          language,
+          audioUrl: cached,
+          cached: true,
+        },
+      });
+    }
+
+    const apiKey = getTelnyxApiKey();
     if (!apiKey) {
       return NextResponse.json({
         data: {
           mode: "mock",
           text,
-          voice,
+          voice: providerVoice,
+          catalogId: curated?.catalogId || null,
           language,
           message: "Telnyx not configured — cannot preview voice audio.",
         },
@@ -42,18 +108,20 @@ export async function POST(request: Request) {
         path: "/text-to-speech/speech",
         body: {
           text,
-          voice,
+          voice: providerVoice,
           language,
           output_type: "base64_output",
+          voice_settings: { voice_speed: speed },
         },
       },
       {
         path: "/text-to-speech",
         body: {
           text,
-          voice,
+          voice: providerVoice,
           language,
           output_format: "mp3",
+          voice_speed: speed,
         },
       },
     ];
@@ -77,41 +145,54 @@ export async function POST(request: Request) {
           continue;
         }
 
+        let audioUrl = "";
         if (contentType.includes("audio")) {
           const buf = Buffer.from(await res.arrayBuffer());
           const mime = contentType.split(";")[0] || "audio/mpeg";
-          const audioUrl = `data:${mime};base64,${buf.toString("base64")}`;
-          return NextResponse.json({
-            data: { mode: "telnyx", text, voice, language, audioUrl },
-          });
+          audioUrl = `data:${mime};base64,${buf.toString("base64")}`;
+        } else {
+          const json = (await res.json()) as Record<string, unknown>;
+          const data = (json.data || json) as Record<string, unknown>;
+          const b64 =
+            (data.audio as string) ||
+            (data.audio_base64 as string) ||
+            (data.base64 as string) ||
+            "";
+          const url =
+            (data.audio_url as string) ||
+            (data.url as string) ||
+            (data.media_url as string) ||
+            "";
+          if (b64) {
+            audioUrl = b64.startsWith("data:")
+              ? b64
+              : `data:audio/mpeg;base64,${b64}`;
+          } else if (url) {
+            audioUrl = url;
+          } else {
+            lastError = `${attempt.path}: no audio in response`;
+            continue;
+          }
         }
 
-        const json = (await res.json()) as Record<string, unknown>;
-        const data = (json.data || json) as Record<string, unknown>;
-        const b64 =
-          (data.audio as string) ||
-          (data.audio_base64 as string) ||
-          (data.base64 as string) ||
-          "";
-        const url =
-          (data.audio_url as string) ||
-          (data.url as string) ||
-          (data.media_url as string) ||
-          "";
-        if (b64) {
-          const audioUrl = b64.startsWith("data:")
-            ? b64
-            : `data:audio/mpeg;base64,${b64}`;
-          return NextResponse.json({
-            data: { mode: "telnyx", text, voice, language, audioUrl },
-          });
-        }
-        if (url) {
-          return NextResponse.json({
-            data: { mode: "telnyx", text, voice, language, audioUrl: url },
-          });
-        }
-        lastError = `${attempt.path}: no audio in response`;
+        await setCachedPreview({
+          voiceId: providerVoice,
+          text,
+          speed,
+          audioUrl,
+        });
+
+        return NextResponse.json({
+          data: {
+            mode: "telnyx",
+            text,
+            voice: providerVoice,
+            catalogId: curated?.catalogId || null,
+            language,
+            audioUrl,
+            cached: false,
+          },
+        });
       } catch (err) {
         lastError = err instanceof Error ? err.message : String(err);
       }
@@ -119,9 +200,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json(
       {
-        error: "Could not generate voice preview",
+        error: "This voice is temporarily unavailable. Choose another voice.",
         detail: lastError.slice(0, 400),
-        voice,
+        voice: providerVoice,
       },
       { status: 502 },
     );

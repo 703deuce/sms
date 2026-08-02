@@ -27,7 +27,7 @@ const SECTIONS = [
   { id: "memory", label: "Memory" },
   { id: "mcp", label: "MCP" },
   { id: "insights", label: "Insights" },
-  { id: "tests", label: "Tests" },
+  { id: "tests", label: "Text debug" },
   { id: "versions", label: "Versions" },
   { id: "canary", label: "Canary" },
   { id: "scheduled", label: "Scheduled" },
@@ -493,8 +493,8 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
           <ol className="list-decimal space-y-1 pl-5 text-xs text-muted-foreground">
             <li>Instructions + knowledge (PDF/RAG) + pick a voice (Play a clip) — Save draft.</li>
             <li>
-              <strong>Build &amp; test</strong>, then <strong>Call agent</strong> in the browser —
-              real mic conversation with the same Telnyx voice as phone.
+              <strong>Build &amp; test</strong>, then <strong>Test Voice Agent</strong> — real
+              WebRTC mic conversation with the same Telnyx assistant as phone.
             </li>
             <li>
               Assign a number under Identity → <strong>Deploy to number</strong> when it sounds right.
@@ -507,17 +507,31 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
           telnyxAssistantId={agent.telnyxAssistantId}
           voiceLabel={voiceLabel(cfg.voiceLanguage?.voiceId || "")}
           status={agent.rawStatus}
+          unsavedChanges={dirty}
           onNeedBuild={() => void buildForTest()}
+          onSaveDraft={async () => {
+            await saveDraft();
+          }}
         />
 
-        {(section === "tests" || section === "messaging") && (
-          <AgentTestPanel
-            agentId={agentId}
-            telnyxAssistantId={agent.telnyxAssistantId}
-            voiceId={cfg.voiceLanguage?.voiceId}
-            language={cfg.voiceLanguage?.primaryLanguage}
-            status={agent.rawStatus}
-          />
+        {section === "tests" && (
+          <details className="rounded-lg border border-dashed border-border p-3">
+            <summary className="cursor-pointer text-sm font-medium text-muted-foreground">
+              Optional: text debug chat (not a voice test)
+            </summary>
+            <p className="mb-3 mt-2 text-xs text-muted-foreground">
+              Typed chat does not prove microphone, turn-taking, interruptions, or the
+              selected voice. Use <strong>Test Voice Agent</strong> above for the real
+              browser call.
+            </p>
+            <AgentTestPanel
+              agentId={agentId}
+              telnyxAssistantId={agent.telnyxAssistantId}
+              voiceId={cfg.voiceLanguage?.voiceId}
+              language={cfg.voiceLanguage?.primaryLanguage}
+              status={agent.rawStatus}
+            />
+          </details>
         )}
 
         {section === "identity" && (
@@ -770,6 +784,7 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
             <VoicePicker
               value={cfg.voiceLanguage?.voiceId}
               language={cfg.voiceLanguage?.primaryLanguage}
+              speed={cfg.voiceLanguage?.speed}
               onChange={(voiceId) =>
                 updateConfig({
                   voiceLanguage: { ...cfg.voiceLanguage, voiceId },
@@ -777,8 +792,8 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
               }
             />
             <p className="text-xs text-muted-foreground">
-              After changing voice, click <strong>Build &amp; test</strong> (or Call agent) so Telnyx
-              picks up the new voice before you talk.
+              After changing voice, save (or start Test Voice Agent) so Telnyx syncs the voice
+              before you talk. Unsaved edits are not on the live assistant.
             </p>
             <div className="grid gap-4 sm:grid-cols-2">
               <div>

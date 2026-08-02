@@ -1398,11 +1398,15 @@ export async function enableWebCallsAndSyncVoice(
     return { skipped: true, reason: "telnyx_not_configured" };
   }
   const { parseVoiceAgentConfig } = await import("../types");
-  const { DEFAULT_AGENT_VOICE_ID, isUltraVoice } = await import(
-    "../telnyx/voices"
-  );
+  const {
+    DEFAULT_AGENT_VOICE_ID,
+    isUltraVoice,
+    resolveProviderVoiceId,
+  } = await import("../telnyx/voices");
   const config = parseVoiceAgentConfig(agent.draftConfig);
-  const voiceId = config.voiceLanguage?.voiceId || DEFAULT_AGENT_VOICE_ID;
+  const voiceId = resolveProviderVoiceId(
+    config.voiceLanguage?.voiceId || DEFAULT_AGENT_VOICE_ID,
+  );
   const connectionId =
     agent.telnyxConnectionId || process.env.TELNYX_CONNECTION_ID?.trim() || "";
   const body: Record<string, unknown> = {

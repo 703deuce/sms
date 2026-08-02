@@ -8,8 +8,8 @@ import { useEffect, useRef, useState } from "react";
 type Msg = { role: "user" | "assistant"; text: string };
 
 /**
- * In-app test conversation before deploy.
- * Uses Telnyx assistant chat after Build, plus browser speech + TTS when available.
+ * Optional text debug against the Telnyx assistant chat API.
+ * Not a voice test — prefer AgentBrowserCall (WebRTC) for proof.
  */
 export function AgentTestPanel({
   agentId,
@@ -46,13 +46,14 @@ export function AgentTestPanel({
   }, []);
 
   async function speak(text: string) {
+    // Optional audio for debug only — never browser speechSynthesis as a voice proof.
     try {
       const res = await fetch("/api/voice/tts-preview", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          text: text.slice(0, 500),
-          voice: voiceId || "Telnyx.NaturalHD.andromeda",
+          text: text.slice(0, 280),
+          voice: voiceId || "ava-warm-us",
           language: language || "en-US",
         }),
       });
@@ -61,16 +62,9 @@ export function AgentTestPanel({
       if (url && audioRef.current) {
         audioRef.current.src = url;
         await audioRef.current.play().catch(() => undefined);
-        return;
       }
     } catch {
-      // fall through to browser TTS
-    }
-    if (typeof window !== "undefined" && "speechSynthesis" in window) {
-      const u = new SpeechSynthesisUtterance(text);
-      u.lang = language || "en-US";
-      window.speechSynthesis.cancel();
-      window.speechSynthesis.speak(u);
+      // silent — text debug does not require audio
     }
   }
 
@@ -151,13 +145,13 @@ export function AgentTestPanel({
     <Card className="space-y-3 p-5">
       <div className="flex items-start justify-between gap-2">
         <div>
-          <CardTitle>Text fallback (optional)</CardTitle>
+          <CardTitle>Text debug (not a voice test)</CardTitle>
           <p className="mt-1 text-sm text-muted-foreground">
-            Prefer <strong>Call agent</strong> above for real voice. This text path is only a backup
-            when you cannot use the mic.
+            Prefer <strong>Test Voice Agent</strong> for real mic ↔ Telnyx voice. This typed path
+            does not exercise speech recognition, interruptions, or the production voice pipeline.
             {!ready
               ? " Build & test first."
-              : " Ready for typed questions if needed."}
+              : " Ready for typed debug questions if needed."}
           </p>
         </div>
         <audio ref={audioRef} className="hidden" />

@@ -251,9 +251,42 @@ async function main() {
   );
   ok("browser call anonymous_login", /anonymous_login/.test(browserCall));
   ok("browser call ai_assistant", /ai_assistant/.test(browserCall));
+  ok("browser call uses test-session", /test-session/.test(browserCall));
+  ok("browser call Test Voice Agent CTA", /Test Voice Agent/.test(browserCall));
+  ok("browser call no speechSynthesis", !/speechSynthesis/.test(browserCall));
   ok(
     "voices API route",
     fs.existsSync(path.join(root, "src/app/api/voice/voices/route.ts")),
+  );
+  ok(
+    "test-session route",
+    fs.existsSync(
+      path.join(root, "src/app/api/voice/agents/[id]/test-session/route.ts"),
+    ),
+  );
+  const testSession = fs.readFileSync(
+    path.join(root, "src/lib/voice/platform/test-session.ts"),
+    "utf8",
+  );
+  ok("test session ownership check", /workspaceId: input\.workspaceId/.test(testSession));
+  ok("test session rate limit", /rateOk|rate_limited/.test(testSession));
+  ok("test session never returns API key", !/TELNYX_API_KEY/.test(testSession) || /Never returns TELNYX_API_KEY/.test(testSession));
+  const voicesSrc = fs.readFileSync(
+    path.join(root, "src/lib/voice/telnyx/voices.ts"),
+    "utf8",
+  );
+  ok("default catalog Ava Ultra", /ava-warm-us/.test(voicesSrc) && /Telnyx\.Ultra\.Clara/.test(voicesSrc));
+  ok("resolveProviderVoiceId", /export function resolveProviderVoiceId/.test(voicesSrc));
+  const ttsPreview = fs.readFileSync(
+    path.join(root, "src/app/api/voice/tts-preview/route.ts"),
+    "utf8",
+  );
+  ok("tts preview allowlist", /isApprovedVoiceId/.test(ttsPreview));
+  ok("tts preview cache", /getCachedPreview/.test(ttsPreview));
+  ok(
+    "tts preview rejects browser TTS path",
+    /never browser speechSynthesis/.test(ttsPreview) ||
+      !/\bspeechSynthesis\./.test(ttsPreview),
   );
   const syncSrc = fs.readFileSync(
     path.join(root, "src/lib/voice/telnyx/assistant-sync.ts"),
@@ -263,8 +296,11 @@ async function main() {
     "web calls enabled on sync",
     /supports_unauthenticated_web_calls:\s*true/.test(syncSrc),
   );
+  ok("sync resolves catalog voice", /resolveProviderVoiceId/.test(syncSrc));
   ok("builder VoicePicker", /VoicePicker/.test(builderSrc2));
   ok("builder AgentBrowserCall", /AgentBrowserCall/.test(builderSrc2));
+  ok("builder demotes text chat", /not a voice test/.test(builderSrc2));
+  ok("builder unsaved warning wiring", /unsavedChanges=\{dirty\}/.test(builderSrc2));
 
   if (failures.length) {
     console.error("\nFAILED", failures.length, failures);
