@@ -5,10 +5,7 @@
 
 import { getPrisma } from "@/lib/db";
 import { telnyxRequest } from "@/lib/messaging/telnyx/client";
-import {
-  getTelnyxApiKey,
-  getTelnyxWebhookUrls,
-} from "@/lib/messaging/telnyx/config";
+import { getTelnyxApiKey } from "@/lib/messaging/telnyx/config";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 
 export type TelnyxOwnedNumber = {
