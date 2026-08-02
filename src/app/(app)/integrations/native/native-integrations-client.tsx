@@ -104,8 +104,8 @@ export function NativeIntegrationsClient() {
   return (
     <div>
       <PageHeader
-        title="Native Integrations"
-        description="Direct connections for scheduling, forms, marketing, e-commerce, sales, and support — OAuth where public apps are available, customer credentials elsewhere. Zoho and Pipedrive stay on the CRM framework."
+        title="Integrations"
+        description="Connect Salesforce, Zoho, Pipedrive, Calendly, Typeform, ActiveCampaign, WooCommerce, Jotform, Close, Freshdesk, Klaviyo, and HighLevel. Mailchimp is deferred for this pass."
       />
 
       {message ? (
@@ -116,7 +116,7 @@ export function NativeIntegrationsClient() {
 
       <div className="mb-6 flex flex-wrap gap-3 text-sm">
         <Link href="/integrations/crm" className="underline">
-          CRM framework (Zoho / Pipedrive)
+          CRM framework (Salesforce / Zoho / Pipedrive)
         </Link>
         <Link href="/integrations/native/leads" className="underline">
           Lead inbox

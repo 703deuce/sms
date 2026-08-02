@@ -2,6 +2,7 @@ export * from "./types";
 export * from "./adapter";
 export {
   NATIVE_PROVIDER_CATALOG,
+  NATIVE_PROVIDER_UI_CATALOG,
   NATIVE_PROVIDER_IDS,
   getCatalogEntry,
   CATEGORY_LABELS,

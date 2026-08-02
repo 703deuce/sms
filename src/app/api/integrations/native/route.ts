@@ -4,7 +4,7 @@ import { listConnections } from "@/lib/integrations/connections";
 import {
   CATEGORY_LABELS,
   EXISTING_CRM_UI_ENTRIES,
-  NATIVE_PROVIDER_CATALOG,
+  NATIVE_PROVIDER_UI_CATALOG,
   connectWithCredentials,
   disconnectExternalIntegration,
   enqueueIntegrationSync,
@@ -47,11 +47,11 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       data: {
-        catalog: NATIVE_PROVIDER_CATALOG,
+        catalog: NATIVE_PROVIDER_UI_CATALOG,
         categories: CATEGORY_LABELS,
         existingCrm: EXISTING_CRM_UI_ENTRIES,
-        capabilities: getCapabilityMatrix(),
-        connections: NATIVE_PROVIDER_CATALOG.map((p) => ({
+        capabilities: getCapabilityMatrix().filter((c) => c.id !== "mailchimp"),
+        connections: NATIVE_PROVIDER_UI_CATALOG.map((p) => ({
           ...p,
           connection: byProvider[p.id] || null,
           env: p.authKind === "oauth" ? oauthEnvReady(p.id) : null,

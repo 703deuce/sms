@@ -7,7 +7,6 @@ import { StatusChip } from "@/components/ui/status-chip";
 import { cn } from "@/lib/utils";
 import {
   ArrowRight,
-  Calendar,
   Cloud,
   Contact,
   CreditCard,
@@ -64,11 +63,18 @@ const PROVIDERS: ProviderDef[] = [
     ],
   },
   { id: "crm", name: "CRM Framework", description: "Salesforce, Zoho, Pipedrive — OAuth sync for calls, SMS, tasks.", icon: Cloud, tone: "bg-sky-100 text-sky-700", kind: "link", href: "/integrations/crm" },
-  { id: "native", name: "Native Integrations", description: "Calendly, Mailchimp, Typeform, ActiveCampaign, WooCommerce, Jotform, Close, Freshdesk, Klaviyo, HighLevel.", icon: GitBranch, tone: "bg-teal-100 text-teal-700", kind: "link", href: "/integrations/native" },
+  {
+    id: "native",
+    name: "Connect apps",
+    description:
+      "Salesforce, Zoho, Pipedrive, Calendly, Typeform, ActiveCampaign, WooCommerce, Jotform, Close, Freshdesk, Klaviyo, HighLevel (Mailchimp deferred).",
+    icon: GitBranch,
+    tone: "bg-teal-100 text-teal-700",
+    kind: "link",
+    href: "/integrations/native",
+  },
   { id: "hubspot", name: "HubSpot", description: "Sync contacts and ingest CRM events.", icon: GitBranch, tone: "bg-orange-100 text-orange-700", kind: "apikey", fields: [{ key: "apiKey", label: "Private app token", placeholder: "pat-...", type: "password" }], canSync: true, hasWebhook: true },
-  { id: "salesforce", name: "Salesforce (legacy token)", description: "Prefer CRM Framework OAuth. Legacy instance URL + token still works.", icon: Cloud, tone: "bg-sky-50 text-sky-700", kind: "apikey", fields: [{ key: "instanceUrl", label: "Instance URL", placeholder: "https://xx.my.salesforce.com" }, { key: "accessToken", label: "Access token", placeholder: "00D...", type: "password" }], canSync: true, hasWebhook: true },
   { id: "shopify", name: "Shopify", description: "Import customers & order events.", icon: ShoppingBag, tone: "bg-emerald-100 text-emerald-700", kind: "apikey", fields: [{ key: "shopDomain", label: "Shop domain", placeholder: "my-store.myshopify.com" }, { key: "accessToken", label: "Admin API token", placeholder: "shpat_...", type: "password" }], canSync: true, hasWebhook: true },
-  { id: "calendly", name: "Calendly", description: "Appointment reminders from bookings.", icon: Calendar, tone: "bg-blue-100 text-blue-600", kind: "apikey", fields: [{ key: "signingKey", label: "Webhook signing key", placeholder: "optional", type: "password" }], hasWebhook: true },
   { id: "google_contacts", name: "Google Contacts", description: "Import contacts securely via OAuth.", icon: Contact, tone: "bg-sky-100 text-sky-600", kind: "oauth", canSync: true },
   {
     id: "google_sheets",

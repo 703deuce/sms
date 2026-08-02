@@ -60,6 +60,20 @@ async function main() {
     assert.deepEqual(oauth.sort(), ["calendly", "mailchimp", "typeform"].sort());
   });
 
+  await ok("UI catalog hides Mailchimp and includes Salesforce CRM entry", async () => {
+    const { NATIVE_PROVIDER_UI_CATALOG, EXISTING_CRM_UI_ENTRIES } = await import(
+      "../src/lib/integrations/framework"
+    );
+    assert.equal(
+      NATIVE_PROVIDER_UI_CATALOG.some((p) => p.id === "mailchimp"),
+      false,
+    );
+    assert.ok(NATIVE_PROVIDER_UI_CATALOG.some((p) => p.id === "calendly"));
+    assert.ok(EXISTING_CRM_UI_ENTRIES.some((p) => p.id === "salesforce"));
+    assert.ok(EXISTING_CRM_UI_ENTRIES.some((p) => p.id === "zoho"));
+    assert.ok(EXISTING_CRM_UI_ENTRIES.some((p) => p.id === "pipedrive"));
+  });
+
   await ok("capability matrix omits unsupported actions", () => {
     const calendly = getCapabilityMatrix().find((m) => m.id === "calendly");
     assert.equal(calendly?.capabilities.actions.upsert_contact, undefined);

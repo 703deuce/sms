@@ -355,4 +355,6 @@ export type ProviderCatalogEntry = {
   credentialHelp?: string;
   credentialFields?: CredentialField[];
   oauthEnv?: { clientId: string; clientSecret: string; scopes: string[] };
+  /** When true, adapter remains registered but is omitted from Integrations UI. */
+  hiddenFromUi?: boolean;
 };

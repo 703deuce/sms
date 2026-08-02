@@ -44,6 +44,8 @@ export const NATIVE_PROVIDER_CATALOG: ProviderCatalogEntry[] = [
     category: "marketing",
     authKind: "oauth",
     description: "Audiences, tags, merge fields, and marketing consent-safe sync.",
+    /** Deferred for this live connect pass — keep adapter, hide from UI. */
+    hiddenFromUi: true,
     oauthEnv: {
       clientId: "MAILCHIMP_CLIENT_ID",
       clientSecret: "MAILCHIMP_CLIENT_SECRET",
@@ -207,6 +209,9 @@ export const NATIVE_PROVIDER_CATALOG: ProviderCatalogEntry[] = [
 
 export const NATIVE_PROVIDER_IDS = NATIVE_PROVIDER_CATALOG.map((p) => p.id);
 
+/** Providers shown on /integrations/native (excludes Mailchimp for this pass). */
+export const NATIVE_PROVIDER_UI_CATALOG = NATIVE_PROVIDER_CATALOG.filter((p) => !p.hiddenFromUi);
+
 export function isExternalProvider(id: string): id is ExternalProviderId {
   return (NATIVE_PROVIDER_IDS as string[]).includes(id);
 }
@@ -227,6 +232,13 @@ export const CATEGORY_LABELS: Record<string, string> = {
 
 /** Existing CRM framework providers shown in the shared Integrations UI (not redesigned). */
 export const EXISTING_CRM_UI_ENTRIES = [
+  {
+    id: "salesforce",
+    displayName: "Salesforce",
+    category: "crm_sales" as const,
+    href: "/integrations/crm/salesforce",
+    authKind: "oauth" as const,
+  },
   {
     id: "zoho",
     displayName: "Zoho CRM",
