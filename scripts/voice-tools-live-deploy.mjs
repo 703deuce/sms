@@ -16,12 +16,12 @@ const OWNER_EMAIL = (process.env.OWNER_EMAIL || "703deuce@gmail.com").trim().toL
 const PHONE_E164 = (process.env.PHONE_E164 || "+18663464256").trim();
 const HANDOFF_E164 = (process.env.HANDOFF_E164 || "+15714776175").trim();
 
-// Single terminator (hangup) + escalate_human cold transfer — avoid dual
-// hangup/end_call and native warm transfer which drop live PSTN calls.
+// Native Telnyx transfer + CRM webhooks. Hangup last/restricted.
+// Do NOT enable AI handoff here — models were handoff→hangup instead of transferring.
+// Do NOT enable escalate_human alongside native transfer (competing paths).
 const FULL_TOOLS = [
+  "transfer",
   "hangup",
-  "handoff",
-  "sip_refer",
   "send_dtmf",
   "send_sms",
   "create_task",
@@ -34,7 +34,6 @@ const FULL_TOOLS = [
   "create_crm_note",
   "create_crm_task",
   "upsert_crm_contact",
-  "escalate_human",
   "calendar_availability",
   "book_appointment",
 ];
@@ -222,14 +221,6 @@ async function main() {
 
   const loaded = await api(jar, `/api/voice/agents/${agent.id}`);
   const draft = loaded.json?.data?.draftConfig || {};
-  const handoffAssistants = [];
-  if (specialist?.telnyxAssistantId) {
-    handoffAssistants.push({
-      name: "Billing Specialist",
-      id: specialist.telnyxAssistantId,
-    });
-  }
-
   const nextDraft = {
     ...draft,
     identity: { ...(draft.identity || {}), directions: ["inbound", "outbound"] },
@@ -251,14 +242,16 @@ async function main() {
       system: [
         "You are the front desk AI for the business.",
         "Be brief, warm, and accurate.",
-        "When the caller asks for an agent handoff, a human, transfer, or to speak with someone, use the Transfer tool (or escalate_human) to the named target 'Agent Handoff'. Do not invent phone numbers.",
-        "You may also use Agent Handoff to the Billing Specialist AI when the caller needs billing help.",
-        "For CRM lookups use search_crm_contacts or lookup_customer. On production calls, use CRM data for recognition/routing — do not read another person's phone number aloud unless this is an internal/browser test.",
+        "CRITICAL: When the caller asks for a human, person, agent, transfer, or to speak with someone, use the native Transfer tool to the named target 'Agent Handoff'. Never invent phone numbers. Never use hangup to transfer. Never hand off to another AI for a human request.",
+        "For CRM lookups use search_crm_contacts, crm_lookup, or lookup_customer, then speak the result. Never hang up after a lookup.",
         "Never claim a transfer, SMS, booking, or CRM write succeeded until the tool returns success.",
-        "If a tool is slow, say 'One moment while I look that up.'",
+        "If a tool is slow, say 'One moment while I look that up.' If a tool fails, apologize and stay on the line.",
+        "Only hang up after a clear goodbye when the caller is fully done.",
       ].join(" "),
       tone: "warm",
       style: "concise",
+      escalation:
+        "If the caller asks for a person, use Transfer to Agent Handoff. Do not hang up yourself.",
       fillerMessages: ["One moment while I look that up.", "Let me check that for you."],
     },
     voiceLanguage: {
@@ -279,9 +272,9 @@ async function main() {
         { name: "Agent Handoff", to: HANDOFF_E164 },
         { name: "Front Desk", to: HANDOFF_E164 },
       ],
-      handoffAssistants,
-      warmTransferInstructions:
-        "Briefly introduce the caller and summarize why they are calling before connecting to Agent Handoff.",
+      // Empty on purpose — AI handoff was stealing human-transfer intent then hanging up.
+      handoffAssistants: [],
+      warmTransferInstructions: "",
     },
   };
 

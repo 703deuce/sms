@@ -244,6 +244,7 @@ export async function syncTelnyxAssistant(
     "Never claim an external action succeeded until the application tool confirms it.",
     "Never tell a caller an appointment is booked until book_appointment returns success with ok=true.",
     "If book_appointment fails or returns an error, explain the issue and offer alternatives.",
+    "CRITICAL TOOL RULES: When the caller asks for a human/person/agent, use Transfer (not hangup, not AI handoff). When they ask to look up a contact, use search_crm_contacts or crm_lookup, then speak the result. Never call hangup after a tool. Tool failures must stay on the call.",
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -323,17 +324,10 @@ export async function syncTelnyxAssistant(
         Math.min(30, Math.round((config.voiceLanguage?.silenceTimeoutMs ?? 2500) / 1000) + 3),
       ),
     },
-    tools: [
-      {
-        type: "hangup",
-        hangup: {
-          description:
-            "End the call when the conversation is complete or the caller asks to hang up.",
-        },
-      },
-      // Full tool set (webhooks/transfers/RAG) — may be rejected on some accounts.
-      ...tools.filter((t) => (t as { type?: string }).type !== "hangup"),
-    ],
+    // Use the exact tool set from buildAssistantTools — never force-inject a
+    // weak hangup tool. Live calls were dropping because the model selected
+    // hangup instead of CRM/transfer (Telnyx called_tools: ["hangup"]).
+    tools,
   };
   if (transcription.enabled !== false) {
     (enrichPayload.enabled_features as string[]).push("transcription");

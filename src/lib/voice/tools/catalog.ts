@@ -334,9 +334,8 @@ export function catalogByCategory(): Array<{
 /** Safe defaults when an agent has never configured tools. */
 /** Full production receptionist set used for live phone agents. */
 export const FULL_RECEPTIONIST_TOOLS = [
+  "transfer",
   "hangup",
-  "handoff",
-  "sip_refer",
   "send_dtmf",
   "send_sms",
   "create_task",
@@ -349,7 +348,6 @@ export const FULL_RECEPTIONIST_TOOLS = [
   "create_crm_note",
   "create_crm_task",
   "upsert_crm_contact",
-  "escalate_human",
   "calendar_availability",
   "book_appointment",
 ] as const;
