@@ -223,6 +223,7 @@ export async function completeExternalOAuth(input: {
       webhookSubscriptionIds = registered.ids || [];
       meta.webhookSubscriptionIds = webhookSubscriptionIds;
       meta.webhookCallbackUrl = callbackUrl;
+      if (registered.scope) meta.webhookSubscriptionScope = registered.scope;
       if (registered.signingKey) {
         meta.signingKey = registered.signingKey;
         meta.signingKeySource = "calendly_subscription_create";
