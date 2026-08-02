@@ -80,11 +80,17 @@ async function runToolByType(
     case "cold_transfer":
       return await runTransferTool(input.workspaceId, config, input.callId, tool.toolType, input.input || {});
     case "book_appointment":
-      const { bookAppointment } = await import("../calendar/booking");
-      return await bookAppointment(input.workspaceId, input.input || {});
-    case "calendar_availability":
-      const { getAvailability } = await import("../calendar/booking");
-      return await getAvailability(input.workspaceId, input.input || {});
+    case "calendar_availability": {
+      // Same Calendly-preferring path as builtin tools.
+      const { executeBuiltinVoiceAction } = await import("./builtin-actions");
+      return await executeBuiltinVoiceAction({
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+        callId: input.callId,
+        toolType: tool.toolType,
+        input: input.input || {},
+      });
+    }
     case "start_automation":
       return await runStartAutomation(input.workspaceId, config, input.input || {});
     case "create_contact":
