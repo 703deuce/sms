@@ -8,6 +8,7 @@ export type ToolExecInput = {
   workspaceId: string;
   toolId: string;
   callId?: string;
+  agentId?: string;
   input?: Record<string, unknown>;
   asyncAllowed?: boolean;
 };

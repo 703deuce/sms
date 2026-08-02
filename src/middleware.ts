@@ -20,6 +20,7 @@ function isPublicPath(pathname: string) {
   // Provider webhooks + cron/job drains must not require a browser session.
   if (pathname.startsWith("/api/twilio/")) return true;
   if (pathname.startsWith("/api/telnyx/")) return true;
+  // Covered by /api/telnyx/ prefix — dynamic-variables + voice tools included.
   if (pathname.startsWith("/api/jobs/")) return true;
   if (pathname.startsWith("/api/integrations/webhooks/incoming/")) return true;
   if (pathname.startsWith("/api/public/")) return true;
@@ -49,6 +50,7 @@ function isPublicPath(pathname: string) {
   if (pathname.startsWith("/s/")) return true;
   if (pathname.startsWith("/embed/f/")) return true;
   if (pathname.startsWith("/embed/w/")) return true;
+  if (pathname.startsWith("/embed/voice/")) return true;
   if (pathname === "/embed/form.js") return true;
   // Signed expiring recording streams (token-gated, no session cookie)
   if (pathname.startsWith("/api/voice/recordings/") && pathname.endsWith("/stream")) return true;

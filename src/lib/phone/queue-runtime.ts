@@ -251,10 +251,39 @@ async function overflowQueue(
       where: { id: queue.overflowTarget, workspaceId: input.workspaceId },
     });
     if (agent?.telnyxAssistantId && isTelnyxPhoneConfigured()) {
+      const { assertAiCallAdmission, canStartMultiPartyAi } = await import(
+        "@/lib/voice/platform/admission"
+      );
+      const admission = await assertAiCallAdmission({
+        workspaceId: input.workspaceId,
+        agentId: agent.id,
+        direction: "INBOUND",
+      });
+      if (!admission.ok) {
+        return { rang: [], overflow: false as const, action, blocked: admission.code };
+      }
+      // When the human call is already in a conference, require multiPartyEnabled.
+      const human = await prisma.humanCall.findUnique({ where: { id: input.humanCallId } });
+      if (human?.conferenceId) {
+        const allowed = await canStartMultiPartyAi(input.workspaceId, agent.id);
+        if (!allowed) {
+          return {
+            rang: [],
+            overflow: false as const,
+            action,
+            blocked: "multi_party_disabled",
+          };
+        }
+      }
       const { startAiAssistantOnCall } = await import("@/lib/voice/telnyx/assistant-sync");
       await startAiAssistantOnCall({
         callControlId: input.telnyxCallControlId,
         assistantId: agent.telnyxAssistantId,
+        clientState: {
+          workspaceId: input.workspaceId,
+          agentId: agent.id,
+          multiParty: Boolean(human?.conferenceId),
+        },
       }).catch(() => undefined);
       await prisma.humanCall.update({
         where: { id: input.humanCallId },

@@ -20,6 +20,7 @@ const SECTIONS = [
   { id: "voicemail", label: "Voicemail" },
   { id: "postCall", label: "Post-Call" },
   { id: "compliance", label: "Compliance" },
+  { id: "platform", label: "AI Platform" },
 ] as const;
 
 type AgentDetail = {
@@ -56,6 +57,34 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
   const [agentOptions, setAgentOptions] = useState<Array<{ id: string; name: string; telnyxAssistantId?: string | null }>>([]);
   const [pronDictText, setPronDictText] = useState("{}");
   const [linkSaving, setLinkSaving] = useState(false);
+  const [platformMsg, setPlatformMsg] = useState("");
+  const [platformBusy, setPlatformBusy] = useState("");
+  const [platformFlags, setPlatformFlags] = useState({
+    emergencyDisabled: false,
+    multiPartyEnabled: false,
+    outboundAiEnabled: false,
+    widgetEnabled: false,
+  });
+  const [destName, setDestName] = useState("Front desk");
+  const [destNumber, setDestNumber] = useState("+1");
+  const [mcpName, setMcpName] = useState("");
+  const [mcpUrl, setMcpUrl] = useState("");
+  const [memoryMode, setMemoryMode] = useState("conversation");
+  const [canaryPct, setCanaryPct] = useState(10);
+
+  const loadPlatform = useCallback(async () => {
+    const res = await fetch(`/api/voice/ai?view=agent&agentId=${agentId}`);
+    if (!res.ok) return;
+    const j = await res.json();
+    const a = j.data;
+    if (!a) return;
+    setPlatformFlags({
+      emergencyDisabled: Boolean(a.emergencyDisabled),
+      multiPartyEnabled: Boolean(a.multiPartyEnabled),
+      outboundAiEnabled: Boolean(a.outboundAiEnabled),
+      widgetEnabled: Boolean(a.widgetEnabled),
+    });
+  }, [agentId]);
 
   const load = useCallback(async () => {
     const [aRes, pRes, kbRes, agentKbRes, toolsRes, agentToolsRes, agentsRes] = await Promise.all([
@@ -70,6 +99,7 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
     const aJson = await aRes.json();
     if (!aRes.ok) throw new Error(aJson.error || "Failed to load");
     setAgent(aJson.data);
+    void loadPlatform();
     setPronDictText(
       JSON.stringify(aJson.data.draftConfig?.voiceLanguage?.pronunciationDictionary || {}, null, 2),
     );
@@ -105,11 +135,31 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
         telnyxAssistantId: a.telnyxAssistantId,
       })));
     }
-  }, [agentId]);
+  }, [agentId, loadPlatform]);
 
   useEffect(() => {
     load().catch((e) => setError(e instanceof Error ? e.message : "Load failed"));
   }, [load]);
+
+  async function platformAct(action: string, extra: Record<string, unknown> = {}) {
+    setPlatformBusy(action);
+    setPlatformMsg("");
+    try {
+      const res = await fetch("/api/voice/ai", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action, agentId, ...extra }),
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error || `Failed ${action}`);
+      setPlatformMsg(`${action}: ok`);
+      await loadPlatform();
+    } catch (err) {
+      setPlatformMsg(err instanceof Error ? err.message : String(err));
+    } finally {
+      setPlatformBusy("");
+    }
+  }
 
   function updateConfig(patch: Partial<VoiceAgentConfig>) {
     if (!agent) return;
@@ -1042,6 +1092,264 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
               </div>
             ))}
           </Card>
+        )}
+
+        {section === "platform" && (
+          <div className="space-y-4">
+            <Card className="space-y-3 p-5">
+              <CardTitle>AI Platform controls</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Versions, canary, memory, MCP, transfers, tests, and safety flags for this Telnyx
+                assistant. Full ops console:{" "}
+                <a className="underline" href="/voice/ai-platform">
+                  /voice/ai-platform
+                </a>
+              </p>
+              {platformMsg ? (
+                <p className="text-xs text-amber-800">{platformMsg}</p>
+              ) : null}
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  disabled={!!platformBusy}
+                  onClick={() => platformAct("sync_versions")}
+                >
+                  Sync versions
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={!!platformBusy}
+                  onClick={() =>
+                    platformAct("upsert_canary", {
+                      rules: [{ percentage: canaryPct, version_id: "main" }],
+                    })
+                  }
+                >
+                  Canary {canaryPct}%
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={!!platformBusy}
+                  onClick={() => platformAct("delete_canary")}
+                >
+                  Delete canary
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={!!platformBusy}
+                  onClick={() => platformAct("seed_suite")}
+                >
+                  Seed test suite
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={!!platformBusy}
+                  onClick={() => platformAct("run_suite")}
+                >
+                  Run suite
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={!!platformBusy}
+                  onClick={() => platformAct("enrich_remote")}
+                >
+                  Re-enrich remote
+                </Button>
+              </div>
+              <div className="flex items-end gap-2">
+                <div>
+                  <Label>Canary %</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={100}
+                    value={canaryPct}
+                    onChange={(e) => setCanaryPct(Number(e.target.value) || 10)}
+                  />
+                </div>
+              </div>
+            </Card>
+
+            <Card className="space-y-3 p-5">
+              <CardTitle>Safety &amp; channel flags</CardTitle>
+              <ul className="space-y-1 text-sm text-muted-foreground">
+                <li>Emergency: {platformFlags.emergencyDisabled ? "STOPPED" : "clear"}</li>
+                <li>Multi-party AI: {platformFlags.multiPartyEnabled ? "on" : "off"}</li>
+                <li>Outbound AI campaigns: {platformFlags.outboundAiEnabled ? "on" : "off"}</li>
+                <li>Widget: {platformFlags.widgetEnabled ? "on" : "off"}</li>
+              </ul>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={!!platformBusy}
+                  onClick={() =>
+                    platformAct("set_flags", { emergencyDisabled: true })
+                  }
+                >
+                  Emergency stop
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={!!platformBusy}
+                  onClick={() =>
+                    platformAct("set_flags", { emergencyDisabled: false })
+                  }
+                >
+                  Clear emergency
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={!!platformBusy}
+                  onClick={() =>
+                    platformAct("set_flags", {
+                      multiPartyEnabled: !platformFlags.multiPartyEnabled,
+                    })
+                  }
+                >
+                  Toggle multi-party
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={!!platformBusy}
+                  onClick={() =>
+                    platformAct("set_flags", {
+                      outboundAiEnabled: !platformFlags.outboundAiEnabled,
+                    })
+                  }
+                >
+                  Toggle outbound AI
+                </Button>
+              </div>
+            </Card>
+
+            <Card className="space-y-3 p-5">
+              <CardTitle>Memory</CardTitle>
+              <div className="flex flex-wrap items-end gap-2">
+                <div>
+                  <Label>Mode</Label>
+                  <select
+                    className="block rounded border border-border bg-background px-2 py-1 text-sm"
+                    value={memoryMode}
+                    onChange={(e) => setMemoryMode(e.target.value)}
+                  >
+                    <option value="none">none</option>
+                    <option value="conversation">conversation</option>
+                    <option value="caller">caller</option>
+                  </select>
+                </div>
+                <Button
+                  size="sm"
+                  disabled={!!platformBusy}
+                  onClick={() =>
+                    platformAct("save_memory", {
+                      mode: memoryMode,
+                      retentionDays: 30,
+                    })
+                  }
+                >
+                  Save memory
+                </Button>
+              </div>
+            </Card>
+
+            <Card className="space-y-3 p-5">
+              <CardTitle>Transfer destination</CardTitle>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <div>
+                  <Label>Name</Label>
+                  <Input value={destName} onChange={(e) => setDestName(e.target.value)} />
+                </div>
+                <div>
+                  <Label>E.164 destination</Label>
+                  <Input value={destNumber} onChange={(e) => setDestNumber(e.target.value)} />
+                </div>
+              </div>
+              <Button
+                size="sm"
+                disabled={!!platformBusy}
+                onClick={() =>
+                  platformAct("upsert_destination", {
+                    name: destName,
+                    kind: "external",
+                    destination: destNumber,
+                  })
+                }
+              >
+                Save destination
+              </Button>
+            </Card>
+
+            <Card className="space-y-3 p-5">
+              <CardTitle>MCP server (pending review)</CardTitle>
+              <p className="text-xs text-muted-foreground">
+                New MCP servers stay unapproved until an admin approves them on the AI platform
+                page.
+              </p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <div>
+                  <Label>Name</Label>
+                  <Input value={mcpName} onChange={(e) => setMcpName(e.target.value)} />
+                </div>
+                <div>
+                  <Label>URL</Label>
+                  <Input value={mcpUrl} onChange={(e) => setMcpUrl(e.target.value)} />
+                </div>
+              </div>
+              <Button
+                size="sm"
+                disabled={!!platformBusy || !mcpName || !mcpUrl}
+                onClick={() =>
+                  platformAct("register_mcp", {
+                    name: mcpName,
+                    url: mcpUrl,
+                    approved: false,
+                  })
+                }
+              >
+                Register MCP
+              </Button>
+            </Card>
+
+            <Card className="space-y-3 p-5">
+              <CardTitle>Web widget</CardTitle>
+              <Button
+                size="sm"
+                disabled={!!platformBusy}
+                onClick={() =>
+                  platformAct("save_widget", {
+                    domainAllowlist: ["transovo.ai", "localhost"],
+                    testMode: true,
+                    captchaEnabled: true,
+                    rateLimitPerMin: 30,
+                  })
+                }
+              >
+                Enable widget (test mode)
+              </Button>
+              <p className="text-xs text-muted-foreground">
+                Embed: <code>/embed/voice/{agentId}</code>
+              </p>
+            </Card>
+
+            <Card className="space-y-3 p-5">
+              <CardTitle>Observability</CardTitle>
+              <Button
+                size="sm"
+                disabled={!!platformBusy}
+                onClick={() =>
+                  platformAct("save_observability", {
+                    langfuseEnabled: false,
+                    enabledFeatures: ["transcription"],
+                  })
+                }
+              >
+                Save observability (transcription)
+              </Button>
+            </Card>
+          </div>
         )}
 
         {agent.versions?.length ? (

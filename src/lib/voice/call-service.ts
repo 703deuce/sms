@@ -72,6 +72,16 @@ export async function initiateOutboundCall(input: {
     throw new Error("Agent is not active");
   }
 
+  const { assertAiCallAdmission } = await import("./platform/admission");
+  const admission = await assertAiCallAdmission({
+    workspaceId: input.workspaceId,
+    agentId: agent.id,
+    direction: "OUTBOUND",
+  });
+  if (!admission.ok) {
+    throw new Error(admission.reason);
+  }
+
   const phone = normalizeE164(input.toPhone);
 
   // Compliance checks

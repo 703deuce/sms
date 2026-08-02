@@ -245,6 +245,24 @@ model Workspace {
   integrationTasks IntegrationTask[]
   integrationOrders IntegrationOrder[]
   workspaceAiIntegrationPolicy WorkspaceAiIntegrationPolicy?
+  voiceAiConversations VoiceAiConversation[]
+  voiceAiConversationMessages VoiceAiConversationMessage[]
+  voiceMemoryConfigs VoiceMemoryConfig[]
+  voiceInsightDefinitions VoiceInsightDefinition[]
+  voiceInsightGroups VoiceInsightGroup[]
+  voiceScheduledEvents VoiceScheduledEvent[]
+  voiceMcpServers VoiceMcpServer[]
+  voiceCanaryDeploys VoiceCanaryDeploy[]
+  voiceAssistantTests VoiceAssistantTest[]
+  voiceTestSuites VoiceTestSuite[]
+  voiceAssistantTestRuns VoiceAssistantTestRun[]
+  voiceAssistantTags VoiceAssistantTag[]
+  voiceObservabilityConfigs VoiceObservabilityConfig[]
+  voiceConcurrencyAllocations VoiceConcurrencyAllocation[]
+  voiceFailureDiagnostics VoiceFailureDiagnostic[]
+  voiceTransferDestinations VoiceTransferDestination[]
+  voiceWidgetConfigs VoiceWidgetConfig[]
+  voiceRemoteVersions VoiceRemoteAssistantVersion[]
 }
 
 model SenderPool {
@@ -1244,6 +1262,13 @@ model VoiceAgent {
   conversionRate  Float            @default(0)
   healthStatus    String           @default("ok")
   healthMessage   String?
+  emergencyDisabled Boolean        @default(false)
+  multiPartyEnabled Boolean        @default(false)
+  outboundAiEnabled Boolean        @default(false)
+  widgetEnabled   Boolean          @default(false)
+  memoryConfigId  String?
+  insightGroupId  String?
+  observabilityConfigId String?
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
   archivedAt      DateTime?
@@ -1256,6 +1281,17 @@ model VoiceAgent {
   campaigns       VoiceCampaign[]
   routingRules    VoiceRoutingRule[]
   testRuns        VoiceTestRun[]
+  remoteVersions  VoiceRemoteAssistantVersion[]
+  canaryDeploys   VoiceCanaryDeploy[]
+  scheduledEvents VoiceScheduledEvent[]
+  memoryConfigs   VoiceMemoryConfig[]
+  transferDestinations VoiceTransferDestination[]
+  widgetConfigs   VoiceWidgetConfig[]
+  failureDiagnostics VoiceFailureDiagnostic[]
+  aiConversations VoiceAiConversation[]
+  assistantTests  VoiceAssistantTest[]
+  tags            VoiceAssistantTag[]
+  observabilityConfigs VoiceObservabilityConfig[]
 
   @@index([workspaceId, status])
   @@map("voice_agents")
@@ -1270,6 +1306,10 @@ model VoiceAgentVersion {
   changeLog   String?
   publishedAt DateTime @default(now())
   publishedBy String?
+  telnyxVersionId String?
+  isMain      Boolean  @default(false)
+  deploymentStatus String @default("local")
+  testStatus  String?
   agent       VoiceAgent @relation(fields: [agentId], references: [id], onDelete: Cascade)
   workspace   Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   calls       VoiceCall[]
@@ -1834,6 +1874,365 @@ model VoiceIntegrationSecret {
 
   @@unique([workspaceId, name])
   @@map("voice_integration_secrets")
+}
+
+model VoiceRemoteAssistantVersion {
+  id                String   @id @default(cuid())
+  workspaceId       String
+  agentId           String
+  telnyxAssistantId String
+  telnyxVersionId   String
+  name              String?
+  label             String?
+  isMain            Boolean  @default(false)
+  configJson        Json?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  syncedAt          DateTime?
+  agent             VoiceAgent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  workspace         Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([agentId, telnyxVersionId])
+  @@index([workspaceId])
+  @@map("voice_remote_assistant_versions")
+}
+
+model VoiceCanaryDeploy {
+  id                String   @id @default(cuid())
+  workspaceId       String
+  agentId           String
+  telnyxAssistantId String
+  rulesJson         Json
+  percentage        Int?
+  status            String   @default("draft")
+  startAt           DateTime?
+  stopAt            DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  syncedAt          DateTime?
+  agent             VoiceAgent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  workspace         Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, status])
+  @@index([agentId])
+  @@map("voice_canary_deploys")
+}
+
+model VoiceAssistantTest {
+  id            String   @id @default(cuid())
+  workspaceId   String
+  agentId       String?
+  telnyxTestId  String
+  name          String
+  description   String?
+  suiteName     String?
+  configJson    Json?
+  criteriaJson  Json?
+  status        String   @default("active")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  agent         VoiceAgent? @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  workspace     Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  runs          VoiceAssistantTestRun[]
+
+  @@index([workspaceId, status])
+  @@index([agentId])
+  @@index([telnyxTestId])
+  @@map("voice_assistant_tests")
+}
+
+model VoiceTestSuite {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  description String?
+  status      String   @default("active")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, name])
+  @@map("voice_test_suites")
+}
+
+model VoiceAssistantTestRun {
+  id          String   @id @default(cuid())
+  workspaceId String
+  testId      String?
+  suiteName   String?
+  telnyxRunId String?
+  status      String   @default("pending")
+  resultsJson Json?
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime @default(now())
+  test        VoiceAssistantTest? @relation(fields: [testId], references: [id], onDelete: SetNull)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
+  @@index([testId])
+  @@map("voice_assistant_test_runs")
+}
+
+model VoiceAssistantTag {
+  id           String   @id @default(cuid())
+  workspaceId  String
+  agentId      String
+  tag          String
+  telnyxSynced Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  agent        VoiceAgent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  workspace    Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([agentId, tag])
+  @@index([workspaceId])
+  @@map("voice_assistant_tags")
+}
+
+model VoiceAiConversation {
+  id                   String   @id @default(cuid())
+  workspaceId          String
+  agentId              String?
+  callId               String?
+  contactId            String?
+  phoneNumberId        String?
+  telnyxConversationId String?
+  channel              String?
+  metadata             Json?
+  status               String   @default("open")
+  startedAt            DateTime?
+  endedAt              DateTime?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  agent                VoiceAgent? @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  workspace            Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  messages             VoiceAiConversationMessage[]
+
+  @@index([workspaceId, telnyxConversationId])
+  @@index([workspaceId, createdAt])
+  @@index([agentId])
+  @@index([callId])
+  @@map("voice_ai_conversations")
+}
+
+model VoiceAiConversationMessage {
+  id              String   @id @default(cuid())
+  workspaceId     String
+  conversationId  String
+  telnyxMessageId String?
+  role            String
+  content         String
+  metadata        Json?
+  createdAt       DateTime @default(now())
+  conversation    VoiceAiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+  @@index([workspaceId])
+  @@map("voice_ai_conversation_messages")
+}
+
+model VoiceMemoryConfig {
+  id                String   @id @default(cuid())
+  workspaceId       String
+  agentId           String?
+  mode              String   @default("none")
+  retentionDays     Int?
+  excludeFields     Json?
+  configJson        Json?
+  telnyxPrivacyJson Json?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  agent             VoiceAgent? @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  workspace         Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([agentId])
+  @@map("voice_memory_configs")
+}
+
+model VoiceInsightDefinition {
+  id              String   @id @default(cuid())
+  workspaceId     String
+  telnyxInsightId String?
+  name            String
+  description     String?
+  instructions    String?
+  jsonSchema      Json?
+  status          String   @default("active")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, status])
+  @@index([telnyxInsightId])
+  @@map("voice_insight_definitions")
+}
+
+model VoiceInsightGroup {
+  id            String   @id @default(cuid())
+  workspaceId   String
+  telnyxGroupId String?
+  name          String
+  description   String?
+  webhookUrl    String?
+  insightIds    Json?
+  status        String   @default("active")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, status])
+  @@index([telnyxGroupId])
+  @@map("voice_insight_groups")
+}
+
+model VoiceScheduledEvent {
+  id                String   @id @default(cuid())
+  workspaceId       String
+  agentId           String
+  telnyxAssistantId String?
+  telnyxEventId     String?
+  channel           String
+  endUserTarget     String
+  agentTarget       String
+  scheduledAt       DateTime
+  text              String?
+  dynamicVariables  Json?
+  metadata          Json?
+  maxRetries        Int?
+  retryIntervalSecs Int?
+  status            String   @default("scheduled")
+  consentRecorded   Boolean  @default(false)
+  enabledByPolicy   Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  completedAt       DateTime?
+  agent             VoiceAgent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  workspace         Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, scheduledAt])
+  @@index([agentId, status])
+  @@index([telnyxEventId])
+  @@map("voice_scheduled_events")
+}
+
+model VoiceMcpServer {
+  id             String   @id @default(cuid())
+  workspaceId    String
+  telnyxMcpId    String?
+  name           String
+  url            String
+  type           String?
+  status         String   @default("draft")
+  configJson     Json?
+  credentialsRef String?
+  approved       Boolean  @default(false)
+  lastTestAt     DateTime?
+  lastTestOk     Boolean?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  workspace      Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, status])
+  @@index([telnyxMcpId])
+  @@map("voice_mcp_servers")
+}
+
+model VoiceObservabilityConfig {
+  id              String   @id @default(cuid())
+  workspaceId     String
+  agentId         String?
+  provider        String   @default("telnyx")
+  configJson      Json?
+  langfuseEnabled Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  agent           VoiceAgent? @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  workspace       Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([agentId])
+  @@map("voice_observability_configs")
+}
+
+model VoiceConcurrencyAllocation {
+  id                  String   @id @default(cuid())
+  workspaceId         String
+  maxInboundAi        Int      @default(5)
+  maxOutboundAi       Int      @default(0)
+  maxTransferLegs     Int      @default(10)
+  softAlertPct        Int      @default(80)
+  hardSpendLimitCents Int?
+  updatedAt           DateTime @updatedAt
+  workspace           Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId])
+  @@map("voice_concurrency_allocations")
+}
+
+model VoiceFailureDiagnostic {
+  id          String   @id @default(cuid())
+  workspaceId String
+  agentId     String?
+  callId      String?
+  category    String
+  code        String?
+  message     String
+  detailsJson Json?
+  resolved    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  resolvedAt  DateTime?
+  agent       VoiceAgent? @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  workspace   Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
+  @@index([agentId])
+  @@index([callId])
+  @@map("voice_failure_diagnostics")
+}
+
+model VoiceTransferDestination {
+  id                   String   @id @default(cuid())
+  workspaceId          String
+  agentId              String?
+  name                 String
+  kind                 String
+  destination          String
+  businessHoursJson    Json?
+  fallbackDestination  String?
+  voicemailOnFail      Boolean  @default(true)
+  returnToAiOnFail     Boolean  @default(true)
+  maxAttempts          Int      @default(2)
+  enabled              Boolean  @default(true)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  agent                VoiceAgent? @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  workspace            Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, name, agentId])
+  @@index([workspaceId, agentId])
+  @@map("voice_transfer_destinations")
+}
+
+model VoiceWidgetConfig {
+  id               String   @id @default(cuid())
+  workspaceId      String
+  agentId          String
+  domainAllowlist  Json?
+  rateLimitPerMin  Int      @default(30)
+  captchaEnabled   Boolean  @default(true)
+  testMode         Boolean  @default(true)
+  configJson       Json?
+  status           String   @default("draft")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  agent            VoiceAgent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  workspace        Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, status])
+  @@index([agentId])
+  @@map("voice_widget_configs")
 }
 
 model ProviderWebhookEvent {

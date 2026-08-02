@@ -145,7 +145,22 @@ export async function publishVoiceAgent(
   // Sync Telnyx assistant when configured
   try {
     const { syncTelnyxAssistant } = await import("./telnyx/assistant-sync");
-    await syncTelnyxAssistant(workspaceId, updated, config);
+    const sync = await syncTelnyxAssistant(workspaceId, updated, config);
+    const assistantId =
+      (sync as { assistantId?: string })?.assistantId || updated.telnyxAssistantId;
+    if (assistantId) {
+      const { enrichAssistantRemoteConfig } = await import("./platform/ai-platform");
+      await enrichAssistantRemoteConfig({
+        workspaceId,
+        agentId,
+        telnyxAssistantId: assistantId,
+      }).catch((err) =>
+        console.warn(
+          "[voice] enrich remote config failed",
+          err instanceof Error ? err.message : err,
+        ),
+      );
+    }
   } catch (err) {
     console.error("[voice] Telnyx assistant sync failed", err);
     await prisma.voiceAgent.update({

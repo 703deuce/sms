@@ -457,12 +457,32 @@ export async function processVoiceWebhookEvent(input: {
       const agent = await prisma.voiceAgent.findUnique({ where: { id: call.agentId } });
       const controlId = String(eventPayload.call_control_id || call.telnyxCallControlId || "");
       if (agent?.telnyxAssistantId && controlId) {
+        const { assertAiCallAdmission } = await import("../platform/admission");
+        const admission = await assertAiCallAdmission({
+          workspaceId,
+          agentId: agent.id,
+          direction: call.direction === "OUTBOUND" ? "OUTBOUND" : "INBOUND",
+          callId: call.id,
+        });
+        if (!admission.ok) {
+          await prisma.voiceCall.update({
+            where: { id: call.id },
+            data: {
+              metadata: {
+                ...meta,
+                aiStartBlocked: admission.code,
+                aiStartBlockedReason: admission.reason,
+              } as object,
+            },
+          });
+        } else {
         const {
           startAiAssistantOnCall,
           startCallRecording,
           startCallTranscription,
         } = await import("../telnyx/assistant-sync");
         const { resolveCallDynamicVariables } = await import("../dynamic-variables");
+        const { recordFailureDiagnostic } = await import("../platform/ai-platform");
         const storedVars = (call.dynamicVariables || {}) as Record<string, unknown>;
         const dynamicVariables = await resolveCallDynamicVariables({
           workspaceId,
@@ -474,16 +494,28 @@ export async function processVoiceWebhookEvent(input: {
           direction: call.direction,
           overrides: storedVars,
         });
-        await startAiAssistantOnCall({
-          callControlId: controlId,
-          assistantId: agent.telnyxAssistantId,
-          dynamicVariables,
-          clientState: {
+        try {
+          await startAiAssistantOnCall({
+            callControlId: controlId,
+            assistantId: agent.telnyxAssistantId,
+            dynamicVariables,
+            clientState: {
+              workspaceId,
+              callId: call.id,
+              agentId: agent.id,
+            },
+          });
+        } catch (err) {
+          console.error("[voice/webhook] ai_assistant_start", err);
+          await recordFailureDiagnostic({
             workspaceId,
-            callId: call.id,
             agentId: agent.id,
-          },
-        }).catch((err) => console.error("[voice/webhook] ai_assistant_start", err));
+            callId: call.id,
+            category: "runtime",
+            code: "ai_assistant_start_failed",
+            message: err instanceof Error ? err.message : String(err),
+          }).catch(() => undefined);
+        }
         await startCallRecording(controlId);
         await startCallTranscription(controlId);
         await prisma.voiceCall.update({
@@ -498,6 +530,7 @@ export async function processVoiceWebhookEvent(input: {
             } as object,
           },
         });
+        }
       }
     }
   }
@@ -526,6 +559,108 @@ export async function processVoiceWebhookEvent(input: {
       } as Prisma.InputJsonValue,
       idempotencyKey: `voice-recording:${call.id}:${eventPayload.recording_id || "0"}`,
     });
+  }
+
+  // Persist live AI transcription segments / finals.
+  if (
+    eventType === "call.transcription" ||
+    eventType === "call.transcription.received" ||
+    eventType === "transcription.received" ||
+    eventType === "call.conversation.ended" ||
+    eventType === "assistant.conversation.ended"
+  ) {
+    const transcriptionData = (eventPayload.transcription_data ||
+      eventPayload.transcription ||
+      {}) as Record<string, unknown>;
+    const text =
+      String(
+        transcriptionData.transcript ||
+          eventPayload.transcript ||
+          eventPayload.text ||
+          "",
+      ).trim() || "";
+    const conversationId = String(
+      eventPayload.conversation_id ||
+        eventPayload.telnyx_conversation_id ||
+        transcriptionData.conversation_id ||
+        "",
+    );
+
+    if (conversationId) {
+      await prisma.voiceCall.update({
+        where: { id: call.id },
+        data: { telnyxConversationId: conversationId },
+      });
+      const existingConv = await prisma.voiceAiConversation.findFirst({
+        where: { workspaceId, telnyxConversationId: conversationId },
+      });
+      if (existingConv) {
+        await prisma.voiceAiConversation.update({
+          where: { id: existingConv.id },
+          data: {
+            callId: call.id,
+            agentId: call.agentId,
+            status: /ended/i.test(eventType) ? "ended" : "active",
+            endedAt: /ended/i.test(eventType) ? new Date() : null,
+          },
+        });
+      } else {
+        await prisma.voiceAiConversation.create({
+          data: {
+            workspaceId,
+            agentId: call.agentId,
+            callId: call.id,
+            telnyxConversationId: conversationId,
+            channel: "phone_call",
+            status: /ended/i.test(eventType) ? "ended" : "active",
+            endedAt: /ended/i.test(eventType) ? new Date() : null,
+          },
+        });
+      }
+    }
+
+    if (text) {
+      let transcript = await prisma.voiceTranscript.findFirst({
+        where: { workspaceId, callId: call.id },
+      });
+      if (!transcript) {
+        transcript = await prisma.voiceTranscript.create({
+          data: {
+            workspaceId,
+            callId: call.id,
+            provider: "telnyx",
+            status: "partial",
+            language: "en",
+            fullText: text,
+          },
+        });
+      } else {
+        const next = `${transcript.fullText || ""}\n${text}`.trim();
+        transcript = await prisma.voiceTranscript.update({
+          where: { id: transcript.id },
+          data: {
+            fullText: next,
+            status: /ended/i.test(eventType) ? "completed" : "partial",
+          },
+        });
+      }
+      const startMs = Number(transcriptionData.start_ms);
+      const endMs = Number(transcriptionData.end_ms);
+      const confidence = Number(transcriptionData.confidence);
+      await prisma.voiceTranscriptSegment
+        .create({
+          data: {
+            workspaceId,
+            transcriptId: transcript.id,
+            speaker: String(transcriptionData.track || eventPayload.track || "unknown"),
+            text,
+            startMs: Number.isFinite(startMs) ? startMs : null,
+            endMs: Number.isFinite(endMs) ? endMs : null,
+            confidence: Number.isFinite(confidence) ? confidence : null,
+          },
+        })
+        .catch(() => undefined);
+    }
   }
 
   await prisma.providerWebhookEvent.update({

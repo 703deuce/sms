@@ -31,6 +31,7 @@ async function returnCallerToAi(workspaceId: string, callId: string, reason: str
 
   const agent = await prisma.voiceAgent.findUnique({ where: { id: call.agentId } });
   if (!agent?.telnyxAssistantId) return { ok: false };
+  if (agent.emergencyDisabled) return { ok: false, reason: "emergency_disabled" };
 
   if (isTelnyxVoiceConfigured() && !call.telnyxCallControlId.startsWith("mock_")) {
     await telnyxRequest(`/calls/${call.telnyxCallControlId}/actions/unhold`, {

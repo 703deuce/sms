@@ -93,3 +93,7 @@
 ### Still open after Wave A
 
 Memory, canaries, MCP, Telnyx Conversations, AI transcript persist, dynamic-variables webhook URL, Telnyx insight groups, widgets, global concurrency, outbound campaign enablement (deferred).
+
+### Full platform completion (2026-08-02)
+
+See `docs/TELNYX_AI_VOICE_AFTER.md` for the after matrix. Waves B–D + Phases 4–30 are wired end-to-end (UI + DB + service + Telnyx client + webhooks/runtime + contract tests). Outbound AI campaigns / unapproved MCP remain intentionally gated.

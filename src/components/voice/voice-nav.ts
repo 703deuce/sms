@@ -11,6 +11,7 @@ export const voiceAgentsSection: VoiceSection = {
   label: "Agents",
   items: [
     { label: "Agents", href: "/voice/agents" },
+    { label: "AI platform", href: "/voice/ai-platform" },
     { label: "Knowledge", href: "/voice/knowledge" },
     { label: "Tools", href: "/voice/tools" },
     { label: "Calendars", href: "/voice/calendars" },
@@ -49,6 +50,7 @@ const sectionMatchers: Array<{ match: (pathname: string) => boolean; section: Vo
   {
     match: (p) =>
       p.startsWith("/voice/agents") ||
+      p === "/voice/ai-platform" ||
       p === "/voice/knowledge" ||
       p === "/voice/tools" ||
       p === "/voice/calendars" ||

@@ -286,15 +286,16 @@ export async function executeBuiltinVoiceAction(input: {
     case "send_dtmf": {
       const digits = String(args.digits || args.digit || "");
       if (!input.callId || !digits) throw new Error("callId and digits required");
+      // Block arbitrary caller-controlled sequences outside DTMF charset/length.
+      if (!/^[0-9A-D*#wW,]{1,32}$/.test(digits)) {
+        throw new Error("Invalid DTMF sequence");
+      }
       const call = await prisma.voiceCall.findFirst({
         where: { id: input.callId, workspaceId: input.workspaceId },
       });
       if (call?.telnyxCallControlId) {
-        const { telnyxRequest } = await import("@/lib/messaging/telnyx/client");
-        await telnyxRequest(`/calls/${call.telnyxCallControlId}/actions/send_dtmf`, {
-          method: "POST",
-          body: { digits },
-        });
+        const { sendDtmf } = await import("@/lib/voice/telnyx/ai-client");
+        await sendDtmf(call.telnyxCallControlId, digits);
       }
       return { ok: true, digits };
     }

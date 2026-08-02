@@ -143,12 +143,30 @@ export async function syncTelnyxAssistant(
     timeoutSeconds?: number;
   };
 
+  // Prefer named destinations from VoiceTransferDestination (platform UI).
+  let transferTargets = transferCfg.targets;
+  try {
+    const { getPrisma } = await import("@/lib/db");
+    const dests = await getPrisma().voiceTransferDestination.findMany({
+      where: { workspaceId, agentId: agent.id, enabled: true },
+      take: 20,
+    });
+    if (dests.length) {
+      transferTargets = dests.map((d: { name: string; destination: string }) => ({
+        name: d.name,
+        to: d.destination,
+      }));
+    }
+  } catch {
+    // keep config.targets
+  }
+
   const tools = buildAssistantTools({
     workspaceId,
     agentId: agent.id,
     bucketIds,
     tools: agentTools,
-    transferTargets: transferCfg.targets,
+    transferTargets,
     handoffAssistants: transferCfg.handoffAssistants,
     warmTransferInstructions: transferCfg.warmTransferInstructions,
   });

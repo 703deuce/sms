@@ -112,6 +112,17 @@ async function startAiOnInboundCall(input: {
   });
   if (!agent) return { started: false, reason: "agent_missing" };
 
+  const { assertAiCallAdmission } = await import("./platform/admission");
+  const admission = await assertAiCallAdmission({
+    workspaceId: input.workspaceId,
+    agentId: agent.id,
+    direction: "INBOUND",
+    callId: input.callId,
+  });
+  if (!admission.ok) {
+    return { started: false, reason: admission.code };
+  }
+
   if (isTelnyxVoiceConfigured() && input.telnyxCallControlId) {
     await telnyxRequest(`/calls/${input.telnyxCallControlId}/actions/answer`, {
       method: "POST",

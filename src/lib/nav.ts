@@ -111,6 +111,7 @@ export const appNav: NavItem[] = [
     children: [
       { label: "Overview", href: "/voice/overview" },
       { label: "Agents", href: "/voice/agents" },
+      { label: "AI platform", href: "/voice/ai-platform" },
       { label: "Knowledge bases", href: "/voice/knowledge" },
       { label: "Tools", href: "/voice/tools" },
       { label: "Calendars", href: "/voice/calendars" },
@@ -237,6 +238,7 @@ export const pageTitles: Record<string, string> = {
   "/voice/overview": "AI Voice Overview",
   "/voice/agents": "Voice Agents",
   "/voice/agents/new": "Agent Builder",
+  "/voice/ai-platform": "AI Voice Platform",
   "/voice/numbers": "Voice Phone Numbers",
   "/voice/inbound-routing": "Inbound Routing",
   "/voice/campaigns": "Outbound Campaigns",
