@@ -363,6 +363,11 @@ export type OAuthProviderConfig = {
   clientSecretEnv: string;
   /** Extra authorize query params (e.g. Salesforce prompt). */
   authorizeParams?: Record<string, string>;
+  /**
+   * When true, authorize + token exchange use PKCE (S256).
+   * Required for Salesforce External Client Apps that enforce "Require Proof Key for Code Exchange".
+   */
+  requiresPkce?: boolean;
   /** Zoho/other regional token hosts may vary — adapter can override. */
   refreshUsesSameTokenUrl?: boolean;
 };

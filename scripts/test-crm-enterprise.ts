@@ -171,6 +171,11 @@ ok("adapters export expected enterprise methods", async () => {
   }
 });
 
+ok("Salesforce OAuth requires PKCE (code challenge)", async () => {
+  const { salesforceConnector } = await import("../src/lib/crm/adapters/salesforce");
+  assert.equal(salesforceConnector.oauth.requiresPkce, true);
+});
+
 ok("conflict policy both-sides resolution", async () => {
   const { resolveBothSidesConflict } = await import("../src/lib/crm/conflict");
   assert.equal(

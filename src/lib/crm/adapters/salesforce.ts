@@ -44,6 +44,8 @@ export const salesforceConnector: CrmConnector = {
     clientIdEnv: "SALESFORCE_CLIENT_ID",
     clientSecretEnv: "SALESFORCE_CLIENT_SECRET",
     authorizeParams: { prompt: "login consent" },
+    // Salesforce External Client Apps commonly require PKCE ("missing required code challenge").
+    requiresPkce: true,
   } satisfies OAuthProviderConfig,
 
   parseTokenResponse(json) {

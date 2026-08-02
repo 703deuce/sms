@@ -13,6 +13,8 @@
 - `SALESFORCE_CLIENT_SECRET`
 - Optional: `SALESFORCE_WEBHOOK_SECRET`, `CRM_WEBHOOK_SECRET`
 
+**PKCE:** Transovo sends `code_challenge` / `code_verifier` (S256) for Salesforce. External Client Apps that require Proof Key for Code Exchange are supported. If you see `missing required code challenge`, redeploy this build and click **Connect** again (do not reuse an old authorize tab).
+
 **Notes:** Object-level access follows the authorizing user’s permission sets. Validation rules and required fields vary by org — use field discovery + mappings.
 
 ## Zoho CRM

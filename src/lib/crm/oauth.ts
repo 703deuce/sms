@@ -3,13 +3,21 @@
  * Adapters supply URLs/scopes; the framework owns authorize → callback → store → refresh → revoke.
  */
 
-import { createHmac, randomBytes } from "crypto";
+import { createHash, createHmac, randomBytes } from "crypto";
 import { getConnection, upsertConnection } from "@/lib/integrations/connections";
 import { assertCrmOAuthEnv } from "./env-check";
 import { getConnector, isCrmProvider } from "./registry";
 import { writeCrmAudit } from "./logging";
 import { decryptCrmSecret, encryptCrmSecret } from "./secrets";
 import type { CrmProviderId } from "./types";
+
+/** RFC 7636 PKCE — Salesforce External Client Apps often require this. */
+function createPkcePair() {
+  // 43–128 chars of unreserved URL-safe characters; 32 bytes → 43 base64url chars.
+  const codeVerifier = randomBytes(32).toString("base64url");
+  const codeChallenge = createHash("sha256").update(codeVerifier).digest("base64url");
+  return { codeVerifier, codeChallenge };
+}
 
 function appUrl() {
   return (process.env.APP_URL || "http://localhost:3000").replace(/\/$/, "");
@@ -129,11 +137,26 @@ export async function startCrmOAuth(workspaceId: string, provider: CrmProviderId
     params.set("prompt", "consent");
   }
 
+  // PKCE (required by many Salesforce External Client Apps).
+  let pkceVerifierEncrypted: string | null = null;
+  const usePkce = Boolean(connector.oauth.requiresPkce) || provider === "salesforce";
+  if (usePkce) {
+    const { codeVerifier, codeChallenge } = createPkcePair();
+    params.set("code_challenge", codeChallenge);
+    params.set("code_challenge_method", "S256");
+    pkceVerifierEncrypted = encryptCrmSecret(codeVerifier);
+  }
+
   await upsertConnection({
     workspaceId,
     provider,
     status: "pending_oauth",
-    config: { oauthStartedAt: new Date().toISOString() },
+    config: {
+      oauthStartedAt: new Date().toISOString(),
+      ...(pkceVerifierEncrypted
+        ? { pkceCodeVerifier: pkceVerifierEncrypted, pkceMethod: "S256" }
+        : { pkceCodeVerifier: null, pkceMethod: null }),
+    },
     mergeConfig: true,
   });
 
@@ -172,19 +195,35 @@ export async function completeCrmOAuth(
       typeof prevConfig.accountsServer === "string" ? prevConfig.accountsServer : null,
   });
 
+  const tokenBody = new URLSearchParams({
+    grant_type: "authorization_code",
+    code,
+    client_id: clientId,
+    client_secret: clientSecret,
+    redirect_uri: crmOAuthCallbackUrl(provider),
+  });
+
+  // Complete PKCE: send the verifier that matches the authorize code_challenge.
+  const storedVerifierEnc =
+    typeof prevConfig.pkceCodeVerifier === "string" ? prevConfig.pkceCodeVerifier : null;
+  const codeVerifier = storedVerifierEnc
+    ? decryptCrmSecret(storedVerifierEnc) || storedVerifierEnc
+    : null;
+  if (codeVerifier) {
+    tokenBody.set("code_verifier", codeVerifier);
+  } else if (connector.oauth.requiresPkce || provider === "salesforce") {
+    throw new Error(
+      "Salesforce OAuth PKCE verifier missing — click Connect again (do not reuse an old authorize tab).",
+    );
+  }
+
   const res = await fetch(tokenUrl, {
     method: "POST",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
       Accept: "application/json",
     },
-    body: new URLSearchParams({
-      grant_type: "authorization_code",
-      code,
-      client_id: clientId,
-      client_secret: clientSecret,
-      redirect_uri: crmOAuthCallbackUrl(provider),
-    }),
+    body: tokenBody,
   });
   const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
   if (!res.ok) {
@@ -203,7 +242,12 @@ export async function completeCrmOAuth(
       category: "oauth",
       action: "token_exchange_failed",
       message: msg,
-      detail: { ...json, tokenUrl, redirect_uri: crmOAuthCallbackUrl(provider) },
+      detail: {
+        ...json,
+        tokenUrl,
+        redirect_uri: crmOAuthCallbackUrl(provider),
+        pkce: Boolean(codeVerifier),
+      },
     });
     throw new Error(msg);
   }
@@ -242,6 +286,9 @@ export async function completeCrmOAuth(
       lastOAuthError: null,
       connectedAt: new Date().toISOString(),
       tokensEncrypted: Boolean(process.env.INTEGRATION_SECRET_KEY?.trim()),
+      // One-time PKCE verifier — clear after successful exchange.
+      pkceCodeVerifier: null,
+      pkceMethod: null,
     },
     mergeConfig: false,
   });
