@@ -491,6 +491,23 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       const { enqueueScheduledCrmIncrementalSyncs } = await import("@/lib/crm/scheduled-sync");
       return enqueueScheduledCrmIncrementalSyncs();
     }
+    case "crm_automation_action": {
+      const { executeCrmAutomationAction } = await import("@/lib/crm/automation-actions");
+      return executeCrmAutomationAction({
+        workspaceId: String(payload.workspaceId || ""),
+        provider: payload.provider as "salesforce" | "zoho" | "pipedrive",
+        actionId: String(payload.actionId || ""),
+        params: (payload.params as Record<string, unknown>) || {},
+        contactId: (payload.contactId as string | null) || null,
+        automationFlowId: (payload.automationFlowId as string | null) || null,
+      });
+    }
+    case "appointment_starting_soon_scan": {
+      const { scanAppointmentsStartingSoon } = await import(
+        "@/lib/integrations/framework/appointment-reminders"
+      );
+      return scanAppointmentsStartingSoon();
+    }
     case "integration_sync": {
       const { runIntegrationSyncJob } = await import("@/lib/integrations/framework/sync");
       return runIntegrationSyncJob({
@@ -612,6 +629,14 @@ export async function processDueJobs(limit = 25) {
     queueName: "maintenance",
     payload: { hourKey },
     idempotencyKey: `crm-scheduled-tick:${hourKey}`,
+  });
+
+  // Calendly / appointment "starting soon" automation windows (every minute drain).
+  await enqueueJob({
+    jobType: "appointment_starting_soon_scan",
+    queueName: "maintenance",
+    payload: { minuteKey },
+    idempotencyKey: `appt-starting-soon:${minuteKey}`,
   });
 
   // When BullMQ is the consumer, cron enqueues the minute batch and re-syncs the DB outbox.

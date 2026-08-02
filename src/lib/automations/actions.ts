@@ -408,8 +408,29 @@ export async function runNodeAction(
     }
     const { enqueueJob } = await import("@/lib/messaging/enqueue-advance");
     const { isExternalProvider } = await import("@/lib/integrations/framework");
-    if (!isExternalProvider(provider)) {
+    const { isCrmAutomationProvider } = await import("@/lib/crm/automation-actions");
+    if (!isExternalProvider(provider) && !isCrmAutomationProvider(provider)) {
       return { error: "integration_action_unknown_provider" };
+    }
+    if (isCrmAutomationProvider(provider)) {
+      await enqueueJob({
+        jobType: "crm_automation_action",
+        queueName: `crm-${provider}`,
+        workspaceId: ctx.workspaceId,
+        priority: 20,
+        payload: JSON.parse(
+          JSON.stringify({
+            workspaceId: ctx.workspaceId,
+            provider,
+            actionId,
+            params,
+            contactId: ctx.contactId,
+            automationFlowId: ctx.flowId,
+          }),
+        ),
+        idempotencyKey: `crm-act-${ctx.flowId}-${ctx.contactId}-${actionId}-${Date.now()}`,
+      });
+      return { nextNodeId: getNextNodeId(def, node.id) };
     }
     await enqueueJob({
       jobType: "integration_action",

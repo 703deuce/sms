@@ -10,7 +10,7 @@ import { loadContactById, loadConversations } from "@/lib/workspace-data";
 import { formatPhone } from "@/lib/utils";
 import { ClickToCallButton } from "@/components/contacts/click-to-call-button";
 import { ContactActivityTimeline } from "@/components/contacts/contact-activity-timeline";
-import { ContactIntegrationsPanel } from "@/components/contacts/contact-integrations-panel";
+import { ConnectedRecordsPanel } from "@/components/contacts/connected-records-panel";
 import { ArrowLeft, MessageSquare, Shield } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -241,18 +241,18 @@ export default async function ContactDetailPage({
 
         <div className="space-y-6">
           <Card>
-            <CardTitle>Connected apps</CardTitle>
+            <CardTitle>Connected records</CardTitle>
             <p className="mt-1 text-sm text-muted-foreground">
-              External records from native integrations and CRM.
+              Salesforce, Zoho, Pipedrive, and Calendly records linked to this contact.
             </p>
             <div className="mt-4">
-              <ContactIntegrationsPanel contactId={contact.id} />
+              <ConnectedRecordsPanel contactId={contact.id} />
             </div>
             <Link
-              href="/integrations/native"
+              href="/integrations/crm"
               className="mt-4 inline-block text-sm underline text-muted-foreground"
             >
-              Manage integrations
+              Manage CRM integrations
             </Link>
           </Card>
 

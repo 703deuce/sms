@@ -18,7 +18,7 @@ import {
 import { useMemo, useState, useEffect, useCallback, useRef } from "react";
 import { MediaPicker } from "@/components/messaging/media-picker";
 import { TemplatePicker } from "@/components/inbox/template-picker";
-import { ContactIntegrationsPanel } from "@/components/contacts/contact-integrations-panel";
+import { ConnectedRecordsPanel } from "@/components/contacts/connected-records-panel";
 
 const LANG_OPTIONS = [
   { value: "es", label: "Spanish" },
@@ -776,7 +776,7 @@ export function InboxView({
             <div className="mt-5 border-t border-border pt-4">
               <p className="text-[11px] font-semibold text-muted-foreground">Connected apps</p>
               <div className="mt-2">
-                <ContactIntegrationsPanel contactId={contact.id} compact />
+                <ConnectedRecordsPanel contactId={contact.id} compact />
               </div>
             </div>
           </div>

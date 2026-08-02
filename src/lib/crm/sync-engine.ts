@@ -1021,6 +1021,24 @@ async function ingestRemoteContact(
       externalId: remote.id,
       message: "Updated contact from CRM",
     });
+    // Only fire automation on real remote change (hash changed), not every reconcile.
+    if (!existingMap || existingMap.syncHash !== incomingHash) {
+      const { publishCrmAutomationEvent } = await import("./automation-bridge");
+      await publishCrmAutomationEvent({
+        workspaceId,
+        provider,
+        eventType: "contact.updated",
+        contactId: result.contactId,
+        externalObjectType: "contact",
+        externalObjectId: remote.id,
+        payload: {
+          email: remote.email,
+          phone: remote.phone,
+          firstName: remote.firstName,
+          lastName: remote.lastName,
+        },
+      }).catch(() => undefined);
+    }
   } else {
     stats.contactsCreated += 1;
     await appendSyncEvent({
@@ -1033,6 +1051,21 @@ async function ingestRemoteContact(
       externalId: remote.id,
       message: "Created contact from CRM",
     });
+    const { publishCrmAutomationEvent } = await import("./automation-bridge");
+    await publishCrmAutomationEvent({
+      workspaceId,
+      provider,
+      eventType: "contact.created",
+      contactId: result.contactId,
+      externalObjectType: "contact",
+      externalObjectId: remote.id,
+      payload: {
+        email: remote.email,
+        phone: remote.phone,
+        firstName: remote.firstName,
+        lastName: remote.lastName,
+      },
+    }).catch(() => undefined);
   }
 }
 

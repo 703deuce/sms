@@ -365,6 +365,9 @@ export function NodeConfigPanel({
                 onChange={(e) => onUpdate({ config: { ...cfg, provider: e.target.value } })}
               >
                 <option value="">Any connected app</option>
+                <option value="salesforce">Salesforce</option>
+                <option value="zoho">Zoho CRM</option>
+                <option value="pipedrive">Pipedrive</option>
                 <option value="calendly">Calendly</option>
                 <option value="mailchimp">Mailchimp</option>
                 <option value="typeform">Typeform</option>
@@ -377,6 +380,23 @@ export function NodeConfigPanel({
                 <option value="highlevel">HighLevel</option>
               </Select>
             </div>
+            {block === "integration_appointment_starting_soon" && (
+              <div>
+                <Label>Minutes before start</Label>
+                <Select
+                  value={String(cfg.minutesBefore || 60)}
+                  onChange={(e) =>
+                    onUpdate({ config: { ...cfg, minutesBefore: Number(e.target.value) } })
+                  }
+                >
+                  <option value="15">15 minutes</option>
+                  <option value="30">30 minutes</option>
+                  <option value="60">1 hour</option>
+                  <option value="120">2 hours</option>
+                  <option value="1440">1 day</option>
+                </Select>
+              </div>
+            )}
             {(block === "integration_tag_added" || block === "integration_tag_removed") && (
               <div>
                 <Label>Tag filter</Label>
@@ -431,6 +451,9 @@ export function NodeConfigPanel({
                 onChange={(e) => onUpdate({ config: { ...cfg, provider: e.target.value } })}
               >
                 <option value="">Select provider</option>
+                <option value="salesforce">Salesforce</option>
+                <option value="zoho">Zoho CRM</option>
+                <option value="pipedrive">Pipedrive</option>
                 <option value="activecampaign">ActiveCampaign</option>
                 <option value="mailchimp">Mailchimp</option>
                 <option value="highlevel">HighLevel</option>
@@ -447,6 +470,12 @@ export function NodeConfigPanel({
                 onChange={(e) => onUpdate({ config: { ...cfg, actionId: e.target.value } })}
               >
                 <option value="contact.upsert">Create/update contact</option>
+                <option value="lead.upsert">Create/update CRM lead</option>
+                <option value="deal.upsert">Create/update CRM deal</option>
+                <option value="task.create">Create CRM / app task</option>
+                <option value="note.create">Add CRM / app note</option>
+                <option value="call.log">Log call in CRM</option>
+                <option value="sms.log">Log SMS in CRM</option>
                 <option value="contact.add_tag">Add tag</option>
                 <option value="contact.remove_tag">Remove tag</option>
                 <option value="contact.add_to_list">Add to list</option>

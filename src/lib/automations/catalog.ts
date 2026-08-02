@@ -5,12 +5,14 @@ import { getAutomationCapabilities, isBlockEnabledForAccount } from "./capabilit
 
 export type BlockDefinition = {
   blockType: string;
-  category: "trigger" | "action" | "logic" | "end";
+  category: "trigger" | "action" | "logic" | "end" | "integrations";
   label: string;
   description: string;
   icon: string;
   enabled: boolean;
   defaultConfig: Record<string, unknown>;
+  /** When set, also listed under Integrations sidebar group. */
+  integrationGroup?: "crm" | "calendly" | "other";
 };
 
 const caps = getAutomationCapabilities();
@@ -153,36 +155,46 @@ export const AUTOMATION_BLOCKS: BlockDefinition[] = [
     icon: "zap",
     defaultConfig: {},
   }),
-  // —— Connected app triggers ——
-  ...[
-    ["integration_appointment_scheduled", "Appointment scheduled (app)", "Calendly/HighLevel appointment booked", { provider: "", eventTypeName: "" }],
-    ["integration_appointment_canceled", "Appointment canceled (app)", "Integrated appointment canceled", { provider: "calendly" }],
-    ["integration_appointment_rescheduled", "Appointment rescheduled (app)", "Integrated appointment rescheduled", { provider: "calendly" }],
-    ["integration_form_submitted", "Form submitted (app)", "Typeform/Jotform submission", { provider: "", formSlug: "" }],
-    ["integration_tag_added", "Tag added (app)", "Tag added in connected marketing/CRM", { provider: "", tag: "" }],
-    ["integration_tag_removed", "Tag removed (app)", "Tag removed in connected app", { provider: "", tag: "" }],
-    ["integration_list_joined", "List joined (app)", "Joined Mailchimp/Klaviyo/AC list", { provider: "" }],
-    ["integration_order_created", "Order created", "WooCommerce order created", { provider: "woocommerce" }],
-    ["integration_order_paid", "Order paid", "WooCommerce order paid", { provider: "woocommerce" }],
-    ["integration_order_updated", "Order status changed", "WooCommerce order status changed", { provider: "woocommerce", orderStatus: "" }],
-    ["integration_order_completed", "Order completed", "WooCommerce order fulfilled", { provider: "woocommerce" }],
-    ["integration_deal_created", "Deal created (app)", "Deal/opportunity created", { provider: "" }],
-    ["integration_deal_stage_changed", "Deal stage changed (app)", "Deal stage changed", { provider: "" }],
-    ["integration_ticket_created", "Ticket created", "Freshdesk ticket created", { provider: "freshdesk" }],
-    ["integration_ticket_updated", "Ticket updated", "Freshdesk ticket updated", { provider: "freshdesk" }],
-    ["integration_ticket_resolved", "Ticket resolved", "Freshdesk ticket solved/closed", { provider: "freshdesk" }],
-    ["integration_contact_created", "Contact created (app)", "Contact/profile created in connected app", { provider: "" }],
-    ["integration_contact_updated", "Contact updated (app)", "Contact/profile updated in connected app", { provider: "" }],
-    ["integration_task_created", "Task created (app)", "Close/HighLevel task created", { provider: "" }],
-    ["integration_consent_changed", "Consent changed", "Mailchimp/Klaviyo consent change", { provider: "" }],
-  ].map(([blockType, label, description, defaultConfig]) =>
+  // —— Connected app / CRM / Calendly triggers (also under Integrations) ——
+  ...(
+    [
+      ["integration_contact_created", "CRM contact created", "Salesforce / Zoho / Pipedrive contact created", { provider: "" }, "crm"],
+      ["integration_contact_updated", "CRM contact updated", "Salesforce / Zoho / Pipedrive contact updated", { provider: "" }, "crm"],
+      ["integration_lead_created", "CRM lead created", "Salesforce / Zoho lead created", { provider: "" }, "crm"],
+      ["integration_lead_updated", "CRM lead updated", "Salesforce / Zoho lead updated", { provider: "" }, "crm"],
+      ["integration_deal_created", "CRM deal created", "Deal/opportunity created in connected CRM", { provider: "" }, "crm"],
+      ["integration_deal_stage_changed", "CRM deal stage changed", "Deal/opportunity stage changed", { provider: "" }, "crm"],
+      ["integration_deal_won", "CRM deal won", "Deal/opportunity marked won", { provider: "" }, "crm"],
+      ["integration_deal_lost", "CRM deal lost", "Deal/opportunity marked lost", { provider: "" }, "crm"],
+      ["integration_task_created", "CRM task created", "Task created in connected CRM", { provider: "" }, "crm"],
+      ["integration_task_completed", "CRM task completed", "Task completed in connected CRM", { provider: "" }, "crm"],
+      ["integration_appointment_scheduled", "Calendly booking created", "Calendly appointment booked", { provider: "calendly", eventTypeName: "" }, "calendly"],
+      ["integration_appointment_canceled", "Calendly booking canceled", "Calendly appointment canceled", { provider: "calendly" }, "calendly"],
+      ["integration_appointment_rescheduled", "Calendly booking rescheduled", "Calendly appointment rescheduled", { provider: "calendly" }, "calendly"],
+      ["integration_appointment_starting_soon", "Calendly appointment starting soon", "Scheduled reminder before appointment start", { provider: "calendly", minutesBefore: 60 }, "calendly"],
+      ["integration_appointment_completed", "Calendly appointment completed", "Appointment end time passed", { provider: "calendly" }, "calendly"],
+      ["integration_form_submitted", "Form submitted (app)", "Typeform/Jotform submission", { provider: "", formSlug: "" }, "other"],
+      ["integration_tag_added", "Tag added (app)", "Tag added in connected marketing/CRM", { provider: "", tag: "" }, "other"],
+      ["integration_tag_removed", "Tag removed (app)", "Tag removed in connected app", { provider: "", tag: "" }, "other"],
+      ["integration_list_joined", "List joined (app)", "Joined Mailchimp/Klaviyo/AC list", { provider: "" }, "other"],
+      ["integration_order_created", "Order created", "WooCommerce order created", { provider: "woocommerce" }, "other"],
+      ["integration_order_paid", "Order paid", "WooCommerce order paid", { provider: "woocommerce" }, "other"],
+      ["integration_order_updated", "Order status changed", "WooCommerce order status changed", { provider: "woocommerce", orderStatus: "" }, "other"],
+      ["integration_order_completed", "Order completed", "WooCommerce order fulfilled", { provider: "woocommerce" }, "other"],
+      ["integration_ticket_created", "Ticket created", "Freshdesk ticket created", { provider: "freshdesk" }, "other"],
+      ["integration_ticket_updated", "Ticket updated", "Freshdesk ticket updated", { provider: "freshdesk" }, "other"],
+      ["integration_ticket_resolved", "Ticket resolved", "Freshdesk ticket solved/closed", { provider: "freshdesk" }, "other"],
+      ["integration_consent_changed", "Consent changed", "Mailchimp/Klaviyo consent change", { provider: "" }, "other"],
+    ] as Array<[string, string, string, Record<string, unknown>, "crm" | "calendly" | "other"]>
+  ).map(([blockType, label, description, defaultConfig, integrationGroup]) =>
     block({
-      blockType: String(blockType),
+      blockType,
       category: "trigger",
-      label: String(label),
-      description: String(description),
+      label,
+      description,
       icon: "zap",
-      defaultConfig: defaultConfig as Record<string, unknown>,
+      defaultConfig,
+      integrationGroup,
     }),
   ),
 
@@ -289,14 +301,16 @@ export const AUTOMATION_BLOCKS: BlockDefinition[] = [
   block({
     blockType: "integration_action",
     category: "action",
-    label: "Connected app action",
-    description: "Run a typed action on a connected integration (tag, ticket, deal, note, …)",
+    label: "CRM / connected app action",
+    description:
+      "Run a typed action on Salesforce, Zoho, Pipedrive, Calendly, or another connected app",
     icon: "cloud",
     defaultConfig: {
       provider: "",
       actionId: "contact.upsert",
       paramsJson: "{}",
     },
+    integrationGroup: "crm",
   }),
   block({
     blockType: "end_automation",

@@ -1,5 +1,6 @@
 "use client";
 
+import { ConnectedRecordsPanel } from "@/components/contacts/connected-records-panel";
 import { Card, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatusChip } from "@/components/ui/status-chip";
@@ -226,6 +227,22 @@ export default function VoiceCallDetailPage() {
               <p className="mt-2 text-sm text-muted-foreground">No transcript available for this call.</p>
             )}
           </Card>
+
+          {call.contactId ? (
+            <Card className="space-y-2 p-5 lg:col-span-2">
+              <CardTitle>CRM &amp; calendar</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Connected Salesforce / Zoho / Pipedrive / Calendly context for this caller.
+              </p>
+              <ConnectedRecordsPanel contactId={String(call.contactId)} />
+              <Link
+                href={`/contacts/${String(call.contactId)}`}
+                className="inline-block text-sm underline"
+              >
+                Open contact
+              </Link>
+            </Card>
+          ) : null}
 
           <Card className="p-5 lg:col-span-2">
             <CardTitle>Event timeline</CardTitle>

@@ -7,6 +7,7 @@ import { useMemo, useState } from "react";
 
 const CATEGORIES = [
   { key: "trigger", label: "Triggers" },
+  { key: "integrations", label: "Integrations" },
   { key: "action", label: "Actions" },
   { key: "logic", label: "Logic" },
   { key: "end", label: "End" },
@@ -46,7 +47,15 @@ export function BlockSidebar({
       </div>
       <div className="flex-1 overflow-y-auto p-2 space-y-3">
         {CATEGORIES.map((cat) => {
-          const blocks = filtered.filter((b) => b.category === cat.key);
+          const blocks =
+            cat.key === "integrations"
+              ? filtered.filter((b) => Boolean(b.integrationGroup))
+              : filtered.filter(
+                  (b) =>
+                    b.category === cat.key &&
+                    // Keep Integrations group from double-listing CRM/Calendly triggers under Triggers
+                    !(cat.key === "trigger" && b.integrationGroup),
+                );
           if (!blocks.length) return null;
           const isCollapsed = collapsed[cat.key];
           return (
@@ -62,9 +71,11 @@ export function BlockSidebar({
               {!isCollapsed && (
                 <div className="mt-1 space-y-1">
                   {blocks.map((block) => {
+                    const isTrigger =
+                      block.category === "trigger" || Boolean(block.integrationGroup && block.blockType.startsWith("integration_") && block.blockType !== "integration_action");
                     const disabled =
                       !block.enabled ||
-                      (block.category === "trigger" && hasTrigger);
+                      (isTrigger && hasTrigger);
                     return (
                       <button
                         key={block.blockType}

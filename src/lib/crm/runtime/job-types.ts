@@ -11,6 +11,7 @@ export const CRM_JOB_TYPES = [
   "crm_bulk_sync",
   "crm_webhook_process",
   "crm_scheduled_incremental",
+  "crm_automation_action",
 ] as const;
 
 export type CrmJobType = (typeof CRM_JOB_TYPES)[number];

@@ -36,6 +36,9 @@ export async function GET() {
         provider: (meta.provider as string) || null,
         inviteeName: (meta.inviteeName as string) || null,
         inviteeEmail: (meta.inviteeEmail as string) || null,
+        cancelUrl: (meta.cancelUrl as string) || null,
+        rescheduleUrl: (meta.rescheduleUrl as string) || null,
+        eventTypeId: (meta.eventTypeId as string) || null,
       };
     });
 
