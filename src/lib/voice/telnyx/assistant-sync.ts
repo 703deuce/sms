@@ -26,6 +26,7 @@ type AgentRow = {
   id: string;
   workspaceId: string;
   name: string;
+  agentType?: string | null;
   purpose?: string | null;
   telnyxAssistantId?: string | null;
   telnyxConnectionId?: string | null;
@@ -112,23 +113,7 @@ async function loadAgentTools(workspaceId: string, agentId: string, config: Voic
     });
   }
 
-  if (!tools.length) {
-    // Attach all active workspace tools (bounded) so publish is useful out of the box.
-    tools = await prisma.voiceTool.findMany({
-      where: { workspaceId, status: "active" },
-      take: 20,
-      select: {
-        id: true,
-        name: true,
-        description: true,
-        toolType: true,
-        config: true,
-        inputSchema: true,
-        status: true,
-      },
-    });
-  }
-
+  // Do not auto-attach every workspace tool — only explicitly linked ones.
   return tools;
 }
 
@@ -144,10 +129,24 @@ function greetingFromConfig(config: VoiceAgentConfig, agentName: string) {
 }
 
 function outputGainLinear(config: VoiceAgentConfig): number | null {
-  const db = Number(config.voiceLanguage?.outputGainDb ?? 0);
-  if (db === -6) return 0.5;
-  if (db === -3) return 0.708;
-  return null;
+  const db = Number(config.voiceLanguage?.outputGainDb ?? -5);
+  if (!db) return null;
+  if (db > 0 || db < -12) return null;
+  return Math.round(Math.pow(10, db / 20) * 1000) / 1000;
+}
+
+function interruptionSettingsFromConfig(config: VoiceAgentConfig) {
+  const waitSec = Math.max(
+    0.15,
+    Math.min(1.5, (config.voiceLanguage?.endpointingMs ?? 300) / 1000),
+  );
+  return {
+    enable: config.voiceLanguage?.bargeIn !== false,
+    disable_greeting_interruption: true,
+    start_speaking_plan: {
+      wait_seconds: waitSec,
+    },
+  };
 }
 
 export async function syncTelnyxAssistant(
@@ -198,6 +197,8 @@ export async function syncTelnyxAssistant(
     transferTargets,
     handoffAssistants: transferCfg.handoffAssistants,
     warmTransferInstructions: transferCfg.warmTransferInstructions,
+    enabledBuiltinTools: config.enabledBuiltinTools,
+    agentType: agent.agentType || undefined,
   });
 
   const personality = [
@@ -304,6 +305,8 @@ export async function syncTelnyxAssistant(
       // Unsupported providers reject this field — sync retries without it below.
       ...(gainLinear != null ? { volume: gainLinear } : {}),
     },
+    // Faster turn-taking: shorter wait after caller stops speaking.
+    interruption_settings: interruptionSettingsFromConfig(config),
     enabled_features: ["telephony"] as string[],
     // Required for in-app browser test calls (TelnyxRTC anonymous_login).
     telephony_settings: {
@@ -314,6 +317,11 @@ export async function syncTelnyxAssistant(
       ...(config.voiceLanguage?.noiseSuppression === false
         ? { noise_suppression: "disabled" }
         : { noise_suppression: "krisp" }),
+      // Soft idle check-in — keep low so the agent doesn't sit in silence.
+      user_idle_reply_secs: Math.max(
+        5,
+        Math.min(30, Math.round((config.voiceLanguage?.silenceTimeoutMs ?? 2500) / 1000) + 3),
+      ),
     },
     tools: [
       {

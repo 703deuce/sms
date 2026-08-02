@@ -7,18 +7,19 @@ import { telnyxRequest } from "@/lib/messaging/telnyx/client";
 import { isTelnyxVoiceConfigured } from "@/lib/voice/telnyx/assistant-sync";
 
 /** Assistant playback gain relative to 0 dB (hosted path; best-effort). */
-export type OutputGainDb = 0 | -3 | -6;
+export type OutputGainDb = 0 | -3 | -4 | -5 | -6;
+
+const ALLOWED_GAINS = new Set<number>([0, -3, -4, -5, -6]);
 
 export function normalizeOutputGainDb(raw: unknown): OutputGainDb {
   const n = Number(raw);
-  if (n === -6) return -6;
-  if (n === -3) return -3;
-  return 0;
+  if (ALLOWED_GAINS.has(n)) return n as OutputGainDb;
+  return -5;
 }
 
 /** Linear amplitude from dB (for APIs that take 0–1 / multiplier). */
-export function gainDbToLinear(db: OutputGainDb): number {
-  if (db === 0) return 1;
+export function gainDbToLinear(db: number): number {
+  if (!db) return 1;
   return Math.round(Math.pow(10, db / 20) * 1000) / 1000;
 }
 
@@ -34,11 +35,9 @@ export async function startInboundNoiseSuppression(callControlId: string) {
     method: "POST",
     body: {
       direction: "inbound",
-      // STT-oriented engine when available; Telnyx falls back if unsupported.
       noise_suppression_engine: "AiCoustics",
     },
   }).catch(async () => {
-    // Fallback without engine pin.
     await telnyxRequest(`/calls/${callControlId}/actions/suppression_start`, {
       method: "POST",
       body: { direction: "inbound" },
@@ -66,7 +65,7 @@ export function buildPstnAudioDiagnostics(input: {
 }): PstnAudioDiagnostics {
   const notes = [
     "Browser WebRTC (Opus) can sound clean while PSTN uses narrowband PCMU/PCMA — that conversion can add faint interference.",
-    "Do not raise bitrate to fix PSTN artifacts; test output gain (−3 / −6 dB) and carrier routes first.",
+    "Tune assistant output gain by ear (−4 / −5 / −6 dB). Do not raise bitrate to fix PSTN artifacts.",
     "Avoid G.729 and extra MP3→PCM→μ-law chains.",
   ];
   if (input.outputGainDb < 0) {

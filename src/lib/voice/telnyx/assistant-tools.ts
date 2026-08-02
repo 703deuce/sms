@@ -1,9 +1,15 @@
 /**
  * Build Telnyx AI Assistant tool definitions (retrieval + webhooks + telephony).
+ * Only attaches tools explicitly enabled for the agent (plus knowledge retrieval).
  */
 
 import { getAppBaseUrl } from "@/lib/messaging/telnyx/config";
 import { retrievalToolForBuckets } from "./rag";
+import {
+  BUILTIN_WEBHOOK_BODIES,
+  isBuiltinToolEnabled,
+  resolveEnabledBuiltinTools,
+} from "@/lib/voice/tools/catalog";
 
 type ToolRow = {
   id: string;
@@ -22,19 +28,33 @@ export function buildAssistantTools(input: {
   transferTargets?: Array<{ name: string; to: string }>;
   handoffAssistants?: Array<{ name: string; id: string }>;
   warmTransferInstructions?: string;
+  /** Catalog keys enabled for this agent. */
+  enabledBuiltinTools?: string[];
+  agentType?: string | null;
 }) {
+  const enabled = resolveEnabledBuiltinTools({
+    enabledBuiltinTools: input.enabledBuiltinTools,
+    agentType: input.agentType,
+  });
+
   const tools: Record<string, unknown>[] = [];
   const retrieval = retrievalToolForBuckets(input.bucketIds);
   if (retrieval) tools.push(retrieval);
 
-  tools.push({
-    type: "hangup",
-    hangup: {
-      description: "End the call when the conversation is complete or the caller asks to hang up.",
-    },
-  });
+  if (isBuiltinToolEnabled(enabled, "hangup")) {
+    tools.push({
+      type: "hangup",
+      hangup: {
+        description:
+          "End the call when the conversation is complete or the caller asks to hang up. Give a brief closing statement first unless emergency termination is required.",
+      },
+    });
+  }
 
-  if (input.transferTargets?.length) {
+  if (
+    isBuiltinToolEnabled(enabled, "transfer") &&
+    input.transferTargets?.length
+  ) {
     tools.push({
       type: "transfer",
       transfer: {
@@ -49,7 +69,10 @@ export function buildAssistantTools(input: {
     });
   }
 
-  if (input.handoffAssistants?.length) {
+  if (
+    isBuiltinToolEnabled(enabled, "handoff") &&
+    input.handoffAssistants?.length
+  ) {
     // Cap specialists to reduce handoff loops; Telnyx keeps conversation context.
     const assistants = input.handoffAssistants.slice(0, 6).map((a) => ({
       name: a.name,
@@ -59,7 +82,6 @@ export function buildAssistantTools(input: {
       type: "handoff",
       handoff: {
         ai_assistants: assistants,
-        // Best-effort hint — ignored if unsupported by account.
         max_handoffs: 3,
       },
     });
@@ -104,8 +126,9 @@ export function buildAssistantTools(input: {
     });
   }
 
-  // Built-in booking / contact helpers always available as webhooks.
-  for (const builtin of BUILTIN_WEBHOOK_TOOLS) {
+  // Attach only explicitly enabled Transovo builtins (never the full catalog).
+  for (const [key, builtin] of Object.entries(BUILTIN_WEBHOOK_BODIES)) {
+    if (!isBuiltinToolEnabled(enabled, key)) continue;
     if (tools.some((t) => (t as { webhook?: { name?: string } }).webhook?.name === builtin.name)) {
       continue;
     }
@@ -174,158 +197,3 @@ function defaultBodySchema(toolType: string): Record<string, unknown> {
       };
   }
 }
-
-const BUILTIN_WEBHOOK_TOOLS = [
-  {
-    name: "lookup_customer",
-    toolType: "lookup_customer",
-    description: "Look up a contact by phone or email and return CRM context.",
-    body: {
-      type: "object",
-      properties: {
-        phone: { type: "string" },
-        email: { type: "string" },
-      },
-      required: [],
-    },
-  },
-  {
-    name: "update_contact_tags",
-    toolType: "update_contact_tags",
-    description: "Add or remove tags on a contact.",
-    body: {
-      type: "object",
-      properties: {
-        phone: { type: "string" },
-        addTags: { type: "array", items: { type: "string" } },
-        removeTags: { type: "array", items: { type: "string" } },
-      },
-      required: ["phone"],
-    },
-  },
-  {
-    name: "create_task",
-    toolType: "create_task",
-    description: "Create a follow-up task for the team.",
-    body: {
-      type: "object",
-      properties: {
-        title: { type: "string" },
-        dueAt: { type: "string" },
-        notes: { type: "string" },
-        phone: { type: "string" },
-      },
-      required: ["title"],
-    },
-  },
-  {
-    name: "send_email",
-    toolType: "send_email",
-    description: "Send an email follow-up to the caller or contact.",
-    body: {
-      type: "object",
-      properties: {
-        to: { type: "string" },
-        subject: { type: "string" },
-        body: { type: "string" },
-      },
-      required: ["to", "subject", "body"],
-    },
-  },
-  {
-    name: "calendar_availability",
-    toolType: "calendar_availability",
-    description: "Check live calendar availability before offering times.",
-    body: {
-      type: "object",
-      properties: {
-        serviceId: { type: "string" },
-        from: { type: "string" },
-        to: { type: "string" },
-      },
-      required: [],
-    },
-  },
-  {
-    name: "book_appointment",
-    toolType: "book_appointment",
-    description:
-      "Book an appointment. NEVER tell the caller they are booked until this returns success.",
-    body: {
-      type: "object",
-      properties: {
-        startAt: { type: "string" },
-        serviceId: { type: "string" },
-        staffId: { type: "string" },
-        customerName: { type: "string" },
-        customerPhone: { type: "string" },
-        customerEmail: { type: "string" },
-      },
-      required: ["startAt", "customerPhone"],
-    },
-  },
-  {
-    name: "reschedule_appointment",
-    toolType: "reschedule_appointment",
-    description: "Reschedule an existing appointment.",
-    body: {
-      type: "object",
-      properties: {
-        appointmentId: { type: "string" },
-        newStartAt: { type: "string" },
-      },
-      required: ["appointmentId", "newStartAt"],
-    },
-  },
-  {
-    name: "cancel_appointment",
-    toolType: "cancel_appointment",
-    description: "Cancel an existing appointment.",
-    body: {
-      type: "object",
-      properties: {
-        appointmentId: { type: "string" },
-        reason: { type: "string" },
-      },
-      required: ["appointmentId"],
-    },
-  },
-  {
-    name: "send_sms",
-    toolType: "send_sms",
-    description: "Send an SMS to the caller or another number.",
-    body: {
-      type: "object",
-      properties: {
-        to: { type: "string" },
-        body: { type: "string" },
-      },
-      required: ["to", "body"],
-    },
-  },
-  {
-    name: "send_dtmf",
-    toolType: "send_dtmf",
-    description:
-      "Send DTMF digits on the active call (extensions, IVR menus). Digits: 0-9 A-D * # w (wait) , (pause).",
-    body: {
-      type: "object",
-      properties: {
-        digits: { type: "string", description: "DTMF sequence up to 32 chars" },
-      },
-      required: ["digits"],
-    },
-  },
-  {
-    name: "end_call",
-    toolType: "end_call",
-    description: "End the call safely when the conversation is complete.",
-    body: {
-      type: "object",
-      properties: {
-        reason: { type: "string" },
-      },
-      required: [],
-    },
-  },
-];

@@ -8,10 +8,17 @@ import { AgentTestPanel } from "@/components/voice/agent-test-panel";
 import { VoicePicker } from "@/components/voice/voice-picker";
 import type { VoiceAgentConfig } from "@/lib/voice/types";
 import { AGENT_TYPE_LABELS } from "@/lib/voice/types";
+import {
+  TOOL_CATEGORY_LABELS,
+  TOOL_CATEGORY_ORDER,
+  TOOL_CATALOG,
+  defaultBuiltinToolsForAgentType,
+  type CatalogToolDef,
+} from "@/lib/voice/tools/catalog";
 import { toErrorMessage } from "@/lib/errors";
 import { voiceLabel } from "@/lib/voice/telnyx/voices";
 import { cn } from "@/lib/utils";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 const SECTIONS = [
   { id: "identity", label: "Identity" },
@@ -71,6 +78,7 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
   const [selectedKbIds, setSelectedKbIds] = useState<string[]>([]);
   const [toolOptions, setToolOptions] = useState<ToolOption[]>([]);
   const [selectedToolIds, setSelectedToolIds] = useState<string[]>([]);
+  const [enabledBuiltinTools, setEnabledBuiltinTools] = useState<string[]>([]);
   const [agentOptions, setAgentOptions] = useState<Array<{ id: string; name: string; telnyxAssistantId?: string | null }>>([]);
   const [pronDictText, setPronDictText] = useState("{}");
   const [linkSaving, setLinkSaving] = useState(false);
@@ -173,6 +181,13 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
     if (agentToolsRes.ok) {
       const j = await agentToolsRes.json();
       setSelectedToolIds((j.data || []).map((l: { toolId: string }) => l.toolId));
+      if (Array.isArray(j.enabledBuiltinTools)) {
+        setEnabledBuiltinTools(j.enabledBuiltinTools);
+      } else {
+        setEnabledBuiltinTools(
+          defaultBuiltinToolsForAgentType(aJson.data?.agentType),
+        );
+      }
     }
     if (agentsRes.ok) {
       const j = await agentsRes.json();
@@ -359,10 +374,23 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
       const res = await fetch(`/api/voice/agents/${agentId}/tools`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ toolIds: selectedToolIds }),
+        body: JSON.stringify({
+          toolIds: selectedToolIds,
+          enabledBuiltinTools,
+        }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(toErrorMessage(json.error ?? json, "Save failed"));
+      if (agent) {
+        setAgent({
+          ...agent,
+          draftConfig: {
+            ...agent.draftConfig,
+            toolIds: selectedToolIds,
+            enabledBuiltinTools,
+          },
+        });
+      }
     } catch (e) {
       setError(toErrorMessage(e, "Tools save failed"));
     } finally {
@@ -381,6 +409,20 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
     );
   }
+
+  function toggleBuiltinTool(key: string) {
+    setEnabledBuiltinTools((prev) =>
+      prev.includes(key) ? prev.filter((x) => x !== key) : [...prev, key],
+    );
+  }
+
+  const catalogGroups = useMemo(() => {
+    return TOOL_CATEGORY_ORDER.map((category) => ({
+      category,
+      label: TOOL_CATEGORY_LABELS[category],
+      tools: TOOL_CATALOG.filter((t) => t.category === category),
+    })).filter((g) => g.tools.length > 0);
+  }, []);
 
   function updateDirections(dir: "inbound" | "outbound", checked: boolean) {
     if (!agent) return;
@@ -851,7 +893,7 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
                   type="number"
                   min="1000"
                   step="500"
-                  value={cfg.voiceLanguage?.silenceTimeoutMs ?? 8000}
+                  value={cfg.voiceLanguage?.silenceTimeoutMs ?? 2500}
                   onChange={(e) =>
                     updateConfig({
                       voiceLanguage: {
@@ -898,7 +940,7 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
                   type="number"
                   min="100"
                   step="50"
-                  value={cfg.voiceLanguage?.endpointingMs ?? 500}
+                  value={cfg.voiceLanguage?.endpointingMs ?? 300}
                   onChange={(e) =>
                     updateConfig({
                       voiceLanguage: {
@@ -974,24 +1016,31 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
               <Label>Assistant output gain (PSTN A/B)</Label>
               <select
                 className="mt-1 w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm"
-                value={String(cfg.voiceLanguage?.outputGainDb ?? -3)}
+                value={String(cfg.voiceLanguage?.outputGainDb ?? -5)}
                 onChange={(e) =>
                   updateConfig({
                     voiceLanguage: {
                       ...cfg.voiceLanguage,
-                      outputGainDb: Number(e.target.value) as 0 | -3 | -6,
+                      outputGainDb: Number(e.target.value) as
+                        | 0
+                        | -3
+                        | -4
+                        | -5
+                        | -6,
                     },
                   })
                 }
               >
-                <option value="0">0 dB (current / loudest)</option>
-                <option value="-3">−3 dB (recommended first test)</option>
+                <option value="0">0 dB (loudest)</option>
+                <option value="-3">−3 dB</option>
+                <option value="-4">−4 dB</option>
+                <option value="-5">−5 dB (recommended)</option>
                 <option value="-6">−6 dB</option>
               </select>
               <p className="mt-1 text-[11px] text-muted-foreground">
-                Lowers only the AI playback level for phone clipping tests — not
-                the caller microphone. Browser WebRTC can stay clean while PSTN
-                shows interference; try −3 dB before changing bitrate.
+                Lowers only AI playback for phone clipping — not the caller mic.
+                Tune by ear around −4 to −5 dB; going quieter than −6 usually just
+                sounds quiet.
               </p>
             </div>
             <div className="rounded border border-border p-3 text-xs">
@@ -1002,9 +1051,9 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
               </p>
               <ul className="mt-2 list-disc space-y-1 pl-4 text-muted-foreground">
                 <li>Browser WebRTC (control — should be clean)</li>
-                <li>Cell on your carrier @ 0 / −3 / −6 dB</li>
-                <li>Cell on a second carrier @ −3 dB</li>
-                <li>Second premium NaturalHD voice @ −3 dB</li>
+                <li>Cell on your carrier @ −4 / −5 / −6 dB</li>
+                <li>Cell on a second carrier @ −5 dB</li>
+                <li>Second premium NaturalHD voice @ −5 dB</li>
               </ul>
             </div>
             <p className="text-[11px] text-muted-foreground">
@@ -1102,33 +1151,114 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
         )}
 
         {section === "tools" && (
-          <Card className="space-y-4 p-5">
-            <CardTitle>Tools</CardTitle>
-            <p className="text-sm text-muted-foreground">
-              Enable tools the agent can invoke during conversations.
-            </p>
-            {toolOptions.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No tools configured yet.</p>
-            ) : (
-              <div className="space-y-2">
-                {toolOptions.map((tool) => (
-                  <label key={tool.id} className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={selectedToolIds.includes(tool.id)}
-                      onChange={() => toggleToolId(tool.id)}
-                    />
-                    {tool.name}
-                    <span className="text-muted-foreground">
-                      ({tool.toolType} · {tool.status})
-                    </span>
-                  </label>
-                ))}
+          <Card className="space-y-5 p-5">
+            <div>
+              <CardTitle>Tools</CardTitle>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Enable only the tools this agent needs. Catalog tools appear for every
+                agent; nothing is attached to Telnyx until you enable it and publish.
+              </p>
+            </div>
+
+            {catalogGroups.map((group) => (
+              <div key={group.category} className="space-y-2">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  {group.label}
+                </h3>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {group.tools.map((tool: CatalogToolDef) => {
+                    const on = enabledBuiltinTools.includes(tool.key);
+                    return (
+                      <label
+                        key={tool.key}
+                        className={cn(
+                          "flex cursor-pointer flex-col gap-1 rounded-md border px-3 py-2.5 text-sm transition-colors",
+                          on
+                            ? "border-foreground/25 bg-muted/40"
+                            : "border-border bg-background",
+                          tool.comingSoon && "opacity-60",
+                        )}
+                      >
+                        <span className="flex items-start justify-between gap-2">
+                          <span className="flex items-center gap-2 font-medium">
+                            <input
+                              type="checkbox"
+                              checked={on}
+                              disabled={tool.comingSoon}
+                              onChange={() => toggleBuiltinTool(tool.key)}
+                            />
+                            {tool.name}
+                          </span>
+                          <span className="shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">
+                            {tool.access}
+                            {tool.risk !== "low" ? ` · ${tool.risk}` : ""}
+                          </span>
+                        </span>
+                        <span className="pl-6 text-xs text-muted-foreground">
+                          {tool.description}
+                        </span>
+                        {tool.requiresIntegration ? (
+                          <span className="pl-6 text-[11px] text-muted-foreground">
+                            Uses: {tool.requiresIntegration}
+                            {tool.comingSoon ? " · Coming soon" : ""}
+                          </span>
+                        ) : null}
+                        {tool.disclosureSensitive ? (
+                          <span className="pl-6 text-[11px] text-amber-700 dark:text-amber-400">
+                            Phone disclosure limited to browser / internal test mode
+                          </span>
+                        ) : null}
+                      </label>
+                    );
+                  })}
+                </div>
               </div>
-            )}
-            <Button disabled={linkSaving} onClick={saveTools}>
-              {linkSaving ? "Saving…" : "Save tool links"}
-            </Button>
+            ))}
+
+            <div className="space-y-2 border-t border-border pt-4">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Custom workspace tools
+              </h3>
+              {toolOptions.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No custom webhook tools yet. Create them under Voice → Tools.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {toolOptions.map((tool) => (
+                    <label key={tool.id} className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={selectedToolIds.includes(tool.id)}
+                        onChange={() => toggleToolId(tool.id)}
+                      />
+                      {tool.name}
+                      <span className="text-muted-foreground">
+                        ({tool.toolType} · {tool.status})
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={linkSaving}
+                onClick={() =>
+                  setEnabledBuiltinTools(
+                    defaultBuiltinToolsForAgentType(agent?.agentType),
+                  )
+                }
+              >
+                Reset to template defaults
+              </Button>
+              <Button disabled={linkSaving} onClick={saveTools}>
+                {linkSaving ? "Saving…" : "Save tool assignments"}
+              </Button>
+            </div>
           </Card>
         )}
 

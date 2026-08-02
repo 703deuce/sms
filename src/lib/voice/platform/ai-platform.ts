@@ -1431,9 +1431,15 @@ export async function enableWebCallsAndSyncVoice(
   let voiceSynced = false;
   let voiceError: string | null = null;
   try {
-    const gainDb = Number(config.voiceLanguage?.outputGainDb ?? 0);
+    const gainDb = Number(config.voiceLanguage?.outputGainDb ?? -5);
     const gainLinear =
-      gainDb === -6 ? 0.5 : gainDb === -3 ? 0.708 : null;
+      gainDb < 0 && gainDb >= -12
+        ? Math.round(Math.pow(10, gainDb / 20) * 1000) / 1000
+        : null;
+    const waitSec = Math.max(
+      0.15,
+      Math.min(1.5, (config.voiceLanguage?.endpointingMs ?? 300) / 1000),
+    );
     await ai.updateAssistant(agent.telnyxAssistantId, {
       voice_settings: {
         voice: voiceId,
@@ -1444,6 +1450,11 @@ export async function enableWebCallsAndSyncVoice(
           ? { expressive_mode: true }
           : {}),
         ...(gainLinear != null ? { volume: gainLinear } : {}),
+      },
+      interruption_settings: {
+        enable: config.voiceLanguage?.bargeIn !== false,
+        disable_greeting_interruption: true,
+        start_speaking_plan: { wait_seconds: waitSec },
       },
       telephony_settings: {
         supports_unauthenticated_web_calls: true,

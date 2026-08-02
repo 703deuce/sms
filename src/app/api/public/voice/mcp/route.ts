@@ -22,6 +22,21 @@ const ALLOWED_TOOLS = [
     },
   },
   {
+    name: "search_crm_contacts",
+    description:
+      "Search Transovo + connected CRM contacts by name, phone, or email",
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: { type: "string" },
+        phone: { type: "string" },
+        email: { type: "string" },
+        match_type: { type: "string" },
+        limit: { type: "number" },
+      },
+    },
+  },
+  {
     name: "calendar_availability",
     description: "Check calendar availability",
     inputSchema: {

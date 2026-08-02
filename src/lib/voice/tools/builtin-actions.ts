@@ -12,29 +12,54 @@ export async function executeBuiltinVoiceAction(input: {
   const args = input.input || {};
 
   switch (input.toolType) {
-    case "lookup_customer": {
-      const phone = args.phone ? normalizeE164(String(args.phone)) : "";
-      const email = args.email ? String(args.email).toLowerCase() : "";
-      const contact = phone
-        ? await prisma.contact.findUnique({
-            where: { workspaceId_phone: { workspaceId: input.workspaceId, phone } },
+    case "lookup_customer":
+    case "search_crm_contacts": {
+      const { searchCrmContactsForVoice } = await import("./crm-contact-search");
+      const call = input.callId
+        ? await prisma.voiceCall.findFirst({
+            where: { id: input.callId, workspaceId: input.workspaceId },
+            select: { isTest: true, metadata: true },
           })
-        : email
-          ? await prisma.contact.findFirst({
-              where: { workspaceId: input.workspaceId, email },
-            })
-          : null;
-      if (!contact) return { found: false };
-      return {
-        found: true,
-        contact: {
-          id: contact.id,
-          phone: contact.phone,
-          firstName: contact.firstName,
-          lastName: contact.lastName,
-          email: contact.email,
-        },
-      };
+        : null;
+      const meta = (call?.metadata || {}) as Record<string, unknown>;
+      const allowSpeakPhone = Boolean(
+        call?.isTest ||
+          meta.internalAssistant ||
+          meta.browserTest ||
+          args.internal_test === true,
+      );
+      const result = await searchCrmContactsForVoice({
+        workspaceId: input.workspaceId,
+        query: args.query ? String(args.query) : args.name ? String(args.name) : "",
+        phone: args.phone ? String(args.phone) : "",
+        email: args.email ? String(args.email) : "",
+        matchType:
+          args.match_type === "name" ||
+          args.match_type === "phone" ||
+          args.match_type === "email"
+            ? args.match_type
+            : "auto",
+        limit: Number(args.limit) || 3,
+        allowSpeakPhone,
+      });
+      // Backward-compatible shape for lookup_customer.
+      if (input.toolType === "lookup_customer") {
+        const first = result.matches[0];
+        if (!first) return { found: false, ...result };
+        return {
+          found: true,
+          contact: {
+            id: first.safeId,
+            phone: first.speakPhone || first.phone,
+            firstName: first.displayName.split(" ")[0] || null,
+            lastName: first.displayName.split(" ").slice(1).join(" ") || null,
+            email: first.email,
+            company: first.company,
+          },
+          ...result,
+        };
+      }
+      return result;
     }
     case "update_contact_tags": {
       const phone = normalizeE164(String(args.phone || ""));

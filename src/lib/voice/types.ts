@@ -86,10 +86,10 @@ export type VoiceAgentConfig = {
     /** Expressive / stability-style delivery when the voice model supports it. */
     expressiveMode?: boolean;
     /**
-     * Assistant playback gain for PSTN clipping A/B (0, −3, −6 dB).
+     * Assistant playback gain for PSTN clipping A/B (0, −3…−6 dB).
      * Does not change caller microphone gain.
      */
-    outputGainDb?: 0 | -3 | -6;
+    outputGainDb?: 0 | -3 | -4 | -5 | -6;
     interruptionHandling?: string;
     bargeIn?: boolean;
     responsiveness?: string;
@@ -138,7 +138,14 @@ export type VoiceAgentConfig = {
   compliance?: Record<string, unknown>;
   advanced?: Record<string, unknown>;
   knowledgeBaseIds?: string[];
+  /** Workspace VoiceTool row IDs linked to this agent. */
   toolIds?: string[];
+  /**
+   * Catalog keys (hangup, transfer, search_crm_contacts, …) explicitly
+   * enabled for this agent. When omitted, template/safe defaults apply —
+   * never the full catalog.
+   */
+  enabledBuiltinTools?: string[];
 };
 
 export const DEFAULT_VOICE_CONFIG: VoiceAgentConfig = {
@@ -170,9 +177,12 @@ export const DEFAULT_VOICE_CONFIG: VoiceAgentConfig = {
     voiceId: "ava-warm-us",
     speed: 1,
     primaryLanguage: "en-US",
-    silenceTimeoutMs: 8000,
+    // Faster conversational turn-taking (target <1s after caller stops).
+    silenceTimeoutMs: 2500,
+    endpointingMs: 300,
+    bargeIn: true,
     noiseSuppression: true,
-    outputGainDb: -3,
+    outputGainDb: -5,
   },
   model: {
     provider: "telnyx",
@@ -202,6 +212,16 @@ export const DEFAULT_VOICE_CONFIG: VoiceAgentConfig = {
       { field: "appointment_booked", points: 10 },
     ],
   },
+  // Explicit list preferred; when omitted at sync time, template/safe defaults apply.
+  enabledBuiltinTools: [
+    "hangup",
+    "transfer",
+    "create_task",
+    "update_contact_tags",
+    "send_sms",
+    "lookup_customer",
+    "end_call",
+  ],
 };
 
 export const AGENT_TYPE_LABELS: Record<VoiceAgentType, string> = {

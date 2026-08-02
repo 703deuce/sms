@@ -1,5 +1,6 @@
 import type { VoiceAgentType, VoiceAgentConfig } from "./types";
 import { DEFAULT_VOICE_CONFIG } from "./types";
+import { defaultBuiltinToolsForAgentType } from "./tools/catalog";
 
 export type AgentTemplate = {
   id: string;
@@ -164,6 +165,7 @@ export const VOICE_AGENT_TEMPLATES: AgentTemplate[] = [
 export function templateConfig(templateId: string): VoiceAgentConfig {
   const t = VOICE_AGENT_TEMPLATES.find((x) => x.id === templateId);
   if (!t) return structuredClone(DEFAULT_VOICE_CONFIG);
+  const agentType = t.agentType;
   return {
     ...structuredClone(DEFAULT_VOICE_CONFIG),
     ...t.config,
@@ -174,5 +176,7 @@ export function templateConfig(templateId: string): VoiceAgentConfig {
     },
     conversationFlow: t.config.conversationFlow ?? DEFAULT_VOICE_CONFIG.conversationFlow,
     voicemail: { ...DEFAULT_VOICE_CONFIG.voicemail, ...t.config.voicemail },
+    enabledBuiltinTools:
+      t.config.enabledBuiltinTools ?? defaultBuiltinToolsForAgentType(agentType),
   };
 }
