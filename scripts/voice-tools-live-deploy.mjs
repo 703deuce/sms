@@ -21,6 +21,7 @@ const HANDOFF_E164 = (process.env.HANDOFF_E164 || "+15714776175").trim();
 // Do NOT enable escalate_human alongside native transfer (competing paths).
 const FULL_TOOLS = [
   "transfer",
+  "escalate_human",
   "hangup",
   "send_dtmf",
   "send_sms",
@@ -242,8 +243,10 @@ async function main() {
       system: [
         "You are the front desk AI for the business.",
         "Be brief, warm, and accurate.",
-        "CRITICAL: When the caller asks for a human, person, agent, transfer, or to speak with someone, use the native Transfer tool to the named target 'Agent Handoff'. Never invent phone numbers. Never use hangup to transfer. Never hand off to another AI for a human request.",
-        "For CRM lookups use search_crm_contacts, crm_lookup, or lookup_customer, then speak the result. Never hang up after a lookup.",
+        "CRITICAL: When the caller asks for a human, person, agent, transfer, or to speak with someone, use Transfer or escalate_human to the named target 'Agent Handoff'. Never invent phone numbers. Never use hangup to transfer. Never hand off to another AI for a human request.",
+        "If Transfer fails, immediately try escalate_human once, then offer to take a message. Stay on the line.",
+        "For CRM lookups use search_crm_contacts, crm_lookup, or lookup_customer with the full name. Speak the contact name you found. Never invent unrelated contacts. Never hang up after a lookup.",
+        "On public calls do not read another person's full phone number aloud — confirm the name and offer transfer or a message.",
         "Never claim a transfer, SMS, booking, or CRM write succeeded until the tool returns success.",
         "If a tool is slow, say 'One moment while I look that up.' If a tool fails, apologize and stay on the line.",
         "Only hang up after a clear goodbye when the caller is fully done.",
@@ -289,6 +292,19 @@ async function main() {
     },
   });
   log(saved.res.ok, "save agent config (−5 dB + tools)", saved.json?.error || saved.status);
+
+  // Specialist flow rules were stealing after-hours inbound onto Billing Specialist
+  // (empty transfer targets → "couldn't transfer"). Remove non-DID flow rules.
+  const routing = await api(jar, "/api/voice/routing");
+  let removedRules = 0;
+  for (const rule of routing.json?.data || []) {
+    const flowManaged = Boolean(rule?.conditions?.flowManaged);
+    if (flowManaged && rule.agentId && rule.agentId !== agent.id) {
+      const del = await api(jar, `/api/voice/routing/${rule.id}`, { method: "DELETE" });
+      if (del.res.ok) removedRules += 1;
+    }
+  }
+  log(true, "clear specialist flow routing rules", `removed=${removedRules}`);
 
   // Named destinations (source of truth for Telnyx transfer targets)
   for (const name of ["Agent Handoff", "Front Desk"]) {

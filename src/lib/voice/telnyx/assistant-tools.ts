@@ -132,14 +132,12 @@ export function buildAssistantTools(input: {
 
   // Attach only explicitly enabled Transovo builtins (never the full catalog).
   // Skip end_call when native hangup is already enabled — dual terminators cause
-  // accidental hangups. Skip escalate_human when native transfer is attached —
-  // competing transfer paths caused the model to hang up instead.
-  const hasNativeTransfer = tools.some((t) => (t as { type?: string }).type === "transfer");
+  // accidental hangups. Keep escalate_human even with native transfer so we can
+  // recover when Telnyx native transfer fails (e.g. transfer-to-self while testing).
   const skipEndCall = isBuiltinToolEnabled(enabled, "hangup");
   for (const [key, builtin] of Object.entries(BUILTIN_WEBHOOK_BODIES)) {
     if (!isBuiltinToolEnabled(enabled, key)) continue;
     if (skipEndCall && key === "end_call") continue;
-    if (hasNativeTransfer && key === "escalate_human") continue;
     if (tools.some((t) => (t as { webhook?: { name?: string } }).webhook?.name === builtin.name)) {
       continue;
     }

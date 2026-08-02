@@ -42,21 +42,20 @@ export async function executeBuiltinVoiceAction(input: {
         limit: Number(args.limit) || 3,
         allowSpeakPhone,
       });
-      // Backward-compatible shape for lookup_customer.
-      // Always include `speak` so the assistant recovers verbally instead of hanging up.
+      // Prefer the search helper's relevance-aware `speak` string.
       if (input.toolType === "lookup_customer") {
         const first = result.matches[0];
         if (!first) {
           return {
-            ok: true,
-            found: false,
             ...result,
+            found: false,
             speak:
+              result.speak ||
               "I couldn't find that contact. Can you spell the name or share another detail?",
           };
         }
         return {
-          ok: true,
+          ...result,
           found: true,
           contact: {
             id: first.safeId,
@@ -66,24 +65,20 @@ export async function executeBuiltinVoiceAction(input: {
             email: first.email,
             company: first.company,
           },
-          ...result,
-          speak: allowSpeakPhone
-            ? `I found ${first.displayName}${first.speakPhone ? `, phone ${first.speakPhone}` : ""}.`
-            : `I found ${first.displayName}${first.company ? ` at ${first.company}` : ""}. I can take a message or transfer you if you need more.`,
+          speak:
+            result.speak ||
+            (allowSpeakPhone
+              ? `I found ${first.displayName}${first.speakPhone ? `, phone ${first.speakPhone}` : ""}.`
+              : `I found ${first.displayName}. I can take a message or transfer you.`),
         };
       }
-      const first = result.matches[0];
       return {
-        ok: true,
         ...result,
         speak:
-          result.matchCount === 0
+          result.speak ||
+          (result.matchCount === 0
             ? "I couldn't find that contact. Can you spell the name?"
-            : result.ambiguous
-              ? `I found a few matches including ${first?.displayName || "similar names"}. Which one did you mean?`
-              : allowSpeakPhone
-                ? `I found ${first?.displayName}${first?.speakPhone ? `, phone ${first.speakPhone}` : ""}.`
-                : `I found ${first?.displayName}${first?.company ? ` at ${first.company}` : ""}.`,
+            : `I found ${result.matches[0]?.displayName || "a match"}.`),
       };
     }
     case "update_contact_tags": {
@@ -433,6 +428,18 @@ export async function executeBuiltinVoiceAction(input: {
             "No transfer destination configured. Ask the caller for a callback instead.",
           speak:
             "I don't have a transfer number configured. I can take a message for the team instead.",
+        };
+      }
+      // Transferring a caller to their own number always fails — common when
+      // testing from the Agent Handoff cellphone.
+      const destNorm = normalizeE164(dest.destination);
+      const callerNorm = normalizeE164(call.fromE164 || "");
+      if (destNorm && callerNorm && destNorm === callerNorm) {
+        return {
+          ok: false,
+          error: "transfer_to_self",
+          speak:
+            "I can't transfer you to the same phone you're calling from. On a customer call this would ring your team. I can take a message instead.",
         };
       }
       // Cold/blind transfer for AI PSTN — warm hold tears down the assistant and

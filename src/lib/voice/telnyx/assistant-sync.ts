@@ -172,18 +172,34 @@ export async function syncTelnyxAssistant(
   };
 
   // Prefer named destinations from VoiceTransferDestination (platform UI).
+  // Include workspace-global destinations (agentId null) so specialists inherit
+  // the same Agent Handoff targets as the main DID agent.
   let transferTargets = transferCfg.targets;
   try {
     const { getPrisma } = await import("@/lib/db");
     const dests = await getPrisma().voiceTransferDestination.findMany({
-      where: { workspaceId, agentId: agent.id, enabled: true },
+      where: {
+        workspaceId,
+        enabled: true,
+        OR: [{ agentId: agent.id }, { agentId: null }],
+      },
       take: 20,
+      orderBy: { updatedAt: "desc" },
     });
     if (dests.length) {
-      transferTargets = dests.map((d: { name: string; destination: string }) => ({
-        name: d.name,
-        to: d.destination,
-      }));
+      const byName = new Map<string, { name: string; to: string }>();
+      for (const d of dests as Array<{
+        name: string;
+        destination: string;
+        agentId: string | null;
+      }>) {
+        const key = d.name.toLowerCase();
+        // Prefer agent-scoped over global when both exist.
+        if (!byName.has(key) || d.agentId === agent.id) {
+          byName.set(key, { name: d.name, to: d.destination });
+        }
+      }
+      transferTargets = [...byName.values()];
     }
   } catch {
     // keep config.targets

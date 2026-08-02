@@ -22,6 +22,7 @@ export type CrmContactSearchMatch = {
   safeId: string;
   /** Redacted for spoken production use unless speakAllowed. */
   speakPhone?: string | null;
+  score?: number;
 };
 
 export async function searchCrmContactsForVoice(input: {
@@ -40,6 +41,7 @@ export async function searchCrmContactsForVoice(input: {
   const email = input.email ? String(input.email).trim().toLowerCase() : "";
   const matchType = input.matchType || "auto";
   const speakAllowed = Boolean(input.allowSpeakPhone);
+  const tokens = tokenizeName(q);
 
   const matches: CrmContactSearchMatch[] = [];
   const prisma = getPrisma();
@@ -49,45 +51,46 @@ export async function searchCrmContactsForVoice(input: {
     const local = await prisma.contact.findUnique({
       where: { workspaceId_phone: { workspaceId: input.workspaceId, phone } },
     });
-    if (local) {
-      matches.push(formatLocal(local, speakAllowed));
-    }
+    if (local) matches.push(formatLocal(local, speakAllowed, 100));
   }
   if (email && matches.length < limit && (matchType === "auto" || matchType === "email")) {
     const local = await prisma.contact.findFirst({
       where: { workspaceId: input.workspaceId, email },
     });
     if (local && !matches.some((m) => m.safeId === `local:${local.id}`)) {
-      matches.push(formatLocal(local, speakAllowed));
+      matches.push(formatLocal(local, speakAllowed, 90));
     }
   }
-  if (q && matches.length < limit && (matchType === "auto" || matchType === "name")) {
-    const parts = q.split(/\s+/).filter(Boolean);
+  if (q && (matchType === "auto" || matchType === "name")) {
+    // Fetch by first/last token separately — Prisma-compat AND/contains is unreliable.
+    const tokenQueries = tokens.length ? tokens : [q];
     const locals = await prisma.contact.findMany({
       where: {
         workspaceId: input.workspaceId,
-        OR: [
-          { firstName: { contains: q, mode: "insensitive" } },
-          { lastName: { contains: q, mode: "insensitive" } },
-          { company: { contains: q, mode: "insensitive" } },
-          ...(parts.length >= 2
-            ? [
-                {
-                  AND: [
-                    { firstName: { contains: parts[0], mode: "insensitive" as const } },
-                    { lastName: { contains: parts[1], mode: "insensitive" as const } },
-                  ],
-                },
-              ]
-            : []),
-        ],
+        OR: tokenQueries.flatMap((tok) => [
+          { firstName: { contains: tok, mode: "insensitive" as const } },
+          { lastName: { contains: tok, mode: "insensitive" as const } },
+          { company: { contains: tok, mode: "insensitive" as const } },
+        ]),
       },
-      take: limit,
+      take: 40,
     });
-    for (const local of locals) {
+    const ranked = locals
+      .map((local: Parameters<typeof formatLocal>[0]) => {
+        const display =
+          [local.firstName, local.lastName].filter(Boolean).join(" ") ||
+          local.company ||
+          "";
+        const score = scoreNameMatch(q, tokens, display, local.company || "");
+        return { local, score };
+      })
+      .filter((r: { score: number }) => r.score > 0)
+      .sort((a: { score: number }, b: { score: number }) => b.score - a.score);
+
+    for (const { local, score } of ranked) {
       if (matches.length >= limit) break;
       if (matches.some((m) => m.safeId === `local:${local.id}`)) continue;
-      matches.push(formatLocal(local, speakAllowed));
+      matches.push(formatLocal(local, speakAllowed, score));
     }
   }
 
@@ -116,11 +119,12 @@ export async function searchCrmContactsForVoice(input: {
         email?: string | null;
         companyName?: string | null;
         ownerExternalId?: string | null;
+        score?: number;
       }> = [];
 
       if (phone && connector.findContactByPhone && (matchType === "auto" || matchType === "phone")) {
         const found = await connector.findContactByPhone(ctx, phone).catch(() => null);
-        if (found?.id) foundRows.push(found);
+        if (found?.id) foundRows.push({ ...found, score: 100 });
       }
       if (
         email &&
@@ -128,16 +132,22 @@ export async function searchCrmContactsForVoice(input: {
         (matchType === "auto" || matchType === "email")
       ) {
         const found = await connector.findContactByEmail(ctx, email).catch(() => null);
-        if (found?.id && !foundRows.some((f) => f.id === found.id)) foundRows.push(found);
+        if (found?.id && !foundRows.some((f) => f.id === found.id)) {
+          foundRows.push({ ...found, score: 90 });
+        }
       }
-      // Name / free-text search via provider word search (Zoho) or local filter.
       if (q && (matchType === "auto" || matchType === "name") && foundRows.length < limit) {
-        const named = await searchCrmByName(provider, ctx, q, limit).catch(() => []);
+        const named = await searchCrmByName(provider, ctx, q, Math.max(limit, 8)).catch(
+          () => [],
+        );
         for (const n of named) {
           if (foundRows.some((f) => f.id === n.id)) continue;
-          foundRows.push(n);
-          if (foundRows.length >= limit) break;
+          const display = [n.firstName, n.lastName].filter(Boolean).join(" ");
+          const score = scoreNameMatch(q, tokens, display, n.companyName || "");
+          if (score <= 0) continue;
+          foundRows.push({ ...n, score });
         }
+        foundRows.sort((a, b) => (b.score || 0) - (a.score || 0));
       }
 
       for (const found of foundRows) {
@@ -159,6 +169,7 @@ export async function searchCrmContactsForVoice(input: {
           recordType: "crm_contact",
           provider,
           safeId,
+          score: found.score || 50,
         });
       }
     } catch {
@@ -166,23 +177,82 @@ export async function searchCrmContactsForVoice(input: {
     }
   }
 
+  // Final relevance gate — never return unrelated contacts for a name query.
+  const filtered =
+    q && (matchType === "auto" || matchType === "name")
+      ? matches
+          .filter((m) => (m.score || 0) > 0 || !tokens.length)
+          .sort((a, b) => (b.score || 0) - (a.score || 0))
+      : matches;
+
+  const top = filtered.slice(0, limit);
+  const best = top[0];
+
   return {
-    matchCount: matches.length,
-    ambiguous: matches.length > 1,
+    ok: true,
+    matchCount: top.length,
+    ambiguous: top.length > 1,
     speakAllowed,
     policy: speakAllowed
       ? "internal_test_may_speak_phone"
       : "production_no_third_party_phone_disclosure",
-    matches: matches.slice(0, limit),
+    matches: top,
     guidance:
-      matches.length === 0
+      top.length === 0
         ? "No match found. Ask the caller to clarify name, phone, or email."
-        : matches.length > 1
+        : top.length > 1
           ? "Multiple matches. Ask the caller to confirm which person before using any details."
           : speakAllowed
             ? "Single match. You may confirm the permitted phone if this is an internal test."
-            : "Single match. Use for recognition/routing only — do not read another person’s phone number aloud to an unknown caller.",
+            : "Single match found. Confirm the name with the caller. Do not read another person’s full phone number aloud on a public inbound call — you may say you found them and offer to transfer or take a message.",
+    speak:
+      top.length === 0
+        ? `I couldn't find anyone named ${q || "that"}. Can you spell the name?`
+        : top.length === 1
+          ? speakAllowed && best?.speakPhone
+            ? `I found ${best.displayName}${best.company ? ` at ${best.company}` : ""}, phone ${best.speakPhone}.`
+            : `I found ${best?.displayName}${best?.company ? ` at ${best.company}` : ""}${best?.provider ? ` in ${best.provider}` : ""}. I can transfer you or take a message — I won't read their full phone number on this line.`
+          : `I found ${top.length} possible matches, including ${best?.displayName}. Which person did you mean?`,
   };
+}
+
+function tokenizeName(q: string) {
+  return q
+    .toLowerCase()
+    .split(/[^a-z0-9]+/i)
+    .map((t) => t.trim())
+    .filter((t) => t.length >= 2);
+}
+
+/** Higher is better. 0 = unrelated (must not return). */
+function scoreNameMatch(
+  rawQuery: string,
+  tokens: string[],
+  displayName: string,
+  company: string,
+) {
+  const name = displayName.toLowerCase().trim();
+  const comp = company.toLowerCase().trim();
+  const q = rawQuery.toLowerCase().trim();
+  if (!q) return 0;
+  if (name === q) return 100;
+  if (name.startsWith(q) || name.includes(` ${q}`)) return 90;
+  if (!tokens.length) {
+    return name.includes(q) || comp.includes(q) ? 40 : 0;
+  }
+  const nameTokens = tokenizeName(name);
+  let hit = 0;
+  for (const t of tokens) {
+    if (nameTokens.some((nt) => nt === t || nt.startsWith(t) || t.startsWith(nt))) {
+      hit += 1;
+    } else if (comp.includes(t)) {
+      hit += 0.25;
+    }
+  }
+  if (hit <= 0) return 0;
+  // Require all tokens for multi-word queries (Jennifer Testcross, David Kelly).
+  if (tokens.length >= 2 && hit < tokens.length) return 0;
+  return Math.round(50 + (hit / tokens.length) * 40);
 }
 
 function formatLocal(
@@ -195,6 +265,7 @@ function formatLocal(
     company?: string | null;
   },
   speakAllowed: boolean,
+  score = 50,
 ): CrmContactSearchMatch {
   const phoneVal = contact.phone || null;
   return {
@@ -208,6 +279,7 @@ function formatLocal(
     company: contact.company || null,
     recordType: "local",
     safeId: `local:${contact.id}`,
+    score,
   };
 }
 
@@ -235,55 +307,85 @@ async function searchCrmByName(
       ctx.preferences?.zohoProduct === "bigin"
         ? `${domain}/bigin/v2`
         : `${domain}/crm/v2`;
-    const word = await crmFetch<{ data?: Array<Record<string, unknown>> }>(
-      `${base}/Contacts/search?word=${encodeURIComponent(q)}`,
-      { accessToken: ctx.accessToken },
-    ).catch(() => ({ data: [] as Array<Record<string, unknown>> }));
-    const rows = (word.data || []).slice(0, limit);
-    if (rows.length) {
-      return rows.map((r) => ({
-        id: String(r.id),
-        firstName: (r.First_Name as string) || null,
-        lastName: (r.Last_Name as string) || null,
-        phone: (r.Phone as string) || (r.Mobile as string) || null,
-        email: (r.Email as string) || null,
-        companyName:
-          typeof r.Account_Name === "object" && r.Account_Name
-            ? String((r.Account_Name as { name?: string }).name || "")
-            : null,
-      }));
-    }
     const parts = q.split(/\s+/).filter(Boolean);
-    const criteria =
-      parts.length >= 2
-        ? `((First_Name:starts_with:${parts[0]})and(Last_Name:starts_with:${parts[1]}))`
-        : `((First_Name:starts_with:${q})or(Last_Name:starts_with:${q}))`;
-    const byCrit = await crmFetch<{ data?: Array<Record<string, unknown>> }>(
-      `${base}/Contacts/search?criteria=${encodeURIComponent(criteria)}`,
-      { accessToken: ctx.accessToken },
-    ).catch(() => ({ data: [] as Array<Record<string, unknown>> }));
-    return (byCrit.data || []).slice(0, limit).map((r) => ({
-      id: String(r.id),
-      firstName: (r.First_Name as string) || null,
-      lastName: (r.Last_Name as string) || null,
-      phone: (r.Phone as string) || (r.Mobile as string) || null,
-      email: (r.Email as string) || null,
-      companyName: null,
-    }));
+    const attempts: string[] = [];
+    // Zoho word search is unreliable with multi-word — try last name, first name, then full.
+    if (parts.length >= 2) {
+      attempts.push(parts[parts.length - 1], parts[0], q);
+    } else {
+      attempts.push(q);
+    }
+    const seen = new Set<string>();
+    const out: Array<{
+      id: string;
+      firstName: string | null;
+      lastName: string | null;
+      phone: string | null;
+      email: string | null;
+      companyName: string | null;
+    }> = [];
+
+    for (const word of attempts) {
+      const wordRes = await crmFetch<{ data?: Array<Record<string, unknown>> }>(
+        `${base}/Contacts/search?word=${encodeURIComponent(word)}`,
+        { accessToken: ctx.accessToken },
+      ).catch(() => ({ data: [] as Array<Record<string, unknown>> }));
+      for (const r of wordRes.data || []) {
+        const id = String(r.id || "");
+        if (!id || seen.has(id)) continue;
+        seen.add(id);
+        out.push({
+          id,
+          firstName: (r.First_Name as string) || null,
+          lastName: (r.Last_Name as string) || null,
+          phone: (r.Phone as string) || (r.Mobile as string) || null,
+          email: (r.Email as string) || null,
+          companyName:
+            typeof r.Account_Name === "object" && r.Account_Name
+              ? String((r.Account_Name as { name?: string }).name || "")
+              : null,
+        });
+        if (out.length >= limit) return out;
+      }
+    }
+
+    if (parts.length >= 2) {
+      const criteria = `((First_Name:starts_with:${parts[0]})and(Last_Name:starts_with:${parts[1]}))`;
+      const byCrit = await crmFetch<{ data?: Array<Record<string, unknown>> }>(
+        `${base}/Contacts/search?criteria=${encodeURIComponent(criteria)}`,
+        { accessToken: ctx.accessToken },
+      ).catch(() => ({ data: [] as Array<Record<string, unknown>> }));
+      for (const r of byCrit.data || []) {
+        const id = String(r.id || "");
+        if (!id || seen.has(id)) continue;
+        seen.add(id);
+        out.push({
+          id,
+          firstName: (r.First_Name as string) || null,
+          lastName: (r.Last_Name as string) || null,
+          phone: (r.Phone as string) || (r.Mobile as string) || null,
+          email: (r.Email as string) || null,
+          companyName: null,
+        });
+      }
+    }
+    return out.slice(0, limit);
   }
 
   // Salesforce / Pipedrive: scan a small page and filter locally by name.
   const connector = getConnector(provider);
   const page = await connector.listContacts(ctx as never, null).catch(() => null);
   if (!page?.items?.length) return [];
-  const lower = q.toLowerCase();
+  const tokens = tokenizeName(q);
   return page.items
-    .filter((c) => {
-      const name = [c.firstName, c.lastName].filter(Boolean).join(" ").toLowerCase();
-      return name.includes(lower) || (c.email || "").toLowerCase().includes(lower);
+    .map((c) => {
+      const name = [c.firstName, c.lastName].filter(Boolean).join(" ");
+      return { c, score: scoreNameMatch(q, tokens, name, c.companyName || "") };
     })
+    .filter((x) => x.score > 0)
+    .sort((a, b) => b.score - a.score)
     .slice(0, limit)
-    .map((c) => ({
+    .map(({ c }) => ({
       id: c.id,
       firstName: c.firstName,
       lastName: c.lastName,

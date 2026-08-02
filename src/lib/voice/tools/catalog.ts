@@ -335,6 +335,7 @@ export function catalogByCategory(): Array<{
 /** Full production receptionist set used for live phone agents. */
 export const FULL_RECEPTIONIST_TOOLS = [
   "transfer",
+  "escalate_human",
   "hangup",
   "send_dtmf",
   "send_sms",
