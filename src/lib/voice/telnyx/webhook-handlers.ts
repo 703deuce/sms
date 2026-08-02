@@ -307,18 +307,7 @@ export async function processVoiceWebhookEvent(input: {
     }
   }
 
-  if (!call) {
-    await prisma.providerWebhookEvent.update({
-      where: { providerEventId: input.providerEventId },
-      data: { status: "ignored", processedAt: new Date() },
-    });
-    return { ok: false, reason: "call_not_found" };
-  }
-
-  const workspaceId = call.workspaceId;
-
-  // Warm transfer consult leg answered — speak summary to agent; keep caller on hold
-  // until completeWarmTransfer is invoked (true warm consult UX).
+  // Warm transfer consult / outbound probe client_state (decoded early).
   const clientStateRaw = eventPayload.client_state;
   let warmState: Record<string, unknown> = {};
   if (typeof clientStateRaw === "string") {
@@ -328,6 +317,33 @@ export async function processVoiceWebhookEvent(input: {
       warmState = {};
     }
   }
+
+  // Direct outbound diagnostic dial (no VoiceCall row) — answer, speak, hang up.
+  if (warmState.kind === "outbound_voice_probe") {
+    const { handleOutboundVoiceProbeEvent } = await import(
+      "@/lib/phone/telnyx-outbound-voice"
+    );
+    await handleOutboundVoiceProbeEvent({
+      eventType,
+      eventPayload,
+      clientState: warmState,
+    });
+    await prisma.providerWebhookEvent.update({
+      where: { providerEventId: input.providerEventId },
+      data: { status: "processed", processedAt: new Date() },
+    });
+    return { ok: true, kind: "outbound_voice_probe" };
+  }
+
+  if (!call) {
+    await prisma.providerWebhookEvent.update({
+      where: { providerEventId: input.providerEventId },
+      data: { status: "ignored", processedAt: new Date() },
+    });
+    return { ok: false, reason: "call_not_found" };
+  }
+
+  const workspaceId = call.workspaceId;
   if (
     warmState.kind === "warm_transfer_consult" &&
     eventType === "call.answered" &&
@@ -858,6 +874,87 @@ export async function processVoiceWebhookEvent(input: {
                 speaker,
                 startMs: Number.isFinite(startMs) ? startMs : null,
                 endMs: Number.isFinite(endMs) ? endMs : null,
+              } as object,
+            },
+          })
+          .catch(() => undefined);
+      }
+    }
+
+    // Persist native Telnyx Transfer attempts (phone Transfer ≠ AI Handoff).
+    if (/conversation\.ended/i.test(eventType)) {
+      const transferStatus = eventPayload.transfer_status as
+        | { status?: string; target?: string; transferred?: boolean }
+        | undefined;
+      if (transferStatus && (transferStatus.target || transferStatus.status)) {
+        const destination = String(transferStatus.target || "").trim();
+        const transferred = Boolean(transferStatus.transferred);
+        const statusRaw = String(transferStatus.status || "").toLowerCase();
+        const status = transferred
+          ? "completed"
+          : statusRaw.includes("fail")
+            ? "failed"
+            : statusRaw || "unknown";
+        const existing = await prisma.voiceTransfer.findFirst({
+          where: {
+            workspaceId,
+            callId: call.id,
+            destination: destination || undefined,
+            transferType: "native_telnyx_transfer",
+          },
+          orderBy: { createdAt: "desc" },
+        });
+        if (existing) {
+          await prisma.voiceTransfer.update({
+            where: { id: existing.id },
+            data: {
+              status,
+              answered: transferred,
+              completedAt: new Date(),
+              metadata: {
+                ...((existing.metadata as object) || {}),
+                transfer_status: transferStatus,
+                conversationEndReason: eventPayload.reason || null,
+                source: "call.conversation.ended",
+              } as object,
+            },
+          });
+        } else {
+          await prisma.voiceTransfer.create({
+            data: {
+              workspaceId,
+              callId: call.id,
+              transferType: "native_telnyx_transfer",
+              destination: destination || "unknown",
+              status,
+              answered: transferred,
+              completedAt: new Date(),
+              metadata: {
+                transfer_status: transferStatus,
+                conversationEndReason: eventPayload.reason || null,
+                source: "call.conversation.ended",
+                // Named destination labels (e.g. "Agent Handoff") are phone
+                // Transfer targets, not Telnyx AI Assistant Handoff.
+                toolKind: "transfer",
+              } as object,
+            },
+          });
+        }
+        if (transferred) {
+          await prisma.voiceCall.update({
+            where: { id: call.id },
+            data: { transferred: true },
+          });
+        }
+        await prisma.voiceCallEvent
+          .create({
+            data: {
+              workspaceId,
+              callId: call.id,
+              eventType: "transfer.native_status",
+              payload: {
+                transfer_status: transferStatus,
+                reason: eventPayload.reason || null,
               } as object,
             },
           })

@@ -15,6 +15,7 @@ import {
 import { getMessagingProvider } from "@/lib/messaging/get-provider";
 import { getRegistrationByWorkspace } from "@/lib/messaging/store";
 import { resolveVoiceConnectionId } from "@/lib/phone/telnyx-voice-connection";
+import type { OutboundVoiceReadiness } from "@/lib/phone/telnyx-outbound-voice";
 
 export type ProvisionState =
   | "purchased"
@@ -68,7 +69,13 @@ export type NumberDiagnostics = {
   lastVerifiedAt: string | null;
   lastError: string | null;
   issues: Array<{ code: string; severity: "error" | "warn" | "info"; message: string }>;
-  ready: { messaging: boolean; voice: boolean; fully: boolean };
+  ready: {
+    messaging: boolean;
+    voice: boolean;
+    outbound: boolean;
+    fully: boolean;
+  };
+  outbound: OutboundVoiceReadiness | null;
   appBaseUrl: string;
 };
 
@@ -328,6 +335,18 @@ export async function enableVoiceOnWorkspaceNumber(input: {
   const connectionId = await resolveVoiceConnectionId();
   await assignVoiceConnection(row.providerNumberId, connectionId);
 
+  try {
+    const { ensureTelnyxOutboundVoiceReady } = await import(
+      "@/lib/phone/telnyx-outbound-voice"
+    );
+    await ensureTelnyxOutboundVoiceReady({
+      connectionId,
+      callerIdE164: row.e164,
+    });
+  } catch (err) {
+    console.error("[dual-provision] outbound voice ensure", err);
+  }
+
   // Messaging: keep existing, or create workspace profile (best-effort).
   let profileId = existingProfile;
   try {
@@ -446,6 +465,18 @@ export async function provisionPurchasedNumber(input: {
   const current = await fetchTelnyxNumber(row.providerNumberId);
   if (current && connectionId && current.connectionId !== connectionId) {
     await assignVoiceConnection(row.providerNumberId, connectionId);
+  }
+
+  try {
+    const { ensureTelnyxOutboundVoiceReady } = await import(
+      "@/lib/phone/telnyx-outbound-voice"
+    );
+    await ensureTelnyxOutboundVoiceReady({
+      connectionId,
+      callerIdE164: row.e164,
+    });
+  } catch (err) {
+    console.error("[dual-provision] outbound voice ensure", err);
   }
 
   // Messaging profile is best-effort — voice must still succeed if profile create fails.
@@ -587,9 +618,38 @@ export async function diagnoseWorkspaceNumber(input: {
     });
   }
 
+  let outbound: OutboundVoiceReadiness | null = null;
+  if (getTelnyxApiKey()) {
+    try {
+      const { diagnoseTelnyxOutboundVoice } = await import(
+        "@/lib/phone/telnyx-outbound-voice"
+      );
+      outbound = await diagnoseTelnyxOutboundVoice({
+        connectionId: telnyx?.connectionId || expectedVoice,
+        callerIdE164: row.e164,
+      });
+      for (const issue of outbound.issues) {
+        issues.push({
+          code: `outbound_${issue.code}`,
+          severity: issue.severity,
+          message: issue.message,
+        });
+      }
+    } catch (err) {
+      issues.push({
+        code: "outbound_diagnose_failed",
+        severity: "warn",
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
   const capabilities =
     telnyx?.capabilities ||
     (asRecord(row.capabilitiesJson) as NumberCapabilities | null);
+
+  const messagingReady = messagingOk || Boolean(messagingProfileId);
+  const outboundReady = Boolean(outbound?.ready);
 
   return {
     workspaceNumberId: row.id,
@@ -615,10 +675,12 @@ export async function diagnoseWorkspaceNumber(input: {
     lastError: prov.lastError,
     issues,
     ready: {
-      messaging: messagingOk || Boolean(messagingProfileId),
+      messaging: messagingReady,
       voice: voiceOk,
-      fully: (messagingOk || Boolean(messagingProfileId)) && voiceOk,
+      outbound: outboundReady,
+      fully: messagingReady && voiceOk && outboundReady,
     },
+    outbound,
     appBaseUrl: getAppBaseUrl(),
   };
 }

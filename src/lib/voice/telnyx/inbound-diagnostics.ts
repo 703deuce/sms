@@ -357,6 +357,40 @@ export async function diagnoseAndRepairInboundNumber(input: {
         } else if (ensured.updated) {
           repairs.push(`Updated Call Control webhook to ${expectedWebhookUrl}`);
         }
+        try {
+          const { ensureTelnyxOutboundVoiceReady } = await import(
+            "@/lib/phone/telnyx-outbound-voice"
+          );
+          const outbound = await ensureTelnyxOutboundVoiceReady({
+            connectionId: recommendedConnectionId,
+            callerIdE164: e164,
+          });
+          if (outbound.createdProfile) {
+            repairs.push(
+              `Created Outbound Voice Profile ${outbound.outboundVoiceProfileId}`,
+            );
+          }
+          if (outbound.attachedConnection) {
+            repairs.push(
+              `Attached Voice API Application to Outbound Voice Profile ${outbound.outboundVoiceProfileId}`,
+            );
+          }
+          if (!outbound.ready) {
+            for (const issue of outbound.issues) {
+              issues.push({
+                code: `outbound_${issue.code}`,
+                severity: issue.severity,
+                message: issue.message,
+              });
+            }
+          }
+        } catch (err) {
+          issues.push({
+            code: "outbound_ensure_failed",
+            severity: "warn",
+            message: err instanceof Error ? err.message : String(err),
+          });
+        }
       } else if (envApp && isCallControlApp(envApp)) {
         callControlApp = envApp;
         recommendedConnectionId = String(envApp.id);

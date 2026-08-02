@@ -54,7 +54,12 @@ export function buildAssistantTools(input: {
     (t) => t?.name && t?.to && /^\+?[1-9]\d{6,14}$/.test(String(t.to).replace(/[\s()-]/g, "")),
   );
   if (isBuiltinToolEnabled(enabled, "transfer") && validTargets.length) {
+    // Native Telnyx phone Transfer (PSTN/SIP destination) — NOT AI Assistant Handoff.
+    // Target names like "Agent Handoff" / "Front Desk" are destination labels only.
     const transferBody: Record<string, unknown> = {
+      name: "transfer_to_human",
+      description:
+        "Transfer the live caller to a named human phone destination (cold phone Transfer). Use when the caller asks for a person. This is not AI Assistant Handoff.",
       targets: validTargets.map((t) => ({
         name: t.name,
         to: t.to.startsWith("+") ? t.to : `+${t.to.replace(/\D/g, "")}`,
@@ -75,6 +80,7 @@ export function buildAssistantTools(input: {
     input.handoffAssistants?.length
   ) {
     // Cap specialists to reduce handoff loops; Telnyx keeps conversation context.
+    // This is AI Assistant Handoff (assistant-to-assistant), not phone Transfer.
     const assistants = input.handoffAssistants.slice(0, 6).map((a) => ({
       name: a.name,
       id: a.id,

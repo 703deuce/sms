@@ -24,7 +24,19 @@ type Diagnostics = {
     agentName: string | null;
   };
   issues: Array<{ code: string; severity: string; message: string }>;
-  ready: { messaging: boolean; voice: boolean; fully: boolean };
+  ready: {
+    messaging: boolean;
+    voice: boolean;
+    outbound?: boolean;
+    fully: boolean;
+  };
+  outbound?: {
+    ready: boolean;
+    outboundVoiceProfileId: string | null;
+    profileEnabled: boolean | null;
+    whitelistedDestinations: string[];
+    connectionId: string | null;
+  } | null;
   lastVerifiedAt: string | null;
   lastError: string | null;
 };
@@ -43,18 +55,27 @@ export function NumberProvisionPanel({ numberId }: { numberId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
-  function run(action: string) {
+  function run(action: string, extra?: Record<string, unknown>) {
     startTransition(async () => {
       setError(null);
       try {
         const res = await fetch(`/api/numbers/${numberId}/provision`, {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ action }),
+          body: JSON.stringify({ action, ...extra }),
         });
         const json = await res.json();
         if (!res.ok) throw new Error(json.error || `Request failed (${res.status})`);
-        setData(json.data);
+        // repair_outbound returns { outbound, diagnose }; others return diagnostics.
+        const next = json.data?.diagnose || json.data;
+        if (next?.e164 || next?.workspaceNumberId || next?.ready) {
+          setData(next);
+        } else if (json.data?.outbound && data) {
+          setData({ ...data, outbound: json.data.outbound, ready: {
+            ...data.ready,
+            outbound: Boolean(json.data.outbound.ready),
+          }});
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
       }
@@ -68,11 +89,13 @@ export function NumberProvisionPanel({ numberId }: { numberId: string }) {
 
   const readyLabel = data?.ready.fully
     ? "Fully configured"
-    : data?.ready.voice
-      ? "Voice ready"
-      : data?.ready.messaging
-        ? "Messaging ready"
-        : "Needs setup";
+    : data?.ready.voice && data?.ready.outbound
+      ? "Voice + outbound ready"
+      : data?.ready.voice
+        ? "Inbound voice ready"
+        : data?.ready.messaging
+          ? "Messaging ready"
+          : "Needs setup";
 
   return (
     <Card className="p-5">
@@ -134,6 +157,20 @@ export function NumberProvisionPanel({ numberId }: { numberId: string }) {
           <Row label="Voice webhook" value={data.voiceWebhookUrl} />
           <Row label="Messaging webhook" value={data.messagingWebhookUrl} />
           <Row
+            label="Outbound voice"
+            value={
+              data.outbound
+                ? `${data.outbound.ready ? "ready" : "not ready"} · profile ${
+                    data.outbound.outboundVoiceProfileId || "—"
+                  } · dest ${
+                    data.outbound.whitelistedDestinations?.join(",") || "—"
+                  }`
+                : data.ready.outbound
+                  ? "ready"
+                  : "—"
+            }
+          />
+          <Row
             label="AI agent"
             value={
               data.callFlow.agentName
@@ -188,6 +225,14 @@ export function NumberProvisionPanel({ numberId }: { numberId: string }) {
           onClick={() => run("repair_messaging")}
         >
           Repair messaging
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={pending}
+          onClick={() => run("repair_outbound")}
+        >
+          Repair outbound voice
         </Button>
         <Button size="sm" variant="outline" disabled={pending} onClick={() => run("provision")}>
           Full provision

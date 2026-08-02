@@ -237,5 +237,14 @@ export async function ensureVoiceCallControlApplication(input?: {
 /** Connection id to use for number attach / dials (never a credential softphone id). */
 export async function resolveVoiceConnectionId(): Promise<string> {
   const { connectionId } = await ensureVoiceCallControlApplication();
+  // Best-effort: attach Outbound Voice Profile so transfers/dials can originate.
+  try {
+    const { ensureTelnyxOutboundVoiceReady } = await import(
+      "@/lib/phone/telnyx-outbound-voice"
+    );
+    await ensureTelnyxOutboundVoiceReady({ connectionId });
+  } catch (err) {
+    console.error("[telnyx-voice] outbound voice ensure failed", err);
+  }
   return connectionId;
 }

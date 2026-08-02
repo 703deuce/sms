@@ -187,9 +187,32 @@ export async function searchCrmContactsForVoice(input: {
 
   const top = filtered.slice(0, limit);
   const best = top[0];
+  const matchStatus =
+    top.length === 0 ? "not_found" : top.length > 1 ? "ambiguous" : "found";
+  const disclosureStatus = speakAllowed ? "allowed" : "blocked";
+  const requestedPhone =
+    /phone|number|mobile|cell/i.test(q) ||
+    Boolean(input.phone) ||
+    Boolean(input.matchType === "phone");
+
+  // Keep tool_execution_status independent from disclosure — a successful lookup
+  // with protected fields is still a successful tool execution.
+  const speak =
+    matchStatus === "not_found"
+      ? `I couldn't find anyone named ${q || "that"}. Can you spell the name?`
+      : matchStatus === "ambiguous"
+        ? disclosureStatus === "blocked"
+          ? `I found ${top.length} contacts named ${best?.displayName || q}, but I'm not authorized to share private contact phone numbers on this call. Do you know the company or email, or would you like me to transfer you to a team member?`
+          : `I found ${top.length} possible matches, including ${best?.displayName}. Which person did you mean?`
+        : speakAllowed && best?.speakPhone
+          ? `I found ${best.displayName}${best.company ? ` at ${best.company}` : ""}, phone ${best.speakPhone}.`
+          : `I found ${best?.displayName}${best?.company ? ` at ${best.company}` : ""}. Their record is in our system, but I'm not authorized to read private contact phone numbers on this call. I can transfer you to a team member or take a message.`;
 
   return {
     ok: true,
+    tool_execution_status: "ok",
+    match_status: matchStatus,
+    disclosure_status: disclosureStatus,
     matchCount: top.length,
     ambiguous: top.length > 1,
     speakAllowed,
@@ -198,21 +221,15 @@ export async function searchCrmContactsForVoice(input: {
       : "production_no_third_party_phone_disclosure",
     matches: top,
     guidance:
-      top.length === 0
-        ? "No match found. Ask the caller to clarify name, phone, or email."
-        : top.length > 1
-          ? "Multiple matches. Ask the caller to confirm which person before using any details."
-          : speakAllowed
-            ? "Single match. You may confirm the permitted phone if this is an internal test."
-            : "Single match found. Confirm the name with the caller. Do not read another person’s full phone number aloud on a public inbound call — you may say you found them and offer to transfer or take a message.",
-    speak:
-      top.length === 0
-        ? `I couldn't find anyone named ${q || "that"}. Can you spell the name?`
-        : top.length === 1
-          ? speakAllowed && best?.speakPhone
-            ? `I found ${best.displayName}${best.company ? ` at ${best.company}` : ""}, phone ${best.speakPhone}.`
-            : `I found ${best?.displayName}${best?.company ? ` at ${best.company}` : ""}${best?.provider ? ` in ${best.provider}` : ""}. I can transfer you or take a message — I won't read their full phone number on this line.`
-          : `I found ${top.length} possible matches, including ${best?.displayName}. Which person did you mean?`,
+      matchStatus === "not_found"
+        ? "No match found. Ask the caller to clarify name, phone, or email. Do not claim a system error."
+        : matchStatus === "ambiguous"
+          ? "Multiple matches. Ask for company, email, or another detail before using any fields. Do not invent a lookup failure."
+          : disclosureStatus === "allowed"
+            ? "Single match. You may confirm the permitted phone if this is an internal/admin test."
+            : "Single match found with disclosure blocked. Say the contact was found but private phone numbers cannot be shared on this public line. Offer transfer or take a message. Never say the lookup failed.",
+    speak,
+    requestedField: requestedPhone ? "phone" : "contact",
   };
 }
 

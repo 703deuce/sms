@@ -173,7 +173,8 @@ export async function syncTelnyxAssistant(
 
   // Prefer named destinations from VoiceTransferDestination (platform UI).
   // Include workspace-global destinations (agentId null) so specialists inherit
-  // the same Agent Handoff targets as the main DID agent.
+  // the same phone Transfer destinations (e.g. destination name "Agent Handoff").
+  // Note: destination name ≠ Telnyx AI Assistant Handoff tool.
   let transferTargets = transferCfg.targets;
   try {
     const { getPrisma } = await import("@/lib/db");
@@ -530,6 +531,43 @@ export async function syncTelnyxAssistant(
   await persistAssistantId(assistantId);
   const toolResult = await enrichBestEffort(assistantId);
 
+  let outboundVoice: {
+    ready: boolean;
+    outboundVoiceProfileId: string | null;
+    issues: Array<{ code: string; severity: string; message: string }>;
+  } | null = null;
+  if (transferTargets?.length) {
+    try {
+      const { ensureTelnyxOutboundVoiceReady } = await import(
+        "@/lib/phone/telnyx-outbound-voice"
+      );
+      const ready = await ensureTelnyxOutboundVoiceReady();
+      outboundVoice = {
+        ready: ready.ready,
+        outboundVoiceProfileId: ready.outboundVoiceProfileId,
+        issues: ready.issues,
+      };
+      if (!ready.ready) {
+        console.warn(
+          "[assistant-sync] Transfer tool enabled but outbound voice not ready:",
+          ready.issues.map((i) => i.message).join("; "),
+        );
+      }
+    } catch (err) {
+      outboundVoice = {
+        ready: false,
+        outboundVoiceProfileId: null,
+        issues: [
+          {
+            code: "outbound_check_failed",
+            severity: "error",
+            message: err instanceof Error ? err.message : String(err),
+          },
+        ],
+      };
+    }
+  }
+
   return {
     mode: "telnyx",
     assistantId,
@@ -537,6 +575,7 @@ export async function syncTelnyxAssistant(
     toolCount: tools.length,
     toolSync: toolResult,
     toolSyncError: toolResult.ok ? null : toolResult.error,
+    outboundVoice,
   };
 }
 
@@ -555,8 +594,35 @@ export async function dialOutboundCall(input: {
     return mockOutboundDial(input);
   }
 
-  const connectionId =
-    input.connectionId || process.env.TELNYX_CONNECTION_ID?.trim();
+  let connectionId =
+    input.connectionId || process.env.TELNYX_CONNECTION_ID?.trim() || "";
+  try {
+    const { ensureTelnyxOutboundVoiceReady } = await import(
+      "@/lib/phone/telnyx-outbound-voice"
+    );
+    const { resolveVoiceConnectionId } = await import(
+      "@/lib/phone/telnyx-voice-connection"
+    );
+    if (!connectionId) connectionId = await resolveVoiceConnectionId();
+    const ready = await ensureTelnyxOutboundVoiceReady({
+      connectionId,
+      callerIdE164: input.fromE164,
+    });
+    if (ready.connectionId) connectionId = ready.connectionId;
+    if (!ready.ready) {
+      const detail =
+        ready.issues.find((i) => i.severity === "error")?.message ||
+        "Outbound Voice Profile not ready";
+      throw new Error(
+        `Outbound calling is not configured for this Voice API Application. ${detail}`,
+      );
+    }
+  } catch (err) {
+    if (err instanceof Error && /Outbound calling is not configured/.test(err.message)) {
+      throw err;
+    }
+    console.error("[dialOutboundCall] outbound ensure", err);
+  }
   if (!connectionId) throw new Error("TELNYX_CONNECTION_ID required for outbound calls");
 
   const body: Record<string, unknown> = {
