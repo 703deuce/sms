@@ -238,31 +238,14 @@ export async function syncTelnyxAssistant(
 
   const transcription = config.transcription || {};
   const connectionId = process.env.TELNYX_CONNECTION_ID?.trim();
-  const payload: Record<string, unknown> = {
+
+  // Core create body — keep strict; optional fields go on a follow-up update.
+  const corePayload: Record<string, unknown> = {
     name: `${agent.name} (${workspaceId.slice(0, 8)})`.slice(0, 100),
     model: modelId,
     instructions: instructions.slice(0, 100_000),
     greeting: greetingFromConfig(config, agent.name),
-    voice_settings: {
-      voice: config.voiceLanguage?.voiceId || "Telnyx.NaturalHD.andromeda",
-      ...(config.voiceLanguage?.speed != null
-        ? { speed: config.voiceLanguage.speed }
-        : {}),
-      ...(config.voiceLanguage?.bargeIn != null
-        ? { barge_in: config.voiceLanguage.bargeIn }
-        : {}),
-    },
-    enabled_features: [
-      "telephony",
-      ...(transcription.enabled !== false ? ["transcription"] : []),
-    ],
-    tools,
   };
-  if (connectionId) {
-    payload.telephony_settings = {
-      default_texml_app_id: connectionId,
-    };
-  }
   if (config.model?.customBaseUrl) {
     let apiKey: string | undefined;
     if (config.model.customApiKeyRef) {
@@ -278,40 +261,107 @@ export async function syncTelnyxAssistant(
         // omit
       }
     }
-    payload.external_llm = {
+    corePayload.external_llm = {
+      model: modelId,
       base_url: config.model.customBaseUrl,
-      ...(apiKey ? { api_key: apiKey } : {}),
+      ...(apiKey ? { llm_api_key_ref: config.model.customApiKeyRef } : {}),
     };
   } else if (config.model?.customApiKeyRef) {
-    // Third-party model via Telnyx integration secret identifier.
-    payload.llm_api_key_ref = config.model.customApiKeyRef;
+    corePayload.llm_api_key_ref = config.model.customApiKeyRef;
   }
-  if (transcription.sttProvider || transcription.sttModel || transcription.keyterms?.length) {
-    payload.transcription = {
-      model: transcription.sttModel || undefined,
+
+  const enrichPayload: Record<string, unknown> = {
+    voice_settings: {
+      voice: config.voiceLanguage?.voiceId || "Telnyx.NaturalHD.andromeda",
+      ...(config.voiceLanguage?.speed != null
+        ? { speed: config.voiceLanguage.speed }
+        : {}),
+    },
+    enabled_features: ["telephony"] as string[],
+    tools: [
+      {
+        type: "hangup",
+        hangup: {
+          description:
+            "End the call when the conversation is complete or the caller asks to hang up.",
+        },
+      },
+      // Full tool set (webhooks/transfers/RAG) — may be rejected on some accounts.
+      ...tools.filter((t) => (t as { type?: string }).type !== "hangup"),
+    ],
+  };
+  if (transcription.enabled !== false) {
+    (enrichPayload.enabled_features as string[]).push("transcription");
+  }
+  if (connectionId) {
+    enrichPayload.telephony_settings = {
+      default_texml_app_id: connectionId,
+    };
+  }
+  if (transcription.sttModel || transcription.keyterms?.length) {
+    enrichPayload.transcription = {
+      ...(transcription.sttModel ? { model: transcription.sttModel } : {}),
       language: transcription.language || config.voiceLanguage?.primaryLanguage || "en",
       ...(transcription.keyterms?.length ? { keyterms: transcription.keyterms } : {}),
-    };
-  }
-  if (config.voiceLanguage?.endpointingMs) {
-    payload.interruption_settings = {
-      ...((payload.interruption_settings as object) || {}),
-      endpointing_ms: config.voiceLanguage.endpointingMs,
-    };
-  }
-  if (config.instructions?.fillerMessages?.length) {
-    payload.messaging_settings = {
-      ...((payload.messaging_settings as object) || {}),
-      filler_messages: config.instructions.fillerMessages,
     };
   }
 
   const { getPrisma } = await import("@/lib/db");
   const prisma = getPrisma();
 
+  async function persistAssistantId(assistantId: string) {
+    await prisma.voiceAgent.update({
+      where: { id: agent.id },
+      data: {
+        telnyxAssistantId: assistantId,
+        telnyxConnectionId: connectionId || null,
+      },
+    });
+  }
+
+  async function enrichBestEffort(assistantId: string) {
+    try {
+      await ai.updateAssistant(assistantId, enrichPayload);
+      return { enriched: true as const };
+    } catch (err) {
+      // Retry with voice + hangup only so chat/telephony still work.
+      try {
+        await ai.updateAssistant(assistantId, {
+          voice_settings: enrichPayload.voice_settings,
+          enabled_features: ["telephony"],
+          tools: [
+            {
+              type: "hangup",
+              hangup: {
+                description: "End the call when the conversation is complete.",
+              },
+            },
+          ],
+          ...(connectionId
+            ? { telephony_settings: { default_texml_app_id: connectionId } }
+            : {}),
+        });
+        return {
+          enriched: "partial" as const,
+          error: err instanceof Error ? err.message : String(err),
+        };
+      } catch (err2) {
+        return {
+          enriched: false as const,
+          error: err2 instanceof Error ? err2.message : String(err2),
+        };
+      }
+    }
+  }
+
   if (agent.telnyxAssistantId) {
-    // Telnyx assistant updates are POST, not PATCH.
-    await ai.updateAssistant(agent.telnyxAssistantId, payload);
+    await ai.updateAssistant(agent.telnyxAssistantId, {
+      ...corePayload,
+      ...enrichPayload,
+    }).catch(async () => {
+      await ai.updateAssistant(agent.telnyxAssistantId!, corePayload);
+      await enrichBestEffort(agent.telnyxAssistantId!);
+    });
     return {
       mode: "telnyx",
       assistantId: agent.telnyxAssistantId,
@@ -320,7 +370,17 @@ export async function syncTelnyxAssistant(
     };
   }
 
-  const created = await ai.createAssistant(payload);
+  // Create with core fields only — optional tools/voice often cause 10015 Bad Request.
+  let created: unknown;
+  try {
+    created = await ai.createAssistant(corePayload);
+  } catch (err) {
+    // Last resort: omit model so Telnyx applies account default.
+    const { model: _omit, ...withoutModel } = corePayload;
+    created = await ai.createAssistant(withoutModel).catch(() => {
+      throw err;
+    });
+  }
   const assistantId = unwrapTelnyxId(created);
   if (!assistantId) {
     throw new Error(
@@ -328,13 +388,8 @@ export async function syncTelnyxAssistant(
     );
   }
 
-  await prisma.voiceAgent.update({
-    where: { id: agent.id },
-    data: {
-      telnyxAssistantId: assistantId,
-      telnyxConnectionId: connectionId || null,
-    },
-  });
+  await persistAssistantId(assistantId);
+  await enrichBestEffort(assistantId);
 
   return { mode: "telnyx", assistantId, bucketIds, toolCount: tools.length };
 }
