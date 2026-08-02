@@ -71,6 +71,13 @@ export function calendlyWebhookSigningKeyEnvPresence(): Record<string, boolean> 
   return out;
 }
 
+/** Presence-only list of CALENDLY_* env names visible to this process (never values). */
+export function listCalendlyEnvNamesPresent(): string[] {
+  return Object.keys(process.env)
+    .filter((k) => /^CALENDLY_/i.test(k) && Boolean(process.env[k]?.trim()))
+    .sort();
+}
+
 export function resolveCalendlyWebhookSigningKey(
   config?: Record<string, unknown> | null,
 ): string | null {

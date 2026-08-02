@@ -30,6 +30,9 @@ type Snapshot = {
     webhookSigningKeyFromConfig?: boolean;
     webhookSigningKeyEnv?: Record<string, boolean>;
     webhookSigningKeyEnvNames?: string[];
+    calendlyEnvNamesPresent?: string[];
+    clientIdPresent?: boolean;
+    clientSecretPresent?: boolean;
     userUri?: string | null;
     organizationUri?: string | null;
     timezone?: string | null;
@@ -271,11 +274,12 @@ export function NativeProviderClient({ provider }: { provider: string }) {
                 Webhook signing key:{" "}
                 {snapshot.calendly.webhookSigningKeyPresent ? "present" : "missing"}
                 {!snapshot.calendly.webhookSigningKeyPresent ? (
-                  <span className="block text-xs">
-                    Expected exact Coolify name:{" "}
-                    <code>CALENDLY_WEBHOOK_SIGNING_KEY</code> (alias{" "}
-                    <code>CALENDLY_WEBHOOK_SECRET</code>) — not{" "}
-                    <code>CALENDY_…</code> / <code>…SINGING…</code>
+                  <span className="block text-xs text-amber-700">
+                    Coolify has not injected this into the <strong>running web</strong>{" "}
+                    container. Exact key name must be{" "}
+                    <code>CALENDLY_WEBHOOK_SIGNING_KEY</code> (or{" "}
+                    <code>CALENDLY_WEBHOOK_SECRET</code>), non-empty, on the same app that
+                    serves transovo.ai, then <strong>restart/redeploy</strong>.
                   </span>
                 ) : null}
                 {snapshot.calendly.webhookSigningKeyEnv ? (
@@ -289,6 +293,15 @@ export function NativeProviderClient({ provider }: { provider: string }) {
                       : ""}
                   </span>
                 ) : null}
+                <span className="block text-xs">
+                  CALENDLY_* vars visible to app:{" "}
+                  {(snapshot.calendly.calendlyEnvNamesPresent || []).length
+                    ? snapshot.calendly.calendlyEnvNamesPresent!.join(", ")
+                    : "(none)"}
+                  {" · "}
+                  client id={snapshot.calendly.clientIdPresent ? "yes" : "no"} · secret=
+                  {snapshot.calendly.clientSecretPresent ? "yes" : "no"}
+                </span>
               </li>
               <li className="break-all">
                 Webhook URL: <code className="text-xs">{snapshot.calendly.webhookUrl}</code>

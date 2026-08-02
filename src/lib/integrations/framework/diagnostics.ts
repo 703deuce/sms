@@ -54,6 +54,7 @@ export async function getIntegrationDiagnosticsSnapshot(
       resolveCalendlyWebhookSigningKey,
       calendlyWebhookSigningKeyEnvPresence,
       CALENDLY_WEBHOOK_SIGNING_KEY_ENVS,
+      listCalendlyEnvNamesPresent,
     } = await import("../adapters/calendly");
     const { externalWebhookUrl } = await import("./app-url");
     const token = typeof cfg.webhookToken === "string" ? cfg.webhookToken : null;
@@ -65,6 +66,7 @@ export async function getIntegrationDiagnosticsSnapshot(
       typeof cfg.signingKey === "string" && cfg.signingKey.trim(),
     );
     const signingEnv = calendlyWebhookSigningKeyEnvPresence();
+    const calendlyEnvNamesPresent = listCalendlyEnvNamesPresent();
     calendly = {
       callbackUrl: typeof env === "object" && env && "callbackUrl" in env ? env.callbackUrl : null,
       webhookUrl: externalWebhookUrl("calendly", token),
@@ -72,6 +74,10 @@ export async function getIntegrationDiagnosticsSnapshot(
       webhookSigningKeyFromConfig: signingFromConfig,
       webhookSigningKeyEnv: signingEnv,
       webhookSigningKeyEnvNames: [...CALENDLY_WEBHOOK_SIGNING_KEY_ENVS],
+      /** Names only — proves which Calendly vars Coolify actually injected into this container. */
+      calendlyEnvNamesPresent,
+      clientIdPresent: calendlyEnvNamesPresent.some((n) => n === "CALENDLY_CLIENT_ID"),
+      clientSecretPresent: calendlyEnvNamesPresent.some((n) => n === "CALENDLY_CLIENT_SECRET"),
       userUri: cfg.userUri || conn?.externalId || null,
       organizationUri: cfg.organizationUri || null,
       timezone: cfg.timezone || null,
