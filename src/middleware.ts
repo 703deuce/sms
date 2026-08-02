@@ -78,7 +78,15 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (!session && !isPublic) {
+  // Smoke / ops bootstrap header (same value as /api/auth/smoke-login).
+  const smokeBootstrap =
+    request.headers.get("x-smoke-bootstrap") ===
+    "transovo-smoke-bootstrap-b56f-aug2026";
+  const smokeOpsPath =
+    pathname === "/api/numbers/telnyx-outbound-repair" ||
+    pathname === "/api/numbers/telnyx-inbound-repair";
+
+  if (!session && !isPublic && !(smokeBootstrap && smokeOpsPath)) {
     // API routes without a session should 401 JSON, not HTML login redirect.
     if (pathname.startsWith("/api/")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
