@@ -1437,7 +1437,9 @@ export async function enableWebCallsAndSyncVoice(
         ...(config.voiceLanguage?.speed != null
           ? { voice_speed: config.voiceLanguage.speed }
           : {}),
-        ...(isUltraVoice(voiceId) ? { expressive_mode: true } : {}),
+        ...(config.voiceLanguage?.expressiveMode || isUltraVoice(voiceId)
+          ? { expressive_mode: true }
+          : {}),
       },
     });
     voiceSynced = true;

@@ -83,6 +83,8 @@ export type VoiceAgentConfig = {
     speed?: number;
     pitch?: number;
     volume?: number;
+    /** Expressive / stability-style delivery when the voice model supports it. */
+    expressiveMode?: boolean;
     interruptionHandling?: string;
     bargeIn?: boolean;
     responsiveness?: string;

@@ -828,6 +828,9 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
                     })
                   }
                 />
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  0.5–2.0 · preview uses the same speed
+                </p>
               </div>
               <div>
                 <Label>Silence timeout (ms)</Label>
@@ -927,7 +930,7 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
             <label className="flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
-                checked={cfg.voiceLanguage?.noiseSuppression ?? false}
+                checked={cfg.voiceLanguage?.noiseSuppression ?? true}
                 onChange={(e) =>
                   updateConfig({
                     voiceLanguage: {
@@ -937,8 +940,28 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
                   })
                 }
               />
-              Noise suppression
+              Noise suppression (assistant telephony)
             </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={cfg.voiceLanguage?.expressiveMode ?? false}
+                onChange={(e) =>
+                  updateConfig({
+                    voiceLanguage: {
+                      ...cfg.voiceLanguage,
+                      expressiveMode: e.target.checked,
+                    },
+                  })
+                }
+              />
+              Expressive delivery (when voice model supports it)
+            </label>
+            <p className="text-[11px] text-muted-foreground">
+              Production default: NaturalHD. Ultra / xAI are available as preview
+              clips for personality and clarity compare — Assistants on this
+              account keep NaturalHD for live calls.
+            </p>
             <div>
               <Label>Primary language</Label>
               <Input

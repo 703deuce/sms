@@ -222,9 +222,11 @@ export type TestSessionQuality = {
   opusNegotiated?: boolean | null;
   mos?: number | null;
   mosLabel?: string | null;
+  connectionGrade?: string | null;
   rttMs?: number | null;
   jitterMs?: number | null;
   packetLossPct?: number | null;
+  bitrateKbps?: number | null;
   inboundBytes?: number | null;
   outboundBytes?: number | null;
   iceState?: string | null;
@@ -232,10 +234,12 @@ export type TestSessionQuality = {
   mediaReadyAtMs?: number | null;
   firstAudioAtMs?: number | null;
   greetingGateMs?: number | null;
+  stabilizeMs?: number | null;
   inputDeviceLabel?: string | null;
   outputDeviceLabel?: string | null;
   inputLooksBluetooth?: boolean;
   outputLooksBluetooth?: boolean;
+  highQualityAudio?: boolean;
   sampledAt?: string;
 };
 
@@ -255,9 +259,11 @@ export async function endVoiceTestSession(input: {
         opusNegotiated: input.quality.opusNegotiated ?? null,
         mos: input.quality.mos ?? null,
         mosLabel: input.quality.mosLabel ?? null,
+        connectionGrade: input.quality.connectionGrade ?? null,
         rttMs: input.quality.rttMs ?? null,
         jitterMs: input.quality.jitterMs ?? null,
         packetLossPct: input.quality.packetLossPct ?? null,
+        bitrateKbps: input.quality.bitrateKbps ?? null,
         inboundBytes: input.quality.inboundBytes ?? null,
         outboundBytes: input.quality.outboundBytes ?? null,
         iceState: input.quality.iceState ?? null,
@@ -265,10 +271,12 @@ export async function endVoiceTestSession(input: {
         mediaReadyAtMs: input.quality.mediaReadyAtMs ?? null,
         firstAudioAtMs: input.quality.firstAudioAtMs ?? null,
         greetingGateMs: input.quality.greetingGateMs ?? null,
+        stabilizeMs: input.quality.stabilizeMs ?? null,
         inputDeviceLabel: input.quality.inputDeviceLabel ?? null,
         outputDeviceLabel: input.quality.outputDeviceLabel ?? null,
         inputLooksBluetooth: Boolean(input.quality.inputLooksBluetooth),
         outputLooksBluetooth: Boolean(input.quality.outputLooksBluetooth),
+        highQualityAudio: input.quality.highQualityAudio !== false,
         sampledAt: input.quality.sampledAt ?? new Date().toISOString(),
       }
     : null;

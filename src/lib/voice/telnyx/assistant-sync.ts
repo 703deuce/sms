@@ -286,7 +286,9 @@ export async function syncTelnyxAssistant(
       ...(config.voiceLanguage?.speed != null
         ? { voice_speed: config.voiceLanguage.speed }
         : {}),
-      ...(isUltraVoice(voiceId) ? { expressive_mode: true } : {}),
+      ...(config.voiceLanguage?.expressiveMode || isUltraVoice(voiceId)
+        ? { expressive_mode: true }
+        : {}),
     },
     enabled_features: ["telephony"] as string[],
     // Required for in-app browser test calls (TelnyxRTC anonymous_login).

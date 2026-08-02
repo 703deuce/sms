@@ -5,8 +5,12 @@ import { Card, CardTitle } from "@/components/ui/card";
 import { Input, Label } from "@/components/ui/input";
 import { toErrorMessage } from "@/lib/errors";
 import {
-  AUDIO_CONSTRAINTS,
-  MEDIA_STABILIZE_MS,
+  HIGH_QUALITY_AUDIO_DEFAULTS,
+  MEDIA_STABILIZE,
+  adaptiveStabilizeMs,
+  applyHighQualitySenderPrefs,
+  audioConstraintsForSettings,
+  connectionGradeLabel,
   getPeerConnectionStats,
   looksLikeBluetooth,
   parseRtcStatsReport,
@@ -54,15 +58,17 @@ type CallHandle = {
   };
 };
 
-const emptyQuality = (): WebrtcQualitySnapshot => ({
+const emptyQuality = (highQualityAudio = true): WebrtcQualitySnapshot => ({
   negotiatedCodec: null,
   preferredCodec: null,
   opusNegotiated: null,
   mos: null,
   mosLabel: null,
+  connectionGrade: "unknown",
   rttMs: null,
   jitterMs: null,
   packetLossPct: null,
+  bitrateKbps: null,
   inboundBytes: null,
   outboundBytes: null,
   inboundAudioLevel: null,
@@ -71,12 +77,17 @@ const emptyQuality = (): WebrtcQualitySnapshot => ({
   mediaReadyAtMs: null,
   firstAudioAtMs: null,
   greetingGateMs: null,
+  stabilizeMs: null,
   inputDeviceLabel: null,
   outputDeviceLabel: null,
   inputLooksBluetooth: false,
   outputLooksBluetooth: false,
+  highQualityAudio,
+  warnings: [],
   sampledAt: new Date().toISOString(),
 });
+
+const HQ_STORAGE_KEY = "transovo.voice.highQualityAudio";
 
 /**
  * Real browser ↔ Telnyx AI assistant voice call (same assistant as phone deploy).
@@ -130,6 +141,9 @@ export function AgentBrowserCall({
     bluetooth: false,
     pstn: false,
   });
+  const [highQualityAudio, setHighQualityAudio] = useState(true);
+  const highQualityRef = useRef(true);
+  const statsSampleAtRef = useRef<number | null>(null);
 
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
   const clientRef = useRef<{
@@ -175,7 +189,7 @@ export function AgentBrowserCall({
     if (requestPermission) {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
-          audio: { ...AUDIO_CONSTRAINTS },
+          audio: audioConstraintsForSettings(highQualityRef.current),
         });
         stream.getTracks().forEach((t) => t.stop());
         if (mountedRef.current) setMicPermission("granted");
@@ -217,6 +231,15 @@ export function AgentBrowserCall({
   useEffect(() => {
     mountedRef.current = true;
     preferredOpusRef.current = pickPreferredOpusCodec();
+    try {
+      const stored = localStorage.getItem(HQ_STORAGE_KEY);
+      if (stored === "0") {
+        setHighQualityAudio(false);
+        highQualityRef.current = false;
+      }
+    } catch {
+      // ignore
+    }
     void listDevices(false);
     const onDeviceChange = () => void listDevices(micPermission === "granted");
     navigator.mediaDevices?.addEventListener?.("devicechange", onDeviceChange);
@@ -261,15 +284,27 @@ export function AgentBrowserCall({
     // Avoid auto-switching devices mid-session after first media-ready.
     if (mediaReadyRef.current) return;
     void callRef.current?.setAudioInDevice?.(selectedMic).catch(() => undefined);
+    const hq = highQualityRef.current;
     void clientRef.current
       ?.setAudioSettings?.({
         micId: selectedMic,
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true,
+        echoCancellation: hq || HIGH_QUALITY_AUDIO_DEFAULTS.echoCancellation,
+        noiseSuppression: hq,
+        autoGainControl: hq || HIGH_QUALITY_AUDIO_DEFAULTS.autoGainControl,
       })
       .catch(() => undefined);
   }, [selectedMic, inCall]);
+
+  function setHighQuality(next: boolean) {
+    setHighQualityAudio(next);
+    highQualityRef.current = next;
+    try {
+      localStorage.setItem(HQ_STORAGE_KEY, next ? "1" : "0");
+    } catch {
+      // ignore
+    }
+    patchQuality({ highQualityAudio: next });
+  }
 
   async function endSession(opts?: {
     error?: string | null;
@@ -368,19 +403,39 @@ export function AgentBrowserCall({
   }
 
   async function waitForMediaReady(call: CallHandle, connectStartedAt: number) {
+    const hq = highQualityRef.current;
     const deadline = Date.now() + 12000;
     let sawInbound = false;
+    let iceState: string | null = null;
+    let connectionState: string | null = null;
+    const waitStarted = Date.now();
+
     while (Date.now() < deadline && mountedRef.current) {
+      const peer = call.peer?.instance as RTCPeerConnection | undefined;
+      if (peer) {
+        applyHighQualitySenderPrefs(peer, hq);
+        connectionState = peer.connectionState || connectionState;
+        iceState = peer.iceConnectionState || iceState;
+      }
       const report = await getPeerConnectionStats(call);
       if (report) {
-        const parsed = parseRtcStatsReport(report, qualityRef.current);
+        const parsed = parseRtcStatsReport(report, qualityRef.current, {
+          highQualityAudio: hq,
+          prevSampleAtMs: statsSampleAtRef.current ?? undefined,
+        });
+        statsSampleAtRef.current = Date.now();
+        iceState = parsed.iceState || iceState;
+        connectionState = parsed.connectionState || connectionState;
         patchQuality({
           ...parsed,
           preferredCodec: preferredOpusRef.current?.mimeType || "audio/opus",
+          iceState,
+          connectionState,
           inputDeviceLabel: selectedMicLabel,
           outputDeviceLabel: selectedSpeakerLabel,
           inputLooksBluetooth: micIsBluetooth,
           outputLooksBluetooth: speakerIsBluetooth,
+          highQualityAudio: hq,
         });
         if ((parsed.inboundBytes || 0) > 0 || (parsed.inboundAudioLevel || 0) > 0) {
           sawInbound = true;
@@ -388,31 +443,40 @@ export function AgentBrowserCall({
             patchQuality({ firstAudioAtMs: Date.now() - connectStartedAt });
           }
         }
-        const peer = call.peer?.instance as RTCPeerConnection | undefined;
-        if (peer?.connectionState) {
-          patchQuality({ connectionState: peer.connectionState });
-        }
-        if (peer?.iceConnectionState) {
-          patchQuality({ iceState: peer.iceConnectionState });
-        }
         if (
-          peer?.connectionState === "connected" ||
-          peer?.iceConnectionState === "connected" ||
-          peer?.iceConnectionState === "completed" ||
+          connectionState === "connected" ||
+          iceState === "connected" ||
+          iceState === "completed" ||
           sawInbound
         ) {
           break;
         }
       }
-      await new Promise((r) => setTimeout(r, 150));
+      await new Promise((r) => setTimeout(r, 100));
     }
 
     const mediaReadyAtMs = Date.now() - connectStartedAt;
-    patchQuality({ mediaReadyAtMs });
-    await new Promise((r) => setTimeout(r, MEDIA_STABILIZE_MS));
+    const waitedMs = Date.now() - waitStarted;
+    const stabilizeMs = hq
+      ? adaptiveStabilizeMs({
+          highQuality: true,
+          iceState,
+          connectionState,
+          sawInboundAudio: sawInbound,
+          rttMs: qualityRef.current.rttMs,
+          jitterMs: qualityRef.current.jitterMs,
+          waitedMs,
+        })
+      : MEDIA_STABILIZE.fastMs;
+
+    patchQuality({ mediaReadyAtMs, stabilizeMs });
+    if (stabilizeMs > 0) {
+      await new Promise((r) => setTimeout(r, stabilizeMs));
+    }
     patchQuality({
       greetingGateMs: Date.now() - connectStartedAt,
       mediaReadyAtMs,
+      stabilizeMs,
     });
     mediaReadyRef.current = true;
   }
@@ -425,9 +489,10 @@ export function AgentBrowserCall({
     conversationIdRef.current = null;
     finishingRef.current = false;
     setLastSynced(null);
-    qualityRef.current = emptyQuality();
+    qualityRef.current = emptyQuality(highQualityRef.current);
     setQuality(qualityRef.current);
     mediaReadyRef.current = false;
+    statsSampleAtRef.current = null;
 
     if (!telnyxAssistantId && !assistantId) {
       setError("Build & test first so Telnyx can sync the assistant.");
@@ -458,13 +523,19 @@ export function AgentBrowserCall({
     const connectStartedAt = Date.now();
     try {
       // Keep mic warm so AGC/NS settle before the AI greeting path starts.
-      warmStreamRef.current?.getTracks().forEach((t) => t.stop());
-      warmStreamRef.current = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          ...AUDIO_CONSTRAINTS,
-          deviceId: selectedMic ? { exact: selectedMic } : undefined,
-        },
-      });
+      const hq = highQualityRef.current;
+      if (hq || HIGH_QUALITY_AUDIO_DEFAULTS.warmMicrophone) {
+        warmStreamRef.current?.getTracks().forEach((t) => t.stop());
+        warmStreamRef.current = await navigator.mediaDevices.getUserMedia({
+          audio: audioConstraintsForSettings(hq, selectedMic || undefined),
+        });
+      } else {
+        // Still need permission + a live track for the call.
+        warmStreamRef.current?.getTracks().forEach((t) => t.stop());
+        warmStreamRef.current = await navigator.mediaDevices.getUserMedia({
+          audio: audioConstraintsForSettings(false, selectedMic || undefined),
+        });
+      }
       setMicPermission("granted");
       await listDevices(true);
     } catch {
@@ -528,7 +599,10 @@ export function AgentBrowserCall({
       startedAtRef.current = Date.now();
       setStartedAt(startedAtRef.current);
 
-      const opus = preferredOpusRef.current || pickPreferredOpusCodec();
+      const hq = highQualityRef.current;
+      const opus = hq
+        ? preferredOpusRef.current || pickPreferredOpusCodec()
+        : preferredOpusRef.current || pickPreferredOpusCodec();
       preferredOpusRef.current = opus;
       patchQuality({
         preferredCodec: opus?.mimeType || "audio/opus",
@@ -536,6 +610,7 @@ export function AgentBrowserCall({
         outputDeviceLabel: selectedSpeakerLabel,
         inputLooksBluetooth: micIsBluetooth,
         outputLooksBluetooth: speakerIsBluetooth,
+        highQualityAudio: hq,
       });
 
       const { TelnyxRTC } = await import("@telnyx/webrtc");
@@ -557,7 +632,7 @@ export function AgentBrowserCall({
         .setAudioSettings?.({
           ...(selectedMic ? { micId: selectedMic } : {}),
           echoCancellation: true,
-          noiseSuppression: true,
+          noiseSuppression: hq,
           autoGainControl: true,
         })
         .catch(() => undefined);
@@ -588,8 +663,10 @@ export function AgentBrowserCall({
       }
 
       setPhase("connected");
-      // Brief settle after signaling READY before placing the AI call.
-      await new Promise((r) => setTimeout(r, MEDIA_STABILIZE_MS));
+      // Tiny settle after signaling READY — adaptive gate runs after media-ready.
+      await new Promise((r) =>
+        setTimeout(r, highQualityRef.current ? MEDIA_STABILIZE.fastMs : 0),
+      );
 
       client.on("telnyx.notification", (notification: unknown) => {
         const n = notification as {
@@ -630,12 +707,24 @@ export function AgentBrowserCall({
       warmStreamRef.current = null;
       setMuted(false);
 
+      const peer = call.peer?.instance as RTCPeerConnection | undefined;
+      applyHighQualitySenderPrefs(peer, hq);
+
       if (remoteAudioRef.current) {
         void remoteAudioRef.current.play().catch(() => undefined);
       }
 
       setPhase("media_ready");
-      await waitForMediaReady(call, connectStartedAt);
+      if (hq || HIGH_QUALITY_AUDIO_DEFAULTS.waitForMediaReady) {
+        await waitForMediaReady(call, connectStartedAt);
+      } else {
+        mediaReadyRef.current = true;
+        patchQuality({
+          mediaReadyAtMs: Date.now() - connectStartedAt,
+          greetingGateMs: Date.now() - connectStartedAt,
+          stabilizeMs: 0,
+        });
+      }
       if (!mountedRef.current) return;
       setPhase("listening");
 
@@ -660,8 +749,13 @@ export function AgentBrowserCall({
     try {
       const report = await getPeerConnectionStats(call);
       if (!report) return;
-      const parsed = parseRtcStatsReport(report, qualityRef.current);
+      const parsed = parseRtcStatsReport(report, qualityRef.current, {
+        highQualityAudio: highQualityRef.current,
+        prevSampleAtMs: statsSampleAtRef.current ?? undefined,
+      });
+      statsSampleAtRef.current = Date.now();
       const peer = call?.peer?.instance as RTCPeerConnection | undefined;
+      if (peer) applyHighQualitySenderPrefs(peer, highQualityRef.current);
       patchQuality({
         ...parsed,
         preferredCodec: preferredOpusRef.current?.mimeType || "audio/opus",
@@ -671,6 +765,7 @@ export function AgentBrowserCall({
         outputDeviceLabel: selectedSpeakerLabel,
         inputLooksBluetooth: micIsBluetooth,
         outputLooksBluetooth: speakerIsBluetooth,
+        highQualityAudio: highQualityRef.current,
         firstAudioAtMs:
           qualityRef.current.firstAudioAtMs ??
           ((parsed.inboundBytes || 0) > 0 && startedAtRef.current
@@ -863,6 +958,36 @@ export function AgentBrowserCall({
         </div>
       </div>
 
+      <div className="rounded border border-border bg-background/60 p-3">
+        <label className="flex items-start gap-2 text-sm">
+          <input
+            type="checkbox"
+            className="mt-1"
+            checked={highQualityAudio}
+            disabled={inCall}
+            onChange={(e) => setHighQuality(e.target.checked)}
+          />
+          <span>
+            <span className="font-medium">High Quality Audio</span>
+            <span className="mt-1 block text-xs text-muted-foreground">
+              Prefer Opus · 48 kHz · echo cancellation · noise suppression · AGC ·
+              warm mic · wait for media-ready · adaptive startup buffer ·
+              diagnostics
+            </span>
+          </span>
+        </label>
+        {highQualityAudio ? (
+          <ul className="mt-2 grid gap-0.5 text-[11px] text-muted-foreground sm:grid-cols-2">
+            <li>✓ Prefer Opus (32–64 kbps speech)</li>
+            <li>✓ 48 kHz capture</li>
+            <li>✓ Echo cancellation / NS / AGC</li>
+            <li>✓ Adaptive jitter + PLC (browser)</li>
+            <li>✓ Warm microphone</li>
+            <li>✓ Adaptive media-ready gate (0–500 ms)</li>
+          </ul>
+        ) : null}
+      </div>
+
       {micIsBluetooth || speakerIsBluetooth ? (
         <p className="rounded border border-amber-500/40 bg-amber-50/80 px-3 py-2 text-xs text-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
           Bluetooth detected ({micIsBluetooth ? "mic" : ""}
@@ -950,53 +1075,99 @@ export function AgentBrowserCall({
       {error ? <p className="text-xs text-rose-600">{error}</p> : null}
 
       {(showDebug || inCall) && (
-        <div className="rounded border border-border bg-background/70 p-3 font-mono text-[11px] text-muted-foreground">
-          <p className="mb-1 font-sans text-xs font-semibold text-foreground">
-            Live call quality
+        <div className="space-y-2 rounded border border-border bg-background/70 p-3 text-xs">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="font-semibold text-foreground">Live call quality</p>
+            <ConnectionBadge grade={quality.connectionGrade} />
+          </div>
+          <div className="grid gap-1 font-mono text-[11px] text-muted-foreground sm:grid-cols-2">
+            <p>
+              Codec:{" "}
+              <span className="text-foreground">
+                {quality.negotiatedCodec || quality.preferredCodec || "Opus"}
+              </span>
+              {quality.opusNegotiated === false ? " (not Opus)" : ""}
+            </p>
+            <p>
+              MOS:{" "}
+              <span className="text-foreground">
+                {quality.mos != null ? quality.mos.toFixed(2) : "—"}
+              </span>
+            </p>
+            <p>
+              Packet Loss:{" "}
+              <span className="text-foreground">
+                {quality.packetLossPct != null ? `${quality.packetLossPct}%` : "—"}
+              </span>
+            </p>
+            <p>
+              Jitter:{" "}
+              <span className="text-foreground">
+                {quality.jitterMs != null ? `${quality.jitterMs} ms` : "—"}
+              </span>
+            </p>
+            <p>
+              RTT:{" "}
+              <span className="text-foreground">
+                {quality.rttMs != null ? `${quality.rttMs} ms` : "—"}
+              </span>
+            </p>
+            <p>
+              Bitrate:{" "}
+              <span className="text-foreground">
+                {quality.bitrateKbps != null ? `${quality.bitrateKbps} kbps` : "—"}
+              </span>
+            </p>
+            <p>
+              Microphone:{" "}
+              <span className="text-foreground">
+                {quality.inputDeviceLabel || selectedMicLabel}
+                {quality.inputLooksBluetooth ? " · Bluetooth" : ""}
+              </span>
+            </p>
+            <p>
+              Speaker:{" "}
+              <span className="text-foreground">
+                {quality.outputDeviceLabel || selectedSpeakerLabel}
+                {quality.outputLooksBluetooth ? " · Bluetooth" : ""}
+              </span>
+            </p>
+          </div>
+          <p className="font-mono text-[11px] text-muted-foreground">
+            Connection: {connectionGradeLabel(quality.connectionGrade)} · Phase{" "}
+            {phase}
+            {quality.stabilizeMs != null
+              ? ` · Stabilize ${quality.stabilizeMs} ms`
+              : ""}
+            {quality.mediaReadyAtMs != null
+              ? ` · Media-ready ${quality.mediaReadyAtMs} ms`
+              : ""}
+            {quality.firstAudioAtMs != null
+              ? ` · First audio ${quality.firstAudioAtMs} ms`
+              : ""}
           </p>
-          <p>Status: {phase}</p>
-          <p>
-            Codec: preferred {quality.preferredCodec || "audio/opus"} · negotiated{" "}
-            {quality.negotiatedCodec || "—"} · Opus{" "}
-            {quality.opusNegotiated == null
-              ? "—"
-              : quality.opusNegotiated
-                ? "yes"
-                : "NO (check path)"}
+          {quality.warnings?.length ? (
+            <ul className="space-y-1 rounded border border-amber-500/30 bg-amber-50/70 px-2 py-1.5 text-[11px] text-amber-950 dark:bg-amber-950/30 dark:text-amber-100">
+              {quality.warnings.map((w) => (
+                <li key={w.code}>Warn: {w.message}</li>
+              ))}
+            </ul>
+          ) : null}
+          <p className="text-[11px] text-muted-foreground">
+            Phone (PSTN) calls are usually slightly narrower than browser Opus —
+            that is normal. Cell↔cell is limited by the carrier codec.
           </p>
-          <p>
-            MOS: {quality.mos != null ? `${quality.mos} (${quality.mosLabel})` : "—"} ·
-            RTT: {quality.rttMs != null ? `${quality.rttMs} ms` : "—"} · Jitter:{" "}
-            {quality.jitterMs != null ? `${quality.jitterMs} ms` : "—"} · Loss:{" "}
-            {quality.packetLossPct != null ? `${quality.packetLossPct}%` : "—"}
-          </p>
-          <p>
-            Bytes in/out: {quality.inboundBytes ?? "—"} / {quality.outboundBytes ?? "—"}
-          </p>
-          <p>
-            ICE: {quality.iceState || "—"} · PC: {quality.connectionState || "—"}
-          </p>
-          <p>
-            Media-ready:{" "}
-            {quality.mediaReadyAtMs != null ? `${quality.mediaReadyAtMs} ms` : "—"} ·
-            First audio:{" "}
-            {quality.firstAudioAtMs != null ? `${quality.firstAudioAtMs} ms` : "—"} ·
-            Greeting gate:{" "}
-            {quality.greetingGateMs != null ? `${quality.greetingGateMs} ms` : "—"}
-          </p>
-          <p>
-            Mic: {quality.inputDeviceLabel || selectedMicLabel}
-            {quality.inputLooksBluetooth ? " (Bluetooth)" : ""}
-          </p>
-          <p>
-            Speaker: {quality.outputDeviceLabel || selectedSpeakerLabel}
-            {quality.outputLooksBluetooth ? " (Bluetooth)" : ""}
-          </p>
-          <p>Assistant: {assistantId || "—"}</p>
-          <p>Session: {sessionId || "—"}</p>
-          <p>Conversation: {conversationId || "—"}</p>
-          {startedAt ? (
-            <p>Elapsed: {Math.round((Date.now() - startedAt) / 1000)}s</p>
+          {showDebug ? (
+            <div className="font-mono text-[10px] text-muted-foreground">
+              <p>
+                Bytes in/out: {quality.inboundBytes ?? "—"} /{" "}
+                {quality.outboundBytes ?? "—"} · ICE {quality.iceState || "—"} ·
+                PC {quality.connectionState || "—"}
+              </p>
+              <p>Assistant: {assistantId || "—"}</p>
+              <p>Session: {sessionId || "—"}</p>
+              <p>Conversation: {conversationId || "—"}</p>
+            </div>
           ) : null}
         </div>
       )}
@@ -1016,11 +1187,17 @@ export function AgentBrowserCall({
             </p>
           ) : null}
           {result.quality ? (
-            <p className="text-xs text-muted-foreground">
-              Final MOS {result.quality.mos ?? "—"} ({result.quality.mosLabel || "n/a"}) ·
-              codec {result.quality.negotiatedCodec || "—"} · loss{" "}
-              {result.quality.packetLossPct ?? "—"}%
-            </p>
+            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              <ConnectionBadge grade={result.quality.connectionGrade} />
+              <span>
+                MOS {result.quality.mos ?? "—"} · codec{" "}
+                {result.quality.negotiatedCodec || "—"} · loss{" "}
+                {result.quality.packetLossPct ?? "—"}%
+                {result.quality.bitrateKbps != null
+                  ? ` · ${result.quality.bitrateKbps} kbps`
+                  : ""}
+              </span>
+            </div>
           ) : null}
           {result.transcript.length ? (
             <div className="max-h-48 space-y-2 overflow-y-auto rounded border border-border bg-muted/20 p-2 text-xs">
@@ -1106,4 +1283,36 @@ function friendlyError(err: unknown) {
     return "The browser could not connect to the voice service. Try again.";
   }
   return raw;
+}
+
+function ConnectionBadge({
+  grade,
+}: {
+  grade: WebrtcQualitySnapshot["connectionGrade"];
+}) {
+  const label = connectionGradeLabel(grade);
+  const styles =
+    grade === "excellent"
+      ? "border-emerald-500/40 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
+      : grade === "good"
+        ? "border-amber-500/40 bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-100"
+        : grade === "poor"
+          ? "border-rose-500/40 bg-rose-50 text-rose-800 dark:bg-rose-950/40 dark:text-rose-200"
+          : "border-border bg-muted text-muted-foreground";
+  const dot =
+    grade === "excellent"
+      ? "bg-emerald-500"
+      : grade === "good"
+        ? "bg-amber-500"
+        : grade === "poor"
+          ? "bg-rose-500"
+          : "bg-muted-foreground";
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium ${styles}`}
+    >
+      <span className={`h-1.5 w-1.5 rounded-full ${dot}`} />
+      {label}
+    </span>
+  );
 }
