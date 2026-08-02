@@ -568,6 +568,72 @@ export async function POST(request: Request) {
           data: await runVoiceAiRetention(workspaceId),
         });
       }
+      case "probe_assistant_create": {
+        // Live diagnostics: try minimal Telnyx create variants and return each result.
+        if (!ai.isTelnyxAiConfigured()) {
+          return NextResponse.json({ error: "TELNYX_API_KEY not configured" }, { status: 400 });
+        }
+        const stamp = Date.now().toString(36);
+        const variants: Array<{ label: string; body: Record<string, unknown> }> = [
+          {
+            label: "name_instructions",
+            body: {
+              name: `Probe ${stamp}`,
+              instructions: "You are a helpful receptionist. Be brief.",
+            },
+          },
+          {
+            label: "with_qwen",
+            body: {
+              name: `Probe Qwen ${stamp}`,
+              instructions: "You are a helpful receptionist. Be brief.",
+              model: "Qwen/Qwen3-235B-A22B",
+            },
+          },
+          {
+            label: "with_llama",
+            body: {
+              name: `Probe Llama ${stamp}`,
+              instructions: "You are a helpful receptionist. Be brief.",
+              model: "meta-llama/Meta-Llama-3.1-70B-Instruct",
+            },
+          },
+          {
+            label: "with_greeting_voice",
+            body: {
+              name: `Probe Voice ${stamp}`,
+              instructions: "You are a helpful receptionist. Be brief.",
+              greeting: "Hi, thanks for calling. How can I help?",
+              voice_settings: { voice: "Telnyx.NaturalHD.andromeda" },
+            },
+          },
+        ];
+        const results = [];
+        for (const v of variants) {
+          try {
+            const created = await ai.createAssistant(v.body);
+            const id =
+              created && typeof created === "object"
+                ? String(
+                    (created as { id?: string }).id ||
+                      (created as { data?: { id?: string } }).data?.id ||
+                      "",
+                  )
+                : "";
+            results.push({ label: v.label, ok: true, id, raw: created });
+            if (id) {
+              await ai.deleteAssistant(id).catch(() => undefined);
+            }
+          } catch (err) {
+            results.push({
+              label: v.label,
+              ok: false,
+              error: err instanceof Error ? err.message : String(err),
+            });
+          }
+        }
+        return NextResponse.json({ data: { results } });
+      }
       default:
         return NextResponse.json({ error: `Unknown action ${action}` }, { status: 400 });
     }
