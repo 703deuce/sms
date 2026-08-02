@@ -42,7 +42,9 @@ export async function applyFlowToAgentDraft(input: {
     throw err;
   }
 
-  const compiled = compileVoiceFlowBundle(bundle);
+  const compiled = compileVoiceFlowBundle(bundle, {
+    preserveTools: base.enabledBuiltinTools || [],
+  });
   const config = mergeVoiceConfig(base, {
     ...compiled.configPatch,
     flows: bundle,

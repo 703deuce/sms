@@ -89,7 +89,7 @@ export const VOICE_FLOW_BLOCKS: VoiceFlowBlock[] = [
   },
   {
     blockType: "voicemail",
-    category: "routing",
+    category: "end",
     layer: "routing",
     label: "Voicemail",
     description: "Standard voicemail box",
@@ -97,7 +97,7 @@ export const VOICE_FLOW_BLOCKS: VoiceFlowBlock[] = [
   },
   {
     blockType: "ai_assistant",
-    category: "routing",
+    category: "end",
     layer: "routing",
     label: "AI assistant",
     description: "Hand the call to an AI agent conversation flow",
@@ -106,7 +106,7 @@ export const VOICE_FLOW_BLOCKS: VoiceFlowBlock[] = [
   },
   {
     blockType: "no_answer_ai",
-    category: "routing",
+    category: "end",
     layer: "routing",
     label: "AI on no answer",
     description: "Missed-call AI answering machine",
@@ -114,7 +114,7 @@ export const VOICE_FLOW_BLOCKS: VoiceFlowBlock[] = [
   },
   {
     blockType: "after_hours_ai",
-    category: "routing",
+    category: "end",
     layer: "routing",
     label: "After-hours AI",
     description: "AI when the office is closed",
@@ -300,11 +300,11 @@ export const VOICE_FLOW_BLOCKS: VoiceFlowBlock[] = [
     description: "Transfer to a named destination (never invent numbers)",
     toolKey: "transfer",
     defaultConfig: { targetName: "Agent Handoff" },
-    branches: "yes_no",
+    branches: "none",
   },
   {
     blockType: "agent_handoff",
-    category: "handoff",
+    category: "end",
     layer: "conversation",
     label: "AI agent handoff",
     description: "Hand off to another specialized AI assistant",
@@ -320,7 +320,7 @@ export const VOICE_FLOW_BLOCKS: VoiceFlowBlock[] = [
     description: "Warm transfer via Agent Handoff destination",
     toolKey: "escalate_human",
     defaultConfig: { targetName: "Agent Handoff" },
-    branches: "yes_no",
+    branches: "none",
   },
   {
     blockType: "end_call",

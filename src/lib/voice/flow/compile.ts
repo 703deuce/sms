@@ -21,21 +21,26 @@ export type CompiledVoiceFlow = {
   globalInstructions: string;
 };
 
-export function compileVoiceFlowBundle(bundle: VoiceFlowBundle): CompiledVoiceFlow {
+export function compileVoiceFlowBundle(
+  bundle: VoiceFlowBundle,
+  opts?: { preserveTools?: string[] },
+): CompiledVoiceFlow {
   const tools = collectToolKeysFromFlow(bundle);
   // Ensure CRM search when CRM nodes present
-  if (bundle.conversation.nodes.some((n) => n.data.blockType.startsWith("create_crm") || n.data.blockType.includes("crm"))) {
-    tools.push("lookup_customer", "search_crm_contacts");
+  if (bundle.conversation.nodes.some((n) => n.data.blockType.startsWith("create_crm") || n.data.blockType.includes("crm") || n.data.blockType === "search_crm_contacts")) {
+    tools.push("lookup_customer", "search_crm_contacts", "create_crm_note", "create_crm_task", "upsert_crm_contact");
   }
   if (bundle.conversation.nodes.some((n) => n.data.blockType === "send_sms")) {
     tools.push("send_sms");
   }
   if (bundle.conversation.nodes.some((n) => n.data.blockType === "take_message")) {
-    tools.push("take_structured_message", "create_task");
+    tools.push("take_structured_message", "create_task", "mark_disposition", "save_caller_info");
   }
   if (bundle.conversation.nodes.some((n) => n.data.blockType === "agent_handoff")) {
     tools.push("handoff");
   }
+  // Keep previously enabled tools (e.g. full receptionist catalog) unless empty.
+  for (const t of opts?.preserveTools || []) tools.push(t);
 
   const greetingNode = bundle.conversation.nodes.find((n) => n.data.blockType === "greeting");
   const greetingText =

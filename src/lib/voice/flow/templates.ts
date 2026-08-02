@@ -109,7 +109,7 @@ function answeringConversation(): VoiceFlowGraph {
       e(message, sms),
       e(sms, note),
       e(note, end),
-      e(human, end, "no"),
+      e(human, end),
     ],
   );
 }
@@ -141,7 +141,7 @@ function leadIntakeConversation(): VoiceFlowGraph {
       e(task, urgent),
       e(urgent, transfer, "yes"),
       e(urgent, end, "no"),
-      e(transfer, end, "no"),
+      e(transfer, end),
     ],
   );
 }
@@ -168,7 +168,7 @@ function faqRouterConversation(): VoiceFlowGraph {
       e(knowledge, end),
       e(appt, end),
       e(message, end),
-      e(sales, message, "no"),
+      e(sales, end),
       e(billing, end),
     ],
   );
@@ -192,6 +192,7 @@ function humanFirstRouting(): VoiceFlowGraph {
       e(ring, aiMissed, "no"),
       e(answered, connect, "yes"),
       e(answered, aiMissed, "no"),
+      // Terminal AI nodes intentionally have no further edges.
     ],
   );
 }
@@ -274,7 +275,7 @@ export const VOICE_FLOW_TEMPLATES: VoiceFlowTemplate[] = [
             e(urgent, message, "no"),
             e(message, task),
             e(task, end),
-            e(transfer, message, "no"),
+            e(transfer, end),
           ],
         );
       })(),
