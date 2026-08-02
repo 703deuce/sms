@@ -10,7 +10,7 @@ Your Transovo admin must:
 2. Create OAuth apps in each CRM and set client ID/secret env vars.
 3. Register the callback URL exactly as:
 
-   `{APP_URL}/api/crm/oauth/callback`
+   `{APP_URL}/api/crm/salesforce/callback` (or `/api/crm/zoho/callback`, `/api/crm/pipedrive/callback`)
 
 4. Apply database migrations (`npm run db:push`).
 5. Run background workers (`npm run worker:all`).

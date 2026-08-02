@@ -92,7 +92,10 @@ APP_URL
 INTEGRATION_SECRET_KEY
 ```
 
-Callback URL (all providers): `{APP_URL}/api/crm/oauth/callback`
+Callback URLs (per provider — authorize sends these; no `/auth` segment):
+- `{APP_URL}/api/crm/salesforce/callback`
+- `{APP_URL}/api/crm/zoho/callback`
+- `{APP_URL}/api/crm/pipedrive/callback`
 
 ## Jobs
 
