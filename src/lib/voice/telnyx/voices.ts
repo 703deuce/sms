@@ -20,7 +20,7 @@ export type CuratedVoice = {
   provider: "telnyx";
   /** Exact Telnyx voice_settings.voice string */
   providerVoiceId: string;
-  model: "Ultra" | "NaturalHD" | "Natural";
+  model: "Ultra" | "NaturalHD" | "Natural" | "xAI";
   language: string;
   locale: string;
   gender: "female" | "male" | "neutral";
@@ -29,6 +29,10 @@ export type CuratedVoice = {
   supportsSpeed: boolean;
   supportsExpressive: boolean;
   enabled: boolean;
+  /** False when AI Assistants API historically rejects this voice id. */
+  assistantCompatible?: boolean;
+  /** Preview via TTS REST may still work when assistantCompatible is false. */
+  previewOnly?: boolean;
   previewText: string;
 };
 
@@ -54,6 +58,7 @@ export const CURATED_VOICE_CATALOG: CuratedVoice[] = [
     supportsSpeed: true,
     supportsExpressive: false,
     enabled: true,
+    assistantCompatible: true,
     previewText: DEFAULT_VOICE_PREVIEW_TEXT,
   },
   {
@@ -122,8 +127,49 @@ export const CURATED_VOICE_CATALOG: CuratedVoice[] = [
     supportsSpeed: true,
     supportsExpressive: false,
     enabled: true,
+    assistantCompatible: true,
     previewText:
       "Bonjour, merci d'appeler Transovo. Je peux répondre à vos questions ou prendre un message.",
+  },
+  // Ultra / expressive — excellent for TTS preview comparison. Some accounts
+  // reject Ultra on AI Assistants voice_settings; keep preview-first until verified.
+  {
+    catalogId: "nova-ultra-preview",
+    displayName: "Nova (Ultra preview)",
+    style: "Premium expressive Ultra — preview & compare clarity",
+    provider: "telnyx",
+    providerVoiceId: "Telnyx.Ultra.Nova",
+    model: "Ultra",
+    language: "en",
+    locale: "en-US",
+    gender: "female",
+    qualityTier: "premium",
+    costTier: "premium_provider",
+    supportsSpeed: true,
+    supportsExpressive: true,
+    enabled: true,
+    assistantCompatible: false,
+    previewOnly: true,
+    previewText: DEFAULT_VOICE_PREVIEW_TEXT,
+  },
+  {
+    catalogId: "eve-xai-preview",
+    displayName: "Eve (xAI preview)",
+    style: "xAI expressive — preview clip for quality comparison",
+    provider: "telnyx",
+    providerVoiceId: "xAI.eve",
+    model: "xAI",
+    language: "en",
+    locale: "en-US",
+    gender: "female",
+    qualityTier: "premium",
+    costTier: "premium_provider",
+    supportsSpeed: false,
+    supportsExpressive: true,
+    enabled: true,
+    assistantCompatible: false,
+    previewOnly: true,
+    previewText: DEFAULT_VOICE_PREVIEW_TEXT,
   },
 ];
 
@@ -143,15 +189,42 @@ export function getCuratedVoice(catalogOrProviderId: string | undefined | null) 
   return null;
 }
 
+/**
+ * Voice id for AI Assistants / live calls.
+ * Preview-only Ultra/xAI catalog entries map to NaturalHD so saves never break.
+ */
 export function resolveProviderVoiceId(catalogOrProviderId: string | undefined | null) {
   const v = getCuratedVoice(catalogOrProviderId);
-  if (v) return v.providerVoiceId;
+  if (v) {
+    if (v.previewOnly || v.assistantCompatible === false) {
+      return getCuratedVoice(DEFAULT_CATALOG_VOICE_ID)!.providerVoiceId;
+    }
+    return v.providerVoiceId;
+  }
   const raw = String(catalogOrProviderId || "");
-  // Legacy Ultra ids are not accepted by AI Assistants on this account — map to NaturalHD.
-  if (raw.startsWith("Telnyx.Ultra.")) {
+  // Legacy Ultra / xAI ids are not accepted by AI Assistants on this account — map to NaturalHD.
+  if (raw.startsWith("Telnyx.Ultra.") || raw.startsWith("xAI.")) {
     return getCuratedVoice(DEFAULT_CATALOG_VOICE_ID)!.providerVoiceId;
   }
   if (raw.startsWith("Telnyx.NaturalHD.") || raw.startsWith("Telnyx.Natural.")) {
+    return raw;
+  }
+  return getCuratedVoice(DEFAULT_CATALOG_VOICE_ID)!.providerVoiceId;
+}
+
+/**
+ * Voice id for TTS preview clips — keeps Ultra/xAI so quality compare is real.
+ */
+export function resolvePreviewVoiceId(catalogOrProviderId: string | undefined | null) {
+  const v = getCuratedVoice(catalogOrProviderId);
+  if (v) return v.providerVoiceId;
+  const raw = String(catalogOrProviderId || "");
+  if (
+    raw.startsWith("Telnyx.NaturalHD.") ||
+    raw.startsWith("Telnyx.Natural.") ||
+    raw.startsWith("Telnyx.Ultra.") ||
+    raw.startsWith("xAI.")
+  ) {
     return raw;
   }
   return getCuratedVoice(DEFAULT_CATALOG_VOICE_ID)!.providerVoiceId;
@@ -180,7 +253,8 @@ export function isApprovedVoiceId(id: string) {
   return (
     id.startsWith("Telnyx.NaturalHD.") ||
     id.startsWith("Telnyx.Natural.") ||
-    id.startsWith("Telnyx.Ultra.")
+    id.startsWith("Telnyx.Ultra.") ||
+    id.startsWith("xAI.")
   );
 }
 
@@ -189,12 +263,14 @@ export type TelnyxVoiceOption = {
   id: string;
   name: string;
   gender: "female" | "male" | "neutral";
-  tier: "ultra" | "natural_hd" | "natural";
+  tier: "ultra" | "natural_hd" | "natural" | "xai";
   language: string;
   description: string;
   providerVoiceId: string;
   supportsSpeed: boolean;
   supportsExpressive: boolean;
+  previewOnly?: boolean;
+  assistantCompatible?: boolean;
 };
 
 export const CURATED_TELNYX_VOICES: TelnyxVoiceOption[] = CURATED_VOICE_CATALOG.filter(
@@ -203,12 +279,23 @@ export const CURATED_TELNYX_VOICES: TelnyxVoiceOption[] = CURATED_VOICE_CATALOG.
   id: v.catalogId,
   name: v.displayName,
   gender: v.gender,
-  tier: v.model === "Ultra" ? "ultra" : v.model === "NaturalHD" ? "natural_hd" : "natural",
+  tier:
+    v.model === "Ultra"
+      ? "ultra"
+      : v.model === "xAI"
+        ? "xai"
+        : v.model === "NaturalHD"
+          ? "natural_hd"
+          : "natural",
   language: v.locale,
-  description: v.style,
+  description: v.previewOnly
+    ? `${v.style} (preview compare — may not save to AI Assistants)`
+    : v.style,
   providerVoiceId: v.providerVoiceId,
   supportsSpeed: v.supportsSpeed,
   supportsExpressive: v.supportsExpressive,
+  previewOnly: v.previewOnly,
+  assistantCompatible: v.assistantCompatible !== false && !v.previewOnly,
 }));
 
 export const DEFAULT_AGENT_VOICE_ID = DEFAULT_CATALOG_VOICE_ID;

@@ -13,8 +13,8 @@ import { cn } from "@/lib/utils";
 import { useEffect, useRef, useState } from "react";
 
 /**
- * Pick a curated Telnyx Ultra / NaturalHD voice with a real audio preview clip.
- * Saves catalog IDs (e.g. ava-warm-us); server resolves to Telnyx provider strings.
+ * Pick a curated Telnyx NaturalHD voice with a real audio preview clip.
+ * Ultra / xAI entries are preview-compare only (AI Assistants may reject them).
  */
 export function VoicePicker({
   value,
@@ -30,6 +30,7 @@ export function VoicePicker({
   const [voices, setVoices] = useState<TelnyxVoiceOption[]>(CURATED_TELNYX_VOICES);
   const [previewing, setPreviewing] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [compareNote, setCompareNote] = useState("");
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
@@ -82,8 +83,23 @@ export function VoicePicker({
     }
   }
 
-  const ultra = voices.filter((v) => v.tier === "ultra");
-  const hd = voices.filter((v) => v.tier !== "ultra");
+  function selectVoice(v: TelnyxVoiceOption) {
+    if (v.previewOnly || v.assistantCompatible === false) {
+      setCompareNote(
+        `${v.name} is for preview comparison only. AI Assistants on this account keep NaturalHD (Ava) for live calls — pick a Recommended voice to save.`,
+      );
+      return;
+    }
+    setCompareNote("");
+    onChange(v.id);
+  }
+
+  const recommended = voices.filter(
+    (v) => !v.previewOnly && (v.tier === "natural_hd" || v.tier === "natural"),
+  );
+  const compare = voices.filter(
+    (v) => v.previewOnly || v.tier === "ultra" || v.tier === "xai",
+  );
 
   return (
     <div className="space-y-3">
@@ -92,7 +108,8 @@ export function VoicePicker({
         <div>
           <Label>Voice</Label>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Telnyx NaturalHD voices — play a real clip, then Call. Same voice on phone deploy.
+            NaturalHD for live calls. Preview Ultra / xAI clips to compare muffling vs
+            network — same short script for each.
           </p>
         </div>
         <p className="text-xs text-muted-foreground">
@@ -104,23 +121,27 @@ export function VoicePicker({
       </div>
 
       {error ? <p className="text-xs text-rose-600">{error}</p> : null}
+      {compareNote ? (
+        <p className="text-xs text-amber-700 dark:text-amber-400">{compareNote}</p>
+      ) : null}
 
       <VoiceGroup
-        title="Recommended voices"
-        voices={hd.length ? hd : voices}
+        title="Recommended for assistants"
+        voices={recommended.length ? recommended : voices.filter((v) => !v.previewOnly)}
         value={value}
         previewing={previewing}
-        onSelect={onChange}
+        onSelect={selectVoice}
         onPreview={preview}
       />
-      {ultra.length ? (
+      {compare.length ? (
         <VoiceGroup
-          title="Ultra (account-dependent)"
-          voices={ultra}
+          title="Quality compare (preview only)"
+          voices={compare}
           value={value}
           previewing={previewing}
-          onSelect={onChange}
+          onSelect={selectVoice}
           onPreview={preview}
+          previewOnly
         />
       ) : null}
     </div>
@@ -134,13 +155,15 @@ function VoiceGroup({
   previewing,
   onSelect,
   onPreview,
+  previewOnly,
 }: {
   title: string;
   voices: TelnyxVoiceOption[];
   value?: string;
   previewing: string | null;
-  onSelect: (id: string) => void;
+  onSelect: (v: TelnyxVoiceOption) => void;
   onPreview: (id: string) => void;
+  previewOnly?: boolean;
 }) {
   if (!voices.length) return null;
   return (
@@ -164,12 +187,13 @@ function VoiceGroup({
               <button
                 type="button"
                 className="min-w-0 flex-1 text-left"
-                onClick={() => onSelect(v.id)}
+                onClick={() => onSelect(v)}
               >
                 <p className="text-sm font-medium">
                   {v.name}{" "}
                   <span className="text-[10px] font-normal uppercase text-muted-foreground">
                     {v.gender}
+                    {previewOnly || v.previewOnly ? " · preview" : ""}
                   </span>
                 </p>
                 <p className="truncate text-xs text-muted-foreground">{v.description}</p>

@@ -216,6 +216,29 @@ export async function createVoiceTestSession(input: {
   };
 }
 
+export type TestSessionQuality = {
+  negotiatedCodec?: string | null;
+  preferredCodec?: string | null;
+  opusNegotiated?: boolean | null;
+  mos?: number | null;
+  mosLabel?: string | null;
+  rttMs?: number | null;
+  jitterMs?: number | null;
+  packetLossPct?: number | null;
+  inboundBytes?: number | null;
+  outboundBytes?: number | null;
+  iceState?: string | null;
+  connectionState?: string | null;
+  mediaReadyAtMs?: number | null;
+  firstAudioAtMs?: number | null;
+  greetingGateMs?: number | null;
+  inputDeviceLabel?: string | null;
+  outputDeviceLabel?: string | null;
+  inputLooksBluetooth?: boolean;
+  outputLooksBluetooth?: boolean;
+  sampledAt?: string;
+};
+
 export async function endVoiceTestSession(input: {
   workspaceId: string;
   agentId: string;
@@ -223,7 +246,33 @@ export async function endVoiceTestSession(input: {
   durationSec?: number;
   conversationId?: string | null;
   error?: string | null;
+  quality?: TestSessionQuality | null;
 }) {
+  const quality = input.quality
+    ? {
+        negotiatedCodec: input.quality.negotiatedCodec ?? null,
+        preferredCodec: input.quality.preferredCodec ?? null,
+        opusNegotiated: input.quality.opusNegotiated ?? null,
+        mos: input.quality.mos ?? null,
+        mosLabel: input.quality.mosLabel ?? null,
+        rttMs: input.quality.rttMs ?? null,
+        jitterMs: input.quality.jitterMs ?? null,
+        packetLossPct: input.quality.packetLossPct ?? null,
+        inboundBytes: input.quality.inboundBytes ?? null,
+        outboundBytes: input.quality.outboundBytes ?? null,
+        iceState: input.quality.iceState ?? null,
+        connectionState: input.quality.connectionState ?? null,
+        mediaReadyAtMs: input.quality.mediaReadyAtMs ?? null,
+        firstAudioAtMs: input.quality.firstAudioAtMs ?? null,
+        greetingGateMs: input.quality.greetingGateMs ?? null,
+        inputDeviceLabel: input.quality.inputDeviceLabel ?? null,
+        outputDeviceLabel: input.quality.outputDeviceLabel ?? null,
+        inputLooksBluetooth: Boolean(input.quality.inputLooksBluetooth),
+        outputLooksBluetooth: Boolean(input.quality.outputLooksBluetooth),
+        sampledAt: input.quality.sampledAt ?? new Date().toISOString(),
+      }
+    : null;
+
   await platform
     .recordFailureDiagnostic({
       workspaceId: input.workspaceId,
@@ -237,6 +286,7 @@ export async function endVoiceTestSession(input: {
         sessionId: input.sessionId,
         durationSec: input.durationSec ?? null,
         conversationId: input.conversationId ?? null,
+        quality,
       },
     })
     .catch(() => undefined);
@@ -265,6 +315,7 @@ export async function endVoiceTestSession(input: {
               testSessionId: input.sessionId,
               test: true,
               durationSec: input.durationSec ?? null,
+              ...(quality ? { webrtcQuality: quality } : {}),
             } as object,
           },
         })
@@ -284,6 +335,7 @@ export async function endVoiceTestSession(input: {
               testSessionId: input.sessionId,
               test: true,
               durationSec: input.durationSec ?? null,
+              ...(quality ? { webrtcQuality: quality } : {}),
             } as object,
           },
         })
@@ -321,6 +373,7 @@ export async function endVoiceTestSession(input: {
     localConversationId,
     transcript,
     labeledTest: true,
+    quality,
   };
 }
 

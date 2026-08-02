@@ -5,7 +5,7 @@ import {
   DEFAULT_VOICE_PREVIEW_TEXT,
   getCuratedVoice,
   isApprovedVoiceId,
-  resolveProviderVoiceId,
+  resolvePreviewVoiceId,
 } from "@/lib/voice/telnyx/voices";
 import { getCachedPreview, setCachedPreview } from "@/lib/voice/platform/preview-cache";
 
@@ -55,7 +55,8 @@ export async function POST(request: Request) {
     }
 
     const curated = getCuratedVoice(requested);
-    const providerVoice = resolveProviderVoiceId(requested);
+    // Use raw Ultra/xAI ids for preview compare; do not map to NaturalHD here.
+    const providerVoice = resolvePreviewVoiceId(requested);
     const text = (
       body.text ||
       curated?.previewText ||

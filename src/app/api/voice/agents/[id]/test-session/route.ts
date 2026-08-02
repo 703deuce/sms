@@ -59,6 +59,7 @@ export async function PATCH(
       conversationId?: string | null;
       error?: string | null;
       action?: string;
+      quality?: Record<string, unknown> | null;
     };
     if (!body.sessionId) {
       return NextResponse.json({ error: "sessionId required" }, { status: 400 });
@@ -81,6 +82,7 @@ export async function PATCH(
       durationSec: body.durationSec,
       conversationId: body.conversationId,
       error: body.error,
+      quality: body.quality as Parameters<typeof endVoiceTestSession>[0]["quality"],
     });
     return NextResponse.json({ data });
   } catch (err) {

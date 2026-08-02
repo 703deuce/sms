@@ -28,6 +28,8 @@ export async function GET() {
           qualityTier: v.qualityTier,
           supportsSpeed: v.supportsSpeed,
           supportsExpressive: v.supportsExpressive,
+          previewOnly: Boolean(v.previewOnly),
+          assistantCompatible: v.assistantCompatible !== false && !v.previewOnly,
         })),
         defaultCatalogId: DEFAULT_CATALOG_VOICE_ID,
         source: "curated",
