@@ -335,11 +335,9 @@ export function catalogByCategory(): Array<{
 /** Full production receptionist set used for live phone agents. */
 export const FULL_RECEPTIONIST_TOOLS = [
   "hangup",
-  "transfer",
   "handoff",
   "sip_refer",
   "send_dtmf",
-  "end_call",
   "send_sms",
   "create_task",
   "take_structured_message",
@@ -358,7 +356,6 @@ export const FULL_RECEPTIONIST_TOOLS = [
 
 export const SAFE_DEFAULT_BUILTIN_TOOLS = [
   "hangup",
-  "transfer",
   "escalate_human",
   "create_task",
   "take_structured_message",
@@ -367,7 +364,6 @@ export const SAFE_DEFAULT_BUILTIN_TOOLS = [
   "send_sms",
   "lookup_customer",
   "search_crm_contacts",
-  "end_call",
 ] as const;
 
 const TEMPLATE_DEFAULTS: Record<string, readonly string[]> = {

@@ -43,10 +43,20 @@ export async function executeBuiltinVoiceAction(input: {
         allowSpeakPhone,
       });
       // Backward-compatible shape for lookup_customer.
+      // Always include `speak` so the assistant recovers verbally instead of hanging up.
       if (input.toolType === "lookup_customer") {
         const first = result.matches[0];
-        if (!first) return { found: false, ...result };
+        if (!first) {
+          return {
+            ok: true,
+            found: false,
+            ...result,
+            speak:
+              "I couldn't find that contact. Can you spell the name or share another detail?",
+          };
+        }
         return {
+          ok: true,
           found: true,
           contact: {
             id: first.safeId,
@@ -57,9 +67,24 @@ export async function executeBuiltinVoiceAction(input: {
             company: first.company,
           },
           ...result,
+          speak: allowSpeakPhone
+            ? `I found ${first.displayName}${first.speakPhone ? `, phone ${first.speakPhone}` : ""}.`
+            : `I found ${first.displayName}${first.company ? ` at ${first.company}` : ""}. I can take a message or transfer you if you need more.`,
         };
       }
-      return result;
+      const first = result.matches[0];
+      return {
+        ok: true,
+        ...result,
+        speak:
+          result.matchCount === 0
+            ? "I couldn't find that contact. Can you spell the name?"
+            : result.ambiguous
+              ? `I found a few matches including ${first?.displayName || "similar names"}. Which one did you mean?`
+              : allowSpeakPhone
+                ? `I found ${first?.displayName}${first?.speakPhone ? `, phone ${first.speakPhone}` : ""}.`
+                : `I found ${first?.displayName}${first?.company ? ` at ${first.company}` : ""}.`,
+      };
     }
     case "update_contact_tags": {
       const phone = normalizeE164(String(args.phone || ""));
@@ -345,11 +370,32 @@ export async function executeBuiltinVoiceAction(input: {
     }
     case "escalate_human":
     case "sip_refer": {
-      if (!input.callId) throw new Error("callId required");
+      if (!input.callId) {
+        return {
+          ok: false,
+          error: "callId required",
+          speak:
+            "I couldn't start the transfer from this session. I can take a message instead.",
+        };
+      }
       const call = await prisma.voiceCall.findFirst({
         where: { id: input.callId, workspaceId: input.workspaceId },
       });
-      if (!call) throw new Error("Call not found");
+      if (!call) {
+        return {
+          ok: false,
+          error: "Call not found",
+          speak: "I couldn't find the active call to transfer. Can I take a message?",
+        };
+      }
+      if (!call.telnyxCallControlId) {
+        return {
+          ok: false,
+          error: "Call control id missing",
+          speak:
+            "I'm having trouble connecting the transfer right now. Can I take a callback message?",
+        };
+      }
       const targetName =
         String(args.target_name || args.destination || "Agent Handoff").trim() ||
         "Agent Handoff";
@@ -385,26 +431,42 @@ export async function executeBuiltinVoiceAction(input: {
           ok: false,
           error:
             "No transfer destination configured. Ask the caller for a callback instead.",
+          speak:
+            "I don't have a transfer number configured. I can take a message for the team instead.",
         };
       }
+      // Cold/blind transfer for AI PSTN — warm hold tears down the assistant and
+      // feels like an immediate hangup when consult dial fails.
       const { initiateTransfer } = await import("../transfers");
-      const result = await initiateTransfer({
-        workspaceId: input.workspaceId,
-        callId: call.id,
-        destination: dest.destination,
-        transferType:
-          input.toolType === "sip_refer" || dest.destination.startsWith("sip:")
-            ? "sip_refer"
-            : "warm_transfer",
-        summary: String(args.summary || args.reason || ""),
-      });
-      return {
-        ok: true,
-        transferredTo: dest.name,
-        destination: dest.destination,
-        reason: args.reason || null,
-        result,
-      };
+      try {
+        const result = await initiateTransfer({
+          workspaceId: input.workspaceId,
+          callId: call.id,
+          destination: dest.destination,
+          transferType:
+            input.toolType === "sip_refer" || dest.destination.startsWith("sip:")
+              ? "sip_refer"
+              : "cold_transfer",
+          summary: String(args.summary || args.reason || ""),
+        });
+        return {
+          ok: true,
+          transferredTo: dest.name,
+          destination: dest.destination,
+          reason: args.reason || null,
+          result,
+          speak: `Connecting you with ${dest.name} now.`,
+        };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error("[voice] escalate_human failed", message);
+        return {
+          ok: false,
+          error: message,
+          speak:
+            "I wasn't able to connect that transfer. I can take a detailed message and have someone call you back.",
+        };
+      }
     }
     case "send_email": {
       const to = String(args.to || "");
@@ -585,7 +647,29 @@ export async function executeBuiltinVoiceAction(input: {
       });
     }
     case "end_call": {
-      if (!input.callId) throw new Error("callId required");
+      // Prefer Telnyx-native hangup. Only hang up after an explicit reason that
+      // indicates the conversation is finished — never after CRM/lookup failures.
+      const reason = String(args.reason || "").toLowerCase();
+      const blocked =
+        /lookup|crm|transfer|tool|error|fail|timeout|hold|connect(ing)? you/.test(
+          reason,
+        );
+      const allowed =
+        !blocked &&
+        (!reason ||
+          /goodbye|complete|finished|caller.?asked|hang.?up|end.?call|conversation.?over|no further/.test(
+            reason,
+          ));
+      if (!allowed) {
+        return {
+          ok: false,
+          error: "end_call refused — reason does not indicate conversation end",
+          speak: "Is there anything else I can help you with?",
+        };
+      }
+      if (!input.callId) {
+        return { ok: false, error: "callId required", speak: "Thanks for calling." };
+      }
       const call = await prisma.voiceCall.findFirst({
         where: { id: input.callId, workspaceId: input.workspaceId },
       });
@@ -594,6 +678,11 @@ export async function executeBuiltinVoiceAction(input: {
         await telnyxRequest(`/calls/${call.telnyxCallControlId}/actions/hangup`, {
           method: "POST",
           body: {},
+        }).catch((err) => {
+          console.warn(
+            "[voice] end_call hangup failed",
+            err instanceof Error ? err.message : err,
+          );
         });
       }
       return { ok: true };

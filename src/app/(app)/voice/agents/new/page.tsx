@@ -40,12 +40,38 @@ export default function VoiceAgentNewPage() {
   const [level, setLevel] = useState<(typeof LEVELS)[number]["id"]>("receptionist");
   const [flowTemplateId, setFlowTemplateId] = useState("full_receptionist");
   const [agentTemplateId, setAgentTemplateId] = useState("receptionist");
+  const [nlPrompt, setNlPrompt] = useState("");
+  const [nlSummary, setNlSummary] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
   const flowOptions = VOICE_FLOW_TEMPLATES.filter(
     (t) => t.agentLevel === level || (level === "pro" && t.agentLevel === "receptionist"),
   );
+
+  async function previewNl() {
+    if (!nlPrompt.trim()) return;
+    setBusy(true);
+    setError("");
+    setNlSummary("");
+    try {
+      const res = await fetch("/api/voice/flows/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: nlPrompt.trim() }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Generate failed");
+      if (json.templateId) setFlowTemplateId(String(json.templateId));
+      setNlSummary(
+        `${json.summary || "Draft ready"} (${json.mode}${json.provider ? ` · ${json.provider}` : ""})`,
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Generate failed");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function create() {
     setBusy(true);
@@ -65,12 +91,19 @@ export default function VoiceAgentNewPage() {
       if (!res.ok) throw new Error(json.error || "Create failed");
       const agentId = json.data.id as string;
 
-      // Attach chosen visual flow template.
-      await fetch(`/api/voice/agents/${agentId}/flows`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ templateId: flowTemplateId, apply: true }),
-      });
+      if (nlPrompt.trim()) {
+        await fetch(`/api/voice/agents/${agentId}/flows/generate`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt: nlPrompt.trim(), apply: true }),
+        });
+      } else {
+        await fetch(`/api/voice/agents/${agentId}/flows`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ templateId: flowTemplateId, apply: true }),
+        });
+      }
 
       router.replace(`/voice/agents/${agentId}`);
     } catch (err) {
@@ -124,7 +157,28 @@ export default function VoiceAgentNewPage() {
         </Card>
 
         <Card className="space-y-3 p-5">
-          <CardTitle>3. Flow template</CardTitle>
+          <CardTitle>3. Describe the call flow (optional)</CardTitle>
+          <p className="text-xs text-muted-foreground">
+            Tell us in plain English how calls should work. AI drafts a visual flow you can edit.
+          </p>
+          <textarea
+            className="min-h-[96px] w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+            placeholder='e.g. "Ring our team for 25 seconds first. If no answer, AI greets callers, looks up Zoho contacts, answers FAQs, and transfers to a human when asked."'
+            value={nlPrompt}
+            onChange={(e) => setNlPrompt(e.target.value)}
+          />
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" variant="outline" disabled={busy || !nlPrompt.trim()} onClick={previewNl}>
+              Preview AI draft
+            </Button>
+            {nlSummary ? (
+              <p className="text-xs text-muted-foreground">{nlSummary}</p>
+            ) : null}
+          </div>
+        </Card>
+
+        <Card className="space-y-3 p-5">
+          <CardTitle>4. Flow template{nlPrompt.trim() ? " (AI may override)" : ""}</CardTitle>
           <div className="space-y-2">
             {(flowOptions.length ? flowOptions : VOICE_FLOW_TEMPLATES).map((t) => (
               <button
@@ -146,7 +200,7 @@ export default function VoiceAgentNewPage() {
         </Card>
 
         <Card className="space-y-3 p-5">
-          <CardTitle>4. Agent instruction template</CardTitle>
+          <CardTitle>5. Agent instruction template</CardTitle>
           <select
             className="w-full rounded-md border border-border bg-background px-2 py-2 text-sm"
             value={agentTemplateId}

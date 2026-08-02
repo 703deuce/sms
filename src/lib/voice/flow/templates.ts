@@ -87,6 +87,15 @@ const DEFAULT_GLOBAL: VoiceGlobalRule[] = [
     destinationBlockType: "take_message",
     instructions: "Capture callback preference with take_structured_message and create a follow-up task.",
   },
+  {
+    id: "gr_toolfail",
+    name: "Tool failure recovery",
+    trigger: "tool_failure",
+    enabled: true,
+    destinationBlockType: "take_message",
+    instructions:
+      "If a CRM lookup, transfer, SMS, or other tool fails or times out, apologize, stay on the line, and offer to take a message. Never hang up because a tool failed.",
+  },
 ];
 
 function answeringConversation(): VoiceFlowGraph {
@@ -179,7 +188,16 @@ function humanFirstRouting(): VoiceFlowGraph {
   const hours = n("business_hours", 80, 160);
   const ring = n("ring_group", 80, 300, { seconds: 25 });
   const answered = n("human_answered", 80, 440);
-  const connect = n("end_call", 320, 440, { closing: "Connecting you now." }, "Connect human");
+  const connect = n(
+    "end_call",
+    320,
+    440,
+    {
+      closing:
+        "You're connected with our team. Thanks for calling — stay on the line.",
+    },
+    "Human connected",
+  );
   const aiMissed = n("no_answer_ai", 80, 580);
   const afterHours = n("after_hours_ai", 320, 300);
   return graph(

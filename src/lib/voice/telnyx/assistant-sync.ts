@@ -368,6 +368,8 @@ export async function syncTelnyxAssistant(
       const voiceBase = { ...(enrichPayload.voice_settings as Record<string, unknown>) };
       delete voiceBase.volume;
       try {
+        // Retry voice/telephony only — never replace the full tool set with
+        // hangup-only (that caused production agents to drop mid-tool).
         await ai.updateAssistant(assistantId, {
           voice_settings: voiceBase,
           enabled_features: ["telephony"],
@@ -378,14 +380,6 @@ export async function syncTelnyxAssistant(
               ? { noise_suppression: "disabled" }
               : { noise_suppression: "krisp" }),
           },
-          tools: [
-            {
-              type: "hangup",
-              hangup: {
-                description: "End the call when the conversation is complete.",
-              },
-            },
-          ],
         });
         return {
           enriched: "partial" as const,

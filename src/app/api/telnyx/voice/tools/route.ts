@@ -9,8 +9,7 @@ import {
 
 /**
  * Telnyx AI Assistant webhook tools POST here mid-call.
- * Headers carry workspace/agent/tool identity; body is tool arguments.
- * Workspace/agent ownership and enabled-tool checks are enforced server-side.
+ * Never hang up from this route — tool failures return speakable errors.
  */
 export async function POST(request: Request) {
   try {
@@ -21,7 +20,14 @@ export async function POST(request: Request) {
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
 
     if (!workspaceId) {
-      return NextResponse.json({ ok: false, error: "workspace required" }, { status: 400 });
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "workspace required",
+          speak: "I'm having trouble looking that up. Can I take a message instead?",
+        },
+        { status: 200 },
+      );
     }
 
     const prisma = getPrisma();
@@ -38,8 +44,12 @@ export async function POST(request: Request) {
       });
       if (!agent) {
         return NextResponse.json(
-          { ok: false, error: "agent not found for workspace" },
-          { status: 403 },
+          {
+            ok: false,
+            error: "agent not found for workspace",
+            speak: "I'm not able to do that right now.",
+          },
+          { status: 200 },
         );
       }
 
@@ -66,7 +76,8 @@ export async function POST(request: Request) {
           {
             ok: false,
             error: `Tool "${toolType}" is not enabled for this agent.`,
-            speak: "I'm not able to do that right now. I can take a message or transfer you instead.",
+            speak:
+              "I'm not able to do that right now. I can take a message or transfer you instead.",
           },
           { status: 200 },
         );
@@ -89,11 +100,41 @@ export async function POST(request: Request) {
       }
     }
 
-    const callControlId = String(body.call_control_id || body.callControlId || "");
+    // Resolve call identity from Telnyx headers first — never trust the LLM.
+    const callControlId =
+      request.headers.get("x-telnyx-call-control-id") ||
+      request.headers.get("x-telnyx-call-control-id".toUpperCase()) ||
+      String(body.call_control_id || body.callControlId || body.call_controlId || "");
+    const conversationId =
+      request.headers.get("x-telnyx-conversation-id") ||
+      String(body.telnyx_conversation_id || body.conversation_id || "");
+
     let callId: string | undefined;
     if (callControlId) {
       const call = await prisma.voiceCall.findFirst({
         where: { workspaceId, telnyxCallControlId: callControlId },
+        select: { id: true },
+      });
+      callId = call?.id;
+    }
+    if (!callId && conversationId) {
+      const call = await prisma.voiceCall.findFirst({
+        where: { workspaceId, telnyxConversationId: conversationId },
+        orderBy: { startedAt: "desc" },
+        select: { id: true },
+      });
+      callId = call?.id;
+    }
+    if (!callId && agentId) {
+      const call = await prisma.voiceCall.findFirst({
+        where: {
+          workspaceId,
+          agentId,
+          status: {
+            in: ["IN_PROGRESS", "ANSWERED", "RINGING", "QUEUED", "INITIATED"],
+          },
+        },
+        orderBy: { startedAt: "desc" },
         select: { id: true },
       });
       callId = call?.id;
@@ -109,8 +150,12 @@ export async function POST(request: Request) {
       });
       return NextResponse.json({
         ...result,
-        ok: result.ok,
+        ok: result.ok !== false,
         agentId,
+        speak:
+          result.ok === false
+            ? "I wasn't able to complete that. Would you like me to take a message?"
+            : undefined,
       });
     }
 
@@ -129,20 +174,25 @@ export async function POST(request: Request) {
         })
         .catch(() => null);
       try {
-        const result = await executeBuiltinVoiceAction({
+        const result = (await executeBuiltinVoiceAction({
           workspaceId,
           agentId,
           callId,
           toolType,
-          input: body,
-        });
+          input: {
+            ...body,
+            call_control_id: callControlId || body.call_control_id,
+          },
+        })) as Record<string, unknown>;
+        const ok = result.ok !== false;
         if (execution) {
           await prisma.voiceToolExecution
             .update({
               where: { id: execution.id },
               data: {
-                status: "completed",
+                status: ok ? "completed" : "failed",
                 output: result as object,
+                errorMessage: ok ? null : String(result.error || "tool failed"),
                 latencyMs: Date.now() - start,
                 completedAt: new Date(),
               },
@@ -151,32 +201,66 @@ export async function POST(request: Request) {
         }
         return NextResponse.json({
           ...result,
-          ok: true,
+          ok,
           agentId,
           executionId: execution?.id,
+          speak:
+            typeof result.speak === "string"
+              ? result.speak
+              : ok
+                ? undefined
+                : "I wasn't able to complete that just now. I can take a message or try something else.",
         });
       } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
         if (execution) {
           await prisma.voiceToolExecution
             .update({
               where: { id: execution.id },
               data: {
                 status: "failed",
-                errorMessage: err instanceof Error ? err.message : String(err),
+                errorMessage: message,
                 latencyMs: Date.now() - start,
                 completedAt: new Date(),
               },
             })
             .catch(() => undefined);
         }
-        throw err;
+        console.error("[telnyx/voice/tools]", toolType, message);
+        // Never hang up on tool failure — return a speakable error.
+        return NextResponse.json(
+          {
+            ok: false,
+            error: message,
+            speak:
+              "Sorry, I ran into a problem looking that up. Would you like me to take a message instead?",
+            agentId,
+            executionId: execution?.id,
+          },
+          { status: 200 },
+        );
       }
     }
 
-    return NextResponse.json({ ok: false, error: "No tool id or type" }, { status: 400 });
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "No tool id or type",
+        speak: "I'm not sure how to do that. Can I take a message?",
+      },
+      { status: 200 },
+    );
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error("[telnyx/voice/tools]", message);
-    return NextResponse.json({ ok: false, error: message }, { status: 200 });
+    return NextResponse.json(
+      {
+        ok: false,
+        error: message,
+        speak:
+          "Sorry, something went wrong on my end. I can take a message for the team.",
+      },
+      { status: 200 },
+    );
   }
 }
