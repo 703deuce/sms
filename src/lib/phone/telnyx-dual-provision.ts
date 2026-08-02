@@ -309,12 +309,6 @@ export async function enableVoiceOnWorkspaceNumber(input: {
   const before = await fetchTelnyxNumber(row.providerNumberId);
   if (!before) throw new Error("Could not load number from Telnyx");
 
-  // Preserve existing messaging profile (from Telnyx or workspace).
-  const existingProfile =
-    before.messagingProfileId ||
-    (await fetchMessagingAssignment(row.providerNumberId)) ||
-    (await ensureWorkspaceMessagingProfileId(input.workspaceId));
-
   if (!before.capabilities.voice && before.capabilities.sms === false) {
     await persistProvisioning(row.id, {
       state: "capability_unsupported",
@@ -326,16 +320,34 @@ export async function enableVoiceOnWorkspaceNumber(input: {
     );
   }
 
+  // Preserve any existing messaging profile before voice attach.
+  const existingProfile =
+    before.messagingProfileId ||
+    (await fetchMessagingAssignment(row.providerNumberId));
+
   const connectionId = await resolveVoiceConnectionId();
   await assignVoiceConnection(row.providerNumberId, connectionId);
 
-  // Re-apply messaging profile if Telnyx dropped it (should not, but be safe).
+  // Messaging: keep existing, or create workspace profile (best-effort).
+  let profileId = existingProfile;
+  try {
+    if (!profileId) {
+      profileId = await ensureWorkspaceMessagingProfileId(input.workspaceId);
+    }
+  } catch (err) {
+    console.error("[dual-provision] ensure messaging profile", err);
+  }
+
   const after = await fetchTelnyxNumber(row.providerNumberId);
   const afterMsg =
     after?.messagingProfileId ||
     (await fetchMessagingAssignment(row.providerNumberId));
-  if (existingProfile && afterMsg !== existingProfile) {
-    await assignMessagingProfile(row.providerNumberId, existingProfile);
+  if (profileId && afterMsg !== profileId) {
+    try {
+      await assignMessagingProfile(row.providerNumberId, profileId);
+    } catch (err) {
+      console.error("[dual-provision] restore messaging profile", err);
+    }
   }
 
   await persistProvisioning(row.id, {
@@ -343,7 +355,7 @@ export async function enableVoiceOnWorkspaceNumber(input: {
     lastError: null,
     capabilities: after?.capabilities || before.capabilities,
     telnyxConnectionId: connectionId,
-    messagingProfileId: existingProfile,
+    messagingProfileId: profileId || afterMsg,
   });
 
   return diagnoseWorkspaceNumber({
