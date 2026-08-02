@@ -580,6 +580,12 @@ export const salesforceConnector: CrmConnector = {
       .filter(Boolean)
       .join("\n\n");
 
+    // Disposition belongs in CallDisposition / Description only.
+    // Passing `disposition` as a custom Task field causes INVALID_FIELD on Salesforce.
+    const safeCustom = { ...(call.customFields || {}) };
+    delete safeCustom.disposition;
+    delete safeCustom.CallDisposition;
+
     const body = await buildMappedPayload({
       workspaceId: ctx.workspaceId,
       provider: "salesforce",
@@ -600,10 +606,7 @@ export const salesforceConnector: CrmConnector = {
         WhoId: call.contactExternalId || undefined,
         ActivityDate: (call.startedAt || new Date().toISOString()).slice(0, 10),
       },
-      customFields: {
-        disposition: call.disposition,
-        ...(call.customFields || {}),
-      },
+      customFields: safeCustom,
     });
 
     if (call.id) {

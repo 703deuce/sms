@@ -115,11 +115,15 @@ async function runTimed(
   const started = Date.now();
   try {
     const result = await fn();
+    // Only humanize failures — success messages often contain words like
+    // "callback", "refresh", or "rate" that false-match the error rewriter.
+    const humanMessage =
+      result.ok || result.skipped ? result.message : humanizeCrmError(result.message);
     return {
       id,
       label: PROBE_LABELS[id],
       durationMs: Date.now() - started,
-      humanMessage: humanizeCrmError(result.message),
+      humanMessage,
       ...result,
     };
   } catch (err) {
@@ -207,7 +211,8 @@ export async function getCrmDiagnosticsSnapshot(
 
   return {
     provider,
-    connected: conn?.status === "connected",
+    // "syncing" still means an authorized live connection.
+    connected: conn?.status === "connected" || conn?.status === "syncing",
     tokenValid:
       Boolean(conn?.accessToken) &&
       conn?.status !== "needs_reauth" &&
@@ -539,18 +544,24 @@ export async function runCrmDiagnosticProbe(input: {
 
       case "webhook_delivery":
         return runTimed("webhook_delivery", async () => {
+          // Salesforce: CDC/Streaming not subscribed — inbound route enqueues
+          // incremental reconcile sync instead of adapter handleWebhook.
+          if (!connector.handleWebhook) {
+            return {
+              ok: true,
+              skipped: true,
+              message:
+                provider === "salesforce"
+                  ? "Salesforce Change Data Capture not subscribed — inbound webhook route triggers incremental reconcile sync"
+                  : "Inbound CRM webhooks unsupported for this provider — outbound Transovo events still push to the CRM",
+            };
+          }
           if (!isFeatureSupported(provider, "webhooks_inbound")) {
             return {
               ok: true,
               skipped: true,
               message:
                 "Inbound CRM webhooks unsupported for this provider edition — outbound Transovo events still push to the CRM",
-            };
-          }
-          if (!connector.handleWebhook) {
-            return {
-              ok: false,
-              message: "Adapter missing handleWebhook despite webhooks_inbound support",
             };
           }
           const ctx = await buildCtx(workspaceId, provider);

@@ -6,7 +6,11 @@ export function humanizeCrmError(err: unknown, context?: string): string {
   const raw = err instanceof Error ? err.message : String(err || "Unknown error");
   const lower = raw.toLowerCase();
 
-  if (/app_url|callback|redirect_uri|redirect uri/i.test(raw)) {
+  if (
+    /redirect_uri|redirect uri|callback.?mismatch|invalid.?callback|APP_URL is missing|couldn.?t return/i.test(
+      raw,
+    )
+  ) {
     return "The CRM couldn’t return to Transovo after sign-in. Ask your admin to confirm the callback URL matches exactly.";
   }
   if (/client_id|client id|invalid_client|consumer key/i.test(lower)) {
@@ -15,10 +19,14 @@ export function humanizeCrmError(err: unknown, context?: string): string {
   if (/invalid_grant|expired.*code|authorization code/i.test(lower)) {
     return "The sign-in link expired. Click Connect again and finish authorization within a couple of minutes.";
   }
-  if (/refresh|needs_reauth|reconnect/i.test(lower)) {
+  if (
+    /needs_reauth|must reconnect|refresh.?token.*(expired|revoked|invalid|missing)|no refresh token/i.test(
+      lower,
+    )
+  ) {
     return "Your CRM connection expired. Click Reconnect to authorize Transovo again — your mappings are kept.";
   }
-  if (/rate|429|too many/i.test(lower)) {
+  if (/\b429\b|too many requests|rate.?limit(ed)?/i.test(lower)) {
     return "The CRM temporarily limited requests. Transovo will retry automatically; try again in a few minutes if it persists.";
   }
   if (/permission|insufficient|forbidden|unauthorized|access denied|INVALID_FIELD|REQUIRED_FIELD/i.test(raw)) {

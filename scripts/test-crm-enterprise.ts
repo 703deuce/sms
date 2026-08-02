@@ -4,11 +4,14 @@
  */
 
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import {
   crmEventIdempotencyKey,
   crmWriteIdempotencyKey,
   payloadSyncHash,
 } from "../src/lib/crm/idempotency";
+import { humanizeCrmError } from "../src/lib/crm/human-errors";
 import { applyFieldMappingsOutbound } from "../src/lib/crm/mappings";
 import {
   featureSupport,
@@ -174,6 +177,29 @@ ok("adapters export expected enterprise methods", async () => {
 ok("Salesforce OAuth requires PKCE (code challenge)", async () => {
   const { salesforceConnector } = await import("../src/lib/crm/adapters/salesforce");
   assert.equal(salesforceConnector.oauth.requiresPkce, true);
+});
+
+ok("Salesforce logCall strips disposition before Task write", () => {
+  const src = readFileSync(
+    join(process.cwd(), "src/lib/crm/adapters/salesforce.ts"),
+    "utf8",
+  );
+  assert.ok(src.includes("delete safeCustom.disposition"));
+  assert.ok(src.includes("CallDisposition: call.disposition"));
+  assert.equal(/\bcustomFields:\s*\{\s*disposition:\s*call\.disposition/.test(src), false);
+});
+
+ok("humanizeCrmError does not rewrite successful callback/refresh copy", () => {
+  assert.equal(
+    humanizeCrmError(
+      "Env ready. Callbacks: Salesforce=https://transovo.ai/api/crm/salesforce/callback",
+    ).includes("couldn’t return"),
+    false,
+  );
+  assert.equal(
+    humanizeCrmError("Refresh token exchange succeeded").includes("expired"),
+    false,
+  );
 });
 
 ok("conflict policy both-sides resolution", async () => {
