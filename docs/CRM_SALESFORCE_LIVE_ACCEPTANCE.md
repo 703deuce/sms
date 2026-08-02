@@ -3,9 +3,11 @@
 **Date:** 2026-08-02  
 **Branch:** `cursor/salesforce-live-acceptance-b56f`  
 **Production app:** `https://transovo.ai`  
-**Verdict:** **Not production-ready yet** — code path hardened and mocked tests pass; full live org acceptance must be run on the deployed workspace after Coolify redeploy of web + `worker:all`.
+**Verdict:** **Not production-ready yet** — code path hardened and mocked tests pass; full live org acceptance must be run on the deployed workspace after Coolify redeploy of the **main web application**.
 
 > **Clarification:** An earlier agent log that printed `SALESFORCE_CLIENT_ID: MISSING` referred only to the **Cursor coding sandbox**, which has no Coolify secrets. It does **not** mean production is missing those vars. Use Integrations → Salesforce → Diagnostics on `transovo.ai` to see presence flags for the live web process.
+
+> **Deployment model:** There is **no separate worker service**. CRM sync, push, metadata, webhook, and scheduled jobs all drain **inside the main web server** via Next.js instrumentation (`src/lib/jobs/inprocess-worker.ts`). Same for every other connection/job type. Only redeploy the web app after Coolify env changes.
 
 Status values used below (only these):
 
@@ -33,8 +35,8 @@ Status values used below (only these):
 | Scopes | `api`, `refresh_token`, `offline_access` |
 | API version | `v59.0` |
 | Client app model | External Client App with **PKCE required** (`requiresPkce: true`) |
-| Queue | `crm-salesforce` via `crmQueueName("salesforce")` |
-| Workers | `npm run worker:all` drains CRM queues (also in-process drain) |
+| Queue | `crm-salesforce` via `crmQueueName("salesforce")` (Postgres `job_queue`; drained in-process) |
+| Job processing | **Main web server only** — in-process poller. No separate `worker:all` service |
 | Job types | `crm_sync`, `crm_push_event`, `crm_metadata_refresh`, `crm_bulk_sync`, `crm_webhook_process`, `crm_scheduled_incremental` |
 | DB migration | Prefer `npm run db:push` (Supabase-compat). `npm run db:deploy` exists for Prisma migrate history |
 | CDC / Streaming / Pub-Sub | **Not implemented** — intentionally unsupported |
@@ -53,7 +55,7 @@ Dev callback (local): `http://localhost:3000/api/crm/salesforce/callback` when `
 | OAuth scopes | Code implemented but not live tested | Least privilege: `api` + `refresh_token` + `offline_access`. No `full` / Chatter / Lightning / Data Cloud |
 | Salesforce API version | Code implemented but not live tested | Hard-coded `v59.0` |
 | Database migration | Code implemented but not live tested | Schema includes connection tokens, org/user ids in config, mappings, sync runs/events, webhooks, dead letters, field mappings, audit |
-| Workers | Code implemented but not live tested | After Coolify env change: **redeploy/restart web app and `worker:all`** so both receive Salesforce credentials |
+| Job processing (main web) | Code implemented but not live tested | After Coolify env change: **redeploy/restart the main web app only** — it already drains Salesforce/CRM jobs in-process |
 | Webhooks / change events | Intentionally unsupported | CDC not subscribed. Generic inbound route enqueues incremental reconcile sync only |
 
 ### Scope-to-feature table
@@ -138,7 +140,7 @@ Missing client id/secret throws a clear OAuth start error via `assertCrmOAuthEnv
 | Conflict handling | Code implemented but not live tested |
 | Deletion handling | Code implemented but not live tested (webhook delete keywords + sync policy) |
 | Retry / rate limits / idempotency | Code implemented but not live tested |
-| Worker restart recovery | Code implemented but not live tested — job queue + scheduled incremental |
+| Web process restart recovery | Code implemented but not live tested — job queue + scheduled incremental; poller restarts with the web app |
 | Fake webhook blocking sync | Failed and fixed — removed Salesforce `handleWebhook` no-op that previously short-circuited reconcile enqueue |
 
 ---
@@ -171,9 +173,9 @@ Missing client id/secret throws a clear OAuth start error via `assertCrmOAuthEnv
 
 ## 9. How to complete live acceptance (deployed org)
 
-After Coolify redeploy of **web** and **worker:all**:
+After Coolify redeploy of the **main web application** (no separate worker):
 
-1. Presence check (on host): `npm run crm:live-readiness`
+1. Presence check (on host or via Diagnostics UI): `npm run crm:live-readiness`
 2. UI: Integrations → CRM → Salesforce → Connect (if needed) → Diagnostics
 3. Run acceptance suite: `POST /api/crm/diagnostics` with `{ "provider": "salesforce", "action": "acceptance" }`
 4. Confirm Salesforce External Client App redirect URI is exactly:

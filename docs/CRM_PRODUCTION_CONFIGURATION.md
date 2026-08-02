@@ -19,13 +19,13 @@ A customer can:
 
 ```bash
 npm run db:push          # CRM tables + IntegrationConnection columns
-# Set provider OAuth env vars (below)
+# Set provider OAuth env vars (below) on the main web Coolify service, then redeploy web.
 # Register callbacks EXACTLY (no trailing slash):
 #   {APP_URL}/api/crm/salesforce/callback
 #   {APP_URL}/api/crm/zoho/callback
 #   {APP_URL}/api/crm/pipedrive/callback
 # Legacy /api/crm/oauth/callback still accepts callbacks, but authorize sends the per-provider URL.
-npm run worker:all       # drains crm_sync + crm_push_event
+# Jobs (crm_sync, crm_push_event, etc.) drain inside the main web server — no separate worker.
 ```
 
 Env:

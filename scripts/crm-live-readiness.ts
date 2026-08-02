@@ -96,8 +96,11 @@ for (const provider of focusProviders) {
   }
 }
 
-console.log("\nWorker / queue coverage:");
-console.log("  Process: npm run worker:all  (single consumer drains all queues)");
+console.log("\nJob / queue coverage:");
+console.log(
+  "  Jobs drain inside the main web server (Next.js instrumentation / in-process poller).",
+);
+console.log("  There is no separate worker service in this deployment.");
 console.log(
   "  Queues:",
   focusProviders.map((p) => crmQueueName(p)).join(", "),
@@ -105,7 +108,7 @@ console.log(
 console.log("  Job types:", CRM_JOB_TYPES.join(", "));
 console.log("  Schema command: npm run db:push   (or npm run db:deploy when using migrate history)");
 console.log(
-  "  Services needing Salesforce env after Coolify change: web app + worker:all (restart/redeploy both)",
+  "  After Coolify env changes: redeploy/restart the main web application only (it already drains CRM jobs).",
 );
 
 const env = checkCrmEnvironment();
