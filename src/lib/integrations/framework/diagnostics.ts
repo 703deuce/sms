@@ -71,12 +71,13 @@ export async function getIntegrationDiagnosticsSnapshot(
       typeof cfg.signingKeySource === "string" ? cfg.signingKeySource : null;
     const subscriptionSigningKeyCaptured =
       signingFromConfig && signingKeySource === "calendly_subscription_create";
+    const envSigningPresent = Object.values(signingEnv).some(Boolean);
     calendly = {
       callbackUrl: typeof env === "object" && env && "callbackUrl" in env ? env.callbackUrl : null,
       webhookUrl: externalWebhookUrl("calendly", token),
       webhookSigningKeyPresent: Boolean(resolveCalendlyWebhookSigningKey(cfg)),
       webhookSigningKeyFromConfig: signingFromConfig,
-      /** True only when signing key was captured from Calendly's create response. */
+      /** True only when signing key was captured from Calendly's create response (PAT). */
       webhookSubscriptionSigningKeyCaptured: subscriptionSigningKeyCaptured,
       webhookSigningKeySource: signingKeySource,
       webhookSigningKeyCapturedAt:
@@ -84,11 +85,11 @@ export async function getIntegrationDiagnosticsSnapshot(
       webhookSigningKeyEnv: signingEnv,
       webhookSigningKeyEnvNames: [...CALENDLY_WEBHOOK_SIGNING_KEY_ENVS],
       /**
-       * Env keys alone usually cannot verify deliveries — Calendly HMAC uses the
-       * per-subscription signing_key from POST /webhook_subscriptions.
+       * OAuth apps sign with the developer-portal webhook key (Coolify env).
+       * Risk = subscription exists but we have neither env key nor a captured create key.
        */
       webhookSigningKeyMismatchRisk:
-        subscriptionIds.length > 0 && !subscriptionSigningKeyCaptured,
+        subscriptionIds.length > 0 && !subscriptionSigningKeyCaptured && !envSigningPresent,
       /** Names only — proves which Calendly vars Coolify actually injected into this container. */
       calendlyEnvNamesPresent,
       clientIdPresent: calendlyEnvNamesPresent.some((n) => n === "CALENDLY_CLIENT_ID"),
@@ -301,6 +302,12 @@ export async function runIntegrationProbe(
           nextConfig.signingKey = result.signingKey;
           nextConfig.signingKeySource = "calendly_subscription_create";
           nextConfig.signingKeyCapturedAt = new Date().toISOString();
+        } else if (provider === "calendly") {
+          // OAuth app path: use Coolify developer-portal key; drop stale config
+          // signingKey so it cannot override a corrected env value.
+          nextConfig.signingKey = null;
+          nextConfig.signingKeySource = "oauth_app_env";
+          nextConfig.signingKeyCapturedAt = new Date().toISOString();
         }
         await upsertConnection({
           workspaceId,
@@ -316,6 +323,8 @@ export async function runIntegrationProbe(
             ids: result.ids,
             url,
             signingKeyCaptured: Boolean(result.signingKey),
+            signingMode: result.signingKey ? "subscription_create" : "oauth_app_env",
+            createResponseKeys: result.createResponseKeys || [],
           },
         };
       } catch (err) {

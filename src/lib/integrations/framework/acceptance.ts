@@ -338,63 +338,30 @@ export async function runIntegrationAcceptance(
         const setupError =
           typeof cfg.webhookSetupError === "string" ? cfg.webhookSetupError : "";
         if (existingIds.length) {
-          const captured =
-            typeof cfg.signingKey === "string" &&
-            cfg.signingKey.trim() &&
-            cfg.signingKeySource === "calendly_subscription_create";
-          if (captured) {
-            push(
-              "calendly_webhooks",
-              "Webhook subscription (invitee.created / canceled)",
-              "Live tested and passed",
-              `ids=${existingIds.join(",")} signingKey=captured`,
-            );
-          } else {
-            // Subscription exists but we never stored Calendly's create-time
-            // signing_key — real deliveries will 401. Recreate to capture it.
-            try {
-              const { externalWebhookUrl } = await import("./app-url");
-              const { upsertConnection } = await import("@/lib/integrations/connections");
-              const token =
-                typeof cfg.webhookToken === "string" ? cfg.webhookToken : null;
-              if (adapter.removeWebhooks) {
-                await adapter.removeWebhooks(ctx, existingIds).catch(() => undefined);
-              }
-              const registered = await adapter.registerWebhooks(
-                ctx,
-                externalWebhookUrl("calendly", token),
-              );
-              const nextConfig: Record<string, unknown> = {
-                webhookSubscriptionIds: registered.ids,
-                webhookSetupError: null,
-              };
-              if (registered.signingKey) {
-                nextConfig.signingKey = registered.signingKey;
-                nextConfig.signingKeySource = "calendly_subscription_create";
-                nextConfig.signingKeyCapturedAt = new Date().toISOString();
-              }
-              await upsertConnection({
-                workspaceId,
-                provider,
-                config: nextConfig,
-                mergeConfig: true,
-              });
-              push(
-                "calendly_webhooks",
-                "Webhook subscription (invitee.created / canceled)",
-                registered.signingKey ? "Live tested and passed" : "Failed and fixed",
-                `recreated ids=${(registered.ids || []).join(",")} signingKey=${registered.signingKey ? "captured" : "missing_from_calendly_response"}`,
-              );
-            } catch (err) {
-              const message = err instanceof Error ? err.message : String(err);
-              push(
-                "calendly_webhooks",
-                "Webhook subscription (invitee.created / canceled)",
-                "Failed and fixed",
-                `subscription present but signing key not captured from Calendly create response; recreate failed: ${message}`,
-              );
-            }
+          const { resolveCalendlyWebhookSigningKey } = await import(
+            "../adapters/calendly"
+          );
+          const hasVerifyKey = Boolean(resolveCalendlyWebhookSigningKey(cfg));
+          const captured = cfg.signingKeySource === "calendly_subscription_create";
+          // Ensure OAuth path uses Coolify env (clear stale config override).
+          if (!captured) {
+            const { upsertConnection } = await import("@/lib/integrations/connections");
+            await upsertConnection({
+              workspaceId,
+              provider,
+              config: {
+                signingKey: null,
+                signingKeySource: "oauth_app_env",
+              },
+              mergeConfig: true,
+            });
           }
+          push(
+            "calendly_webhooks",
+            "Webhook subscription (invitee.created / canceled)",
+            hasVerifyKey ? "Live tested and passed" : "Failed and fixed",
+            `ids=${existingIds.join(",")} signingMode=${captured ? "subscription_create" : "oauth_app_env"} verifyKey=${hasVerifyKey ? "present" : "missing"}`,
+          );
         } else if (/Blocked by Calendly plan|Standard, Teams, or Enterprise/i.test(setupError)) {
           push(
             "calendly_webhooks",
@@ -420,6 +387,10 @@ export async function runIntegrationAcceptance(
               nextConfig.signingKey = registered.signingKey;
               nextConfig.signingKeySource = "calendly_subscription_create";
               nextConfig.signingKeyCapturedAt = new Date().toISOString();
+            } else {
+              nextConfig.signingKey = null;
+              nextConfig.signingKeySource = "oauth_app_env";
+              nextConfig.signingKeyCapturedAt = new Date().toISOString();
             }
             await upsertConnection({
               workspaceId,
@@ -427,11 +398,13 @@ export async function runIntegrationAcceptance(
               config: nextConfig,
               mergeConfig: true,
             });
+            const { resolveCalendlyWebhookSigningKey } = await import("../adapters/calendly");
+            const hasVerifyKey = Boolean(resolveCalendlyWebhookSigningKey(nextConfig));
             push(
               "calendly_webhooks",
               "Webhook subscription (invitee.created / canceled)",
-              "Live tested and passed",
-              `ids=${(registered.ids || []).join(",")} signingKey=${registered.signingKey ? "captured" : "missing"}`,
+              hasVerifyKey || registered.signingKey ? "Live tested and passed" : "Failed and fixed",
+              `ids=${(registered.ids || []).join(",")} signingMode=${registered.signingKey ? "subscription_create" : "oauth_app_env"} verifyKey=${hasVerifyKey || registered.signingKey ? "present" : "missing"}`,
             );
           } catch (err) {
             const message = err instanceof Error ? err.message : String(err);

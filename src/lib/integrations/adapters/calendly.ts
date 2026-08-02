@@ -109,17 +109,53 @@ export function listCalendlyEnvNamesPresent(): string[] {
     .sort();
 }
 
+/**
+ * Resolve signing keys used to verify Calendly webhook HMAC.
+ *
+ * OAuth apps: Calendly shows a single **Webhook signing key** when the OAuth
+ * app is created in the developer portal (alongside client id/secret). That
+ * value belongs in Coolify as CALENDLY_WEBHOOK_SIGNING_KEY. Create
+ * `/webhook_subscriptions` does **not** return signing_key for OAuth apps.
+ *
+ * Personal access tokens: create may return a per-subscription signing_key;
+ * we store that on the connection with signingKeySource=calendly_subscription_create.
+ *
+ * Prefer env (OAuth app key) over a legacy config.signingKey unless the config
+ * key was captured from a Calendly create response — otherwise a stale copied
+ * config value can override a corrected Coolify env and 401 every delivery.
+ */
+export function resolveCalendlyWebhookSigningKeys(
+  config?: Record<string, unknown> | null,
+): string[] {
+  const keys: string[] = [];
+  const seen = new Set<string>();
+  const add = (value: unknown) => {
+    const v = typeof value === "string" ? value.trim() : "";
+    if (!v || seen.has(v)) return;
+    seen.add(v);
+    keys.push(v);
+  };
+
+  const fromConfig =
+    typeof config?.signingKey === "string" ? config.signingKey.trim() : "";
+  const source =
+    typeof config?.signingKeySource === "string" ? config.signingKeySource : "";
+
+  if (source === "calendly_subscription_create" && fromConfig) {
+    add(fromConfig);
+  }
+  for (const name of CALENDLY_WEBHOOK_SIGNING_KEY_ENVS) {
+    add(process.env[name]);
+  }
+  // Legacy config fallback (may be a stale copy of an old env value).
+  if (source !== "calendly_subscription_create") add(fromConfig);
+  return keys;
+}
+
 export function resolveCalendlyWebhookSigningKey(
   config?: Record<string, unknown> | null,
 ): string | null {
-  const fromConfig =
-    typeof config?.signingKey === "string" ? config.signingKey.trim() : "";
-  if (fromConfig) return fromConfig;
-  for (const name of CALENDLY_WEBHOOK_SIGNING_KEY_ENVS) {
-    const v = process.env[name]?.trim();
-    if (v) return v;
-  }
-  return null;
+  return resolveCalendlyWebhookSigningKeys(config)[0] || null;
 }
 
 export const calendlyAdapter: ExternalIntegrationAdapter = {
@@ -188,18 +224,20 @@ export const calendlyAdapter: ExternalIntegrationAdapter = {
   },
 
   async verifyWebhook(headers, rawBody, secret) {
-    const key =
-      (typeof secret === "string" && secret.trim()) ||
-      resolveCalendlyWebhookSigningKey(null);
-    // Require a signing key for native Calendly webhooks — do not silently accept.
-    if (!key) return false;
     const header =
       (typeof headers.get === "function"
         ? headers.get("calendly-webhook-signature")
         : null) ||
       (headers as unknown as Record<string, string>)["calendly-webhook-signature"] ||
       null;
-    return verifyCalendlySignature(key, header, rawBody);
+    // Try explicit secret, then all resolved candidates (env + config).
+    const keys = [
+      ...(typeof secret === "string" && secret.trim() ? [secret.trim()] : []),
+      ...resolveCalendlyWebhookSigningKeys(null),
+    ];
+    const unique = [...new Set(keys.filter(Boolean))];
+    if (!unique.length) return false;
+    return unique.some((key) => verifyCalendlySignature(key, header, rawBody));
   },
 
   async listAppointments(ctx, cursor, opts) {
@@ -306,18 +344,22 @@ export const calendlyAdapter: ExternalIntegrationAdapter = {
         method: "POST",
         body: JSON.stringify(body),
       });
-      // Calendly returns signing_key ONLY on create — never again via GET.
-      // Real deliveries are HMAC'd with this key; env CALENDLY_WEBHOOK_SIGNING_KEY
-      // is not a substitute unless it happens to match (it usually does not).
+      // PAT creates may include signing_key (once). OAuth apps usually omit it —
+      // those use the developer-portal "Webhook signing key" in Coolify env.
       const resource =
-        ((created as { resource?: { uri?: string; signing_key?: string } }).resource ||
-          {}) as { uri?: string; signing_key?: string };
+        ((created as { resource?: Record<string, unknown> }).resource ||
+          {}) as Record<string, unknown>;
       const uri = String(resource.uri || "");
       const signingKey =
         typeof resource.signing_key === "string" && resource.signing_key.trim()
-          ? resource.signing_key.trim()
+          ? String(resource.signing_key).trim()
           : null;
-      return { ids: uri ? [uri] : [], signingKey };
+      return {
+        ids: uri ? [uri] : [],
+        signingKey,
+        // Presence-only keys for diagnostics (never values).
+        createResponseKeys: Object.keys(resource).sort(),
+      };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       if (

@@ -116,7 +116,12 @@ export interface ExternalIntegrationAdapter {
   registerWebhooks?(
     ctx: AdapterContext,
     callbackUrl: string,
-  ): Promise<{ ids: string[]; signingKey?: string | null }>;
+  ): Promise<{
+    ids: string[];
+    signingKey?: string | null;
+    /** Presence-only resource keys from provider create response (debug). */
+    createResponseKeys?: string[];
+  }>;
   removeWebhooks?(ctx: AdapterContext, ids?: string[]): Promise<void>;
   verifyWebhook?(
     headers: Headers,

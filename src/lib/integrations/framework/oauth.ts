@@ -227,6 +227,11 @@ export async function completeExternalOAuth(input: {
         meta.signingKey = registered.signingKey;
         meta.signingKeySource = "calendly_subscription_create";
         meta.signingKeyCapturedAt = new Date().toISOString();
+      } else {
+        // OAuth apps: developer-portal key via Coolify env (not returned on create).
+        meta.signingKey = null;
+        meta.signingKeySource = "oauth_app_env";
+        meta.signingKeyCapturedAt = new Date().toISOString();
       }
       meta.webhookSetupError = null;
     } catch (err) {

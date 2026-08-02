@@ -278,23 +278,24 @@ export function NativeProviderClient({ provider }: { provider: string }) {
                 {snapshot.calendly.webhookSubscriptionSigningKeyCaptured
                   ? "captured from Calendly subscription"
                   : snapshot.calendly.webhookSigningKeyPresent
-                    ? "present (env/fallback — may not match subscription)"
+                    ? "present (OAuth app / Coolify env)"
                     : "missing"}
                 {snapshot.calendly.webhookSigningKeyMismatchRisk ? (
                   <span className="block text-xs text-amber-700">
-                    Subscription exists but we never stored Calendly&apos;s create-time{" "}
-                    <code>signing_key</code>. Real webhooks will get{" "}
-                    <strong>401 Invalid signature</strong>. Click{" "}
-                    <strong>Register webhooks</strong> to recreate the subscription and
-                    capture the key (env <code>CALENDLY_WEBHOOK_SIGNING_KEY</code> is not
-                    enough by itself).
+                    Subscription exists but no signing key is available to verify
+                    deliveries. For OAuth apps, paste the <strong>Webhook signing key</strong>{" "}
+                    from the Calendly developer portal (shown once when the OAuth app was
+                    created) into Coolify as <code>CALENDLY_WEBHOOK_SIGNING_KEY</code>, then
+                    redeploy.
                   </span>
                 ) : null}
                 {!snapshot.calendly.webhookSigningKeyPresent &&
                 !snapshot.calendly.webhookSigningKeyMismatchRisk ? (
                   <span className="block text-xs text-amber-700">
-                    No signing key on the connection. Click <strong>Register webhooks</strong>{" "}
-                    to create a Calendly subscription (key is returned only on create).
+                    Set <code>CALENDLY_WEBHOOK_SIGNING_KEY</code> in Coolify to the OAuth
+                    app&apos;s webhook signing key from the Calendly developer portal, then
+                    redeploy. Click <strong>Register webhooks</strong> if no subscription
+                    exists yet.
                   </span>
                 ) : null}
                 {snapshot.calendly.webhookSigningKeyEnv ? (

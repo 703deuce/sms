@@ -58,13 +58,24 @@ export async function POST(
     process.env[`${raw.toUpperCase()}_WEBHOOK_SECRET`]?.trim() ||
     null;
   if (raw === "calendly") {
-    const { resolveCalendlyWebhookSigningKey } = await import(
-      "@/lib/integrations/adapters/calendly"
-    );
-    secret = resolveCalendlyWebhookSigningKey(cfg);
-  }
-
-  if (adapter.verifyWebhook) {
+    // Try every candidate (OAuth app env key + optional captured/legacy config).
+    const {
+      resolveCalendlyWebhookSigningKeys,
+      calendlyAdapter,
+    } = await import("@/lib/integrations/adapters/calendly");
+    const keys = resolveCalendlyWebhookSigningKeys(cfg);
+    if (!keys.length) {
+      return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
+    }
+    let ok = false;
+    for (const key of keys) {
+      if (await calendlyAdapter.verifyWebhook?.(request.headers, rawBody, key)) {
+        ok = true;
+        break;
+      }
+    }
+    if (!ok) return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
+  } else if (adapter.verifyWebhook) {
     const ok = await adapter.verifyWebhook(request.headers, rawBody, secret);
     if (!ok) return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
   }
