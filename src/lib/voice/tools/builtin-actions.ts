@@ -114,7 +114,297 @@ export async function executeBuiltinVoiceAction(input: {
           }),
         },
       });
-      return { ok: true, title, contactId };
+      // Also create CRM task when a CRM is connected.
+      const { createCrmTaskForVoice } = await import("./crm-writes");
+      const crm = await createCrmTaskForVoice({
+        workspaceId: input.workspaceId,
+        title,
+        notes: args.notes ? String(args.notes) : undefined,
+        dueAt: args.dueAt ? String(args.dueAt) : undefined,
+        phone: phone || undefined,
+        callId: input.callId,
+      }).catch((err) => ({
+        ok: false as const,
+        error: err instanceof Error ? err.message : String(err),
+      }));
+      return { ok: true, title, contactId, crm };
+    }
+    case "take_structured_message": {
+      const reason = String(args.reason || args.message || "").trim();
+      if (!reason) throw new Error("reason required");
+      const phone = args.phone ? normalizeE164(String(args.phone)) : "";
+      const callerName = String(args.caller_name || args.name || "").trim();
+      const email = args.email ? String(args.email).trim() : "";
+      const urgency = String(args.urgency || "normal");
+      const preferredCallback = String(args.preferred_callback || "");
+      const notes = String(args.notes || "");
+      let contactId: string | undefined;
+      if (phone) {
+        const parts = callerName.split(/\s+/).filter(Boolean);
+        const contact = await prisma.contact.upsert({
+          where: {
+            workspaceId_phone: { workspaceId: input.workspaceId, phone },
+          },
+          create: {
+            workspaceId: input.workspaceId,
+            phone,
+            firstName: parts[0] || null,
+            lastName: parts.slice(1).join(" ") || null,
+            email: email || null,
+          },
+          update: {
+            ...(parts[0] ? { firstName: parts[0] } : {}),
+            ...(parts.length > 1 ? { lastName: parts.slice(1).join(" ") } : {}),
+            ...(email ? { email } : {}),
+          },
+        });
+        contactId = contact.id;
+      }
+      if (input.callId) {
+        const existing = await prisma.voiceCall.findFirst({
+          where: { id: input.callId, workspaceId: input.workspaceId },
+          select: { metadata: true },
+        });
+        const prevMeta = (existing?.metadata || {}) as Record<string, unknown>;
+        await prisma.voiceCall.update({
+          where: { id: input.callId },
+          data: {
+            outcome: "message_taken",
+            contactId: contactId || undefined,
+            metadata: {
+              ...prevMeta,
+              structuredMessage: {
+                callerName,
+                phone,
+                email,
+                reason,
+                urgency,
+                preferredCallback,
+                notes,
+              },
+            },
+          },
+        }).catch(() => undefined);
+      }
+      await prisma.auditLog.create({
+        data: {
+          workspaceId: input.workspaceId,
+          event: "voice.message_taken",
+          detail: JSON.stringify({
+            callerName,
+            phone,
+            email,
+            reason,
+            urgency,
+            preferredCallback,
+            notes,
+            contactId,
+            callId: input.callId,
+          }),
+        },
+      });
+      const { createCrmNoteForVoice } = await import("./crm-writes");
+      const crm = await createCrmNoteForVoice({
+        workspaceId: input.workspaceId,
+        subject: `Caller message: ${reason.slice(0, 80)}`,
+        body: [
+          `From: ${callerName || "Unknown"}`,
+          phone ? `Phone: ${phone}` : "",
+          email ? `Email: ${email}` : "",
+          `Urgency: ${urgency}`,
+          preferredCallback ? `Callback: ${preferredCallback}` : "",
+          "",
+          reason,
+          notes,
+        ]
+          .filter(Boolean)
+          .join("\n"),
+        phone: phone || undefined,
+        email: email || undefined,
+        callId: input.callId,
+      }).catch((err) => ({
+        ok: false as const,
+        error: err instanceof Error ? err.message : String(err),
+      }));
+      return {
+        ok: true,
+        message: "Message saved. Tell the caller you will make sure the team receives it.",
+        contactId,
+        crm,
+      };
+    }
+    case "mark_disposition": {
+      const disposition = String(args.disposition || "").trim();
+      if (!disposition) throw new Error("disposition required");
+      if (input.callId) {
+        await prisma.voiceCall.update({
+          where: { id: input.callId },
+          data: {
+            outcome: disposition,
+            leadScore:
+              disposition === "lead" || disposition === "callback_requested"
+                ? 60
+                : undefined,
+          },
+        }).catch(() => undefined);
+      }
+      await prisma.auditLog.create({
+        data: {
+          workspaceId: input.workspaceId,
+          event: "voice.disposition",
+          detail: JSON.stringify({
+            disposition,
+            notes: args.notes,
+            callId: input.callId,
+          }),
+        },
+      });
+      return { ok: true, disposition };
+    }
+    case "save_caller_info": {
+      const phone = normalizeE164(String(args.phone || ""));
+      if (!phone) throw new Error("phone required");
+      const firstName = args.first_name ? String(args.first_name) : null;
+      const lastName = args.last_name ? String(args.last_name) : null;
+      const email = args.email ? String(args.email) : null;
+      const company = args.company ? String(args.company) : null;
+      const contact = await prisma.contact.upsert({
+        where: {
+          workspaceId_phone: { workspaceId: input.workspaceId, phone },
+        },
+        create: {
+          workspaceId: input.workspaceId,
+          phone,
+          firstName,
+          lastName,
+          email,
+          company,
+        },
+        update: {
+          ...(firstName ? { firstName } : {}),
+          ...(lastName ? { lastName } : {}),
+          ...(email ? { email } : {}),
+          ...(company ? { company } : {}),
+        },
+      });
+      if (input.callId) {
+        await prisma.voiceCall
+          .update({
+            where: { id: input.callId },
+            data: { contactId: contact.id },
+          })
+          .catch(() => undefined);
+      }
+      const { upsertCrmContactForVoice } = await import("./crm-writes");
+      const crm = await upsertCrmContactForVoice({
+        workspaceId: input.workspaceId,
+        firstName: firstName || undefined,
+        lastName: lastName || undefined,
+        phone,
+        email: email || undefined,
+        company: company || undefined,
+      }).catch((err) => ({
+        ok: false as const,
+        error: err instanceof Error ? err.message : String(err),
+      }));
+      return { ok: true, contactId: contact.id, crm };
+    }
+    case "create_crm_note": {
+      const { createCrmNoteForVoice } = await import("./crm-writes");
+      return await createCrmNoteForVoice({
+        workspaceId: input.workspaceId,
+        subject: args.subject ? String(args.subject) : undefined,
+        body: String(args.body || ""),
+        phone: args.phone ? String(args.phone) : undefined,
+        email: args.email ? String(args.email) : undefined,
+        callId: input.callId,
+      });
+    }
+    case "create_crm_task": {
+      const { createCrmTaskForVoice } = await import("./crm-writes");
+      return await createCrmTaskForVoice({
+        workspaceId: input.workspaceId,
+        title: String(args.title || "Follow-up"),
+        notes: args.notes ? String(args.notes) : undefined,
+        dueAt: args.dueAt ? String(args.dueAt) : undefined,
+        phone: args.phone ? String(args.phone) : undefined,
+        email: args.email ? String(args.email) : undefined,
+        callId: input.callId,
+      });
+    }
+    case "upsert_crm_contact": {
+      const { upsertCrmContactForVoice } = await import("./crm-writes");
+      return await upsertCrmContactForVoice({
+        workspaceId: input.workspaceId,
+        firstName: args.first_name ? String(args.first_name) : undefined,
+        lastName: args.last_name ? String(args.last_name) : undefined,
+        phone: args.phone ? String(args.phone) : undefined,
+        email: args.email ? String(args.email) : undefined,
+        company: args.company ? String(args.company) : undefined,
+      });
+    }
+    case "escalate_human":
+    case "sip_refer": {
+      if (!input.callId) throw new Error("callId required");
+      const call = await prisma.voiceCall.findFirst({
+        where: { id: input.callId, workspaceId: input.workspaceId },
+      });
+      if (!call) throw new Error("Call not found");
+      const targetName =
+        String(args.target_name || args.destination || "Agent Handoff").trim() ||
+        "Agent Handoff";
+      const dest =
+        (await prisma.voiceTransferDestination.findFirst({
+          where: {
+            workspaceId: input.workspaceId,
+            enabled: true,
+            OR: [
+              { agentId: input.agentId || undefined, name: { equals: targetName, mode: "insensitive" } },
+              { agentId: null, name: { equals: targetName, mode: "insensitive" } },
+              ...(input.toolType === "escalate_human"
+                ? [
+                    {
+                      agentId: input.agentId || undefined,
+                      name: { equals: "Front Desk", mode: "insensitive" as const },
+                    },
+                  ]
+                : []),
+            ],
+          },
+        })) ||
+        (await prisma.voiceTransferDestination.findFirst({
+          where: {
+            workspaceId: input.workspaceId,
+            agentId: input.agentId || undefined,
+            enabled: true,
+          },
+          orderBy: { name: "asc" },
+        }));
+      if (!dest) {
+        return {
+          ok: false,
+          error:
+            "No transfer destination configured. Ask the caller for a callback instead.",
+        };
+      }
+      const { initiateTransfer } = await import("../transfers");
+      const result = await initiateTransfer({
+        workspaceId: input.workspaceId,
+        callId: call.id,
+        destination: dest.destination,
+        transferType:
+          input.toolType === "sip_refer" || dest.destination.startsWith("sip:")
+            ? "sip_refer"
+            : "warm_transfer",
+        summary: String(args.summary || args.reason || ""),
+      });
+      return {
+        ok: true,
+        transferredTo: dest.name,
+        destination: dest.destination,
+        reason: args.reason || null,
+        result,
+      };
     }
     case "send_email": {
       const to = String(args.to || "");

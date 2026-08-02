@@ -97,10 +97,32 @@ export async function PUT(
     if (builtinKeys) {
       nextDraft.enabledBuiltinTools = builtinKeys;
     }
-    await getPrisma().voiceAgent.update({
+    const updated = await getPrisma().voiceAgent.update({
       where: { id: agentId },
       data: { draftConfig: nextDraft },
     });
+
+    // Keep Telnyx assistant in sync so the next call gets the new tool set.
+    let synced = false;
+    if (updated.telnyxAssistantId) {
+      try {
+        const { parseVoiceAgentConfig } = await import("@/lib/voice/types");
+        const { syncTelnyxAssistant } = await import(
+          "@/lib/voice/telnyx/assistant-sync"
+        );
+        await syncTelnyxAssistant(
+          auth.workspaceId,
+          updated as never,
+          parseVoiceAgentConfig(nextDraft),
+        );
+        synced = true;
+      } catch (err) {
+        console.warn(
+          "[voice/tools] sync after save failed",
+          err instanceof Error ? err.message : err,
+        );
+      }
+    }
 
     return NextResponse.json({
       data: {
@@ -112,6 +134,7 @@ export async function PUT(
             agentType: agent.agentType,
           }),
         catalogSize: TOOL_CATALOG.length,
+        synced,
       },
     });
   } catch (err) {

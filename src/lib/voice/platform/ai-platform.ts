@@ -396,17 +396,41 @@ export async function upsertTransferDestination(
     maxAttempts: input.maxAttempts ?? 2,
     enabled: input.enabled ?? true,
   };
-  if (existing) {
-    return prisma.voiceTransferDestination.update({ where: { id: existing.id }, data });
+  const row = existing
+    ? await prisma.voiceTransferDestination.update({ where: { id: existing.id }, data })
+    : await prisma.voiceTransferDestination.create({
+        data: {
+          workspaceId,
+          agentId,
+          name: input.name,
+          ...data,
+        },
+      });
+
+  // Re-sync Telnyx transfer tool targets when the destination belongs to an agent.
+  if (agentId) {
+    try {
+      const agent = await prisma.voiceAgent.findFirst({
+        where: { id: agentId, workspaceId },
+      });
+      if (agent?.telnyxAssistantId) {
+        const { parseVoiceAgentConfig } = await import("../types");
+        const { syncTelnyxAssistant } = await import("../telnyx/assistant-sync");
+        await syncTelnyxAssistant(
+          workspaceId,
+          agent as never,
+          parseVoiceAgentConfig(agent.draftConfig),
+        );
+      }
+    } catch (err) {
+      console.warn(
+        "[voice] destination upsert sync failed",
+        err instanceof Error ? err.message : err,
+      );
+    }
   }
-  return prisma.voiceTransferDestination.create({
-    data: {
-      workspaceId,
-      agentId,
-      name: input.name,
-      ...data,
-    },
-  });
+
+  return row;
 }
 
 export async function registerMcpServer(

@@ -91,7 +91,7 @@ export async function searchCrmContactsForVoice(input: {
     }
   }
 
-  // 2) Connected CRMs via Transovo adapters (phone/email only — no bulk dump).
+  // 2) Connected CRMs via Transovo adapters (no bulk dump).
   const connected = await prisma.integrationConnection.findMany({
     where: {
       workspaceId: input.workspaceId,
@@ -108,37 +108,58 @@ export async function searchCrmContactsForVoice(input: {
       const { buildContext } = await import("@/lib/crm/sync-engine");
       const ctx = await buildContext(input.workspaceId, provider);
       const connector = getConnector(provider);
-      let found = null;
+      const foundRows: Array<{
+        id?: string;
+        firstName?: string | null;
+        lastName?: string | null;
+        phone?: string | null;
+        email?: string | null;
+        companyName?: string | null;
+        ownerExternalId?: string | null;
+      }> = [];
+
       if (phone && connector.findContactByPhone && (matchType === "auto" || matchType === "phone")) {
-        found = await connector.findContactByPhone(ctx, phone).catch(() => null);
+        const found = await connector.findContactByPhone(ctx, phone).catch(() => null);
+        if (found?.id) foundRows.push(found);
       }
       if (
-        !found &&
         email &&
         connector.findContactByEmail &&
         (matchType === "auto" || matchType === "email")
       ) {
-        found = await connector.findContactByEmail(ctx, email).catch(() => null);
+        const found = await connector.findContactByEmail(ctx, email).catch(() => null);
+        if (found?.id && !foundRows.some((f) => f.id === found.id)) foundRows.push(found);
       }
-      if (found?.id) {
-        const safeId = `crm:${provider}:${found.id}`;
-        if (!matches.some((m) => m.safeId === safeId)) {
-          const phoneVal = found.phone || null;
-          matches.push({
-            displayName:
-              [found.firstName, found.lastName].filter(Boolean).join(" ") ||
-              found.email ||
-              "CRM contact",
-            phone: speakAllowed ? phoneVal : phoneVal ? redactPhone(phoneVal) : null,
-            speakPhone: speakAllowed ? phoneVal : null,
-            email: found.email || null,
-            company: found.companyName || null,
-            owner: found.ownerExternalId || null,
-            recordType: "crm_contact",
-            provider,
-            safeId,
-          });
+      // Name / free-text search via provider word search (Zoho) or local filter.
+      if (q && (matchType === "auto" || matchType === "name") && foundRows.length < limit) {
+        const named = await searchCrmByName(provider, ctx, q, limit).catch(() => []);
+        for (const n of named) {
+          if (foundRows.some((f) => f.id === n.id)) continue;
+          foundRows.push(n);
+          if (foundRows.length >= limit) break;
         }
+      }
+
+      for (const found of foundRows) {
+        if (matches.length >= limit) break;
+        if (!found?.id) continue;
+        const safeId = `crm:${provider}:${found.id}`;
+        if (matches.some((m) => m.safeId === safeId)) continue;
+        const phoneVal = found.phone || null;
+        matches.push({
+          displayName:
+            [found.firstName, found.lastName].filter(Boolean).join(" ") ||
+            found.email ||
+            "CRM contact",
+          phone: speakAllowed ? phoneVal : phoneVal ? redactPhone(phoneVal) : null,
+          speakPhone: speakAllowed ? phoneVal : null,
+          email: found.email || null,
+          company: found.companyName || null,
+          owner: found.ownerExternalId || null,
+          recordType: "crm_contact",
+          provider,
+          safeId,
+        });
       }
     } catch {
       // Provider optional
@@ -194,4 +215,81 @@ function redactPhone(phone: string) {
   const digits = phone.replace(/\D/g, "");
   if (digits.length < 4) return "***";
   return `***-***-${digits.slice(-4)}`;
+}
+
+async function searchCrmByName(
+  provider: CrmProviderId,
+  ctx: { accessToken: string; meta?: Record<string, unknown>; preferences?: Record<string, unknown> },
+  query: string,
+  limit: number,
+) {
+  const q = query.trim();
+  if (!q) return [];
+  if (provider === "zoho") {
+    const { crmFetch } = await import("@/lib/crm/http");
+    const domain = String(ctx.meta?.apiDomain || "https://www.zohoapis.com").replace(
+      /\/$/,
+      "",
+    );
+    const base =
+      ctx.preferences?.zohoProduct === "bigin"
+        ? `${domain}/bigin/v2`
+        : `${domain}/crm/v2`;
+    const word = await crmFetch<{ data?: Array<Record<string, unknown>> }>(
+      `${base}/Contacts/search?word=${encodeURIComponent(q)}`,
+      { accessToken: ctx.accessToken },
+    ).catch(() => ({ data: [] as Array<Record<string, unknown>> }));
+    const rows = (word.data || []).slice(0, limit);
+    if (rows.length) {
+      return rows.map((r) => ({
+        id: String(r.id),
+        firstName: (r.First_Name as string) || null,
+        lastName: (r.Last_Name as string) || null,
+        phone: (r.Phone as string) || (r.Mobile as string) || null,
+        email: (r.Email as string) || null,
+        companyName:
+          typeof r.Account_Name === "object" && r.Account_Name
+            ? String((r.Account_Name as { name?: string }).name || "")
+            : null,
+      }));
+    }
+    const parts = q.split(/\s+/).filter(Boolean);
+    const criteria =
+      parts.length >= 2
+        ? `((First_Name:starts_with:${parts[0]})and(Last_Name:starts_with:${parts[1]}))`
+        : `((First_Name:starts_with:${q})or(Last_Name:starts_with:${q}))`;
+    const byCrit = await crmFetch<{ data?: Array<Record<string, unknown>> }>(
+      `${base}/Contacts/search?criteria=${encodeURIComponent(criteria)}`,
+      { accessToken: ctx.accessToken },
+    ).catch(() => ({ data: [] as Array<Record<string, unknown>> }));
+    return (byCrit.data || []).slice(0, limit).map((r) => ({
+      id: String(r.id),
+      firstName: (r.First_Name as string) || null,
+      lastName: (r.Last_Name as string) || null,
+      phone: (r.Phone as string) || (r.Mobile as string) || null,
+      email: (r.Email as string) || null,
+      companyName: null,
+    }));
+  }
+
+  // Salesforce / Pipedrive: scan a small page and filter locally by name.
+  const connector = getConnector(provider);
+  const page = await connector.listContacts(ctx as never, null).catch(() => null);
+  if (!page?.items?.length) return [];
+  const lower = q.toLowerCase();
+  return page.items
+    .filter((c) => {
+      const name = [c.firstName, c.lastName].filter(Boolean).join(" ").toLowerCase();
+      return name.includes(lower) || (c.email || "").toLowerCase().includes(lower);
+    })
+    .slice(0, limit)
+    .map((c) => ({
+      id: c.id,
+      firstName: c.firstName,
+      lastName: c.lastName,
+      phone: c.phone,
+      email: c.email,
+      companyName: c.companyName,
+      ownerExternalId: c.ownerExternalId,
+    }));
 }
