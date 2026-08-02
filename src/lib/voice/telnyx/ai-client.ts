@@ -64,12 +64,21 @@ export async function enhanceInstructions(id: string, body?: TelnyxAiBody) {
   });
 }
 
+/**
+ * Chat with an assistant.
+ * Telnyx expects `{ content, conversation_id?, name? }` — not OpenAI-style messages[].
+ */
 export async function chatAssistant(id: string, body: TelnyxAiBody) {
   return telnyxRequest(`/ai/assistants/${enc(id)}/chat`, { method: "POST", body });
 }
 
 export async function smsChatAssistant(id: string, body: TelnyxAiBody) {
   return telnyxRequest(`/ai/assistants/${enc(id)}/chat/sms`, { method: "POST", body });
+}
+
+/** Create a Telnyx AI conversation (for chat continuity). */
+export async function createConversation(body?: TelnyxAiBody) {
+  return telnyxRequest("/ai/conversations", { method: "POST", body: body || {} });
 }
 
 export async function getAssistantTexml(id: string) {

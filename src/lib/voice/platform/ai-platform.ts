@@ -1397,10 +1397,35 @@ export async function chatPreview(
   if (!agent.telnyxAssistantId) {
     throw new Error("Build the agent first (Build & test) so Telnyx can sync the assistant");
   }
-  return ai.chatAssistant(agent.telnyxAssistantId, {
-    messages: [{ role: "user", content: message }],
-    ...(conversationId ? { conversation_id: conversationId } : {}),
-  });
+
+  let convId = conversationId || "";
+  if (!convId) {
+    const created = await ai.createConversation({
+      name: `Transovo test ${agent.name}`.slice(0, 80),
+      metadata: { workspaceId, agentId, source: "chat_preview" },
+    });
+    const data = asData<{ id?: string }>(created);
+    convId = String(data?.id || (created as { id?: string })?.id || "");
+  }
+
+  const body: Record<string, unknown> = {
+    content: message,
+  };
+  if (convId) body.conversation_id = convId;
+
+  const reply = await ai.chatAssistant(agent.telnyxAssistantId, body);
+  const replyData = asData<Record<string, unknown>>(reply);
+  return {
+    ...((replyData && typeof replyData === "object" ? replyData : { reply }) as object),
+    conversation_id:
+      (replyData as { conversation_id?: string })?.conversation_id || convId || null,
+    // Normalize for UI consumers looking for a plain text reply.
+    reply:
+      (replyData as { content?: string; text?: string; reply?: string })?.content ||
+      (replyData as { text?: string })?.text ||
+      (replyData as { reply?: string })?.reply ||
+      (typeof reply === "string" ? reply : null),
+  };
 }
 
 export async function smsChatPreview(
@@ -1412,7 +1437,7 @@ export async function smsChatPreview(
   const agent = await requireAgent(workspaceId, agentId);
   if (!agent.telnyxAssistantId) throw new Error("Publish agent before SMS chat");
   return ai.smsChatAssistant(agent.telnyxAssistantId, {
-    messages: [{ role: "user", content: message }],
+    content: message,
     ...(to ? { to } : {}),
   });
 }

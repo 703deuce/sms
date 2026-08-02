@@ -234,7 +234,7 @@ export async function syncTelnyxAssistant(
 
   // Prefer Telnyx-native models (no llm_api_key_ref). Override via builder Model ID.
   const modelId =
-    config.model?.modelId?.trim() || "Qwen/Qwen3-235B-A22B";
+    config.model?.modelId?.trim() || "moonshotai/Kimi-K2.6";
 
   const transcription = config.transcription || {};
   const connectionId = process.env.TELNYX_CONNECTION_ID?.trim();

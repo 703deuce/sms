@@ -102,6 +102,8 @@ export function AgentTestPanel({
         typeof data === "string"
           ? data
           : data?.reply ||
+            data?.content ||
+            data?.text ||
             data?.message ||
             data?.choices?.[0]?.message?.content ||
             data?.messages?.slice?.(-1)?.[0]?.content ||

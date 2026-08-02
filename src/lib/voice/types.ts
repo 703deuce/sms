@@ -168,7 +168,7 @@ export const DEFAULT_VOICE_CONFIG: VoiceAgentConfig = {
   },
   model: {
     provider: "telnyx",
-    modelId: "Qwen/Qwen3-235B-A22B",
+    modelId: "moonshotai/Kimi-K2.6",
     temperature: 0.4,
     maxTokens: 1024,
   },
