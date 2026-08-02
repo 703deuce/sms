@@ -278,6 +278,8 @@ export async function syncTelnyxAssistant(
   const voiceId = resolveProviderVoiceId(
     config.voiceLanguage?.voiceId || DEFAULT_AGENT_VOICE_ID,
   );
+  // TeXML app id only — never Call Control TELNYX_CONNECTION_ID (causes 10015).
+  const texmlAppId = process.env.TELNYX_TEXML_APP_ID?.trim() || "";
   const enrichPayload: Record<string, unknown> = {
     voice_settings: {
       voice: voiceId,
@@ -290,7 +292,7 @@ export async function syncTelnyxAssistant(
     // Required for in-app browser test calls (TelnyxRTC anonymous_login).
     telephony_settings: {
       supports_unauthenticated_web_calls: true,
-      ...(connectionId ? { default_texml_app_id: connectionId } : {}),
+      ...(texmlAppId ? { default_texml_app_id: texmlAppId } : {}),
     },
     tools: [
       {
@@ -340,7 +342,7 @@ export async function syncTelnyxAssistant(
           enabled_features: ["telephony"],
           telephony_settings: {
             supports_unauthenticated_web_calls: true,
-            ...(connectionId ? { default_texml_app_id: connectionId } : {}),
+            ...(texmlAppId ? { default_texml_app_id: texmlAppId } : {}),
           },
           tools: [
             {

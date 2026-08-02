@@ -1385,6 +1385,11 @@ export async function cloneAgentFull(workspaceId: string, agentId: string) {
 /**
  * Enable TelnyxRTC anonymous browser calls + push current voice_settings.
  * Safe to call before every in-app test call.
+ *
+ * Important: do NOT send Call Control `TELNYX_CONNECTION_ID` as
+ * `default_texml_app_id` — that is a TeXML app id and causes Telnyx 10015,
+ * which leaves `supports_unauthenticated_web_calls` unset and makes browser
+ * anonymous_login fail with "Authentication failed".
  */
 export async function enableWebCallsAndSyncVoice(
   workspaceId: string,
@@ -1407,28 +1412,75 @@ export async function enableWebCallsAndSyncVoice(
   const voiceId = resolveProviderVoiceId(
     config.voiceLanguage?.voiceId || DEFAULT_AGENT_VOICE_ID,
   );
-  const connectionId =
-    agent.telnyxConnectionId || process.env.TELNYX_CONNECTION_ID?.trim() || "";
-  const body: Record<string, unknown> = {
-    voice_settings: {
-      voice: voiceId,
-      ...(config.voiceLanguage?.speed != null
-        ? { voice_speed: config.voiceLanguage.speed }
-        : {}),
-      ...(isUltraVoice(voiceId) ? { expressive_mode: true } : {}),
-    },
+  const texmlAppId = process.env.TELNYX_TEXML_APP_ID?.trim() || "";
+
+  // 1) Web-calls flag alone — must succeed for anonymous_login.
+  const webCallsBody: Record<string, unknown> = {
     telephony_settings: {
       supports_unauthenticated_web_calls: true,
-      ...(connectionId ? { default_texml_app_id: connectionId } : {}),
+      ...(texmlAppId ? { default_texml_app_id: texmlAppId } : {}),
     },
-    enabled_features: ["telephony", "transcription"],
+    enabled_features: ["telephony"],
   };
-  const remote = await ai.updateAssistant(agent.telnyxAssistantId, body);
+  const webRemote = await ai.updateAssistant(
+    agent.telnyxAssistantId,
+    webCallsBody,
+  );
+
+  // 2) Voice separately so a voice quirk cannot block browser auth.
+  let voiceSynced = false;
+  let voiceError: string | null = null;
+  try {
+    await ai.updateAssistant(agent.telnyxAssistantId, {
+      voice_settings: {
+        voice: voiceId,
+        ...(config.voiceLanguage?.speed != null
+          ? { voice_speed: config.voiceLanguage.speed }
+          : {}),
+        ...(isUltraVoice(voiceId) ? { expressive_mode: true } : {}),
+      },
+    });
+    voiceSynced = true;
+  } catch (err) {
+    voiceError = err instanceof Error ? err.message : String(err);
+    // Retry without expressive_mode / speed.
+    try {
+      await ai.updateAssistant(agent.telnyxAssistantId, {
+        voice_settings: { voice: voiceId },
+      });
+      voiceSynced = true;
+      voiceError = voiceError ? `${voiceError} (retried plain voice ok)` : null;
+    } catch (err2) {
+      voiceError = err2 instanceof Error ? err2.message : String(err2);
+    }
+  }
+
+  // Confirm flag on the remote assistant when possible.
+  let confirmed = false;
+  try {
+    const remote = await ai.getAssistant(agent.telnyxAssistantId);
+    const data = asData<Record<string, unknown>>(remote);
+    const tel = (data.telephony_settings || {}) as Record<string, unknown>;
+    confirmed = tel.supports_unauthenticated_web_calls === true;
+  } catch {
+    // get may fail on some accounts; web update succeeded above.
+    confirmed = true;
+  }
+
+  if (!confirmed) {
+    throw new Error(
+      "Telnyx rejected enabling browser web calls on this assistant",
+    );
+  }
+
   return {
     ok: true,
     telnyxAssistantId: agent.telnyxAssistantId,
     voiceId,
-    remote: asData(remote),
+    voiceSynced,
+    voiceError,
+    webCallsEnabled: true,
+    remote: asData(webRemote),
   };
 }
 

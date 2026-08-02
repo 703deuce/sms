@@ -99,8 +99,6 @@ export async function createVoiceTestSession(input: {
       const { syncTelnyxAssistant } = await import("@/lib/voice/telnyx/assistant-sync");
       // Full assistant sync so browser hears the same instructions/KB/tools/voice as phone.
       await syncTelnyxAssistant(input.workspaceId, agent, config);
-      await platform.enableWebCallsAndSyncVoice(input.workspaceId, input.agentId);
-      synced = true;
       agent =
         (await prisma.voiceAgent.findFirst({
           where: { id: input.agentId, workspaceId: input.workspaceId },
@@ -115,7 +113,31 @@ export async function createVoiceTestSession(input: {
           message: err instanceof Error ? err.message : String(err),
         })
         .catch(() => undefined);
-      // Still allow call if assistant exists — config may be stale; client shows synced=false.
+      // Continue — web-calls enable below is the hard requirement for browser auth.
+    }
+
+    try {
+      // Hard requirement for TelnyxRTC anonymous_login (otherwise "Authentication failed").
+      await platform.enableWebCallsAndSyncVoice(input.workspaceId, input.agentId);
+      synced = true;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      await platform
+        .recordFailureDiagnostic({
+          workspaceId: input.workspaceId,
+          agentId: input.agentId,
+          category: "test_session",
+          code: "web_calls_enable_failed",
+          message,
+        })
+        .catch(() => undefined);
+      return {
+        ok: false,
+        code: "web_calls_disabled",
+        error:
+          "Could not enable browser voice calls on this Telnyx assistant. Rebuild the agent and try again.",
+        status: 502,
+      };
     }
   }
 
@@ -179,8 +201,9 @@ export async function createVoiceTestSession(input: {
     webrtc: {
       target_type: "ai_assistant",
       target_id: agent.telnyxAssistantId,
-      // Forwarded as SIP headers / assistant params where Telnyx supports them.
-      target_params: testVariables,
+      // Only conversation_id is supported by Telnyx anonymous_login target_params.
+      // Custom test variables are kept server-side for audit — do not send them here
+      // (passing fake conversation_id / unknown keys can break login).
     },
     voice: {
       catalogId: curated?.catalogId || null,

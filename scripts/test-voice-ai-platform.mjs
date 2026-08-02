@@ -297,6 +297,20 @@ async function main() {
     /supports_unauthenticated_web_calls:\s*true/.test(syncSrc),
   );
   ok("sync resolves catalog voice", /resolveProviderVoiceId/.test(syncSrc));
+  ok(
+    "sync does not misuse Call Control id as TeXML",
+    !/default_texml_app_id:\s*connectionId/.test(syncSrc) &&
+      /TELNYX_TEXML_APP_ID/.test(syncSrc),
+  );
+  const enableSrc = fs.readFileSync(
+    path.join(root, "src/lib/voice/platform/ai-platform.ts"),
+    "utf8",
+  );
+  ok(
+    "enable web calls isolated telephony update",
+    /supports_unauthenticated_web_calls:\s*true/.test(enableSrc) &&
+      /TELNYX_TEXML_APP_ID/.test(enableSrc),
+  );
   ok("builder VoicePicker", /VoicePicker/.test(builderSrc2));
   ok("builder AgentBrowserCall", /AgentBrowserCall/.test(builderSrc2));
   ok("builder demotes text chat", /not a voice test/.test(builderSrc2));

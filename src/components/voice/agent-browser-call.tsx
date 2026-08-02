@@ -419,9 +419,6 @@ export function AgentBrowserCall({
         anonymous_login: {
           target_id: session.webrtc.target_id,
           target_type: "ai_assistant",
-          ...(session.webrtc.target_params
-            ? { target_params: session.webrtc.target_params }
-            : {}),
         },
       });
       clientRef.current = client as unknown as typeof clientRef.current;
@@ -894,6 +891,14 @@ function friendlyError(err: unknown) {
   }
   if (lower.includes("rate_limited") || lower.includes("too many test")) {
     return "Too many test sessions — wait a minute and try again.";
+  }
+  if (
+    lower.includes("authentication failed") ||
+    lower.includes("login_failed") ||
+    lower.includes("web_calls_disabled") ||
+    lower.includes("enable browser voice")
+  ) {
+    return "Browser voice authentication failed. Rebuild the agent so Telnyx enables web calls, then try again.";
   }
   if (lower.includes("temporarily unavailable") || lower.includes("voice is")) {
     return "This voice is temporarily unavailable. Choose another voice.";
