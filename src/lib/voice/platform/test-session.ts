@@ -37,6 +37,7 @@ export type TestSessionResult =
       webrtc: {
         target_type: "ai_assistant";
         target_id: string;
+        target_params?: Record<string, string>;
       };
       voice: {
         catalogId: string | null;
@@ -53,7 +54,7 @@ export async function createVoiceTestSession(input: {
   workspaceId: string;
   userId: string;
   agentId: string;
-  /** When true, sync voice + enable web calls before returning. */
+  /** When true, sync full assistant + enable web calls before returning. */
   sync?: boolean;
   testVariables?: Record<string, string>;
 }): Promise<TestSessionResult> {
@@ -68,7 +69,7 @@ export async function createVoiceTestSession(input: {
   }
 
   const prisma = getPrisma();
-  const agent = await prisma.voiceAgent.findFirst({
+  let agent = await prisma.voiceAgent.findFirst({
     where: { id: input.agentId, workspaceId: input.workspaceId },
   });
   if (!agent) {
@@ -94,8 +95,16 @@ export async function createVoiceTestSession(input: {
   let synced = false;
   if (input.sync !== false) {
     try {
+      const config = parseVoiceAgentConfig(agent.draftConfig);
+      const { syncTelnyxAssistant } = await import("@/lib/voice/telnyx/assistant-sync");
+      // Full assistant sync so browser hears the same instructions/KB/tools/voice as phone.
+      await syncTelnyxAssistant(input.workspaceId, agent, config);
       await platform.enableWebCallsAndSyncVoice(input.workspaceId, input.agentId);
       synced = true;
+      agent =
+        (await prisma.voiceAgent.findFirst({
+          where: { id: input.agentId, workspaceId: input.workspaceId },
+        })) || agent;
     } catch (err) {
       await platform
         .recordFailureDiagnostic({
@@ -106,8 +115,17 @@ export async function createVoiceTestSession(input: {
           message: err instanceof Error ? err.message : String(err),
         })
         .catch(() => undefined);
-      // Still allow call if assistant exists — voice may be stale.
+      // Still allow call if assistant exists — config may be stale; client shows synced=false.
     }
+  }
+
+  if (!agent.telnyxAssistantId) {
+    return {
+      ok: false,
+      code: "not_built",
+      error: "Build & test first so Telnyx can sync the assistant",
+      status: 400,
+    };
   }
 
   const config = parseVoiceAgentConfig(agent.draftConfig);
@@ -117,6 +135,24 @@ export async function createVoiceTestSession(input: {
 
   const sessionId = randomUUID();
   const expiresAt = new Date(Date.now() + 10 * 60_000).toISOString();
+
+  let workspaceName = input.workspaceId.slice(0, 8);
+  try {
+    const ws = await prisma.workspace.findUnique({
+      where: { id: input.workspaceId },
+      select: { name: true, displayName: true },
+    });
+    workspaceName = ws?.displayName || ws?.name || workspaceName;
+  } catch {
+    // ignore
+  }
+
+  const testVariables: Record<string, string> = {
+    telnyx_conversation_channel: "web_call",
+    workspace_name: workspaceName,
+    test_caller_name: "Browser Tester",
+    ...((input.testVariables || {}) as Record<string, string>),
+  };
 
   await platform
     .recordFailureDiagnostic({
@@ -129,17 +165,11 @@ export async function createVoiceTestSession(input: {
         sessionId,
         telnyxAssistantId: agent.telnyxAssistantId,
         providerVoiceId,
+        synced,
         expiresAt,
       },
     })
     .catch(() => undefined);
-
-  const testVariables: Record<string, string> = {
-    telnyx_conversation_channel: "web_call",
-    workspace_name: input.workspaceId.slice(0, 8),
-    test_caller_name: "Browser Tester",
-    ...((input.testVariables || {}) as Record<string, string>),
-  };
 
   return {
     ok: true,
@@ -149,6 +179,8 @@ export async function createVoiceTestSession(input: {
     webrtc: {
       target_type: "ai_assistant",
       target_id: agent.telnyxAssistantId,
+      // Forwarded as SIP headers / assistant params where Telnyx supports them.
+      target_params: testVariables,
     },
     voice: {
       catalogId: curated?.catalogId || null,
@@ -189,7 +221,6 @@ export async function endVoiceTestSession(input: {
   let transcript: Array<{ role: string; content: string }> = [];
   let localConversationId: string | null = null;
 
-  // Persist as a labeled test conversation row when we have a Telnyx conversation id.
   if (input.conversationId) {
     const prisma = getPrisma();
     const existing = await prisma.voiceAiConversation.findFirst({
@@ -245,7 +276,7 @@ export async function endVoiceTestSession(input: {
         const rows = Array.isArray(data)
           ? data
           : Array.isArray((data as { messages?: unknown })?.messages)
-            ? ((data as { messages: unknown[] }).messages)
+            ? (data as { messages: unknown[] }).messages
             : [];
         transcript = rows
           .map((m) => {

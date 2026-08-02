@@ -228,7 +228,7 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
   }
 
   async function saveDraft() {
-    if (!agent) return;
+    if (!agent) throw new Error("Agent not loaded");
     setSaving(true);
     setSaveState("saving");
     try {
@@ -246,13 +246,14 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
         }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error);
+      if (!res.ok) throw new Error(json.error || "Save failed");
       setAgent(json.data);
       setDirty(false);
       setSaveState("saved");
     } catch (err) {
       setSaveState("error");
       setError(err instanceof Error ? err.message : "Save failed");
+      throw err instanceof Error ? err : new Error("Save failed");
     } finally {
       setSaving(false);
     }
@@ -276,8 +277,10 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
         if (json.issues) setError(`Build blocked: ${JSON.stringify(json.issues)}`);
         return;
       }
-      setSection("tests");
+      // Stay on the builder — Test Voice Agent is always at the top.
       await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Build failed");
     } finally {
       setSaving(false);
     }
@@ -300,6 +303,8 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
         return;
       }
       await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Deploy failed");
     } finally {
       setSaving(false);
     }
@@ -399,7 +404,9 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
 
   useEffect(() => {
     if (!dirty) return;
-    const t = setTimeout(() => saveDraft(), 2000);
+    const t = setTimeout(() => {
+      void saveDraft().catch(() => undefined);
+    }, 2000);
     return () => clearTimeout(t);
   }, [dirty, agent]); // autosave debounced
 

@@ -25,12 +25,27 @@ type TestResult = {
   assistantId: string | null;
   voiceDisplayName: string | null;
   transcript: Array<{ role: string; content: string }>;
+  synced: boolean | null;
 };
 
 type QualityStats = {
   rttMs: number | null;
   jitterMs: number | null;
   packetLossPct: number | null;
+};
+
+type CallHandle = {
+  hangup?: () => void;
+  muteAudio?: () => void;
+  unmuteAudio?: () => void;
+  setAudioInDevice?: (id: string) => Promise<unknown>;
+  setSpeaker?: (id: string) => Promise<unknown>;
+  // Telnyx Call.getStats is callback-based; peer connection may expose Promise stats.
+  getStats?: unknown;
+  peer?: {
+    instance?: { getStats?: () => Promise<RTCStatsReport> };
+    getStats?: () => Promise<RTCStatsReport>;
+  };
 };
 
 /**
@@ -82,22 +97,23 @@ export function AgentBrowserCall({
   });
   const [result, setResult] = useState<TestResult | null>(null);
   const [startedAt, setStartedAt] = useState<number | null>(null);
+  const [lastSynced, setLastSynced] = useState<boolean | null>(null);
 
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
   const clientRef = useRef<{
     disconnect?: () => void;
     newCall?: (opts: Record<string, unknown>) => CallHandle;
     on?: (ev: string, cb: (...args: unknown[]) => void) => void;
-    off?: (ev: string, cb: (...args: unknown[]) => void) => void;
     remoteElement?: HTMLAudioElement | null;
     setAudioSettings?: (opts: Record<string, unknown>) => Promise<unknown>;
-    getStats?: () => Promise<unknown>;
   } | null>(null);
   const callRef = useRef<CallHandle | null>(null);
   const sessionIdRef = useRef<string | null>(null);
   const conversationIdRef = useRef<string | null>(null);
   const startedAtRef = useRef<number | null>(null);
   const statsTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const finishingRef = useRef(false);
+  const mountedRef = useRef(true);
 
   const ready = Boolean(telnyxAssistantId || assistantId);
   const inCall =
@@ -108,22 +124,26 @@ export function AgentBrowserCall({
     phase === "user_speaking" ||
     phase === "reconnecting";
 
-  const refreshDevices = useCallback(async () => {
+  const listDevices = useCallback(async (requestPermission: boolean) => {
     if (!navigator.mediaDevices?.enumerateDevices) return;
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
-      });
-      stream.getTracks().forEach((t) => t.stop());
-      setMicPermission("granted");
-    } catch {
-      setMicPermission("denied");
+    if (requestPermission) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          },
+        });
+        stream.getTracks().forEach((t) => t.stop());
+        if (mountedRef.current) setMicPermission("granted");
+      } catch {
+        if (mountedRef.current) setMicPermission("denied");
+        return;
+      }
     }
     const devices = await navigator.mediaDevices.enumerateDevices();
+    if (!mountedRef.current) return;
     const mics = devices
       .filter((d) => d.kind === "audioinput")
       .map((d, i) => ({
@@ -138,8 +158,14 @@ export function AgentBrowserCall({
       }));
     setInputs(mics);
     setOutputs(speakers);
-    setSelectedMic((prev) => prev || mics[0]?.deviceId || "");
-    setSelectedSpeaker((prev) => prev || speakers[0]?.deviceId || "");
+    setSelectedMic((prev) =>
+      prev && mics.some((m) => m.deviceId === prev) ? prev : mics[0]?.deviceId || "",
+    );
+    setSelectedSpeaker((prev) =>
+      prev && speakers.some((s) => s.deviceId === prev)
+        ? prev
+        : speakers[0]?.deviceId || "",
+    );
   }, []);
 
   useEffect(() => {
@@ -147,22 +173,32 @@ export function AgentBrowserCall({
   }, [telnyxAssistantId]);
 
   useEffect(() => {
-    void refreshDevices();
-    navigator.mediaDevices?.addEventListener?.("devicechange", () => {
-      void refreshDevices();
-    });
+    mountedRef.current = true;
+    // Enumerate without prompting; labels may be blank until Test Voice Agent.
+    void listDevices(false);
+    const onDeviceChange = () => void listDevices(micPermission === "granted");
+    navigator.mediaDevices?.addEventListener?.("devicechange", onDeviceChange);
     if (navigator.permissions?.query) {
       navigator.permissions
         .query({ name: "microphone" as PermissionName })
         .then((status) => {
+          if (!mountedRef.current) return;
           setMicPermission(status.state as typeof micPermission);
-          status.onchange = () =>
-            setMicPermission(status.state as typeof micPermission);
+          status.onchange = () => {
+            if (mountedRef.current) {
+              setMicPermission(status.state as typeof micPermission);
+            }
+          };
         })
         .catch(() => undefined);
     }
     return () => {
-      void teardown(true);
+      mountedRef.current = false;
+      navigator.mediaDevices?.removeEventListener?.(
+        "devicechange",
+        onDeviceChange,
+      );
+      void teardownCall();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -179,15 +215,11 @@ export function AgentBrowserCall({
   }, [volume, selectedSpeaker]);
 
   useEffect(() => {
-    const call = callRef.current;
-    const client = clientRef.current;
-    if (!inCall) return;
-    if (selectedMic) {
-      void call?.setAudioInDevice?.(selectedMic).catch(() => undefined);
-      void client
-        ?.setAudioSettings?.({ micId: selectedMic })
-        .catch(() => undefined);
-    }
+    if (!inCall || !selectedMic) return;
+    void callRef.current?.setAudioInDevice?.(selectedMic).catch(() => undefined);
+    void clientRef.current
+      ?.setAudioSettings?.({ micId: selectedMic })
+      .catch(() => undefined);
   }, [selectedMic, inCall]);
 
   async function endSession(opts?: {
@@ -219,7 +251,7 @@ export function AgentBrowserCall({
     } | null;
   }
 
-  async function teardown(silent = false) {
+  async function teardownCall() {
     if (statsTimerRef.current) {
       clearInterval(statsTimerRef.current);
       statsTimerRef.current = null;
@@ -236,9 +268,6 @@ export function AgentBrowserCall({
     }
     callRef.current = null;
     clientRef.current = null;
-    if (!silent) {
-      setMuted(false);
-    }
   }
 
   function mapCallState(state: string) {
@@ -260,12 +289,13 @@ export function AgentBrowserCall({
   function extractConversationId(notification: unknown): string | null {
     const n = notification as Record<string, unknown>;
     const call = (n.call || {}) as Record<string, unknown>;
+    const options = (call.options || {}) as Record<string, unknown>;
     const candidates = [
       call.conversation_id,
       call.conversationId,
       call.ai_conversation_id,
-      (call.customHeaders as Record<string, unknown> | undefined)
-        ?.conversation_id,
+      options.conversation_id,
+      (call.customHeaders as Record<string, unknown> | undefined)?.conversation_id,
       (n.params as Record<string, unknown> | undefined)?.conversation_id,
     ];
     for (const c of candidates) {
@@ -275,13 +305,16 @@ export function AgentBrowserCall({
   }
 
   async function startCall() {
+    if (inCall || finishingRef.current) return;
     setError("");
     setResult(null);
     setConversationId(null);
     conversationIdRef.current = null;
+    finishingRef.current = false;
+    setLastSynced(null);
 
     if (!telnyxAssistantId && !assistantId) {
-      setError("Save the agent before starting a live test.");
+      setError("Build & test first so Telnyx can sync the assistant.");
       onNeedBuild?.();
       setPhase("failed");
       return;
@@ -318,6 +351,7 @@ export function AgentBrowserCall({
         stream.getTracks().forEach((t) => t.stop());
         setMicPermission("granted");
       });
+      await listDevices(true);
     } catch {
       setMicPermission("denied");
       setPhase("failed");
@@ -348,7 +382,7 @@ export function AgentBrowserCall({
         throw new Error(
           sessionJson.error ||
             (sessionJson.code === "not_built"
-              ? "Save the agent before starting a live test."
+              ? "Build & test first so Telnyx can sync the assistant."
               : "Could not authorize test session"),
         );
       }
@@ -356,14 +390,24 @@ export function AgentBrowserCall({
       const session = sessionJson.data as {
         sessionId: string;
         telnyxAssistantId: string;
-        webrtc: { target_type: "ai_assistant"; target_id: string };
+        webrtc: {
+          target_type: "ai_assistant";
+          target_id: string;
+          target_params?: Record<string, string>;
+        };
         voice?: { displayName?: string };
+        synced?: boolean;
         expiresAt: string;
       };
+
+      if (!session.webrtc?.target_id) {
+        throw new Error("Build & test first so Telnyx can sync the assistant.");
+      }
 
       sessionIdRef.current = session.sessionId;
       setSessionId(session.sessionId);
       setAssistantId(session.webrtc.target_id);
+      setLastSynced(Boolean(session.synced));
       startedAtRef.current = Date.now();
       setStartedAt(startedAtRef.current);
 
@@ -372,6 +416,9 @@ export function AgentBrowserCall({
         anonymous_login: {
           target_id: session.webrtc.target_id,
           target_type: "ai_assistant",
+          ...(session.webrtc.target_params
+            ? { target_params: session.webrtc.target_params }
+            : {}),
         },
       });
       clientRef.current = client as unknown as typeof clientRef.current;
@@ -401,16 +448,17 @@ export function AgentBrowserCall({
         client.connect();
       });
 
+      if (!mountedRef.current) {
+        client.disconnect?.();
+        return;
+      }
+
       setPhase("connected");
 
       client.on("telnyx.notification", (notification: unknown) => {
         const n = notification as {
           type?: string;
-          call?: {
-            state?: string;
-            hangup?: () => void;
-            direction?: string;
-          };
+          call?: { state?: string };
         };
         const cid = extractConversationId(notification);
         if (cid) {
@@ -440,9 +488,11 @@ export function AgentBrowserCall({
         audio: true,
         ...(opus ? { preferred_codecs: [opus] } : {}),
         ...(selectedMic ? { micId: selectedMic } : {}),
+        ...(selectedSpeaker ? { speakerId: selectedSpeaker } : {}),
       });
       callRef.current = call;
       setPhase("listening");
+      setMuted(false);
 
       if (remoteAudioRef.current) {
         void remoteAudioRef.current.play().catch(() => undefined);
@@ -456,44 +506,47 @@ export function AgentBrowserCall({
       setPhase("failed");
       setError(message);
       await endSession({ error: message });
-      await teardown(true);
-      clientRef.current = null;
+      await teardownCall();
       sessionIdRef.current = null;
       setSessionId(null);
+      startedAtRef.current = null;
+      setStartedAt(null);
     }
   }
 
   async function pollQuality() {
-    const call = callRef.current as CallHandle & {
-      peer?: { getStats?: () => Promise<RTCStatsReport> };
-      getStats?: () => Promise<RTCStatsReport>;
-    };
+    const call = callRef.current;
     try {
-      const report =
-        (await call?.getStats?.()) || (await call?.peer?.getStats?.());
-      if (!report || typeof report[Symbol.iterator] !== "function") return;
+      let report: RTCStatsReport | null = null;
+      const peerStats =
+        call?.peer?.instance?.getStats || call?.peer?.getStats;
+      if (peerStats) {
+        report = await peerStats.call(call.peer?.instance || call.peer);
+      }
+      if (!report || typeof report.forEach !== "function") return;
       let rttMs: number | null = null;
       let jitterMs: number | null = null;
       let packetsLost = 0;
       let packetsReceived = 0;
-      for (const stat of report as RTCStatsReport) {
-        const s = stat[1] as Record<string, unknown>;
-        if (s.type === "candidate-pair" && s.state === "succeeded") {
-          if (typeof s.currentRoundTripTime === "number") {
-            rttMs = Math.round(s.currentRoundTripTime * 1000);
+      report.forEach((s) => {
+        const row = s as Record<string, unknown>;
+        if (row.type === "candidate-pair" && row.state === "succeeded") {
+          if (typeof row.currentRoundTripTime === "number") {
+            rttMs = Math.round(row.currentRoundTripTime * 1000);
           }
         }
-        if (s.type === "inbound-rtp" && s.kind === "audio") {
-          if (typeof s.jitter === "number") {
-            jitterMs = Math.round(s.jitter * 1000);
+        if (row.type === "inbound-rtp" && row.kind === "audio") {
+          if (typeof row.jitter === "number") {
+            jitterMs = Math.round(row.jitter * 1000);
           }
-          if (typeof s.packetsLost === "number") packetsLost = s.packetsLost;
-          if (typeof s.packetsReceived === "number") {
-            packetsReceived = s.packetsReceived;
+          if (typeof row.packetsLost === "number") packetsLost = row.packetsLost;
+          if (typeof row.packetsReceived === "number") {
+            packetsReceived = row.packetsReceived;
           }
         }
-      }
+      });
       const total = packetsLost + packetsReceived;
+      if (!mountedRef.current) return;
       setQuality({
         rttMs,
         jitterMs,
@@ -506,30 +559,38 @@ export function AgentBrowserCall({
   }
 
   async function finishCall(failedMessage?: string) {
+    if (finishingRef.current) return;
+    finishingRef.current = true;
+
     const durationSec =
       startedAtRef.current != null
         ? Math.max(0, Math.round((Date.now() - startedAtRef.current) / 1000))
         : 0;
     const cid = conversationIdRef.current;
+    const sid = sessionIdRef.current;
     const ended = await endSession({
       error: failedMessage || null,
       conversationId: cid,
     });
-    await teardown(true);
+    await teardownCall();
+    if (!mountedRef.current) return;
     setResult({
       durationSec,
       conversationId: cid,
-      sessionId: sessionIdRef.current,
+      sessionId: sid,
       assistantId,
       voiceDisplayName: voiceLabel || null,
       transcript: ended?.transcript || [],
+      synced: lastSynced,
     });
     sessionIdRef.current = null;
     setSessionId(null);
     startedAtRef.current = null;
     setStartedAt(null);
+    setMuted(false);
     setPhase(failedMessage ? "failed" : "ended");
     if (failedMessage) setError(failedMessage);
+    finishingRef.current = false;
   }
 
   function hangup() {
@@ -659,7 +720,7 @@ export function AgentBrowserCall({
             )}
           </select>
           <div className="mt-2 flex items-center gap-2">
-            <Label className="shrink-0 text-xs">Volume</Label>
+            <span className="shrink-0 text-xs font-medium">Volume</span>
             <input
               type="range"
               min={0}
@@ -696,7 +757,7 @@ export function AgentBrowserCall({
           </>
         ) : (
           <>
-            <Button disabled={!ready && !telnyxAssistantId} onClick={() => void startCall()}>
+            <Button disabled={!ready} onClick={() => void startCall()}>
               Test Voice Agent
             </Button>
             {phase === "ended" || phase === "failed" ? (
@@ -727,6 +788,10 @@ export function AgentBrowserCall({
           <p>Assistant: {assistantId || "—"}</p>
           <p>Session: {sessionId || "—"}</p>
           <p>Conversation: {conversationId || "—"}</p>
+          <p>
+            Synced before call:{" "}
+            {lastSynced == null ? "—" : lastSynced ? "yes" : "no (may be stale)"}
+          </p>
           <p>
             RTT: {quality.rttMs != null ? `${quality.rttMs} ms` : "—"} · Jitter:{" "}
             {quality.jitterMs != null ? `${quality.jitterMs} ms` : "—"} · Loss:{" "}
@@ -794,26 +859,33 @@ export function AgentBrowserCall({
   );
 }
 
-type CallHandle = {
-  hangup?: () => void;
-  muteAudio?: () => void;
-  unmuteAudio?: () => void;
-  setAudioInDevice?: (id: string) => Promise<unknown>;
-};
-
 function friendlyError(err: unknown) {
   const raw = err instanceof Error ? err.message : String(err);
   const lower = raw.toLowerCase();
   if (lower.includes("permission") || lower.includes("notallowed")) {
     return "Microphone access is required to test this voice agent.";
   }
-  if (lower.includes("timeout") || lower.includes("ice") || lower.includes("webrtc")) {
+  if (
+    lower.includes("timeout") ||
+    lower.includes("ice") ||
+    lower.includes("webrtc") ||
+    lower.includes("socket")
+  ) {
     return "The browser could not connect to the voice service. Check your network and try again.";
   }
-  if (lower.includes("not_built") || lower.includes("save the agent")) {
-    return "Save the agent before starting a live test.";
+  if (
+    lower.includes("not_built") ||
+    lower.includes("build & test") ||
+    lower.includes("save the agent")
+  ) {
+    return raw.includes("Build")
+      ? raw
+      : "Save the agent before starting a live test.";
   }
-  if (lower.includes("unavailable") || lower.includes("voice")) {
+  if (lower.includes("rate_limited") || lower.includes("too many test")) {
+    return "Too many test sessions — wait a minute and try again.";
+  }
+  if (lower.includes("temporarily unavailable") || lower.includes("voice is")) {
     return "This voice is temporarily unavailable. Choose another voice.";
   }
   return raw || "The browser could not connect to the voice service. Try again.";
