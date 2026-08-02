@@ -80,6 +80,16 @@ export function compileVoiceFlowBundle(
         "Never invent phone numbers, appointment times, or CRM values.",
         "Never claim a tool action succeeded until the tool returns success.",
         "If a tool is slow, say a short filler like 'One moment while I look that up.'",
+        "Only hang up after a clear goodbye when the caller is fully done. Never hang up after CRM lookups, transfers, holds, or tool errors — stay on the line and recover with a spoken apology.",
+        enabledBuiltinTools.includes("escalate_human") ||
+        enabledBuiltinTools.includes("transfer")
+          ? "For live transfers prefer escalate_human. After calling it, wait quietly — do not also hang up. If transfer fails, apologize and continue helping or take a message."
+          : "",
+        enabledBuiltinTools.includes("crm_lookup_contact") ||
+        enabledBuiltinTools.includes("lookup_customer") ||
+        enabledBuiltinTools.includes("search_crm_contacts")
+          ? "CRM lookups can take a few seconds. Tell the caller you are checking, call the tool once, then speak the result. Never end the call because a lookup was slow or failed."
+          : "",
         flowInstructions,
         globalInstructions,
       ]
@@ -87,7 +97,7 @@ export function compileVoiceFlowBundle(
         .join("\n\n"),
       confirmation: "Confirm important details before transfers, SMS, or CRM writes.",
       escalation:
-        "If the caller asks for a person, use Transfer / escalate_human to the named target Agent Handoff.",
+        "If the caller asks for a person, use escalate_human to the named target Agent Handoff. Do not hang up yourself.",
       uncertainty: "If unsure, ask a clarifying question or offer to take a message.",
       fillerMessages: [
         "One moment while I look that up.",
@@ -99,8 +109,8 @@ export function compileVoiceFlowBundle(
         name: t.name,
         to: (t as { name: string; to?: string }).to || "",
       })),
-      warmTransferInstructions:
-        "Briefly introduce the caller and summarize why they are calling before connecting.",
+      // Cold transfer by default — warm hold tears down the AI mid-call.
+      warmTransferInstructions: "",
     },
   };
 
@@ -255,7 +265,7 @@ function describeNode(node: VoiceFlowNode, fallback: string): string {
     case "search_crm_contacts":
       return "Look up the caller/contact. Do not disclose another person's phone on public inbound calls.";
     case "end_call":
-      return `Close with: "${c.closing || "Thanks for calling. Goodbye."}" then hang up.`;
+      return `Only when the caller is done, close with: "${c.closing || "Thanks for calling. Goodbye."}" then hang up. Never use this after a failed tool or mid-transfer.`;
     default:
       return fallback || node.data.blockType;
   }

@@ -261,6 +261,12 @@ export function VoiceFlowBuilder({
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [templateId, setTemplateId] = useState("");
+  const [nlPrompt, setNlPrompt] = useState("");
+  const [nlBusy, setNlBusy] = useState(false);
+  const [optBusy, setOptBusy] = useState(false);
+  const [suggestions, setSuggestions] = useState<
+    Array<{ id: string; title: string; rationale: string; severity: string }>
+  >([]);
 
   const graph = layer === "routing" ? bundle.routing : bundle.conversation;
   const errorIds = useMemo(
@@ -388,6 +394,61 @@ export function VoiceFlowBuilder({
     setMessage(`Loaded template: ${t.name}`);
   }
 
+  async function generateFromNl() {
+    if (!nlPrompt.trim()) {
+      setMessage("Describe the flow in plain English first");
+      return;
+    }
+    setNlBusy(true);
+    setMessage("");
+    try {
+      const res = await fetch(`/api/voice/agents/${agentId}/flows/generate`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ prompt: nlPrompt.trim(), apply: false }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Generate failed");
+      const next = parseVoiceFlowBundle(json.data);
+      setBundle(next);
+      setTemplateId(String(json.templateId || ""));
+      setIssues(Array.isArray(json.issues) ? json.issues : []);
+      setSelectedNodeId(null);
+      setMessage(
+        `${json.summary || "Draft generated"} (${json.mode}${json.provider ? ` via ${json.provider}` : ""})`,
+      );
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Generate failed");
+    } finally {
+      setNlBusy(false);
+    }
+  }
+
+  async function optimizeFromCalls() {
+    setOptBusy(true);
+    setMessage("");
+    try {
+      const res = await fetch(`/api/voice/agents/${agentId}/flows/optimize`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ apply: true, compile: false }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Optimize failed");
+      setBundle(parseVoiceFlowBundle(json.data));
+      setSuggestions(Array.isArray(json.suggestions) ? json.suggestions : []);
+      setIssues(Array.isArray(json.issues) ? json.issues : []);
+      const stats = json.stats || {};
+      setMessage(
+        `Optimized from ${stats.callsAnalyzed ?? 0} calls · ${json.appliedCount ?? 0} patches · ${json.mode}`,
+      );
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Optimize failed");
+    } finally {
+      setOptBusy(false);
+    }
+  }
+
   function toggleGlobalRule(id: string) {
     setBundle((prev) => ({
       ...prev,
@@ -445,6 +506,15 @@ export function VoiceFlowBuilder({
         </select>
 
         <div className="ml-auto flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={optBusy}
+            onClick={() => optimizeFromCalls()}
+          >
+            {optBusy ? "Optimizing…" : "Optimize from calls"}
+          </Button>
           <Button type="button" variant="outline" size="sm" onClick={() => validate()}>
             Validate
           </Button>
@@ -457,8 +527,47 @@ export function VoiceFlowBuilder({
         </div>
       </div>
 
+      <div className="flex flex-wrap items-end gap-2 border-b border-border px-3 py-2">
+        <div className="min-w-[220px] flex-1">
+          <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Describe the flow in plain English
+          </label>
+          <input
+            className="h-8 w-full rounded-md border border-border bg-background px-2 text-xs"
+            placeholder='e.g. "Ring the team 25s, then AI answers, look up Zoho contacts, transfer to Agent Handoff on request"'
+            value={nlPrompt}
+            onChange={(e) => setNlPrompt(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                void generateFromNl();
+              }
+            }}
+          />
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={nlBusy}
+          onClick={() => generateFromNl()}
+        >
+          {nlBusy ? "Generating…" : "Generate with AI"}
+        </Button>
+      </div>
+
       {message ? (
         <div className="border-b border-border bg-muted/40 px-3 py-1.5 text-xs">{message}</div>
+      ) : null}
+
+      {suggestions.length ? (
+        <div className="max-h-28 overflow-y-auto border-b border-border bg-amber-50 px-3 py-1.5 text-[11px] text-amber-950">
+          {suggestions.slice(0, 6).map((s) => (
+            <p key={s.id}>
+              <span className="font-semibold">[{s.severity}]</span> {s.title} — {s.rationale}
+            </p>
+          ))}
+        </div>
       ) : null}
 
       {issues.length ? (

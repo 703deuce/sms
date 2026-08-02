@@ -16,13 +16,13 @@ const OWNER_EMAIL = (process.env.OWNER_EMAIL || "703deuce@gmail.com").trim().toL
 const PHONE_E164 = (process.env.PHONE_E164 || "+18663464256").trim();
 const HANDOFF_E164 = (process.env.HANDOFF_E164 || "+15714776175").trim();
 
+// Single terminator (hangup) + escalate_human cold transfer — avoid dual
+// hangup/end_call and native warm transfer which drop live PSTN calls.
 const FULL_TOOLS = [
   "hangup",
-  "transfer",
   "handoff",
   "sip_refer",
   "send_dtmf",
-  "end_call",
   "send_sms",
   "create_task",
   "take_structured_message",

@@ -46,26 +46,33 @@ export function buildAssistantTools(input: {
       type: "hangup",
       hangup: {
         description:
-          "End the call when the conversation is complete or the caller asks to hang up. Give a brief closing statement first unless emergency termination is required.",
+          "End the call ONLY after a clear goodbye when the conversation is fully complete or the caller explicitly asks to hang up. Give a brief closing statement first. NEVER use hangup after CRM lookups, transfers, SMS, or tool failures — keep talking or take a message instead.",
       },
     });
   }
 
+  // Prefer Transovo escalate_human (cold transfer) over Telnyx-native transfer.
+  // Native warm transfer puts the caller on hold and tears down the assistant —
+  // when consult fails the call feels like an immediate hangup.
+  const preferEscalate = isBuiltinToolEnabled(enabled, "escalate_human");
   if (
     isBuiltinToolEnabled(enabled, "transfer") &&
-    input.transferTargets?.length
+    input.transferTargets?.length &&
+    !preferEscalate
   ) {
+    const transferBody: Record<string, unknown> = {
+      targets: input.transferTargets.map((t) => ({
+        name: t.name,
+        to: t.to,
+      })),
+    };
+    // Only attach warm instructions when explicitly provided — default is cold.
+    if (input.warmTransferInstructions) {
+      transferBody.warm_transfer_instructions = input.warmTransferInstructions;
+    }
     tools.push({
       type: "transfer",
-      transfer: {
-        targets: input.transferTargets.map((t) => ({
-          name: t.name,
-          to: t.to,
-        })),
-        warm_transfer_instructions:
-          input.warmTransferInstructions ||
-          "Briefly introduce the caller and summarize why they are calling before connecting.",
-      },
+      transfer: transferBody,
     });
   }
 
@@ -101,9 +108,11 @@ export function buildAssistantTools(input: {
         name: sanitizeToolName(tool.name || tool.toolType),
         description:
           tool.description ||
-          `Execute the ${tool.toolType} business action. Never claim success until this tool returns ok=true.`,
+          `Execute the ${tool.toolType} business action. Never claim success until this tool returns ok=true. Never hang up if this tool fails.`,
         url: webhookUrl,
         method: "POST",
+        // Give CRM/SMS tools enough time; Telnyx max is typically 10s.
+        timeout_ms: 10000,
         headers: [
           { name: "X-Transovo-Workspace-Id", value: input.workspaceId },
           { name: "X-Transovo-Agent-Id", value: input.agentId },
@@ -114,10 +123,6 @@ export function buildAssistantTools(input: {
           type: "object",
           properties: {
             ...(schema.properties as Record<string, unknown> | undefined),
-            call_control_id: {
-              type: "string",
-              description: "Telnyx call control id when available",
-            },
             notes: { type: "string", description: "Optional notes from the conversation" },
           },
           required: Array.isArray(schema.required) ? schema.required : [],
@@ -127,18 +132,30 @@ export function buildAssistantTools(input: {
   }
 
   // Attach only explicitly enabled Transovo builtins (never the full catalog).
+  // Skip end_call when native hangup is already enabled — dual terminators cause
+  // accidental hangups after CRM/transfer tool confusion.
+  const skipEndCall = isBuiltinToolEnabled(enabled, "hangup");
   for (const [key, builtin] of Object.entries(BUILTIN_WEBHOOK_BODIES)) {
     if (!isBuiltinToolEnabled(enabled, key)) continue;
+    if (skipEndCall && key === "end_call") continue;
     if (tools.some((t) => (t as { webhook?: { name?: string } }).webhook?.name === builtin.name)) {
       continue;
     }
+    const slow =
+      key.includes("crm") ||
+      key === "lookup_customer" ||
+      key === "search_crm_contacts" ||
+      key === "send_sms" ||
+      key === "book_appointment" ||
+      key === "calendar_availability";
     tools.push({
       type: "webhook",
       webhook: {
         name: builtin.name,
-        description: builtin.description,
+        description: `${builtin.description} If this tool fails, do NOT hang up — apologize and offer to take a message.`,
         url: webhookUrl,
         method: "POST",
+        timeout_ms: slow ? 10000 : 8000,
         headers: [
           { name: "X-Transovo-Workspace-Id", value: input.workspaceId },
           { name: "X-Transovo-Agent-Id", value: input.agentId },
