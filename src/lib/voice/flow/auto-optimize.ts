@@ -244,6 +244,7 @@ export async function optimizeVoiceFlowFromCallResults(input: {
     Date.now() - Math.max(1, input.lookbackDays || 14) * 24 * 60 * 60 * 1000,
   );
 
+  // Keep the call query flat — nested includes can break on the Prisma compat layer.
   const calls = await prisma.voiceCall.findMany({
     where: {
       workspaceId: input.workspaceId,
@@ -259,25 +260,40 @@ export async function optimizeVoiceFlowFromCallResults(input: {
       transferred: true,
       status: true,
       errorMessage: true,
-      metadata: true,
-      insights: {
-        select: { summary: true, intent: true, sentiment: true, topics: true },
-        take: 1,
-      },
-      transcripts: {
-        select: { fullText: true },
-        take: 1,
-      },
-      toolExecutions: {
-        select: { status: true, errorMessage: true, input: true },
-        take: 20,
-      },
-      transfers: {
-        select: { status: true, answered: true },
-        take: 5,
-      },
     },
   });
+  const callIds = calls.map((c: { id: string }) => c.id);
+
+  const [toolRows, transferRows, insightRows, transcriptRows] = await Promise.all([
+    callIds.length
+      ? prisma.voiceToolExecution.findMany({
+          where: { workspaceId: input.workspaceId, callId: { in: callIds } },
+          select: { callId: true, status: true },
+          take: 500,
+        })
+      : Promise.resolve([]),
+    callIds.length
+      ? prisma.voiceTransfer.findMany({
+          where: { workspaceId: input.workspaceId, callId: { in: callIds } },
+          select: { callId: true, status: true, answered: true },
+          take: 200,
+        })
+      : Promise.resolve([]),
+    callIds.length
+      ? prisma.voiceConversationInsight.findMany({
+          where: { workspaceId: input.workspaceId, callId: { in: callIds } },
+          select: { callId: true, summary: true, topics: true },
+          take: 80,
+        })
+      : Promise.resolve([]),
+    callIds.length
+      ? prisma.voiceTranscript.findMany({
+          where: { workspaceId: input.workspaceId, callId: { in: callIds } },
+          select: { callId: true, fullText: true },
+          take: 80,
+        })
+      : Promise.resolve([]),
+  ]);
 
   let toolFailures = 0;
   let shortCalls = 0;
@@ -287,21 +303,24 @@ export async function optimizeVoiceFlowFromCallResults(input: {
   for (const call of calls) {
     const dur = call.durationSeconds ?? 0;
     if (dur > 0 && dur < 20) shortCalls += 1;
-    for (const t of call.toolExecutions) {
-      if (t.status === "failed") toolFailures += 1;
+  }
+  for (const t of toolRows as Array<{ status: string }>) {
+    if (t.status === "failed") toolFailures += 1;
+  }
+  for (const x of transferRows as Array<{ status: string; answered: boolean }>) {
+    if (!x.answered || ["failed", "no_answer", "cancelled"].includes(x.status)) {
+      transferFails += 1;
     }
-    for (const x of call.transfers) {
-      if (!x.answered || ["failed", "no_answer", "cancelled"].includes(x.status)) {
-        transferFails += 1;
-      }
-    }
-    const text = [
-      call.transcripts[0]?.fullText || "",
-      call.insights[0]?.summary || "",
-      JSON.stringify(call.insights[0]?.topics || ""),
-    ]
-      .join(" ")
-      .toLowerCase();
+  }
+
+  const texts = [
+    ...(transcriptRows as Array<{ fullText: string | null }>).map((t) => t.fullText || ""),
+    ...(insightRows as Array<{ summary: string | null; topics: unknown }>).map(
+      (i) => `${i.summary || ""} ${JSON.stringify(i.topics || "")}`,
+    ),
+  ];
+  for (const raw of texts) {
+    const text = raw.toLowerCase();
     if (
       /\b(real person|human|agent|representative|speak to someone|transfer me)\b/.test(
         text,
@@ -324,9 +343,9 @@ export async function optimizeVoiceFlowFromCallResults(input: {
     stats,
   );
 
-  const sampleInsights = calls
+  const sampleInsights = (insightRows as Array<{ summary: string | null }>)
     .slice(0, 12)
-    .map((c: (typeof calls)[number]) => c.insights[0]?.summary)
+    .map((i) => i.summary)
     .filter(Boolean)
     .join("\n- ");
 
