@@ -223,9 +223,10 @@ export async function cleanupTransovoWebhookSubscriptions(
 }
 
 /**
- * List webhook subscriptions for the connected user (presence/status only).
- * Used to diagnose delivery failures (retry_started_at means Calendly is
- * retrying — usually because our endpoint returned 401 Invalid signature).
+ * List webhook subscriptions for the connected user + organization
+ * (presence/status only). Used to diagnose delivery failures
+ * (retry_started_at means Calendly is retrying — usually because our
+ * endpoint returned 401 Invalid signature).
  */
 export async function listWebhookSubscriptions(ctx: AdapterContext): Promise<{
   subscriptions: Array<{
@@ -236,6 +237,9 @@ export async function listWebhookSubscriptions(ctx: AdapterContext): Promise<{
     events: string[];
     retryStartedAt: string | null;
     createdAt: string | null;
+    updatedAt: string | null;
+    user: string | null;
+    organization: string | null;
   }>;
 }> {
   try {
@@ -245,17 +249,8 @@ export async function listWebhookSubscriptions(ctx: AdapterContext): Promise<{
     if (!user || !org) {
       throw new Error("Calendly user/organization missing");
     }
-    const params = new URLSearchParams({
-      organization: org,
-      user,
-      scope: "user",
-      count: "20",
-    });
-    const res = await calendlyApi<{ collection?: CalendlyResource[] }>(
-      `/webhook_subscriptions?${params}`,
-      ctx,
-    );
-    const subscriptions = (res.collection || []).map((s) => ({
+
+    const mapSub = (s: CalendlyResource) => ({
       uri: String(s.uri || ""),
       callbackUrl: (s.callback_url as string) || null,
       state: (s.state as string) || null,
@@ -263,8 +258,41 @@ export async function listWebhookSubscriptions(ctx: AdapterContext): Promise<{
       events: Array.isArray(s.events) ? (s.events as string[]) : [],
       retryStartedAt: (s.retry_started_at as string) || null,
       createdAt: (s.created_at as string) || null,
-    }));
-    return { subscriptions };
+      updatedAt: (s.updated_at as string) || null,
+      user: (s.user as string) || null,
+      organization: (s.organization as string) || null,
+    });
+
+    const queries: URLSearchParams[] = [
+      new URLSearchParams({
+        organization: org,
+        user,
+        scope: "user",
+        count: "20",
+      }),
+      new URLSearchParams({
+        organization: org,
+        scope: "organization",
+        count: "20",
+      }),
+    ];
+
+    const byUri = new Map<string, ReturnType<typeof mapSub>>();
+    for (const params of queries) {
+      try {
+        const res = await calendlyApi<{ collection?: CalendlyResource[] }>(
+          `/webhook_subscriptions?${params}`,
+          ctx,
+        );
+        for (const s of res.collection || []) {
+          const mapped = mapSub(s);
+          if (mapped.uri) byUri.set(mapped.uri, mapped);
+        }
+      } catch {
+        // Org listing can 403 for non-admins — user list still useful.
+      }
+    }
+    return { subscriptions: [...byUri.values()] };
   } catch (err) {
     return wrapCalendlyError(err, "list webhook subscriptions");
   }

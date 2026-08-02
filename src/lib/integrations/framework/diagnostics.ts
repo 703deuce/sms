@@ -53,6 +53,7 @@ export async function getIntegrationDiagnosticsSnapshot(
     const {
       resolveCalendlyWebhookSigningKey,
       calendlyWebhookSigningKeyEnvPresence,
+      calendlyWebhookSigningKeyFingerprint,
       CALENDLY_WEBHOOK_SIGNING_KEY_ENVS,
       listCalendlyEnvNamesPresent,
     } = await import("../adapters/calendly");
@@ -82,6 +83,8 @@ export async function getIntegrationDiagnosticsSnapshot(
       webhookSigningKeySource: signingKeySource,
       webhookSigningKeyCapturedAt:
         typeof cfg.signingKeyCapturedAt === "string" ? cfg.signingKeyCapturedAt : null,
+      /** sha256 hex prefix of the active key — compare across Coolify/portal without leaking. */
+      webhookSigningKeyFingerprint: calendlyWebhookSigningKeyFingerprint(cfg),
       webhookSigningKeyEnv: signingEnv,
       webhookSigningKeyEnvNames: [...CALENDLY_WEBHOOK_SIGNING_KEY_ENVS],
       /**
@@ -99,7 +102,19 @@ export async function getIntegrationDiagnosticsSnapshot(
       timezone: cfg.timezone || null,
       schedulingUrl: cfg.schedulingUrl || null,
       webhookSubscriptionIds: subscriptionIds,
+      webhookSubscriptionScope:
+        typeof cfg.webhookSubscriptionScope === "string"
+          ? cfg.webhookSubscriptionScope
+          : null,
       webhookSetupError: setupError,
+      /** Any HTTP hit to our webhook URL (including 401) — proves Calendly/edge reached us. */
+      lastWebhookHitAt:
+        typeof cfg.lastWebhookHitAt === "string" ? cfg.lastWebhookHitAt : null,
+      lastWebhookHitStatus:
+        typeof cfg.lastWebhookHitStatus === "number" ? cfg.lastWebhookHitStatus : null,
+      lastWebhookHitReason:
+        typeof cfg.lastWebhookHitReason === "string" ? cfg.lastWebhookHitReason : null,
+      webhookHitCount: Number(cfg.webhookHitCount || 0) || 0,
       webhooksPlanBlocked: Boolean(
         setupError &&
           /Blocked by Calendly plan|Standard, Teams, or Enterprise/i.test(setupError),
@@ -117,12 +132,19 @@ export async function getIntegrationDiagnosticsSnapshot(
         uri: s.uri,
         callbackUrl: s.callbackUrl,
         state: s.state,
+        scope: s.scope,
         events: s.events,
         retryStartedAt: s.retryStartedAt,
         createdAt: s.createdAt,
+        updatedAt: s.updatedAt,
       }));
       calendly.webhookDeliveryFailing = live.some((s) => Boolean(s.retryStartedAt));
       calendly.webhookActiveCount = live.filter((s) => /active/i.test(s.state || "")).length;
+      // Active sub + no inbound hits after events usually means Calendly never POSTed.
+      calendly.webhookSilentDeliveryRisk =
+        live.some((s) => /active/i.test(s.state || "")) &&
+        !cfg.lastWebhookHitAt &&
+        !cfg.lastWebhookAt;
     } catch (err) {
       calendly.webhookSubscriptionsLiveError =
         err instanceof Error ? err.message : String(err);
@@ -195,7 +217,8 @@ export async function runIntegrationProbe(
     | "force_sync"
     | "register_webhooks"
     | "book_invitee"
-    | "cancel_event",
+    | "cancel_event"
+    | "webhook_self_test",
   actorUserId?: string | null,
   params?: Record<string, unknown>,
 ) {
@@ -421,7 +444,15 @@ export async function runIntegrationProbe(
           mergeConfig: true,
         });
       }
-      const url = externalWebhookUrl(provider, token);
+      const overrideUrl =
+        typeof params?.callbackUrl === "string" && params.callbackUrl.trim()
+          ? params.callbackUrl.trim()
+          : "";
+      const url = overrideUrl || externalWebhookUrl(provider, token);
+      const scopePref =
+        params?.scope === "user" || params?.scope === "organization"
+          ? (params.scope as "user" | "organization")
+          : undefined;
       try {
         // Wipe ALL Transovo Calendly webhook URLs for this user (including orphan
         // smoke-test tokens). Otherwise Calendly fans out to dead endpoints that
@@ -440,12 +471,20 @@ export async function runIntegrationProbe(
             await adapter.removeWebhooks(ctx, priorIds).catch(() => undefined);
           }
         }
-        const result = await adapter.registerWebhooks(ctx, url);
+        const result = await adapter.registerWebhooks(ctx, url, {
+          scope: scopePref,
+        });
         const nextConfig: Record<string, unknown> = {
           webhookSubscriptionIds: result.ids,
           webhookCallbackUrl: url,
+          webhookSubscriptionScope: result.scope || scopePref || null,
           webhookSetupError: null,
         };
+        // Don't persist a temporary external callback as the canonical Harbor URL.
+        if (overrideUrl) {
+          nextConfig.webhookCallbackUrl = externalWebhookUrl(provider, token);
+          nextConfig.webhookDiagnosticCallbackUrl = overrideUrl;
+        }
         if (result.signingKey) {
           nextConfig.signingKey = result.signingKey;
           nextConfig.signingKeySource = "calendly_subscription_create";
@@ -470,10 +509,12 @@ export async function runIntegrationProbe(
           data: {
             ids: result.ids,
             url,
+            scope: result.scope || scopePref || null,
             signingKeyCaptured: Boolean(result.signingKey),
             signingMode: result.signingKey ? "subscription_create" : "oauth_app_env",
             createResponseKeys: result.createResponseKeys || [],
             cleanedOrphans: cleaned?.deleted || [],
+            diagnosticOverride: Boolean(overrideUrl),
           },
         };
       } catch (err) {
@@ -495,6 +536,103 @@ export async function runIntegrationProbe(
           data: { planBlocked, url },
         };
       }
+    }
+
+    if (probe === "webhook_self_test") {
+      if (provider !== "calendly") {
+        return {
+          ok: false,
+          probe,
+          durationMs: Date.now() - started,
+          error: "webhook_self_test is Calendly-only",
+        };
+      }
+      const { createHmac } = await import("crypto");
+      const { externalWebhookUrl } = await import("./app-url");
+      const { getConnection } = await import("@/lib/integrations/connections");
+      const {
+        resolveCalendlyWebhookSigningKeys,
+        calendlyWebhookSigningKeyFingerprint,
+      } = await import("../adapters/calendly");
+      const conn = await getConnection(workspaceId, provider);
+      const cfg = (conn?.configJson || {}) as Record<string, unknown>;
+      const token =
+        typeof cfg.webhookToken === "string" && cfg.webhookToken.trim()
+          ? cfg.webhookToken.trim()
+          : "";
+      if (!token) {
+        return {
+          ok: false,
+          probe,
+          durationMs: Date.now() - started,
+          error: "No webhook token — run Register webhooks first",
+        };
+      }
+      const keys = resolveCalendlyWebhookSigningKeys(cfg);
+      if (!keys.length) {
+        return {
+          ok: false,
+          probe,
+          durationMs: Date.now() - started,
+          error: "No Calendly signing key in Coolify env / connection config",
+        };
+      }
+      const rawBody = JSON.stringify({
+        event: "invitee.created",
+        payload: {
+          email: "webhook-self-test@transovo.ai",
+          name: "Webhook Self Test",
+          uri: `https://api.calendly.com/scheduled_events/self-test/invitees/${Date.now()}`,
+          status: "active",
+          timezone: "America/New_York",
+          scheduled_event: {
+            uri: `https://api.calendly.com/scheduled_events/self-test-${Date.now()}`,
+            name: "Webhook Self Test",
+            status: "active",
+            start_time: new Date(Date.now() + 86400000).toISOString(),
+            end_time: new Date(Date.now() + 86400000 + 1800000).toISOString(),
+          },
+        },
+      });
+      const t = String(Math.floor(Date.now() / 1000));
+      const v1 = createHmac("sha256", keys[0]).update(`${t}.${rawBody}`).digest("hex");
+      const url = externalWebhookUrl("calendly", token);
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Calendly-Webhook-Signature": `t=${t},v1=${v1}`,
+          "User-Agent": "Transovo-Webhook-Self-Test/1.0",
+        },
+        body: rawBody,
+      });
+      const text = await res.text();
+      let json: unknown = null;
+      try {
+        json = JSON.parse(text);
+      } catch {
+        json = text.slice(0, 300);
+      }
+      await writeIntegrationAudit({
+        workspaceId,
+        provider,
+        category: "diagnostics",
+        action: "probe_webhook_self_test",
+        message: `Self-test ${res.status} fingerprint=${calendlyWebhookSigningKeyFingerprint(cfg)}`,
+        actorUserId,
+      });
+      return {
+        ok: res.status === 200,
+        probe,
+        durationMs: Date.now() - started,
+        data: {
+          status: res.status,
+          url,
+          fingerprint: calendlyWebhookSigningKeyFingerprint(cfg),
+          body: json,
+        },
+        error: res.status === 200 ? undefined : `Webhook self-test HTTP ${res.status}`,
+      };
     }
 
     return { ok: false, probe, durationMs: Date.now() - started, error: "Unknown probe" };

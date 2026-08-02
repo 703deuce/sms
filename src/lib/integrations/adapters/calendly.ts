@@ -1,3 +1,4 @@
+import { createHash } from "crypto";
 import type { ExternalIntegrationAdapter } from "../framework/adapter";
 import { integrationFetch } from "../framework/http";
 import { makeEventIdempotencyKey } from "../framework/events";
@@ -167,6 +168,19 @@ export function resolveCalendlyWebhookSigningKey(
   return resolveCalendlyWebhookSigningKeys(config)[0] || null;
 }
 
+/**
+ * Presence-only fingerprint of the active signing key (sha256 hex prefix).
+ * Lets operators confirm Coolify matches the Calendly portal key without
+ * exposing the secret.
+ */
+export function calendlyWebhookSigningKeyFingerprint(
+  config?: Record<string, unknown> | null,
+): string | null {
+  const key = resolveCalendlyWebhookSigningKey(config);
+  if (!key) return null;
+  return createHash("sha256").update(key).digest("hex").slice(0, 12);
+}
+
 export const calendlyAdapter: ExternalIntegrationAdapter = {
   id: "calendly",
   displayName: "Calendly",
@@ -324,7 +338,7 @@ export const calendlyAdapter: ExternalIntegrationAdapter = {
     return { items, nextCursor: next };
   },
 
-  async registerWebhooks(ctx, callbackUrl) {
+  async registerWebhooks(ctx, callbackUrl, opts) {
     const me = await api("/users/me", ctx);
     const resource =
       ((me as { resource?: { uri?: string; current_organization?: string } }).resource ||
@@ -336,52 +350,62 @@ export const calendlyAdapter: ExternalIntegrationAdapter = {
         "Calendly user/organization URI missing — reconnect OAuth and retry webhook setup",
       );
     }
-    // User scope still requires organization URI (Calendly FAQ). Prefer user scope
-    // so personal accounts work without org-admin privileges.
-    const body = {
-      url: callbackUrl,
-      // invitee_no_show.created requires a paid plan on many accounts — registration
-      // still succeeds when the plan allows the event; Free accounts already fall back
-      // to incremental reconcile via the plan-error path below.
-      events: ["invitee.created", "invitee.canceled", "invitee_no_show.created"],
-      organization: org,
-      user,
-      scope: "user",
-    };
-    try {
-      const created = await api("/webhook_subscriptions", ctx, {
-        method: "POST",
-        body: JSON.stringify(body),
-      });
-      // PAT creates may include signing_key (once). OAuth apps usually omit it —
-      // those use the developer-portal "Webhook signing key" in Coolify env.
-      const resource =
-        ((created as { resource?: Record<string, unknown> }).resource ||
-          {}) as Record<string, unknown>;
-      const uri = String(resource.uri || "");
-      const signingKey =
-        typeof resource.signing_key === "string" && resource.signing_key.trim()
-          ? String(resource.signing_key).trim()
-          : null;
-      return {
-        ids: uri ? [uri] : [],
-        signingKey,
-        // Presence-only keys for diagnostics (never values).
-        createResponseKeys: Object.keys(resource).sort(),
-      };
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      if (
-        /403|402|payment|paid|plan|standard|teams|enterprise|subscription|upgrade/i.test(
-          message,
-        )
-      ) {
-        throw new Error(
-          `Blocked by Calendly plan: webhook subscriptions require Standard, Teams, or Enterprise. Free accounts use incremental reconciliation instead. (${message.slice(0, 180)})`,
-        );
+
+    // Prefer organization scope first: some Calendly accounts deliver Scheduling API
+    // book/cancel reliably only on org subscriptions. Fall back to user scope when
+    // the token lacks org-admin privileges.
+    const preferred = opts?.scope === "user" ? ("user" as const) : ("organization" as const);
+    const attempts: Array<"organization" | "user"> =
+      preferred === "user" ? ["user", "organization"] : ["organization", "user"];
+
+    const events = ["invitee.created", "invitee.canceled", "invitee_no_show.created"];
+    let lastError: Error | null = null;
+
+    for (const scope of attempts) {
+      const body =
+        scope === "organization"
+          ? { url: callbackUrl, events, organization: org, scope }
+          : { url: callbackUrl, events, organization: org, user, scope };
+      try {
+        const created = await api("/webhook_subscriptions", ctx, {
+          method: "POST",
+          body: JSON.stringify(body),
+        });
+        // PAT creates may include signing_key (once). OAuth apps usually omit it —
+        // those use the developer-portal "Webhook signing key" in Coolify env.
+        const createdResource =
+          ((created as { resource?: Record<string, unknown> }).resource ||
+            {}) as Record<string, unknown>;
+        const uri = String(createdResource.uri || "");
+        const signingKey =
+          typeof createdResource.signing_key === "string" &&
+          createdResource.signing_key.trim()
+            ? String(createdResource.signing_key).trim()
+            : null;
+        return {
+          ids: uri ? [uri] : [],
+          signingKey,
+          scope,
+          // Presence-only keys for diagnostics (never values).
+          createResponseKeys: Object.keys(createdResource).sort(),
+        };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        if (
+          /403|402|payment|paid|plan|standard|teams|enterprise|subscription|upgrade/i.test(
+            message,
+          )
+        ) {
+          throw new Error(
+            `Blocked by Calendly plan: webhook subscriptions require Standard, Teams, or Enterprise. Free accounts use incremental reconciliation instead. (${message.slice(0, 180)})`,
+          );
+        }
+        lastError = new Error(`Calendly webhook registration (${scope}) failed: ${message}`);
+        // Try the other scope (e.g. org-admin required → user scope).
+        continue;
       }
-      throw new Error(`Calendly webhook registration failed: ${message}`);
     }
+    throw lastError || new Error("Calendly webhook registration failed");
   },
 
   async removeWebhooks(ctx, ids) {

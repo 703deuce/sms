@@ -1,11 +1,44 @@
 import { NextResponse } from "next/server";
 import { getPrisma } from "@/lib/db";
-import { findConnectionByWebhookToken, getConnection } from "@/lib/integrations/connections";
+import {
+  findConnectionByWebhookToken,
+  getConnection,
+  upsertConnection,
+} from "@/lib/integrations/connections";
 import {
   enqueueIntegrationWebhookProcess,
   getAdapter,
   isExternalProvider,
 } from "@/lib/integrations/framework";
+
+async function recordWebhookHit(input: {
+  workspaceId: string;
+  provider: string;
+  status: number;
+  reason: string;
+}) {
+  try {
+    const conn = await getConnection(input.workspaceId, input.provider);
+    if (!conn) return;
+    const cfg = (conn.configJson || {}) as Record<string, unknown>;
+    await upsertConnection({
+      workspaceId: input.workspaceId,
+      provider: input.provider,
+      mergeConfig: true,
+      config: {
+        lastWebhookHitAt: new Date().toISOString(),
+        lastWebhookHitStatus: input.status,
+        lastWebhookHitReason: input.reason.slice(0, 180),
+        webhookHitCount: Number(cfg.webhookHitCount || 0) + 1,
+      },
+    });
+  } catch (err) {
+    console.warn(
+      "[native webhook] hit record failed",
+      err instanceof Error ? err.message : err,
+    );
+  }
+}
 
 /**
  * Inbound provider webhooks.
@@ -65,6 +98,12 @@ export async function POST(
     } = await import("@/lib/integrations/adapters/calendly");
     const keys = resolveCalendlyWebhookSigningKeys(cfg);
     if (!keys.length) {
+      await recordWebhookHit({
+        workspaceId,
+        provider: raw,
+        status: 401,
+        reason: "missing_signing_key",
+      });
       return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
     }
     let ok = false;
@@ -74,10 +113,26 @@ export async function POST(
         break;
       }
     }
-    if (!ok) return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
+    if (!ok) {
+      await recordWebhookHit({
+        workspaceId,
+        provider: raw,
+        status: 401,
+        reason: "invalid_signature",
+      });
+      return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
+    }
   } else if (adapter.verifyWebhook) {
     const ok = await adapter.verifyWebhook(request.headers, rawBody, secret);
-    if (!ok) return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
+    if (!ok) {
+      await recordWebhookHit({
+        workspaceId,
+        provider: raw,
+        status: 401,
+        reason: "invalid_signature",
+      });
+      return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
+    }
   }
 
   const externalId =
@@ -106,6 +161,13 @@ export async function POST(
     workspaceId,
     provider: raw,
     webhookEventId: row.id,
+  });
+
+  await recordWebhookHit({
+    workspaceId,
+    provider: raw,
+    status: 200,
+    reason: "accepted",
   });
 
   return NextResponse.json({ ok: true, id: row.id });

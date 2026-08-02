@@ -47,13 +47,22 @@ type Snapshot = {
       uri?: string;
       callbackUrl?: string | null;
       state?: string | null;
+      scope?: string | null;
       events?: string[];
       retryStartedAt?: string | null;
       createdAt?: string | null;
+      updatedAt?: string | null;
     }>;
     webhookDeliveryFailing?: boolean;
+    webhookSilentDeliveryRisk?: boolean;
     webhookActiveCount?: number;
     webhookSubscriptionsLiveError?: string;
+    webhookSigningKeyFingerprint?: string | null;
+    webhookSubscriptionScope?: string | null;
+    lastWebhookHitAt?: string | null;
+    lastWebhookHitStatus?: number | null;
+    lastWebhookHitReason?: string | null;
+    webhookHitCount?: number;
   };
 };
 
@@ -271,7 +280,21 @@ export function NativeProviderClient({ provider }: { provider: string }) {
           <ul className="space-y-1 text-sm text-muted-foreground">
             <li>Env ready: {snapshot?.env?.ready ? "yes" : "no"}</li>
             <li>Last sync: {snapshot?.lastSyncAt || "—"}</li>
-            <li>Last webhook: {snapshot?.lastWebhookAt || "—"}</li>
+            <li>Last webhook accepted: {snapshot?.lastWebhookAt || "—"}</li>
+            {snapshot?.calendly ? (
+              <li>
+                Last webhook hit: {snapshot.calendly.lastWebhookHitAt || "—"}
+                {snapshot.calendly.lastWebhookHitStatus != null
+                  ? ` · HTTP ${snapshot.calendly.lastWebhookHitStatus}`
+                  : ""}
+                {snapshot.calendly.lastWebhookHitReason
+                  ? ` · ${snapshot.calendly.lastWebhookHitReason}`
+                  : ""}
+                {snapshot.calendly.webhookHitCount
+                  ? ` · hits=${snapshot.calendly.webhookHitCount}`
+                  : ""}
+              </li>
+            ) : null}
             <li>Last error: {snapshot?.lastError || "—"}</li>
             <li>
               Tokens: access {snapshot?.secretsPresent?.accessToken ? "yes" : "no"} · refresh{" "}
@@ -350,6 +373,18 @@ export function NativeProviderClient({ provider }: { provider: string }) {
                       ? "blocked by Calendly plan (Free)"
                       : "none"}
               </li>
+              {snapshot.calendly.webhookSigningKeyFingerprint ? (
+                <li className="text-xs">
+                  Signing key fingerprint:{" "}
+                  <code>{snapshot.calendly.webhookSigningKeyFingerprint}</code>{" "}
+                  (sha256 prefix — confirm Coolify key matches the portal)
+                </li>
+              ) : null}
+              {snapshot.calendly.webhookSubscriptionScope ? (
+                <li className="text-xs">
+                  Registered scope: {snapshot.calendly.webhookSubscriptionScope}
+                </li>
+              ) : null}
               {snapshot.calendly.webhookDeliveryFailing ? (
                 <li className="text-amber-700">
                   Calendly is <strong>retrying deliveries</strong> (
@@ -360,12 +395,23 @@ export function NativeProviderClient({ provider }: { provider: string }) {
                   OAuth app in the Calendly developer portal (not a random string).
                 </li>
               ) : null}
+              {snapshot.calendly.webhookSilentDeliveryRisk ? (
+                <li className="text-amber-700">
+                  Subscription is active, but Transovo has never seen an inbound hit
+                  from Calendly (no accepted webhook and no failed signature attempt).
+                  Book/cancel can still work via API. Re-run{" "}
+                  <strong>Register webhooks</strong> (now prefers organization scope),
+                  then cancel a meeting and check whether &quot;Last webhook hit&quot;
+                  updates.
+                </li>
+              ) : null}
               {(snapshot.calendly.webhookSubscriptionsLive || []).length ? (
                 <li className="text-xs break-all">
                   Live subs:{" "}
                   {snapshot.calendly.webhookSubscriptionsLive!.map((s) => (
                     <span key={s.uri} className="block">
-                      {s.state || "?"} · retry={s.retryStartedAt || "none"} ·{" "}
+                      {s.state || "?"} · scope={s.scope || "?"} · retry=
+                      {s.retryStartedAt || "none"} ·{" "}
                       {(s.events || []).join(",") || "events?"}
                     </span>
                   ))}
@@ -390,13 +436,22 @@ export function NativeProviderClient({ provider }: { provider: string }) {
               Write probe
             </Button>
             {provider === "calendly" ? (
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() => post("probe", { probe: "register_webhooks" })}
-              >
-                Register webhooks
-              </Button>
+              <>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => post("probe", { probe: "register_webhooks" })}
+                >
+                  Register webhooks
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => post("probe", { probe: "webhook_self_test" })}
+                >
+                  Webhook self-test
+                </Button>
+              </>
             ) : null}
             <Button size="sm" onClick={() => post("sync")}>
               Force sync
