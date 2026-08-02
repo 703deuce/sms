@@ -160,7 +160,7 @@ export async function advanceTelnyxRegistration(workspaceId: string) {
       });
     }
 
-    // 3) Attach purchased number to messaging profile
+    // 3) Attach purchased number to messaging profile + voice Call Control
     if (phoneId && reg.phoneE164 && !reg.phoneAttached) {
       try {
         await provider.assignNumberToMessagingProfile(phoneId, profileId);
@@ -173,6 +173,30 @@ export async function advanceTelnyxRegistration(workspaceId: string) {
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         throw new JobDeferredError(`Attach number to profile: ${msg}`, 60_000);
+      }
+    }
+
+    // Dual voice: ensure DID stays on Call Control without clearing messaging.
+    if (phoneId && reg.phoneE164 && !isTelnyxOrderId(phoneId)) {
+      try {
+        const { provisionPurchasedNumber } = await import(
+          "@/lib/phone/telnyx-dual-provision"
+        );
+        const phoneRow = await getPrisma().phoneNumber.findFirst({
+          where: { workspaceId, e164: reg.phoneE164 },
+          select: { id: true },
+        });
+        if (phoneRow) {
+          await provisionPurchasedNumber({
+            workspaceId,
+            phoneNumberId: phoneRow.id,
+          });
+          await log(reg, "phone_dual_provisioned", reg.phoneE164 || undefined);
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        await log(reg, "phone_dual_provision_deferred", msg);
+        // Non-fatal for messaging advance — voice can be repaired from Numbers UI.
       }
     }
 

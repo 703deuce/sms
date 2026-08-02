@@ -4,6 +4,7 @@ import {
   NumberMessagingForm,
   NumberWebhooksForm,
 } from "@/components/numbers/number-config-forms";
+import { NumberProvisionPanel } from "@/components/numbers/number-provision-panel";
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle, StatCard } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
@@ -22,6 +23,7 @@ import { getPrisma } from "@/lib/db";
 
 const detailTabs = [
   { id: "overview", label: "Overview" },
+  { id: "voice", label: "Voice + SMS" },
   { id: "messaging", label: "Messaging" },
   { id: "assignment", label: "Assignment" },
   { id: "compliance", label: "Compliance" },
@@ -168,6 +170,8 @@ export default async function NumberDetailPage({ params, searchParams }: PagePro
           </div>
         </>
       )}
+
+      {tab === "voice" && <NumberProvisionPanel numberId={numberId} />}
 
       {tab === "messaging" && (
         <Card>

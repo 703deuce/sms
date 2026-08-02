@@ -335,18 +335,33 @@ export const messagingOnboarding = {
     }
     reg = (await getRegistrationByWorkspace(workspaceId))!;
 
-    await getPrisma().phoneNumber.upsert({
+    const digits = purchased.phoneNumber.replace(/\D/g, "");
+    const npa = digits.slice(1, 4);
+    const isTollFree = /^(800|833|844|855|866|877|888)$/.test(npa);
+    const phoneRow = await getPrisma().phoneNumber.upsert({
       where: { workspaceId_e164: { workspaceId, e164: purchased.phoneNumber } },
       create: {
         workspaceId,
         e164: purchased.phoneNumber,
-        type: "Local",
-        areaCode: purchased.phoneNumber.replace(/\D/g, "").slice(1, 4),
+        type: isTollFree ? "TollFree" : "Local",
+        areaCode: npa || null,
         twilioSid: providerName === "twilio" ? purchased.sid : null,
         providerNumberId: purchased.sid,
         status: "Active",
         purchasedAt: new Date(),
         a2pStatus: "PENDING",
+        settingsJson: {
+          provisioning: {
+            state: purchased.sid.startsWith("ORDER:")
+              ? "pending_activation"
+              : "purchased",
+          },
+        },
+        capabilitiesJson: {
+          voice: true,
+          sms: true,
+          source: "purchase",
+        },
       },
       update: {
         twilioSid: providerName === "twilio" ? purchased.sid : undefined,
@@ -354,6 +369,8 @@ export const messagingOnboarding = {
         status: "Active",
         purchasedAt: new Date(),
         releasedAt: null,
+        type: isTollFree ? "TollFree" : "Local",
+        areaCode: npa || null,
       },
     });
 
@@ -363,6 +380,21 @@ export const messagingOnboarding = {
       eventType: "number_purchased",
       message: purchased.phoneNumber,
     });
+
+    // Dual SMS + voice attach (idempotent). Messaging advance still handles 10DLC.
+    if (providerName === "telnyx" && !purchased.sid.startsWith("ORDER:")) {
+      try {
+        const { provisionPurchasedNumber } = await import(
+          "@/lib/phone/telnyx-dual-provision"
+        );
+        await provisionPurchasedNumber({
+          workspaceId,
+          phoneNumberId: phoneRow.id,
+        });
+      } catch (err) {
+        console.error("[purchaseNumber] dual provision", err);
+      }
+    }
 
     await enqueueMessagingRegistrationAdvance(workspaceId);
     return toPublicRegistration(reg);

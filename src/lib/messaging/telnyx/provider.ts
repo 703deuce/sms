@@ -134,7 +134,8 @@ export const telnyxProvider: MessagingProvider = {
     >("/available_phone_numbers", {
       query: {
         "filter[country_code]": "US",
-        "filter[features]": options?.mms ? "sms,mms" : "sms",
+        // Prefer numbers that support SMS + voice (dual use). MMS optional.
+        "filter[features]": options?.mms ? "sms,mms,voice" : "sms,voice",
         "filter[limit]": 20,
         ...(areaCode ? { "filter[national_destination_code]": areaCode } : {}),
         ...(options?.locality ? { "filter[locality]": options.locality } : {}),
@@ -166,8 +167,29 @@ export const telnyxProvider: MessagingProvider = {
     });
   },
 
-  async buyPhoneNumber(_reg, phoneNumber): Promise<PurchasedNumber> {
+  async buyPhoneNumber(reg, phoneNumber): Promise<PurchasedNumber> {
     assertTelnyxConfigured();
+    // Dual provision: attach Voice Call Control + Messaging Profile on order when known.
+    let connectionId: string | undefined;
+    let messagingProfileId: string | undefined;
+    try {
+      const { resolveOrderProvisionIds } = await import(
+        "@/lib/phone/telnyx-dual-provision"
+      );
+      const ids = await resolveOrderProvisionIds(reg.workspaceId);
+      connectionId = ids.connectionId || undefined;
+      messagingProfileId = ids.messagingProfileId || undefined;
+    } catch (err) {
+      console.error("[telnyx] resolveOrderProvisionIds", err);
+    }
+
+    const orderBody: Record<string, unknown> = {
+      phone_numbers: [{ phone_number: phoneNumber }],
+      customer_reference: `ws:${reg.workspaceId}`,
+    };
+    if (connectionId) orderBody.connection_id = connectionId;
+    if (messagingProfileId) orderBody.messaging_profile_id = messagingProfileId;
+
     const res = await telnyxRequest<
       TelnyxDataResponse<{
         id: string;
@@ -176,9 +198,7 @@ export const telnyxProvider: MessagingProvider = {
       }>
     >("/number_orders", {
       method: "POST",
-      body: {
-        phone_numbers: [{ phone_number: phoneNumber }],
-      },
+      body: orderBody,
       idempotencyKey: `number-order:${phoneNumber}`,
     });
 

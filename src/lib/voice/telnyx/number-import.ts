@@ -66,7 +66,16 @@ export async function importTelnyxNumbersIntoWorkspace(input: {
   const candidates = owned.filter((n) => (want ? want.has(n.e164) : true));
 
   const prisma = getPrisma();
-  const connectionId = process.env.TELNYX_CONNECTION_ID?.trim() || "";
+  let connectionId = "";
+  try {
+    const { resolveVoiceConnectionId } = await import(
+      "@/lib/phone/telnyx-voice-connection"
+    );
+    connectionId = await resolveVoiceConnectionId();
+  } catch {
+    connectionId = process.env.TELNYX_CONNECTION_ID?.trim() || "";
+  }
+
   const imported: Array<{
     id: string;
     e164: string;
@@ -119,7 +128,10 @@ export async function importTelnyxNumbersIntoWorkspace(input: {
       },
     });
 
-    let attached = Boolean(n.connectionId && connectionId && n.connectionId === connectionId);
+    // Attach Call Control for voice — never clear messaging_profile_id (base PATCH).
+    let attached = Boolean(
+      n.connectionId && connectionId && n.connectionId === connectionId,
+    );
     if (input.attachConnection !== false && connectionId && n.connectionId !== connectionId) {
       try {
         await telnyxRequest(`/phone_numbers/${encodeURIComponent(n.id)}`, {
@@ -141,6 +153,21 @@ export async function importTelnyxNumbersIntoWorkspace(input: {
       }
     }
 
+    // Best-effort dual provision (preserves messaging profile).
+    if (attached) {
+      try {
+        const { provisionPurchasedNumber } = await import(
+          "@/lib/phone/telnyx-dual-provision"
+        );
+        await provisionPurchasedNumber({
+          workspaceId: input.workspaceId,
+          phoneNumberId: row.id,
+        });
+      } catch {
+        // non-fatal
+      }
+    }
+
     imported.push({
       id: row.id,
       e164: n.e164,
@@ -149,8 +176,6 @@ export async function importTelnyxNumbersIntoWorkspace(input: {
     });
   }
 
-  // Prefer diagnosing Call Control routing via inbound-diagnostics when asked
-  // (sync route passes repairInbound). Avoid PATCHing credential connections.
   return {
     telnyxCount: owned.length,
     imported,
