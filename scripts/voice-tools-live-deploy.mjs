@@ -412,6 +412,19 @@ async function main() {
       : JSON.stringify(deployed.json).slice(0, 400),
   );
 
+  // Final pin after build/deploy — those steps can re-expand tools via flow compile.
+  const toolsFinal = await api(jar, `/api/voice/agents/${agent.id}/tools`, {
+    method: "PUT",
+    body: { toolIds: [], enabledBuiltinTools: FULL_TOOLS },
+  });
+  log(
+    toolsFinal.res.ok,
+    "final tool pin + Telnyx sync",
+    toolsFinal.res.ok
+      ? `count=${(toolsFinal.json?.data?.enabledBuiltinTools || []).length} synced=${toolsFinal.json?.data?.synced}`
+      : JSON.stringify(toolsFinal.json).slice(0, 200),
+  );
+
   // Repair inbound routing on the DID
   const repair = await api(jar, "/api/numbers/telnyx-inbound-repair", {
     method: "POST",
