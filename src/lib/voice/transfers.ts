@@ -93,8 +93,12 @@ export async function initiateTransfer(input: {
   }
 
   // Prefer named destination config when the destination matches a saved name or number.
-  let destination = normalizeE164(input.destination);
-  let fallbacks = (input.fallbackDestinations || []).map((d) => normalizeE164(d));
+  let destination = input.destination.toLowerCase().startsWith("sip:")
+    ? input.destination
+    : normalizeE164(input.destination);
+  let fallbacks = (input.fallbackDestinations || []).map((d) =>
+    d.toLowerCase().startsWith("sip:") ? d : normalizeE164(d),
+  );
   const namedCandidates = await prisma.voiceTransferDestination.findMany({
     where: {
       workspaceId: input.workspaceId,
@@ -116,11 +120,19 @@ export async function initiateTransfer(input: {
     namedCandidates[0] ||
     null;
   if (namedDest) {
-    destination = normalizeE164(namedDest.destination);
+    destination = namedDest.destination.toLowerCase().startsWith("sip:")
+      ? namedDest.destination
+      : normalizeE164(namedDest.destination);
     if (namedDest.fallbackDestination) {
-      fallbacks = [normalizeE164(namedDest.fallbackDestination), ...fallbacks];
+      const fb = namedDest.fallbackDestination;
+      fallbacks = [
+        fb.toLowerCase().startsWith("sip:") ? fb : normalizeE164(fb),
+        ...fallbacks,
+      ];
     }
   }
+  const { assertSafeTransferDestination } = await import("./security/redaction");
+  assertSafeTransferDestination(destination);
 
   const transfer = await prisma.voiceTransfer.create({
     data: {
@@ -168,21 +180,82 @@ export async function initiateTransfer(input: {
     });
   }
 
-  await telnyxRequest(`/calls/${call.telnyxCallControlId}/actions/transfer`, {
-    method: "POST",
-    body: {
-      to: destination,
-      timeout_secs: input.timeoutSeconds || 30,
-      answering_machine_detection: "detect",
-    },
-  });
+  // SIP REFER when destination is a SIP URI or transferType explicitly requests it.
+  const isSipRefer =
+    input.transferType === "sip_refer" ||
+    destination.toLowerCase().startsWith("sip:") ||
+    input.destination.toLowerCase().startsWith("sip:");
+  const referTarget = isSipRefer
+    ? input.destination.toLowerCase().startsWith("sip:")
+      ? input.destination
+      : destination.toLowerCase().startsWith("sip:")
+        ? destination
+        : `sip:${destination.replace(/^\+/, "")}`
+    : null;
+
+  if (isSipRefer && referTarget) {
+    try {
+      await telnyxRequest(`/calls/${call.telnyxCallControlId}/actions/refer`, {
+        method: "POST",
+        body: {
+          sip_address: referTarget,
+          client_state: Buffer.from(
+            JSON.stringify({
+              workspaceId: input.workspaceId,
+              callId: call.id,
+              transferId: transfer.id,
+              mode: "sip_refer",
+            }),
+          ).toString("base64"),
+        },
+        idempotencyKey: `refer-${transfer.id}`,
+      });
+    } catch {
+      // Fallback to Call Control transfer if REFER is unsupported on the account.
+      await telnyxRequest(`/calls/${call.telnyxCallControlId}/actions/transfer`, {
+        method: "POST",
+        body: {
+          to: referTarget,
+          timeout_secs: input.timeoutSeconds || 30,
+        },
+        idempotencyKey: `xfer-sip-${transfer.id}`,
+      });
+    }
+  } else {
+    await telnyxRequest(`/calls/${call.telnyxCallControlId}/actions/transfer`, {
+      method: "POST",
+      body: {
+        to: destination,
+        timeout_secs: input.timeoutSeconds || 30,
+        answering_machine_detection: "detect",
+      },
+      idempotencyKey: `xfer-${transfer.id}`,
+    });
+  }
 
   await prisma.voiceCall.update({
     where: { id: call.id },
-    data: { transferred: true },
+    data: {
+      transferred: true,
+      metadata: {
+        ...(call.metadata as object),
+        lastTransferType: isSipRefer ? "sip_refer" : input.transferType,
+      } as object,
+    },
+  });
+  await prisma.voiceTransfer.update({
+    where: { id: transfer.id },
+    data: {
+      transferType: isSipRefer ? "sip_refer" : input.transferType,
+      metadata: {
+        ...((transfer.metadata as object) || {}),
+        sipRefer: Boolean(isSipRefer),
+        referTarget,
+      } as object,
+    },
   });
 
-  return { mode: "telnyx", transferId: transfer.id };
+  return { mode: "telnyx", transferId: transfer.id, sipRefer: Boolean(isSipRefer) };
 }
 
 async function initiateWarmTransfer(input: {

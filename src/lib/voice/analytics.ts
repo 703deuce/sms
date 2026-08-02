@@ -112,6 +112,28 @@ export async function loadVoiceAnalytics(
   });
   const toolSuccess = toolExecs.filter((t) => t.status === "completed").length;
   const toolFail = toolExecs.filter((t) => t.status === "failed").length;
+  const toolLatencies = toolExecs
+    .map((t) => t.latencyMs)
+    .filter((n): n is number => typeof n === "number" && n >= 0);
+  const avgToolLatencyMs = toolLatencies.length
+    ? Math.round(toolLatencies.reduce((a, b) => a + b, 0) / toolLatencies.length)
+    : 0;
+  const p95ToolLatencyMs = toolLatencies.length
+    ? [...toolLatencies].sort((a, b) => a - b)[
+        Math.min(toolLatencies.length - 1, Math.floor(toolLatencies.length * 0.95))
+      ]
+    : 0;
+
+  const diagnostics = await prisma.voiceFailureDiagnostic.findMany({
+    where: { workspaceId, createdAt: { gte: since } },
+    select: { category: true, code: true },
+    take: 500,
+  });
+  const diagnosticCounts: Record<string, number> = {};
+  for (const d of diagnostics) {
+    const k = `${d.category}:${d.code || "none"}`;
+    diagnosticCounts[k] = (diagnosticCounts[k] || 0) + 1;
+  }
 
   return {
     periodDays: days,
@@ -153,6 +175,12 @@ export async function loadVoiceAnalytics(
     sentimentCounts,
     toolSuccessRate: toolExecs.length ? toolSuccess / toolExecs.length : 0,
     toolFailures: toolFail,
+    latency: {
+      avgToolLatencyMs,
+      p95ToolLatencyMs,
+      toolSampleSize: toolLatencies.length,
+      diagnosticCounts,
+    },
   };
 }
 

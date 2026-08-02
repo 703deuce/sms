@@ -49,16 +49,21 @@ export async function executeVoiceTool(input: ToolExecInput) {
     };
   }
 
+  const { sanitizeToolArgs, redactValue } = await import("../security/redaction");
+  const safeInput = sanitizeToolArgs((input.input || {}) as Record<string, unknown>);
+  input = { ...input, input: safeInput };
+
   const start = Date.now();
   try {
     const result = await runToolByType(tool, input);
     const latencyMs = Date.now() - start;
+    const redactedOutput = redactValue(result) as Prisma.InputJsonValue;
 
     await prisma.voiceToolExecution.update({
       where: { id: execution.id },
       data: {
         status: "completed",
-        output: result as Prisma.InputJsonValue,
+        output: redactedOutput,
         latencyMs,
         completedAt: new Date(),
       },

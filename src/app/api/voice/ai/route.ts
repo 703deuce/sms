@@ -513,6 +513,60 @@ export async function POST(request: Request) {
         return NextResponse.json({
           data: await platform.seedDefaultInsights(workspaceId),
         });
+      case "preview_memory":
+        return NextResponse.json({
+          data: await platform.previewMemory(workspaceId, agentId),
+        });
+      case "compare_versions":
+        return NextResponse.json({
+          data: await platform.compareRemoteVersions(
+            workspaceId,
+            agentId,
+            String(body.leftVersionId || ""),
+            String(body.rightVersionId || ""),
+          ),
+        });
+      case "canary_metrics":
+        return NextResponse.json({
+          data: await platform.canaryMetrics(workspaceId, agentId),
+        });
+      case "ensure_transovo_mcp":
+        return NextResponse.json({
+          data: await platform.ensureTransovoMcpServer(workspaceId),
+        });
+      case "sms_chat_preview":
+        return NextResponse.json({
+          data: await platform.smsChatPreview(
+            workspaceId,
+            agentId,
+            String(body.message || ""),
+            body.to ? String(body.to) : undefined,
+          ),
+        });
+      case "import_assistants":
+        return NextResponse.json({
+          data: await platform.importRemoteAssistants(workspaceId, body),
+        });
+      case "enhance_instructions":
+        return NextResponse.json({
+          data: await platform.enhanceAgentInstructions(workspaceId, agentId, body),
+        });
+      case "delete_remote_assistant":
+        return NextResponse.json({
+          data: await platform.deleteRemoteAssistant(workspaceId, agentId),
+        });
+      case "schedule_regression":
+        return NextResponse.json({
+          data: await platform.scheduleRecurringRegression(workspaceId),
+        });
+      case "run_retention": {
+        const { runVoiceAiRetention } = await import(
+          "@/lib/voice/platform/retention"
+        );
+        return NextResponse.json({
+          data: await runVoiceAiRetention(workspaceId),
+        });
+      }
       default:
         return NextResponse.json({ error: `Unknown action ${action}` }, { status: 400 });
     }

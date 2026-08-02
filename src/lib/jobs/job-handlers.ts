@@ -580,6 +580,56 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
         String(payload.contactId || ""),
       );
     }
+    case "voice_ai_retention": {
+      const { runVoiceAiRetention } = await import("@/lib/voice/platform/retention");
+      return runVoiceAiRetention(
+        payload.workspaceId ? String(payload.workspaceId) : undefined,
+      );
+    }
+    case "voice_regression_suite": {
+      const { runDefaultRegressionSuite } = await import(
+        "@/lib/voice/platform/ai-platform"
+      );
+      const workspaceId = String(payload.workspaceId || "");
+      if (!workspaceId) throw new Error("workspaceId required");
+      return runDefaultRegressionSuite(
+        workspaceId,
+        String(payload.suiteName || "transovo-default"),
+      );
+    }
+    case "voice_webhook_dlq_reprocess": {
+      const { getPrisma } = await import("@/lib/db");
+      const { processVoiceWebhookEvent } = await import(
+        "@/lib/voice/telnyx/webhook-handlers"
+      );
+      const prisma = getPrisma();
+      const failed = await prisma.providerWebhookEvent.findMany({
+        where: {
+          provider: "telnyx",
+          status: "failed",
+          ...(payload.workspaceId
+            ? { workspaceId: String(payload.workspaceId) }
+            : {}),
+        },
+        orderBy: { createdAt: "asc" },
+        take: Number(payload.limit || 25),
+      });
+      let ok = 0;
+      for (const ev of failed) {
+        try {
+          await processVoiceWebhookEvent({
+            providerEventId: ev.providerEventId,
+            eventType: ev.eventType,
+            workspaceId: ev.workspaceId || undefined,
+            eventPayload: (ev.payload as Record<string, unknown>) || {},
+          });
+          ok += 1;
+        } catch {
+          // leave failed
+        }
+      }
+      return { reprocessed: ok, scanned: failed.length };
+    }
     case "integration_health_scan": {
       const { scanIntegrationHealth } = await import("@/lib/integrations/framework/alerts");
       return scanIntegrationHealth(String(payload.workspaceId || ""));

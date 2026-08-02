@@ -51,13 +51,17 @@ export function buildAssistantTools(input: {
   }
 
   if (input.handoffAssistants?.length) {
+    // Cap specialists to reduce handoff loops; Telnyx keeps conversation context.
+    const assistants = input.handoffAssistants.slice(0, 6).map((a) => ({
+      name: a.name,
+      id: a.id,
+    }));
     tools.push({
       type: "handoff",
       handoff: {
-        ai_assistants: input.handoffAssistants.map((a) => ({
-          name: a.name,
-          id: a.id,
-        })),
+        ai_assistants: assistants,
+        // Best-effort hint — ignored if unsupported by account.
+        max_handoffs: 3,
       },
     });
   }

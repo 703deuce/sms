@@ -1124,6 +1124,21 @@ const DEFAULT_SUITE_TESTS = [
     description: "Assistant ends the call politely when conversation is done",
     rubric: { criteria: [{ name: "end_call", description: "Agent closes cleanly", weight: 1 }] },
   },
+  {
+    name: "transovo-tool-timeout",
+    description: "Assistant recovers when a tool is slow or times out",
+    rubric: { criteria: [{ name: "tool_timeout", description: "Agent handles tool delay gracefully", weight: 1 }] },
+  },
+  {
+    name: "transovo-hallucination-guard",
+    description: "Assistant does not invent policies or facts",
+    rubric: { criteria: [{ name: "hallucination", description: "Agent avoids fabricated facts", weight: 1 }] },
+  },
+  {
+    name: "transovo-language",
+    description: "Assistant matches caller language when configured",
+    rubric: { criteria: [{ name: "language", description: "Agent uses appropriate language", weight: 1 }] },
+  },
 ];
 
 /** Seed local + remote default regression suite tests when missing. */
@@ -1287,6 +1302,36 @@ export async function ingestInsightWebhook(input: {
         status: "insights_ready",
       },
     });
+
+    // Persist structured outcomes into local insight + CRM/timeline when call linked.
+    if (conv.callId) {
+      const summary = JSON.stringify(insightResults).slice(0, 4000);
+      await prisma.voiceConversationInsight
+        .create({
+          data: {
+            workspaceId: conv.workspaceId,
+            callId: conv.callId,
+            summary: `Telnyx insights (${insightResults.length})`,
+            customFields: {
+              source: "telnyx_insight_webhook",
+              insightResults,
+              payload: input.payload,
+            } as object,
+          },
+        })
+        .catch(() => undefined);
+      try {
+        const { publishAiSummaryReady } = await import("@/lib/crm/events");
+        await publishAiSummaryReady({
+          workspaceId: conv.workspaceId,
+          callId: conv.callId,
+          contactId: conv.contactId || undefined,
+          aiSummary: summary,
+        }).catch(() => undefined);
+      } catch {
+        // CRM optional
+      }
+    }
   }
 
   return { conversationId, stored: Boolean(conv), resultCount: insightResults.length };
@@ -1347,4 +1392,233 @@ export async function chatPreview(
   return ai.chatAssistant(agent.telnyxAssistantId, {
     messages: [{ role: "user", content: message }],
   });
+}
+
+export async function smsChatPreview(
+  workspaceId: string,
+  agentId: string,
+  message: string,
+  to?: string,
+) {
+  const agent = await requireAgent(workspaceId, agentId);
+  if (!agent.telnyxAssistantId) throw new Error("Publish agent before SMS chat");
+  return ai.smsChatAssistant(agent.telnyxAssistantId, {
+    messages: [{ role: "user", content: message }],
+    ...(to ? { to } : {}),
+  });
+}
+
+export async function previewMemory(workspaceId: string, agentId: string) {
+  const prisma = getPrisma();
+  const memory = await prisma.voiceMemoryConfig.findFirst({
+    where: { workspaceId, agentId },
+    orderBy: { updatedAt: "desc" },
+  });
+  const { redactValue } = await import("../security/redaction");
+  const recent = await prisma.voiceAiConversation.findMany({
+    where: { workspaceId, agentId },
+    orderBy: { createdAt: "desc" },
+    take: 5,
+    select: {
+      id: true,
+      telnyxConversationId: true,
+      channel: true,
+      status: true,
+      createdAt: true,
+      metadata: true,
+    },
+  });
+  return {
+    config: memory
+      ? {
+          mode: memory.mode,
+          retentionDays: memory.retentionDays,
+          excludeFields: memory.excludeFields,
+          privacy: redactValue(memory.telnyxPrivacyJson),
+        }
+      : null,
+    recentConversations: redactValue(recent),
+  };
+}
+
+export async function compareRemoteVersions(
+  workspaceId: string,
+  agentId: string,
+  leftVersionId: string,
+  rightVersionId: string,
+) {
+  const prisma = getPrisma();
+  const [left, right] = await Promise.all([
+    prisma.voiceRemoteAssistantVersion.findFirst({
+      where: { workspaceId, agentId, telnyxVersionId: leftVersionId },
+    }),
+    prisma.voiceRemoteAssistantVersion.findFirst({
+      where: { workspaceId, agentId, telnyxVersionId: rightVersionId },
+    }),
+  ]);
+  if (!left || !right) throw new Error("Both versions must be synced locally first");
+  const leftCfg = (left.configJson || {}) as Record<string, unknown>;
+  const rightCfg = (right.configJson || {}) as Record<string, unknown>;
+  const keys = Array.from(new Set([...Object.keys(leftCfg), ...Object.keys(rightCfg)]));
+  const diffs = keys
+    .filter((k) => JSON.stringify(leftCfg[k]) !== JSON.stringify(rightCfg[k]))
+    .map((k) => ({
+      key: k,
+      left: leftCfg[k] ?? null,
+      right: rightCfg[k] ?? null,
+    }));
+  return { left, right, diffs, diffCount: diffs.length };
+}
+
+export async function canaryMetrics(workspaceId: string, agentId: string) {
+  const prisma = getPrisma();
+  const canary = await prisma.voiceCanaryDeploy.findFirst({
+    where: { workspaceId, agentId, status: "active" },
+    orderBy: { createdAt: "desc" },
+  });
+  const since = canary?.createdAt || new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const calls = await prisma.voiceCall.findMany({
+    where: { workspaceId, agentId, createdAt: { gte: since } },
+    select: {
+      id: true,
+      status: true,
+      transferred: true,
+      durationSeconds: true,
+      costCents: true,
+      agentVersionId: true,
+      metadata: true,
+    },
+    take: 500,
+  });
+  const byVersion: Record<
+    string,
+    {
+      completed: number;
+      transfers: number;
+      hangups: number;
+      durationSum: number;
+      costSum: number;
+    }
+  > = {};
+  for (const c of calls) {
+    const meta = (c.metadata || {}) as Record<string, unknown>;
+    const key = String(meta.assistantVersionId || c.agentVersionId || "main");
+    byVersion[key] ||= {
+      completed: 0,
+      transfers: 0,
+      hangups: 0,
+      durationSum: 0,
+      costSum: 0,
+    };
+    if (["COMPLETED", "completed"].includes(c.status)) byVersion[key].completed += 1;
+    if (c.transferred) byVersion[key].transfers += 1;
+    if (["HANGUP", "COMPLETED", "completed"].includes(c.status)) byVersion[key].hangups += 1;
+    byVersion[key].durationSum += c.durationSeconds || 0;
+    byVersion[key].costSum += c.costCents || 0;
+  }
+  return { canary, since, byVersion, callCount: calls.length };
+}
+
+export async function ensureTransovoMcpServer(workspaceId: string) {
+  const prisma = getPrisma();
+  const { getAppBaseUrl } = await import("@/lib/messaging/telnyx/config");
+  const { mintWorkspaceMcpToken } = await import("./mcp-token");
+  const url = `${getAppBaseUrl()}/api/public/voice/mcp`;
+  const existing = await prisma.voiceMcpServer.findFirst({
+    where: { workspaceId, name: "transovo-builtins" },
+  });
+  if (existing?.approved && existing.telnyxMcpId) return existing;
+  const token = mintWorkspaceMcpToken(workspaceId);
+  return registerMcpServer(workspaceId, {
+    name: "transovo-builtins",
+    url,
+    type: "http",
+    approved: true,
+    configJson: {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "X-Transovo-Workspace-Id": workspaceId,
+      },
+      allowlist: [
+        "lookup_customer",
+        "calendar_availability",
+        "book_appointment",
+        "send_sms",
+        "create_task",
+      ],
+    },
+  });
+}
+
+export async function importRemoteAssistants(
+  workspaceId: string,
+  body: Record<string, unknown>,
+) {
+  const remote = await ai.importAssistants(body);
+  return { remote: asData(remote) };
+}
+
+export async function enhanceAgentInstructions(
+  workspaceId: string,
+  agentId: string,
+  body?: Record<string, unknown>,
+) {
+  const agent = await requireAgent(workspaceId, agentId);
+  if (!agent.telnyxAssistantId) throw new Error("Publish first");
+  const remote = await ai.enhanceInstructions(agent.telnyxAssistantId, body || {});
+  const data = asData<Record<string, unknown>>(remote);
+  const enhanced = String(
+    data.instructions || data.enhanced_instructions || data.result || "",
+  );
+  if (enhanced) {
+    const cfg = (agent.draftConfig || {}) as Record<string, unknown>;
+    const instructions = {
+      ...((cfg.instructions as object) || {}),
+      system: enhanced,
+    };
+    await getPrisma().voiceAgent.update({
+      where: { id: agentId },
+      data: { draftConfig: { ...cfg, instructions } as object },
+    });
+  }
+  return { remote: data, applied: Boolean(enhanced) };
+}
+
+export async function deleteRemoteAssistant(workspaceId: string, agentId: string) {
+  const agent = await getPrisma().voiceAgent.findFirst({
+    where: { id: agentId, workspaceId },
+  });
+  if (!agent) throw new Error("Agent not found");
+  if (agent.telnyxAssistantId && ai.isTelnyxAiConfigured()) {
+    await ai.deleteAssistant(agent.telnyxAssistantId).catch(() => undefined);
+  }
+  return getPrisma().voiceAgent.update({
+    where: { id: agentId },
+    data: {
+      status: "ARCHIVED",
+      telnyxAssistantId: null,
+      emergencyDisabled: true,
+    },
+  });
+}
+
+export async function scheduleRecurringRegression(workspaceId: string) {
+  const { enqueueJob } = await import("@/lib/messaging/enqueue-advance");
+  await enqueueJob({
+    jobType: "voice_regression_suite",
+    queueName: "voice-calls",
+    workspaceId,
+    payload: { workspaceId, suiteName: "transovo-default" },
+    idempotencyKey: `voice-regression:${workspaceId}:${new Date().toISOString().slice(0, 10)}`,
+    runAfter: new Date(Date.now() + 60_000),
+  });
+  await enqueueJob({
+    jobType: "voice_ai_retention",
+    queueName: "voice-calls",
+    workspaceId,
+    payload: { workspaceId },
+    idempotencyKey: `voice-retention:${workspaceId}:${new Date().toISOString().slice(0, 10)}`,
+    runAfter: new Date(Date.now() + 120_000),
+  });
+  return { scheduled: true };
 }

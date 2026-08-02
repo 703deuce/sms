@@ -104,6 +104,29 @@ export async function publishVoiceAgent(
     throw err;
   }
 
+  // Gate public publish when regression suite has a failing result (or hard-require when env set).
+  const requireSuite = process.env.VOICE_PUBLISH_REQUIRE_SUITE === "1";
+  const latestSuiteRun = await prisma.voiceAssistantTestRun.findFirst({
+    where: {
+      workspaceId,
+      suiteName: "transovo-default",
+    },
+    orderBy: { createdAt: "desc" },
+  });
+  const suiteFailed =
+    latestSuiteRun &&
+    ["failed", "error", "fail"].includes(String(latestSuiteRun.status).toLowerCase());
+  if (suiteFailed) {
+    throw new Error(
+      "Publish blocked: latest transovo-default suite run failed — fix tests or clear the failing run",
+    );
+  }
+  if (requireSuite && !latestSuiteRun) {
+    throw new Error(
+      "Publish blocked: VOICE_PUBLISH_REQUIRE_SUITE=1 and no suite run found — run seed_suite/run_suite first",
+    );
+  }
+
   const lastVersion = await prisma.voiceAgentVersion.findFirst({
     where: { agentId },
     orderBy: { version: "desc" },
@@ -117,6 +140,9 @@ export async function publishVoiceAgent(
       version,
       config: config as object,
       publishedBy,
+      testStatus: latestSuiteRun?.status || (requireSuite ? "required" : "skipped"),
+      deploymentStatus: "publishing",
+      isMain: true,
     },
   });
 

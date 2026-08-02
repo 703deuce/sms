@@ -275,14 +275,23 @@ async function overflowQueue(
           };
         }
       }
+      const { parseVoiceAgentConfig } = await import("@/lib/voice/types");
+      const cfg = parseVoiceAgentConfig(agent.draftConfig);
+      const multiPartyMode = cfg.multiParty?.mode || "assist";
       const { startAiAssistantOnCall } = await import("@/lib/voice/telnyx/assistant-sync");
       await startAiAssistantOnCall({
         callControlId: input.telnyxCallControlId,
         assistantId: agent.telnyxAssistantId,
+        greeting:
+          multiPartyMode === "silent" || multiPartyMode === "listen_until_asked"
+            ? ""
+            : undefined,
         clientState: {
           workspaceId: input.workspaceId,
           agentId: agent.id,
           multiParty: Boolean(human?.conferenceId),
+          multiPartyMode,
+          identifyAsAi: cfg.multiParty?.identifyAsAi !== false,
         },
       }).catch(() => undefined);
       await prisma.humanCall.update({

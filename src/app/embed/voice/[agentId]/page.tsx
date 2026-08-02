@@ -1,22 +1,37 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 /**
- * Minimal embeddable AI chat widget surface.
- * Domain allowlist + rate limits enforced by /api/public/voice/widget/chat.
+ * Embeddable AI chat widget — uses short-lived session tokens (no Telnyx keys in browser).
  */
 export default function VoiceWidgetEmbedPage() {
   const params = useParams();
   const agentId = String(params.agentId || "");
+  const [sessionToken, setSessionToken] = useState("");
   const [message, setMessage] = useState("");
   const [log, setLog] = useState<Array<{ role: string; text: string }>>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
+  useEffect(() => {
+    if (!agentId) return;
+    fetch("/api/public/voice/widget/session", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ agentId }),
+    })
+      .then(async (res) => {
+        const j = await res.json();
+        if (!res.ok) throw new Error(j.error || "Session failed");
+        setSessionToken(j.data.token);
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : String(err)));
+  }, [agentId]);
+
   async function send() {
-    if (!message.trim() || !agentId) return;
+    if (!message.trim() || !agentId || !sessionToken) return;
     setBusy(true);
     setError("");
     const userText = message.trim();
@@ -26,7 +41,7 @@ export default function VoiceWidgetEmbedPage() {
       const res = await fetch("/api/public/voice/widget/chat", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ agentId, message: userText }),
+        body: JSON.stringify({ agentId, message: userText, sessionToken }),
       });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error || "Chat failed");
@@ -50,9 +65,10 @@ export default function VoiceWidgetEmbedPage() {
     <div className="mx-auto flex min-h-screen max-w-md flex-col bg-[#0f1419] p-4 text-[#e8eef4]">
       <header className="mb-3 border-b border-white/10 pb-2">
         <p className="text-xs uppercase tracking-[0.2em] text-[#7eb8c9]">Transovo Voice</p>
-        <h1 className="font-[family-name:var(--font-geist-sans)] text-lg font-semibold">
-          Assistant chat
-        </h1>
+        <h1 className="text-lg font-semibold">Assistant chat</h1>
+        <p className="text-[11px] text-white/50">
+          {sessionToken ? "Secure session active" : "Starting session…"}
+        </p>
       </header>
       <div className="flex-1 space-y-2 overflow-y-auto text-sm">
         {log.map((m, i) => (
@@ -78,12 +94,12 @@ export default function VoiceWidgetEmbedPage() {
             if (e.key === "Enter") void send();
           }}
           placeholder="Type a message…"
-          disabled={busy}
+          disabled={busy || !sessionToken}
         />
         <button
           type="button"
           className="rounded bg-[#2a6f82] px-4 py-2 text-sm font-medium disabled:opacity-50"
-          disabled={busy || !message.trim()}
+          disabled={busy || !message.trim() || !sessionToken}
           onClick={() => void send()}
         >
           Send

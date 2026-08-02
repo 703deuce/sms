@@ -20,16 +20,28 @@ export type VoiceSectionKey =
   | "instructions"
   | "conversationFlow"
   | "voiceLanguage"
+  | "transcription"
   | "knowledge"
   | "tools"
+  | "model"
   | "callHandling"
   | "inboundRules"
   | "outboundRules"
   | "transfers"
   | "voicemail"
   | "messaging"
+  | "memory"
+  | "mcp"
+  | "insights"
+  | "tests"
+  | "versions"
+  | "canary"
+  | "scheduled"
+  | "observability"
   | "postCall"
   | "compliance"
+  | "security"
+  | "platform"
   | "advanced";
 
 export type VoiceAgentConfig = {
@@ -53,6 +65,8 @@ export type VoiceAgentConfig = {
     responseLength?: string;
     custom?: string;
     raw?: string;
+    protectedGreeting?: boolean;
+    fillerMessages?: string[];
   };
   conversationFlow?: {
     sections: Array<{
@@ -70,20 +84,33 @@ export type VoiceAgentConfig = {
     pitch?: number;
     volume?: number;
     interruptionHandling?: string;
+    bargeIn?: boolean;
     responsiveness?: string;
     silenceTimeoutMs?: number;
     endOfTurn?: string;
+    endpointingMs?: number;
     noiseSuppression?: boolean;
     primaryLanguage?: string;
     additionalLanguages?: string[];
     autoLanguageDetection?: boolean;
     pronunciationDictionary?: Record<string, string>;
   };
+  transcription?: {
+    enabled?: boolean;
+    sttProvider?: string;
+    sttModel?: string;
+    keyterms?: string[];
+    language?: string;
+  };
   model?: {
     provider?: string;
     modelId?: string;
     temperature?: number;
     maxTokens?: number;
+    /** Custom OpenAI-compatible endpoint (server-side credentials only). */
+    customBaseUrl?: string;
+    customApiKeyRef?: string;
+    maxToolCalls?: number;
   };
   callHandling?: Record<string, unknown>;
   inboundRules?: Record<string, unknown>;
@@ -91,6 +118,12 @@ export type VoiceAgentConfig = {
   transfers?: Record<string, unknown>;
   voicemail?: Record<string, unknown>;
   messaging?: Record<string, unknown>;
+  multiParty?: {
+    mode?: "assist" | "silent" | "listen_until_asked" | "exit_when_done";
+    identifyAsAi?: boolean;
+    maxParticipants?: number;
+  };
+  dynamicVariables?: Record<string, unknown>;
   postCall?: {
     scoringRules?: Array<{ field: string; points: number }>;
     extractionFields?: string[];
@@ -183,7 +216,9 @@ export function parseVoiceAgentConfig(raw: unknown): VoiceAgentConfig {
     instructions: { ...base.instructions, ...obj.instructions },
     conversationFlow: obj.conversationFlow ?? base.conversationFlow,
     voiceLanguage: { ...base.voiceLanguage, ...obj.voiceLanguage },
+    transcription: { ...base.transcription, ...obj.transcription },
     model: { ...base.model, ...obj.model },
+    multiParty: { ...base.multiParty, ...obj.multiParty },
     postCall: { ...base.postCall, ...obj.postCall },
   };
 }

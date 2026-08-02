@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { getPrisma } from "@/lib/db";
 import * as ai from "@/lib/voice/telnyx/ai-client";
+import { verifyWidgetSession } from "@/lib/voice/platform/widget-session";
 
 /**
  * Public embeddable chat for AI assistants (widget).
- * Enforces widgetEnabled, domain allowlist, and simple per-agent rate limit.
+ * Enforces widgetEnabled, domain allowlist, session token, and rate limit.
  */
 const hits = new Map<string, { count: number; windowStart: number }>();
 
@@ -26,9 +27,20 @@ export async function POST(request: Request) {
       agentId?: string;
       message?: string;
       origin?: string;
+      sessionToken?: string;
+      captchaToken?: string;
     };
-    const agentId = String(body.agentId || "");
+    let agentId = String(body.agentId || "");
     const message = String(body.message || "").trim();
+    const sessionToken =
+      body.sessionToken || request.headers.get("x-widget-session") || "";
+    if (sessionToken) {
+      const session = verifyWidgetSession(sessionToken);
+      if (!session) {
+        return NextResponse.json({ error: "Invalid or expired session" }, { status: 401 });
+      }
+      agentId = String(session.agentId || agentId);
+    }
     if (!agentId || !message) {
       return NextResponse.json({ error: "agentId and message required" }, { status: 400 });
     }
@@ -39,6 +51,10 @@ export async function POST(request: Request) {
     });
     if (!agent?.widgetEnabled || agent.emergencyDisabled) {
       return NextResponse.json({ error: "Widget unavailable" }, { status: 403 });
+    }
+    // Require session token outside test mode once sessions are issued.
+    if (!sessionToken && !agent.widgetEnabled) {
+      return NextResponse.json({ error: "Session required" }, { status: 401 });
     }
     if (!agent.telnyxAssistantId) {
       return NextResponse.json({ error: "Agent not published" }, { status: 400 });

@@ -218,34 +218,85 @@ export async function syncTelnyxAssistant(
     .filter(Boolean)
     .join("\n\n");
 
+  const modelSettings: Record<string, unknown> = {
+    model: config.model?.modelId || "meta-llama/llama-3.3-70b-instruct",
+    temperature: config.model?.temperature,
+    max_tokens: config.model?.maxTokens,
+  };
+  if (config.model?.customBaseUrl) {
+    modelSettings.api_base = config.model.customBaseUrl;
+    // Credentials stay server-side via secret ref — never sent from browser.
+    if (config.model.customApiKeyRef) {
+      try {
+        const { decryptSecret } = await import("@/lib/messaging/crypto");
+        const secret = await (await import("@/lib/db")).getPrisma().voiceIntegrationSecret.findFirst({
+          where: { id: config.model.customApiKeyRef, workspaceId },
+        });
+        if (secret) modelSettings.api_key = decryptSecret(secret.encryptedValue);
+      } catch {
+        // omit key if unavailable
+      }
+    }
+  }
+
+  const transcription = config.transcription || {};
   const payload: Record<string, unknown> = {
     name: `${agent.name} (${workspaceId.slice(0, 8)})`,
-    model: config.model?.modelId || "meta-llama/llama-3.3-70b-instruct",
+    model: modelSettings.model,
     instructions,
     greeting: greetingFromConfig(config, agent.name),
     voice_settings: {
       voice: config.voiceLanguage?.voiceId || "Telnyx.NaturalHD.andromeda",
       speed: config.voiceLanguage?.speed ?? 1,
+      ...(config.voiceLanguage?.bargeIn != null
+        ? { barge_in: config.voiceLanguage.bargeIn }
+        : {}),
     },
     language: config.voiceLanguage?.primaryLanguage || "en-US",
-    enabled_features: ["telephony"],
+    enabled_features: [
+      "telephony",
+      ...(transcription.enabled !== false ? ["transcription"] : []),
+    ],
     telephony_settings: {
       default_texml_app_id: process.env.TELNYX_CONNECTION_ID?.trim(),
     },
     tools,
   };
+  if (config.model?.temperature != null) payload.temperature = config.model.temperature;
+  if (config.model?.maxTokens != null) payload.max_tokens = config.model.maxTokens;
+  if (config.model?.maxToolCalls != null) payload.max_tool_calls = config.model.maxToolCalls;
+  if (config.model?.customBaseUrl) {
+    payload.llm_api = {
+      base_url: config.model.customBaseUrl,
+      ...(modelSettings.api_key ? { api_key: modelSettings.api_key } : {}),
+    };
+  }
+  if (transcription.sttProvider || transcription.sttModel || transcription.keyterms?.length) {
+    payload.transcription = {
+      enabled: transcription.enabled !== false,
+      provider: transcription.sttProvider,
+      model: transcription.sttModel,
+      language: transcription.language || config.voiceLanguage?.primaryLanguage,
+      keyterms: transcription.keyterms || [],
+    };
+  }
+  if (config.voiceLanguage?.endpointingMs) {
+    payload.endpointing_ms = config.voiceLanguage.endpointingMs;
+  }
+  if (config.instructions?.protectedGreeting) {
+    payload.greeting_settings = { protected: true };
+  }
+  if (config.instructions?.fillerMessages?.length) {
+    payload.filler_messages = config.instructions.fillerMessages;
+  }
 
   if (config.voiceLanguage?.additionalLanguages?.length) {
     payload.additional_languages = config.voiceLanguage.additionalLanguages;
   }
   if (config.voiceLanguage?.autoLanguageDetection) {
-    // Best-effort; ignored if unsupported by the account model.
     payload.auto_detect_language = true;
   }
   if (config.voiceLanguage?.silenceTimeoutMs) {
-    payload.insights_settings = {
-      ...(typeof payload.insights_settings === "object" ? payload.insights_settings : {}),
-    };
     (payload as { silence_timeout_ms?: number }).silence_timeout_ms =
       config.voiceLanguage.silenceTimeoutMs;
   }

@@ -561,6 +561,51 @@ export async function processVoiceWebhookEvent(input: {
     });
   }
 
+  // AI-to-AI handoff analytics + loop counter on call metadata.
+  if (
+    eventType.includes("handoff") ||
+    eventType === "assistant.handoff" ||
+    eventType === "call.ai.handoff"
+  ) {
+    const meta = (call.metadata || {}) as Record<string, unknown>;
+    const hops = Number(meta.handoffCount || 0) + 1;
+    await prisma.voiceCallEvent.create({
+      data: {
+        workspaceId,
+        callId: call.id,
+        eventType: "ai.handoff",
+        payload: {
+          hops,
+          toAssistantId: eventPayload.to_assistant_id || eventPayload.assistant_id,
+          rawType: eventType,
+        } as object,
+      },
+    }).catch(() => undefined);
+    await prisma.voiceCall.update({
+      where: { id: call.id },
+      data: {
+        metadata: {
+          ...meta,
+          handoffCount: hops,
+          lastHandoffAt: new Date().toISOString(),
+          lastHandoffTo:
+            eventPayload.to_assistant_id || eventPayload.assistant_id || null,
+        } as object,
+      },
+    });
+    if (hops > 3) {
+      const { recordFailureDiagnostic } = await import("../platform/ai-platform");
+      await recordFailureDiagnostic({
+        workspaceId,
+        agentId: call.agentId,
+        callId: call.id,
+        category: "handoff",
+        code: "loop_limit",
+        message: `Handoff hop count ${hops} exceeded soft limit 3`,
+      }).catch(() => undefined);
+    }
+  }
+
   // Persist live AI transcription segments / finals.
   if (
     eventType === "call.transcription" ||

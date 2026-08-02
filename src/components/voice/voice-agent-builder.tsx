@@ -13,13 +13,24 @@ const SECTIONS = [
   { id: "instructions", label: "Instructions" },
   { id: "conversationFlow", label: "Conversation Flow" },
   { id: "voiceLanguage", label: "Voice & Language" },
+  { id: "transcription", label: "Transcription" },
   { id: "knowledge", label: "Knowledge" },
   { id: "tools", label: "Tools" },
   { id: "model", label: "Model" },
   { id: "transfers", label: "Transfers" },
   { id: "voicemail", label: "Voicemail" },
+  { id: "messaging", label: "SMS" },
+  { id: "memory", label: "Memory" },
+  { id: "mcp", label: "MCP" },
+  { id: "insights", label: "Insights" },
+  { id: "tests", label: "Tests" },
+  { id: "versions", label: "Versions" },
+  { id: "canary", label: "Canary" },
+  { id: "scheduled", label: "Scheduled" },
+  { id: "observability", label: "Observability" },
   { id: "postCall", label: "Post-Call" },
   { id: "compliance", label: "Compliance" },
+  { id: "security", label: "Security" },
   { id: "platform", label: "AI Platform" },
 ] as const;
 
@@ -1091,6 +1102,236 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
                 <span>{rule.points} pts</span>
               </div>
             ))}
+          </Card>
+        )}
+
+        {(section === "transcription" ||
+          section === "messaging" ||
+          section === "memory" ||
+          section === "mcp" ||
+          section === "insights" ||
+          section === "tests" ||
+          section === "versions" ||
+          section === "canary" ||
+          section === "scheduled" ||
+          section === "observability" ||
+          section === "security") && (
+          <Card className="space-y-3 p-5">
+            <CardTitle>{SECTIONS.find((s) => s.id === section)?.label}</CardTitle>
+            {section === "transcription" && (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <Label>STT provider</Label>
+                  <Input
+                    value={cfg.transcription?.sttProvider || ""}
+                    onChange={(e) =>
+                      updateConfig({
+                        transcription: { ...cfg.transcription, sttProvider: e.target.value },
+                      })
+                    }
+                    placeholder="telnyx / deepgram / …"
+                  />
+                </div>
+                <div>
+                  <Label>STT model</Label>
+                  <Input
+                    value={cfg.transcription?.sttModel || ""}
+                    onChange={(e) =>
+                      updateConfig({
+                        transcription: { ...cfg.transcription, sttModel: e.target.value },
+                      })
+                    }
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <Label>Keyterms (comma-separated)</Label>
+                  <Input
+                    value={(cfg.transcription?.keyterms || []).join(", ")}
+                    onChange={(e) =>
+                      updateConfig({
+                        transcription: {
+                          ...cfg.transcription,
+                          keyterms: e.target.value
+                            .split(",")
+                            .map((s) => s.trim())
+                            .filter(Boolean),
+                        },
+                      })
+                    }
+                  />
+                </div>
+              </div>
+            )}
+            {section === "messaging" && (
+              <div className="space-y-2">
+                <p className="text-sm text-muted-foreground">
+                  SMS follow-ups use messaging-ready numbers. Preview Telnyx SMS chat below.
+                </p>
+                <Button
+                  size="sm"
+                  disabled={!!platformBusy}
+                  onClick={() =>
+                    platformAct("sms_chat_preview", {
+                      message: "Hi — confirming this SMS assistant channel works.",
+                    })
+                  }
+                >
+                  SMS chat preview
+                </Button>
+              </div>
+            )}
+            {section === "memory" && (
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  disabled={!!platformBusy}
+                  onClick={() => platformAct("save_memory", { mode: "caller", retentionDays: 30 })}
+                >
+                  Save caller memory
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={!!platformBusy}
+                  onClick={() => platformAct("preview_memory")}
+                >
+                  Preview memory
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={!!platformBusy}
+                  onClick={() => platformAct("clear_memory")}
+                >
+                  Clear memory
+                </Button>
+              </div>
+            )}
+            {section === "mcp" && (
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  disabled={!!platformBusy}
+                  onClick={() => platformAct("ensure_transovo_mcp")}
+                >
+                  Attach Transovo MCP
+                </Button>
+              </div>
+            )}
+            {section === "insights" && (
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" disabled={!!platformBusy} onClick={() => platformAct("seed_insights")}>
+                  Seed default insights
+                </Button>
+                <Button size="sm" disabled={!!platformBusy} onClick={() => platformAct("sync_insights")}>
+                  Sync insights
+                </Button>
+              </div>
+            )}
+            {section === "tests" && (
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" disabled={!!platformBusy} onClick={() => platformAct("seed_suite")}>
+                  Seed suite
+                </Button>
+                <Button size="sm" disabled={!!platformBusy} onClick={() => platformAct("run_suite")}>
+                  Run suite
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={!!platformBusy}
+                  onClick={() => platformAct("schedule_regression")}
+                >
+                  Schedule daily regression
+                </Button>
+              </div>
+            )}
+            {section === "versions" && (
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" disabled={!!platformBusy} onClick={() => platformAct("sync_versions")}>
+                  Sync versions
+                </Button>
+              </div>
+            )}
+            {section === "canary" && (
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  disabled={!!platformBusy}
+                  onClick={() =>
+                    platformAct("upsert_canary", {
+                      rules: [{ percentage: canaryPct, version_id: "main" }],
+                    })
+                  }
+                >
+                  Start canary {canaryPct}%
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={!!platformBusy}
+                  onClick={() => platformAct("canary_metrics")}
+                >
+                  Canary metrics
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={!!platformBusy}
+                  onClick={() => platformAct("delete_canary")}
+                >
+                  Rollback canary
+                </Button>
+              </div>
+            )}
+            {section === "scheduled" && (
+              <p className="text-sm text-muted-foreground">
+                Schedule SMS from AI platform. Outbound AI phone schedules stay gated
+                (`outboundAiEnabled` + consent).
+              </p>
+            )}
+            {section === "observability" && (
+              <Button
+                size="sm"
+                disabled={!!platformBusy}
+                onClick={() =>
+                  platformAct("save_observability", {
+                    langfuseEnabled: false,
+                    enabledFeatures: ["transcription"],
+                  })
+                }
+              >
+                Save observability
+              </Button>
+            )}
+            {section === "security" && (
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={!!platformBusy}
+                  onClick={() => platformAct("set_flags", { emergencyDisabled: true })}
+                >
+                  Emergency stop
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={!!platformBusy}
+                  onClick={() => platformAct("set_flags", { emergencyDisabled: false })}
+                >
+                  Clear emergency
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={!!platformBusy}
+                  onClick={() => platformAct("run_retention")}
+                >
+                  Run retention purge
+                </Button>
+              </div>
+            )}
+            {platformMsg ? <p className="text-xs text-amber-800">{platformMsg}</p> : null}
           </Card>
         )}
 
