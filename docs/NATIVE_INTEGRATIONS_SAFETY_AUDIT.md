@@ -104,9 +104,11 @@ Base: `APP_URL` (production: `https://transovo.ai`)
 
 ## Exact manual provider setup order
 
-1. **Calendly** — create OAuth app → register callback → scopes → Coolify env → redeploy web+worker → connect → acceptance  
+**Mailchimp deferred for this live pass.** Use Salesforce (CRM framework) in its place.
+
+1. **Calendly** — create OAuth app → register callback → scopes → Coolify env → redeploy → connect → acceptance  
 2. **Typeform** — same  
-3. **Mailchimp** — same  
+3. **Salesforce** — External Client App → `SALESFORCE_CLIENT_ID` / `SALESFORCE_CLIENT_SECRET` → callback `{APP_URL}/api/crm/salesforce/callback` → `/integrations/crm/salesforce` → Connect → `POST /api/crm/diagnostics` `{ "provider": "salesforce", "action": "acceptance" }`  
 4. **Jotform** — API key in UI → acceptance  
 5. **Freshdesk** — subdomain + API key → acceptance  
 6. **ActiveCampaign** — API URL + key → acceptance  
@@ -115,7 +117,7 @@ Base: `APP_URL` (production: `https://transovo.ai`)
 9. **Close** — API key → acceptance  
 10. **HighLevel PIT** — token + location ID → acceptance  
 11. **Pipedrive** — disconnect/reconnect for `deals:full` → deal/pipeline/stage tests  
-12. **Salesforce** — when signup works → OAuth credentials → acceptance  
+12. **Mailchimp** — optional later (`MAILCHIMP_CLIENT_ID` / `MAILCHIMP_CLIENT_SECRET` + native callback)
 
 Apply migration `20260802_native_integration_safety.sql` (or `db:push`) before deploy.
 
