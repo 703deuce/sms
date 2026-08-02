@@ -941,12 +941,16 @@ export async function loadContactCrmSummaries(
     }
   }
 
-  // 2) Deals linked to those contacts (by metadata.contactExternalId / parent).
+  // 2) Deals linked to those contacts (by parentExternalId — set at sync time).
   const dealByContactExt = new Map<string, MappingRow>();
   if (contactExternalIds.length) {
     const extSet = new Set(contactExternalIds);
     const dealRows = (await prisma.crmObjectMapping.findMany({
-      where: { workspaceId, objectType: "deal" },
+      where: {
+        workspaceId,
+        objectType: "deal",
+        parentExternalId: { in: contactExternalIds },
+      },
       orderBy: { updatedAt: "desc" },
       take: 2000,
     })) as MappingRow[];
@@ -1133,7 +1137,11 @@ export async function loadContactCrmLinks(
   if (contactExternalIds.length) {
     const extSet = new Set(contactExternalIds);
     const dealRows = (await prisma.crmObjectMapping.findMany({
-      where: { workspaceId, objectType: "deal" },
+      where: {
+        workspaceId,
+        objectType: "deal",
+        parentExternalId: { in: contactExternalIds },
+      },
       orderBy: { updatedAt: "desc" },
       take: 2000,
     })) as MappingRow[];

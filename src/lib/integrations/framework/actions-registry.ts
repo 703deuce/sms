@@ -407,6 +407,23 @@ export async function executeIntegrationAction(input: {
     return { ok: false, code: "UNSUPPORTED", message: truth.reason || "Unsupported" };
   }
 
+  // A single-use "send scheduling link" mints a Calendly single-use link (a
+  // write), so it must satisfy the create_single_use_link capability rather than
+  // the read-only get_scheduling_link capability the action maps to by default.
+  if (input.actionId === "appointment.send_scheduling_link" && input.params.singleUse) {
+    const singleUseTruth = getActionCapabilityTruth(
+      input.provider,
+      "appointment.create_single_use_link",
+    );
+    if (!singleUseTruth.supported) {
+      return {
+        ok: false,
+        code: "UNSUPPORTED",
+        message: singleUseTruth.reason || "Single-use scheduling links are not supported",
+      };
+    }
+  }
+
   const riskLevel = classifyActionRisk(input.actionId, { recordCount: input.recordCount });
   const payloadHash =
     input.payloadHash ||
@@ -460,10 +477,27 @@ export async function executeIntegrationAction(input: {
     String(input.actionId).includes("sms") ||
     input.actionId === "appointment.send_scheduling_link"
   ) {
+    // Consent must be evaluated against the exact number the SMS is delivered to
+    // (params.phone || contact phone) — not just the contact's default number.
+    let consentPhone = (input.params.phone as string) || null;
+    let consentContactId = input.contactId || null;
+    if (input.actionId === "appointment.send_scheduling_link") {
+      if (!consentPhone && input.contactId) {
+        const { getPrisma } = await import("@/lib/db");
+        const c = await getPrisma().contact.findUnique({
+          where: { id: input.contactId },
+          select: { phone: true },
+        });
+        consentPhone = c?.phone || null;
+      }
+      // An explicit phone override may differ from the contact's stored number —
+      // gate on the number that will actually receive the message.
+      if (input.params.phone) consentContactId = null;
+    }
     const consent = await checkCommunicationConsent({
       workspaceId: input.workspaceId,
-      contactId: input.contactId,
-      phone: (input.params.phone as string) || null,
+      contactId: consentContactId,
+      phone: consentPhone,
       channel: "sms",
     });
     if (!consent.allowed) {
@@ -477,7 +511,14 @@ export async function executeIntegrationAction(input: {
 
   const prefs = await getIntegrationPreferences(input.workspaceId, input.provider);
   if (prefs.paused) return { ok: false, code: "PAUSED", message: "Connection paused" };
-  if (!prefs.enableWrites && !READ_ONLY_ACTION_IDS.has(input.actionId)) {
+  // A non-single-use "send scheduling link" only READS the account/event-type
+  // scheduling URL and delivers it over Transovo SMS — it performs no Calendly
+  // write — so it bypasses the provider writes-disabled gate. A single-use link
+  // does write to Calendly and stays subject to the gate.
+  const bypassesWritesGate =
+    READ_ONLY_ACTION_IDS.has(input.actionId) ||
+    (input.actionId === "appointment.send_scheduling_link" && !input.params.singleUse);
+  if (!prefs.enableWrites && !bypassesWritesGate) {
     return { ok: false, code: "WRITES_DISABLED", message: "Writes disabled in settings" };
   }
 
@@ -744,13 +785,15 @@ export async function executeIntegrationAction(input: {
             ).schedulingUrl;
 
         let phone = (p.phone as string) || null;
-        if (!phone && input.contactId) {
+        let contactFirstName = "";
+        if (input.contactId) {
           const { getPrisma } = await import("@/lib/db");
           const contact = await getPrisma().contact.findUnique({
             where: { id: input.contactId },
-            select: { phone: true },
+            select: { phone: true, firstName: true },
           });
-          phone = contact?.phone || null;
+          if (!phone) phone = contact?.phone || null;
+          contactFirstName = contact?.firstName || "";
         }
         if (!phone) {
           await completeIntegrationActionLog(actionLog.id, {
@@ -764,12 +807,21 @@ export async function executeIntegrationAction(input: {
             actionLogId: actionLog.id,
           };
         }
+        const customerName =
+          (p.customerName as string) ||
+          (p.firstName as string) ||
+          contactFirstName ||
+          "";
         const template =
           (p.message as string) ||
           "Hi {{customer_name}}, book a time here: {{scheduling_link}}";
-        const body = template.includes("{{scheduling_link}}")
-          ? template.replace(/\{\{scheduling_link\}\}/g, link)
-          : `${template.trim()} ${link}`.trim();
+        // Merge the recipient's name before appending/injecting the link.
+        let body = template
+          .replace(/\{\{customer_name\}\}/g, customerName)
+          .replace(/\{\{customer\.firstName\}\}/g, customerName);
+        body = body.includes("{{scheduling_link}}")
+          ? body.replace(/\{\{scheduling_link\}\}/g, link)
+          : `${body.trim()} ${link}`.trim();
 
         const { sendQuickSms } = await import("@/lib/sms/send-quick");
         const sms = await sendQuickSms({

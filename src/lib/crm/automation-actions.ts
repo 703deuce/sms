@@ -361,10 +361,24 @@ export async function executeCrmAutomationAction(input: {
 
       case "contact.add_tag":
       case "contact.remove_tag": {
-        const tags = tagsFrom(params);
+        const incoming = tagsFrom(params);
+        const extId = requireExternalId();
+        const map = await getObjectMapping({
+          workspaceId: input.workspaceId,
+          provider: input.provider,
+          objectType: "contact",
+          externalId: extId,
+        });
+        const current = Array.isArray((map?.metadataJson as { tags?: unknown } | null)?.tags)
+          ? ((map!.metadataJson as { tags: string[] }).tags || []).map(String)
+          : [];
+        const next =
+          actionId === "contact.add_tag"
+            ? Array.from(new Set([...current, ...incoming]))
+            : current.filter((t) => !incoming.includes(t));
         result = await connector.upsertContact(ctx, {
-          id: requireExternalId(),
-          tags,
+          id: extId,
+          tags: next,
         });
         break;
       }
@@ -467,7 +481,7 @@ export async function executeCrmAutomationAction(input: {
         const upsertCompany = need(connector.upsertCompany, "companies");
         result = await upsertCompany(ctx, {
           id: requireExternalId(),
-          name: String(params.name || params.company || params.companyName || "Company"),
+          name: String(params.name || params.company || params.companyName || ""),
           ownerExternalId: ownerId(),
         });
         break;
@@ -477,7 +491,7 @@ export async function executeCrmAutomationAction(input: {
         const upsertCompany = need(connector.upsertCompany, "companies");
         result = await upsertCompany(ctx, {
           id: requireExternalId(),
-          name: String(params.name || params.company || params.companyName || "Company"),
+          name: String(params.name || params.company || params.companyName || ""),
           customFields: customFieldsFrom(params) || {},
         });
         break;
@@ -536,9 +550,10 @@ export async function executeCrmAutomationAction(input: {
 
       case "deal.move_pipeline": {
         const upsertDeal = need(connector.upsertDeal, "deals");
+        // Empty name ⇒ adapters omit Name/title on PATCH (do not invent "Deal").
         result = await upsertDeal(ctx, {
           id: requireExternalId(),
-          name: String(params.name || params.title || "Deal"),
+          name: String(params.name || params.title || ""),
           pipeline: str(params.pipelineId) ?? str(params.pipeline),
           stage: str(params.stageId) ?? str(params.stage),
         });
@@ -549,7 +564,7 @@ export async function executeCrmAutomationAction(input: {
         const upsertDeal = need(connector.upsertDeal, "deals");
         result = await upsertDeal(ctx, {
           id: requireExternalId(),
-          name: String(params.name || params.title || "Deal"),
+          name: String(params.name || params.title || ""),
           stage: str(params.stageId) ?? str(params.stage),
         });
         break;
@@ -561,10 +576,12 @@ export async function executeCrmAutomationAction(input: {
         const upsertDeal = need(connector.upsertDeal, "deals");
         const status =
           actionId === "deal.mark_won" ? "won" : actionId === "deal.mark_lost" ? "lost" : "open";
+        // Adapters map status → provider stage (Closed Won / Closed Lost / open).
         result = await upsertDeal(ctx, {
           id: requireExternalId(),
-          name: String(params.name || params.title || "Deal"),
+          name: String(params.name || params.title || ""),
           status,
+          stage: str(params.stageId) ?? str(params.stage),
         });
         break;
       }
@@ -573,7 +590,7 @@ export async function executeCrmAutomationAction(input: {
         const upsertDeal = need(connector.upsertDeal, "deals");
         result = await upsertDeal(ctx, {
           id: requireExternalId(),
-          name: String(params.name || params.title || "Deal"),
+          name: String(params.name || params.title || ""),
           ownerExternalId: ownerId(),
         });
         break;
@@ -583,7 +600,7 @@ export async function executeCrmAutomationAction(input: {
         const upsertDeal = need(connector.upsertDeal, "deals");
         result = await upsertDeal(ctx, {
           id: requireExternalId(),
-          name: String(params.name || params.title || "Deal"),
+          name: String(params.name || params.title || ""),
           amount: num(params.value) ?? num(params.amount),
           currency: str(params.currency),
         });
@@ -594,7 +611,7 @@ export async function executeCrmAutomationAction(input: {
         const upsertDeal = need(connector.upsertDeal, "deals");
         result = await upsertDeal(ctx, {
           id: requireExternalId(),
-          name: String(params.name || params.title || "Deal"),
+          name: String(params.name || params.title || ""),
           closeDate: str(params.closeDate),
         });
         break;
@@ -604,7 +621,7 @@ export async function executeCrmAutomationAction(input: {
         const upsertDeal = need(connector.upsertDeal, "deals");
         result = await upsertDeal(ctx, {
           id: requireExternalId(),
-          name: String(params.name || params.title || "Deal"),
+          name: String(params.name || params.title || ""),
           contactExternalId: str(params.contactExternalId) ?? (await resolveContactExternalId()),
         });
         break;
@@ -614,7 +631,7 @@ export async function executeCrmAutomationAction(input: {
         const upsertDeal = need(connector.upsertDeal, "deals");
         result = await upsertDeal(ctx, {
           id: requireExternalId(),
-          name: String(params.name || params.title || "Deal"),
+          name: String(params.name || params.title || ""),
           companyExternalId: str(params.companyExternalId),
         });
         break;
@@ -635,7 +652,7 @@ export async function executeCrmAutomationAction(input: {
         const upsertDeal = need(connector.upsertDeal, "deals");
         result = await upsertDeal(ctx, {
           id: requireExternalId(),
-          name: String(params.name || params.title || "Deal"),
+          name: String(params.name || params.title || ""),
           customFields: customFieldsFrom(params) || {},
         });
         break;
@@ -670,10 +687,11 @@ export async function executeCrmAutomationAction(input: {
 
       case "task.complete": {
         const updateTask = need(connector.updateTask, "tasks");
+        // Adapters normalize "Completed" / done:1 per provider.
         result = await updateTask(ctx, {
           id: requireExternalId(),
-          subject: String(params.title || params.subject || "Task"),
-          status: "completed",
+          subject: String(params.title || params.subject || ""),
+          status: "Completed",
         });
         break;
       }
@@ -682,7 +700,7 @@ export async function executeCrmAutomationAction(input: {
         const updateTask = need(connector.updateTask, "tasks");
         result = await updateTask(ctx, {
           id: requireExternalId(),
-          subject: String(params.title || params.subject || "Task"),
+          subject: String(params.title || params.subject || ""),
           ownerExternalId: ownerId(),
         });
         break;

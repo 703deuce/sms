@@ -222,29 +222,36 @@ export const zohoConnector: CrmConnector = {
   },
 
   async upsertContact(ctx, contact) {
+    const isUpdate = Boolean(contact.id);
+    const base: Record<string, unknown> = {
+      id: contact.id || undefined,
+      First_Name: contact.firstName,
+      Phone: contact.phone,
+      Email: contact.email,
+      Account_Name: contact.companyExternalId
+        ? { id: contact.companyExternalId }
+        : contact.companyName
+          ? contact.companyName
+          : undefined,
+      Tag: contact.tags?.length ? contact.tags.map((name) => ({ name })) : undefined,
+      Owner: contact.ownerExternalId
+        ? { id: contact.ownerExternalId }
+        : !isUpdate && ctx.preferences.defaultOwnerExternalId
+          ? { id: ctx.preferences.defaultOwnerExternalId }
+          : undefined,
+    };
+    if (contact.lastName != null && contact.lastName !== "") {
+      base.Last_Name = contact.lastName;
+    } else if (!isUpdate) {
+      base.Last_Name = "Unknown";
+    }
+    if (contact.source) base.Lead_Source = contact.source;
+    else if (!isUpdate) base.Lead_Source = "Transovo";
     const fields = await buildMappedPayload({
       workspaceId: ctx.workspaceId,
       provider: "zoho",
       objectType: "contact",
-      base: {
-        id: contact.id || undefined,
-        First_Name: contact.firstName,
-        Last_Name: contact.lastName || "Unknown",
-        Phone: contact.phone,
-        Email: contact.email,
-        Lead_Source: contact.source || "Transovo",
-        Account_Name: contact.companyExternalId
-          ? { id: contact.companyExternalId }
-          : contact.companyName
-            ? contact.companyName
-            : undefined,
-        Tag: contact.tags?.length ? contact.tags.map((name) => ({ name })) : undefined,
-        Owner: contact.ownerExternalId
-          ? { id: contact.ownerExternalId }
-          : ctx.preferences.defaultOwnerExternalId
-            ? { id: ctx.preferences.defaultOwnerExternalId }
-            : undefined,
-      },
+      base,
       customFields: contact.customFields,
     });
     const body = { data: [fields] };
@@ -336,34 +343,69 @@ export const zohoConnector: CrmConnector = {
     const module = isBigin(ctx) ? "Pipelines" : "Deals";
     const { rows, more } = await zohoListPage(ctx, module, page, opts?.modifiedSince);
     return {
-      items: rows.map(
-        (r): CrmDeal => ({
+      items: rows.map((r): CrmDeal => {
+        const contactRef = r.Contact_Name as { id?: string } | string | null | undefined;
+        const contactExternalId =
+          typeof contactRef === "object" && contactRef?.id
+            ? String(contactRef.id)
+            : typeof contactRef === "string"
+              ? contactRef
+              : null;
+        const stage = (r.Stage as string) || null;
+        const stageLower = String(stage || "").toLowerCase();
+        let status: string | null = null;
+        if (stageLower.includes("won") || stageLower === "closed won") status = "won";
+        else if (stageLower.includes("lost") || stageLower === "closed lost") status = "lost";
+        else status = "open";
+        return {
           id: String(r.id),
           name: String(r.Deal_Name || r.Pipeline_Name || r.Name || "Deal"),
           amount: r.Amount != null ? Number(r.Amount) : null,
-          stage: (r.Stage as string) || null,
+          stage,
           pipeline: (r.Pipeline as string) || null,
           closeDate: (r.Closing_Date as string) || null,
-        }),
-      ),
+          contactExternalId,
+          companyExternalId:
+            typeof r.Account_Name === "object" && r.Account_Name && (r.Account_Name as { id?: string }).id
+              ? String((r.Account_Name as { id: string }).id)
+              : null,
+          ownerExternalId:
+            typeof r.Owner === "object" && r.Owner && (r.Owner as { id?: string }).id
+              ? String((r.Owner as { id: string }).id)
+              : null,
+          status,
+        };
+      }),
       nextCursor: more ? String(page + 1) : null,
     };
   },
 
   async upsertDeal(ctx, deal) {
     const module = isBigin(ctx) ? "Pipelines" : "Deals";
+    const isUpdate = Boolean(deal.id);
+    let stage = deal.stage || null;
+    if (!stage && deal.status) {
+      const s = String(deal.status).toLowerCase();
+      if (s === "won") stage = "Closed Won";
+      else if (s === "lost") stage = "Closed Lost";
+    }
+    const base: Record<string, unknown> = {
+      id: deal.id || undefined,
+      Amount: deal.amount,
+      Stage: stage || undefined,
+      Pipeline: deal.pipeline || undefined,
+      Closing_Date: deal.closeDate || undefined,
+      Contact_Name: deal.contactExternalId ? { id: deal.contactExternalId } : undefined,
+      Account_Name: deal.companyExternalId ? { id: deal.companyExternalId } : undefined,
+      Owner: deal.ownerExternalId ? { id: deal.ownerExternalId } : undefined,
+    };
+    if (deal.name) base.Deal_Name = deal.name;
+    else if (!isUpdate) base.Deal_Name = "Deal";
     const fields = await buildMappedPayload({
       workspaceId: ctx.workspaceId,
       provider: "zoho",
       objectType: "deal",
-      base: {
-        id: deal.id || undefined,
-        Deal_Name: deal.name,
-        Amount: deal.amount,
-        Stage: deal.stage,
-        Pipeline: deal.pipeline,
-        Closing_Date: deal.closeDate || undefined,
-      },
+      base,
       customFields: deal.customFields,
     });
     const body = { data: [fields] };
@@ -629,20 +671,23 @@ export const zohoConnector: CrmConnector = {
   },
 
   async updateTask(ctx, task) {
+    let status = task.status || undefined;
+    if (status && /^(completed|complete|done)$/i.test(status)) {
+      status = "Completed";
+    }
+    const base: Record<string, unknown> = {
+      id: task.id,
+      Description: task.description,
+      Status: status,
+      Due_Date: task.dueAt,
+      What_Id: task.contactExternalId ? { id: task.contactExternalId } : undefined,
+    };
+    if (task.subject) base.Subject = task.subject;
     const fields = await buildMappedPayload({
       workspaceId: ctx.workspaceId,
       provider: "zoho",
       objectType: "task",
-      base: {
-        id: task.id,
-        Subject: task.subject,
-        Description: task.description,
-        Status: task.status,
-        Due_Date: task.dueAt,
-        What_Id: task.contactExternalId
-          ? { id: task.contactExternalId }
-          : undefined,
-      },
+      base,
       customFields: task.customFields,
     });
     await crmFetch(`${apiBase(ctx)}/Tasks`, {

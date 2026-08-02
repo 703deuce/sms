@@ -549,12 +549,9 @@ export async function runCrmSyncJob(payload: {
           for (const lead of page.items) {
             stats.leadsIn += 1;
             if (!lead.id) continue;
-            const {
-              hashCrmPayload,
-              diffFields,
-              publishMappedCrmEvent,
-              resolveContactIdFromExternal,
-            } = await import("./sync-publish");
+            const { hashCrmPayload, diffFields, publishMappedCrmEvent } = await import(
+              "./sync-publish"
+            );
             const prevLead = await getObjectMapping({
               workspaceId,
               provider,
@@ -576,30 +573,31 @@ export async function runCrmSyncJob(payload: {
               (prevLead?.metadataJson || null) as Record<string, unknown> | null,
               leadMeta as Record<string, unknown>,
             );
+            // Match/create a Transovo contact by phone/email — NEVER map Lead Id
+            // as a Contact externalId (that poisons later upsertContact calls).
             let contactId: string | null = null;
-            if (lead.phone || lead.email) {
+            if (
+              prevLead?.internalId &&
+              !String(prevLead.internalId).startsWith("crm-")
+            ) {
+              contactId = prevLead.internalId;
+            }
+            if (!contactId && (lead.phone || lead.email)) {
               try {
-                await ingestRemoteContact(
-                  workspaceId,
-                  provider,
-                  syncRunId,
-                  {
-                    id: lead.id,
-                    firstName: lead.firstName,
-                    lastName: lead.lastName,
-                    phone: lead.phone,
-                    email: lead.email,
-                    companyName: lead.companyName,
-                    customFields: {
-                      ownerExternalId: lead.ownerExternalId,
-                      status: lead.status,
-                      source: lead.source,
-                      tags: [],
-                    },
-                  },
-                  stats,
+                const { upsertExternalContact } = await import(
+                  "@/lib/integrations/connections"
                 );
-                contactId = await resolveContactIdFromExternal(workspaceId, provider, lead.id);
+                const matched = await upsertExternalContact({
+                  workspaceId,
+                  phone: lead.phone,
+                  email: lead.email,
+                  firstName: lead.firstName,
+                  lastName: lead.lastName,
+                  company: lead.companyName,
+                  source: `crm:${provider}:lead`,
+                  createIfMissing: true,
+                });
+                contactId = matched?.contactId || null;
               } catch {
                 stats.errors += 1;
               }
@@ -797,7 +795,23 @@ export async function runCrmSyncJob(payload: {
               }
               const status = String(deal.status || "").toLowerCase();
               const prevStatus = String(prevMeta.status || "").toLowerCase();
-              if (status.includes("won") && !prevStatus.includes("won")) {
+              const stage = String(deal.stage || "").toLowerCase();
+              const prevStage = String(prevMeta.stage || "").toLowerCase();
+              const isWon =
+                status.includes("won") || stage.includes("closed won") || stage === "won";
+              const wasWon =
+                prevStatus.includes("won") ||
+                prevStage.includes("closed won") ||
+                prevStage === "won";
+              const isLost =
+                (status.includes("lost") && !isWon) ||
+                stage.includes("closed lost") ||
+                stage === "lost";
+              const wasLost =
+                (prevStatus.includes("lost") && !wasWon) ||
+                prevStage.includes("closed lost") ||
+                prevStage === "lost";
+              if (isWon && !wasWon) {
                 await publishMappedCrmEvent({
                   workspaceId,
                   provider,
@@ -808,7 +822,7 @@ export async function runCrmSyncJob(payload: {
                   payload: dealMeta,
                 }).catch(() => undefined);
               }
-              if (status.includes("lost") && !prevStatus.includes("lost")) {
+              if (isLost && !wasLost && !isWon) {
                 await publishMappedCrmEvent({
                   workspaceId,
                   provider,
@@ -819,12 +833,7 @@ export async function runCrmSyncJob(payload: {
                   payload: dealMeta,
                 }).catch(() => undefined);
               }
-              if (
-                (prevStatus.includes("won") || prevStatus.includes("lost")) &&
-                !status.includes("won") &&
-                !status.includes("lost") &&
-                !isNew
-              ) {
+              if ((wasWon || wasLost) && !isWon && !isLost && !isNew) {
                 await publishMappedCrmEvent({
                   workspaceId,
                   provider,

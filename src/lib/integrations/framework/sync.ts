@@ -460,6 +460,14 @@ async function publishCalendlyEventTypeDiffs(input: {
   prevEventTypes: Array<Record<string, unknown>>;
   nextEventTypes: Array<Record<string, unknown>>;
 }) {
+  // First refresh (no previously stored event types): SEED the baseline only.
+  // Enqueueing a "created" event for every pre-existing Calendly event type on
+  // the very first sync would spam automations with historical noise. The caller
+  // persists meta.eventTypes so the next refresh diffs against this baseline.
+  if (!input.prevEventTypes.length) {
+    return;
+  }
+
   const prevByUri = new Map(
     input.prevEventTypes
       .map((t) => [String(t.uri || t.uuid || ""), t] as const)

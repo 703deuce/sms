@@ -591,6 +591,54 @@ export const INTEGRATION_ACTION_OPTIONS: IntegrationActionOption[] = [
     providers: ["woocommerce"],
     samplePayload: { orderId: "", note: "Order note" },
   },
+  // —— Calendly appointment actions ——
+  {
+    id: "appointment.get_scheduling_link",
+    label: "Get scheduling link",
+    providers: ["calendly"],
+    samplePayload: { eventTypeUri: "" },
+  },
+  {
+    id: "appointment.create_single_use_link",
+    label: "Create single-use scheduling link",
+    providers: ["calendly"],
+    samplePayload: { eventTypeUri: "", ownerUri: "" },
+  },
+  {
+    id: "appointment.send_scheduling_link",
+    label: "Send scheduling link (SMS)",
+    providers: ["calendly"],
+    samplePayload: {
+      phone: "{{customer.phone}}",
+      message: "Hi {{customer.firstName}}, book a time here: {{scheduling_link}}",
+      eventTypeUri: "",
+      singleUse: false,
+    },
+  },
+  {
+    id: "appointment.retrieve",
+    label: "Retrieve appointment",
+    providers: ["calendly"],
+    samplePayload: { eventUri: "", eventUuid: "" },
+  },
+  {
+    id: "appointment.cancel",
+    label: "Cancel appointment",
+    providers: ["calendly"],
+    samplePayload: { eventUri: "", eventUuid: "", reason: "" },
+  },
+  {
+    id: "appointment.get_cancel_url",
+    label: "Get cancel URL",
+    providers: ["calendly"],
+    samplePayload: { eventUri: "", eventUuid: "" },
+  },
+  {
+    id: "appointment.get_reschedule_url",
+    label: "Get reschedule URL",
+    providers: ["calendly"],
+    samplePayload: { eventUri: "", eventUuid: "" },
+  },
 ];
 
 export function integrationActionsForProvider(provider: string): IntegrationActionOption[] {

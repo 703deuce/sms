@@ -159,6 +159,16 @@ export async function POST(request: Request) {
     };
 
     if (body.action === "retry_sync" && body.taskId) {
+      try {
+        await requireCrmPermission(
+          auth.session.userId,
+          auth.workspaceId,
+          "force_sync",
+        );
+      } catch (permErr) {
+        const message = permErr instanceof Error ? permErr.message : String(permErr);
+        return NextResponse.json({ error: message }, { status: 403 });
+      }
       await prisma.integrationTask.updateMany({
         where: { id: body.taskId, workspaceId: auth.workspaceId },
         data: { syncStatus: "pending" },
@@ -265,6 +275,16 @@ export async function POST(request: Request) {
 
     if (!isExternalProvider(provider)) {
       return NextResponse.json({ error: "Unknown provider" }, { status: 400 });
+    }
+    try {
+      await requireCrmPermission(
+        auth.session.userId,
+        auth.workspaceId,
+        "use_crm_quick_actions",
+      );
+    } catch (permErr) {
+      const message = permErr instanceof Error ? permErr.message : String(permErr);
+      return NextResponse.json({ error: message }, { status: 403 });
     }
     const truth = getActionCapabilityTruth(provider, actionId);
     if (!truth.supported) {

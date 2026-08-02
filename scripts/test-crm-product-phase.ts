@@ -3,7 +3,10 @@
  * Run: npx tsx scripts/test-crm-product-phase.ts
  */
 import assert from "node:assert/strict";
-import { AUTOMATION_BLOCKS } from "../src/lib/automations/catalog";
+import {
+  AUTOMATION_BLOCKS,
+  INTEGRATION_ACTION_OPTIONS,
+} from "../src/lib/automations/catalog";
 import {
   INTEGRATION_AUTOMATION_TEMPLATES,
   buildAutomationDefinitionFromTemplate,
@@ -301,6 +304,69 @@ ok("permissions include product CRM actions", () => {
   assert.ok(!canCrmAction("INBOX_AGENT", "connect_crm"));
   assert.ok(canCrmAction("OWNER", "resolve_mapping_conflicts"));
   assert.ok(canCrmAction("CAMPAIGN_CREATOR", "create_integration_triggers"));
+});
+
+ok("bugfix: CRM action idempotency is stable (no Date.now)", () => {
+  const fs = require("node:fs") as typeof import("node:fs");
+  const src = fs.readFileSync(
+    new URL("../src/lib/automations/actions.ts", import.meta.url),
+    "utf8",
+  );
+  assert.match(src, /crm-act:\$\{ctx\.executionId\}:\$\{node\.id\}/);
+  assert.doesNotMatch(src, /crm-act-.*Date\.now\(\)/);
+});
+
+ok("bugfix: SF deal upsert omits invented Name/CloseDate on update", () => {
+  const fs = require("node:fs") as typeof import("node:fs");
+  const src = fs.readFileSync(
+    new URL("../src/lib/crm/adapters/salesforce.ts", import.meta.url),
+    "utf8",
+  );
+  assert.match(src, /Never invent Name\/Stage\/CloseDate on PATCH/);
+  assert.match(src, /IsWon/);
+  assert.match(src, /OpportunityContactRoles/);
+});
+
+ok("bugfix: lead ingest does not map Lead Id as Contact", () => {
+  const fs = require("node:fs") as typeof import("node:fs");
+  const src = fs.readFileSync(
+    new URL("../src/lib/crm/sync-engine.ts", import.meta.url),
+    "utf8",
+  );
+  assert.match(src, /NEVER map Lead Id/);
+  assert.match(src, /crm:\$\{provider\}:lead/);
+  assert.doesNotMatch(
+    src,
+    /ingestRemoteContact\(\s*workspaceId,\s*provider,\s*syncRunId,\s*\{\s*id:\s*lead\.id/,
+  );
+});
+
+ok("bugfix: Calendly persist reads startsAt/endsAt + no_show", () => {
+  const fs = require("node:fs") as typeof import("node:fs");
+  const src = fs.readFileSync(
+    new URL("../src/lib/integrations/framework/product-persist.ts", import.meta.url),
+    "utf8",
+  );
+  assert.match(src, /startsAt/);
+  assert.match(src, /endsAt/);
+  assert.match(src, /no_show/);
+});
+
+ok("bugfix: builder exposes Calendly appointment actions", () => {
+  assert.ok(
+    INTEGRATION_ACTION_OPTIONS.some(
+      (a) => a.id === "appointment.send_scheduling_link" && a.providers.includes("calendly"),
+    ),
+  );
+  assert.ok(
+    INTEGRATION_ACTION_OPTIONS.some(
+      (a) => a.id === "appointment.cancel" && a.providers.includes("calendly"),
+    ),
+  );
+});
+
+ok("bugfix: crm_task_due_scan is a registered CRM job type", () => {
+  assert.ok((CRM_JOB_TYPES as readonly string[]).includes("crm_task_due_scan"));
 });
 
 console.log(`\n${passed} tests passed`);

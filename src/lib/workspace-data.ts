@@ -67,6 +67,9 @@ export async function loadContacts(workspaceId: string, status?: string): Promis
   const rows = await getPrisma().contact.findMany({
     where: {
       workspaceId,
+      // Hide the synthetic workspace-level automation contact (used only as an FK
+      // for event_type.* triggers) from user-facing contact lists.
+      NOT: { customFields: { path: ["systemAutomationContact"], equals: true } },
       ...(status
         ? {
             status: status.toUpperCase() as
@@ -532,7 +535,13 @@ export async function loadDashboardMetrics(workspaceId: string): Promise<Dashboa
     prisma.messagingRegistration.findUnique({ where: { workspaceId } }),
     prisma.phoneNumber.findMany({ where: { workspaceId, status: "Active" }, take: 1 }),
     prisma.campaign.findMany({ where: { workspaceId }, take: 200 }),
-    prisma.contact.count({ where: { workspaceId } }),
+    prisma.contact.count({
+      where: {
+        workspaceId,
+        // Exclude the synthetic automation contact from headline contact metrics.
+        NOT: { customFields: { path: ["systemAutomationContact"], equals: true } },
+      },
+    }),
     prisma.usageRecord.findFirst({
       where: { workspaceId },
       orderBy: { periodStart: "desc" },

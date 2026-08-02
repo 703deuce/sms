@@ -228,7 +228,10 @@ async function main() {
   await ok("action registry only exposes methods the adapter implements", () => {
     assert.ok(INTEGRATION_ACTIONS.length >= 8);
     const calendlyActions = actionsForProvider("calendly");
-    assert.equal(calendlyActions.length, 0);
+    // Calendly appointment actions are capability-gated (companion module), not adapter methods.
+    assert.ok(calendlyActions.length >= 5);
+    assert.ok(calendlyActions.every((a) => a.id.startsWith("appointment.")));
+    assert.ok(!calendlyActions.some((a) => a.id === "contact.upsert"));
     const ac = actionsForProvider("activecampaign");
     assert.ok(ac.some((a) => a.id === "contact.upsert"));
     const freshdesk = actionsForProvider("freshdesk");

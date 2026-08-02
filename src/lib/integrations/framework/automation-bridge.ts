@@ -97,6 +97,10 @@ async function ensureWorkspaceAutomationContact(workspaceId: string): Promise<st
     select: { id: true },
   });
   if (existing) return existing.id;
+  // Kept SUBSCRIBED so enrollForTrigger (which skips non-SUBSCRIBED contacts)
+  // still fires event_type.* automations. It is flagged systemAutomationContact
+  // so it is filtered out of contact lists, metrics, exports, and never has its
+  // synthetic +1555 phone / placeholder email merged into provider actions.
   const created = await prisma.contact.create({
     data: {
       workspaceId,

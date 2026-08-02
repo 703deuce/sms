@@ -24,14 +24,21 @@ export async function scanAppointmentsStartingSoon() {
     const rows = await prisma.voiceAppointment.findMany({
       where: {
         startsAt: { gte: windowStart, lte: windowEnd },
-        status: { notIn: ["canceled", "cancelled", "completed"] },
+        status: { notIn: ["canceled", "cancelled", "completed", "no_show"] },
         contactId: { not: null },
+        NOT: { metadata: { path: ["noShow"], equals: true } },
       },
       take: 200,
     });
 
     for (const appt of rows) {
       if (!appt.contactId) continue;
+      if (
+        appt.status === "no_show" ||
+        (appt.metadata as { noShow?: unknown } | null)?.noShow === true
+      ) {
+        continue;
+      }
       const provider =
         (typeof (appt.metadata as { provider?: string } | null)?.provider === "string"
           ? (appt.metadata as { provider: string }).provider
@@ -91,14 +98,23 @@ export async function scanAppointmentsCompleted() {
   const rows = await prisma.voiceAppointment.findMany({
     where: {
       endsAt: { not: null, lt: now },
-      status: { notIn: ["canceled", "cancelled", "completed"] },
+      // Never auto-complete cancellations, already-completed rows, or no-shows.
+      status: { notIn: ["canceled", "cancelled", "completed", "no_show"] },
       contactId: { not: null },
+      NOT: { metadata: { path: ["noShow"], equals: true } },
     },
     take: 200,
   });
 
   for (const appt of rows) {
     if (!appt.contactId || !appt.endsAt) continue;
+    // Defensive: skip no-shows even if the DB filter missed a legacy row shape.
+    if (
+      appt.status === "no_show" ||
+      (appt.metadata as { noShow?: unknown } | null)?.noShow === true
+    ) {
+      continue;
+    }
     const provider =
       (typeof (appt.metadata as { provider?: string } | null)?.provider === "string"
         ? (appt.metadata as { provider: string }).provider
@@ -111,6 +127,9 @@ export async function scanAppointmentsCompleted() {
       "appointment.completed",
     );
     try {
+      // enqueueJob resolves for both a fresh enqueue and a duplicate idempotency
+      // key; it only throws on a real backend failure. Marking the row completed
+      // only after it resolves guarantees we never drop the completion event.
       await enqueueJob({
         jobType: "integration_automation_event",
         queueName: `ext-${provider}`,
@@ -133,14 +152,15 @@ export async function scanAppointmentsCompleted() {
         },
       });
       enqueued += 1;
-    } catch {
-      // duplicate idempotency — still mark completed below to stop re-scanning
-    }
 
-    // Mark completed after enqueue so the row is not re-scanned next tick.
-    await prisma.voiceAppointment
-      .update({ where: { id: appt.id }, data: { status: "completed" } })
-      .catch(() => undefined);
+      // Mark completed only after a successful enqueue so a backend failure lets
+      // the row be re-scanned next tick instead of silently swallowing the event.
+      await prisma.voiceAppointment
+        .update({ where: { id: appt.id }, data: { status: "completed" } })
+        .catch(() => undefined);
+    } catch {
+      // Enqueue failed — leave the row untouched so the next scan retries it.
+    }
   }
 
   return { ok: true, enqueued };

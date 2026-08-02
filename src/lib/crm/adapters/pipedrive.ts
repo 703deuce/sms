@@ -315,24 +315,35 @@ export const pipedriveConnector: CrmConnector = {
   },
 
   async upsertDeal(ctx, deal) {
+    const isUpdate = Boolean(deal.id);
+    let status = deal.status || undefined;
+    if (status) {
+      const s = String(status).toLowerCase();
+      if (s === "won" || s.includes("won")) status = "won";
+      else if (s === "lost" || s.includes("lost")) status = "lost";
+      else if (s === "open" || s === "reopen" || s === "reopened") status = "open";
+    }
+    const base: Record<string, unknown> = {
+      value: deal.amount ?? undefined,
+      currency: deal.currency || undefined,
+      stage_id: deal.stage ? Number(deal.stage) : undefined,
+      pipeline_id: deal.pipeline
+        ? Number(deal.pipeline)
+        : !isUpdate && ctx.preferences.defaultPipelineId
+          ? Number(ctx.preferences.defaultPipelineId)
+          : undefined,
+      person_id: deal.contactExternalId ? Number(deal.contactExternalId) : undefined,
+      org_id: deal.companyExternalId ? Number(deal.companyExternalId) : undefined,
+      status,
+      user_id: deal.ownerExternalId ? Number(deal.ownerExternalId) : undefined,
+    };
+    if (deal.name) base.title = deal.name;
+    else if (!isUpdate) base.title = "Deal";
     const body = await buildMappedPayload({
       workspaceId: ctx.workspaceId,
       provider: "pipedrive",
       objectType: "deal",
-      base: {
-        title: deal.name,
-        value: deal.amount ?? undefined,
-        currency: deal.currency || undefined,
-        stage_id: deal.stage ? Number(deal.stage) : undefined,
-        pipeline_id: deal.pipeline
-          ? Number(deal.pipeline)
-          : ctx.preferences.defaultPipelineId
-            ? Number(ctx.preferences.defaultPipelineId)
-            : undefined,
-        person_id: deal.contactExternalId ? Number(deal.contactExternalId) : undefined,
-        org_id: deal.companyExternalId ? Number(deal.companyExternalId) : undefined,
-        status: deal.status || undefined,
-      },
+      base,
       customFields: deal.customFields,
     });
     if (deal.id) {
@@ -554,16 +565,21 @@ export const pipedriveConnector: CrmConnector = {
   },
 
   async updateTask(ctx, task) {
+    const status = String(task.status || "");
+    const done = /^(completed|complete|done|Completed)$/i.test(status) ? 1 : 0;
+    const base: Record<string, unknown> = {
+      note: task.description,
+      done: task.status != null ? done : undefined,
+      person_id: task.contactExternalId ? Number(task.contactExternalId) : undefined,
+      user_id: task.ownerExternalId ? Number(task.ownerExternalId) : undefined,
+      due_date: task.dueAt ? task.dueAt.slice(0, 10) : undefined,
+    };
+    if (task.subject) base.subject = task.subject;
     const body = await buildMappedPayload({
       workspaceId: ctx.workspaceId,
       provider: "pipedrive",
       objectType: "task",
-      base: {
-        subject: task.subject,
-        note: task.description,
-        done: task.status === "Completed" ? 1 : 0,
-        person_id: task.contactExternalId ? Number(task.contactExternalId) : undefined,
-      },
+      base,
       customFields: task.customFields,
     });
     await pd(ctx, `/activities/${task.id}`, {

@@ -229,6 +229,8 @@ export type NormalizedAppointment = {
   rescheduleUrl?: string | null;
   updatedAt?: string | null;
   raw?: Record<string, unknown>;
+  /** Extra provider metadata merged into the persisted VoiceAppointment.metadata. */
+  metadata?: Record<string, unknown>;
 };
 
 export type NormalizedForm = {

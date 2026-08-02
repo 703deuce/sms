@@ -49,6 +49,9 @@ export async function persistAppointmentFromIntegration(input: {
       cancelUrl: input.appointment.cancelUrl,
       rescheduleUrl: input.appointment.rescheduleUrl,
       raw: input.appointment.raw || undefined,
+      // Provider-specific extras (host, cancellationReason, questionsAndAnswers,
+      // tracking, noShow, …) merged last so callers can enrich the record.
+      ...(input.appointment.metadata || {}),
     } as object,
   };
 
@@ -176,25 +179,67 @@ export async function persistProductFromNormalizedEvent(
     event.eventType.startsWith("appointment.") &&
     event.externalObjectType === "appointment"
   ) {
+    const scheduledEvent =
+      (event.payload.scheduledEvent as Record<string, unknown> | undefined) ||
+      (event.payload.scheduled_event as Record<string, unknown> | undefined) ||
+      undefined;
+
+    // Adapters normalize to startsAt/endsAt; also accept startAt/endAt and the
+    // raw Calendly scheduled_event start_time/end_time as fallbacks.
+    const startAt =
+      (event.payload.startsAt as string) ||
+      (event.payload.startAt as string) ||
+      (scheduledEvent?.start_time as string) ||
+      (event.payload.start_time as string) ||
+      event.occurredAt;
+    const endAt =
+      (event.payload.endsAt as string) ||
+      (event.payload.endAt as string) ||
+      (scheduledEvent?.end_time as string) ||
+      (event.payload.end_time as string) ||
+      null;
+
+    const noShow =
+      event.eventType === "appointment.no_show" ||
+      Boolean(event.payload.noShow);
+    const status = noShow
+      ? "no_show"
+      : event.eventType.includes("canceled")
+        ? "canceled"
+        : "confirmed";
+
+    // Prefer the event type / meeting name over the invitee's name for the title.
+    const title = String(
+      event.payload.eventTypeName ||
+        (scheduledEvent?.name as string) ||
+        event.payload.title ||
+        event.payload.name ||
+        "Appointment",
+    );
+
     return persistAppointmentFromIntegration({
       workspaceId: event.workspaceId,
       provider: event.provider,
       contactId,
       appointment: {
         id: event.externalObjectId,
-        title: String(event.payload.name || event.payload.title || "Appointment"),
-        startAt:
-          (event.payload.startAt as string) ||
-          (event.payload.start_time as string) ||
-          event.occurredAt,
-        endAt: (event.payload.endAt as string) || null,
-        status: event.eventType.includes("canceled") ? "canceled" : "confirmed",
+        title,
+        startAt,
+        endAt,
+        status,
         inviteeEmail: event.email,
         inviteePhone: event.phone,
         inviteeName: (event.payload.name as string) || null,
         cancelUrl: (event.payload.cancelUrl as string) || null,
         rescheduleUrl: (event.payload.rescheduleUrl as string) || null,
         eventTypeId: (event.payload.eventType as string) || null,
+        metadata: {
+          host: event.payload.host ?? null,
+          cancellationReason: event.payload.cancellationReason ?? null,
+          questionsAndAnswers: event.payload.questionsAndAnswers ?? null,
+          tracking: event.payload.tracking ?? null,
+          ...(noShow ? { noShow: true } : {}),
+        },
       },
     });
   }

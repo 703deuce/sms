@@ -392,10 +392,20 @@ export async function runNodeAction(
         return { error: "integration_action_invalid_params" };
       }
     }
-    // Merge contact identity for upserts
+    // Merge contact identity for upserts. The synthetic workspace automation
+    // contact (used only as an FK for event_type.* triggers) carries a fake
+    // +1555 phone and placeholder email — never leak those into provider actions.
+    const isSystemAutomationContact =
+      contact.customFields &&
+      typeof contact.customFields === "object" &&
+      (contact.customFields as Record<string, unknown>).systemAutomationContact === true;
     params = {
-      email: contact.email,
-      phone: contact.phone,
+      ...(isSystemAutomationContact
+        ? {}
+        : {
+            email: contact.email,
+            phone: contact.phone,
+          }),
       firstName: contact.firstName,
       lastName: contact.lastName,
       ...params,
@@ -428,7 +438,8 @@ export async function runNodeAction(
             automationFlowId: ctx.flowId,
           }),
         ),
-        idempotencyKey: `crm-act-${ctx.flowId}-${ctx.contactId}-${actionId}-${Date.now()}`,
+        // Stable per execution node — retries must not duplicate CRM writes.
+        idempotencyKey: `crm-act:${ctx.executionId}:${node.id}`,
       });
       return { nextNodeId: getNextNodeId(def, node.id) };
     }

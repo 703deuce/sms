@@ -169,19 +169,37 @@ export const salesforceConnector: CrmConnector = {
   },
 
   async upsertContact(ctx, contact) {
+    const isUpdate = Boolean(contact.id);
+    // Partial updates must not invent LastName/LeadSource — that corrupts CRM data.
+    const base: Record<string, unknown> = {
+      FirstName: contact.firstName,
+      Phone: contact.phone,
+      Email: contact.email,
+      AccountId: contact.companyExternalId || undefined,
+      OwnerId:
+        contact.ownerExternalId ||
+        (!isUpdate ? ctx.preferences.defaultOwnerExternalId : undefined) ||
+        undefined,
+    };
+    if (contact.lastName != null && contact.lastName !== "") {
+      base.LastName = contact.lastName;
+    } else if (!isUpdate) {
+      base.LastName = "Unknown";
+    }
+    if (contact.source) {
+      base.LeadSource = contact.source;
+    } else if (!isUpdate) {
+      base.LeadSource = "Transovo";
+    }
+    if (contact.status) {
+      // Contact status is not a standard SF field — pass via customFields if mapped.
+      // Intentionally not written to a wrong API field.
+    }
     const body = await buildMappedPayload({
       workspaceId: ctx.workspaceId,
       provider: "salesforce",
       objectType: "contact",
-      base: {
-        FirstName: contact.firstName,
-        LastName: contact.lastName || "Unknown",
-        Phone: contact.phone,
-        Email: contact.email,
-        LeadSource: contact.source || "Transovo",
-        AccountId: contact.companyExternalId || undefined,
-        OwnerId: contact.ownerExternalId || ctx.preferences.defaultOwnerExternalId || undefined,
-      },
+      base,
       customFields: contact.customFields,
     });
     if (contact.id) {
@@ -273,41 +291,68 @@ export const salesforceConnector: CrmConnector = {
     const since = opts?.modifiedSince
       ? ` WHERE LastModifiedDate > ${soqlDate(opts.modifiedSince)}`
       : "";
-    const soql = `SELECT Id, Name, Amount, StageName, AccountId, OwnerId, IsClosed, LastModifiedDate FROM Opportunity${since} ORDER BY LastModifiedDate DESC LIMIT 200`;
+    // Include IsWon + primary OpportunityContactRole so deal.won/lost automations can link a contact.
+    const soql = `SELECT Id, Name, Amount, StageName, AccountId, OwnerId, IsClosed, IsWon, CloseDate, LastModifiedDate, (SELECT ContactId FROM OpportunityContactRoles ORDER BY IsPrimary DESC NULLS LAST LIMIT 1) FROM Opportunity${since} ORDER BY LastModifiedDate DESC LIMIT 200`;
     const url = cursor || `${api(ctx, "/query")}?q=${encodeURIComponent(soql)}`;
     const data = await crmFetch<{ records?: Array<Record<string, unknown>>; nextRecordsUrl?: string }>(
       url.startsWith("http") ? url : `${instanceUrl(ctx)}${url}`,
       { accessToken: ctx.accessToken },
     );
     return {
-      items: (data.records || []).map(
-        (r): CrmDeal => ({
+      items: (data.records || []).map((r): CrmDeal => {
+        const roles = (r.OpportunityContactRoles as { records?: Array<{ ContactId?: string }> } | null)
+          ?.records;
+        const contactId = roles?.[0]?.ContactId || null;
+        const isWon = Boolean(r.IsWon);
+        const isClosed = Boolean(r.IsClosed);
+        return {
           id: String(r.Id),
           name: String(r.Name || "Opportunity"),
           amount: r.Amount != null ? Number(r.Amount) : null,
           stage: (r.StageName as string) || null,
           companyExternalId: (r.AccountId as string) || null,
+          contactExternalId: contactId,
           ownerExternalId: (r.OwnerId as string) || null,
-          status: r.IsClosed ? "closed" : "open",
-        }),
-      ),
+          closeDate: (r.CloseDate as string) || null,
+          status: isWon ? "won" : isClosed ? "lost" : "open",
+        };
+      }),
       nextCursor: data.nextRecordsUrl || null,
     };
   },
 
   async upsertDeal(ctx, deal) {
+    const isUpdate = Boolean(deal.id);
+    // Map normalized won/lost/open onto Salesforce StageName when stage is omitted.
+    let stage = deal.stage || null;
+    if (!stage && deal.status) {
+      const s = String(deal.status).toLowerCase();
+      if (s === "won" || s.includes("closed won")) stage = "Closed Won";
+      else if (s === "lost" || s.includes("closed lost")) stage = "Closed Lost";
+      else if (s === "open" || s === "reopen" || s === "reopened") stage = "Prospecting";
+    }
+    const base: Record<string, unknown> = {
+      Amount: deal.amount,
+      AccountId: deal.companyExternalId || undefined,
+      OwnerId:
+        deal.ownerExternalId ||
+        (!isUpdate ? ctx.preferences.defaultOwnerExternalId : undefined) ||
+        undefined,
+    };
+    // Never invent Name/Stage/CloseDate on PATCH — that resets live opportunities.
+    if (deal.name) base.Name = deal.name;
+    else if (!isUpdate) base.Name = "Opportunity";
+    if (stage) base.StageName = stage;
+    else if (!isUpdate) base.StageName = "Prospecting";
+    if (deal.closeDate) base.CloseDate = deal.closeDate;
+    else if (!isUpdate) {
+      base.CloseDate = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+    }
     const body = await buildMappedPayload({
       workspaceId: ctx.workspaceId,
       provider: "salesforce",
       objectType: "deal",
-      base: {
-        Name: deal.name,
-        Amount: deal.amount,
-        StageName: deal.stage || "Prospecting",
-        CloseDate: deal.closeDate || new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10),
-        AccountId: deal.companyExternalId || undefined,
-        OwnerId: deal.ownerExternalId || ctx.preferences.defaultOwnerExternalId || undefined,
-      },
+      base,
       customFields: deal.customFields,
     });
     if (deal.id) {
@@ -351,6 +396,7 @@ export const salesforceConnector: CrmConnector = {
   },
 
   async createNote(ctx, note) {
+    const linkTo = note.relatedExternalId || note.contactExternalId || null;
     try {
       const created = await crmFetch<{ id: string }>(api(ctx, "/sobjects/ContentNote"), {
         method: "POST",
@@ -360,7 +406,7 @@ export const salesforceConnector: CrmConnector = {
           Content: Buffer.from(note.body, "utf8").toString("base64"),
         }),
       });
-      if (note.contactExternalId) {
+      if (linkTo) {
         // ContentNote Id is also the ContentDocument Id for linking in modern orgs;
         // if link fails, resolve LatestPublishedVersion → ContentDocumentId.
         let documentId = created.id;
@@ -369,7 +415,7 @@ export const salesforceConnector: CrmConnector = {
           accessToken: ctx.accessToken,
           body: JSON.stringify({
             ContentDocumentId: documentId,
-            LinkedEntityId: note.contactExternalId,
+            LinkedEntityId: linkTo,
             ShareType: "V",
           }),
         }).catch(() => null);
@@ -388,7 +434,7 @@ export const salesforceConnector: CrmConnector = {
             accessToken: ctx.accessToken,
             body: JSON.stringify({
               ContentDocumentId: documentId,
-              LinkedEntityId: note.contactExternalId,
+              LinkedEntityId: linkTo,
               ShareType: "V",
             }),
           }).catch(() => undefined);
@@ -403,7 +449,17 @@ export const salesforceConnector: CrmConnector = {
           Subject: "Transovo note",
           Description: note.body,
           Status: "Completed",
-          WhoId: note.contactExternalId || undefined,
+          // WhoId is Contact/Lead; WhatId is Account/Opportunity/etc.
+          WhoId:
+            note.relatedType === "lead" || note.relatedType === "contact" || !note.relatedType
+              ? linkTo || undefined
+              : undefined,
+          WhatId:
+            note.relatedType === "deal" ||
+            note.relatedType === "company" ||
+            note.relatedType === "account"
+              ? linkTo || undefined
+              : undefined,
         }),
       });
       return { externalId: created.id, created: true };
@@ -411,18 +467,24 @@ export const salesforceConnector: CrmConnector = {
   },
 
   async updateTask(ctx, task) {
+    let status = task.status || undefined;
+    if (status && /^(completed|complete|done)$/i.test(status)) {
+      status = "Completed";
+    }
+    const base: Record<string, unknown> = {
+      Description: task.description,
+      Status: status,
+      ActivityDate: task.dueAt ? task.dueAt.slice(0, 10) : undefined,
+      WhoId: task.contactExternalId || undefined,
+      OwnerId: task.ownerExternalId || undefined,
+    };
+    // Omit Subject when the caller only wants status/owner/due changes.
+    if (task.subject) base.Subject = task.subject;
     const body = await buildMappedPayload({
       workspaceId: ctx.workspaceId,
       provider: "salesforce",
       objectType: "task",
-      base: {
-        Subject: task.subject,
-        Description: task.description,
-        Status: task.status,
-        ActivityDate: task.dueAt ? task.dueAt.slice(0, 10) : undefined,
-        WhoId: task.contactExternalId || undefined,
-        OwnerId: task.ownerExternalId || undefined,
-      },
+      base,
       customFields: task.customFields,
     });
     await crmFetch(api(ctx, `/sobjects/Task/${task.id}`), {
@@ -687,16 +749,22 @@ export const salesforceConnector: CrmConnector = {
   },
 
   async upsertCompany(ctx, company) {
+    const isUpdate = Boolean(company.id);
+    const base: Record<string, unknown> = {
+      Phone: company.phone,
+      Website: company.website,
+      OwnerId:
+        company.ownerExternalId ||
+        (!isUpdate ? ctx.preferences.defaultOwnerExternalId : undefined) ||
+        undefined,
+    };
+    if (company.name) base.Name = company.name;
+    else if (!isUpdate) base.Name = "Account";
     const body = await buildMappedPayload({
       workspaceId: ctx.workspaceId,
       provider: "salesforce",
       objectType: "company",
-      base: {
-        Name: company.name,
-        Phone: company.phone,
-        Website: company.website,
-        OwnerId: company.ownerExternalId || ctx.preferences.defaultOwnerExternalId || undefined,
-      },
+      base,
       customFields: company.customFields,
     });
     if (company.id) {
