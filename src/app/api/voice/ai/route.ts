@@ -233,6 +233,49 @@ export async function POST(request: Request) {
           }),
         });
       }
+      case "fetch_live_assistant": {
+        const agentRow = await getPrisma().voiceAgent.findFirst({
+          where: { id: agentId, workspaceId },
+        });
+        const telnyxAssistantId =
+          String(body.telnyxAssistantId || "") || agentRow?.telnyxAssistantId || "";
+        if (!telnyxAssistantId) {
+          return NextResponse.json(
+            { error: "No Telnyx assistant id — build the agent first" },
+            { status: 400 },
+          );
+        }
+        const remote = await ai.getAssistant(telnyxAssistantId);
+        const data = (remote as { data?: Record<string, unknown> }).data || remote;
+        const tools = Array.isArray((data as { tools?: unknown[] }).tools)
+          ? ((data as { tools: unknown[] }).tools as Array<Record<string, unknown>>)
+          : [];
+        return NextResponse.json({
+          data: {
+            telnyxAssistantId,
+            model: (data as { model?: string }).model,
+            name: (data as { name?: string }).name,
+            toolCount: tools.length,
+            tools: tools.map((t) => {
+              const webhook = t.webhook as { name?: string; url?: string; timeout_ms?: number } | undefined;
+              const transfer = t.transfer as { targets?: unknown } | undefined;
+              return {
+                type: t.type,
+                name:
+                  webhook?.name ||
+                  (t.type === "transfer" ? "transfer" : undefined) ||
+                  (t.type === "hangup" ? "hangup" : undefined) ||
+                  (t.type === "handoff" ? "handoff" : String(t.type || "unknown")),
+                transferTargets: transfer?.targets,
+                hangup: t.hangup,
+                webhookUrl: webhook?.url,
+                timeout_ms: webhook?.timeout_ms,
+              };
+            }),
+            rawTools: tools,
+          },
+        });
+      }
       case "sync_versions":
         return NextResponse.json({
           data: await platform.syncRemoteVersions(workspaceId, agentId),

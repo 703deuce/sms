@@ -125,14 +125,17 @@ export async function POST(request: Request) {
       });
       callId = call?.id;
     }
+    // Only fall back to a very recent live call — never a stale row that already
+    // ended (that produced Telnyx "Call has already ended" and felt like a drop).
     if (!callId && agentId) {
+      const since = new Date(Date.now() - 10 * 60 * 1000);
       const call = await prisma.voiceCall.findFirst({
         where: {
           workspaceId,
           agentId,
-          status: {
-            in: ["IN_PROGRESS", "ANSWERED", "RINGING", "QUEUED", "INITIATED"],
-          },
+          status: { in: ["IN_PROGRESS", "ANSWERED", "RINGING"] },
+          startedAt: { gte: since },
+          endedAt: null,
         },
         orderBy: { startedAt: "desc" },
         select: { id: true },

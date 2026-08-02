@@ -1,6 +1,9 @@
 /**
  * Build Telnyx AI Assistant tool definitions (retrieval + webhooks + telephony).
  * Only attaches tools explicitly enabled for the agent (plus knowledge retrieval).
+ *
+ * Native Telnyx tools (transfer / hangup / handoff / sip_refer / send_dtmf) must
+ * stay native — never serialize them as webhook tools.
  */
 
 import { getAppBaseUrl } from "@/lib/messaging/telnyx/config";
@@ -19,6 +22,11 @@ type ToolRow = {
   config: unknown;
   inputSchema: unknown;
 };
+
+const HANGUP_DESCRIPTION =
+  "End the call ONLY after the caller clearly says goodbye and the conversation is fully finished. " +
+  "NEVER use hangup to transfer, connect a human, look up CRM, send SMS, or recover from a tool error. " +
+  "NEVER use hangup immediately after another tool. If unsure, keep talking or take a message.";
 
 export function buildAssistantTools(input: {
   workspaceId: string;
@@ -41,34 +49,20 @@ export function buildAssistantTools(input: {
   const retrieval = retrievalToolForBuckets(input.bucketIds);
   if (retrieval) tools.push(retrieval);
 
-  if (isBuiltinToolEnabled(enabled, "hangup")) {
-    tools.push({
-      type: "hangup",
-      hangup: {
-        description:
-          "End the call ONLY after a clear goodbye when the conversation is fully complete or the caller explicitly asks to hang up. Give a brief closing statement first. NEVER use hangup after CRM lookups, transfers, SMS, or tool failures — keep talking or take a message instead.",
-      },
-    });
-  }
-
-  // Prefer Transovo escalate_human (cold transfer) over Telnyx-native transfer.
-  // Native warm transfer puts the caller on hold and tears down the assistant —
-  // when consult fails the call feels like an immediate hangup.
-  const preferEscalate = isBuiltinToolEnabled(enabled, "escalate_human");
-  if (
-    isBuiltinToolEnabled(enabled, "transfer") &&
-    input.transferTargets?.length &&
-    !preferEscalate
-  ) {
+  // Native transfer FIRST — human handoff must not compete with hangup/handoff.
+  const validTargets = (input.transferTargets || []).filter(
+    (t) => t?.name && t?.to && /^\+?[1-9]\d{6,14}$/.test(String(t.to).replace(/[\s()-]/g, "")),
+  );
+  if (isBuiltinToolEnabled(enabled, "transfer") && validTargets.length) {
     const transferBody: Record<string, unknown> = {
-      targets: input.transferTargets.map((t) => ({
+      targets: validTargets.map((t) => ({
         name: t.name,
-        to: t.to,
+        to: t.to.startsWith("+") ? t.to : `+${t.to.replace(/\D/g, "")}`,
       })),
     };
-    // Only attach warm instructions when explicitly provided — default is cold.
-    if (input.warmTransferInstructions) {
-      transferBody.warm_transfer_instructions = input.warmTransferInstructions;
+    // Cold transfer by default. Warm hold tears down the AI mid-call.
+    if (input.warmTransferInstructions?.trim()) {
+      transferBody.warm_transfer_instructions = input.warmTransferInstructions.trim();
     }
     tools.push({
       type: "transfer",
@@ -89,13 +83,19 @@ export function buildAssistantTools(input: {
       type: "handoff",
       handoff: {
         ai_assistants: assistants,
-        max_handoffs: 3,
+        max_handoffs: 2,
       },
     });
   }
 
   const base = getAppBaseUrl();
   const webhookUrl = `${base}/api/telnyx/voice/tools`;
+  if (!base || base.includes("localhost")) {
+    console.warn(
+      "[assistant-tools] APP_URL looks wrong for Telnyx webhooks:",
+      base,
+    );
+  }
 
   for (const tool of input.tools) {
     const schema =
@@ -111,7 +111,6 @@ export function buildAssistantTools(input: {
           `Execute the ${tool.toolType} business action. Never claim success until this tool returns ok=true. Never hang up if this tool fails.`,
         url: webhookUrl,
         method: "POST",
-        // Give CRM/SMS tools enough time; Telnyx max is typically 10s.
         timeout_ms: 10000,
         headers: [
           { name: "X-Transovo-Workspace-Id", value: input.workspaceId },
@@ -133,11 +132,14 @@ export function buildAssistantTools(input: {
 
   // Attach only explicitly enabled Transovo builtins (never the full catalog).
   // Skip end_call when native hangup is already enabled — dual terminators cause
-  // accidental hangups after CRM/transfer tool confusion.
+  // accidental hangups. Skip escalate_human when native transfer is attached —
+  // competing transfer paths caused the model to hang up instead.
+  const hasNativeTransfer = tools.some((t) => (t as { type?: string }).type === "transfer");
   const skipEndCall = isBuiltinToolEnabled(enabled, "hangup");
   for (const [key, builtin] of Object.entries(BUILTIN_WEBHOOK_BODIES)) {
     if (!isBuiltinToolEnabled(enabled, key)) continue;
     if (skipEndCall && key === "end_call") continue;
+    if (hasNativeTransfer && key === "escalate_human") continue;
     if (tools.some((t) => (t as { webhook?: { name?: string } }).webhook?.name === builtin.name)) {
       continue;
     }
@@ -162,6 +164,41 @@ export function buildAssistantTools(input: {
           { name: "X-Transovo-Tool-Type", value: builtin.toolType },
         ],
         body_parameters: builtin.body,
+      },
+    });
+  }
+
+  // Alias: models often invent "crm_lookup" — map it to the same gateway.
+  if (
+    isBuiltinToolEnabled(enabled, "search_crm_contacts") &&
+    !tools.some((t) => (t as { webhook?: { name?: string } }).webhook?.name === "crm_lookup")
+  ) {
+    const body = BUILTIN_WEBHOOK_BODIES.search_crm_contacts;
+    tools.push({
+      type: "webhook",
+      webhook: {
+        name: "crm_lookup",
+        description:
+          "Alias for search_crm_contacts. Look up a contact by name/phone/email. Never hang up after this tool.",
+        url: webhookUrl,
+        method: "POST",
+        timeout_ms: 10000,
+        headers: [
+          { name: "X-Transovo-Workspace-Id", value: input.workspaceId },
+          { name: "X-Transovo-Agent-Id", value: input.agentId },
+          { name: "X-Transovo-Tool-Type", value: "search_crm_contacts" },
+        ],
+        body_parameters: body.body,
+      },
+    });
+  }
+
+  // Hangup LAST and only when enabled — ordering matters for model tool choice.
+  if (isBuiltinToolEnabled(enabled, "hangup")) {
+    tools.push({
+      type: "hangup",
+      hangup: {
+        description: HANGUP_DESCRIPTION,
       },
     });
   }
