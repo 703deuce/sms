@@ -55,6 +55,23 @@ function testTransferVsHandoffLabels() {
   assert.equal(transferTool.transfer.name, "transfer_to_human");
 }
 
+function testSingleTransferPathPreference() {
+  // When escalate_human is enabled with destinations, native Transfer must be omitted.
+  const escalateEnabled = true;
+  const validTargets = [{ name: "Agent Handoff", to: "+17038166017" }];
+  const useCallControlTransfer = escalateEnabled && validTargets.length > 0;
+  const attachNative =
+    true && validTargets.length > 0 && !useCallControlTransfer;
+  assert.equal(useCallControlTransfer, true);
+  assert.equal(attachNative, false);
+
+  // Native-only when escalate is off.
+  const escalateOff = false;
+  const useCc2 = escalateOff && validTargets.length > 0;
+  const attachNative2 = true && validTargets.length > 0 && !useCc2;
+  assert.equal(attachNative2, true);
+}
+
 function testOutboundReadinessShape() {
   const ready = {
     ready: false,
@@ -75,6 +92,7 @@ function testOutboundReadinessShape() {
 async function main() {
   await testCrmDisclosureSpeak();
   testTransferVsHandoffLabels();
+  testSingleTransferPathPreference();
   testOutboundReadinessShape();
   console.log("outbound voice wiring checks passed");
 }

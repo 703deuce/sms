@@ -431,7 +431,7 @@ export async function executeBuiltinVoiceAction(input: {
         };
       }
       // Transferring a caller to their own number always fails — common when
-      // testing from the Agent Handoff cellphone.
+      // testing from the handoff cellphone.
       const destNorm = normalizeE164(dest.destination);
       const callerNorm = normalizeE164(call.fromE164 || "");
       if (destNorm && callerNorm && destNorm === callerNorm) {
@@ -442,8 +442,31 @@ export async function executeBuiltinVoiceAction(input: {
             "I can't transfer you to the same phone you're calling from. On a customer call this would ring your team. I can take a message instead.",
         };
       }
-      // Cold/blind transfer for AI PSTN — warm hold tears down the assistant and
-      // feels like an immediate hangup when consult dial fails.
+
+      // Idempotent: if a transfer is already ringing, do not dial again or
+      // invite a second "failed" apology from the model.
+      const inflight = await prisma.voiceTransfer.findFirst({
+        where: {
+          workspaceId: input.workspaceId,
+          callId: call.id,
+          status: {
+            in: ["requested", "ringing", "bridging", "in_progress", "consulting"],
+          },
+        },
+        orderBy: { createdAt: "desc" },
+      });
+      if (inflight) {
+        return {
+          ok: true,
+          alreadyInProgress: true,
+          transferId: inflight.id,
+          transferredTo: dest.name,
+          destination: dest.destination,
+          speak: `I'm still connecting you with ${dest.name}. Please stay on the line.`,
+        };
+      }
+
+      // Cold/blind Call Control transfer — single path for PSTN human handoff.
       const { initiateTransfer } = await import("../transfers");
       try {
         const result = await initiateTransfer({
@@ -462,7 +485,11 @@ export async function executeBuiltinVoiceAction(input: {
           destination: dest.destination,
           reason: args.reason || null,
           result,
-          speak: `Connecting you with ${dest.name} now.`,
+          transferInProgress: true,
+          // Model must not invent a failure while the destination is ringing.
+          speak: `Connecting you with ${dest.name} now. Please stay on the line.`,
+          guidance:
+            "Transfer dial started. Say you are connecting them, then stay silent. Do not claim the transfer failed unless a later tool result says ok=false.",
         };
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);

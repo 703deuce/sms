@@ -49,17 +49,27 @@ export function buildAssistantTools(input: {
   const retrieval = retrievalToolForBuckets(input.bucketIds);
   if (retrieval) tools.push(retrieval);
 
-  // Native transfer FIRST — human handoff must not compete with hangup/handoff.
+  // Phone destinations for human transfer (destination labels ≠ AI Handoff).
   const validTargets = (input.transferTargets || []).filter(
     (t) => t?.name && t?.to && /^\+?[1-9]\d{6,14}$/.test(String(t.to).replace(/[\s()-]/g, "")),
   );
-  if (isBuiltinToolEnabled(enabled, "transfer") && validTargets.length) {
-    // Native Telnyx phone Transfer (PSTN/SIP destination) — NOT AI Assistant Handoff.
-    // Target names like "Agent Handoff" / "Front Desk" are destination labels only.
+  const escalateEnabled = isBuiltinToolEnabled(enabled, "escalate_human");
+  // Prefer a SINGLE transfer path. Offering native Transfer + escalate_human
+  // causes a dual-dial race: Telnyx AI reports Transfer failed and the model
+  // apologizes while Call Control is still ringing the destination through.
+  // Call Control escalate is the reliable PSTN path once Outbound Voice is ready.
+  const useCallControlTransfer = escalateEnabled && validTargets.length > 0;
+
+  if (
+    isBuiltinToolEnabled(enabled, "transfer") &&
+    validTargets.length &&
+    !useCallControlTransfer
+  ) {
+    // Native Telnyx phone Transfer — only when escalate_human is not available.
     const transferBody: Record<string, unknown> = {
       name: "transfer_to_human",
       description:
-        "Transfer the live caller to a named human phone destination (cold phone Transfer). Use when the caller asks for a person. This is not AI Assistant Handoff.",
+        "Transfer the live caller to a named human phone destination (cold phone Transfer). Use when the caller asks for a person. This is not AI Assistant Handoff. After invoking, stay quiet — do not claim failure while connecting.",
       targets: validTargets.map((t) => ({
         name: t.name,
         to: t.to.startsWith("+") ? t.to : `+${t.to.replace(/\D/g, "")}`,
@@ -138,8 +148,7 @@ export function buildAssistantTools(input: {
 
   // Attach only explicitly enabled Transovo builtins (never the full catalog).
   // Skip end_call when native hangup is already enabled — dual terminators cause
-  // accidental hangups. Keep escalate_human even with native transfer so we can
-  // recover when Telnyx native transfer fails (e.g. transfer-to-self while testing).
+  // accidental hangups.
   const skipEndCall = isBuiltinToolEnabled(enabled, "hangup");
   for (const [key, builtin] of Object.entries(BUILTIN_WEBHOOK_BODIES)) {
     if (!isBuiltinToolEnabled(enabled, key)) continue;
@@ -154,14 +163,18 @@ export function buildAssistantTools(input: {
       key === "send_sms" ||
       key === "book_appointment" ||
       key === "calendar_availability";
+    const escalateSolePath = key === "escalate_human" && useCallControlTransfer;
+    const description = escalateSolePath
+      ? "Transfer the caller to a named human phone destination (e.g. Agent Handoff / Front Desk). This is the ONLY human phone transfer tool. Call it once when they ask for a person. If it returns ok=true, say you are connecting them and stay silent — never say the transfer failed while they are being connected. If it returns ok=false, then apologize and take a message. Never invent a phone number. Never hang up to transfer."
+      : `${builtin.description} If this tool fails, do NOT hang up — apologize and offer to take a message.`;
     tools.push({
       type: "webhook",
       webhook: {
         name: builtin.name,
-        description: `${builtin.description} If this tool fails, do NOT hang up — apologize and offer to take a message.`,
+        description,
         url: webhookUrl,
         method: "POST",
-        timeout_ms: slow ? 10000 : 8000,
+        timeout_ms: escalateSolePath ? 12000 : slow ? 10000 : 8000,
         headers: [
           { name: "X-Transovo-Workspace-Id", value: input.workspaceId },
           { name: "X-Transovo-Agent-Id", value: input.agentId },

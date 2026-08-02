@@ -461,8 +461,20 @@ export async function processVoiceWebhookEvent(input: {
     });
   }
 
+  // Call Control human transfer completed — destination answered / bridged.
+  if (!isSecondaryVoiceLeg && eventType === "call.bridged") {
+    const { completeTransfersOnBridge } = await import("../transfers");
+    await completeTransfersOnBridge({
+      workspaceId,
+      callId: call.id,
+    }).catch((err) =>
+      console.warn("[voice/webhook] completeTransfersOnBridge failed", err),
+    );
+  }
+
   // Outbound (or inbound that never claimed): start assistant once on answered.
   // Inbound AI usually claims + starts on call.initiated — do NOT greet twice.
+  // Never restart AI after a human transfer is in progress or bridged.
   if (
     !isSecondaryVoiceLeg &&
     (eventType === "call.answered" || eventType === "call.bridged") &&
@@ -471,7 +483,22 @@ export async function processVoiceWebhookEvent(input: {
   ) {
     const { claimAiStart, isAiStartClaimed } = await import("../ai-start-lock");
     const meta = (call.metadata || {}) as Record<string, unknown>;
-    if (isAiStartClaimed(meta)) {
+    if (eventType === "call.bridged" || meta.transferInProgress || call.transferred) {
+      await prisma.voiceCallEvent
+        .create({
+          data: {
+            workspaceId,
+            callId: call.id,
+            eventType: "media.ai_start_skipped",
+            payload: {
+              reason: "human_transfer_active",
+              path: "answered_webhook",
+              eventType,
+            } as object,
+          },
+        })
+        .catch(() => undefined);
+    } else if (isAiStartClaimed(meta)) {
       await prisma.voiceCallEvent
         .create({
           data: {
@@ -882,6 +909,8 @@ export async function processVoiceWebhookEvent(input: {
     }
 
     // Persist native Telnyx Transfer attempts (phone Transfer ≠ AI Handoff).
+    // Do NOT treat native "failed" as authoritative when a Call Control transfer
+    // is still ringing — that race made the AI apologize while the phone rang.
     if (/conversation\.ended/i.test(eventType)) {
       const transferStatus = eventPayload.transfer_status as
         | { status?: string; target?: string; transferred?: boolean }
@@ -890,11 +919,24 @@ export async function processVoiceWebhookEvent(input: {
         const destination = String(transferStatus.target || "").trim();
         const transferred = Boolean(transferStatus.transferred);
         const statusRaw = String(transferStatus.status || "").toLowerCase();
+        const inflightCc = await prisma.voiceTransfer.findFirst({
+          where: {
+            workspaceId,
+            callId: call.id,
+            transferType: { not: "native_telnyx_transfer" },
+            status: {
+              in: ["requested", "ringing", "bridging", "in_progress", "consulting"],
+            },
+          },
+          orderBy: { createdAt: "desc" },
+        });
         const status = transferred
           ? "completed"
-          : statusRaw.includes("fail")
-            ? "failed"
-            : statusRaw || "unknown";
+          : inflightCc && statusRaw.includes("fail")
+            ? "superseded_by_call_control"
+            : statusRaw.includes("fail")
+              ? "failed"
+              : statusRaw || "unknown";
         const existing = await prisma.voiceTransfer.findFirst({
           where: {
             workspaceId,
@@ -916,6 +958,7 @@ export async function processVoiceWebhookEvent(input: {
                 transfer_status: transferStatus,
                 conversationEndReason: eventPayload.reason || null,
                 source: "call.conversation.ended",
+                callControlInFlightId: inflightCc?.id || null,
               } as object,
             },
           });
@@ -933,9 +976,8 @@ export async function processVoiceWebhookEvent(input: {
                 transfer_status: transferStatus,
                 conversationEndReason: eventPayload.reason || null,
                 source: "call.conversation.ended",
-                // Named destination labels (e.g. "Agent Handoff") are phone
-                // Transfer targets, not Telnyx AI Assistant Handoff.
                 toolKind: "transfer",
+                callControlInFlightId: inflightCc?.id || null,
               } as object,
             },
           });
@@ -955,6 +997,7 @@ export async function processVoiceWebhookEvent(input: {
               payload: {
                 transfer_status: transferStatus,
                 reason: eventPayload.reason || null,
+                supersededByCallControl: Boolean(inflightCc && !transferred),
               } as object,
             },
           })

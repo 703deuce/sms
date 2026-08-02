@@ -758,7 +758,7 @@ export const BUILTIN_WEBHOOK_BODIES: Record<
     name: "escalate_human",
     toolType: "escalate_human",
     description:
-      "Escalate to a human. Prefer named target 'Agent Handoff'. Summarize the call first. Never invent a phone number.",
+      "Transfer the caller to a named human phone destination (default Agent Handoff). Call once. If ok=true, say you are connecting them and stay silent — do not claim failure while ringing. Never invent a phone number.",
     body: {
       type: "object",
       properties: {

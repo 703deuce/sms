@@ -236,16 +236,21 @@ export async function initiateTransfer(input: {
   await prisma.voiceCall.update({
     where: { id: call.id },
     data: {
+      // Mark intent immediately; bridge/answer confirms completion.
       transferred: true,
+      status: "TRANSFERRED",
       metadata: {
         ...(call.metadata as object),
         lastTransferType: isSipRefer ? "sip_refer" : input.transferType,
+        transferInProgress: true,
+        transferId: transfer.id,
       } as object,
     },
   });
   await prisma.voiceTransfer.update({
     where: { id: transfer.id },
     data: {
+      status: "ringing",
       transferType: isSipRefer ? "sip_refer" : input.transferType,
       metadata: {
         ...((transfer.metadata as object) || {}),
@@ -254,8 +259,62 @@ export async function initiateTransfer(input: {
       } as object,
     },
   });
+  await logTransferEvent(input.workspaceId, call.id, transfer.id, "ringing", {
+    destination,
+    transferType: isSipRefer ? "sip_refer" : input.transferType,
+  });
 
   return { mode: "telnyx", transferId: transfer.id, sipRefer: Boolean(isSipRefer) };
+}
+
+/** Mark in-flight Call Control transfers completed when the call bridges. */
+export async function completeTransfersOnBridge(input: {
+  workspaceId: string;
+  callId: string;
+}) {
+  const prisma = getPrisma();
+  const pending = await prisma.voiceTransfer.findMany({
+    where: {
+      workspaceId: input.workspaceId,
+      callId: input.callId,
+      status: {
+        in: ["requested", "ringing", "bridging", "in_progress", "consulting"],
+      },
+    },
+  });
+  for (const t of pending) {
+    await prisma.voiceTransfer.update({
+      where: { id: t.id },
+      data: {
+        status: "completed",
+        answered: true,
+        completedAt: new Date(),
+      },
+    });
+    await logTransferEvent(input.workspaceId, input.callId, t.id, "completed", {
+      reason: "call.bridged",
+    });
+  }
+  if (pending.length) {
+    const call = await prisma.voiceCall.findFirst({
+      where: { id: input.callId, workspaceId: input.workspaceId },
+    });
+    if (call) {
+      await prisma.voiceCall.update({
+        where: { id: call.id },
+        data: {
+          transferred: true,
+          status: "TRANSFERRED",
+          metadata: {
+            ...(call.metadata as object),
+            transferInProgress: false,
+            transferCompletedAt: new Date().toISOString(),
+          } as object,
+        },
+      });
+    }
+  }
+  return { completed: pending.length };
 }
 
 async function initiateWarmTransfer(input: {

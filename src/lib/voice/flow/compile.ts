@@ -83,7 +83,7 @@ export function compileVoiceFlowBundle(
         "Only hang up after a clear goodbye when the caller is fully done. Never hang up after CRM lookups, transfers, holds, or tool errors — stay on the line and recover with a spoken apology.",
         enabledBuiltinTools.includes("transfer") ||
         enabledBuiltinTools.includes("escalate_human")
-          ? "For live human transfers use the native Transfer tool to a named target (Agent Handoff / Front Desk). Never invent a phone number. Never use hangup to transfer. If transfer fails, apologize and take a message — stay on the line."
+          ? "For live human transfers call escalate_human (or Transfer if that is the only tool) once to a named target such as Agent Handoff / Front Desk. Never invent a phone number. Never use hangup to transfer. After the tool returns ok=true, say you are connecting them and stay silent — do not claim the transfer failed while connecting. Only apologize and take a message if the tool returns ok=false."
           : "",
         enabledBuiltinTools.includes("crm_lookup_contact") ||
         enabledBuiltinTools.includes("lookup_customer") ||
@@ -97,7 +97,7 @@ export function compileVoiceFlowBundle(
         .join("\n\n"),
       confirmation: "Confirm important details before transfers, SMS, or CRM writes.",
       escalation:
-        "If the caller asks for a person, use Transfer to the named target Agent Handoff. Do not hang up yourself. Do not hand off to another AI unless they ask for a specialist topic.",
+        "If the caller asks for a person, use escalate_human to the named target Agent Handoff. Do not hang up yourself. After connecting starts, stay quiet. Do not hand off to another AI unless they ask for a specialist topic.",
       uncertainty: "If unsure, ask a clarifying question or offer to take a message.",
       fillerMessages: [
         "One moment while I look that up.",
