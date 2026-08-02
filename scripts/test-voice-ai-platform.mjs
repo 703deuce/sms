@@ -194,6 +194,50 @@ async function main() {
   ok("outboundAiEnabled default false", /outboundAiEnabled Boolean\s+@default\(false\)/.test(schema));
   ok("mcp approved default false", /approved\s+Boolean\s+@default\(false\)/.test(schema));
 
+  const agentSvc = fs.readFileSync(
+    path.join(root, "src/lib/voice/agent-service.ts"),
+    "utf8",
+  );
+  ok("buildVoiceAgentForTest export", /export async function buildVoiceAgentForTest/.test(agentSvc));
+  ok("build sets TESTING", /status:\s*"TESTING"/.test(agentSvc));
+  ok("publishVoiceAgent export", /export async function publishVoiceAgent/.test(agentSvc));
+  const agentRoute = fs.readFileSync(
+    path.join(root, "src/app/api/voice/agents/[id]/route.ts"),
+    "utf8",
+  );
+  ok("API build_for_test action", /build_for_test/.test(agentRoute));
+  ok("API deploy action", /action === "deploy"/.test(agentRoute));
+  ok(
+    "AgentTestPanel component",
+    fs.existsSync(path.join(root, "src/components/voice/agent-test-panel.tsx")),
+  );
+  ok("builder Build & test", /build_for_test|Build &amp; test|Build \& test/.test(builderSrc2));
+  ok("builder Deploy to number", /Deploy to number/.test(builderSrc2));
+  ok("builder barge-in control", /bargeIn/.test(builderSrc2));
+  ok("builder compare_versions UI", /compare_versions/.test(builderSrc2));
+  const widgetChat = fs.readFileSync(
+    path.join(root, "src/app/api/public/voice/widget/chat/route.ts"),
+    "utf8",
+  );
+  ok("widget session requires !testMode", /!cfg\.testMode/.test(widgetChat));
+  const admission = fs.readFileSync(
+    path.join(root, "src/lib/voice/platform/admission.ts"),
+    "utf8",
+  );
+  ok("admission plan/trial gates", /trial_pending_card|plan_suspended/.test(admission));
+  ok("resolveAiVersionStamp", /resolveAiVersionStamp/.test(admission));
+  const webhookSrc = fs.readFileSync(
+    path.join(root, "src/lib/voice/telnyx/webhook-handlers.ts"),
+    "utf8",
+  );
+  ok(
+    "webhook persists conversation messages",
+    /voiceAiConversationMessage/.test(webhookSrc),
+  );
+  ok("handoff hangup loop limit", /hops > 3/.test(webhookSrc));
+  const jobsSrc = fs.readFileSync(path.join(root, "src/lib/jobs/job-handlers.ts"), "utf8");
+  ok("regression recurring re-enqueue", /recurring:\s*true/.test(jobsSrc));
+
   if (failures.length) {
     console.error("\nFAILED", failures.length, failures);
     process.exit(1);

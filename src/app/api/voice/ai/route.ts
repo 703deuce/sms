@@ -382,6 +382,7 @@ export async function POST(request: Request) {
             workspaceId,
             agentId,
             String(body.message || ""),
+            body.conversationId ? String(body.conversationId) : undefined,
           ),
         });
       case "send_dtmf": {

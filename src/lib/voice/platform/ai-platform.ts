@@ -1386,11 +1386,20 @@ export async function chatPreview(
   workspaceId: string,
   agentId: string,
   message: string,
+  conversationId?: string,
 ) {
-  const agent = await requireAgent(workspaceId, agentId);
-  if (!agent.telnyxAssistantId) throw new Error("Publish agent to Telnyx before chat preview");
+  // Allow TESTING builds — requireAgent blocks emergency only.
+  const agent = await getPrisma().voiceAgent.findFirst({
+    where: { id: agentId, workspaceId },
+  });
+  if (!agent) throw new Error("Agent not found");
+  if (agent.emergencyDisabled) throw new Error("Agent emergency-disabled");
+  if (!agent.telnyxAssistantId) {
+    throw new Error("Build the agent first (Build & test) so Telnyx can sync the assistant");
+  }
   return ai.chatAssistant(agent.telnyxAssistantId, {
     messages: [{ role: "user", content: message }],
+    ...(conversationId ? { conversation_id: conversationId } : {}),
   });
 }
 
@@ -1604,12 +1613,14 @@ export async function deleteRemoteAssistant(workspaceId: string, agentId: string
 
 export async function scheduleRecurringRegression(workspaceId: string) {
   const { enqueueJob } = await import("@/lib/messaging/enqueue-advance");
+  const dayKey = new Date().toISOString().slice(0, 10);
+  // First run soon; handler re-enqueues the next day when recurring=true.
   await enqueueJob({
     jobType: "voice_regression_suite",
     queueName: "voice-calls",
     workspaceId,
-    payload: { workspaceId, suiteName: "transovo-default" },
-    idempotencyKey: `voice-regression:${workspaceId}:${new Date().toISOString().slice(0, 10)}`,
+    payload: { workspaceId, suiteName: "transovo-default", recurring: true },
+    idempotencyKey: `voice-regression:${workspaceId}:${dayKey}`,
     runAfter: new Date(Date.now() + 60_000),
   });
   await enqueueJob({
@@ -1617,8 +1628,8 @@ export async function scheduleRecurringRegression(workspaceId: string) {
     queueName: "voice-calls",
     workspaceId,
     payload: { workspaceId },
-    idempotencyKey: `voice-retention:${workspaceId}:${new Date().toISOString().slice(0, 10)}`,
+    idempotencyKey: `voice-retention:${workspaceId}:${dayKey}`,
     runAfter: new Date(Date.now() + 120_000),
   });
-  return { scheduled: true };
+  return { scheduled: true, recurring: true };
 }

@@ -283,6 +283,12 @@ export async function syncTelnyxAssistant(
   if (config.voiceLanguage?.endpointingMs) {
     payload.endpointing_ms = config.voiceLanguage.endpointingMs;
   }
+  if (config.voiceLanguage?.noiseSuppression != null) {
+    payload.noise_suppression = config.voiceLanguage.noiseSuppression;
+  }
+  if (config.voiceLanguage?.endOfTurn) {
+    payload.end_of_turn = config.voiceLanguage.endOfTurn;
+  }
   if (config.instructions?.protectedGreeting) {
     payload.greeting_settings = { protected: true };
   }

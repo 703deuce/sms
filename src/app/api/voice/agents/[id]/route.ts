@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
 import { getPrisma } from "@/lib/db";
 import {
+  buildVoiceAgentForTest,
   duplicateVoiceAgent,
   publishVoiceAgent,
   rollbackVoiceAgent,
@@ -102,11 +103,24 @@ export async function PATCH(
       const dup = await duplicateVoiceAgent(auth.workspaceId, id);
       return NextResponse.json({ data: mapAgent(dup) }, { status: 201 });
     }
-    if (body.action === "publish") {
+    if (body.action === "build" || body.action === "build_for_test") {
+      const result = await buildVoiceAgentForTest(
+        auth.workspaceId,
+        id,
+        auth.session.userId,
+      );
+      return NextResponse.json({
+        data: mapAgent(result.agent),
+        version: result.version.version,
+        mode: "testing",
+      });
+    }
+    if (body.action === "publish" || body.action === "deploy") {
       const result = await publishVoiceAgent(auth.workspaceId, id, auth.session.userId);
       return NextResponse.json({
         data: mapAgent(result.agent),
         version: result.version.version,
+        mode: "deployed",
       });
     }
     if (body.action === "pause") {

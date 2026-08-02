@@ -82,6 +82,111 @@ export async function updateVoiceAgentDraft(
   return updated;
 }
 
+async function syncAssistantToTelnyx(
+  workspaceId: string,
+  agentId: string,
+  agent: { id: string; telnyxAssistantId: string | null },
+  config: VoiceAgentConfig,
+) {
+  const { syncTelnyxAssistant } = await import("./telnyx/assistant-sync");
+  const sync = await syncTelnyxAssistant(workspaceId, agent as never, config);
+  const assistantId =
+    (sync as { assistantId?: string })?.assistantId || agent.telnyxAssistantId;
+  if (!assistantId) return null;
+
+  const platform = await import("./platform/ai-platform");
+  // Ensure Transovo MCP is registered/approved before enrich attaches it.
+  await platform.ensureTransovoMcpServer(workspaceId).catch(() => undefined);
+  await platform
+    .enrichAssistantRemoteConfig({
+      workspaceId,
+      agentId,
+      telnyxAssistantId: assistantId,
+    })
+    .catch((err) =>
+      console.warn(
+        "[voice] enrich remote config failed",
+        err instanceof Error ? err.message : err,
+      ),
+    );
+  return assistantId;
+}
+
+/**
+ * Build agent for in-app testing (Telnyx sync → TESTING).
+ * Does not require a phone number and does not accept production inbound.
+ */
+export async function buildVoiceAgentForTest(
+  workspaceId: string,
+  agentId: string,
+  publishedBy?: string,
+) {
+  const prisma = getPrisma();
+  const agent = await prisma.voiceAgent.findFirst({
+    where: { id: agentId, workspaceId },
+  });
+  if (!agent) throw new Error("Agent not found");
+  if (agent.emergencyDisabled) throw new Error("Agent emergency-disabled");
+
+  const config = parseVoiceAgentConfig(agent.draftConfig);
+  const issues = validateAgentForPublish(agent.name, config, {
+    requirePhone: false,
+    phoneNumberId: agent.phoneNumberId,
+  });
+  if (hasBlockingIssues(issues)) {
+    const err = new Error("Build validation failed");
+    (err as Error & { issues: typeof issues }).issues = issues;
+    throw err;
+  }
+
+  const lastVersion = await prisma.voiceAgentVersion.findFirst({
+    where: { agentId },
+    orderBy: { version: "desc" },
+  });
+  const version = (lastVersion?.version ?? 0) + 1;
+  const versionRow = await prisma.voiceAgentVersion.create({
+    data: {
+      workspaceId,
+      agentId,
+      version,
+      config: config as object,
+      publishedBy,
+      testStatus: "ready_for_test",
+      deploymentStatus: "testing",
+      isMain: false,
+    },
+  });
+
+  let updated = await prisma.voiceAgent.update({
+    where: { id: agentId },
+    data: {
+      publishedVersionId: versionRow.id,
+      status: "TESTING",
+      healthStatus: "ok",
+      healthMessage: null,
+    },
+  });
+
+  try {
+    await syncAssistantToTelnyx(workspaceId, agentId, updated, config);
+    updated = (await prisma.voiceAgent.findUnique({ where: { id: agentId } })) || updated;
+  } catch (err) {
+    console.error("[voice] Telnyx build sync failed", err);
+    await prisma.voiceAgent.update({
+      where: { id: agentId },
+      data: {
+        healthStatus: "warning",
+        healthMessage: "Built locally but Telnyx sync failed — chat test may be mock-only",
+      },
+    });
+  }
+
+  return { agent: updated, version: versionRow };
+}
+
+/**
+ * Deploy agent to production (ACTIVE) and assign DID for inbound.
+ */
 export async function publishVoiceAgent(
   workspaceId: string,
   agentId: string,
@@ -95,16 +200,18 @@ export async function publishVoiceAgent(
 
   const config = parseVoiceAgentConfig(agent.draftConfig);
   const issues = validateAgentForPublish(agent.name, config, {
-    requirePhone: config.identity?.directions?.includes("inbound"),
+    requirePhone:
+      !config.identity?.directions?.length ||
+      config.identity.directions.includes("inbound"),
     phoneNumberId: agent.phoneNumberId,
   });
   if (hasBlockingIssues(issues)) {
-    const err = new Error("Publish validation failed");
+    const err = new Error("Deploy validation failed — assign a phone number under Identity");
     (err as Error & { issues: typeof issues }).issues = issues;
     throw err;
   }
 
-  // Gate public publish when regression suite has a failing result (or hard-require when env set).
+  // Gate deploy when regression suite has a failing result (or hard-require when env set).
   const requireSuite = process.env.VOICE_PUBLISH_REQUIRE_SUITE === "1";
   const latestSuiteRun = await prisma.voiceAssistantTestRun.findFirst({
     where: {
@@ -118,12 +225,12 @@ export async function publishVoiceAgent(
     ["failed", "error", "fail"].includes(String(latestSuiteRun.status).toLowerCase());
   if (suiteFailed) {
     throw new Error(
-      "Publish blocked: latest transovo-default suite run failed — fix tests or clear the failing run",
+      "Deploy blocked: latest transovo-default suite run failed — fix tests or clear the failing run",
     );
   }
   if (requireSuite && !latestSuiteRun) {
     throw new Error(
-      "Publish blocked: VOICE_PUBLISH_REQUIRE_SUITE=1 and no suite run found — run seed_suite/run_suite first",
+      "Deploy blocked: VOICE_PUBLISH_REQUIRE_SUITE=1 and no suite run found — run seed_suite/run_suite first",
     );
   }
 
@@ -141,7 +248,7 @@ export async function publishVoiceAgent(
       config: config as object,
       publishedBy,
       testStatus: latestSuiteRun?.status || (requireSuite ? "required" : "skipped"),
-      deploymentStatus: "publishing",
+      deploymentStatus: "deployed",
       isMain: true,
     },
   });
@@ -156,7 +263,6 @@ export async function publishVoiceAgent(
     },
   });
 
-  // Keep inbound DID join table in sync with the agent's primary number.
   try {
     const { syncVoiceAgentPhoneAssignment } = await import("./agent-phone");
     await syncVoiceAgentPhoneAssignment({
@@ -168,32 +274,15 @@ export async function publishVoiceAgent(
     console.error("[voice] phone assignment sync failed", err);
   }
 
-  // Sync Telnyx assistant when configured
   try {
-    const { syncTelnyxAssistant } = await import("./telnyx/assistant-sync");
-    const sync = await syncTelnyxAssistant(workspaceId, updated, config);
-    const assistantId =
-      (sync as { assistantId?: string })?.assistantId || updated.telnyxAssistantId;
-    if (assistantId) {
-      const { enrichAssistantRemoteConfig } = await import("./platform/ai-platform");
-      await enrichAssistantRemoteConfig({
-        workspaceId,
-        agentId,
-        telnyxAssistantId: assistantId,
-      }).catch((err) =>
-        console.warn(
-          "[voice] enrich remote config failed",
-          err instanceof Error ? err.message : err,
-        ),
-      );
-    }
+    await syncAssistantToTelnyx(workspaceId, agentId, updated, config);
   } catch (err) {
     console.error("[voice] Telnyx assistant sync failed", err);
     await prisma.voiceAgent.update({
       where: { id: agentId },
       data: {
         healthStatus: "warning",
-        healthMessage: "Published locally but Telnyx sync failed",
+        healthMessage: "Deployed locally but Telnyx sync failed",
       },
     });
   }

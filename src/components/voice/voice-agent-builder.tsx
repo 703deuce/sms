@@ -3,6 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
 import { Input, Label, Textarea } from "@/components/ui/input";
+import { AgentTestPanel } from "@/components/voice/agent-test-panel";
 import type { VoiceAgentConfig } from "@/lib/voice/types";
 import { AGENT_TYPE_LABELS } from "@/lib/voice/types";
 import { cn } from "@/lib/utils";
@@ -47,6 +48,7 @@ type AgentDetail = {
   directions: string[];
   draftConfig: VoiceAgentConfig;
   publishedVersionId?: string | null;
+  telnyxAssistantId?: string | null;
   versions?: Array<{ id: string; version: number; publishedAt: string }>;
 };
 
@@ -82,6 +84,16 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
   const [mcpUrl, setMcpUrl] = useState("");
   const [memoryMode, setMemoryMode] = useState("conversation");
   const [canaryPct, setCanaryPct] = useState(10);
+  const [remoteVersions, setRemoteVersions] = useState<
+    Array<{ telnyxVersionId: string; name?: string | null; label?: string | null; isMain?: boolean }>
+  >([]);
+  const [canaryVersionId, setCanaryVersionId] = useState("main");
+  const [compareLeft, setCompareLeft] = useState("");
+  const [compareRight, setCompareRight] = useState("");
+  const [compareResult, setCompareResult] = useState<{
+    diffCount?: number;
+    diffs?: Array<{ key: string; left: unknown; right: unknown }>;
+  } | null>(null);
 
   const loadPlatform = useCallback(async () => {
     const res = await fetch(`/api/voice/ai?view=agent&agentId=${agentId}`);
@@ -95,6 +107,26 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
       outboundAiEnabled: Boolean(a.outboundAiEnabled),
       widgetEnabled: Boolean(a.widgetEnabled),
     });
+  }, [agentId]);
+
+  const loadRemoteVersions = useCallback(async () => {
+    const res = await fetch(`/api/voice/ai?view=versions&agentId=${agentId}`);
+    if (!res.ok) return;
+    const j = await res.json();
+    const rows = (j.data || []) as Array<{
+      telnyxVersionId: string;
+      name?: string | null;
+      label?: string | null;
+      isMain?: boolean;
+    }>;
+    setRemoteVersions(rows);
+    setCanaryVersionId((prev) => {
+      if (prev && prev !== "main") return prev;
+      const main = rows.find((r) => r.isMain) || rows[0];
+      return main?.telnyxVersionId || prev || "main";
+    });
+    setCompareLeft((prev) => prev || rows[0]?.telnyxVersionId || "");
+    setCompareRight((prev) => prev || rows[1]?.telnyxVersionId || rows[0]?.telnyxVersionId || "");
   }, [agentId]);
 
   const load = useCallback(async () => {
@@ -152,6 +184,10 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
     load().catch((e) => setError(e instanceof Error ? e.message : "Load failed"));
   }, [load]);
 
+  useEffect(() => {
+    void loadRemoteVersions();
+  }, [loadRemoteVersions]);
+
   async function platformAct(action: string, extra: Record<string, unknown> = {}) {
     setPlatformBusy(action);
     setPlatformMsg("");
@@ -163,8 +199,14 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
       });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error || `Failed ${action}`);
-      setPlatformMsg(`${action}: ok`);
+      if (action === "compare_versions") {
+        setCompareResult(j.data || null);
+        setPlatformMsg(`compare_versions: ${j.data?.diffCount ?? 0} diffs`);
+      } else {
+        setPlatformMsg(`${action}: ok`);
+      }
       await loadPlatform();
+      if (action === "sync_versions") await loadRemoteVersions();
     } catch (err) {
       setPlatformMsg(err instanceof Error ? err.message : String(err));
     } finally {
@@ -213,20 +255,51 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
     }
   }
 
-  async function publish() {
-    await saveDraft();
-    const res = await fetch(`/api/voice/agents/${agentId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "publish" }),
-    });
-    const json = await res.json();
-    if (!res.ok) {
-      setError(json.error || "Publish failed");
-      if (json.issues) setError(`Publish blocked: ${JSON.stringify(json.issues)}`);
-      return;
+  async function buildForTest() {
+    setSaving(true);
+    setError(null);
+    try {
+      await saveDraft();
+      await saveKnowledgeBases();
+      await saveTools();
+      const res = await fetch(`/api/voice/agents/${agentId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "build_for_test" }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setError(json.error || "Build failed");
+        if (json.issues) setError(`Build blocked: ${JSON.stringify(json.issues)}`);
+        return;
+      }
+      setSection("tests");
+      await load();
+    } finally {
+      setSaving(false);
     }
-    await load();
+  }
+
+  async function deploy() {
+    setSaving(true);
+    setError(null);
+    try {
+      await saveDraft();
+      const res = await fetch(`/api/voice/agents/${agentId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "deploy" }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setError(json.error || "Deploy failed");
+        if (json.issues) setError(`Deploy blocked: ${JSON.stringify(json.issues)}`);
+        return;
+      }
+      await load();
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function agentAction(action: string, extra?: Record<string, unknown>) {
@@ -359,8 +432,10 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
           {saveState === "saved" && "Saved"}
           {saveState === "unsaved" && "Unsaved changes"}
           {saveState === "error" && "Save error"}
-          {agent.publishedVersionId ? (
-            <p className="mt-1 text-emerald-600">Published</p>
+          {agent.rawStatus === "ACTIVE" ? (
+            <p className="mt-1 text-emerald-600">Deployed live</p>
+          ) : agent.rawStatus === "TESTING" ? (
+            <p className="mt-1 text-amber-700">Built — test before deploy</p>
           ) : (
             <p className="mt-1">Draft only</p>
           )}
@@ -374,21 +449,64 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
             <p className="text-sm text-muted-foreground">Status: {agent.status}</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" disabled={saving} onClick={saveDraft}>Save</Button>
-            <Button disabled={saving} onClick={publish}>Publish</Button>
+            <Button variant="outline" disabled={saving} onClick={saveDraft}>
+              Save draft
+            </Button>
+            <Button disabled={saving} onClick={() => void buildForTest()}>
+              Build &amp; test
+            </Button>
+            <Button
+              variant="secondary"
+              disabled={saving}
+              onClick={() => void deploy()}
+              title="Requires a phone number for inbound — goes live on that DID"
+            >
+              Deploy to number
+            </Button>
             {agent.rawStatus === "ACTIVE" ? (
-              <Button variant="outline" size="sm" onClick={() => agentAction("pause")}>Pause</Button>
+              <Button variant="outline" size="sm" onClick={() => agentAction("pause")}>
+                Pause
+              </Button>
             ) : agent.rawStatus === "PAUSED" ? (
-              <Button variant="outline" size="sm" onClick={() => agentAction("activate")}>Activate</Button>
+              <Button variant="outline" size="sm" onClick={() => agentAction("activate")}>
+                Activate
+              </Button>
             ) : null}
             {agent.rawStatus !== "ARCHIVED" ? (
-              <Button variant="outline" size="sm" onClick={() => agentAction("archive")}>Archive</Button>
+              <Button variant="outline" size="sm" onClick={() => agentAction("archive")}>
+                Archive
+              </Button>
             ) : null}
-            <Button variant="outline" size="sm" onClick={() => agentAction("duplicate")}>Duplicate</Button>
+            <Button variant="outline" size="sm" onClick={() => agentAction("duplicate")}>
+              Duplicate
+            </Button>
           </div>
         </div>
 
         {error && <p className="text-sm text-rose-600">{error}</p>}
+
+        <Card className="space-y-2 border-emerald-800/20 bg-emerald-50/40 p-4 dark:bg-emerald-950/20">
+          <p className="text-sm font-medium">Flow</p>
+          <ol className="list-decimal space-y-1 pl-5 text-xs text-muted-foreground">
+            <li>Configure instructions, knowledge, voice, and tools — Save draft.</li>
+            <li>
+              <strong>Build &amp; test</strong> syncs the assistant to Telnyx (status: Testing) —
+              talk below before going live.
+            </li>
+            <li>
+              Pick a phone number under Identity, then <strong>Deploy to number</strong> for
+              production inbound (status: Active).
+            </li>
+          </ol>
+        </Card>
+
+        <AgentTestPanel
+          agentId={agentId}
+          telnyxAssistantId={agent.telnyxAssistantId}
+          voiceId={cfg.voiceLanguage?.voiceId}
+          language={cfg.voiceLanguage?.primaryLanguage}
+          status={agent.rawStatus}
+        />
 
         {section === "identity" && (
           <Card className="space-y-4 p-5">
@@ -747,7 +865,69 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
                   placeholder="e.g. fast, balanced"
                 />
               </div>
+              <div>
+                <Label>Endpointing (ms)</Label>
+                <Input
+                  type="number"
+                  min="100"
+                  step="50"
+                  value={cfg.voiceLanguage?.endpointingMs ?? 500}
+                  onChange={(e) =>
+                    updateConfig({
+                      voiceLanguage: {
+                        ...cfg.voiceLanguage,
+                        endpointingMs: Number(e.target.value),
+                      },
+                    })
+                  }
+                />
+              </div>
+              <div>
+                <Label>End of turn</Label>
+                <Input
+                  value={cfg.voiceLanguage?.endOfTurn || ""}
+                  onChange={(e) =>
+                    updateConfig({
+                      voiceLanguage: {
+                        ...cfg.voiceLanguage,
+                        endOfTurn: e.target.value,
+                      },
+                    })
+                  }
+                  placeholder="e.g. normal, patient"
+                />
+              </div>
             </div>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={cfg.voiceLanguage?.bargeIn ?? true}
+                onChange={(e) =>
+                  updateConfig({
+                    voiceLanguage: {
+                      ...cfg.voiceLanguage,
+                      bargeIn: e.target.checked,
+                    },
+                  })
+                }
+              />
+              Allow barge-in (caller can interrupt)
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={cfg.voiceLanguage?.noiseSuppression ?? false}
+                onChange={(e) =>
+                  updateConfig({
+                    voiceLanguage: {
+                      ...cfg.voiceLanguage,
+                      noiseSuppression: e.target.checked,
+                    },
+                  })
+                }
+              />
+              Noise suppression
+            </label>
             <div>
               <Label>Primary language</Label>
               <Input
@@ -893,6 +1073,47 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
                     model: { ...cfg.model, temperature: Number(e.target.value) },
                   })
                 }
+              />
+            </div>
+            <div>
+              <Label>Max tokens</Label>
+              <Input
+                type="number"
+                min="64"
+                step="64"
+                value={cfg.model?.maxTokens ?? ""}
+                onChange={(e) =>
+                  updateConfig({
+                    model: {
+                      ...cfg.model,
+                      maxTokens: e.target.value ? Number(e.target.value) : undefined,
+                    },
+                  })
+                }
+              />
+            </div>
+            <div>
+              <Label>Custom LLM base URL (optional)</Label>
+              <Input
+                value={cfg.model?.customBaseUrl || ""}
+                onChange={(e) =>
+                  updateConfig({
+                    model: { ...cfg.model, customBaseUrl: e.target.value || undefined },
+                  })
+                }
+                placeholder="https://api.openai.com/v1"
+              />
+            </div>
+            <div>
+              <Label>Custom API key ref (server secret name)</Label>
+              <Input
+                value={cfg.model?.customApiKeyRef || ""}
+                onChange={(e) =>
+                  updateConfig({
+                    model: { ...cfg.model, customApiKeyRef: e.target.value || undefined },
+                  })
+                }
+                placeholder="CUSTOM_LLM_API_KEY"
               />
             </div>
           </Card>
@@ -1247,41 +1468,135 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
               </div>
             )}
             {section === "versions" && (
-              <div className="flex flex-wrap gap-2">
-                <Button size="sm" disabled={!!platformBusy} onClick={() => platformAct("sync_versions")}>
-                  Sync versions
-                </Button>
+              <div className="space-y-3">
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    disabled={!!platformBusy}
+                    onClick={() => platformAct("sync_versions")}
+                  >
+                    Sync versions
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={!!platformBusy || !compareLeft || !compareRight}
+                    onClick={() =>
+                      platformAct("compare_versions", {
+                        leftVersionId: compareLeft,
+                        rightVersionId: compareRight,
+                      })
+                    }
+                  >
+                    Compare
+                  </Button>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <Label>Left version</Label>
+                    <select
+                      className="mt-1 w-full rounded-lg border border-border px-3 py-2 text-sm"
+                      value={compareLeft}
+                      onChange={(e) => setCompareLeft(e.target.value)}
+                    >
+                      <option value="">Select…</option>
+                      {remoteVersions.map((v) => (
+                        <option key={v.telnyxVersionId} value={v.telnyxVersionId}>
+                          {v.label || v.name || v.telnyxVersionId}
+                          {v.isMain ? " (main)" : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <Label>Right version</Label>
+                    <select
+                      className="mt-1 w-full rounded-lg border border-border px-3 py-2 text-sm"
+                      value={compareRight}
+                      onChange={(e) => setCompareRight(e.target.value)}
+                    >
+                      <option value="">Select…</option>
+                      {remoteVersions.map((v) => (
+                        <option key={`r-${v.telnyxVersionId}`} value={v.telnyxVersionId}>
+                          {v.label || v.name || v.telnyxVersionId}
+                          {v.isMain ? " (main)" : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                {compareResult ? (
+                  <div className="rounded border border-border bg-muted/20 p-3 text-xs">
+                    <p className="font-medium">{compareResult.diffCount ?? 0} differing keys</p>
+                    <ul className="mt-2 max-h-48 space-y-1 overflow-y-auto">
+                      {(compareResult.diffs || []).slice(0, 40).map((d) => (
+                        <li key={d.key} className="font-mono">
+                          {d.key}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
               </div>
             )}
             {section === "canary" && (
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  size="sm"
-                  disabled={!!platformBusy}
-                  onClick={() =>
-                    platformAct("upsert_canary", {
-                      rules: [{ percentage: canaryPct, version_id: "main" }],
-                    })
-                  }
-                >
-                  Start canary {canaryPct}%
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={!!platformBusy}
-                  onClick={() => platformAct("canary_metrics")}
-                >
-                  Canary metrics
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={!!platformBusy}
-                  onClick={() => platformAct("delete_canary")}
-                >
-                  Rollback canary
-                </Button>
+              <div className="space-y-3">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <Label>Canary %</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={100}
+                      value={canaryPct}
+                      onChange={(e) => setCanaryPct(Number(e.target.value) || 10)}
+                    />
+                  </div>
+                  <div>
+                    <Label>Canary version</Label>
+                    <select
+                      className="mt-1 w-full rounded-lg border border-border px-3 py-2 text-sm"
+                      value={canaryVersionId}
+                      onChange={(e) => setCanaryVersionId(e.target.value)}
+                    >
+                      <option value="main">main</option>
+                      {remoteVersions.map((v) => (
+                        <option key={`c-${v.telnyxVersionId}`} value={v.telnyxVersionId}>
+                          {v.label || v.name || v.telnyxVersionId}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    disabled={!!platformBusy}
+                    onClick={() =>
+                      platformAct("upsert_canary", {
+                        rules: [{ percentage: canaryPct, version_id: canaryVersionId || "main" }],
+                      })
+                    }
+                  >
+                    Start canary {canaryPct}%
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={!!platformBusy}
+                    onClick={() => platformAct("canary_metrics")}
+                  >
+                    Canary metrics
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={!!platformBusy}
+                    onClick={() => platformAct("delete_canary")}
+                  >
+                    Rollback canary
+                  </Button>
+                </div>
               </div>
             )}
             {section === "scheduled" && (
@@ -1362,7 +1677,7 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
                   disabled={!!platformBusy}
                   onClick={() =>
                     platformAct("upsert_canary", {
-                      rules: [{ percentage: canaryPct, version_id: "main" }],
+                      rules: [{ percentage: canaryPct, version_id: canaryVersionId || "main" }],
                     })
                   }
                 >

@@ -518,15 +518,25 @@ export async function processVoiceWebhookEvent(input: {
         }
         await startCallRecording(controlId);
         await startCallTranscription(controlId);
+        const { resolveAiVersionStamp } = await import("../platform/admission");
+        const versionStamp = await resolveAiVersionStamp({
+          workspaceId,
+          agentId: agent.id,
+          publishedVersionId: agent.publishedVersionId,
+        });
         await prisma.voiceCall.update({
           where: { id: call.id },
           data: {
+            agentVersionId: versionStamp.agentVersionId || call.agentVersionId,
             dynamicVariables: dynamicVariables as object,
             metadata: {
               ...meta,
               aiStarted: true,
               assistantId: agent.telnyxAssistantId,
               transcriptionStarted: true,
+              assistantVersionId: versionStamp.assistantVersionId,
+              canaryVersionId: versionStamp.canaryVersionId,
+              canaryActive: versionStamp.canaryActive,
             } as object,
           },
         });
@@ -601,8 +611,18 @@ export async function processVoiceWebhookEvent(input: {
         callId: call.id,
         category: "handoff",
         code: "loop_limit",
-        message: `Handoff hop count ${hops} exceeded soft limit 3`,
+        message: `Handoff hop count ${hops} exceeded limit 3 — hanging up`,
       }).catch(() => undefined);
+      const controlId = String(
+        eventPayload.call_control_id || call.telnyxCallControlId || "",
+      );
+      if (controlId) {
+        const { telnyxRequest } = await import("@/lib/messaging/telnyx/client");
+        await telnyxRequest(`/calls/${controlId}/actions/hangup`, {
+          method: "POST",
+          body: {},
+        }).catch(() => undefined);
+      }
     }
   }
 
@@ -631,6 +651,7 @@ export async function processVoiceWebhookEvent(input: {
         "",
     );
 
+    let conversationRowId: string | null = null;
     if (conversationId) {
       await prisma.voiceCall.update({
         where: { id: call.id },
@@ -640,7 +661,7 @@ export async function processVoiceWebhookEvent(input: {
         where: { workspaceId, telnyxConversationId: conversationId },
       });
       if (existingConv) {
-        await prisma.voiceAiConversation.update({
+        const updated = await prisma.voiceAiConversation.update({
           where: { id: existingConv.id },
           data: {
             callId: call.id,
@@ -649,8 +670,9 @@ export async function processVoiceWebhookEvent(input: {
             endedAt: /ended/i.test(eventType) ? new Date() : null,
           },
         });
+        conversationRowId = updated.id;
       } else {
-        await prisma.voiceAiConversation.create({
+        const created = await prisma.voiceAiConversation.create({
           data: {
             workspaceId,
             agentId: call.agentId,
@@ -661,6 +683,7 @@ export async function processVoiceWebhookEvent(input: {
             endedAt: /ended/i.test(eventType) ? new Date() : null,
           },
         });
+        conversationRowId = created.id;
       }
     }
 
@@ -692,12 +715,15 @@ export async function processVoiceWebhookEvent(input: {
       const startMs = Number(transcriptionData.start_ms);
       const endMs = Number(transcriptionData.end_ms);
       const confidence = Number(transcriptionData.confidence);
+      const speaker = String(
+        transcriptionData.track || eventPayload.track || eventPayload.role || "unknown",
+      );
       await prisma.voiceTranscriptSegment
         .create({
           data: {
             workspaceId,
             transcriptId: transcript.id,
-            speaker: String(transcriptionData.track || eventPayload.track || "unknown"),
+            speaker,
             text,
             startMs: Number.isFinite(startMs) ? startMs : null,
             endMs: Number.isFinite(endMs) ? endMs : null,
@@ -705,6 +731,32 @@ export async function processVoiceWebhookEvent(input: {
           },
         })
         .catch(() => undefined);
+
+      // Persist live messages on VoiceAiConversationMessage (not only pull-sync).
+      if (conversationRowId) {
+        const role =
+          /assistant|outbound|agent/i.test(speaker) || speaker === "outbound"
+            ? "assistant"
+            : /user|inbound|caller|customer/i.test(speaker) || speaker === "inbound"
+              ? "user"
+              : "transcript";
+        await prisma.voiceAiConversationMessage
+          .create({
+            data: {
+              workspaceId,
+              conversationId: conversationRowId,
+              role,
+              content: text.slice(0, 8000),
+              metadata: {
+                eventType,
+                speaker,
+                startMs: Number.isFinite(startMs) ? startMs : null,
+                endMs: Number.isFinite(endMs) ? endMs : null,
+              } as object,
+            },
+          })
+          .catch(() => undefined);
+      }
     }
   }
 

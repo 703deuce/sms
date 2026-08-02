@@ -57,6 +57,7 @@ export async function countActiveAiCalls(
 /**
  * Gate AI assistant start / outbound dial.
  * direction: inbound AI answer vs outbound AI dial.
+ * Also enforces billing plan / trial allowances.
  */
 export async function assertAiCallAdmission(input: {
   workspaceId: string;
@@ -81,11 +82,72 @@ export async function assertAiCallAdmission(input: {
     return { ok: false, reason: "Agent emergency-disabled", code: "emergency_disabled" };
   }
 
+  const workspace = await prisma.workspace.findUnique({
+    where: { id: input.workspaceId },
+    select: {
+      billingPlan: true,
+      stripeCustomerId: true,
+      creditBalanceCents: true,
+    },
+  });
+  const plan = String(workspace?.billingPlan || "growth").toLowerCase();
+  if (plan === "suspended" || plan === "canceled") {
+    await noteFailure({
+      workspaceId: input.workspaceId,
+      agentId: agent.id,
+      callId: input.callId || null,
+      category: "admission",
+      code: "plan_suspended",
+      message: `AI start blocked: billing plan=${plan}`,
+    });
+    return {
+      ok: false,
+      reason: "Workspace billing is suspended",
+      code: "plan_suspended",
+    };
+  }
+  if (
+    plan === "trial_pending_card" &&
+    !workspace?.stripeCustomerId &&
+    Boolean(process.env.STRIPE_SECRET_KEY?.trim())
+  ) {
+    await noteFailure({
+      workspaceId: input.workspaceId,
+      agentId: agent.id,
+      callId: input.callId || null,
+      category: "admission",
+      code: "trial_card_required",
+      message: "AI start blocked: trial pending payment method",
+    });
+    return {
+      ok: false,
+      reason: "Add a payment method to finish trial setup before AI calls",
+      code: "trial_card_required",
+    };
+  }
+  if (Number(workspace?.creditBalanceCents ?? 0) < 0) {
+    await noteFailure({
+      workspaceId: input.workspaceId,
+      agentId: agent.id,
+      callId: input.callId || null,
+      category: "admission",
+      code: "credits_exhausted",
+      message: "AI start blocked: negative credit balance",
+    });
+    return {
+      ok: false,
+      reason: "Insufficient credit balance for AI calls",
+      code: "credits_exhausted",
+    };
+  }
+
   const allocRow = await prisma.voiceConcurrencyAllocation.findUnique({
     where: { workspaceId: input.workspaceId },
   });
+  // Trial workspaces get tighter inbound defaults when no explicit allocation exists.
+  const trialDefaultInbound = plan.startsWith("trial") ? 2 : 5;
   const alloc = {
-    maxInboundAi: allocRow?.maxInboundAi ?? 5,
+    maxInboundAi: allocRow?.maxInboundAi ?? trialDefaultInbound,
     maxOutboundAi: allocRow?.maxOutboundAi ?? 0,
     hardSpendLimitCents: allocRow?.hardSpendLimitCents ?? null,
     softAlertPct: allocRow?.softAlertPct ?? 80,
@@ -163,4 +225,47 @@ export async function assertAiCallAdmission(input: {
 export async function canStartMultiPartyAi(workspaceId: string, agentId: string) {
   const agent = await loadAgent(workspaceId, agentId);
   return Boolean(agent && !agent.emergencyDisabled && agent.multiPartyEnabled);
+}
+
+/**
+ * Stamp local published version + optional canary cohort on AI start
+ * so canary metrics do not collapse to "main".
+ */
+export async function resolveAiVersionStamp(input: {
+  workspaceId: string;
+  agentId: string;
+  publishedVersionId?: string | null;
+}) {
+  const prisma = getPrisma();
+  const canary = await prisma.voiceCanaryDeploy.findFirst({
+    where: {
+      workspaceId: input.workspaceId,
+      agentId: input.agentId,
+      status: "active",
+    },
+    orderBy: { createdAt: "desc" },
+  });
+  let assistantVersionId = input.publishedVersionId || "main";
+  let canaryVersionId: string | null = null;
+  if (canary) {
+    const rules = (Array.isArray(canary.rulesJson)
+      ? canary.rulesJson
+      : []) as Array<{ percentage?: number; version_id?: string }>;
+    const roll = Math.random() * 100;
+    let cumulative = 0;
+    for (const rule of rules) {
+      cumulative += Number(rule.percentage || 0);
+      if (roll < cumulative && rule.version_id) {
+        canaryVersionId = String(rule.version_id);
+        assistantVersionId = canaryVersionId;
+        break;
+      }
+    }
+  }
+  return {
+    agentVersionId: input.publishedVersionId || null,
+    assistantVersionId,
+    canaryVersionId,
+    canaryActive: Boolean(canary),
+  };
 }

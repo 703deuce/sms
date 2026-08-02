@@ -111,7 +111,33 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
     }
     case "voice_tool_execute": {
       const { executeVoiceTool } = await import("@/lib/voice/tools/executor");
-      return executeVoiceTool(payload as import("@/lib/voice/tools/executor").ToolExecInput);
+      const result = await executeVoiceTool(
+        payload as import("@/lib/voice/tools/executor").ToolExecInput,
+      );
+      // Inject async tool result into Telnyx conversation so the assistant can continue.
+      try {
+        const callId = String(payload.callId || "");
+        if (callId && result?.ok) {
+          const { getPrisma } = await import("@/lib/db");
+          const call = await getPrisma().voiceCall.findUnique({ where: { id: callId } });
+          const conversationId = call?.telnyxConversationId;
+          if (conversationId) {
+            const ai = await import("@/lib/voice/telnyx/ai-client");
+            if (ai.isTelnyxAiConfigured()) {
+              const text = JSON.stringify(
+                (result as { output?: unknown }).output ?? { ok: true },
+              ).slice(0, 4000);
+              await ai.addConversationMessage(conversationId, {
+                role: "tool",
+                content: text,
+              }).catch(() => undefined);
+            }
+          }
+        }
+      } catch {
+        // best-effort injection
+      }
+      return result;
     }
     case "voice_knowledge_process": {
       const { processKnowledgeSource } = await import("@/lib/voice/knowledge-processor");
@@ -592,10 +618,24 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       );
       const workspaceId = String(payload.workspaceId || "");
       if (!workspaceId) throw new Error("workspaceId required");
-      return runDefaultRegressionSuite(
-        workspaceId,
-        String(payload.suiteName || "transovo-default"),
-      );
+      const suiteName = String(payload.suiteName || "transovo-default");
+      const result = await runDefaultRegressionSuite(workspaceId, suiteName);
+      // True daily recurrence: schedule tomorrow when this run was marked recurring.
+      if (payload.recurring === true || payload.recurring === "1") {
+        const tomorrow = new Date();
+        tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+        tomorrow.setUTCHours(6, 0, 0, 0);
+        const dayKey = tomorrow.toISOString().slice(0, 10);
+        await enqueueJob({
+          jobType: "voice_regression_suite",
+          queueName: "voice-calls",
+          workspaceId,
+          payload: { workspaceId, suiteName, recurring: true },
+          idempotencyKey: `voice-regression:${workspaceId}:${dayKey}`,
+          runAfter: tomorrow,
+        });
+      }
+      return result;
     }
     case "voice_webhook_dlq_reprocess": {
       const { getPrisma } = await import("@/lib/db");
@@ -713,6 +753,20 @@ export async function processDueJobs(limit = 25) {
     queueName: "maintenance",
     payload: { minuteKey },
     idempotencyKey: `crm-task-due:${minuteKey}`,
+  });
+
+  // Daily voice AI retention + DLQ sweep (workspace-scoped jobs still scheduled per-tenant).
+  await enqueueJob({
+    jobType: "voice_ai_retention",
+    queueName: "voice-calls",
+    payload: { dayKey },
+    idempotencyKey: `voice-retention:global:${dayKey}`,
+  });
+  await enqueueJob({
+    jobType: "voice_webhook_dlq_reprocess",
+    queueName: "voice-calls",
+    payload: { dayKey, limit: 25 },
+    idempotencyKey: `voice-dlq-reprocess:${dayKey}`,
   });
 
   // When BullMQ is the consumer, cron enqueues the minute batch and re-syncs the DB outbox.

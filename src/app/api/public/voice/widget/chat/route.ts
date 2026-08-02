@@ -52,10 +52,6 @@ export async function POST(request: Request) {
     if (!agent?.widgetEnabled || agent.emergencyDisabled) {
       return NextResponse.json({ error: "Widget unavailable" }, { status: 403 });
     }
-    // Require session token outside test mode once sessions are issued.
-    if (!sessionToken && !agent.widgetEnabled) {
-      return NextResponse.json({ error: "Session required" }, { status: 401 });
-    }
     if (!agent.telnyxAssistantId) {
       return NextResponse.json({ error: "Agent not published" }, { status: 400 });
     }
@@ -65,6 +61,10 @@ export async function POST(request: Request) {
     });
     if (!cfg) {
       return NextResponse.json({ error: "Widget not configured" }, { status: 403 });
+    }
+    // Outside test mode, chat requires a short-lived widget session token.
+    if (!sessionToken && !cfg.testMode) {
+      return NextResponse.json({ error: "Session required" }, { status: 401 });
     }
 
     const originHeader =

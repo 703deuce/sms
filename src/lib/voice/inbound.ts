@@ -169,11 +169,19 @@ async function startAiOnInboundCall(input: {
       await startCallRecording(input.telnyxCallControlId);
       await startCallTranscription(input.telnyxCallControlId);
 
+      const { resolveAiVersionStamp } = await import("./platform/admission");
+      const versionStamp = await resolveAiVersionStamp({
+        workspaceId: input.workspaceId,
+        agentId: agent.id,
+        publishedVersionId: agent.publishedVersionId,
+      });
+
       await prisma.voiceCall.update({
         where: { id: input.callId },
         data: {
           status: "IN_PROGRESS",
           answeredAt: new Date(),
+          agentVersionId: versionStamp.agentVersionId,
           dynamicVariables: dynamicVariables as object,
           metadata: {
             routing: input.routing,
@@ -181,6 +189,9 @@ async function startAiOnInboundCall(input: {
             aiStarted: true,
             assistantId: agent.telnyxAssistantId,
             transcriptionStarted: true,
+            assistantVersionId: versionStamp.assistantVersionId,
+            canaryVersionId: versionStamp.canaryVersionId,
+            canaryActive: versionStamp.canaryActive,
           } as object,
         },
       });
@@ -603,10 +614,21 @@ export async function handleInboundCallEvent(input: InboundInput) {
     where: { workspaceId: input.workspaceId, e164: to },
   });
 
+  const inboundAgentId = forcedAgentId || routing.agentId || null;
+  let inboundAgentVersionId: string | null = null;
+  if (inboundAgentId) {
+    const inboundAgent = await prisma.voiceAgent.findFirst({
+      where: { id: inboundAgentId, workspaceId: input.workspaceId },
+      select: { publishedVersionId: true },
+    });
+    inboundAgentVersionId = inboundAgent?.publishedVersionId || null;
+  }
+
   const call = await prisma.voiceCall.create({
     data: {
       workspaceId: input.workspaceId,
-      agentId: forcedAgentId || routing.agentId,
+      agentId: inboundAgentId,
+      agentVersionId: inboundAgentVersionId,
       contactId: contact?.id,
       direction: "INBOUND",
       status: "RINGING",
