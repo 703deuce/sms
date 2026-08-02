@@ -42,8 +42,17 @@ export async function GET(request: Request) {
       }
     }
 
-    const connections = await listConnections(auth.workspaceId);
-    const byProvider = Object.fromEntries(connections.map((c) => [c.provider, c]));
+    // Always return the catalog even if connection lookup fails — empty UI blocks connect.
+    let byProvider: Record<string, Awaited<ReturnType<typeof listConnections>>[number]> = {};
+    try {
+      const connections = await listConnections(auth.workspaceId);
+      byProvider = Object.fromEntries(connections.map((c) => [c.provider, c]));
+    } catch (err) {
+      console.warn(
+        "[integrations/native] listConnections failed",
+        err instanceof Error ? err.message : err,
+      );
+    }
 
     return NextResponse.json({
       data: {

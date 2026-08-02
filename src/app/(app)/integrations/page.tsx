@@ -12,10 +12,13 @@ import { listConnections, isStripeEnvConfigured } from "@/lib/integrations/conne
 import { getPrisma } from "@/lib/db";
 import { Plus, Puzzle } from "lucide-react";
 import Link from "next/link";
+import { ConnectableProvidersGrid } from "@/components/integrations/connectable-providers-grid";
 import { IntegrationsDirectory } from "./integrations-directory";
 
 const integrationTabs = [
   { label: "Directory", href: "/integrations" },
+  { label: "Connect apps", href: "/integrations/native" },
+  { label: "CRM", href: "/integrations/crm" },
   { label: "API", href: "/integrations/api" },
   { label: "Webhooks", href: "/integrations/webhooks" },
   { label: "Developer logs", href: "/integrations/logs" },
@@ -78,6 +81,8 @@ export default async function IntegrationsPage() {
           <p className="mt-1 text-[12px] text-muted-foreground">{webhooks.length > 0 ? "Event destinations" : "None configured"}</p>
         </Card>
       </div>
+
+      <ConnectableProvidersGrid />
 
       <IntegrationsDirectory
         connectedApi={connectedApi}

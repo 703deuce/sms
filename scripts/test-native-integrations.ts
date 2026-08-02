@@ -74,6 +74,36 @@ async function main() {
     assert.ok(EXISTING_CRM_UI_ENTRIES.some((p) => p.id === "pipedrive"));
   });
 
+  await ok("connectable providers grid lists all 12 (no Mailchimp)", async () => {
+    const { CONNECTABLE_PROVIDERS } = await import(
+      "../src/lib/integrations/connectable-providers"
+    );
+    assert.equal(CONNECTABLE_PROVIDERS.length, 12);
+    assert.equal(
+      CONNECTABLE_PROVIDERS.some((p) => p.id === "mailchimp"),
+      false,
+    );
+    for (const id of [
+      "salesforce",
+      "zoho",
+      "pipedrive",
+      "calendly",
+      "typeform",
+      "jotform",
+      "activecampaign",
+      "klaviyo",
+      "close",
+      "highlevel",
+      "woocommerce",
+      "freshdesk",
+    ]) {
+      assert.ok(
+        CONNECTABLE_PROVIDERS.some((p) => p.id === id),
+        `missing ${id}`,
+      );
+    }
+  });
+
   await ok("capability matrix omits unsupported actions", () => {
     const calendly = getCapabilityMatrix().find((m) => m.id === "calendly");
     assert.equal(calendly?.capabilities.actions.upsert_contact, undefined);

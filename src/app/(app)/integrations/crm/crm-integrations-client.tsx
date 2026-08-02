@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatusChip } from "@/components/ui/status-chip";
+import { ConnectableProvidersGrid } from "@/components/integrations/connectable-providers-grid";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
@@ -93,7 +94,7 @@ export function CrmIntegrationsClient() {
     <div>
       <PageHeader
         title="CRM Integrations"
-        description="Connect Salesforce, Zoho CRM / Bigin, or Pipedrive so calls, SMS, voicemails, recordings, and tasks sync into the CRM you already use — without Zapier."
+        description="Connect Salesforce, Zoho CRM / Bigin, or Pipedrive so calls, SMS, voicemails, recordings, and tasks sync into the CRM you already use — without Zapier. Other apps (Calendly, Typeform, etc.) are listed below."
       />
 
       {message ? (
@@ -183,6 +184,13 @@ export function CrmIntegrationsClient() {
             </div>
           </Card>
         ))}
+      </div>
+
+      <div className="mt-10">
+        <ConnectableProvidersGrid
+          title="All connectable apps"
+          description="Salesforce is above. Use these cards for Calendly, Typeform, Jotform, ActiveCampaign, Klaviyo, Close, HighLevel, WooCommerce, and Freshdesk (Mailchimp deferred)."
+        />
       </div>
     </div>
   );
