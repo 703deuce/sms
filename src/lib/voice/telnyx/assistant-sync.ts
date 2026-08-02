@@ -324,10 +324,9 @@ export async function syncTelnyxAssistant(
         Math.min(30, Math.round((config.voiceLanguage?.silenceTimeoutMs ?? 2500) / 1000) + 3),
       ),
     },
-    // Use the exact tool set from buildAssistantTools — never force-inject a
-    // weak hangup tool. Live calls were dropping because the model selected
-    // hangup instead of CRM/transfer (Telnyx called_tools: ["hangup"]).
-    tools,
+    // Tools are pushed and verified separately via pushTools() — do not embed
+    // them in the voice/telephony enrich payload (failed combined updates were
+    // silently falling back and leaving hangup-only assistants).
   };
   if (transcription.enabled !== false) {
     (enrichPayload.enabled_features as string[]).push("transcription");
@@ -353,17 +352,76 @@ export async function syncTelnyxAssistant(
     });
   }
 
+  async function pushTools(assistantId: string) {
+    const attempts: Array<{ label: string; tools: Record<string, unknown>[] }> = [
+      { label: "all", tools: tools as Record<string, unknown>[] },
+    ];
+    // Progressive fallback — never fall all the way to hangup-only.
+    const nativeOnly = (tools as Record<string, unknown>[]).filter((t) =>
+      ["transfer", "hangup", "handoff", "sip_refer", "send_dtmf"].includes(
+        String((t as { type?: string }).type || ""),
+      ),
+    );
+    const transferHangup = (tools as Record<string, unknown>[]).filter((t) =>
+      ["transfer", "hangup"].includes(String((t as { type?: string }).type || "")),
+    );
+    const crmWebhooks = (tools as Record<string, unknown>[]).filter((t) => {
+      const name = String((t as { webhook?: { name?: string } }).webhook?.name || "");
+      return (
+        name.includes("crm") ||
+        name.includes("lookup") ||
+        name.includes("search_crm") ||
+        name === "lookup_customer"
+      );
+    });
+    if (nativeOnly.length) attempts.push({ label: "native", tools: nativeOnly });
+    if (transferHangup.length) {
+      attempts.push({
+        label: "transfer_hangup_crm",
+        tools: [...transferHangup, ...crmWebhooks],
+      });
+      attempts.push({ label: "transfer_hangup", tools: transferHangup });
+    }
+
+    let lastError = "";
+    for (const attempt of attempts) {
+      try {
+        await ai.updateAssistant(assistantId, { tools: attempt.tools });
+        const remote = await ai.getAssistant(assistantId);
+        const data = (remote as { data?: { tools?: unknown[] } }).data || remote;
+        const remoteTools = Array.isArray((data as { tools?: unknown[] }).tools)
+          ? ((data as { tools: unknown[] }).tools as Array<{ type?: string }>)
+          : [];
+        const types = remoteTools.map((t) => t.type);
+        const hasTransfer = types.includes("transfer");
+        const hasWebhook = types.includes("webhook");
+        const onlyHangup = types.length === 1 && types[0] === "hangup";
+        if (onlyHangup && attempt.tools.length > 1) {
+          lastError = `Telnyx kept hangup-only after tools push (${attempt.label})`;
+          continue;
+        }
+        return {
+          ok: true as const,
+          label: attempt.label,
+          remoteToolCount: remoteTools.length,
+          remoteTypes: types,
+          hasTransfer,
+          hasWebhook,
+        };
+      } catch (err) {
+        lastError = err instanceof Error ? err.message : String(err);
+      }
+    }
+    return { ok: false as const, error: lastError || "tool push failed" };
+  }
+
   async function enrichBestEffort(assistantId: string) {
+    const voiceBase = { ...(enrichPayload.voice_settings as Record<string, unknown>) };
     try {
       await ai.updateAssistant(assistantId, enrichPayload);
-      return { enriched: true as const };
-    } catch (err) {
-      // Retry without optional volume (many NaturalHD voices reject unknown keys).
-      const voiceBase = { ...(enrichPayload.voice_settings as Record<string, unknown>) };
+    } catch {
       delete voiceBase.volume;
       try {
-        // Retry voice/telephony only — never replace the full tool set with
-        // hangup-only (that caused production agents to drop mid-tool).
         await ai.updateAssistant(assistantId, {
           voice_settings: voiceBase,
           enabled_features: ["telephony"],
@@ -375,47 +433,63 @@ export async function syncTelnyxAssistant(
               : { noise_suppression: "krisp" }),
           },
         });
-        return {
-          enriched: "partial" as const,
-          error: err instanceof Error ? err.message : String(err),
-        };
-      } catch (err2) {
-        try {
-          await ai.updateAssistant(assistantId, {
-            voice_settings: { voice: voiceId },
-            enabled_features: ["telephony"],
-            telephony_settings: {
-              supports_unauthenticated_web_calls: true,
-              ...(texmlAppId ? { default_texml_app_id: texmlAppId } : {}),
-            },
-          });
-          return {
-            enriched: "partial" as const,
-            error: err2 instanceof Error ? err2.message : String(err2),
-          };
-        } catch (err3) {
-          return {
-            enriched: false as const,
-            error: err3 instanceof Error ? err3.message : String(err3),
-          };
-        }
+      } catch {
+        await ai.updateAssistant(assistantId, {
+          voice_settings: { voice: voiceId },
+          enabled_features: ["telephony"],
+          telephony_settings: {
+            supports_unauthenticated_web_calls: true,
+            ...(texmlAppId ? { default_texml_app_id: texmlAppId } : {}),
+          },
+        }).catch(() => undefined);
       }
     }
+    return pushTools(assistantId);
   }
 
   if (agent.telnyxAssistantId) {
-    await ai.updateAssistant(agent.telnyxAssistantId, {
-      ...corePayload,
-      ...enrichPayload,
-    }).catch(async () => {
-      await ai.updateAssistant(agent.telnyxAssistantId!, corePayload);
-      await enrichBestEffort(agent.telnyxAssistantId!);
-    });
+    // Core first (must not swallow tool failures).
+    try {
+      await ai.updateAssistant(agent.telnyxAssistantId, corePayload);
+    } catch {
+      // continue — tool push / enrich still attempted
+    }
+    const toolResult = await enrichBestEffort(agent.telnyxAssistantId);
+    if (!toolResult.ok) {
+      // Recreate assistant — existing one appears stuck on hangup-only tools.
+      const created = await ai.createAssistant({
+        ...corePayload,
+        ...enrichPayload,
+        tools,
+      }).catch(async () => {
+        const createdCore = await ai.createAssistant(corePayload);
+        const newId = unwrapTelnyxId(createdCore);
+        if (!newId) throw new Error("assistant recreate returned no id");
+        await enrichBestEffort(newId);
+        return createdCore;
+      });
+      const newId = unwrapTelnyxId(created);
+      if (!newId) throw new Error("assistant recreate returned no id");
+      await persistAssistantId(newId);
+      const verified = await pushTools(newId);
+      return {
+        mode: "telnyx",
+        assistantId: newId,
+        bucketIds,
+        toolCount: tools.length,
+        recreated: true,
+        previousAssistantId: agent.telnyxAssistantId,
+        toolSync: verified,
+        toolSyncError: verified.ok ? null : verified.error,
+      };
+    }
     return {
       mode: "telnyx",
       assistantId: agent.telnyxAssistantId,
       bucketIds,
       toolCount: tools.length,
+      toolSync: toolResult,
+      toolSyncError: null,
     };
   }
 
@@ -438,9 +512,16 @@ export async function syncTelnyxAssistant(
   }
 
   await persistAssistantId(assistantId);
-  await enrichBestEffort(assistantId);
+  const toolResult = await enrichBestEffort(assistantId);
 
-  return { mode: "telnyx", assistantId, bucketIds, toolCount: tools.length };
+  return {
+    mode: "telnyx",
+    assistantId,
+    bucketIds,
+    toolCount: tools.length,
+    toolSync: toolResult,
+    toolSyncError: toolResult.ok ? null : toolResult.error,
+  };
 }
 
 export async function dialOutboundCall(input: {

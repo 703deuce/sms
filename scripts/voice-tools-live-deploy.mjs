@@ -410,12 +410,35 @@ async function main() {
     method: "PUT",
     body: { toolIds: [], enabledBuiltinTools: FULL_TOOLS },
   });
+  const syncMeta = toolsFinal.json?.data || {};
+  const remoteTypes = syncMeta.toolSync?.remoteTypes || [];
+  const hangupOnly =
+    remoteTypes.length === 1 && remoteTypes[0] === "hangup";
   log(
-    toolsFinal.res.ok,
+    toolsFinal.res.ok && syncMeta.synced !== false && !hangupOnly,
     "final tool pin + Telnyx sync",
     toolsFinal.res.ok
-      ? `count=${(toolsFinal.json?.data?.enabledBuiltinTools || []).length} synced=${toolsFinal.json?.data?.synced}`
-      : JSON.stringify(toolsFinal.json).slice(0, 200),
+      ? `count=${(syncMeta.enabledBuiltinTools || []).length} synced=${syncMeta.synced} remote=${JSON.stringify(remoteTypes)} err=${syncMeta.toolSyncError || ""} assistant=${syncMeta.telnyxAssistantId || ""}`
+      : JSON.stringify(toolsFinal.json).slice(0, 300),
+  );
+
+  // Prove live Telnyx tool schema (must include native transfer + webhook CRM).
+  const live = await api(jar, "/api/voice/ai", {
+    method: "POST",
+    body: { action: "fetch_live_assistant", agentId: agent.id },
+  });
+  const liveTools = live.json?.data?.tools || [];
+  const liveTypes = liveTools.map((t) => t.type);
+  const hasTransfer = liveTypes.includes("transfer");
+  const hasWebhook = liveTypes.includes("webhook");
+  log(
+    live.res.ok && hasTransfer && hasWebhook,
+    "live Telnyx tools verified",
+    live.res.ok
+      ? `types=${JSON.stringify(liveTypes)} targets=${JSON.stringify(
+          liveTools.find((t) => t.type === "transfer")?.transferTargets || [],
+        )}`
+      : JSON.stringify(live.json).slice(0, 240),
   );
 
   // Repair inbound routing on the DID

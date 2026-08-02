@@ -104,23 +104,40 @@ export async function PUT(
 
     // Keep Telnyx assistant in sync so the next call gets the new tool set.
     let synced = false;
-    if (updated.telnyxAssistantId) {
+    let toolSync: unknown = null;
+    let toolSyncError: string | null = null;
+    let assistantId: string | null = updated.telnyxAssistantId;
+    if (updated.telnyxAssistantId || builtinKeys) {
       try {
         const { parseVoiceAgentConfig } = await import("@/lib/voice/types");
         const { syncTelnyxAssistant } = await import(
           "@/lib/voice/telnyx/assistant-sync"
         );
-        await syncTelnyxAssistant(
+        const syncResult = (await syncTelnyxAssistant(
           auth.workspaceId,
           updated as never,
           parseVoiceAgentConfig(nextDraft),
-        );
+        )) as {
+          assistantId?: string;
+          toolSync?: unknown;
+          toolSyncError?: string | null;
+          recreated?: boolean;
+        };
         synced = true;
+        toolSync = syncResult.toolSync || null;
+        toolSyncError = syncResult.toolSyncError || null;
+        assistantId = syncResult.assistantId || assistantId;
+        const types = (syncResult.toolSync as { remoteTypes?: string[] } | undefined)
+          ?.remoteTypes;
+        if (types && types.length === 1 && types[0] === "hangup" && (builtinKeys?.length || 0) > 1) {
+          toolSyncError =
+            toolSyncError ||
+            "Telnyx assistant still hangup-only after sync — transfer/CRM tools did not stick";
+          synced = false;
+        }
       } catch (err) {
-        console.warn(
-          "[voice/tools] sync after save failed",
-          err instanceof Error ? err.message : err,
-        );
+        toolSyncError = err instanceof Error ? err.message : String(err);
+        console.warn("[voice/tools] sync after save failed", toolSyncError);
       }
     }
 
@@ -135,6 +152,9 @@ export async function PUT(
           }),
         catalogSize: TOOL_CATALOG.length,
         synced,
+        toolSync,
+        toolSyncError,
+        telnyxAssistantId: assistantId,
       },
     });
   } catch (err) {
