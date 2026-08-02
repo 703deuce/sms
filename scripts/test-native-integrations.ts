@@ -497,6 +497,65 @@ async function main() {
     }
   });
 
+  await ok("calendly oauth scopes are explicit API v2 permissions", async () => {
+    const { CALENDLY_OAUTH_SCOPES } = await import("../src/lib/integrations/adapters/calendly");
+    const scopes: string[] = [...CALENDLY_OAUTH_SCOPES];
+    assert.ok(scopes.includes("users:read"));
+    assert.ok(scopes.includes("event_types:read"));
+    assert.ok(scopes.includes("scheduled_events:read"));
+    assert.ok(scopes.includes("webhooks:write"));
+    assert.ok(!scopes.includes("default"));
+    const calendly = getAdapter("calendly");
+    assert.ok(calendly.oauth);
+    assert.deepEqual(calendly.oauth!.scopes, scopes);
+  });
+
+  await ok("calendly callback and webhook URLs match production paths", async () => {
+    const prev = process.env.APP_URL;
+    process.env.APP_URL = "https://transovo.ai";
+    const { externalOAuthCallbackUrl: cb, externalWebhookUrl } = await import(
+      "../src/lib/integrations/framework/app-url"
+    );
+    assert.equal(
+      cb("calendly"),
+      "https://transovo.ai/api/integrations/native/calendly/callback",
+    );
+    assert.equal(
+      externalWebhookUrl("calendly"),
+      "https://transovo.ai/api/integrations/native/webhooks/calendly",
+    );
+    assert.equal(
+      externalWebhookUrl("calendly", "tok"),
+      "https://transovo.ai/api/integrations/native/webhooks/calendly?token=tok",
+    );
+    if (prev === undefined) delete process.env.APP_URL;
+    else process.env.APP_URL = prev;
+  });
+
+  await ok("calendly webhook signature verify rejects missing/invalid signatures", async () => {
+    const calendly = getAdapter("calendly");
+    assert.ok(calendly.verifyWebhook);
+    const body = JSON.stringify({ event: "invitee.created" });
+    const missing = await calendly.verifyWebhook!(new Headers(), body, "test-signing-key");
+    assert.equal(missing, false);
+    const bad = await calendly.verifyWebhook!(
+      new Headers({ "calendly-webhook-signature": "t=1,v1=deadbeef" }),
+      body,
+      "test-signing-key",
+    );
+    assert.equal(bad, false);
+    const noKey = await calendly.verifyWebhook!(new Headers(), body, null);
+    assert.equal(noKey, false);
+  });
+
+  await ok("calendly capabilities mark contacts and scheduling-link writes unsupported", () => {
+    const caps = getAdapter("calendly").capabilities;
+    assert.equal(caps.objects.contact, "unsupported");
+    assert.equal(caps.actions.create_scheduling_link, "unsupported");
+    assert.equal(caps.webhooks, "subscription_dependent");
+    assert.equal(caps.incrementalSync, "read_only");
+  });
+
   console.log(`\n${passed} tests passed`);
 }
 

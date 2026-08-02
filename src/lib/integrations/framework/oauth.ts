@@ -150,12 +150,28 @@ export async function completeExternalOAuth(input: {
   }
 
   const parsedTokens = adapter.parseTokenResponse(json);
+  const prevConfig = (existing?.configJson || {}) as Record<string, unknown>;
   const meta: Record<string, unknown> = {
     ...(parsedTokens.meta || {}),
     authKind: "oauth",
     scopes: oauth.scopes,
     ...(input.extra || {}),
   };
+
+  // Stable per-connection webhook routing token (do not rotate on reconnect/refresh).
+  if (typeof prevConfig.webhookToken === "string" && prevConfig.webhookToken.trim()) {
+    meta.webhookToken = prevConfig.webhookToken;
+  } else {
+    const { randomBytes } = await import("crypto");
+    meta.webhookToken = randomBytes(24).toString("hex");
+  }
+
+  if (provider === "calendly") {
+    const { resolveCalendlyWebhookSigningKey } = await import("../adapters/calendly");
+    const signingKey =
+      resolveCalendlyWebhookSigningKey(prevConfig) || resolveCalendlyWebhookSigningKey(null);
+    if (signingKey) meta.signingKey = signingKey;
+  }
 
   await upsertConnection({
     workspaceId,
@@ -185,6 +201,27 @@ export async function completeExternalOAuth(input: {
     });
     throw new Error(health.message || "Connection validation failed");
   }
+
+  let webhookSubscriptionIds: string[] = [];
+  let webhookSetupNote: string | null = null;
+  if (provider === "calendly" && adapter.registerWebhooks) {
+    try {
+      const { externalWebhookUrl } = await import("./app-url");
+      const callbackUrl = externalWebhookUrl(
+        provider,
+        typeof meta.webhookToken === "string" ? meta.webhookToken : null,
+      );
+      const registered = await adapter.registerWebhooks(ctx, callbackUrl);
+      webhookSubscriptionIds = registered.ids || [];
+      meta.webhookSubscriptionIds = webhookSubscriptionIds;
+      meta.webhookCallbackUrl = callbackUrl;
+    } catch (err) {
+      webhookSetupNote = err instanceof Error ? err.message : String(err);
+      meta.webhookSetupError = webhookSetupNote;
+      // Free Calendly plans cannot create webhook subscriptions — reconcile still works.
+    }
+  }
+
   await upsertConnection({
     workspaceId,
     provider,
@@ -207,7 +244,12 @@ export async function completeExternalOAuth(input: {
     category: "oauth",
     action: "authorize_complete",
     message: `Connected ${adapter.displayName}`,
-    detail: { accountId: health.accountId, accountName: health.accountName },
+    detail: {
+      accountId: health.accountId,
+      accountName: health.accountName,
+      webhookSubscriptionIds,
+      webhookSetupNote,
+    },
   });
 
   const { enqueueIntegrationSync } = await import("./sync");

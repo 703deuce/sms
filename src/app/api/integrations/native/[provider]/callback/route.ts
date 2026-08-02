@@ -4,9 +4,10 @@ import {
   isExternalProvider,
   parseExternalOAuthState,
 } from "@/lib/integrations/framework";
+import { getIntegrationAppUrl } from "@/lib/integrations/framework/app-url";
 
 function appUrl() {
-  return (process.env.APP_URL || "http://localhost:3000").replace(/\/$/, "");
+  return getIntegrationAppUrl();
 }
 
 export async function GET(

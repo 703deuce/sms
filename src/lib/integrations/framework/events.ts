@@ -37,13 +37,14 @@ export async function publishNormalizedEvent(event: NormalizedEvent) {
   }
 
   let contactId = event.contactId || null;
-  if (!contactId && prefs.autoCreateContacts && (event.phone || event.email)) {
+  if (!contactId && (event.phone || event.email)) {
     const matched = await upsertExternalContact({
       workspaceId: event.workspaceId,
       phone: prefs.matchByPhone ? event.phone : null,
       email: prefs.matchByEmail ? event.email : event.email,
       source: event.provider,
       overwrite: prefs.duplicatePolicy === "update",
+      createIfMissing: prefs.autoCreateContacts,
     });
     contactId = matched?.contactId || null;
   }

@@ -10,11 +10,15 @@ export async function POST(request: Request) {
     if (!conn) return NextResponse.json({ error: "Unknown webhook token" }, { status: 404 });
 
     const rawBody = await request.text();
-    const signingKey = (conn.configJson as Record<string, unknown> | null)?.signingKey as
-      | string
-      | undefined;
+    const { resolveCalendlyWebhookSigningKey } = await import(
+      "@/lib/integrations/adapters/calendly"
+    );
+    const signingKey = resolveCalendlyWebhookSigningKey(
+      (conn.configJson || {}) as Record<string, unknown>,
+    );
     const signature = request.headers.get("calendly-webhook-signature");
-    if (!verifyCalendlySignature(signingKey, signature, rawBody)) {
+    // Require configured signing key on the live path.
+    if (!signingKey || !verifyCalendlySignature(signingKey, signature, rawBody)) {
       return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
     }
 

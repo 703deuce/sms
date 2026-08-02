@@ -1,6 +1,7 @@
 import type { ExternalIntegrationAdapter } from "../framework/adapter";
 import { integrationFetch } from "../framework/http";
 import { makeEventIdempotencyKey } from "../framework/events";
+import { verifyCalendlySignature } from "../inbound";
 import type {
   AdapterContext,
   CapabilityDefinition,
@@ -8,20 +9,34 @@ import type {
   NormalizedEvent,
 } from "../framework/types";
 
+/**
+ * Least-privilege Calendly OAuth scopes (API v2 scoped apps).
+ * New Calendly OAuth apps grant no API access until scopes are requested.
+ * @see https://developer.calendly.com/scopes
+ */
+export const CALENDLY_OAUTH_SCOPES = [
+  "users:read",
+  "event_types:read",
+  "scheduled_events:read",
+  "webhooks:read",
+  "webhooks:write",
+] as const;
+
 const caps: CapabilityDefinition = {
   objects: {
     appointment: "read_only",
-    contact: "read_only",
-    form: "subscription_dependent",
+    // Invitee→contact matching only. Calendly Contacts API is not implemented.
+    contact: "unsupported",
+    form: "unsupported",
   },
   events: {
     "appointment.scheduled": "subscription_dependent",
     "appointment.canceled": "subscription_dependent",
     "appointment.rescheduled": "subscription_dependent",
-    "contact.created": "read_only",
   },
   actions: {
-    create_scheduling_link: "subscription_dependent",
+    // Single-use / Scheduling API booking not implemented — booking links are read-only.
+    create_scheduling_link: "unsupported",
   },
   webhooks: "subscription_dependent",
   incrementalSync: "read_only",
@@ -35,6 +50,20 @@ function api(path: string, ctx: AdapterContext, init?: RequestInit) {
   });
 }
 
+/** App-level signing key from Coolify (Calendly developer portal name) or legacy alias. */
+export function resolveCalendlyWebhookSigningKey(
+  config?: Record<string, unknown> | null,
+): string | null {
+  const fromConfig =
+    typeof config?.signingKey === "string" ? config.signingKey.trim() : "";
+  return (
+    fromConfig ||
+    process.env.CALENDLY_WEBHOOK_SIGNING_KEY?.trim() ||
+    process.env.CALENDLY_WEBHOOK_SECRET?.trim() ||
+    null
+  );
+}
+
 export const calendlyAdapter: ExternalIntegrationAdapter = {
   id: "calendly",
   displayName: "Calendly",
@@ -44,7 +73,7 @@ export const calendlyAdapter: ExternalIntegrationAdapter = {
     tokenUrl: "https://auth.calendly.com/oauth/token",
     clientIdEnv: "CALENDLY_CLIENT_ID",
     clientSecretEnv: "CALENDLY_CLIENT_SECRET",
-    scopes: [],
+    scopes: [...CALENDLY_OAUTH_SCOPES],
     sandboxAuthorizationUrl: "https://auth.calendly.com/oauth/authorize",
     sandboxTokenUrl: "https://auth.calendly.com/oauth/token",
     sandboxClientIdEnv: "CALENDLY_SANDBOX_CLIENT_ID",
@@ -58,7 +87,11 @@ export const calendlyAdapter: ExternalIntegrationAdapter = {
       accessToken: String(json.access_token || ""),
       refreshToken: json.refresh_token ? String(json.refresh_token) : null,
       expiresAt: expiresIn ? new Date(Date.now() + expiresIn * 1000) : null,
-      meta: { owner: json.owner || null, organization: json.organization || null },
+      externalId: json.owner ? String(json.owner) : null,
+      meta: {
+        owner: json.owner || null,
+        organization: json.organization || null,
+      },
     };
   },
 
@@ -69,9 +102,21 @@ export const calendlyAdapter: ExternalIntegrationAdapter = {
       ok: true,
       accountId: String(resource.uri || resource.uuid || ""),
       accountName: String(resource.name || resource.email || "Calendly user"),
-      scopes: [],
-      capabilities: ["users", "event_types", "scheduled_events", "webhooks_plan_dependent"],
-      details: { email: resource.email, schedulingUrl: resource.scheduling_url },
+      scopes: [...CALENDLY_OAUTH_SCOPES],
+      capabilities: [
+        "users",
+        "event_types",
+        "scheduled_events",
+        "invitees",
+        "webhooks_plan_dependent",
+      ],
+      details: {
+        email: resource.email,
+        timezone: resource.timezone,
+        schedulingUrl: resource.scheduling_url,
+        organizationUri: resource.current_organization || ctx.meta.organization || null,
+        userUri: resource.uri || null,
+      },
     };
   },
 
@@ -84,6 +129,21 @@ export const calendlyAdapter: ExternalIntegrationAdapter = {
     };
   },
 
+  async verifyWebhook(headers, rawBody, secret) {
+    const key =
+      (typeof secret === "string" && secret.trim()) ||
+      resolveCalendlyWebhookSigningKey(null);
+    // Require a signing key for native Calendly webhooks — do not silently accept.
+    if (!key) return false;
+    const header =
+      (typeof headers.get === "function"
+        ? headers.get("calendly-webhook-signature")
+        : null) ||
+      (headers as unknown as Record<string, string>)["calendly-webhook-signature"] ||
+      null;
+    return verifyCalendlySignature(key, header, rawBody);
+  },
+
   async listAppointments(ctx, cursor, opts) {
     const me = await api("/users/me", ctx);
     const userUri = String(
@@ -91,18 +151,27 @@ export const calendlyAdapter: ExternalIntegrationAdapter = {
     );
     const params = new URLSearchParams({ user: userUri, count: "50" });
     if (cursor) params.set("page_token", cursor);
+    // Calendly has no modified_since — use a start-time lookback window for reconcile.
     if (opts?.modifiedSince) {
-      params.set("min_start_time", opts.modifiedSince.toISOString());
+      const lookback = new Date(opts.modifiedSince.getTime() - 2 * 86400000);
+      params.set("min_start_time", lookback.toISOString());
+    } else {
+      // Initial import: last 90 days + future
+      params.set(
+        "min_start_time",
+        new Date(Date.now() - 90 * 86400000).toISOString(),
+      );
     }
     const data = await api(`/scheduled_events?${params}`, ctx);
     const collection = ((data as { collection?: Record<string, unknown>[] }).collection ||
       []) as Record<string, unknown>[];
     const items: NormalizedAppointment[] = [];
     for (const ev of collection) {
-      // Enrich with first invitee when possible
       let inviteeEmail: string | null = null;
       let inviteeName: string | null = null;
       let inviteePhone: string | null = null;
+      let cancelUrl: string | null = null;
+      let rescheduleUrl: string | null = null;
       try {
         const eventId = String(ev.uri || "").split("/").pop() || "";
         if (eventId) {
@@ -120,6 +189,8 @@ export const calendlyAdapter: ExternalIntegrationAdapter = {
               [];
             const phoneAns = qs.find((q) => /phone|mobile|cell/i.test(q.question || ""));
             inviteePhone = phoneAns?.answer || (first.text_reminder_number as string) || null;
+            cancelUrl = (first.cancel_url as string) || null;
+            rescheduleUrl = (first.reschedule_url as string) || null;
           }
         }
       } catch {
@@ -136,8 +207,8 @@ export const calendlyAdapter: ExternalIntegrationAdapter = {
         inviteeName,
         inviteePhone,
         eventTypeId: (ev.event_type as string) || null,
-        cancelUrl: null,
-        rescheduleUrl: null,
+        cancelUrl,
+        rescheduleUrl,
         updatedAt: (ev.updated_at as string) || null,
         raw: ev,
       });
@@ -150,16 +221,24 @@ export const calendlyAdapter: ExternalIntegrationAdapter = {
 
   async registerWebhooks(ctx, callbackUrl) {
     const me = await api("/users/me", ctx);
-    const org =
-      ((me as { resource?: { current_organization?: string } }).resource || {})
-        .current_organization || null;
-    const user = ((me as { resource?: { uri?: string } }).resource || {}).uri || null;
+    const resource =
+      ((me as { resource?: { uri?: string; current_organization?: string } }).resource ||
+        {}) as { uri?: string; current_organization?: string };
+    const user = resource.uri || null;
+    const org = resource.current_organization || null;
+    if (!user || !org) {
+      throw new Error(
+        "Calendly user/organization URI missing — reconnect OAuth and retry webhook setup",
+      );
+    }
+    // User scope still requires organization URI (Calendly FAQ). Prefer user scope
+    // so personal accounts work without org-admin privileges.
     const body = {
       url: callbackUrl,
       events: ["invitee.created", "invitee.canceled"],
       organization: org,
-      user: org ? undefined : user,
-      scope: org ? "organization" : "user",
+      user,
+      scope: "user",
     };
     try {
       const created = await api("/webhook_subscriptions", ctx, {
@@ -172,9 +251,16 @@ export const calendlyAdapter: ExternalIntegrationAdapter = {
       return { ids: uri ? [uri] : [] };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      throw new Error(
-        `Calendly webhook registration failed (plan/role may block webhooks): ${message}`,
-      );
+      if (
+        /403|402|payment|paid|plan|standard|teams|enterprise|subscription|upgrade/i.test(
+          message,
+        )
+      ) {
+        throw new Error(
+          `Blocked by Calendly plan: webhook subscriptions require Standard, Teams, or Enterprise. Free accounts use incremental reconciliation instead. (${message.slice(0, 180)})`,
+        );
+      }
+      throw new Error(`Calendly webhook registration failed: ${message}`);
     }
   },
 
@@ -229,6 +315,7 @@ export const calendlyAdapter: ExternalIntegrationAdapter = {
           cancelUrl: p.cancel_url,
           rescheduleUrl: p.reschedule_url,
           tracking: p.tracking,
+          scheduledEvent: p.scheduled_event,
         },
         rawMeta: { calendlyEvent: eventName },
       },
@@ -236,7 +323,7 @@ export const calendlyAdapter: ExternalIntegrationAdapter = {
   },
 
   async createTestRecord(ctx) {
-    // Calendly does not allow creating scheduled events via API for arbitrary invitees easily.
+    // Calendly does not allow creating scheduled events via API without Scheduling API write scopes.
     // Probe: list event types as read verification.
     const me = await api("/users/me", ctx);
     const user = String(((me as { resource?: { uri?: string } }).resource || {}).uri || "");
@@ -246,7 +333,7 @@ export const calendlyAdapter: ExternalIntegrationAdapter = {
     return {
       objectType: "event_type",
       externalId: String(first?.uri || user),
-      label: first?.name || "Transovo Integration Test Appointment (read probe)",
+      label: first?.name || "Transovo Calendly Test Event Type (read probe)",
     };
   },
 

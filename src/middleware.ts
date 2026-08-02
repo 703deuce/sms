@@ -29,6 +29,13 @@ function isPublicPath(pathname: string) {
   if (pathname.startsWith("/api/integrations/shopify/webhook")) return true;
   if (pathname.startsWith("/api/integrations/salesforce/webhook")) return true;
   if (pathname.startsWith("/api/integrations/google/") && pathname.includes("/callback")) return true;
+  // Native integrations: OAuth provider redirects + inbound webhooks (no browser session).
+  if (
+    pathname.startsWith("/api/integrations/native/") &&
+    (pathname.includes("/callback") || pathname.includes("/webhooks/"))
+  ) {
+    return true;
+  }
   // CRM OAuth callbacks — provider-specific + legacy shared
   if (pathname.startsWith("/api/crm/oauth/callback")) return true;
   if (/^\/api\/crm\/(zoho|pipedrive|salesforce)\/callback\/?$/.test(pathname)) return true;

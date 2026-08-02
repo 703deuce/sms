@@ -23,6 +23,18 @@ type Snapshot = {
   counts: Record<string, number>;
   env?: { ready: boolean; missing: string[]; callbackUrl: string | null };
   secretsPresent: { accessToken: boolean; refreshToken: boolean };
+  calendly?: {
+    callbackUrl?: string | null;
+    webhookUrl?: string | null;
+    webhookSigningKeyPresent?: boolean;
+    userUri?: string | null;
+    organizationUri?: string | null;
+    timezone?: string | null;
+    webhookSubscriptionIds?: string[];
+    webhookSetupError?: string | null;
+    webhooksPlanBlocked?: boolean;
+    scopesRequested?: string[];
+  };
 };
 
 type CatalogField = {
@@ -237,17 +249,51 @@ export function NativeProviderClient({ provider }: { provider: string }) {
         <Card className="space-y-3 p-4">
           <CardTitle className="text-base">Health & diagnostics</CardTitle>
           <ul className="space-y-1 text-sm text-muted-foreground">
+            <li>Env ready: {snapshot?.env?.ready ? "yes" : "no"}</li>
             <li>Last sync: {snapshot?.lastSyncAt || "—"}</li>
             <li>Last webhook: {snapshot?.lastWebhookAt || "—"}</li>
             <li>Last error: {snapshot?.lastError || "—"}</li>
+            <li>
+              Tokens: access {snapshot?.secretsPresent?.accessToken ? "yes" : "no"} · refresh{" "}
+              {snapshot?.secretsPresent?.refreshToken ? "yes" : "no"}
+            </li>
             <li>
               Mappings: {snapshot?.counts?.mappings ?? 0} · Pending jobs:{" "}
               {snapshot?.counts?.pendingJobs ?? 0} · Failed: {snapshot?.counts?.failedJobs ?? 0}
             </li>
           </ul>
+          {snapshot?.calendly ? (
+            <ul className="space-y-1 border-t pt-2 text-sm text-muted-foreground">
+              <li>
+                Webhook signing key:{" "}
+                {snapshot.calendly.webhookSigningKeyPresent ? "present" : "missing"}
+              </li>
+              <li className="break-all">
+                Webhook URL: <code className="text-xs">{snapshot.calendly.webhookUrl}</code>
+              </li>
+              <li className="break-all">User URI: {snapshot.calendly.userUri || "—"}</li>
+              <li className="break-all">
+                Organization URI: {snapshot.calendly.organizationUri || "—"}
+              </li>
+              <li>
+                Webhook subscription:{" "}
+                {(snapshot.calendly.webhookSubscriptionIds || []).length
+                  ? "present"
+                  : snapshot.calendly.webhooksPlanBlocked
+                    ? "blocked by Calendly plan (Free)"
+                    : "none"}
+              </li>
+              {snapshot.calendly.webhookSetupError ? (
+                <li className="text-amber-700">{snapshot.calendly.webhookSetupError}</li>
+              ) : null}
+            </ul>
+          ) : null}
           <div className="flex flex-wrap gap-2">
             <Button size="sm" variant="secondary" onClick={() => post("probe", { probe: "validate" })}>
               Test connection
+            </Button>
+            <Button size="sm" variant="secondary" onClick={() => post("probe", { probe: "identify" })}>
+              Fetch identity
             </Button>
             <Button size="sm" variant="secondary" onClick={() => post("probe", { probe: "read" })}>
               Read probe
@@ -255,6 +301,15 @@ export function NativeProviderClient({ provider }: { provider: string }) {
             <Button size="sm" variant="secondary" onClick={() => post("probe", { probe: "write" })}>
               Write probe
             </Button>
+            {provider === "calendly" ? (
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => post("probe", { probe: "register_webhooks" })}
+              >
+                Register webhooks
+              </Button>
+            ) : null}
             <Button size="sm" onClick={() => post("sync")}>
               Force sync
             </Button>

@@ -48,6 +48,33 @@ export async function getIntegrationDiagnosticsSnapshot(
       ? oauthEnvReady(provider)
       : { ready: true, missing: [] as string[], callbackUrl: null };
 
+  let calendly: Record<string, unknown> | undefined;
+  if (provider === "calendly") {
+    const { resolveCalendlyWebhookSigningKey } = await import("../adapters/calendly");
+    const { externalWebhookUrl } = await import("./app-url");
+    const token = typeof cfg.webhookToken === "string" ? cfg.webhookToken : null;
+    const setupError = typeof cfg.webhookSetupError === "string" ? cfg.webhookSetupError : null;
+    const subscriptionIds = Array.isArray(cfg.webhookSubscriptionIds)
+      ? (cfg.webhookSubscriptionIds as string[])
+      : [];
+    calendly = {
+      callbackUrl: typeof env === "object" && env && "callbackUrl" in env ? env.callbackUrl : null,
+      webhookUrl: externalWebhookUrl("calendly", token),
+      webhookSigningKeyPresent: Boolean(resolveCalendlyWebhookSigningKey(cfg)),
+      userUri: cfg.userUri || conn?.externalId || null,
+      organizationUri: cfg.organizationUri || null,
+      timezone: cfg.timezone || null,
+      schedulingUrl: cfg.schedulingUrl || null,
+      webhookSubscriptionIds: subscriptionIds,
+      webhookSetupError: setupError,
+      webhooksPlanBlocked: Boolean(
+        setupError &&
+          /Blocked by Calendly plan|Standard, Teams, or Enterprise/i.test(setupError),
+      ),
+      scopesRequested: adapter.oauth?.scopes || [],
+    };
+  }
+
   return {
     provider,
     displayName: adapter.displayName,
@@ -99,6 +126,7 @@ export async function getIntegrationDiagnosticsSnapshot(
       accessToken: Boolean(conn?.accessToken),
       refreshToken: Boolean(conn?.refreshToken),
     },
+    ...(calendly ? { calendly } : {}),
   };
 }
 
@@ -201,9 +229,58 @@ export async function runIntegrationProbe(
         };
       }
       const { externalWebhookUrl } = await import("./app-url");
-      const url = externalWebhookUrl(provider);
-      const result = await adapter.registerWebhooks(ctx, url);
-      return { ok: true, probe, durationMs: Date.now() - started, data: result };
+      const { getConnection, upsertConnection } = await import(
+        "@/lib/integrations/connections"
+      );
+      const conn = await getConnection(workspaceId, provider);
+      const cfg = (conn?.configJson || {}) as Record<string, unknown>;
+      let token =
+        typeof cfg.webhookToken === "string" && cfg.webhookToken.trim()
+          ? cfg.webhookToken.trim()
+          : "";
+      if (!token) {
+        const { randomBytes } = await import("crypto");
+        token = randomBytes(24).toString("hex");
+        await upsertConnection({
+          workspaceId,
+          provider,
+          config: { webhookToken: token },
+          mergeConfig: true,
+        });
+      }
+      const url = externalWebhookUrl(provider, token);
+      try {
+        const result = await adapter.registerWebhooks(ctx, url);
+        await upsertConnection({
+          workspaceId,
+          provider,
+          config: {
+            webhookSubscriptionIds: result.ids,
+            webhookCallbackUrl: url,
+            webhookSetupError: null,
+          },
+          mergeConfig: true,
+        });
+        return { ok: true, probe, durationMs: Date.now() - started, data: { ...result, url } };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        const planBlocked = /Blocked by Calendly plan|Standard, Teams, or Enterprise/i.test(
+          message,
+        );
+        await upsertConnection({
+          workspaceId,
+          provider,
+          config: { webhookSetupError: message, webhookCallbackUrl: url },
+          mergeConfig: true,
+        });
+        return {
+          ok: planBlocked,
+          probe,
+          durationMs: Date.now() - started,
+          error: message,
+          data: { planBlocked, url },
+        };
+      }
     }
 
     return { ok: false, probe, durationMs: Date.now() - started, error: "Unknown probe" };

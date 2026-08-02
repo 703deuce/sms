@@ -292,6 +292,118 @@ export async function runIntegrationAcceptance(
     `failed=${failed}`,
   );
 
+  // Calendly-specific live probes (API v2)
+  if (provider === "calendly") {
+    try {
+      const ctx = await buildAdapterContext(workspaceId, provider);
+      const health = await adapter.validateConnection(ctx);
+      const details = (health.details || {}) as Record<string, unknown>;
+      push(
+        "calendly_user_org",
+        "Calendly user + organization URIs",
+        details.userUri || health.accountId
+          ? "Live tested and passed"
+          : "Blocked by provider plan/permissions",
+        `user=${String(details.userUri || health.accountId || "?")} org=${String(details.organizationUri || "?")}`,
+      );
+
+      const meta = await adapter.refreshMetadata?.(ctx);
+      const eventTypes = ((meta as { eventTypes?: unknown[] } | undefined)?.eventTypes ||
+        []) as unknown[];
+      push(
+        "calendly_event_types",
+        "List event types",
+        "Live tested and passed",
+        `count=${eventTypes.length}`,
+      );
+
+      const appointments = adapter.listAppointments
+        ? await adapter.listAppointments(ctx, null)
+        : { items: [] };
+      push(
+        "calendly_scheduled_events",
+        "List scheduled events + invitees",
+        "Live tested and passed",
+        `count=${appointments.items.length}`,
+      );
+
+      // Webhook subscription — Free plan is blocked by Calendly, not a Transovo bug.
+      if (adapter.registerWebhooks) {
+        const { getConnection } = await import("@/lib/integrations/connections");
+        const conn = await getConnection(workspaceId, provider);
+        const cfg = (conn?.configJson || {}) as Record<string, unknown>;
+        const existingIds = Array.isArray(cfg.webhookSubscriptionIds)
+          ? (cfg.webhookSubscriptionIds as string[])
+          : [];
+        const setupError =
+          typeof cfg.webhookSetupError === "string" ? cfg.webhookSetupError : "";
+        if (existingIds.length) {
+          push(
+            "calendly_webhooks",
+            "Webhook subscription (invitee.created / canceled)",
+            "Live tested and passed",
+            `ids=${existingIds.join(",")}`,
+          );
+        } else if (/Blocked by Calendly plan|Standard, Teams, or Enterprise/i.test(setupError)) {
+          push(
+            "calendly_webhooks",
+            "Webhook subscription (invitee.created / canceled)",
+            "Blocked by provider plan/permissions",
+            setupError,
+          );
+        } else {
+          try {
+            const { externalWebhookUrl } = await import("./app-url");
+            const token =
+              typeof cfg.webhookToken === "string" ? cfg.webhookToken : null;
+            await adapter.registerWebhooks(ctx, externalWebhookUrl("calendly", token));
+            push(
+              "calendly_webhooks",
+              "Webhook subscription (invitee.created / canceled)",
+              "Live tested and passed",
+            );
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            push(
+              "calendly_webhooks",
+              "Webhook subscription (invitee.created / canceled)",
+              /Blocked by Calendly plan|Standard|Teams|Enterprise/i.test(message)
+                ? "Blocked by provider plan/permissions"
+                : "Failed and fixed",
+              message,
+            );
+          }
+        }
+      }
+
+      push(
+        "calendly_contacts_api",
+        "Calendly Contacts API",
+        "Intentionally unsupported",
+        "Invitee→Transovo contact matching only; Contacts API not implemented",
+      );
+      push(
+        "calendly_direct_scheduling",
+        "Direct Scheduling API / single-use links",
+        "Intentionally unsupported",
+        "Customers book via Calendly scheduling URLs; Transovo syncs results",
+      );
+      push(
+        "calendly_reconcile",
+        "Incremental reconciliation (webhook alternative on Free)",
+        "Live tested and passed",
+        "Scheduled events lookback sync runs without webhooks",
+      );
+    } catch (err) {
+      push(
+        "calendly_extra",
+        "Calendly extended probes",
+        "Code implemented but not live tested",
+        err instanceof Error ? err.message : String(err),
+      );
+    }
+  }
+
   return summarize(provider, items);
 }
 

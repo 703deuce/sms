@@ -52,10 +52,17 @@ export async function POST(
 
   const adapter = getAdapter(raw);
   const conn = await getConnection(workspaceId, raw);
-  const secret =
-    ((conn?.configJson as Record<string, unknown> | null)?.signingKey as string) ||
-    process.env[`${raw.toUpperCase()}_WEBHOOK_SECRET`] ||
+  const cfg = (conn?.configJson || {}) as Record<string, unknown>;
+  let secret: string | null =
+    (typeof cfg.signingKey === "string" && cfg.signingKey.trim()) ||
+    process.env[`${raw.toUpperCase()}_WEBHOOK_SECRET`]?.trim() ||
     null;
+  if (raw === "calendly") {
+    const { resolveCalendlyWebhookSigningKey } = await import(
+      "@/lib/integrations/adapters/calendly"
+    );
+    secret = resolveCalendlyWebhookSigningKey(cfg);
+  }
 
   if (adapter.verifyWebhook) {
     const ok = await adapter.verifyWebhook(request.headers, rawBody, secret);

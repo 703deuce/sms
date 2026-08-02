@@ -216,16 +216,49 @@ export async function upsertExternalContact(input: {
   source?: string;
   /** When true, CRM values overwrite local non-null fields (apply_crm conflict policy). */
   overwrite?: boolean;
+  /** When false, only match existing contacts — never create. Default true. */
+  createIfMissing?: boolean;
 }): Promise<{ contactId: string; created: boolean } | null> {
   const prisma = getPrisma();
   const phone = input.phone ? normalizeE164(input.phone) : null;
   const overwrite = Boolean(input.overwrite);
+  const createIfMissing = input.createIfMissing !== false;
+  const emailNorm = input.email?.trim() || null;
 
-  // Match or create by email when there's no phone (CRM imports + email matching).
-  if (!phone) {
-    if (!input.email) return null;
+  // Prefer phone match, then case-insensitive email match, then optional create.
+  if (phone) {
+    const existing = await prisma.contact.findUnique({
+      where: { workspaceId_phone: { workspaceId: input.workspaceId, phone } },
+    });
+
+    if (existing) {
+      await prisma.contact.update({
+        where: { id: existing.id },
+        data: {
+          firstName: overwrite
+            ? input.firstName ?? existing.firstName ?? null
+            : existing.firstName ?? input.firstName ?? null,
+          lastName: overwrite
+            ? input.lastName ?? existing.lastName ?? null
+            : existing.lastName ?? input.lastName ?? null,
+          email: overwrite
+            ? emailNorm ?? existing.email ?? null
+            : existing.email ?? emailNorm ?? null,
+          company: overwrite
+            ? input.company ?? existing.company ?? null
+            : existing.company ?? input.company ?? null,
+        },
+      });
+      return { contactId: existing.id, created: false };
+    }
+  }
+
+  if (emailNorm) {
     const byEmail = await prisma.contact.findFirst({
-      where: { workspaceId: input.workspaceId, email: input.email },
+      where: {
+        workspaceId: input.workspaceId,
+        email: { equals: emailNorm, mode: "insensitive" },
+      },
     });
     if (byEmail) {
       await prisma.contact.update({
@@ -240,56 +273,26 @@ export async function upsertExternalContact(input: {
           company: overwrite
             ? input.company ?? byEmail.company ?? null
             : byEmail.company ?? input.company ?? null,
+          // Attach normalized phone when we found by email and contact had placeholder phone.
+          ...(phone && byEmail.phone.startsWith("email:")
+            ? { phone }
+            : {}),
         },
       });
       return { contactId: byEmail.id, created: false };
     }
-    const createdByEmail = await prisma.contact.create({
-      data: {
-        workspaceId: input.workspaceId,
-        phone: `email:${input.email.toLowerCase()}`,
-        firstName: input.firstName ?? null,
-        lastName: input.lastName ?? null,
-        email: input.email,
-        company: input.company ?? null,
-        consentSource: input.source || "integration",
-      },
-    });
-    return { contactId: createdByEmail.id, created: true };
   }
 
-  const existing = await prisma.contact.findUnique({
-    where: { workspaceId_phone: { workspaceId: input.workspaceId, phone } },
-  });
-
-  if (existing) {
-    await prisma.contact.update({
-      where: { id: existing.id },
-      data: {
-        firstName: overwrite
-          ? input.firstName ?? existing.firstName ?? null
-          : existing.firstName ?? input.firstName ?? null,
-        lastName: overwrite
-          ? input.lastName ?? existing.lastName ?? null
-          : existing.lastName ?? input.lastName ?? null,
-        email: overwrite
-          ? input.email ?? existing.email ?? null
-          : existing.email ?? input.email ?? null,
-        company: overwrite
-          ? input.company ?? existing.company ?? null
-          : existing.company ?? input.company ?? null,
-      },
-    });
-    return { contactId: existing.id, created: false };
-  }
+  if (!createIfMissing) return null;
+  if (!phone && !emailNorm) return null;
 
   const created = await prisma.contact.create({
     data: {
       workspaceId: input.workspaceId,
-      phone,
+      phone: phone || `email:${emailNorm!.toLowerCase()}`,
       firstName: input.firstName ?? null,
       lastName: input.lastName ?? null,
-      email: input.email ?? null,
+      email: emailNorm,
       company: input.company ?? null,
       consentSource: input.source || "integration",
     },

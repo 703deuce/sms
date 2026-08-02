@@ -158,12 +158,13 @@ export async function runIntegrationSyncJob(payload: {
               firstName: a.inviteeName?.split(" ")[0],
               lastName: a.inviteeName?.split(" ").slice(1).join(" ") || null,
               source: provider,
+              createIfMissing: prefs.autoCreateContacts,
             });
-            if (matched && a.id) {
+            if (a.id) {
               await persistAppointmentFromIntegration({
                 workspaceId,
                 provider,
-                contactId: matched.contactId,
+                contactId: matched?.contactId || null,
                 appointment: a,
               });
             }

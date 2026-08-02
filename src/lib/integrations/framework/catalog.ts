@@ -10,7 +10,14 @@ export const NATIVE_PROVIDER_CATALOG: ProviderCatalogEntry[] = [
     oauthEnv: {
       clientId: "CALENDLY_CLIENT_ID",
       clientSecret: "CALENDLY_CLIENT_SECRET",
-      scopes: ["default"],
+      // Exact authorize scopes live on calendlyAdapter.oauth.scopes (API v2).
+      scopes: [
+        "users:read",
+        "event_types:read",
+        "scheduled_events:read",
+        "webhooks:read",
+        "webhooks:write",
+      ],
     },
   },
   {
