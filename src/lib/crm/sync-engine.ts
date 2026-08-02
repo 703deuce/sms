@@ -376,20 +376,96 @@ export async function runCrmSyncJob(payload: {
                 }
                 companyContactId = companyContact?.id || null;
               }
+              const {
+                hashCrmPayload,
+                diffFields,
+                publishMappedCrmEvent,
+              } = await import("./sync-publish");
+              const prevCo = await getObjectMapping({
+                workspaceId,
+                provider,
+                objectType: "company",
+                externalId: company.id,
+              });
+              const coMeta = {
+                name: company.name,
+                phone: company.phone,
+                website: company.website,
+                ownerExternalId: company.ownerExternalId,
+                status:
+                  (company.customFields?.status as string) ||
+                  (company as { status?: string }).status ||
+                  null,
+              };
+              const coHash = hashCrmPayload(coMeta);
+              const coChanged = diffFields(
+                (prevCo?.metadataJson || null) as Record<string, unknown> | null,
+                coMeta as Record<string, unknown>,
+              );
               await upsertObjectMapping({
                 workspaceId,
                 provider,
                 objectType: "company",
                 internalId: companyContactId || `crm-company:${company.id}`,
                 externalId: company.id,
+                syncHash: coHash,
                 syncStatus: "synced",
-                metadata: {
-                  name: company.name,
-                  phone: company.phone,
-                  website: company.website,
-                  ownerExternalId: company.ownerExternalId,
-                },
+                metadata: coMeta,
               }).catch(() => undefined);
+              if (
+                companyContactId &&
+                (!prevCo || prevCo.syncHash !== coHash)
+              ) {
+                await publishMappedCrmEvent({
+                  workspaceId,
+                  provider,
+                  eventType: !prevCo ? "company.created" : "company.updated",
+                  contactId: companyContactId,
+                  externalObjectType: "company",
+                  externalObjectId: company.id,
+                  changedFields: coChanged,
+                  payload: coMeta,
+                }).catch(() => undefined);
+                if (prevCo && coChanged.includes("ownerExternalId")) {
+                  await publishMappedCrmEvent({
+                    workspaceId,
+                    provider,
+                    eventType: "company.owner_changed",
+                    contactId: companyContactId,
+                    externalObjectType: "company",
+                    externalObjectId: company.id,
+                    payload: coMeta,
+                    changedFields: ["ownerExternalId"],
+                  }).catch(() => undefined);
+                }
+                if (prevCo && coChanged.includes("status")) {
+                  await publishMappedCrmEvent({
+                    workspaceId,
+                    provider,
+                    eventType: "company.status_changed",
+                    contactId: companyContactId,
+                    externalObjectType: "company",
+                    externalObjectId: company.id,
+                    payload: coMeta,
+                    changedFields: ["status"],
+                  }).catch(() => undefined);
+                }
+                if (
+                  prevCo &&
+                  coChanged.some((c) => c.startsWith("custom") || c === "website")
+                ) {
+                  await publishMappedCrmEvent({
+                    workspaceId,
+                    provider,
+                    eventType: "company.custom_field_changed",
+                    contactId: companyContactId,
+                    externalObjectType: "company",
+                    externalObjectId: company.id,
+                    payload: coMeta,
+                    changedFields: coChanged,
+                  }).catch(() => undefined);
+                }
+              }
             }
             cursor = page.nextCursor;
             pages += 1;
@@ -473,7 +549,34 @@ export async function runCrmSyncJob(payload: {
           for (const lead of page.items) {
             stats.leadsIn += 1;
             if (!lead.id) continue;
-            // Ingest lead as contact when phone/email present (preserves CRM lead mapping)
+            const {
+              hashCrmPayload,
+              diffFields,
+              publishMappedCrmEvent,
+              resolveContactIdFromExternal,
+            } = await import("./sync-publish");
+            const prevLead = await getObjectMapping({
+              workspaceId,
+              provider,
+              objectType: "lead",
+              externalId: lead.id,
+            });
+            const leadMeta = {
+              status: lead.status,
+              source: lead.source,
+              ownerExternalId: lead.ownerExternalId,
+              firstName: lead.firstName,
+              lastName: lead.lastName,
+              phone: lead.phone,
+              email: lead.email,
+              companyName: lead.companyName,
+            };
+            const leadHash = hashCrmPayload(leadMeta);
+            const changed = diffFields(
+              (prevLead?.metadataJson || null) as Record<string, unknown> | null,
+              leadMeta as Record<string, unknown>,
+            );
+            let contactId: string | null = null;
             if (lead.phone || lead.email) {
               try {
                 await ingestRemoteContact(
@@ -487,34 +590,81 @@ export async function runCrmSyncJob(payload: {
                     phone: lead.phone,
                     email: lead.email,
                     companyName: lead.companyName,
+                    customFields: {
+                      ownerExternalId: lead.ownerExternalId,
+                      status: lead.status,
+                      source: lead.source,
+                      tags: [],
+                    },
                   },
                   stats,
                 );
-                await upsertObjectMapping({
-                  workspaceId,
-                  provider,
-                  objectType: "lead",
-                  internalId: `crm-lead:${lead.id}`,
-                  externalId: lead.id,
-                  syncStatus: "synced",
-                  metadata: {
-                    status: lead.status,
-                    source: lead.source,
-                    ownerExternalId: lead.ownerExternalId,
-                  },
-                }).catch(() => undefined);
+                contactId = await resolveContactIdFromExternal(workspaceId, provider, lead.id);
               } catch {
                 stats.errors += 1;
               }
-            } else {
-              await upsertObjectMapping({
+            }
+            await upsertObjectMapping({
+              workspaceId,
+              provider,
+              objectType: "lead",
+              internalId: contactId || `crm-lead:${lead.id}`,
+              externalId: lead.id,
+              syncHash: leadHash,
+              syncStatus: "synced",
+              metadata: leadMeta,
+            }).catch(() => undefined);
+            if (contactId && (!prevLead || prevLead.syncHash !== leadHash)) {
+              const isNew = !prevLead;
+              await publishMappedCrmEvent({
                 workspaceId,
                 provider,
-                objectType: "lead",
-                internalId: `crm-lead:${lead.id}`,
-                externalId: lead.id,
-                metadata: { status: lead.status, name: lead.lastName },
+                eventType: isNew ? "lead.created" : "lead.updated",
+                contactId,
+                externalObjectType: "lead",
+                externalObjectId: lead.id,
+                changedFields: changed,
+                payload: leadMeta,
               }).catch(() => undefined);
+              if (!isNew && changed.includes("ownerExternalId")) {
+                await publishMappedCrmEvent({
+                  workspaceId,
+                  provider,
+                  eventType: "lead.assigned",
+                  contactId,
+                  externalObjectType: "lead",
+                  externalObjectId: lead.id,
+                  payload: leadMeta,
+                  changedFields: ["ownerExternalId"],
+                }).catch(() => undefined);
+              }
+              if (!isNew && changed.includes("status")) {
+                await publishMappedCrmEvent({
+                  workspaceId,
+                  provider,
+                  eventType: "lead.status_changed",
+                  contactId,
+                  externalObjectType: "lead",
+                  externalObjectId: lead.id,
+                  payload: {
+                    ...leadMeta,
+                    previousStatus: (prevLead?.metadataJson as { status?: string } | null)?.status,
+                  },
+                  changedFields: ["status"],
+                }).catch(() => undefined);
+              }
+              if (!isNew && changed.includes("source")) {
+                await publishMappedCrmEvent({
+                  workspaceId,
+                  provider,
+                  eventType: "lead.source_changed",
+                  contactId,
+                  externalObjectType: "lead",
+                  externalObjectId: lead.id,
+                  payload: leadMeta,
+                  changedFields: ["source"],
+                }).catch(() => undefined);
+              }
             }
           }
           cursor = page.nextCursor;
@@ -539,6 +689,40 @@ export async function runCrmSyncJob(payload: {
           });
           for (const deal of page.items) {
             if (!deal.id) continue;
+            const {
+              hashCrmPayload,
+              diffFields,
+              publishMappedCrmEvent,
+              resolveContactIdFromExternal,
+            } = await import("./sync-publish");
+            const prevDeal = await getObjectMapping({
+              workspaceId,
+              provider,
+              objectType: "deal",
+              externalId: deal.id,
+            });
+            const dealMeta = {
+              name: deal.name,
+              amount: deal.amount,
+              currency: deal.currency,
+              stage: deal.stage,
+              pipeline: deal.pipeline,
+              status: deal.status,
+              ownerExternalId: deal.ownerExternalId,
+              closeDate: deal.closeDate,
+              contactExternalId: deal.contactExternalId,
+              companyExternalId: deal.companyExternalId,
+            };
+            const dealHash = hashCrmPayload(dealMeta);
+            const changed = diffFields(
+              (prevDeal?.metadataJson || null) as Record<string, unknown> | null,
+              dealMeta as Record<string, unknown>,
+            );
+            const contactId = await resolveContactIdFromExternal(
+              workspaceId,
+              provider,
+              deal.contactExternalId,
+            );
             await upsertObjectMapping({
               workspaceId,
               provider,
@@ -546,18 +730,112 @@ export async function runCrmSyncJob(payload: {
               internalId: `crm-deal:${deal.id}`,
               externalId: deal.id,
               parentExternalId: deal.contactExternalId || deal.companyExternalId || null,
+              syncHash: dealHash,
               syncStatus: "synced",
-              metadata: {
-                name: deal.name,
-                amount: deal.amount,
-                currency: deal.currency,
-                stage: deal.stage,
-                pipeline: deal.pipeline,
-                status: deal.status,
-                ownerExternalId: deal.ownerExternalId,
-                closeDate: deal.closeDate,
-              },
+              metadata: dealMeta,
             }).catch(() => undefined);
+            if (contactId && (!prevDeal || prevDeal.syncHash !== dealHash)) {
+              const isNew = !prevDeal;
+              const prevMeta = (prevDeal?.metadataJson || {}) as Record<string, unknown>;
+              await publishMappedCrmEvent({
+                workspaceId,
+                provider,
+                eventType: isNew ? "deal.created" : "deal.updated",
+                contactId,
+                externalObjectType: "deal",
+                externalObjectId: deal.id,
+                changedFields: changed,
+                payload: dealMeta,
+              }).catch(() => undefined);
+              if (!isNew && changed.includes("stage")) {
+                await publishMappedCrmEvent({
+                  workspaceId,
+                  provider,
+                  eventType: "deal.stage_changed",
+                  contactId,
+                  externalObjectType: "deal",
+                  externalObjectId: deal.id,
+                  payload: { ...dealMeta, previousStage: prevMeta.stage },
+                  changedFields: ["stage"],
+                }).catch(() => undefined);
+              }
+              if (!isNew && changed.includes("pipeline")) {
+                await publishMappedCrmEvent({
+                  workspaceId,
+                  provider,
+                  eventType: "deal.pipeline_changed",
+                  contactId,
+                  externalObjectType: "deal",
+                  externalObjectId: deal.id,
+                  payload: dealMeta,
+                  changedFields: ["pipeline"],
+                }).catch(() => undefined);
+              }
+              if (!isNew && changed.includes("ownerExternalId")) {
+                await publishMappedCrmEvent({
+                  workspaceId,
+                  provider,
+                  eventType: "deal.owner_changed",
+                  contactId,
+                  externalObjectType: "deal",
+                  externalObjectId: deal.id,
+                  payload: dealMeta,
+                  changedFields: ["ownerExternalId"],
+                }).catch(() => undefined);
+              }
+              if (!isNew && changed.includes("amount")) {
+                await publishMappedCrmEvent({
+                  workspaceId,
+                  provider,
+                  eventType: "deal.value_changed",
+                  contactId,
+                  externalObjectType: "deal",
+                  externalObjectId: deal.id,
+                  payload: dealMeta,
+                  changedFields: ["amount"],
+                }).catch(() => undefined);
+              }
+              const status = String(deal.status || "").toLowerCase();
+              const prevStatus = String(prevMeta.status || "").toLowerCase();
+              if (status.includes("won") && !prevStatus.includes("won")) {
+                await publishMappedCrmEvent({
+                  workspaceId,
+                  provider,
+                  eventType: "deal.won",
+                  contactId,
+                  externalObjectType: "deal",
+                  externalObjectId: deal.id,
+                  payload: dealMeta,
+                }).catch(() => undefined);
+              }
+              if (status.includes("lost") && !prevStatus.includes("lost")) {
+                await publishMappedCrmEvent({
+                  workspaceId,
+                  provider,
+                  eventType: "deal.lost",
+                  contactId,
+                  externalObjectType: "deal",
+                  externalObjectId: deal.id,
+                  payload: dealMeta,
+                }).catch(() => undefined);
+              }
+              if (
+                (prevStatus.includes("won") || prevStatus.includes("lost")) &&
+                !status.includes("won") &&
+                !status.includes("lost") &&
+                !isNew
+              ) {
+                await publishMappedCrmEvent({
+                  workspaceId,
+                  provider,
+                  eventType: "deal.reopened",
+                  contactId,
+                  externalObjectType: "deal",
+                  externalObjectId: deal.id,
+                  payload: dealMeta,
+                }).catch(() => undefined);
+              }
+            }
           }
           cursor = page.nextCursor;
           pages += 1;
@@ -589,6 +867,39 @@ export async function runCrmSyncJob(payload: {
             });
             for (const task of page.items) {
               if (!task.id) continue;
+              const {
+                hashCrmPayload,
+                diffFields,
+                publishMappedCrmEvent,
+                resolveContactIdFromExternal,
+              } = await import("./sync-publish");
+              const { persistTaskFromIntegration } = await import(
+                "@/lib/integrations/framework/product-persist"
+              );
+              const prevTask = await getObjectMapping({
+                workspaceId,
+                provider,
+                objectType: "task",
+                externalId: task.id,
+              });
+              const taskMeta = {
+                subject: task.subject,
+                status: task.status,
+                dueAt: task.dueAt,
+                ownerExternalId: task.ownerExternalId,
+                description: task.description,
+                priority: task.priority,
+              };
+              const taskHash = hashCrmPayload(taskMeta);
+              const changed = diffFields(
+                (prevTask?.metadataJson || null) as Record<string, unknown> | null,
+                taskMeta as Record<string, unknown>,
+              );
+              const contactId = await resolveContactIdFromExternal(
+                workspaceId,
+                provider,
+                task.contactExternalId,
+              );
               await upsertObjectMapping({
                 workspaceId,
                 provider,
@@ -596,13 +907,69 @@ export async function runCrmSyncJob(payload: {
                 internalId: `crm-task:${task.id}`,
                 externalId: task.id,
                 parentExternalId: task.contactExternalId || null,
+                syncHash: taskHash,
                 syncStatus: "synced",
-                metadata: {
-                  subject: task.subject,
-                  status: task.status,
-                  dueAt: task.dueAt,
+                metadata: taskMeta,
+              }).catch(() => undefined);
+              await persistTaskFromIntegration({
+                workspaceId,
+                provider,
+                contactId,
+                task: {
+                  externalId: task.id,
+                  id: task.id,
+                  title: task.subject || "Task",
+                  status: task.status || "open",
+                  dueAt: task.dueAt || null,
+                  ownerExternalId: task.ownerExternalId || null,
+                  description: task.description || null,
+                  priority: task.priority || null,
                 },
               }).catch(() => undefined);
+              if (contactId && (!prevTask || prevTask.syncHash !== taskHash)) {
+                const isNew = !prevTask;
+                const prevStatus = String(
+                  ((prevTask?.metadataJson || {}) as { status?: string }).status || "",
+                ).toLowerCase();
+                const status = String(task.status || "").toLowerCase();
+                await publishMappedCrmEvent({
+                  workspaceId,
+                  provider,
+                  eventType: isNew ? "task.created" : "task.updated",
+                  contactId,
+                  externalObjectType: "task",
+                  externalObjectId: task.id,
+                  changedFields: changed,
+                  payload: taskMeta,
+                }).catch(() => undefined);
+                if (!isNew && changed.includes("ownerExternalId")) {
+                  await publishMappedCrmEvent({
+                    workspaceId,
+                    provider,
+                    eventType: "task.assigned",
+                    contactId,
+                    externalObjectType: "task",
+                    externalObjectId: task.id,
+                    payload: taskMeta,
+                    changedFields: ["ownerExternalId"],
+                  }).catch(() => undefined);
+                }
+                if (
+                  (status.includes("complete") || status.includes("done")) &&
+                  !prevStatus.includes("complete") &&
+                  !prevStatus.includes("done")
+                ) {
+                  await publishMappedCrmEvent({
+                    workspaceId,
+                    provider,
+                    eventType: "task.completed",
+                    contactId,
+                    externalObjectType: "task",
+                    externalObjectId: task.id,
+                    payload: taskMeta,
+                  }).catch(() => undefined);
+                }
+              }
             }
             cursor = page.nextCursor;
             pages += 1;
@@ -621,6 +988,16 @@ export async function runCrmSyncJob(payload: {
             const page = await connector.listNotes!(ctx, cursor);
             for (const note of page.items) {
               if (!note.id) continue;
+              const {
+                publishMappedCrmEvent,
+                resolveContactIdFromExternal,
+              } = await import("./sync-publish");
+              const prevNote = await getObjectMapping({
+                workspaceId,
+                provider,
+                objectType: "note",
+                externalId: note.id,
+              });
               await upsertObjectMapping({
                 workspaceId,
                 provider,
@@ -631,6 +1008,24 @@ export async function runCrmSyncJob(payload: {
                 syncStatus: "synced",
                 metadata: { preview: String(note.body || "").slice(0, 200) },
               }).catch(() => undefined);
+              if (!prevNote) {
+                const contactId = await resolveContactIdFromExternal(
+                  workspaceId,
+                  provider,
+                  note.contactExternalId,
+                );
+                if (contactId) {
+                  await publishMappedCrmEvent({
+                    workspaceId,
+                    provider,
+                    eventType: "note.created",
+                    contactId,
+                    externalObjectType: "note",
+                    externalObjectId: note.id,
+                    payload: { preview: String(note.body || "").slice(0, 200) },
+                  }).catch(() => undefined);
+                }
+              }
             }
             cursor = page.nextCursor;
             pages += 1;
@@ -654,6 +1049,23 @@ export async function runCrmSyncJob(payload: {
             });
             for (const activity of page.items) {
               if (!activity.id) continue;
+              const {
+                publishMappedCrmEvent,
+                resolveContactIdFromExternal,
+                hashCrmPayload,
+              } = await import("./sync-publish");
+              const prevAct = await getObjectMapping({
+                workspaceId,
+                provider,
+                objectType: "activity",
+                externalId: activity.id,
+              });
+              const actMeta = {
+                type: activity.type,
+                subject: activity.subject,
+                status: activity.status,
+              };
+              const actHash = hashCrmPayload(actMeta);
               await upsertObjectMapping({
                 workspaceId,
                 provider,
@@ -661,13 +1073,41 @@ export async function runCrmSyncJob(payload: {
                 internalId: `crm-activity:${activity.id}`,
                 externalId: activity.id,
                 parentExternalId: activity.contactExternalId || null,
+                syncHash: actHash,
                 syncStatus: "synced",
-                metadata: {
-                  type: activity.type,
-                  subject: activity.subject,
-                  status: activity.status,
-                },
+                metadata: actMeta,
               }).catch(() => undefined);
+              if (!prevAct || prevAct.syncHash !== actHash) {
+                const contactId = await resolveContactIdFromExternal(
+                  workspaceId,
+                  provider,
+                  activity.contactExternalId,
+                );
+                if (contactId) {
+                  const isNew = !prevAct;
+                  const type = String(activity.type || "").toLowerCase();
+                  await publishMappedCrmEvent({
+                    workspaceId,
+                    provider,
+                    eventType: isNew ? "activity.created" : "activity.updated",
+                    contactId,
+                    externalObjectType: "activity",
+                    externalObjectId: activity.id,
+                    payload: actMeta,
+                  }).catch(() => undefined);
+                  if (isNew && (type.includes("call") || type === "call")) {
+                    await publishMappedCrmEvent({
+                      workspaceId,
+                      provider,
+                      eventType: "call.activity_created",
+                      contactId,
+                      externalObjectType: "activity",
+                      externalObjectId: activity.id,
+                      payload: actMeta,
+                    }).catch(() => undefined);
+                  }
+                }
+              }
             }
             cursor = page.nextCursor;
             pages += 1;
@@ -993,6 +1433,30 @@ async function ingestRemoteContact(
     return;
   }
 
+  const nextMeta = {
+    firstName: remote.firstName,
+    lastName: remote.lastName,
+    phone: remote.phone,
+    email: remote.email,
+    company: remote.companyName,
+    ownerExternalId:
+      (remote.customFields?.ownerExternalId as string) ||
+      (remote as { ownerExternalId?: string }).ownerExternalId ||
+      null,
+    status:
+      (remote.customFields?.status as string) ||
+      (remote as { status?: string }).status ||
+      null,
+    source:
+      (remote.customFields?.source as string) ||
+      (remote as { source?: string }).source ||
+      null,
+    tags: (remote as { tags?: string[] }).tags || remote.customFields?.tags || [],
+  };
+  const { diffFields, publishMappedCrmEvent } = await import("./sync-publish");
+  const prevMeta = (existingMap?.metadataJson || null) as Record<string, unknown> | null;
+  const changed = diffFields(prevMeta, nextMeta as Record<string, unknown>);
+
   await upsertObjectMapping({
     workspaceId,
     provider,
@@ -1007,6 +1471,7 @@ async function ingestRemoteContact(
         : null,
     syncStatus: "synced",
     externalDeletedAt: null,
+    metadata: nextMeta,
   });
 
   if (existingMap || !result.created) {
@@ -1021,23 +1486,85 @@ async function ingestRemoteContact(
       externalId: remote.id,
       message: "Updated contact from CRM",
     });
-    // Only fire automation on real remote change (hash changed), not every reconcile.
     if (!existingMap || existingMap.syncHash !== incomingHash) {
-      const { publishCrmAutomationEvent } = await import("./automation-bridge");
-      await publishCrmAutomationEvent({
+      await publishMappedCrmEvent({
         workspaceId,
         provider,
         eventType: "contact.updated",
         contactId: result.contactId,
         externalObjectType: "contact",
         externalObjectId: remote.id,
-        payload: {
-          email: remote.email,
-          phone: remote.phone,
-          firstName: remote.firstName,
-          lastName: remote.lastName,
-        },
+        changedFields: changed,
+        payload: nextMeta,
       }).catch(() => undefined);
+      const fieldEvents: Array<[string, "contact.owner_changed" | "contact.status_changed" | "contact.phone_changed" | "contact.email_changed" | "contact.custom_field_changed"]> = [
+        ["ownerExternalId", "contact.owner_changed"],
+        ["status", "contact.status_changed"],
+        ["phone", "contact.phone_changed"],
+        ["email", "contact.email_changed"],
+      ];
+      for (const [field, evt] of fieldEvents) {
+        if (changed.includes(field)) {
+          await publishMappedCrmEvent({
+            workspaceId,
+            provider,
+            eventType: evt,
+            contactId: result.contactId,
+            externalObjectType: "contact",
+            externalObjectId: remote.id,
+            changedFields: [field],
+            payload: nextMeta,
+          }).catch(() => undefined);
+        }
+      }
+      if (changed.some((c) => c.startsWith("custom") || c === "company")) {
+        await publishMappedCrmEvent({
+          workspaceId,
+          provider,
+          eventType: "contact.custom_field_changed",
+          contactId: result.contactId,
+          externalObjectType: "contact",
+          externalObjectId: remote.id,
+          changedFields: changed,
+          payload: nextMeta,
+        }).catch(() => undefined);
+      }
+      if (changed.includes("tags")) {
+        const prevTags = new Set(
+          Array.isArray(prevMeta?.tags) ? (prevMeta!.tags as string[]) : [],
+        );
+        const nextTags = new Set(
+          Array.isArray(nextMeta.tags) ? (nextMeta.tags as string[]) : [],
+        );
+        for (const tag of nextTags) {
+          if (!prevTags.has(tag)) {
+            await publishMappedCrmEvent({
+              workspaceId,
+              provider,
+              eventType: "contact.tag_added",
+              contactId: result.contactId,
+              externalObjectType: "contact",
+              externalObjectId: remote.id,
+              changedFields: ["tags"],
+              payload: { ...nextMeta, tag },
+            }).catch(() => undefined);
+          }
+        }
+        for (const tag of prevTags) {
+          if (!nextTags.has(tag)) {
+            await publishMappedCrmEvent({
+              workspaceId,
+              provider,
+              eventType: "contact.tag_removed",
+              contactId: result.contactId,
+              externalObjectType: "contact",
+              externalObjectId: remote.id,
+              changedFields: ["tags"],
+              payload: { ...nextMeta, tag },
+            }).catch(() => undefined);
+          }
+        }
+      }
     }
   } else {
     stats.contactsCreated += 1;
@@ -1051,20 +1578,15 @@ async function ingestRemoteContact(
       externalId: remote.id,
       message: "Created contact from CRM",
     });
-    const { publishCrmAutomationEvent } = await import("./automation-bridge");
-    await publishCrmAutomationEvent({
+    await publishMappedCrmEvent({
       workspaceId,
       provider,
       eventType: "contact.created",
       contactId: result.contactId,
       externalObjectType: "contact",
       externalObjectId: remote.id,
-      payload: {
-        email: remote.email,
-        phone: remote.phone,
-        firstName: remote.firstName,
-        lastName: remote.lastName,
-      },
+      payload: nextMeta,
+      changedFields: [],
     }).catch(() => undefined);
   }
 }

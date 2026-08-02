@@ -12,14 +12,26 @@ import type {
 /**
  * Least-privilege Calendly OAuth scopes (API v2 scoped apps).
  * New Calendly OAuth apps grant no API access until scopes are requested.
+ *
+ * NOTE: The `*:write` scopes below were added to support scheduling-link
+ * automation actions (single-use links, share links) and appointment
+ * cancellation. Existing connections were authorized before these scopes
+ * existed, so they must DISCONNECT AND RECONNECT for the new write actions
+ * to work — the token they hold does not carry the new grants.
+ *
  * @see https://developer.calendly.com/scopes
  */
 export const CALENDLY_OAUTH_SCOPES = [
+  // —— read / webhook (unchanged; reconnect not required for these) ——
   "users:read",
   "event_types:read",
   "scheduled_events:read",
   "webhooks:read",
   "webhooks:write",
+  // —— write (added; reconnect required to activate) ——
+  "scheduling_links:write",
+  "shares:write",
+  "scheduled_events:write",
 ] as const;
 
 const caps: CapabilityDefinition = {
@@ -33,9 +45,24 @@ const caps: CapabilityDefinition = {
     "appointment.scheduled": "subscription_dependent",
     "appointment.canceled": "subscription_dependent",
     "appointment.rescheduled": "subscription_dependent",
+    "appointment.no_show": "subscription_dependent",
+    // Event type lifecycle is not delivered by Calendly webhooks; surfaced via
+    // metadata refresh diffing where available (see refreshMetadata).
+    "event_type.created": "scope_dependent",
+    "event_type.updated": "scope_dependent",
+    "event_type.activated": "scope_dependent",
+    "event_type.deactivated": "scope_dependent",
   },
   actions: {
-    // Single-use / Scheduling API booking not implemented — booking links are read-only.
+    // Read the account/event-type scheduling URL (from /users/me or /event_types).
+    get_scheduling_link: "read_only",
+    // Single-use scheduling link (POST /scheduling_links) — requires scheduling_links:write.
+    create_single_use_link: "read_write",
+    // Cancel a scheduled event (POST /scheduled_events/{uuid}/cancellation) — requires scheduled_events:write.
+    cancel_appointment: "read_write",
+    // Read a scheduled event + invitee cancel/reschedule URLs.
+    retrieve_appointment: "read_only",
+    // Direct booking / creating a scheduled event is not offered by the API — keep unsupported.
     create_scheduling_link: "unsupported",
   },
   webhooks: "subscription_dependent",
@@ -262,7 +289,10 @@ export const calendlyAdapter: ExternalIntegrationAdapter = {
     // so personal accounts work without org-admin privileges.
     const body = {
       url: callbackUrl,
-      events: ["invitee.created", "invitee.canceled"],
+      // invitee_no_show.created requires a paid plan on many accounts — registration
+      // still succeeds when the plan allows the event; Free accounts already fall back
+      // to incremental reconcile via the plan-error path below.
+      events: ["invitee.created", "invitee.canceled", "invitee_no_show.created"],
       organization: org,
       user,
       scope: "user",
@@ -310,20 +340,56 @@ export const calendlyAdapter: ExternalIntegrationAdapter = {
     };
     const eventName = body.event || "";
     const p = body.payload || {};
+
+    const qa =
+      (p.questions_and_answers as Array<{ question?: string; answer?: string }>) || [];
     const email = (p.email as string) || null;
     const name = (p.name as string) || null;
     const phone =
       (p.text_reminder_number as string) ||
-      (
-        (p.questions_and_answers as Array<{ question?: string; answer?: string }>) || []
-      ).find((q) => /phone|mobile|cell/i.test(q.question || ""))?.answer ||
+      qa.find((q) => /phone|mobile|cell/i.test(q.question || ""))?.answer ||
       null;
+
+    // Host / event-type enrichment lives on the embedded scheduled_event.
+    const scheduledEvent =
+      (p.scheduled_event as Record<string, unknown> | undefined) || undefined;
+    const memberships =
+      (scheduledEvent?.event_memberships as Array<Record<string, unknown>>) || [];
+    const firstHost = memberships[0] || {};
+    const host = {
+      name: (firstHost.user_name as string) || null,
+      email: (firstHost.user_email as string) || null,
+      uri: (firstHost.user as string) || null,
+    };
+    const eventTypeName =
+      (scheduledEvent?.name as string) ||
+      (p.event_type_name as string) ||
+      (p.name as string) ||
+      null;
+
+    const cancellation =
+      (p.cancellation as {
+        reason?: string;
+        canceled_by?: string;
+        canceler_type?: string;
+      } | null) || null;
+
+    // Calendly delivers no-shows via the dedicated `invitee_no_show.created` event,
+    // but some payloads also carry an inline `no_show` marker.
+    const noShow =
+      /no_show/i.test(eventName) || Boolean(p.no_show) ? true : false;
+
     const externalId = String(p.uri || p.event || `${eventName}:${email}`);
+
     let eventType: NormalizedEvent["eventType"] = "appointment.scheduled";
-    if (eventName.includes("canceled")) eventType = "appointment.canceled";
-    if (p.rescheduled || eventName.includes("reschedule")) {
+    if (noShow) {
+      eventType = "appointment.no_show";
+    } else if (eventName.includes("canceled")) {
+      eventType = "appointment.canceled";
+    } else if (p.rescheduled || eventName.includes("reschedule")) {
       eventType = "appointment.rescheduled";
     }
+
     return [
       {
         workspaceId,
@@ -338,11 +404,24 @@ export const calendlyAdapter: ExternalIntegrationAdapter = {
         idempotencyKey: makeEventIdempotencyKey("calendly", externalId, eventType),
         payload: {
           name,
+          email,
+          phone,
           eventType,
+          eventTypeName,
+          host,
+          inviteeUri: p.uri || null,
           cancelUrl: p.cancel_url,
           rescheduleUrl: p.reschedule_url,
           tracking: p.tracking,
+          utm: p.tracking,
+          questionsAndAnswers: qa,
+          cancellationReason: cancellation?.reason || null,
+          canceledBy: cancellation?.canceled_by || null,
+          cancelerType: cancellation?.canceler_type || null,
+          noShow,
           scheduledEvent: p.scheduled_event,
+          startsAt: (scheduledEvent?.start_time as string) || null,
+          endsAt: (scheduledEvent?.end_time as string) || null,
         },
         rawMeta: { calendlyEvent: eventName },
       },

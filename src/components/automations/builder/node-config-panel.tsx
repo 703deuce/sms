@@ -6,16 +6,27 @@ import {
   CONDITION_FIELDS,
   CONDITION_OPERATORS,
   MERGE_VARIABLES,
+  integrationActionsForProvider,
   isConditionBlock,
 } from "@/lib/automations/catalog";
 import type { AutomationCanvasNode } from "@/lib/automations/types";
 import { X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type TagOption = { id: string; name: string };
 type NumberOption = { id: string; number: string };
 type FlowOption = { id: string; name: string };
 type ContactOption = { id: string; firstName?: string | null; lastName?: string | null; phone: string };
+
+type IntegrationMetadata = {
+  provider: string;
+  owners?: Array<{ id: string; name: string; email?: string | null }>;
+  pipelines?: Array<{ id: string; name: string }>;
+  stages?: Array<{ id: string; name: string; pipelineId?: string | null }>;
+  eventTypes?: Array<{ id: string; name: string }>;
+};
+
+const METADATA_PROVIDERS = ["salesforce", "zoho", "pipedrive", "calendly"];
 
 export function NodeConfigPanel({
   flowId,
@@ -43,6 +54,15 @@ export function NodeConfigPanel({
   const [contacts, setContacts] = useState<ContactOption[]>([]);
   const [testContactId, setTestContactId] = useState("");
   const [testSending, setTestSending] = useState(false);
+  const [metadata, setMetadata] = useState<IntegrationMetadata | null>(null);
+  const [metaLoading, setMetaLoading] = useState(false);
+  const [actionTesting, setActionTesting] = useState(false);
+  const [actionTestResult, setActionTestResult] = useState<
+    { ok: boolean; message: string } | null
+  >(null);
+
+  const provider = String(cfg.provider || "");
+  const isIntegrationBlock = block === "integration_action" || block.startsWith("integration_");
 
   useEffect(() => {
     fetch("/api/contacts/tags")
@@ -71,6 +91,94 @@ export function NodeConfigPanel({
       .then((j) => setContacts(j?.data || []))
       .catch(() => undefined);
   }, []);
+
+  useEffect(() => {
+    const isMeta =
+      isIntegrationBlock && Boolean(provider) && METADATA_PROVIDERS.includes(provider);
+    if (!isMeta) return;
+    let cancelled = false;
+    async function load() {
+      setMetaLoading(true);
+      try {
+        const r = await fetch(
+          `/api/integrations/metadata?provider=${encodeURIComponent(provider)}`,
+        );
+        const j = r.ok ? await r.json() : null;
+        if (!cancelled) setMetadata((j?.data as IntegrationMetadata) || null);
+      } catch {
+        if (!cancelled) setMetadata(null);
+      } finally {
+        if (!cancelled) setMetaLoading(false);
+      }
+    }
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [provider, isIntegrationBlock]);
+
+  // Only surface metadata that matches the currently selected provider, so a
+  // stale response from a previous provider is never shown.
+  const activeMetadata =
+    metadata && metadata.provider === provider ? metadata : null;
+
+  const actionOptions = useMemo(
+    () => integrationActionsForProvider(provider),
+    [provider],
+  );
+  const selectedAction = useMemo(
+    () => actionOptions.find((a) => a.id === String(cfg.actionId || "")),
+    [actionOptions, cfg.actionId],
+  );
+
+  function insertSamplePayload() {
+    if (!selectedAction) return;
+    onUpdate({
+      config: { ...cfg, paramsJson: JSON.stringify(selectedAction.samplePayload, null, 2) },
+    });
+  }
+
+  async function testAction() {
+    setActionTesting(true);
+    setActionTestResult(null);
+    try {
+      const res = await fetch("/api/integrations/actions/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          provider: cfg.provider,
+          actionId: cfg.actionId,
+          paramsJson: cfg.paramsJson,
+          contactId: testContactId || undefined,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Test failed");
+      const d = json.data as {
+        supported: boolean;
+        reason: string | null;
+        riskLevel: number;
+        preview: { fieldsChanged: string[] };
+      };
+      setActionTestResult(
+        d.supported
+          ? {
+              ok: true,
+              message: `Dry run OK · risk ${d.riskLevel} · fields: ${
+                d.preview.fieldsChanged.join(", ") || "none"
+              }`,
+            }
+          : { ok: false, message: d.reason || "Not supported" },
+      );
+    } catch (err) {
+      setActionTestResult({
+        ok: false,
+        message: err instanceof Error ? err.message : "Test failed",
+      });
+    } finally {
+      setActionTesting(false);
+    }
+  }
 
   function insertVariable(key: string) {
     if (block !== "send_sms" && block !== "send_review_request" && block !== "send_email") return;
@@ -380,6 +488,148 @@ export function NodeConfigPanel({
                 <option value="highlevel">HighLevel</option>
               </Select>
             </div>
+            {metaLoading && (
+              <p className="text-xs text-muted-foreground">Loading {provider} metadata…</p>
+            )}
+            {(block.includes("owner_changed") || block.includes("_assigned")) && (
+              <div>
+                <Label>Owner filter</Label>
+                {activeMetadata?.owners?.length ? (
+                  <Select
+                    value={String(cfg.owner || "")}
+                    onChange={(e) => onUpdate({ config: { ...cfg, owner: e.target.value } })}
+                  >
+                    <option value="">Any owner</option>
+                    {activeMetadata.owners.map((o) => (
+                      <option key={o.id} value={o.id}>{o.name}</option>
+                    ))}
+                  </Select>
+                ) : (
+                  <Input
+                    value={String(cfg.owner || "")}
+                    onChange={(e) => onUpdate({ config: { ...cfg, owner: e.target.value } })}
+                    placeholder="Optional owner id"
+                  />
+                )}
+              </div>
+            )}
+            {block.includes("status_changed") && (
+              <div>
+                <Label>Status filter</Label>
+                <Input
+                  value={String(cfg.status || "")}
+                  onChange={(e) => onUpdate({ config: { ...cfg, status: e.target.value } })}
+                  placeholder="Optional exact status"
+                />
+              </div>
+            )}
+            {block === "integration_deal_stage_changed" && (
+              <>
+                <div>
+                  <Label>New stage filter</Label>
+                  {activeMetadata?.stages?.length ? (
+                    <Select
+                      value={String(cfg.stage || "")}
+                      onChange={(e) => onUpdate({ config: { ...cfg, stage: e.target.value } })}
+                    >
+                      <option value="">Any stage</option>
+                      {activeMetadata.stages.map((s) => (
+                        <option key={s.id} value={s.id}>{s.name}</option>
+                      ))}
+                    </Select>
+                  ) : (
+                    <Input
+                      value={String(cfg.stage || "")}
+                      onChange={(e) => onUpdate({ config: { ...cfg, stage: e.target.value } })}
+                      placeholder="Optional stage id"
+                    />
+                  )}
+                </div>
+                <div>
+                  <Label>Previous stage filter</Label>
+                  {activeMetadata?.stages?.length ? (
+                    <Select
+                      value={String(cfg.previousStage || "")}
+                      onChange={(e) =>
+                        onUpdate({ config: { ...cfg, previousStage: e.target.value } })
+                      }
+                    >
+                      <option value="">Any previous stage</option>
+                      {activeMetadata.stages.map((s) => (
+                        <option key={s.id} value={s.id}>{s.name}</option>
+                      ))}
+                    </Select>
+                  ) : (
+                    <Input
+                      value={String(cfg.previousStage || "")}
+                      onChange={(e) =>
+                        onUpdate({ config: { ...cfg, previousStage: e.target.value } })
+                      }
+                      placeholder="Optional previous stage id"
+                    />
+                  )}
+                </div>
+              </>
+            )}
+            {block === "integration_deal_pipeline_changed" && (
+              <div>
+                <Label>Pipeline filter</Label>
+                {activeMetadata?.pipelines?.length ? (
+                  <Select
+                    value={String(cfg.pipeline || "")}
+                    onChange={(e) => onUpdate({ config: { ...cfg, pipeline: e.target.value } })}
+                  >
+                    <option value="">Any pipeline</option>
+                    {activeMetadata.pipelines.map((p) => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </Select>
+                ) : (
+                  <Input
+                    value={String(cfg.pipeline || "")}
+                    onChange={(e) => onUpdate({ config: { ...cfg, pipeline: e.target.value } })}
+                    placeholder="Optional pipeline id"
+                  />
+                )}
+              </div>
+            )}
+            {block === "integration_lead_source_changed" && (
+              <div>
+                <Label>Source filter</Label>
+                <Input
+                  value={String(cfg.source || "")}
+                  onChange={(e) => onUpdate({ config: { ...cfg, source: e.target.value } })}
+                  placeholder="Optional exact source"
+                />
+              </div>
+            )}
+            {block.includes("custom_field_changed") && (
+              <div>
+                <Label>Changed field filter</Label>
+                <Input
+                  value={String(cfg.changedField || "")}
+                  onChange={(e) => onUpdate({ config: { ...cfg, changedField: e.target.value } })}
+                  placeholder="Optional mapped field key"
+                />
+              </div>
+            )}
+            {block === "integration_task_due" && (
+              <div>
+                <Label>Minutes before due</Label>
+                <Select
+                  value={String(cfg.minutesBefore || 60)}
+                  onChange={(e) =>
+                    onUpdate({ config: { ...cfg, minutesBefore: Number(e.target.value) } })
+                  }
+                >
+                  <option value="15">15 minutes</option>
+                  <option value="30">30 minutes</option>
+                  <option value="60">1 hour</option>
+                  <option value="120">2 hours</option>
+                  <option value="1440">1 day</option>
+                </Select>
+              </div>
+            )}
             {block === "integration_appointment_starting_soon" && (
               <div>
                 <Label>Minutes before start</Label>
@@ -430,13 +680,27 @@ export function NodeConfigPanel({
             {block === "integration_appointment_scheduled" && (
               <div>
                 <Label>Event type filter</Label>
-                <Input
-                  value={String(cfg.eventTypeName || "")}
-                  onChange={(e) =>
-                    onUpdate({ config: { ...cfg, eventTypeName: e.target.value } })
-                  }
-                  placeholder="Optional event type name"
-                />
+                {activeMetadata?.eventTypes?.length ? (
+                  <Select
+                    value={String(cfg.eventTypeName || "")}
+                    onChange={(e) =>
+                      onUpdate({ config: { ...cfg, eventTypeName: e.target.value } })
+                    }
+                  >
+                    <option value="">Any event type</option>
+                    {activeMetadata.eventTypes.map((et) => (
+                      <option key={et.id} value={et.name}>{et.name}</option>
+                    ))}
+                  </Select>
+                ) : (
+                  <Input
+                    value={String(cfg.eventTypeName || "")}
+                    onChange={(e) =>
+                      onUpdate({ config: { ...cfg, eventTypeName: e.target.value } })
+                    }
+                    placeholder="Optional event type name"
+                  />
+                )}
               </div>
             )}
           </>
@@ -448,12 +712,15 @@ export function NodeConfigPanel({
               <Label>Provider</Label>
               <Select
                 value={String(cfg.provider || "")}
-                onChange={(e) => onUpdate({ config: { ...cfg, provider: e.target.value } })}
+                onChange={(e) =>
+                  onUpdate({ config: { ...cfg, provider: e.target.value, actionId: "" } })
+                }
               >
                 <option value="">Select provider</option>
                 <option value="salesforce">Salesforce</option>
                 <option value="zoho">Zoho CRM</option>
                 <option value="pipedrive">Pipedrive</option>
+                <option value="calendly">Calendly</option>
                 <option value="activecampaign">ActiveCampaign</option>
                 <option value="mailchimp">Mailchimp</option>
                 <option value="highlevel">HighLevel</option>
@@ -465,37 +732,87 @@ export function NodeConfigPanel({
             </div>
             <div>
               <Label>Action</Label>
-              <Select
-                value={String(cfg.actionId || "contact.upsert")}
-                onChange={(e) => onUpdate({ config: { ...cfg, actionId: e.target.value } })}
-              >
-                <option value="contact.upsert">Create/update contact</option>
-                <option value="lead.upsert">Create/update CRM lead</option>
-                <option value="deal.upsert">Create/update CRM deal</option>
-                <option value="task.create">Create CRM / app task</option>
-                <option value="note.create">Add CRM / app note</option>
-                <option value="call.log">Log call in CRM</option>
-                <option value="sms.log">Log SMS in CRM</option>
-                <option value="contact.add_tag">Add tag</option>
-                <option value="contact.remove_tag">Remove tag</option>
-                <option value="contact.add_to_list">Add to list</option>
-                <option value="deal.upsert">Create/update deal</option>
-                <option value="task.create">Create task</option>
-                <option value="note.create">Create note</option>
-                <option value="ticket.create">Create ticket</option>
-                <option value="ticket.add_private_note">Add private ticket note</option>
-                <option value="order.add_note">Add order note</option>
-              </Select>
+              {actionOptions.length ? (
+                <Select
+                  value={String(cfg.actionId || "")}
+                  onChange={(e) => onUpdate({ config: { ...cfg, actionId: e.target.value } })}
+                >
+                  <option value="">Select an action</option>
+                  {actionOptions.map((a) => (
+                    <option key={a.id} value={a.id}>{a.label}</option>
+                  ))}
+                </Select>
+              ) : (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {provider
+                    ? "No write actions available for this provider."
+                    : "Select a provider to see available actions."}
+                </p>
+              )}
             </div>
+            {selectedAction && (
+              <div>
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs">Sample payload</Label>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs"
+                    onClick={insertSamplePayload}
+                  >
+                    Use sample
+                  </Button>
+                </div>
+                <pre className="mt-1 max-h-32 overflow-auto rounded-md bg-muted p-2 text-[11px] leading-relaxed">
+                  {JSON.stringify(selectedAction.samplePayload, null, 2)}
+                </pre>
+              </div>
+            )}
             <div>
               <Label>Params JSON</Label>
-              <Input
+              <Textarea
+                rows={4}
                 value={String(cfg.paramsJson || "{}")}
                 onChange={(e) => onUpdate({ config: { ...cfg, paramsJson: e.target.value } })}
                 placeholder='{"tag":"Hot Lead"}'
               />
               <p className="mt-1 text-xs text-muted-foreground">
                 Contact phone/email/name are merged automatically. Do not put secrets here.
+              </p>
+            </div>
+            <div className="space-y-2 border-t border-border pt-3">
+              <Label className="text-xs">Test action (dry run)</Label>
+              <Select value={testContactId} onChange={(e) => setTestContactId(e.target.value)}>
+                <option value="">No sample contact</option>
+                {contacts.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.firstName} {c.lastName} — {c.phone}
+                  </option>
+                ))}
+              </Select>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={!cfg.provider || !cfg.actionId || actionTesting}
+                onClick={testAction}
+              >
+                {actionTesting ? "Testing…" : "Test action"}
+              </Button>
+              {actionTestResult && (
+                <p
+                  className={
+                    actionTestResult.ok
+                      ? "text-xs text-emerald-600"
+                      : "text-xs text-rose-600"
+                  }
+                >
+                  {actionTestResult.message}
+                </p>
+              )}
+              <p className="text-[11px] text-muted-foreground">
+                Dry run validates provider support and previews the payload — it does not
+                write to the connected app.
               </p>
             </div>
           </>

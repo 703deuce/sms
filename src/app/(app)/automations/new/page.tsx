@@ -1,6 +1,10 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import {
+  buildAutomationDefinitionFromTemplate,
+  getIntegrationTemplate,
+} from "@/lib/automations/integration-templates";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
@@ -18,10 +22,21 @@ export default function NewAutomationPage() {
 
     async function create() {
       try {
+        // Optional starter template — seeds a trigger + suggested actions.
+        // Templates never auto-activate; the new flow is always created as DRAFT.
+        const templateId = new URLSearchParams(window.location.search).get("template");
+        const template = templateId ? getIntegrationTemplate(templateId) : null;
+        const body: {
+          name: string;
+          definition?: ReturnType<typeof buildAutomationDefinitionFromTemplate>;
+        } = template
+          ? { name: template.title, definition: buildAutomationDefinitionFromTemplate(template) }
+          : { name: "Untitled automation" };
+
         const res = await fetch("/api/automations", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: "Untitled automation" }),
+          body: JSON.stringify(body),
         });
         const json = await res.json();
         if (!res.ok) throw new Error(json.error || "Failed to create automation");

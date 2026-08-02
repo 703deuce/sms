@@ -11,6 +11,7 @@ import { formatPhone } from "@/lib/utils";
 import { ClickToCallButton } from "@/components/contacts/click-to-call-button";
 import { ContactActivityTimeline } from "@/components/contacts/contact-activity-timeline";
 import { ConnectedRecordsPanel } from "@/components/contacts/connected-records-panel";
+import { IntegrationTimelineCard } from "@/components/contacts/integration-timeline-card";
 import { ArrowLeft, MessageSquare, Shield } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -236,6 +237,14 @@ export default async function ContactDetailPage({
               </div>
             ) : null}
             <ContactActivityTimeline contactId={contact.id} />
+          </Card>
+
+          <Card>
+            <CardTitle>Integration timeline</CardTitle>
+            <p className="mt-1 text-sm text-muted-foreground">
+              CRM webhook events and mapping sync activity from Salesforce, Zoho, Pipedrive, and Calendly.
+            </p>
+            <IntegrationTimelineCard contactId={contact.id} />
           </Card>
         </div>
 

@@ -508,6 +508,16 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       );
       return scanAppointmentsStartingSoon();
     }
+    case "appointment_completed_scan": {
+      const { scanAppointmentsCompleted } = await import(
+        "@/lib/integrations/framework/appointment-reminders"
+      );
+      return scanAppointmentsCompleted();
+    }
+    case "crm_task_due_scan": {
+      const { scanCrmTasksDueAndOverdue } = await import("@/lib/crm/task-due-scan");
+      return scanCrmTasksDueAndOverdue();
+    }
     case "integration_sync": {
       const { runIntegrationSyncJob } = await import("@/lib/integrations/framework/sync");
       return runIntegrationSyncJob({
@@ -637,6 +647,22 @@ export async function processDueJobs(limit = 25) {
     queueName: "maintenance",
     payload: { minuteKey },
     idempotencyKey: `appt-starting-soon:${minuteKey}`,
+  });
+
+  // Calendly / appointment "completed" automation events (every minute drain).
+  await enqueueJob({
+    jobType: "appointment_completed_scan",
+    queueName: "maintenance",
+    payload: { minuteKey },
+    idempotencyKey: `appt-completed:${minuteKey}`,
+  });
+
+  // CRM task due / overdue automation windows (every minute drain).
+  await enqueueJob({
+    jobType: "crm_task_due_scan",
+    queueName: "maintenance",
+    payload: { minuteKey },
+    idempotencyKey: `crm-task-due:${minuteKey}`,
   });
 
   // When BullMQ is the consumer, cron enqueues the minute batch and re-syncs the DB outbox.

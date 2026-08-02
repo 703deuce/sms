@@ -58,6 +58,16 @@ export function classifyActionRisk(
 ): ActionRiskLevel {
   if (opts?.consentChange) return 4;
   if (opts?.bulk || (opts?.recordCount && opts.recordCount > 1)) return 4;
+  // Read-only Calendly lookups are safe even though their ids contain "cancel"
+  // (e.g. appointment.get_cancel_url) — classify before the destructive regex.
+  if (
+    actionId === "appointment.retrieve" ||
+    actionId === "appointment.get_scheduling_link" ||
+    actionId === "appointment.get_cancel_url" ||
+    actionId === "appointment.get_reschedule_url"
+  ) {
+    return 1;
+  }
   if (
     /delete|archive|cancel|suppress|unsubscribe|revoke|refund|payment|inventory|bulk/i.test(
       actionId,
@@ -80,6 +90,9 @@ export function classifyActionRisk(
     "ticket.add_public_reply",
     "order.add_note",
     "send_sms",
+    // Customer-facing SMS with a booking link + writes a single-use link.
+    "appointment.send_scheduling_link",
+    "appointment.create_single_use_link",
   ]);
   if (level3.has(actionId)) return 3;
 

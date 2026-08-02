@@ -5,6 +5,12 @@
 import { getPrisma } from "@/lib/db";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 
+export type TimelineCrmSync = {
+  provider: string;
+  externalUrl: string | null;
+  syncStatus: string;
+};
+
 export type TimelineItem = {
   id: string;
   kind: "sms" | "call" | "voice_ai" | "voicemail";
@@ -13,8 +19,11 @@ export type TimelineItem = {
   status?: string | null;
   at: string;
   href?: string | null;
+  crmSync?: TimelineCrmSync[];
   meta?: Record<string, unknown>;
 };
+
+const CRM_ACTIVITY_PROVIDERS = ["salesforce", "zoho", "pipedrive"];
 
 export async function getContactActivityTimeline(
   workspaceId: string,
@@ -127,6 +136,52 @@ export async function getContactActivityTimeline(
         humanCallId: v.humanCallId,
       },
     });
+  }
+
+  // Attach CRM-sync indicators so a call/SMS that was mirrored into a CRM shows
+  // its source rather than appearing as a duplicate timeline entry.
+  const callIds = items
+    .filter((i) => i.kind === "call")
+    .map((i) => i.id.slice("call:".length));
+  const smsIds = items
+    .filter((i) => i.kind === "sms")
+    .map((i) => i.id.slice("sms:".length));
+
+  if (callIds.length || smsIds.length) {
+    const syncRows = await prisma.crmObjectMapping.findMany({
+      where: {
+        workspaceId,
+        provider: { in: CRM_ACTIVITY_PROVIDERS },
+        objectType: { in: ["call", "sms"] },
+        internalId: { in: [...callIds, ...smsIds] },
+      },
+    });
+    const byInternalId = new Map<string, TimelineCrmSync[]>();
+    for (const row of syncRows as Array<{
+      internalId: string;
+      objectType: string;
+      provider: string;
+      externalUrl: string | null;
+      syncStatus: string;
+    }>) {
+      const key = `${row.objectType}:${row.internalId}`;
+      const list = byInternalId.get(key) || [];
+      list.push({
+        provider: row.provider,
+        externalUrl: row.externalUrl,
+        syncStatus: row.syncStatus,
+      });
+      byInternalId.set(key, list);
+    }
+    for (const item of items) {
+      if (item.kind === "call") {
+        const sync = byInternalId.get(`call:${item.id.slice("call:".length)}`);
+        if (sync) item.crmSync = sync;
+      } else if (item.kind === "sms") {
+        const sync = byInternalId.get(`sms:${item.id.slice("sms:".length)}`);
+        if (sync) item.crmSync = sync;
+      }
+    }
   }
 
   items.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());

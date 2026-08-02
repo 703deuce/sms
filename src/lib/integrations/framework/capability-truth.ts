@@ -20,6 +20,14 @@ export const ACTION_TO_CAPABILITY: Partial<Record<IntegrationActionId, Normalize
   "ticket.add_private_note": "add_ticket_comment",
   "ticket.add_public_reply": "add_ticket_comment",
   "order.add_note": "add_order_note",
+  // —— Calendly appointment actions ——
+  "appointment.get_scheduling_link": "get_scheduling_link",
+  "appointment.create_single_use_link": "create_single_use_link",
+  "appointment.send_scheduling_link": "get_scheduling_link",
+  "appointment.retrieve": "retrieve_appointment",
+  "appointment.cancel": "cancel_appointment",
+  "appointment.get_cancel_url": "retrieve_appointment",
+  "appointment.get_reschedule_url": "retrieve_appointment",
 };
 
 export type CapabilityTruth = {

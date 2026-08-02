@@ -156,23 +156,70 @@ export const AUTOMATION_BLOCKS: BlockDefinition[] = [
     defaultConfig: {},
   }),
   // —— Connected app / CRM / Calendly triggers (also under Integrations) ——
+  // NOTE: every CRM-labeled event in INTEGRATION_EVENT_TO_TRIGGER must have a
+  // matching block here so the Integrations sidebar can expose it.
   ...(
     [
+      // Contacts
       ["integration_contact_created", "CRM contact created", "Salesforce / Zoho / Pipedrive contact created", { provider: "" }, "crm"],
-      ["integration_contact_updated", "CRM contact updated", "Salesforce / Zoho / Pipedrive contact updated", { provider: "" }, "crm"],
+      ["integration_contact_updated", "CRM contact updated", "Contact updated in connected CRM", { provider: "" }, "crm"],
+      ["integration_contact_deleted", "CRM contact deleted", "Contact deleted in connected CRM", { provider: "" }, "crm"],
+      ["integration_contact_owner_changed", "CRM contact owner changed", "Contact owner/assignee changed", { provider: "", owner: "" }, "crm"],
+      ["integration_contact_status_changed", "CRM contact status changed", "Contact status/stage changed", { provider: "", status: "" }, "crm"],
+      ["integration_contact_phone_changed", "CRM contact phone changed", "Contact phone number changed", { provider: "", requirePhone: true }, "crm"],
+      ["integration_contact_email_changed", "CRM contact email changed", "Contact email address changed", { provider: "", requireEmail: true }, "crm"],
+      ["integration_contact_custom_field_changed", "CRM contact field changed", "A mapped contact custom field changed", { provider: "", changedField: "" }, "crm"],
+      // Leads
       ["integration_lead_created", "CRM lead created", "Salesforce / Zoho lead created", { provider: "" }, "crm"],
-      ["integration_lead_updated", "CRM lead updated", "Salesforce / Zoho lead updated", { provider: "" }, "crm"],
+      ["integration_lead_updated", "CRM lead updated", "Lead updated in connected CRM", { provider: "" }, "crm"],
+      ["integration_lead_assigned", "CRM lead assigned", "Lead assigned to an owner", { provider: "", owner: "" }, "crm"],
+      ["integration_lead_status_changed", "CRM lead status changed", "Lead status changed", { provider: "", status: "" }, "crm"],
+      ["integration_lead_source_changed", "CRM lead source changed", "Lead source changed", { provider: "", source: "" }, "crm"],
+      ["integration_lead_converted", "CRM lead converted", "Lead converted to contact/deal", { provider: "" }, "crm"],
+      ["integration_lead_deleted", "CRM lead deleted", "Lead deleted in connected CRM", { provider: "" }, "crm"],
+      ["integration_lead_custom_field_changed", "CRM lead field changed", "A mapped lead custom field changed", { provider: "", changedField: "" }, "crm"],
+      // Companies
+      ["integration_company_created", "CRM company created", "Company/account created in connected CRM", { provider: "" }, "crm"],
+      ["integration_company_updated", "CRM company updated", "Company/account updated in connected CRM", { provider: "" }, "crm"],
+      ["integration_company_owner_changed", "CRM company owner changed", "Company/account owner changed", { provider: "", owner: "" }, "crm"],
+      ["integration_company_status_changed", "CRM company status changed", "Company/account status changed", { provider: "", status: "" }, "crm"],
+      ["integration_company_deleted", "CRM company deleted", "Company/account deleted in connected CRM", { provider: "" }, "crm"],
+      ["integration_company_custom_field_changed", "CRM company field changed", "A mapped company custom field changed", { provider: "", changedField: "" }, "crm"],
+      // Deals / opportunities
       ["integration_deal_created", "CRM deal created", "Deal/opportunity created in connected CRM", { provider: "" }, "crm"],
-      ["integration_deal_stage_changed", "CRM deal stage changed", "Deal/opportunity stage changed", { provider: "" }, "crm"],
+      ["integration_deal_updated", "CRM deal updated", "Deal/opportunity updated in connected CRM", { provider: "" }, "crm"],
+      ["integration_deal_stage_changed", "CRM deal stage changed", "Deal/opportunity stage changed", { provider: "", stage: "", previousStage: "" }, "crm"],
+      ["integration_deal_pipeline_changed", "CRM deal pipeline changed", "Deal/opportunity moved to another pipeline", { provider: "", pipeline: "" }, "crm"],
+      ["integration_deal_owner_changed", "CRM deal owner changed", "Deal/opportunity owner changed", { provider: "", owner: "" }, "crm"],
+      ["integration_deal_value_changed", "CRM deal value changed", "Deal/opportunity amount changed", { provider: "" }, "crm"],
       ["integration_deal_won", "CRM deal won", "Deal/opportunity marked won", { provider: "" }, "crm"],
       ["integration_deal_lost", "CRM deal lost", "Deal/opportunity marked lost", { provider: "" }, "crm"],
+      ["integration_deal_reopened", "CRM deal reopened", "Closed deal/opportunity reopened", { provider: "" }, "crm"],
+      ["integration_deal_deleted", "CRM deal deleted", "Deal/opportunity deleted in connected CRM", { provider: "" }, "crm"],
+      ["integration_deal_custom_field_changed", "CRM deal field changed", "A mapped deal custom field changed", { provider: "", changedField: "" }, "crm"],
+      // Tasks
       ["integration_task_created", "CRM task created", "Task created in connected CRM", { provider: "" }, "crm"],
+      ["integration_task_updated", "CRM task updated", "Task updated in connected CRM", { provider: "" }, "crm"],
+      ["integration_task_assigned", "CRM task assigned", "Task assigned to an owner", { provider: "", owner: "" }, "crm"],
       ["integration_task_completed", "CRM task completed", "Task completed in connected CRM", { provider: "" }, "crm"],
+      ["integration_task_due", "CRM task due", "Reminder fired before a task's due time", { provider: "", minutesBefore: 60 }, "crm"],
+      ["integration_task_overdue", "CRM task overdue", "Task passed its due date without completion", { provider: "" }, "crm"],
+      // Activities / notes / calls
+      ["integration_activity_created", "CRM activity created", "Activity logged in connected CRM", { provider: "" }, "crm"],
+      ["integration_activity_updated", "CRM activity updated", "Activity updated in connected CRM", { provider: "" }, "crm"],
+      ["integration_note_created", "CRM note created", "Note added in connected CRM", { provider: "" }, "crm"],
+      ["integration_call_activity_created", "CRM call logged", "Call activity created in connected CRM", { provider: "" }, "crm"],
+      // Calendly
       ["integration_appointment_scheduled", "Calendly booking created", "Calendly appointment booked", { provider: "calendly", eventTypeName: "" }, "calendly"],
       ["integration_appointment_canceled", "Calendly booking canceled", "Calendly appointment canceled", { provider: "calendly" }, "calendly"],
       ["integration_appointment_rescheduled", "Calendly booking rescheduled", "Calendly appointment rescheduled", { provider: "calendly" }, "calendly"],
       ["integration_appointment_starting_soon", "Calendly appointment starting soon", "Scheduled reminder before appointment start", { provider: "calendly", minutesBefore: 60 }, "calendly"],
       ["integration_appointment_completed", "Calendly appointment completed", "Appointment end time passed", { provider: "calendly" }, "calendly"],
+      ["integration_appointment_no_show", "Calendly invitee no-show", "Invitee marked as a no-show", { provider: "calendly" }, "calendly"],
+      ["integration_event_type_created", "Calendly event type created", "New Calendly event type detected", { provider: "calendly", eventTypeName: "" }, "calendly"],
+      ["integration_event_type_updated", "Calendly event type updated", "Calendly event type changed", { provider: "calendly", eventTypeName: "" }, "calendly"],
+      ["integration_event_type_activated", "Calendly event type activated", "Calendly event type turned active", { provider: "calendly", eventTypeName: "" }, "calendly"],
+      ["integration_event_type_deactivated", "Calendly event type deactivated", "Calendly event type turned inactive", { provider: "calendly", eventTypeName: "" }, "calendly"],
       ["integration_form_submitted", "Form submitted (app)", "Typeform/Jotform submission", { provider: "", formSlug: "" }, "other"],
       ["integration_tag_added", "Tag added (app)", "Tag added in connected marketing/CRM", { provider: "", tag: "" }, "other"],
       ["integration_tag_removed", "Tag removed (app)", "Tag removed in connected app", { provider: "", tag: "" }, "other"],
@@ -421,6 +468,135 @@ export const CONDITION_OPERATORS = [
   { value: "before", label: "Before" },
   { value: "after", label: "After" },
 ];
+
+/**
+ * Client-safe catalog of `integration_action` operations for the builder config
+ * panel. Mirrors CRM_AUTOMATION_ACTIONS (Salesforce/Zoho/Pipedrive) plus the
+ * external INTEGRATION_ACTIONS registry — declared here so the UI never imports
+ * server-only modules (Prisma, connectors) into the client bundle.
+ */
+export type IntegrationActionOption = {
+  id: string;
+  label: string;
+  providers: string[];
+  samplePayload: Record<string, unknown>;
+};
+
+export const INTEGRATION_ACTION_OPTIONS: IntegrationActionOption[] = [
+  {
+    id: "contact.upsert",
+    label: "Create / update contact",
+    providers: [
+      "salesforce",
+      "zoho",
+      "pipedrive",
+      "activecampaign",
+      "mailchimp",
+      "highlevel",
+      "close",
+      "freshdesk",
+      "klaviyo",
+      "woocommerce",
+    ],
+    samplePayload: {
+      firstName: "{{customer.firstName}}",
+      lastName: "{{customer.lastName}}",
+      email: "{{customer.email}}",
+      phone: "{{customer.phone}}",
+      company: "",
+    },
+  },
+  {
+    id: "lead.upsert",
+    label: "Create / update CRM lead",
+    providers: ["salesforce", "zoho"],
+    samplePayload: {
+      firstName: "{{customer.firstName}}",
+      lastName: "{{customer.lastName}}",
+      email: "{{customer.email}}",
+      phone: "{{customer.phone}}",
+      status: "New",
+      source: "Transovo",
+    },
+  },
+  {
+    id: "deal.upsert",
+    label: "Create / update deal / opportunity",
+    providers: ["salesforce", "zoho", "pipedrive", "activecampaign", "highlevel", "close"],
+    samplePayload: { title: "New opportunity", value: 0, stage: "", pipeline: "" },
+  },
+  {
+    id: "task.create",
+    label: "Create task",
+    providers: ["salesforce", "zoho", "pipedrive", "highlevel", "close"],
+    samplePayload: { title: "Follow up with {{customer.firstName}}", description: "", dueAt: "" },
+  },
+  {
+    id: "note.create",
+    label: "Add note",
+    providers: ["salesforce", "zoho", "pipedrive", "activecampaign", "highlevel", "close"],
+    samplePayload: { body: "Logged from Transovo automation" },
+  },
+  {
+    id: "call.log",
+    label: "Log call activity",
+    providers: ["salesforce", "zoho", "pipedrive"],
+    samplePayload: {
+      direction: "outbound",
+      disposition: "connected",
+      durationSeconds: 0,
+      recordingUrl: "",
+      notes: "",
+    },
+  },
+  {
+    id: "sms.log",
+    label: "Log SMS activity",
+    providers: ["salesforce", "zoho", "pipedrive"],
+    samplePayload: { direction: "outbound", body: "" },
+  },
+  {
+    id: "contact.add_tag",
+    label: "Add tag",
+    providers: ["activecampaign", "mailchimp", "highlevel"],
+    samplePayload: { externalContactId: "", tag: "Hot Lead" },
+  },
+  {
+    id: "contact.remove_tag",
+    label: "Remove tag",
+    providers: ["activecampaign", "mailchimp", "highlevel"],
+    samplePayload: { externalContactId: "", tag: "Hot Lead" },
+  },
+  {
+    id: "contact.add_to_list",
+    label: "Add to list / audience",
+    providers: ["activecampaign", "mailchimp", "klaviyo"],
+    samplePayload: { externalContactId: "", listId: "" },
+  },
+  {
+    id: "ticket.create",
+    label: "Create support ticket",
+    providers: ["freshdesk"],
+    samplePayload: { subject: "New request", requesterEmail: "{{customer.email}}", priority: "medium" },
+  },
+  {
+    id: "ticket.add_private_note",
+    label: "Add private ticket note",
+    providers: ["freshdesk"],
+    samplePayload: { ticketId: "", body: "Internal note" },
+  },
+  {
+    id: "order.add_note",
+    label: "Add order note",
+    providers: ["woocommerce"],
+    samplePayload: { orderId: "", note: "Order note" },
+  },
+];
+
+export function integrationActionsForProvider(provider: string): IntegrationActionOption[] {
+  if (!provider) return INTEGRATION_ACTION_OPTIONS;
+  return INTEGRATION_ACTION_OPTIONS.filter((a) => a.providers.includes(provider));
+}
 
 export function getBlock(blockType: string): BlockDefinition | undefined {
   return AUTOMATION_BLOCKS.find((b) => b.blockType === blockType);

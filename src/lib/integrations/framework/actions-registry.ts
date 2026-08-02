@@ -4,7 +4,7 @@ import { getIntegrationPreferences } from "./settings";
 import type { ExternalProviderId, FeatureSupport } from "./types";
 import { writeIntegrationAudit } from "./audit";
 import { upsertExternalMapping } from "./mappings";
-import { getActionCapabilityTruth } from "./capability-truth";
+import { ACTION_TO_CAPABILITY, getActionCapabilityTruth } from "./capability-truth";
 import {
   buildActionPreview,
   classifyActionRisk,
@@ -34,7 +34,22 @@ export type IntegrationActionId =
   | "ticket.add_private_note"
   | "ticket.add_public_reply"
   | "order.add_note"
-  | "customer.upsert";
+  | "customer.upsert"
+  | "appointment.get_scheduling_link"
+  | "appointment.create_single_use_link"
+  | "appointment.send_scheduling_link"
+  | "appointment.retrieve"
+  | "appointment.cancel"
+  | "appointment.get_cancel_url"
+  | "appointment.get_reschedule_url";
+
+/** Calendly appointment actions that only read data (skip the writes gate). */
+const READ_ONLY_ACTION_IDS = new Set<IntegrationActionId>([
+  "appointment.get_scheduling_link",
+  "appointment.retrieve",
+  "appointment.get_cancel_url",
+  "appointment.get_reschedule_url",
+]);
 
 export type IntegrationActionDef = {
   id: IntegrationActionId;
@@ -219,6 +234,84 @@ export const INTEGRATION_ACTIONS: IntegrationActionDef[] = [
     ],
     idempotency: "external_id",
   },
+  // —— Calendly appointment actions ——
+  {
+    id: "appointment.get_scheduling_link",
+    label: "Get scheduling link",
+    providers: ["calendly"],
+    requiredCapability: "get_scheduling_link",
+    inputFields: [{ key: "eventTypeUri", label: "Event type URI (optional)" }],
+    idempotency: "none",
+  },
+  {
+    id: "appointment.create_single_use_link",
+    label: "Create single-use scheduling link",
+    providers: ["calendly"],
+    requiredCapability: "create_single_use_link",
+    inputFields: [
+      { key: "eventTypeUri", label: "Event type URI (optional)" },
+      { key: "ownerUri", label: "Owner URI (optional)" },
+    ],
+    idempotency: "none",
+  },
+  {
+    id: "appointment.send_scheduling_link",
+    label: "Send scheduling link (SMS)",
+    providers: ["calendly"],
+    requiredCapability: "get_scheduling_link",
+    inputFields: [
+      { key: "phone", label: "Phone (falls back to contact)" },
+      { key: "message", label: "Message template" },
+      { key: "eventTypeUri", label: "Event type URI (optional)" },
+      { key: "singleUse", label: "Use single-use link" },
+    ],
+    idempotency: "hash_payload",
+  },
+  {
+    id: "appointment.retrieve",
+    label: "Retrieve appointment",
+    providers: ["calendly"],
+    requiredCapability: "retrieve_appointment",
+    inputFields: [
+      { key: "eventUri", label: "Scheduled event URI" },
+      { key: "eventUuid", label: "Scheduled event UUID" },
+    ],
+    idempotency: "none",
+  },
+  {
+    id: "appointment.cancel",
+    label: "Cancel appointment",
+    providers: ["calendly"],
+    requiredCapability: "cancel_appointment",
+    inputFields: [
+      { key: "eventUri", label: "Scheduled event URI" },
+      { key: "eventUuid", label: "Scheduled event UUID" },
+      { key: "reason", label: "Cancellation reason" },
+    ],
+    idempotency: "hash_payload",
+  },
+  {
+    id: "appointment.get_cancel_url",
+    label: "Get cancel URL",
+    providers: ["calendly"],
+    requiredCapability: "retrieve_appointment",
+    inputFields: [
+      { key: "eventUri", label: "Scheduled event URI" },
+      { key: "eventUuid", label: "Scheduled event UUID" },
+    ],
+    idempotency: "none",
+  },
+  {
+    id: "appointment.get_reschedule_url",
+    label: "Get reschedule URL",
+    providers: ["calendly"],
+    requiredCapability: "retrieve_appointment",
+    inputFields: [
+      { key: "eventUri", label: "Scheduled event URI" },
+      { key: "eventUuid", label: "Scheduled event UUID" },
+    ],
+    idempotency: "none",
+  },
 ];
 
 export function actionsForProvider(provider: ExternalProviderId): IntegrationActionDef[] {
@@ -241,6 +334,13 @@ export function actionsForProvider(provider: ExternalProviderId): IntegrationAct
     }
     if (a.id === "order.add_note") return Boolean(adapter.addOrderNote);
     if (a.id === "customer.upsert") return Boolean(adapter.upsertCustomer);
+    if (a.id.startsWith("appointment.")) {
+      // Gate by declared capability support (Calendly actions live in a companion module).
+      const cap = ACTION_TO_CAPABILITY[a.id];
+      if (!cap) return false;
+      const support = adapter.capabilities.actions[cap];
+      return Boolean(support && support !== "unsupported");
+    }
     return false;
   });
 }
@@ -276,7 +376,13 @@ export async function executeIntegrationAction(input: {
   connectionId?: string | null;
   recordCount?: number;
 }): Promise<
-  | { ok: true; externalId?: string; created?: boolean; actionLogId?: string }
+  | {
+      ok: true;
+      externalId?: string;
+      created?: boolean;
+      actionLogId?: string;
+      data?: Record<string, unknown>;
+    }
   | {
       ok: false;
       code:
@@ -350,7 +456,10 @@ export async function executeIntegrationAction(input: {
     };
   }
 
-  if (String(input.actionId).includes("sms")) {
+  if (
+    String(input.actionId).includes("sms") ||
+    input.actionId === "appointment.send_scheduling_link"
+  ) {
     const consent = await checkCommunicationConsent({
       workspaceId: input.workspaceId,
       contactId: input.contactId,
@@ -368,7 +477,7 @@ export async function executeIntegrationAction(input: {
 
   const prefs = await getIntegrationPreferences(input.workspaceId, input.provider);
   if (prefs.paused) return { ok: false, code: "PAUSED", message: "Connection paused" };
-  if (!prefs.enableWrites) {
+  if (!prefs.enableWrites && !READ_ONLY_ACTION_IDS.has(input.actionId)) {
     return { ok: false, code: "WRITES_DISABLED", message: "Writes disabled in settings" };
   }
 
@@ -412,6 +521,7 @@ export async function executeIntegrationAction(input: {
 
   try {
     let result: { externalId: string; created: boolean } | undefined;
+    let data: Record<string, unknown> | undefined;
     let undoJson: Record<string, unknown> | null = preview.reversible
       ? { actionId: input.actionId, params: input.params }
       : { irreversible: true, message: "This cannot be automatically undone." };
@@ -588,6 +698,146 @@ export async function executeIntegrationAction(input: {
         }
         result = await adapter.addOrderNote(ctx, String(p.orderId), String(p.note || ""));
         break;
+      case "appointment.get_scheduling_link": {
+        const { getSchedulingLink } = await import(
+          "@/lib/integrations/adapters/calendly-actions"
+        );
+        const link = await getSchedulingLink(ctx, {
+          eventTypeUri: (p.eventTypeUri as string) || undefined,
+        });
+        data = {
+          schedulingUrl: link.schedulingUrl,
+          source: link.source,
+          ownerUri: link.ownerUri,
+        };
+        break;
+      }
+      case "appointment.create_single_use_link": {
+        const { createSingleUseSchedulingLink } = await import(
+          "@/lib/integrations/adapters/calendly-actions"
+        );
+        const link = await createSingleUseSchedulingLink(ctx, {
+          eventTypeUri: (p.eventTypeUri as string) || undefined,
+          ownerUri: (p.ownerUri as string) || undefined,
+          ownerType: (p.ownerType as string) || undefined,
+          maxEventCount: 1,
+        });
+        data = { bookingUrl: link.bookingUrl, owner: link.owner, ownerType: link.ownerType };
+        break;
+      }
+      case "appointment.send_scheduling_link": {
+        const { getSchedulingLink, createSingleUseSchedulingLink } = await import(
+          "@/lib/integrations/adapters/calendly-actions"
+        );
+        const link = p.singleUse
+          ? (
+              await createSingleUseSchedulingLink(ctx, {
+                eventTypeUri: (p.eventTypeUri as string) || undefined,
+                ownerUri: (p.ownerUri as string) || undefined,
+                maxEventCount: 1,
+              })
+            ).bookingUrl
+          : (
+              await getSchedulingLink(ctx, {
+                eventTypeUri: (p.eventTypeUri as string) || undefined,
+              })
+            ).schedulingUrl;
+
+        let phone = (p.phone as string) || null;
+        if (!phone && input.contactId) {
+          const { getPrisma } = await import("@/lib/db");
+          const contact = await getPrisma().contact.findUnique({
+            where: { id: input.contactId },
+            select: { phone: true },
+          });
+          phone = contact?.phone || null;
+        }
+        if (!phone) {
+          await completeIntegrationActionLog(actionLog.id, {
+            result: "failed",
+            failureReason: "No phone available to send scheduling link",
+          });
+          return {
+            ok: false,
+            code: "ERROR",
+            message: "No phone available to send scheduling link",
+            actionLogId: actionLog.id,
+          };
+        }
+        const template =
+          (p.message as string) ||
+          "Hi {{customer_name}}, book a time here: {{scheduling_link}}";
+        const body = template.includes("{{scheduling_link}}")
+          ? template.replace(/\{\{scheduling_link\}\}/g, link)
+          : `${template.trim()} ${link}`.trim();
+
+        const { sendQuickSms } = await import("@/lib/sms/send-quick");
+        const sms = await sendQuickSms({
+          workspaceId: input.workspaceId,
+          to: phone,
+          body,
+          idempotencyKey: input.idempotencyKey
+            ? `calendly-link-${input.idempotencyKey}`
+            : `calendly-link-${payloadHash.slice(0, 32)}`,
+        });
+        data = {
+          schedulingUrl: link,
+          messageId: sms.messageId,
+          smsStatus: sms.status,
+          to: phone,
+        };
+        break;
+      }
+      case "appointment.retrieve": {
+        const { getAppointment } = await import(
+          "@/lib/integrations/adapters/calendly-actions"
+        );
+        const appt = await getAppointment(ctx, {
+          eventUri: (p.eventUri as string) || undefined,
+          eventUuid: (p.eventUuid as string) || undefined,
+        });
+        data = {
+          status: appt.status,
+          startsAt: appt.startsAt,
+          endsAt: appt.endsAt,
+          cancelUrl: appt.cancelUrl,
+          rescheduleUrl: appt.rescheduleUrl,
+          event: appt.event,
+          invitee: appt.invitee,
+        };
+        break;
+      }
+      case "appointment.get_cancel_url":
+      case "appointment.get_reschedule_url": {
+        const { getAppointment } = await import(
+          "@/lib/integrations/adapters/calendly-actions"
+        );
+        const appt = await getAppointment(ctx, {
+          eventUri: (p.eventUri as string) || undefined,
+          eventUuid: (p.eventUuid as string) || undefined,
+        });
+        data =
+          input.actionId === "appointment.get_cancel_url"
+            ? { cancelUrl: appt.cancelUrl }
+            : { rescheduleUrl: appt.rescheduleUrl };
+        break;
+      }
+      case "appointment.cancel": {
+        const { cancelAppointment } = await import(
+          "@/lib/integrations/adapters/calendly-actions"
+        );
+        const canceled = await cancelAppointment(ctx, {
+          eventUri: (p.eventUri as string) || undefined,
+          eventUuid: (p.eventUuid as string) || undefined,
+          reason: (p.reason as string) || undefined,
+        });
+        data = { canceled: canceled.canceled, eventUuid: canceled.eventUuid };
+        undoJson = {
+          irreversible: true,
+          message: "Canceling a Calendly appointment cannot be automatically undone.",
+        };
+        break;
+      }
       default:
         return { ok: false, code: "UNSUPPORTED", message: "Unknown action" };
     }
@@ -636,6 +886,7 @@ export async function executeIntegrationAction(input: {
       externalId: result?.externalId,
       created: result?.created,
       actionLogId: actionLog.id,
+      data,
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

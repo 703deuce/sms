@@ -3,6 +3,15 @@
  * Never auto-activate — users must create/edit from Templates UI.
  */
 
+import {
+  EMPTY_DEFINITION,
+  createEdgeId,
+  createNodeId,
+  type AutomationCanvasNode,
+  type AutomationDefinition,
+} from "./types";
+import { getBlock } from "./catalog";
+
 export type IntegrationAutomationTemplate = {
   id: string;
   title: string;
@@ -42,6 +51,40 @@ export const INTEGRATION_AUTOMATION_TEMPLATES: IntegrationAutomationTemplate[] =
         blockType: "integration_action",
         label: "Log call in CRM",
         config: { provider: "salesforce", actionId: "call.log", paramsJson: '{"direction":"missed"}' },
+      },
+    ],
+  },
+  {
+    id: "completed-call-crm",
+    title: "Completed call → CRM call activity",
+    description:
+      "When a call completes: log the call activity in the CRM with recording/media links and create a follow-up task based on disposition.",
+    group: "voice_sms",
+    triggerBlockType: "call_completed",
+    suggestedActions: [
+      {
+        blockType: "integration_action",
+        label: "Log call activity in CRM",
+        config: {
+          provider: "salesforce",
+          actionId: "call.log",
+          paramsJson:
+            '{"direction":"outbound","disposition":"{{call.disposition}}","durationSeconds":"{{call.durationSeconds}}","recordingUrl":"{{call.recordingUrl}}","notes":"{{call.summary}}"}',
+        },
+      },
+      {
+        blockType: "integration_action",
+        label: "Attach recording / media note",
+        config: {
+          provider: "salesforce",
+          actionId: "note.create",
+          paramsJson: '{"body":"Call recording: {{call.recordingUrl}}"}',
+        },
+      },
+      {
+        blockType: "create_task",
+        label: "Follow up by disposition",
+        config: { title: "Follow up after {{call.disposition}} call", dueInDays: 1 },
       },
     ],
   },
@@ -113,3 +156,71 @@ export const INTEGRATION_AUTOMATION_TEMPLATES: IntegrationAutomationTemplate[] =
     ],
   },
 ];
+
+export function getIntegrationTemplate(
+  id: string,
+): IntegrationAutomationTemplate | null {
+  return INTEGRATION_AUTOMATION_TEMPLATES.find((t) => t.id === id) || null;
+}
+
+/**
+ * Build a builder-ready graph from a starter template: a trigger node followed
+ * by the suggested action nodes, chained top-to-bottom. This never activates the
+ * automation — it only seeds the definition the user edits in the builder.
+ */
+export function buildAutomationDefinitionFromTemplate(
+  template: IntegrationAutomationTemplate,
+): AutomationDefinition {
+  const triggerBlock = getBlock(template.triggerBlockType);
+  const triggerId = createNodeId();
+  const triggerConfig: Record<string, unknown> = { ...(triggerBlock?.defaultConfig || {}) };
+  if (template.providerHint) triggerConfig.provider = template.providerHint;
+
+  const nodes: AutomationCanvasNode[] = [
+    {
+      id: triggerId,
+      type: "trigger",
+      position: { x: 260, y: 60 },
+      data: {
+        blockType: template.triggerBlockType,
+        label: triggerBlock?.label || template.triggerBlockType,
+        config: triggerConfig,
+      },
+    },
+  ];
+  const edges: AutomationDefinition["edges"] = [];
+
+  let prevId = triggerId;
+  template.suggestedActions.forEach((action, idx) => {
+    const block = getBlock(action.blockType);
+    const category = block?.category;
+    const type: AutomationCanvasNode["type"] =
+      category === "end" ? "end" : category === "logic" ? "logic" : "action";
+    const id = `${createNodeId()}_${idx}`;
+    nodes.push({
+      id,
+      type,
+      position: { x: 260, y: 200 + idx * 140 },
+      data: {
+        blockType: action.blockType,
+        label: action.label || block?.label || action.blockType,
+        config: { ...(block?.defaultConfig || {}), ...(action.config || {}) },
+      },
+    });
+    edges.push({
+      id: createEdgeId(),
+      source: prevId,
+      target: id,
+      sourceHandle: "default",
+      targetHandle: null,
+    });
+    prevId = id;
+  });
+
+  return {
+    version: 1,
+    nodes,
+    edges,
+    viewport: EMPTY_DEFINITION.viewport,
+  };
+}

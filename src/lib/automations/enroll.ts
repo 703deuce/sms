@@ -96,9 +96,20 @@ export async function enrollForTrigger(
     tag?: string;
     formSlug?: string;
     provider?: string;
+    connectedAccount?: string;
     eventType?: string;
     orderStatus?: string;
     eventTypeName?: string;
+    owner?: string;
+    status?: string;
+    stage?: string;
+    previousStage?: string;
+    pipeline?: string;
+    source?: string;
+    minutesBefore?: number;
+    changedField?: string;
+    phoneExists?: boolean;
+    emailExists?: boolean;
   },
 ) {
   const prisma = getPrisma();
@@ -137,17 +148,69 @@ export async function enrollForTrigger(
       if (requiredProvider && requiredProvider !== filters.provider) continue;
     }
 
+    if (triggerBlockType.startsWith("integration_") && cfg.connectedAccount) {
+      const required = String(cfg.connectedAccount || "").trim();
+      if (required && filters?.connectedAccount && required !== filters.connectedAccount) continue;
+    }
+
     if (triggerBlockType === "integration_order_updated" && filters?.orderStatus) {
       const required = String(cfg.orderStatus || "").trim();
       if (required && required !== filters.orderStatus) continue;
     }
 
     if (
-      triggerBlockType === "integration_appointment_scheduled" &&
+      (triggerBlockType === "integration_appointment_scheduled" ||
+        triggerBlockType.startsWith("integration_appointment_") ||
+        triggerBlockType.startsWith("integration_event_type_")) &&
       filters?.eventTypeName
     ) {
       const required = String(cfg.eventTypeName || "").trim();
       if (required && required !== filters.eventTypeName) continue;
+    }
+
+    if (triggerBlockType.startsWith("integration_") && cfg.owner) {
+      const required = String(cfg.owner || "").trim();
+      if (required && filters?.owner && required !== filters.owner) continue;
+    }
+    if (triggerBlockType.startsWith("integration_") && cfg.status) {
+      const required = String(cfg.status || "").trim();
+      if (required && filters?.status && required !== filters.status) continue;
+    }
+    if (triggerBlockType.startsWith("integration_") && cfg.stage) {
+      const required = String(cfg.stage || "").trim();
+      if (required && filters?.stage && required !== filters.stage) continue;
+    }
+    if (triggerBlockType.startsWith("integration_") && cfg.previousStage) {
+      const required = String(cfg.previousStage || "").trim();
+      if (required && filters?.previousStage && required !== filters.previousStage) continue;
+    }
+    if (triggerBlockType.startsWith("integration_") && cfg.pipeline) {
+      const required = String(cfg.pipeline || "").trim();
+      if (required && filters?.pipeline && required !== filters.pipeline) continue;
+    }
+    if (triggerBlockType.startsWith("integration_") && cfg.source) {
+      const required = String(cfg.source || "").trim();
+      if (required && filters?.source && required !== filters.source) continue;
+    }
+    if (triggerBlockType.startsWith("integration_") && cfg.changedField) {
+      const required = String(cfg.changedField || "").trim();
+      if (required && filters?.changedField && required !== filters.changedField) continue;
+    }
+    if (cfg.requirePhone === true && filters?.phoneExists === false) continue;
+    if (cfg.requireEmail === true && filters?.emailExists === false) continue;
+    if (
+      (triggerBlockType === "integration_appointment_starting_soon" ||
+        triggerBlockType === "integration_task_due") &&
+      cfg.minutesBefore != null
+    ) {
+      const requiredMinutes = Number(cfg.minutesBefore || 60);
+      if (
+        filters?.minutesBefore != null &&
+        Number.isFinite(filters.minutesBefore) &&
+        requiredMinutes !== filters.minutesBefore
+      ) {
+        continue;
+      }
     }
 
     results.push(

@@ -222,6 +222,43 @@ export async function markExternalDeleted(input: {
     });
   }
 
+  // Fire normalized delete/archive automation events once.
+  const deleteEvent =
+    input.objectType === "lead"
+      ? "lead.deleted"
+      : input.objectType === "deal"
+        ? "deal.deleted"
+        : input.objectType === "company"
+          ? "company.deleted"
+          : input.objectType === "contact"
+            ? "contact.deleted"
+            : null;
+  if (deleteEvent) {
+    const { publishMappedCrmEvent, resolveContactIdFromExternal } = await import(
+      "./sync-publish"
+    );
+    let contactId =
+      row.internalId && !row.internalId.startsWith("crm-") ? row.internalId : null;
+    if (!contactId && row.parentExternalId) {
+      contactId = await resolveContactIdFromExternal(
+        input.workspaceId,
+        input.provider,
+        row.parentExternalId,
+      );
+    }
+    if (contactId) {
+      await publishMappedCrmEvent({
+        workspaceId: input.workspaceId,
+        provider: input.provider,
+        eventType: deleteEvent,
+        contactId,
+        externalObjectType: input.objectType,
+        externalObjectId: input.externalId,
+        payload: { deletionPolicy: policy },
+      }).catch(() => undefined);
+    }
+  }
+
   // Never delete communication history. Archive policy stores a local flag only.
   if (policy === "archive_local" && input.objectType === "contact") {
     const contact = await getPrisma().contact.findFirst({

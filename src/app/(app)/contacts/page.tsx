@@ -1,4 +1,5 @@
 import { AddContactDialog } from "@/components/contacts/add-contact-dialog";
+import { ContactCrmControls } from "@/components/contacts/contact-crm-controls";
 import { ExportContactsButton } from "@/components/contacts/export-contacts-button";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -14,11 +15,14 @@ import { Tabs } from "@/components/ui/tabs";
 import { getActiveWorkspaceId } from "@/lib/auth";
 import type { Contact } from "@/lib/types";
 import { loadContacts } from "@/lib/workspace-data";
+import {
+  loadContactCrmSummaries,
+  type ContactCrmSummary,
+} from "@/lib/integrations/product/contact-crm-context";
 import { cn, formatNumber, formatPercent, formatPhone } from "@/lib/utils";
 import {
   Ban,
   MoreHorizontal,
-  SlidersHorizontal,
   Upload,
   UserCheck,
   UserMinus,
@@ -50,11 +54,56 @@ function formatDate(date: string | null) {
   });
 }
 
+function formatDateTime(date: string | null) {
+  if (!date) return "—";
+  return new Date(date).toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function formatMoney(value: number | null, currency: string | null) {
+  if (value == null) return "—";
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency: currency || "USD",
+      maximumFractionDigits: 0,
+    }).format(value);
+  } catch {
+    return String(value);
+  }
+}
+
 function getInitials(firstName: string, lastName: string) {
   return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
 }
 
-export default async function ContactsPage() {
+type ContactsPageProps = {
+  searchParams: Promise<{
+    crm?: string;
+    crmConnected?: string;
+    provider?: string;
+    syncError?: string;
+    unmapped?: string;
+  }>;
+};
+
+export default async function ContactsPage({ searchParams }: ContactsPageProps) {
+  const params = await searchParams;
+  const filterCrmConnected = params.crmConnected || "";
+  const filterProvider = params.provider || "";
+  const filterSyncError = params.syncError === "1";
+  const filterUnmapped = params.unmapped === "1";
+  const hasCrmFilter =
+    Boolean(filterCrmConnected) ||
+    Boolean(filterProvider) ||
+    filterSyncError ||
+    filterUnmapped;
+  const showCrmColumns = params.crm === "1" || hasCrmFilter;
+
   const workspaceId = await getActiveWorkspaceId();
   if (!workspaceId) {
     return (
@@ -73,11 +122,35 @@ export default async function ContactsPage() {
     );
   }
 
-  const contacts: Contact[] = await loadContacts(workspaceId);
-  const total = contacts.length;
-  const subscribed = contacts.filter((c) => c.status === "Subscribed").length;
-  const unsubscribed = contacts.filter((c) => c.status === "Unsubscribed").length;
-  const invalidBlocked = contacts.filter(
+  const allContacts: Contact[] = await loadContacts(workspaceId);
+
+  // Batch-load CRM + appointment context for the listed contacts when the CRM
+  // columns/filters are in use — one set of `where internalId in ids` queries.
+  const crmSummaries: Map<string, ContactCrmSummary> =
+    showCrmColumns
+      ? await loadContactCrmSummaries(
+          workspaceId,
+          allContacts.map((c) => c.id),
+        )
+      : new Map();
+
+  const contacts = allContacts.filter((c) => {
+    if (!hasCrmFilter) return true;
+    const s = crmSummaries.get(c.id);
+    const connected = Boolean(s?.crmConnected);
+    if (filterCrmConnected === "yes" && !connected) return false;
+    if (filterCrmConnected === "no" && connected) return false;
+    if (filterUnmapped && connected) return false;
+    if (filterProvider && s?.provider !== filterProvider) return false;
+    if (filterSyncError && !s?.syncError) return false;
+    return true;
+  });
+
+  const total = allContacts.length;
+  const shown = contacts.length;
+  const subscribed = allContacts.filter((c) => c.status === "Subscribed").length;
+  const unsubscribed = allContacts.filter((c) => c.status === "Unsubscribed").length;
+  const invalidBlocked = allContacts.filter(
     (c) => c.status === "Invalid" || c.status === "Blocked",
   ).length;
   const subscribedPct = total > 0 ? (subscribed / total) * 100 : 0;
@@ -147,16 +220,12 @@ export default async function ContactsPage() {
       </div>
 
       <Card className="rounded-[12px] p-4">
-        <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <input
-            className="h-9 w-full min-w-[200px] rounded-[10px] border border-border bg-card px-3 text-[13px] outline-none focus:border-primary sm:max-w-sm"
-            placeholder="Search by name, phone, or email..."
-          />
-          <div className="flex flex-wrap items-center gap-3">
-            <Button variant="outline" size="sm" className="text-[13px]">
-              <SlidersHorizontal className="h-4 w-4" />
-              Filters
-            </Button>
+        <div className="mb-4 flex flex-col gap-3">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <input
+              className="h-9 w-full min-w-[200px] rounded-[10px] border border-border bg-card px-3 text-[13px] outline-none focus:border-primary sm:max-w-sm"
+              placeholder="Search by name, phone, or email..."
+            />
             <div className="flex flex-wrap items-center gap-3 text-[12px] text-muted-foreground">
               {statusLegend.map((item) => (
                 <span key={item.label} className="inline-flex items-center gap-1.5">
@@ -166,15 +235,28 @@ export default async function ContactsPage() {
               ))}
             </div>
           </div>
+          <ContactCrmControls />
+          {hasCrmFilter ? (
+            <p className="text-[12px] text-muted-foreground">
+              Showing {formatNumber(shown)} of {formatNumber(total)} contacts
+              matching CRM filters.
+            </p>
+          ) : null}
         </div>
 
-        {contacts.length === 0 ? (
+        {allContacts.length === 0 ? (
           <EmptyState
             icon={<Users className="h-8 w-8" />}
             title="No contacts yet"
             description="Import contacts or add them manually to start building your audience."
             actionLabel="Import contacts"
             actionHref="/contacts/imports"
+          />
+        ) : contacts.length === 0 ? (
+          <EmptyState
+            icon={<Users className="h-8 w-8" />}
+            title="No contacts match these CRM filters"
+            description="Adjust or clear the CRM filters to see more contacts."
           />
         ) : (
           <>
@@ -194,6 +276,20 @@ export default async function ContactsPage() {
                   <TH>Status</TH>
                   <TH>Lists</TH>
                   <TH>Tags</TH>
+                  {showCrmColumns ? (
+                    <>
+                      <TH>Provider</TH>
+                      <TH>CRM</TH>
+                      <TH>Object</TH>
+                      <TH>Owner</TH>
+                      <TH>Lead status</TH>
+                      <TH>Deal stage</TH>
+                      <TH>Deal value</TH>
+                      <TH>Upcoming appt</TH>
+                      <TH>Last CRM sync</TH>
+                      <TH>Sync error</TH>
+                    </>
+                  ) : null}
                   <TH>Consent Source</TH>
                   <TH>Consent Date</TH>
                   <TH>Last Messaged</TH>
@@ -201,7 +297,9 @@ export default async function ContactsPage() {
                 </TR>
               </THead>
               <TBody>
-                {contacts.map((contact, index) => (
+                {contacts.map((contact, index) => {
+                  const crm = crmSummaries.get(contact.id);
+                  return (
                   <TR key={contact.id}>
                     <TD>
                       <input
@@ -270,6 +368,52 @@ export default async function ContactsPage() {
                         )}
                       </div>
                     </TD>
+                    {showCrmColumns ? (
+                      <>
+                        <TD className="whitespace-nowrap text-muted-foreground">
+                          {crm?.providerDisplay || "—"}
+                        </TD>
+                        <TD>
+                          {crm?.crmConnected ? (
+                            <StatusChip status="Connected" className="bg-emerald-100 text-emerald-800" />
+                          ) : (
+                            <span className="text-muted-foreground">No</span>
+                          )}
+                        </TD>
+                        <TD className="capitalize text-muted-foreground">
+                          {crm?.objectType || "—"}
+                        </TD>
+                        <TD className="whitespace-nowrap text-muted-foreground">
+                          {crm?.owner || "—"}
+                        </TD>
+                        <TD className="text-muted-foreground">{crm?.leadStatus || "—"}</TD>
+                        <TD className="text-muted-foreground">{crm?.dealStage || "—"}</TD>
+                        <TD className="whitespace-nowrap text-muted-foreground">
+                          {formatMoney(crm?.dealValue ?? null, crm?.dealCurrency ?? null)}
+                        </TD>
+                        <TD className="whitespace-nowrap text-muted-foreground">
+                          {crm?.upcomingAppointmentAt ? (
+                            <span title={crm.upcomingAppointmentName || undefined}>
+                              {formatDateTime(crm.upcomingAppointmentAt)}
+                            </span>
+                          ) : (
+                            "—"
+                          )}
+                        </TD>
+                        <TD className="whitespace-nowrap text-muted-foreground">
+                          {formatDateTime(crm?.lastCrmSyncAt ?? null)}
+                        </TD>
+                        <TD>
+                          {crm?.syncError ? (
+                            <StatusChip status="Error" />
+                          ) : crm?.crmConnected ? (
+                            <span className="text-muted-foreground">OK</span>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </TD>
+                      </>
+                    ) : null}
                     <TD className="text-muted-foreground">{contact.consentSource}</TD>
                     <TD className="whitespace-nowrap text-muted-foreground">
                       {formatDate(contact.consentDate)}
@@ -291,11 +435,12 @@ export default async function ContactsPage() {
                       </div>
                     </TD>
                   </TR>
-                ))}
+                  );
+                })}
               </TBody>
             </Table>
 
-            <PaginationBar rangeLabel={`1–${total} of ${total}`} />
+            <PaginationBar rangeLabel={`1–${shown} of ${total}`} />
           </>
         )}
       </Card>

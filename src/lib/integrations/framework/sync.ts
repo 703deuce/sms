@@ -290,16 +290,27 @@ export async function runIntegrationSyncJob(payload: {
     }
 
     if (adapter.refreshMetadata) {
+      const existingConn = await prisma.integrationConnection.findUnique({
+        where: { workspaceId_provider: { workspaceId, provider } },
+      });
+      const prevConfig = (existingConn?.configJson || {}) as Record<string, unknown>;
+      const prevMeta = (prevConfig.metadata || {}) as Record<string, unknown>;
       const meta = await adapter.refreshMetadata(ctx);
+
+      // Calendly: diff event types → normalized event_type.* automation triggers.
+      if (provider === "calendly") {
+        await publishCalendlyEventTypeDiffs({
+          workspaceId,
+          prevEventTypes: (prevMeta.eventTypes as Array<Record<string, unknown>>) || [],
+          nextEventTypes: (meta.eventTypes as Array<Record<string, unknown>>) || [],
+        }).catch(() => undefined);
+      }
+
       await prisma.integrationConnection.updateMany({
         where: { workspaceId, provider },
         data: {
           configJson: {
-            ...((((
-              await prisma.integrationConnection.findUnique({
-                where: { workspaceId_provider: { workspaceId, provider } },
-              })
-            )?.configJson || {}) as object) as object),
+            ...prevConfig,
             metadata: meta,
             metadataRefreshedAt: new Date().toISOString(),
           } as object,
@@ -437,5 +448,103 @@ export async function processIntegrationWebhookJob(payload: {
       data: { status: "failed", lastError: message },
     });
     throw err;
+  }
+}
+
+/**
+ * Diff Calendly event types between metadata refreshes and enqueue automation events.
+ * Event-type lifecycle is not delivered by Calendly webhooks.
+ */
+async function publishCalendlyEventTypeDiffs(input: {
+  workspaceId: string;
+  prevEventTypes: Array<Record<string, unknown>>;
+  nextEventTypes: Array<Record<string, unknown>>;
+}) {
+  const prevByUri = new Map(
+    input.prevEventTypes
+      .map((t) => [String(t.uri || t.uuid || ""), t] as const)
+      .filter(([uri]) => Boolean(uri)),
+  );
+  const nextByUri = new Map(
+    input.nextEventTypes
+      .map((t) => [String(t.uri || t.uuid || ""), t] as const)
+      .filter(([uri]) => Boolean(uri)),
+  );
+
+  const enqueue = async (
+    eventType:
+      | "event_type.created"
+      | "event_type.updated"
+      | "event_type.activated"
+      | "event_type.deactivated",
+    uri: string,
+    row: Record<string, unknown>,
+  ) => {
+    const { makeEventIdempotencyKey } = await import("./events");
+    const name = String(row.name || row.slug || uri);
+    const active = row.active !== false && row.deleted !== true;
+    const idempotencyKey = makeEventIdempotencyKey(
+      "calendly",
+      `${uri}:${eventType}:${active}`,
+      eventType,
+    );
+    try {
+      await enqueueJob({
+        jobType: "integration_automation_event",
+        queueName: "ext-calendly",
+        workspaceId: input.workspaceId,
+        priority: 35,
+        idempotencyKey: `cal-etype-${idempotencyKey}`,
+        payload: JSON.parse(
+          JSON.stringify({
+            workspaceId: input.workspaceId,
+            provider: "calendly",
+            eventType,
+            contactId: null,
+            payload: {
+              eventTypeUri: uri,
+              eventTypeName: name,
+              active,
+              schedulingUrl:
+                typeof row.scheduling_url === "string" ? row.scheduling_url : null,
+            },
+          }),
+        ),
+      });
+    } catch {
+      // duplicate
+    }
+  };
+
+  for (const [uri, next] of nextByUri) {
+    const prev = prevByUri.get(uri);
+    if (!prev) {
+      await enqueue("event_type.created", uri, next);
+      continue;
+    }
+    const prevActive = prev.active !== false && prev.deleted !== true;
+    const nextActive = next.active !== false && next.deleted !== true;
+    const changed =
+      JSON.stringify({
+        name: prev.name,
+        active: prevActive,
+        scheduling_url: prev.scheduling_url,
+        duration: prev.duration,
+      }) !==
+      JSON.stringify({
+        name: next.name,
+        active: nextActive,
+        scheduling_url: next.scheduling_url,
+        duration: next.duration,
+      });
+    if (changed) {
+      await enqueue("event_type.updated", uri, next);
+    }
+    if (!prevActive && nextActive) {
+      await enqueue("event_type.activated", uri, next);
+    }
+    if (prevActive && !nextActive) {
+      await enqueue("event_type.deactivated", uri, next);
+    }
   }
 }

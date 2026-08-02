@@ -5,6 +5,12 @@ import { Mail, MessageSquare, Phone, Voicemail } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+type TimelineCrmSync = {
+  provider: string;
+  externalUrl: string | null;
+  syncStatus: string;
+};
+
 type TimelineItem = {
   id: string;
   kind: "sms" | "call" | "voice_ai" | "voicemail";
@@ -13,7 +19,15 @@ type TimelineItem = {
   status?: string | null;
   at: string;
   href?: string | null;
+  crmSync?: TimelineCrmSync[];
   meta?: Record<string, unknown>;
+};
+
+const PROVIDER_LABEL: Record<string, string> = {
+  salesforce: "Salesforce",
+  zoho: "Zoho",
+  pipedrive: "Pipedrive",
+  calendly: "Calendly",
 };
 
 const KIND_LABEL: Record<TimelineItem["kind"], string> = {
@@ -109,6 +123,43 @@ export function ContactActivityTimeline({ contactId }: { contactId: string }) {
               </span>
             </div>
             <p className="mt-1 text-sm text-foreground/90">{item.summary}</p>
+            {item.crmSync?.length ? (
+              <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                {item.crmSync.map((s) => {
+                  const label = PROVIDER_LABEL[s.provider] || s.provider;
+                  const chip = (
+                    <span
+                      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                        s.syncStatus === "error"
+                          ? "bg-red-100 text-red-800"
+                          : s.syncStatus === "pending"
+                            ? "bg-sky-100 text-sky-800"
+                            : "bg-emerald-100 text-emerald-800"
+                      }`}
+                    >
+                      {s.syncStatus === "error"
+                        ? `Sync failed · ${label}`
+                        : s.syncStatus === "pending"
+                          ? `Syncing · ${label}`
+                          : `Synced to ${label}`}
+                    </span>
+                  );
+                  return s.externalUrl ? (
+                    <a
+                      key={s.provider}
+                      href={s.externalUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="hover:opacity-80"
+                    >
+                      {chip}
+                    </a>
+                  ) : (
+                    <span key={s.provider}>{chip}</span>
+                  );
+                })}
+              </div>
+            ) : null}
             {recordingUrl ? (
               <audio className="mt-2 w-full" controls preload="none" src={recordingUrl} />
             ) : null}

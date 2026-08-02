@@ -3,22 +3,66 @@ import { enrollForTrigger } from "@/lib/automations/enroll";
 import type { ExternalProviderId, NormalizedEventType } from "./types";
 
 /**
- * Map normalized integration events → automation trigger block types.
- * Events without a contactId are stored but do not enroll flows.
+ * Map normalized integration / CRM events → automation trigger block types.
  */
 export const INTEGRATION_EVENT_TO_TRIGGER: Record<string, string> = {
   "contact.created": "integration_contact_created",
   "contact.updated": "integration_contact_updated",
-  "contact.deleted": "integration_contact_updated",
+  "contact.deleted": "integration_contact_deleted",
+  "contact.owner_changed": "integration_contact_owner_changed",
+  "contact.status_changed": "integration_contact_status_changed",
+  "contact.phone_changed": "integration_contact_phone_changed",
+  "contact.email_changed": "integration_contact_email_changed",
+  "contact.tag_added": "integration_tag_added",
+  "contact.tag_removed": "integration_tag_removed",
+  "contact.custom_field_changed": "integration_contact_custom_field_changed",
+  "lead.created": "integration_lead_created",
+  "lead.updated": "integration_lead_updated",
+  "lead.assigned": "integration_lead_assigned",
+  "lead.status_changed": "integration_lead_status_changed",
+  "lead.source_changed": "integration_lead_source_changed",
+  "lead.converted": "integration_lead_converted",
+  "lead.deleted": "integration_lead_deleted",
+  "lead.custom_field_changed": "integration_lead_custom_field_changed",
+  "company.created": "integration_company_created",
+  "company.updated": "integration_company_updated",
+  "company.owner_changed": "integration_company_owner_changed",
+  "company.status_changed": "integration_company_status_changed",
+  "company.deleted": "integration_company_deleted",
+  "company.custom_field_changed": "integration_company_custom_field_changed",
+  "deal.created": "integration_deal_created",
+  "deal.updated": "integration_deal_updated",
+  "deal.stage_changed": "integration_deal_stage_changed",
+  "deal.pipeline_changed": "integration_deal_pipeline_changed",
+  "deal.owner_changed": "integration_deal_owner_changed",
+  "deal.value_changed": "integration_deal_value_changed",
+  "deal.won": "integration_deal_won",
+  "deal.lost": "integration_deal_lost",
+  "deal.reopened": "integration_deal_reopened",
+  "deal.deleted": "integration_deal_deleted",
+  "deal.custom_field_changed": "integration_deal_custom_field_changed",
+  "task.created": "integration_task_created",
+  "task.updated": "integration_task_updated",
+  "task.assigned": "integration_task_assigned",
+  "task.completed": "integration_task_completed",
+  "task.due": "integration_task_due",
+  "task.overdue": "integration_task_overdue",
+  "activity.created": "integration_activity_created",
+  "activity.updated": "integration_activity_updated",
+  "note.created": "integration_note_created",
+  "call.activity_created": "integration_call_activity_created",
   "appointment.scheduled": "integration_appointment_scheduled",
   "appointment.canceled": "integration_appointment_canceled",
   "appointment.rescheduled": "integration_appointment_rescheduled",
   "appointment.starting_soon": "integration_appointment_starting_soon",
   "appointment.completed": "integration_appointment_completed",
+  "appointment.no_show": "integration_appointment_no_show",
+  "event_type.created": "integration_event_type_created",
+  "event_type.updated": "integration_event_type_updated",
+  "event_type.activated": "integration_event_type_activated",
+  "event_type.deactivated": "integration_event_type_deactivated",
   "form.submitted": "integration_form_submitted",
   "lead.submitted": "integration_form_submitted",
-  "lead.created": "integration_lead_created",
-  "lead.updated": "integration_lead_updated",
   "audience.member_added": "integration_list_joined",
   "audience.member_updated": "integration_contact_updated",
   "tag.added": "integration_tag_added",
@@ -28,12 +72,6 @@ export const INTEGRATION_EVENT_TO_TRIGGER: Record<string, string> = {
   "order.status_changed": "integration_order_updated",
   "order.fulfilled": "integration_order_completed",
   "customer.updated": "integration_contact_updated",
-  "deal.created": "integration_deal_created",
-  "deal.stage_changed": "integration_deal_stage_changed",
-  "deal.won": "integration_deal_won",
-  "deal.lost": "integration_deal_lost",
-  "task.created": "integration_task_created",
-  "task.completed": "integration_task_completed",
   "support_ticket.created": "integration_ticket_created",
   "support_ticket.updated": "integration_ticket_updated",
   "support_ticket.solved": "integration_ticket_resolved",
@@ -41,13 +79,37 @@ export const INTEGRATION_EVENT_TO_TRIGGER: Record<string, string> = {
   "consent.changed": "integration_consent_changed",
 };
 
-/** Also map to legacy native triggers where useful. */
 const LEGACY_ALIASES: Record<string, string> = {
   "form.submitted": "form_submitted",
   "appointment.scheduled": "call_appointment_booked",
   "contact.created": "customer_added",
   "tag.added": "tag_added",
 };
+
+/** Workspace-level triggers (e.g. Calendly event type changes) need a contact FK. */
+async function ensureWorkspaceAutomationContact(workspaceId: string): Promise<string> {
+  const { getPrisma } = await import("@/lib/db");
+  const prisma = getPrisma();
+  // Stable synthetic phone (unique per workspace) — Contact.phone is required.
+  const phone = `+1555${workspaceId.replace(/\D/g, "").slice(-7).padStart(7, "0")}`;
+  const existing = await prisma.contact.findFirst({
+    where: { workspaceId, phone },
+    select: { id: true },
+  });
+  if (existing) return existing.id;
+  const created = await prisma.contact.create({
+    data: {
+      workspaceId,
+      email: `automations+system@${workspaceId.slice(0, 12)}.transovo.local`,
+      firstName: "System",
+      lastName: "Automations",
+      status: "SUBSCRIBED",
+      phone,
+      customFields: { systemAutomationContact: true },
+    },
+  });
+  return created.id;
+}
 
 export async function dispatchIntegrationAutomationEvent(payload: {
   workspaceId: string;
@@ -59,7 +121,10 @@ export async function dispatchIntegrationAutomationEvent(payload: {
   webhookEventId?: string | null;
   payload?: Record<string, unknown>;
 }) {
-  const contactId = payload.contactId;
+  let contactId = payload.contactId;
+  if (!contactId && String(payload.eventType || "").startsWith("event_type.")) {
+    contactId = await ensureWorkspaceAutomationContact(payload.workspaceId);
+  }
   if (!contactId) {
     return { enrolled: [], skipped: true, reason: "no_contact" };
   }
@@ -68,12 +133,37 @@ export async function dispatchIntegrationAutomationEvent(payload: {
   const formSlugRaw = payload.payload?.formId ?? payload.payload?.formName;
   const filters = {
     provider: String(payload.provider),
+    connectedAccount:
+      payload.payload?.connectedAccount != null
+        ? String(payload.payload.connectedAccount)
+        : payload.payload?.connectedAccountName != null
+          ? String(payload.payload.connectedAccountName)
+          : undefined,
     eventType: payload.eventType,
     tag: payload.payload?.tag != null ? String(payload.payload.tag) : undefined,
     formSlug: formSlugRaw != null && formSlugRaw !== "" ? String(formSlugRaw) : undefined,
     orderStatus: payload.payload?.status != null ? String(payload.payload.status) : undefined,
     eventTypeName:
-      payload.payload?.eventType != null ? String(payload.payload.eventType) : undefined,
+      payload.payload?.eventTypeName != null
+        ? String(payload.payload.eventTypeName)
+        : payload.payload?.eventType != null
+          ? String(payload.payload.eventType)
+          : undefined,
+    owner: payload.payload?.ownerExternalId != null ? String(payload.payload.ownerExternalId) : undefined,
+    status: payload.payload?.status != null ? String(payload.payload.status) : undefined,
+    stage: payload.payload?.stage != null ? String(payload.payload.stage) : undefined,
+    previousStage:
+      payload.payload?.previousStage != null ? String(payload.payload.previousStage) : undefined,
+    pipeline: payload.payload?.pipeline != null ? String(payload.payload.pipeline) : undefined,
+    source: payload.payload?.source != null ? String(payload.payload.source) : undefined,
+    minutesBefore:
+      payload.payload?.minutesBefore != null ? Number(payload.payload.minutesBefore) : undefined,
+    changedField:
+      Array.isArray(payload.payload?.changedFields) && payload.payload.changedFields[0]
+        ? String((payload.payload.changedFields as string[])[0])
+        : undefined,
+    phoneExists: Boolean(payload.phone || payload.payload?.phone),
+    emailExists: Boolean(payload.email || payload.payload?.email),
   };
 
   const results = [];
@@ -85,7 +175,6 @@ export async function dispatchIntegrationAutomationEvent(payload: {
 
   const legacy = LEGACY_ALIASES[payload.eventType];
   if (legacy) {
-    // Prefer provider-scoped integration triggers; still fire legacy for forms/tags.
     if (legacy === "form_submitted" || legacy === "tag_added" || legacy === "customer_added") {
       results.push(
         ...(await emitAutomationEvent(payload.workspaceId, payload.eventType, contactId, {
@@ -107,128 +196,12 @@ export function listIntegrationTriggerBlocks(): Array<{
   description: string;
   defaultConfig: Record<string, unknown>;
 }> {
-  return [
-    {
-      blockType: "integration_appointment_scheduled",
-      label: "Appointment scheduled (integration)",
-      description: "When Calendly/HighLevel books an appointment",
-      defaultConfig: { provider: "", eventTypeName: "" },
-    },
-    {
-      blockType: "integration_appointment_canceled",
-      label: "Appointment canceled (integration)",
-      description: "When an integrated appointment is canceled",
-      defaultConfig: { provider: "calendly" },
-    },
-    {
-      blockType: "integration_appointment_rescheduled",
-      label: "Appointment rescheduled (integration)",
-      description: "When an integrated appointment is rescheduled",
-      defaultConfig: { provider: "calendly" },
-    },
-    {
-      blockType: "integration_form_submitted",
-      label: "Form submitted (integration)",
-      description: "When Typeform or Jotform receives a submission",
-      defaultConfig: { provider: "", formSlug: "" },
-    },
-    {
-      blockType: "integration_tag_added",
-      label: "Tag added (integration)",
-      description: "When a tag is added in ActiveCampaign/Mailchimp/HighLevel",
-      defaultConfig: { provider: "", tag: "" },
-    },
-    {
-      blockType: "integration_tag_removed",
-      label: "Tag removed (integration)",
-      description: "When a tag is removed in a connected marketing/CRM app",
-      defaultConfig: { provider: "", tag: "" },
-    },
-    {
-      blockType: "integration_list_joined",
-      label: "List/audience joined",
-      description: "When a contact joins a Mailchimp/Klaviyo/AC list",
-      defaultConfig: { provider: "" },
-    },
-    {
-      blockType: "integration_order_created",
-      label: "Order created",
-      description: "When WooCommerce creates an order",
-      defaultConfig: { provider: "woocommerce" },
-    },
-    {
-      blockType: "integration_order_paid",
-      label: "Order paid",
-      description: "When an order is paid",
-      defaultConfig: { provider: "woocommerce" },
-    },
-    {
-      blockType: "integration_order_updated",
-      label: "Order status changed",
-      description: "When an order status changes",
-      defaultConfig: { provider: "woocommerce", orderStatus: "" },
-    },
-    {
-      blockType: "integration_order_completed",
-      label: "Order completed/fulfilled",
-      description: "When an order is completed",
-      defaultConfig: { provider: "woocommerce" },
-    },
-    {
-      blockType: "integration_deal_created",
-      label: "Deal created (integration)",
-      description: "When a deal/opportunity is created",
-      defaultConfig: { provider: "" },
-    },
-    {
-      blockType: "integration_deal_stage_changed",
-      label: "Deal stage changed (integration)",
-      description: "When a deal stage changes",
-      defaultConfig: { provider: "" },
-    },
-    {
-      blockType: "integration_ticket_created",
-      label: "Support ticket created",
-      description: "When Freshdesk creates a ticket",
-      defaultConfig: { provider: "freshdesk" },
-    },
-    {
-      blockType: "integration_ticket_updated",
-      label: "Support ticket updated",
-      description: "When a support ticket is updated",
-      defaultConfig: { provider: "freshdesk" },
-    },
-    {
-      blockType: "integration_ticket_resolved",
-      label: "Support ticket resolved",
-      description: "When a support ticket is solved/closed",
-      defaultConfig: { provider: "freshdesk" },
-    },
-    {
-      blockType: "integration_contact_created",
-      label: "Contact created (integration)",
-      description: "When a connected app creates a contact/profile",
-      defaultConfig: { provider: "" },
-    },
-    {
-      blockType: "integration_contact_updated",
-      label: "Contact updated (integration)",
-      description: "When a connected app updates a contact/profile",
-      defaultConfig: { provider: "" },
-    },
-    {
-      blockType: "integration_task_created",
-      label: "Task created (integration)",
-      description: "When Close/HighLevel creates a task",
-      defaultConfig: { provider: "" },
-    },
-    {
-      blockType: "integration_consent_changed",
-      label: "Marketing consent changed",
-      description: "When Mailchimp/Klaviyo consent changes",
-      defaultConfig: { provider: "" },
-    },
-  ];
+  return Object.entries(INTEGRATION_EVENT_TO_TRIGGER).map(([eventType, blockType]) => ({
+    blockType,
+    label: blockType.replace(/^integration_/, "").replace(/_/g, " "),
+    description: `Normalized event ${eventType}`,
+    defaultConfig: { provider: "" },
+  }));
 }
 
 export function listIntegrationActionBlocks(): Array<{
@@ -240,13 +213,9 @@ export function listIntegrationActionBlocks(): Array<{
   return [
     {
       blockType: "integration_action",
-      label: "Connected app action",
-      description: "Run a typed action on a connected integration",
-      defaultConfig: {
-        provider: "",
-        actionId: "contact.upsert",
-        params: {},
-      },
+      label: "CRM / connected app action",
+      description: "Run a typed action on a connected CRM or app",
+      defaultConfig: { provider: "", actionId: "contact.upsert", params: {} },
     },
   ];
 }

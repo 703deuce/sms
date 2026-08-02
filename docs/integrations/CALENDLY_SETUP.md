@@ -36,16 +36,19 @@ Requested by code (`calendlyAdapter.oauth.scopes`):
 | `users:read` | `/users/me` identity |
 | `event_types:read` | Event type metadata |
 | `scheduled_events:read` | Events + invitees |
+| `scheduled_events:write` | Cancel appointments from automations / UI |
+| `scheduling_links:write` | Create single-use scheduling links |
+| `shares:write` | Share/single-use link variants |
 | `webhooks:read` | List subscriptions |
 | `webhooks:write` | Create/delete subscriptions (paid plans) |
 
-**Not requested:** Contacts API, Scheduling API write, event-type writes, availability writes, single-use link writes.
+**Still unsupported (not requested):** Contacts API, direct Scheduling API booking, event-type / availability writes.
 
-New Calendly OAuth apps grant **no** API access until scopes are approved — reconnect after deploy if Connect was done with empty scopes.
+New Calendly OAuth apps grant **no** API access until scopes are approved. **Reconnect after deploy** so existing connections pick up the write scopes.
 
 ## Plan limitations
 - **Free:** OAuth + reads + incremental reconcile work. **Webhook subscriptions are plan-blocked** (Standard / Teams / Enterprise). Mark as blocked by plan, not a Transovo bug.
-- **Paid:** Webhook `invitee.created` / `invitee.canceled` can be registered automatically after Connect.
+- **Paid:** Webhook `invitee.created` / `invitee.canceled` / `invitee_no_show.created` can be registered automatically after Connect.
 
 ## Customer connection steps
 1. Open `/integrations/native/calendly`.

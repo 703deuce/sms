@@ -12,7 +12,14 @@ export type CrmAction =
   | "view_crm_errors"
   | "retry_crm_jobs"
   | "disconnect_crm"
-  | "access_crm_diagnostics";
+  | "access_crm_diagnostics"
+  | "view_connected_data"
+  | "use_crm_quick_actions"
+  | "create_crm_automation_actions"
+  | "create_integration_triggers"
+  | "edit_crm_linked_records"
+  | "force_sync"
+  | "resolve_mapping_conflicts";
 
 const MATRIX: Record<string, CrmAction[]> = {
   OWNER: [
@@ -24,6 +31,13 @@ const MATRIX: Record<string, CrmAction[]> = {
     "retry_crm_jobs",
     "disconnect_crm",
     "access_crm_diagnostics",
+    "view_connected_data",
+    "use_crm_quick_actions",
+    "create_crm_automation_actions",
+    "create_integration_triggers",
+    "edit_crm_linked_records",
+    "force_sync",
+    "resolve_mapping_conflicts",
   ],
   ADMINISTRATOR: [
     "view_crm",
@@ -34,6 +48,13 @@ const MATRIX: Record<string, CrmAction[]> = {
     "retry_crm_jobs",
     "disconnect_crm",
     "access_crm_diagnostics",
+    "view_connected_data",
+    "use_crm_quick_actions",
+    "create_crm_automation_actions",
+    "create_integration_triggers",
+    "edit_crm_linked_records",
+    "force_sync",
+    "resolve_mapping_conflicts",
   ],
   MANAGER: [
     "view_crm",
@@ -42,11 +63,34 @@ const MATRIX: Record<string, CrmAction[]> = {
     "view_crm_errors",
     "retry_crm_jobs",
     "access_crm_diagnostics",
+    "view_connected_data",
+    "use_crm_quick_actions",
+    "create_crm_automation_actions",
+    "create_integration_triggers",
+    "edit_crm_linked_records",
+    "force_sync",
+    "resolve_mapping_conflicts",
   ],
-  CAMPAIGN_CREATOR: ["view_crm", "view_crm_errors"],
-  INBOX_AGENT: ["view_crm"],
-  ANALYST: ["view_crm", "view_crm_errors", "access_crm_diagnostics"],
-  READ_ONLY: ["view_crm"],
+  CAMPAIGN_CREATOR: [
+    "view_crm",
+    "view_crm_errors",
+    "view_connected_data",
+    "use_crm_quick_actions",
+    "create_crm_automation_actions",
+    "create_integration_triggers",
+  ],
+  INBOX_AGENT: [
+    "view_crm",
+    "view_connected_data",
+    "use_crm_quick_actions",
+  ],
+  ANALYST: [
+    "view_crm",
+    "view_crm_errors",
+    "access_crm_diagnostics",
+    "view_connected_data",
+  ],
+  READ_ONLY: ["view_crm", "view_connected_data"],
 };
 
 export async function getMembershipRole(userId: string, workspaceId: string) {

@@ -1,0 +1,246 @@
+/**
+ * Calendly write/action helpers used by automation execution.
+ *
+ * These live in a companion module (rather than on the adapter interface) because
+ * the shared `ExternalIntegrationAdapter` contract is intentionally generic and
+ * does not model scheduling-link / cancellation operations. The automation
+ * action registry imports these directly for the `appointment.*` action ids.
+ *
+ * Requires the write OAuth scopes added in `calendly.ts`
+ * (scheduling_links:write, shares:write, scheduled_events:write) — connections
+ * authorized before those scopes existed must reconnect.
+ */
+import { integrationFetch } from "../framework/http";
+import type { AdapterContext } from "../framework/types";
+
+const CALENDLY_API = "https://api.calendly.com";
+
+function calendlyApi<T = Record<string, unknown>>(
+  path: string,
+  ctx: AdapterContext,
+  init?: RequestInit,
+): Promise<T> {
+  return integrationFetch<T>(`${CALENDLY_API}${path}`, {
+    ...init,
+    accessToken: ctx.accessToken,
+  });
+}
+
+/**
+ * Normalize Calendly API errors (plan/permission/scope) into a clear message.
+ * Wrap every network call so automation logs surface actionable guidance.
+ */
+function wrapCalendlyError(err: unknown, op: string): never {
+  const message = err instanceof Error ? err.message : String(err);
+  if (/401|unauthor|invalid_token|expired/i.test(message)) {
+    throw new Error(
+      `UNSUPPORTED: Calendly rejected ${op} — token invalid or missing scope. Disconnect and reconnect Calendly to grant the new write scopes. (${message.slice(0, 160)})`,
+    );
+  }
+  if (/403|forbidden|permission|scope/i.test(message)) {
+    throw new Error(
+      `UNSUPPORTED: Calendly ${op} is not permitted by this account (missing scope or role). Reconnect with the required scopes or use an admin account. (${message.slice(0, 160)})`,
+    );
+  }
+  if (/402|payment|plan|standard|teams|enterprise|upgrade|subscription/i.test(message)) {
+    throw new Error(
+      `Blocked by Calendly plan: ${op} requires a paid Calendly plan. (${message.slice(0, 160)})`,
+    );
+  }
+  throw new Error(`Calendly ${op} failed: ${message.slice(0, 200)}`);
+}
+
+type CalendlyResource = Record<string, unknown>;
+
+async function getMe(ctx: AdapterContext): Promise<CalendlyResource> {
+  const me = await calendlyApi<{ resource?: CalendlyResource }>("/users/me", ctx);
+  return me.resource || {};
+}
+
+/** UUID is the last path segment of a Calendly resource URI. */
+function uuidFromUri(uri: string): string {
+  return uri.split("/").filter(Boolean).pop() || uri;
+}
+
+/**
+ * Resolve a persistent scheduling URL from the connected user, or from a
+ * specific event type when `eventTypeUri` is provided.
+ */
+export async function getSchedulingLink(
+  ctx: AdapterContext,
+  opts: { eventTypeUri?: string } = {},
+): Promise<{ schedulingUrl: string; source: "event_type" | "user"; ownerUri: string }> {
+  try {
+    if (opts.eventTypeUri) {
+      const uuid = uuidFromUri(opts.eventTypeUri);
+      const res = await calendlyApi<{ resource?: CalendlyResource }>(
+        `/event_types/${encodeURIComponent(uuid)}`,
+        ctx,
+      );
+      const resource = res.resource || {};
+      const url = String(resource.scheduling_url || "");
+      if (!url) {
+        throw new Error("Event type has no scheduling_url");
+      }
+      return {
+        schedulingUrl: url,
+        source: "event_type",
+        ownerUri: String(resource.uri || opts.eventTypeUri),
+      };
+    }
+    const me = await getMe(ctx);
+    const url = String(me.scheduling_url || "");
+    if (!url) {
+      throw new Error("User has no scheduling_url");
+    }
+    return { schedulingUrl: url, source: "user", ownerUri: String(me.uri || "") };
+  } catch (err) {
+    return wrapCalendlyError(err, "get scheduling link");
+  }
+}
+
+/** Find the first active event type owned by the connected user. */
+async function resolveDefaultEventTypeUri(ctx: AdapterContext): Promise<string | null> {
+  const me = await getMe(ctx);
+  const user = String(me.uri || "");
+  if (!user) return null;
+  const res = await calendlyApi<{ collection?: CalendlyResource[] }>(
+    `/event_types?user=${encodeURIComponent(user)}&active=true&count=1`,
+    ctx,
+  );
+  const first = (res.collection || [])[0];
+  return first ? String(first.uri || "") || null : null;
+}
+
+/**
+ * Create a single-use scheduling link (POST /scheduling_links).
+ * The `owner` must be an event type URI (owner_type "EventType").
+ * Requires the `scheduling_links:write` scope.
+ */
+export async function createSingleUseSchedulingLink(
+  ctx: AdapterContext,
+  opts: {
+    ownerUri?: string;
+    ownerType?: string;
+    maxEventCount?: 1;
+    eventTypeUri?: string;
+  } = {},
+): Promise<{ bookingUrl: string; owner: string; ownerType: string }> {
+  try {
+    const ownerType = opts.ownerType || "EventType";
+    let owner = opts.ownerUri || opts.eventTypeUri || null;
+    if (!owner) {
+      owner = await resolveDefaultEventTypeUri(ctx);
+    }
+    if (!owner) {
+      throw new Error(
+        "No event type available to create a single-use scheduling link — provide eventTypeUri/ownerUri",
+      );
+    }
+    const res = await calendlyApi<{ resource?: CalendlyResource }>(
+      "/scheduling_links",
+      ctx,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          max_event_count: opts.maxEventCount ?? 1,
+          owner,
+          owner_type: ownerType,
+        }),
+      },
+    );
+    const resource = res.resource || {};
+    const url = String(resource.booking_url || "");
+    if (!url) {
+      throw new Error("Calendly did not return a booking_url");
+    }
+    return { bookingUrl: url, owner, ownerType };
+  } catch (err) {
+    return wrapCalendlyError(err, "create single-use scheduling link");
+  }
+}
+
+/**
+ * Cancel a scheduled event (POST /scheduled_events/{uuid}/cancellation).
+ * Requires the `scheduled_events:write` scope.
+ */
+export async function cancelAppointment(
+  ctx: AdapterContext,
+  opts: { eventUuid?: string; eventUri?: string; reason?: string },
+): Promise<{ canceled: true; eventUuid: string; reason: string | null }> {
+  const uuid = opts.eventUuid || (opts.eventUri ? uuidFromUri(opts.eventUri) : "");
+  if (!uuid) {
+    throw new Error("cancelAppointment requires eventUuid or eventUri");
+  }
+  try {
+    await calendlyApi(
+      `/scheduled_events/${encodeURIComponent(uuid)}/cancellation`,
+      ctx,
+      {
+        method: "POST",
+        body: JSON.stringify({ reason: opts.reason || "Canceled via automation" }),
+      },
+    );
+    return { canceled: true, eventUuid: uuid, reason: opts.reason || null };
+  } catch (err) {
+    return wrapCalendlyError(err, "cancel appointment");
+  }
+}
+
+/**
+ * Read a scheduled event and its first invitee, exposing the invitee
+ * cancel/reschedule URLs (GET /scheduled_events/{uuid} + /invitees).
+ */
+export async function getAppointment(
+  ctx: AdapterContext,
+  opts: { eventUuid?: string; eventUri?: string },
+): Promise<{
+  event: CalendlyResource;
+  invitee: CalendlyResource | null;
+  cancelUrl: string | null;
+  rescheduleUrl: string | null;
+  status: string | null;
+  startsAt: string | null;
+  endsAt: string | null;
+}> {
+  const uuid = opts.eventUuid || (opts.eventUri ? uuidFromUri(opts.eventUri) : "");
+  if (!uuid) {
+    throw new Error("getAppointment requires eventUuid or eventUri");
+  }
+  try {
+    const eventRes = await calendlyApi<{ resource?: CalendlyResource }>(
+      `/scheduled_events/${encodeURIComponent(uuid)}`,
+      ctx,
+    );
+    const event = eventRes.resource || {};
+
+    let invitee: CalendlyResource | null = null;
+    let cancelUrl: string | null = null;
+    let rescheduleUrl: string | null = null;
+    try {
+      const invRes = await calendlyApi<{ collection?: CalendlyResource[] }>(
+        `/scheduled_events/${encodeURIComponent(uuid)}/invitees?count=1`,
+        ctx,
+      );
+      invitee = (invRes.collection || [])[0] || null;
+      if (invitee) {
+        cancelUrl = (invitee.cancel_url as string) || null;
+        rescheduleUrl = (invitee.reschedule_url as string) || null;
+      }
+    } catch {
+      // invitee fetch may fail on plan/role — still return the event
+    }
+
+    return {
+      event,
+      invitee,
+      cancelUrl,
+      rescheduleUrl,
+      status: (event.status as string) || null,
+      startsAt: (event.start_time as string) || null,
+      endsAt: (event.end_time as string) || null,
+    };
+  } catch (err) {
+    return wrapCalendlyError(err, "retrieve appointment");
+  }
+}
