@@ -240,7 +240,7 @@ export async function runCrmAcceptanceSuite(
         const lead = await connector.upsertLead(ctx, {
           firstName: "Transovo",
           lastName: `Salesforce Test Lead ${marker}`,
-          company: "Transovo SF Acceptance",
+          companyName: "Transovo SF Acceptance",
           email: `sf-lead-${marker}@example.com`,
         });
         items.push({
