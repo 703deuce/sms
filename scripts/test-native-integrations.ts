@@ -556,6 +556,32 @@ async function main() {
     assert.equal(caps.incrementalSync, "read_only");
   });
 
+  await ok("calendly signing key resolver uses dynamic env names", async () => {
+    const {
+      resolveCalendlyWebhookSigningKey,
+      CALENDLY_WEBHOOK_SIGNING_KEY_ENVS,
+    } = await import("../src/lib/integrations/adapters/calendly");
+    assert.deepEqual([...CALENDLY_WEBHOOK_SIGNING_KEY_ENVS], [
+      "CALENDLY_WEBHOOK_SIGNING_KEY",
+      "CALENDLY_WEBHOOK_SECRET",
+    ]);
+    const prevA = process.env.CALENDLY_WEBHOOK_SIGNING_KEY;
+    const prevB = process.env.CALENDLY_WEBHOOK_SECRET;
+    delete process.env.CALENDLY_WEBHOOK_SIGNING_KEY;
+    delete process.env.CALENDLY_WEBHOOK_SECRET;
+    assert.equal(resolveCalendlyWebhookSigningKey(null), null);
+    process.env.CALENDLY_WEBHOOK_SIGNING_KEY = "  runtime-key  ";
+    assert.equal(resolveCalendlyWebhookSigningKey(null), "runtime-key");
+    assert.equal(
+      resolveCalendlyWebhookSigningKey({ signingKey: "from-config" }),
+      "from-config",
+    );
+    if (prevA === undefined) delete process.env.CALENDLY_WEBHOOK_SIGNING_KEY;
+    else process.env.CALENDLY_WEBHOOK_SIGNING_KEY = prevA;
+    if (prevB === undefined) delete process.env.CALENDLY_WEBHOOK_SECRET;
+    else process.env.CALENDLY_WEBHOOK_SECRET = prevB;
+  });
+
   console.log(`\n${passed} tests passed`);
 }
 

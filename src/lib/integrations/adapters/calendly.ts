@@ -50,18 +50,38 @@ function api(path: string, ctx: AdapterContext, init?: RequestInit) {
   });
 }
 
-/** App-level signing key from Coolify (Calendly developer portal name) or legacy alias. */
+/**
+ * App-level signing key from Coolify (Calendly developer portal) or legacy alias.
+ * Exact names: CALENDLY_WEBHOOK_SIGNING_KEY | CALENDLY_WEBHOOK_SECRET
+ *
+ * Use dynamic `process.env[name]` access — Next.js inlines static
+ * `process.env.FOO` at build time, so keys added later in Coolify would
+ * otherwise always look "missing" until a rebuild that saw the var.
+ */
+export const CALENDLY_WEBHOOK_SIGNING_KEY_ENVS = [
+  "CALENDLY_WEBHOOK_SIGNING_KEY",
+  "CALENDLY_WEBHOOK_SECRET",
+] as const;
+
+export function calendlyWebhookSigningKeyEnvPresence(): Record<string, boolean> {
+  const out: Record<string, boolean> = {};
+  for (const name of CALENDLY_WEBHOOK_SIGNING_KEY_ENVS) {
+    out[name] = Boolean(process.env[name]?.trim());
+  }
+  return out;
+}
+
 export function resolveCalendlyWebhookSigningKey(
   config?: Record<string, unknown> | null,
 ): string | null {
   const fromConfig =
     typeof config?.signingKey === "string" ? config.signingKey.trim() : "";
-  return (
-    fromConfig ||
-    process.env.CALENDLY_WEBHOOK_SIGNING_KEY?.trim() ||
-    process.env.CALENDLY_WEBHOOK_SECRET?.trim() ||
-    null
-  );
+  if (fromConfig) return fromConfig;
+  for (const name of CALENDLY_WEBHOOK_SIGNING_KEY_ENVS) {
+    const v = process.env[name]?.trim();
+    if (v) return v;
+  }
+  return null;
 }
 
 export const calendlyAdapter: ExternalIntegrationAdapter = {

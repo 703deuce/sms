@@ -27,6 +27,9 @@ type Snapshot = {
     callbackUrl?: string | null;
     webhookUrl?: string | null;
     webhookSigningKeyPresent?: boolean;
+    webhookSigningKeyFromConfig?: boolean;
+    webhookSigningKeyEnv?: Record<string, boolean>;
+    webhookSigningKeyEnvNames?: string[];
     userUri?: string | null;
     organizationUri?: string | null;
     timezone?: string | null;
@@ -267,6 +270,25 @@ export function NativeProviderClient({ provider }: { provider: string }) {
               <li>
                 Webhook signing key:{" "}
                 {snapshot.calendly.webhookSigningKeyPresent ? "present" : "missing"}
+                {!snapshot.calendly.webhookSigningKeyPresent ? (
+                  <span className="block text-xs">
+                    Expected exact Coolify name:{" "}
+                    <code>CALENDLY_WEBHOOK_SIGNING_KEY</code> (alias{" "}
+                    <code>CALENDLY_WEBHOOK_SECRET</code>) — not{" "}
+                    <code>CALENDY_…</code> / <code>…SINGING…</code>
+                  </span>
+                ) : null}
+                {snapshot.calendly.webhookSigningKeyEnv ? (
+                  <span className="block text-xs">
+                    Env:{" "}
+                    {Object.entries(snapshot.calendly.webhookSigningKeyEnv)
+                      .map(([k, v]) => `${k}=${v ? "yes" : "no"}`)
+                      .join(" · ")}
+                    {snapshot.calendly.webhookSigningKeyFromConfig
+                      ? " · stored on connection=yes"
+                      : ""}
+                  </span>
+                ) : null}
               </li>
               <li className="break-all">
                 Webhook URL: <code className="text-xs">{snapshot.calendly.webhookUrl}</code>

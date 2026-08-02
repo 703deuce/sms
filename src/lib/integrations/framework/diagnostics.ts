@@ -50,17 +50,28 @@ export async function getIntegrationDiagnosticsSnapshot(
 
   let calendly: Record<string, unknown> | undefined;
   if (provider === "calendly") {
-    const { resolveCalendlyWebhookSigningKey } = await import("../adapters/calendly");
+    const {
+      resolveCalendlyWebhookSigningKey,
+      calendlyWebhookSigningKeyEnvPresence,
+      CALENDLY_WEBHOOK_SIGNING_KEY_ENVS,
+    } = await import("../adapters/calendly");
     const { externalWebhookUrl } = await import("./app-url");
     const token = typeof cfg.webhookToken === "string" ? cfg.webhookToken : null;
     const setupError = typeof cfg.webhookSetupError === "string" ? cfg.webhookSetupError : null;
     const subscriptionIds = Array.isArray(cfg.webhookSubscriptionIds)
       ? (cfg.webhookSubscriptionIds as string[])
       : [];
+    const signingFromConfig = Boolean(
+      typeof cfg.signingKey === "string" && cfg.signingKey.trim(),
+    );
+    const signingEnv = calendlyWebhookSigningKeyEnvPresence();
     calendly = {
       callbackUrl: typeof env === "object" && env && "callbackUrl" in env ? env.callbackUrl : null,
       webhookUrl: externalWebhookUrl("calendly", token),
       webhookSigningKeyPresent: Boolean(resolveCalendlyWebhookSigningKey(cfg)),
+      webhookSigningKeyFromConfig: signingFromConfig,
+      webhookSigningKeyEnv: signingEnv,
+      webhookSigningKeyEnvNames: [...CALENDLY_WEBHOOK_SIGNING_KEY_ENVS],
       userUri: cfg.userUri || conn?.externalId || null,
       organizationUri: cfg.organizationUri || null,
       timezone: cfg.timezone || null,
