@@ -92,7 +92,7 @@ export function VoicePicker({
         <div>
           <Label>Voice</Label>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Telnyx Ultra / NaturalHD — play a real clip, then Call. Same voice on phone deploy.
+            Telnyx NaturalHD voices — play a real clip, then Call. Same voice on phone deploy.
           </p>
         </div>
         <p className="text-xs text-muted-foreground">
@@ -106,21 +106,23 @@ export function VoicePicker({
       {error ? <p className="text-xs text-rose-600">{error}</p> : null}
 
       <VoiceGroup
-        title="Ultra (recommended)"
-        voices={ultra}
+        title="Recommended voices"
+        voices={hd.length ? hd : voices}
         value={value}
         previewing={previewing}
         onSelect={onChange}
         onPreview={preview}
       />
-      <VoiceGroup
-        title="NaturalHD"
-        voices={hd}
-        value={value}
-        previewing={previewing}
-        onSelect={onChange}
-        onPreview={preview}
-      />
+      {ultra.length ? (
+        <VoiceGroup
+          title="Ultra (account-dependent)"
+          voices={ultra}
+          value={value}
+          previewing={previewing}
+          onSelect={onChange}
+          onPreview={preview}
+        />
+      ) : null}
     </div>
   );
 }

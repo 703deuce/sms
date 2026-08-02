@@ -275,7 +275,10 @@ async function main() {
     path.join(root, "src/lib/voice/telnyx/voices.ts"),
     "utf8",
   );
-  ok("default catalog Ava Ultra", /ava-warm-us/.test(voicesSrc) && /Telnyx\.Ultra\.Clara/.test(voicesSrc));
+  ok(
+    "default catalog Ava NaturalHD",
+    /ava-warm-us/.test(voicesSrc) && /Telnyx\.NaturalHD\.astra/.test(voicesSrc),
+  );
   ok("resolveProviderVoiceId", /export function resolveProviderVoiceId/.test(voicesSrc));
   const ttsPreview = fs.readFileSync(
     path.join(root, "src/app/api/voice/tts-preview/route.ts"),
