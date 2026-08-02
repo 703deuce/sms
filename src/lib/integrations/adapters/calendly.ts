@@ -306,10 +306,18 @@ export const calendlyAdapter: ExternalIntegrationAdapter = {
         method: "POST",
         body: JSON.stringify(body),
       });
-      const uri = String(
-        ((created as { resource?: { uri?: string } }).resource || {}).uri || "",
-      );
-      return { ids: uri ? [uri] : [] };
+      // Calendly returns signing_key ONLY on create — never again via GET.
+      // Real deliveries are HMAC'd with this key; env CALENDLY_WEBHOOK_SIGNING_KEY
+      // is not a substitute unless it happens to match (it usually does not).
+      const resource =
+        ((created as { resource?: { uri?: string; signing_key?: string } }).resource ||
+          {}) as { uri?: string; signing_key?: string };
+      const uri = String(resource.uri || "");
+      const signingKey =
+        typeof resource.signing_key === "string" && resource.signing_key.trim()
+          ? resource.signing_key.trim()
+          : null;
+      return { ids: uri ? [uri] : [], signingKey };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       if (

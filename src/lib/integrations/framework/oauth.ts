@@ -211,10 +211,24 @@ export async function completeExternalOAuth(input: {
         provider,
         typeof meta.webhookToken === "string" ? meta.webhookToken : null,
       );
+      // Drop prior subscriptions so we always capture a fresh signing_key
+      // (Calendly only returns it on POST create).
+      const priorIds = Array.isArray(prevConfig.webhookSubscriptionIds)
+        ? (prevConfig.webhookSubscriptionIds as string[])
+        : [];
+      if (adapter.removeWebhooks && priorIds.length) {
+        await adapter.removeWebhooks(ctx, priorIds).catch(() => undefined);
+      }
       const registered = await adapter.registerWebhooks(ctx, callbackUrl);
       webhookSubscriptionIds = registered.ids || [];
       meta.webhookSubscriptionIds = webhookSubscriptionIds;
       meta.webhookCallbackUrl = callbackUrl;
+      if (registered.signingKey) {
+        meta.signingKey = registered.signingKey;
+        meta.signingKeySource = "calendly_subscription_create";
+        meta.signingKeyCapturedAt = new Date().toISOString();
+      }
+      meta.webhookSetupError = null;
     } catch (err) {
       webhookSetupNote = err instanceof Error ? err.message : String(err);
       meta.webhookSetupError = webhookSetupNote;

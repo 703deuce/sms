@@ -28,6 +28,9 @@ type Snapshot = {
     webhookUrl?: string | null;
     webhookSigningKeyPresent?: boolean;
     webhookSigningKeyFromConfig?: boolean;
+    webhookSubscriptionSigningKeyCaptured?: boolean;
+    webhookSigningKeySource?: string | null;
+    webhookSigningKeyMismatchRisk?: boolean;
     webhookSigningKeyEnv?: Record<string, boolean>;
     webhookSigningKeyEnvNames?: string[];
     calendlyEnvNamesPresent?: string[];
@@ -272,16 +275,26 @@ export function NativeProviderClient({ provider }: { provider: string }) {
             <ul className="space-y-1 border-t pt-2 text-sm text-muted-foreground">
               <li>
                 Webhook signing key:{" "}
-                {snapshot.calendly.webhookSigningKeyPresent ? "present" : "missing"}
-                {!snapshot.calendly.webhookSigningKeyPresent ? (
+                {snapshot.calendly.webhookSubscriptionSigningKeyCaptured
+                  ? "captured from Calendly subscription"
+                  : snapshot.calendly.webhookSigningKeyPresent
+                    ? "present (env/fallback — may not match subscription)"
+                    : "missing"}
+                {snapshot.calendly.webhookSigningKeyMismatchRisk ? (
                   <span className="block text-xs text-amber-700">
-                    Coolify has not injected a recognized signing-key env into the{" "}
-                    <strong>running web</strong> container. Preferred name:{" "}
-                    <code>CALENDLY_WEBHOOK_SIGNING_KEY</code> (note the{" "}
-                    <strong>L</strong> in CALEND<strong>L</strong>Y — not{" "}
-                    <code>CALENDY_…</code>). Alias:{" "}
-                    <code>CALENDLY_WEBHOOK_SECRET</code>. Same app as transovo.ai, then{" "}
-                    <strong>restart/redeploy</strong>.
+                    Subscription exists but we never stored Calendly&apos;s create-time{" "}
+                    <code>signing_key</code>. Real webhooks will get{" "}
+                    <strong>401 Invalid signature</strong>. Click{" "}
+                    <strong>Register webhooks</strong> to recreate the subscription and
+                    capture the key (env <code>CALENDLY_WEBHOOK_SIGNING_KEY</code> is not
+                    enough by itself).
+                  </span>
+                ) : null}
+                {!snapshot.calendly.webhookSigningKeyPresent &&
+                !snapshot.calendly.webhookSigningKeyMismatchRisk ? (
+                  <span className="block text-xs text-amber-700">
+                    No signing key on the connection. Click <strong>Register webhooks</strong>{" "}
+                    to create a Calendly subscription (key is returned only on create).
                   </span>
                 ) : null}
                 {snapshot.calendly.webhookSigningKeyEnv ? (
@@ -292,6 +305,9 @@ export function NativeProviderClient({ provider }: { provider: string }) {
                       .join(" · ")}
                     {snapshot.calendly.webhookSigningKeyFromConfig
                       ? " · stored on connection=yes"
+                      : ""}
+                    {snapshot.calendly.webhookSigningKeySource
+                      ? ` · source=${snapshot.calendly.webhookSigningKeySource}`
                       : ""}
                   </span>
                 ) : null}

@@ -67,13 +67,28 @@ export async function getIntegrationDiagnosticsSnapshot(
     );
     const signingEnv = calendlyWebhookSigningKeyEnvPresence();
     const calendlyEnvNamesPresent = listCalendlyEnvNamesPresent();
+    const signingKeySource =
+      typeof cfg.signingKeySource === "string" ? cfg.signingKeySource : null;
+    const subscriptionSigningKeyCaptured =
+      signingFromConfig && signingKeySource === "calendly_subscription_create";
     calendly = {
       callbackUrl: typeof env === "object" && env && "callbackUrl" in env ? env.callbackUrl : null,
       webhookUrl: externalWebhookUrl("calendly", token),
       webhookSigningKeyPresent: Boolean(resolveCalendlyWebhookSigningKey(cfg)),
       webhookSigningKeyFromConfig: signingFromConfig,
+      /** True only when signing key was captured from Calendly's create response. */
+      webhookSubscriptionSigningKeyCaptured: subscriptionSigningKeyCaptured,
+      webhookSigningKeySource: signingKeySource,
+      webhookSigningKeyCapturedAt:
+        typeof cfg.signingKeyCapturedAt === "string" ? cfg.signingKeyCapturedAt : null,
       webhookSigningKeyEnv: signingEnv,
       webhookSigningKeyEnvNames: [...CALENDLY_WEBHOOK_SIGNING_KEY_ENVS],
+      /**
+       * Env keys alone usually cannot verify deliveries — Calendly HMAC uses the
+       * per-subscription signing_key from POST /webhook_subscriptions.
+       */
+      webhookSigningKeyMismatchRisk:
+        subscriptionIds.length > 0 && !subscriptionSigningKeyCaptured,
       /** Names only — proves which Calendly vars Coolify actually injected into this container. */
       calendlyEnvNamesPresent,
       clientIdPresent: calendlyEnvNamesPresent.some((n) => n === "CALENDLY_CLIENT_ID"),
@@ -267,18 +282,42 @@ export async function runIntegrationProbe(
       }
       const url = externalWebhookUrl(provider, token);
       try {
+        // Recreate subscription so Calendly issues a signing_key we can store.
+        // Without this, verifyWebhook uses a Coolify env key that does not match
+        // the subscription HMAC → every real delivery gets 401 Invalid signature.
+        const priorIds = Array.isArray(cfg.webhookSubscriptionIds)
+          ? (cfg.webhookSubscriptionIds as string[])
+          : [];
+        if (adapter.removeWebhooks && priorIds.length) {
+          await adapter.removeWebhooks(ctx, priorIds).catch(() => undefined);
+        }
         const result = await adapter.registerWebhooks(ctx, url);
+        const nextConfig: Record<string, unknown> = {
+          webhookSubscriptionIds: result.ids,
+          webhookCallbackUrl: url,
+          webhookSetupError: null,
+        };
+        if (result.signingKey) {
+          nextConfig.signingKey = result.signingKey;
+          nextConfig.signingKeySource = "calendly_subscription_create";
+          nextConfig.signingKeyCapturedAt = new Date().toISOString();
+        }
         await upsertConnection({
           workspaceId,
           provider,
-          config: {
-            webhookSubscriptionIds: result.ids,
-            webhookCallbackUrl: url,
-            webhookSetupError: null,
-          },
+          config: nextConfig,
           mergeConfig: true,
         });
-        return { ok: true, probe, durationMs: Date.now() - started, data: { ...result, url } };
+        return {
+          ok: true,
+          probe,
+          durationMs: Date.now() - started,
+          data: {
+            ids: result.ids,
+            url,
+            signingKeyCaptured: Boolean(result.signingKey),
+          },
+        };
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         const planBlocked = /Blocked by Calendly plan|Standard, Teams, or Enterprise/i.test(

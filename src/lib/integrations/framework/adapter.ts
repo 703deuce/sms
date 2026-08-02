@@ -113,7 +113,10 @@ export interface ExternalIntegrationAdapter {
     note: { body: string; contactId?: string; parentId?: string },
   ): Promise<UpsertResult>;
 
-  registerWebhooks?(ctx: AdapterContext, callbackUrl: string): Promise<{ ids: string[] }>;
+  registerWebhooks?(
+    ctx: AdapterContext,
+    callbackUrl: string,
+  ): Promise<{ ids: string[]; signingKey?: string | null }>;
   removeWebhooks?(ctx: AdapterContext, ids?: string[]): Promise<void>;
   verifyWebhook?(
     headers: Headers,
