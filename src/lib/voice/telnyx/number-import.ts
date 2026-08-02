@@ -5,7 +5,10 @@
 
 import { getPrisma } from "@/lib/db";
 import { telnyxRequest } from "@/lib/messaging/telnyx/client";
-import { getTelnyxApiKey } from "@/lib/messaging/telnyx/config";
+import {
+  getTelnyxApiKey,
+  getTelnyxWebhookUrls,
+} from "@/lib/messaging/telnyx/config";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 
 export type TelnyxOwnedNumber = {
@@ -92,6 +95,9 @@ export async function importTelnyxNumbersIntoWorkspace(input: {
       continue;
     }
 
+    const digits = n.e164.replace(/\D/g, "");
+    const npa = digits.slice(1, 4);
+    const isTollFree = /^(800|833|844|855|866|877|888)$/.test(npa);
     const row = await prisma.phoneNumber.upsert({
       where: {
         workspaceId_e164: { workspaceId: input.workspaceId, e164: n.e164 },
@@ -99,8 +105,8 @@ export async function importTelnyxNumbersIntoWorkspace(input: {
       create: {
         workspaceId: input.workspaceId,
         e164: n.e164,
-        type: "Local",
-        areaCode: n.e164.replace(/\D/g, "").slice(1, 4) || null,
+        type: isTollFree ? "TollFree" : "Local",
+        areaCode: npa || null,
         providerNumberId: n.id,
         status: "Active",
         purchasedAt: new Date(),
@@ -111,6 +117,8 @@ export async function importTelnyxNumbersIntoWorkspace(input: {
         providerNumberId: n.id,
         status: "Active",
         releasedAt: null,
+        type: isTollFree ? "TollFree" : "Local",
+        areaCode: npa || null,
       },
     });
 
@@ -144,9 +152,46 @@ export async function importTelnyxNumbersIntoWorkspace(input: {
     });
   }
 
+  // Ensure Call Control Application webhook points at Transovo after attach.
+  let webhookEnsured: { ok: boolean; url: string; error?: string } | null = null;
+  if (connectionId && imported.some((n) => n.attached)) {
+    const voiceUrl = getTelnyxWebhookUrls().voice;
+    try {
+      const current = await telnyxRequest<{ data?: Record<string, unknown> }>(
+        `/call_control_applications/${encodeURIComponent(connectionId)}`,
+      );
+      const app = current.data || {};
+      const have = String(app.webhook_event_url || "").replace(/\/$/, "");
+      const want = voiceUrl.replace(/\/$/, "");
+      if (have !== want || app.active === false || String(app.webhook_api_version) !== "2") {
+        await telnyxRequest(
+          `/call_control_applications/${encodeURIComponent(connectionId)}`,
+          {
+            method: "PATCH",
+            body: {
+              application_name:
+                String(app.application_name || "").trim() || "Transovo Voice",
+              webhook_event_url: want,
+              webhook_api_version: "2",
+              active: true,
+            },
+          },
+        );
+      }
+      webhookEnsured = { ok: true, url: want };
+    } catch (err) {
+      webhookEnsured = {
+        ok: false,
+        url: voiceUrl,
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
+  }
+
   return {
     telnyxCount: owned.length,
     imported,
     connectionId: connectionId || null,
+    webhookEnsured,
   };
 }
