@@ -276,18 +276,8 @@ export async function processVoiceWebhookEvent(input: {
 
       let aiAgent = null;
       if (!preferSoftphone) {
-        const assignment = await prisma.voiceAgentPhoneNumber.findFirst({
-          where: {
-            workspaceId: pn.workspaceId,
-            phoneNumberId: pn.id,
-            inboundEnabled: true,
-          },
-        });
-        if (assignment?.agentId) {
-          aiAgent = await prisma.voiceAgent.findFirst({
-            where: { id: assignment.agentId, workspaceId: pn.workspaceId, status: "ACTIVE" },
-          });
-        }
+        const { resolveInboundAiAgent } = await import("../agent-phone");
+        aiAgent = await resolveInboundAiAgent(pn.workspaceId, pn.id);
       }
 
       if (aiAgent) {
@@ -472,9 +462,22 @@ export async function processVoiceWebhookEvent(input: {
           startCallRecording,
           startCallTranscription,
         } = await import("../telnyx/assistant-sync");
+        const { resolveCallDynamicVariables } = await import("../dynamic-variables");
+        const storedVars = (call.dynamicVariables || {}) as Record<string, unknown>;
+        const dynamicVariables = await resolveCallDynamicVariables({
+          workspaceId,
+          agentId: agent.id,
+          callId: call.id,
+          contactId: call.contactId,
+          fromE164: call.fromE164,
+          toE164: call.toE164,
+          direction: call.direction,
+          overrides: storedVars,
+        });
         await startAiAssistantOnCall({
           callControlId: controlId,
           assistantId: agent.telnyxAssistantId,
+          dynamicVariables,
           clientState: {
             workspaceId,
             callId: call.id,
@@ -486,6 +489,7 @@ export async function processVoiceWebhookEvent(input: {
         await prisma.voiceCall.update({
           where: { id: call.id },
           data: {
+            dynamicVariables: dynamicVariables as object,
             metadata: {
               ...meta,
               aiStarted: true,

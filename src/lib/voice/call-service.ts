@@ -157,6 +157,18 @@ export async function initiateOutboundCall(input: {
 
   const config = await getPublishedConfig(agent.id);
 
+  const { resolveCallDynamicVariables } = await import("./dynamic-variables");
+  const dynamicVariables = await resolveCallDynamicVariables({
+    workspaceId: input.workspaceId,
+    agentId: agent.id,
+    callId: call.id,
+    contactId: input.contactId,
+    fromE164,
+    toE164: phone,
+    direction: "OUTBOUND",
+    overrides: input.dynamicVariables || null,
+  });
+
   const dial = await dialOutboundCall({
     workspaceId: input.workspaceId,
     callId: call.id,
@@ -164,6 +176,7 @@ export async function initiateOutboundCall(input: {
     toE164: phone,
     assistantId: agent.telnyxAssistantId,
     connectionId: agent.telnyxConnectionId,
+    dynamicVariables,
   });
 
   await prisma.voiceCall.update({
@@ -171,6 +184,7 @@ export async function initiateOutboundCall(input: {
     data: {
       telnyxCallControlId: dial.callControlId,
       status: "INITIATED",
+      dynamicVariables: dynamicVariables as object,
     },
   });
 

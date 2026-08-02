@@ -126,6 +126,20 @@ async function startAiOnInboundCall(input: {
     );
 
     if (agent.telnyxAssistantId) {
+      const callRow = await prisma.voiceCall.findUnique({ where: { id: input.callId } });
+      const { resolveCallDynamicVariables } = await import("./dynamic-variables");
+      const dynamicVariables = await resolveCallDynamicVariables({
+        workspaceId: input.workspaceId,
+        agentId: agent.id,
+        callId: input.callId,
+        contactId: callRow?.contactId,
+        fromE164: callRow?.fromE164,
+        toE164: callRow?.toE164,
+        direction: "INBOUND",
+        overrides: (callRow?.dynamicVariables || null) as Record<string, unknown> | null,
+      });
+      if (input.contactName) dynamicVariables.full_name = input.contactName;
+
       const personalized = input.contactName
         ? `Hi ${input.contactName}, thanks for calling.`
         : undefined;
@@ -133,6 +147,7 @@ async function startAiOnInboundCall(input: {
         callControlId: input.telnyxCallControlId,
         assistantId: agent.telnyxAssistantId,
         greeting: personalized,
+        dynamicVariables,
         clientState: {
           workspaceId: input.workspaceId,
           callId: input.callId,
@@ -148,6 +163,7 @@ async function startAiOnInboundCall(input: {
         data: {
           status: "IN_PROGRESS",
           answeredAt: new Date(),
+          dynamicVariables: dynamicVariables as object,
           metadata: {
             routing: input.routing,
             payload: input.payload,

@@ -54,7 +54,7 @@ export async function updateVoiceAgentDraft(
     ? { ...prevConfig, ...patch.draftConfig }
     : prevConfig;
 
-  return prisma.voiceAgent.update({
+  const updated = await prisma.voiceAgent.update({
     where: { id: agentId },
     data: {
       name: patch.name?.trim() || undefined,
@@ -69,6 +69,17 @@ export async function updateVoiceAgentDraft(
       updatedAt: new Date(),
     },
   });
+
+  if (patch.phoneNumberId !== undefined) {
+    const { syncVoiceAgentPhoneAssignment } = await import("./agent-phone");
+    await syncVoiceAgentPhoneAssignment({
+      workspaceId,
+      agentId,
+      phoneNumberId: patch.phoneNumberId,
+    });
+  }
+
+  return updated;
 }
 
 export async function publishVoiceAgent(
@@ -118,6 +129,18 @@ export async function publishVoiceAgent(
       healthMessage: null,
     },
   });
+
+  // Keep inbound DID join table in sync with the agent's primary number.
+  try {
+    const { syncVoiceAgentPhoneAssignment } = await import("./agent-phone");
+    await syncVoiceAgentPhoneAssignment({
+      workspaceId,
+      agentId,
+      phoneNumberId: updated.phoneNumberId,
+    });
+  } catch (err) {
+    console.error("[voice] phone assignment sync failed", err);
+  }
 
   // Sync Telnyx assistant when configured
   try {

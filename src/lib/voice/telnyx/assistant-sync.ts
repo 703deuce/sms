@@ -274,6 +274,8 @@ export async function dialOutboundCall(input: {
   assistantId?: string | null;
   connectionId?: string | null;
   metadata?: Record<string, unknown>;
+  /** Injected into Telnyx assistant session when the callee answers. */
+  dynamicVariables?: Record<string, string> | null;
 }) {
   if (!isTelnyxVoiceConfigured()) {
     return mockOutboundDial(input);
@@ -291,6 +293,7 @@ export async function dialOutboundCall(input: {
       JSON.stringify({
         workspaceId: input.workspaceId,
         callId: input.callId,
+        dynamicVariables: input.dynamicVariables || undefined,
       }),
     ).toString("base64"),
   };
@@ -305,6 +308,10 @@ export async function dialOutboundCall(input: {
       initial_silence_millis: 2500,
     };
     body.assistant_id = input.assistantId;
+    // Call Control dial accepts assistant dynamic variables alongside assistant_id.
+    if (input.dynamicVariables && Object.keys(input.dynamicVariables).length) {
+      body.assistant_dynamic_variables = input.dynamicVariables;
+    }
   }
 
   const res = await telnyxRequest<{ data: { call_control_id: string } }>(
@@ -328,6 +335,7 @@ export async function startAiAssistantOnCall(input: {
   assistantId: string;
   greeting?: string | null;
   clientState?: Record<string, unknown>;
+  dynamicVariables?: Record<string, string> | null;
 }) {
   if (!input.callControlId || input.callControlId.startsWith("mock_")) {
     return { mode: "mock" as const };
@@ -336,9 +344,11 @@ export async function startAiAssistantOnCall(input: {
     return { mode: "mock" as const };
   }
 
-  const body: Record<string, unknown> = {
-    assistant: { id: input.assistantId },
-  };
+  const assistant: Record<string, unknown> = { id: input.assistantId };
+  if (input.dynamicVariables && Object.keys(input.dynamicVariables).length) {
+    assistant.dynamic_variables = input.dynamicVariables;
+  }
+  const body: Record<string, unknown> = { assistant };
   if (input.greeting) body.greeting = input.greeting;
   if (input.clientState) {
     body.client_state = Buffer.from(JSON.stringify(input.clientState)).toString("base64");

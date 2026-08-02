@@ -108,10 +108,114 @@ export async function executeBuiltinVoiceAction(input: {
       return { ok: true, queued: true, to, subject };
     }
     case "calendar_availability": {
+      // Prefer Calendly Scheduling API when the workspace has Calendly connected.
+      try {
+        const { getConnection } = await import("@/lib/integrations/connections");
+        const conn = await getConnection(input.workspaceId, "calendly");
+        if (conn?.status === "connected") {
+          const { executeIntegrationAction } = await import(
+            "@/lib/integrations/framework/actions-registry"
+          );
+          const result = await executeIntegrationAction({
+            workspaceId: input.workspaceId,
+            provider: "calendly",
+            actionId: "appointment.list_available_times",
+            params: {
+              eventTypeUri: args.eventTypeUri || args.eventTypeId,
+              startTime: args.startTime || args.from,
+              endTime: args.endTime || args.to,
+            },
+            contactId: (args.contactId as string) || null,
+            actorUserId: null,
+            source: "ai",
+          });
+          if (result.ok) {
+            return {
+              provider: "calendly",
+              slots: (result.data as { slots?: unknown })?.slots || result.data,
+            };
+          }
+        }
+      } catch (err) {
+        console.warn(
+          "[voice] calendly availability fallback",
+          err instanceof Error ? err.message : err,
+        );
+      }
       const { getAvailability } = await import("../calendar/booking");
       return await getAvailability(input.workspaceId, args);
     }
     case "book_appointment": {
+      // Prefer Calendly POST /invitees when connected so bookings land on the
+      // host calendar and fire invitee webhooks (same path as automations).
+      try {
+        const { getConnection } = await import("@/lib/integrations/connections");
+        const conn = await getConnection(input.workspaceId, "calendly");
+        if (conn?.status === "connected") {
+          let email = String(args.email || "").trim();
+          let name = String(args.name || args.inviteeName || "").trim();
+          const phone = args.phone ? normalizeE164(String(args.phone)) : "";
+          if ((!email || !name) && phone) {
+            const contact = await prisma.contact.findUnique({
+              where: {
+                workspaceId_phone: { workspaceId: input.workspaceId, phone },
+              },
+            });
+            if (contact) {
+              email = email || contact.email || "";
+              name =
+                name ||
+                [contact.firstName, contact.lastName].filter(Boolean).join(" ") ||
+                "Caller";
+            }
+          }
+          if (!email) {
+            throw new Error(
+              "Calendly booking requires invitee email (pass email or a contact with email)",
+            );
+          }
+          if (!name) name = "Caller";
+          const { executeIntegrationAction } = await import(
+            "@/lib/integrations/framework/actions-registry"
+          );
+          const result = await executeIntegrationAction({
+            workspaceId: input.workspaceId,
+            provider: "calendly",
+            actionId: "appointment.book",
+            params: {
+              name,
+              email,
+              phone: phone || args.phone || null,
+              startTime: args.startsAt || args.startTime || undefined,
+              timezone: args.timezone || "America/New_York",
+              eventTypeUri: args.eventTypeUri || args.eventTypeId || undefined,
+            },
+            contactId: (args.contactId as string) || null,
+            actorUserId: null,
+            source: "ai",
+          });
+          if (result.ok) {
+            return { provider: "calendly", ok: true, ...(result.data as object) };
+          }
+          throw new Error(
+            ("message" in result && result.message) || "Calendly book failed",
+          );
+        }
+      } catch (err) {
+        // If Calendly is connected but booking failed, surface the error rather
+        // than silently booking only into the internal calendar.
+        const { getConnection } = await import("@/lib/integrations/connections");
+        const conn = await getConnection(input.workspaceId, "calendly").catch(
+          () => null,
+        );
+        if (conn?.status === "connected") {
+          throw err instanceof Error ? err : new Error(String(err));
+        }
+        console.warn(
+          "[voice] calendly book skipped",
+          err instanceof Error ? err.message : err,
+        );
+      }
       const { bookAppointment } = await import("../calendar/booking");
       return await bookAppointment(input.workspaceId, args);
     }
