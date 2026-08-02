@@ -71,12 +71,24 @@ async function fetchCallControlApp(connectionId: string) {
     );
     return asRecord(res.data);
   } catch (err) {
-    // Some accounts expose the same id under /connections
+    // Some accounts expose the same id under /connections (SIP / credential / IP)
     try {
       const res = await telnyxRequest<{ data?: Record<string, unknown> }>(
         `/connections/${encodeURIComponent(connectionId)}`,
       );
-      return asRecord(res.data);
+      const conn = asRecord(res.data);
+      if (conn) {
+        // Surface connection_type so we can detect credential SIP trunks that
+        // require a registered softphone (common cause of "as dialed" rejects).
+        return {
+          ...conn,
+          application_name:
+            conn.application_name || conn.connection_name || conn.name || "connection",
+          webhook_event_url: conn.webhook_event_url || conn.webhook_url || "",
+          _source: "connections",
+        };
+      }
+      return null;
     } catch {
       throw err;
     }
@@ -366,6 +378,25 @@ export async function diagnoseAndRepairInboundNumber(input: {
         }
 
         if (callControlApp) {
+          const source = String(callControlApp._source || "call_control_applications");
+          const connType = String(
+            callControlApp.connection_type ||
+              callControlApp.record_type ||
+              source,
+          );
+          if (
+            /credential|ip_connection|fqdn|sip_connection/i.test(connType) ||
+            source === "connections"
+          ) {
+            issues.push({
+              code: "connection_not_call_control",
+              severity: "error",
+              message:
+                `TELNYX_CONNECTION_ID looks like a SIP/credential connection (${connType}), not a Call Control Application. ` +
+                `Inbound PSTN fails with "cannot be completed as dialed" unless a softphone is registered — ` +
+                `point the DID at a Call Control app with webhook ${expectedWebhookUrl}`,
+            });
+          }
           if (callControlApp.active === false) {
             issues.push({
               code: "connection_inactive",
