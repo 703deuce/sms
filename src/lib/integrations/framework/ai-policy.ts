@@ -93,6 +93,7 @@ export function classifyActionRisk(
     // Customer-facing SMS with a booking link + writes a single-use link.
     "appointment.send_scheduling_link",
     "appointment.create_single_use_link",
+    "appointment.book",
   ]);
   if (level3.has(actionId)) return 3;
 

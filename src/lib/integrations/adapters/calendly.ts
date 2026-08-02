@@ -62,7 +62,9 @@ const caps: CapabilityDefinition = {
     cancel_appointment: "read_write",
     // Read a scheduled event + invitee cancel/reschedule URLs.
     retrieve_appointment: "read_only",
-    // Direct booking / creating a scheduled event is not offered by the API — keep unsupported.
+    // Scheduling API: POST /invitees books without the Calendly-hosted UI (paid plan).
+    book_appointment: "read_write",
+    // Legacy alias — prefer book_appointment / create_single_use_link.
     create_scheduling_link: "unsupported",
   },
   webhooks: "subscription_dependent",

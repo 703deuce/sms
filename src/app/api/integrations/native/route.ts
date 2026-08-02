@@ -86,6 +86,9 @@ export async function POST(request: Request) {
       credentials?: Record<string, string>;
       preferences?: Record<string, unknown>;
       probe?: string;
+      params?: Record<string, unknown>;
+      actionId?: string;
+      contactId?: string;
     };
 
     const provider = body.provider?.trim();
@@ -155,8 +158,29 @@ export async function POST(request: Request) {
         provider,
         probe,
         auth.session.userId || null,
+        (body.params as Record<string, unknown> | undefined) || undefined,
       );
       return NextResponse.json({ data: result });
+    }
+
+    if (action === "execute_action") {
+      const { executeIntegrationAction } = await import(
+        "@/lib/integrations/framework/actions-registry"
+      );
+      const actionId = String(body.actionId || "").trim();
+      if (!actionId) {
+        return NextResponse.json({ error: "actionId required" }, { status: 400 });
+      }
+      const result = await executeIntegrationAction({
+        workspaceId: auth.workspaceId,
+        provider,
+        actionId: actionId as Parameters<typeof executeIntegrationAction>[0]["actionId"],
+        params: (body.params as Record<string, unknown>) || {},
+        contactId: (body.contactId as string) || null,
+        actorUserId: auth.session.userId || null,
+        source: "api",
+      });
+      return NextResponse.json({ data: result }, { status: result.ok ? 200 : 400 });
     }
 
     if (action === "acceptance") {

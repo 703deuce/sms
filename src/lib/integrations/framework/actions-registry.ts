@@ -37,6 +37,8 @@ export type IntegrationActionId =
   | "customer.upsert"
   | "appointment.get_scheduling_link"
   | "appointment.create_single_use_link"
+  | "appointment.list_available_times"
+  | "appointment.book"
   | "appointment.send_scheduling_link"
   | "appointment.retrieve"
   | "appointment.cancel"
@@ -46,6 +48,7 @@ export type IntegrationActionId =
 /** Calendly appointment actions that only read data (skip the writes gate). */
 const READ_ONLY_ACTION_IDS = new Set<IntegrationActionId>([
   "appointment.get_scheduling_link",
+  "appointment.list_available_times",
   "appointment.retrieve",
   "appointment.get_cancel_url",
   "appointment.get_reschedule_url",
@@ -253,6 +256,33 @@ export const INTEGRATION_ACTIONS: IntegrationActionDef[] = [
       { key: "ownerUri", label: "Owner URI (optional)" },
     ],
     idempotency: "none",
+  },
+  {
+    id: "appointment.list_available_times",
+    label: "List available appointment times",
+    providers: ["calendly"],
+    requiredCapability: "book_appointment",
+    inputFields: [
+      { key: "eventTypeUri", label: "Event type URI (optional)" },
+      { key: "startTime", label: "Window start (ISO, optional)" },
+      { key: "endTime", label: "Window end (ISO, optional)" },
+    ],
+    idempotency: "none",
+  },
+  {
+    id: "appointment.book",
+    label: "Book appointment (Scheduling API)",
+    providers: ["calendly"],
+    requiredCapability: "book_appointment",
+    inputFields: [
+      { key: "name", label: "Invitee name", required: true },
+      { key: "email", label: "Invitee email", required: true },
+      { key: "startTime", label: "Start time UTC ISO (optional — books next slot if empty)" },
+      { key: "eventTypeUri", label: "Event type URI (optional)" },
+      { key: "timezone", label: "Invitee timezone" },
+      { key: "phone", label: "Invitee phone (optional)" },
+    ],
+    idempotency: "hash_payload",
   },
   {
     id: "appointment.send_scheduling_link",
@@ -764,6 +794,83 @@ export async function executeIntegrationAction(input: {
           maxEventCount: 1,
         });
         data = { bookingUrl: link.bookingUrl, owner: link.owner, ownerType: link.ownerType };
+        break;
+      }
+      case "appointment.list_available_times": {
+        const { listEventTypeAvailableTimes } = await import(
+          "@/lib/integrations/adapters/calendly-actions"
+        );
+        const avail = await listEventTypeAvailableTimes(ctx, {
+          eventTypeUri: (p.eventTypeUri as string) || undefined,
+          startTime: (p.startTime as string) || undefined,
+          endTime: (p.endTime as string) || undefined,
+        });
+        data = avail as unknown as Record<string, unknown>;
+        break;
+      }
+      case "appointment.book": {
+        const {
+          bookEventInvitee,
+          bookNextAvailableSlot,
+        } = await import("@/lib/integrations/adapters/calendly-actions");
+        const name = String(p.name || "").trim();
+        const email = String(p.email || "").trim();
+        if (!name || !email) {
+          throw new Error("appointment.book requires name and email");
+        }
+        const booked = p.startTime
+          ? await bookEventInvitee(ctx, {
+              eventTypeUri: (p.eventTypeUri as string) || undefined,
+              startTime: String(p.startTime),
+              name,
+              email,
+              timezone: (p.timezone as string) || undefined,
+              phone: (p.phone as string) || null,
+              locationKind: (p.locationKind as string) || null,
+              location: (p.location as string) || null,
+            })
+          : await bookNextAvailableSlot(ctx, {
+              eventTypeUri: (p.eventTypeUri as string) || undefined,
+              name,
+              email,
+              timezone: (p.timezone as string) || undefined,
+              phone: (p.phone as string) || null,
+            });
+        // Write-through so Contacts/Messenger see the appointment immediately
+        // (webhook may arrive later or be delayed by signing).
+        try {
+          const { persistAppointmentFromIntegration } = await import("./product-persist");
+          const { getAppointment } = await import(
+            "@/lib/integrations/adapters/calendly-actions"
+          );
+          const details = await getAppointment(ctx, { eventUri: booked.eventUri });
+          await persistAppointmentFromIntegration({
+            workspaceId: input.workspaceId,
+            provider: "calendly",
+            contactId: input.contactId || null,
+            appointment: {
+              id: booked.eventUri,
+              title: "Calendly booking",
+              startAt: details.startsAt || booked.startTime,
+              endAt: details.endsAt,
+              status: details.status || booked.status || "confirmed",
+              inviteeEmail: email,
+              inviteeName: name,
+              inviteePhone: (p.phone as string) || null,
+              cancelUrl: booked.cancelUrl,
+              rescheduleUrl: booked.rescheduleUrl,
+              eventTypeId: booked.eventTypeUri,
+              metadata: { inviteeUri: booked.inviteeUri, bookedVia: "scheduling_api" },
+            },
+          });
+        } catch (persistErr) {
+          console.warn(
+            "[appointment.book] product persist skipped",
+            persistErr instanceof Error ? persistErr.message : persistErr,
+          );
+        }
+        data = booked as unknown as Record<string, unknown>;
+        result = { externalId: booked.eventUri, created: true };
         break;
       }
       case "appointment.send_scheduling_link": {

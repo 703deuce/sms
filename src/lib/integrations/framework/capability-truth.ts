@@ -23,6 +23,8 @@ export const ACTION_TO_CAPABILITY: Partial<Record<IntegrationActionId, Normalize
   // —— Calendly appointment actions ——
   "appointment.get_scheduling_link": "get_scheduling_link",
   "appointment.create_single_use_link": "create_single_use_link",
+  "appointment.list_available_times": "book_appointment",
+  "appointment.book": "book_appointment",
   "appointment.send_scheduling_link": "get_scheduling_link",
   "appointment.retrieve": "retrieve_appointment",
   "appointment.cancel": "cancel_appointment",

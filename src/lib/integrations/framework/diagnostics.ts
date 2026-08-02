@@ -172,8 +172,10 @@ export async function runIntegrationProbe(
     | "read"
     | "write"
     | "force_sync"
-    | "register_webhooks",
+    | "register_webhooks"
+    | "book_invitee",
   actorUserId?: string | null,
+  params?: Record<string, unknown>,
 ) {
   const adapter = getAdapter(provider);
   const started = Date.now();
@@ -250,6 +252,86 @@ export async function runIntegrationProbe(
         durationMs: Date.now() - started,
         data: { created, readBack: Boolean(readBack) },
       };
+    }
+
+    if (probe === "book_invitee") {
+      if (provider !== "calendly") {
+        return {
+          ok: false,
+          probe,
+          durationMs: Date.now() - started,
+          error: "book_invitee is Calendly-only (Scheduling API POST /invitees)",
+        };
+      }
+      const { bookNextAvailableSlot, bookEventInvitee } = await import(
+        "../adapters/calendly-actions"
+      );
+      const name = String(params?.name || "Transovo Voice Booking").trim();
+      const email = String(params?.email || "").trim();
+      if (!email) {
+        return {
+          ok: false,
+          probe,
+          durationMs: Date.now() - started,
+          error: "params.email required",
+        };
+      }
+      const booked = params?.startTime
+        ? await bookEventInvitee(ctx, {
+            eventTypeUri: (params.eventTypeUri as string) || undefined,
+            startTime: String(params.startTime),
+            name,
+            email,
+            timezone: (params.timezone as string) || "America/New_York",
+            phone: (params.phone as string) || null,
+          })
+        : await bookNextAvailableSlot(ctx, {
+            eventTypeUri: (params?.eventTypeUri as string) || undefined,
+            name,
+            email,
+            timezone: (params?.timezone as string) || "America/New_York",
+            phone: (params?.phone as string) || null,
+          });
+
+      // Immediate product write-through (same as appointment.book action).
+      try {
+        const { persistAppointmentFromIntegration } = await import("./product-persist");
+        const { getAppointment } = await import("../adapters/calendly-actions");
+        const details = await getAppointment(ctx, { eventUri: booked.eventUri });
+        await persistAppointmentFromIntegration({
+          workspaceId,
+          provider: "calendly",
+          contactId: null,
+          appointment: {
+            id: booked.eventUri,
+            title: "Calendly booking",
+            startAt: details.startsAt || booked.startTime,
+            endAt: details.endsAt,
+            status: details.status || booked.status || "confirmed",
+            inviteeEmail: email,
+            inviteeName: name,
+            cancelUrl: booked.cancelUrl,
+            rescheduleUrl: booked.rescheduleUrl,
+            eventTypeId: booked.eventTypeUri,
+            metadata: { inviteeUri: booked.inviteeUri, bookedVia: "probe_book_invitee" },
+          },
+        });
+      } catch (persistErr) {
+        console.warn(
+          "[probe book_invitee] product persist skipped",
+          persistErr instanceof Error ? persistErr.message : persistErr,
+        );
+      }
+
+      await writeIntegrationAudit({
+        workspaceId,
+        provider,
+        category: "diagnostics",
+        action: "probe_book_invitee",
+        message: `Booked ${booked.eventUri} for ${email}`,
+        actorUserId,
+      });
+      return { ok: true, probe, durationMs: Date.now() - started, data: booked };
     }
 
     if (probe === "register_webhooks") {

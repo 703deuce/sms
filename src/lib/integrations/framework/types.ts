@@ -113,6 +113,7 @@ export type NormalizedActionId =
   | "create_scheduling_link"
   | "get_scheduling_link"
   | "create_single_use_link"
+  | "book_appointment"
   | "cancel_appointment"
   | "retrieve_appointment"
   | "subscribe_marketing"

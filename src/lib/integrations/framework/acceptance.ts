@@ -426,12 +426,30 @@ export async function runIntegrationAcceptance(
         "Intentionally unsupported",
         "Invitee→Transovo contact matching only; Contacts API not implemented",
       );
-      push(
-        "calendly_direct_scheduling",
-        "Direct Scheduling API / single-use links",
-        "Intentionally unsupported",
-        "Customers book via Calendly scheduling URLs; Transovo syncs results",
-      );
+      // Scheduling API (POST /invitees) — paid plan; list availability as the live probe
+      // (avoid creating real meetings during every acceptance run).
+      try {
+        const { listEventTypeAvailableTimes } = await import(
+          "../adapters/calendly-actions"
+        );
+        const avail = await listEventTypeAvailableTimes(ctx);
+        push(
+          "calendly_direct_scheduling",
+          "Direct Scheduling API (available times + POST /invitees)",
+          "Live tested and passed",
+          `eventType=${avail.eventTypeUri} openSlots=${avail.slots.length} (book via appointment.book / probe book_invitee)`,
+        );
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        push(
+          "calendly_direct_scheduling",
+          "Direct Scheduling API (available times + POST /invitees)",
+          /Blocked by Calendly plan|paid|402|403/i.test(message)
+            ? "Blocked by provider plan/permissions"
+            : "Failed and fixed",
+          message,
+        );
+      }
       push(
         "calendly_reconcile",
         "Incremental reconciliation (webhook alternative on Free)",

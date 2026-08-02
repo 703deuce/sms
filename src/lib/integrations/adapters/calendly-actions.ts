@@ -188,6 +188,191 @@ export async function cancelAppointment(
 }
 
 /**
+ * List available times for an event type (GET /event_type_available_times).
+ * Window is capped at 7 days by default (Calendly allows up to 31).
+ */
+export async function listEventTypeAvailableTimes(
+  ctx: AdapterContext,
+  opts: {
+    eventTypeUri?: string;
+    startTime?: string;
+    endTime?: string;
+  } = {},
+): Promise<{
+  eventTypeUri: string;
+  slots: Array<{ startTime: string; status: string }>;
+}> {
+  try {
+    let eventTypeUri = opts.eventTypeUri || null;
+    if (!eventTypeUri) {
+      eventTypeUri = await resolveDefaultEventTypeUri(ctx);
+    }
+    if (!eventTypeUri) {
+      throw new Error("No event type available — provide eventTypeUri");
+    }
+    const start = opts.startTime || new Date(Date.now() + 60 * 60_000).toISOString();
+    const end =
+      opts.endTime ||
+      new Date(Date.now() + 7 * 86400_000).toISOString();
+    const params = new URLSearchParams({
+      event_type: eventTypeUri,
+      start_time: start,
+      end_time: end,
+    });
+    const res = await calendlyApi<{
+      collection?: Array<{ start_time?: string; status?: string }>;
+    }>(`/event_type_available_times?${params}`, ctx);
+    const slots = (res.collection || [])
+      .map((s) => ({
+        startTime: String(s.start_time || ""),
+        status: String(s.status || "available"),
+      }))
+      .filter((s) => s.startTime);
+    return { eventTypeUri, slots };
+  } catch (err) {
+    return wrapCalendlyError(err, "list available times");
+  }
+}
+
+/**
+ * Book a meeting via Calendly Scheduling API (POST /invitees).
+ * This is the voice-agent / in-app path — no Calendly-hosted browser UI.
+ * Requires a paid Calendly plan on the connected account.
+ */
+export async function bookEventInvitee(
+  ctx: AdapterContext,
+  opts: {
+    eventTypeUri?: string;
+    startTime: string;
+    name: string;
+    email: string;
+    timezone?: string;
+    phone?: string | null;
+    locationKind?: string | null;
+    location?: string | null;
+  },
+): Promise<{
+  inviteeUri: string;
+  eventUri: string;
+  status: string | null;
+  cancelUrl: string | null;
+  rescheduleUrl: string | null;
+  startTime: string;
+  eventTypeUri: string;
+}> {
+  if (!opts.startTime?.trim()) {
+    throw new Error("bookEventInvitee requires startTime (UTC ISO)");
+  }
+  if (!opts.email?.trim() || !opts.name?.trim()) {
+    throw new Error("bookEventInvitee requires name and email");
+  }
+  try {
+    let eventTypeUri = opts.eventTypeUri || null;
+    if (!eventTypeUri) {
+      eventTypeUri = await resolveDefaultEventTypeUri(ctx);
+    }
+    if (!eventTypeUri) {
+      throw new Error("No event type available — provide eventTypeUri");
+    }
+
+    // Resolve location.kind from the event type when the caller did not supply one.
+    let locationKind = opts.locationKind || null;
+    let locationValue = opts.location || null;
+    if (!locationKind) {
+      try {
+        const uuid = uuidFromUri(eventTypeUri);
+        const et = await calendlyApi<{ resource?: CalendlyResource }>(
+          `/event_types/${encodeURIComponent(uuid)}`,
+          ctx,
+        );
+        const locations =
+          (et.resource?.locations as Array<{ kind?: string; location?: string }> | undefined) ||
+          [];
+        const first = locations[0];
+        if (first?.kind) {
+          locationKind = String(first.kind);
+          if (!locationValue && first.location) locationValue = String(first.location);
+        }
+      } catch {
+        // proceed without location — Calendly rejects only when the ET requires one
+      }
+    }
+
+    const body: Record<string, unknown> = {
+      event_type: eventTypeUri,
+      start_time: opts.startTime,
+      invitee: {
+        name: opts.name.trim(),
+        email: opts.email.trim().toLowerCase(),
+        timezone: opts.timezone || "America/New_York",
+        ...(opts.phone ? { text_reminder_number: opts.phone } : {}),
+      },
+    };
+    if (locationKind) {
+      body.location = {
+        kind: locationKind,
+        ...(locationValue ? { location: locationValue } : {}),
+      };
+    }
+
+    const res = await calendlyApi<{ resource?: CalendlyResource }>("/invitees", ctx, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+    const resource = res.resource || {};
+    const inviteeUri = String(resource.uri || "");
+    const eventUri = String(resource.event || "");
+    if (!inviteeUri || !eventUri) {
+      throw new Error("Calendly did not return invitee/event URIs from POST /invitees");
+    }
+    return {
+      inviteeUri,
+      eventUri,
+      status: (resource.status as string) || null,
+      cancelUrl: (resource.cancel_url as string) || null,
+      rescheduleUrl: (resource.reschedule_url as string) || null,
+      startTime: opts.startTime,
+      eventTypeUri,
+    };
+  } catch (err) {
+    return wrapCalendlyError(err, "book invitee (Scheduling API)");
+  }
+}
+
+/**
+ * Convenience: pick the first open slot and book it (agent/voice happy path).
+ */
+export async function bookNextAvailableSlot(
+  ctx: AdapterContext,
+  opts: {
+    eventTypeUri?: string;
+    name: string;
+    email: string;
+    timezone?: string;
+    phone?: string | null;
+  },
+): Promise<Awaited<ReturnType<typeof bookEventInvitee>> & { slotsConsidered: number }> {
+  const avail = await listEventTypeAvailableTimes(ctx, {
+    eventTypeUri: opts.eventTypeUri,
+  });
+  const open = avail.slots.filter((s) => /available/i.test(s.status) || !s.status);
+  if (!open.length) {
+    throw new Error(
+      `No available Calendly slots in the next window for event type ${avail.eventTypeUri}`,
+    );
+  }
+  const booked = await bookEventInvitee(ctx, {
+    eventTypeUri: avail.eventTypeUri,
+    startTime: open[0].startTime,
+    name: opts.name,
+    email: opts.email,
+    timezone: opts.timezone,
+    phone: opts.phone,
+  });
+  return { ...booked, slotsConsidered: open.length };
+}
+
+/**
  * Read a scheduled event and its first invitee, exposing the invitee
  * cancel/reschedule URLs (GET /scheduled_events/{uuid} + /invitees).
  */
