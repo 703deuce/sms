@@ -300,4 +300,29 @@ const BUILTIN_WEBHOOK_TOOLS = [
       required: ["to", "body"],
     },
   },
+  {
+    name: "send_dtmf",
+    toolType: "send_dtmf",
+    description:
+      "Send DTMF digits on the active call (extensions, IVR menus). Digits: 0-9 A-D * # w (wait) , (pause).",
+    body: {
+      type: "object",
+      properties: {
+        digits: { type: "string", description: "DTMF sequence up to 32 chars" },
+      },
+      required: ["digits"],
+    },
+  },
+  {
+    name: "end_call",
+    toolType: "end_call",
+    description: "End the call safely when the conversation is complete.",
+    body: {
+      type: "object",
+      properties: {
+        reason: { type: "string" },
+      },
+      required: [],
+    },
+  },
 ];

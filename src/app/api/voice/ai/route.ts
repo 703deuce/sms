@@ -505,6 +505,14 @@ export async function POST(request: Request) {
         return NextResponse.json({
           data: await platform.pollTestRun(workspaceId, String(body.runId || "")),
         });
+      case "clear_memory":
+        return NextResponse.json({
+          data: await platform.clearMemoryConfig(workspaceId, agentId),
+        });
+      case "seed_insights":
+        return NextResponse.json({
+          data: await platform.seedDefaultInsights(workspaceId),
+        });
       default:
         return NextResponse.json({ error: `Unknown action ${action}` }, { status: 400 });
     }

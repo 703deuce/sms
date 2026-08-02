@@ -18,7 +18,15 @@ type Rule = {
   actions: Record<string, unknown>;
 };
 
-const ACTION_TYPES = ["ai_answer", "transfer", "voicemail", "hangup"];
+const ACTION_TYPES = [
+  "ai_answer",
+  "human_first",
+  "ai_after_hours",
+  "transfer",
+  "voicemail",
+  "hangup",
+  "overflow",
+];
 
 export default function InboundRoutingPage() {
   const [rules, setRules] = useState<Rule[]>([]);

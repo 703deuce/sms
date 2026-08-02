@@ -340,3 +340,7 @@ CREATE INDEX IF NOT EXISTS "voice_widget_configs_workspaceId_status_idx"
   ON "voice_widget_configs" ("workspaceId", "status");
 CREATE INDEX IF NOT EXISTS "voice_widget_configs_agentId_idx"
   ON "voice_widget_configs" ("agentId");
+
+-- Allow builtin tool executions without a VoiceTool row.
+ALTER TABLE IF EXISTS "voice_tool_executions"
+  ALTER COLUMN "toolId" DROP NOT NULL;

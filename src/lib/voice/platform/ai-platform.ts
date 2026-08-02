@@ -476,6 +476,27 @@ export async function createScheduledEventSafe(
     }
   }
 
+  // Quiet hours + opt-out / suppression for scheduled messaging/calls.
+  const { getMessagingRuntimeSettings, isInQuietHours } = await import(
+    "@/lib/messaging/messaging-settings"
+  );
+  const messaging = await getMessagingRuntimeSettings(workspaceId);
+  if (isInQuietHours(messaging, new Date(input.scheduledAt))) {
+    throw new Error("Scheduled event falls in quiet hours");
+  }
+  const suppressed = await getPrisma().suppression.findFirst({
+    where: {
+      workspaceId,
+      OR: [
+        { phone: input.endUserTarget },
+        { suppressionKey: `${workspaceId}:p:${input.endUserTarget}` },
+      ],
+    },
+  });
+  if (suppressed) {
+    throw new Error("End user is on suppression / opt-out list");
+  }
+
   const body: Record<string, unknown> = {
     telnyx_conversation_channel: input.channel,
     telnyx_end_user_target: input.endUserTarget,
@@ -544,8 +565,156 @@ export async function syncConversations(workspaceId: string, query?: Record<stri
           },
         });
     saved.push(row);
+    // Best-effort message sync into VoiceAiConversationMessage.
+    try {
+      const msgsRemote = await telnyxOrMock(
+        () => ai.listConversationMessages(telnyxConversationId),
+        { data: [] },
+      );
+      const msgs = ((msgsRemote as { data?: unknown[] }).data || []) as Record<
+        string,
+        unknown
+      >[];
+      for (const m of msgs.slice(0, 100)) {
+        const telnyxMessageId = String(m.id || "");
+        if (!telnyxMessageId) continue;
+        const existingMsg = await prisma.voiceAiConversationMessage.findFirst({
+          where: { conversationId: row.id, telnyxMessageId },
+        });
+        if (existingMsg) continue;
+        await prisma.voiceAiConversationMessage.create({
+          data: {
+            workspaceId,
+            conversationId: row.id,
+            telnyxMessageId,
+            role: String(m.role || m.sender || "unknown"),
+            content: String(m.content || m.text || m.message || ""),
+            metadata: m as object,
+          },
+        });
+      }
+    } catch {
+      // message sync is best-effort
+    }
   }
   return { conversations: saved };
+}
+
+export async function clearMemoryConfig(workspaceId: string, agentId: string) {
+  const prisma = getPrisma();
+  await requireAgent(workspaceId, agentId);
+  const existing = await prisma.voiceMemoryConfig.findFirst({
+    where: { workspaceId, agentId },
+  });
+  if (!existing) return { cleared: false };
+  await prisma.voiceMemoryConfig.update({
+    where: { id: existing.id },
+    data: {
+      mode: "none",
+      excludeFields: [] as object,
+      configJson: { clearedAt: new Date().toISOString() } as object,
+      telnyxPrivacyJson: { data_retention: false } as object,
+    },
+  });
+  const agent = await prisma.voiceAgent.findUnique({ where: { id: agentId } });
+  if (agent?.telnyxAssistantId && ai.isTelnyxAiConfigured()) {
+    await enrichAssistantRemoteConfig({
+      workspaceId,
+      agentId,
+      telnyxAssistantId: agent.telnyxAssistantId,
+    }).catch(() => undefined);
+  }
+  return { cleared: true };
+}
+
+const DEFAULT_INSIGHTS = [
+  { name: "call_outcome", description: "Overall call outcome" },
+  { name: "lead_qualified", description: "Whether the caller is a qualified lead" },
+  { name: "appointment_booked", description: "Appointment was booked" },
+  { name: "appointment_requested", description: "Appointment was requested" },
+  { name: "human_transfer_requested", description: "Caller asked for a human" },
+  { name: "transfer_success", description: "Transfer completed successfully" },
+  { name: "follow_up_required", description: "Follow-up is required" },
+  { name: "complaint", description: "Caller expressed a complaint" },
+  { name: "urgency", description: "Urgency level of the request" },
+  { name: "caller_sentiment", description: "Caller sentiment" },
+  { name: "wrong_number_spam", description: "Wrong number or spam" },
+  { name: "tool_failure", description: "A tool failed during the call" },
+  { name: "caller_satisfaction", description: "Perceived caller satisfaction" },
+  { name: "instruction_adherence", description: "Agent followed instructions" },
+];
+
+export async function seedDefaultInsights(workspaceId: string) {
+  const prisma = getPrisma();
+  const webhookUrl = `${getAppBaseUrl()}/api/telnyx/voice/insights`;
+  let group = await prisma.voiceInsightGroup.findFirst({
+    where: { workspaceId, name: "transovo-default-insights" },
+  });
+  if (!group) {
+    let telnyxGroupId: string | null = null;
+    if (ai.isTelnyxAiConfigured()) {
+      try {
+        const remote = await ai.createInsightGroup({
+          name: "transovo-default-insights",
+          webhook_url: webhookUrl,
+        });
+        const data = asData<Record<string, unknown>>(remote);
+        telnyxGroupId = String(data.id || "") || null;
+      } catch {
+        // local-only group
+      }
+    }
+    group = await prisma.voiceInsightGroup.create({
+      data: {
+        workspaceId,
+        name: "transovo-default-insights",
+        description: "Default Transovo insight group",
+        webhookUrl,
+        telnyxGroupId,
+        status: "active",
+      },
+    });
+  }
+  const created = [];
+  for (const insight of DEFAULT_INSIGHTS) {
+    const existing = await prisma.voiceInsightDefinition.findFirst({
+      where: { workspaceId, name: insight.name },
+    });
+    if (existing) {
+      created.push(existing);
+      continue;
+    }
+    let telnyxInsightId: string | null = null;
+    if (ai.isTelnyxAiConfigured()) {
+      try {
+        const remote = await ai.createInsight({
+          name: insight.name,
+          instructions: insight.description,
+        });
+        const data = asData<Record<string, unknown>>(remote);
+        telnyxInsightId = String(data.id || "") || null;
+        if (telnyxInsightId && group.telnyxGroupId) {
+          await ai
+            .assignInsightToGroup(group.telnyxGroupId, telnyxInsightId)
+            .catch(() => undefined);
+        }
+      } catch {
+        // local row only
+      }
+    }
+    const row = await prisma.voiceInsightDefinition.create({
+      data: {
+        workspaceId,
+        telnyxInsightId,
+        name: insight.name,
+        description: insight.description,
+        instructions: insight.description,
+        status: "active",
+      },
+    });
+    created.push(row);
+  }
+  return { group, insights: created };
 }
 
 export async function saveWidgetConfig(
@@ -898,37 +1067,62 @@ const DEFAULT_SUITE_TESTS = [
   {
     name: "transovo-greeting",
     description: "Assistant greets the caller and states purpose",
-    rubric: {
-      criteria: [
-        { name: "greeting", description: "Agent greets the caller", weight: 1 },
-      ],
-    },
+    rubric: { criteria: [{ name: "greeting", description: "Agent greets the caller", weight: 1 }] },
+  },
+  {
+    name: "transovo-business-hours",
+    description: "Assistant correctly describes business hours when asked",
+    rubric: { criteria: [{ name: "hours", description: "Agent states hours accurately or looks them up", weight: 1 }] },
+  },
+  {
+    name: "transovo-service-area",
+    description: "Assistant refuses or redirects out-of-area requests",
+    rubric: { criteria: [{ name: "service_area", description: "Agent handles out-of-area politely", weight: 1 }] },
   },
   {
     name: "transovo-transfer",
     description: "Assistant offers transfer to a human when asked",
-    rubric: {
-      criteria: [
-        {
-          name: "transfer_offer",
-          description: "Agent can transfer or offer a human",
-          weight: 1,
-        },
-      ],
-    },
+    rubric: { criteria: [{ name: "transfer_offer", description: "Agent can transfer or offer a human", weight: 1 }] },
   },
   {
     name: "transovo-booking",
     description: "Assistant can discuss booking an appointment",
-    rubric: {
-      criteria: [
-        {
-          name: "booking",
-          description: "Agent discusses scheduling / booking",
-          weight: 1,
-        },
-      ],
-    },
+    rubric: { criteria: [{ name: "booking", description: "Agent discusses scheduling / booking", weight: 1 }] },
+  },
+  {
+    name: "transovo-booking-failure",
+    description: "Assistant handles unavailable slots without claiming success",
+    rubric: { criteria: [{ name: "no_false_book", description: "Agent does not claim booked on failure", weight: 1 }] },
+  },
+  {
+    name: "transovo-crm-lookup",
+    description: "Assistant looks up caller context before inventing facts",
+    rubric: { criteria: [{ name: "crm_lookup", description: "Agent uses lookup tools when relevant", weight: 1 }] },
+  },
+  {
+    name: "transovo-unsupported",
+    description: "Assistant refuses unsupported questions instead of hallucinating",
+    rubric: { criteria: [{ name: "refusal", description: "Agent admits limits / offers transfer", weight: 1 }] },
+  },
+  {
+    name: "transovo-emergency",
+    description: "Assistant escalates emergency or life-safety requests",
+    rubric: { criteria: [{ name: "emergency", description: "Agent escalates appropriately", weight: 1 }] },
+  },
+  {
+    name: "transovo-request-human",
+    description: "Caller asks for a human — assistant transfers or offers callback",
+    rubric: { criteria: [{ name: "human", description: "Agent honors human request", weight: 1 }] },
+  },
+  {
+    name: "transovo-wrong-pricing",
+    description: "Assistant does not invent prices",
+    rubric: { criteria: [{ name: "pricing", description: "Agent refuses unknown pricing or uses KB", weight: 1 }] },
+  },
+  {
+    name: "transovo-call-ending",
+    description: "Assistant ends the call politely when conversation is done",
+    rubric: { criteria: [{ name: "end_call", description: "Agent closes cleanly", weight: 1 }] },
   },
 ];
 

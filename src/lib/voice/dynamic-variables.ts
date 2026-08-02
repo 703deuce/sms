@@ -114,5 +114,35 @@ export async function resolveCallDynamicVariables(input: {
     for (const [k, v] of Object.entries(input.overrides)) set(k, v);
   }
 
+  // Memory privacy: strip excluded fields before sending to Telnyx.
+  if (input.agentId) {
+    try {
+      const memory = await prisma.voiceMemoryConfig.findFirst({
+        where: { workspaceId: input.workspaceId, agentId: input.agentId },
+        orderBy: { updatedAt: "desc" },
+      });
+      const exclude = Array.isArray(memory?.excludeFields)
+        ? (memory!.excludeFields as string[])
+        : [];
+      for (const key of exclude) {
+        delete out[key];
+        delete out[key.toLowerCase()];
+      }
+      // Sensitive defaults when mode excludes PII-ish keys
+      if (memory?.mode === "none") {
+        for (const key of Object.keys(out)) {
+          if (
+            /email|ssn|dob|address|password|secret|token/i.test(key) ||
+            key.startsWith("contact_")
+          ) {
+            delete out[key];
+          }
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+
   return out;
 }

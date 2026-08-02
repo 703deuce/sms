@@ -31,6 +31,24 @@ export async function executeVoiceTool(input: ToolExecInput) {
     },
   });
 
+  // Async tools: acknowledge immediately and finish via voice_tool_execute job.
+  if (tool.isAsync && input.asyncAllowed) {
+    await enqueueAsyncTool({
+      ...input,
+      asyncAllowed: false, // worker runs synchronously to completion
+    });
+    await prisma.voiceToolExecution.update({
+      where: { id: execution.id },
+      data: { status: "queued" },
+    });
+    return {
+      executionId: execution.id,
+      ok: true,
+      pending: true,
+      output: { status: "queued", message: "Tool running asynchronously" },
+    };
+  }
+
   const start = Date.now();
   try {
     const result = await runToolByType(tool, input);
@@ -57,9 +75,6 @@ export async function executeVoiceTool(input: ToolExecInput) {
         completedAt: new Date(),
       },
     });
-    if (tool.isAsync && input.asyncAllowed) {
-      return { executionId: execution.id, ok: false, pending: true, error: message };
-    }
     throw err;
   }
 }

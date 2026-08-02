@@ -28,8 +28,9 @@ async function main() {
   ok("registry has canary", /id: \"canary\"/.test(regSrc));
   ok("registry has mcp", /id: \"mcp\"/.test(regSrc));
   ok("registry has conversations", /id: \"conversations\"/.test(regSrc));
-  ok("registry marks versions live", /id: \"versions\"[\s\S]*?status: \"live\"/.test(regSrc));
-  ok("registry marks concurrency live", /id: \"usage_concurrency\"[\s\S]*?status: \"live\"/.test(regSrc));
+  ok("registry has honest partial statuses", /status: \"partial\"/.test(regSrc));
+  ok("registry marks outbound deferred", /id: \"outbound_campaigns\"[\s\S]*?status: \"deferred\"/.test(regSrc));
+  ok("registry notes SIP REFER gap", /SIP REFER/.test(regSrc));
 
   ok("ai-client file", fs.existsSync(path.join(root, "src/lib/voice/telnyx/ai-client.ts")));
   const clientSrc = fs.readFileSync(path.join(root, "src/lib/voice/telnyx/ai-client.ts"), "utf8");

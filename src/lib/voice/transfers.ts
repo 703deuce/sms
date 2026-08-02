@@ -76,8 +76,51 @@ export async function initiateTransfer(input: {
   });
   if (!call?.telnyxCallControlId) throw new Error("Call not active for transfer");
 
-  const destination = normalizeE164(input.destination);
-  const fallbacks = (input.fallbackDestinations || []).map((d) => normalizeE164(d));
+  const alloc = await prisma.voiceConcurrencyAllocation.findUnique({
+    where: { workspaceId: input.workspaceId },
+  });
+  const maxLegs = alloc?.maxTransferLegs ?? 10;
+  if (maxLegs > 0) {
+    const activeLegs = await prisma.voiceTransfer.count({
+      where: {
+        workspaceId: input.workspaceId,
+        status: { in: ["requested", "ringing", "bridging", "in_progress"] },
+      },
+    });
+    if (activeLegs >= maxLegs) {
+      throw new Error(`Transfer concurrency cap reached (${activeLegs}/${maxLegs})`);
+    }
+  }
+
+  // Prefer named destination config when the destination matches a saved name or number.
+  let destination = normalizeE164(input.destination);
+  let fallbacks = (input.fallbackDestinations || []).map((d) => normalizeE164(d));
+  const namedCandidates = await prisma.voiceTransferDestination.findMany({
+    where: {
+      workspaceId: input.workspaceId,
+      enabled: true,
+      OR: [
+        { name: input.destination },
+        { destination: input.destination },
+        { destination },
+      ],
+    },
+    orderBy: { updatedAt: "desc" },
+    take: 10,
+  });
+  const namedDest =
+    namedCandidates.find(
+      (d: { agentId: string | null }) => d.agentId && d.agentId === call.agentId,
+    ) ||
+    namedCandidates.find((d: { agentId: string | null }) => !d.agentId) ||
+    namedCandidates[0] ||
+    null;
+  if (namedDest) {
+    destination = normalizeE164(namedDest.destination);
+    if (namedDest.fallbackDestination) {
+      fallbacks = [normalizeE164(namedDest.fallbackDestination), ...fallbacks];
+    }
+  }
 
   const transfer = await prisma.voiceTransfer.create({
     data: {

@@ -3,6 +3,9 @@
 **Date:** 2026-08-02  
 **Branch:** `cursor/telnyx-ai-voice-completion-b56f`
 
+> **Honesty note:** Prefer `docs/TELNYX_AI_VOICE_HONEST_MATRIX.md` for fully / partial / not.
+> This file lists what was added; it does **not** claim live-acceptance completeness.
+
 ## Preserved (unchanged live paths)
 
 - Publish → `POST/PATCH /ai/assistants` via `syncTelnyxAssistant`

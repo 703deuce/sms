@@ -78,6 +78,21 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 });
     }
 
+    // CAPTCHA: when enabled outside test mode, require a captchaToken (verified by upstream later).
+    if (cfg.captchaEnabled && !cfg.testMode) {
+      const captchaToken = String(
+        (body as { captchaToken?: string }).captchaToken ||
+          request.headers.get("x-captcha-token") ||
+          "",
+      );
+      if (!captchaToken) {
+        return NextResponse.json(
+          { error: "CAPTCHA required", code: "captcha_required" },
+          { status: 403 },
+        );
+      }
+    }
+
     if (!ai.isTelnyxAiConfigured()) {
       return NextResponse.json({
         data: {

@@ -45,14 +45,57 @@ export async function POST(request: Request) {
     }
 
     if (toolType) {
-      const result = await executeBuiltinVoiceAction({
-        workspaceId,
-        agentId,
-        callId,
-        toolType,
-        input: body,
-      });
-      return NextResponse.json({ ...result, ok: true, agentId });
+      const prisma = getPrisma();
+      const start = Date.now();
+      const execution = await prisma.voiceToolExecution.create({
+        data: {
+          workspaceId,
+          callId: callId || null,
+          toolId: null,
+          status: "running",
+          input: { toolType, ...body } as object,
+          isAsync: false,
+        },
+      }).catch(() => null);
+      try {
+        const result = await executeBuiltinVoiceAction({
+          workspaceId,
+          agentId,
+          callId,
+          toolType,
+          input: body,
+        });
+        if (execution) {
+          await prisma.voiceToolExecution.update({
+            where: { id: execution.id },
+            data: {
+              status: "completed",
+              output: result as object,
+              latencyMs: Date.now() - start,
+              completedAt: new Date(),
+            },
+          }).catch(() => undefined);
+        }
+        return NextResponse.json({
+          ...result,
+          ok: true,
+          agentId,
+          executionId: execution?.id,
+        });
+      } catch (err) {
+        if (execution) {
+          await prisma.voiceToolExecution.update({
+            where: { id: execution.id },
+            data: {
+              status: "failed",
+              errorMessage: err instanceof Error ? err.message : String(err),
+              latencyMs: Date.now() - start,
+              completedAt: new Date(),
+            },
+          }).catch(() => undefined);
+        }
+        throw err;
+      }
     }
 
     return NextResponse.json({ ok: false, error: "No tool id or type" }, { status: 400 });

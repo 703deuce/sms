@@ -1773,7 +1773,7 @@ model VoiceToolExecution {
   id          String   @id @default(cuid())
   workspaceId String
   callId      String?
-  toolId      String
+  toolId      String?
   status      String   @default("pending")
   input       Json?
   output      Json?
@@ -1783,7 +1783,7 @@ model VoiceToolExecution {
   createdAt   DateTime @default(now())
   completedAt DateTime?
   call        VoiceCall? @relation(fields: [callId], references: [id], onDelete: SetNull)
-  tool        VoiceTool @relation(fields: [toolId], references: [id], onDelete: Cascade)
+  tool        VoiceTool? @relation(fields: [toolId], references: [id], onDelete: SetNull)
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@index([callId])

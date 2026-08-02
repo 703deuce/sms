@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getPrisma } from "@/lib/db";
 import { ingestInsightWebhook } from "@/lib/voice/platform/ai-platform";
+import { readTelnyxWebhook } from "@/lib/messaging/telnyx/webhook-auth";
 
 /**
  * Telnyx conversation insight group webhook receiver.
@@ -8,18 +9,29 @@ import { ingestInsightWebhook } from "@/lib/voice/platform/ai-platform";
  */
 export async function POST(request: Request) {
   try {
-    const payload = (await request.json()) as Record<string, unknown>;
+    const verified = await readTelnyxWebhook(request);
+    if (!verified.ok) return verified.response;
+    const payload = (verified.payload || {}) as Record<string, unknown>;
+    const data =
+      payload.data && typeof payload.data === "object"
+        ? (payload.data as Record<string, unknown>)
+        : payload;
     const url = new URL(request.url);
     const workspaceHint =
       url.searchParams.get("workspaceId") ||
-      (typeof payload.workspace_id === "string" ? payload.workspace_id : null);
+      (typeof data.workspace_id === "string"
+        ? data.workspace_id
+        : typeof payload.workspace_id === "string"
+          ? payload.workspace_id
+          : null);
 
     // Best-effort workspace resolution via conversation id or assistant metadata.
     let workspaceId = workspaceHint;
     if (!workspaceId) {
       const conversationId = String(
-        payload.conversation_id ||
-          (payload.data as Record<string, unknown> | undefined)?.conversation_id ||
+        data.conversation_id ||
+          payload.conversation_id ||
+          (data.payload as Record<string, unknown> | undefined)?.conversation_id ||
           "",
       );
       if (conversationId) {
@@ -32,15 +44,20 @@ export async function POST(request: Request) {
 
     const result = await ingestInsightWebhook({
       workspaceId,
-      payload,
+      payload: data,
     });
 
+    const providerEventId = String(
+      (payload.data as Record<string, unknown> | undefined)?.id ||
+        payload.id ||
+        `insight-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    );
     await getPrisma().providerWebhookEvent.create({
       data: {
         workspaceId: workspaceId || undefined,
         provider: "telnyx",
         eventType: "ai.insight_webhook",
-        providerEventId: `insight-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        providerEventId,
         payload: payload as object,
         status: "processed",
         processedAt: new Date(),

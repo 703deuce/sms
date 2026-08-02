@@ -235,6 +235,17 @@ export default function VoiceAiPlatformPage() {
             >
               Sync insights
             </Button>
+            <Button size="sm" disabled={!!busy} onClick={() => act("seed_insights")}>
+              Seed default insights
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={!agentId || !!busy}
+              onClick={() => act("clear_memory")}
+            >
+              Clear memory
+            </Button>
             <Button
               size="sm"
               disabled={!agentId || !!busy}

@@ -81,15 +81,15 @@ export async function assertAiCallAdmission(input: {
     return { ok: false, reason: "Agent emergency-disabled", code: "emergency_disabled" };
   }
 
-  const alloc =
-    (await prisma.voiceConcurrencyAllocation.findUnique({
-      where: { workspaceId: input.workspaceId },
-    })) || {
-      maxInboundAi: 5,
-      maxOutboundAi: 0,
-      hardSpendLimitCents: null as number | null,
-      softAlertPct: 80,
-    };
+  const allocRow = await prisma.voiceConcurrencyAllocation.findUnique({
+    where: { workspaceId: input.workspaceId },
+  });
+  const alloc = {
+    maxInboundAi: allocRow?.maxInboundAi ?? 5,
+    maxOutboundAi: allocRow?.maxOutboundAi ?? 0,
+    hardSpendLimitCents: allocRow?.hardSpendLimitCents ?? null,
+    softAlertPct: allocRow?.softAlertPct ?? 80,
+  };
 
   const active = await countActiveAiCalls(input.workspaceId, input.direction);
   // Inbound always capped. Outbound: maxOutboundAi<=0 means "no platform cap"
@@ -111,6 +111,20 @@ export async function assertAiCallAdmission(input: {
       reason: `${input.direction} AI concurrency cap reached (${active}/${cap})`,
       code: "concurrency_cap",
     };
+  }
+
+  // Soft alert when approaching concurrency cap (does not block).
+  const softPct = Number(alloc.softAlertPct ?? 80);
+  if (cap > 0 && softPct > 0 && active / cap >= softPct / 100) {
+    await noteFailure({
+      workspaceId: input.workspaceId,
+      agentId: agent.id,
+      callId: input.callId || null,
+      category: "admission_alert",
+      code: "concurrency_soft_alert",
+      message: `AI concurrency soft alert: ${input.direction} active=${active} cap=${cap} threshold=${softPct}%`,
+      detailsJson: { active, cap, softPct, direction: input.direction },
+    });
   }
 
   if (alloc.hardSpendLimitCents != null && alloc.hardSpendLimitCents >= 0) {
