@@ -176,14 +176,12 @@ async function main() {
           },
           enabledBuiltinTools: [
             "hangup",
-            "transfer",
             "escalate_human",
             "take_structured_message",
             "create_task",
             "send_sms",
             "lookup_customer",
             "search_crm_contacts",
-            "end_call",
           ],
           transfers: {
             ...(specDraft.transfers || {}),
@@ -198,14 +196,12 @@ async function main() {
         toolIds: [],
         enabledBuiltinTools: [
           "hangup",
-          "transfer",
           "escalate_human",
           "take_structured_message",
           "create_task",
           "send_sms",
           "lookup_customer",
           "search_crm_contacts",
-          "end_call",
         ],
       },
     });
@@ -355,6 +351,19 @@ async function main() {
     flow.res.ok
       ? `routingMode=${flow.json?.applied?.routingMode} tools=${(flow.json?.applied?.enabledBuiltinTools || []).length}`
       : JSON.stringify(flow.json).slice(0, 220),
+  );
+
+  // Re-pin the safe tool set after flow compile (compile preserves prior keys).
+  const toolsPinned = await api(jar, `/api/voice/agents/${agent.id}/tools`, {
+    method: "PUT",
+    body: { toolIds: [], enabledBuiltinTools: FULL_TOOLS },
+  });
+  log(
+    toolsPinned.res.ok,
+    "re-pin safe tool catalog",
+    toolsPinned.res.ok
+      ? `count=${(toolsPinned.json?.data?.enabledBuiltinTools || []).length} synced=${toolsPinned.json?.data?.synced}`
+      : JSON.stringify(toolsPinned.json).slice(0, 200),
   );
 
   // Ensure a local test contact exists for CRM search demos.

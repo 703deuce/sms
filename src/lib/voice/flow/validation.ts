@@ -193,9 +193,9 @@ export function collectToolKeysFromFlow(bundle: VoiceFlowBundle): string[] {
   walk(bundle.conversation.nodes);
   walk(bundle.routing.nodes);
   // Always allow hangup + escalate for global rules.
+  // Do not force end_call + transfer — dual terminators / native warm transfer
+  // caused live PSTN hangups when CRM or handoff tools ran.
   keys.add("hangup");
-  keys.add("end_call");
-  keys.add("transfer");
   keys.add("escalate_human");
   return [...keys];
 }
