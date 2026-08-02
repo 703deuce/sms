@@ -20,6 +20,7 @@ type Action =
 /**
  * Dual SMS + voice provisioning actions for a workspace number.
  * Body: { action: "diagnose" | "verify" | "enable_voice" | "repair_voice" | "repair_messaging" | "provision" }
+ * Never clears messaging_profile_id when assigning voice.
  */
 export async function POST(
   request: Request,
