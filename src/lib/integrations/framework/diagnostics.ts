@@ -386,14 +386,22 @@ export async function runIntegrationProbe(
       }
       const url = externalWebhookUrl(provider, token);
       try {
-        // Recreate subscription so Calendly issues a signing_key we can store.
-        // Without this, verifyWebhook uses a Coolify env key that does not match
-        // the subscription HMAC → every real delivery gets 401 Invalid signature.
-        const priorIds = Array.isArray(cfg.webhookSubscriptionIds)
-          ? (cfg.webhookSubscriptionIds as string[])
-          : [];
-        if (adapter.removeWebhooks && priorIds.length) {
-          await adapter.removeWebhooks(ctx, priorIds).catch(() => undefined);
+        // Wipe ALL Transovo Calendly webhook URLs for this user (including orphan
+        // smoke-test tokens). Otherwise Calendly fans out to dead endpoints that
+        // 401 forever (retry_started_at) while Harbor never sees a clean delivery.
+        let cleaned: { deleted: string[]; kept: string[] } | null = null;
+        if (provider === "calendly") {
+          const { cleanupTransovoWebhookSubscriptions } = await import(
+            "../adapters/calendly-actions"
+          );
+          cleaned = await cleanupTransovoWebhookSubscriptions(ctx, null);
+        } else {
+          const priorIds = Array.isArray(cfg.webhookSubscriptionIds)
+            ? (cfg.webhookSubscriptionIds as string[])
+            : [];
+          if (adapter.removeWebhooks && priorIds.length) {
+            await adapter.removeWebhooks(ctx, priorIds).catch(() => undefined);
+          }
         }
         const result = await adapter.registerWebhooks(ctx, url);
         const nextConfig: Record<string, unknown> = {
@@ -428,6 +436,7 @@ export async function runIntegrationProbe(
             signingKeyCaptured: Boolean(result.signingKey),
             signingMode: result.signingKey ? "subscription_create" : "oauth_app_env",
             createResponseKeys: result.createResponseKeys || [],
+            cleanedOrphans: cleaned?.deleted || [],
           },
         };
       } catch (err) {

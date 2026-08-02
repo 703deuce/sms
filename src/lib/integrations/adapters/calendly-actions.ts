@@ -188,6 +188,41 @@ export async function cancelAppointment(
 }
 
 /**
+ * Delete every user-scope webhook subscription whose callback points at
+ * Transovo. Prevents orphan smoke-test / reconnect URLs from eating events
+ * and stuck in Calendly retry loops (401 Invalid signature).
+ */
+export async function cleanupTransovoWebhookSubscriptions(
+  ctx: AdapterContext,
+  keepCallbackUrl?: string | null,
+): Promise<{ deleted: string[]; kept: string[] }> {
+  const { subscriptions } = await listWebhookSubscriptions(ctx);
+  const deleted: string[] = [];
+  const kept: string[] = [];
+  for (const sub of subscriptions) {
+    const cb = sub.callbackUrl || "";
+    if (!/transovo\.ai\/api\/integrations\/native\/webhooks\/calendly/i.test(cb)) {
+      continue;
+    }
+    if (keepCallbackUrl && cb === keepCallbackUrl) {
+      kept.push(sub.uri);
+      continue;
+    }
+    const uuid = uuidFromUri(sub.uri);
+    if (!uuid) continue;
+    try {
+      await calendlyApi(`/webhook_subscriptions/${encodeURIComponent(uuid)}`, ctx, {
+        method: "DELETE",
+      });
+      deleted.push(sub.uri);
+    } catch {
+      // ignore delete races
+    }
+  }
+  return { deleted, kept };
+}
+
+/**
  * List webhook subscriptions for the connected user (presence/status only).
  * Used to diagnose delivery failures (retry_started_at means Calendly is
  * retrying — usually because our endpoint returned 401 Invalid signature).
