@@ -112,7 +112,7 @@ Queue name: `integrations`
 |-------|------|
 | `GET /api/crm/providers` | Card status for UI |
 | `POST /api/crm/oauth/start` | Begin OAuth |
-| `GET /api/crm/oauth/callback` | OAuth return |
+| `GET /api/crm/{provider}/callback` | OAuth return (e.g. `/api/crm/salesforce/callback`) |
 | `POST /api/crm/sync` | Enqueue sync / validate |
 | `GET\|PATCH\|DELETE /api/crm/settings` | Preferences / disconnect |
 | `GET /api/crm/logs` | Runs + audit |
