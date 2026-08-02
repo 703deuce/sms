@@ -288,11 +288,71 @@ ok("adapters expose inbound activity lists + updateNote", async () => {
     assert.equal(typeof c.listNotes, "function");
     assert.equal(typeof c.listActivities, "function");
     assert.equal(typeof c.updateNote, "function");
-    assert.equal(typeof c.handleWebhook, "function");
     if (c.id !== "pipedrive") {
       assert.equal(typeof c.upsertLead, "function");
     }
   }
+  // Salesforce intentionally omits handleWebhook so webhook ingest falls through
+  // to incremental reconcile sync (CDC/Streaming not subscribed).
+  assert.equal(typeof salesforceConnector.handleWebhook, "undefined");
+  assert.equal(typeof zohoConnector.handleWebhook, "function");
+  assert.equal(typeof pipedriveConnector.handleWebhook, "function");
+});
+
+ok("Salesforce OAuth callback + scopes + job handlers registered", async () => {
+  const prev = process.env.APP_URL;
+  process.env.APP_URL = "https://transovo.ai";
+  const { crmOAuthCallbackUrl } = await import("../src/lib/crm/oauth");
+  const { scopesForProvider } = await import("../src/lib/crm/scopes");
+  const { CRM_JOB_TYPES } = await import("../src/lib/crm/runtime/job-types");
+  const { readFileSync } = await import("node:fs");
+  const { join } = await import("node:path");
+
+  assert.equal(
+    crmOAuthCallbackUrl("salesforce"),
+    "https://transovo.ai/api/crm/salesforce/callback",
+  );
+  const scopes = scopesForProvider("salesforce");
+  assert.deepEqual(scopes, ["api", "refresh_token", "offline_access"]);
+  assert.equal(scopes.includes("full"), false);
+
+  const handlerSrc = readFileSync(join(process.cwd(), "src/lib/jobs/job-handlers.ts"), "utf8");
+  for (const jobType of CRM_JOB_TYPES) {
+    assert.ok(
+      handlerSrc.includes(`case "${jobType}"`),
+      `Missing job handler for ${jobType}`,
+    );
+  }
+
+  // Every CRM enqueue site must use a registered job type.
+  const emitFiles = [
+    "src/lib/crm/sync-engine.ts",
+    "src/lib/crm/runtime/event-bus.ts",
+    "src/lib/crm/runtime/metadata-refresh.ts",
+    "src/lib/crm/runtime/bulk-sync.ts",
+    "src/lib/crm/runtime/webhooks.ts",
+    "src/lib/jobs/job-handlers.ts",
+  ];
+  const emitted = new Set<string>();
+  for (const file of emitFiles) {
+    const src = readFileSync(join(process.cwd(), file), "utf8");
+    for (const match of src.matchAll(/jobType:\s*"((?:crm_)[^"]+)"/g)) {
+      emitted.add(match[1]!);
+    }
+  }
+  for (const jobType of emitted) {
+    assert.ok(
+      (CRM_JOB_TYPES as readonly string[]).includes(jobType),
+      `Salesforce/CRM integration emits unregistered job type: ${jobType}`,
+    );
+    assert.ok(
+      handlerSrc.includes(`case "${jobType}"`),
+      `No active handler for emitted CRM job type: ${jobType}`,
+    );
+  }
+
+  if (prev === undefined) delete process.env.APP_URL;
+  else process.env.APP_URL = prev;
 });
 
 ok("mergeInboundContact prefers local filled fields", async () => {
@@ -346,6 +406,10 @@ ok("provider-specific OAuth callback URLs", async () => {
   const prev = process.env.APP_URL;
   process.env.APP_URL = "https://transovo.ai";
   const { crmOAuthCallbackUrl } = await import("../src/lib/crm/oauth");
+  assert.equal(
+    crmOAuthCallbackUrl("salesforce"),
+    "https://transovo.ai/api/crm/salesforce/callback",
+  );
   assert.equal(crmOAuthCallbackUrl("zoho"), "https://transovo.ai/api/crm/zoho/callback");
   assert.equal(
     crmOAuthCallbackUrl("pipedrive"),

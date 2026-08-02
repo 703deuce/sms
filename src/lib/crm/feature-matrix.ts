@@ -71,7 +71,13 @@ const MATRIX: Record<CrmProviderId, FeatureRow[]> = {
     { feature: "pipelines", label: "Pipelines", support: "read_only", notes: "Virtual Opportunity pipeline" },
     { feature: "stages", label: "Stages", support: "read_only", notes: "OpportunityStage / StageName picklist" },
     { feature: "owners", label: "Owners", support: "read_only" },
-    { feature: "webhooks_inbound", label: "Inbound webhooks", support: "beta", notes: "Generic webhook ingest + delete handling; Salesforce Change Data Capture not subscribed yet" },
+    {
+      feature: "webhooks_inbound",
+      label: "Inbound webhooks",
+      support: "fallback",
+      notes:
+        "Generic /api/crm/webhooks/salesforce ingest enqueues incremental reconcile sync. Change Data Capture / Streaming / Pub-Sub are intentionally unsupported (not subscribed).",
+    },
     { feature: "incremental_sync", label: "Incremental sync", support: "beta", notes: "SOQL LastModifiedDate checkpoints" },
     { feature: "bidirectional_sync", label: "Bidirectional sync", support: "beta", notes: "Direction/pause/read-write gates in preferences; sandbox proof pending" },
   ],

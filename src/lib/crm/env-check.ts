@@ -58,7 +58,7 @@ export function checkCrmEnvironment(provider?: CrmProviderId): EnvCheckResult {
     ok: Boolean(base),
     provider: "shared",
     message: base
-      ? `APP_URL is set (${base}). Register provider callbacks as ${base}/api/crm/zoho/callback and ${base}/api/crm/pipedrive/callback`
+      ? `APP_URL is set (${base}). Register Salesforce callback exactly as ${base}/api/crm/salesforce/callback (also Zoho/Pipedrive per-provider paths)`
       : "APP_URL is missing. Set it to your public site origin (no trailing slash), e.g. https://transovo.ai",
   });
 
@@ -147,6 +147,17 @@ export function checkCrmEnvironment(provider?: CrmProviderId): EnvCheckResult {
         message: process.env.PIPEDRIVE_WEBHOOK_SECRET?.trim()
           ? "PIPEDRIVE_WEBHOOK_SECRET is set"
           : "PIPEDRIVE_WEBHOOK_SECRET optional",
+      });
+    }
+    if (id === "salesforce") {
+      items.push({
+        key: "SALESFORCE_WEBHOOK_SECRET",
+        required: false,
+        ok: Boolean(process.env.SALESFORCE_WEBHOOK_SECRET?.trim()),
+        provider: id,
+        message: process.env.SALESFORCE_WEBHOOK_SECRET?.trim()
+          ? "SALESFORCE_WEBHOOK_SECRET is set (optional HMAC for generic inbound webhook route)"
+          : "SALESFORCE_WEBHOOK_SECRET optional — CDC/Streaming not subscribed; incremental sync is the reconcile path",
       });
     }
 

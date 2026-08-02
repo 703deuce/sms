@@ -51,6 +51,8 @@ export async function validateCrmProductionConnection(
   let externalAccountId: string | null = null;
   let externalAccountName: string | null = null;
   let connectedUserId: string | null = null;
+  let organizationId: string | null = null;
+  let providerUserId: string | null = null;
 
   // 1. Token present
   try {
@@ -90,7 +92,13 @@ export async function validateCrmProductionConnection(
     });
     externalAccountId = health.externalAccountId || null;
     externalAccountName = health.externalAccountName || null;
-    connectedUserId = health.externalAccountId || null;
+    organizationId =
+      (typeof health.details?.organizationId === "string" && health.details.organizationId) ||
+      null;
+    providerUserId =
+      (typeof health.details?.userId === "string" && health.details.userId) || null;
+    // Prefer explicit user id from health.details (Salesforce); fall back to account id.
+    connectedUserId = providerUserId || health.externalAccountId || null;
     if (!health.ok) return fail(workspaceId, provider, steps, health.message);
   } catch (err) {
     steps.push({
@@ -227,6 +235,8 @@ export async function validateCrmProductionConnection(
     externalId: externalAccountId,
     config: {
       validation: { ok: true, at: new Date().toISOString(), steps },
+      ...(organizationId ? { organizationId } : {}),
+      ...(providerUserId ? { salesforceUserId: providerUserId } : {}),
     },
     mergeConfig: true,
   });

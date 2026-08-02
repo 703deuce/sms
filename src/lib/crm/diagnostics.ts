@@ -244,7 +244,7 @@ export async function runCrmDiagnosticProbe(input: {
             ok: check.providers[0]?.oauthReady ?? false,
             message: missing.length
               ? `Missing: ${missing.join(", ")}`
-              : `Env ready. Callbacks: Zoho=${check.callbackUrls.zoho} · Pipedrive=${check.callbackUrls.pipedrive}`,
+              : `Env ready. Callbacks: Salesforce=${check.callbackUrls.salesforce} · Zoho=${check.callbackUrls.zoho} · Pipedrive=${check.callbackUrls.pipedrive}`,
             raw: check,
           };
         });

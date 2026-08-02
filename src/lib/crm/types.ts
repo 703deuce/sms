@@ -376,7 +376,14 @@ export type ConnectorHealth = {
   ok: boolean;
   state: CrmConnectionState;
   message?: string;
+  /** Primary external account id (Salesforce: organization id). */
   externalAccountId?: string | null;
   externalAccountName?: string | null;
   tokenExpiresAt?: string | null;
+  /** Extra identity fields — e.g. Salesforce user id separate from org id. */
+  details?: {
+    organizationId?: string | null;
+    userId?: string | null;
+    [key: string]: unknown;
+  };
 };

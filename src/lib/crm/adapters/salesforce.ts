@@ -65,15 +65,29 @@ export const salesforceConnector: CrmConnector = {
 
   async validateConnection(ctx) {
     try {
-      const identity = await crmFetch<{ user_id?: string; display_name?: string; organization_id?: string }>(
-        `${instanceUrl(ctx)}/services/oauth2/userinfo`,
-        { accessToken: ctx.accessToken },
-      );
+      const identity = await crmFetch<{
+        user_id?: string;
+        display_name?: string;
+        organization_id?: string;
+        preferred_username?: string;
+      }>(`${instanceUrl(ctx)}/services/oauth2/userinfo`, {
+        accessToken: ctx.accessToken,
+      });
+      const organizationId = identity.organization_id || null;
+      const userId = identity.user_id || null;
       return {
         ok: true,
         state: "connected",
-        externalAccountId: identity.organization_id || identity.user_id || null,
-        externalAccountName: identity.display_name || null,
+        // Organization is the connected Salesforce account; user is stored separately.
+        externalAccountId: organizationId || userId,
+        externalAccountName:
+          identity.display_name || identity.preferred_username || null,
+        details: {
+          organizationId,
+          userId,
+          instanceUrl: instanceUrl(ctx),
+          apiVersion: "v59.0",
+        },
       };
     } catch (err) {
       return {
@@ -538,10 +552,9 @@ export const salesforceConnector: CrmConnector = {
     return [];
   },
 
-  async handleWebhook(_ctx, _headers, body) {
-    const payload = (body || {}) as Record<string, unknown>;
-    return { accepted: true, events: [payload] };
-  },
+  // INTENTIONAL: no handleWebhook. CDC / Streaming / Pub-Sub is not subscribed.
+  // Inbound `/api/crm/webhooks/salesforce` therefore falls through to incremental
+  // reconcile sync (see processCrmWebhookJob). Do not fake CDC support here.
 
   async logCall(ctx, call) {
     const subject =

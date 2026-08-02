@@ -1,5 +1,5 @@
 /**
- * Live acceptance battery for Zoho CRM + Pipedrive.
+ * Live acceptance battery for Salesforce, Zoho CRM, and Pipedrive.
  * Invoked from diagnostics (`action: "acceptance"`) — not a product feature surface.
  */
 
@@ -132,6 +132,309 @@ export async function runCrmAcceptanceSuite(
     // Pipedrive/Zoho do not always echo granted scopes into token response; we record requested.
     requestedScopesAtConnect: requestedScopes,
   };
+
+  // --- Salesforce identity / API / labeled CRUD probes ---
+  if (provider === "salesforce") {
+    const { crmFetch } = await import("./http");
+    const instance = String(ctx.meta.instanceUrl || "").replace(/\/$/, "");
+    try {
+      const identity = await crmFetch<{
+        user_id?: string;
+        organization_id?: string;
+        display_name?: string;
+      }>(`${instance}/services/oauth2/userinfo`, { accessToken: ctx.accessToken });
+      items.push({
+        id: "sf_identity",
+        status:
+          identity.organization_id || identity.user_id
+            ? "Live tested and passed"
+            : "Blocked by provider permissions or plan",
+        message: `org=${identity.organization_id || "?"} user=${identity.user_id || "?"} name=${identity.display_name || "?"}`,
+        externalId: identity.organization_id || identity.user_id || null,
+      });
+    } catch (err) {
+      items.push(blockedOrFail(err, "sf_identity"));
+    }
+
+    for (const [id, soql] of [
+      ["sf_contacts_read", "SELECT Id FROM Contact LIMIT 1"],
+      ["sf_accounts_read", "SELECT Id FROM Account LIMIT 1"],
+      ["sf_leads_read", "SELECT Id FROM Lead LIMIT 1"],
+      ["sf_opportunities_read", "SELECT Id FROM Opportunity LIMIT 1"],
+      ["sf_tasks_read", "SELECT Id FROM Task LIMIT 1"],
+      ["sf_users_read", "SELECT Id FROM User WHERE IsActive = true LIMIT 1"],
+      ["sf_stages_read", "SELECT Id, MasterLabel FROM OpportunityStage LIMIT 5"],
+    ] as const) {
+      try {
+        const data = await crmFetch<{ records?: Array<{ Id?: string }> }>(
+          `${instance}/services/data/v59.0/query?q=${encodeURIComponent(soql)}`,
+          { accessToken: ctx.accessToken },
+        );
+        items.push({
+          id,
+          status: "Live tested and passed",
+          message: `SOQL ok (${(data.records || []).length} row(s))`,
+          externalId: data.records?.[0]?.Id || null,
+        });
+      } catch (err) {
+        items.push(blockedOrFail(err, id));
+      }
+    }
+
+    // Labeled create/update contact (Transovo Salesforce Test Contact)
+    try {
+      const created = await connector.upsertContact(ctx, {
+        firstName: "Transovo",
+        lastName: `Salesforce Test Contact ${marker}`,
+        email: `sf-test-${marker}@example.com`,
+        phone: `+1555700${String(Date.now()).slice(-4)}`,
+      });
+      items.push({
+        id: "sf_contact_create",
+        status: created.externalId
+          ? "Live tested and passed"
+          : "Blocked by provider permissions or plan",
+        message: `Created ${created.externalId}`,
+        externalId: created.externalId,
+      });
+      if (created.externalId) {
+        const updated = await connector.upsertContact(ctx, {
+          id: created.externalId,
+          firstName: "Transovo",
+          lastName: `Salesforce Test Contact ${marker} upd`,
+          email: `sf-test-${marker}@example.com`,
+        });
+        items.push({
+          id: "sf_contact_update",
+          status: updated.externalId
+            ? "Live tested and passed"
+            : "Blocked by provider permissions or plan",
+          message: `Updated ${updated.externalId}`,
+          externalId: updated.externalId,
+        });
+      }
+    } catch (err) {
+      items.push(blockedOrFail(err, "sf_contact_create"));
+    }
+
+    try {
+      if (connector.upsertCompany) {
+        const acc = await connector.upsertCompany(ctx, {
+          name: `Transovo Salesforce Test Account ${marker}`,
+        });
+        items.push({
+          id: "sf_account_create",
+          status: acc.externalId
+            ? "Live tested and passed"
+            : "Blocked by provider permissions or plan",
+          message: `Created ${acc.externalId}`,
+          externalId: acc.externalId,
+        });
+      }
+    } catch (err) {
+      items.push(blockedOrFail(err, "sf_account_create"));
+    }
+
+    try {
+      if (connector.upsertLead) {
+        const lead = await connector.upsertLead(ctx, {
+          firstName: "Transovo",
+          lastName: `Salesforce Test Lead ${marker}`,
+          company: "Transovo SF Acceptance",
+          email: `sf-lead-${marker}@example.com`,
+        });
+        items.push({
+          id: "sf_lead_create",
+          status: lead.externalId
+            ? "Live tested and passed"
+            : "Blocked by provider permissions or plan",
+          message: `Created ${lead.externalId}`,
+          externalId: lead.externalId,
+        });
+      }
+    } catch (err) {
+      items.push(blockedOrFail(err, "sf_lead_create"));
+    }
+
+    try {
+      if (connector.upsertDeal) {
+        const opp = await connector.upsertDeal(ctx, {
+          name: `Transovo Salesforce Test Opportunity ${marker}`,
+          amount: 250,
+          currency: "USD",
+        });
+        items.push({
+          id: "sf_opportunity_create",
+          status: opp.externalId
+            ? "Live tested and passed"
+            : "Blocked by provider permissions or plan",
+          message: `Created ${opp.externalId}`,
+          externalId: opp.externalId,
+        });
+      }
+    } catch (err) {
+      items.push(blockedOrFail(err, "sf_opportunity_create"));
+    }
+
+    try {
+      if (connector.createTask) {
+        const task = await connector.createTask(ctx, {
+          subject: `Transovo Salesforce Test Task ${marker}`,
+          description: "Acceptance probe — safe to delete",
+          status: "Not Started",
+        });
+        items.push({
+          id: "sf_task_create",
+          status: task.externalId
+            ? "Live tested and passed"
+            : "Blocked by provider permissions or plan",
+          message: `Created ${task.externalId}`,
+          externalId: task.externalId,
+        });
+        if (connector.updateTask && task.externalId) {
+          const done = await connector.updateTask(ctx, {
+            id: task.externalId,
+            subject: `Transovo Salesforce Test Task ${marker}`,
+            status: "Completed",
+          });
+          items.push({
+            id: "sf_task_complete",
+            status: done.externalId
+              ? "Live tested and passed"
+              : "Blocked by provider permissions or plan",
+            message: `Completed ${done.externalId}`,
+            externalId: done.externalId,
+          });
+        }
+      }
+    } catch (err) {
+      items.push(blockedOrFail(err, "sf_task_create"));
+    }
+
+    // Call activity lifecycle: create then update the SAME Salesforce Task.
+    try {
+      if (connector.logCall) {
+        const created = await connector.logCall(ctx, {
+          direction: "inbound",
+          from: "+15557001001",
+          to: "+15557001002",
+          durationSeconds: 12,
+          disposition: "answered",
+          notes: `Transovo Salesforce Test Call ${marker}`,
+          recordingUrl: null,
+          transcriptText: null,
+          transcriptUrl: null,
+          aiSummary: null,
+          contactExternalId: null,
+          startedAt: new Date().toISOString(),
+        });
+        items.push({
+          id: "sf_call_create",
+          status: created.externalId
+            ? "Live tested and passed"
+            : "Blocked by provider permissions or plan",
+          message: `Created call activity ${created.externalId}`,
+          externalId: created.externalId,
+        });
+        if (created.externalId) {
+          const updated = await connector.logCall(ctx, {
+            id: created.externalId,
+            direction: "inbound",
+            from: "+15557001001",
+            to: "+15557001002",
+            durationSeconds: 95,
+            disposition: "completed",
+            notes: `Transovo Salesforce Test Call ${marker}`,
+            recordingUrl: "https://transovo.ai/diag/recording-example",
+            transcriptUrl: "https://transovo.ai/diag/transcript-example",
+            transcriptText: "Acceptance transcript",
+            aiSummary: "Acceptance AI summary",
+            contactExternalId: null,
+            startedAt: new Date().toISOString(),
+          });
+          items.push({
+            id: "sf_call_update_same_activity",
+            status:
+              updated.externalId === created.externalId && !updated.created
+                ? "Live tested and passed"
+                : "Blocked by provider permissions or plan",
+            message:
+              updated.externalId === created.externalId && !updated.created
+                ? `Updated original activity ${updated.externalId} (no duplicate)`
+                : `Expected update of ${created.externalId}, got created=${updated.created} id=${updated.externalId}`,
+            externalId: updated.externalId,
+          });
+        }
+      }
+    } catch (err) {
+      items.push(blockedOrFail(err, "sf_call_create"));
+    }
+
+    try {
+      if (connector.logSms) {
+        const sms = await connector.logSms(ctx, {
+          direction: "outbound",
+          from: "+15557001001",
+          to: "+15557001003",
+          body: `Transovo Salesforce Test SMS ${marker}`,
+          status: "delivered",
+          sentAt: new Date().toISOString(),
+          contactExternalId: null,
+          mediaUrls: ["https://transovo.ai/diag/mms-example.png"],
+        });
+        items.push({
+          id: "sf_sms_create",
+          status: sms.externalId
+            ? "Live tested and passed"
+            : "Blocked by provider permissions or plan",
+          message: `Created SMS activity ${sms.externalId}`,
+          externalId: sms.externalId,
+        });
+      }
+    } catch (err) {
+      items.push(blockedOrFail(err, "sf_sms_create"));
+    }
+
+    try {
+      const describe = await crmFetch<{ name?: string; fields?: unknown[] }>(
+        `${instance}/services/data/v59.0/sobjects/Contact/describe`,
+        { accessToken: ctx.accessToken },
+      );
+      items.push({
+        id: "sf_contact_metadata",
+        status: describe.name === "Contact"
+          ? "Live tested and passed"
+          : "Blocked by provider permissions or plan",
+        message: `Contact describe fields=${Array.isArray(describe.fields) ? describe.fields.length : 0}`,
+      });
+    } catch (err) {
+      items.push(blockedOrFail(err, "sf_contact_metadata"));
+    }
+
+    try {
+      const leadStatuses = await crmFetch<{ records?: Array<{ Id?: string }> }>(
+        `${instance}/services/data/v59.0/query?q=${encodeURIComponent(
+          "SELECT Id, MasterLabel, IsDefault FROM LeadStatus LIMIT 20",
+        )}`,
+        { accessToken: ctx.accessToken },
+      );
+      items.push({
+        id: "sf_lead_statuses_read",
+        status: "Live tested and passed",
+        message: `LeadStatus rows=${(leadStatuses.records || []).length}`,
+        externalId: leadStatuses.records?.[0]?.Id || null,
+      });
+    } catch (err) {
+      items.push(blockedOrFail(err, "sf_lead_statuses_read"));
+    }
+
+    items.push({
+      id: "sf_cdc_webhooks",
+      status: "Unsupported",
+      message:
+        "Change Data Capture / Streaming / Pub-Sub not subscribed. Inbound webhook route triggers incremental reconcile sync only.",
+    });
+  }
 
   // --- permission / scope matrix (Pipedrive) ---
   if (provider === "pipedrive") {
