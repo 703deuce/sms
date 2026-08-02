@@ -3,6 +3,19 @@ import { getTelnyxApiKey } from "@/lib/messaging/telnyx/config";
 import type { VoiceAgentConfig } from "../types";
 import { getAgentRagBucketIds } from "../knowledge-processor";
 import { buildAssistantTools } from "./assistant-tools";
+import * as ai from "./ai-client";
+
+function unwrapTelnyxId(res: unknown): string | null {
+  if (!res || typeof res !== "object") return null;
+  const obj = res as Record<string, unknown>;
+  if (typeof obj.id === "string" && obj.id) return obj.id;
+  const data = obj.data;
+  if (data && typeof data === "object") {
+    const id = (data as { id?: unknown }).id;
+    if (typeof id === "string" && id) return id;
+  }
+  return null;
+}
 
 type AgentRow = {
   id: string;
@@ -127,7 +140,8 @@ export async function syncTelnyxAssistant(
   agent: AgentRow,
   config: VoiceAgentConfig,
 ) {
-  if (!isTelnyxVoiceConfigured()) {
+  // AI Assistants only need TELNYX_API_KEY (Call Control connection is separate).
+  if (!ai.isTelnyxAiConfigured()) {
     return { mode: "mock", assistantId: agent.telnyxAssistantId };
   }
 
@@ -218,103 +232,86 @@ export async function syncTelnyxAssistant(
     .filter(Boolean)
     .join("\n\n");
 
-  const modelSettings: Record<string, unknown> = {
-    model: config.model?.modelId || "meta-llama/llama-3.3-70b-instruct",
-    temperature: config.model?.temperature,
-    max_tokens: config.model?.maxTokens,
-  };
-  if (config.model?.customBaseUrl) {
-    modelSettings.api_base = config.model.customBaseUrl;
-    // Credentials stay server-side via secret ref — never sent from browser.
-    if (config.model.customApiKeyRef) {
-      try {
-        const { decryptSecret } = await import("@/lib/messaging/crypto");
-        const secret = await (await import("@/lib/db")).getPrisma().voiceIntegrationSecret.findFirst({
-          where: { id: config.model.customApiKeyRef, workspaceId },
-        });
-        if (secret) modelSettings.api_key = decryptSecret(secret.encryptedValue);
-      } catch {
-        // omit key if unavailable
-      }
-    }
-  }
+  // Prefer Telnyx-native models (no llm_api_key_ref). Override via builder Model ID.
+  const modelId =
+    config.model?.modelId?.trim() || "Qwen/Qwen3-235B-A22B";
 
   const transcription = config.transcription || {};
+  const connectionId = process.env.TELNYX_CONNECTION_ID?.trim();
   const payload: Record<string, unknown> = {
-    name: `${agent.name} (${workspaceId.slice(0, 8)})`,
-    model: modelSettings.model,
-    instructions,
+    name: `${agent.name} (${workspaceId.slice(0, 8)})`.slice(0, 100),
+    model: modelId,
+    instructions: instructions.slice(0, 100_000),
     greeting: greetingFromConfig(config, agent.name),
     voice_settings: {
       voice: config.voiceLanguage?.voiceId || "Telnyx.NaturalHD.andromeda",
-      speed: config.voiceLanguage?.speed ?? 1,
+      ...(config.voiceLanguage?.speed != null
+        ? { speed: config.voiceLanguage.speed }
+        : {}),
       ...(config.voiceLanguage?.bargeIn != null
         ? { barge_in: config.voiceLanguage.bargeIn }
         : {}),
     },
-    language: config.voiceLanguage?.primaryLanguage || "en-US",
     enabled_features: [
       "telephony",
       ...(transcription.enabled !== false ? ["transcription"] : []),
     ],
-    telephony_settings: {
-      default_texml_app_id: process.env.TELNYX_CONNECTION_ID?.trim(),
-    },
     tools,
   };
-  if (config.model?.temperature != null) payload.temperature = config.model.temperature;
-  if (config.model?.maxTokens != null) payload.max_tokens = config.model.maxTokens;
-  if (config.model?.maxToolCalls != null) payload.max_tool_calls = config.model.maxToolCalls;
-  if (config.model?.customBaseUrl) {
-    payload.llm_api = {
-      base_url: config.model.customBaseUrl,
-      ...(modelSettings.api_key ? { api_key: modelSettings.api_key } : {}),
+  if (connectionId) {
+    payload.telephony_settings = {
+      default_texml_app_id: connectionId,
     };
+  }
+  if (config.model?.customBaseUrl) {
+    let apiKey: string | undefined;
+    if (config.model.customApiKeyRef) {
+      try {
+        const { decryptSecret } = await import("@/lib/messaging/crypto");
+        const secret = await (
+          await import("@/lib/db")
+        ).getPrisma().voiceIntegrationSecret.findFirst({
+          where: { id: config.model.customApiKeyRef, workspaceId },
+        });
+        if (secret) apiKey = decryptSecret(secret.encryptedValue);
+      } catch {
+        // omit
+      }
+    }
+    payload.external_llm = {
+      base_url: config.model.customBaseUrl,
+      ...(apiKey ? { api_key: apiKey } : {}),
+    };
+  } else if (config.model?.customApiKeyRef) {
+    // Third-party model via Telnyx integration secret identifier.
+    payload.llm_api_key_ref = config.model.customApiKeyRef;
   }
   if (transcription.sttProvider || transcription.sttModel || transcription.keyterms?.length) {
     payload.transcription = {
-      enabled: transcription.enabled !== false,
-      provider: transcription.sttProvider,
-      model: transcription.sttModel,
-      language: transcription.language || config.voiceLanguage?.primaryLanguage,
-      keyterms: transcription.keyterms || [],
+      model: transcription.sttModel || undefined,
+      language: transcription.language || config.voiceLanguage?.primaryLanguage || "en",
+      ...(transcription.keyterms?.length ? { keyterms: transcription.keyterms } : {}),
     };
   }
   if (config.voiceLanguage?.endpointingMs) {
-    payload.endpointing_ms = config.voiceLanguage.endpointingMs;
-  }
-  if (config.voiceLanguage?.noiseSuppression != null) {
-    payload.noise_suppression = config.voiceLanguage.noiseSuppression;
-  }
-  if (config.voiceLanguage?.endOfTurn) {
-    payload.end_of_turn = config.voiceLanguage.endOfTurn;
-  }
-  if (config.instructions?.protectedGreeting) {
-    payload.greeting_settings = { protected: true };
+    payload.interruption_settings = {
+      ...((payload.interruption_settings as object) || {}),
+      endpointing_ms: config.voiceLanguage.endpointingMs,
+    };
   }
   if (config.instructions?.fillerMessages?.length) {
-    payload.filler_messages = config.instructions.fillerMessages;
-  }
-
-  if (config.voiceLanguage?.additionalLanguages?.length) {
-    payload.additional_languages = config.voiceLanguage.additionalLanguages;
-  }
-  if (config.voiceLanguage?.autoLanguageDetection) {
-    payload.auto_detect_language = true;
-  }
-  if (config.voiceLanguage?.silenceTimeoutMs) {
-    (payload as { silence_timeout_ms?: number }).silence_timeout_ms =
-      config.voiceLanguage.silenceTimeoutMs;
+    payload.messaging_settings = {
+      ...((payload.messaging_settings as object) || {}),
+      filler_messages: config.instructions.fillerMessages,
+    };
   }
 
   const { getPrisma } = await import("@/lib/db");
   const prisma = getPrisma();
 
   if (agent.telnyxAssistantId) {
-    await telnyxRequest(`/ai/assistants/${agent.telnyxAssistantId}`, {
-      method: "PATCH",
-      body: payload,
-    });
+    // Telnyx assistant updates are POST, not PATCH.
+    await ai.updateAssistant(agent.telnyxAssistantId, payload);
     return {
       mode: "telnyx",
       assistantId: agent.telnyxAssistantId,
@@ -323,18 +320,19 @@ export async function syncTelnyxAssistant(
     };
   }
 
-  const created = await telnyxRequest<{ data: { id: string } }>("/ai/assistants", {
-    method: "POST",
-    body: payload,
-  });
-  const assistantId = created.data?.id;
-  if (!assistantId) throw new Error("Telnyx assistant create returned no id");
+  const created = await ai.createAssistant(payload);
+  const assistantId = unwrapTelnyxId(created);
+  if (!assistantId) {
+    throw new Error(
+      `Telnyx assistant create returned no id: ${JSON.stringify(created).slice(0, 400)}`,
+    );
+  }
 
   await prisma.voiceAgent.update({
     where: { id: agent.id },
     data: {
       telnyxAssistantId: assistantId,
-      telnyxConnectionId: process.env.TELNYX_CONNECTION_ID?.trim() || null,
+      telnyxConnectionId: connectionId || null,
     },
   });
 

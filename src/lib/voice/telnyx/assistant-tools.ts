@@ -42,7 +42,6 @@ export function buildAssistantTools(input: {
           name: t.name,
           to: t.to,
         })),
-        from: undefined,
         warm_transfer_instructions:
           input.warmTransferInstructions ||
           "Briefly introduce the caller and summarize why they are calling before connecting.",

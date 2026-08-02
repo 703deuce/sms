@@ -168,7 +168,7 @@ export const DEFAULT_VOICE_CONFIG: VoiceAgentConfig = {
   },
   model: {
     provider: "telnyx",
-    modelId: "meta-llama/llama-3.3-70b-instruct",
+    modelId: "Qwen/Qwen3-235B-A22B",
     temperature: 0.4,
     maxTokens: 1024,
   },

@@ -109,10 +109,14 @@ export async function PATCH(
         id,
         auth.session.userId,
       );
+      const mapped = mapAgent(result.agent);
       return NextResponse.json({
-        data: mapAgent(result.agent),
+        data: mapped,
         version: result.version.version,
         mode: "testing",
+        telnyxAssistantId: mapped.telnyxAssistantId,
+        healthStatus: mapped.healthStatus,
+        healthMessage: mapped.healthMessage,
       });
     }
     if (body.action === "publish" || body.action === "deploy") {

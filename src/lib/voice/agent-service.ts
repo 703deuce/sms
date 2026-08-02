@@ -168,15 +168,36 @@ export async function buildVoiceAgentForTest(
   });
 
   try {
-    await syncAssistantToTelnyx(workspaceId, agentId, updated, config);
+    const assistantId = await syncAssistantToTelnyx(
+      workspaceId,
+      agentId,
+      updated,
+      config,
+    );
     updated = (await prisma.voiceAgent.findUnique({ where: { id: agentId } })) || updated;
+    if (!assistantId && !updated.telnyxAssistantId) {
+      updated = await prisma.voiceAgent.update({
+        where: { id: agentId },
+        data: {
+          healthStatus: "warning",
+          healthMessage:
+            "Built locally but Telnyx did not return an assistant id — check TELNYX_API_KEY and Build again",
+        },
+      });
+    }
   } catch (err) {
-    console.error("[voice] Telnyx build sync failed", err);
-    await prisma.voiceAgent.update({
+    const detail =
+      err instanceof Error
+        ? err.message
+        : typeof err === "string"
+          ? err
+          : JSON.stringify(err);
+    console.error("[voice] Telnyx build sync failed", detail);
+    updated = await prisma.voiceAgent.update({
       where: { id: agentId },
       data: {
         healthStatus: "warning",
-        healthMessage: "Built locally but Telnyx sync failed — chat test may be mock-only",
+        healthMessage: `Built locally but Telnyx sync failed: ${detail.slice(0, 500)}`,
       },
     });
   }
