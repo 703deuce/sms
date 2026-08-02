@@ -250,12 +250,12 @@ async function main() {
         await page.locator('button:has-text("Send")').first().click();
         await page.waitForTimeout(8000);
         const after = await page.locator("body").innerText();
-        uiOk =
-          /assistant|hello|help|hours|front desk|Talk Co|there/i.test(after) &&
-          !/Build the agent first/i.test(after);
-        uiNote = after.includes("Thinking")
-          ? "still thinking / slow"
-          : after.slice(after.indexOf("Test conversation"), after.indexOf("Test conversation") + 500);
+        // Panel instructions always contain "Build the agent first…" — look for an ASSISTANT turn.
+        const hasAssistantTurn = /ASSISTANT\s*\n\s*\S+/i.test(after);
+        const assistantSnippet =
+          after.match(/ASSISTANT\s*\n([\s\S]{1,240})/i)?.[1]?.trim() || "";
+        uiOk = hasAssistantTurn && assistantSnippet.length > 3;
+        uiNote = assistantSnippet || after.slice(0, 240);
         log(uiOk, "UI chat send", uiNote.slice(0, 240));
       } else {
         log(false, "UI chat send", "textarea missing");
