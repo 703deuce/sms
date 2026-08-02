@@ -132,7 +132,14 @@ export function resolveCalendlyWebhookSigningKeys(
   const keys: string[] = [];
   const seen = new Set<string>();
   const add = (value: unknown) => {
-    const v = typeof value === "string" ? value.trim() : "";
+    // Coolify / portal copies sometimes wrap the key in quotes or leave a newline.
+    let v = typeof value === "string" ? value.trim() : "";
+    if (
+      (v.startsWith('"') && v.endsWith('"')) ||
+      (v.startsWith("'") && v.endsWith("'"))
+    ) {
+      v = v.slice(1, -1).trim();
+    }
     if (!v || seen.has(v)) return;
     seen.add(v);
     keys.push(v);

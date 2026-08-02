@@ -194,7 +194,8 @@ export async function runIntegrationProbe(
     | "write"
     | "force_sync"
     | "register_webhooks"
-    | "book_invitee",
+    | "book_invitee"
+    | "cancel_event",
   actorUserId?: string | null,
   params?: Record<string, unknown>,
 ) {
@@ -273,6 +274,42 @@ export async function runIntegrationProbe(
         durationMs: Date.now() - started,
         data: { created, readBack: Boolean(readBack) },
       };
+    }
+
+    if (probe === "cancel_event") {
+      if (provider !== "calendly") {
+        return {
+          ok: false,
+          probe,
+          durationMs: Date.now() - started,
+          error: "cancel_event is Calendly-only",
+        };
+      }
+      const { cancelAppointment } = await import("../adapters/calendly-actions");
+      const eventUri = String(params?.eventUri || "").trim();
+      const eventUuid = String(params?.eventUuid || "").trim();
+      if (!eventUri && !eventUuid) {
+        return {
+          ok: false,
+          probe,
+          durationMs: Date.now() - started,
+          error: "params.eventUri or params.eventUuid required",
+        };
+      }
+      const canceled = await cancelAppointment(ctx, {
+        eventUri: eventUri || undefined,
+        eventUuid: eventUuid || undefined,
+        reason: String(params?.reason || "Diagnostics cancel — webhook delivery test"),
+      });
+      await writeIntegrationAudit({
+        workspaceId,
+        provider,
+        category: "diagnostics",
+        action: "probe_cancel_event",
+        message: `Canceled ${canceled.eventUuid}`,
+        actorUserId,
+      });
+      return { ok: true, probe, durationMs: Date.now() - started, data: canceled };
     }
 
     if (probe === "book_invitee") {
