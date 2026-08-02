@@ -188,6 +188,54 @@ export async function cancelAppointment(
 }
 
 /**
+ * List webhook subscriptions for the connected user (presence/status only).
+ * Used to diagnose delivery failures (retry_started_at means Calendly is
+ * retrying — usually because our endpoint returned 401 Invalid signature).
+ */
+export async function listWebhookSubscriptions(ctx: AdapterContext): Promise<{
+  subscriptions: Array<{
+    uri: string;
+    callbackUrl: string | null;
+    state: string | null;
+    scope: string | null;
+    events: string[];
+    retryStartedAt: string | null;
+    createdAt: string | null;
+  }>;
+}> {
+  try {
+    const me = await getMe(ctx);
+    const user = String(me.uri || "");
+    const org = String(me.current_organization || "");
+    if (!user || !org) {
+      throw new Error("Calendly user/organization missing");
+    }
+    const params = new URLSearchParams({
+      organization: org,
+      user,
+      scope: "user",
+      count: "20",
+    });
+    const res = await calendlyApi<{ collection?: CalendlyResource[] }>(
+      `/webhook_subscriptions?${params}`,
+      ctx,
+    );
+    const subscriptions = (res.collection || []).map((s) => ({
+      uri: String(s.uri || ""),
+      callbackUrl: (s.callback_url as string) || null,
+      state: (s.state as string) || null,
+      scope: (s.scope as string) || null,
+      events: Array.isArray(s.events) ? (s.events as string[]) : [],
+      retryStartedAt: (s.retry_started_at as string) || null,
+      createdAt: (s.created_at as string) || null,
+    }));
+    return { subscriptions };
+  } catch (err) {
+    return wrapCalendlyError(err, "list webhook subscriptions");
+  }
+}
+
+/**
  * List available times for an event type (GET /event_type_available_times).
  * Window is capped at 7 days by default (Calendly allows up to 31).
  */

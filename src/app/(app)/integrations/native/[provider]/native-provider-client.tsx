@@ -43,6 +43,17 @@ type Snapshot = {
     webhookSetupError?: string | null;
     webhooksPlanBlocked?: boolean;
     scopesRequested?: string[];
+    webhookSubscriptionsLive?: Array<{
+      uri?: string;
+      callbackUrl?: string | null;
+      state?: string | null;
+      events?: string[];
+      retryStartedAt?: string | null;
+      createdAt?: string | null;
+    }>;
+    webhookDeliveryFailing?: boolean;
+    webhookActiveCount?: number;
+    webhookSubscriptionsLiveError?: string;
   };
 };
 
@@ -331,12 +342,35 @@ export function NativeProviderClient({ provider }: { provider: string }) {
               </li>
               <li>
                 Webhook subscription:{" "}
-                {(snapshot.calendly.webhookSubscriptionIds || []).length
-                  ? "present"
-                  : snapshot.calendly.webhooksPlanBlocked
-                    ? "blocked by Calendly plan (Free)"
-                    : "none"}
+                {snapshot.calendly.webhookActiveCount != null
+                  ? `${snapshot.calendly.webhookActiveCount} active`
+                  : (snapshot.calendly.webhookSubscriptionIds || []).length
+                    ? "present"
+                    : snapshot.calendly.webhooksPlanBlocked
+                      ? "blocked by Calendly plan (Free)"
+                      : "none"}
               </li>
+              {snapshot.calendly.webhookDeliveryFailing ? (
+                <li className="text-amber-700">
+                  Calendly is <strong>retrying deliveries</strong> (
+                  <code>retry_started_at</code> set). That almost always means our
+                  endpoint returned <strong>401 Invalid signature</strong> — Coolify{" "}
+                  <code>CALENDLY_WEBHOOK_SIGNING_KEY</code> must match the{" "}
+                  <strong>Webhook signing key</strong> shown once when you created the
+                  OAuth app in the Calendly developer portal (not a random string).
+                </li>
+              ) : null}
+              {(snapshot.calendly.webhookSubscriptionsLive || []).length ? (
+                <li className="text-xs break-all">
+                  Live subs:{" "}
+                  {snapshot.calendly.webhookSubscriptionsLive!.map((s) => (
+                    <span key={s.uri} className="block">
+                      {s.state || "?"} · retry={s.retryStartedAt || "none"} ·{" "}
+                      {(s.events || []).join(",") || "events?"}
+                    </span>
+                  ))}
+                </li>
+              ) : null}
               {snapshot.calendly.webhookSetupError ? (
                 <li className="text-amber-700">{snapshot.calendly.webhookSetupError}</li>
               ) : null}

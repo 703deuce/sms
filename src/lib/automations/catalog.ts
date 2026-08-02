@@ -592,6 +592,27 @@ export const INTEGRATION_ACTION_OPTIONS: IntegrationActionOption[] = [
     samplePayload: { orderId: "", note: "Order note" },
   },
   // —— Calendly appointment actions ——
+  // These run through job `integration_action` → executeIntegrationAction
+  // (same path as AI supervised actions). Prefer API booking over browser UI.
+  {
+    id: "appointment.list_available_times",
+    label: "List available appointment times",
+    providers: ["calendly"],
+    samplePayload: { eventTypeUri: "", startTime: "", endTime: "" },
+  },
+  {
+    id: "appointment.book",
+    label: "Book appointment (Scheduling API)",
+    providers: ["calendly"],
+    samplePayload: {
+      name: "{{customer.firstName}} {{customer.lastName}}",
+      email: "{{customer.email}}",
+      startTime: "",
+      eventTypeUri: "",
+      timezone: "America/New_York",
+      phone: "{{customer.phone}}",
+    },
+  },
   {
     id: "appointment.get_scheduling_link",
     label: "Get scheduling link",

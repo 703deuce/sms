@@ -106,6 +106,27 @@ export async function getIntegrationDiagnosticsSnapshot(
       ),
       scopesRequested: adapter.oauth?.scopes || [],
     };
+
+    // Live subscription status from Calendly (retry_started_at = delivery failing).
+    try {
+      const { listWebhookSubscriptions } = await import("../adapters/calendly-actions");
+      const ctx = await buildAdapterContext(workspaceId, provider);
+      const listed = await listWebhookSubscriptions(ctx);
+      const live = listed.subscriptions || [];
+      calendly.webhookSubscriptionsLive = live.map((s) => ({
+        uri: s.uri,
+        callbackUrl: s.callbackUrl,
+        state: s.state,
+        events: s.events,
+        retryStartedAt: s.retryStartedAt,
+        createdAt: s.createdAt,
+      }));
+      calendly.webhookDeliveryFailing = live.some((s) => Boolean(s.retryStartedAt));
+      calendly.webhookActiveCount = live.filter((s) => /active/i.test(s.state || "")).length;
+    } catch (err) {
+      calendly.webhookSubscriptionsLiveError =
+        err instanceof Error ? err.message : String(err);
+    }
   }
 
   return {
