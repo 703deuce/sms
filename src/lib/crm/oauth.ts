@@ -5,6 +5,7 @@
 
 import { createHash, createHmac, randomBytes } from "crypto";
 import { getConnection, upsertConnection } from "@/lib/integrations/connections";
+import { getIntegrationAppUrl } from "@/lib/integrations/framework/app-url";
 import { assertCrmOAuthEnv } from "./env-check";
 import { getConnector, isCrmProvider } from "./registry";
 import { writeCrmAudit } from "./logging";
@@ -20,7 +21,8 @@ function createPkcePair() {
 }
 
 function appUrl() {
-  return (process.env.APP_URL || "http://localhost:3000").replace(/\/$/, "");
+  // Same resolution as native integrations: APP_URL, then NEXT_PUBLIC_APP_URL.
+  return getIntegrationAppUrl();
 }
 
 function secret() {

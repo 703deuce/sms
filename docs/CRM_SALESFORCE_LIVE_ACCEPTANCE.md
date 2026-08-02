@@ -5,6 +5,8 @@
 **Production app:** `https://transovo.ai`  
 **Verdict:** **Not production-ready yet** — code path hardened and mocked tests pass; full live org acceptance must be run on the deployed workspace after Coolify redeploy of web + `worker:all`.
 
+> **Clarification:** An earlier agent log that printed `SALESFORCE_CLIENT_ID: MISSING` referred only to the **Cursor coding sandbox**, which has no Coolify secrets. It does **not** mean production is missing those vars. Use Integrations → Salesforce → Diagnostics on `transovo.ai` to see presence flags for the live web process.
+
 Status values used below (only these):
 
 - Live tested and passed
@@ -161,6 +163,9 @@ Missing client id/secret throws a clear OAuth start error via `assertCrmOAuthEnv
 3. **Enterprise test incorrectly required `handleWebhook` on Salesforce** — updated to assert it is intentionally absent.
 4. **Readiness / env docs omitted Salesforce** — `crm-live-readiness`, `.env.example`, env-check APP_URL message, diagnostics env probe now include Salesforce callback and secrets.
 5. **No job-handler registration guard** — added `CRM_JOB_TYPES` + test that fails if CRM emits an unhandled job type.
+6. **CRM OAuth ignored `NEXT_PUBLIC_APP_URL`** — native integrations accepted it, CRM OAuth only read `APP_URL` (else localhost). Fixed: CRM now uses `getIntegrationAppUrl()`.
+7. **Stale docs listed wrong callback** — some docs said `/api/crm/oauth/callback` while authorize sends `/api/crm/salesforce/callback`. Corrected; both routes exist, but Salesforce redirect URI must match the authorize `redirect_uri`.
+8. **Diagnostics hid which vars the web process actually has** — providers + diagnostics now show presence-only rows and the exact callback URL.
 
 ---
 

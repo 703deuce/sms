@@ -3,6 +3,7 @@
  * Missing vars must produce helpful, actionable errors — never silent failure.
  */
 
+import { getIntegrationAppUrl } from "@/lib/integrations/framework/app-url";
 import { CRM_PROVIDER_IDS, getConnector, providerEnvReady } from "./registry";
 import type { CrmProviderId } from "./types";
 import { scopesForProvider } from "./scopes";
@@ -32,7 +33,11 @@ export type EnvCheckResult = {
 };
 
 function appUrl() {
-  return (process.env.APP_URL || "").replace(/\/$/, "");
+  // Prefer APP_URL; accept NEXT_PUBLIC_APP_URL the same way native OAuth does.
+  const hasExplicit =
+    Boolean(process.env.APP_URL?.trim()) || Boolean(process.env.NEXT_PUBLIC_APP_URL?.trim());
+  if (!hasExplicit) return "";
+  return getIntegrationAppUrl();
 }
 
 /** @deprecated Prefer getCrmCallbackUrlForProvider — kept for diagnostics summary. */
@@ -52,14 +57,19 @@ export function checkCrmEnvironment(provider?: CrmProviderId): EnvCheckResult {
   const items: EnvCheckItem[] = [];
   const base = appUrl();
 
+  const appUrlSource = process.env.APP_URL?.trim()
+    ? "APP_URL"
+    : process.env.NEXT_PUBLIC_APP_URL?.trim()
+      ? "NEXT_PUBLIC_APP_URL"
+      : null;
   items.push({
     key: "APP_URL",
     required: true,
     ok: Boolean(base),
     provider: "shared",
     message: base
-      ? `APP_URL is set (${base}). Register Salesforce callback exactly as ${base}/api/crm/salesforce/callback (also Zoho/Pipedrive per-provider paths)`
-      : "APP_URL is missing. Set it to your public site origin (no trailing slash), e.g. https://transovo.ai",
+      ? `Public app URL is set via ${appUrlSource} (${base}). Register Salesforce callback exactly as ${base}/api/crm/salesforce/callback`
+      : "APP_URL (or NEXT_PUBLIC_APP_URL) is missing. Set it to your public site origin (no trailing slash), e.g. https://transovo.ai",
   });
 
   items.push({

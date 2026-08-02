@@ -3,6 +3,7 @@ import {
   handleCrmOAuthCallback,
   providerFromCallbackParam,
 } from "@/lib/crm/oauth-callback-handler";
+import { getIntegrationAppUrl } from "@/lib/integrations/framework/app-url";
 
 /**
  * Provider-specific OAuth callbacks registered in CRM consoles:
@@ -18,7 +19,7 @@ export async function GET(
   const provider = providerFromCallbackParam(raw);
   if (!provider) {
     return NextResponse.redirect(
-      `${(process.env.APP_URL || "http://localhost:3000").replace(/\/$/, "")}/integrations/crm?connected_error=${encodeURIComponent(
+      `${getIntegrationAppUrl()}/integrations/crm?connected_error=${encodeURIComponent(
         "Unknown CRM provider callback.",
       )}`,
     );

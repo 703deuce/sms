@@ -301,7 +301,9 @@ ok("adapters expose inbound activity lists + updateNote", async () => {
 
 ok("Salesforce OAuth callback + scopes + job handlers registered", async () => {
   const prev = process.env.APP_URL;
+  const prevPublic = process.env.NEXT_PUBLIC_APP_URL;
   process.env.APP_URL = "https://transovo.ai";
+  delete process.env.NEXT_PUBLIC_APP_URL;
   const { crmOAuthCallbackUrl } = await import("../src/lib/crm/oauth");
   const { scopesForProvider } = await import("../src/lib/crm/scopes");
   const { CRM_JOB_TYPES } = await import("../src/lib/crm/runtime/job-types");
@@ -353,6 +355,27 @@ ok("Salesforce OAuth callback + scopes + job handlers registered", async () => {
 
   if (prev === undefined) delete process.env.APP_URL;
   else process.env.APP_URL = prev;
+  if (prevPublic === undefined) delete process.env.NEXT_PUBLIC_APP_URL;
+  else process.env.NEXT_PUBLIC_APP_URL = prevPublic;
+});
+
+ok("CRM OAuth accepts NEXT_PUBLIC_APP_URL when APP_URL unset", async () => {
+  const prev = process.env.APP_URL;
+  const prevPublic = process.env.NEXT_PUBLIC_APP_URL;
+  delete process.env.APP_URL;
+  process.env.NEXT_PUBLIC_APP_URL = "https://transovo.ai";
+  const { crmOAuthCallbackUrl } = await import("../src/lib/crm/oauth");
+  const { checkCrmEnvironment } = await import("../src/lib/crm/env-check");
+  assert.equal(
+    crmOAuthCallbackUrl("salesforce"),
+    "https://transovo.ai/api/crm/salesforce/callback",
+  );
+  const env = checkCrmEnvironment("salesforce");
+  assert.equal(env.items.find((i) => i.key === "APP_URL")?.ok, true);
+  if (prev === undefined) delete process.env.APP_URL;
+  else process.env.APP_URL = prev;
+  if (prevPublic === undefined) delete process.env.NEXT_PUBLIC_APP_URL;
+  else process.env.NEXT_PUBLIC_APP_URL = prevPublic;
 });
 
 ok("mergeInboundContact prefers local filled fields", async () => {

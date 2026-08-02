@@ -7,6 +7,7 @@
  */
 
 import { NextResponse } from "next/server";
+import { getIntegrationAppUrl } from "@/lib/integrations/framework/app-url";
 import { humanizeCrmError } from "./human-errors";
 import { completeCrmOAuth, parseCrmOAuthState } from "./oauth";
 import { isCrmProvider } from "./registry";
@@ -14,7 +15,7 @@ import { enqueueCrmSync } from "./sync-engine";
 import type { CrmProviderId } from "./types";
 
 function appUrl() {
-  return (process.env.APP_URL || "http://localhost:3000").replace(/\/$/, "");
+  return getIntegrationAppUrl();
 }
 
 export async function handleCrmOAuthCallback(

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
 import { getPrisma } from "@/lib/db";
+import { checkCrmEnvironment } from "@/lib/crm/env-check";
 import { listConnectors, providerEnvReady } from "@/lib/crm/registry";
 import { connectionUiState, getCrmSyncPreferences } from "@/lib/crm/settings";
 import { listCrmSyncRuns } from "@/lib/crm/logging";
@@ -37,10 +38,23 @@ export async function GET() {
         const runs = await listCrmSyncRuns(auth.workspaceId, { provider: c.id, limit: 1 });
         const lastRun = runs[0] || null;
         const cfg = (conn?.configJson || {}) as Record<string, unknown>;
+        // Presence-only — never secret values. Shows whether Coolify vars reached THIS web process.
+        const env = checkCrmEnvironment(c.id as CrmProviderId);
+        const providerEnv = env.providers[0];
+        const envItems = env.items.map((i) => ({
+          key: i.key,
+          ok: i.ok,
+          required: i.required,
+          message: i.message,
+        }));
         return {
           id: c.id,
           name: c.displayName,
           envConfigured: providerEnvReady(c.id),
+          oauthReady: providerEnv?.oauthReady ?? false,
+          missingEnv: providerEnv?.missing || [],
+          callbackUrl: providerEnv?.callbackUrl || env.callbackUrls[c.id as CrmProviderId],
+          envItems,
           status: connectionUiState(conn?.status),
           syncStatus: conn?.syncStatus || "idle",
           lastSyncAt: conn?.lastSyncAt?.toISOString() || null,

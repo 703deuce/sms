@@ -12,6 +12,9 @@ type ProviderCard = {
   id: string;
   name: string;
   envConfigured: boolean;
+  oauthReady?: boolean;
+  missingEnv?: string[];
+  callbackUrl?: string;
   status: string;
   lastSyncAt: string | null;
   lastError: string | null;
@@ -123,9 +126,16 @@ export function CrmIntegrationsClient() {
             </div>
             <p className="text-xs text-muted-foreground">
               {p.envConfigured
-                ? "OAuth app credentials configured"
-                : "Set client ID/secret env vars to enable Connect"}
+                ? p.oauthReady
+                  ? "OAuth app credentials configured on this web service"
+                  : `Client ID/secret present, but still missing: ${(p.missingEnv || []).join(", ") || "APP_URL / INTEGRATION_SECRET_KEY"}`
+                : "Set client ID/secret env vars on the web service, then redeploy"}
             </p>
+            {p.callbackUrl ? (
+              <p className="break-all font-mono text-[11px] text-muted-foreground">
+                Callback: {p.callbackUrl}
+              </p>
+            ) : null}
             <p className="text-xs text-muted-foreground">
               Last sync:{" "}
               {p.lastSyncAt ? new Date(p.lastSyncAt).toLocaleString() : "Never"}

@@ -1035,10 +1035,45 @@ export function CrmProviderClient({ provider }: { provider: string }) {
               Support-facing probes against the live CRM. Prefer this over SSH/logs.
             </p>
             {diagSnapshot ? (
-              <div className="grid gap-2 md:grid-cols-3 text-xs">
-                <p>Connected: {diagSnapshot.connected ? "✅" : "❌"}</p>
-                <p>Token valid: {diagSnapshot.tokenValid ? "✅" : "❌"}</p>
-                <p>Env ready: {diagSnapshot.envReady ? "✅" : "❌"}</p>
+              <div className="space-y-3 text-xs">
+                <div className="grid gap-2 md:grid-cols-3">
+                  <p>Connected: {diagSnapshot.connected ? "✅" : "❌"}</p>
+                  <p>Token valid: {diagSnapshot.tokenValid ? "✅" : "❌"}</p>
+                  <p>Env ready: {diagSnapshot.envReady ? "✅" : "❌"}</p>
+                </div>
+                {typeof diagSnapshot.callbackUrl === "string" ? (
+                  <p className="break-all font-mono text-muted-foreground">
+                    Exact Salesforce callback to register: {String(diagSnapshot.callbackUrl)}
+                  </p>
+                ) : null}
+                {Array.isArray(diagSnapshot.missingEnv) &&
+                (diagSnapshot.missingEnv as string[]).length > 0 ? (
+                  <p className="text-danger">
+                    Missing on this web process:{" "}
+                    {(diagSnapshot.missingEnv as string[]).join(", ")}
+                  </p>
+                ) : null}
+                {Array.isArray(diagSnapshot.envItems) ? (
+                  <ul className="space-y-1 rounded-lg border border-border bg-muted/20 p-3">
+                    {(
+                      diagSnapshot.envItems as Array<{
+                        key: string;
+                        ok: boolean;
+                        required: boolean;
+                        message: string;
+                      }>
+                    ).map((item) => (
+                      <li key={item.key} className="flex gap-2">
+                        <span>{item.ok ? "✅" : item.required ? "❌" : "⚪"}</span>
+                        <span>
+                          <span className="font-mono">{item.key}</span>
+                          {" — "}
+                          {item.message}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
               </div>
             ) : null}
             <div className="flex flex-wrap gap-2">

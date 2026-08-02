@@ -33,13 +33,16 @@ Do not redesign the framework. Do not add abstractions unless required for produ
 
 Code cannot create your OAuth apps. Create them once per environment.
 
-### Shared callback
+### Per-provider callbacks (authorize sends these)
 
 ```
-{APP_URL}/api/crm/oauth/callback
+{APP_URL}/api/crm/salesforce/callback
+{APP_URL}/api/crm/zoho/callback
+{APP_URL}/api/crm/pipedrive/callback
 ```
 
-Must match **exactly** (scheme, host, path, no trailing slash on `APP_URL`).
+Must match **exactly** (scheme, host, path, no trailing slash on `APP_URL`).  
+Legacy `{APP_URL}/api/crm/oauth/callback` still accepts a return, but is not what authorize sends.
 
 ### Salesforce
 

@@ -70,6 +70,9 @@ export type DiagnosticsSnapshot = {
   };
   envReady: boolean;
   callbackUrl: string;
+  /** Presence-only env rows for the active provider (no secret values). */
+  envItems: Array<{ key: string; ok: boolean; required: boolean; message: string }>;
+  missingEnv: string[];
 };
 
 const PROBE_LABELS: Record<ProbeId, string> = {
@@ -220,7 +223,14 @@ export async function getCrmDiagnosticsSnapshot(
       status: recent429 > 0 ? "throttled" : "ok",
     },
     envReady: env.providers[0]?.oauthReady ?? false,
-    callbackUrl: env.callbackUrl,
+    callbackUrl: env.callbackUrls[provider] || env.callbackUrl,
+    envItems: env.items.map((i) => ({
+      key: i.key,
+      ok: i.ok,
+      required: i.required,
+      message: i.message,
+    })),
+    missingEnv: env.providers[0]?.missing || [],
   };
 }
 

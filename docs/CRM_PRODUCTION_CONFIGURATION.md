@@ -20,7 +20,11 @@ A customer can:
 ```bash
 npm run db:push          # CRM tables + IntegrationConnection columns
 # Set provider OAuth env vars (below)
-# Register callback: {APP_URL}/api/crm/oauth/callback
+# Register callbacks EXACTLY (no trailing slash):
+#   {APP_URL}/api/crm/salesforce/callback
+#   {APP_URL}/api/crm/zoho/callback
+#   {APP_URL}/api/crm/pipedrive/callback
+# Legacy /api/crm/oauth/callback still accepts callbacks, but authorize sends the per-provider URL.
 npm run worker:all       # drains crm_sync + crm_push_event
 ```
 
@@ -93,7 +97,7 @@ Use `access_type=offline`. Regional `api_domain` from token response is stored a
 
 **Not requested:** `mail:*`, products, admin scopes.
 
-Configure the same scopes in Developer Hub → Auth & access. Callback = `{APP_URL}/api/crm/oauth/callback`.
+Configure the same scopes in Developer Hub → Auth & access. Callback = `{APP_URL}/api/crm/salesforce/callback` (or the Zoho/Pipedrive per-provider path).
 
 ---
 
