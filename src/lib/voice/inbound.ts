@@ -13,7 +13,37 @@ import {
   startCallTranscription,
 } from "./telnyx/assistant-sync";
 import { parseVoiceAgentConfig } from "./types";
+import { claimAiStart } from "./ai-start-lock";
+import {
+  AI_MEDIA_SETTLE_MS,
+  DEFAULT_AI_GREETING,
+  startupGreetingFromConfig,
+} from "./startup-greeting";
 import { playStartupGreetingMask } from "./startup-greeting-runtime";
+import {
+  buildPstnAudioDiagnostics,
+  normalizeOutputGainDb,
+  startInboundNoiseSuppression,
+} from "./pstn-audio";
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function resolveAiGreeting(input: {
+  config: ReturnType<typeof parseVoiceAgentConfig>;
+  agentName: string;
+  contactName?: string;
+}) {
+  const configured =
+    (input.config.callHandling?.greeting as string | undefined)?.trim() ||
+    DEFAULT_AI_GREETING;
+  if (!input.contactName) return configured;
+  if (/^hi[, ]/i.test(configured) || configured.includes(input.contactName)) {
+    return configured;
+  }
+  return `Hi ${input.contactName}. ${configured}`;
+}
 
 type InboundInput = {
   workspaceId: string;
@@ -125,6 +155,12 @@ async function startAiOnInboundCall(input: {
   }
 
   if (isTelnyxVoiceConfigured() && input.telnyxCallControlId) {
+    // Claim BEFORE answer/speak so call.answered cannot start a second mask/AI.
+    const claim = await claimAiStart(input.callId);
+    if (!claim.claimed) {
+      return { started: false, reason: claim.reason || "ai_start_claimed" };
+    }
+
     const answerAt = Date.now();
     await telnyxRequest(`/calls/${input.telnyxCallControlId}/actions/answer`, {
       method: "POST",
@@ -140,6 +176,9 @@ async function startAiOnInboundCall(input: {
       },
     }).catch(() => undefined);
 
+    // Inbound-only NS — do not process outbound AI playback.
+    await startInboundNoiseSuppression(input.telnyxCallControlId);
+
     await speakRecordingDisclosure(
       input.workspaceId,
       input.callId,
@@ -149,12 +188,21 @@ async function startAiOnInboundCall(input: {
 
     if (agent.telnyxAssistantId) {
       const cfg = parseVoiceAgentConfig(agent.draftConfig);
+      const startup = startupGreetingFromConfig(cfg);
+      const outputGainDb = normalizeOutputGainDb(cfg.voiceLanguage?.outputGainDb);
+
+      // Optional TTS/audio mask — default mode is "ai" (no mask).
       const maskResult = await playStartupGreetingMask({
         workspaceId: input.workspaceId,
         callId: input.callId,
         callControlId: input.telnyxCallControlId,
         config: cfg,
       });
+
+      // When AI speaks the greeting, wait for media settle so the first syllable isn't static.
+      if (startup.mode === "ai" || startup.mode === "none" || !maskResult.played) {
+        await sleep(AI_MEDIA_SETTLE_MS);
+      }
 
       const callRow = await prisma.voiceCall.findUnique({ where: { id: input.callId } });
       const { resolveCallDynamicVariables } = await import("./dynamic-variables");
@@ -169,16 +217,20 @@ async function startAiOnInboundCall(input: {
         overrides: (callRow?.dynamicVariables || null) as Record<string, unknown> | null,
       });
       if (input.contactName) dynamicVariables.full_name = input.contactName;
+      dynamicVariables.output_gain_db = String(outputGainDb);
 
-      const personalized = input.contactName
-        ? `Hi ${input.contactName}, thanks for calling.`
-        : undefined;
+      const greeting = resolveAiGreeting({
+        config: cfg,
+        agentName: agent.name || "our assistant",
+        contactName: input.contactName,
+      });
 
       const aiHandoffAt = Date.now();
       await startAiAssistantOnCall({
         callControlId: input.telnyxCallControlId,
         assistantId: agent.telnyxAssistantId,
-        greeting: personalized,
+        // One complete greeting from the selected AI voice — not a short “Thanks”.
+        greeting,
         dynamicVariables,
         clientState: {
           workspaceId: input.workspaceId,
@@ -186,6 +238,13 @@ async function startAiOnInboundCall(input: {
           agentId: agent.id,
         },
       }).catch((err) => console.error("[voice/inbound] ai_assistant_start", err));
+
+      const pstnDiag = buildPstnAudioDiagnostics({
+        callControlId: input.telnyxCallControlId,
+        outputGainDb,
+        startupGreetingMode: startup.mode,
+        noiseSuppressionInbound: true,
+      });
 
       await prisma.voiceCallEvent.create({
         data: {
@@ -196,7 +255,9 @@ async function startAiOnInboundCall(input: {
             at: aiHandoffAt,
             answerToAiMs: aiHandoffAt - answerAt,
             startupMask: maskResult,
-            // Ideal path: PSTN ↔ Telnyx ↔ PCM ↔ AI (no extra app-side encodes).
+            greetingPreview: greeting.slice(0, 160),
+            path: "inbound_initiated",
+            pstnAudio: pstnDiag,
             transcodesEstimate: 1,
           } as object,
         },
@@ -220,9 +281,11 @@ async function startAiOnInboundCall(input: {
           agentVersionId: versionStamp.agentVersionId,
           dynamicVariables: dynamicVariables as object,
           metadata: {
+            ...claim.meta,
             routing: input.routing,
             payload: input.payload,
             aiStarted: true,
+            aiStartClaimed: true,
             assistantId: agent.telnyxAssistantId,
             transcriptionStarted: true,
             assistantVersionId: versionStamp.assistantVersionId,
@@ -233,8 +296,12 @@ async function startAiOnInboundCall(input: {
               aiHandoffAt,
               answerToAiMs: aiHandoffAt - answerAt,
               startupMask: maskResult,
+              settleMs: AI_MEDIA_SETTLE_MS,
+              greetingPreview: greeting.slice(0, 160),
+              path: "inbound_initiated",
               transcodesEstimate: 1,
             },
+            pstnAudio: pstnDiag,
           } as object,
         },
       });

@@ -23,14 +23,25 @@ export type StartupGreetingConfig = {
   handOffWhenReady: boolean;
 };
 
+/**
+ * Default: AI speaks one complete greeting after media settle.
+ * TTS mask is optional — using both caused “Thank you … Thank you” doubles
+ * when initiated + answered paths both ran.
+ */
 export const DEFAULT_STARTUP_GREETING: StartupGreetingConfig = {
   enabled: true,
-  mode: "tts",
-  text: "Thank you for calling.",
+  mode: "ai",
+  text: "Thank you for calling. Please hold for just a moment while I connect you with our AI assistant.",
   audioUrl: "",
   delayMs: "auto",
   handOffWhenReady: true,
 };
+
+/** Brief settle after answer before AI greets (no TTS mask). */
+export const AI_MEDIA_SETTLE_MS = 700;
+
+export const DEFAULT_AI_GREETING =
+  "Thank you for calling. I'm the virtual assistant, and I can answer questions or take a message. How can I help you today?";
 
 export function parseStartupGreeting(
   callHandling: Record<string, unknown> | undefined | null,
@@ -43,7 +54,7 @@ export function parseStartupGreeting(
     modeRaw === "tts" ||
     modeRaw === "audio_url"
       ? modeRaw
-      : "tts";
+      : "ai";
 
   let delayMs: "auto" | number = "auto";
   if (typeof raw.delayMs === "number" && Number.isFinite(raw.delayMs)) {
@@ -52,15 +63,25 @@ export function parseStartupGreeting(
     delayMs = "auto";
   }
 
+  // Legacy: short “Thank you.” TTS mask was the old default and raced with AI greeting.
+  // Treat that exact legacy config as AI-only so existing agents stop double-greeting.
+  const text = String(raw.text || DEFAULT_STARTUP_GREETING.text).slice(0, 280);
+  const legacyShortMask =
+    mode === "tts" &&
+    /^thank you for calling\.?$/i.test(text.trim()) &&
+    raw.enabled !== false;
+
+  const resolvedMode: StartupGreetingMode = legacyShortMask ? "ai" : mode;
+
   const enabled =
     raw.enabled === undefined
-      ? mode !== "none"
-      : Boolean(raw.enabled) && mode !== "none";
+      ? resolvedMode !== "none"
+      : Boolean(raw.enabled) && resolvedMode !== "none";
 
   return {
     enabled,
-    mode,
-    text: String(raw.text || DEFAULT_STARTUP_GREETING.text).slice(0, 280),
+    mode: resolvedMode,
+    text: legacyShortMask ? DEFAULT_STARTUP_GREETING.text : text,
     audioUrl: String(raw.audioUrl || "").trim(),
     delayMs,
     handOffWhenReady: raw.handOffWhenReady !== false,

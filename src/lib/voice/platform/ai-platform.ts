@@ -1431,6 +1431,9 @@ export async function enableWebCallsAndSyncVoice(
   let voiceSynced = false;
   let voiceError: string | null = null;
   try {
+    const gainDb = Number(config.voiceLanguage?.outputGainDb ?? 0);
+    const gainLinear =
+      gainDb === -6 ? 0.5 : gainDb === -3 ? 0.708 : null;
     await ai.updateAssistant(agent.telnyxAssistantId, {
       voice_settings: {
         voice: voiceId,
@@ -1440,15 +1443,25 @@ export async function enableWebCallsAndSyncVoice(
         ...(config.voiceLanguage?.expressiveMode || isUltraVoice(voiceId)
           ? { expressive_mode: true }
           : {}),
+        ...(gainLinear != null ? { volume: gainLinear } : {}),
+      },
+      telephony_settings: {
+        supports_unauthenticated_web_calls: true,
+        ...(config.voiceLanguage?.noiseSuppression === false
+          ? { noise_suppression: "disabled" }
+          : { noise_suppression: "krisp" }),
       },
     });
     voiceSynced = true;
   } catch (err) {
     voiceError = err instanceof Error ? err.message : String(err);
-    // Retry without expressive_mode / speed.
+    // Retry without expressive_mode / speed / volume.
     try {
       await ai.updateAssistant(agent.telnyxAssistantId, {
         voice_settings: { voice: voiceId },
+        telephony_settings: {
+          supports_unauthenticated_web_calls: true,
+        },
       });
       voiceSynced = true;
       voiceError = voiceError ? `${voiceError} (retried plain voice ok)` : null;

@@ -445,15 +445,48 @@ export async function processVoiceWebhookEvent(input: {
     });
   }
 
-  // Outbound (and any unanswered AI leg): when the callee answers, start the assistant.
+  // Outbound (or inbound that never claimed): start assistant once on answered.
+  // Inbound AI usually claims + starts on call.initiated — do NOT greet twice.
   if (
     !isSecondaryVoiceLeg &&
     (eventType === "call.answered" || eventType === "call.bridged") &&
     call.agentId &&
     !call.voicemailDetected
   ) {
+    const { claimAiStart, isAiStartClaimed } = await import("../ai-start-lock");
     const meta = (call.metadata || {}) as Record<string, unknown>;
-    if (!meta.aiStarted) {
+    if (isAiStartClaimed(meta)) {
+      await prisma.voiceCallEvent
+        .create({
+          data: {
+            workspaceId,
+            callId: call.id,
+            eventType: "media.ai_start_skipped",
+            payload: {
+              reason: meta.aiStarted ? "ai_already_started" : "ai_start_claimed",
+              path: "answered_webhook",
+              eventType,
+            } as object,
+          },
+        })
+        .catch(() => undefined);
+    } else {
+      const claim = await claimAiStart(call.id);
+      if (!claim.claimed) {
+        await prisma.voiceCallEvent
+          .create({
+            data: {
+              workspaceId,
+              callId: call.id,
+              eventType: "media.ai_start_skipped",
+              payload: {
+                reason: claim.reason || "claim_failed",
+                path: "answered_webhook",
+              } as object,
+            },
+          })
+          .catch(() => undefined);
+      } else {
       const agent = await prisma.voiceAgent.findUnique({ where: { id: call.agentId } });
       const controlId = String(eventPayload.call_control_id || call.telnyxCallControlId || "");
       if (agent?.telnyxAssistantId && controlId) {
@@ -469,7 +502,7 @@ export async function processVoiceWebhookEvent(input: {
             where: { id: call.id },
             data: {
               metadata: {
-                ...meta,
+                ...claim.meta,
                 aiStartBlocked: admission.code,
                 aiStartBlockedReason: admission.reason,
               } as object,
@@ -483,6 +516,35 @@ export async function processVoiceWebhookEvent(input: {
         } = await import("../telnyx/assistant-sync");
         const { resolveCallDynamicVariables } = await import("../dynamic-variables");
         const { recordFailureDiagnostic } = await import("../platform/ai-platform");
+        const { parseVoiceAgentConfig } = await import("../types");
+        const { playStartupGreetingMask } = await import("../startup-greeting-runtime");
+        const {
+          AI_MEDIA_SETTLE_MS,
+          DEFAULT_AI_GREETING,
+          startupGreetingFromConfig,
+        } = await import("../startup-greeting");
+        const {
+          buildPstnAudioDiagnostics,
+          normalizeOutputGainDb,
+          startInboundNoiseSuppression,
+        } = await import("../pstn-audio");
+
+        const cfg = parseVoiceAgentConfig(agent.draftConfig);
+        const startup = startupGreetingFromConfig(cfg);
+        const outputGainDb = normalizeOutputGainDb(cfg.voiceLanguage?.outputGainDb);
+
+        await startInboundNoiseSuppression(controlId);
+
+        const maskResult = await playStartupGreetingMask({
+          workspaceId,
+          callId: call.id,
+          callControlId: controlId,
+          config: cfg,
+        });
+        if (startup.mode === "ai" || startup.mode === "none" || !maskResult.played) {
+          await new Promise((r) => setTimeout(r, AI_MEDIA_SETTLE_MS));
+        }
+
         const storedVars = (call.dynamicVariables || {}) as Record<string, unknown>;
         const dynamicVariables = await resolveCallDynamicVariables({
           workspaceId,
@@ -494,20 +556,18 @@ export async function processVoiceWebhookEvent(input: {
           direction: call.direction,
           overrides: storedVars,
         });
-        const { parseVoiceAgentConfig } = await import("../types");
-        const { playStartupGreetingMask } = await import("../startup-greeting-runtime");
-        const cfg = parseVoiceAgentConfig(agent.draftConfig);
-        const maskResult = await playStartupGreetingMask({
-          workspaceId,
-          callId: call.id,
-          callControlId: controlId,
-          config: cfg,
-        });
+        dynamicVariables.output_gain_db = String(outputGainDb);
+
+        const greeting =
+          (cfg.callHandling?.greeting as string | undefined)?.trim() ||
+          DEFAULT_AI_GREETING;
+
         const aiHandoffAt = Date.now();
         try {
           await startAiAssistantOnCall({
             callControlId: controlId,
             assistantId: agent.telnyxAssistantId,
+            greeting,
             dynamicVariables,
             clientState: {
               workspaceId,
@@ -526,6 +586,14 @@ export async function processVoiceWebhookEvent(input: {
             message: err instanceof Error ? err.message : String(err),
           }).catch(() => undefined);
         }
+
+        const pstnDiag = buildPstnAudioDiagnostics({
+          callControlId: controlId,
+          outputGainDb,
+          startupGreetingMode: startup.mode,
+          noiseSuppressionInbound: true,
+        });
+
         await prisma.voiceCallEvent
           .create({
             data: {
@@ -535,8 +603,10 @@ export async function processVoiceWebhookEvent(input: {
               payload: {
                 at: aiHandoffAt,
                 startupMask: maskResult,
+                greetingPreview: greeting.slice(0, 160),
                 transcodesEstimate: 1,
                 path: "answered_webhook",
+                pstnAudio: pstnDiag,
               } as object,
             },
           })
@@ -555,8 +625,9 @@ export async function processVoiceWebhookEvent(input: {
             agentVersionId: versionStamp.agentVersionId || call.agentVersionId,
             dynamicVariables: dynamicVariables as object,
             metadata: {
-              ...meta,
+              ...claim.meta,
               aiStarted: true,
+              aiStartClaimed: true,
               assistantId: agent.telnyxAssistantId,
               transcriptionStarted: true,
               assistantVersionId: versionStamp.assistantVersionId,
@@ -565,12 +636,17 @@ export async function processVoiceWebhookEvent(input: {
               mediaPipeline: {
                 aiHandoffAt,
                 startupMask: maskResult,
+                settleMs: AI_MEDIA_SETTLE_MS,
+                greetingPreview: greeting.slice(0, 160),
+                path: "answered_webhook",
                 transcodesEstimate: 1,
               },
+              pstnAudio: pstnDiag,
             } as object,
           },
         });
         }
+      }
       }
     }
   }

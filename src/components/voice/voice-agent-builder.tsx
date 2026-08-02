@@ -970,6 +970,43 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
               />
               Expressive delivery (when voice model supports it)
             </label>
+            <div>
+              <Label>Assistant output gain (PSTN A/B)</Label>
+              <select
+                className="mt-1 w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm"
+                value={String(cfg.voiceLanguage?.outputGainDb ?? -3)}
+                onChange={(e) =>
+                  updateConfig({
+                    voiceLanguage: {
+                      ...cfg.voiceLanguage,
+                      outputGainDb: Number(e.target.value) as 0 | -3 | -6,
+                    },
+                  })
+                }
+              >
+                <option value="0">0 dB (current / loudest)</option>
+                <option value="-3">−3 dB (recommended first test)</option>
+                <option value="-6">−6 dB</option>
+              </select>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                Lowers only the AI playback level for phone clipping tests — not
+                the caller microphone. Browser WebRTC can stay clean while PSTN
+                shows interference; try −3 dB before changing bitrate.
+              </p>
+            </div>
+            <div className="rounded border border-border p-3 text-xs">
+              <p className="font-medium">PSTN interference checklist</p>
+              <p className="mt-1 text-muted-foreground">
+                Same sentence + voice. Save Telnyx call ID from Observability for
+                each run.
+              </p>
+              <ul className="mt-2 list-disc space-y-1 pl-4 text-muted-foreground">
+                <li>Browser WebRTC (control — should be clean)</li>
+                <li>Cell on your carrier @ 0 / −3 / −6 dB</li>
+                <li>Cell on a second carrier @ −3 dB</li>
+                <li>Second premium NaturalHD voice @ −3 dB</li>
+              </ul>
+            </div>
             <p className="text-[11px] text-muted-foreground">
               Production default: NaturalHD. Ultra / xAI are available as preview
               clips for personality and clarity compare — Assistants on this
@@ -1988,8 +2025,11 @@ function StartupGreetingEditor({
   onChange: (next: Record<string, unknown>) => void;
 }) {
   const enabled = value.enabled !== false && value.mode !== "none";
-  const mode = String(value.mode || "tts");
-  const text = String(value.text || "Thank you for calling.");
+  const mode = String(value.mode || "ai");
+  const text = String(
+    value.text ||
+      "Thank you for calling. Please hold for just a moment while I connect you with our AI assistant.",
+  );
   const audioUrl = String(value.audioUrl || "");
   const delayMs = value.delayMs === undefined || value.delayMs === "auto" ? "auto" : String(value.delayMs);
   const handOffWhenReady = value.handOffWhenReady !== false;
@@ -2009,10 +2049,10 @@ function StartupGreetingEditor({
   return (
     <div className="space-y-3 rounded border border-border p-3">
       <div>
-        <p className="text-sm font-medium">Startup greeting (call mask)</p>
+        <p className="text-sm font-medium">Startup greeting</p>
         <p className="mt-0.5 text-[11px] text-muted-foreground">
-          Plays the instant the call is answered so callers never hear WebRTC/media
-          initialization. AI takes over when ready.
+          Recommended: one complete greeting spoken by the AI voice after media
+          is ready. Avoid a short “Thank you” mask plus a second AI thank-you.
         </p>
       </div>
       <label className="flex items-center gap-2 text-sm">
@@ -2022,7 +2062,7 @@ function StartupGreetingEditor({
           onChange={(e) =>
             patch({
               enabled: e.target.checked,
-              mode: e.target.checked ? (mode === "none" ? "tts" : mode) : "none",
+              mode: e.target.checked ? (mode === "none" ? "ai" : mode) : "none",
             })
           }
         />
@@ -2037,22 +2077,29 @@ function StartupGreetingEditor({
               value={mode}
               onChange={(e) => patch({ mode: e.target.value })}
             >
-              <option value="tts">Text-to-speech (short mask)</option>
-              <option value="audio_url">Upload / audio URL (MP3/WAV)</option>
-              <option value="ai">AI-generated only (no pre-mask)</option>
+              <option value="ai">AI voice — one full greeting (recommended)</option>
+              <option value="tts">Pre-mask TTS, then AI (advanced)</option>
+              <option value="audio_url">Pre-mask audio URL, then AI</option>
               <option value="none">None</option>
             </select>
           </div>
+          {mode === "ai" ? (
+            <p className="text-[11px] text-muted-foreground">
+              Uses the AI greeting above. We settle media ~700 ms after answer,
+              then start the assistant once (no duplicate greetings).
+            </p>
+          ) : null}
           {mode === "tts" ? (
             <div>
-              <Label>Mask text</Label>
+              <Label>Mask text (plays before AI)</Label>
               <Input
                 value={text}
                 onChange={(e) => patch({ text: e.target.value })}
-                placeholder="Thank you for calling."
+                placeholder="Thank you for calling. Please hold for just a moment…"
               />
               <p className="mt-1 text-[11px] text-muted-foreground">
-                Keep it short (0.5–2s). Example: “Thank you for calling.”
+                Use 3–5 seconds of natural speech if masking. Keep the AI greeting
+                different so callers do not hear “Thank you” twice.
               </p>
             </div>
           ) : null}

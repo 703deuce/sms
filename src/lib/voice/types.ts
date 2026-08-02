@@ -85,6 +85,11 @@ export type VoiceAgentConfig = {
     volume?: number;
     /** Expressive / stability-style delivery when the voice model supports it. */
     expressiveMode?: boolean;
+    /**
+     * Assistant playback gain for PSTN clipping A/B (0, −3, −6 dB).
+     * Does not change caller microphone gain.
+     */
+    outputGainDb?: 0 | -3 | -6;
     interruptionHandling?: string;
     bargeIn?: boolean;
     responsiveness?: string;
@@ -167,6 +172,7 @@ export const DEFAULT_VOICE_CONFIG: VoiceAgentConfig = {
     primaryLanguage: "en-US",
     silenceTimeoutMs: 8000,
     noiseSuppression: true,
+    outputGainDb: -3,
   },
   model: {
     provider: "telnyx",
@@ -175,11 +181,12 @@ export const DEFAULT_VOICE_CONFIG: VoiceAgentConfig = {
     maxTokens: 1024,
   },
   callHandling: {
-    greeting: "Thank you for calling. How can I help you today?",
+    greeting:
+      "Thank you for calling. I'm the virtual assistant, and I can answer questions or take a message. How can I help you today?",
     startupGreeting: {
       enabled: true,
-      mode: "tts",
-      text: "Thank you for calling.",
+      mode: "ai",
+      text: "Thank you for calling. Please hold for just a moment while I connect you with our AI assistant.",
       audioUrl: "",
       delayMs: "auto",
       handOffWhenReady: true,

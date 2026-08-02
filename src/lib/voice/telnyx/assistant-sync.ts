@@ -137,7 +137,17 @@ function greetingFromConfig(config: VoiceAgentConfig, agentName: string) {
     (config.callHandling?.greeting as string | undefined) ||
     (config.conversationFlow?.sections?.find((s) => s.type === "greeting")?.config
       ?.text as string | undefined);
-  return greeting || `Thank you for calling. This is ${agentName}. How can I help you today?`;
+  return (
+    greeting?.trim() ||
+    `Thank you for calling. I'm ${agentName}, the virtual assistant, and I can answer questions or take a message. How can I help you today?`
+  );
+}
+
+function outputGainLinear(config: VoiceAgentConfig): number | null {
+  const db = Number(config.voiceLanguage?.outputGainDb ?? 0);
+  if (db === -6) return 0.5;
+  if (db === -3) return 0.708;
+  return null;
 }
 
 export async function syncTelnyxAssistant(
@@ -280,6 +290,7 @@ export async function syncTelnyxAssistant(
   );
   // TeXML app id only — never Call Control TELNYX_CONNECTION_ID (causes 10015).
   const texmlAppId = process.env.TELNYX_TEXML_APP_ID?.trim() || "";
+  const gainLinear = outputGainLinear(config);
   const enrichPayload: Record<string, unknown> = {
     voice_settings: {
       voice: voiceId,
@@ -289,12 +300,20 @@ export async function syncTelnyxAssistant(
       ...(config.voiceLanguage?.expressiveMode || isUltraVoice(voiceId)
         ? { expressive_mode: true }
         : {}),
+      // Best-effort assistant playback trim for PSTN clipping A/B.
+      // Unsupported providers reject this field — sync retries without it below.
+      ...(gainLinear != null ? { volume: gainLinear } : {}),
     },
     enabled_features: ["telephony"] as string[],
     // Required for in-app browser test calls (TelnyxRTC anonymous_login).
     telephony_settings: {
       supports_unauthenticated_web_calls: true,
       ...(texmlAppId ? { default_texml_app_id: texmlAppId } : {}),
+      // Prefer inbound-oriented NS via assistant telephony when available.
+      // Per-call suppression_start(inbound) is also applied on PSTN answer.
+      ...(config.voiceLanguage?.noiseSuppression === false
+        ? { noise_suppression: "disabled" }
+        : { noise_suppression: "krisp" }),
     },
     tools: [
       {
@@ -337,14 +356,19 @@ export async function syncTelnyxAssistant(
       await ai.updateAssistant(assistantId, enrichPayload);
       return { enriched: true as const };
     } catch (err) {
-      // Retry with voice + hangup only so chat/telephony still work.
+      // Retry without optional volume (many NaturalHD voices reject unknown keys).
+      const voiceBase = { ...(enrichPayload.voice_settings as Record<string, unknown>) };
+      delete voiceBase.volume;
       try {
         await ai.updateAssistant(assistantId, {
-          voice_settings: enrichPayload.voice_settings,
+          voice_settings: voiceBase,
           enabled_features: ["telephony"],
           telephony_settings: {
             supports_unauthenticated_web_calls: true,
             ...(texmlAppId ? { default_texml_app_id: texmlAppId } : {}),
+            ...(config.voiceLanguage?.noiseSuppression === false
+              ? { noise_suppression: "disabled" }
+              : { noise_suppression: "krisp" }),
           },
           tools: [
             {
@@ -360,10 +384,25 @@ export async function syncTelnyxAssistant(
           error: err instanceof Error ? err.message : String(err),
         };
       } catch (err2) {
-        return {
-          enriched: false as const,
-          error: err2 instanceof Error ? err2.message : String(err2),
-        };
+        try {
+          await ai.updateAssistant(assistantId, {
+            voice_settings: { voice: voiceId },
+            enabled_features: ["telephony"],
+            telephony_settings: {
+              supports_unauthenticated_web_calls: true,
+              ...(texmlAppId ? { default_texml_app_id: texmlAppId } : {}),
+            },
+          });
+          return {
+            enriched: "partial" as const,
+            error: err2 instanceof Error ? err2.message : String(err2),
+          };
+        } catch (err3) {
+          return {
+            enriched: false as const,
+            error: err3 instanceof Error ? err3.message : String(err3),
+          };
+        }
       }
     }
   }
