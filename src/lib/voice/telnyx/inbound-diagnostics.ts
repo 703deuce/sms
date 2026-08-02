@@ -345,7 +345,7 @@ export async function diagnoseAndRepairInboundNumber(input: {
           }
         }
 
-        const voiceConn = voiceSettings.connection_id
+        const voiceConn = voiceSettings?.connection_id
           ? String(voiceSettings.connection_id)
           : "";
         if (
