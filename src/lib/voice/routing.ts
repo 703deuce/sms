@@ -84,20 +84,72 @@ export async function evaluateInboundRouting(ctx: RoutingContext): Promise<Routi
   const now = ctx.now || new Date();
   const hoursCtx = await loadBusinessHoursContext(ctx.workspaceId, now);
 
+  // Resolve which agent owns the dialed DID — never let another agent's
+  // flow-managed after-hours rule steal the call (that sent live PSTN to
+  // Billing Specialist with empty transfer targets).
+  const toE164 = ctx.toE164;
+  const pn = toE164
+    ? await prisma.phoneNumber.findFirst({
+        where: { workspaceId: ctx.workspaceId, e164: toE164 },
+        select: { id: true },
+      })
+    : null;
+  const ownerAgent = pn
+    ? await prisma.voiceAgent.findFirst({
+        where: {
+          workspaceId: ctx.workspaceId,
+          phoneNumberId: pn.id,
+          status: { in: ["ACTIVE", "TESTING"] },
+        },
+        select: { id: true },
+      })
+    : await prisma.voiceAgent.findFirst({
+        where: {
+          workspaceId: ctx.workspaceId,
+          phoneNumberId: { not: null },
+          status: "ACTIVE",
+        },
+        select: { id: true },
+      });
+  const ownerAgentId = ownerAgent?.id || null;
+
   const rules = await prisma.voiceRoutingRule.findMany({
     where: { workspaceId: ctx.workspaceId, isActive: true },
     orderBy: { priority: "asc" },
   });
 
-  for (const rule of rules) {
+  // Prefer rules for the DID owner (or workspace-global agentId=null).
+  const ordered = [
+    ...rules.filter((r: { agentId: string | null }) => r.agentId === ownerAgentId),
+    ...rules.filter((r: { agentId: string | null }) => r.agentId == null),
+    // Other agents' rules only if nothing else matches (legacy).
+    ...rules.filter(
+      (r: { agentId: string | null }) =>
+        r.agentId && r.agentId !== ownerAgentId,
+    ),
+  ];
+
+  for (const rule of ordered) {
     const conditions = (rule.conditions || {}) as Record<string, unknown>;
     const actions = (rule.actions || {}) as Record<string, unknown>;
     if (!matchesConditions(conditions, ctx, now, hoursCtx)) continue;
 
+    // Never route a DID-owned call to a different agent via flow-managed rules.
+    const actionAgentId =
+      (actions.agentId as string | undefined) || rule.agentId || undefined;
+    if (
+      ownerAgentId &&
+      actionAgentId &&
+      actionAgentId !== ownerAgentId &&
+      (conditions as { flowManaged?: boolean }).flowManaged
+    ) {
+      continue;
+    }
+
     const action = String(actions.type || actions.action || "ai_answer");
     return {
       action,
-      agentId: (actions.agentId as string | undefined) || rule.agentId || undefined,
+      agentId: actionAgentId || ownerAgentId || undefined,
       destination: actions.destination as string | undefined,
       queueId: actions.queueId as string | undefined,
       ruleId: rule.id,
@@ -107,17 +159,9 @@ export async function evaluateInboundRouting(ctx: RoutingContext): Promise<Routi
     };
   }
 
-  const agent = await prisma.voiceAgent.findFirst({
-    where: {
-      workspaceId: ctx.workspaceId,
-      phoneNumberId: { not: null },
-      status: "ACTIVE",
-    },
-  });
-
   return {
     action: "ai_answer",
-    agentId: agent?.id,
+    agentId: ownerAgentId || undefined,
     reason: "Default AI answer",
   };
 }
