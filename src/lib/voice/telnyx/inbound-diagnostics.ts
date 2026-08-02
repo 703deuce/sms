@@ -342,15 +342,6 @@ export async function diagnoseAndRepairInboundNumber(input: {
     let envApp: Record<string, unknown> | null = null;
     if (envConnectionId) {
       envApp = await fetchConnectionOrApp(envConnectionId);
-      if (isCredentialLike(envApp)) {
-        issues.push({
-          code: "connection_not_call_control",
-          severity: input.repair ? "warn" : "error",
-          message:
-            `TELNYX_CONNECTION_ID (${envConnectionId}) is a SIP/credential connection, not a Call Control Application. ` +
-            `Inbound PSTN fails with "cannot be completed as dialed" unless a softphone is registered.`,
-        });
-      }
     }
 
     // Ensure we have a real Call Control Application for inbound voice.
@@ -489,6 +480,15 @@ export async function diagnoseAndRepairInboundNumber(input: {
           code: "webhook_mismatch",
           severity: "error",
           message: `Call Control webhook is "${wh || "(empty)"}", expected "${expectedWebhookUrl}"`,
+        });
+      }
+      if (envApp && isCredentialLike(envApp)) {
+        issues.push({
+          code: "connection_not_call_control",
+          severity: "warn",
+          message:
+            `Coolify TELNYX_CONNECTION_ID (${envConnectionId}) is still the softphone credential connection. ` +
+            `Inbound uses the DID's Call Control app; update Coolify to ${recommendedConnectionId || "the Transovo Voice app id"} for outbound dials.`,
         });
       }
       if (
