@@ -1,11 +1,16 @@
 "use client";
 
-import { WIZARD_VOICES } from "@/lib/solutions/appointment-receptionist/defaults";
+import {
+  WIZARD_VOICE_BACKUPS,
+  WIZARD_VOICES,
+} from "@/lib/solutions/appointment-receptionist/defaults";
 import type { AppointmentReceptionistWizardState } from "@/lib/solutions/appointment-receptionist/types";
 import { Input, Label, Textarea } from "@/components/ui/input";
 import { Play, Volume2 } from "lucide-react";
 import { useRef, useState } from "react";
 import { InfoCallout, RadioRow, SelectableCard, SidePanel } from "../ui";
+
+const ALL_VOICES = [...WIZARD_VOICES, ...WIZARD_VOICE_BACKUPS];
 
 export function VoiceStep({
   state,
@@ -15,37 +20,62 @@ export function VoiceStep({
   patch: (p: Partial<AppointmentReceptionistWizardState>) => void;
 }) {
   const [previewing, setPreviewing] = useState<string | null>(null);
+  const [previewError, setPreviewError] = useState("");
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const greeting = state.openingGreeting
     .replaceAll("{{businessName}}", state.businessName || "our office")
     .replaceAll("{{agentName}}", state.agentName || "Maya");
 
-  async function previewVoice(voiceId: string) {
+  function selectVoice(id: string, label: string, recommendedSpeed?: number) {
+    patch({
+      voiceId: id,
+      voiceLabel: label,
+      speakingSpeed: recommendedSpeed ?? state.speakingSpeed,
+    });
+  }
+
+  async function previewVoice(voiceId: string, speed?: number) {
     setPreviewing(voiceId);
+    setPreviewError("");
     try {
       const res = await fetch("/api/voice/tts-preview", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          text: "Thank you for calling. How may I help you today?",
+          text: "Thank you for calling. This is your AI receptionist. How may I help you today?",
           voice: voiceId,
           language: "en-US",
+          speed: speed ?? state.speakingSpeed,
         }),
       });
       const j = await res.json();
+      if (!res.ok) {
+        const fallback = ALL_VOICES.find((v) => v.id === voiceId && "fallbackId" in v) as
+          | { fallbackId?: string }
+          | undefined;
+        if (fallback?.fallbackId) {
+          setPreviewError(`${j.error || "Preview failed"} — trying fallback…`);
+          return previewVoice(fallback.fallbackId, speed);
+        }
+        throw new Error(j.error || "Preview failed");
+      }
       const url = j.data?.audioUrl as string | undefined;
       if (url && audioRef.current) {
         audioRef.current.src = url;
         await audioRef.current.play().catch(() => undefined);
+      } else {
+        setPreviewError("No audio returned for this voice.");
       }
-    } catch {
-      // preview optional
+    } catch (err) {
+      setPreviewError(err instanceof Error ? err.message : "Preview failed");
     } finally {
       setPreviewing(null);
     }
   }
 
   const behaviors = state.conversationBehaviors;
+  const females = WIZARD_VOICES.filter((v) => v.gender === "female");
+  const males = WIZARD_VOICES.filter((v) => v.gender === "male");
 
   return (
     <div className="flex gap-6">
@@ -56,7 +86,7 @@ export function VoiceStep({
             Who is your receptionist?
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Identity, greeting, and voice — we generate the system prompt for you.
+            Identity, greeting, and voice — play each clip, then test live on the next step.
           </p>
         </div>
 
@@ -216,34 +246,69 @@ export function VoiceStep({
           </div>
 
           <div className="space-y-4 rounded-xl border border-border bg-card p-4">
-            <h3 className="text-sm font-semibold">Choose a voice</h3>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {WIZARD_VOICES.map((v) => (
-                <div key={v.id} className="relative">
-                  <SelectableCard
+            <div>
+              <h3 className="text-sm font-semibold">Choose a voice</h3>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Top 10 shortlist from live phone tests + Telnyx NaturalHD / Ultra evidence.
+                Press play to hear each one.
+              </p>
+              {previewError ? (
+                <p className="mt-2 text-xs text-warning-foreground">{previewError}</p>
+              ) : null}
+            </div>
+
+            <div>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Female finalists
+              </p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {females.map((v) => (
+                  <VoicePickCard
+                    key={v.id}
+                    voice={v}
                     selected={state.voiceId === v.id}
-                    onClick={() => patch({ voiceId: v.id, voiceLabel: v.label })}
-                    title={v.label}
-                    description={v.description}
-                  >
-                    <div className="mt-2">
-                      <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium">
-                        {v.badge}
-                      </span>
-                    </div>
-                  </SelectableCard>
-                  <button
-                    type="button"
-                    className="absolute bottom-3 right-3 z-10 rounded-full p-1.5 text-primary hover:bg-primary/10"
-                    onClick={() => void previewVoice(v.id)}
-                    aria-label={`Preview ${v.label}`}
-                  >
-                    <Play
-                      className={`h-3.5 w-3.5 ${previewing === v.id ? "animate-pulse" : ""}`}
-                    />
-                  </button>
-                </div>
-              ))}
+                    previewing={previewing === v.id}
+                    onSelect={() => selectVoice(v.id, v.label, v.recommendedSpeed)}
+                    onPreview={() => void previewVoice(v.id, v.recommendedSpeed)}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Male finalists
+              </p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {males.map((v) => (
+                  <VoicePickCard
+                    key={v.id}
+                    voice={v}
+                    selected={state.voiceId === v.id}
+                    previewing={previewing === v.id}
+                    onSelect={() => selectVoice(v.id, v.label, v.recommendedSpeed)}
+                    onPreview={() => void previewVoice(v.id, v.recommendedSpeed)}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Backups
+              </p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {WIZARD_VOICE_BACKUPS.map((v) => (
+                  <VoicePickCard
+                    key={v.id}
+                    voice={v}
+                    selected={state.voiceId === v.id}
+                    previewing={previewing === v.id}
+                    onSelect={() => selectVoice(v.id, v.label, v.recommendedSpeed)}
+                    onPreview={() => void previewVoice(v.id, v.recommendedSpeed)}
+                  />
+                ))}
+              </div>
             </div>
 
             <div className="space-y-4 pt-2">
@@ -279,16 +344,11 @@ export function VoiceStep({
                   />
                 </div>
               ))}
-            </div>
-
-            <div className="rounded-lg border border-border px-3 py-2 text-xs">
-              <p className="font-medium">Pronunciation dictionary</p>
-              <p className="mt-0.5 text-muted-foreground">
-                Add custom phonetic pronunciations for names and terms.
-              </p>
-              <button type="button" className="mt-2 text-primary font-medium">
-                Manage dictionary
-              </button>
+              {state.voiceId === "allie-ultra" ? (
+                <p className="text-[11px] text-muted-foreground">
+                  Allie sounds best a bit faster — speed defaults to 1.15 when selected.
+                </p>
+              ) : null}
             </div>
           </div>
         </div>
@@ -302,15 +362,67 @@ export function VoiceStep({
           <div>
             <p className="text-sm font-semibold">{state.voiceLabel}</p>
             <p className="text-xs text-muted-foreground">
-              {WIZARD_VOICES.find((v) => v.id === state.voiceId)?.badge || "NaturalHD"}
+              {ALL_VOICES.find((v) => v.id === state.voiceId)?.badge || "NaturalHD"}
             </p>
           </div>
         </div>
         <p className="text-xs text-muted-foreground">
           Tone: <span className="text-foreground">{state.tone}</span>
         </p>
-        <InfoCallout>Customers will hear this voice on every call.</InfoCallout>
+        <InfoCallout>
+          Next you&apos;ll talk live with this voice over a real WebRTC test call — same
+          assistant that answers the phone after activate.
+        </InfoCallout>
       </SidePanel>
+    </div>
+  );
+}
+
+function VoicePickCard({
+  voice,
+  selected,
+  previewing,
+  onSelect,
+  onPreview,
+}: {
+  voice: {
+    id: string;
+    label: string;
+    badge: string;
+    description: string;
+    note?: string;
+  };
+  selected: boolean;
+  previewing: boolean;
+  onSelect: () => void;
+  onPreview: () => void;
+}) {
+  return (
+    <div className="relative">
+      <SelectableCard
+        selected={selected}
+        onClick={onSelect}
+        title={voice.label}
+        description={voice.description}
+      >
+        <div className="mt-2 flex items-center gap-2">
+          <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium">
+            {voice.badge}
+          </span>
+          {voice.note ? (
+            <span className="text-[10px] text-muted-foreground line-clamp-1">{voice.note}</span>
+          ) : null}
+        </div>
+      </SelectableCard>
+      <button
+        type="button"
+        className="absolute bottom-3 right-3 z-10 inline-flex items-center gap-1 rounded-full bg-primary px-2.5 py-1.5 text-[11px] font-medium text-primary-foreground shadow-sm hover:bg-primary-hover"
+        onClick={onPreview}
+        aria-label={`Play sample of ${voice.label}`}
+      >
+        <Play className={`h-3 w-3 fill-current ${previewing ? "animate-pulse" : ""}`} />
+        {previewing ? "…" : "Play"}
+      </button>
     </div>
   );
 }

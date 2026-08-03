@@ -127,11 +127,11 @@ async function main() {
   await page.waitForSelector("text=Test your receptionist", { timeout: 15000 });
   await shot("07-test");
 
-  await page.getByRole("button", { name: /Run test scenario/i }).click();
-  await page.waitForTimeout(3500);
+  await page.getByRole("button", { name: /Mark scenario checked|Build & ready test|Build & start live test/i }).first().click();
+  await page.waitForTimeout(1500);
   await shot("07b-test-running");
-  const passed = await page.getByText("Passed").count();
-  report.clicks.push(`test passed badge count=${passed}`);
+  const passed = await page.getByText(/Checked|Passed|Synced/i).count();
+  report.clicks.push(`test status badge count=${passed}`);
 
   await page.getByRole("button", { name: "Continue" }).click();
   await page.waitForSelector("text=Make your receptionist live", { timeout: 15000 });

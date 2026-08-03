@@ -98,6 +98,7 @@ export type AppointmentTypeConfig = {
 
 export type AppointmentReceptionistWizardState = {
   agentId?: string;
+  telnyxAssistantId?: string | null;
   capabilities: CapabilityId[];
   answerWhen: AnswerWhen;
   solutionName: string;

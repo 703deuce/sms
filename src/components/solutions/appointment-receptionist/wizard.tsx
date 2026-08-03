@@ -75,17 +75,19 @@ export function AppointmentReceptionistWizard() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Save failed");
       const agentId = json.data.agentId as string;
-      patch({ agentId });
+      const telnyxAssistantId =
+        (json.data.telnyxAssistantId as string | null | undefined) ?? state.telnyxAssistantId;
+      patch({ agentId, telnyxAssistantId });
       if (action === "activate") {
         if (json.data.publishError) {
           setError(json.data.publishError);
-          return agentId;
+          return { agentId, telnyxAssistantId };
         }
         localStorage.removeItem(STORAGE_KEY);
         router.push(`/voice/agents/${agentId}`);
-        return agentId;
+        return { agentId, telnyxAssistantId };
       }
-      return agentId;
+      return { agentId, telnyxAssistantId };
     } catch (err) {
       setError(toErrorMessage(err));
       return null;
@@ -94,19 +96,29 @@ export function AppointmentReceptionistWizard() {
     }
   }
 
+  async function ensureAgentForTest() {
+    const saved = await persist("save_draft");
+    if (!saved?.agentId) return null;
+    return saved;
+  }
+
   async function onContinue() {
     if (stepIndex < WIZARD_STEPS.length - 1) {
       if (stepIndex === 0 && !state.agentId) {
         await persist("create_draft");
       }
+      // Entering Test: save latest voice + config so live talk-back can build.
+      if (WIZARD_STEPS[stepIndex + 1]?.id === "test") {
+        await persist("save_draft");
+      }
       setStepIndex((i) => i + 1);
       return;
     }
     if (state.activationMode === "save_draft") {
-      const id = await persist("save_draft");
-      if (id) {
+      const saved = await persist("save_draft");
+      if (saved?.agentId) {
         localStorage.removeItem(STORAGE_KEY);
-        router.push(`/voice/agents/${id}`);
+        router.push(`/voice/agents/${saved.agentId}`);
       }
       return;
     }
@@ -114,10 +126,7 @@ export function AppointmentReceptionistWizard() {
   }
 
   async function onSaveDraft() {
-    const id = await persist("save_draft");
-    if (id && !error) {
-      // stay on wizard; draft is linked
-    }
+    await persist("save_draft");
   }
 
   const step = WIZARD_STEPS[stepIndex];
@@ -152,7 +161,9 @@ export function AppointmentReceptionistWizard() {
           <CallHandlingStep state={state} patch={patch} />
         ) : null}
         {step.id === "voice" ? <VoiceStep state={state} patch={patch} /> : null}
-        {step.id === "test" ? <TestStep state={state} patch={patch} /> : null}
+        {step.id === "test" ? (
+          <TestStep state={state} patch={patch} onEnsureAgent={ensureAgentForTest} />
+        ) : null}
         {step.id === "activate" ? <ActivateStep state={state} patch={patch} /> : null}
       </div>
 

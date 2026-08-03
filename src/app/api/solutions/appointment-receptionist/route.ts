@@ -83,6 +83,7 @@ export async function POST(request: Request) {
         status: published ? "ACTIVE" : updated.status,
         published,
         publishError,
+        telnyxAssistantId: (updated as { telnyxAssistantId?: string | null }).telnyxAssistantId,
       },
     });
   } catch (err) {
