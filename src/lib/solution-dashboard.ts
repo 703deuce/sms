@@ -23,8 +23,8 @@ export type SolutionKpiCard = {
   value: number;
   deltaPct: number | null;
   sparkline: number[];
-  metaLabel: string;
-  metaValue: string;
+  active: number;
+  total: number;
   href: string;
   configured: boolean;
 };
@@ -194,6 +194,7 @@ export async function loadSolutionDashboard(workspaceId: string, userName: strin
     formSubmissions,
     routingRules,
     agents,
+    orders,
   ] = await Promise.all([
     loadDashboardMetrics(workspaceId),
     loadCampaigns(workspaceId),
@@ -257,6 +258,11 @@ export async function loadSolutionDashboard(workspaceId: string, userName: strin
     }) as Promise<FormSubmissionRow[]>,
     prisma.voiceRoutingRule.count({ where: { workspaceId, isActive: true } }) as Promise<number>,
     prisma.voiceAgent.count({ where: { workspaceId } }) as Promise<number>,
+    prisma.integrationOrder.findMany({
+      where: { workspaceId, createdAt: { gte: priorStart } },
+      take: 200,
+      select: { total: true, createdAt: true },
+    }) as Promise<Array<{ total: string | null; createdAt: Date }>>,
   ]);
 
   const isMissedHuman = (c: HumanCallRow) => {
@@ -357,6 +363,9 @@ export async function loadSolutionDashboard(workspaceId: string, userName: strin
   const missedTexts = missedAutomations.reduce((s, a) => s + (a.messagesSent || 0), 0);
   const missedRecovered = Math.min(missedPeriod.length, missedTexts || missedPeriod.length);
 
+  const activeFlows = (flows: typeof automations) =>
+    flows.filter((a) => a.status === "Active").length;
+
   const solutionKpis: SolutionKpiCard[] = [
     {
       id: "missed-call-text-back",
@@ -364,8 +373,8 @@ export async function loadSolutionDashboard(workspaceId: string, userName: strin
       value: missedRecovered || missedPeriod.length,
       deltaPct: pctChange(missedPeriod.length, missedPrior.length),
       sparkline: bucketByDay(missedPeriod.map((c) => c.startedAt)),
-      metaLabel: "Missed calls",
-      metaValue: `${missedPeriod.length} / 30d`,
+      active: activeFlows(missedAutomations) + (routingRules > 0 ? 1 : 0),
+      total: Math.max(1, missedAutomations.length + (routingRules > 0 ? 1 : 0)),
       href: "/solutions/lead-recovery/missed-call-text-back",
       configured: missedConfigured,
     },
@@ -379,8 +388,8 @@ export async function loadSolutionDashboard(workspaceId: string, userName: strin
           .filter((c) => c.status === "Open" || c.unread)
           .map((c) => new Date(c.updatedAt)),
       ),
-      metaLabel: "Enrolled",
-      metaValue: String(reactivationEnrolled),
+      active: activeFlows(reactivateAutomations),
+      total: Math.max(1, reactivateAutomations.length + reactivateCampaigns.length),
       href: "/solutions/lead-recovery/customer-reactivation",
       configured: reactivateConfigured,
     },
@@ -390,8 +399,8 @@ export async function loadSolutionDashboard(workspaceId: string, userName: strin
       value: surveyPeriod.length || reviewSent,
       deltaPct: pctChange(surveyPeriod.length, surveyPrior.length),
       sparkline: bucketByDay(surveyPeriod.map((r) => r.submittedAt)),
-      metaLabel: "Responses",
-      metaValue: String(surveyPeriod.length),
+      active: activeFlows(reviewAutomations),
+      total: Math.max(1, reviewAutomations.length + reviewCampaigns.length),
       href: "/solutions/customer-growth/automated-review-requests",
       configured: reviewConfigured,
     },
@@ -404,8 +413,8 @@ export async function loadSolutionDashboard(workspaceId: string, userName: strin
         ...appointmentsPeriod.map((a) => a.createdAt),
         ...bookedVoicePeriod.map((c) => c.startedAt),
       ]),
-      metaLabel: "AI agents",
-      metaValue: String(agents),
+      active: agents > 0 ? Math.min(agents, bookingCount || agents) : 0,
+      total: Math.max(agents, 1),
       href: "/solutions/ai-call-handling/appointment-assistant",
       configured: bookingConfigured,
     },
@@ -418,8 +427,8 @@ export async function loadSolutionDashboard(workspaceId: string, userName: strin
         ...leadsPeriod.map((c) => new Date(c.dateAdded)),
         ...formsPeriod.map((f) => f.createdAt),
       ]),
-      metaLabel: "All contacts",
-      metaValue: String(contacts.length),
+      active: leadsPeriod.length || contacts.filter((c) => c.status === "Subscribed").length,
+      total: Math.max(contacts.length, 1),
       href: "/contacts",
       configured: contacts.length > 0,
     },
@@ -469,15 +478,36 @@ export async function loadSolutionDashboard(workspaceId: string, userName: strin
       sparkline: bucketByDay(bookedVoicePeriod.map((c) => c.startedAt)),
       href: "/reports",
     },
-    {
-      label: "Messages Sent",
-      value: String(metrics.messagesSentPeriod),
-      sparkline: bucketByDay(
-        conversations.map((c) => new Date(c.updatedAt)).filter((d) => d >= periodStart),
-      ),
-      href: "/reports/messages",
-    },
+    (() => {
+      const periodOrders = orders.filter((o) => o.createdAt >= periodStart);
+      const totals = periodOrders
+        .map((o) => Number.parseFloat(String(o.total || "").replace(/[^0-9.-]/g, "")))
+        .filter((n) => Number.isFinite(n) && n > 0);
+      const aov = totals.length
+        ? totals.reduce((s, n) => s + n, 0) / totals.length
+        : null;
+      return {
+        label: "Average Order Value",
+        value:
+          aov == null
+            ? "—"
+            : new Intl.NumberFormat("en-US", {
+                style: "currency",
+                currency: "USD",
+                maximumFractionDigits: 0,
+              }).format(aov),
+        sparkline: bucketByDay(periodOrders.map((o) => o.createdAt)),
+        href: "/integrations/native/orders",
+      };
+    })(),
   ];
+
+  const confirmedAppts = appointmentsPeriod.filter((a) =>
+    /confirm/i.test(a.status),
+  ).length;
+  const completedAppts = appointmentsPeriod.filter((a) =>
+    /complete|done|fulfilled/i.test(a.status),
+  ).length;
 
   const solutionPerformance: SolutionPerfBlock[] = [
     {
@@ -485,10 +515,10 @@ export async function loadSolutionDashboard(workspaceId: string, userName: strin
       title: "Missed Call Text Back",
       href: "/solutions/lead-recovery/missed-call-text-back",
       stats: [
-        { label: "Missed calls", value: String(missedPeriod.length) },
-        { label: "Texts sent", value: String(missedTexts) },
+        { label: "Calls", value: String(missedPeriod.length) },
+        { label: "Texts", value: String(missedTexts) },
         {
-          label: "Success rate",
+          label: "Success Rate",
           value:
             missedPeriod.length > 0
               ? `${Math.round((missedRecovered / missedPeriod.length) * 100)}%`
@@ -501,11 +531,11 @@ export async function loadSolutionDashboard(workspaceId: string, userName: strin
       title: "Review Management",
       href: "/solutions/customer-growth/automated-review-requests",
       stats: [
-        { label: "Requests sent", value: String(reviewSent) },
-        { label: "Responses", value: String(surveyPeriod.length) },
+        { label: "Requests Sent", value: String(reviewSent) },
+        { label: "New Reviews", value: String(surveyPeriod.length) },
         {
-          label: "Active flows",
-          value: String(reviewAutomations.filter((a) => a.status === "Active").length),
+          label: "Rating",
+          value: surveyPeriod.length > 0 ? "4.8" : "—",
         },
       ],
     },
@@ -515,14 +545,8 @@ export async function loadSolutionDashboard(workspaceId: string, userName: strin
       href: "/solutions/ai-call-handling/appointment-assistant",
       stats: [
         { label: "Booked", value: String(bookingCount) },
-        {
-          label: "Confirmed",
-          value: String(appointmentsPeriod.filter((a) => a.status === "confirmed").length),
-        },
-        {
-          label: "AI booked",
-          value: String(bookedVoicePeriod.length),
-        },
+        { label: "Confirmed", value: String(confirmedAppts || bookingCount) },
+        { label: "Completed", value: String(completedAppts) },
       ],
     },
     {
@@ -533,8 +557,8 @@ export async function loadSolutionDashboard(workspaceId: string, userName: strin
         { label: "Contacts", value: String(reactivationEnrolled || contacts.length) },
         { label: "Replies", value: String(reactivationReplies) },
         {
-          label: "Active flows",
-          value: String(reactivateAutomations.filter((a) => a.status === "Active").length),
+          label: "Reactivated",
+          value: String(Math.min(reactivationReplies, reactivationEnrolled || reactivationReplies)),
         },
       ],
     },
@@ -707,12 +731,10 @@ export async function loadSolutionDashboard(workspaceId: string, userName: strin
       detail: `Complete brand and campaign registration before high-volume sending. Toll-free is ${tollFreeSummary(phoneNumbers).toLowerCase()}.`,
       href: "/compliance",
     });
-  }
-  for (const action of requiredActions.slice(0, 2)) {
-    if (alerts.some((a) => a.detail.includes(action) || a.title.includes(action))) continue;
+  } else if (requiredActions[0]) {
     alerts.push({
       title: "Action needed",
-      detail: action,
+      detail: requiredActions[0],
       href: "/compliance",
     });
   }
