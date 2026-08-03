@@ -711,6 +711,10 @@ export async function POST(request: Request) {
               data: {
                 ok: false,
                 alternatives: result.alternatives,
+                detail: "detail" in result ? result.detail : undefined,
+                ttsRequest: "ttsRequest" in result ? result.ttsRequest : undefined,
+                musicRequest:
+                  "musicRequest" in result ? result.musicRequest : undefined,
               },
             },
             { status: 422 },

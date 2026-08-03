@@ -74,11 +74,12 @@ export async function generateConnectionGreetingSources(input?: {
     voiceId: CONNECTION_GREETING_VOICE_ID,
     modelId: CONNECTION_GREETING_TTS_MODEL,
     text: CONNECTION_GREETING_TEXT,
-    outputFormat: "mp3_44100_192",
+    // 128 kbps is reliable on this account; 192 requires Creator+ and 403s.
+    outputFormat: "mp3_44100_128",
     stability: CONNECTION_GREETING_TTS_SETTINGS.stability,
     similarityBoost: CONNECTION_GREETING_TTS_SETTINGS.similarityBoost,
-    // v3 reports can_use_style/speaker_boost false — omit unsupported knobs
-    // but keep settings documented; send only stability/similarity for v3.
+    // Documented but omitted for eleven_v3 (can_use_style/speaker_boost false):
+    // style: 0.15, useSpeakerBoost: true
   };
 
   const musicRequest = {
@@ -89,11 +90,48 @@ export async function generateConnectionGreetingSources(input?: {
     outputFormat: "mp3_44100_128",
   };
 
-  const speechBuf = await synthesizeElevenLabsSpeech({
-    ...ttsRequest,
-    // eleven_v3: style/speaker_boost not supported on account capabilities
-  });
-  const musicBuf = await composeElevenMusic(musicRequest);
+  let speechBuf: ArrayBuffer;
+  let musicBuf: ArrayBuffer;
+  try {
+    speechBuf = await synthesizeElevenLabsSpeech({
+      voiceId: ttsRequest.voiceId,
+      modelId: ttsRequest.modelId,
+      text: ttsRequest.text,
+      outputFormat: ttsRequest.outputFormat,
+      stability: ttsRequest.stability,
+      similarityBoost: ttsRequest.similarityBoost,
+    });
+  } catch (err) {
+    const detail =
+      err && typeof err === "object" && "body" in err
+        ? (err as { body: unknown }).body
+        : null;
+    return {
+      ok: false as const,
+      error: err instanceof Error ? err.message : String(err),
+      alternatives: [],
+      detail,
+      ttsRequest,
+      musicRequest,
+    };
+  }
+  try {
+    musicBuf = await composeElevenMusic(musicRequest);
+  } catch (err) {
+    const detail =
+      err && typeof err === "object" && "body" in err
+        ? (err as { body: unknown }).body
+        : null;
+    return {
+      ok: false as const,
+      error: err instanceof Error ? err.message : String(err),
+      alternatives: [],
+      detail,
+      ttsRequest,
+      musicRequest,
+      speechBytes: speechBuf.byteLength,
+    };
+  }
 
   const outDir =
     input?.outDir ||
