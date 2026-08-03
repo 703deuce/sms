@@ -2,6 +2,11 @@ import type { VoiceAgentConfig } from "@/lib/voice/types";
 import { parseVoiceAgentConfig } from "@/lib/voice/types";
 import { DEFAULT_CONNECTION_GREETING } from "./defaults";
 import type { AppointmentReceptionistWizardState } from "./types";
+import {
+  normalizeWizardTransferPhone,
+  wizardTransferDestinationName,
+  WIZARD_HANDOFF_NAME,
+} from "./sync-transfer";
 
 function interpolateGreeting(state: AppointmentReceptionistWizardState) {
   const business = state.businessName.trim() || "our office";
@@ -13,6 +18,8 @@ function interpolateGreeting(state: AppointmentReceptionistWizardState) {
 
 export function buildSystemPrompt(state: AppointmentReceptionistWizardState): string {
   const caps = state.capabilities;
+  const transferName = wizardTransferDestinationName(state.transferDestinationName);
+  const transferPhone = normalizeWizardTransferPhone(state.transferDestinationPhone);
   const lines: string[] = [];
   lines.push(
     `You are ${state.agentName || "Maya"}, a ${state.role || "front-desk receptionist"} for ${state.businessName || "the business"}.`,
@@ -29,16 +36,42 @@ export function buildSystemPrompt(state: AppointmentReceptionistWizardState): st
   }
   if (caps.includes("reschedule")) lines.push("- Help callers reschedule existing appointments.");
   if (caps.includes("cancel")) lines.push("- Help callers cancel appointments when allowed.");
-  if (caps.includes("take_messages")) lines.push("- Take a clear message when a person is unavailable.");
-  if (caps.includes("qualify_callers")) lines.push("- Qualify new callers before booking or transfer.");
-  if (caps.includes("transfer_calls")) {
+  if (caps.includes("take_messages")) {
+    lines.push("- Take and save a clear message when a person is unavailable or the caller wants a callback.");
+  } else {
     lines.push(
-      `- Transfer to ${state.transferDestinationName || "the configured staff member"} when transfer rules apply.`,
+      "- Always be able to take and save a message (take_structured_message) if booking or transfer cannot complete.",
+    );
+  }
+  if (caps.includes("qualify_callers")) lines.push("- Qualify new callers before booking or transfer.");
+  if (caps.includes("transfer_calls") && transferPhone) {
+    lines.push(
+      `- Transfer to ${transferName} when transfer rules apply (use the escalate_human tool).`,
     );
   }
   if (caps.includes("send_sms_confirmations") || state.bookingBehavior.sendSmsAfterBooking) {
     lines.push("- Send SMS confirmations after a successful booking when configured.");
   }
+  lines.push("");
+  lines.push("Tools — you MUST use these; never claim you cannot save or transfer:");
+  lines.push(
+    "- save_caller_info: when the caller gives name, phone, email, or company — call this tool to store it. Confirm after the tool succeeds.",
+  );
+  lines.push(
+    "- take_structured_message: when taking a message or callback — call this tool with caller_name, phone, reason, and urgency. Confirm after it succeeds.",
+  );
+  lines.push(
+    "- lookup_customer: look up an existing contact by phone before booking when helpful.",
+  );
+  if (caps.includes("book_appointments")) {
+    lines.push("- calendar_availability / book_appointment: check live availability and book only after confirmation.");
+  }
+  if (caps.includes("transfer_calls") && transferPhone) {
+    lines.push(
+      `- escalate_human: to transfer, call once with target_name exactly "${transferName}" (or "${WIZARD_HANDOFF_NAME}"). Never invent a phone number — the destination is already configured.`,
+    );
+  }
+  lines.push("- hangup / end_call: only after a clear goodbye when the conversation is finished.");
   lines.push("");
   lines.push("Booking conversation rules:");
   if (state.bookingBehavior.askServiceFirst) {
@@ -65,12 +98,21 @@ export function buildSystemPrompt(state: AppointmentReceptionistWizardState): st
   for (const field of state.collectFields.filter((f) => f.enabled)) {
     lines.push(`- ${field.label}${field.required ? " (required)" : " (optional)"}`);
   }
-  lines.push("");
-  lines.push("Transfer when:");
-  for (const t of state.transferTriggers) lines.push(`- ${t}`);
   lines.push(
-    `On failed transfer: ${state.transferFallback.replaceAll("_", " ")}. Ring destination for ${state.transferRingSeconds} seconds.`,
+    "- As soon as you have a phone number (or the caller confirms the caller ID), call save_caller_info. Do not say you have no way to save information.",
   );
+  lines.push("");
+  if (caps.includes("transfer_calls") && transferPhone) {
+    lines.push("Transfer when:");
+    for (const t of state.transferTriggers) lines.push(`- ${t}`);
+    lines.push(
+      `Destination: ${transferName}. On failed transfer: ${state.transferFallback.replaceAll("_", " ")}. Prefer take_structured_message if the transfer tool returns ok=false.`,
+    );
+  } else if (caps.includes("transfer_calls") && !transferPhone) {
+    lines.push(
+      "Transfer is requested but no destination phone is configured — take a structured message instead of inventing a number.",
+    );
+  }
   lines.push("");
   lines.push("Conversation behavior:");
   const b = state.conversationBehaviors;
@@ -93,6 +135,10 @@ export function buildWizardAgentConfig(
   const base = parseVoiceAgentConfig(null);
   const greeting = interpolateGreeting(state);
   const connectionMode = state.connectionGreeting;
+  const transferName = wizardTransferDestinationName(state.transferDestinationName);
+  const transferPhone = normalizeWizardTransferPhone(state.transferDestinationPhone);
+  const canTransfer =
+    state.capabilities.includes("transfer_calls") && Boolean(transferPhone);
 
   const startupGreeting =
     connectionMode === "none"
@@ -125,12 +171,16 @@ export function buildWizardAgentConfig(
   const enabledTools = new Set([
     "hangup",
     "end_call",
-    "transfer",
-    "escalate_human",
     "take_structured_message",
     "save_caller_info",
+    "create_task",
+    "mark_disposition",
     "lookup_customer",
   ]);
+  if (canTransfer) {
+    enabledTools.add("transfer");
+    enabledTools.add("escalate_human");
+  }
   if (state.capabilities.includes("book_appointments")) {
     enabledTools.add("calendar_availability");
     enabledTools.add("book_appointment");
@@ -150,6 +200,16 @@ export function buildWizardAgentConfig(
 
   const ringHumanFirst =
     state.answerWhen === "nobody_answers" || state.ringBehavior === "ring_team_first";
+
+  const transferTargets = transferPhone
+    ? [
+        { name: transferName, to: transferPhone },
+        ...(transferName !== WIZARD_HANDOFF_NAME
+          ? [{ name: WIZARD_HANDOFF_NAME, to: transferPhone }]
+          : []),
+        { name: "Front Desk", to: transferPhone },
+      ]
+    : [];
 
   return {
     ...base,
@@ -171,6 +231,11 @@ export function buildWizardAgentConfig(
       confirmation: state.bookingBehavior.confirmBeforeBooking
         ? "Confirm appointment details before booking."
         : undefined,
+      escalation: canTransfer
+        ? `If the caller asks for a person, use escalate_human with target_name "${transferName}". Never invent a phone number.`
+        : "Offer to take a structured message if the caller asks for a person and no transfer destination is configured.",
+      uncertainty:
+        "If unsure, ask a clarifying question or take a structured message with take_structured_message.",
       protectedGreeting: true,
     },
     voiceLanguage: {
@@ -203,14 +268,17 @@ export function buildWizardAgentConfig(
     },
     transfers: {
       ...(base.transfers || {}),
-      enabled: state.capabilities.includes("transfer_calls"),
+      enabled: canTransfer,
       triggers: state.transferTriggers,
-      destinationName: state.transferDestinationName,
-      destinationPhone: state.transferDestinationPhone,
+      destinationName: transferName,
+      destinationPhone: transferPhone || state.transferDestinationPhone || "",
       ringSeconds: state.transferRingSeconds,
       fallback: state.transferFallback,
       announce: true,
-      warmTransfer: true,
+      // Cold Call Control path — warm hold tears down AI mid-call.
+      warmTransfer: false,
+      warmTransferInstructions: "",
+      targets: transferTargets,
     },
     messaging: {
       ...(base.messaging || {}),
@@ -243,10 +311,16 @@ export function buildWizardAgentConfig(
           enabled: state.capabilities.includes("answer_questions"),
         },
         {
+          id: "message_taking",
+          type: "message_taking",
+          label: "Take message",
+          enabled: true,
+        },
+        {
           id: "transfer",
           type: "transfer",
           label: "Human transfer",
-          enabled: state.capabilities.includes("transfer_calls"),
+          enabled: canTransfer,
         },
         {
           id: "sms",
@@ -291,6 +365,7 @@ export function buildReceptionistWillList(state: AppointmentReceptionistWizardSt
   if (fields.length) {
     items.push(`Collect ${fields.join(", ")}`);
   }
+  items.push("Save caller details with save_caller_info");
   if (state.capabilities.includes("book_appointments")) {
     items.push("Check your calendar for availability");
     items.push(
@@ -306,13 +381,13 @@ export function buildReceptionistWillList(state: AppointmentReceptionistWizardSt
   if (state.bookingBehavior.sendSmsAfterBooking) {
     items.push("Send an SMS confirmation");
   }
-  if (state.capabilities.includes("transfer_calls") && state.transferDestinationName) {
-    items.push(
-      `Transfer urgent or frustrated callers to ${state.transferDestinationName}`,
-    );
-    items.push(
-      `Take a message if ${state.transferDestinationName} does not answer`,
-    );
+  if (
+    state.capabilities.includes("transfer_calls") &&
+    normalizeWizardTransferPhone(state.transferDestinationPhone)
+  ) {
+    const name = wizardTransferDestinationName(state.transferDestinationName);
+    items.push(`Transfer urgent or frustrated callers to ${name}`);
+    items.push(`Take a message if ${name} does not answer`);
   }
   return items;
 }

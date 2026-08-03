@@ -52,6 +52,32 @@ export async function POST(request: Request) {
       status: action === "activate" ? undefined : "DRAFT",
     });
 
+    // Persist transfer destination so escalate_human has a real E.164 at runtime.
+    let transferSynced: { synced: boolean; e164: string | null } = {
+      synced: false,
+      e164: null,
+    };
+    if (state.transferDestinationPhone?.trim()) {
+      try {
+        const { syncWizardTransferDestinations } = await import(
+          "@/lib/solutions/appointment-receptionist/sync-transfer"
+        );
+        const result = await syncWizardTransferDestinations({
+          workspaceId: auth.workspaceId,
+          agentId,
+          destinationName: state.transferDestinationName,
+          destinationPhone: state.transferDestinationPhone,
+          returnToAiOnFail: state.transferFallback === "return_to_ai",
+        });
+        transferSynced = { synced: result.synced, e164: result.e164 };
+      } catch (err) {
+        console.warn(
+          "[appointment-receptionist] transfer destination sync failed",
+          err instanceof Error ? err.message : err,
+        );
+      }
+    }
+
     let published = false;
     let publishError: string | null = null;
     let previousAiOwner: { id: string; name: string } | null = null;
@@ -99,6 +125,7 @@ export async function POST(request: Request) {
         published,
         publishError,
         previousAiOwner,
+        transferSynced,
         telnyxAssistantId: (updated as { telnyxAssistantId?: string | null }).telnyxAssistantId,
       },
     });

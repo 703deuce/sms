@@ -239,7 +239,12 @@ export const TEST_SCENARIOS = [
 
 export function createDefaultWizardState(): AppointmentReceptionistWizardState {
   return {
-    capabilities: ["answer_questions", "book_appointments", "transfer_calls"],
+    capabilities: [
+      "answer_questions",
+      "book_appointments",
+      "take_messages",
+      "transfer_calls",
+    ],
     answerWhen: "every_call",
     solutionName: "Main Office Appointment Receptionist",
 
