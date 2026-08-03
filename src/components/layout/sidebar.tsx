@@ -9,13 +9,7 @@ import {
 } from "@/lib/solutions-nav";
 import type { Workspace } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import {
-  ChevronDown,
-  CircleHelp,
-  CreditCard,
-  LogOut,
-  MessageSquare,
-} from "lucide-react";
+import { ChevronDown, LogOut, MessageSquare } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState, useTransition } from "react";
@@ -409,47 +403,31 @@ export function Sidebar({
             </div>
           );
         })}
-      </nav>
 
-      {/* Footer — pinned bottom, never scrolls away */}
-      <div className="shrink-0 space-y-px border-t border-white/10 p-2.5">
-        <Link
-          href="/getting-started"
-          onClick={onClose}
-          className="flex items-center gap-2 rounded-[10px] px-2.5 py-1.5 text-[12px] text-sidebar-muted hover:bg-white/5 hover:text-white"
-        >
-          <CircleHelp className="h-3.5 w-3.5" />
-          Help & getting started
-        </Link>
-        <Link
-          href="/settings/billing"
-          onClick={onClose}
-          className="flex items-center gap-2 rounded-[10px] px-2.5 py-1.5 text-[12px] text-sidebar-muted hover:bg-white/5 hover:text-white"
-        >
-          <CreditCard className="h-3.5 w-3.5" />
-          Billing / usage
-        </Link>
-        <div className="mt-1 flex items-center gap-2 rounded-[12px] bg-white/[0.04] px-2 py-1.5">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/avatars/alex.svg"
-            alt={userName}
-            className="h-7 w-7 rounded-full object-cover ring-2 ring-white/10"
-          />
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-[12px] font-semibold text-white">{userName}</p>
-            <p className="text-[10px] text-sidebar-muted">Owner</p>
+        {/* Account sits at the end of the scrollable nav — not a pinned footer. */}
+        <div className="mt-3 border-t border-white/10 px-1 pb-3 pt-3">
+          <div className="flex items-center gap-2 rounded-[12px] bg-white/[0.04] px-2 py-1.5">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/avatars/alex.svg"
+              alt={userName}
+              className="h-7 w-7 rounded-full object-cover ring-2 ring-white/10"
+            />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[12px] font-semibold text-white">{userName}</p>
+              <p className="text-[10px] text-sidebar-muted">Owner</p>
+            </div>
+            <button
+              type="button"
+              onClick={logout}
+              className="rounded-md p-1.5 text-sidebar-muted hover:bg-white/5 hover:text-white"
+              aria-label="Log out"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={logout}
-            className="rounded-md p-1.5 text-sidebar-muted hover:bg-white/5 hover:text-white"
-            aria-label="Log out"
-          >
-            <LogOut className="h-3.5 w-3.5" />
-          </button>
         </div>
-      </div>
+      </nav>
     </aside>
   );
 

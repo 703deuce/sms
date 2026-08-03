@@ -105,7 +105,11 @@ function iconFor(slug: string): LucideIcon {
 export function buildSolutionsNav(options: SolutionsNavOptions = {}): NavItem[] {
   const instances = options.instancesBySolution ?? {};
 
-  const callsAi = outcomeSolutions.filter((s) => s.category === "calls-ai");
+  // AI Receptionist is the section title — not its own clickable row.
+  const receptionistHub = outcomeSolutions.find((s) => s.slug === "ai-receptionist");
+  const callOutcomes = outcomeSolutions.filter(
+    (s) => s.category === "calls-ai" && s.slug !== "ai-receptionist",
+  );
   const sms = outcomeSolutions.filter((s) => s.category === "sms-messaging");
 
   const nav: NavItem[] = [
@@ -117,13 +121,39 @@ export function buildSolutionsNav(options: SolutionsNavOptions = {}): NavItem[] 
     },
   ];
 
-  for (const [index, solution] of callsAi.entries()) {
+  if (receptionistHub) {
+    const receptionistInstances = instances["ai-receptionist"] ?? [];
+    nav.push({
+      label: "Your Receptionists",
+      href: outcomeHref("ai-receptionist"),
+      icon: AudioLines,
+      sectionLabel: "AI Receptionist",
+      children:
+        receptionistInstances.length > 0
+          ? receptionistInstances.slice(0, 2).map((inst) => ({
+              label: `${inst.label} · ${inst.status}`,
+              href: inst.href,
+            }))
+          : [
+              { label: "Overview", href: outcomeHref("ai-receptionist") },
+              {
+                label: "Create receptionist",
+                href:
+                  receptionistHub.setupHref ||
+                  outcomeHref("ai-receptionist"),
+              },
+            ],
+    });
+  }
+
+  for (const [index, solution] of callOutcomes.entries()) {
     nav.push({
       label: solution.title,
       href: outcomeHref(solution.slug),
       icon: iconFor(solution.slug),
       children: solutionChildren(solution, instances[solution.slug]),
-      sectionLabel: index === 0 ? "Calls & AI" : undefined,
+      sectionLabel:
+        index === 0 && !receptionistHub ? "AI Receptionist" : undefined,
     });
   }
 
@@ -133,7 +163,7 @@ export function buildSolutionsNav(options: SolutionsNavOptions = {}): NavItem[] 
       href: outcomeHref(solution.slug),
       icon: MessageSquare,
       children: solutionChildren(solution, instances[solution.slug]),
-      sectionLabel: index === 0 ? "SMS & Messaging" : undefined,
+      sectionLabel: index === 0 ? "Texts & Follow-Up" : undefined,
     });
   }
 

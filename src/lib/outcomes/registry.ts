@@ -86,8 +86,9 @@ export const outcomeSolutions: OutcomeSolutionDef[] = [
   },
   {
     slug: "answer-every-call",
-    title: "Answer Every Call",
-    summary: "Have an AI receptionist immediately answer every incoming call.",
+    title: "AI Answering Service",
+    summary:
+      "Replace the voicemail box — AI answers every incoming call right away.",
     category: "calls-ai",
     whatItDoes: [
       "Immediate answering on your business number",
@@ -140,9 +141,9 @@ export const outcomeSolutions: OutcomeSolutionDef[] = [
   },
   {
     slug: "missed-overflow",
-    title: "Missed & Overflow Calls",
+    title: "Cover Missed Calls",
     summary:
-      "Let your team answer first. AI steps in when nobody answers or the line is busy.",
+      "Your team rings first. AI picks up when nobody answers or the line is busy.",
     category: "calls-ai",
     whatItDoes: [
       "Ring your team first",
@@ -203,9 +204,9 @@ export const outcomeSolutions: OutcomeSolutionDef[] = [
   },
   {
     slug: "after-hours",
-    title: "After-Hours Answering",
+    title: "Answer After Hours",
     summary:
-      "Answer calls when your business is closed and route urgent situations appropriately.",
+      "Cover nights, weekends, and holidays — and escalate urgent callers to on-call staff.",
     category: "calls-ai",
     whatItDoes: [
       "After-hours greeting when closed",
@@ -263,9 +264,9 @@ export const outcomeSolutions: OutcomeSolutionDef[] = [
   },
   {
     slug: "appointment-booking",
-    title: "Appointment Booking",
+    title: "Book Appointments",
     summary:
-      "Let the receptionist check live availability and book, reschedule, or cancel appointments.",
+      "Callers can check availability and book, reschedule, or cancel on your live calendar.",
     category: "calls-ai",
     whatItDoes: [
       "Check live calendar availability",
@@ -324,9 +325,9 @@ export const outcomeSolutions: OutcomeSolutionDef[] = [
   },
   {
     slug: "lead-capture",
-    title: "Lead Capture",
+    title: "Capture New Leads",
     summary:
-      "Capture contact details, service need, timeline, and urgency — then route to your sales team or CRM.",
+      "Collect name, need, timeline, and urgency on the call — then send the lead to your team or CRM.",
     category: "calls-ai",
     whatItDoes: [
       "Collect contact and project details on every call",
@@ -377,9 +378,9 @@ export const outcomeSolutions: OutcomeSolutionDef[] = [
   },
   {
     slug: "service-intake",
-    title: "Service Intake",
+    title: "Take Job Requests",
     summary:
-      "Structured intake for home services, property management, maintenance, and field service.",
+      "For home services and field teams — collect the job type, address, and how urgent it is.",
     category: "calls-ai",
     whatItDoes: [
       "Collect service type, address, and urgency",
@@ -423,7 +424,7 @@ export const outcomeSolutions: OutcomeSolutionDef[] = [
   },
   {
     slug: "missed-call-text-back",
-    title: "Missed Call Text Back",
+    title: "Text Back Missed Callers",
     summary: "Automatically text people who called and could not reach you.",
     category: "sms-messaging",
     whatItDoes: [
@@ -472,9 +473,9 @@ export const outcomeSolutions: OutcomeSolutionDef[] = [
   },
   {
     slug: "instant-lead-response",
-    title: "Instant Lead Response",
+    title: "Text New Leads Instantly",
     summary:
-      "Respond to new leads instantly by text, call, or a combination — let the lead choose.",
+      "When a new lead comes in, text or call them right away — or let them choose.",
     category: "sms-messaging",
     whatItDoes: [
       "Watch forms, keywords, and CRM lead sources",
@@ -529,8 +530,8 @@ export const outcomeSolutions: OutcomeSolutionDef[] = [
   },
   {
     slug: "old-lead-reactivation",
-    title: "Old Lead Reactivation",
-    summary: "Win back quiet contacts with targeted reactivation campaigns.",
+    title: "Re-engage Old Leads",
+    summary: "Win back quiet contacts with targeted text campaigns.",
     category: "sms-messaging",
     whatItDoes: [
       "Build an audience from dormant leads",
@@ -578,8 +579,8 @@ export const outcomeSolutions: OutcomeSolutionDef[] = [
   },
   {
     slug: "review-requests",
-    title: "Review Requests",
-    summary: "Ask happy customers for reviews at the right moment.",
+    title: "Ask for Reviews",
+    summary: "Text happy customers a review link at the right moment.",
     category: "sms-messaging",
     whatItDoes: [
       "Trigger after jobs, calls, or appointments",
@@ -627,9 +628,9 @@ export const outcomeSolutions: OutcomeSolutionDef[] = [
   },
   {
     slug: "appointment-reminders",
-    title: "Appointment Reminders",
+    title: "Remind About Appointments",
     summary:
-      "Remind customers by SMS/email; use AI voice only when someone remains unconfirmed.",
+      "Text appointment reminders; only use AI voice if someone still hasn’t confirmed.",
     category: "sms-messaging",
     whatItDoes: [
       "Pull upcoming appointments from connected calendars",
@@ -677,8 +678,8 @@ export const outcomeSolutions: OutcomeSolutionDef[] = [
   },
   {
     slug: "estimate-follow-up",
-    title: "Estimate Follow-Up",
-    summary: "Follow up on sent estimates until the customer books or declines.",
+    title: "Follow Up on Estimates",
+    summary: "Nudge customers after you send an estimate until they book or decline.",
     category: "sms-messaging",
     whatItDoes: [
       "Watch estimate sources and CRM stages",
@@ -726,7 +727,7 @@ export const outcomeSolutions: OutcomeSolutionDef[] = [
   },
   {
     slug: "promotional-broadcast",
-    title: "Promotional Broadcast",
+    title: "Send a Promo Text",
     summary: "Send offers and announcements to the right audience at the right time.",
     category: "sms-messaging",
     whatItDoes: [

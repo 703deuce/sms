@@ -259,7 +259,7 @@ export function applyWizardPreset(
         ...state,
         answerWhen: "every_call",
         ringBehavior: "ai_immediate",
-        solutionName: "Answer Every Call",
+        solutionName: "AI Answering Service",
         capabilities: [
           "answer_questions",
           "take_messages",
@@ -274,7 +274,7 @@ export function applyWizardPreset(
         answerWhen: "nobody_answers",
         ringBehavior: "ring_team_first",
         ringTeamSeconds: state.ringTeamSeconds || 20,
-        solutionName: "Missed & Overflow Calls",
+        solutionName: "Cover Missed Calls",
         capabilities: [
           "answer_questions",
           "take_messages",
@@ -287,7 +287,7 @@ export function applyWizardPreset(
         ...state,
         answerWhen: "after_hours",
         ringBehavior: "after_hours",
-        solutionName: "After-Hours Answering",
+        solutionName: "Answer After Hours",
         capabilities: [
           "answer_questions",
           "take_messages",
@@ -300,7 +300,7 @@ export function applyWizardPreset(
         ...state,
         answerWhen: "every_call",
         ringBehavior: "ai_immediate",
-        solutionName: "Lead Capture Receptionist",
+        solutionName: "Capture New Leads",
         capabilities: [
           "answer_questions",
           "qualify_callers",
@@ -313,7 +313,7 @@ export function applyWizardPreset(
         ...state,
         answerWhen: "every_call",
         ringBehavior: "ai_immediate",
-        solutionName: "Service Intake Receptionist",
+        solutionName: "Take Job Requests",
         capabilities: [
           "answer_questions",
           "qualify_callers",
