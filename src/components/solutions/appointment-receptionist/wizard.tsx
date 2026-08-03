@@ -1,0 +1,191 @@
+"use client";
+
+import { Button } from "@/components/ui/button";
+import { createDefaultWizardState } from "@/lib/solutions/appointment-receptionist/defaults";
+import {
+  WIZARD_STEPS,
+  type AppointmentReceptionistWizardState,
+} from "@/lib/solutions/appointment-receptionist/types";
+import { toErrorMessage } from "@/lib/errors";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
+import { WizardStepper } from "./wizard-stepper";
+import { GoalsStep } from "./steps/goals-step";
+import { PhoneStep } from "./steps/phone-step";
+import { InformationStep } from "./steps/information-step";
+import { AppointmentsStep } from "./steps/appointments-step";
+import { CallHandlingStep } from "./steps/call-handling-step";
+import { VoiceStep } from "./steps/voice-step";
+import { TestStep } from "./steps/test-step";
+import { ActivateStep } from "./steps/activate-step";
+
+const STORAGE_KEY = "transovo.appointment-receptionist.wizard.v1";
+
+export function AppointmentReceptionistWizard() {
+  const router = useRouter();
+  const [stepIndex, setStepIndex] = useState(0);
+  const [state, setState] = useState<AppointmentReceptionistWizardState>(() =>
+    createDefaultWizardState(),
+  );
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as {
+          stepIndex?: number;
+          state?: AppointmentReceptionistWizardState;
+        };
+        if (parsed.state) setState({ ...createDefaultWizardState(), ...parsed.state });
+        if (typeof parsed.stepIndex === "number") {
+          setStepIndex(Math.min(Math.max(parsed.stepIndex, 0), WIZARD_STEPS.length - 1));
+        }
+      }
+    } catch {
+      // ignore corrupt draft
+    }
+    setHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ stepIndex, state }));
+    } catch {
+      // ignore quota
+    }
+  }, [hydrated, stepIndex, state]);
+
+  const patch = useCallback((p: Partial<AppointmentReceptionistWizardState>) => {
+    setState((prev) => ({ ...prev, ...p }));
+  }, []);
+
+  async function persist(action: "save_draft" | "activate" | "create_draft") {
+    setBusy(true);
+    setError("");
+    try {
+      const res = await fetch("/api/solutions/appointment-receptionist", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action, state }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Save failed");
+      const agentId = json.data.agentId as string;
+      patch({ agentId });
+      if (action === "activate") {
+        if (json.data.publishError) {
+          setError(json.data.publishError);
+          return agentId;
+        }
+        localStorage.removeItem(STORAGE_KEY);
+        router.push(`/voice/agents/${agentId}`);
+        return agentId;
+      }
+      return agentId;
+    } catch (err) {
+      setError(toErrorMessage(err));
+      return null;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onContinue() {
+    if (stepIndex < WIZARD_STEPS.length - 1) {
+      if (stepIndex === 0 && !state.agentId) {
+        await persist("create_draft");
+      }
+      setStepIndex((i) => i + 1);
+      return;
+    }
+    if (state.activationMode === "save_draft") {
+      const id = await persist("save_draft");
+      if (id) {
+        localStorage.removeItem(STORAGE_KEY);
+        router.push(`/voice/agents/${id}`);
+      }
+      return;
+    }
+    await persist("activate");
+  }
+
+  async function onSaveDraft() {
+    const id = await persist("save_draft");
+    if (id && !error) {
+      // stay on wizard; draft is linked
+    }
+  }
+
+  const step = WIZARD_STEPS[stepIndex];
+
+  return (
+    <div className="flex min-h-[calc(100vh-7rem)] flex-col">
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground">
+            Create AI Receptionist
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Answer Calls and Book Appointments — guided setup
+          </p>
+        </div>
+      </div>
+
+      <div className="mb-6 rounded-xl border border-border bg-card px-3 py-4 sm:px-5">
+        <WizardStepper currentIndex={stepIndex} />
+      </div>
+
+      <div className="flex-1">
+        {step.id === "goals" ? <GoalsStep state={state} patch={patch} /> : null}
+        {step.id === "phone" ? <PhoneStep state={state} patch={patch} /> : null}
+        {step.id === "information" ? (
+          <InformationStep state={state} patch={patch} />
+        ) : null}
+        {step.id === "appointments" ? (
+          <AppointmentsStep state={state} patch={patch} />
+        ) : null}
+        {step.id === "call-handling" ? (
+          <CallHandlingStep state={state} patch={patch} />
+        ) : null}
+        {step.id === "voice" ? <VoiceStep state={state} patch={patch} /> : null}
+        {step.id === "test" ? <TestStep state={state} patch={patch} /> : null}
+        {step.id === "activate" ? <ActivateStep state={state} patch={patch} /> : null}
+      </div>
+
+      <div className="sticky bottom-0 z-20 -mx-4 mt-6 border-t border-border bg-card/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6 lg:static lg:mx-0 lg:mt-8 lg:rounded-xl lg:border lg:px-5">
+        <div className="flex items-center justify-between gap-3">
+          <Button
+            variant="outline"
+            disabled={stepIndex === 0 || busy}
+            onClick={() => setStepIndex((i) => Math.max(0, i - 1))}
+          >
+            Back
+          </Button>
+          <div className="flex flex-1 flex-col items-end gap-1 sm:flex-row sm:items-center sm:justify-end">
+            {error ? (
+              <p className="max-w-md text-right text-xs text-danger sm:mr-3">{error}</p>
+            ) : null}
+            <div className="flex gap-2">
+              <Button variant="outline" disabled={busy} onClick={() => void onSaveDraft()}>
+                Save draft
+              </Button>
+              <Button disabled={busy} onClick={() => void onContinue()}>
+                {busy
+                  ? "Working…"
+                  : stepIndex === WIZARD_STEPS.length - 1
+                    ? state.activationMode === "save_draft"
+                      ? "Save draft"
+                      : "Activate now"
+                    : "Continue"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
