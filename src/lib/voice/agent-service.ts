@@ -70,7 +70,57 @@ export async function updateVoiceAgentDraft(
 
   const prevConfig = parseVoiceAgentConfig(existing.draftConfig);
   const nextConfig = patch.draftConfig
-    ? { ...prevConfig, ...patch.draftConfig }
+    ? {
+        ...prevConfig,
+        ...patch.draftConfig,
+        // Deep-merge nested objects so activate hooks / wizard patches don't wipe each other.
+        identity: {
+          ...(prevConfig.identity || {}),
+          ...(patch.draftConfig.identity || {}),
+        },
+        instructions: {
+          ...(prevConfig.instructions || {}),
+          ...(patch.draftConfig.instructions || {}),
+        },
+        callHandling: {
+          ...(prevConfig.callHandling || {}),
+          ...(patch.draftConfig.callHandling || {}),
+          startupGreeting: {
+            ...((prevConfig.callHandling as { startupGreeting?: object } | undefined)
+              ?.startupGreeting || {}),
+            ...((patch.draftConfig.callHandling as { startupGreeting?: object } | undefined)
+              ?.startupGreeting || {}),
+          },
+        },
+        transfers: {
+          ...(prevConfig.transfers || {}),
+          ...(patch.draftConfig.transfers || {}),
+        },
+        messaging: {
+          ...(prevConfig.messaging || {}),
+          ...(patch.draftConfig.messaging || {}),
+        },
+        compliance: {
+          ...(prevConfig.compliance || {}),
+          ...(patch.draftConfig.compliance || {}),
+        },
+        advanced: {
+          ...(prevConfig.advanced || {}),
+          ...(patch.draftConfig.advanced || {}),
+        },
+        voiceLanguage: {
+          ...(prevConfig.voiceLanguage || {}),
+          ...(patch.draftConfig.voiceLanguage || {}),
+        },
+        transcription: {
+          ...(prevConfig.transcription || {}),
+          ...(patch.draftConfig.transcription || {}),
+        },
+        postCall: {
+          ...(prevConfig.postCall || {}),
+          ...(patch.draftConfig.postCall || {}),
+        },
+      }
     : prevConfig;
 
   const updated = await prisma.voiceAgent.update({

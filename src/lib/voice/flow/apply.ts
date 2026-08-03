@@ -96,8 +96,21 @@ export async function applyFlowToAgentDraft(input: {
   // Keep wizard (or builder) system prompt first; append flow/global rules.
   const mergedSystem = [wizardSystem, flowSystem].filter(Boolean).join("\n\n");
 
+  const baseHandling = (base.callHandling || {}) as Record<string, unknown>;
+  const patchHandling = (compiled.configPatch.callHandling || {}) as Record<
+    string,
+    unknown
+  >;
+  const baseGreeting = String(baseHandling.greeting || "").trim();
+  const patchGreeting = String(patchHandling.greeting || "").trim();
+
   const config = mergeVoiceConfig(base, {
     ...compiled.configPatch,
+    callHandling: {
+      ...patchHandling,
+      // Prefer wizard / existing greeting over catalog flow default text.
+      greeting: baseGreeting || patchGreeting,
+    },
     instructions: {
       ...baseInstructions,
       ...patchInstructions,
@@ -128,6 +141,38 @@ export async function applyFlowToAgentDraft(input: {
         String(baseTransfers.warmTransferInstructions || "").trim() || "",
     },
     flows: bundle,
+    // Prefer wizard booking/message conversation sections over flow graph wipe.
+    conversationFlow: (() => {
+      const baseSections = Array.isArray(base.conversationFlow?.sections)
+        ? base.conversationFlow!.sections
+        : [];
+      const patchSections = Array.isArray(compiled.configPatch.conversationFlow?.sections)
+        ? compiled.configPatch.conversationFlow!.sections!
+        : [];
+      if (!baseSections.length) {
+        return compiled.configPatch.conversationFlow || base.conversationFlow;
+      }
+      const byId = new Map<string, (typeof baseSections)[number]>();
+      for (const s of patchSections) byId.set(String(s.id || s.type), s);
+      for (const s of baseSections) {
+        const key = String(s.id || s.type);
+        const existing = byId.get(key);
+        if (!existing) {
+          byId.set(key, s);
+          continue;
+        }
+        // Keep wizard section config (appointmentTypes, collectFields, etc.).
+        byId.set(key, {
+          ...existing,
+          ...s,
+          config: {
+            ...((existing as { config?: object }).config || {}),
+            ...((s as { config?: object }).config || {}),
+          },
+        });
+      }
+      return { sections: [...byId.values()] };
+    })(),
     enabledBuiltinTools: [
       ...new Set([
         ...(compiled.enabledBuiltinTools || []),

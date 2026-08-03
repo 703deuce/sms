@@ -7,6 +7,10 @@ import {
   isWithinBusinessHours,
 } from "@/lib/messaging/messaging-settings";
 import {
+  applyActionTimezone,
+  resolveRingTimeoutSeconds,
+} from "./routing-action-resolve";
+import {
   isTelnyxVoiceConfigured,
   startAiAssistantOnCall,
   startCallRecording,
@@ -216,7 +220,8 @@ async function resolveRecordingDisclosure(workspaceId: string, agentId?: string 
   if (!agentId) return null;
   const agent = await prisma.voiceAgent.findUnique({ where: { id: agentId } });
   if (!agent) return null;
-  const cfg = parseVoiceAgentConfig(agent.draftConfig);
+  const { loadVoiceAgentRuntimeConfig } = await import("./load-agent-config");
+  const cfg = await loadVoiceAgentRuntimeConfig(agent.workspaceId, agentId);
   const fromCompliance = (cfg.compliance || {}) as Record<string, unknown>;
   if (fromCompliance.recordingDisclosureText) {
     return String(fromCompliance.recordingDisclosureText);
@@ -303,7 +308,8 @@ async function startAiOnInboundCall(input: {
     await startInboundNoiseSuppression(input.telnyxCallControlId);
 
     if (agent.telnyxAssistantId) {
-      const cfg = parseVoiceAgentConfig(agent.draftConfig);
+      const { loadVoiceAgentRuntimeConfig } = await import("./load-agent-config");
+      const cfg = await loadVoiceAgentRuntimeConfig(input.workspaceId, agent.id);
       const startup = startupGreetingFromConfig(cfg);
       const outputGainDb = normalizeOutputGainDb(cfg.voiceLanguage?.outputGainDb);
 
@@ -391,6 +397,16 @@ async function startAiOnInboundCall(input: {
                 "This call may be recorded for quality and training purposes.",
             )
           : null;
+      // If the caller speaks first, still speak recording disclosure when needed
+      // (AI greeting path would otherwise skip it entirely).
+      if (speaksFirst === "caller" && disclosureText && input.telnyxCallControlId) {
+        const { speakOnCallControl } = await import("./startup-greeting-runtime");
+        await speakOnCallControl(input.telnyxCallControlId, disclosureText).catch(
+          () => undefined,
+        );
+        disclosureSpoken = true;
+      }
+
       const greeting =
         speaksFirst === "caller"
           ? null
@@ -398,7 +414,7 @@ async function startAiOnInboundCall(input: {
               config: cfg,
               agentName: agent.name || "our assistant",
               contactName: input.contactName,
-              prependDisclosure: disclosureText,
+              prependDisclosure: disclosureSpoken ? null : disclosureText,
             });
 
       const aiHandoffAt = Date.now();
@@ -520,7 +536,7 @@ async function executeHumanFirst(input: {
   routing: Record<string, unknown>;
   actions?: Record<string, unknown>;
 }) {
-  const timeoutSeconds = Number(input.actions?.timeoutSeconds || input.actions?.ringTimeout || 30);
+  const timeoutSeconds = resolveRingTimeoutSeconds(input.actions, 30);
   const queueId = input.actions?.queueId as string | undefined;
   const agentId = input.actions?.agentId as string | undefined;
 
@@ -603,9 +619,12 @@ async function executeVoicemail(input: {
 
   if (!input.greetingText && input.agentId) {
     const agent = await prisma.voiceAgent.findUnique({ where: { id: input.agentId } });
-    const cfg = parseVoiceAgentConfig(agent?.draftConfig);
-    const vm = (cfg.voicemail || {}) as Record<string, unknown>;
-    if (vm.greetingText) greeting = String(vm.greetingText);
+    if (agent) {
+      const { loadVoiceAgentRuntimeConfig } = await import("./load-agent-config");
+      const cfg = await loadVoiceAgentRuntimeConfig(agent.workspaceId, agent.id);
+      const vm = (cfg.voicemail || {}) as Record<string, unknown>;
+      if (vm.greetingText) greeting = String(vm.greetingText);
+    }
   }
 
   if (input.telnyxCallControlId && isTelnyxVoiceConfigured()) {
@@ -714,13 +733,14 @@ async function executeOverflow(input: {
 async function resolveEffectiveAction(
   workspaceId: string,
   action: string,
-  _actions?: Record<string, unknown>,
+  actions?: Record<string, unknown>,
   now = new Date(),
 ) {
   if (action !== "ai_after_hours") return action;
 
   const settings = await getMessagingRuntimeSettings(workspaceId);
-  const withinHours = isWithinBusinessHours(settings, now);
+  const effective = applyActionTimezone(settings, actions);
+  const withinHours = isWithinBusinessHours(effective, now);
   if (withinHours) return "human_first";
   return "ai_answer";
 }

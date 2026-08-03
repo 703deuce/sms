@@ -341,6 +341,14 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
         transferId: String(payload.transferId || ""),
       });
     }
+    case "voice_cold_transfer_timeout": {
+      const { handleColdTransferTimeoutJob } = await import("@/lib/voice/transfers");
+      return handleColdTransferTimeoutJob({
+        workspaceId: String(payload.workspaceId || ""),
+        callId: String(payload.callId || ""),
+        transferId: String(payload.transferId || ""),
+      });
+    }
     case "voice_warm_transfer_complete": {
       const { completeWarmTransfer } = await import("@/lib/voice/transfers");
       return completeWarmTransfer({

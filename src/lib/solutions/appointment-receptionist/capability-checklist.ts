@@ -116,7 +116,7 @@ export function getWizardActivationIssues(
         id: "calendar",
         severity: "blocking",
         message:
-          "Connect a live calendar before activating booking — link Google, Microsoft, or Transovo Calendar under Appointments.",
+          "Connect a live calendar before activating booking — link Google, Microsoft, Calendly, or Transovo Calendar under Appointments.",
       });
     }
   }

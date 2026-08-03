@@ -7,6 +7,7 @@ import {
   wizardTransferDestinationName,
   WIZARD_HANDOFF_NAME,
 } from "./transfer-utils";
+import { resolveWizardRoutingMode } from "./routing-mode";
 
 const KNOWLEDGE_FALLBACK_PHRASE =
   "If information is not available in the knowledge base, say you don't have that information and offer to take a message or connect someone who can help.";
@@ -98,6 +99,11 @@ export function buildSystemPrompt(state: AppointmentReceptionistWizardState): st
     );
   }
   if (caps.includes("qualify_callers")) lines.push("- Qualify new callers before booking or transfer.");
+  if (state.bookingBehavior.distinguishNewExisting) {
+    lines.push(
+      "- Ask whether the caller is new or an existing patient/client before booking, and tailor questions accordingly.",
+    );
+  }
   if (caps.includes("transfer_calls") && transferPhone) {
     lines.push(
       `- Transfer to ${transferName} when transfer rules apply (use the escalate_human tool).`,
@@ -226,9 +232,9 @@ export function buildWizardAgentConfig(
             handOffWhenReady: true,
           }
         : {
-            // create_custom (and upload_custom without URL) use TTS/text mask
+            // create_custom (and upload_custom without URL) — TTS mask before AI.
             enabled: true,
-            mode: "ai" as const,
+            mode: "tts" as const,
             text: state.connectionGreetingText || DEFAULT_CONNECTION_GREETING,
             audioUrl: customAudioUrl,
             delayMs: "auto" as const,
@@ -272,10 +278,10 @@ export function buildWizardAgentConfig(
     enabledTools.add("create_crm_task");
   }
 
-  const ringHumanFirst =
-    state.answerWhen === "nobody_answers" ||
-    state.answerWhen === "line_busy" ||
-    state.ringBehavior === "ring_team_first";
+  const ringMode = resolveWizardRoutingMode({
+    answerWhen: state.answerWhen,
+    ringBehavior: state.ringBehavior,
+  });
 
   const transferTargets = transferPhone
     ? [
@@ -349,7 +355,14 @@ export function buildWizardAgentConfig(
       speaksFirst: state.speaksFirst,
       closingStatement: "Thanks for calling. Goodbye.",
       startupGreeting,
-      answerMode: ringHumanFirst ? "ring_team_first" : "ai_immediate",
+      answerMode:
+        ringMode === "human_first" || ringMode === "custom_schedule"
+          ? "ring_team_first"
+          : ringMode === "ai_after_hours"
+            ? "after_hours"
+            : ringMode === "overflow"
+              ? "overflow"
+              : "ai_immediate",
       ringTeamSeconds: state.ringTeamSeconds,
       callRecording: state.callRecording,
       solutionSlug: "appointment-assistant",
@@ -381,7 +394,9 @@ export function buildWizardAgentConfig(
     },
     messaging: {
       ...(base.messaging || {}),
-      smsConfirmations: state.bookingBehavior.sendSmsAfterBooking,
+      smsConfirmations:
+        state.bookingBehavior.sendSmsAfterBooking ||
+        state.capabilities.includes("send_sms_confirmations"),
     },
     conversationFlow: {
       sections: [
@@ -464,20 +479,23 @@ export function buildWizardAgentConfig(
     advanced: {
       ...(base.advanced || {}),
       appointmentReceptionistWizard: {
-        solutionName: state.solutionName,
-        answerWhen: state.answerWhen,
-        knowledgeSource: state.knowledgeSource,
-        websiteUrl: state.websiteUrl,
+        // Full wizard snapshot so scheduled promote can re-run activate hooks.
+        ...state,
+        phoneNumberId: state.phoneNumberId,
+        phoneNumberE164: state.phoneNumberE164,
+        agentName: state.agentName,
+        voiceId: state.voiceId,
+        openingGreeting: state.openingGreeting,
+        businessName: state.businessName,
+        capabilities: state.capabilities,
+        transferDestinationPhone: state.transferDestinationPhone,
+        transferDestinationName: state.transferDestinationName,
+        calendarConnected: state.calendarConnected,
         calendarProvider: state.calendarProvider,
-        timezone: state.timezone,
-        collectFields: state.collectFields,
-        appointmentTypes: state.appointmentTypes.filter((t) => t.enabled),
+        appointmentTypes: state.appointmentTypes,
         activationMode: state.activationMode,
         scheduledAt: state.scheduledAt || null,
-        longTermMemory: Boolean(state.longTermMemory),
-        crmEnabled: Boolean(state.crmEnabled),
-        warmTransfer: Boolean(state.warmTransfer),
-        detectVoicemailOnTransfer: Boolean(state.detectVoicemailOnTransfer),
+        lastTestPassed: state.lastTestPassed,
       },
       capabilityPack: "appointment_receptionist",
       ...(state.longTermMemory
@@ -502,7 +520,7 @@ export function buildReceptionistWillList(state: AppointmentReceptionistWizardSt
   const phone = state.phoneNumberE164 || "your assigned number";
   const items = [
     `Answer incoming calls on ${phone}`,
-    `Greet the caller as ${state.agentName || "Maya"}${state.businessName ? ` from ${state.businessName}` : ""}`,
+    `Greet the caller as ${state.agentName || "Astra"}${state.businessName ? ` from ${state.businessName}` : ""}`,
   ];
   if (state.capabilities.includes("answer_questions")) {
     items.push("Answer questions using your business knowledge base");

@@ -325,11 +325,21 @@ export async function syncRoutingRulesFromFlow(input: {
   const existing = await prisma.voiceRoutingRule.findMany({
     where: { workspaceId: input.workspaceId, agentId: input.agentId },
   });
+  const hasWizardManaged = existing.some((rule: { conditions: unknown }) => {
+    const meta = (rule.conditions || {}) as Record<string, unknown>;
+    return Boolean(meta.wizardManaged);
+  });
   for (const rule of existing) {
     const meta = (rule.conditions || {}) as Record<string, unknown>;
     if (meta.flowManaged) {
       await prisma.voiceRoutingRule.delete({ where: { id: rule.id } });
     }
+  }
+
+  // Appointment Receptionist (and similar) own routing via wizardManaged rules.
+  // Do not add competing Flow: AI answer rules that race at the same priority.
+  if (hasWizardManaged) {
+    return;
   }
 
   if (input.compiled.routingMode === "human_first") {

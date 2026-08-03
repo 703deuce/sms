@@ -106,7 +106,7 @@ export type AppointmentReceptionistWizardState = {
   numberSource: NumberSource;
   phoneNumberId: string | null;
   phoneNumberE164: string | null;
-  ringBehavior: "ai_immediate" | "ring_team_first" | "after_hours" | "custom";
+  ringBehavior: "ai_immediate" | "ring_team_first" | "after_hours" | "custom" | "line_busy";
   ringTeamSeconds: number;
   callRecording: "off" | "all" | "inbound_only";
   connectionGreeting: ConnectionGreetingMode;

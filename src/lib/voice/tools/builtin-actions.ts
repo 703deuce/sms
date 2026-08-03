@@ -9,7 +9,7 @@ export async function executeBuiltinVoiceAction(input: {
   input: Record<string, unknown>;
 }) {
   const prisma = getPrisma();
-  const args = input.input || {};
+  let args = input.input || {};
 
   switch (input.toolType) {
     case "lookup_customer":
@@ -531,13 +531,9 @@ export async function executeBuiltinVoiceAction(input: {
       }
 
       // Cold/blind Call Control transfer — single path for PSTN human handoff.
+      const { loadVoiceAgentRuntimeConfigRecord } = await import("../load-agent-config");
       const agentConfig = input.agentId
-        ? (((
-            await prisma.voiceAgent.findFirst({
-              where: { id: input.agentId, workspaceId: input.workspaceId },
-              select: { config: true },
-            })
-          )?.config || {}) as Record<string, unknown>)
+        ? await loadVoiceAgentRuntimeConfigRecord(input.workspaceId, input.agentId)
         : ({} as Record<string, unknown>);
       const transfersCfg = (agentConfig.transfers || {}) as Record<string, unknown>;
       const shouldAnnounce = Boolean(transfersCfg.announce);
@@ -564,6 +560,9 @@ export async function executeBuiltinVoiceAction(input: {
                 ? "warm_transfer"
                 : "cold_transfer",
           summary: String(args.summary || args.reason || ""),
+          timeoutSeconds: Number(
+            transfersCfg.ringSeconds || transfersCfg.timeoutSeconds || 30,
+          ),
         });
         return {
           ok: true,
@@ -581,6 +580,7 @@ export async function executeBuiltinVoiceAction(input: {
         const message = err instanceof Error ? err.message : String(err);
         console.error("[voice] escalate_human failed", message);
         const takeMessage = fallback === "take_message";
+        const notifyStaff = fallback === "notify_staff";
         if (input.callId) {
           const existing = await prisma.voiceCall.findFirst({
             where: { id: input.callId, workspaceId: input.workspaceId },
@@ -591,24 +591,54 @@ export async function executeBuiltinVoiceAction(input: {
             .update({
               where: { id: input.callId },
               data: {
-                outcome: takeMessage ? "transfer_failed_take_message" : "transfer_failed",
+                outcome: takeMessage
+                  ? "transfer_failed_take_message"
+                  : notifyStaff
+                    ? "transfer_failed_notify_staff"
+                    : "transfer_failed",
                 metadata: {
                   ...prevMeta,
                   transferFailed: true,
                   transferFallback: fallback,
                   transferError: message,
-                  ...(takeMessage ? { follow_up_required: true } : {}),
+                  ...(takeMessage || notifyStaff ? { follow_up_required: true } : {}),
                 },
               },
             })
             .catch(() => undefined);
+        }
+        if (notifyStaff) {
+          await import("@/lib/notifications/in-app")
+            .then(({ notifyWorkspace }) =>
+              notifyWorkspace(input.workspaceId, {
+                type: "system",
+                title: "Transfer failed — staff follow-up needed",
+                body: message.slice(0, 200),
+                href: input.callId ? `/voice/calls/${input.callId}` : "/voice/calls",
+              }),
+            )
+            .catch(() => undefined);
+          await notifyStaffByEmail({
+            workspaceId: input.workspaceId,
+            subject: "Transfer failed — staff follow-up needed",
+            body: [
+              "A live transfer failed.",
+              message,
+              input.callId ? `Call: ${input.callId}` : "",
+            ]
+              .filter(Boolean)
+              .join("\n"),
+            callId: input.callId,
+          }).catch(() => undefined);
         }
         return {
           ok: false,
           error: message,
           speak: takeMessage
             ? "I wasn't able to connect that transfer. I can take a detailed message and have someone call you back."
-            : "I wasn't able to connect that transfer. I can help another way or try again shortly.",
+            : notifyStaff
+              ? "I wasn't able to connect that transfer. I've notified the team and someone will follow up."
+              : "I wasn't able to connect that transfer. I can help another way or try again shortly.",
         };
       }
     }
@@ -629,11 +659,22 @@ export async function executeBuiltinVoiceAction(input: {
       return { ok: true, queued: true, to, subject };
     }
     case "calendar_availability": {
+      const { normalizeBookingToolArgs } = await import("../calendar/booking-args");
+      args = normalizeBookingToolArgs(args);
       // Prefer Calendly Scheduling API when the workspace has Calendly connected.
       try {
         const { getConnection } = await import("@/lib/integrations/connections");
         const conn = await getConnection(input.workspaceId, "calendly");
         if (conn?.status === "connected") {
+          const serviceName = String(args.serviceName || args.service || "Appointment");
+          const {
+            assertBookingPermission,
+            loadServiceBookingConfig,
+            filterSlotsByNoticeAndMaxDays,
+          } = await import("../calendar/booking");
+          const gates = await loadServiceBookingConfig(input.workspaceId, serviceName);
+          assertBookingPermission(gates.config);
+
           const { executeIntegrationAction } = await import(
             "@/lib/integrations/framework/actions-registry"
           );
@@ -651,10 +692,15 @@ export async function executeBuiltinVoiceAction(input: {
             source: "ai",
           });
           if (result.ok) {
-            return {
-              provider: "calendly",
-              slots: (result.data as { slots?: unknown })?.slots || result.data,
-            };
+            const raw =
+              (result.data as { slots?: Array<{ startsAt: string }> })?.slots ||
+              (Array.isArray(result.data) ? result.data : []);
+            const slots = filterSlotsByNoticeAndMaxDays(
+              (raw as Array<{ startsAt: string }>) || [],
+              gates.noticeMinutes,
+              gates.maxDaysAhead,
+            );
+            return { provider: "calendly", slots };
           }
         }
       } catch (err) {
@@ -662,17 +708,47 @@ export async function executeBuiltinVoiceAction(input: {
           "[voice] calendly availability fallback",
           err instanceof Error ? err.message : err,
         );
+        // Permission / gate errors should surface to the model.
+        if (
+          err instanceof Error &&
+          /does not allow direct booking|minimum notice|too far ahead|Missing required/i.test(
+            err.message,
+          )
+        ) {
+          throw err;
+        }
       }
       const { getAvailability } = await import("../calendar/booking");
       return await getAvailability(input.workspaceId, args);
     }
     case "book_appointment": {
+      const { normalizeBookingToolArgs } = await import("../calendar/booking-args");
+      args = normalizeBookingToolArgs(args);
       // Prefer Calendly POST /invitees when connected so bookings land on the
       // host calendar and fire invitee webhooks (same path as automations).
       try {
         const { getConnection } = await import("@/lib/integrations/connections");
         const conn = await getConnection(input.workspaceId, "calendly");
         if (conn?.status === "connected") {
+          const serviceName = String(args.serviceName || args.service || "Appointment");
+          const {
+            assertBookingPermission,
+            assertRequiredFields,
+            assertBookingTimingGates,
+            loadServiceBookingConfig,
+          } = await import("../calendar/booking");
+          const gates = await loadServiceBookingConfig(input.workspaceId, serviceName);
+          assertBookingPermission(gates.config);
+          assertRequiredFields(gates.config, args);
+          const startsAt = new Date(String(args.startsAt || args.startTime || ""));
+          if (!Number.isNaN(startsAt.getTime())) {
+            assertBookingTimingGates({
+              startsAt,
+              noticeMinutes: gates.noticeMinutes,
+              maxDaysAhead: gates.maxDaysAhead,
+            });
+          }
+
           let email = String(args.email || "").trim();
           let name = String(args.name || args.inviteeName || "").trim();
           const phone = args.phone ? normalizeE164(String(args.phone)) : "";
@@ -725,32 +801,35 @@ export async function executeBuiltinVoiceAction(input: {
               name,
               email,
               startsAt: String(args.startsAt || args.startTime || ""),
-              serviceName: String(args.serviceName || args.service || "Appointment"),
+              serviceName,
               appointmentId:
-                typeof (result.data as { appointmentId?: unknown })?.appointmentId === "string"
-                  ? String((result.data as { appointmentId: string }).appointmentId)
-                  : undefined,
+                (result.data as { appointmentId?: string; id?: string })?.appointmentId ||
+                (result.data as { id?: string })?.id ||
+                undefined,
             }).catch(() => undefined);
             return booked;
           }
-          throw new Error(
-            ("message" in result && result.message) || "Calendly book failed",
-          );
         }
       } catch (err) {
-        // If Calendly is connected but booking failed, surface the error rather
-        // than silently booking only into the internal calendar.
-        const { getConnection } = await import("@/lib/integrations/connections");
-        const conn = await getConnection(input.workspaceId, "calendly").catch(
-          () => null,
+        console.warn(
+          "[voice] calendly book fallback",
+          err instanceof Error ? err.message : err,
         );
+        if (
+          err instanceof Error &&
+          /does not allow direct booking|minimum notice|too far ahead|Missing required|requires invitee email/i.test(
+            err.message,
+          )
+        ) {
+          throw err;
+        }
+        // If Calendly is connected but booking failed for another reason, surface it
+        // rather than silently booking only into the internal calendar.
+        const { getConnection } = await import("@/lib/integrations/connections");
+        const conn = await getConnection(input.workspaceId, "calendly").catch(() => null);
         if (conn?.status === "connected") {
           throw err instanceof Error ? err : new Error(String(err));
         }
-        console.warn(
-          "[voice] calendly book skipped",
-          err instanceof Error ? err.message : err,
-        );
       }
       const { bookAppointment } = await import("../calendar/booking");
       const booked = await bookAppointment(input.workspaceId, {
@@ -770,7 +849,12 @@ export async function executeBuiltinVoiceAction(input: {
         appointmentId:
           booked && typeof booked === "object" && "appointmentId" in booked
             ? String((booked as { appointmentId: string }).appointmentId)
-            : undefined,
+            : booked &&
+                typeof booked === "object" &&
+                "appointment" in booked &&
+                (booked as { appointment?: { id?: string } }).appointment?.id
+              ? String((booked as { appointment: { id: string } }).appointment.id)
+              : undefined,
         smsAlreadySent: Boolean(
           booked && typeof booked === "object" && "smsSent" in booked
             ? (booked as { smsSent?: boolean }).smsSent
@@ -913,11 +997,8 @@ async function agentSmsConfirmationsEnabled(
   agentId?: string,
 ): Promise<boolean> {
   if (!agentId) return false;
-  const agent = await getPrisma().voiceAgent.findFirst({
-    where: { id: agentId, workspaceId },
-    select: { config: true },
-  });
-  const cfg = (agent?.config || {}) as Record<string, unknown>;
+  const { loadVoiceAgentRuntimeConfigRecord } = await import("../load-agent-config");
+  const cfg = await loadVoiceAgentRuntimeConfigRecord(workspaceId, agentId);
   const messaging = (cfg.messaging || {}) as Record<string, unknown>;
   if ("smsConfirmations" in messaging) return Boolean(messaging.smsConfirmations);
   const tools = Array.isArray(cfg.enabledBuiltinTools)

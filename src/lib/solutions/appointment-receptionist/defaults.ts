@@ -73,12 +73,14 @@ export const ANSWER_WHEN_OPTIONS = [
   {
     id: "line_busy" as const,
     label: "When the line is busy",
-    description: "AI answers overflow while staff are on calls.",
+    description:
+      "Use when this number only receives overflow/forwarded calls from another system that is busy.",
   },
   {
     id: "custom_schedule" as const,
     label: "According to a custom schedule",
-    description: "Define exact windows when AI should answer.",
+    description:
+      "Ring your team during business hours, then AI after hours (uses your workspace business hours).",
   },
 ];
 
@@ -328,6 +330,9 @@ export function createDefaultWizardState(): AppointmentReceptionistWizardState {
         durationMin: 60,
         calendar: "Main Calendar",
         status: "ready",
+        bookingHours: "Mon - Fri, 8:00 AM - 6:00 PM",
+        minNotice: "2 hours",
+        maxDaysAhead: "30 days",
         requiredFields: ["full_name", "phone", "email", "service", "address"],
         bookingPermission: "book_directly",
         enabled: true,
@@ -374,7 +379,7 @@ export function createDefaultWizardState(): AppointmentReceptionistWizardState {
     warmTransfer: false,
     detectVoicemailOnTransfer: false,
 
-    agentName: "Maya",
+    agentName: "Astra",
     businessName: "",
     role: "Front-desk receptionist",
     tone: "Warm and professional",

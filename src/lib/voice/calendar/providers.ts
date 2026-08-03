@@ -1,4 +1,9 @@
 import { getPrisma } from "@/lib/db";
+import {
+  addCalendarDays,
+  wallTimeInZoneToUtc,
+  zonedDateParts,
+} from "./timezone-slots";
 
 export type CalendarConfig = {
   provider?: string;
@@ -224,13 +229,52 @@ export function computeFreeSlots(
   days: number,
   now = new Date(),
   bufferMinutes = 0,
+  opts?: {
+    timezone?: string;
+    startHour?: number;
+    endHour?: number;
+    weekdaysOnly?: boolean;
+  },
 ): Array<{ startsAt: string; endsAt: string }> {
   const bufferMs = bufferMinutes * 60_000;
   const slots: Array<{ startsAt: string; endsAt: string }> = [];
+  const tz = (opts?.timezone || "").trim();
+  const startHour = opts?.startHour ?? 9;
+  const endHour = opts?.endHour ?? 17;
+  const weekdaysOnly = opts?.weekdaysOnly ?? true;
+
+  if (tz) {
+    const today = zonedDateParts(now, tz);
+    for (let d = 0; d < days; d += 1) {
+      const day = addCalendarDays(today.year, today.month, today.day, d);
+      const noon = wallTimeInZoneToUtc(tz, day.year, day.month, day.day, 12, 0);
+      const weekday = zonedDateParts(noon, tz).weekday;
+      if (weekdaysOnly && (weekday === "sat" || weekday === "sun")) continue;
+      for (let hour = startHour; hour < endHour; hour += 1) {
+        const start = wallTimeInZoneToUtc(tz, day.year, day.month, day.day, hour, 0);
+        const end = new Date(start.getTime() + durationMinutes * 60_000);
+        if (start <= now) continue;
+        const overlaps = busy.some((b) => {
+          const bufferedStart = new Date(b.start.getTime() - bufferMs);
+          const bufferedEnd = new Date(b.end.getTime() + bufferMs);
+          return start < bufferedEnd && end > bufferedStart;
+        });
+        if (!overlaps) {
+          slots.push({ startsAt: start.toISOString(), endsAt: end.toISOString() });
+        }
+      }
+    }
+    return slots.slice(0, 20);
+  }
+
   for (let d = 0; d < days; d += 1) {
     const day = new Date(now);
     day.setDate(day.getDate() + d);
-    for (let hour = 9; hour < 17; hour += 1) {
+    if (weekdaysOnly) {
+      const dow = day.getDay();
+      if (dow === 0 || dow === 6) continue;
+    }
+    for (let hour = startHour; hour < endHour; hour += 1) {
       const start = new Date(day);
       start.setHours(hour, 0, 0, 0);
       const end = new Date(start.getTime() + durationMinutes * 60_000);

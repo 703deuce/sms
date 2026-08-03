@@ -226,17 +226,14 @@ export async function initiateTransfer(input: {
       to: destination,
       timeout_secs: input.timeoutSeconds || 30,
     };
-    // Prefer agent draftConfig.transfers.detectVoicemailOnTransfer when set.
+    // Prefer published/draft transfers.detectVoicemailOnTransfer when set.
     let detectAmd = true;
     if (call.agentId) {
-      const agentRow = await prisma.voiceAgent.findUnique({ where: { id: call.agentId } });
-      if (agentRow?.draftConfig) {
-        const { parseVoiceAgentConfig } = await import("./types");
-        const cfg = parseVoiceAgentConfig(agentRow.draftConfig);
-        const transfersCfg = (cfg.transfers || {}) as Record<string, unknown>;
-        if (typeof transfersCfg.detectVoicemailOnTransfer === "boolean") {
-          detectAmd = transfersCfg.detectVoicemailOnTransfer;
-        }
+      const { loadVoiceAgentRuntimeConfig } = await import("./load-agent-config");
+      const cfg = await loadVoiceAgentRuntimeConfig(call.workspaceId, call.agentId);
+      const transfersCfg = (cfg.transfers || {}) as Record<string, unknown>;
+      if (typeof transfersCfg.detectVoicemailOnTransfer === "boolean") {
+        detectAmd = transfersCfg.detectVoicemailOnTransfer;
       }
     }
     if (detectAmd) {
@@ -280,6 +277,25 @@ export async function initiateTransfer(input: {
     transferType: isSipRefer ? "sip_refer" : input.transferType,
   });
 
+  // Cold transfer: if destination never bridges, resume AI / honor fallback.
+  try {
+    const { enqueueJob } = await import("@/lib/messaging/enqueue-advance");
+    await enqueueJob({
+      jobType: "voice_cold_transfer_timeout",
+      queueName: "voice-calls",
+      workspaceId: input.workspaceId,
+      payload: {
+        workspaceId: input.workspaceId,
+        callId: call.id,
+        transferId: transfer.id,
+      },
+      idempotencyKey: `cold-transfer-timeout-${transfer.id}`,
+      runAfter: new Date(Date.now() + (input.timeoutSeconds || 30) * 1000),
+    });
+  } catch {
+    // non-blocking
+  }
+
   return { mode: "telnyx", transferId: transfer.id, sipRefer: Boolean(isSipRefer) };
 }
 
@@ -321,6 +337,7 @@ export async function completeTransfersOnBridge(input: {
         data: {
           transferred: true,
           status: "TRANSFERRED",
+          outcome: "transferred",
           metadata: {
             ...(call.metadata as object),
             transferInProgress: false,
@@ -367,14 +384,14 @@ async function initiateWarmTransfer(input: {
   const connectionId = process.env.TELNYX_CONNECTION_ID!.trim();
   let detectAmd = true;
   if (input.call.agentId) {
-    const agentRow = await prisma.voiceAgent.findUnique({ where: { id: input.call.agentId } });
-    if (agentRow?.draftConfig) {
-      const { parseVoiceAgentConfig } = await import("./types");
-      const cfg = parseVoiceAgentConfig(agentRow.draftConfig);
-      const transfersCfg = (cfg.transfers || {}) as Record<string, unknown>;
-      if (typeof transfersCfg.detectVoicemailOnTransfer === "boolean") {
-        detectAmd = transfersCfg.detectVoicemailOnTransfer;
-      }
+    const { loadVoiceAgentRuntimeConfig } = await import("./load-agent-config");
+    const cfg = await loadVoiceAgentRuntimeConfig(
+      input.workspaceId,
+      input.call.agentId,
+    );
+    const transfersCfg = (cfg.transfers || {}) as Record<string, unknown>;
+    if (typeof transfersCfg.detectVoicemailOnTransfer === "boolean") {
+      detectAmd = transfersCfg.detectVoicemailOnTransfer;
     }
   }
   const consultBody: Record<string, unknown> = {
@@ -478,7 +495,7 @@ export async function completeWarmTransfer(input: {
   });
   await prisma.voiceCall.update({
     where: { id: input.callId },
-    data: { transferred: true, status: "TRANSFERRED" },
+    data: { transferred: true, status: "TRANSFERRED", outcome: "transferred" },
   });
   await logTransferEvent(input.workspaceId, input.callId, input.transferId, "completed", {
     consultControlId: input.consultControlId,
@@ -539,6 +556,130 @@ export async function cancelWarmTransfer(input: {
   }
 
   return returnCallerToAi(input.workspaceId, input.callId, input.reason || "transfer_cancelled");
+}
+
+/**
+ * Cold transfer timed out without bridge — mark failed and resume AI when
+ * destination/agent config says return_to_ai / take_message / notify_staff.
+ */
+export async function handleColdTransferTimeoutJob(payload: {
+  workspaceId: string;
+  callId: string;
+  transferId: string;
+}) {
+  const prisma = getPrisma();
+  const transfer = await prisma.voiceTransfer.findFirst({
+    where: { id: payload.transferId, workspaceId: payload.workspaceId },
+  });
+  if (
+    !transfer ||
+    transfer.status === "completed" ||
+    transfer.status === "cancelled" ||
+    transfer.status === "voicemail"
+  ) {
+    return { skipped: true };
+  }
+
+  const call = await prisma.voiceCall.findFirst({
+    where: { id: payload.callId, workspaceId: payload.workspaceId },
+  });
+  if (!call) return { skipped: true, reason: "call_missing" };
+  if (call.endedAt || call.status === "COMPLETED" || call.status === "TRANSFERRED") {
+    // Bridged successfully or caller already gone.
+    if (call.status === "TRANSFERRED" && call.outcome === "transferred") {
+      return { skipped: true, reason: "already_bridged" };
+    }
+    if (call.endedAt) return { skipped: true, reason: "call_ended" };
+  }
+
+  await prisma.voiceTransfer.update({
+    where: { id: transfer.id },
+    data: { status: "failed", completedAt: new Date() },
+  });
+  await logTransferEvent(payload.workspaceId, payload.callId, transfer.id, "timeout", {
+    reason: "cold_transfer_timeout",
+  });
+
+  let returnToAi = true;
+  let fallback = "return_to_ai";
+  if (call.agentId) {
+    const dest = await prisma.voiceTransferDestination.findFirst({
+      where: {
+        workspaceId: payload.workspaceId,
+        agentId: call.agentId,
+        enabled: true,
+      },
+      orderBy: { name: "asc" },
+    });
+    if (typeof dest?.returnToAiOnFail === "boolean") {
+      returnToAi = dest.returnToAiOnFail;
+    }
+    const { loadVoiceAgentRuntimeConfig } = await import("./load-agent-config");
+    const cfg = await loadVoiceAgentRuntimeConfig(payload.workspaceId, call.agentId);
+    fallback = String(
+      (cfg.transfers as Record<string, unknown> | undefined)?.fallback || "return_to_ai",
+    );
+  }
+
+  const shouldResume =
+    returnToAi ||
+    fallback === "return_to_ai" ||
+    fallback === "take_message" ||
+    fallback === "notify_staff";
+
+  if (!shouldResume) {
+    await prisma.voiceCall.update({
+      where: { id: call.id },
+      data: {
+        outcome: "transfer_failed",
+        metadata: {
+          ...(call.metadata as object),
+          transferInProgress: false,
+          transferFailed: true,
+          transferFallback: fallback,
+        } as object,
+      },
+    });
+    return { ok: false, reason: "fallback_no_resume" };
+  }
+
+  if (fallback === "notify_staff") {
+    await import("@/lib/notifications/in-app")
+      .then(({ notifyWorkspace }) =>
+        notifyWorkspace(payload.workspaceId, {
+          type: "system",
+          title: "Transfer timed out — staff follow-up needed",
+          body: "A live transfer did not connect before the ring timeout.",
+          href: `/voice/calls/${payload.callId}`,
+        }),
+      )
+      .catch(() => undefined);
+  }
+
+  const resumed = await returnCallerToAi(
+    payload.workspaceId,
+    payload.callId,
+    `cold_transfer_timeout:${fallback}`,
+  );
+  await prisma.voiceCall.update({
+    where: { id: call.id },
+    data: {
+      outcome:
+        fallback === "take_message"
+          ? "transfer_failed_take_message"
+          : fallback === "notify_staff"
+            ? "transfer_failed_notify_staff"
+            : "transfer_failed",
+      metadata: {
+        ...(call.metadata as object),
+        transferInProgress: false,
+        transferFailed: true,
+        transferFallback: fallback,
+        follow_up_required: fallback === "take_message" || fallback === "notify_staff",
+      } as object,
+    },
+  });
+  return { ok: Boolean(resumed?.ok), resumed };
 }
 
 export async function handleWarmTransferTimeoutJob(payload: {

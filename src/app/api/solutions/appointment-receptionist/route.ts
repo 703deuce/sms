@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
+import { getPrisma } from "@/lib/db";
 import {
   createVoiceAgent,
   publishVoiceAgent,
@@ -95,7 +96,10 @@ export async function POST(request: Request) {
       activationMode === "schedule" &&
       Boolean(state.scheduledAt?.trim());
 
-    if (shouldPublish && hasBlockingActivationIssues(hooks.issues)) {
+    if (
+      (shouldPublish || scheduleOnly) &&
+      hasBlockingActivationIssues(hooks.issues)
+    ) {
       return NextResponse.json(
         {
           error: "Activation checklist incomplete",
@@ -117,6 +121,15 @@ export async function POST(request: Request) {
         : draftConfig.knowledgeBaseIds || [],
     };
 
+    // Scheduling must not demote an already-live ACTIVE agent to DRAFT (that
+    // would stop inbound AI until the scheduled promote runs).
+    const existingAgent = await getPrisma().voiceAgent.findFirst({
+      where: { id: agentId, workspaceId: auth.workspaceId },
+      select: { status: true },
+    });
+    const preserveActiveOnSchedule =
+      scheduleOnly && existingAgent?.status === "ACTIVE";
+
     const updated = await updateVoiceAgentDraft(auth.workspaceId, agentId, {
       name,
       description: "Answer Calls and Book Appointments — wizard setup",
@@ -125,19 +138,28 @@ export async function POST(request: Request) {
       purpose: "appointment_receptionist",
       phoneNumberId: shouldPublish ? state.phoneNumberId : state.phoneNumberId,
       draftConfig: configWithKb,
-      status: shouldPublish ? undefined : "DRAFT",
+      status: shouldPublish || preserveActiveOnSchedule ? undefined : "DRAFT",
     });
 
-    // Long-term memory via VoiceMemoryConfig when opted in.
-    if (state.longTermMemory && (shouldPublish || scheduleOnly || effectiveAction !== "create_draft")) {
+    // Long-term memory via VoiceMemoryConfig — enable or explicitly disable.
+    if (shouldPublish || scheduleOnly || effectiveAction !== "create_draft") {
       try {
         const { saveMemoryConfig } = await import("@/lib/voice/platform/ai-platform");
-        await saveMemoryConfig(auth.workspaceId, agentId, {
-          mode: "caller",
-          retentionDays: 30,
-        });
+        if (state.longTermMemory) {
+          await saveMemoryConfig(auth.workspaceId, agentId, {
+            mode: "caller",
+            retentionDays: 30,
+          });
+        } else {
+          await saveMemoryConfig(auth.workspaceId, agentId, {
+            mode: "none",
+            retentionDays: 0,
+          });
+        }
       } catch {
-        warnings.push("Could not enable long-term memory — configure it later in AI platform.");
+        if (state.longTermMemory) {
+          warnings.push("Could not enable long-term memory — configure it later in AI platform.");
+        }
       }
     }
 
@@ -221,7 +243,9 @@ export async function POST(request: Request) {
       }
     } else if (scheduleOnly) {
       warnings.push(
-        `Activation scheduled for ${state.scheduledAt} — agent kept as DRAFT until then.`,
+        preserveActiveOnSchedule
+          ? `Activation changes scheduled for ${state.scheduledAt} — live agent stays ACTIVE until then.`
+          : `Activation scheduled for ${state.scheduledAt} — agent kept as DRAFT until then.`,
       );
     }
 

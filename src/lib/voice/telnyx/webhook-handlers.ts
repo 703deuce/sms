@@ -244,41 +244,10 @@ export async function processVoiceWebhookEvent(input: {
         return { ok: true, kind: "ivr_gather" };
       }
 
-      // Phone-first per number: softphone when this DID has a human assignment,
-      // queue/IVR path, or the assigned user's softphone device.
-      // Do NOT force softphone for every number just because some workspace device exists.
-      const humanAssignment = await prisma.phoneNumberAssignment.findFirst({
-        where: { phoneNumberId: pn.id },
-      });
-      let hasQueueOrIvr = false;
-      try {
-        const { resolveQueueForInbound } = await import("@/lib/phone/queue-service");
-        const { resolveIvrForNumber } = await import("@/lib/phone/ivr-service");
-        const [q, ivr] = await Promise.all([
-          resolveQueueForInbound(pn.workspaceId, to),
-          resolveIvrForNumber(pn.workspaceId, to),
-        ]);
-        hasQueueOrIvr = Boolean(q || ivr);
-      } catch {
-        // ignore resolution failures
-      }
-      const assignedDeviceCount = humanAssignment
-        ? await prisma.softphoneDevice.count({
-            where: {
-              workspaceId: pn.workspaceId,
-              active: true,
-              userId: humanAssignment.userId,
-            },
-          })
-        : 0;
-      const preferSoftphone =
-        Boolean(humanAssignment) || hasQueueOrIvr || assignedDeviceCount > 0;
-
-      let aiAgent = null;
-      if (!preferSoftphone) {
-        const { resolveInboundAiAgent } = await import("../agent-phone");
-        aiAgent = await resolveInboundAiAgent(pn.workspaceId, pn.id);
-      }
+      // Phone-first only when no ACTIVE AI owns this DID. Softphone / queue /
+      // IVR still apply for numbers without an AI owner.
+      const { resolveInboundAiAgent } = await import("../agent-phone");
+      const aiAgent = await resolveInboundAiAgent(pn.workspaceId, pn.id);
 
       if (aiAgent) {
         const { handleInboundCallEvent } = await import("../inbound");
@@ -598,7 +567,8 @@ export async function processVoiceWebhookEvent(input: {
           startInboundNoiseSuppression,
         } = await import("../pstn-audio");
 
-        const cfg = parseVoiceAgentConfig(agent.draftConfig);
+        const { loadVoiceAgentRuntimeConfig } = await import("../load-agent-config");
+        const cfg = await loadVoiceAgentRuntimeConfig(workspaceId, agent.id);
         const startup = startupGreetingFromConfig(cfg);
         const outputGainDb = normalizeOutputGainDb(cfg.voiceLanguage?.outputGainDb);
 

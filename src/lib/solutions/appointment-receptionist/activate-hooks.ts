@@ -10,11 +10,13 @@ import { runSharedReceptionistHooks } from "@/lib/solutions/hooks";
 import type { AppointmentReceptionistWizardState } from "./types";
 import { syncWizardTransferDestinations } from "./sync-transfer";
 import { syncWizardRoutingRules } from "./sync-routing";
+import { normalizeWizardTransferPhone } from "./transfer-utils";
 import {
   getWizardActivationIssues,
   hasBlockingActivationIssues,
   type ActivationIssue,
 } from "./capability-checklist";
+import { parseNoticeMinutes, parseDaysAhead } from "./notice-utils";
 
 export type ActivateHooksResult = {
   issues: ActivationIssue[];
@@ -181,17 +183,48 @@ async function ensureWizardCalendarServices(input: {
   state: AppointmentReceptionistWizardState;
 }): Promise<{ calendarConnectionId: string | null; serviceIds: string[] }> {
   const prisma = getPrisma();
-  const calendar = await prisma.voiceCalendarConnection.findFirst({
+  let calendar = await prisma.voiceCalendarConnection.findFirst({
     where: {
       workspaceId: input.workspaceId,
       status: { in: ["connected", "active", "ok"] },
-      provider: { in: ["google", "microsoft", "internal"] },
+      provider: { in: ["google", "microsoft", "internal", "calendly"] },
     },
     orderBy: { updatedAt: "desc" },
   });
 
+  // Integrations Calendly counts even without a VoiceCalendarConnection row.
+  if (!calendar) {
+    try {
+      const { getConnection } = await import("@/lib/integrations/connections");
+      const conn = await getConnection(input.workspaceId, "calendly");
+      if (conn?.status === "connected") {
+        const existing = await prisma.voiceCalendarConnection.findFirst({
+          where: { workspaceId: input.workspaceId, provider: "calendly" },
+        });
+        calendar = existing
+          ? await prisma.voiceCalendarConnection.update({
+              where: { id: existing.id },
+              data: { status: "connected" },
+            })
+          : await prisma.voiceCalendarConnection.create({
+              data: {
+                workspaceId: input.workspaceId,
+                name: "Calendly",
+                provider: "calendly",
+                status: "connected",
+                config: { source: "integrations" },
+              },
+            });
+      }
+    } catch {
+      // ignore
+    }
+  }
+
   const serviceIds: string[] = [];
   const enabled = input.state.appointmentTypes.filter((t) => t.enabled);
+  const enabledIds = new Set(enabled.map((t) => t.id));
+
   for (const t of enabled) {
     const existing = await prisma.voiceService.findFirst({
       where: {
@@ -200,21 +233,28 @@ async function ensureWizardCalendarServices(input: {
       },
     });
     if (existing) {
+      const prev = (existing.config || {}) as Record<string, unknown>;
       const updated = await prisma.voiceService.update({
         where: { id: existing.id },
         data: {
           durationMinutes: t.durationMin || 30,
           calendarId: calendar?.id || existing.calendarId,
           config: {
+            ...prev,
             wizardTypeId: t.id,
+            enabled: true,
             description: t.description || null,
             location: t.location || null,
+            locations: t.location ? [t.location] : [],
             modality: t.modality || null,
             bookingHours: t.bookingHours || null,
             minNotice: t.minNotice || null,
+            minimumBookingNoticeMinutes: parseNoticeMinutes(t.minNotice),
             maxDaysAhead: t.maxDaysAhead || null,
+            maximumBookingDaysAhead: parseDaysAhead(t.maxDaysAhead),
             requiredFields: t.requiredFields || [],
             bookingPermission: t.bookingPermission,
+            timezone: input.state.timezone || null,
           },
         },
       });
@@ -229,19 +269,44 @@ async function ensureWizardCalendarServices(input: {
           calendarId: calendar?.id || null,
           config: {
             wizardTypeId: t.id,
+            enabled: true,
             description: t.description || null,
             location: t.location || null,
+            locations: t.location ? [t.location] : [],
             modality: t.modality || null,
             bookingHours: t.bookingHours || null,
             minNotice: t.minNotice || null,
+            minimumBookingNoticeMinutes: parseNoticeMinutes(t.minNotice),
             maxDaysAhead: t.maxDaysAhead || null,
+            maximumBookingDaysAhead: parseDaysAhead(t.maxDaysAhead),
             requiredFields: t.requiredFields || [],
             bookingPermission: t.bookingPermission,
+            timezone: input.state.timezone || null,
           },
         },
       });
       serviceIds.push(created.id);
     }
+  }
+
+  // Soft-disable wizard-managed services that were turned off in the wizard.
+  const wizardServices = await prisma.voiceService.findMany({
+    where: { workspaceId: input.workspaceId },
+  });
+  for (const svc of wizardServices) {
+    const cfg = (svc.config || {}) as Record<string, unknown>;
+    const wizardTypeId = typeof cfg.wizardTypeId === "string" ? cfg.wizardTypeId : null;
+    if (!wizardTypeId) continue;
+    if (enabledIds.has(wizardTypeId)) continue;
+    await prisma.voiceService.update({
+      where: { id: svc.id },
+      data: {
+        config: {
+          ...cfg,
+          enabled: false,
+        },
+      },
+    });
   }
 
   return {
@@ -274,13 +339,24 @@ export async function runAppointmentReceptionistActivateHooks(input: {
     where: {
       workspaceId: input.workspaceId,
       status: { in: ["connected", "active", "ok"] },
-      provider: { in: ["google", "microsoft", "internal"] },
+      provider: { in: ["google", "microsoft", "internal", "calendly"] },
     },
     select: { id: true },
   });
 
+  let hasCalendarConnection = Boolean(calendar);
+  if (!hasCalendarConnection) {
+    try {
+      const { getConnection } = await import("@/lib/integrations/connections");
+      const conn = await getConnection(input.workspaceId, "calendly");
+      hasCalendarConnection = conn?.status === "connected";
+    } catch {
+      // ignore
+    }
+  }
+
   const issues = getWizardActivationIssues(input.state, {
-    hasCalendarConnection: Boolean(calendar),
+    hasCalendarConnection: hasCalendarConnection || Boolean(input.state.calendarConnected),
     hasKnowledgeText: Boolean(input.state.businessName?.trim()),
   });
 
@@ -323,7 +399,19 @@ export async function runAppointmentReceptionistActivateHooks(input: {
 
   let transferSynced = false;
   let transferE164: string | null = null;
-  if (input.state.transferDestinationPhone?.trim()) {
+  // Destinations are shared with live escalate_human. Only mutate them for
+  // draft/testing agents, or during an activate attempt (not casual draft edits
+  // on an already-ACTIVE agent).
+  const agentRow = await prisma.voiceAgent.findFirst({
+    where: { id: input.agentId, workspaceId: input.workspaceId },
+    select: { status: true },
+  });
+  const mayMutateTransferDestinations =
+    input.mode === "activate" ||
+    agentRow?.status === "DRAFT" ||
+    agentRow?.status === "TESTING" ||
+    !agentRow?.status;
+  if (input.state.transferDestinationPhone?.trim() && mayMutateTransferDestinations) {
     const result = await syncWizardTransferDestinations({
       workspaceId: input.workspaceId,
       agentId: input.agentId,
@@ -339,6 +427,16 @@ export async function runAppointmentReceptionistActivateHooks(input: {
     });
     transferSynced = result.synced;
     transferE164 = result.e164;
+  } else if (
+    input.state.transferDestinationPhone?.trim() &&
+    input.mode === "save_draft" &&
+    agentRow?.status === "ACTIVE"
+  ) {
+    // Keep prior live destinations; mark as synced for checklist purposes when
+    // the number is still valid (actual rewrite waits for activate).
+    transferSynced = Boolean(
+      normalizeWizardTransferPhone(input.state.transferDestinationPhone),
+    );
   }
 
   let insightGroupId: string | null = null;
@@ -356,23 +454,29 @@ export async function runAppointmentReceptionistActivateHooks(input: {
       return null;
     });
 
-    const routing = await syncWizardRoutingRules({
-      workspaceId: input.workspaceId,
-      agentId: input.agentId,
-      answerWhen: input.state.answerWhen,
-      ringBehavior: input.state.ringBehavior,
-      ringTeamSeconds: input.state.ringTeamSeconds,
-      timezone: input.state.timezone,
-    }).catch((err) => {
-      console.warn(
-        "[appointment-receptionist] routing hook failed",
-        err instanceof Error ? err.message : err,
-      );
-      return null;
-    });
-    if (routing) {
-      routingSynced = true;
-      routingMode = routing.mode;
+    const transferRequired =
+      input.state.capabilities.includes("transfer_calls") &&
+      Boolean(input.state.transferDestinationPhone?.trim());
+    // Don't wipe/replace live routing if a required transfer sync already failed.
+    if (!(transferRequired && !transferSynced)) {
+      const routing = await syncWizardRoutingRules({
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+        answerWhen: input.state.answerWhen,
+        ringBehavior: input.state.ringBehavior,
+        ringTeamSeconds: input.state.ringTeamSeconds,
+        timezone: input.state.timezone,
+      }).catch((err) => {
+        console.warn(
+          "[appointment-receptionist] routing hook failed",
+          err instanceof Error ? err.message : err,
+        );
+        return null;
+      });
+      if (routing) {
+        routingSynced = true;
+        routingMode = routing.mode;
+      }
     }
   }
 
@@ -409,6 +513,37 @@ export async function runAppointmentReceptionistActivateHooks(input: {
       err instanceof Error ? err.message : err,
     );
   });
+
+  // Post-hook gates: transfer/routing must actually sync before go-live.
+  if (input.mode === "activate") {
+    if (
+      input.state.capabilities.includes("transfer_calls") &&
+      input.state.transferDestinationPhone?.trim() &&
+      !transferSynced
+    ) {
+      issues.push({
+        id: "transfer_sync",
+        severity: "blocking",
+        message:
+          "Could not sync the transfer destination — check the phone number and try again.",
+      });
+    }
+    if (!routingSynced) {
+      issues.push({
+        id: "routing_sync",
+        severity: "blocking",
+        message: "Could not sync call routing rules — activation blocked.",
+      });
+    }
+    if (!knowledgeBaseId) {
+      issues.push({
+        id: "knowledge_sync",
+        severity: "warning",
+        message:
+          "Knowledge base sync did not complete — the agent will still use the system prompt knowledge.",
+      });
+    }
+  }
 
   return {
     issues,
