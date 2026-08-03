@@ -883,6 +883,8 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
               value={cfg.voiceLanguage?.voiceId}
               language={cfg.voiceLanguage?.primaryLanguage}
               speed={cfg.voiceLanguage?.speed}
+              agentId={agentId}
+              expressiveMode={cfg.voiceLanguage?.expressiveMode}
               onChange={(voiceId) =>
                 updateConfig({
                   voiceLanguage: { ...cfg.voiceLanguage, voiceId },
@@ -1038,7 +1040,7 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
                   })
                 }
               />
-              Expressive delivery (when voice model supports it)
+              Expressive delivery (Ultra voices only — Telnyx rejects this on NaturalHD)
             </label>
             <div>
               <Label>Assistant output gain (PSTN A/B)</Label>
@@ -1085,9 +1087,9 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
               </ul>
             </div>
             <p className="text-[11px] text-muted-foreground">
-              Production default: NaturalHD. Ultra / xAI are available as preview
-              clips for personality and clarity compare — Assistants on this
-              account keep NaturalHD for live calls.
+              Production default: NaturalHD (Standard Voice). Ultra Voice uses
+              Telnyx.Ultra.&lt;id&gt; with optional expressive mode — use Test Voice
+              on a clone before applying to the live receptionist.
             </p>
             <div>
               <Label>Primary language</Label>

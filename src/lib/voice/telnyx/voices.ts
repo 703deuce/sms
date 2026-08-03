@@ -1,14 +1,17 @@
 /**
- * Curated Telnyx AI Assistant voice catalog.
- * Customer-facing labels are friendly; provider voice strings stay internal.
+ * Telnyx AI Assistant voice catalog + voice_settings helpers.
  *
- * Note: Telnyx Ultra voices are REST/TTS-oriented and are rejected by the
- * AI Assistants voice_settings API on this account ("Voice not found").
- * Curated defaults use NaturalHD voices that assistants actually accept.
+ * Ultra format: Telnyx.Ultra.<voice_id>
+ * Standard (Natural / NaturalHD) remains the safe default / fallback.
+ *
+ * History: Ultra was previously remapped to NaturalHD after Assistants returned
+ * "Voice not found". That remap made the UI lie about the live voice. We now
+ * send Ultra as selected, surface Telnyx errors, and keep NaturalHD as fallback.
  */
 
 export type VoiceQualityTier = "premium" | "standard" | "economy";
 export type VoiceCostTier = "standard" | "low" | "premium_provider";
+export type VoiceUiTier = "standard" | "ultra";
 
 export type CuratedVoice = {
   /** Stable catalog ID saved on the agent (not the raw Telnyx string). */
@@ -26,12 +29,16 @@ export type CuratedVoice = {
   gender: "female" | "male" | "neutral";
   qualityTier: VoiceQualityTier;
   costTier: VoiceCostTier;
+  /** UI grouping: Standard Voice vs Ultra Voice */
+  uiTier: VoiceUiTier;
   supportsSpeed: boolean;
   supportsExpressive: boolean;
   enabled: boolean;
-  /** False when AI Assistants API historically rejects this voice id. */
+  /**
+   * When false, UI may still preview via TTS REST but must not mark as
+   * assistant-ready until a live Assistants update succeeds.
+   */
   assistantCompatible?: boolean;
-  /** Preview via TTS REST may still work when assistantCompatible is false. */
   previewOnly?: boolean;
   previewText: string;
 };
@@ -40,8 +47,16 @@ export const DEFAULT_VOICE_PREVIEW_TEXT =
   "Hi, thanks for calling Transovo. I can answer questions, take a message, or help connect you with the right person.";
 
 /**
- * Strong NaturalHD voices validated against Telnyx AI Assistants update API.
+ * Documented Telnyx Ultra sample voices (TTS + Assistants Voice Settings).
+ * Do not invent IDs — only use values Telnyx publishes / returns.
+ * @see https://developers.telnyx.com/docs/voice/tts/providers/telnyx/ultra
  */
+export const DOCUMENTED_ULTRA_VOICE_IDS = [
+  "Telnyx.Ultra.Clara",
+  "Telnyx.Ultra.Callie",
+  "Telnyx.Ultra.Asher",
+] as const;
+
 export const CURATED_VOICE_CATALOG: CuratedVoice[] = [
   {
     catalogId: "ava-warm-us",
@@ -55,6 +70,7 @@ export const CURATED_VOICE_CATALOG: CuratedVoice[] = [
     gender: "female",
     qualityTier: "premium",
     costTier: "standard",
+    uiTier: "standard",
     supportsSpeed: true,
     supportsExpressive: false,
     enabled: true,
@@ -73,9 +89,11 @@ export const CURATED_VOICE_CATALOG: CuratedVoice[] = [
     gender: "female",
     qualityTier: "premium",
     costTier: "standard",
+    uiTier: "standard",
     supportsSpeed: true,
     supportsExpressive: false,
     enabled: true,
+    assistantCompatible: true,
     previewText: DEFAULT_VOICE_PREVIEW_TEXT,
   },
   {
@@ -90,9 +108,11 @@ export const CURATED_VOICE_CATALOG: CuratedVoice[] = [
     gender: "male",
     qualityTier: "premium",
     costTier: "standard",
+    uiTier: "standard",
     supportsSpeed: true,
     supportsExpressive: false,
     enabled: true,
+    assistantCompatible: true,
     previewText: DEFAULT_VOICE_PREVIEW_TEXT,
   },
   {
@@ -107,9 +127,11 @@ export const CURATED_VOICE_CATALOG: CuratedVoice[] = [
     gender: "female",
     qualityTier: "premium",
     costTier: "standard",
+    uiTier: "standard",
     supportsSpeed: true,
     supportsExpressive: false,
     enabled: true,
+    assistantCompatible: true,
     previewText: DEFAULT_VOICE_PREVIEW_TEXT,
   },
   {
@@ -124,6 +146,7 @@ export const CURATED_VOICE_CATALOG: CuratedVoice[] = [
     gender: "female",
     qualityTier: "premium",
     costTier: "standard",
+    uiTier: "standard",
     supportsSpeed: true,
     supportsExpressive: false,
     enabled: true,
@@ -131,25 +154,62 @@ export const CURATED_VOICE_CATALOG: CuratedVoice[] = [
     previewText:
       "Bonjour, merci d'appeler Transovo. Je peux répondre à vos questions ou prendre un message.",
   },
-  // Ultra / expressive — excellent for TTS preview comparison. Some accounts
-  // reject Ultra on AI Assistants voice_settings; keep preview-first until verified.
+  // Ultra — same Voice AI minute rate as NaturalHD inside Assistants.
   {
-    catalogId: "nova-ultra-preview",
-    displayName: "Nova (Ultra preview)",
-    style: "Premium expressive Ultra — preview & compare clarity",
+    catalogId: "clara-ultra",
+    displayName: "Clara",
+    style: "Expressive Ultra — warm US English",
     provider: "telnyx",
-    providerVoiceId: "Telnyx.Ultra.Nova",
+    providerVoiceId: "Telnyx.Ultra.Clara",
     model: "Ultra",
     language: "en",
     locale: "en-US",
     gender: "female",
     qualityTier: "premium",
-    costTier: "premium_provider",
+    costTier: "standard",
+    uiTier: "ultra",
     supportsSpeed: true,
     supportsExpressive: true,
     enabled: true,
-    assistantCompatible: false,
-    previewOnly: true,
+    assistantCompatible: true,
+    previewText: DEFAULT_VOICE_PREVIEW_TEXT,
+  },
+  {
+    catalogId: "callie-ultra",
+    displayName: "Callie",
+    style: "Expressive Ultra — clear English",
+    provider: "telnyx",
+    providerVoiceId: "Telnyx.Ultra.Callie",
+    model: "Ultra",
+    language: "en",
+    locale: "en",
+    gender: "female",
+    qualityTier: "premium",
+    costTier: "standard",
+    uiTier: "ultra",
+    supportsSpeed: true,
+    supportsExpressive: true,
+    enabled: true,
+    assistantCompatible: true,
+    previewText: DEFAULT_VOICE_PREVIEW_TEXT,
+  },
+  {
+    catalogId: "asher-ultra",
+    displayName: "Asher",
+    style: "Expressive Ultra — confident male English",
+    provider: "telnyx",
+    providerVoiceId: "Telnyx.Ultra.Asher",
+    model: "Ultra",
+    language: "en",
+    locale: "en",
+    gender: "male",
+    qualityTier: "premium",
+    costTier: "standard",
+    uiTier: "ultra",
+    supportsSpeed: true,
+    supportsExpressive: true,
+    enabled: true,
+    assistantCompatible: true,
     previewText: DEFAULT_VOICE_PREVIEW_TEXT,
   },
   {
@@ -164,6 +224,7 @@ export const CURATED_VOICE_CATALOG: CuratedVoice[] = [
     gender: "female",
     qualityTier: "premium",
     costTier: "premium_provider",
+    uiTier: "ultra",
     supportsSpeed: false,
     supportsExpressive: true,
     enabled: true,
@@ -173,8 +234,9 @@ export const CURATED_VOICE_CATALOG: CuratedVoice[] = [
   },
 ];
 
-/** Production default — NaturalHD Astra (catalog: Ava). */
+/** Production default — NaturalHD Astra (catalog: Ava). Safe fallback. */
 export const DEFAULT_CATALOG_VOICE_ID = "ava-warm-us";
+export const FALLBACK_PROVIDER_VOICE_ID = "Telnyx.NaturalHD.astra";
 
 export function getCuratedVoice(catalogOrProviderId: string | undefined | null) {
   if (!catalogOrProviderId) {
@@ -190,26 +252,65 @@ export function getCuratedVoice(catalogOrProviderId: string | undefined | null) 
 }
 
 /**
- * Voice id for AI Assistants / live calls.
- * Preview-only Ultra/xAI catalog entries map to NaturalHD so saves never break.
+ * Validate Ultra provider string before Assistants update.
+ * Requires Telnyx.Ultra.<voice_id> with a non-empty voice_id segment.
+ */
+export function validateUltraProviderVoiceId(voice: string): {
+  ok: boolean;
+  voiceId?: string;
+  error?: string;
+} {
+  const raw = String(voice || "").trim();
+  if (!raw.startsWith("Telnyx.Ultra.")) {
+    return { ok: false, error: "Ultra voice must begin with Telnyx.Ultra." };
+  }
+  const voiceId = raw.slice("Telnyx.Ultra.".length).trim();
+  if (!voiceId || voiceId.includes(" ")) {
+    return {
+      ok: false,
+      error: "Ultra voice requires a voice_id after Telnyx.Ultra. (e.g. Telnyx.Ultra.Clara)",
+    };
+  }
+  if (voiceId.toLowerCase() === "ultra" || raw === "Telnyx.Ultra") {
+    return {
+      ok: false,
+      error: "Incomplete Ultra voice — use Telnyx.Ultra.<voice_id>, not Telnyx.Ultra alone",
+    };
+  }
+  return { ok: true, voiceId };
+}
+
+export function isUltraProviderVoice(voice: string | undefined | null) {
+  return String(voice || "").startsWith("Telnyx.Ultra.");
+}
+
+/**
+ * Resolve the exact provider voice string for AI Assistants / live calls.
+ * Does NOT silently remap Ultra → NaturalHD (that previously hid failures).
+ * Preview-only / incompatible catalog entries still fall back to NaturalHD.
  */
 export function resolveProviderVoiceId(catalogOrProviderId: string | undefined | null) {
   const v = getCuratedVoice(catalogOrProviderId);
   if (v) {
     if (v.previewOnly || v.assistantCompatible === false) {
-      return getCuratedVoice(DEFAULT_CATALOG_VOICE_ID)!.providerVoiceId;
+      return FALLBACK_PROVIDER_VOICE_ID;
     }
     return v.providerVoiceId;
   }
-  const raw = String(catalogOrProviderId || "");
-  // Legacy Ultra / xAI ids are not accepted by AI Assistants on this account — map to NaturalHD.
-  if (raw.startsWith("Telnyx.Ultra.") || raw.startsWith("xAI.")) {
-    return getCuratedVoice(DEFAULT_CATALOG_VOICE_ID)!.providerVoiceId;
+  const raw = String(catalogOrProviderId || "").trim();
+  if (raw.startsWith("Telnyx.Ultra.")) {
+    const check = validateUltraProviderVoiceId(raw);
+    if (check.ok) return raw;
+    return FALLBACK_PROVIDER_VOICE_ID;
   }
   if (raw.startsWith("Telnyx.NaturalHD.") || raw.startsWith("Telnyx.Natural.")) {
     return raw;
   }
-  return getCuratedVoice(DEFAULT_CATALOG_VOICE_ID)!.providerVoiceId;
+  // xAI stays preview-only until explicitly validated for Assistants.
+  if (raw.startsWith("xAI.")) {
+    return FALLBACK_PROVIDER_VOICE_ID;
+  }
+  return FALLBACK_PROVIDER_VOICE_ID;
 }
 
 /**
@@ -218,7 +319,7 @@ export function resolveProviderVoiceId(catalogOrProviderId: string | undefined |
 export function resolvePreviewVoiceId(catalogOrProviderId: string | undefined | null) {
   const v = getCuratedVoice(catalogOrProviderId);
   if (v) return v.providerVoiceId;
-  const raw = String(catalogOrProviderId || "");
+  const raw = String(catalogOrProviderId || "").trim();
   if (
     raw.startsWith("Telnyx.NaturalHD.") ||
     raw.startsWith("Telnyx.Natural.") ||
@@ -227,11 +328,13 @@ export function resolvePreviewVoiceId(catalogOrProviderId: string | undefined | 
   ) {
     return raw;
   }
-  return getCuratedVoice(DEFAULT_CATALOG_VOICE_ID)!.providerVoiceId;
+  return FALLBACK_PROVIDER_VOICE_ID;
 }
 
-export function isUltraVoice(voiceId: string) {
-  return resolveProviderVoiceId(voiceId).startsWith("Telnyx.Ultra.");
+export function isUltraVoice(catalogOrProviderId: string | undefined | null) {
+  const curated = getCuratedVoice(catalogOrProviderId);
+  if (curated) return curated.model === "Ultra";
+  return isUltraProviderVoice(String(catalogOrProviderId || ""));
 }
 
 export function voiceLabel(catalogOrProviderId: string | undefined | null) {
@@ -239,11 +342,13 @@ export function voiceLabel(catalogOrProviderId: string | undefined | null) {
   if (v) return `${v.displayName} — ${v.style}`;
   const raw = String(catalogOrProviderId || "");
   if (!raw) return "Ava — Warm, professional US English";
-  // Map legacy Ultra labels to Ava so the UI never advertises a rejected voice.
-  if (raw.startsWith("Telnyx.Ultra.")) {
-    return "Ava — Warm, professional US English";
-  }
   return raw.split(".").pop() || raw;
+}
+
+export function voiceUiTierLabel(catalogOrProviderId: string | undefined | null) {
+  const v = getCuratedVoice(catalogOrProviderId);
+  if (v?.uiTier === "ultra" || isUltraVoice(catalogOrProviderId)) return "Ultra Voice";
+  return "Standard Voice";
 }
 
 export function isApprovedVoiceId(id: string) {
@@ -258,12 +363,111 @@ export function isApprovedVoiceId(id: string) {
   );
 }
 
+export type AssistantVoiceSettingsInput = {
+  /** Catalog id or provider voice string */
+  voiceRef: string | undefined | null;
+  speed?: number | null;
+  expressiveMode?: boolean | null;
+  volume?: number | null;
+};
+
+/**
+ * Build Assistants voice_settings. Never forces expressive_mode on non-Ultra.
+ */
+export function buildAssistantVoiceSettings(input: AssistantVoiceSettingsInput): {
+  voice_settings: Record<string, unknown>;
+  providerVoiceId: string;
+  isUltra: boolean;
+  expressiveMode: boolean;
+} {
+  const providerVoiceId = resolveProviderVoiceId(input.voiceRef);
+  const isUltra = isUltraProviderVoice(providerVoiceId);
+  if (isUltra) {
+    const check = validateUltraProviderVoiceId(providerVoiceId);
+    if (!check.ok) {
+      throw new Error(check.error || "Invalid Ultra voice");
+    }
+  }
+  const expressiveMode = Boolean(isUltra && input.expressiveMode);
+  const voice_settings: Record<string, unknown> = {
+    voice: providerVoiceId,
+  };
+  if (input.speed != null && Number.isFinite(input.speed)) {
+    voice_settings.voice_speed = input.speed;
+  }
+  if (expressiveMode) {
+    voice_settings.expressive_mode = true;
+  }
+  if (input.volume != null && Number.isFinite(input.volume)) {
+    voice_settings.volume = input.volume;
+  }
+  return { voice_settings, providerVoiceId, isUltra, expressiveMode };
+}
+
+/** Sanitize Telnyx error body for UI / logs (never includes API keys). */
+export function sanitizeTelnyxVoiceError(err: unknown): {
+  message: string;
+  status: number | null;
+  code: string | null;
+  body: unknown;
+} {
+  if (err && typeof err === "object" && "status" in err && "body" in err) {
+    const status = Number((err as { status: number }).status) || null;
+    const body = (err as { body: unknown }).body;
+    let code: string | null = null;
+    let detail: string | null = null;
+    if (body && typeof body === "object" && Array.isArray((body as { errors?: unknown }).errors)) {
+      const first = (body as { errors: Array<Record<string, unknown>> }).errors[0];
+      if (first) {
+        code = first.code != null ? String(first.code) : null;
+        detail =
+          (first.detail != null ? String(first.detail) : null) ||
+          (first.title != null ? String(first.title) : null);
+      }
+    }
+    return {
+      message: detail || (err instanceof Error ? err.message : "Telnyx voice update failed"),
+      status,
+      code,
+      body,
+    };
+  }
+  return {
+    message: err instanceof Error ? err.message : String(err),
+    status: null,
+    code: null,
+    body: null,
+  };
+}
+
+export function logVoiceAssistantUpdate(meta: {
+  assistantId: string;
+  requestedVoice: string;
+  expressiveMode: boolean;
+  status: number | string;
+  errorBody?: unknown;
+}) {
+  console.info(
+    "[telnyx-voice]",
+    JSON.stringify({
+      assistantId: meta.assistantId,
+      requestedVoice: meta.requestedVoice,
+      expressiveMode: meta.expressiveMode,
+      status: meta.status,
+      errorBody: meta.errorBody ?? null,
+      // never log API keys
+    }),
+  );
+}
+
 /** UI-facing option shape used by VoicePicker + /api/voice/voices */
 export type TelnyxVoiceOption = {
   id: string;
   name: string;
   gender: "female" | "male" | "neutral";
   tier: "ultra" | "natural_hd" | "natural" | "xai";
+  uiTier: VoiceUiTier;
+  uiTierLabel: "Standard Voice" | "Ultra Voice";
   language: string;
   description: string;
   providerVoiceId: string;
@@ -287,6 +491,8 @@ export const CURATED_TELNYX_VOICES: TelnyxVoiceOption[] = CURATED_VOICE_CATALOG.
         : v.model === "NaturalHD"
           ? "natural_hd"
           : "natural",
+  uiTier: v.uiTier,
+  uiTierLabel: v.uiTier === "ultra" ? "Ultra Voice" : "Standard Voice",
   language: v.locale,
   description: v.previewOnly
     ? `${v.style} (preview compare — may not save to AI Assistants)`

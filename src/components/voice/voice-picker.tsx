@@ -7,30 +7,37 @@ import {
   DEFAULT_VOICE_PREVIEW_TEXT,
   type TelnyxVoiceOption,
   voiceLabel,
+  voiceUiTierLabel,
 } from "@/lib/voice/telnyx/voices";
 import { toErrorMessage } from "@/lib/errors";
 import { cn } from "@/lib/utils";
 import { useEffect, useRef, useState } from "react";
 
 /**
- * Pick a curated Telnyx NaturalHD voice with a real audio preview clip.
- * Ultra / xAI entries are preview-compare only (AI Assistants may reject them).
+ * Pick a curated Telnyx Standard (NaturalHD) or Ultra voice.
+ * Shows the exact provider voice id under the friendly name.
  */
 export function VoicePicker({
   value,
   onChange,
   language,
   speed,
+  agentId,
+  expressiveMode,
 }: {
   value?: string;
   onChange: (voiceId: string) => void;
   language?: string;
   speed?: number;
+  /** When set, enables Test Voice against a Telnyx clone (production untouched). */
+  agentId?: string;
+  expressiveMode?: boolean;
 }) {
   const [voices, setVoices] = useState<TelnyxVoiceOption[]>(CURATED_TELNYX_VOICES);
   const [previewing, setPreviewing] = useState<string | null>(null);
+  const [testing, setTesting] = useState<string | null>(null);
   const [error, setError] = useState("");
-  const [compareNote, setCompareNote] = useState("");
+  const [testNote, setTestNote] = useState("");
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
@@ -83,23 +90,66 @@ export function VoicePicker({
     }
   }
 
+  async function testVoice(v: TelnyxVoiceOption) {
+    if (!agentId) {
+      setError("Save/build the agent first, then use Test Voice.");
+      return;
+    }
+    setTesting(v.id);
+    setError("");
+    setTestNote("");
+    try {
+      const res = await fetch("/api/voice/ai", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          action: "test_voice",
+          agentId,
+          voice: v.id,
+          expressiveMode: Boolean(expressiveMode && v.supportsExpressive),
+        }),
+      });
+      const j = await res.json();
+      if (!res.ok) {
+        const detail = [
+          j.status ? `HTTP ${j.status}` : null,
+          j.code ? `code ${j.code}` : null,
+          toErrorMessage(j.error ?? j, "Telnyx rejected this voice"),
+        ]
+          .filter(Boolean)
+          .join(" · ");
+        throw new Error(detail);
+      }
+      setTestNote(
+        `Test OK on clone ${j.data?.testAssistantId || ""}. Remote voice: ${
+          j.data?.remoteVoice || v.providerVoiceId
+        }. Production assistant unchanged.`,
+      );
+      onChange(v.id);
+    } catch (err) {
+      setError(toErrorMessage(err, "Test Voice failed"));
+    } finally {
+      setTesting(null);
+    }
+  }
+
   function selectVoice(v: TelnyxVoiceOption) {
     if (v.previewOnly || v.assistantCompatible === false) {
-      setCompareNote(
-        `${v.name} is for preview comparison only. AI Assistants on this account keep NaturalHD (Ava) for live calls — pick a Recommended voice to save.`,
+      setError(
+        `${v.name} is preview-only and is not saved to AI Assistants. Pick a Standard or Ultra Voice.`,
       );
       return;
     }
-    setCompareNote("");
+    setError("");
+    setTestNote("");
     onChange(v.id);
   }
 
-  const recommended = voices.filter(
-    (v) => !v.previewOnly && (v.tier === "natural_hd" || v.tier === "natural"),
+  const standard = voices.filter(
+    (v) => !v.previewOnly && v.uiTier === "standard",
   );
-  const compare = voices.filter(
-    (v) => v.previewOnly || v.tier === "ultra" || v.tier === "xai",
-  );
+  const ultra = voices.filter((v) => !v.previewOnly && v.uiTier === "ultra");
+  const compare = voices.filter((v) => v.previewOnly);
 
   return (
     <div className="space-y-3">
@@ -108,37 +158,48 @@ export function VoicePicker({
         <div>
           <Label>Voice</Label>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            NaturalHD for live calls. Preview Ultra / xAI clips to compare muffling vs
-            network — same short script for each.
+            Standard Voice = NaturalHD. Ultra Voice uses Telnyx.Ultra.&lt;id&gt; with optional
+            expressive mode. Same Voice AI minute rate inside Assistants.
           </p>
         </div>
-        <p className="text-xs text-muted-foreground">
-          Selected:{" "}
-          <span className="font-medium text-foreground">
+        <p className="text-right text-xs text-muted-foreground">
+          <span className="block font-medium text-foreground">
             {voiceLabel(value || "")}
           </span>
+          <span className="block">{voiceUiTierLabel(value || "")}</span>
         </p>
       </div>
 
       {error ? <p className="text-xs text-rose-600">{error}</p> : null}
-      {compareNote ? (
-        <p className="text-xs text-amber-700 dark:text-amber-400">{compareNote}</p>
-      ) : null}
+      {testNote ? <p className="text-xs text-emerald-700">{testNote}</p> : null}
 
       <VoiceGroup
-        title="Recommended for assistants"
-        voices={recommended.length ? recommended : voices.filter((v) => !v.previewOnly)}
+        title="Standard Voice"
+        voices={standard.length ? standard : voices.filter((v) => v.tier === "natural_hd")}
         value={value}
         previewing={previewing}
+        testing={testing}
         onSelect={selectVoice}
         onPreview={preview}
+        onTest={agentId ? testVoice : undefined}
+      />
+      <VoiceGroup
+        title="Ultra Voice"
+        voices={ultra}
+        value={value}
+        previewing={previewing}
+        testing={testing}
+        onSelect={selectVoice}
+        onPreview={preview}
+        onTest={agentId ? testVoice : undefined}
       />
       {compare.length ? (
         <VoiceGroup
-          title="Quality compare (preview only)"
+          title="Preview compare only"
           voices={compare}
           value={value}
           previewing={previewing}
+          testing={testing}
           onSelect={selectVoice}
           onPreview={preview}
           previewOnly
@@ -153,16 +214,20 @@ function VoiceGroup({
   voices,
   value,
   previewing,
+  testing,
   onSelect,
   onPreview,
+  onTest,
   previewOnly,
 }: {
   title: string;
   voices: TelnyxVoiceOption[];
   value?: string;
   previewing: string | null;
+  testing: string | null;
   onSelect: (v: TelnyxVoiceOption) => void;
   onPreview: (id: string) => void;
+  onTest?: (v: TelnyxVoiceOption) => void;
   previewOnly?: boolean;
 }) {
   if (!voices.length) return null;
@@ -192,21 +257,37 @@ function VoiceGroup({
                 <p className="text-sm font-medium">
                   {v.name}{" "}
                   <span className="text-[10px] font-normal uppercase text-muted-foreground">
-                    {v.gender}
+                    {v.uiTierLabel}
                     {previewOnly || v.previewOnly ? " · preview" : ""}
                   </span>
                 </p>
                 <p className="truncate text-xs text-muted-foreground">{v.description}</p>
+                <p className="mt-0.5 truncate font-mono text-[10px] text-slate-400">
+                  {v.providerVoiceId}
+                </p>
               </button>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                disabled={previewing === v.id}
-                onClick={() => onPreview(v.id)}
-              >
-                {previewing === v.id ? "…" : "Play"}
-              </Button>
+              <div className="flex shrink-0 flex-col gap-1">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={previewing === v.id}
+                  onClick={() => onPreview(v.id)}
+                >
+                  {previewing === v.id ? "…" : "Play"}
+                </Button>
+                {onTest && !previewOnly && !v.previewOnly ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={testing === v.id}
+                    onClick={() => onTest(v)}
+                  >
+                    {testing === v.id ? "…" : "Test Voice"}
+                  </Button>
+                ) : null}
+              </div>
             </div>
           );
         })}

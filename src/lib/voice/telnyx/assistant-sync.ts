@@ -6,8 +6,10 @@ import { buildAssistantTools } from "./assistant-tools";
 import * as ai from "./ai-client";
 import {
   DEFAULT_AGENT_VOICE_ID,
-  isUltraVoice,
+  buildAssistantVoiceSettings,
+  logVoiceAssistantUpdate,
   resolveProviderVoiceId,
+  sanitizeTelnyxVoiceError,
 } from "./voices";
 
 function unwrapTelnyxId(res: unknown): string | null {
@@ -304,25 +306,18 @@ export async function syncTelnyxAssistant(
     corePayload.llm_api_key_ref = config.model.customApiKeyRef;
   }
 
-  const voiceId = resolveProviderVoiceId(
-    config.voiceLanguage?.voiceId || DEFAULT_AGENT_VOICE_ID,
-  );
+  const gainLinear = outputGainLinear(config);
+  const voiceBuilt = buildAssistantVoiceSettings({
+    voiceRef: config.voiceLanguage?.voiceId || DEFAULT_AGENT_VOICE_ID,
+    speed: config.voiceLanguage?.speed,
+    expressiveMode: config.voiceLanguage?.expressiveMode,
+    volume: gainLinear,
+  });
+  const voiceId = voiceBuilt.providerVoiceId;
   // TeXML app id only — never Call Control TELNYX_CONNECTION_ID (causes 10015).
   const texmlAppId = process.env.TELNYX_TEXML_APP_ID?.trim() || "";
-  const gainLinear = outputGainLinear(config);
   const enrichPayload: Record<string, unknown> = {
-    voice_settings: {
-      voice: voiceId,
-      ...(config.voiceLanguage?.speed != null
-        ? { voice_speed: config.voiceLanguage.speed }
-        : {}),
-      ...(config.voiceLanguage?.expressiveMode || isUltraVoice(voiceId)
-        ? { expressive_mode: true }
-        : {}),
-      // Best-effort assistant playback trim for PSTN clipping A/B.
-      // Unsupported providers reject this field — sync retries without it below.
-      ...(gainLinear != null ? { volume: gainLinear } : {}),
-    },
+    voice_settings: voiceBuilt.voice_settings,
     // Faster turn-taking: shorter wait after caller stops speaking.
     interruption_settings: interruptionSettingsFromConfig(config),
     enabled_features: ["telephony"] as string[],
@@ -434,9 +429,26 @@ export async function syncTelnyxAssistant(
 
   async function enrichBestEffort(assistantId: string) {
     const voiceBase = { ...(enrichPayload.voice_settings as Record<string, unknown>) };
+    const requestedVoice = String(voiceBase.voice || voiceId);
+    const expressiveMode = Boolean(voiceBase.expressive_mode);
     try {
       await ai.updateAssistant(assistantId, enrichPayload);
-    } catch {
+      logVoiceAssistantUpdate({
+        assistantId,
+        requestedVoice,
+        expressiveMode,
+        status: "ok",
+      });
+    } catch (err) {
+      const sanitized = sanitizeTelnyxVoiceError(err);
+      logVoiceAssistantUpdate({
+        assistantId,
+        requestedVoice,
+        expressiveMode,
+        status: sanitized.status ?? "error",
+        errorBody: sanitized.body ?? sanitized.message,
+      });
+      // Retry without optional volume only — never silently swap the voice id.
       delete voiceBase.volume;
       try {
         await ai.updateAssistant(assistantId, {
@@ -450,15 +462,54 @@ export async function syncTelnyxAssistant(
               : { noise_suppression: "krisp" }),
           },
         });
-      } catch {
-        await ai.updateAssistant(assistantId, {
-          voice_settings: { voice: voiceId },
-          enabled_features: ["telephony"],
-          telephony_settings: {
-            supports_unauthenticated_web_calls: true,
-            ...(texmlAppId ? { default_texml_app_id: texmlAppId } : {}),
-          },
-        }).catch(() => undefined);
+        logVoiceAssistantUpdate({
+          assistantId,
+          requestedVoice,
+          expressiveMode,
+          status: "ok_without_volume",
+        });
+      } catch (err2) {
+        const sanitized2 = sanitizeTelnyxVoiceError(err2);
+        logVoiceAssistantUpdate({
+          assistantId,
+          requestedVoice,
+          expressiveMode,
+          status: sanitized2.status ?? "error",
+          errorBody: sanitized2.body ?? sanitized2.message,
+        });
+        // Minimal retry with the SAME voice (no silent NaturalHD remap).
+        try {
+          await ai.updateAssistant(assistantId, {
+            voice_settings: { voice: requestedVoice },
+            enabled_features: ["telephony"],
+            telephony_settings: {
+              supports_unauthenticated_web_calls: true,
+              ...(texmlAppId ? { default_texml_app_id: texmlAppId } : {}),
+            },
+          });
+          logVoiceAssistantUpdate({
+            assistantId,
+            requestedVoice,
+            expressiveMode: false,
+            status: "ok_voice_only",
+          });
+        } catch (err3) {
+          const sanitized3 = sanitizeTelnyxVoiceError(err3);
+          logVoiceAssistantUpdate({
+            assistantId,
+            requestedVoice,
+            expressiveMode: false,
+            status: sanitized3.status ?? "error",
+            errorBody: sanitized3.body ?? sanitized3.message,
+          });
+          // Do not overwrite the customer's active assistant with a different voice.
+          throw new Error(
+            `Telnyx rejected voice ${requestedVoice}` +
+              (sanitized3.status ? ` (HTTP ${sanitized3.status}` : " (") +
+              (sanitized3.code ? ` code ${sanitized3.code}` : "") +
+              `): ${sanitized3.message}`,
+          );
+        }
       }
     }
     return pushTools(assistantId);

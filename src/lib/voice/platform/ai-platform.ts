@@ -1429,13 +1429,23 @@ export async function enableWebCallsAndSyncVoice(
   const { parseVoiceAgentConfig } = await import("../types");
   const {
     DEFAULT_AGENT_VOICE_ID,
-    isUltraVoice,
-    resolveProviderVoiceId,
+    buildAssistantVoiceSettings,
+    logVoiceAssistantUpdate,
+    sanitizeTelnyxVoiceError,
   } = await import("../telnyx/voices");
   const config = parseVoiceAgentConfig(agent.draftConfig);
-  const voiceId = resolveProviderVoiceId(
-    config.voiceLanguage?.voiceId || DEFAULT_AGENT_VOICE_ID,
-  );
+  const gainDb = Number(config.voiceLanguage?.outputGainDb ?? -5);
+  const gainLinear =
+    gainDb < 0 && gainDb >= -12
+      ? Math.round(Math.pow(10, gainDb / 20) * 1000) / 1000
+      : null;
+  const voiceBuilt = buildAssistantVoiceSettings({
+    voiceRef: config.voiceLanguage?.voiceId || DEFAULT_AGENT_VOICE_ID,
+    speed: config.voiceLanguage?.speed,
+    expressiveMode: config.voiceLanguage?.expressiveMode,
+    volume: gainLinear,
+  });
+  const voiceId = voiceBuilt.providerVoiceId;
   const texmlAppId = process.env.TELNYX_TEXML_APP_ID?.trim() || "";
 
   // 1) Web-calls flag alone — must succeed for anonymous_login.
@@ -1454,27 +1464,14 @@ export async function enableWebCallsAndSyncVoice(
   // 2) Voice separately so a voice quirk cannot block browser auth.
   let voiceSynced = false;
   let voiceError: string | null = null;
+  let voiceErrorDetail: ReturnType<typeof sanitizeTelnyxVoiceError> | null = null;
   try {
-    const gainDb = Number(config.voiceLanguage?.outputGainDb ?? -5);
-    const gainLinear =
-      gainDb < 0 && gainDb >= -12
-        ? Math.round(Math.pow(10, gainDb / 20) * 1000) / 1000
-        : null;
     const waitSec = Math.max(
       0.15,
       Math.min(1.5, (config.voiceLanguage?.endpointingMs ?? 300) / 1000),
     );
     await ai.updateAssistant(agent.telnyxAssistantId, {
-      voice_settings: {
-        voice: voiceId,
-        ...(config.voiceLanguage?.speed != null
-          ? { voice_speed: config.voiceLanguage.speed }
-          : {}),
-        ...(config.voiceLanguage?.expressiveMode || isUltraVoice(voiceId)
-          ? { expressive_mode: true }
-          : {}),
-        ...(gainLinear != null ? { volume: gainLinear } : {}),
-      },
+      voice_settings: voiceBuilt.voice_settings,
       interruption_settings: {
         enable: config.voiceLanguage?.bargeIn !== false,
         disable_greeting_interruption: true,
@@ -1488,9 +1485,23 @@ export async function enableWebCallsAndSyncVoice(
       },
     });
     voiceSynced = true;
+    logVoiceAssistantUpdate({
+      assistantId: agent.telnyxAssistantId,
+      requestedVoice: voiceId,
+      expressiveMode: voiceBuilt.expressiveMode,
+      status: "ok",
+    });
   } catch (err) {
-    voiceError = err instanceof Error ? err.message : String(err);
-    // Retry without expressive_mode / speed / volume.
+    voiceErrorDetail = sanitizeTelnyxVoiceError(err);
+    voiceError = voiceErrorDetail.message;
+    logVoiceAssistantUpdate({
+      assistantId: agent.telnyxAssistantId,
+      requestedVoice: voiceId,
+      expressiveMode: voiceBuilt.expressiveMode,
+      status: voiceErrorDetail.status ?? "error",
+      errorBody: voiceErrorDetail.body ?? voiceErrorDetail.message,
+    });
+    // Retry without expressive_mode / speed / volume — SAME voice id (no silent remap).
     try {
       await ai.updateAssistant(agent.telnyxAssistantId, {
         voice_settings: { voice: voiceId },
@@ -1500,8 +1511,22 @@ export async function enableWebCallsAndSyncVoice(
       });
       voiceSynced = true;
       voiceError = voiceError ? `${voiceError} (retried plain voice ok)` : null;
+      logVoiceAssistantUpdate({
+        assistantId: agent.telnyxAssistantId,
+        requestedVoice: voiceId,
+        expressiveMode: false,
+        status: "ok_voice_only",
+      });
     } catch (err2) {
-      voiceError = err2 instanceof Error ? err2.message : String(err2);
+      voiceErrorDetail = sanitizeTelnyxVoiceError(err2);
+      voiceError = voiceErrorDetail.message;
+      logVoiceAssistantUpdate({
+        assistantId: agent.telnyxAssistantId,
+        requestedVoice: voiceId,
+        expressiveMode: false,
+        status: voiceErrorDetail.status ?? "error",
+        errorBody: voiceErrorDetail.body ?? voiceErrorDetail.message,
+      });
     }
   }
 
@@ -1529,6 +1554,7 @@ export async function enableWebCallsAndSyncVoice(
     voiceId,
     voiceSynced,
     voiceError,
+    voiceErrorDetail,
     webCallsEnabled: true,
     remote: asData(webRemote),
   };

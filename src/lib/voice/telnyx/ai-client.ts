@@ -37,9 +37,36 @@ export async function getAssistant(id: string, query?: TelnyxAiQuery) {
   return telnyxRequest(`/ai/assistants/${enc(id)}`, { query });
 }
 
-/** Telnyx uses POST (not PATCH/PUT) to update assistants. */
+/** Telnyx docs use PATCH for assistant updates; older clients used POST. Try PATCH first. */
 export async function updateAssistant(id: string, body: TelnyxAiBody) {
-  return telnyxRequest(`/ai/assistants/${enc(id)}`, { method: "POST", body });
+  try {
+    return await telnyxRequest(`/ai/assistants/${enc(id)}`, {
+      method: "PATCH",
+      body,
+      noRetry: true,
+    });
+  } catch (err) {
+    if (!(err instanceof TelnyxApiError)) throw err;
+    // Method not supported → fall back to POST (legacy behavior).
+    if (err.status === 405 || err.status === 501) {
+      return telnyxRequest(`/ai/assistants/${enc(id)}`, { method: "POST", body });
+    }
+    // Some accounts reject PATCH with a generic 4xx even though POST works.
+    // Do not swallow validation errors like "Voice not found" — surface them.
+    const msg = err.message.toLowerCase();
+    if (
+      msg.includes("voice not found") ||
+      msg.includes("expressive_mode") ||
+      msg.includes("unprocessable")
+    ) {
+      throw err;
+    }
+    try {
+      return await telnyxRequest(`/ai/assistants/${enc(id)}`, { method: "POST", body });
+    } catch {
+      throw err;
+    }
+  }
 }
 
 export async function deleteAssistant(id: string) {

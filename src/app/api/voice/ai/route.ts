@@ -682,6 +682,50 @@ export async function POST(request: Request) {
         }
         return NextResponse.json({ data: { results } });
       }
+      case "probe_ultra_voices": {
+        const { probeTelnyxAssistantVoices } = await import(
+          "@/lib/voice/telnyx/voice-probe"
+        );
+        return NextResponse.json({
+          data: await probeTelnyxAssistantVoices(),
+        });
+      }
+      case "test_voice": {
+        const agentRow = await getPrisma().voiceAgent.findFirst({
+          where: { id: agentId, workspaceId },
+        });
+        const telnyxAssistantId =
+          String(body.telnyxAssistantId || "") || agentRow?.telnyxAssistantId || "";
+        if (!telnyxAssistantId) {
+          return NextResponse.json(
+            { error: "Build/publish the agent first so a Telnyx assistant exists to clone" },
+            { status: 400 },
+          );
+        }
+        const voiceRef = String(body.voice || body.voiceId || "").trim();
+        if (!voiceRef) {
+          return NextResponse.json({ error: "voice is required" }, { status: 400 });
+        }
+        const { testVoiceOnClone } = await import("@/lib/voice/telnyx/voice-probe");
+        const result = await testVoiceOnClone({
+          sourceAssistantId: telnyxAssistantId,
+          voiceRef,
+          expressiveMode: Boolean(body.expressiveMode),
+        });
+        if (!result.ok) {
+          return NextResponse.json(
+            {
+              error: result.error?.message || "Telnyx rejected the voice",
+              code: result.error?.code,
+              status: result.error?.status,
+              body: result.error?.body,
+              data: result,
+            },
+            { status: result.error?.status && result.error.status >= 400 ? result.error.status : 422 },
+          );
+        }
+        return NextResponse.json({ data: result });
+      }
       default:
         return NextResponse.json({ error: `Unknown action ${action}` }, { status: 400 });
     }
