@@ -255,6 +255,8 @@ export async function POST(request: Request) {
             telnyxAssistantId,
             model: (data as { model?: string }).model,
             name: (data as { name?: string }).name,
+            voice_settings: (data as { voice_settings?: Record<string, unknown> })
+              .voice_settings,
             toolCount: tools.length,
             tools: tools.map((t) => {
               const webhook = t.webhook as { name?: string; url?: string; timeout_ms?: number } | undefined;

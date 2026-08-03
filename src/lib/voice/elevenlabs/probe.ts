@@ -27,6 +27,11 @@ import {
   validateElevenLabsBeforePatch,
 } from "@/lib/voice/elevenlabs/voice-settings";
 import {
+  ELEVENLABS_RECEPTIONIST_VOICES,
+  getReceptionistVoice,
+  prioritizeReceptionistVoices,
+} from "@/lib/voice/elevenlabs/receptionist-voices";
+import {
   FALLBACK_PROVIDER_VOICE_ID,
   logVoiceAssistantUpdate,
   sanitizeTelnyxVoiceError,
@@ -145,10 +150,27 @@ export async function discoverElevenLabsCatalog(input?: {
     };
   });
 
+  const ordered = prioritizeReceptionistVoices(voices);
+  // Ensure curated receptionist IDs appear even if absent from /v1/voices page.
+  const missingCurated: ElevenLabsVoiceInfo[] = [];
+  for (const curated of ELEVENLABS_RECEPTIONIST_VOICES) {
+    if (!ordered.some((v) => v.voice_id === curated.voiceId)) {
+      missingCurated.push({
+        voice_id: curated.voiceId,
+        name: curated.displayName,
+        category: "premade",
+        description: curated.style,
+        labels: { use_case: "conversational", gender: "female" },
+        preview_url: null,
+      });
+    }
+  }
+  const withCurated = [...missingCurated, ...ordered];
   const limit = Math.max(1, Math.min(40, input?.voiceLimit ?? 12));
-  const selectedVoices = voices.slice(0, limit);
+  const selectedVoices = withCurated.slice(0, limit);
   const pickerVoices: TelnyxVoiceOption[] = [];
   for (const voice of selectedVoices) {
+    const curated = getReceptionistVoice(voice.voice_id);
     for (const cand of ELEVENLABS_CANDIDATE_MODELS) {
       const onAccount = candidateModels.find((c) => c.modelId === cand.modelId)?.onAccount;
       const providerVoiceId = buildElevenLabsProviderVoice(cand.modelId, voice.voice_id);
@@ -158,10 +180,13 @@ export async function discoverElevenLabsCatalog(input?: {
           ? ("female" as const)
           : genderLabel.includes("male") || genderLabel === "m"
             ? ("male" as const)
-            : ("neutral" as const);
+            : curated
+              ? ("female" as const)
+              : ("neutral" as const);
+      const liveUnsupported = cand.modelId === "eleven_v3";
       pickerVoices.push({
         id: catalogIdForElevenLabs(cand.modelId, voice.voice_id),
-        name: voice.name,
+        name: curated?.displayName || voice.name,
         gender,
         tier: "elevenlabs",
         uiTier: cand.uiTier,
@@ -169,20 +194,28 @@ export async function discoverElevenLabsCatalog(input?: {
         language: voice.labels?.accent || voice.labels?.language || "en",
         description: [
           cand.shortLabel,
-          voice.category,
-          voice.description || voice.labels?.description || voice.labels?.use_case,
+          curated?.style ||
+            voice.description ||
+            voice.labels?.description ||
+            voice.labels?.use_case ||
+            voice.category,
+          liveUnsupported ? "config-ok / live Telnyx greeting fails (no WS)" : null,
         ]
           .filter(Boolean)
           .join(" · "),
         providerVoiceId,
         supportsSpeed: true,
         supportsExpressive: false,
-        assistantCompatible: Boolean(onAccount),
-        previewOnly: !onAccount,
+        assistantCompatible: Boolean(onAccount) && !liveUnsupported,
+        previewOnly: !onAccount || liveUnsupported,
         elevenLabsModelId: cand.modelId,
         elevenLabsVoiceId: voice.voice_id,
         previewUrl: voice.preview_url,
-        compatibility: onAccount ? "available" : "not_on_account",
+        compatibility: !onAccount
+          ? "not_on_account"
+          : liveUnsupported
+            ? "telnyx_rejected"
+            : "available",
       });
     }
   }
@@ -219,10 +252,27 @@ export async function probeElevenLabsOnTelnyx(input: {
 
   const ensured = await ensureElevenLabsTelnyxSecret();
   const discovery = await discoverElevenLabsCatalog({ voiceLimit: 50 });
-  const voiceOk = discovery.voices.some((v) => v.voice_id === input.voiceId);
+  let voiceOk = discovery.voices.some((v) => v.voice_id === input.voiceId);
+  if (!voiceOk) {
+    // Shared / library voices may not appear on the first /v1/voices page.
+    // Prove the ID with a tiny direct TTS call before Telnyx probing.
+    try {
+      const { synthesizeElevenLabsPreview } = await import(
+        "@/lib/voice/elevenlabs/client"
+      );
+      await synthesizeElevenLabsPreview({
+        voiceId: input.voiceId,
+        modelId: "eleven_flash_v2_5",
+        text: "Voice probe.",
+      });
+      voiceOk = true;
+    } catch {
+      voiceOk = false;
+    }
+  }
   if (!voiceOk) {
     throw new Error(
-      `Voice ${input.voiceId} was not returned by ElevenLabs /v1/voices for this account`,
+      `Voice ${input.voiceId} was not returned by ElevenLabs /v1/voices and direct TTS failed for this account`,
     );
   }
 
@@ -280,6 +330,8 @@ export async function probeElevenLabsOnTelnyx(input: {
         voiceId: input.voiceId,
         apiKeyRef: ensured.apiKeyRef || ELEVENLABS_SECRET_IDENTIFIER,
         includeTuning: Boolean(input.includeTuning),
+        stability: input.includeTuning ? 0.45 : undefined,
+        similarityBoost: input.includeTuning ? 0.75 : undefined,
         modelCapabilities: caps
           ? {
               can_use_style: caps.can_use_style,

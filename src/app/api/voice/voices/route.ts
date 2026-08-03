@@ -30,7 +30,8 @@ export async function GET() {
 
     if (secret.configuredEnv) {
       try {
-        const discovery = await discoverElevenLabsCatalog({ voiceLimit: 10 });
+        // Prefer receptionist candidates (Alexandra / Jessica / Eryn) in the picker.
+        const discovery = await discoverElevenLabsCatalog({ voiceLimit: 18 });
         elevenLabsVoices = discovery.pickerVoices;
         elevenLabsMeta = {
           ...elevenLabsMeta,

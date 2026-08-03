@@ -886,6 +886,9 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
               agentId={agentId}
               expressiveMode={cfg.voiceLanguage?.expressiveMode}
               onChange={(voiceId) => {
+                const isEl =
+                  String(voiceId || "").startsWith("el:") ||
+                  String(voiceId || "").startsWith("ElevenLabs.");
                 updateConfig({
                   voiceLanguage: {
                     ...cfg.voiceLanguage,
@@ -893,6 +896,17 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
                     // Ultra defaults expressive on when not yet chosen.
                     ...(isUltraVoice(voiceId) && cfg.voiceLanguage?.expressiveMode == null
                       ? { expressiveMode: true }
+                      : {}),
+                    // Receptionist defaults for ElevenLabs live agents.
+                    ...(isEl
+                      ? {
+                          elevenLabsTuning: true,
+                          elevenLabsStability: 0.45,
+                          elevenLabsSimilarityBoost: 0.75,
+                          elevenLabsApiKeyRef: "elevenlabs_transovo",
+                          speed: cfg.voiceLanguage?.speed ?? 1,
+                          expressiveMode: false,
+                        }
                       : {}),
                   },
                 });
