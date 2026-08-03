@@ -1,0 +1,871 @@
+# Telnyx AI Assistant–compatible voices
+
+Queried: `2026-08-03T15:13:54.732337+00:00`
+
+**854 voices** — 82 NaturalHD + 772 Ultra (UUID only).
+
+Excluded: Natural (non-HD), Ultra short names, Kokoro/Qwen3/etc.
+
+## NaturalHD (82)
+
+| Provider voice ID | Name | Language |
+|---|---|---|
+| `Telnyx.NaturalHD.batin` | batin | ar-SA |
+| `Telnyx.NaturalHD.haqq` | haqq | ar-SA |
+| `Telnyx.NaturalHD.layla` | layla | ar-SA |
+| `Telnyx.NaturalHD.qadir` | qadir | ar-SA |
+| `Telnyx.NaturalHD.sakina` | sakina | ar-SA |
+| `Telnyx.NaturalHD.shams` | shams | ar-SA |
+| `Telnyx.NaturalHD.alfhild` | alfhild | de-DE |
+| `Telnyx.NaturalHD.baldur` | baldur | de-DE |
+| `Telnyx.NaturalHD.bergmann_katharina` | bergmann_katharina | de-DE |
+| `Telnyx.NaturalHD.kumara` | kumara | de-DE |
+| `Telnyx.NaturalHD.liesel` | liesel | de-DE |
+| `Telnyx.NaturalHD.lorelei` | lorelei | de-DE |
+| `Telnyx.NaturalHD.rosenfeld_steffi` | rosenfeld_steffi | de-DE |
+| `Telnyx.NaturalHD.runa` | runa | de-DE |
+| `Telnyx.NaturalHD.sigurd` | sigurd | de-DE |
+| `Telnyx.NaturalHD.eucalyptus` | eucalyptus | en-AU |
+| `Telnyx.NaturalHD.marlu` | marlu | en-AU |
+| `Telnyx.NaturalHD.albion` | albion | en-US |
+| `Telnyx.NaturalHD.andromeda` | andromeda | en-US |
+| `Telnyx.NaturalHD.arcade` | arcade | en-US |
+| `Telnyx.NaturalHD.astra` | astra | en-US |
+| `Telnyx.NaturalHD.atrium` | atrium | en-US |
+| `Telnyx.NaturalHD.bond` | bond | en-US |
+| `Telnyx.NaturalHD.celeste` | celeste | en-US |
+| `Telnyx.NaturalHD.cupola` | cupola | en-US |
+| `Telnyx.NaturalHD.day` | day | en-US |
+| `Telnyx.NaturalHD.dusk` | dusk | en-US |
+| `Telnyx.NaturalHD.eliphas` | eliphas | en-US |
+| `Telnyx.NaturalHD.estelle` | estelle | en-US |
+| `Telnyx.NaturalHD.esther` | esther | en-US |
+| `Telnyx.NaturalHD.fern` | fern | en-US |
+| `Telnyx.NaturalHD.kima` | kima | en-US |
+| `Telnyx.NaturalHD.lintel` | lintel | en-US |
+| `Telnyx.NaturalHD.luna` | luna | en-US |
+| `Telnyx.NaturalHD.lyra` | lyra | en-US |
+| `Telnyx.NaturalHD.masonry` | masonry | en-US |
+| `Telnyx.NaturalHD.moss` | moss | en-US |
+| `Telnyx.NaturalHD.oculus` | oculus | en-US |
+| `Telnyx.NaturalHD.orion` | orion | en-US |
+| `Telnyx.NaturalHD.parapet` | parapet | en-US |
+| `Telnyx.NaturalHD.pilaster` | pilaster | en-US |
+| `Telnyx.NaturalHD.pola` | pola | en-US |
+| `Telnyx.NaturalHD.sirius` | sirius | en-US |
+| `Telnyx.NaturalHD.stucco` | stucco | en-US |
+| `Telnyx.NaturalHD.tauro` | tauro | en-US |
+| `Telnyx.NaturalHD.thalassa` | thalassa | en-US |
+| `Telnyx.NaturalHD.transom` | transom | en-US |
+| `Telnyx.NaturalHD.truss` | truss | en-US |
+| `Telnyx.NaturalHD.ursa` | ursa | en-US |
+| `Telnyx.NaturalHD.vashti` | vashti | en-US |
+| `Telnyx.NaturalHD.vespera` | vespera | en-US |
+| `Telnyx.NaturalHD.walnut` | walnut | en-US |
+| `Telnyx.NaturalHD.nova` | nova | es-CO |
+| `Telnyx.NaturalHD.lark` | lark | es-ES |
+| `Telnyx.NaturalHD.luz` | luz | es-ES |
+| `Telnyx.NaturalHD.celestino` | celestino | es-MX |
+| `Telnyx.NaturalHD.eris` | eris | es-MX |
+| `Telnyx.NaturalHD.mar` | mar | es-MX |
+| `Telnyx.NaturalHD.aurelio` | aurelio | es-US |
+| `Telnyx.NaturalHD.seraphina` | seraphina | es-VE |
+| `Telnyx.NaturalHD.amarante` | amarante | fr-FR |
+| `Telnyx.NaturalHD.aurelie` | aurelie | fr-FR |
+| `Telnyx.NaturalHD.destin` | destin | fr-FR |
+| `Telnyx.NaturalHD.livet_aurelie` | livet_aurelie | fr-FR |
+| `Telnyx.NaturalHD.morel_marianne` | morel_marianne | fr-FR |
+| `Telnyx.NaturalHD.serrin_joseph` | serrin_joseph | fr-FR |
+| `Telnyx.NaturalHD.solstice` | solstice | fr-FR |
+| `Telnyx.NaturalHD.aviva` | aviva | he-IL |
+| `Telnyx.NaturalHD.ori` | ori | he-IL |
+| `Telnyx.NaturalHD.aarohi` | aarohi | hi-IN |
+| `Telnyx.NaturalHD.avni` | avni | hi-IN |
+| `Telnyx.NaturalHD.taru` | taru | hi-IN |
+| `Telnyx.NaturalHD.vyom` | vyom | hi-IN |
+| `Telnyx.NaturalHD.raiden` | raiden | ja-JP |
+| `Telnyx.NaturalHD.ren` | ren | ja-JP |
+| `Telnyx.NaturalHD.yukiko` | yukiko | ja-JP |
+| `Telnyx.NaturalHD.alzira` | alzira | pt-BR |
+| `Telnyx.NaturalHD.baltasar` | baltasar | pt-BR |
+| `Telnyx.NaturalHD.celso` | celso | pt-BR |
+| `Telnyx.NaturalHD.isadora` | isadora | pt-BR |
+| `Telnyx.NaturalHD.lucia` | lucia | pt-BR |
+| `Telnyx.NaturalHD.sol` | sol | pt-BR |
+
+## Ultra (772)
+
+| Provider voice ID | Name | Language |
+|---|---|---|
+| `Telnyx.Ultra.ee373d69-5e47-4663-a05e-7008ff26f85c` | [Amazon] Brooke - Big Sister | en-US |
+| `Telnyx.Ultra.87adf1b2-b82b-4d60-bef9-11a4270b09e5` | [Amazon] Ronald - Thinker | en-US |
+| `Telnyx.Ultra.f91ab3e6-5071-4e15-b016-cde6f2bcd222` | Aadhya - Soother | hi |
+| `Telnyx.Ultra.39d518b7-fd0b-4676-9b8b-29d64ff31e12` | Aarav - Old Time Storyteller | en-IN |
+| `Telnyx.Ultra.9cebb910-d4b7-4a4a-85a4-12c79137724c` | Aarti - Conversationalist | hi |
+| `Telnyx.Ultra.2821fd0c-35c7-4adf-9c42-32e394bf85cb` | Adi - Efficient Expert | he |
+| `Telnyx.Ultra.e2d48e7b-cd73-4c4c-bc1e-f232580e8709` | Adrian - Explorer | en-US |
+| `Telnyx.Ultra.f4d6bb07-f876-4464-ba70-cd48d8701890` | Adriana - Bright Entertainer | es-MX |
+| `Telnyx.Ultra.6bc7c014-022b-42ce-8b53-a5ec878a7ca7` | Agnieszka - Coordinator | pl |
+| `Telnyx.Ultra.2695b6b5-5543-4be1-96d9-3967fb5e7fec` | Agustin - Clear Storyteller | es-MX |
+| `Telnyx.Ultra.3ccc4544-84f7-45e3-ae57-5c52b5a1fac6` | Aiden - Yogi | en |
+| `Telnyx.Ultra.498e7f37-7fa3-4e2c-b8e2-8b6e9276f956` | Aiko - Calming Voice | ja |
+| `Telnyx.Ultra.fb02b554-7d64-4f90-841e-e57fc88f410c` | Ailsa - Warm Guide | en-GB |
+| `Telnyx.Ultra.80c81aee-b6ad-4d12-9af8-a9c79c2e141d` | Aina - Meditation Guru | en |
+| `Telnyx.Ultra.83604597-55fa-4ccc-8357-730b313f353f` | Aisyah - Chat Partner | ms |
+| `Telnyx.Ultra.87748186-23bb-4158-a1eb-332911b0b708` | Alaric - Wizard | en-US |
+| `Telnyx.Ultra.9a0894a9-28f0-436e-9a1d-e92bccbce4dd` | Albert - Firm Guide | en-US |
+| `Telnyx.Ultra.17044048-bfab-44b2-9532-9c1b65e9c217` | Alec - Spirited Salesman | en-GB |
+| `Telnyx.Ultra.3a35daa1-ba81-451c-9b21-59332e9db2f3` | Alejandro - Calm Mentor | es-MX |
+| `Telnyx.Ultra.0e21713a-5e9a-428a-bed4-90d410b87f13` | Alessandra - Melodic Guide | it |
+| `Telnyx.Ultra.cd7b67f4-22a4-49a0-a197-3fa16f7e64d4` | Alexander - Reliable Advisor | de |
+| `Telnyx.Ultra.069ff31a-5524-4945-a403-f746ee617507` | Alexei\t- Articulate Analyst | ru |
+| `Telnyx.Ultra.5e7d492a-5502-482e-b315-ebf587427806` | Alfie - Composed Advisor | en-GB |
+| `Telnyx.Ultra.38aabb6a-f52b-4fb0-a3d1-988518f4dc06` | Alina - Engaging Assistant | de |
+| `Telnyx.Ultra.c8f7835e-28a3-4f0c-80d7-c1302ac62aae` | Alistair - Composed Consultant | en-GB |
+| `Telnyx.Ultra.9287676d-f0cc-423f-ac03-3b3c7242f091` | Allen - Modern Voice | en-US |
+| `Telnyx.Ultra.2747b6cf-fa34-460c-97db-267566918881` | Allie - Natural Conversationalist | en-US |
+| `Telnyx.Ultra.43300c5e-f925-4cd2-adf7-0a031c0e242e` | Alma - Clear Advisor | he |
+| `Telnyx.Ultra.ccfea4bf-b3f4-421e-87ed-dd05dae01431` | Alondra - Reassuring Sister | es-ES |
+| `Telnyx.Ultra.b60048c2-abb5-43fa-b403-90dce232e55e` | Amanda - Warm Guide | en |
+| `Telnyx.Ultra.a7a59115-2425-4192-844c-1e98ec7d6877` | Amber - Warm Support Agent | en-US |
+| `Telnyx.Ultra.043cfc81-d69f-4bee-ae1e-7862cb358650` | Amelia - Instructor | en-AU |
+| `Telnyx.Ultra.2590a84a-68cf-4b08-970d-b4ff824bf242` | Amelie - Warm Concierge | fr-CA |
+| `Telnyx.Ultra.6304c635-6681-4f9e-85b6-a97f4d26461a` | Amira - Dreamy Whisperer | ar |
+| `Telnyx.Ultra.91925fe5-42ee-4ebe-96c1-c84b12a85a32` | Amit - Sports Student | gu |
+| `Telnyx.Ultra.faa75703-00e3-4a57-9955-0703001e3231` | Amélie - Decisive Agent | fr-FR |
+| `Telnyx.Ultra.1cf751f6-8749-43ab-98bd-230dd633abdb` | Ana Paula - Marketer | pt-BR |
+| `Telnyx.Ultra.a053f6bc-7df4-40de-96d4-de026bc47ce8` | Andi - Dynamic Presenter | id |
+| `Telnyx.Ultra.34acfaee-c556-41ee-a5f6-c687fb20357c` | Andrada - Steady Speaker | ro |
+| `Telnyx.Ultra.db229dfe-f5de-4be4-91fd-7b077c158578` | Andreas - Recorder | de |
+| `Telnyx.Ultra.3f64ef99-d87b-4b51-b217-df7351f7886a` | Andrei - Conversationalist Guy | ro |
+| `Telnyx.Ultra.d46e87a1-7c6d-4b18-9359-926f4a35ffdf` | Andres - Trusted Voice | es-MX |
+| `Telnyx.Ultra.887149a8-4616-42ad-b2ce-c3819176f45d` | Andrzej - Elder Voice | pl |
+| `Telnyx.Ultra.072d954b-8379-4b6b-816a-bb0cd38725f8` | Anele - Bright Presenter | en-ZA |
+| `Telnyx.Ultra.d1c819ba-0384-496b-b63b-eb57a96a43cc` | Angel - Welcoming Host | tl |
+| `Telnyx.Ultra.c4cbcb7d-d9fa-4eac-b547-46831718ef58` | Angelo - Calm Narrator | tl |
+| `Telnyx.Ultra.5c32dce6-936a-4892-b131-bafe474afe5f` | Anika - Enthusiastic Seller | mr |
+| `Telnyx.Ultra.209d9a43-03eb-40d8-a7b7-51a6d54c052f` | Anita - Meditation Guide | hi |
+| `Telnyx.Ultra.d4470f50-295e-4e11-82a2-158d45bf6abc` | Anitha - Warm Guide | ta |
+| `Telnyx.Ultra.ac317dac-1b8f-434f-b198-a490e2a4914d` | Anneke - Trusted Guide | nl |
+| `Telnyx.Ultra.225ba8cf-9fc2-4371-a78c-fe38ba38898a` | Anneliese - Methodical Guide | nl |
+| `Telnyx.Ultra.0418348a-0ca2-4e90-9986-800fb8b3bbc0` | Antoine - Stern Man | fr-FR |
+| `Telnyx.Ultra.7e8cb11d-37af-476b-ab8f-25da99b18644` | Anuj - Engaging Narrator | hi |
+| `Telnyx.Ultra.ef191366-f52f-447a-a398-ed8c0f2943a1` | Archie - Approachable Mate | en-GB |
+| `Telnyx.Ultra.ec1e269e-9ca0-402f-8a18-58e0e022355a` | Ariana - Kind Friend | en |
+| `Telnyx.Ultra.1f575487-6f3d-40e0-862a-814f55b5fb15` | Ariane - Captivating Tone | en |
+| `Telnyx.Ultra.bb7e8daa-8b79-47a2-8408-a7a1cc72b53c` | Arthur - Polished Advisor | en-GB |
+| `Telnyx.Ultra.d2870b91-1b4c-47ab-81a8-3718d8e9c222` | Arun - Lively Voice | ta |
+| `Telnyx.Ultra.95d51f79-c397-46f9-b49a-23763d3eaa2d` | Arushi - Hinglish Speaker | hi |
+| `Telnyx.Ultra.3f04e815-3260-4f50-8fd9-af9c657be4c2` | Arvin - Reliable Guide | en |
+| `Telnyx.Ultra.52271edb-c161-4c76-9e33-c5c1d39de6e3` | Asaf - Steady Advisor | he |
+| `Telnyx.Ultra.00967b2f-88a6-4a31-8153-110a92134b9f` | Asher - Podcaster | en-US |
+| `Telnyx.Ultra.b576c504-cbd1-4224-af06-04067c5a5e3e` | Astrid - Direct Director | sv |
+| `Telnyx.Ultra.87041166-c212-4838-9028-05d7437df750` | Aubrey - Easygoing Pal | en |
+| `Telnyx.Ultra.8f091740-3df1-4795-8bd9-dc62d88e5131` | Aurora - Fairy Princess | en-US |
+| `Telnyx.Ultra.1fcd23d0-bf12-4896-8f60-4f21ef5c9b98` | Austin - Conversational Guide | en-US |
+| `Telnyx.Ultra.cccc21e8-5bcf-4ff0-bc7f-be4e40afc544` | Avery - Gaming Girl | en-US |
+| `Telnyx.Ultra.858c98dc-db9e-4d1a-9435-557cdf77685c` | Avi - Calm Consultant | he |
+| `Telnyx.Ultra.4ff88d85-28a2-4870-bdc4-cd9697fd5af5` | Aviva - Patient Guide | he |
+| `Telnyx.Ultra.63d6f469-8c2c-489d-b53f-d36f0bbdcd4b` | Ayako | ja |
+| `Telnyx.Ultra.91e91d74-8eb4-43cd-97d3-7466c21db00d` | Aykut - Friendly Companion | tr |
+| `Telnyx.Ultra.bb2347fe-69e9-4810-873f-ffd759fe8420` | Aylin - Warm Guide | tr |
+| `Telnyx.Ultra.31c55968-a9f4-4115-8831-3a16952179c8` | Ayumi - Sales Guide | ja |
+| `Telnyx.Ultra.791d5162-d5eb-40f0-8189-f19db44611d8` | Ayush - Friendly Neighbor | hi |
+| `Telnyx.Ultra.0f95596c-09c4-4418-99fe-5c107e0713c0` | Azra - Service Specialist | tr |
+| `Telnyx.Ultra.13524ffb-a918-499a-ae97-c98c7c4408c4` | Barry - Helper | en-AU |
+| `Telnyx.Ultra.4fb26a05-57de-4d21-855a-f51adae44f38` | Barry 2.0 - Helper | en |
+| `Telnyx.Ultra.d4b44b9a-82bc-4b65-b456-763fce4c52f9` | Beatriz - Support Guide | pt-PT |
+| `Telnyx.Ultra.bbee10a8-4f08-4c5c-8282-e69299115055` | Ben - Helpful Man | en-US |
+| `Telnyx.Ultra.4c5c7be8-6b3b-4c62-b915-c54d049c198f` | Bence - Focused Facilitator | hu |
+| `Telnyx.Ultra.3c0f09d6-e0d7-499c-a594-70c5b7b93048` | Benedict - Measured Mediator | en-GB |
+| `Telnyx.Ultra.7cf0e2b1-8daf-4fe4-89ad-f6039398f359` | Benedict - Royal Narrator | en-GB |
+| `Telnyx.Ultra.02aeee94-c02b-456e-be7a-659672acf82d` | Benito - Digital Voice | es-ES |
+| `Telnyx.Ultra.2d5b8c3a-116c-4741-acaf-ba4fa289eba2` | Benji - Joyful Spirit | en |
+| `Telnyx.Ultra.5def377d-908b-4540-8bd7-3c968fcae351` | Benoît - Methodical Moderator | fr-FR |
+| `Telnyx.Ultra.fdd6abff-902a-4885-9f5f-0d3d9f7567e5` | Betty - Reassured Guide | en-US |
+| `Telnyx.Ultra.76961778-5ce4-4aa9-9cdf-66a029d61a8f` | Bhavani - Reassuring Companion | te |
+| `Telnyx.Ultra.a167e0f3-df7e-4d52-a9c3-f949145efdab` | Blake - Helpful Agent | en-US |
+| `Telnyx.Ultra.538a8872-3799-4df5-b373-b78493b766c6` | Blanca - Graceful Host | es-ES |
+| `Telnyx.Ultra.5cad89c9-d88a-4832-89fb-55f2f16d13d3` | Brandon - Confident Guy | en |
+| `Telnyx.Ultra.607167f6-9bf2-473c-accc-ac7b3b66b30b` | Brenda - Host | en-US |
+| `Telnyx.Ultra.3d808d23-cb09-4c39-8afd-528e209cba4f` | Brent - Steady Conversationalist | en-US |
+| `Telnyx.Ultra.46788d8e-cdf9-4d5c-9125-094eb2e4d44c` | Brittany - Intense Performer | en-US |
+| `Telnyx.Ultra.e07c00bc-4134-4eae-9ea4-1a55fb45746b` | Brooke - Big Sister | en-US |
+| `Telnyx.Ultra.b603811e-54c2-4a0a-8854-09eab9ffa63f` | Bruno - Reliable Communicator | pt-BR |
+| `Telnyx.Ultra.2948c301-9211-4112-8f36-4c3fc836ef12` | Bryce - Clear Explainer | en |
+| `Telnyx.Ultra.b9cf5ec3-eaa4-46a5-a5b2-b0d0f22395a2` | Caleb - Seasoned Pro | en |
+| `Telnyx.Ultra.00a77add-48d5-4ef6-8157-71e5437b282d` | Callie - Encourager | en-US |
+| `Telnyx.Ultra.da4a4eff-3b7e-4846-8f70-f075ff61222c` | Callum - Brand Spokesperson | en-AU |
+| `Telnyx.Ultra.a8a1eb38-5f15-4c1d-8722-7ac0f329727d` | Calm French Woman | fr-CA |
+| `Telnyx.Ultra.03496517-369a-4db1-8236-3d3ae459ddf7` | Calypso - ASMR Lady | en-US |
+| `Telnyx.Ultra.df872fcd-da17-4b01-a49f-a80d7aaee95e` | Cameron - Chill Companion | en |
+| `Telnyx.Ultra.30212483-5c20-479c-8121-f93cd24e30a6` | Camila | es |
+| `Telnyx.Ultra.bef2ba57-5c10-433b-b215-3bef35110a81` | Camila - Happy Conversationalist | es |
+| `Telnyx.Ultra.55deba52-bc73-4481-ab69-9c8831c8a7c3` | Camille - Friendly Expert | en-US |
+| `Telnyx.Ultra.4325f426-c4e0-418e-a0e5-97fcdfcdf8e6` | Camille - Gracious Guide | fr |
+| `Telnyx.Ultra.ed82c17b-4704-4d34-be43-5d19065acdf1` | Carl - Steady Storyteller | en |
+| `Telnyx.Ultra.1fc31370-81b1-4588-9c1a-f93793c6e01d` | Carlo - Roman Guide | en |
+| `Telnyx.Ultra.9ebc775b-c579-4c31-b37c-2306cbe9cc91` | Carlos | es |
+| `Telnyx.Ultra.727f663b-0e90-4031-90f2-558b7334425b` | Carmen - Friendly Neighbor | es |
+| `Telnyx.Ultra.bf991597-6c13-47e4-8411-91ec2de5c466` | Carol - Task Coach | en-US |
+| `Telnyx.Ultra.3797b3c0-ab71-40dc-bfa0-a8c6ff9c1e8b` | Carolina - Friendly Guide | es-MX |
+| `Telnyx.Ultra.f9836c6e-a0bd-460e-9d3c-f7299fa60f94` | Caroline - Southern Guide | en-US |
+| `Telnyx.Ultra.0b32066b-2bcc-44b9-89ab-0223a09d1606` | Carson - Angry Friendly Support | en-US |
+| `Telnyx.Ultra.86e30c1d-714b-4074-a1f2-1cb6b552fb49` | Carson - Curious Conversationalist | en-US |
+| `Telnyx.Ultra.ee8b13e7-98af-4b15-89d1-8d402be10c94` | Carson - Disgusted Friendly Support | en-US |
+| `Telnyx.Ultra.4df027cb-2920-4a1f-8c34-f21529d5c3fe` | Carson - Friendly Support | en-US |
+| `Telnyx.Ultra.96c64eb5-a945-448f-9710-980abe7a514c` | Carson - Friendly Support | en-US |
+| `Telnyx.Ultra.3246e36c-ac8c-418d-83cd-4eaad5a3b887` | Carson - Sad Friendly Support | en-US |
+| `Telnyx.Ultra.5c43e078-5ba4-4e1f-9639-8d85a403f76a` | Carson - Scared Friendly Support | en-US |
+| `Telnyx.Ultra.66f5935b-af2e-4ec9-bb3e-59112e9ddc93` | Carson - Surprised Friendly Support | en-US |
+| `Telnyx.Ultra.4f7f1324-1853-48a6-b294-4e78e8036a83` | Casper - Gentle Narrator | en-GB |
+| `Telnyx.Ultra.d7862948-75c3-4c7c-ae28-2959fe166f49` | Caspian - Oracle | en-GB |
+| `Telnyx.Ultra.162e0f37-8504-474c-bb33-c606c01890dc` | Catalina - Neighborly Guide | es-CO |
+| `Telnyx.Ultra.e8e5fffb-252c-436d-b842-8879b84445b6` | Cathy - Coworker | en-US |
+| `Telnyx.Ultra.0caedb75-417f-4e36-9b64-c21354cb94c8` | Cees - Nordic Narrator | sv |
+| `Telnyx.Ultra.ca566b43-944e-4474-b494-7d9f0695f307` | Celine - Soothing Presence | en |
+| `Telnyx.Ultra.3af40927-948e-429b-b92d-e2158f79fb9f` | Cera - Lighthearted Muse | en |
+| `Telnyx.Ultra.aaa0bf6d-bc07-40f2-bc6b-66afc5fd42f6` | Chakrit - Reliable Communicator | th |
+| `Telnyx.Ultra.356f4a89-d056-4e2e-8c73-865fa4d3af0a` | Chandler - Easygoing Pal | en |
+| `Telnyx.Ultra.71a7ad14-091c-4e8e-a314-022ece01c121` | Charlotte - Heiress | en-GB |
+| `Telnyx.Ultra.59cb0f89-5d66-49f8-b965-f72b252789e0` | Chase - Steady Helper | en-US |
+| `Telnyx.Ultra.f762e181-ddc7-486e-9a48-636bd7e229d4` | Chloe - Persuasive Lady | en-US |
+| `Telnyx.Ultra.3264ada2-4a79-4666-badc-49e2267be692` | Christian | de |
+| `Telnyx.Ultra.1242fb95-7ddd-44ac-8a05-9e8a22a6137d` | Cindy - Receptionist | en-US |
+| `Telnyx.Ultra.f039066f-cdb7-45ed-b51d-1034ae2f04a0` | Cindy Baker - Receptionist | en-US |
+| `Telnyx.Ultra.01eaafa9-308a-4276-a017-6ab0cf061b1f` | Clara - Instructor | en-US |
+| `Telnyx.Ultra.41534e16-2966-4c6b-9670-111411def906` | Clarence - Newsman | en-US |
+| `Telnyx.Ultra.c78dd7ae-6692-4c44-a2a2-834e365afe60` | Clark - Trustworthy Expert | en |
+| `Telnyx.Ultra.c0f43c66-9f21-4034-b485-8f1d3340d759` | Clarkson - Executive Tone | en |
+| `Telnyx.Ultra.f80e7298-93f5-46d0-86f2-b8f29cfc88bd` | Claudia - Welcoming Lady | en-US |
+| `Telnyx.Ultra.4111bc29-d7ff-4a15-90db-819f7b4f7706` | Clementine - Hospitable Host | en-US |
+| `Telnyx.Ultra.db69127a-dbaf-4fa9-b425-2fe67680c348` | Clint - Rugged Actor | en |
+| `Telnyx.Ultra.98a34ef2-2140-4c28-9c71-663dc4dd7022` | Clyde - Calm Narrator | en-US |
+| `Telnyx.Ultra.18f8d87b-0da9-4efa-b504-4580e303f7db` | Colby - Lively Guy | en |
+| `Telnyx.Ultra.3e39e9a5-585c-4f5f-bac6-5e4905c51095` | Cole - Clear Communicator | en-US |
+| `Telnyx.Ultra.e39b9fc0-23f5-4616-962a-da99c8ccb1dc` | Colin - Assured Guide | en |
+| `Telnyx.Ultra.8d8ce8c9-44a4-46c4-b10f-9a927b99a853` | Connie - Candid Conversationalist | en-US |
+| `Telnyx.Ultra.92c41dd4-04aa-45de-8504-a92b40cb8818` | Connor - Grateful Person | en-US |
+| `Telnyx.Ultra.1ec736fa-db96-4eea-9299-235ce2cb7a0e` | Conor - Decisive Agent | en-IE |
+| `Telnyx.Ultra.9c8880b2-ccf9-4730-b805-cea23df247d7` | Conrad - Seasoned Support | en |
+| `Telnyx.Ultra.49743b08-0f5d-4741-839c-b12933853780` | Cooper - Friendly Mate | en-AU |
+| `Telnyx.Ultra.630ed21c-2c5c-41cf-9d82-10a7fd668370` | Corey - Supportive Buddy | en-US |
+| `Telnyx.Ultra.41468051-3a85-4b68-92ad-64add250d369` | Cory - Relaxed Voice | en |
+| `Telnyx.Ultra.3a1546bd-6781-4376-984d-70b4e9f3d2c4` | Dafna - Supportive Guide | he |
+| `Telnyx.Ultra.e8a863c6-22c7-4671-86ca-91cacffc038d` | Daisuke - Businessman | ja |
+| `Telnyx.Ultra.32b3f3c5-7171-46aa-abe7-b598964aa793` | Daisy - Reading Girl | en-US |
+| `Telnyx.Ultra.23e9e50a-4ea2-447b-b589-df90dbb848a2` | Dallas - Fireside Friend | en-US |
+| `Telnyx.Ultra.dbfa416f-d5c3-4006-854b-235ef6bdf4fd` | Damon - Commanding Narrator | en |
+| `Telnyx.Ultra.cc00e582-ed66-4004-8336-0175b85c85f6` | Dana - Balanced Spirit | en |
+| `Telnyx.Ultra.47c38ca4-5f35-497b-b1a3-415245fb35e1` | Daniel - Modern Assistant | en-US |
+| `Telnyx.Ultra.5c5ad5e7-1020-476b-8b91-fdcbe9cc313c` | Daniela - Relaxed Woman | es-MX |
+| `Telnyx.Ultra.09ed0318-2f4a-41b1-abe5-d11da7537c31` | Daphne - Excited Woman | en-US |
+| `Telnyx.Ultra.25b7aaa6-1670-42dc-b791-419322400803` | Daria - Decisive Dispatcher | ru |
+| `Telnyx.Ultra.23112795-d54e-4560-9568-791a87c30201` | Darius - Engaging Narrator | en |
+| `Telnyx.Ultra.996a8b96-4804-46f0-8e05-3fd4ef1a87cd` | Darla - Resolution Agent | en-CA |
+| `Telnyx.Ultra.fd098a10-ba9e-445e-b144-be2a9f3dac02` | David - Angry Greeter | en-US |
+| `Telnyx.Ultra.b08c966e-2146-4592-99eb-3171a714a43c` | David - Curious Greeter | en-US |
+| `Telnyx.Ultra.9d2b4a7f-7ced-4fb8-b570-9ce21fb931c8` | David - Disgusted Greeter | en-US |
+| `Telnyx.Ultra.da69d796-4603-4419-8a95-293bfc5679eb` | David - Greeter | en-US |
+| `Telnyx.Ultra.6b622a1d-906f-44af-b60c-7bef365bf124` | David - Happy Greeter | en-US |
+| `Telnyx.Ultra.c4e848dc-d4fd-4bc8-90ea-8525563ec0e5` | David - Sad Greeter | en-US |
+| `Telnyx.Ultra.a3a4fe2a-d402-41d1-be7d-28f71eda755f` | David - Scared Greeter | en-US |
+| `Telnyx.Ultra.10d17ae0-8f64-472a-be00-f00a98c729e0` | David - Surprised Greeter | en-US |
+| `Telnyx.Ultra.90c896fa-aaa1-41af-a612-5267636440a3` | Dean - Laidback Pal | en |
+| `Telnyx.Ultra.8a1b8af0-c4f6-423f-a268-5507fd4aefdf` | Denise - Professional Woman | en |
+| `Telnyx.Ultra.68fb6747-b6ea-4c44-a18e-4e29921424d3` | Derek - Deep Advisor | en-US |
+| `Telnyx.Ultra.5cf0e4d9-ca2b-4fd5-81fa-89db3b645539` | Derrick - Professional Man | en |
+| `Telnyx.Ultra.50849023-76e9-46c7-af52-9ec39888a165` | Despina - Motherly Woman | el |
+| `Telnyx.Ultra.910fb75e-1d20-4840-ac63-ac6b26a71bdc` | Dev\t- Friendly Host | hi |
+| `Telnyx.Ultra.1259b7e3-cb8a-43df-9446-30971a46b8b0` | Devansh - Warm Support Agent | en-IN |
+| `Telnyx.Ultra.87a983d8-3471-4c4b-9ade-f1d10a4110ac` | Devin - Relaxed Spirit | en |
+| `Telnyx.Ultra.083de431-6b5c-4b18-a2dc-264eafa205f2` | Diana - Animated Narrator | en |
+| `Telnyx.Ultra.ea93f57f-7c71-4d79-aeaa-0a39b150f6ca` | Diana - Gentle Mom | en |
+| `Telnyx.Ultra.a8136a0c-9642-497a-882d-8d591bdcb2fa` | Diane - Service Assistant | en-US |
+| `Telnyx.Ultra.399002e9-7f7d-42d4-a6a8-9b91bd809b9d` | Diego - Hype Guy | es |
+| `Telnyx.Ultra.2be00b67-d53f-4eb5-89e7-96c224d56fbc` | Dieter - Commercial Man | de |
+| `Telnyx.Ultra.218a8026-7a26-4dc5-9753-9e75dffe1ea6` | Dina - Trusted Advisor | ar |
+| `Telnyx.Ultra.fbee0e7d-a83a-4082-bad1-13c70f86da4e` | Diogo - Promotion Lead | pt-PT |
+| `Telnyx.Ultra.7c6219d2-e8d2-462c-89d8-7ecba7c75d65` | Divya - Joyful Narrator | kn |
+| `Telnyx.Ultra.d2d3584d-1b44-428e-aab1-30255d28d978` | Diya - Service Specialist | hi |
+| `Telnyx.Ultra.888b7df4-e165-4852-bfec-0ab2b96aaa46` | Dmitri - Gentle Voice | ru |
+| `Telnyx.Ultra.59697755-8cfb-4ccf-9da4-f2201d06b067` | Dominic - Sportscaster | en |
+| `Telnyx.Ultra.d709a7e8-9495-4247-aef0-01b3207d11bf` | Donny - Steady Presence | en |
+| `Telnyx.Ultra.c0832d40-57c5-4a34-991a-907b2cf0bfbf` | Doreen - Decisive Coordinator | en-US |
+| `Telnyx.Ultra.0c8ed86e-6c64-40f0-b252-b773911de6bb` | Doris - Friend | en-US |
+| `Telnyx.Ultra.66c6b81c-ddb7-4892-bdd5-19b5a7be38e7` | Dorothy -  Easy Charm | en |
+| `Telnyx.Ultra.e3827ec5-697a-4b7c-9704-1a23041bbc51` | Dottie - Sweet Gal | en-US |
+| `Telnyx.Ultra.b2222537-1561-4425-8c3c-e1aca96ad853` | Dylan - Chill Companion | en |
+| `Telnyx.Ultra.83ae58a1-7e97-4b94-b03f-e4cc0a10d8af` | Eden - Clear Advisor | en-US |
+| `Telnyx.Ultra.c8605446-247c-4d39-acd4-8f4c28aa363c` | Edith - Matriarch | en-US |
+| `Telnyx.Ultra.19e399df-5b30-4fba-9d1d-99434f993614` | Edna - Graceful Veteran | en |
+| `Telnyx.Ultra.921034a2-aace-4ef7-87b1-b9bc455c9a15` | Edric - Refined Mentor | en |
+| `Telnyx.Ultra.5fb68a42-0ed7-46fa-8a8f-ad4b332fbf6f` | Edward - Persuasive Promoter | en |
+| `Telnyx.Ultra.daa4d6bb-da62-4e16-8065-76cd87942475` | Eitan - Modern Communicator | he |
+| `Telnyx.Ultra.f0377496-2708-4cc9-b2f8-1b7fdb5e1a2a` | Elaine - Confident Guide | en |
+| `Telnyx.Ultra.7d7d769c-5ab1-4dd5-bb17-ec8d4b69d03d` | Eleanor - Composed Clarifier | en-AU |
+| `Telnyx.Ultra.cefcb124-080b-4655-b31f-932f3ee743de` | Elena - Narrator | es-ES |
+| `Telnyx.Ultra.c0c52199-e35f-4681-b68a-949ee499617e` | Eleni - Troubleshooter | de |
+| `Telnyx.Ultra.6a176356-ada1-4b48-b2ae-3a3fdd485680` | Elias - Night Warden | en-US |
+| `Telnyx.Ultra.8036098f-cff4-401e-bfba-f0a6a6e5e49b` | Elif - Structured Supporter | tr |
+| `Telnyx.Ultra.00510a15-4216-4fdc-a0ab-05d74cd9f795` | Elina - Clear Presenter Woman | sv |
+| `Telnyx.Ultra.7a8ae0b6-504a-49af-92d3-4e7e2eb84ca1` | Eliott - Positive Spirit | en |
+| `Telnyx.Ultra.64b2a604-f0de-449f-9d90-255602357c05` | Elise - Helpful Voice | en |
+| `Telnyx.Ultra.248be419-c632-4f23-adf1-5324ed7dbf1d` | Elizabeth - Manager | en-US |
+| `Telnyx.Ultra.2a12b36c-7f9b-4c3a-9f7a-72731b15323a` | Ella - Caring Scout | en-AU |
+| `Telnyx.Ultra.8d2c9eda-31df-477a-9eb6-df6f00b82845` | Ellie Mae - Friendly Companion | en-US |
+| `Telnyx.Ultra.7edf9efb-58fc-46ba-a648-3a00a86b111b` | Elliott - Reflective Storyteller | en-US |
+| `Telnyx.Ultra.6c64b57a-bc65-48e4-bff4-12dbe85606cd` | Eloise - Dialogue Anchor | fr-FR |
+| `Telnyx.Ultra.43a317e9-f1b9-45bf-bbdb-1d4a52e46f0d` | Emi | de |
+| `Telnyx.Ultra.c7eafe22-8b71-40cd-850b-c5a3bbd8f8d2` | Emi - Soft-Spoken Friend | ja |
+| `Telnyx.Ultra.b0689631-eee7-4a6c-bb86-195f1d267c2e` | Emilio - Friendly Optimist | es-MX |
+| `Telnyx.Ultra.f6ce3444-478b-4ce4-982e-bcb72dffe7aa` | Emily - Easygoing Pal | en |
+| `Telnyx.Ultra.f6ff7c0c-e396-40a9-a70b-f7607edb6937` | Emma - Customer Care Line | en-US |
+| `Telnyx.Ultra.735287ee-ce91-4b08-8de4-63315c5ba1fb` | Emmanuelle | fr-FR |
+| `Telnyx.Ultra.39f753ef-b0eb-41cd-aa53-2f3c284f948f` | Emre - Calming Speaker | tr |
+| `Telnyx.Ultra.32a806e8-894e-41ad-a4d5-6d9154d7b1e6` | Erik - Social Speaker | sv |
+| `Telnyx.Ultra.8918ddfe-2ad4-4cc8-a573-e020ca13f3f5` | Erin - Joyful Guide | en-US |
+| `Telnyx.Ultra.ab636c8b-9960-4fb3-bb0c-b7b655fb9745` | Erwan - Everyday Speaker | fr-FR |
+| `Telnyx.Ultra.1a0c6bb2-bc1b-476e-8d45-56a66300362b` | Esther - Gracious Helper | en-US |
+| `Telnyx.Ultra.e97c3b37-1aa5-46af-afb7-9545086aaa92` | Eszter - Customer Companion | hu |
+| `Telnyx.Ultra.f0e50f2a-9116-4510-9c5b-fec928daff4b` | Ethan - Casual Assistant | en-AU |
+| `Telnyx.Ultra.bd89603f-0efb-4721-a0c8-d10b3642acc3` | Evan - Practical Guide | en-US |
+| `Telnyx.Ultra.3c7dfd17-3fa8-47aa-aacc-6313fe025442` | Evelyn - Digital Assistante | en-GB |
+| `Telnyx.Ultra.320f7211-3dc3-4292-89b1-3661e8cac27c` | Evelyn - Peaceful Whisper | en |
+| `Telnyx.Ultra.e5d4c33a-d8f6-46e8-a10f-b5afecc35648` | Evie - Engaging Expert | en-GB |
+| `Telnyx.Ultra.f8aacd6e-1ac2-42d3-bcbf-125336ecd0f2` | Ewa\t- Efficient Envoy | pl |
+| `Telnyx.Ultra.a976c076-3e31-4bf2-a178-8c3ce3d52b2a` | Eyal - Grounded Guide | he |
+| `Telnyx.Ultra.8281db18-6ac5-47bb-91a8-ce23a1f1d951` | Faiz - Family Guide | ms |
+| `Telnyx.Ultra.731ace69-ee17-41bc-8c6f-665c9f1db95c` | Fatima - Graceful Guide | ar |
+| `Telnyx.Ultra.caa06a3e-c85d-459d-a1c0-4a25eeb60aeb` | Faye - Hospitable Neighbor | en-US |
+| `Telnyx.Ultra.b4b8e2af-6139-466e-a93a-30c20d2e1fc5` | Fernanda - Friendly Guide | es-MX |
+| `Telnyx.Ultra.a01c369f-6d2d-4185-bc20-b32c225eab70` | Fiona - Witty Woman | en-GB |
+| `Telnyx.Ultra.de075c71-b2dd-4723-848d-ea9aa9cd010b` | Fleur - Vibrant Voice | nl |
+| `Telnyx.Ultra.d609f27f-f1a4-410f-85bb-10037b4fba99` | Francesca - Elegant Partner | it |
+| `Telnyx.Ultra.6c6b05bf-ae5f-4013-82ab-7348e99ffdb2` | Freja - Nordic Reader | sv |
+| `Telnyx.Ultra.8832a0b5-47b2-4751-bb22-6a8e2149303d` | French Narrator Lady | fr-FR |
+| `Telnyx.Ultra.5c3c89e5-535f-43ef-b14d-f8ffe148c1f0` | French Narrator Man | fr-FR |
+| `Telnyx.Ultra.ab7c61f5-3daa-47dd-a23b-4ac0aac5f5c3` | Friendly French Man | fr-FR |
+| `Telnyx.Ultra.36e0c00b-1bfd-4ad7-a0e8-928d4cadca00` | Gabor - Reassuring Voice | hu |
+| `Telnyx.Ultra.c58bda25-abd5-4c72-97a2-4dbe049b368d` | Garrett - Enthusiastic Pal | en |
+| `Telnyx.Ultra.dc52ada6-0e11-4684-a8fa-e0af5b7bdcb2` | Gary - Composed Advisor | en-GB |
+| `Telnyx.Ultra.f4a3a8e4-694c-4c45-9ca0-27caf97901b5` | Gavin - Friendly Vibe | en |
+| `Telnyx.Ultra.62ae83ad-4f6a-430b-af41-a9bede9286ca` | Gemma - Decisive Agent | en-GB |
+| `Telnyx.Ultra.4bc3cb8c-adb9-4bb8-b5d5-cbbef950b991` | George - Composed Consultant | en-GB |
+| `Telnyx.Ultra.d132064c-b931-4a80-bf0d-02a331ec4572` | Georgi - Conversationalist | bg |
+| `Telnyx.Ultra.5deeaea9-c3cf-4288-82ec-22d8f04eb158` | Gerard | fr-FR |
+| `Telnyx.Ultra.2d693a9c-fc75-4313-aefb-c9cfaa17dd83` | Gerard - Monsieur Noir | fr-FR |
+| `Telnyx.Ultra.029c3c7a-b6d9-44f0-814b-200d849830ff` | Giancarlo - Support Leader | it |
+| `Telnyx.Ultra.84b969ad-19c7-428d-b742-48d387f7f138` | Gil - Friendly Host | he |
+| `Telnyx.Ultra.36d94908-c5b9-4014-b521-e69aee5bead0` | Giulia - Teacherly Voice | it |
+| `Telnyx.Ultra.88b329db-85d7-47cc-a5c5-98225a756721` | Giuseppe - Retro Man | it |
+| `Telnyx.Ultra.58e531e3-b212-49df-adee-c335a19c2429` | Gonzalo - Grounded Storyteller | es-ES |
+| `Telnyx.Ultra.a4a16c5e-5902-4732-b9b6-2a48efd2e11b` | Grace - Helpful Hand | en-AU |
+| `Telnyx.Ultra.1628cfcd-a161-4e47-98ff-46bffa4ab290` | Graham - Assured Helper | en |
+| `Telnyx.Ultra.d46abd1d-2d02-43e8-819f-51fb652c1c61` | Grant - Friendly Support | en-US |
+| `Telnyx.Ultra.a0e99841-438c-4a64-b679-ae501e7d6091` | Greg - Supporter | en-US |
+| `Telnyx.Ultra.34d923aa-c3b5-4f21-aac7-2c1f12730d4b` | Griffin - Excited Narrator | en-GB |
+| `Telnyx.Ultra.c99d36f3-5ffd-4253-803a-535c1bc9c306` | Griffin - Narrator | en-GB |
+| `Telnyx.Ultra.dbaa1a0d-e004-442d-866f-5431b18d8d54` | Guadalupe - Wise Storyteller | es-MX |
+| `Telnyx.Ultra.8bacd442-a107-4ec1-b6f1-2fcb3f6f4d56` | Gurpreet - Companion | pa |
+| `Telnyx.Ultra.28a942b5-74f3-47bb-9b56-4c3f2562d3ba` | Gustavo - Steady Advisor | pt-BR |
+| `Telnyx.Ultra.4dd4630e-19e0-4243-bca0-676ff85119b7` | Haeun - Polished Presence | ko |
+| `Telnyx.Ultra.cec7cae1-ac8b-4a59-9eac-ec48366f37ae` | Haley - Engaging Friend | en |
+| `Telnyx.Ultra.db408a93-859c-4a0a-b6a2-220c074cc90d` | Hana - Easygoing Support | en |
+| `Telnyx.Ultra.16212f18-4955-4be9-a6cd-2196ce2c11d1` | Hao - Friendly Guy | zh |
+| `Telnyx.Ultra.a892d232-f705-40d7-bc8d-e368b295ec2a` | Harlan - Vintage Tone | en |
+| `Telnyx.Ultra.fdf6303b-4cfa-4f8e-b7ae-acb398984cf9` | Harley - Comforting Voice | en |
+| `Telnyx.Ultra.c5d00dfb-501f-43f3-8e79-c810d24f5acd` | Harper - Conversationalist | en |
+| `Telnyx.Ultra.df89f42f-f285-4613-adbf-14eedcec4c9e` | Harrison - Diligent Detailer | en-GB |
+| `Telnyx.Ultra.861213b7-f057-45c8-9527-0f4c144f1a03` | Haruka - Gracious Guide | ja |
+| `Telnyx.Ultra.664aec8a-64a4-4437-8a0b-a61aa4f51fe6` | Hassan - Authoritative Narrator | ar |
+| `Telnyx.Ultra.eb7d0d3b-e427-483b-bbca-1c009c33f8a7` | Heath - Calm & Composed | en-AU |
+| `Telnyx.Ultra.b042270c-d46f-4d4f-8fb0-7dd7c5fe5615` | Hector - Tour Leader | es-ES |
+| `Telnyx.Ultra.b0f46533-d4bb-493f-a26f-a99e1f2e86e3` | Heitor - Easygoing Local | pt-BR |
+| `Telnyx.Ultra.65c34eec-42c9-4a75-a8bd-b676fb847b72` | Helmi - Warm Friend | fi |
+| `Telnyx.Ultra.eede54e1-c038-4b4d-b655-809eeaa45c4c` | Henrik - Refined Narrator | sv |
+| `Telnyx.Ultra.d1cbea67-e4d3-47cd-be2a-2bd4e646b002` | Henrik\t- Steady Analyst | de |
+| `Telnyx.Ultra.87286a8d-7ea7-4235-a41a-dd9fa6630feb` | Henry - Plainspoken Guy | en-US |
+| `Telnyx.Ultra.f6f315e4-4fb3-4440-92ea-2edb01f9bf1b` | Hermann - Businessman | de |
+| `Telnyx.Ultra.d0ff6870-dd30-420d-8568-d756d806ea62` | Hinata\t- Graceful Guide | ja |
+| `Telnyx.Ultra.1d210168-d764-462c-8ab6-288a6d5a9579` | Hiroshi - Dependable Director | ja |
+| `Telnyx.Ultra.aef96ff9-4578-4b5d-9744-7fb347cbe4d4` | Holly - Joyful Presence | en |
+| `Telnyx.Ultra.0d42f0f6-c019-4082-b250-1c16133d1c82` | Howard - Approachable Man | en-US |
+| `Telnyx.Ultra.7a5d4663-88ae-47b7-808e-8f9b9ee4127b` | Hua - Sunny Support | zh |
+| `Telnyx.Ultra.002622d8-19d0-4567-a16a-f99c7397c062` | Huda - Approachable Speaker | ar |
+| `Telnyx.Ultra.4cf80313-54dc-4ca9-a17c-3e5b8f68a78c` | Hugh - Confident Veteran | en |
+| `Telnyx.Ultra.1463a4e1-56a1-4b41-b257-728d56e93605` | Hugo - Teatime Friend | en-GB |
+| `Telnyx.Ultra.90dba946-774b-40ed-98d9-ac3835117827` | Hyerin\t- Graceful Host | ko |
+| `Telnyx.Ultra.5a93ae96-9e3e-4b9d-8575-5f62b7de6d0f` | Imogen - Polished Guide | en-GB |
+| `Telnyx.Ultra.bdab08ad-4137-4548-b9db-6142854c7525` | Imran - Hindi Film Actor | hi |
+| `Telnyx.Ultra.f852eb8d-a177-48cd-bf63-7e4dcab61a36` | Ingrid - Peaceful Guide | sv |
+| `Telnyx.Ultra.7c58f4a4-a72c-42fa-a503-41b9408820f3` | Inès\t- Poised Communicator | fr-FR |
+| `Telnyx.Ultra.642014de-c0e3-4133-adc0-36b5309c23e6` | Irina - Poetic Voice | ru |
+| `Telnyx.Ultra.c894559e-d529-4d70-a6fb-3330ecf7ef6b` | Iris - Friendly Specialist | en-US |
+| `Telnyx.Ultra.60e94cf5-8069-459f-a91e-3ff852a51107` | Isa - Empathetic Ear | nl |
+| `Telnyx.Ultra.f39bf583-3b3d-402f-9ffb-6179d9ec3e35` | Isabel - Confident Woman | pt-PT |
+| `Telnyx.Ultra.c0c374aa-09be-42d9-9828-4d2d7df86962` | Isabel - Teacher | es-ES |
+| `Telnyx.Ultra.c9611be8-aae9-4a93-bb1c-98dd6b7d52a4` | Isabella - Warm Storyteller | pt-BR |
+| `Telnyx.Ultra.22f1a356-56c2-4428-bc91-2ab2e6d0c215` | Isabelle - Professional Liaison | fr-CA |
+| `Telnyx.Ultra.4590a461-bc68-4a50-8d14-ac04f5923d22` | Isha - Learner | gu |
+| `Telnyx.Ultra.fd2ada67-c2d9-4afe-b474-6386b87d8fc3` | Ishan - Ally | hi |
+| `Telnyx.Ultra.eef47c0d-cb49-4160-a4a0-6b97ed4c81e6` | Isla - Serene Flow | en |
+| `Telnyx.Ultra.db3dc8a6-d8f8-4ca5-add9-559c849a6fa0` | Itai - Measured Advisor | he |
+| `Telnyx.Ultra.a1a16724-b1f3-4b27-9e47-8a175115e93c` | Ivan - Bar Companion | hr |
+| `Telnyx.Ultra.fcbecbcc-0cef-4615-8b5a-712fe1b39dd0` | Ivana - Instruction Provider | bg |
+| `Telnyx.Ultra.6776173b-fd72-460d-89b3-d85812ee518d` | Jace - Cool Conversationalist | en |
+| `Telnyx.Ultra.9626c31c-bec5-4cca-baa8-f8ba9e84c8bc` | Jacqueline - Reassuring Agent | en-US |
+| `Telnyx.Ultra.89f4372f-1f73-4b85-8e1e-5d24ed8bc826` | Jaewon - Steady Advisor | ko |
+| `Telnyx.Ultra.729651dc-c6c3-4ee5-97fa-350da1f88600` | Jake - Sidekick | en-US |
+| `Telnyx.Ultra.2a3503b2-b6b6-4534-a224-e8c0679cec4a` | Jakub - Gentle Guide | pl |
+| `Telnyx.Ultra.42b39f37-515f-4eee-8546-73e841679c1d` | James - Navigator | en-US |
+| `Telnyx.Ultra.a5136bf9-224c-4d76-b823-52bd5efcffcc` | Jameson - Easygoing Support | en-US |
+| `Telnyx.Ultra.b5c1bab5-f036-481f-9295-4db6f06f6443` | Jamie - Comforting Presence | en |
+| `Telnyx.Ultra.42f14755-88c3-4124-aae3-5cc3a9618e8f` | Jan | de |
+| `Telnyx.Ultra.82db1f84-5b96-4364-b04a-4c7ff80e2f8a` | Jan - Capable Coordinator | cs |
+| `Telnyx.Ultra.bdc4a3ce-2e22-4398-8cd6-76b7160d2298` | Jana - Crisp Conversationalist | cs |
+| `Telnyx.Ultra.2a17e905-8f14-4db7-9b9d-9223a8e3f278` | Jane - Digital Guide | en-US |
+| `Telnyx.Ultra.58fbaf73-d7de-4e82-a6b3-118180e7057c` | Janet - Sunny Speaker | en-US |
+| `Telnyx.Ultra.69092565-1c93-4a88-9f2c-ac8cddaf9f65` | Janice - Engaging Tone | en |
+| `Telnyx.Ultra.7ea5e9c2-b719-4dc3-b870-5ba5f14d31d8` | Janvi - Steady Agent | en-IN |
+| `Telnyx.Ultra.8ccd7fcd-846a-4594-bde2-5feec2cba73a` | Jari - Reliable Representative | fi |
+| `Telnyx.Ultra.3faa81ae-d3d8-4ab1-9e44-e50e46d33c30` | Jasper - Service Specialist | en-GB |
+| `Telnyx.Ultra.e98bd614-9b9d-4031-b930-ed72482af858` | Jasper - Vibrant Stylist | en-AU |
+| `Telnyx.Ultra.991c62ce-631f-48b0-8060-2a0ebecbd15b` | Jaspreet - Commercial Woman | pa |
+| `Telnyx.Ultra.e9f0368b-3662-4a01-b037-e13ca5203c74` | Javier - Gentle Advisor | es |
+| `Telnyx.Ultra.ac197a78-cec7-4c50-93e5-93bdc1910b11` | Jennifer | de |
+| `Telnyx.Ultra.6cb8801d-259a-4bdc-978f-b45808d58cd3` | Jeremy - Energetic Promoter | en |
+| `Telnyx.Ultra.4b250449-c635-4b63-bd1d-b654b12ffcd4` | Jeroen - Clear Storyteller | nl |
+| `Telnyx.Ultra.42332792-6e9f-4b2c-a106-3ff97e34a79d` | Jerome - Empathetic Voice | tl |
+| `Telnyx.Ultra.7c1ecd2d-1c83-4d5d-a25c-b3820a274a2e` | Jeronimo - Empathetic Advisor | es-CO |
+| `Telnyx.Ultra.25d7abcb-4d6d-4aca-adce-8a1c85620c8b` | Jessica - Clear Communicator | en-US |
+| `Telnyx.Ultra.bbc5d060-50e1-45a3-87ff-191b8cea3092` | Jett - Helpful Pal | en |
+| `Telnyx.Ultra.f39d8500-0d9b-4b8b-a080-38f5188f5892` | Jewel - Commercial Announcer | en-US |
+| `Telnyx.Ultra.7e2a44d1-76b8-42b8-9507-fedfe3a803c8` | Jian - Direct Dispatcher | zh |
+| `Telnyx.Ultra.304fdbd8-65e6-40d6-ab78-f9d18b9efdf9` | Jihyun - Anchorwoman | ko |
+| `Telnyx.Ultra.e4d5f4c4-6601-4779-bee1-b3c14d629dc6` | Jillian - Happy Spirit | en |
+| `Telnyx.Ultra.6eb8965c-e295-47bd-a9e4-3eeebb3abcff` | Jing - Clear Coordinator | zh |
+| `Telnyx.Ultra.15628352-2ede-4f1b-89e6-ceda0c983fbc` | Jiwoo - Service Specialist | ko |
+| `Telnyx.Ultra.5abd2130-146a-41b1-bcdb-974ea8e19f56` | Jo - Go to Gal | en-US |
+| `Telnyx.Ultra.c9440d34-5641-427b-bbb7-80ef7462576d` | Joan - Messenger | en-US |
+| `Telnyx.Ultra.a7b8d8fa-f6e5-4908-900e-0c11d1d82519` | Joanie - Vibrant Speaker | en |
+| `Telnyx.Ultra.34575e71-908f-4ab6-ab54-b08c95d6597d` | Joey - Neighborhood Guy | en-US |
+| `Telnyx.Ultra.4b31d090-8d2d-4bcd-8a32-1c135301e26e` | Johan - Deep Consultant | en-ZA |
+| `Telnyx.Ultra.d1d9c946-7cfc-4378-85a4-07d09827cb7e` | Jolene - Warm Storyteller | en-US |
+| `Telnyx.Ultra.dff81230-ff75-49a4-af44-f6b2f43500d8` | Jonas | de |
+| `Telnyx.Ultra.87bc56aa-ab01-4baa-9071-77d497064686` | Jordan - Chill Pal | en-US |
+| `Telnyx.Ultra.7b001dff-b8b2-4da7-92e4-5c794798effa` | Jorge - Regular Guy | es-MX |
+| `Telnyx.Ultra.68db3d29-e0ab-4d4f-a5d5-e34ee47d38b7` | Joris - Command Coach | fr |
+| `Telnyx.Ultra.7d444628-dd13-442b-b687-71a6baf0c07e` | Joseph - Empathetic Voice | en-US |
+| `Telnyx.Ultra.8bfb1d08-a77a-4a7c-a4b7-af377380c6eb` | Joy - Crisp Narrator | tl |
+| `Telnyx.Ultra.5cd73b8e-703e-4f73-9e30-56876c620204` | Juan - Clear Communicator | tl |
+| `Telnyx.Ultra.c68a8bd0-f99e-4e7f-915d-a097da6d024c` | Juanita - Helpful Companion | es-MX |
+| `Telnyx.Ultra.4d3d2e9c-14e4-4802-a8d8-bd5268a73fde` | Judith - Poised Strength | en |
+| `Telnyx.Ultra.273f9ef7-9fc2-4def-88bb-ab108c6249ca` | Julia - Gentle Guide | en-GB |
+| `Telnyx.Ultra.5319c0b1-3dd1-4c00-b721-bfd2ec88ef56` | Julian - Vibrant Voice | en |
+| `Telnyx.Ultra.cc4276e6-1ebc-429a-8c7d-930993d51abc` | Julien - Polished Partner | fr-CA |
+| `Telnyx.Ultra.c9115185-0086-4cf4-bfdd-0d36425db387` | Juliette | fr-FR |
+| `Telnyx.Ultra.43e52207-96fc-4e01-aaf8-cae317e43fdb` | Kacper - Diligent Detailer | pl |
+| `Telnyx.Ultra.eda5bbff-1ff1-4886-8ef1-4e69a77640a0` | Kai - Commercial Man | zh |
+| `Telnyx.Ultra.8810fbfa-b317-4503-9974-9774d08b5897` | Kanya - Gentle Helper | th |
+| `Telnyx.Ultra.4f7b1820-6263-4615-87a7-b105768d8f64` | Kari - Crisp Coordinator | no |
+| `Telnyx.Ultra.3f4ade23-6eb4-4279-ab05-6a144947c4d5` | Karin - Companion | de |
+| `Telnyx.Ultra.ea7b5eee-39d9-40b0-b241-1910cbca9c62` | Kasia - Natural Conversationalist | pl |
+| `Telnyx.Ultra.abf68668-6549-462c-8426-1fa7b466b91d` | Katarina - Friendly Sales | sk |
+| `Telnyx.Ultra.575a5d29-1fdc-4d4e-9afa-5a9a71759864` | Katarzyna - Melodic Storyteller | pl |
+| `Telnyx.Ultra.489b647b-5662-408f-8c95-82e26ef8d29e` | Kate - Practical Voice | en-US |
+| `Telnyx.Ultra.f786b574-daa5-4673-aa0c-cbe3e8534c02` | Katie - Friendly Fixer | en-US |
+| `Telnyx.Ultra.c323c793-41f9-47b8-99dc-9b44b0440b84` | Katrine - Calm Caregiver | da |
+| `Telnyx.Ultra.9436e723-612d-4114-aeb0-fa00d4d639bf` | Katsuya - Promo Host | ja |
+| `Telnyx.Ultra.aee94121-770a-42f2-896b-314648fe5714` | Katya | uk |
+| `Telnyx.Ultra.56e35e2d-6eb6-4226-ab8b-9776515a7094` | Kavita - Customer Care Agent | hi |
+| `Telnyx.Ultra.01d7796d-ac10-4ea3-8df0-3cc04f2d25ff` | Kavitha - Clear Communicator | ta |
+| `Telnyx.Ultra.25d2c432-139c-4035-bfd6-9baaabcdd006` | Kavya - Warm Presence | ta |
+| `Telnyx.Ultra.1ac31ebd-9113-405b-9d80-4a4bbbeea91c` | Kayla - Easygoing Pal | en |
+| `Telnyx.Ultra.9fa83ce3-c3a8-4523-accc-173904582ced` | Keith - Easygoing Friend | en-US |
+| `Telnyx.Ultra.4b1e0bf9-53a0-4e9e-8664-ba1314dbcb38` | Kelly - Friendly Spirit | en |
+| `Telnyx.Ultra.050f5a7a-9d2b-4b76-84e3-2d056a0a3eb0` | Kelsey - Ball of energy | en |
+| `Telnyx.Ultra.358e650d-ac0b-4a74-b14f-aca3daa40d79` | Kendra - Smooth Communicator | en-US |
+| `Telnyx.Ultra.6b92f628-be90-497c-8f4c-3b035002df71` | Kenji - Calm Man | ja |
+| `Telnyx.Ultra.911b8b22-887f-4caf-bf87-85d834c08708` | Kenneth - Friendly Rep | en-US |
+| `Telnyx.Ultra.b068aef8-2c18-4a1d-bafb-e8f6d2239d60` | Khaled - Keen Problem-Solver | ar |
+| `Telnyx.Ultra.b0aa4612-81d2-4df3-9730-3fc064754b1f` | Khalid - Bright Energy | ar |
+| `Telnyx.Ultra.f8f5f1b2-f02d-4d8e-a40d-fd850a487b3d` | Kiara - Joyful Woman | en-IN |
+| `Telnyx.Ultra.228fca29-3a0a-435c-8728-5cb483251068` | Kiefer - Assured Tone | en |
+| `Telnyx.Ultra.eb649460-7e23-43bc-ad20-0a7a2749b938` | Kim - Cheerful Pal | en |
+| `Telnyx.Ultra.57dcab65-68ac-45a6-8480-6c4c52ec1cd1` | Kira - Trusted Confidant | en-US |
+| `Telnyx.Ultra.2578354e-4b18-4d28-832c-5943344b7085` | Klara - Empathetic Voice | de |
+| `Telnyx.Ultra.24c61c42-b538-468e-a9ad-16c7a032c9cb` | Klaus - Archivist | de |
+| `Telnyx.Ultra.c63361f8-d142-4c62-8da7-8f8149d973d6` | Krishna - Friendly Pal | en-IN |
+| `Telnyx.Ultra.a50a04b8-35ee-487e-8b87-97f0eee68a64` | Krit - Efficient Envoy | th |
+| `Telnyx.Ultra.5283efe8-07d1-4e3a-b615-2ae4a81c1b73` | Kriti - Clear Explainer | hi |
+| `Telnyx.Ultra.efa653e5-314d-46ca-9f90-70ac7d6ca71e` | Kurt - Phone Support | en |
+| `Telnyx.Ultra.c961b81c-a935-4c17-bfb3-ba2239de8c2f` | Kyle - Approachable Friend | en |
+| `Telnyx.Ultra.efc5488b-5429-4e72-aaa2-570981cf47d9` | Lacey - Sunny Soul | en |
+| `Telnyx.Ultra.7f98e662-142d-41ba-89a2-12452640ce6d` | Lakshmi - Everyday Voice | ta |
+| `Telnyx.Ultra.bf32f849-7bc9-4b91-8c62-954588efcc30` | Lan - Instructor | zh |
+| `Telnyx.Ultra.8d826d43-20ad-4c56-8d37-1048eccca1bf` | Larissa - Bright Companion | pt-BR |
+| `Telnyx.Ultra.d6dca1b6-cdd8-4e9c-823c-e03979261740` | Lars - Casual Conversationalist | no |
+| `Telnyx.Ultra.b426013c-002b-4e89-8874-8cd20b68373a` | Latha - Friendly Host | ml |
+| `Telnyx.Ultra.cb6a8744-41b0-4cdc-b643-fabeb545c6a9` | Laurel - Caring Sister | en |
+| `Telnyx.Ultra.a33f7a4c-100f-41cf-a1fd-5822e8fc253f` | Lauren - Lively Narrator | en-US |
+| `Telnyx.Ultra.7345dfa5-ee04-44d2-abf4-29262b880ab4` | Laurent - Dependable Anchor | fr-FR |
+| `Telnyx.Ultra.d2c66146-c1c8-4c3a-9870-38e5a6b72442` | Lawson - Suave Storyteller | en |
+| `Telnyx.Ultra.999df508-4de5-40a7-8bd3-8c12f678c284` | Layla - Casual Friend | en |
+| `Telnyx.Ultra.1ade29fc-6b82-4607-9e70-361720139b12` | Lea - Breezy Voice | de |
+| `Telnyx.Ultra.758a5cff-af0b-4bdf-84bd-4c1b5525c249` | Leander | de |
+| `Telnyx.Ultra.4ab1ff51-476d-42bb-8019-4d315f7c0c05` | Lena - Muse | de |
+| `Telnyx.Ultra.adc919b3-6ebf-47fd-8a46-27c5169d6d94` | Leni - Daymaker | de |
+| `Telnyx.Ultra.adff5dcb-249f-463f-aa89-d98d8ca05e88` | Leo | fr-FR |
+| `Telnyx.Ultra.0834f3df-e650-4766-a20c-5a93a43aa6e3` | Leo - Genuine Companion | en |
+| `Telnyx.Ultra.dbebd077-80cb-4bcf-b43b-4552f96341bb` | Levan - Support Guide | ka |
+| `Telnyx.Ultra.4703c250-66e4-4682-a223-0a60acafcfc0` | Levi - Steady Spokesman | en-US |
+| `Telnyx.Ultra.56b87df1-594d-4135-992c-1112bb504c59` | Lexi - Fun Friend | en-US |
+| `Telnyx.Ultra.fa7bfcdc-603c-4bf1-a600-a371400d2f8c` | Leyla - Story Companion | tr |
+| `Telnyx.Ultra.41f3c367-e0a8-4a85-89e0-c27bae9c9b6d` | Liam - Guy Next Door | en-AU |
+| `Telnyx.Ultra.8e8f222d-c817-4cc5-822b-8bf76ca7e98d` | Lien - Gentle Coordinator | vi |
+| `Telnyx.Ultra.21d8f579-b69c-42f0-8313-c50c6be05531` | Liezel - Steady Informer | tl |
+| `Telnyx.Ultra.4af7c703-f2a9-45dd-a7fd-724cf7efc371` | Lila - Meditation Guide | en-US |
+| `Telnyx.Ultra.b503f001-80b8-49d3-8666-8d7700fc5ca2` | Liliana - Doting Mother | es |
+| `Telnyx.Ultra.dda51133-5d43-4a3b-84e6-e68c13f60cba` | Lily - Casual Pal | en-US |
+| `Telnyx.Ultra.829ccd10-f8b3-43cd-b8a0-4aeaa81f3b30` | Linda - Conversational Guide | en-US |
+| `Telnyx.Ultra.a38e4e85-e815-43ab-acf1-907c4688dd6c` | Lindsey - Relaxed Rep | en-US |
+| `Telnyx.Ultra.935a9060-373c-49e4-b078-f4ea6326987a` | Linh - Soft Presence | vi |
+| `Telnyx.Ultra.b54dc7e4-afca-4877-aa67-2c725419b600` | Liora - Gentle Guide | he |
+| `Telnyx.Ultra.c1b9a03e-747f-40ad-8e7b-18caf8aaac0b` | Lira - Tranquil Voice | en |
+| `Telnyx.Ultra.653b9445-ae0c-4312-a3ce-375504cff31e` | Liu - Plain Talker | zh |
+| `Telnyx.Ultra.d718e944-b313-4998-b011-d1cc078d4ef3` | Liv - Casual Friend | it |
+| `Telnyx.Ultra.ea7c252f-6cb1-45f5-8be9-b4f6ac282242` | Logan - Approachable Friend | en |
+| `Telnyx.Ultra.0b66a153-548f-4f2c-b734-09a13b0bd163` | Lorelei - Helpful Guide | de |
+| `Telnyx.Ultra.ee16f140-f6dc-490e-a1ed-c1d537ea0086` | Lorenzo - Hospitable Host | it |
+| `Telnyx.Ultra.25bf938a-025c-4dd0-906f-8cf8be2e26e9` | Loretta - Still Comfort | en-US |
+| `Telnyx.Ultra.57c63422-d911-4666-815b-0c332e4d7d6a` | Lori - Cheerleader | en-AU |
+| `Telnyx.Ultra.5cc54223-ec0c-4c50-87e9-b9947264e1f4` | Lori - Cheerleader | en-AU |
+| `Telnyx.Ultra.ba0add52-783c-4ec0-8b9c-7a6b60f99d1c` | Lori - Curious Cheerleader | en-AU |
+| `Telnyx.Ultra.414da90b-16b3-4e88-86f5-3c3945e8fa4b` | Lori - Disgusted Cheerleader | en-AU |
+| `Telnyx.Ultra.8843adfb-77d3-455a-86f9-de0651555ec6` | Lori - Happy Cheerleader | en-AU |
+| `Telnyx.Ultra.2d01710c-7c77-4cf1-b0d0-5902a25f6e17` | Lori - Sad Cheerleader | en-AU |
+| `Telnyx.Ultra.fb78f09f-f998-4061-ad51-d71f90388f0e` | Lori - Scared Cheerleader | en-AU |
+| `Telnyx.Ultra.c2da2a3e-b0d6-46bf-a09a-68562617a50a` | Lori - Surprised Cheerleader | en-AU |
+| `Telnyx.Ultra.700d1ee3-a641-4018-ba6e-899dcadc9e2b` | Luana - Public Speaker | pt-BR |
+| `Telnyx.Ultra.e019ed7e-6079-4467-bc7f-b599a5dccf6f` | Luca - Everyday Friend | it |
+| `Telnyx.Ultra.af482421-80f4-4379-b00c-a118def29cde` | Lucas - Storyteller | nl |
+| `Telnyx.Ultra.c0925108-d541-4dc4-bbae-39f4e57ba10c` | Lucia - Radiant Host | es-ES |
+| `Telnyx.Ultra.2f251ac3-89a9-4a77-a452-704b474ccd01` | Lucy - Capable Coordinator | en-GB |
+| `Telnyx.Ultra.b5aa8098-49ef-475d-89b0-c9262ecf33fd` | Luis - News Caster | es-ES |
+| `Telnyx.Ultra.e00dd3df-19e7-4cd4-827a-7ff6687b6954` | Lukas - Professional | de |
+| `Telnyx.Ultra.61001bc6-9064-40a4-b8b2-29178e0fa558` | Luke - Angry Broadway Voice | en-US |
+| `Telnyx.Ultra.7b2c0a2e-3dd3-4a44-b16b-26ecd8134279` | Luke - Broadway Voice | en-US |
+| `Telnyx.Ultra.8e14933d-ecd7-402b-9505-795130d69b35` | Luke - Broadway Voice | en-US |
+| `Telnyx.Ultra.79b8126f-c5d9-4a73-8585-ba5e1a077ed6` | Luke - Disgusted Broadway Voice | en-US |
+| `Telnyx.Ultra.3d79b1fd-daaa-439c-bff3-903dc18e7684` | Luke - Happy Broadway Voice | en-US |
+| `Telnyx.Ultra.5c7b66c2-3b58-464d-8a12-093410a269c5` | Luke - Sad Broadway Voice | en-US |
+| `Telnyx.Ultra.63426c82-a0c9-4f23-a175-50eb64c95ec1` | Luke - Scared Broadway Voice | en-US |
+| `Telnyx.Ultra.725d43d6-1196-480e-bd87-728ae5eff9e1` | Luke - Surprised Broadway Voice | en-US |
+| `Telnyx.Ultra.e13cae5c-ec59-4f71-b0a6-266df3c9bb8e` | Lulu - Madame Mischief | en-US |
+| `Telnyx.Ultra.9261664a-c3d0-4200-9038-5466bcf3a09c` | Luz - Casual Speaker | tl |
+| `Telnyx.Ultra.c96a7d7d-3457-4979-8665-522f7b3e36fb` | Léa - Logical Liaison | fr-FR |
+| `Telnyx.Ultra.e8e2079b-b690-40e6-8e21-02721d3d56bc` | Maayan\t- Refined Speaker | he |
+| `Telnyx.Ultra.3817fdb0-7ae1-42d2-b46e-734dd9601bf2` | Madeleine - Reliable Resident | fr-CA |
+| `Telnyx.Ultra.02fe5732-a072-4767-83e3-a91d41d274ca` | Madison - Best Friend | en-US |
+| `Telnyx.Ultra.134838f5-ce7e-4876-ac32-6367b99daf83` | Madison - Best Friend | en-US |
+| `Telnyx.Ultra.98c87826-dba2-44f4-b123-4c7e3c8a2647` | Madison - Curious Best Friend | en-US |
+| `Telnyx.Ultra.5993c2c9-5d59-403e-b459-946c8b302086` | Madison - Disgusted Best Friend | en-US |
+| `Telnyx.Ultra.62305e79-9d39-4643-b003-5e0b096fe4f4` | Madison - Happy Best Friend | en-US |
+| `Telnyx.Ultra.27c12970-3efb-4f39-a78a-2fbb7bddc941` | Madison - Sad Best Friend | en-US |
+| `Telnyx.Ultra.30236d07-62d0-4c63-abf7-df46aa45e473` | Madison - Scared Best Friend | en-US |
+| `Telnyx.Ultra.a5def41e-2e73-433f-92f7-5f1d99fef05d` | Madison - Surprised Best Friend | en-US |
+| `Telnyx.Ultra.6d14ac2a-4dda-46f8-bd6f-0722db08ec00` | Mae - Calm Authority | tl |
+| `Telnyx.Ultra.02a924f6-bb49-4177-8fbb-52238c5056d6` | Maeve - Steady Host | en-US |
+| `Telnyx.Ultra.5a033900-2ed6-4fd4-a257-707f2688e713` | Maia - Agile Support | en |
+| `Telnyx.Ultra.2f8e82c4-cb94-4e6d-8b6a-29bf58ceb60a` | Manon - Bright Belle | fr-FR |
+| `Telnyx.Ultra.948196a7-fe02-417b-9b6d-c45ee0803565` | Manuel - Newsman | es |
+| `Telnyx.Ultra.ce74c4da-4aee-435d-bc6d-81d1a9367e12` | Marc - Conversational Buddy | fr-CA |
+| `Telnyx.Ultra.d358377a-cd1d-45c5-abd0-701314e36cbe` | Marcin - Charismatic Presenter | pl |
+| `Telnyx.Ultra.79693aee-1207-4771-a01e-20c393c89e6f` | Marco - Friendly Conversationalist | it |
+| `Telnyx.Ultra.13ff5deb-2591-42ad-a356-63a04e524411` | Marcos - Steady Advisor | es-ES |
+| `Telnyx.Ultra.9301949d-b7cd-40d9-a246-5a4430992d6b` | Marcus - Reliable Guy | en |
+| `Telnyx.Ultra.0b6d3ccb-f421-4e49-80f7-4bfa39f6eb8e` | Marek - Steady Specialist | cs |
+| `Telnyx.Ultra.a2364c9d-1fe3-4553-9eff-100c4fe5ffc8` | Marge - Seasoned Grace | en |
+| `Telnyx.Ultra.26403c37-80c1-4a1a-8692-540551ca2ae5` | Marian - Poised Narrator | en |
+| `Telnyx.Ultra.ae823354-f9be-4aef-8543-f569644136b4` | Mariana - Nurturing Guide | es-CO |
+| `Telnyx.Ultra.6d912a43-805f-4673-bbc8-a9e6c45a6ad0` | Marie-Eve - Team Mentor | fr-CA |
+| `Telnyx.Ultra.f9fc912e-52f0-448a-8bfa-47e9ca75f25a` | Marilyn - Explainer | en-US |
+| `Telnyx.Ultra.3d9b50f9-10c5-4026-9ae1-c4a698f67fc5` | Marjorie - Encouraging Aunt | en |
+| `Telnyx.Ultra.5619d38c-cf51-4d8e-9575-48f61a280413` | Mark - Promotion Lead | en-US |
+| `Telnyx.Ultra.9b4d08b6-0494-4301-ab92-9150f4ee2718` | Marlene - Elegant Speaker | de |
+| `Telnyx.Ultra.de38f545-c574-44e8-9b54-a7d6fec1c6b1` | Marta - Friendly Guide | es-ES |
+| `Telnyx.Ultra.dcddf1f4-b114-4b5d-9158-895cbba0e406` | Martin - Meticulous Operator | en-GB |
+| `Telnyx.Ultra.49808e4c-998a-40a8-b2ea-8ac8e8ce779e` | Marvin - Steady Ally | en |
+| `Telnyx.Ultra.5c42302c-194b-4d0c-ba1a-8cb485c84ab9` | Mary - Nurse | en-US |
+| `Telnyx.Ultra.9825cf5f-6aff-412a-80c5-bc58a8d55bc4` | Maryam - Friendly Voice | ar |
+| `Telnyx.Ultra.b58b6b46-1a27-46ba-8648-bc203a5d394e` | Mason - Calm Vibe | en |
+| `Telnyx.Ultra.2fc4f1ec-bfd0-46f1-8e6d-d4279eaaf838` | Mateo\t- Friendly Host | es-MX |
+| `Telnyx.Ultra.93c98a2b-7d15-4f7b-8236-294b1e02b1c0` | Mathieu - Assured Expert | fr-FR |
+| `Telnyx.Ultra.bfd3644b-d561-4b1c-a01f-d9af98cb67c0` | Matt - Goofy Friend | en-US |
+| `Telnyx.Ultra.408daed0-c597-4c27-aae8-fa0497d644bf` | Matteo - Gentle Narrator | it |
+| `Telnyx.Ultra.7849a11e-4107-44ae-bc7e-77bea41ec019` | Matti - Measured Manager | fi |
+| `Telnyx.Ultra.cc7d2711-69af-4072-9674-df588dd85682` | Maxime - Methodical Moderator | fr-FR |
+| `Telnyx.Ultra.6fbca103-0f7f-4e49-97ed-49a53b4f3534` | Maxine - Relaxed Energy | en |
+| `Telnyx.Ultra.cbaf8084-f009-4838-a096-07ee2e6612b1` | Maya - Easygoing Ally | en |
+| `Telnyx.Ultra.4014f0c9-d3eb-4eca-af2b-fd6004f526be` | Meena - Measured Professional | ta |
+| `Telnyx.Ultra.a81fccdc-5595-4dfc-ae76-4de6a515b8a2` | Meera - Bright Companion | hi |
+| `Telnyx.Ultra.a53c3509-ec3f-425c-a223-977f5f7424dd` | Mei - Expressive Assistant | zh |
+| `Telnyx.Ultra.dcc82bcd-647e-4478-955f-8232d5122f8b` | Melanie - Lively Spirit | en |
+| `Telnyx.Ultra.d6b0c62a-c7ff-477c-9a1f-eadd64b94360` | Melina - Bright Spirit | en |
+| `Telnyx.Ultra.f107908f-7d23-45d2-8ae7-8da35a0955ef` | Melisa - V3 | es |
+| `Telnyx.Ultra.eb929394-68e7-4e08-bd2f-e7055728a5e1` | Mette - Polished Facilitator | da |
+| `Telnyx.Ultra.d7bf7d75-64b7-4c1e-86c0-79d647366587` | Michelle - Empathetic Voice | en |
+| `Telnyx.Ultra.187d1cc5-a771-4ccd-9110-9df8c4e39499` | Mika - Empathetic Friend | fr-CA |
+| `Telnyx.Ultra.ae1a833b-0d95-4b7f-8d05-d6418c6f8049` | Mikko - Narration Expert | fi |
+| `Telnyx.Ultra.b66b3a19-31b3-401f-8b08-40d46a61e4f1` | Milena\t- Composed Clarifier | cs |
+| `Telnyx.Ultra.f114a467-c40a-4db8-964d-aaba89cd08fa` | Miles - Yogi | en-GB |
+| `Telnyx.Ultra.2835e382-643b-4ac6-8f6c-74df549a7ad0` | Milla - Modern Communicator | fi |
+| `Telnyx.Ultra.d6905573-8e91-4e32-b103-fd4d1205cd87` | Mindy - Spirited Ally | en |
+| `Telnyx.Ultra.0e58d60a-2f1a-4252-81bd-3db6af45fb41` | Minh - Conversational Partner | vi |
+| `Telnyx.Ultra.537a82ae-4926-4bfb-9aec-aff0b80a12a5` | Minho - Friendly Spirit | ko |
+| `Telnyx.Ultra.7706804e-ea85-443a-968a-b9bf363bdde8` | Minji - Modern Communicator | ko |
+| `Telnyx.Ultra.2f4d204f-a5dc-4196-81bc-155986b76ab6` | Mirella - Upbeat Speaker | pt-BR |
+| `Telnyx.Ultra.03b1c65d-4b7f-4c09-91a8-e2f6f78cb2c9` | Molly - Upbeat Conversationalist | en-US |
+| `Telnyx.Ultra.1b4ea5fb-b1c0-43ee-a7be-4e315878c2b1` | Monica - Emotive Voice | en-US |
+| `Telnyx.Ultra.0ee8beaa-db49-4024-940d-c7ea09b590b3` | Morgan - Executive Expert | en-US |
+| `Telnyx.Ultra.4ad22058-7cb6-402c-a115-196cbfc25dce` | Moritz - Modern Communicator | de |
+| `Telnyx.Ultra.5a31e4fb-f823-4359-aa91-82c0ae9a991c` | Murat - Anatolian Storyteller | tr |
+| `Telnyx.Ultra.efddb3d2-4464-45e0-9f8a-fcd5fd4fc54f` | Nadia - Singaporean Female | en |
+| `Telnyx.Ultra.273193f7-dbff-438e-b8af-fcc499200b1c` | Narin - Warm Concierge | th |
+| `Telnyx.Ultra.7a62541e-5492-410e-95ff-3abd096fce87` | Natalia - Steady Strategist | ru |
+| `Telnyx.Ultra.b87d697c-0af2-4617-a72f-a17444b32d1b` | Natalie - Caring Specialist | en-US |
+| `Telnyx.Ultra.779673f3-895f-4935-b6b5-b031dc78b319` | Natalya - Soothing Guide | ru |
+| `Telnyx.Ultra.e2d08065-b658-466b-ad52-cef8ee21d307` | Natasha - Upbeat Guide | en-US |
+| `Telnyx.Ultra.97f4b8fb-f2fe-444b-bb9a-c109783a857a` | Nathan - Easy Talker | en-US |
+| `Telnyx.Ultra.8193c793-825c-4bb1-b522-13d458ce8d68` | Nava - Warm Specialist | he |
+| `Telnyx.Ultra.9b953e7b-86a8-42f0-b625-1434fb15392b` | Neeraj - Tour Guide | hi |
+| `Telnyx.Ultra.47f3bbb1-e98f-4e0c-92c5-5f0325e1e206` | Neha - Virtual Assistant | hi |
+| `Telnyx.Ultra.afa425cf-5489-4a09-8a3f-d3cb1f82150d` | Nico - Friendly Agent | de |
+| `Telnyx.Ultra.b45eba5b-2215-4da7-9c7c-121c95ed7b81` | Nikos - Radio Storyteller | el |
+| `Telnyx.Ultra.8c889eba-5b31-4179-8fb2-37bbee22db64` | Nils - Friendly Host | sv |
+| `Telnyx.Ultra.0f14d8cb-f039-41fe-a813-a9b4bee7eed8` | Nisha - Elegant Speaker | hi |
+| `Telnyx.Ultra.80e4e2b3-ec54-4930-97ac-667eba950352` | Nithya - Polished Presence | ta |
+| `Telnyx.Ultra.96355f3d-0179-4c9a-a8d8-11ef0779a9b8` | Noa - Reassuring Responder | nl |
+| `Telnyx.Ultra.a924b0e6-9253-4711-8fc3-5cb8e0188c94` | Noah - Calming Presence | en |
+| `Telnyx.Ultra.3e32f3c5-9ac0-4192-9994-87fdb277120f` | Noam - Broadcaster | he |
+| `Telnyx.Ultra.65209f8e-6140-4a20-b819-3cc2e21da19b` | Nolan - Expressive Agent | en-US |
+| `Telnyx.Ultra.f4c1a0b2-669d-403f-b440-4b34b34856aa` | Nora - Calm Companion | en |
+| `Telnyx.Ultra.fc923f89-1de5-4ddf-b93c-6da2ba63428a` | Nour - Engaging Speaker | ar |
+| `Telnyx.Ultra.9d8c6b2e-0a23-4a15-ae1b-121d5b5af417` | Nuria - Trusted Advisor | es-ES |
+| `Telnyx.Ultra.05ffab9c-d380-4909-8375-cd12f59238c3` | Oleh - Professional Guy | uk |
+| `Telnyx.Ultra.9ed9f7e7-3ef6-4773-9dd3-ffcb479ca1f0` | Olga - Confident Saleswoman | ru |
+| `Telnyx.Ultra.ee7ea9f8-c0c1-498c-9279-764d6b56d189` | Oliver - Customer Chap | en-GB |
+| `Telnyx.Ultra.f31cc6a7-c1e8-4764-980c-60a361443dd1` | Olivia - Sunny Woman | en-AU |
+| `Telnyx.Ultra.e3087ad8-7018-4154-9a87-11577f916cd4` | Omar - High-Energy Presenter | ar |
+| `Telnyx.Ultra.431b7e77-b46d-4eda-8362-db430ac0913c` | Oren - Steady Advisor | he |
+| `Telnyx.Ultra.4c2dcd38-5608-45ca-8f11-51c88208d01c` | Orin - Velvet Gentleman | en |
+| `Telnyx.Ultra.22df7143-7987-4e15-a720-d65c69a443b3` | Oscar - Clear Specialist | en-GB |
+| `Telnyx.Ultra.d42fc8d7-efdd-44df-bb2e-a6e093601917` | Oskar - Steady Advisor | de |
+| `Telnyx.Ultra.28ca2041-5dda-42df-8123-f58ea9c3da00` | Palak - Presenter | hi |
+| `Telnyx.Ultra.d4db5fb9-f44b-4bd1-85fa-192e0f0d75f9` | Paloma - Clear Presenter Woman | es-ES |
+| `Telnyx.Ultra.e361b786-2768-4308-9369-a09793d4dd73` | Paola - Expressive Performer | es-MX |
+| `Telnyx.Ultra.30894953-bcce-41fe-892c-15ce19c843ff` | Parker - Supportive Pal | en-US |
+| `Telnyx.Ultra.bec003e2-3cb3-429c-8468-206a393c67ad` | Parvati - Friendly Supporter | hi |
+| `Telnyx.Ultra.e5a6cd18-d552-4192-9533-82a08cac8f23` | Patricia - Veteran Support | en |
+| `Telnyx.Ultra.3e1ed423-17e5-4773-b87c-25b031106e41` | Paul - Straight Talker | en-AU |
+| `Telnyx.Ultra.65b25c5d-ff07-4687-a04c-da2f43ef6fa9` | Pauline - Helpful Companion | fr-FR |
+| `Telnyx.Ultra.ebecd063-10f4-422e-a8ff-556ce5c4d4e4` | Pavan - Bright Voice | te |
+| `Telnyx.Ultra.d6c52d6f-6478-47a2-ad54-dbc8f3335a2b` | Pearl - Calm Solutionist | en-US |
+| `Telnyx.Ultra.15d0c2e2-8d29-44c3-be23-d585d5f154a1` | Pedro - Formal Speaker | es-MX |
+| `Telnyx.Ultra.ca590fdc-df56-4d2e-94a4-ef5b423c7ddf` | Peter - Narrator Man | sk |
+| `Telnyx.Ultra.89266bab-6e15-455d-8654-e18c440b0656` | Petr - Pastor | cs |
+| `Telnyx.Ultra.2a2624ad-bd06-4563-81fd-0519742e25d2` | Petra - Strict Lecturer | hr |
+| `Telnyx.Ultra.bfd5390b-e4f9-4e44-95ab-9ebd223acd62` | Pierre | fr-FR |
+| `Telnyx.Ultra.56df0456-8f47-4f7a-ac26-40c2f9797104` | Pierre - Baritone Storyteller | fr-CA |
+| `Telnyx.Ultra.baf84392-fa95-4d44-8871-d32ee36b0e01` | Pieter - Polished Analyst | en-ZA |
+| `Telnyx.Ultra.3d335974-4c4a-400a-84dc-ebf4b73aada6` | Piotr - Corporate Lead | pl |
+| `Telnyx.Ultra.81cd8d19-45e7-47b2-ad0e-bcd94f557ad0` | Pippa - Bright Assistant | en-GB |
+| `Telnyx.Ultra.59ba7dee-8f9a-432f-a6c0-ffb33666b654` | Pooja - Everyday Assistant | bn |
+| `Telnyx.Ultra.6baae46d-1226-45b5-a976-c7f9b797aae2` | Prakash - Instructor | kn |
+| `Telnyx.Ultra.cd6256ef-2b2a-41f6-a8d8-c1307af5061f` | Preston - Relatable Pal | en |
+| `Telnyx.Ultra.f6141af3-5f94-418c-80ed-a45d450e7e2e` | Priya - Trusted Operator | en-IN |
+| `Telnyx.Ultra.045f0292-0731-4a4c-971d-64594fc2c35a` | Quinn - Calm Authority | en |
+| `Telnyx.Ultra.10bd4af4-825b-49b8-b8bd-0ca11865536e` | Rachel - Polished Presence | en-US |
+| `Telnyx.Ultra.07b6f895-78b9-4921-8e10-8a21c99c2e8a` | Rafael - Dynamic Speaker | pt-BR |
+| `Telnyx.Ultra.393dd459-f8d8-4c3e-a86b-ec43a1113d0b` | Rahul - Calm Office Guy | hi |
+| `Telnyx.Ultra.6b7468f5-d6b0-4d6b-b38a-46f6d6e5bac7` | Rakesh - Thoughtful Speaker | hi |
+| `Telnyx.Ultra.1ce291a1-0771-4732-a3f7-8cca29bf055f` | Ralph - Dynamic Commentator | en |
+| `Telnyx.Ultra.cf061d8b-a752-4865-81a2-57570a6e0565` | Ramya - Graceful Host | te |
+| `Telnyx.Ultra.98bf39ce-b44a-49d7-9794-fb9a9329fd11` | Rania - Spirited Storyteller | ar |
+| `Telnyx.Ultra.565510e8-6b45-45de-8758-13588fbaec73` | Ray - Conversationalist | en-US |
+| `Telnyx.Ultra.57b6bf63-c7a1-4ffc-8e10-23bf45152dd6` | Rebecca - Counselor | en-US |
+| `Telnyx.Ultra.533b2990-5b82-45a4-b9f2-367776972ca6` | Reed - Polished Professional | en-US |
+| `Telnyx.Ultra.c7c790c5-2bf4-47e4-bc83-5f43e61f3803` | Reese - Warm Companion | en |
+| `Telnyx.Ultra.a3520a8f-226a-428d-9fcd-b0a4711a6829` | Reflective Woman | en |
+| `Telnyx.Ultra.74f42072-6245-4fe2-b5dc-3dc9b56fdbd0` | Regis - News Anchor | en |
+| `Telnyx.Ultra.177df681-25b1-48c2-bb47-03ca5fa27f0a` | Ren\t- Calm Navigator | ja |
+| `Telnyx.Ultra.de07efe3-b309-418b-bdca-42827223efd2` | Rena | de |
+| `Telnyx.Ultra.d3793b7b-4996-409c-9d59-96dd09f47717` | Renata - Cheerful Conversationalist | es-MX |
+| `Telnyx.Ultra.c2ac25f9-ecc4-4f56-9095-651354df60c0` | Renee - Commander | en-US |
+| `Telnyx.Ultra.21b81c14-f85b-436d-aff5-43f2e788ecf8` | Riley - Chill Friend | en-US |
+| `Telnyx.Ultra.d179b385-3cd4-4972-b155-e7cb2445776f` | Rina - Articulate Coordinator | he |
+| `Telnyx.Ultra.faf0731e-dfb9-4cfc-8119-259a79b27e12` | Riya - College Roommate | hi |
+| `Telnyx.Ultra.8985388c-1332-4ce7-8d55-789628aa3df4` | Robyn - Storycrafter | en-AU |
+| `Telnyx.Ultra.079e3a17-5545-4bc5-93e3-e11df6fe37b8` | Rodrigo - Calm Companion | es-MX |
+| `Telnyx.Ultra.4877b818-c7fe-4c89-b1cf-eadf8e23da72` | Rohan - Steady Communicator | hi |
+| `Telnyx.Ultra.f688c0a6-dddd-48ba-8246-c099d494a162` | Romeo - Calm Narrator | en |
+| `Telnyx.Ultra.5ee9feff-1265-424a-9d7f-8e4d431a12c7` | Ronald - Thinker | en-US |
+| `Telnyx.Ultra.8d7d11ff-d985-48a2-a737-1da0b6fedc8b` | Ronan - Warm Buddy | en |
+| `Telnyx.Ultra.921f4026-af53-4761-ac56-1c32e44856e8` | Ronen - Calm Consultant | he |
+| `Telnyx.Ultra.9329fbdb-e285-4fba-95ec-592e15f14476` | Rory - Maternal Vibe | en |
+| `Telnyx.Ultra.fb936dd1-66ea-43a0-86bd-18a6203dcda2` | Rosa - Optimist Mother | es |
+| `Telnyx.Ultra.f24ae0b7-a3d2-4dd1-89df-959bdc4ab179` | Ross - Reliable Partner | en |
+| `Telnyx.Ultra.701a96e1-7fdd-4a6c-a81e-a4a450403599` | Rowan - Team Leader | en-US |
+| `Telnyx.Ultra.328e0683-d1a7-4cde-ad46-0ee69a3cbd6a` | Roxane - Problem-Solver | fr-CA |
+| `Telnyx.Ultra.f2ddbdca-59d9-4363-abeb-a197d65ea24a` | Roy - Stern Realist | en-GB |
+| `Telnyx.Ultra.2ba861ea-7cdc-43d1-8608-4045b5a41de5` | Rubel - City Guide | bn |
+| `Telnyx.Ultra.ed9ccfa4-8fa1-40f8-bfb2-cb7d67d2f9cd` | Ruby - Helpful Handler | en |
+| `Telnyx.Ultra.0ad65e7f-006c-47cf-bd31-52279d487913` | Rupert - Caring Dad | en-GB |
+| `Telnyx.Ultra.11af83e2-23eb-452f-956e-7fee218ccb5c` | Ruth - Manager | en-US |
+| `Telnyx.Ultra.f7755efb-1848-4321-aa22-5e5be5d32486` | Ryeowook - Easygoing Pal | ko |
+| `Telnyx.Ultra.6d4b1416-8d54-4d94-a788-8a802c086544` | Sabine - Firm Newscaster | de |
+| `Telnyx.Ultra.0a9a5903-0a30-4d2e-b6b6-891f73d4b4e0` | Sabrina - Casual Ally | en |
+| `Telnyx.Ultra.6303e5fb-a0a7-48f9-bb1a-dd42c216dc5d` | Sagar - Helpful Friend | hi |
+| `Telnyx.Ultra.1e9b9b3d-d2ce-4cac-9d05-bc36a63fa28e` | Saira - Organized Coordinator | en-GB |
+| `Telnyx.Ultra.04bfd756-4fd4-42c2-9ccf-37f647c5bf54` | Samantha - Angry Support Leader | en-US |
+| `Telnyx.Ultra.761afc95-bef5-44dd-aa07-d3c678912e43` | Samantha - Happy Support Leader | en-US |
+| `Telnyx.Ultra.5e10a334-7fa5-46d4-a64b-5ae6185da3fd` | Samantha - Sad Support Leader | en-US |
+| `Telnyx.Ultra.f4e8781b-a420-4080-81cf-576331238efa` | Samantha - Support Leader | en-US |
+| `Telnyx.Ultra.d3e03deb-5439-4203-add1-ca9a7501eaa7` | Samantha - Yelling Support Leader | en-US |
+| `Telnyx.Ultra.638efaaa-4d0c-442e-b701-3fae16aad012` | Sameer - Problem Solver | en-IN |
+| `Telnyx.Ultra.55e2a153-c61e-4784-85c8-e954cb22fe29` | Sanjay - Clear Speaker | hi |
+| `Telnyx.Ultra.0eb213fe-4658-45bc-9442-33a48b24b133` | Sanne - Clear Companion | nl |
+| `Telnyx.Ultra.bef24f4f-adc9-4cef-acbf-cc1ceb98224b` | Santiago\t- Modern Navigator | es-MX |
+| `Telnyx.Ultra.432fc642-6a83-4975-b77a-c605903b5ba6` | Sanya - Modern Communicator | hi |
+| `Telnyx.Ultra.694f9389-aac1-45b6-b726-9d9369183238` | Sarah - Mindful Woman | en-US |
+| `Telnyx.Ultra.330c4fa0-1da3-4c55-8e97-951bfd724e20` | Sarika - Calm Spirit | te |
+| `Telnyx.Ultra.3f38cbe2-ce6a-4051-b5dc-2b2ee20b9bc1` | Sasha - Cool Friend | en |
+| `Telnyx.Ultra.78ab82d5-25be-4f7d-82b3-7ad64e5b85b2` | Savannah - Magnolia Belle | en-US |
+| `Telnyx.Ultra.2f22b9bc-b0eb-4cb6-b5ae-0c099a0fdfad` | Scott - Sportscaster | en-US |
+| `Telnyx.Ultra.1cb5b8bc-77c9-4e7c-a251-da02348e2727` | Sean - Steady Companion | en |
+| `Telnyx.Ultra.b7187e84-fe22-4344-ba4a-bc013fcb533e` | Sebastian - Orator | de |
+| `Telnyx.Ultra.63927f41-9616-4ac2-89cf-f3afa346e0ef` | Selene - Soothing Aura | en |
+| `Telnyx.Ultra.ce9ca2b6-2bed-4452-99bb-052e1ec0b534` | Seoyun - Warm Guide | ko |
+| `Telnyx.Ultra.3ef78ba6-9aaa-46a2-b5b5-f9ded76a2370` | Serena - Laidback Girl | en-US |
+| `Telnyx.Ultra.1e4176b1-3db9-44d6-a601-4fe68b041942` | Sergei - Steady Supporter | ru |
+| `Telnyx.Ultra.b3610b4c-0fd6-4912-89d1-ace6cb6054dd` | Shailika - Clear Explainer | hi |
+| `Telnyx.Ultra.8cbfe3ab-8364-4e72-b606-93f749519c66` | Shane - Helpful Guide | en |
+| `Telnyx.Ultra.4418bb06-8329-49a1-bb11-53bb64ca0547` | Shanti - Calm Authority | te |
+| `Telnyx.Ultra.39b376fc-488e-4d0c-8b37-e00b72059fdd` | Sheldon - Help Desk Man | en-US |
+| `Telnyx.Ultra.0d2162c2-2fe9-40a7-b3c1-43eab576a64b` | Shelly - Warm Companion | en |
+| `Telnyx.Ultra.d0be495c-5e23-4b88-b12d-bc42d38be9a5` | Shira - Comforting Presence | he |
+| `Telnyx.Ultra.f9a4b3a6-b44b-469f-90e3-c8e19bd30e99` | Shuwen - Precision Guide | zh |
+| `Telnyx.Ultra.b629d743-2b5a-4ffd-b5bb-9de9b969a690` | Sibylle | de |
+| `Telnyx.Ultra.4e41a434-85fc-4614-b203-af79ba44d473` | Sienna - Encourager | en-US |
+| `Telnyx.Ultra.b7d50908-b17c-442d-ad8d-810c63997ed9` | Sierra - California Girl | en-US |
+| `Telnyx.Ultra.7e19344f-9f17-47d7-a13a-4366ad06ebf3` | Silas - Nighttime Narrator | en-US |
+| `Telnyx.Ultra.3b554273-4299-48b9-9aaf-eefd438e3941` | Simi - Support Specialist | en-IN |
+| `Telnyx.Ultra.07bc462a-c644-49f1-baf7-82d5599131be` | Sindhu - Conversational Partner | te |
+| `Telnyx.Ultra.d79d2b77-9192-4e10-9407-5d43ca034803` | Siobhan - Warm Welcomer | en-IE |
+| `Telnyx.Ultra.b441c4fd-4910-4c55-ae56-f0291057e2cc` | Siti - Ad Narrator | id |
+| `Telnyx.Ultra.db6b0ed5-d5d3-463d-ae85-518a07d3c2b4` | Skylar - Friendly Guide | en-US |
+| `Telnyx.Ultra.01fd7d67-d2a0-4e4e-8c48-42611c71a926` | Skyler - Laidback Partner | en |
+| `Telnyx.Ultra.6b02ffe5-e3cb-48c0-a023-c72f85953375` | Sneha - Empathetic Voice | hi |
+| `Telnyx.Ultra.90c7d657-9599-4cd0-9ed2-2568359e4d1a` | Sofia - Methodical Moderator | it |
+| `Telnyx.Ultra.5de076e9-7b28-4442-b279-e7d80d573505` | Somchai - Star | th |
+| `Telnyx.Ultra.cd6c48a9-774b-4397-98b4-9948c0a790f0` | Soojin - Helpful Tone | ko |
+| `Telnyx.Ultra.bf0a246a-8642-498a-9950-80c35e9276b5` | Sophie - Teacher | en-US |
+| `Telnyx.Ultra.926e0766-f380-4d77-aeb0-9aa4ebb16b38` | Soren - Executive Voice | da |
+| `Telnyx.Ultra.69c18e1d-fab0-4747-b9da-58617cd8b9e4` | Soyeon - Bright Companion | ko |
+| `Telnyx.Ultra.3bf35adc-bcc4-464b-b834-c90c88cf6492` | Spencer - Chill Gentleman | en |
+| `Telnyx.Ultra.6a73e45f-3fa6-427c-97da-0fc6a7a1bc0d` | Stephanie - Steady Professional | en-US |
+| `Telnyx.Ultra.b134c304-d095-4d2b-a77a-914f5e8e84e7` | Sterling - Monarch | en |
+| `Telnyx.Ultra.7c8ba972-4960-4c43-bea0-8178e2205696` | Steve - Angry Baritone | en-US |
+| `Telnyx.Ultra.9fb269e7-70fe-4cbe-aa3f-28bdb67e3e84` | Steve - Baritone | en-US |
+| `Telnyx.Ultra.c1c65fc2-528a-4dde-a2c4-f822785c2704` | Steve - Curious Baritone | en-US |
+| `Telnyx.Ultra.f96dc0b1-7900-4894-a339-81fb46d515a7` | Steve - Disgusted Baritone | en-US |
+| `Telnyx.Ultra.adde00e9-c98f-42ae-a94d-fc9f92f11c76` | Steve - Happy Baritone | en-US |
+| `Telnyx.Ultra.80713a53-e484-4f69-9852-7891096016ac` | Steve - Sad Baritone | en-US |
+| `Telnyx.Ultra.b1ce5126-4d08-42c3-adef-d3eb39e90c7a` | Steve - Scared Baritone | en-US |
+| `Telnyx.Ultra.6fd4f468-0345-4f41-81d0-3f48ebc295e0` | Steve - Surprised Baritone | en-US |
+| `Telnyx.Ultra.17488b72-f815-44d8-bdd9-869971c3ec06` | Steven - Big Brother | en |
+| `Telnyx.Ultra.da743a82-ddf2-4d9b-8eb8-ff67ca0b138e` | Stjin - Helpful Handler | nl |
+| `Telnyx.Ultra.a0fc16d3-01af-482b-910f-ed063c3d79d3` | Subin - Elegant Speaker | ko |
+| `Telnyx.Ultra.ccc7bb22-dcd0-42e4-822e-0731b950972f` | Suda - Fortune Teller | th |
+| `Telnyx.Ultra.be79f378-47fe-4f9c-b92b-f02cefa62ccf` | Sunil - Official Announcer | hi |
+| `Telnyx.Ultra.156fb8d2-335b-4950-9cb3-a2d33befec77` | Sunny - Pep Talker | en-US |
+| `Telnyx.Ultra.f227bc18-3704-47fe-b759-8c78a450fdfa` | Suresh - Instruction Voice | mr |
+| `Telnyx.Ultra.8634bd27-0acf-4056-b014-4fea0385ed9e` | Suzanne - Laidback Aunt | en |
+| `Telnyx.Ultra.a466f9e2-28eb-4bb7-925c-8e8984950700` | Søren - Steady Strategist | da |
+| `Telnyx.Ultra.b56c6aac-f35f-46f7-9361-e8f078cec72e` | Tabitha - Smooth Energy | en |
+| `Telnyx.Ultra.e1717dc3-b87b-4720-aa7f-b6db290e0609` | Taehyun - Friendly Host | ko |
+| `Telnyx.Ultra.b8e1169c-f16a-4064-a6e0-95054169e553` | Takashi - Professional Conversationalist | ja |
+| `Telnyx.Ultra.bd05edd9-cec9-4600-9af4-c9ba4e032ff9` | Talia - Approachable Guide | he |
+| `Telnyx.Ultra.94c2e193-a498-44e4-b958-174478734c3f` | Tamar - Crisp Announcer | he |
+| `Telnyx.Ultra.0bfbea6c-2f8f-4f86-b411-aa2316561e36` | Tamara - Support Specialist | ka |
+| `Telnyx.Ultra.373e661a-f0ef-4e34-a09e-183184a443e6` | Tanner - Laidback Spirit | en |
+| `Telnyx.Ultra.710feaa3-b550-42f3-b3eb-6f37f2a7cc0a` | Tanner - Upbeat Assistant | en-US |
+| `Telnyx.Ultra.c59c247b-6aa9-4ab6-91f9-9eabea7dc69e` | Tao - Lecturer | zh |
+| `Telnyx.Ultra.3308b492-50cc-417e-89dd-1f446c574546` | Tara - Confident Ally | en |
+| `Telnyx.Ultra.db873303-3a70-4d9d-867a-0d70a6377195` | Tariq - Wise Advisor | ar |
+| `Telnyx.Ultra.064b17af-d36b-4bfb-b003-be07dba1b649` | Tatiana - Friendly Storyteller | ru |
+| `Telnyx.Ultra.c1cfee3d-532d-47f8-8dd2-8e5b2b66bf1d` | Taylan - Expressive Voice | tr |
+| `Telnyx.Ultra.32a91a5d-05d2-4c1e-bd5a-ff5fd0c413f2` | Tehila - Calm Specialist | he |
+| `Telnyx.Ultra.f8685385-96f6-4c12-8520-49e4914bcbfe` | Tereza\t- Decisive Agent | cs |
+| `Telnyx.Ultra.6ccbfb76-1fc6-48f7-b71d-91ac6298247b` | Tessa - Kind Companion | en-US |
+| `Telnyx.Ultra.db938869-18b5-4c21-be8b-2ffdfba6d8d4` | Thaksin - Tactful Tracker | th |
+| `Telnyx.Ultra.692846ad-1a6b-49b8-bfc5-86421fd41a19` | Thandi - Direct Dispatcher | en-ZA |
+| `Telnyx.Ultra.79f8b5fb-2cc8-479a-80df-29f7a7cf1a3e` | Theo - Modern Narrator | en-US |
+| `Telnyx.Ultra.95e9fdaf-cf0b-4739-b1de-3350ca50774a` | Thijs - Confident Coordinator | nl |
+| `Telnyx.Ultra.384b625b-da5d-49e8-a76d-a2855d4f31eb` | Thomas - Anchor | de |
+| `Telnyx.Ultra.6a360542-a117-4ed5-9e09-e8bf9b05eabb` | Tiago - Narration Expert | pt-PT |
+| `Telnyx.Ultra.86600680-b836-41e1-9916-8475728dcc14` | Tiffany - Dynamic Presence | en |
+| `Telnyx.Ultra.146485fd-8736-41c7-88a8-7cdd0da34d84` | Tim - Pal | en-US |
+| `Telnyx.Ultra.91b4cf29-5166-44eb-8054-30d40ecc8081` | Tina - Customer Ally | en-US |
+| `Telnyx.Ultra.3d5ce2fb-e56c-42f0-9ed9-4662484063b4` | Toby - Genuine Guide | en-GB |
+| `Telnyx.Ultra.efd255c7-f030-43d3-b5d8-c7b72063be70` | Todd - Matter of Fact Salesman | en-US |
+| `Telnyx.Ultra.49e02441-83ea-4c77-bda8-79fdd7f07e92` | Tohru - Career Coach | ja |
+| `Telnyx.Ultra.40104aff-a015-4da1-9912-af950fbec99e` | Travis - How To Guide | en-US |
+| `Telnyx.Ultra.c45bc5ec-dc68-4feb-8829-6e6b2748095d` | Trevor - Movieman | en-GB |
+| `Telnyx.Ultra.726d5ae5-055f-4c3d-8355-d9677de68937` | Troy - Fix It Man | en-US |
+| `Telnyx.Ultra.820a3788-2b37-4d21-847a-b65d8a68c99a` | Tyler - Friendly Salesman | en-US |
+| `Telnyx.Ultra.ad8eee76-d702-4a1f-a1bd-7596755ae4c9` | Valeria - Cheerful Promoter | es |
+| `Telnyx.Ultra.af346552-54bf-4c2b-a4d4-9d2820f51b6c` | Valerie - Support Authority | en-US |
+| `Telnyx.Ultra.0d09e991-5763-406e-b637-02bc431ef72d` | Valérie - Vibrant Voice | fr-FR |
+| `Telnyx.Ultra.dd951538-c475-4bde-a3f7-9fd7b3e4d8f5` | Vanessa | fr-CA |
+| `Telnyx.Ultra.643f5eee-459d-4b41-b4fc-0b8407139be6` | Vicky - Businesswoman | en |
+| `Telnyx.Ultra.dc30854e-e398-4579-9dc8-16f6cb2c19b9` | Victoria - Refined Coordinator | en-GB |
+| `Telnyx.Ultra.3a8e6fea-81e5-4d4d-8755-86093146cdb8` | Vidya - Empathetic Voice | te |
+| `Telnyx.Ultra.374b80da-e622-4dfc-90f6-1eeb13d331c9` | Vijay - Comfort Voice | ml |
+| `Telnyx.Ultra.adf97b9d-905c-41de-9fe9-afb387116d06` | Vikas - Approachable Voice | hi |
+| `Telnyx.Ultra.38bded0a-3ab4-42d1-8e47-2e0b6b10ced9` | Vikram - Folk Narrator | te |
+| `Telnyx.Ultra.b9de4a89-2257-424b-94c2-db18ba68c81a` | Viktoria - Phone Conversationalist | de |
+| `Telnyx.Ultra.80e11491-2d8a-4361-ac61-c4f3e0a4f7e7` | Vincent | fr-FR |
+| `Telnyx.Ultra.098fb15d-2597-4186-8b74-25340050b6e7` | Vishal\t- Assured Expert | hi |
+| `Telnyx.Ultra.20e68f5c-08e5-42d0-8e9b-6e716fd1ae66` | Vivek - Composed Voice | hi |
+| `Telnyx.Ultra.ca31ce53-ebf6-4e51-b87d-2f65d5d1f7f8` | Vivian - Fierce Narrator | en |
+| `Telnyx.Ultra.40e0f496-a220-46bb-975a-7ef465b3d92b` | Vreni - Diligent Advisor | de |
+| `Telnyx.Ultra.3d83e30f-c31b-4f26-b442-7075feafa53a` | Wade - Southern Soul | en-US |
+| `Telnyx.Ultra.fbf7d2ec-ebea-49f2-8889-a482b9b0a7ed` | Wade 2.0 - Southern Soul | en |
+| `Telnyx.Ultra.f1cdfb4a-bf7d-4e83-916e-8f0802278315` | Walid - Steady Presence | ar |
+| `Telnyx.Ultra.79bfcec0-720c-41f2-a33a-f12383e9627f` | Wang - Guide | en-US |
+| `Telnyx.Ultra.aec42b73-8c46-4528-a377-537b5ecb8e7b` | Warren - Seasoned Pragmatist | en-US |
+| `Telnyx.Ultra.2a4d065a-ac91-4203-a015-eb3fc3ee3365` | Wes - Customer Companion | en-US |
+| `Telnyx.Ultra.6fccb471-26f7-4f7a-93dd-542935db6c20` | Wesley - Chill Flow | en |
+| `Telnyx.Ultra.f3c7d5d2-c1e1-41a0-bd88-8b5512be5335` | Whitney - Composed Concierge | en-US |
+| `Telnyx.Ultra.5f621418-ab01-4bf4-9a9d-73d66032234e` | Willow - Approachable Ally | en |
+| `Telnyx.Ultra.5fc5c797-12c5-4f2b-ac9b-d4e53c08098f` | Wyatt - Dependable Dispatcher | en-US |
+| `Telnyx.Ultra.b8cd71e3-bc14-4538-a530-d6314731c036` | Xia - Calm Companion | vi |
+| `Telnyx.Ultra.3597a26f-80ef-4bd5-8101-9699bc764917` | Ximena - Calm Navigator | es-MX |
+| `Telnyx.Ultra.1daba551-67af-465e-a189-f91495aa2347` | Yael - Casual Presence | he |
+| `Telnyx.Ultra.ff857c8e-e7f9-4afd-af42-dce9f3c5ab02` | Yarden - Trusted Advisor | he |
+| `Telnyx.Ultra.c5bc902c-bc31-40a8-b81f-7d3a1e1920bd` | Yardena - Expert Facilitator | he |
+| `Telnyx.Ultra.daf747c6-6bc2-4083-bd59-aa94dce23f5d` | Yasmin - Dialogue Anchor | en |
+| `Telnyx.Ultra.95d91579-a3f1-4bb3-b5e1-9a97ef401628` | Yonatan - Measured Professional | he |
+| `Telnyx.Ultra.9cbad5f7-fbf6-4416-a22f-1ecc75ad40a2` | Youssef - Clear Communicator | ar |
+| `Telnyx.Ultra.59d4fd2f-f5eb-4410-8105-58db7661144f` | Yuki - Calm Woman | ja |
+| `Telnyx.Ultra.2b568345-1d48-4047-b25f-7baccf842eb0` | Yumiko - Friendly Agent | ja |
+| `Telnyx.Ultra.cac92886-4b7c-4bc1-a524-e0f79c0381be` | Yuna - Kind Unnie | ko |
+| `Telnyx.Ultra.ed81fd13-2016-4a49-8fe3-c0d2761695fc` | Zack - Sportsman | en-US |
+| `Telnyx.Ultra.40f9b5d1-bc79-43a6-b5cc-1c692b3b40d2` | Zain\t- Dynamic Presenter | ar |
+| `Telnyx.Ultra.afb19d1b-4044-4f34-a962-f4aef640a002` | Zander - Energetic Announcer | en |
+| `Telnyx.Ultra.263b9cc0-0d99-44e7-ae92-3d4ad5d2ad18` | Zanele - Vibrant Advocate | en-ZA |
+| `Telnyx.Ultra.e00d0e4c-a5c8-443f-a8a3-473eb9a62355` | Zeke - Friendly Sidekick | en-US |
+| `Telnyx.Ultra.48369ca9-0645-40de-9821-0d55e18a03c2` | Zoey - Bright Voice | en |
+| `Telnyx.Ultra.dcf62f33-7cff-4f20-85b2-2efaa68cbc32` | Zofia - Audiobook Muse | pl |
