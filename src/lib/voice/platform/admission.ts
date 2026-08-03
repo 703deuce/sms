@@ -77,13 +77,20 @@ export async function sweepStaleOpenVoiceCalls(
   });
   if (!stale.length) return { swept: 0, ids: [] as string[] };
 
+  type StaleCall = {
+    id: string;
+    telnyxCallControlId: string | null;
+    status: string;
+  };
+  const staleRows = stale as StaleCall[];
+
   // Best-effort hangup on Telnyx so parked legs do not keep ringing.
   try {
     const { telnyxRequest } = await import("@/lib/messaging/telnyx/client");
     const { isTelnyxVoiceConfigured } = await import("@/lib/voice/telnyx/assistant-sync");
     if (isTelnyxVoiceConfigured()) {
       await Promise.all(
-        stale.map(async (c) => {
+        staleRows.map(async (c: StaleCall) => {
           if (!c.telnyxCallControlId || c.telnyxCallControlId.startsWith("mock_")) return;
           await telnyxRequest(`/calls/${c.telnyxCallControlId}/actions/hangup`, {
             method: "POST",
@@ -97,14 +104,14 @@ export async function sweepStaleOpenVoiceCalls(
   }
 
   await prisma.voiceCall.updateMany({
-    where: { id: { in: stale.map((c) => c.id) } },
+    where: { id: { in: staleRows.map((c: StaleCall) => c.id) } },
     data: {
       status: "COMPLETED",
       endedAt: new Date(),
       outcome: "stale_swept",
     },
   });
-  return { swept: stale.length, ids: stale.map((c) => c.id) };
+  return { swept: staleRows.length, ids: staleRows.map((c: StaleCall) => c.id) };
 }
 
 /**
