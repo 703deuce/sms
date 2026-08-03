@@ -312,7 +312,20 @@ export async function syncTelnyxAssistant(
     speed: config.voiceLanguage?.speed,
     expressiveMode: config.voiceLanguage?.expressiveMode,
     volume: gainLinear,
+    apiKeyRef: config.voiceLanguage?.elevenLabsApiKeyRef,
+    includeElevenLabsTuning: Boolean(config.voiceLanguage?.elevenLabsTuning),
+    elevenLabsStability: config.voiceLanguage?.elevenLabsStability,
+    elevenLabsSimilarityBoost: config.voiceLanguage?.elevenLabsSimilarityBoost,
+    elevenLabsStyle: config.voiceLanguage?.elevenLabsStyle,
+    elevenLabsSpeakerBoost: config.voiceLanguage?.elevenLabsSpeakerBoost,
   });
+  if (voiceBuilt.isElevenLabs) {
+    const { ensureElevenLabsTelnyxSecret } = await import(
+      "@/lib/voice/elevenlabs/telnyx-secret"
+    );
+    const ensured = await ensureElevenLabsTelnyxSecret();
+    voiceBuilt.voice_settings.api_key_ref = ensured.apiKeyRef;
+  }
   const voiceId = voiceBuilt.providerVoiceId;
   // TeXML app id only — never Call Control TELNYX_CONNECTION_ID (causes 10015).
   const texmlAppId = process.env.TELNYX_TEXML_APP_ID?.trim() || "";
@@ -479,8 +492,12 @@ export async function syncTelnyxAssistant(
         });
         // Minimal retry with the SAME voice (no silent NaturalHD remap).
         try {
+          const plain: Record<string, unknown> = { voice: requestedVoice };
+          if (voiceBase.api_key_ref) {
+            plain.api_key_ref = voiceBase.api_key_ref;
+          }
           await ai.updateAssistant(assistantId, {
-            voice_settings: { voice: requestedVoice },
+            voice_settings: plain,
             enabled_features: ["telephony"],
             telephony_settings: {
               supports_unauthenticated_web_calls: true,

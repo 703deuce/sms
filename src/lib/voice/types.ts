@@ -86,6 +86,14 @@ export type VoiceAgentConfig = {
     volume?: number;
     /** Expressive / stability-style delivery when the voice model supports it. */
     expressiveMode?: boolean;
+    /** Telnyx integration secret identifier for ElevenLabs (never the raw key). */
+    elevenLabsApiKeyRef?: string;
+    /** Include optional ElevenLabs tuning fields after basic voice succeeds. */
+    elevenLabsTuning?: boolean;
+    elevenLabsStability?: number;
+    elevenLabsSimilarityBoost?: number;
+    elevenLabsStyle?: number;
+    elevenLabsSpeakerBoost?: boolean;
     /**
      * Assistant playback gain for PSTN clipping A/B (0, −3…−6 dB).
      * Does not change caller microphone gain.

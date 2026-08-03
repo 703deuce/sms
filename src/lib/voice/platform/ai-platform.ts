@@ -1444,7 +1444,27 @@ export async function enableWebCallsAndSyncVoice(
     speed: config.voiceLanguage?.speed,
     expressiveMode: config.voiceLanguage?.expressiveMode,
     volume: gainLinear,
+    apiKeyRef: config.voiceLanguage?.elevenLabsApiKeyRef,
+    includeElevenLabsTuning: Boolean(config.voiceLanguage?.elevenLabsTuning),
+    elevenLabsStability: config.voiceLanguage?.elevenLabsStability,
+    elevenLabsSimilarityBoost: config.voiceLanguage?.elevenLabsSimilarityBoost,
+    elevenLabsStyle: config.voiceLanguage?.elevenLabsStyle,
+    elevenLabsSpeakerBoost: config.voiceLanguage?.elevenLabsSpeakerBoost,
   });
+  // Ensure Telnyx secret exists when selecting ElevenLabs.
+  if (voiceBuilt.isElevenLabs && !voiceBuilt.apiKeyRef) {
+    const { ensureElevenLabsTelnyxSecret } = await import(
+      "@/lib/voice/elevenlabs/telnyx-secret"
+    );
+    const ensured = await ensureElevenLabsTelnyxSecret();
+    voiceBuilt.voice_settings.api_key_ref = ensured.apiKeyRef;
+  } else if (voiceBuilt.isElevenLabs && !String(voiceBuilt.voice_settings.api_key_ref || "")) {
+    const { ensureElevenLabsTelnyxSecret } = await import(
+      "@/lib/voice/elevenlabs/telnyx-secret"
+    );
+    const ensured = await ensureElevenLabsTelnyxSecret();
+    voiceBuilt.voice_settings.api_key_ref = ensured.apiKeyRef;
+  }
   const voiceId = voiceBuilt.providerVoiceId;
   const texmlAppId = process.env.TELNYX_TEXML_APP_ID?.trim() || "";
 
@@ -1502,9 +1522,15 @@ export async function enableWebCallsAndSyncVoice(
       errorBody: voiceErrorDetail.body ?? voiceErrorDetail.message,
     });
     // Retry without expressive_mode / speed / volume — SAME voice id (no silent remap).
+    // Keep api_key_ref for ElevenLabs — dropping it causes false failures.
     try {
+      const plain: Record<string, unknown> = { voice: voiceId };
+      if (voiceBuilt.apiKeyRef || voiceBuilt.voice_settings.api_key_ref) {
+        plain.api_key_ref =
+          voiceBuilt.apiKeyRef || voiceBuilt.voice_settings.api_key_ref;
+      }
       await ai.updateAssistant(agent.telnyxAssistantId, {
-        voice_settings: { voice: voiceId },
+        voice_settings: plain,
         telephony_settings: {
           supports_unauthenticated_web_calls: true,
         },

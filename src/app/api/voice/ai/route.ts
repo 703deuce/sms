@@ -690,6 +690,98 @@ export async function POST(request: Request) {
           data: await probeTelnyxAssistantVoices(),
         });
       }
+      case "elevenlabs_status": {
+        const { getElevenLabsSecretStatus } = await import(
+          "@/lib/voice/elevenlabs/telnyx-secret"
+        );
+        return NextResponse.json({ data: await getElevenLabsSecretStatus() });
+      }
+      case "connect_elevenlabs": {
+        const { ensureElevenLabsTelnyxSecret, getElevenLabsSecretStatus } = await import(
+          "@/lib/voice/elevenlabs/telnyx-secret"
+        );
+        const ensured = await ensureElevenLabsTelnyxSecret();
+        const status = await getElevenLabsSecretStatus();
+        return NextResponse.json({
+          data: {
+            ...ensured,
+            // Never return the secret value
+            status: {
+              connected: status.connected,
+              secretIdentifier: status.secretIdentifier,
+              secretExists: status.secretExists,
+              configuredEnv: status.configuredEnv,
+              apiKeyRef: status.apiKeyRef,
+              message: status.message,
+            },
+          },
+        });
+      }
+      case "discover_elevenlabs": {
+        const { discoverElevenLabsCatalog } = await import(
+          "@/lib/voice/elevenlabs/probe"
+        );
+        const discovery = await discoverElevenLabsCatalog({
+          voiceLimit: Number(body.voiceLimit) || 20,
+        });
+        return NextResponse.json({
+          data: {
+            secret: {
+              connected: discovery.secret.connected,
+              secretIdentifier: discovery.secret.secretIdentifier,
+              configuredEnv: discovery.secret.configuredEnv,
+              apiKeyRef: discovery.secret.apiKeyRef,
+              message: discovery.secret.message,
+            },
+            models: discovery.ttsModels.map((m) => ({
+              model_id: m.model_id,
+              name: m.name,
+              can_do_text_to_speech: m.can_do_text_to_speech,
+              can_use_style: m.can_use_style,
+              can_use_speaker_boost: m.can_use_speaker_boost,
+              serves_pro_voices: m.serves_pro_voices,
+            })),
+            candidateModels: discovery.candidateModels,
+            voices: discovery.voices.map((v) => ({
+              voice_id: v.voice_id,
+              name: v.name,
+              category: v.category,
+              description: v.description,
+              preview_url: v.preview_url,
+              labels: v.labels,
+            })),
+            pickerVoices: discovery.pickerVoices,
+          },
+        });
+      }
+      case "probe_elevenlabs_voices": {
+        const agentRow = await getPrisma().voiceAgent.findFirst({
+          where: { id: agentId, workspaceId },
+        });
+        const telnyxAssistantId =
+          String(body.telnyxAssistantId || "") || agentRow?.telnyxAssistantId || "";
+        if (!telnyxAssistantId) {
+          return NextResponse.json(
+            { error: "Build/publish the agent first so a Telnyx assistant exists to clone" },
+            { status: 400 },
+          );
+        }
+        const voiceId = String(body.elevenLabsVoiceId || body.voiceId || "").trim();
+        if (!voiceId) {
+          return NextResponse.json(
+            { error: "elevenLabsVoiceId is required (exact ElevenLabs voice_id)" },
+            { status: 400 },
+          );
+        }
+        const { probeElevenLabsOnTelnyx } = await import("@/lib/voice/elevenlabs/probe");
+        const result = await probeElevenLabsOnTelnyx({
+          sourceAssistantId: telnyxAssistantId,
+          voiceId,
+          includeTuning: Boolean(body.includeTuning),
+          models: Array.isArray(body.models) ? body.models : undefined,
+        });
+        return NextResponse.json({ data: result });
+      }
       case "test_voice": {
         const agentRow = await getPrisma().voiceAgent.findFirst({
           where: { id: agentId, workspaceId },
@@ -715,6 +807,7 @@ export async function POST(request: Request) {
             body.expressiveMode === undefined || body.expressiveMode === null
               ? undefined
               : Boolean(body.expressiveMode),
+          includeElevenLabsTuning: Boolean(body.includeElevenLabsTuning),
         });
         if (!result.ok) {
           return NextResponse.json(

@@ -280,6 +280,30 @@ export async function deleteMcpServer(id: string) {
   return telnyxRequest(`/ai/mcp_servers/${enc(id)}`, { method: "DELETE" });
 }
 
+// ── Integration secrets (ElevenLabs api_key_ref, etc.) ──────────────────────
+
+export async function listIntegrationSecrets(query?: TelnyxAiQuery) {
+  return telnyxRequest("/integration_secrets", { query });
+}
+
+export async function createIntegrationSecret(body: {
+  identifier: string;
+  type: "bearer" | "basic";
+  token?: string;
+  username?: string;
+  password?: string;
+}) {
+  return telnyxRequest("/integration_secrets", {
+    method: "POST",
+    body,
+    noRetry: true,
+  });
+}
+
+export async function deleteIntegrationSecret(id: string) {
+  return telnyxRequest(`/integration_secrets/${enc(id)}`, { method: "DELETE" });
+}
+
 // ── Integrations ────────────────────────────────────────────────────────────
 
 export async function listIntegrations(query?: TelnyxAiQuery) {

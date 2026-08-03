@@ -14,6 +14,10 @@ import {
   sanitizeTelnyxVoiceError,
   validateUltraProviderVoiceId,
 } from "@/lib/voice/telnyx/voices";
+import {
+  resolveElevenLabsParts,
+  validateElevenLabsBeforePatch,
+} from "@/lib/voice/elevenlabs/voice-settings";
 
 /** Verified Assistants Ultra UUID (short names like Telnyx.Ultra.Clara fail with 10015). */
 const ULTRA_CLARA = DOCUMENTED_ULTRA_VOICES[0].providerVoiceId;
@@ -226,6 +230,8 @@ export async function testVoiceOnClone(input: {
   sourceAssistantId: string;
   voiceRef: string;
   expressiveMode?: boolean;
+  apiKeyRef?: string;
+  includeElevenLabsTuning?: boolean;
 }) {
   if (!ai.isTelnyxAiConfigured()) {
     throw new Error("TELNYX_API_KEY not configured");
@@ -234,10 +240,54 @@ export async function testVoiceOnClone(input: {
     throw new Error("assistant_id is required");
   }
 
+  const isEl =
+    String(input.voiceRef || "").startsWith("el:") ||
+    String(input.voiceRef || "").startsWith("ElevenLabs.");
+
+  let apiKeyRef = input.apiKeyRef || null;
+  if (isEl) {
+    const { ensureElevenLabsTelnyxSecret } = await import(
+      "@/lib/voice/elevenlabs/telnyx-secret"
+    );
+    const ensured = await ensureElevenLabsTelnyxSecret();
+    apiKeyRef = ensured.apiKeyRef;
+  }
+
   const built = buildAssistantVoiceSettings({
     voiceRef: input.voiceRef,
     expressiveMode: input.expressiveMode,
+    apiKeyRef,
+    includeElevenLabsTuning: Boolean(input.includeElevenLabsTuning),
   });
+
+  const validation = isEl
+    ? (() => {
+        const parts = resolveElevenLabsParts({ voiceRef: input.voiceRef });
+        return validateElevenLabsBeforePatch({
+          assistantId: input.sourceAssistantId,
+          apiKeyRef: built.apiKeyRef,
+          modelId: parts.modelId,
+          voiceId: parts.voiceId,
+          providerVoiceId: built.providerVoiceId,
+        });
+      })()
+    : { ok: true as const };
+
+  if (!validation.ok) {
+    return {
+      ok: false as const,
+      productionAssistantId: input.sourceAssistantId,
+      testAssistantId: null,
+      requested: built.voice_settings,
+      productionUnchanged: true,
+      error: {
+        message: validation.error,
+        status: 400,
+        code: "local_validation",
+        body: null,
+      },
+    };
+  }
 
   const cloned = await ai.cloneAssistant(input.sourceAssistantId, {
     name: `Voice test ${Date.now().toString(36)}`,
@@ -261,14 +311,34 @@ export async function testVoiceOnClone(input: {
       ? ((remote as { data: Record<string, unknown> }).data as Record<string, unknown>)
       : (remote as Record<string, unknown>);
     const vs = (remoteObj?.voice_settings || {}) as Record<string, unknown>;
+    const remoteVoice = vs.voice != null ? String(vs.voice) : null;
+    const readBackMatch = remoteVoice === built.providerVoiceId;
+    if (!readBackMatch) {
+      await ai.deleteAssistant(cloneId).catch(() => undefined);
+      return {
+        ok: false as const,
+        productionAssistantId: input.sourceAssistantId,
+        testAssistantId: cloneId,
+        requested: built.voice_settings,
+        productionUnchanged: true,
+        error: {
+          message: `Read-back mismatch: requested ${built.providerVoiceId}, remote ${remoteVoice}`,
+          status: 422,
+          code: "read_back_mismatch",
+          body: { remoteVoiceSettings: { voice: remoteVoice, api_key_ref: Boolean(vs.api_key_ref) } },
+        },
+      };
+    }
     return {
       ok: true as const,
       productionAssistantId: input.sourceAssistantId,
       testAssistantId: cloneId,
       requested: built.voice_settings,
-      remoteVoice: vs.voice != null ? String(vs.voice) : null,
+      remoteVoice,
       remoteExpressive:
         typeof vs.expressive_mode === "boolean" ? vs.expressive_mode : null,
+      remoteApiKeyRefPresent: Boolean(vs.api_key_ref),
+      readBackMatch: true,
       productionUnchanged: true,
     };
   } catch (err) {

@@ -11,11 +11,12 @@ import {
 } from "@/lib/voice/telnyx/voices";
 import { toErrorMessage } from "@/lib/errors";
 import { cn } from "@/lib/utils";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 /**
- * Pick a curated Telnyx Standard (NaturalHD) or Ultra voice.
+ * Pick Telnyx Standard / Ultra or ElevenLabs Flash / Multilingual v2 / v3.
  * Shows the exact provider voice id under the friendly name.
+ * ElevenLabs selection only applies after Connect + Test Voice succeeds.
  */
 export function VoicePicker({
   value,
@@ -34,32 +35,80 @@ export function VoicePicker({
   expressiveMode?: boolean;
 }) {
   const [voices, setVoices] = useState<TelnyxVoiceOption[]>(CURATED_TELNYX_VOICES);
+  const [elevenMeta, setElevenMeta] = useState<{
+    connected?: boolean;
+    configuredEnv?: boolean;
+    message?: string;
+    secretIdentifier?: string;
+  }>({});
   const [previewing, setPreviewing] = useState<string | null>(null);
   const [testing, setTesting] = useState<string | null>(null);
+  const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState("");
   const [testNote, setTestNote] = useState("");
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  useEffect(() => {
+  const reload = useCallback(() => {
     fetch("/api/voice/voices")
       .then((r) => r.json())
       .then((j) => {
         if (Array.isArray(j.data?.voices) && j.data.voices.length) {
           setVoices(j.data.voices);
         }
+        if (j.data?.elevenLabs) {
+          setElevenMeta(j.data.elevenLabs);
+        }
       })
       .catch(() => undefined);
   }, []);
 
-  async function preview(voiceId: string) {
-    setPreviewing(voiceId);
+  useEffect(() => {
+    reload();
+  }, [reload]);
+
+  async function connectElevenLabs() {
+    setConnecting(true);
+    setError("");
+    setTestNote("");
+    try {
+      const res = await fetch("/api/voice/ai", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "connect_elevenlabs" }),
+      });
+      const j = await res.json();
+      if (!res.ok) {
+        throw new Error(toErrorMessage(j.error ?? j, "Connect ElevenLabs failed"));
+      }
+      setTestNote(
+        j.data?.message ||
+          `Connected Telnyx secret ${j.data?.apiKeyRef || "elevenlabs_transovo"} (key not shown).`,
+      );
+      reload();
+    } catch (err) {
+      setError(toErrorMessage(err, "Connect ElevenLabs failed"));
+    } finally {
+      setConnecting(false);
+    }
+  }
+
+  async function preview(v: TelnyxVoiceOption) {
+    setPreviewing(v.id);
     setError("");
     try {
+      if (v.previewUrl) {
+        if (audioRef.current) {
+          audioRef.current.pause();
+          audioRef.current.src = v.previewUrl;
+          await audioRef.current.play();
+        }
+        return;
+      }
       const res = await fetch("/api/voice/tts-preview", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          voice: voiceId,
+          voice: v.id,
           language: language || "en-US",
           speed: speed ?? 1,
           text: DEFAULT_VOICE_PREVIEW_TEXT,
@@ -138,7 +187,7 @@ export function VoicePicker({
   function selectVoice(v: TelnyxVoiceOption) {
     if (v.previewOnly || v.assistantCompatible === false) {
       setError(
-        `${v.name} is preview-only and is not saved to AI Assistants. Pick a Standard or Ultra Voice.`,
+        `${v.name} is not ready for AI Assistants yet (${v.compatibility || "preview"}). Use Test Voice after Connect ElevenLabs.`,
       );
       return;
     }
@@ -147,11 +196,14 @@ export function VoicePicker({
     onChange(v.id);
   }
 
-  const standard = voices.filter(
-    (v) => !v.previewOnly && v.uiTier === "standard",
+  const standard = voices.filter((v) => !v.previewOnly && v.uiTier === "standard");
+  const ultra = voices.filter(
+    (v) => !v.previewOnly && v.uiTier === "ultra" && v.tier !== "elevenlabs",
   );
-  const ultra = voices.filter((v) => !v.previewOnly && v.uiTier === "ultra");
-  const compare = voices.filter((v) => v.previewOnly);
+  const elFlash = voices.filter((v) => v.uiTier === "elevenlabs_flash");
+  const elMv2 = voices.filter((v) => v.uiTier === "elevenlabs_multilingual_v2");
+  const elV3 = voices.filter((v) => v.uiTier === "elevenlabs_v3");
+  const compare = voices.filter((v) => v.previewOnly && v.tier !== "elevenlabs");
 
   return (
     <div className="space-y-3">
@@ -160,8 +212,9 @@ export function VoicePicker({
         <div>
           <Label>Voice</Label>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Standard Voice = NaturalHD. Ultra Voice uses Telnyx.Ultra.&lt;id&gt; with optional
-            expressive mode. Same Voice AI minute rate inside Assistants.
+            Compare Telnyx Ultra with ElevenLabs Flash / Multilingual v2 / v3 via Telnyx
+            Assistants TTS. Production stays on the current voice until you Test Voice and
+            publish.
           </p>
         </div>
         <p className="text-right text-xs text-muted-foreground">
@@ -175,8 +228,28 @@ export function VoicePicker({
       {error ? <p className="text-xs text-rose-600">{error}</p> : null}
       {testNote ? <p className="text-xs text-emerald-700">{testNote}</p> : null}
 
+      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border px-3 py-2">
+        <p className="flex-1 text-xs text-muted-foreground">
+          {elevenMeta.connected
+            ? `ElevenLabs connected (${elevenMeta.secretIdentifier || "secret"}). Key never shown.`
+            : elevenMeta.configuredEnv
+              ? "ELEVENLABS_KEY is on the server — connect it as a Telnyx integration secret."
+              : "Add ELEVENLABS_KEY on the server, then Connect ElevenLabs."}
+        </p>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={connecting || Boolean(elevenMeta.connected)}
+          onClick={() => void connectElevenLabs()}
+        >
+          {connecting ? "…" : elevenMeta.connected ? "Connected" : "Connect ElevenLabs"}
+        </Button>
+      </div>
+
       <VoiceGroup
         title="Standard Voice"
+        subtitle="Telnyx NaturalHD — included"
         voices={standard.length ? standard : voices.filter((v) => v.tier === "natural_hd")}
         value={value}
         previewing={previewing}
@@ -186,8 +259,42 @@ export function VoicePicker({
         onTest={agentId ? testVoice : undefined}
       />
       <VoiceGroup
-        title="Ultra Voice"
+        title="Ultra — Fast, natural, included"
+        subtitle="Telnyx Ultra"
         voices={ultra}
+        value={value}
+        previewing={previewing}
+        testing={testing}
+        onSelect={selectVoice}
+        onPreview={preview}
+        onTest={agentId ? testVoice : undefined}
+      />
+      <VoiceGroup
+        title="ElevenLabs Flash — Premium voice, optimized for speed"
+        subtitle="eleven_flash_v2_5"
+        voices={elFlash}
+        value={value}
+        previewing={previewing}
+        testing={testing}
+        onSelect={selectVoice}
+        onPreview={preview}
+        onTest={agentId ? testVoice : undefined}
+      />
+      <VoiceGroup
+        title="ElevenLabs Multilingual v2 — Highest-quality live voice"
+        subtitle="eleven_multilingual_v2"
+        voices={elMv2}
+        value={value}
+        previewing={previewing}
+        testing={testing}
+        onSelect={selectVoice}
+        onPreview={preview}
+        onTest={agentId ? testVoice : undefined}
+      />
+      <VoiceGroup
+        title="ElevenLabs v3 — Most expressive ElevenLabs voice"
+        subtitle="eleven_v3 — must be accepted by Telnyx"
+        voices={elV3}
         value={value}
         previewing={previewing}
         testing={testing}
@@ -213,6 +320,7 @@ export function VoicePicker({
 
 function VoiceGroup({
   title,
+  subtitle,
   voices,
   value,
   previewing,
@@ -223,21 +331,27 @@ function VoiceGroup({
   previewOnly,
 }: {
   title: string;
+  subtitle?: string;
   voices: TelnyxVoiceOption[];
   value?: string;
   previewing: string | null;
   testing: string | null;
   onSelect: (v: TelnyxVoiceOption) => void;
-  onPreview: (id: string) => void;
+  onPreview: (v: TelnyxVoiceOption) => void;
   onTest?: (v: TelnyxVoiceOption) => void;
   previewOnly?: boolean;
 }) {
   if (!voices.length) return null;
   return (
     <div>
-      <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+      <p className="mb-0.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
         {title}
       </p>
+      {subtitle ? (
+        <p className="mb-2 font-mono text-[10px] text-slate-400">{subtitle}</p>
+      ) : (
+        <div className="mb-2" />
+      )}
       <div className="grid gap-2 sm:grid-cols-2">
         {voices.map((v) => {
           const selected = value === v.id || value === v.providerVoiceId;
@@ -259,11 +373,18 @@ function VoiceGroup({
                 <p className="text-sm font-medium">
                   {v.name}{" "}
                   <span className="text-[10px] font-normal uppercase text-muted-foreground">
-                    {v.uiTierLabel}
+                    {v.tier === "elevenlabs" ? "ElevenLabs" : v.uiTier}
+                    {v.compatibility === "telnyx_rejected" ? " · rejected" : ""}
+                    {v.compatibility === "not_on_account" ? " · n/a" : ""}
                     {previewOnly || v.previewOnly ? " · preview" : ""}
                   </span>
                 </p>
                 <p className="truncate text-xs text-muted-foreground">{v.description}</p>
+                {v.elevenLabsModelId ? (
+                  <p className="truncate text-[10px] text-muted-foreground">
+                    model {v.elevenLabsModelId}
+                  </p>
+                ) : null}
                 <p className="mt-0.5 truncate font-mono text-[10px] text-slate-400">
                   {v.providerVoiceId}
                 </p>
@@ -274,7 +395,7 @@ function VoiceGroup({
                   size="sm"
                   variant="outline"
                   disabled={previewing === v.id}
-                  onClick={() => onPreview(v.id)}
+                  onClick={() => onPreview(v)}
                 >
                   {previewing === v.id ? "…" : "Play"}
                 </Button>

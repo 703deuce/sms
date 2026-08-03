@@ -2,6 +2,7 @@
  * Telnyx AI Assistant voice catalog + voice_settings helpers.
  *
  * Ultra format: Telnyx.Ultra.<voice_id>
+ * ElevenLabs format: ElevenLabs.<model_id>.<voice_id> + api_key_ref
  * Standard (Natural / NaturalHD) remains the safe default / fallback.
  *
  * History: Ultra was previously remapped to NaturalHD after Assistants returned
@@ -9,9 +10,20 @@
  * send Ultra as selected, surface Telnyx errors, and keep NaturalHD as fallback.
  */
 
+import {
+  isElevenLabsProviderVoice,
+  parseElevenLabsCatalogId,
+} from "@/lib/voice/elevenlabs/models";
+import { buildElevenLabsVoiceSettings } from "@/lib/voice/elevenlabs/voice-settings";
+
 export type VoiceQualityTier = "premium" | "standard" | "economy";
 export type VoiceCostTier = "standard" | "low" | "premium_provider";
-export type VoiceUiTier = "standard" | "ultra";
+export type VoiceUiTier =
+  | "standard"
+  | "ultra"
+  | "elevenlabs_flash"
+  | "elevenlabs_multilingual_v2"
+  | "elevenlabs_v3";
 
 export type CuratedVoice = {
   /** Stable catalog ID saved on the agent (not the raw Telnyx string). */
@@ -410,12 +422,34 @@ export function voiceLabel(catalogOrProviderId: string | undefined | null) {
   if (v) return `${v.displayName} — ${v.style}`;
   const raw = String(catalogOrProviderId || "");
   if (!raw) return "Ava — Warm, professional US English";
+  if (raw.startsWith("el:")) {
+    const parts = raw.split(":");
+    return `${parts[2] || "ElevenLabs"} (${parts[1] || "model"})`;
+  }
+  if (raw.startsWith("ElevenLabs.")) {
+    return raw.split(".").slice(-1)[0] || raw;
+  }
   return raw.split(".").pop() || raw;
 }
 
 export function voiceUiTierLabel(catalogOrProviderId: string | undefined | null) {
+  const raw = String(catalogOrProviderId || "");
+  if (raw.startsWith("el:") || raw.startsWith("ElevenLabs.")) {
+    if (raw.includes("eleven_flash_v2_5")) {
+      return "ElevenLabs Flash — Premium voice, optimized for speed";
+    }
+    if (raw.includes("eleven_multilingual_v2")) {
+      return "ElevenLabs Multilingual v2 — Highest-quality live voice";
+    }
+    if (raw.includes("eleven_v3")) {
+      return "ElevenLabs v3 — Most expressive ElevenLabs voice";
+    }
+    return "ElevenLabs Voice";
+  }
   const v = getCuratedVoice(catalogOrProviderId);
-  if (v?.uiTier === "ultra" || isUltraVoice(catalogOrProviderId)) return "Ultra Voice";
+  if (v?.uiTier === "ultra" || isUltraVoice(catalogOrProviderId)) {
+    return "Ultra — Fast, natural, included";
+  }
   return "Standard Voice";
 }
 
@@ -427,7 +461,9 @@ export function isApprovedVoiceId(id: string) {
     id.startsWith("Telnyx.NaturalHD.") ||
     id.startsWith("Telnyx.Natural.") ||
     id.startsWith("Telnyx.Ultra.") ||
-    id.startsWith("xAI.")
+    id.startsWith("xAI.") ||
+    id.startsWith("ElevenLabs.") ||
+    id.startsWith("el:")
   );
 }
 
@@ -437,17 +473,66 @@ export type AssistantVoiceSettingsInput = {
   speed?: number | null;
   expressiveMode?: boolean | null;
   volume?: number | null;
+  /** Telnyx integration secret identifier for ElevenLabs */
+  apiKeyRef?: string | null;
+  /** When true, include ElevenLabs tuning fields after basic voice works */
+  includeElevenLabsTuning?: boolean;
+  elevenLabsStability?: number | null;
+  elevenLabsSimilarityBoost?: number | null;
+  elevenLabsStyle?: number | null;
+  elevenLabsSpeakerBoost?: boolean | null;
+  elevenLabsModelCapabilities?: {
+    can_use_style: boolean;
+    can_use_speaker_boost: boolean;
+  } | null;
 };
 
 /**
- * Build Assistants voice_settings. Never forces expressive_mode on non-Ultra.
+ * Build Assistants voice_settings.
+ * - Ultra: Telnyx.Ultra.<uuid> + optional expressive_mode
+ * - ElevenLabs: ElevenLabs.<model>.<voiceId> + api_key_ref (never expressive_mode)
+ * - NaturalHD: existing Telnyx voices
  */
 export function buildAssistantVoiceSettings(input: AssistantVoiceSettingsInput): {
   voice_settings: Record<string, unknown>;
   providerVoiceId: string;
   isUltra: boolean;
+  isElevenLabs: boolean;
   expressiveMode: boolean;
+  apiKeyRef: string | null;
 } {
+  const rawRef = String(input.voiceRef || "").trim();
+
+  // ElevenLabs catalog / provider strings
+  if (
+    rawRef.startsWith("el:") ||
+    isElevenLabsProviderVoice(rawRef) ||
+    parseElevenLabsCatalogId(rawRef).ok
+  ) {
+    const built = buildElevenLabsVoiceSettings({
+      voiceRef: rawRef,
+      apiKeyRef: input.apiKeyRef,
+      includeTuning: Boolean(input.includeElevenLabsTuning),
+      stability: input.elevenLabsStability,
+      similarityBoost: input.elevenLabsSimilarityBoost,
+      style: input.elevenLabsStyle,
+      useSpeakerBoost: input.elevenLabsSpeakerBoost,
+      modelCapabilities: input.elevenLabsModelCapabilities,
+    });
+    // ElevenLabs uses `speed` (not voice_speed); only set when tuning is enabled.
+    if (input.speed != null && Number.isFinite(input.speed) && input.includeElevenLabsTuning) {
+      built.voice_settings.speed = input.speed;
+    }
+    return {
+      voice_settings: built.voice_settings,
+      providerVoiceId: built.providerVoiceId,
+      isUltra: false,
+      isElevenLabs: true,
+      expressiveMode: false,
+      apiKeyRef: built.apiKeyRef,
+    };
+  }
+
   const providerVoiceId = resolveProviderVoiceId(input.voiceRef);
   const isUltra = isUltraProviderVoice(providerVoiceId);
   if (isUltra) {
@@ -457,7 +542,7 @@ export function buildAssistantVoiceSettings(input: AssistantVoiceSettingsInput):
     }
   }
   // Ultra defaults expressive_mode on; callers can pass expressiveMode: false to disable.
-  // Never force expressive_mode on Natural / NaturalHD.
+  // Never force expressive_mode on Natural / NaturalHD / ElevenLabs.
   const expressiveMode = Boolean(
     isUltra && (input.expressiveMode == null ? true : input.expressiveMode),
   );
@@ -473,7 +558,14 @@ export function buildAssistantVoiceSettings(input: AssistantVoiceSettingsInput):
   if (input.volume != null && Number.isFinite(input.volume)) {
     voice_settings.volume = input.volume;
   }
-  return { voice_settings, providerVoiceId, isUltra, expressiveMode };
+  return {
+    voice_settings,
+    providerVoiceId,
+    isUltra,
+    isElevenLabs: false,
+    expressiveMode,
+    apiKeyRef: null,
+  };
 }
 
 /** Sanitize Telnyx error body for UI / logs (never includes API keys). */
@@ -537,9 +629,9 @@ export type TelnyxVoiceOption = {
   id: string;
   name: string;
   gender: "female" | "male" | "neutral";
-  tier: "ultra" | "natural_hd" | "natural" | "xai";
+  tier: "ultra" | "natural_hd" | "natural" | "xai" | "elevenlabs";
   uiTier: VoiceUiTier;
-  uiTierLabel: "Standard Voice" | "Ultra Voice";
+  uiTierLabel: string;
   language: string;
   description: string;
   providerVoiceId: string;
@@ -547,6 +639,11 @@ export type TelnyxVoiceOption = {
   supportsExpressive: boolean;
   previewOnly?: boolean;
   assistantCompatible?: boolean;
+  /** ElevenLabs-only metadata */
+  elevenLabsModelId?: string;
+  elevenLabsVoiceId?: string;
+  previewUrl?: string | null;
+  compatibility?: "available" | "telnyx_accepted" | "telnyx_rejected" | "not_on_account";
 };
 
 export const CURATED_TELNYX_VOICES: TelnyxVoiceOption[] = CURATED_VOICE_CATALOG.filter(
