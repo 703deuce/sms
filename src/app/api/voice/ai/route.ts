@@ -903,6 +903,39 @@ export async function POST(request: Request) {
         }
         return NextResponse.json({ data: result });
       }
+      case "voice_ab_shortlist": {
+        const {
+          VOICE_AB_CANDIDATES,
+          VOICE_AB_SCRIPT_LINES,
+          VOICE_AB_SCORE_FIELDS,
+          MIA_CATALOG_STATUS,
+          emptyVoiceAbScorecard,
+          primaryVoiceAbCandidates,
+        } = await import("@/lib/voice/telnyx/receptionist-ab");
+        return NextResponse.json({
+          data: {
+            phoneHint: "+18663464256",
+            keepIdentical: [
+              "assistant instructions",
+              "greeting",
+              "LLM",
+              "STT",
+              "tools",
+              "interruption settings",
+              "phone number",
+              "test script",
+            ],
+            miaCatalogStatus: MIA_CATALOG_STATUS,
+            primary: primaryVoiceAbCandidates(),
+            all: VOICE_AB_CANDIDATES,
+            script: VOICE_AB_SCRIPT_LINES,
+            scoreFields: VOICE_AB_SCORE_FIELDS,
+            scorecardTemplate: emptyVoiceAbScorecard(),
+            ultraProtocol:
+              "First live call with expressive_mode=false, then repeat with expressive_mode=true",
+          },
+        });
+      }
       default:
         return NextResponse.json({ error: `Unknown action ${action}` }, { status: 400 });
     }

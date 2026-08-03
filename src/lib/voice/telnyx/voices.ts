@@ -96,6 +96,38 @@ export const DOCUMENTED_ULTRA_VOICES = [
     locale: "en-US",
     gender: "female" as const,
   },
+  {
+    catalogId: "allie-ultra",
+    displayName: "Allie",
+    style: "Natural Conversationalist — receptionist A/B shortlist",
+    providerVoiceId: "Telnyx.Ultra.2747b6cf-fa34-460c-97db-267566918881",
+    locale: "en-US",
+    gender: "female" as const,
+  },
+  {
+    catalogId: "maia-ultra",
+    displayName: "Maia",
+    style: "Agile Support — stand-in for missing Mia Agent (catalog 2026-08-03)",
+    providerVoiceId: "Telnyx.Ultra.5a033900-2ed6-4fd4-a257-707f2688e713",
+    locale: "en-US",
+    gender: "female" as const,
+  },
+  {
+    catalogId: "howard-ultra",
+    displayName: "Howard",
+    style: "Approachable Man — transactional male A/B option",
+    providerVoiceId: "Telnyx.Ultra.0d42f0f6-c019-4082-b250-1c16133d1c82",
+    locale: "en-US",
+    gender: "male" as const,
+  },
+  {
+    catalogId: "jasper-ultra",
+    displayName: "Jasper",
+    style: "Service Specialist — sales-adjacent male A/B option",
+    providerVoiceId: "Telnyx.Ultra.3faa81ae-d3d8-4ab1-9e44-e50e46d33c30",
+    locale: "en-US",
+    gender: "male" as const,
+  },
 ] as const;
 
 /** @deprecated short names — Assistants reject these; use DOCUMENTED_ULTRA_VOICES */
@@ -268,6 +300,82 @@ export const CURATED_VOICE_CATALOG: CuratedVoice[] = [
     language: "en",
     locale: "en-US",
     gender: "female",
+    qualityTier: "premium",
+    costTier: "standard",
+    uiTier: "ultra",
+    supportsSpeed: true,
+    supportsExpressive: true,
+    enabled: true,
+    assistantCompatible: true,
+    previewText: DEFAULT_VOICE_PREVIEW_TEXT,
+  },
+  {
+    catalogId: "allie-ultra",
+    displayName: "Allie",
+    style: "Natural Conversationalist — receptionist A/B shortlist",
+    provider: "telnyx",
+    providerVoiceId: "Telnyx.Ultra.2747b6cf-fa34-460c-97db-267566918881",
+    model: "Ultra",
+    language: "en",
+    locale: "en-US",
+    gender: "female",
+    qualityTier: "premium",
+    costTier: "standard",
+    uiTier: "ultra",
+    supportsSpeed: true,
+    supportsExpressive: true,
+    enabled: true,
+    assistantCompatible: true,
+    previewText: DEFAULT_VOICE_PREVIEW_TEXT,
+  },
+  {
+    catalogId: "maia-ultra",
+    displayName: "Maia",
+    style: "Agile Support — stand-in for missing Mia Agent",
+    provider: "telnyx",
+    providerVoiceId: "Telnyx.Ultra.5a033900-2ed6-4fd4-a257-707f2688e713",
+    model: "Ultra",
+    language: "en",
+    locale: "en-US",
+    gender: "female",
+    qualityTier: "premium",
+    costTier: "standard",
+    uiTier: "ultra",
+    supportsSpeed: true,
+    supportsExpressive: true,
+    enabled: true,
+    assistantCompatible: true,
+    previewText: DEFAULT_VOICE_PREVIEW_TEXT,
+  },
+  {
+    catalogId: "howard-ultra",
+    displayName: "Howard",
+    style: "Approachable Man — transactional male A/B option",
+    provider: "telnyx",
+    providerVoiceId: "Telnyx.Ultra.0d42f0f6-c019-4082-b250-1c16133d1c82",
+    model: "Ultra",
+    language: "en",
+    locale: "en-US",
+    gender: "male",
+    qualityTier: "premium",
+    costTier: "standard",
+    uiTier: "ultra",
+    supportsSpeed: true,
+    supportsExpressive: true,
+    enabled: true,
+    assistantCompatible: true,
+    previewText: DEFAULT_VOICE_PREVIEW_TEXT,
+  },
+  {
+    catalogId: "jasper-ultra",
+    displayName: "Jasper",
+    style: "Service Specialist — sales-adjacent male A/B option",
+    provider: "telnyx",
+    providerVoiceId: "Telnyx.Ultra.3faa81ae-d3d8-4ab1-9e44-e50e46d33c30",
+    model: "Ultra",
+    language: "en",
+    locale: "en-US",
+    gender: "male",
     qualityTier: "premium",
     costTier: "standard",
     uiTier: "ultra",
@@ -548,12 +656,21 @@ export function buildAssistantVoiceSettings(input: AssistantVoiceSettingsInput):
   );
   const voice_settings: Record<string, unknown> = {
     voice: providerVoiceId,
+    // Telnyx MERGES voice_settings — clear ElevenLabs leftovers when leaving EL.
+    api_key_ref: null,
+    similarity_boost: null,
+    temperature: null,
+    style: null,
+    use_speaker_boost: false,
+    language_boost: null,
   };
   if (input.speed != null && Number.isFinite(input.speed)) {
     voice_settings.voice_speed = input.speed;
   }
-  if (expressiveMode) {
-    voice_settings.expressive_mode = true;
+  if (isUltra) {
+    voice_settings.expressive_mode = expressiveMode;
+  } else {
+    voice_settings.expressive_mode = false;
   }
   if (input.volume != null && Number.isFinite(input.volume)) {
     voice_settings.volume = input.volume;
