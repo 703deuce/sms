@@ -62,13 +62,8 @@ export function compileVoiceFlowBundle(
   const configPatch: Partial<VoiceAgentConfig> = {
     callHandling: {
       greeting: greetingText,
-      startupGreeting: {
-        enabled: true,
-        mode: "ai",
-        text: "",
-        delayMs: "auto",
-        handOffWhenReady: true,
-      },
+      // Do not overwrite startupGreeting / connectionGreeting — those are
+      // independent receptionist settings (Off | Transovo default prerecord).
       closingStatement: closing,
     },
     conversationFlow: { sections },

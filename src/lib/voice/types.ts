@@ -309,7 +309,24 @@ export function mergeVoiceConfig(
   prev: VoiceAgentConfig,
   patch: Partial<VoiceAgentConfig>,
 ): VoiceAgentConfig {
-  return parseVoiceAgentConfig({ ...prev, ...patch });
+  const prevHandling = (prev.callHandling || {}) as Record<string, unknown>;
+  const patchHandling = (patch.callHandling || {}) as Record<string, unknown>;
+  const mergedHandling =
+    patch.callHandling || prev.callHandling
+      ? {
+          ...prevHandling,
+          ...patchHandling,
+          startupGreeting: {
+            ...((prevHandling.startupGreeting as object) || {}),
+            ...((patchHandling.startupGreeting as object) || {}),
+          },
+        }
+      : undefined;
+  return parseVoiceAgentConfig({
+    ...prev,
+    ...patch,
+    ...(mergedHandling ? { callHandling: mergedHandling } : {}),
+  });
 }
 
 export const DYNAMIC_VARIABLE_PATTERN = /\{\{([^}]+)\}\}/g;
