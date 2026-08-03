@@ -141,14 +141,40 @@ function bucketByDay(dates: Date[], days = 14): number[] {
 }
 
 function pctChange(current: number, previous: number): number | null {
-  if (previous <= 0 && current <= 0) return null;
-  if (previous <= 0) return 100;
+  if (previous <= 0) return null;
   return Math.round(((current - previous) / previous) * 1000) / 10;
 }
 
 function nameOf(contact: { firstName?: string | null; lastName?: string | null; phone?: string }) {
   const full = `${contact.firstName || ""} ${contact.lastName || ""}`.trim();
   return full || contact.phone || "Unknown";
+}
+
+function displayFirstName(userName: string) {
+  const parts = userName.trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return "there";
+  // Prefer a real given name when the account starts with a numeric handle.
+  if (/^\d/.test(parts[0]) && parts[1]) return parts[1];
+  return parts[0];
+}
+
+function humanSourceName(raw: string) {
+  const map: Record<string, string> = {
+    "crm:zoho": "Zoho CRM",
+    "crm:salesforce": "Salesforce",
+    "crm:salesforce:company": "Salesforce Companies",
+    "crm:pipedrive": "Pipedrive",
+    "crm:pipedrive:company": "Pipedrive Companies",
+    Manual: "Manual add",
+    Import: "Import",
+    Keyword: "SMS Keyword",
+    Form: "Web form",
+  };
+  if (map[raw]) return map[raw];
+  return raw
+    .replace(/^crm:/i, "")
+    .replace(/[_:]+/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 function relativeTime(date: Date | string | null | undefined) {
@@ -661,7 +687,11 @@ export async function loadSolutionDashboard(workspaceId: string, userName: strin
     teamStats = [...sources.entries()]
       .sort((a, b) => b[1] - a[1])
       .slice(0, 5)
-      .map(([name, count]) => ({ name, count, label: "leads" }));
+      .map(([name, count]) => ({
+        name: humanSourceName(name),
+        count,
+        label: "leads",
+      }));
   }
 
   const gettingStartedSteps = deriveGettingStartedSteps({
@@ -746,7 +776,7 @@ export async function loadSolutionDashboard(workspaceId: string, userName: strin
   });
 
   return {
-    userName: userName.split(" ")[0] || userName,
+    userName: displayFirstName(userName),
     workspaceName: workspace?.name || "your workspace",
     todayLabel,
     solutionKpis,
