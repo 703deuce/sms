@@ -1598,26 +1598,31 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
                 <div>
                   <Label>STT provider</Label>
                   <Input
-                    value={cfg.transcription?.sttProvider || ""}
+                    value={cfg.transcription?.sttProvider || "deepgram"}
                     onChange={(e) =>
                       updateConfig({
                         transcription: { ...cfg.transcription, sttProvider: e.target.value },
                       })
                     }
-                    placeholder="telnyx / deepgram / …"
+                    placeholder="deepgram"
                   />
                 </div>
                 <div>
                   <Label>STT model</Label>
                   <Input
-                    value={cfg.transcription?.sttModel || ""}
+                    value={cfg.transcription?.sttModel || "deepgram/nova-3"}
                     onChange={(e) =>
                       updateConfig({
                         transcription: { ...cfg.transcription, sttModel: e.target.value },
                       })
                     }
+                    placeholder="deepgram/nova-3"
                   />
                 </div>
+                <p className="sm:col-span-2 text-xs text-muted-foreground">
+                  Live call transcripts use Deepgram Nova-3 with smart formatting
+                  (punctuation + capitalization) by default.
+                </p>
                 <div className="sm:col-span-2">
                   <Label>Keyterms (comma-separated)</Label>
                   <Input

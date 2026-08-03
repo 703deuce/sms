@@ -377,10 +377,22 @@ export async function syncTelnyxAssistant(
   if (transcription.enabled !== false) {
     (enrichPayload.enabled_features as string[]).push("transcription");
   }
-  if (transcription.sttModel || transcription.keyterms?.length) {
+  // Default assistant STT to Deepgram Nova-3 (punctuated). Builder can override.
+  {
+    const sttModel =
+      transcription.sttModel?.trim() ||
+      process.env.VOICE_TRANSCRIPTION_MODEL?.trim() ||
+      "deepgram/nova-3";
+    const langRaw =
+      transcription.language ||
+      config.voiceLanguage?.primaryLanguage ||
+      "en";
+    const lang = String(langRaw).toLowerCase().startsWith("en")
+      ? "en"
+      : String(langRaw).split("-")[0] || "en";
     enrichPayload.transcription = {
-      ...(transcription.sttModel ? { model: transcription.sttModel } : {}),
-      language: transcription.language || config.voiceLanguage?.primaryLanguage || "en",
+      model: sttModel,
+      language: lang,
       ...(transcription.keyterms?.length ? { keyterms: transcription.keyterms } : {}),
     };
   }
@@ -815,20 +827,52 @@ export async function startCallRecording(callControlId: string) {
   return { mode: "telnyx" as const };
 }
 
-/** Start live transcription on a call control leg. */
+/** Start live transcription on a call control leg (Deepgram Nova-3 + smart format). */
 export async function startCallTranscription(callControlId: string) {
   if (!callControlId || callControlId.startsWith("mock_") || !isTelnyxVoiceConfigured()) {
     return { mode: "mock" as const };
   }
+
+  const engine =
+    process.env.VOICE_TRANSCRIPTION_ENGINE?.trim() || "Deepgram";
+  const model =
+    process.env.VOICE_TRANSCRIPTION_MODEL?.trim() || "deepgram/nova-3";
+  const languageRaw =
+    process.env.VOICE_TRANSCRIPTION_LANGUAGE?.trim() || "en";
+  // Deepgram expects short codes (en), not BCP-47 tags like en-US.
+  const languageLower = languageRaw.toLowerCase();
+  const language = languageLower.startsWith("en")
+    ? "en"
+    : languageLower.split("-")[0] || "en";
+  const smartFormat = process.env.VOICE_TRANSCRIPTION_SMART_FORMAT !== "0";
+
+  const body: Record<string, unknown> =
+    engine === "Deepgram" || engine.toLowerCase() === "deepgram"
+      ? {
+          transcription_engine: "Deepgram",
+          transcription_tracks: "both",
+          transcription_engine_config: {
+            transcription_engine: "Deepgram",
+            transcription_model: model.startsWith("deepgram/")
+              ? model
+              : "deepgram/nova-3",
+            language,
+            smart_format: smartFormat,
+            interim_results: false,
+          },
+        }
+      : {
+          // Legacy escape hatch (Google / Telnyx / A / B).
+          language,
+          transcription_engine: engine,
+          transcription_tracks: "both",
+        };
+
   await telnyxRequest(`/calls/${callControlId}/actions/transcription_start`, {
     method: "POST",
-    body: {
-      language: "en",
-      transcription_engine: "A",
-      transcription_tracks: "both",
-    },
+    body,
   }).catch((err) => console.warn("[voice] transcription_start failed", err));
-  return { mode: "telnyx" as const };
+  return { mode: "telnyx" as const, engine, model };
 }
 
 async function mockOutboundDial(input: {
