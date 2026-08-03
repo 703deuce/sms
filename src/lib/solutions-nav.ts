@@ -121,13 +121,23 @@ export function buildSolutionsNav(options: SolutionsNavOptions = {}): NavItem[] 
     },
   ];
 
+  for (const [index, solution] of callOutcomes.entries()) {
+    nav.push({
+      label: solution.title,
+      href: outcomeHref(solution.slug),
+      icon: iconFor(solution.slug),
+      children: solutionChildren(solution, instances[solution.slug]),
+      // First outcome opens the AI Receptionist section; Your Receptionists follows last.
+      sectionLabel: index === 0 ? "AI Receptionist" : undefined,
+    });
+  }
+
   if (receptionistHub) {
     const receptionistInstances = instances["ai-receptionist"] ?? [];
     nav.push({
       label: "Your Receptionists",
       href: outcomeHref("ai-receptionist"),
       icon: AudioLines,
-      sectionLabel: "AI Receptionist",
       children:
         receptionistInstances.length > 0
           ? receptionistInstances.slice(0, 2).map((inst) => ({
@@ -143,17 +153,6 @@ export function buildSolutionsNav(options: SolutionsNavOptions = {}): NavItem[] 
                   outcomeHref("ai-receptionist"),
               },
             ],
-    });
-  }
-
-  for (const [index, solution] of callOutcomes.entries()) {
-    nav.push({
-      label: solution.title,
-      href: outcomeHref(solution.slug),
-      icon: iconFor(solution.slug),
-      children: solutionChildren(solution, instances[solution.slug]),
-      sectionLabel:
-        index === 0 && !receptionistHub ? "AI Receptionist" : undefined,
     });
   }
 
