@@ -25,13 +25,22 @@ export async function POST(request: Request) {
       provider?: string;
       config?: Record<string, unknown>;
     };
+    const provider = body.provider || "internal";
+    // Only OAuth calendars and Transovo internal are connectable here.
+    // Calendly/Acuity/Cal.com need a real integration connection — do not fake "connected".
+    const status =
+      provider === "google" || provider === "microsoft"
+        ? "pending_oauth"
+        : provider === "internal"
+          ? "connected"
+          : "pending";
     const row = await getPrisma().voiceCalendarConnection.create({
       data: {
         workspaceId: auth.workspaceId,
         name: body.name || "Calendar",
-        provider: body.provider || "internal",
+        provider,
         config: body.config || {},
-        status: body.provider === "google" || body.provider === "microsoft" ? "pending_oauth" : "connected",
+        status,
       },
     });
     return NextResponse.json({ data: row }, { status: 201 });

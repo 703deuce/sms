@@ -34,13 +34,6 @@ export function getWizardActivationIssues(
       message: "Set a receptionist name.",
     });
   }
-  if (!state.businessName?.trim()) {
-    issues.push({
-      id: "business_name",
-      severity: "warning",
-      message: "Add a business name so callers hear who they’re calling.",
-    });
-  }
   if (!state.voiceId?.trim()) {
     issues.push({
       id: "voice",
@@ -65,7 +58,14 @@ export function getWizardActivationIssues(
     issues.push({
       id: "knowledge",
       severity: "blocking",
-      message: "Add business information (name, hours, services, or FAQ) so the agent can answer questions.",
+      message:
+        "Add a business name or other business information (hours, services, or FAQ) so the agent can answer questions.",
+    });
+  } else if (!state.businessName?.trim()) {
+    issues.push({
+      id: "business_name",
+      severity: "warning",
+      message: "Add a business name so callers hear who they’re calling.",
     });
   }
 
@@ -92,9 +92,9 @@ export function getWizardActivationIssues(
     if (!ctx?.hasCalendarConnection && !state.calendarConnected) {
       issues.push({
         id: "calendar",
-        severity: "warning",
+        severity: "blocking",
         message:
-          "No live calendar connected yet — booking tools will be limited until a calendar is linked under Voice → Calendars.",
+          "Connect a live calendar before activating booking — link Google, Microsoft, or Transovo Calendar under Appointments.",
       });
     }
   }
@@ -102,8 +102,23 @@ export function getWizardActivationIssues(
   if (state.lastTestPassed === false) {
     issues.push({
       id: "test",
+      severity: "blocking",
+      message: "Last test did not pass — retest before going live.",
+    });
+  } else if (state.lastTestPassed === null) {
+    issues.push({
+      id: "test",
       severity: "warning",
-      message: "Last test did not pass — consider retesting before going live.",
+      message: "No successful test recorded yet — consider running a test before going live.",
+    });
+  }
+
+  if (state.callRecording !== "off") {
+    issues.push({
+      id: "recording_disclosure",
+      severity: "warning",
+      message:
+        "Call recording is on — ensure callers hear a recording disclosure at the start of the call.",
     });
   }
 

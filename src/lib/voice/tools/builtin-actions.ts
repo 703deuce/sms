@@ -193,6 +193,7 @@ export async function executeBuiltinVoiceAction(input: {
             contactId: contactId || undefined,
             metadata: {
               ...prevMeta,
+              follow_up_required: true,
               structuredMessage: {
                 callerName,
                 phone,
@@ -247,32 +248,73 @@ export async function executeBuiltinVoiceAction(input: {
         error: err instanceof Error ? err.message : String(err),
       }));
 
+      const notifyTitle =
+        urgency === "high" || urgency === "urgent"
+          ? "Urgent caller message"
+          : "New caller message";
+      const notifyBody = [callerName || "Unknown caller", phone || "", reason.slice(0, 160)]
+        .filter(Boolean)
+        .join(" · ");
+      const notifyHref = input.callId ? `/voice/calls/${input.callId}` : "/voice/calls";
+
       // Staff notification — required for every receptionist message-taking path.
       await import("@/lib/notifications/in-app")
         .then(({ notifyWorkspace }) =>
           notifyWorkspace(input.workspaceId, {
-            type: urgency === "high" || urgency === "urgent" ? "system" : "system",
-            title:
-              urgency === "high" || urgency === "urgent"
-                ? "Urgent caller message"
-                : "New caller message",
-            body: [
-              callerName || "Unknown caller",
-              phone || "",
-              reason.slice(0, 160),
-            ]
-              .filter(Boolean)
-              .join(" · "),
-            href: input.callId ? `/voice/calls/${input.callId}` : "/voice/calls",
+            type: "system",
+            title: notifyTitle,
+            body: notifyBody,
+            href: notifyHref,
           }),
         )
         .catch(() => undefined);
+
+      // Best-effort email via Brevo / voice_send_email when staff emails are available.
+      await notifyStaffByEmail({
+        workspaceId: input.workspaceId,
+        subject: notifyTitle,
+        body: [
+          notifyBody,
+          preferredCallback ? `Preferred callback: ${preferredCallback}` : "",
+          notes ? `Notes: ${notes}` : "",
+          notifyHref.startsWith("/")
+            ? `Open: ${(process.env.APP_URL || "").replace(/\/$/, "")}${notifyHref}`
+            : "",
+        ]
+          .filter(Boolean)
+          .join("\n"),
+        callId: input.callId,
+        kind: "caller_message",
+      }).catch(() => undefined);
+
+      // High/urgent messages also create a follow-up task for the team.
+      let task: unknown = null;
+      if (urgency === "high" || urgency === "urgent") {
+        task = await executeBuiltinVoiceAction({
+          workspaceId: input.workspaceId,
+          agentId: input.agentId,
+          callId: input.callId,
+          toolType: "create_task",
+          input: {
+            title: `Urgent callback: ${callerName || phone || "caller"}`,
+            notes: [reason, preferredCallback ? `Callback: ${preferredCallback}` : "", notes]
+              .filter(Boolean)
+              .join("\n"),
+            phone: phone || undefined,
+          },
+        }).catch((err) => ({
+          ok: false as const,
+          error: err instanceof Error ? err.message : String(err),
+        }));
+      }
 
       return {
         ok: true,
         message: "Message saved. Tell the caller you will make sure the team receives it.",
         contactId,
         crm,
+        follow_up_required: true,
+        task,
       };
     }
     case "mark_disposition": {
@@ -489,6 +531,26 @@ export async function executeBuiltinVoiceAction(input: {
       }
 
       // Cold/blind Call Control transfer — single path for PSTN human handoff.
+      const agentConfig = input.agentId
+        ? (((
+            await prisma.voiceAgent.findFirst({
+              where: { id: input.agentId, workspaceId: input.workspaceId },
+              select: { config: true },
+            })
+          )?.config || {}) as Record<string, unknown>)
+        : ({} as Record<string, unknown>);
+      const transfersCfg = (agentConfig.transfers || {}) as Record<string, unknown>;
+      const shouldAnnounce = Boolean(transfersCfg.announce);
+      const fallback = String(transfersCfg.fallback || "return_to_ai");
+
+      if (shouldAnnounce && call.telnyxCallControlId) {
+        const { speakOnCallControl } = await import("../startup-greeting-runtime");
+        await speakOnCallControl(
+          call.telnyxCallControlId,
+          "Please hold while I connect you.",
+        ).catch(() => undefined);
+      }
+
       const { initiateTransfer } = await import("../transfers");
       try {
         const result = await initiateTransfer({
@@ -516,11 +578,35 @@ export async function executeBuiltinVoiceAction(input: {
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         console.error("[voice] escalate_human failed", message);
+        const takeMessage = fallback === "take_message";
+        if (input.callId) {
+          const existing = await prisma.voiceCall.findFirst({
+            where: { id: input.callId, workspaceId: input.workspaceId },
+            select: { metadata: true },
+          });
+          const prevMeta = (existing?.metadata || {}) as Record<string, unknown>;
+          await prisma.voiceCall
+            .update({
+              where: { id: input.callId },
+              data: {
+                outcome: takeMessage ? "transfer_failed_take_message" : "transfer_failed",
+                metadata: {
+                  ...prevMeta,
+                  transferFailed: true,
+                  transferFallback: fallback,
+                  transferError: message,
+                  ...(takeMessage ? { follow_up_required: true } : {}),
+                },
+              },
+            })
+            .catch(() => undefined);
+        }
         return {
           ok: false,
           error: message,
-          speak:
-            "I wasn't able to connect that transfer. I can take a detailed message and have someone call you back.",
+          speak: takeMessage
+            ? "I wasn't able to connect that transfer. I can take a detailed message and have someone call you back."
+            : "I wasn't able to connect that transfer. I can help another way or try again shortly.",
         };
       }
     }
@@ -628,7 +714,22 @@ export async function executeBuiltinVoiceAction(input: {
             source: "ai",
           });
           if (result.ok) {
-            return { provider: "calendly", ok: true, ...(result.data as object) };
+            const booked = { provider: "calendly", ok: true, ...(result.data as object) };
+            await afterAppointmentBooked({
+              workspaceId: input.workspaceId,
+              agentId: input.agentId,
+              callId: input.callId,
+              phone: phone || (args.phone ? String(args.phone) : ""),
+              name,
+              email,
+              startsAt: String(args.startsAt || args.startTime || ""),
+              serviceName: String(args.serviceName || args.service || "Appointment"),
+              appointmentId:
+                typeof (result.data as { appointmentId?: unknown })?.appointmentId === "string"
+                  ? String((result.data as { appointmentId: string }).appointmentId)
+                  : undefined,
+            }).catch(() => undefined);
+            return booked;
           }
           throw new Error(
             ("message" in result && result.message) || "Calendly book failed",
@@ -650,7 +751,31 @@ export async function executeBuiltinVoiceAction(input: {
         );
       }
       const { bookAppointment } = await import("../calendar/booking");
-      return await bookAppointment(input.workspaceId, args);
+      const booked = await bookAppointment(input.workspaceId, {
+        ...args,
+        callId: input.callId || args.callId,
+        agentId: input.agentId,
+      });
+      await afterAppointmentBooked({
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+        callId: input.callId,
+        phone: args.phone ? String(args.phone) : "",
+        name: String(args.name || ""),
+        email: args.email ? String(args.email) : "",
+        startsAt: String(args.startsAt || ""),
+        serviceName: String(args.serviceName || args.service || "Appointment"),
+        appointmentId:
+          booked && typeof booked === "object" && "appointmentId" in booked
+            ? String((booked as { appointmentId: string }).appointmentId)
+            : undefined,
+        smsAlreadySent: Boolean(
+          booked && typeof booked === "object" && "smsSent" in booked
+            ? (booked as { smsSent?: boolean }).smsSent
+            : false,
+        ),
+      }).catch(() => undefined);
+      return booked;
     }
     case "reschedule_appointment": {
       const appointmentId = String(args.appointmentId || "");
@@ -780,3 +905,143 @@ export async function executeBuiltinVoiceAction(input: {
       throw new Error(`Unsupported builtin tool: ${input.toolType}`);
   }
 }
+
+async function agentSmsConfirmationsEnabled(
+  workspaceId: string,
+  agentId?: string,
+): Promise<boolean> {
+  if (!agentId) return false;
+  const agent = await getPrisma().voiceAgent.findFirst({
+    where: { id: agentId, workspaceId },
+    select: { config: true },
+  });
+  const cfg = (agent?.config || {}) as Record<string, unknown>;
+  const messaging = (cfg.messaging || {}) as Record<string, unknown>;
+  if ("smsConfirmations" in messaging) return Boolean(messaging.smsConfirmations);
+  const tools = Array.isArray(cfg.enabledBuiltinTools)
+    ? (cfg.enabledBuiltinTools as string[])
+    : [];
+  return tools.includes("send_sms");
+}
+
+async function notifyStaffByEmail(input: {
+  workspaceId: string;
+  subject: string;
+  body: string;
+  callId?: string;
+  kind?: string;
+}) {
+  const prisma = getPrisma();
+  const memberships = await prisma.membership.findMany({
+    where: { workspaceId: input.workspaceId },
+    include: { user: { select: { id: true, email: true } } },
+  });
+  if (!memberships.length) return { sent: 0 };
+
+  const { getNotificationPrefs } = await import("@/lib/settings/notification-prefs");
+  const { enqueueJob } = await import("@/lib/messaging/enqueue-advance");
+  let sent = 0;
+  const seen = new Set<string>();
+
+  for (const m of memberships as Array<{
+    userId: string;
+    user: { id: string; email: string };
+  }>) {
+    const prefs = await getNotificationPrefs(input.workspaceId, m.userId).catch(() => null);
+    const typePref =
+      prefs?.prefs && typeof prefs.prefs === "object"
+        ? (prefs.prefs as Record<string, { email?: boolean } | undefined>).system
+        : undefined;
+    if (typePref?.email === false) continue;
+
+    const to = (prefs?.notifyEmail?.trim() || m.user.email || "").trim().toLowerCase();
+    if (!to || seen.has(to)) continue;
+    seen.add(to);
+
+    await enqueueJob({
+      jobType: "voice_send_email",
+      queueName: "voice-calls",
+      workspaceId: input.workspaceId,
+      payload: {
+        workspaceId: input.workspaceId,
+        to,
+        subject: input.subject,
+        body: input.body,
+        callId: input.callId,
+        kind: input.kind || "staff_notify",
+      },
+      idempotencyKey: `voice-staff-email-${input.kind || "notify"}-${input.callId || "none"}-${to}-${Date.now()}`,
+    }).catch(() => undefined);
+    sent += 1;
+  }
+  return { sent };
+}
+
+async function afterAppointmentBooked(input: {
+  workspaceId: string;
+  agentId?: string;
+  callId?: string;
+  phone?: string;
+  name?: string;
+  email?: string;
+  startsAt?: string;
+  serviceName: string;
+  appointmentId?: string;
+  smsAlreadySent?: boolean;
+}) {
+  const when = input.startsAt || "the scheduled time";
+  const body = [
+    input.name || "Caller",
+    input.phone || "",
+    `${input.serviceName} · ${when}`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  await import("@/lib/notifications/in-app")
+    .then(({ notifyWorkspace }) =>
+      notifyWorkspace(input.workspaceId, {
+        type: "system",
+        title: "Appointment booked",
+        body,
+        href: input.callId ? `/voice/calls/${input.callId}` : "/voice/calls",
+      }),
+    )
+    .catch(() => undefined);
+
+  await notifyStaffByEmail({
+    workspaceId: input.workspaceId,
+    subject: `Appointment booked: ${input.serviceName}`,
+    body: [
+      body,
+      input.email ? `Email: ${input.email}` : "",
+      input.appointmentId ? `Appointment ID: ${input.appointmentId}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n"),
+    callId: input.callId,
+    kind: "appointment_booked",
+  }).catch(() => undefined);
+
+  if (input.smsAlreadySent) return;
+  const phone = input.phone ? normalizeE164(input.phone) : "";
+  if (!phone) return;
+  const smsOn = await agentSmsConfirmationsEnabled(input.workspaceId, input.agentId);
+  if (!smsOn) return;
+
+  const smsBody = `Your ${input.serviceName} appointment is confirmed for ${when}.`;
+  try {
+    const { sendQuickSms } = await import("@/lib/sms/send-quick");
+    await sendQuickSms({
+      workspaceId: input.workspaceId,
+      to: phone,
+      body: smsBody,
+    });
+  } catch (err) {
+    console.warn(
+      "[voice] appointment SMS confirmation failed",
+      err instanceof Error ? err.message : err,
+    );
+  }
+}
+

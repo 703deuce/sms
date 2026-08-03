@@ -389,22 +389,6 @@ export async function runAppointmentReceptionistActivateHooks(input: {
     });
   }
 
-  await runSharedReceptionistHooks({
-    workspaceId: input.workspaceId,
-    agentId: input.agentId,
-    mode: input.mode,
-    answerWhen: input.state.answerWhen,
-    meta: {
-      ringBehavior: input.state.ringBehavior,
-      solutionSlug: "appointment-assistant",
-    },
-  }).catch((err) => {
-    console.warn(
-      "[appointment-receptionist] shared receptionist hooks failed",
-      err instanceof Error ? err.message : err,
-    );
-  });
-
   return {
     issues,
     knowledgeBaseId,
