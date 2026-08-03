@@ -193,7 +193,7 @@ async function startAiOnInboundCall(input: {
       const concurrentMask =
         playMaskFirst &&
         (startup.connectionGreeting === "transovo_default" ||
-          startup.delayMs === 0);
+          (typeof startup.delayMs === "number" && startup.delayMs <= 1000));
 
       if (!playMaskFirst) {
         await speakRecordingDisclosure(
@@ -204,7 +204,7 @@ async function startAiOnInboundCall(input: {
         );
       }
 
-      // Optional TTS/audio mask — connection greeting returns immediately.
+      // Optional TTS/audio mask — connection greeting returns after a short settle.
       const maskResult = await playStartupGreetingMask({
         workspaceId: input.workspaceId,
         callId: input.callId,
@@ -225,11 +225,13 @@ async function startAiOnInboundCall(input: {
       }
 
       // When AI speaks the greeting, wait for media settle so the first syllable isn't static.
-      // Concurrent connection greeting: tiny settle only, then start AI while bed plays.
+      // Concurrent connection greeting: music first, then ~500ms, then start AI.
       if (startup.mode === "ai" || startup.mode === "none" || !maskResult.played) {
         await sleep(AI_MEDIA_SETTLE_MS);
       } else if (concurrentMask) {
-        await sleep(150);
+        const settleMs =
+          typeof startup.delayMs === "number" ? startup.delayMs : 500;
+        await sleep(Math.max(0, Math.min(1000, settleMs)));
       }
 
       const callRow = await prisma.voiceCall.findUnique({ where: { id: input.callId } });

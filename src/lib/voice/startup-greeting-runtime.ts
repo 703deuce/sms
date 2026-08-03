@@ -76,7 +76,9 @@ export async function playStartupGreetingMask(input: {
   const concurrent =
     mask.connectionGreeting === "transovo_default" ||
     input.wait === false ||
-    (mask.mode === "audio_url" && mask.delayMs === 0);
+    (mask.mode === "audio_url" &&
+      typeof mask.delayMs === "number" &&
+      mask.delayMs <= 1000);
 
   const waitMs = concurrent || input.wait === false ? 0 : resolveStartupWaitMs(mask);
   await prisma.voiceCallEvent

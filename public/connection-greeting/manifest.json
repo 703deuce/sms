@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-03T16:39:06.376Z",
+  "generatedAt": "2026-08-03T16:55:25.092Z",
   "text": "Thank you for calling. One moment, please, while I connect you with our receptionist.",
   "voice": {
     "id": "kdmDKE6EkgrWrrykO9Qt",
@@ -23,7 +23,7 @@
   },
   "ffmpegFilterComplex": "[0:a]afade=t=in:st=0:d=0.1,volume=-21dB,apad=whole_dur=4.8,atrim=0:4.8,afade=t=out:st=4.1:d=0.7[bed];[1:a]adelay=200|200:all=1,loudnorm=I=-16:TP=-1.5:LRA=11,apad=whole_dur=4.8,atrim=0:4.8[spk];[spk]asplit=2[spk_sc][spk_mix];[bed][spk_sc]sidechaincompress=threshold=0.05:ratio=4:attack=30:release=300:makeup=1:knee=2.82843[ducked];[ducked][spk_mix]amix=inputs=2:duration=longest:dropout_transition=0:normalize=0,alimiter=limit=0.95:level=disabled[out]",
   "speechDelayMs": 200,
-  "musicUnderSpeechDb": -9,
+  "musicUnderSpeechDb": -6,
   "targetDurationSec": 4.8,
   "sources": {
     "speech": {
@@ -64,5 +64,5 @@
     "phoneWav": "https://transovo.ai/connection-greeting/transovo-connection-greeting-phone.wav",
     "masterWav": "https://transovo.ai/connection-greeting/transovo-connection-greeting-master.wav"
   },
-  "note": "Music raised to -9dB under speech for PSTN audibility; concurrent AI handoff"
+  "note": "Music -6dB under speech; AI starts 500ms after music begins"
 }

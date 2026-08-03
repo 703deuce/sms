@@ -2256,7 +2256,7 @@ function StartupGreetingEditor({
                   patch({
                     connectionGreeting: "transovo_default",
                     mode: "transovo_default",
-                    delayMs: 0,
+                    delayMs: 500,
                     handOffWhenReady: true,
                   });
                 } else {

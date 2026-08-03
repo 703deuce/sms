@@ -114,8 +114,8 @@ export function parseStartupGreeting(
       audioUrl = `${appUrl}/connection-greeting/transovo-connection-greeting-phone.mp3`;
     }
     resolvedMode = "audio_url";
-    // Concurrent: play while AI initializes — do not wait out the full clip.
-    if (delayMs === "auto") delayMs = 0;
+    // Concurrent: music starts immediately; brief settle then AI init.
+    if (delayMs === "auto") delayMs = 500;
   }
 
   const enabled =

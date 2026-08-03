@@ -608,7 +608,8 @@ export async function processVoiceWebhookEvent(input: {
           startup.enabled &&
           startup.mode === "audio_url" &&
           Boolean(startup.audioUrl) &&
-          (startup.connectionGreeting === "transovo_default" || startup.delayMs === 0);
+          (startup.connectionGreeting === "transovo_default" ||
+            (typeof startup.delayMs === "number" && startup.delayMs <= 1000));
 
         const maskResult = await playStartupGreetingMask({
           workspaceId,
@@ -620,7 +621,11 @@ export async function processVoiceWebhookEvent(input: {
         if (startup.mode === "ai" || startup.mode === "none" || !maskResult.played) {
           await new Promise((r) => setTimeout(r, AI_MEDIA_SETTLE_MS));
         } else if (concurrentMask || maskResult.concurrent) {
-          await new Promise((r) => setTimeout(r, 150));
+          const settleMs =
+            typeof startup.delayMs === "number" ? startup.delayMs : 500;
+          await new Promise((r) =>
+            setTimeout(r, Math.max(0, Math.min(1000, settleMs))),
+          );
         }
 
         const storedVars = (call.dynamicVariables || {}) as Record<string, unknown>;
