@@ -5,6 +5,7 @@ import {
   ClipboardList,
   Inbox,
   LayoutDashboard,
+  Megaphone,
   MessageSquare,
   Phone,
   Puzzle,
@@ -47,19 +48,22 @@ function instanceShortcutLinks(
   if (!slugs?.length) {
     return [
       { label: "Open", href: `/voice/agents/${instanceId}` },
-      {
-        label: "Results",
-        href: outcomeHref(solution.slug, "results"),
-      },
+      { label: "Results", href: outcomeHref(solution.slug, "results") },
     ];
   }
-  return slugs
+  // Keep instance menus tight: most-used settings + test + results.
+  const preferred = slugs.filter((s) =>
+    /^(test|results|ring-rules|hours|calendars|triggers|sources|schedule|messages|eligibility)$/.test(
+      s,
+    ),
+  );
+  const shortlist = (preferred.length ? preferred : slugs).slice(0, 6);
+  return shortlist
     .map((slug) => {
       const page = pageBySlug(solution, slug);
       if (!page) return null;
       return {
         label: page.label,
-        // Instance-scoped management still uses the solution page; agent context via query.
         href: `${outcomeHref(solution.slug, slug)}?agentId=${encodeURIComponent(instanceId)}`,
       } satisfies NavLink;
     })
@@ -71,8 +75,6 @@ function instanceShortcutLinks(
  * - No setups: Overview + Set Up
  * - 1–2 setups: Overview, + Set Up Another, each instance with shortcuts
  * - 3+ setups: Overview, + Set Up Another, Your Setups (N)
- *
- * Solutions without navRole metadata keep the full page list (legacy/SMS).
  */
 function solutionChildren(
   solution: OutcomeSolutionDef,
@@ -85,7 +87,6 @@ function solutionChildren(
   const listLabel = solution.setupsListLabel || listPage?.label || "Your Setups";
 
   if (!hasRoles) {
-    // Legacy / SMS solutions: show all pages; light instance injection.
     const links: NavChild[] = solution.pages.map((page) => ({
       label: page.label,
       href: outcomeHref(solution.slug, page.slug),
@@ -93,7 +94,9 @@ function solutionChildren(
     if (count === 0) return links;
     if (count > 2) {
       const activeIdx = links.findIndex(
-        (c) => !("type" in c && c.type === "group") && /active|setups|workflows/i.test((c as NavLink).label),
+        (c) =>
+          !("type" in c && c.type === "group") &&
+          /active|setups|workflows|campaigns/i.test((c as NavLink).label),
       );
       if (activeIdx >= 0) {
         (links[activeIdx] as NavLink).label = `${(links[activeIdx] as NavLink).label} (${count})`;
@@ -118,14 +121,12 @@ function solutionChildren(
 
   if (setupPage) {
     children.push({
-      label: count > 0 ? "+ Set Up Another" : "Set Up",
+      label: count > 0 ? "+ Set Up Another" : setupPage.label,
       href: outcomeHref(solution.slug, setupPage.slug),
     });
   }
 
-  if (count === 0) {
-    return children;
-  }
+  if (count === 0) return children;
 
   if (count > 2) {
     children.push({
@@ -149,20 +150,82 @@ function solutionChildren(
   return children;
 }
 
-function iconFor(slug: string): LucideIcon {
+function iconFor(slug: string, category: string): LucideIcon {
+  if (category === "marketing") return Megaphone;
+  if (category === "customer-experience") return Sparkles;
+  if (category === "leads-follow-up") return MessageSquare;
   if (slug.includes("appointment") || slug.includes("booking")) return CalendarDays;
-  if (slug.includes("lead") || slug.includes("intake")) return Users;
+  if (slug.includes("lead") || slug.includes("intake") || slug.includes("dispatch")) {
+    return Users;
+  }
   if (
-    slug.startsWith("ai-") ||
     slug.includes("call") ||
     slug.includes("hours") ||
     slug.includes("overflow") ||
-    slug.includes("answer")
+    slug.includes("answer") ||
+    slug.includes("support") ||
+    slug.includes("reception")
   ) {
     return AudioLines;
   }
   return Sparkles;
 }
+
+type SectionDef = {
+  label: string;
+  category: OutcomeSolutionDef["category"];
+  /** Explicit slug order for the launch menu. */
+  slugs: string[];
+};
+
+const LAUNCH_SECTIONS: SectionDef[] = [
+  {
+    label: "Calls & AI",
+    category: "calls-ai",
+    slugs: [
+      "answer-every-call",
+      "missed-overflow",
+      "after-hours",
+      "appointment-booking",
+      "lead-capture",
+      "lead-qualification",
+      "service-intake",
+      "customer-support",
+    ],
+  },
+  {
+    label: "Leads & Follow-Up",
+    category: "leads-follow-up",
+    slugs: [
+      "instant-lead-response",
+      "missed-call-text-back",
+      "lead-follow-up",
+      "estimate-follow-up",
+      "old-lead-reactivation",
+    ],
+  },
+  {
+    label: "Customer Experience",
+    category: "customer-experience",
+    slugs: [
+      "appointment-reminders",
+      "review-requests",
+      "customer-follow-up",
+      "client-onboarding",
+      "payment-follow-up",
+    ],
+  },
+  {
+    label: "Marketing",
+    category: "marketing",
+    slugs: [
+      "promotional-broadcast",
+      "customer-reactivation",
+      "referral-campaigns",
+      "event-offer-campaigns",
+    ],
+  },
+];
 
 /**
  * Outcome-based Solutions sidebar.
@@ -170,12 +233,7 @@ function iconFor(slug: string): LucideIcon {
  */
 export function buildSolutionsNav(options: SolutionsNavOptions = {}): NavItem[] {
   const instances = options.instancesBySolution ?? {};
-
-  const receptionistHub = outcomeSolutions.find((s) => s.slug === "ai-receptionist");
-  const callOutcomes = outcomeSolutions.filter(
-    (s) => s.category === "calls-ai" && s.slug !== "ai-receptionist",
-  );
-  const sms = outcomeSolutions.filter((s) => s.category === "sms-messaging");
+  const bySlug = new Map(outcomeSolutions.map((s) => [s.slug, s]));
 
   const nav: NavItem[] = [
     {
@@ -186,56 +244,28 @@ export function buildSolutionsNav(options: SolutionsNavOptions = {}): NavItem[] 
     },
   ];
 
-  for (const [index, solution] of callOutcomes.entries()) {
-    nav.push({
-      label: solution.title,
-      href: outcomeHref(solution.slug),
-      icon: iconFor(solution.slug),
-      children: solutionChildren(solution, instances[solution.slug]),
-      sectionLabel: index === 0 ? "AI Receptionist" : undefined,
-    });
-  }
-
-  if (receptionistHub) {
-    const receptionistInstances = instances["ai-receptionist"] ?? [];
-    nav.push({
-      label: "Your Receptionists",
-      href: outcomeHref("ai-receptionist"),
-      icon: AudioLines,
-      children:
-        receptionistInstances.length > 0
-          ? receptionistInstances.slice(0, 2).map((inst) => ({
-              label: `${inst.label} · ${inst.status}`,
-              href: inst.href,
-            }))
-          : [
-              { label: "Overview", href: outcomeHref("ai-receptionist") },
-              {
-                label: "Create receptionist",
-                href:
-                  receptionistHub.setupHref ||
-                  outcomeHref("ai-receptionist"),
-              },
-            ],
-    });
-  }
-
-  for (const [index, solution] of sms.entries()) {
-    nav.push({
-      label: solution.title,
-      href: outcomeHref(solution.slug),
-      icon: MessageSquare,
-      children: solutionChildren(solution, instances[solution.slug]),
-      sectionLabel: index === 0 ? "Texts & Follow-Up" : undefined,
-    });
+  for (const section of LAUNCH_SECTIONS) {
+    let first = true;
+    for (const slug of section.slugs) {
+      const solution = bySlug.get(slug);
+      if (!solution) continue;
+      nav.push({
+        label: solution.title,
+        href: outcomeHref(solution.slug),
+        icon: iconFor(solution.slug, section.category),
+        children: solutionChildren(solution, instances[solution.slug]),
+        sectionLabel: first ? section.label : undefined,
+      });
+      first = false;
+    }
   }
 
   nav.push(
     {
-      label: "Team Inbox",
+      label: "Inbox",
       href: "/inbox",
       icon: Inbox,
-      sectionLabel: "Customers",
+      sectionLabel: "Shared",
       children: [
         { label: "All Conversations", href: "/inbox" },
         { label: "Assigned to Me", href: "/inbox/mine" },
@@ -250,18 +280,6 @@ export function buildSolutionsNav(options: SolutionsNavOptions = {}): NavItem[] 
         { label: "All Contacts", href: "/contacts" },
         { label: "Lists & Segments", href: "/contacts/lists" },
         { label: "Imports", href: "/contacts/imports" },
-        {
-          type: "group",
-          label: "Contact Settings",
-          children: [
-            { label: "Tags", href: "/contacts/tags" },
-            { label: "Custom Fields", href: "/contacts/fields" },
-            { label: "Validation", href: "/contacts/validation" },
-            { label: "Unsubscribed", href: "/contacts/unsubscribed" },
-            { label: "Blocked", href: "/contacts/blocked" },
-            { label: "Invalid", href: "/contacts/invalid" },
-          ],
-        },
       ],
     },
     {
@@ -280,75 +298,34 @@ export function buildSolutionsNav(options: SolutionsNavOptions = {}): NavItem[] 
       icon: CalendarDays,
     },
     {
-      label: "Tasks",
-      href: "/integrations/native/tasks",
-      icon: ClipboardList,
-    },
-    {
-      label: "Phone",
+      label: "Phone Numbers",
       href: "/numbers",
       icon: Phone,
-      sectionLabel: "Phone",
-      children: [
-        { label: "Phone Numbers", href: "/numbers" },
-        { label: "Softphone", href: "/phone" },
-        { label: "Call History", href: "/phone/calls" },
-        {
-          type: "group",
-          label: "Routing",
-          children: [
-            { label: "Queues", href: "/phone/queues" },
-            { label: "IVR", href: "/phone/ivr" },
-            { label: "Inbound routing", href: "/voice/inbound-routing" },
-            { label: "Phone settings", href: "/phone/settings" },
-          ],
-        },
-      ],
+    },
+    {
+      label: "Call History",
+      href: "/phone/calls",
+      icon: Phone,
     },
     {
       label: "Calendars",
       href: "/voice/calendars",
       icon: CalendarDays,
-      sectionLabel: "Calendars",
-      children: [
-        { label: "Connections", href: "/voice/calendars" },
-        { label: "Appointment Types", href: "/voice/calendars" },
-        { label: "Appointments", href: "/integrations/native/appointments" },
-      ],
     },
     {
       label: "Integrations",
       href: "/integrations",
       icon: Puzzle,
-      sectionLabel: "Integrations",
-      children: [
-        { label: "App Directory", href: "/integrations" },
-        { label: "Connected Apps", href: "/integrations/native" },
-        { label: "CRM", href: "/integrations/crm" },
-        { label: "Webhooks", href: "/integrations/webhooks" },
-        { label: "API Keys", href: "/integrations/api" },
-      ],
     },
     {
       label: "Reports",
       href: "/reports",
       icon: BarChart3,
-      sectionLabel: "Reports",
-      children: [
-        { label: "Overview", href: "/reports" },
-        { label: "Calls", href: "/voice/analytics" },
-        { label: "Appointments", href: "/integrations/native/appointments" },
-        { label: "Leads", href: "/integrations/native/leads" },
-        { label: "Messages", href: "/reports/messages" },
-        { label: "Campaigns", href: "/reports/campaigns" },
-        { label: "Usage", href: "/reports/usage" },
-      ],
     },
     {
       label: "Compliance",
       href: "/compliance",
       icon: ShieldCheck,
-      sectionLabel: "Compliance",
     },
     {
       label: "Advanced",

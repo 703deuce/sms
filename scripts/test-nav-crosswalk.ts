@@ -72,10 +72,14 @@ for (const category of solutionCategories) {
 const solutionsHrefs = new Set(collectNavHrefs(solutionsNav));
 assert.ok(solutionsHrefs.has("/outcomes"), "Solutions dashboard required");
 
-for (const solution of outcomeSolutions) {
+// Launch menu outcomes (ai-receptionist hub is route-only, not a nav row).
+const launchSlugs = outcomeSolutions
+  .filter((s) => s.slug !== "ai-receptionist")
+  .map((s) => s.slug);
+for (const slug of launchSlugs) {
   assert.ok(
-    solutionsHrefs.has(`/outcomes/${solution.slug}`),
-    `Outcome ${solution.slug} missing from solutionsNav`,
+    solutionsHrefs.has(`/outcomes/${slug}`),
+    `Outcome ${slug} missing from solutionsNav`,
   );
 }
 

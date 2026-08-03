@@ -11,8 +11,10 @@ const recommended = [
   "answer-every-call",
   "missed-overflow",
   "appointment-booking",
-  "missed-call-text-back",
+  "lead-capture",
   "instant-lead-response",
+  "missed-call-text-back",
+  "appointment-reminders",
   "review-requests",
 ];
 
