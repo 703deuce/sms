@@ -197,8 +197,10 @@ export async function assertAiCallAdmission(input: {
   const allocRow = await prisma.voiceConcurrencyAllocation.findUnique({
     where: { workspaceId: input.workspaceId },
   });
-  // Trial workspaces get tighter inbound defaults when no explicit allocation exists.
-  const trialDefaultInbound = plan.startsWith("trial") ? 2 : 5;
+  // Per-workspace only (not platform-wide). 0 = no concurrency gate.
+  // Paid/default workspaces are uncapped — scale is limited by Telnyx/plan spend,
+  // not an arbitrary 5-call inbound ceiling. Trial may keep a soft default.
+  const trialDefaultInbound = plan.startsWith("trial") ? 10 : 0;
   const alloc = {
     maxInboundAi: allocRow?.maxInboundAi ?? trialDefaultInbound,
     maxOutboundAi: allocRow?.maxOutboundAi ?? 0,
@@ -207,8 +209,8 @@ export async function assertAiCallAdmission(input: {
   };
 
   const active = await countActiveAiCalls(input.workspaceId, input.direction);
-  // Inbound always capped. Outbound: maxOutboundAi<=0 means "no platform cap"
-  // (campaign pacing / Missions stay separately gated by outboundAiEnabled).
+  // Both directions: <=0 means no platform concurrency gate.
+  // Campaign pacing / Missions stay separately gated by outboundAiEnabled.
   const cap =
     input.direction === "INBOUND" ? alloc.maxInboundAi : alloc.maxOutboundAi;
   if (cap > 0 && active >= cap) {
