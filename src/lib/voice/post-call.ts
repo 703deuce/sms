@@ -3,7 +3,7 @@ import { emitAutomationEvent } from "@/lib/automations/events";
 import { emitVoiceAutomationEvents } from "./automation-events";
 import { recordVoiceUsage } from "./usage";
 import { parseVoiceAgentConfig } from "./types";
-import { resolveTransferInsightFields } from "./routing-action-resolve";
+import { resolveTransferInsightFields, resolveMessageTakenInsight } from "./routing-action-resolve";
 
 export async function processPostCall(callId: string) {
   const prisma = getPrisma();
@@ -373,6 +373,7 @@ function heuristicExtractedFields(
     transferred: boolean;
     voicemailDetected: boolean;
     outcome?: string | null;
+    metadata?: Record<string, unknown> | null;
   },
   fields: string[],
 ): Record<string, unknown> {
@@ -393,7 +394,11 @@ function heuristicExtractedFields(
         break;
       }
       case "message_taken":
-        out[key] = /message|callback|call back/i.test(text);
+        out[key] = resolveMessageTakenInsight({
+          text,
+          outcome: call.outcome,
+          metadata: call.metadata,
+        });
         break;
       case "outcome":
         out[key] = call.outcome || null;

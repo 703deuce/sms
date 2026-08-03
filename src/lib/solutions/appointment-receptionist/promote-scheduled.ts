@@ -3,11 +3,19 @@
  * and whose scheduledAt is now in the past.
  *
  * Wizard stores `advanced.activationMode === "schedule"` + `advanced.scheduledAt`
- * and keeps the agent as DRAFT until this publisher runs.
+ * and keeps the agent as DRAFT until this publisher runs (unless it was already
+ * ACTIVE and schedule was an edit — then status is preserved).
  */
 
 import { getPrisma } from "@/lib/db";
 import { publishVoiceAgent } from "@/lib/voice/agent-service";
+import { runAppointmentReceptionistActivateHooks } from "@/lib/solutions/appointment-receptionist/activate-hooks";
+import {
+  getWizardActivationIssues,
+  hasBlockingActivationIssues,
+} from "@/lib/solutions/appointment-receptionist/capability-checklist";
+import { createDefaultWizardState } from "@/lib/solutions/appointment-receptionist/defaults";
+import type { AppointmentReceptionistWizardState } from "@/lib/solutions/appointment-receptionist/types";
 
 export type PromoteScheduledResult = {
   scanned: number;
@@ -26,16 +34,17 @@ export type PromoteScheduledResult = {
 function readScheduleMeta(draftConfig: unknown): {
   activationMode: string | null;
   scheduledAt: string | null;
+  wizard: Partial<AppointmentReceptionistWizardState>;
 } {
   if (!draftConfig || typeof draftConfig !== "object") {
-    return { activationMode: null, scheduledAt: null };
+    return { activationMode: null, scheduledAt: null, wizard: {} };
   }
   const draft = draftConfig as Record<string, unknown>;
   const advanced =
     draft.advanced && typeof draft.advanced === "object"
       ? (draft.advanced as Record<string, unknown>)
       : {};
-  const wizard =
+  const wizardRaw =
     advanced.appointmentReceptionistWizard &&
     typeof advanced.appointmentReceptionistWizard === "object"
       ? (advanced.appointmentReceptionistWizard as Record<string, unknown>)
@@ -43,19 +52,26 @@ function readScheduleMeta(draftConfig: unknown): {
 
   const activationMode =
     (typeof advanced.activationMode === "string" && advanced.activationMode) ||
-    (typeof wizard.activationMode === "string" && wizard.activationMode) ||
+    (typeof wizardRaw.activationMode === "string" && wizardRaw.activationMode) ||
     null;
   const scheduledAtRaw =
     (typeof advanced.scheduledAt === "string" && advanced.scheduledAt) ||
-    (typeof wizard.scheduledAt === "string" && wizard.scheduledAt) ||
+    (typeof wizardRaw.scheduledAt === "string" && wizardRaw.scheduledAt) ||
     null;
 
-  return { activationMode, scheduledAt: scheduledAtRaw };
+  return {
+    activationMode,
+    scheduledAt: scheduledAtRaw,
+    wizard: wizardRaw as Partial<AppointmentReceptionistWizardState>,
+  };
 }
 
-/**
- * Find DRAFT agents with schedule activation due and publish them.
- */
+function mergeWizardState(
+  partial: Partial<AppointmentReceptionistWizardState>,
+): AppointmentReceptionistWizardState {
+  return { ...createDefaultWizardState(), ...partial };
+}
+
 export async function promoteScheduledReceptionists(opts?: {
   now?: Date;
   limit?: number;
@@ -63,37 +79,27 @@ export async function promoteScheduledReceptionists(opts?: {
 }): Promise<PromoteScheduledResult> {
   const prisma = getPrisma();
   const now = opts?.now || new Date();
-  const limit = Math.min(Math.max(opts?.limit || 50, 1), 200);
+  const limit = opts?.limit || 50;
 
   const candidates = await prisma.voiceAgent.findMany({
     where: {
-      status: "DRAFT",
       ...(opts?.workspaceId ? { workspaceId: opts.workspaceId } : {}),
       OR: [
-        { draftConfig: { path: ["advanced", "activationMode"], equals: "schedule" } },
-        {
-          draftConfig: {
-            path: ["advanced", "appointmentReceptionistWizard", "activationMode"],
-            equals: "schedule",
-          },
-        },
+        { status: "DRAFT" },
+        { status: "ACTIVE" },
+        { status: "TESTING" },
       ],
-    },
-    select: {
-      id: true,
-      workspaceId: true,
-      draftConfig: true,
-      name: true,
+      purpose: "appointment_receptionist",
     },
     take: limit * 3,
     orderBy: { updatedAt: "asc" },
   });
 
-  const results: PromoteScheduledResult["results"] = [];
+  let scanned = 0;
   let promoted = 0;
   let failed = 0;
   let skipped = 0;
-  let scanned = 0;
+  const results: PromoteScheduledResult["results"] = [];
 
   for (const agent of candidates) {
     if (promoted + failed + skipped >= limit) break;
@@ -119,6 +125,35 @@ export async function promoteScheduledReceptionists(opts?: {
     }
 
     try {
+      const state = mergeWizardState(meta.wizard);
+      const preIssues = getWizardActivationIssues(state, {
+        hasCalendarConnection: Boolean(state.calendarConnected),
+        hasKnowledgeText: Boolean(state.businessName?.trim()),
+      });
+      if (hasBlockingActivationIssues(preIssues)) {
+        throw new Error(
+          `Activation checklist incomplete: ${preIssues
+            .filter((i) => i.severity === "blocking")
+            .map((i) => i.id)
+            .join(", ")}`,
+        );
+      }
+
+      const hooks = await runAppointmentReceptionistActivateHooks({
+        workspaceId: agent.workspaceId,
+        agentId: agent.id,
+        state,
+        mode: "activate",
+      });
+      if (hasBlockingActivationIssues(hooks.issues)) {
+        throw new Error(
+          `Activate hooks blocked: ${hooks.issues
+            .filter((i) => i.severity === "blocking")
+            .map((i) => i.id)
+            .join(", ")}`,
+        );
+      }
+
       await publishVoiceAgent(agent.workspaceId, agent.id, "scheduled_activation");
 
       const draft = (agent.draftConfig || {}) as Record<string, unknown>;
@@ -134,6 +169,9 @@ export async function promoteScheduledReceptionists(opts?: {
         data: {
           draftConfig: {
             ...draft,
+            knowledgeBaseIds: hooks.knowledgeBaseId
+              ? [hooks.knowledgeBaseId]
+              : (draft.knowledgeBaseIds as unknown[]) || [],
             advanced: {
               ...advanced,
               activationMode: "activate_now",

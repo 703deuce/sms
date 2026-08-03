@@ -664,6 +664,15 @@ export async function executeBuiltinVoiceAction(input: {
         const { getConnection } = await import("@/lib/integrations/connections");
         const conn = await getConnection(input.workspaceId, "calendly");
         if (conn?.status === "connected") {
+          const serviceName = String(args.serviceName || args.service || "Appointment");
+          const {
+            assertBookingPermission,
+            loadServiceBookingConfig,
+            filterSlotsByNoticeAndMaxDays,
+          } = await import("../calendar/booking");
+          const gates = await loadServiceBookingConfig(input.workspaceId, serviceName);
+          assertBookingPermission(gates.config);
+
           const { executeIntegrationAction } = await import(
             "@/lib/integrations/framework/actions-registry"
           );
@@ -681,10 +690,15 @@ export async function executeBuiltinVoiceAction(input: {
             source: "ai",
           });
           if (result.ok) {
-            return {
-              provider: "calendly",
-              slots: (result.data as { slots?: unknown })?.slots || result.data,
-            };
+            const raw =
+              (result.data as { slots?: Array<{ startsAt: string }> })?.slots ||
+              (Array.isArray(result.data) ? result.data : []);
+            const slots = filterSlotsByNoticeAndMaxDays(
+              (raw as Array<{ startsAt: string }>) || [],
+              gates.noticeMinutes,
+              gates.maxDaysAhead,
+            );
+            return { provider: "calendly", slots };
           }
         }
       } catch (err) {
@@ -692,6 +706,15 @@ export async function executeBuiltinVoiceAction(input: {
           "[voice] calendly availability fallback",
           err instanceof Error ? err.message : err,
         );
+        // Permission / gate errors should surface to the model.
+        if (
+          err instanceof Error &&
+          /does not allow direct booking|minimum notice|too far ahead|Missing required/i.test(
+            err.message,
+          )
+        ) {
+          throw err;
+        }
       }
       const { getAvailability } = await import("../calendar/booking");
       return await getAvailability(input.workspaceId, args);
@@ -703,6 +726,25 @@ export async function executeBuiltinVoiceAction(input: {
         const { getConnection } = await import("@/lib/integrations/connections");
         const conn = await getConnection(input.workspaceId, "calendly");
         if (conn?.status === "connected") {
+          const serviceName = String(args.serviceName || args.service || "Appointment");
+          const {
+            assertBookingPermission,
+            assertRequiredFields,
+            assertBookingTimingGates,
+            loadServiceBookingConfig,
+          } = await import("../calendar/booking");
+          const gates = await loadServiceBookingConfig(input.workspaceId, serviceName);
+          assertBookingPermission(gates.config);
+          assertRequiredFields(gates.config, args);
+          const startsAt = new Date(String(args.startsAt || args.startTime || ""));
+          if (!Number.isNaN(startsAt.getTime())) {
+            assertBookingTimingGates({
+              startsAt,
+              noticeMinutes: gates.noticeMinutes,
+              maxDaysAhead: gates.maxDaysAhead,
+            });
+          }
+
           let email = String(args.email || "").trim();
           let name = String(args.name || args.inviteeName || "").trim();
           const phone = args.phone ? normalizeE164(String(args.phone)) : "";
@@ -755,32 +797,35 @@ export async function executeBuiltinVoiceAction(input: {
               name,
               email,
               startsAt: String(args.startsAt || args.startTime || ""),
-              serviceName: String(args.serviceName || args.service || "Appointment"),
+              serviceName,
               appointmentId:
-                typeof (result.data as { appointmentId?: unknown })?.appointmentId === "string"
-                  ? String((result.data as { appointmentId: string }).appointmentId)
-                  : undefined,
+                (result.data as { appointmentId?: string; id?: string })?.appointmentId ||
+                (result.data as { id?: string })?.id ||
+                undefined,
             }).catch(() => undefined);
             return booked;
           }
-          throw new Error(
-            ("message" in result && result.message) || "Calendly book failed",
-          );
         }
       } catch (err) {
-        // If Calendly is connected but booking failed, surface the error rather
-        // than silently booking only into the internal calendar.
-        const { getConnection } = await import("@/lib/integrations/connections");
-        const conn = await getConnection(input.workspaceId, "calendly").catch(
-          () => null,
+        console.warn(
+          "[voice] calendly book fallback",
+          err instanceof Error ? err.message : err,
         );
+        if (
+          err instanceof Error &&
+          /does not allow direct booking|minimum notice|too far ahead|Missing required|requires invitee email/i.test(
+            err.message,
+          )
+        ) {
+          throw err;
+        }
+        // If Calendly is connected but booking failed for another reason, surface it
+        // rather than silently booking only into the internal calendar.
+        const { getConnection } = await import("@/lib/integrations/connections");
+        const conn = await getConnection(input.workspaceId, "calendly").catch(() => null);
         if (conn?.status === "connected") {
           throw err instanceof Error ? err : new Error(String(err));
         }
-        console.warn(
-          "[voice] calendly book skipped",
-          err instanceof Error ? err.message : err,
-        );
       }
       const { bookAppointment } = await import("../calendar/booking");
       const booked = await bookAppointment(input.workspaceId, {
@@ -800,7 +845,12 @@ export async function executeBuiltinVoiceAction(input: {
         appointmentId:
           booked && typeof booked === "object" && "appointmentId" in booked
             ? String((booked as { appointmentId: string }).appointmentId)
-            : undefined,
+            : booked &&
+                typeof booked === "object" &&
+                "appointment" in booked &&
+                (booked as { appointment?: { id?: string } }).appointment?.id
+              ? String((booked as { appointment: { id: string } }).appointment.id)
+              : undefined,
         smsAlreadySent: Boolean(
           booked && typeof booked === "object" && "smsSent" in booked
             ? (booked as { smsSent?: boolean }).smsSent

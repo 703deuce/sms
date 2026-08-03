@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
+import { getPrisma } from "@/lib/db";
 import {
   createVoiceAgent,
   publishVoiceAgent,
@@ -95,7 +96,10 @@ export async function POST(request: Request) {
       activationMode === "schedule" &&
       Boolean(state.scheduledAt?.trim());
 
-    if (shouldPublish && hasBlockingActivationIssues(hooks.issues)) {
+    if (
+      (shouldPublish || scheduleOnly) &&
+      hasBlockingActivationIssues(hooks.issues)
+    ) {
       return NextResponse.json(
         {
           error: "Activation checklist incomplete",
@@ -117,6 +121,15 @@ export async function POST(request: Request) {
         : draftConfig.knowledgeBaseIds || [],
     };
 
+    // Scheduling must not demote an already-live ACTIVE agent to DRAFT (that
+    // would stop inbound AI until the scheduled promote runs).
+    const existingAgent = await getPrisma().voiceAgent.findFirst({
+      where: { id: agentId, workspaceId: auth.workspaceId },
+      select: { status: true },
+    });
+    const preserveActiveOnSchedule =
+      scheduleOnly && existingAgent?.status === "ACTIVE";
+
     const updated = await updateVoiceAgentDraft(auth.workspaceId, agentId, {
       name,
       description: "Answer Calls and Book Appointments — wizard setup",
@@ -125,7 +138,7 @@ export async function POST(request: Request) {
       purpose: "appointment_receptionist",
       phoneNumberId: shouldPublish ? state.phoneNumberId : state.phoneNumberId,
       draftConfig: configWithKb,
-      status: shouldPublish ? undefined : "DRAFT",
+      status: shouldPublish || preserveActiveOnSchedule ? undefined : "DRAFT",
     });
 
     // Long-term memory via VoiceMemoryConfig when opted in.

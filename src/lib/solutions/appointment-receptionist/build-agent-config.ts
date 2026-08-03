@@ -394,7 +394,9 @@ export function buildWizardAgentConfig(
     },
     messaging: {
       ...(base.messaging || {}),
-      smsConfirmations: state.bookingBehavior.sendSmsAfterBooking,
+      smsConfirmations:
+        state.bookingBehavior.sendSmsAfterBooking ||
+        state.capabilities.includes("send_sms_confirmations"),
     },
     conversationFlow: {
       sections: [

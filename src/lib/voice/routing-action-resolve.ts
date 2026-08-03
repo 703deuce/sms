@@ -37,3 +37,13 @@ export function resolveTransferInsightFields(input: {
       /transfer (completed|successful|connected|bridged)/i.test(text),
   };
 }
+
+export function resolveMessageTakenInsight(input: {
+  text: string;
+  outcome?: string | null;
+  metadata?: Record<string, unknown> | null;
+}): boolean {
+  if (input.outcome === "message_taken") return true;
+  if (input.metadata && input.metadata.structuredMessage) return true;
+  return /message|callback|call back/i.test(input.text || "");
+}

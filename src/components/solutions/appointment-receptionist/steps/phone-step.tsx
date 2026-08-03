@@ -179,8 +179,9 @@ export function PhoneStep({
             ) : null}
             {selected?.hasSoftphoneAssignment ? (
               <InfoCallout>
-                This number also has a softphone / team assignment. Human routing can take
-                priority over AI until that assignment is removed in Numbers.
+                This number also has a softphone / team assignment. After you activate,
+                the AI receptionist owns inbound calls; remove the softphone assignment
+                in Numbers if you want humans to answer this DID instead.
               </InfoCallout>
             ) : null}
           </div>

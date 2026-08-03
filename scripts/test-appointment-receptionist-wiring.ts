@@ -23,6 +23,7 @@ import {
   applyActionTimezone,
   resolveRingTimeoutSeconds,
   resolveTransferInsightFields,
+  resolveMessageTakenInsight,
 } from "../src/lib/voice/routing-action-resolve";
 import {
   isWithinBusinessHours,
@@ -308,6 +309,36 @@ assert(
     /new or an existing/i.test(prompt),
   );
 }
+
+assert(
+  "message_taken prefers outcome",
+  resolveMessageTakenInsight({
+    text: "thanks bye",
+    outcome: "message_taken",
+  }) === true,
+);
+assert(
+  "message_taken prefers structuredMessage metadata",
+  resolveMessageTakenInsight({
+    text: "",
+    outcome: null,
+    metadata: { structuredMessage: { reason: "callback" } },
+  }) === true,
+);
+assert(
+  "smsConfirmations from Goals capability",
+  (() => {
+    const state = createDefaultWizardState();
+    state.capabilities = ["send_sms_confirmations"];
+    state.bookingBehavior = {
+      ...state.bookingBehavior,
+      sendSmsAfterBooking: false,
+    };
+    state.agentName = "Maya";
+    state.openingGreeting = "Hi";
+    return Boolean(buildWizardAgentConfig(state).messaging?.smsConfirmations);
+  })(),
+);
 
 console.log("");
 if (failures.length) {

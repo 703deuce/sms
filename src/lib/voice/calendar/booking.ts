@@ -81,7 +81,7 @@ function slotPassesNotice(start: Date, noticeMinutes: number, now: Date) {
   return start.getTime() >= now.getTime() + noticeMinutes * 60_000;
 }
 
-function assertBookingPermission(svcCfg: ServiceConfig) {
+export function assertBookingPermission(svcCfg: ServiceConfig) {
   const permission = String(svcCfg.bookingPermission || "book_directly").toLowerCase();
   if (permission === "collect_info_only" || permission === "request_only") {
     throw new Error(
@@ -94,7 +94,7 @@ function assertBookingPermission(svcCfg: ServiceConfig) {
   }
 }
 
-function assertRequiredFields(
+export function assertRequiredFields(
   svcCfg: ServiceConfig,
   input: Record<string, unknown>,
 ) {
@@ -109,6 +109,71 @@ function assertRequiredFields(
       throw new Error(`Missing required booking field: ${key}`);
     }
   }
+}
+
+/** Load VoiceService config gates used by both native and Calendly booking paths. */
+export async function loadServiceBookingConfig(
+  workspaceId: string,
+  serviceName: string,
+): Promise<{
+  service: { id: string; calendarId: string | null; durationMinutes: number; bufferMinutes: number } | null;
+  config: ServiceConfig;
+  noticeMinutes: number;
+  maxDaysAhead: number;
+}> {
+  const prisma = getPrisma();
+  const service = await prisma.voiceService.findFirst({
+    where: { workspaceId, name: serviceName },
+  });
+  const config = (service?.config || {}) as ServiceConfig;
+  return {
+    service: service
+      ? {
+          id: service.id,
+          calendarId: service.calendarId,
+          durationMinutes: service.durationMinutes,
+          bufferMinutes: service.bufferMinutes,
+        }
+      : null,
+    config,
+    noticeMinutes: Number(config.minimumBookingNoticeMinutes || 0),
+    maxDaysAhead: serviceMaxDaysAhead(config),
+  };
+}
+
+export function assertBookingTimingGates(input: {
+  startsAt: Date;
+  noticeMinutes: number;
+  maxDaysAhead: number;
+  now?: Date;
+}) {
+  const now = input.now || new Date();
+  if (!slotPassesNotice(input.startsAt, input.noticeMinutes, now)) {
+    throw new Error("Booking is too soon — minimum notice required");
+  }
+  if (input.maxDaysAhead > 0) {
+    const latest = new Date(now.getTime() + input.maxDaysAhead * 86_400_000);
+    if (input.startsAt.getTime() > latest.getTime()) {
+      throw new Error(`Booking is too far ahead — max ${input.maxDaysAhead} days`);
+    }
+  }
+}
+
+export function filterSlotsByNoticeAndMaxDays(
+  slots: Array<{ startsAt: string; endsAt?: string }>,
+  noticeMinutes: number,
+  maxDaysAhead: number,
+  now = new Date(),
+) {
+  const latest =
+    maxDaysAhead > 0 ? new Date(now.getTime() + maxDaysAhead * 86_400_000) : null;
+  return slots.filter((s) => {
+    const start = new Date(s.startsAt);
+    if (Number.isNaN(start.getTime())) return false;
+    if (!slotPassesNotice(start, noticeMinutes, now)) return false;
+    if (latest && start.getTime() > latest.getTime()) return false;
+    return true;
+  });
 }
 
 async function internalAvailabilitySlots(input: {
@@ -307,7 +372,15 @@ export async function getAvailability(
         }),
       });
       const json = await res.json();
-      return { slots: (json.slots as Slot[]) || [] };
+      const rawSlots = ((json.slots as Slot[]) || []) as Slot[];
+      return {
+        slots: filterSlotsByNoticeAndMaxDays(
+          rawSlots,
+          noticeMinutes,
+          maxDaysAhead,
+          new Date(),
+        ) as Slot[],
+      };
     }
   }
 
@@ -375,18 +448,8 @@ export async function bookAppointment(
   const bufferMs = bufferMinutes * 60_000;
   const noticeMinutes = Number(svcCfg.minimumBookingNoticeMinutes || 0);
   const now = new Date();
-
-  if (!slotPassesNotice(startsAt, noticeMinutes, now)) {
-    throw new Error("Booking is too soon — minimum notice required");
-  }
-
   const maxDaysAhead = serviceMaxDaysAhead(svcCfg);
-  if (maxDaysAhead > 0) {
-    const latest = new Date(now.getTime() + maxDaysAhead * 86_400_000);
-    if (startsAt.getTime() > latest.getTime()) {
-      throw new Error(`Booking is too far ahead — max ${maxDaysAhead} days`);
-    }
-  }
+  assertBookingTimingGates({ startsAt, noticeMinutes, maxDaysAhead, now });
 
   const endsAt = new Date(startsAt.getTime() + durationMinutes * 60_000);
   const phone = input.phone ? normalizeE164(String(input.phone)) : "";
@@ -404,6 +467,7 @@ export async function bookAppointment(
   });
   if (conflict) throw new Error("Slot no longer available");
 
+  // Re-check provider busy right before insert (availability can go stale).
   let staffName = String(input.staffName || "") || null;
   if (!staffName) {
     const picked = await pickStaffRoundRobin(workspaceId, service?.id, svcCfg.staffIds);
@@ -422,6 +486,26 @@ export async function bookAppointment(
       try {
         const token = await getValidAccessToken(cal.id, cal.provider, config);
         if (token) {
+          const busy =
+            cal.provider === "google"
+              ? await getGoogleBusy(
+                  token,
+                  config.calendarId || "primary",
+                  new Date(startsAt.getTime() - bufferMs),
+                  new Date(endsAt.getTime() + bufferMs),
+                )
+              : await getMicrosoftBusy(
+                  token,
+                  new Date(startsAt.getTime() - bufferMs),
+                  new Date(endsAt.getTime() + bufferMs),
+                );
+          const overlaps = busy.some((b) => {
+            const bufferedStart = new Date(b.start.getTime() - bufferMs);
+            const bufferedEnd = new Date(b.end.getTime() + bufferMs);
+            return startsAt < bufferedEnd && endsAt > bufferedStart;
+          });
+          if (overlaps) throw new Error("Slot no longer available on the connected calendar");
+
           const event = {
             summary: `${serviceName}${phone ? ` — ${phone}` : ""}`,
             description: [
@@ -443,6 +527,7 @@ export async function bookAppointment(
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
+        if (/no longer available/i.test(message)) throw err;
         console.warn("[calendar] event insert failed", cal.id, message);
         throw new Error(
           `Could not create the calendar event — booking not confirmed (${message.slice(0, 120)})`,
