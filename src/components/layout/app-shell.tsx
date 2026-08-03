@@ -4,6 +4,8 @@ import { Header } from "@/components/layout/header";
 import { MobileNav } from "@/components/layout/mobile-nav";
 import { Sidebar } from "@/components/layout/sidebar";
 import { getPageTitle } from "@/lib/nav";
+import type { NavView } from "@/lib/nav-view";
+import type { SolutionNavInstance } from "@/lib/solutions-nav";
 import type { DashboardMetrics, PhoneNumber, Workspace } from "@/lib/types";
 import { usePathname } from "next/navigation";
 import { Suspense, useState } from "react";
@@ -17,6 +19,8 @@ export function AppShell({
   metrics,
   activeFromNumberId,
   unreadNotifications,
+  navView = "solutions",
+  outcomeInstances = {},
 }: {
   children: React.ReactNode;
   userName: string;
@@ -26,6 +30,8 @@ export function AppShell({
   metrics: DashboardMetrics;
   activeFromNumberId?: string | null;
   unreadNotifications?: number;
+  navView?: NavView;
+  outcomeInstances?: Record<string, SolutionNavInstance[]>;
 }) {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -40,6 +46,8 @@ export function AppShell({
           workspaces={workspaces}
           open={menuOpen}
           onClose={() => setMenuOpen(false)}
+          initialNavView={navView}
+          outcomeInstances={outcomeInstances}
         />
       </Suspense>
       <div className="lg:pl-[260px]">

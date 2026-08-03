@@ -1,5 +1,6 @@
 /**
- * Assert every legacy sidebar route remains reachable in the new appNav.
+ * Assert every legacy sidebar route remains reachable in Platform appNav,
+ * and that Solutions view covers the outcome-based navigation.
  * Run: npx tsx scripts/test-nav-crosswalk.ts
  */
 
@@ -9,6 +10,8 @@ import {
   appNav,
   collectNavHrefs,
 } from "../src/lib/nav";
+import { outcomeSolutions } from "../src/lib/outcomes/registry";
+import { buildSolutionsNav, solutionsNav } from "../src/lib/solutions-nav";
 import { solutionCategories } from "../src/lib/solutions-catalog";
 
 const navHrefs = new Set(collectNavHrefs(appNav));
@@ -28,9 +31,14 @@ assert.ok(messaging, "Messaging section required");
 const messagingHrefs = collectNavHrefs([messaging]);
 assert.ok(messagingHrefs.includes("/send"), "Send Campaign must be under Messaging");
 
+// Platform view: Solutions top-level section removed (Solutions mode replaces it).
+assert.ok(
+  !appNav.some((item) => item.label === "Solutions"),
+  "Platform appNav must not include a top-level Solutions section",
+);
+
 const requiredTopLevel = [
   "Dashboard",
-  "Solutions",
   "Messaging",
   "Contacts",
   "Automations",
@@ -47,21 +55,48 @@ const requiredTopLevel = [
 assert.deepEqual(
   appNav.map((item) => item.label),
   requiredTopLevel,
-  "Top-level sidebar labels must match the complete navigation crosswalk",
+  "Top-level Platform sidebar labels must match the navigation crosswalk",
 );
 
+// Legacy solution catalog URLs remain valid pages even if not in Platform nav.
 for (const category of solutionCategories) {
   for (const solution of category.solutions) {
     assert.ok(
-      navHrefs.has(solution.href),
-      `Solution ${solution.href} missing from appNav`,
+      solution.href.startsWith("/solutions/"),
+      `Catalog solution href looks wrong: ${solution.href}`,
     );
   }
 }
 
-// Solution Center hub
-assert.ok(navHrefs.has("/solutions"));
+// Solutions view covers outcome dashboards and permanent solution sections.
+const solutionsHrefs = new Set(collectNavHrefs(solutionsNav));
+assert.ok(solutionsHrefs.has("/outcomes"), "Solutions dashboard required");
+
+for (const solution of outcomeSolutions) {
+  assert.ok(
+    solutionsHrefs.has(`/outcomes/${solution.slug}`),
+    `Outcome ${solution.slug} missing from solutionsNav`,
+  );
+}
+
+const withInstances = buildSolutionsNav({
+  instancesBySolution: {
+    "appointment-booking": [
+      {
+        id: "a1",
+        label: "Main Office Booking",
+        status: "Active",
+        href: "/voice/agents/a1",
+      },
+    ],
+  },
+});
+const withInstanceHrefs = new Set(collectNavHrefs(withInstances));
+assert.ok(
+  withInstanceHrefs.has("/voice/agents/a1"),
+  "Instance shortcuts should appear in Solutions nav when 1–2 setups exist",
+);
 
 console.log(
-  `nav crosswalk passed: ${LEGACY_APP_NAV_HREFS.length} legacy routes + Solutions layer accounted for (${navHrefs.size} total nav hrefs)`,
+  `nav crosswalk passed: ${LEGACY_APP_NAV_HREFS.length} legacy Platform routes + ${outcomeSolutions.length} Solutions outcomes (${navHrefs.size} platform hrefs, ${solutionsHrefs.size} solutions hrefs)`,
 );

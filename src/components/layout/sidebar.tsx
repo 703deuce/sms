@@ -1,7 +1,12 @@
 "use client";
 
 import { appNav, flattenNavLinks, isNavGroup } from "@/lib/nav";
-import type { NavChild, NavLink } from "@/lib/nav";
+import type { NavChild, NavItem, NavLink } from "@/lib/nav";
+import type { NavView } from "@/lib/nav-view";
+import {
+  buildSolutionsNav,
+  type SolutionNavInstance,
+} from "@/lib/solutions-nav";
 import type { Workspace } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import {
@@ -13,7 +18,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 
 function isNavHrefActive(pathname: string, search: string, href: string): boolean {
   const [pathPart, queryPart] = href.split("?");
@@ -29,7 +34,6 @@ function isNavHrefActive(pathname: string, search: string, href: string): boolea
   }
 
   if (pathname === pathPart) {
-    // Bare path links stay inactive when a query sibling (e.g. surveys?type=) is selected.
     if (have.has("type")) return false;
     return true;
   }
@@ -83,24 +87,92 @@ function NavLinkRow({
   );
 }
 
+function ViewToggle({
+  view,
+  onChange,
+  pending,
+}: {
+  view: NavView;
+  onChange: (view: NavView) => void;
+  pending: boolean;
+}) {
+  return (
+    <div className="mt-3">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-sidebar-muted">
+        Navigation
+      </p>
+      <div
+        className={cn(
+          "mt-1 grid grid-cols-2 rounded-[10px] border border-white/10 bg-white/5 p-0.5",
+          pending && "opacity-70",
+        )}
+        role="tablist"
+        aria-label="Navigation view"
+      >
+        {(
+          [
+            { id: "solutions", label: "Solutions" },
+            { id: "platform", label: "Platform" },
+          ] as const
+        ).map((option) => {
+          const active = view === option.id;
+          return (
+            <button
+              key={option.id}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              disabled={pending}
+              onClick={() => onChange(option.id)}
+              className={cn(
+                "rounded-[8px] px-2 py-1.5 text-[12px] font-semibold transition",
+                active
+                  ? "bg-primary text-white shadow-sm"
+                  : "text-sidebar-muted hover:text-white",
+              )}
+            >
+              {option.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export function Sidebar({
   workspaceId,
   userName,
   workspaces,
   open,
   onClose,
+  initialNavView = "solutions",
+  outcomeInstances = {},
 }: {
   workspaceId: string;
   userName: string;
   workspaces: Workspace[];
   open?: boolean;
   onClose?: () => void;
+  initialNavView?: NavView;
+  outcomeInstances?: Record<string, SolutionNavInstance[]>;
 }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const search = searchParams?.toString() ? `?${searchParams.toString()}` : "";
   const router = useRouter();
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [navView, setNavView] = useState<NavView>(initialNavView);
+  const [pending, startTransition] = useTransition();
+
+  useEffect(() => {
+    setNavView(initialNavView);
+  }, [initialNavView]);
+
+  const navItems: NavItem[] = useMemo(() => {
+    if (navView === "platform") return appNav;
+    return buildSolutionsNav({ instancesBySolution: outcomeInstances });
+  }, [navView, outcomeInstances]);
 
   const activeWorkspace = useMemo(
     () => workspaces.find((w) => w.id === workspaceId) ?? workspaces[0],
@@ -109,11 +181,12 @@ export function Sidebar({
 
   // Keep only the section for the current route open (accordion).
   useEffect(() => {
-    const match = appNav.find((item) => {
+    const match = navItems.find((item) => {
       if (sectionHasActiveChild(item.children, pathname, search)) return true;
       if (pathname === item.href) return true;
       if (
         item.href !== "/dashboard" &&
+        item.href !== "/outcomes" &&
         !item.children &&
         pathname.startsWith(`${item.href}/`)
       ) {
@@ -122,7 +195,7 @@ export function Sidebar({
       return pathname.startsWith(`${item.href}/`) && Boolean(item.children);
     });
     setExpanded(match?.label ?? null);
-  }, [pathname, search]);
+  }, [pathname, search, navItems]);
 
   async function switchWorkspace(id: string) {
     await fetch("/api/workspace", {
@@ -139,11 +212,34 @@ export function Sidebar({
     router.refresh();
   }
 
+  function switchNavView(next: NavView) {
+    if (next === navView) return;
+    setNavView(next);
+    startTransition(async () => {
+      await fetch("/api/nav-view", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ view: next }),
+      });
+      if (next === "solutions" && !pathname.startsWith("/outcomes")) {
+        router.push("/outcomes");
+      } else if (next === "platform" && pathname.startsWith("/outcomes")) {
+        router.push("/dashboard");
+      } else {
+        router.refresh();
+      }
+    });
+  }
+
   const content = (
     <aside className="flex h-dvh w-[260px] flex-col overflow-hidden bg-sidebar text-sidebar-foreground">
       {/* Brand + workspace — fixed top */}
       <div className="shrink-0 px-3.5 pb-2.5 pt-3.5">
-        <Link href="/dashboard" className="flex items-start gap-2.5" onClick={onClose}>
+        <Link
+          href={navView === "solutions" ? "/outcomes" : "/dashboard"}
+          className="flex items-start gap-2.5"
+          onClick={onClose}
+        >
           <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] bg-primary text-white shadow-[0_8px_18px_rgba(16,185,129,0.35)]">
             <MessageSquare className="h-3.5 w-3.5" fill="currentColor" />
           </span>
@@ -152,10 +248,14 @@ export function Sidebar({
               Transovo SMS
             </span>
             <span className="mt-0.5 block text-[10px] leading-tight text-sidebar-muted">
-              Business texting platform
+              {navView === "solutions"
+                ? "Business outcomes"
+                : "Business texting platform"}
             </span>
           </span>
         </Link>
+
+        <ViewToggle view={navView} onChange={switchNavView} pending={pending} />
 
         <label className="mt-3 block text-[10px] font-semibold uppercase tracking-[0.08em] text-sidebar-muted">
           Workspace
@@ -181,19 +281,37 @@ export function Sidebar({
 
       {/* Nav — only this region scrolls, and only when needed */}
       <nav className="sidebar-nav min-h-0 flex-1 space-y-px overflow-y-auto overscroll-contain px-2 pb-1.5">
-        {appNav.map((item) => {
+        {navView === "platform" ? (
+          <div className="mb-1.5 px-1">
+            <Link
+              href="/send"
+              onClick={onClose}
+              className="flex items-center justify-center gap-2 rounded-[10px] bg-primary px-3 py-2 text-[12px] font-semibold text-white shadow-[0_8px_18px_rgba(16,185,129,0.25)] transition hover:bg-primary/90"
+            >
+              Send Campaign
+            </Link>
+          </div>
+        ) : null}
+
+        {navItems.map((item) => {
           const Icon = item.icon;
           const childActive = sectionHasActiveChild(item.children, pathname, search);
           const active =
             isNavHrefActive(pathname, search, item.href) ||
             Boolean(childActive) ||
             (item.href !== "/dashboard" &&
+              item.href !== "/outcomes" &&
               pathname.startsWith(`${item.href}/`) &&
               !item.children);
           const isOpen = expanded === item.label;
 
           return (
-            <div key={item.label}>
+            <div key={`${navView}-${item.label}`}>
+              {item.sectionLabel ? (
+                <p className="px-2.5 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-[0.08em] text-sidebar-muted/80">
+                  {item.sectionLabel}
+                </p>
+              ) : null}
               <div
                 className={cn(
                   "group relative flex items-center rounded-[10px] transition",
@@ -262,7 +380,7 @@ export function Sidebar({
                           <div className="space-y-px">
                             {child.children.map((link) => (
                               <NavLinkRow
-                                key={link.href}
+                                key={link.href + link.label}
                                 link={link}
                                 sectionHref={item.href}
                                 pathname={pathname}
@@ -277,7 +395,7 @@ export function Sidebar({
 
                     return (
                       <NavLinkRow
-                        key={child.href}
+                        key={child.href + child.label}
                         link={child}
                         sectionHref={item.href}
                         pathname={pathname}

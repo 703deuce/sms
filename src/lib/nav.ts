@@ -15,7 +15,6 @@ import {
   Settings,
   AudioLines,
   ClipboardList,
-  Sparkles,
   type LucideIcon,
 } from "lucide-react";
 
@@ -42,6 +41,8 @@ export type NavItem = {
   children?: NavChild[];
   badge?: string | number;
   emphasize?: boolean;
+  /** Optional sidebar section header rendered above this item (Solutions view). */
+  sectionLabel?: string;
 };
 
 /** @deprecated use NavLink — kept for gradual call-site typing */
@@ -166,68 +167,6 @@ export const appNav: NavItem[] = [
     href: "/dashboard",
     icon: LayoutDashboard,
     children: [{ label: "Overview", href: "/dashboard" }],
-  },
-  {
-    label: "Solutions",
-    href: "/solutions",
-    icon: Sparkles,
-    emphasize: true,
-    children: [
-      { label: "Solution Center", href: "/solutions" },
-      {
-        type: "group",
-        label: "Lead Recovery",
-        children: [
-          { label: "Missed Call Text Back", href: "/solutions/lead-recovery/missed-call-text-back" },
-          { label: "Lead Follow-Up", href: "/solutions/lead-recovery/lead-follow-up" },
-          { label: "Customer Reactivation", href: "/solutions/lead-recovery/customer-reactivation" },
-        ],
-      },
-      {
-        type: "group",
-        label: "AI Call Handling",
-        children: [
-          { label: "AI Answering Machine", href: "/solutions/ai-call-handling/ai-answering-machine" },
-          { label: "After-Hours Assistant", href: "/solutions/ai-call-handling/after-hours-assistant" },
-          { label: "Lead Intake Assistant", href: "/solutions/ai-call-handling/lead-intake-assistant" },
-          {
-            label: "Answer Calls & Book Appointments",
-            href: "/solutions/ai-call-handling/appointment-assistant",
-          },
-        ],
-      },
-      {
-        type: "group",
-        label: "Customer Growth",
-        children: [
-          {
-            label: "Automated Review Requests",
-            href: "/solutions/customer-growth/automated-review-requests",
-          },
-          { label: "Appointment Reminders", href: "/solutions/customer-growth/appointment-reminders" },
-          { label: "Customer Surveys", href: "/solutions/customer-growth/customer-surveys" },
-        ],
-      },
-      {
-        type: "group",
-        label: "Team Performance",
-        children: [
-          {
-            label: "Sales Call Intelligence",
-            href: "/solutions/team-performance/sales-call-intelligence",
-          },
-          {
-            label: "Call Quality & Coaching",
-            href: "/solutions/team-performance/call-quality-coaching",
-          },
-        ],
-      },
-      {
-        type: "group",
-        label: "Custom",
-        children: [{ label: "Build a Custom Solution", href: "/solutions/custom/build" }],
-      },
-    ],
   },
   {
     label: "Messaging",
@@ -546,6 +485,7 @@ export const adminNav: NavItem[] = [
 export const pageTitles: Record<string, string> = {
   "/dashboard": "Dashboard",
   "/getting-started": "Getting Started",
+  "/outcomes": "Solutions Dashboard",
   "/solutions": "Solution Center",
   "/solutions/lead-recovery": "Lead Recovery",
   "/solutions/lead-recovery/missed-call-text-back": "Missed Call Text Back",
@@ -692,6 +632,23 @@ export const pageTitles: Record<string, string> = {
 
 export function getPageTitle(pathname: string) {
   if (pageTitles[pathname]) return pageTitles[pathname];
+  if (pathname.startsWith("/outcomes/")) {
+    const parts = pathname.split("/").filter(Boolean);
+    // /outcomes/:solution(/:section)
+    if (parts[1]) {
+      const pretty = parts
+        .slice(1)
+        .map((p) =>
+          p
+            .split("-")
+            .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+            .join(" "),
+        )
+        .join(" · ");
+      return pretty || "Solutions";
+    }
+    return "Solutions Dashboard";
+  }
   if (pathname.startsWith("/solutions/")) return "Solutions";
   if (pathname.startsWith("/campaigns/")) return "Campaign Detail";
   if (pathname.startsWith("/contacts/")) return "Contact Detail";

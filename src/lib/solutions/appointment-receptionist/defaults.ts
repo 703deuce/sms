@@ -239,6 +239,93 @@ export const TEST_SCENARIOS = [
   },
 ];
 
+export type WizardPresetId =
+  | "every_call"
+  | "nobody_answers"
+  | "after_hours"
+  | "lead_capture"
+  | "service_intake";
+
+/** Apply Solutions-view presets onto a wizard state (answer mode + capabilities). */
+export function applyWizardPreset(
+  state: AppointmentReceptionistWizardState,
+  preset: string | null | undefined,
+): AppointmentReceptionistWizardState {
+  if (!preset) return state;
+
+  switch (preset as WizardPresetId) {
+    case "every_call":
+      return {
+        ...state,
+        answerWhen: "every_call",
+        ringBehavior: "ai_immediate",
+        solutionName: "Answer Every Call",
+        capabilities: [
+          "answer_questions",
+          "take_messages",
+          "transfer_calls",
+          // Booking optional — leave enabled so users can opt out in Goals.
+          "book_appointments",
+        ],
+      };
+    case "nobody_answers":
+      return {
+        ...state,
+        answerWhen: "nobody_answers",
+        ringBehavior: "ring_team_first",
+        ringTeamSeconds: state.ringTeamSeconds || 20,
+        solutionName: "Missed & Overflow Calls",
+        capabilities: [
+          "answer_questions",
+          "take_messages",
+          "transfer_calls",
+          "book_appointments",
+        ],
+      };
+    case "after_hours":
+      return {
+        ...state,
+        answerWhen: "after_hours",
+        ringBehavior: "after_hours",
+        solutionName: "After-Hours Answering",
+        capabilities: [
+          "answer_questions",
+          "take_messages",
+          "transfer_calls",
+          "book_appointments",
+        ],
+      };
+    case "lead_capture":
+      return {
+        ...state,
+        answerWhen: "every_call",
+        ringBehavior: "ai_immediate",
+        solutionName: "Lead Capture Receptionist",
+        capabilities: [
+          "answer_questions",
+          "qualify_callers",
+          "take_messages",
+          "transfer_calls",
+        ],
+      };
+    case "service_intake":
+      return {
+        ...state,
+        answerWhen: "every_call",
+        ringBehavior: "ai_immediate",
+        solutionName: "Service Intake Receptionist",
+        capabilities: [
+          "answer_questions",
+          "qualify_callers",
+          "take_messages",
+          "transfer_calls",
+        ],
+      };
+    default:
+      return state;
+  }
+}
+
 export function createDefaultWizardState(): AppointmentReceptionistWizardState {
   return {
     capabilities: [

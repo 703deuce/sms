@@ -116,12 +116,12 @@ export default async function DashboardPage() {
           </h2>
           <p className="mt-1 text-[13px] text-slate-500">{data.todayLabel}</p>
         </div>
-        <Link href="/solutions">
+        <Link href="/outcomes">
           <Button
             variant="outline"
             className="h-9 rounded-lg border-slate-200 bg-white text-[13px] font-semibold text-slate-700 shadow-sm"
           >
-            Customize Dashboard
+            Solutions view
           </Button>
         </Link>
       </div>

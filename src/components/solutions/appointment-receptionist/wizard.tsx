@@ -1,13 +1,16 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { createDefaultWizardState } from "@/lib/solutions/appointment-receptionist/defaults";
+import {
+  applyWizardPreset,
+  createDefaultWizardState,
+} from "@/lib/solutions/appointment-receptionist/defaults";
 import {
   WIZARD_STEPS,
   type AppointmentReceptionistWizardState,
 } from "@/lib/solutions/appointment-receptionist/types";
 import { toErrorMessage } from "@/lib/errors";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { WizardStepper } from "./wizard-stepper";
 import { GoalsStep } from "./steps/goals-step";
@@ -23,9 +26,11 @@ const STORAGE_KEY = "transovo.appointment-receptionist.wizard.v1";
 
 export function AppointmentReceptionistWizard() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const preset = searchParams?.get("preset");
   const [stepIndex, setStepIndex] = useState(0);
   const [state, setState] = useState<AppointmentReceptionistWizardState>(() =>
-    createDefaultWizardState(),
+    applyWizardPreset(createDefaultWizardState(), preset),
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -34,7 +39,11 @@ export function AppointmentReceptionistWizard() {
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
+      // Fresh Solutions-view presets win over a stale local draft.
+      if (preset) {
+        setState(applyWizardPreset(createDefaultWizardState(), preset));
+        setStepIndex(0);
+      } else if (raw) {
         const parsed = JSON.parse(raw) as {
           stepIndex?: number;
           state?: AppointmentReceptionistWizardState;
@@ -48,7 +57,7 @@ export function AppointmentReceptionistWizard() {
       // ignore corrupt draft
     }
     setHydrated(true);
-  }, []);
+  }, [preset]);
 
   useEffect(() => {
     if (!hydrated) return;
