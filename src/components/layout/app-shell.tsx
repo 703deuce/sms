@@ -13,8 +13,6 @@ import { Suspense, useState } from "react";
 export function AppShell({
   children,
   userName,
-  workspaceId,
-  workspaces,
   phoneNumbers,
   metrics,
   activeFromNumberId,
@@ -24,8 +22,8 @@ export function AppShell({
 }: {
   children: React.ReactNode;
   userName: string;
-  workspaceId: string;
-  workspaces: Workspace[];
+  workspaceId?: string;
+  workspaces?: Workspace[];
   phoneNumbers: PhoneNumber[];
   metrics: DashboardMetrics;
   activeFromNumberId?: string | null;
@@ -41,9 +39,7 @@ export function AppShell({
     <div className="min-h-screen bg-background">
       <Suspense fallback={null}>
         <Sidebar
-          workspaceId={workspaceId}
           userName={userName}
-          workspaces={workspaces}
           open={menuOpen}
           onClose={() => setMenuOpen(false)}
           initialNavView={navView}

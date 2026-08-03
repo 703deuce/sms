@@ -7,7 +7,6 @@ import {
   buildSolutionsNav,
   type SolutionNavInstance,
 } from "@/lib/solutions-nav";
-import type { Workspace } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { ChevronDown, LogOut, MessageSquare } from "lucide-react";
 import Link from "next/link";
@@ -135,17 +134,13 @@ function ViewToggle({
 }
 
 export function Sidebar({
-  workspaceId,
   userName,
-  workspaces,
   open,
   onClose,
   initialNavView = "solutions",
   outcomeInstances = {},
 }: {
-  workspaceId: string;
   userName: string;
-  workspaces: Workspace[];
   open?: boolean;
   onClose?: () => void;
   initialNavView?: NavView;
@@ -168,11 +163,6 @@ export function Sidebar({
     return buildSolutionsNav({ instancesBySolution: outcomeInstances });
   }, [navView, outcomeInstances]);
 
-  const activeWorkspace = useMemo(
-    () => workspaces.find((w) => w.id === workspaceId) ?? workspaces[0],
-    [workspaceId, workspaces],
-  );
-
   // Keep only the section for the current route open (accordion).
   useEffect(() => {
     const match = navItems.find((item) => {
@@ -190,15 +180,6 @@ export function Sidebar({
     });
     setExpanded(match?.label ?? null);
   }, [pathname, search, navItems]);
-
-  async function switchWorkspace(id: string) {
-    await fetch("/api/workspace", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ workspaceId: id }),
-    });
-    router.refresh();
-  }
 
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -227,7 +208,7 @@ export function Sidebar({
 
   const content = (
     <aside className="flex h-dvh w-[260px] flex-col overflow-hidden bg-sidebar text-sidebar-foreground">
-      {/* Brand + workspace — fixed top */}
+      {/* Brand + view toggle — fixed top */}
       <div className="shrink-0 px-3.5 pb-2.5 pt-3.5">
         <Link
           href={navView === "solutions" ? "/outcomes" : "/dashboard"}
@@ -250,27 +231,6 @@ export function Sidebar({
         </Link>
 
         <ViewToggle view={navView} onChange={switchNavView} pending={pending} />
-
-        <label className="mt-3 block text-[10px] font-semibold uppercase tracking-[0.08em] text-sidebar-muted">
-          Workspace
-        </label>
-        <div className="relative mt-1">
-          <span className="pointer-events-none absolute left-2.5 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-md bg-violet-500 text-[10px] font-bold text-white">
-            {activeWorkspace?.name?.slice(0, 1).toUpperCase() ?? "W"}
-          </span>
-          <select
-            className="h-9 w-full appearance-none rounded-[10px] border border-white/10 bg-white/5 py-1.5 pl-9 pr-8 text-[12px] font-medium text-white outline-none focus:border-primary/40"
-            value={activeWorkspace?.id ?? workspaceId}
-            onChange={(e) => switchWorkspace(e.target.value)}
-          >
-            {workspaces.map((w) => (
-              <option key={w.id} value={w.id} className="text-foreground">
-                {w.name}
-              </option>
-            ))}
-          </select>
-          <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-sidebar-muted" />
-        </div>
       </div>
 
       {/* Nav — only this region scrolls, and only when needed */}
