@@ -5,6 +5,18 @@ import { Button } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
 import { StatusChip } from "@/components/ui/status-chip";
 
+type ChannelReadiness = {
+  voiceInboundConfigured: boolean;
+  voiceOutboundConfigured: boolean;
+  messagingProfileConfigured: boolean;
+  a2pRegistrationStatus: string;
+  a2pCampaignAssignmentStatus: string;
+  smsSendingEnabled: boolean;
+  mmsEnabled: boolean;
+  callsReady: boolean;
+  fullyProvisioned: boolean;
+};
+
 type Diagnostics = {
   e164: string;
   providerNumberId: string | null;
@@ -29,7 +41,10 @@ type Diagnostics = {
     voice: boolean;
     outbound?: boolean;
     fully: boolean;
+    calls?: boolean;
+    smsSending?: boolean;
   };
+  channels?: ChannelReadiness | null;
   outbound?: {
     ready: boolean;
     outboundVoiceProfileId: string | null;
@@ -43,11 +58,15 @@ type Diagnostics = {
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="grid grid-cols-[10rem_1fr] gap-2 border-b border-border/60 py-2 text-sm last:border-0">
+    <div className="grid grid-cols-[11rem_1fr] gap-2 border-b border-border/60 py-2 text-sm last:border-0">
       <div className="text-muted-foreground">{label}</div>
       <div className="break-all font-medium">{value ?? "—"}</div>
     </div>
   );
+}
+
+function flag(ok: boolean | undefined, yes = "Ready", no = "Not ready") {
+  return ok ? yes : no;
 }
 
 export function NumberProvisionPanel({ numberId }: { numberId: string }) {
@@ -66,15 +85,18 @@ export function NumberProvisionPanel({ numberId }: { numberId: string }) {
         });
         const json = await res.json();
         if (!res.ok) throw new Error(json.error || `Request failed (${res.status})`);
-        // repair_outbound returns { outbound, diagnose }; others return diagnostics.
         const next = json.data?.diagnose || json.data;
-        if (next?.e164 || next?.workspaceNumberId || next?.ready) {
+        if (next?.e164 || next?.workspaceNumberId || next?.ready || next?.channels) {
           setData(next);
         } else if (json.data?.outbound && data) {
-          setData({ ...data, outbound: json.data.outbound, ready: {
-            ...data.ready,
-            outbound: Boolean(json.data.outbound.ready),
-          }});
+          setData({
+            ...data,
+            outbound: json.data.outbound,
+            ready: {
+              ...data.ready,
+              outbound: Boolean(json.data.outbound.ready),
+            },
+          });
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
@@ -87,15 +109,14 @@ export function NumberProvisionPanel({ numberId }: { numberId: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [numberId]);
 
-  const readyLabel = data?.ready.fully
-    ? "Fully configured"
-    : data?.ready.voice && data?.ready.outbound
-      ? "Voice + outbound ready"
+  const channels = data?.channels;
+  const readyLabel = channels?.fullyProvisioned
+    ? "Infrastructure ready"
+    : channels?.callsReady
+      ? "Calls ready · SMS infra pending"
       : data?.ready.voice
-        ? "Inbound voice ready"
-        : data?.ready.messaging
-          ? "Messaging ready"
-          : "Needs setup";
+        ? "Inbound voice only"
+        : "Needs setup";
 
   return (
     <Card className="p-5">
@@ -103,7 +124,7 @@ export function NumberProvisionPanel({ numberId }: { numberId: string }) {
         <CardTitle>SMS + Voice provisioning</CardTitle>
         <StatusChip
           status={
-            data?.ready.fully
+            channels?.fullyProvisioned || data?.ready.fully
               ? "Active"
               : data?.issues.some((i) => i.severity === "error")
                 ? "Failed"
@@ -112,8 +133,9 @@ export function NumberProvisionPanel({ numberId }: { numberId: string }) {
         />
       </div>
       <p className="mb-4 text-sm text-muted-foreground">
-        One number for messaging and voice. Voice routes through Transovo Call Control
-        (softphone, queues, AI) without clearing the messaging profile.
+        Numbers are provisioned for inbound voice, outbound voice/transfers, and messaging
+        infrastructure at purchase. Business SMS stays locked until A2P brand and campaign
+        approval — calling is never blocked by A2P.
       </p>
 
       {error ? (
@@ -137,6 +159,48 @@ export function NumberProvisionPanel({ numberId }: { numberId: string }) {
             }
           />
           <Row
+            label="Voice inbound"
+            value={flag(channels?.voiceInboundConfigured ?? data.ready.voice)}
+          />
+          <Row
+            label="Voice outbound"
+            value={
+              channels
+                ? flag(channels.voiceOutboundConfigured)
+                : data.outbound
+                  ? flag(data.outbound.ready)
+                  : "—"
+            }
+          />
+          <Row
+            label="Calls ready"
+            value={flag(channels?.callsReady ?? (data.ready.voice && data.ready.outbound))}
+          />
+          <Row
+            label="SMS infrastructure"
+            value={
+              channels?.messagingProfileConfigured
+                ? "Configured (Messaging Profile)"
+                : "Not configured"
+            }
+          />
+          <Row
+            label="A2P registration"
+            value={channels?.a2pRegistrationStatus || "—"}
+          />
+          <Row
+            label="A2P campaign"
+            value={channels?.a2pCampaignAssignmentStatus || "—"}
+          />
+          <Row
+            label="Business SMS"
+            value={
+              channels?.smsSendingEnabled || data.ready.smsSending
+                ? "Enabled"
+                : "Locked until A2P approved"
+            }
+          />
+          <Row
             label="Messaging profile"
             value={
               data.messagingProfileId ||
@@ -154,22 +218,18 @@ export function NumberProvisionPanel({ numberId }: { numberId: string }) {
                 : "—")
             }
           />
-          <Row label="Voice webhook" value={data.voiceWebhookUrl} />
-          <Row label="Messaging webhook" value={data.messagingWebhookUrl} />
           <Row
-            label="Outbound voice"
+            label="Outbound profile"
             value={
               data.outbound
-                ? `${data.outbound.ready ? "ready" : "not ready"} · profile ${
+                ? `${data.outbound.ready ? "ready" : "not ready"} · ${
                     data.outbound.outboundVoiceProfileId || "—"
-                  } · dest ${
-                    data.outbound.whitelistedDestinations?.join(",") || "—"
-                  }`
-                : data.ready.outbound
-                  ? "ready"
-                  : "—"
+                  } · ${data.outbound.whitelistedDestinations?.join(",") || "—"}`
+                : "—"
             }
           />
+          <Row label="Voice webhook" value={data.voiceWebhookUrl} />
+          <Row label="Messaging webhook" value={data.messagingWebhookUrl} />
           <Row
             label="AI agent"
             value={
@@ -198,7 +258,7 @@ export function NumberProvisionPanel({ numberId }: { numberId: string }) {
         <ul className="mb-4 space-y-1 text-sm">
           {data.issues.map((issue) => (
             <li
-              key={issue.code}
+              key={`${issue.code}-${issue.message.slice(0, 24)}`}
               className={
                 issue.severity === "error"
                   ? "text-destructive"
@@ -215,7 +275,14 @@ export function NumberProvisionPanel({ numberId }: { numberId: string }) {
         <Button size="sm" variant="outline" disabled={pending} onClick={() => run("verify")}>
           Verify
         </Button>
-        <Button size="sm" disabled={pending} onClick={() => run("enable_voice")}>
+        <Button
+          size="sm"
+          disabled={pending}
+          onClick={() => run("repair_configuration")}
+        >
+          Repair number configuration
+        </Button>
+        <Button size="sm" variant="outline" disabled={pending} onClick={() => run("enable_voice")}>
           Enable voice
         </Button>
         <Button
@@ -233,9 +300,6 @@ export function NumberProvisionPanel({ numberId }: { numberId: string }) {
           onClick={() => run("repair_outbound")}
         >
           Repair outbound voice
-        </Button>
-        <Button size="sm" variant="outline" disabled={pending} onClick={() => run("provision")}>
-          Full provision
         </Button>
       </div>
     </Card>

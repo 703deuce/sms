@@ -169,7 +169,8 @@ export const telnyxProvider: MessagingProvider = {
 
   async buyPhoneNumber(reg, phoneNumber): Promise<PurchasedNumber> {
     assertTelnyxConfigured();
-    // Dual provision: attach Voice Call Control + Messaging Profile on order when known.
+    // Dual provision at order time: Voice Call Control + Messaging Profile.
+    // Outbound Voice Profile is attached to the Voice app (not the DID).
     let connectionId: string | undefined;
     let messagingProfileId: string | undefined;
     try {
@@ -179,6 +180,21 @@ export const telnyxProvider: MessagingProvider = {
       const ids = await resolveOrderProvisionIds(reg.workspaceId);
       connectionId = ids.connectionId || undefined;
       messagingProfileId = ids.messagingProfileId || undefined;
+      if (!connectionId || !messagingProfileId) {
+        console.warn(
+          "[telnyx] number order missing dual-provision ids",
+          {
+            connectionId: Boolean(connectionId),
+            messagingProfileId: Boolean(messagingProfileId),
+            outboundReady: ids.outboundReady,
+          },
+        );
+      } else if (!ids.outboundReady) {
+        console.warn(
+          "[telnyx] outbound voice not ready at order time — post-purchase repair will retry",
+          { outboundVoiceProfileId: ids.outboundVoiceProfileId },
+        );
+      }
     } catch (err) {
       console.error("[telnyx] resolveOrderProvisionIds", err);
     }

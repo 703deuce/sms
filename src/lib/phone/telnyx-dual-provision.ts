@@ -1,8 +1,12 @@
 /**
  * Dual SMS + Voice provisioning for Telnyx DIDs.
  *
- * Phone number → Call Control Application (voice webhook) + Messaging Profile
- * Call-flow / AI / softphone routing stays inside Transovo after attach.
+ * On purchase / repair:
+ *   inbound voice (Call Control App) + outbound voice (OVP on that app)
+ *   + messaging profile infrastructure.
+ *
+ * A2P brand/campaign approval is tracked separately and does NOT block calling.
+ * Business SMS send remains gated by isMessagingReady (A2P approved).
  */
 
 import { getPrisma } from "@/lib/db";
@@ -14,6 +18,7 @@ import {
 } from "@/lib/messaging/telnyx/config";
 import { getMessagingProvider } from "@/lib/messaging/get-provider";
 import { getRegistrationByWorkspace } from "@/lib/messaging/store";
+import { isMessagingReady } from "@/lib/messaging/status";
 import { resolveVoiceConnectionId } from "@/lib/phone/telnyx-voice-connection";
 import type { OutboundVoiceReadiness } from "@/lib/phone/telnyx-outbound-voice";
 
@@ -27,11 +32,44 @@ export type ProvisionState =
   | "capability_unsupported"
   | "needs_compliance";
 
+export type A2pRegistrationStatus =
+  | "not_started"
+  | "pending"
+  | "in_review"
+  | "approved"
+  | "rejected"
+  | "action_required";
+
+export type A2pCampaignAssignmentStatus =
+  | "not_started"
+  | "pending"
+  | "assigned"
+  | "failed";
+
 export type NumberCapabilities = {
   voice: boolean;
   sms: boolean;
   mms: boolean;
   fax?: boolean;
+};
+
+/** Independent channel / regulatory readiness — never conflate A2P with voice. */
+export type ChannelReadiness = {
+  voiceInboundConfigured: boolean;
+  voiceOutboundConfigured: boolean;
+  messagingProfileConfigured: boolean;
+  a2pRegistrationStatus: A2pRegistrationStatus;
+  a2pCampaignAssignmentStatus: A2pCampaignAssignmentStatus;
+  /** True only when brand+campaign approved and number can send business SMS. */
+  smsSendingEnabled: boolean;
+  mmsEnabled: boolean;
+  /** Inbound + outbound voice ready (calls/transfers/AI). Independent of A2P. */
+  callsReady: boolean;
+  /**
+   * Infrastructure provisioned for supported channels (voice in/out + messaging
+   * profile when SMS-capable). Does NOT mean business SMS is unlocked.
+   */
+  fullyProvisioned: boolean;
 };
 
 export type NumberTelnyxSnapshot = {
@@ -73,8 +111,12 @@ export type NumberDiagnostics = {
     messaging: boolean;
     voice: boolean;
     outbound: boolean;
+    /** Infrastructure fully provisioned (not A2P/SMS send). */
     fully: boolean;
+    calls: boolean;
+    smsSending: boolean;
   };
+  channels: ChannelReadiness;
   outbound: OutboundVoiceReadiness | null;
   appBaseUrl: string;
 };
@@ -125,13 +167,14 @@ async function fetchTelnyxNumber(
   const voice =
     capsRaw.voice === true ||
     featureNames.has("voice") ||
-    Boolean(data.connection_id);
+    capsRaw.VOICE === true;
+  // Do not invent SMS capability — only trust Telnyx-reported features.
   const sms =
     capsRaw.sms === true ||
     featureNames.has("sms") ||
-    capsRaw.SMS === true ||
-    true; // most Telnyx DIDs support SMS; verify via messaging endpoint if needed
-  const mms = capsRaw.mms === true || featureNames.has("mms") || capsRaw.MMS === true;
+    capsRaw.SMS === true;
+  const mms =
+    capsRaw.mms === true || featureNames.has("mms") || capsRaw.MMS === true;
 
   return {
     providerNumberId: String(data.id || providerNumberId),
@@ -172,6 +215,7 @@ async function persistProvisioning(
     capabilities?: NumberCapabilities | null;
     telnyxConnectionId?: string | null;
     messagingProfileId?: string | null;
+    channels?: ChannelReadiness | null;
   },
 ) {
   const prisma = getPrisma();
@@ -192,6 +236,19 @@ async function persistProvisioning(
       patch.messagingProfileId === undefined
         ? prev.messagingProfileId
         : patch.messagingProfileId,
+    ...(patch.channels
+      ? {
+          voiceInboundConfigured: patch.channels.voiceInboundConfigured,
+          voiceOutboundConfigured: patch.channels.voiceOutboundConfigured,
+          messagingProfileConfigured: patch.channels.messagingProfileConfigured,
+          a2pRegistrationStatus: patch.channels.a2pRegistrationStatus,
+          a2pCampaignAssignmentStatus: patch.channels.a2pCampaignAssignmentStatus,
+          smsSendingEnabled: patch.channels.smsSendingEnabled,
+          mmsEnabled: patch.channels.mmsEnabled,
+          callsReady: patch.channels.callsReady,
+          fullyProvisioned: patch.channels.fullyProvisioned,
+        }
+      : {}),
   };
   const caps =
     patch.capabilities ||
@@ -217,6 +274,53 @@ async function persistProvisioning(
         : {}),
     },
   });
+}
+
+function mapA2pRegistrationStatus(reg: {
+  brandStatus?: string | null;
+  campaignStatus?: string | null;
+  overallStatus?: string | null;
+  certifiedAt?: Date | string | null;
+} | null): A2pRegistrationStatus {
+  if (!reg) return "not_started";
+  const brand = String(reg.brandStatus || "").toLowerCase();
+  const campaign = String(reg.campaignStatus || "").toLowerCase();
+  const overall = String(reg.overallStatus || "").toLowerCase();
+  if (brand === "rejected" || campaign === "rejected" || overall === "rejected") {
+    return "rejected";
+  }
+  if (brand === "approved" && campaign === "approved") return "approved";
+  if (
+    ["submitted", "in_review", "pending"].includes(brand) ||
+    ["submitted", "in_review", "pending"].includes(campaign) ||
+    ["submitted", "in_review", "pending"].includes(overall)
+  ) {
+    return "in_review";
+  }
+  if (reg.certifiedAt || brand === "action_required" || campaign === "action_required") {
+    return "action_required";
+  }
+  if (brand === "not_started" && campaign === "not_started") return "not_started";
+  return "pending";
+}
+
+function mapA2pCampaignAssignmentStatus(reg: {
+  campaignId?: string | null;
+  a2pCampaignSid?: string | null;
+  campaignStatus?: string | null;
+  phoneAttached?: boolean | null;
+  phoneE164?: string | null;
+} | null): A2pCampaignAssignmentStatus {
+  if (!reg) return "not_started";
+  const campaignId = reg.campaignId || reg.a2pCampaignSid;
+  if (!campaignId) return "not_started";
+  if (reg.campaignStatus === "approved" && reg.phoneAttached && reg.phoneE164) {
+    return "assigned";
+  }
+  if (["rejected", "failed"].includes(String(reg.campaignStatus || "").toLowerCase())) {
+    return "failed";
+  }
+  return "pending";
 }
 
 /** Ensure workspace has a Telnyx messaging profile; return its id. */
@@ -252,18 +356,31 @@ export async function ensureWorkspaceMessagingProfileId(
 
 /**
  * Values to include on Telnyx POST /number_orders for dual provisioning.
+ * Also ensures the Voice API Application has an Outbound Voice Profile before
+ * the number is purchased (OVP attaches to the app, not each DID).
  */
 export async function resolveOrderProvisionIds(workspaceId: string): Promise<{
   connectionId: string | null;
   messagingProfileId: string | null;
+  outboundReady: boolean;
+  outboundVoiceProfileId: string | null;
 }> {
   let connectionId: string | null = null;
   let messagingProfileId: string | null = null;
+  let outboundReady = false;
+  let outboundVoiceProfileId: string | null = null;
   if (getTelnyxApiKey()) {
     try {
       connectionId = await resolveVoiceConnectionId();
+      const { ensureTelnyxOutboundVoiceReady } = await import(
+        "@/lib/phone/telnyx-outbound-voice"
+      );
+      const outbound = await ensureTelnyxOutboundVoiceReady({ connectionId });
+      outboundReady = outbound.ready;
+      outboundVoiceProfileId = outbound.outboundVoiceProfileId;
+      if (outbound.connectionId) connectionId = outbound.connectionId;
     } catch (err) {
-      console.error("[dual-provision] voice connection", err);
+      console.error("[dual-provision] voice connection / outbound", err);
     }
     try {
       messagingProfileId = await ensureWorkspaceMessagingProfileId(workspaceId);
@@ -271,7 +388,12 @@ export async function resolveOrderProvisionIds(workspaceId: string): Promise<{
       console.error("[dual-provision] messaging profile", err);
     }
   }
-  return { connectionId, messagingProfileId };
+  return {
+    connectionId,
+    messagingProfileId,
+    outboundReady,
+    outboundVoiceProfileId,
+  };
 }
 
 /** Assign voice connection without clearing messaging_profile_id. */
@@ -377,7 +499,7 @@ export async function enableVoiceOnWorkspaceNumber(input: {
     messagingProfileId: profileId || afterMsg,
   });
 
-  return diagnoseWorkspaceNumber({
+  return verifyAndPersistNumber({
     workspaceId: input.workspaceId,
     phoneNumberId: input.phoneNumberId,
   });
@@ -423,13 +545,20 @@ export async function verifyAndPersistNumber(input: {
   const diag = await diagnoseWorkspaceNumber(input);
   let state: ProvisionState = "purchased";
   if (!diag.telnyx) state = "pending_activation";
-  else if (diag.ready.fully) state = "fully_configured";
-  else if (diag.ready.voice && !diag.ready.messaging) state = "voice_configured";
-  else if (diag.ready.messaging && !diag.ready.voice) state = "messaging_configured";
-  else if (diag.issues.some((i) => i.code === "capability_unsupported")) {
+  else if (diag.channels.fullyProvisioned) state = "fully_configured";
+  else if (diag.channels.callsReady && !diag.channels.messagingProfileConfigured) {
+    state = "voice_configured";
+  } else if (
+    diag.channels.messagingProfileConfigured &&
+    !diag.channels.callsReady
+  ) {
+    state = "messaging_configured";
+  } else if (diag.issues.some((i) => i.code === "capability_unsupported")) {
     state = "capability_unsupported";
   } else if (diag.issues.some((i) => i.severity === "error")) {
     state = "configuration_failed";
+  } else if (diag.channels.callsReady || diag.channels.messagingProfileConfigured) {
+    state = diag.channels.callsReady ? "voice_configured" : "messaging_configured";
   }
 
   await persistProvisioning(input.phoneNumberId, {
@@ -438,16 +567,32 @@ export async function verifyAndPersistNumber(input: {
     capabilities: diag.capabilities,
     telnyxConnectionId: diag.voiceConnectionId,
     messagingProfileId: diag.messagingProfileId,
+    channels: diag.channels,
   });
 
   return { ...diag, provisionState: state };
 }
 
 /**
- * After purchase / order resolve: attach voice + messaging and verify.
- * Idempotent — safe to retry.
+ * Idempotent full provision / repair after purchase (or on demand).
+ *
+ * 1. Confirm capabilities
+ * 2. Assign Voice API Application (inbound)
+ * 3. Ensure Outbound Voice Profile on that application
+ * 4. Assign Messaging Profile (preserve existing profile when already set)
+ * 5. Re-fetch live Telnyx state and persist channel readiness
+ *
+ * Does not wait for A2P and does not enable business SMS.
  */
 export async function provisionPurchasedNumber(input: {
+  workspaceId: string;
+  phoneNumberId: string;
+}): Promise<NumberDiagnostics> {
+  return repairNumberConfiguration(input);
+}
+
+/** Explicit repair alias used by the UI / API. */
+export async function repairNumberConfiguration(input: {
   workspaceId: string;
   phoneNumberId: string;
 }): Promise<NumberDiagnostics> {
@@ -461,44 +606,89 @@ export async function provisionPurchasedNumber(input: {
     return diagnoseWorkspaceNumber(input);
   }
 
-  const connectionId = await resolveVoiceConnectionId();
-  const current = await fetchTelnyxNumber(row.providerNumberId);
-  if (current && connectionId && current.connectionId !== connectionId) {
-    await assignVoiceConnection(row.providerNumberId, connectionId);
-  }
-
-  try {
-    const { ensureTelnyxOutboundVoiceReady } = await import(
-      "@/lib/phone/telnyx-outbound-voice"
-    );
-    await ensureTelnyxOutboundVoiceReady({
-      connectionId,
-      callerIdE164: row.e164,
+  const before = await fetchTelnyxNumber(row.providerNumberId);
+  if (!before) {
+    await persistProvisioning(row.id, {
+      state: "configuration_failed",
+      lastError: "Could not load number from Telnyx",
     });
-  } catch (err) {
-    console.error("[dual-provision] outbound voice ensure", err);
+    return diagnoseWorkspaceNumber(input);
   }
 
-  // Messaging profile is best-effort — voice must still succeed if profile create fails.
-  let profileId: string | null = null;
+  if (!before.capabilities.voice && !before.capabilities.sms) {
+    await persistProvisioning(row.id, {
+      state: "capability_unsupported",
+      lastError: "Number reports neither voice nor SMS capability",
+      capabilities: before.capabilities,
+    });
+    return diagnoseWorkspaceNumber(input);
+  }
+
+  // Preserve existing messaging profile before voice attach.
+  const existingProfile =
+    before.messagingProfileId ||
+    (await fetchMessagingAssignment(row.providerNumberId));
+
+  let connectionId: string | null = null;
+  if (before.capabilities.voice !== false) {
+    try {
+      connectionId = await resolveVoiceConnectionId();
+      if (connectionId && before.connectionId !== connectionId) {
+        await assignVoiceConnection(row.providerNumberId, connectionId);
+      }
+      const { ensureTelnyxOutboundVoiceReady } = await import(
+        "@/lib/phone/telnyx-outbound-voice"
+      );
+      await ensureTelnyxOutboundVoiceReady({
+        connectionId,
+        callerIdE164: row.e164,
+      });
+    } catch (err) {
+      console.error("[dual-provision] voice/outbound repair", err);
+    }
+  }
+
+  // Messaging profile — prefer workspace profile; never clear an existing one
+  // if workspace profile create fails (keeps campaign assignment possible).
+  let profileId: string | null = existingProfile;
   try {
-    profileId = await ensureWorkspaceMessagingProfileId(input.workspaceId);
-    if (profileId) {
-      const msgId =
-        current?.messagingProfileId ||
-        (await fetchMessagingAssignment(row.providerNumberId));
-      if (msgId !== profileId) {
-        await assignMessagingProfile(row.providerNumberId, profileId);
+    const workspaceProfile = await ensureWorkspaceMessagingProfileId(
+      input.workspaceId,
+    );
+    if (workspaceProfile) {
+      profileId = workspaceProfile;
+      const liveMsg =
+        (await fetchMessagingAssignment(row.providerNumberId)) ||
+        (await fetchTelnyxNumber(row.providerNumberId))?.messagingProfileId ||
+        null;
+      if (liveMsg !== workspaceProfile) {
+        await assignMessagingProfile(row.providerNumberId, workspaceProfile);
       }
     }
   } catch (err) {
     console.error("[dual-provision] messaging attach", err);
   }
 
-  // Ensure messaging attach flag on registration when this is the reg number.
+  // If voice attach cleared messaging, restore.
+  if (profileId) {
+    const afterVoice = await fetchTelnyxNumber(row.providerNumberId);
+    const afterMsg =
+      afterVoice?.messagingProfileId ||
+      (await fetchMessagingAssignment(row.providerNumberId));
+    if (afterMsg !== profileId) {
+      try {
+        await assignMessagingProfile(row.providerNumberId, profileId);
+      } catch (err) {
+        console.error("[dual-provision] restore messaging profile", err);
+      }
+    }
+  }
+
+  // Keep registration phoneAttached in sync when this DID is the reg number.
+  // Do not set overallStatus/messagingEnabled — A2P gates sending separately.
   const reg = await getRegistrationByWorkspace(input.workspaceId);
   if (reg?.phoneE164 === row.e164 && profileId) {
-    await getPrisma().messagingRegistration.updateMany({
+    await prisma.messagingRegistration.updateMany({
       where: { workspaceId: input.workspaceId },
       data: {
         phoneAttached: true,
@@ -648,8 +838,57 @@ export async function diagnoseWorkspaceNumber(input: {
     telnyx?.capabilities ||
     (asRecord(row.capabilitiesJson) as NumberCapabilities | null);
 
-  const messagingReady = messagingOk || Boolean(messagingProfileId);
+  const messagingProfileConfigured =
+    messagingOk || Boolean(messagingProfileId);
   const outboundReady = Boolean(outbound?.ready);
+  const smsCapable = Boolean(capabilities?.sms);
+  const mmsCapable = Boolean(capabilities?.mms);
+  const a2pRegistrationStatus = mapA2pRegistrationStatus(reg);
+  const a2pCampaignAssignmentStatus = mapA2pCampaignAssignmentStatus(
+    reg
+      ? {
+          campaignId: (reg as { campaignId?: string | null }).campaignId,
+          a2pCampaignSid: reg.a2pCampaignSid,
+          campaignStatus: reg.campaignStatus,
+          phoneAttached: reg.phoneAttached,
+          phoneE164: reg.phoneE164,
+        }
+      : null,
+  );
+  const smsSendingEnabled = isMessagingReady(reg);
+  // Workspace UI may also store mmsEnabled; capability wins when false.
+  const mmsEnabled =
+    mmsCapable &&
+    (settings.mmsEnabled === undefined ? true : Boolean(settings.mmsEnabled));
+
+  const channels: ChannelReadiness = {
+    voiceInboundConfigured: voiceOk,
+    voiceOutboundConfigured: outboundReady,
+    messagingProfileConfigured,
+    a2pRegistrationStatus,
+    a2pCampaignAssignmentStatus,
+    smsSendingEnabled,
+    mmsEnabled,
+    callsReady: voiceOk && outboundReady,
+    // Infrastructure complete for supported channels — NOT business SMS unlock.
+    fullyProvisioned:
+      voiceOk &&
+      outboundReady &&
+      (!smsCapable || messagingProfileConfigured),
+  };
+
+  if (
+    messagingProfileConfigured &&
+    !smsSendingEnabled &&
+    smsCapable
+  ) {
+    issues.push({
+      code: "a2p_pending_sms_locked",
+      severity: "info",
+      message:
+        "Messaging Profile is configured, but business SMS sending stays locked until A2P brand/campaign approval.",
+    });
+  }
 
   return {
     workspaceNumberId: row.id,
@@ -675,11 +914,14 @@ export async function diagnoseWorkspaceNumber(input: {
     lastError: prov.lastError,
     issues,
     ready: {
-      messaging: messagingReady,
+      messaging: messagingProfileConfigured,
       voice: voiceOk,
       outbound: outboundReady,
-      fully: messagingReady && voiceOk && outboundReady,
+      fully: channels.fullyProvisioned,
+      calls: channels.callsReady,
+      smsSending: smsSendingEnabled,
     },
+    channels,
     outbound,
     appBaseUrl: getAppBaseUrl(),
   };

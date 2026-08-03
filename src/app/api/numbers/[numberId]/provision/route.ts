@@ -4,8 +4,8 @@ import {
   diagnoseWorkspaceNumber,
   enableVoiceOnWorkspaceNumber,
   getDualProvisionEnvStatus,
-  provisionPurchasedNumber,
   repairMessagingOnWorkspaceNumber,
+  repairNumberConfiguration,
   verifyAndPersistNumber,
 } from "@/lib/phone/telnyx-dual-provision";
 import {
@@ -22,6 +22,8 @@ type Action =
   | "repair_voice"
   | "repair_messaging"
   | "provision"
+  | "repair"
+  | "repair_configuration"
   | "diagnose_outbound"
   | "repair_outbound"
   | "test_outbound";
@@ -30,6 +32,7 @@ type Action =
  * Dual SMS + voice provisioning actions for a workspace number.
  * Body: { action, to? }
  * Never clears messaging_profile_id when assigning voice.
+ * A2P approval is never required for call readiness.
  */
 export async function POST(
   request: Request,
@@ -70,7 +73,7 @@ export async function POST(
         const outbound = await ensureTelnyxOutboundVoiceReady({
           callerIdE164: row.e164,
         });
-        const diag = await diagnoseWorkspaceNumber({
+        const diag = await verifyAndPersistNumber({
           workspaceId: auth.workspaceId,
           phoneNumberId: numberId,
         });
@@ -116,8 +119,10 @@ export async function POST(
           phoneNumberId: numberId,
         });
         break;
+      case "repair":
+      case "repair_configuration":
       case "provision":
-        data = await provisionPurchasedNumber({
+        data = await repairNumberConfiguration({
           workspaceId: auth.workspaceId,
           phoneNumberId: numberId,
         });
