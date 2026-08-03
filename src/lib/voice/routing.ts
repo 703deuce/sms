@@ -167,7 +167,8 @@ export async function evaluateInboundRouting(ctx: RoutingContext): Promise<Routi
       ownerAgentId &&
       actionAgentId &&
       actionAgentId !== ownerAgentId &&
-      (conditions as { flowManaged?: boolean }).flowManaged
+      ((conditions as { flowManaged?: boolean }).flowManaged ||
+        (conditions as { wizardManaged?: boolean }).wizardManaged)
     ) {
       continue;
     }

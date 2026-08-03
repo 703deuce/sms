@@ -137,6 +137,8 @@ export async function POST(request: Request) {
           insightGroupId: hooks.insightGroupId,
           transferSynced: hooks.transferSynced,
           transferE164: hooks.transferE164,
+          routingSynced: hooks.routingSynced,
+          routingMode: hooks.routingMode,
         },
         telnyxAssistantId: (updated as { telnyxAssistantId?: string | null })
           .telnyxAssistantId,
