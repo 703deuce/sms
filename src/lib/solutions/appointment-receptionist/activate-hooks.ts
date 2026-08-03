@@ -183,6 +183,7 @@ async function ensureWizardCalendarServices(input: {
     where: {
       workspaceId: input.workspaceId,
       status: { in: ["connected", "active", "ok"] },
+      provider: { in: ["google", "microsoft", "internal"] },
     },
     orderBy: { updatedAt: "desc" },
   });
@@ -271,6 +272,7 @@ export async function runAppointmentReceptionistActivateHooks(input: {
     where: {
       workspaceId: input.workspaceId,
       status: { in: ["connected", "active", "ok"] },
+      provider: { in: ["google", "microsoft", "internal"] },
     },
     select: { id: true },
   });
