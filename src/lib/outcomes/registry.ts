@@ -1955,12 +1955,14 @@ export const outcomeSolutions: OutcomeSolutionDef[] = [
   {
     slug: "old-lead-reactivation",
     title: "Old Lead Reactivation",
-    summary: "Win back quiet contacts with targeted reactivation campaigns.",
+    summary:
+      "For people who inquired but never purchased — unresponsive leads, lost opportunities, unaccepted estimates, no-shows, and CRM leads that went quiet.",
     category: "leads-follow-up",
     whatItDoes: [
-      "Build audiences from old leads, no-shows, and lost deals",
-      "Respect consent and exclusions",
-      "Route replies to booking or sales",
+      "Re-engage leads who never became customers",
+      "Target unresponsive leads, lost deals, unaccepted estimates, and no-shows",
+      "Pull from CRM stages where leads are sitting idle",
+      "Route replies to booking or sales — not past-customer offers",
     ],
     requiredConnections: ["Contacts / segments"],
     setupTime: "10 minutes",
@@ -1998,15 +2000,16 @@ export const outcomeSolutions: OutcomeSolutionDef[] = [
         label: "Audience",
         kind: "settings",
         navRole: "manage",
+        description:
+          "People who inquired but never purchased — not past customers.",
         launchHref: "/contacts/segments",
         bullets: [
-          "Old leads",
-          "Past customers",
+          "Unresponsive leads",
           "Lost opportunities",
-          "No-shows",
           "Unaccepted estimates",
-          "Lapsed memberships",
-          "Customers due for service",
+          "No-shows",
+          "Leads sitting in the CRM",
+          "Abandoned inquiries",
         ],
       },
       {
@@ -2017,10 +2020,10 @@ export const outcomeSolutions: OutcomeSolutionDef[] = [
         launchHref: "/contacts/segments",
         bullets: [
           "Last contact date",
-          "Last purchase date",
+          "Never purchased / no closed-won deal",
           "Location",
           "Service type",
-          "Value",
+          "Lead value",
           "Consent status",
           "Exclusions",
         ],
@@ -2866,12 +2869,14 @@ export const outcomeSolutions: OutcomeSolutionDef[] = [
   {
     slug: "customer-reactivation",
     title: "Customer Reactivation",
-    summary: "Bring past customers back with offers timed to service cycles and lapsed memberships.",
+    summary:
+      "For people who previously purchased — customers due for service, lapsed memberships, seasonal reminders, past-customer promotions, and rebooking.",
     category: "marketing",
     whatItDoes: [
-      "Target customers due for service or gone quiet",
-      "Lead with a clear offer",
-      "Book replies or hand them to sales",
+      "Win back people who already bought from you",
+      "Target due-for-service, lapsed memberships, and seasonal cycles",
+      "Lead with a past-customer offer or rebooking CTA",
+      "Not for first-time leads who never purchased — use Old Lead Reactivation for those",
     ],
     requiredConnections: ["Contacts / segments"],
     setupTime: "10 minutes",
