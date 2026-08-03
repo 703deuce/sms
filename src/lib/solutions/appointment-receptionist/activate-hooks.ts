@@ -1,3 +1,5 @@
+import "server-only";
+
 import { getPrisma } from "@/lib/db";
 import { processKnowledgeSource } from "@/lib/voice/knowledge-processor";
 import {

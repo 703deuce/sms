@@ -1,27 +1,22 @@
-import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
+import "server-only";
+
+/**
+ * Server-only transfer destination sync for the appointment receptionist.
+ * Client Components must import helpers from `./transfer-utils` instead.
+ */
+
 import { upsertTransferDestination } from "@/lib/voice/platform/ai-platform";
+import {
+  normalizeWizardTransferPhone,
+  wizardTransferDestinationName,
+  WIZARD_HANDOFF_NAME,
+} from "./transfer-utils";
 
-/** Canonical escalate_human target used by flow global rules. */
-export const WIZARD_HANDOFF_NAME = "Agent Handoff";
-
-export function normalizeWizardTransferPhone(raw: string): string | null {
-  const trimmed = String(raw || "").trim();
-  if (!trimmed) return null;
-  try {
-    return normalizeE164(trimmed);
-  } catch {
-    const digits = trimmed.replace(/\D/g, "");
-    if (digits.length === 10) return `+1${digits}`;
-    if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
-    if (trimmed.startsWith("+") && digits.length >= 10) return `+${digits}`;
-    return null;
-  }
-}
-
-export function wizardTransferDestinationName(name: string): string {
-  const trimmed = String(name || "").trim();
-  return trimmed || WIZARD_HANDOFF_NAME;
-}
+export {
+  normalizeWizardTransferPhone,
+  wizardTransferDestinationName,
+  WIZARD_HANDOFF_NAME,
+} from "./transfer-utils";
 
 /**
  * Persist wizard transfer phone so escalate_human / Telnyx sync have a real E.164.
