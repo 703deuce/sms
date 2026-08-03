@@ -73,7 +73,15 @@ export function AppointmentReceptionistWizard() {
         body: JSON.stringify({ action, state }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Save failed");
+      if (!res.ok) {
+        const issueMsgs = Array.isArray(json?.data?.issues)
+          ? (json.data.issues as Array<{ message?: string }>)
+              .map((i) => i.message)
+              .filter(Boolean)
+              .join(" ")
+          : "";
+        throw new Error(issueMsgs || json.error || "Save failed");
+      }
       const agentId = json.data.agentId as string;
       const telnyxAssistantId =
         (json.data.telnyxAssistantId as string | null | undefined) ?? state.telnyxAssistantId;

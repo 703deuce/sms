@@ -227,6 +227,30 @@ export const TELNYX_AI_CAPABILITY_REGISTRY: CapabilityEntry[] = [
     telnyxPaths: ["/ai/assistants/{id}/scheduled_events"],
     status: "deferred",
   },
+  {
+    id: "receptionist.capability_pack",
+    label: "Receptionist capability checklist (shared across agent types)",
+    phase: 26,
+    clientMethods: [],
+    telnyxPaths: [],
+    status: "wired",
+    notes:
+      "See src/lib/voice/capabilities/receptionist-checklist.ts — required/optional/booking/specialized packs",
+  },
+  {
+    id: "receptionist.activate_hooks",
+    label: "Wizard activate hooks (KB, services, transfer, insights, notify)",
+    phase: 26,
+    clientMethods: [],
+    telnyxPaths: [
+      "/api/solutions/appointment-receptionist",
+      "voice_knowledge_bases",
+      "voice_services",
+      "voice_transfer_destinations",
+      "insight groups",
+    ],
+    status: "wired",
+  },
 ];
 
 export function capabilityRegistrySnapshot() {

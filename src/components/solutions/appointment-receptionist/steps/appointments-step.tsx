@@ -7,15 +7,16 @@ import type {
 } from "@/lib/solutions/appointment-receptionist/types";
 import { Input, Label } from "@/components/ui/input";
 import { CheckCircle2, MoreHorizontal, Plus, X } from "lucide-react";
+import { useEffect, useState } from "react";
 import { InfoCallout, RadioRow, SelectableCard, SidePanel, StatusPill } from "../ui";
 
 const CALENDARS = [
   { id: "google", label: "Google Calendar" },
   { id: "calendly", label: "Calendly" },
   { id: "calcom", label: "Cal.com" },
-  { id: "outlook", label: "Microsoft Outlook" },
+  { id: "microsoft", label: "Microsoft Outlook" },
   { id: "acuity", label: "Acuity" },
-  { id: "transovo", label: "Transovo Calendar" },
+  { id: "internal", label: "Transovo Calendar" },
 ];
 
 export function AppointmentsStep({
@@ -38,13 +39,69 @@ export function AppointmentsStep({
     });
   }
 
-  function connectCalendar(id: string) {
-    patch({
-      calendarProvider: id,
-      calendarConnected: true,
-      calendarEmail:
-        id === "google" ? "calendar@connected.local" : `${id}@connected.local`,
-    });
+  const [calendars, setCalendars] = useState<Array<{ id: string; name: string; provider: string; status: string }>>([]);
+  const [busyProvider, setBusyProvider] = useState<string | null>(null);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const res = await fetch("/api/voice/calendars");
+        const json = await res.json();
+        const rows = (json.data || []) as Array<{ id: string; name: string; provider: string; status: string }>;
+        setCalendars(rows);
+        const connected = rows.find((r) => ["connected", "active", "ok"].includes(String(r.status || "")));
+        if (connected) {
+          patch({ calendarConnected: true, calendarProvider: connected.provider, calendarEmail: connected.name });
+        } else if (state.calendarEmail?.endsWith("@connected.local")) {
+          patch({ calendarConnected: false, calendarEmail: null });
+        }
+      } catch {
+        // ignore
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function connectCalendar(providerId: string) {
+    setBusyProvider(providerId);
+    try {
+      const provider = providerId === "outlook" ? "microsoft" : providerId;
+      const existing = calendars.find((c) => c.provider === provider);
+      let connectionId = existing?.id;
+      if (!connectionId) {
+        const res = await fetch("/api/voice/calendars", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            name: CALENDARS.find((c) => c.id === providerId)?.label || "Calendar",
+            provider,
+          }),
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || "Could not create calendar");
+        connectionId = json.data.id as string;
+      }
+      if (provider === "google" || provider === "microsoft") {
+        window.location.href = `/api/voice/calendars/oauth/${provider}?connectionId=${connectionId}`;
+        return;
+      }
+      patch({
+        calendarProvider: provider,
+        calendarConnected: true,
+        calendarEmail: CALENDARS.find((c) => c.id === providerId)?.label || provider,
+      });
+    } catch {
+      // leave UI unchanged
+    } finally {
+      setBusyProvider(null);
+    }
+  }
+
+  function isProviderConnected(providerId: string) {
+    const provider = providerId === "outlook" ? "microsoft" : providerId;
+    const row = calendars.find((c) => c.provider === provider);
+    if (row && ["connected", "active", "ok"].includes(row.status)) return true;
+    return state.calendarConnected && state.calendarProvider === providerId;
   }
 
   return (
@@ -59,15 +116,23 @@ export function AppointmentsStep({
           </p>
           <div className="mt-4 grid gap-2 sm:grid-cols-3 xl:grid-cols-6">
             {CALENDARS.map((cal) => {
-              const connected =
-                state.calendarConnected && state.calendarProvider === cal.id;
+              const connected = isProviderConnected(cal.id);
+              const row = calendars.find((c) => c.provider === cal.id);
               return (
                 <SelectableCard
                   key={cal.id}
                   selected={connected}
-                  onClick={() => connectCalendar(cal.id)}
+                  onClick={() => void connectCalendar(cal.id)}
                   title={cal.label}
-                  description={connected ? "Connected" : "Connect"}
+                  description={
+                    busyProvider === cal.id
+                      ? "Connecting…"
+                      : connected
+                        ? "Connected"
+                        : row?.status === "pending_oauth"
+                          ? "Finish OAuth"
+                          : "Connect"
+                  }
                   className="min-h-[88px]"
                 />
               );
