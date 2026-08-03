@@ -120,6 +120,8 @@ export function AgentBrowserCall({
   unsavedChanges,
   onNeedBuild,
   onSaveDraft,
+  onSessionSuccess,
+  onSessionFailure,
 }: {
   agentId: string;
   telnyxAssistantId?: string | null;
@@ -128,6 +130,10 @@ export function AgentBrowserCall({
   unsavedChanges?: boolean;
   onNeedBuild?: () => void;
   onSaveDraft?: () => Promise<void> | void;
+  /** Fired when a live WebRTC session reaches connected / media_ready. */
+  onSessionSuccess?: () => void;
+  /** Fired when WebRTC connect fails. */
+  onSessionFailure?: (message?: string) => void;
 }) {
   const [phase, setPhase] = useState<CallPhase>("idle");
   const [error, setError] = useState("");
@@ -639,6 +645,7 @@ export function AgentBrowserCall({
       setError("Build & test first so Telnyx can sync the assistant.");
       onNeedBuild?.();
       setPhase("failed");
+      onSessionFailure?.("Build & test first so Telnyx can sync the assistant.");
       return;
     }
 
@@ -648,6 +655,7 @@ export function AgentBrowserCall({
       } catch {
         setError("Save the agent before starting a live test.");
         setPhase("failed");
+        onSessionFailure?.("Save the agent before starting a live test.");
         return;
       }
     }
@@ -657,6 +665,9 @@ export function AgentBrowserCall({
         "This browser does not support microphone access for voice testing.",
       );
       setPhase("failed");
+      onSessionFailure?.(
+        "This browser does not support microphone access for voice testing.",
+      );
       return;
     }
 
@@ -683,6 +694,7 @@ export function AgentBrowserCall({
       setMicPermission("denied");
       setPhase("failed");
       setError("Microphone access is required to test this voice agent.");
+      onSessionFailure?.("Microphone access is required to test this voice agent.");
       return;
     }
 
@@ -870,6 +882,7 @@ export function AgentBrowserCall({
       }
       if (!mountedRef.current) return;
       setPhase("listening");
+      onSessionSuccess?.();
 
       statsTimerRef.current = setInterval(() => {
         void pollQuality();
@@ -878,6 +891,7 @@ export function AgentBrowserCall({
       const message = friendlyError(err);
       setPhase("failed");
       setError(message);
+      onSessionFailure?.(message);
       await endSession({ error: message });
       await teardownCall();
       sessionIdRef.current = null;

@@ -256,6 +256,7 @@ export function createDefaultWizardState(): AppointmentReceptionistWizardState {
     callRecording: "all",
     connectionGreeting: "transovo_professional",
     connectionGreetingText: DEFAULT_CONNECTION_GREETING,
+    connectionGreetingAudioUrl: "",
 
     knowledgeSource: "website",
     websiteUrl: "",
@@ -370,6 +371,8 @@ export function createDefaultWizardState(): AppointmentReceptionistWizardState {
     transferDestinationPhone: "",
     transferRingSeconds: 20,
     transferFallback: "return_to_ai",
+    warmTransfer: false,
+    detectVoicemailOnTransfer: false,
 
     agentName: "Maya",
     businessName: "",
@@ -408,6 +411,9 @@ export function createDefaultWizardState(): AppointmentReceptionistWizardState {
     lastTestPassed: null,
 
     activationMode: "activate_now",
+    scheduledAt: null,
+    longTermMemory: false,
+    crmEnabled: false,
     timezone: "America/New_York",
   };
 }

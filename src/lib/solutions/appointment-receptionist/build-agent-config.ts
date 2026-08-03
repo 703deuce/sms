@@ -1,5 +1,6 @@
 import type { VoiceAgentConfig } from "@/lib/voice/types";
 import { parseVoiceAgentConfig } from "@/lib/voice/types";
+import { FALLBACK_PROVIDER_VOICE_ID } from "@/lib/voice/telnyx/voices";
 import { DEFAULT_CONNECTION_GREETING } from "./defaults";
 import type { AppointmentReceptionistWizardState } from "./types";
 import {
@@ -8,12 +9,66 @@ import {
   WIZARD_HANDOFF_NAME,
 } from "./sync-transfer";
 
+const KNOWLEDGE_FALLBACK_PHRASE =
+  "If information is not available in the knowledge base, say you don't have that information and offer to take a message or connect someone who can help.";
+
+const DEFAULT_RECORDING_DISCLOSURE =
+  "This call may be recorded for quality and training purposes.";
+
 function interpolateGreeting(state: AppointmentReceptionistWizardState) {
   const business = state.businessName.trim() || "our office";
   const agent = state.agentName.trim() || "your receptionist";
   return state.openingGreeting
     .replaceAll("{{businessName}}", business)
     .replaceAll("{{agentName}}", agent);
+}
+
+/** Map wizard language labels / locales to BCP-47 + STT language codes. */
+export function mapWizardLanguage(language: string): {
+  primaryLanguage: string;
+  transcriptionLanguage: string;
+} {
+  const raw = (language || "English").trim();
+  const lower = raw.toLowerCase();
+  if (lower === "spanish" || lower.startsWith("es")) {
+    return { primaryLanguage: "es-ES", transcriptionLanguage: "es" };
+  }
+  if (lower === "french" || lower.startsWith("fr")) {
+    return { primaryLanguage: "fr-FR", transcriptionLanguage: "fr" };
+  }
+  if (lower === "english" || lower.startsWith("en")) {
+    return { primaryLanguage: "en-US", transcriptionLanguage: "en" };
+  }
+  if (raw.includes("-")) {
+    return {
+      primaryLanguage: raw,
+      transcriptionLanguage: lower.split("-")[0] || "en",
+    };
+  }
+  return { primaryLanguage: "en-US", transcriptionLanguage: "en" };
+}
+
+function mapResponsivenessLevel(value: number): "high" | "medium" | "low" {
+  if (value >= 0.7) return "high";
+  if (value >= 0.4) return "medium";
+  return "low";
+}
+
+/** Higher responsiveness → shorter silence before the agent continues. */
+function silenceTimeoutFromResponsiveness(responsiveness: number): number {
+  const clamped = Math.max(0, Math.min(1, responsiveness));
+  return Math.round(3500 - clamped * 2000);
+}
+
+function buildTranscriptionKeyterms(state: AppointmentReceptionistWizardState): string[] {
+  const transferName = wizardTransferDestinationName(state.transferDestinationName);
+  const terms = [
+    state.businessName?.trim(),
+    state.agentName?.trim(),
+    transferName,
+    ...state.appointmentTypes.filter((t) => t.enabled).map((t) => t.name?.trim()),
+  ].filter((t): t is string => Boolean(t && t.length > 1));
+  return [...new Set(terms)].slice(0, 50);
 }
 
 export function buildSystemPrompt(state: AppointmentReceptionistWizardState): string {
@@ -123,9 +178,11 @@ export function buildSystemPrompt(state: AppointmentReceptionistWizardState): st
   if (b.neverInventAvailability) lines.push("- Never invent availability.");
   lines.push("- Use the knowledge base for business facts.");
   lines.push("- Use calendar tools for availability.");
+  lines.push(`- ${KNOWLEDGE_FALLBACK_PHRASE}`);
   lines.push("");
   lines.push("Guardrails:");
   for (const g of state.guardrails) lines.push(`- ${g}`);
+  lines.push(`- ${KNOWLEDGE_FALLBACK_PHRASE}`);
   return lines.join("\n");
 }
 
@@ -139,6 +196,7 @@ export function buildWizardAgentConfig(
   const transferPhone = normalizeWizardTransferPhone(state.transferDestinationPhone);
   const canTransfer =
     state.capabilities.includes("transfer_calls") && Boolean(transferPhone);
+  const customAudioUrl = (state.connectionGreetingAudioUrl || "").trim();
 
   const startupGreeting =
     connectionMode === "none"
@@ -150,6 +208,15 @@ export function buildWizardAgentConfig(
           delayMs: "auto" as const,
           handOffWhenReady: true,
         }
+      : connectionMode === "upload_custom" && customAudioUrl
+        ? {
+            enabled: true,
+            mode: "audio_url" as const,
+            text: state.connectionGreetingText || DEFAULT_CONNECTION_GREETING,
+            audioUrl: customAudioUrl,
+            delayMs: 500 as const,
+            handOffWhenReady: true,
+          }
       : connectionMode === "transovo_professional" || connectionMode === "transovo_warm"
         ? {
             enabled: true,
@@ -160,10 +227,11 @@ export function buildWizardAgentConfig(
             handOffWhenReady: true,
           }
         : {
+            // create_custom (and upload_custom without URL) use TTS/text mask
             enabled: true,
             mode: "ai" as const,
             text: state.connectionGreetingText || DEFAULT_CONNECTION_GREETING,
-            audioUrl: "",
+            audioUrl: customAudioUrl,
             delayMs: "auto" as const,
             handOffWhenReady: true,
           };
@@ -197,9 +265,18 @@ export function buildWizardAgentConfig(
   ) {
     enabledTools.add("send_sms");
   }
+  // Always enable CRM notes with message taking for receptionist; crmEnabled adds full CRM set.
+  enabledTools.add("create_crm_note");
+  if (state.crmEnabled) {
+    enabledTools.add("search_crm_contacts");
+    enabledTools.add("upsert_crm_contact");
+    enabledTools.add("create_crm_task");
+  }
 
   const ringHumanFirst =
-    state.answerWhen === "nobody_answers" || state.ringBehavior === "ring_team_first";
+    state.answerWhen === "nobody_answers" ||
+    state.answerWhen === "line_busy" ||
+    state.ringBehavior === "ring_team_first";
 
   const transferTargets = transferPhone
     ? [
@@ -210,6 +287,13 @@ export function buildWizardAgentConfig(
         { name: "Front Desk", to: transferPhone },
       ]
     : [];
+
+  const lang = mapWizardLanguage(state.language);
+  const responsivenessLevel = mapResponsivenessLevel(state.responsiveness);
+  const interruptionLevel = mapResponsivenessLevel(state.interruptionSensitivity);
+  const silenceTimeoutMs = silenceTimeoutFromResponsiveness(state.responsiveness);
+  const keyterms = buildTranscriptionKeyterms(state);
+  const recordingOn = state.callRecording !== "off";
 
   return {
     ...base,
@@ -241,18 +325,24 @@ export function buildWizardAgentConfig(
     voiceLanguage: {
       ...base.voiceLanguage,
       voiceId: state.voiceId,
+      fallbackVoiceId: FALLBACK_PROVIDER_VOICE_ID,
       voiceProvider: "telnyx",
       speed: state.speakingSpeed,
-      responsiveness:
-        state.responsiveness >= 0.7 ? "high" : state.responsiveness >= 0.4 ? "medium" : "low",
-      interruptionHandling:
-        state.interruptionSensitivity >= 0.7
-          ? "high"
-          : state.interruptionSensitivity >= 0.4
-            ? "medium"
-            : "low",
-      primaryLanguage: state.language.toLowerCase().startsWith("en") ? "en-US" : "en-US",
-      bargeIn: true,
+      responsiveness: responsivenessLevel,
+      interruptionHandling: interruptionLevel,
+      silenceTimeoutMs,
+      // Higher interruption sensitivity → shorter endpointing wait.
+      endpointingMs: Math.round(450 - state.interruptionSensitivity * 250),
+      primaryLanguage: lang.primaryLanguage,
+      bargeIn: state.interruptionSensitivity >= 0.3,
+    },
+    transcription: {
+      ...base.transcription,
+      enabled: true,
+      sttProvider: "deepgram",
+      sttModel: "deepgram/nova-3",
+      language: lang.transcriptionLanguage,
+      keyterms,
     },
     callHandling: {
       ...(base.callHandling || {}),
@@ -266,6 +356,13 @@ export function buildWizardAgentConfig(
       solutionSlug: "appointment-assistant",
       wizardVersion: 1,
     },
+    compliance: {
+      ...(base.compliance || {}),
+      recordingDisclosure: recordingOn,
+      ...(recordingOn
+        ? { recordingDisclosureText: DEFAULT_RECORDING_DISCLOSURE }
+        : {}),
+    },
     transfers: {
       ...(base.transfers || {}),
       enabled: canTransfer,
@@ -275,9 +372,12 @@ export function buildWizardAgentConfig(
       ringSeconds: state.transferRingSeconds,
       fallback: state.transferFallback,
       announce: true,
-      // Cold Call Control path — warm hold tears down AI mid-call.
-      warmTransfer: false,
-      warmTransferInstructions: "",
+      // Honor wizard warm-transfer preference (cold by default — warm hold tears down AI mid-call).
+      warmTransfer: Boolean(state.warmTransfer),
+      warmTransferInstructions: state.warmTransfer
+        ? "Briefly introduce the caller and reason for transfer before connecting."
+        : "",
+      detectVoicemailOnTransfer: Boolean(state.detectVoicemailOnTransfer),
       targets: transferTargets,
     },
     messaging: {
@@ -373,8 +473,28 @@ export function buildWizardAgentConfig(
         timezone: state.timezone,
         collectFields: state.collectFields,
         appointmentTypes: state.appointmentTypes.filter((t) => t.enabled),
+        activationMode: state.activationMode,
+        scheduledAt: state.scheduledAt || null,
+        longTermMemory: Boolean(state.longTermMemory),
+        crmEnabled: Boolean(state.crmEnabled),
+        warmTransfer: Boolean(state.warmTransfer),
+        detectVoicemailOnTransfer: Boolean(state.detectVoicemailOnTransfer),
       },
       capabilityPack: "appointment_receptionist",
+      ...(state.longTermMemory
+        ? {
+            memory: {
+              enabled: true,
+              mode: "caller",
+              retentionDays: 30,
+            },
+          }
+        : {
+            memory: {
+              enabled: false,
+              mode: "none",
+            },
+          }),
     },
   };
 }

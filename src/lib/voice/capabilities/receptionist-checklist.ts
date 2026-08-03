@@ -42,6 +42,9 @@ export type AgentCapability = {
     | "missed_call"
     | "lead_qualification"
     | "customer_support"
+    | "medical"
+    | "legal"
+    | "property_management"
   >;
 };
 
@@ -59,7 +62,7 @@ export const RECEPTIONIST_CAPABILITIES: AgentCapability[] = [
     label: "Phone-number connection & answering behavior",
     tier: "required_receptionist",
     status: "wizard_wired",
-    notes: "DID assign live; after-hours/busy routing still partial",
+    notes: "DID assign live; after-hours/overflow via shared activate hooks + routing sync",
     defaultFor: ["standard_receptionist", "appointment_receptionist"],
   },
   {
@@ -74,6 +77,7 @@ export const RECEPTIONIST_CAPABILITIES: AgentCapability[] = [
     label: "Voice configuration + telephone test",
     tier: "required_receptionist",
     status: "wizard_wired",
+    notes: "Speed / responsiveness / silenceTimeoutMs / fallbackVoiceId from wizard",
     defaultFor: ["standard_receptionist", "appointment_receptionist"],
   },
   {
@@ -81,6 +85,7 @@ export const RECEPTIONIST_CAPABILITIES: AgentCapability[] = [
     label: "Speech recognition (Deepgram Nova-3)",
     tier: "required_receptionist",
     status: "live",
+    notes: "keyterms from business name, appointment types, transfer name",
     defaultFor: ["standard_receptionist", "appointment_receptionist"],
   },
   {
@@ -88,14 +93,15 @@ export const RECEPTIONIST_CAPABILITIES: AgentCapability[] = [
     label: "Core instructions & guardrails",
     tier: "required_receptionist",
     status: "wizard_wired",
+    notes: "Includes knowledge fallback phrase always",
     defaultFor: ["standard_receptionist", "appointment_receptionist"],
   },
   {
     id: "business_knowledge",
     label: "Business knowledge sources",
     tier: "required_receptionist",
-    status: "partial",
-    notes: "Activate creates KB from wizard profile/FAQ; website crawl still stubbed",
+    status: "wizard_wired",
+    notes: "Wizard Scan POSTs /api/voice/knowledge + URL source; activate rebuilds profile/FAQ KB",
     defaultFor: ["standard_receptionist", "appointment_receptionist"],
   },
   {
@@ -118,7 +124,7 @@ export const RECEPTIONIST_CAPABILITIES: AgentCapability[] = [
     label: "Caller-information collection",
     tier: "required_receptionist",
     toolKeys: ["save_caller_info", "lookup_customer"],
-    status: "wizard_wired",
+    status: "live",
     defaultFor: ["standard_receptionist", "appointment_receptionist"],
   },
   {
@@ -126,7 +132,7 @@ export const RECEPTIONIST_CAPABILITIES: AgentCapability[] = [
     label: "Message taking + staff notify",
     tier: "required_receptionist",
     toolKeys: ["take_structured_message", "create_task", "mark_disposition"],
-    status: "wizard_wired",
+    status: "live",
     defaultFor: ["standard_receptionist", "appointment_receptionist"],
   },
   {
@@ -134,7 +140,7 @@ export const RECEPTIONIST_CAPABILITIES: AgentCapability[] = [
     label: "Human transfer + failed-transfer fallback",
     tier: "required_receptionist",
     toolKeys: ["escalate_human", "transfer"],
-    status: "wizard_wired",
+    status: "live",
     defaultFor: ["standard_receptionist", "appointment_receptionist"],
   },
   {
@@ -149,7 +155,9 @@ export const RECEPTIONIST_CAPABILITIES: AgentCapability[] = [
     id: "recording",
     label: "Call recording setting",
     tier: "required_receptionist",
-    status: "partial",
+    status: "live",
+    notes:
+      "compliance.recordingDisclosure; inbound speaks disclosure or prepends to greeting when concurrent mask skips speak",
     defaultFor: ["standard_receptionist", "appointment_receptionist"],
   },
   {
@@ -163,8 +171,8 @@ export const RECEPTIONIST_CAPABILITIES: AgentCapability[] = [
     id: "post_call_summary",
     label: "Post-call summary & structured insights",
     tier: "required_receptionist",
-    status: "wizard_wired",
-    notes: "Default insight group attached on activate",
+    status: "live",
+    notes: "extractionFields mapped into insight customFields from LLM/heuristic JSON",
     defaultFor: ["standard_receptionist", "appointment_receptionist"],
   },
   {
@@ -186,7 +194,8 @@ export const RECEPTIONIST_CAPABILITIES: AgentCapability[] = [
     id: "reliability_security",
     label: "Reliability & security controls",
     tier: "required_receptionist",
-    status: "partial",
+    status: "wizard_wired",
+    notes: "Activation gates, transfer destination checks, recording disclosure, emergency disable",
     defaultFor: ["standard_receptionist", "appointment_receptionist"],
   },
 
@@ -196,6 +205,7 @@ export const RECEPTIONIST_CAPABILITIES: AgentCapability[] = [
     label: "Prerecorded connection greeting",
     tier: "optional_receptionist",
     status: "live",
+    notes: "upload_custom audioUrl + Transovo default MP3; create_custom text",
   },
   {
     id: "background_ambience",
@@ -207,7 +217,8 @@ export const RECEPTIONIST_CAPABILITIES: AgentCapability[] = [
     id: "multilingual",
     label: "Multiple languages",
     tier: "optional_receptionist",
-    status: "partial",
+    status: "wizard_wired",
+    notes: "mapWizardLanguage → primaryLanguage + transcription.language",
   },
   {
     id: "multi_transfer_destinations",
@@ -219,20 +230,22 @@ export const RECEPTIONIST_CAPABILITIES: AgentCapability[] = [
     id: "warm_transfer",
     label: "Warm transfer",
     tier: "optional_receptionist",
-    status: "platform_ready",
+    status: "wizard_wired",
+    notes: "wizard warmTransfer → transfers.warmTransfer; builtin escalate uses warm_transfer type",
   },
   {
     id: "voicemail_detection",
     label: "Voicemail detection on transfer",
     tier: "optional_receptionist",
-    status: "partial",
+    status: "wizard_wired",
+    notes: "detectVoicemailOnTransfer gates answering_machine_detection on transfer legs",
   },
   {
     id: "long_term_memory",
     label: "Long-term memory",
     tier: "optional_receptionist",
-    status: "platform_ready",
-    notes: "Conservative / off by default until privacy gates hardened",
+    status: "wizard_wired",
+    notes: "longTermMemory → VoiceMemoryConfig (saveMemoryConfig) + advanced.memory; off by default",
   },
   {
     id: "crm_connection",
@@ -245,14 +258,15 @@ export const RECEPTIONIST_CAPABILITIES: AgentCapability[] = [
       "create_crm_note",
       "create_crm_task",
     ],
-    status: "platform_ready",
+    status: "wizard_wired",
+    notes: "create_crm_note always on for receptionist; full CRM set when crmEnabled",
   },
   {
     id: "sms_followup",
     label: "SMS follow-up",
     tier: "optional_receptionist",
     toolKeys: ["send_sms"],
-    status: "partial",
+    status: "wizard_wired",
   },
   {
     id: "ai_handoff",
@@ -273,7 +287,8 @@ export const RECEPTIONIST_CAPABILITIES: AgentCapability[] = [
     id: "calendar_connection",
     label: "Calendar connection",
     tier: "required_booking",
-    status: "partial",
+    status: "wizard_wired",
+    notes: "Appointments step + /api/voice/calendars; activation blocks without live Google/Microsoft/internal",
     defaultFor: ["appointment_receptionist"],
   },
   {
@@ -320,36 +335,68 @@ export const RECEPTIONIST_CAPABILITIES: AgentCapability[] = [
     id: "after_hours",
     label: "After-hours receptionist rules",
     tier: "specialized",
-    status: "planned",
+    status: "wizard_wired",
+    notes: "runSharedReceptionistHooks → after-hours activate stub",
     defaultFor: ["after_hours"],
   },
   {
     id: "overflow",
     label: "Overflow / ring-team-first",
     tier: "specialized",
-    status: "partial",
+    status: "wizard_wired",
+    notes: "runSharedReceptionistHooks → overflow activate stub",
     defaultFor: ["overflow"],
   },
   {
     id: "missed_call",
     label: "Missed-call text-back receptionist",
     tier: "specialized",
-    status: "planned",
+    status: "wizard_wired",
+    notes: "Activate hook stub under solutions/hooks/missed-call",
     defaultFor: ["missed_call"],
   },
   {
     id: "lead_qualification",
     label: "Lead-qualification receptionist",
     tier: "specialized",
-    status: "partial",
+    status: "wizard_wired",
+    notes: "Activate hook stub; qualify_callers capability in wizard",
     defaultFor: ["lead_qualification"],
   },
   {
     id: "customer_support",
     label: "Customer-support receptionist",
     tier: "specialized",
-    status: "partial",
+    status: "wizard_wired",
+    notes: "Activate hook stub under solutions/hooks/customer-support",
     defaultFor: ["customer_support"],
+  },
+  {
+    id: "medical",
+    label: "Medical / HIPAA receptionist",
+    tier: "specialized",
+    status: "wizard_wired",
+    notes:
+      "Activate hook: medical guardrails, medicalReceptionist, take_structured_message, compliance flags",
+    defaultFor: ["medical"],
+  },
+  {
+    id: "legal",
+    label: "Legal intake receptionist",
+    tier: "specialized",
+    status: "wizard_wired",
+    notes:
+      "Activate hook: no-advice guardrails, legalReceptionist, conflict-check collectFields",
+    defaultFor: ["legal"],
+  },
+  {
+    id: "property_management",
+    label: "Property management receptionist",
+    tier: "specialized",
+    status: "wizard_wired",
+    notes:
+      "Activate hook: unit/address intake, maintenance vs emergency, create_task, propertyReceptionist",
+    defaultFor: ["property_management"],
   },
 
   // ——— 5. Other solutions ———
@@ -358,12 +405,14 @@ export const RECEPTIONIST_CAPABILITIES: AgentCapability[] = [
     label: "Outbound dialing / AMD",
     tier: "other_solutions",
     status: "platform_ready",
+    notes: "Activate hook under solutions/hooks/outbound",
   },
   {
     id: "campaigns",
     label: "Campaigns / bulk lists",
     tier: "other_solutions",
     status: "platform_ready",
+    notes: "Activate hook under solutions/hooks/campaigns",
   },
   {
     id: "dtmf_navigation",
@@ -376,25 +425,31 @@ export const RECEPTIONIST_CAPABILITIES: AgentCapability[] = [
     id: "payments",
     label: "Payment collection",
     tier: "other_solutions",
-    status: "planned",
+    status: "platform_ready",
+    notes:
+      "Activate hook: paymentsEnabled + webhook URL config; use payment_link when available",
   },
   {
     id: "surveys",
     label: "Surveys",
     tier: "other_solutions",
-    status: "planned",
+    status: "platform_ready",
+    notes: "Activate hook: advanced.surveyMode post-call survey offer",
   },
   {
     id: "review_requests",
     label: "Review requests",
     tier: "other_solutions",
-    status: "planned",
+    status: "platform_ready",
+    notes: "Activate hook: advanced.reviewRequests + workspace reviewLink",
   },
   {
     id: "appointment_reminders",
     label: "Appointment reminders",
     tier: "other_solutions",
-    status: "planned",
+    status: "live",
+    notes:
+      "Activate hook wires advanced.appointmentReminders to live appointment-reminders scan jobs",
   },
 ];
 
@@ -406,7 +461,10 @@ export function capabilitiesForSolution(
     | "overflow"
     | "missed_call"
     | "lead_qualification"
-    | "customer_support",
+    | "customer_support"
+    | "medical"
+    | "legal"
+    | "property_management",
 ) {
   return RECEPTIONIST_CAPABILITIES.filter(
     (c) =>

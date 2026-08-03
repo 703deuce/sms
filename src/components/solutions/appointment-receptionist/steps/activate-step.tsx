@@ -32,18 +32,24 @@ export function ActivateStep({
     ? formatPhone(state.phoneNumberE164)
     : "No number assigned";
   const [hasCalendar, setHasCalendar] = useState(state.calendarConnected);
+  const books = state.capabilities.includes("book_appointments");
+  const transfers = state.capabilities.includes("transfer_calls");
 
   useEffect(() => {
     fetch("/api/voice/calendars")
       .then((r) => r.json())
       .then((j) => {
-        const rows = (j.data || []) as Array<{ status?: string }>;
-        const connected = rows.some((r) =>
-          ["connected", "active", "ok"].includes(String(r.status || "")),
+        const rows = (j.data || []) as Array<{ status?: string; provider?: string }>;
+        const connected = rows.some(
+          (r) =>
+            ["connected", "active", "ok"].includes(String(r.status || "")) &&
+            ["google", "microsoft", "internal"].includes(String(r.provider || "")),
         );
         setHasCalendar(connected);
         if (connected && !state.calendarConnected) {
           patch({ calendarConnected: true });
+        } else if (!connected && state.calendarConnected) {
+          patch({ calendarConnected: false });
         }
       })
       .catch(() => undefined);
@@ -62,37 +68,75 @@ export function ActivateStep({
       detail: state.phoneNumberId ? "Ready" : "Needed",
     },
     {
+      label: "Receptionist name",
+      ok: Boolean(state.agentName?.trim()),
+      detail: state.agentName?.trim() || "Needed",
+    },
+    {
       label: "Business information",
-      ok: Boolean(state.businessName?.trim()),
+      ok: Boolean(
+        state.businessName?.trim() ||
+          state.knowledgeItems.some(
+            (k) => k.status === "complete" || Boolean(k.summary?.trim()),
+          ) ||
+          state.websiteUrl?.trim(),
+      ),
       detail: state.businessName?.trim() ? "Ready" : "Needed",
     },
     {
       label: "Voice",
       ok: Boolean(state.voiceId),
-      detail: state.voiceLabel || "Ready",
+      detail: state.voiceLabel || (state.voiceId ? "Ready" : "Needed"),
     },
     {
       label: "Opening greeting",
       ok: Boolean(state.openingGreeting?.trim()),
-      detail: "Ready",
+      detail: state.openingGreeting?.trim() ? "Ready" : "Needed",
+    },
+    ...(books
+      ? [
+          {
+            label: "Calendar",
+            ok: hasCalendar,
+            detail: hasCalendar ? "Connected" : "Needed for booking",
+          },
+          {
+            label: "Appointment type",
+            ok: state.appointmentTypes.some((t) => t.enabled),
+            detail: state.appointmentTypes.some((t) => t.enabled)
+              ? "Ready"
+              : "Enable at least one",
+          },
+        ]
+      : []),
+    ...(transfers
+      ? [
+          {
+            label: "Transfer destination",
+            ok: Boolean(state.transferDestinationPhone),
+            detail: state.transferDestinationPhone ? "Ready" : "Needed",
+          },
+        ]
+      : []),
+    {
+      label: "Test call",
+      ok: state.lastTestPassed === true,
+      warn: state.lastTestPassed === null,
+      detail:
+        state.lastTestPassed === true
+          ? "Passed"
+          : state.lastTestPassed === false
+            ? "Failed — retest"
+            : "Not run yet",
     },
     {
-      label: "Calendar",
-      ok: hasCalendar,
-      detail: hasCalendar ? "Connected" : "Optional warning",
-      warn: !hasCalendar,
-    },
-    {
-      label: "Transfer destination",
-      ok:
-        !state.capabilities.includes("transfer_calls") ||
-        Boolean(state.transferDestinationPhone),
-      detail: state.transferDestinationPhone ? "Ready" : "Needed if transferring",
-    },
-    {
-      label: "Appointment type",
-      ok: state.appointmentTypes.some((t) => t.enabled),
-      detail: "Ready",
+      label: "Recording disclosure",
+      ok: state.callRecording === "off",
+      warn: state.callRecording !== "off",
+      detail:
+        state.callRecording === "off"
+          ? "Recording off"
+          : "Recording on — disclose to callers",
     },
     {
       label: "Message taking + notify",
@@ -213,6 +257,35 @@ export function ActivateStep({
               />
             ))}
           </div>
+          {state.activationMode === "schedule" ? (
+            <label className="mt-3 block max-w-sm text-xs text-muted-foreground">
+              Go live at
+              <input
+                type="datetime-local"
+                className="mt-1 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground"
+                value={
+                  state.scheduledAt
+                    ? (() => {
+                        try {
+                          const d = new Date(state.scheduledAt);
+                          if (Number.isNaN(d.getTime())) return "";
+                          const pad = (n: number) => String(n).padStart(2, "0");
+                          return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+                        } catch {
+                          return "";
+                        }
+                      })()
+                    : ""
+                }
+                onChange={(e) => {
+                  const v = e.target.value;
+                  patch({
+                    scheduledAt: v ? new Date(v).toISOString() : null,
+                  });
+                }}
+              />
+            </label>
+          ) : null}
         </div>
       </div>
 

@@ -49,10 +49,22 @@ export function AppointmentsStep({
         const json = await res.json();
         const rows = (json.data || []) as Array<{ id: string; name: string; provider: string; status: string }>;
         setCalendars(rows);
-        const connected = rows.find((r) => ["connected", "active", "ok"].includes(String(r.status || "")));
+        // Only treat Google/Microsoft/internal as live calendar connections.
+        const connected = rows.find(
+          (r) =>
+            ["google", "microsoft", "internal"].includes(r.provider) &&
+            ["connected", "active", "ok"].includes(String(r.status || "")),
+        );
         if (connected) {
-          patch({ calendarConnected: true, calendarProvider: connected.provider, calendarEmail: connected.name });
-        } else if (state.calendarEmail?.endsWith("@connected.local")) {
+          patch({
+            calendarConnected: true,
+            calendarProvider: connected.provider,
+            calendarEmail: connected.name,
+          });
+        } else if (
+          state.calendarConnected ||
+          state.calendarEmail?.endsWith("@connected.local")
+        ) {
           patch({ calendarConnected: false, calendarEmail: null });
         }
       } catch {
@@ -85,10 +97,34 @@ export function AppointmentsStep({
         window.location.href = `/api/voice/calendars/oauth/${provider}?connectionId=${connectionId}`;
         return;
       }
+
+      // Refresh local list so status reflects what the API actually created.
+      const listRes = await fetch("/api/voice/calendars");
+      const listJson = await listRes.json().catch(() => ({ data: [] }));
+      const rows = (listJson.data || []) as Array<{
+        id: string;
+        name: string;
+        provider: string;
+        status: string;
+      }>;
+      setCalendars(rows);
+      const row = rows.find((c) => c.id === connectionId) || rows.find((c) => c.provider === provider);
+
+      if (provider === "internal") {
+        const live = row && ["connected", "active", "ok"].includes(row.status);
+        patch({
+          calendarProvider: provider,
+          calendarConnected: Boolean(live),
+          calendarEmail: live ? row?.name || "Transovo Calendar" : null,
+        });
+        return;
+      }
+
+      // calendly / acuity / calcom — creating a calendar row is not a live connection
       patch({
         calendarProvider: provider,
-        calendarConnected: true,
-        calendarEmail: CALENDARS.find((c) => c.id === providerId)?.label || provider,
+        calendarConnected: false,
+        calendarEmail: null,
       });
     } catch {
       // leave UI unchanged
@@ -99,9 +135,17 @@ export function AppointmentsStep({
 
   function isProviderConnected(providerId: string) {
     const provider = providerId === "outlook" ? "microsoft" : providerId;
+    if (["calendly", "acuity", "calcom"].includes(provider)) {
+      // External schedulers need a real integration connection — creating a
+      // VoiceCalendarConnection row alone does not count.
+      return false;
+    }
     const row = calendars.find((c) => c.provider === provider);
     if (row && ["connected", "active", "ok"].includes(row.status)) return true;
-    return state.calendarConnected && state.calendarProvider === providerId;
+    return (
+      state.calendarConnected &&
+      (state.calendarProvider === providerId || state.calendarProvider === provider)
+    );
   }
 
   return (
@@ -129,9 +173,13 @@ export function AppointmentsStep({
                       ? "Connecting…"
                       : connected
                         ? "Connected"
-                        : row?.status === "pending_oauth"
-                          ? "Finish OAuth"
-                          : "Connect"
+                        : ["calendly", "acuity", "calcom"].includes(cal.id)
+                          ? "Connect via Integrations"
+                          : row?.status === "pending_oauth"
+                            ? "Finish OAuth"
+                            : row?.status === "pending"
+                              ? "Pending setup"
+                              : "Connect"
                   }
                   className="min-h-[88px]"
                 />

@@ -213,6 +213,8 @@ export function TestStep({
                       onSaveDraft={async () => {
                         await prepareLiveTest();
                       }}
+                      onSessionSuccess={() => patch({ lastTestPassed: true })}
+                      onSessionFailure={() => patch({ lastTestPassed: false })}
                     />
                   ) : (
                     <div className="rounded-xl border border-dashed border-border p-6 text-center">

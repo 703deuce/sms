@@ -4,8 +4,10 @@ import {
   attachInsightGroupToAgent,
   seedDefaultInsights,
 } from "@/lib/voice/platform/ai-platform";
+import { runSharedReceptionistHooks } from "@/lib/solutions/hooks";
 import type { AppointmentReceptionistWizardState } from "./types";
 import { syncWizardTransferDestinations } from "./sync-transfer";
+import { syncWizardRoutingRules } from "./sync-routing";
 import {
   getWizardActivationIssues,
   hasBlockingActivationIssues,
@@ -20,6 +22,8 @@ export type ActivateHooksResult = {
   insightGroupId: string | null;
   transferSynced: boolean;
   transferE164: string | null;
+  routingSynced: boolean;
+  routingMode: string | null;
 };
 
 function buildBusinessProfileText(state: AppointmentReceptionistWizardState): string {
@@ -179,6 +183,7 @@ async function ensureWizardCalendarServices(input: {
     where: {
       workspaceId: input.workspaceId,
       status: { in: ["connected", "active", "ok"] },
+      provider: { in: ["google", "microsoft", "internal"] },
     },
     orderBy: { updatedAt: "desc" },
   });
@@ -267,6 +272,7 @@ export async function runAppointmentReceptionistActivateHooks(input: {
     where: {
       workspaceId: input.workspaceId,
       status: { in: ["connected", "active", "ok"] },
+      provider: { in: ["google", "microsoft", "internal"] },
     },
     select: { id: true },
   });
@@ -285,6 +291,8 @@ export async function runAppointmentReceptionistActivateHooks(input: {
       insightGroupId: null,
       transferSynced: false,
       transferE164: null,
+      routingSynced: false,
+      routingMode: null,
     };
   }
 
@@ -332,6 +340,8 @@ export async function runAppointmentReceptionistActivateHooks(input: {
   }
 
   let insightGroupId: string | null = null;
+  let routingSynced = false;
+  let routingMode: string | null = null;
   if (input.mode === "activate") {
     insightGroupId = await ensureInsightsAttached({
       workspaceId: input.workspaceId,
@@ -343,6 +353,25 @@ export async function runAppointmentReceptionistActivateHooks(input: {
       );
       return null;
     });
+
+    const routing = await syncWizardRoutingRules({
+      workspaceId: input.workspaceId,
+      agentId: input.agentId,
+      answerWhen: input.state.answerWhen,
+      ringBehavior: input.state.ringBehavior,
+      ringTeamSeconds: input.state.ringTeamSeconds,
+      timezone: input.state.timezone,
+    }).catch((err) => {
+      console.warn(
+        "[appointment-receptionist] routing hook failed",
+        err instanceof Error ? err.message : err,
+      );
+      return null;
+    });
+    if (routing) {
+      routingSynced = true;
+      routingMode = routing.mode;
+    }
   }
 
   // Persist KB id onto draft config for Telnyx retrieval attach.
@@ -363,6 +392,22 @@ export async function runAppointmentReceptionistActivateHooks(input: {
     });
   }
 
+  await runSharedReceptionistHooks({
+    workspaceId: input.workspaceId,
+    agentId: input.agentId,
+    mode: input.mode,
+    answerWhen: input.state.answerWhen,
+    meta: {
+      ringBehavior: input.state.ringBehavior,
+      solutionSlug: "appointment-assistant",
+    },
+  }).catch((err) => {
+    console.warn(
+      "[appointment-receptionist] shared receptionist hooks failed",
+      err instanceof Error ? err.message : err,
+    );
+  });
+
   return {
     issues,
     knowledgeBaseId,
@@ -371,5 +416,7 @@ export async function runAppointmentReceptionistActivateHooks(input: {
     insightGroupId,
     transferSynced,
     transferE164,
+    routingSynced,
+    routingMode,
   };
 }

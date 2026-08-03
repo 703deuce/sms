@@ -222,13 +222,29 @@ export async function initiateTransfer(input: {
       });
     }
   } else {
+    const amdBody: Record<string, unknown> = {
+      to: destination,
+      timeout_secs: input.timeoutSeconds || 30,
+    };
+    // Prefer agent draftConfig.transfers.detectVoicemailOnTransfer when set.
+    let detectAmd = true;
+    if (call.agentId) {
+      const agentRow = await prisma.voiceAgent.findUnique({ where: { id: call.agentId } });
+      if (agentRow?.draftConfig) {
+        const { parseVoiceAgentConfig } = await import("./types");
+        const cfg = parseVoiceAgentConfig(agentRow.draftConfig);
+        const transfersCfg = (cfg.transfers || {}) as Record<string, unknown>;
+        if (typeof transfersCfg.detectVoicemailOnTransfer === "boolean") {
+          detectAmd = transfersCfg.detectVoicemailOnTransfer;
+        }
+      }
+    }
+    if (detectAmd) {
+      amdBody.answering_machine_detection = "detect";
+    }
     await telnyxRequest(`/calls/${call.telnyxCallControlId}/actions/transfer`, {
       method: "POST",
-      body: {
-        to: destination,
-        timeout_secs: input.timeoutSeconds || 30,
-        answering_machine_detection: "detect",
-      },
+      body: amdBody,
       idempotencyKey: `xfer-${transfer.id}`,
     });
   }
@@ -349,23 +365,38 @@ async function initiateWarmTransfer(input: {
   });
 
   const connectionId = process.env.TELNYX_CONNECTION_ID!.trim();
+  let detectAmd = true;
+  if (input.call.agentId) {
+    const agentRow = await prisma.voiceAgent.findUnique({ where: { id: input.call.agentId } });
+    if (agentRow?.draftConfig) {
+      const { parseVoiceAgentConfig } = await import("./types");
+      const cfg = parseVoiceAgentConfig(agentRow.draftConfig);
+      const transfersCfg = (cfg.transfers || {}) as Record<string, unknown>;
+      if (typeof transfersCfg.detectVoicemailOnTransfer === "boolean") {
+        detectAmd = transfersCfg.detectVoicemailOnTransfer;
+      }
+    }
+  }
+  const consultBody: Record<string, unknown> = {
+    connection_id: connectionId,
+    from: input.call.toE164,
+    to: input.destination,
+    client_state: encodeClientState({
+      workspaceId: input.workspaceId,
+      callId: input.call.id,
+      transferId: input.transfer.id,
+      kind: "warm_transfer_consult",
+      callerControlId,
+      summary: input.summary || "",
+      fallbackDestinations: input.fallbacks,
+    }),
+  };
+  if (detectAmd) {
+    consultBody.answering_machine_detection = "detect";
+  }
   const consultLeg = await telnyxRequest<{ data: { call_control_id: string } }>("/calls", {
     method: "POST",
-    body: {
-      connection_id: connectionId,
-      from: input.call.toE164,
-      to: input.destination,
-      answering_machine_detection: "detect",
-      client_state: encodeClientState({
-        workspaceId: input.workspaceId,
-        callId: input.call.id,
-        transferId: input.transfer.id,
-        kind: "warm_transfer_consult",
-        callerControlId,
-        summary: input.summary || "",
-        fallbackDestinations: input.fallbacks,
-      }),
-    },
+    body: consultBody,
   });
 
   const consultControlId = consultLeg.data?.call_control_id;

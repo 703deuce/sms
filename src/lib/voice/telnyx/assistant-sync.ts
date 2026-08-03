@@ -130,6 +130,19 @@ function greetingFromConfig(config: VoiceAgentConfig, agentName: string) {
   );
 }
 
+/** Telnyx has no native first_speaker field — encode clearly in instructions. */
+function speaksFirstDirective(config: VoiceAgentConfig): string {
+  const mode = String(config.callHandling?.speaksFirst || "ai").toLowerCase();
+  if (mode === "caller") {
+    return "Opening behavior: Wait for the caller to speak first. Do not open with a greeting until they have said something.";
+  }
+  return "Opening behavior: Speak first with the greeting.";
+}
+
+function speaksFirstIsCaller(config: VoiceAgentConfig): boolean {
+  return String(config.callHandling?.speaksFirst || "ai").toLowerCase() === "caller";
+}
+
 function outputGainLinear(config: VoiceAgentConfig): number | null {
   const db = Number(config.voiceLanguage?.outputGainDb ?? -5);
   if (!db) return null;
@@ -277,6 +290,7 @@ export async function syncTelnyxAssistant(
       ]
         .filter(Boolean)
         .join("\n\n"),
+    speaksFirstDirective(config),
     digest,
     bucketIds.length
       ? "You have a knowledge retrieval tool backed by the business document store. Use it for FAQs, policies, pricing, and detailed questions instead of guessing."
@@ -297,12 +311,16 @@ export async function syncTelnyxAssistant(
   const connectionId = process.env.TELNYX_CONNECTION_ID?.trim();
 
   // Core create body — keep strict; optional fields go on a follow-up update.
+  // No native Telnyx first_speaker field: caller-first omits greeting so the
+  // assistant waits; AI-first includes the configured greeting.
   const corePayload: Record<string, unknown> = {
     name: `${agent.name} (${workspaceId.slice(0, 8)})`.slice(0, 100),
     model: modelId,
     instructions: instructions.slice(0, 100_000),
-    greeting: greetingFromConfig(config, agent.name),
   };
+  if (!speaksFirstIsCaller(config)) {
+    corePayload.greeting = greetingFromConfig(config, agent.name);
+  }
   if (config.model?.customBaseUrl) {
     let apiKey: string | undefined;
     if (config.model.customApiKeyRef) {

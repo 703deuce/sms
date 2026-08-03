@@ -21,6 +21,11 @@ async function speakOnCall(callControlId: string, text: string) {
   }).catch(() => undefined);
 }
 
+/** Speak a short phrase on a Call Control leg (transfer announce, etc.). */
+export async function speakOnCallControl(callControlId: string, text: string) {
+  return speakOnCall(callControlId, text);
+}
+
 async function playbackOnCall(callControlId: string, audioUrl: string) {
   if (!callControlId || callControlId.startsWith("mock_") || !isTelnyxVoiceConfigured()) return;
   await telnyxRequest(`/calls/${callControlId}/actions/playback_start`, {

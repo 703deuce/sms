@@ -641,16 +641,23 @@ export async function processVoiceWebhookEvent(input: {
         });
         dynamicVariables.output_gain_db = String(outputGainDb);
 
+        const speaksFirst =
+          String(cfg.callHandling?.speaksFirst || "ai").toLowerCase() === "caller"
+            ? "caller"
+            : "ai";
         const greeting =
-          (cfg.callHandling?.greeting as string | undefined)?.trim() ||
-          DEFAULT_AI_GREETING;
+          speaksFirst === "caller"
+            ? null
+            : (cfg.callHandling?.greeting as string | undefined)?.trim() ||
+              DEFAULT_AI_GREETING;
 
         const aiHandoffAt = Date.now();
+        let aiStartOk = false;
         try {
           await startAiAssistantOnCall({
             callControlId: controlId,
             assistantId: agent.telnyxAssistantId,
-            greeting,
+            greeting: greeting || undefined,
             dynamicVariables,
             clientState: {
               workspaceId,
@@ -659,6 +666,7 @@ export async function processVoiceWebhookEvent(input: {
               connectionGreetingPlaying: Boolean(concurrentMask || maskResult.concurrent),
             },
           });
+          aiStartOk = true;
         } catch (err) {
           console.error("[voice/webhook] ai_assistant_start", err);
           await recordFailureDiagnostic({
@@ -669,8 +677,17 @@ export async function processVoiceWebhookEvent(input: {
             code: "ai_assistant_start_failed",
             message: err instanceof Error ? err.message : String(err),
           }).catch(() => undefined);
+          const { handleAiAssistantStartFailure } = await import("../inbound");
+          await handleAiAssistantStartFailure({
+            workspaceId,
+            callId: call.id,
+            telnyxCallControlId: controlId,
+            fromE164: call.fromE164,
+            error: err,
+          });
         }
 
+        if (aiStartOk) {
         const pstnDiag = buildPstnAudioDiagnostics({
           callControlId: controlId,
           outputGainDb,
@@ -687,7 +704,8 @@ export async function processVoiceWebhookEvent(input: {
               payload: {
                 at: aiHandoffAt,
                 startupMask: maskResult,
-                greetingPreview: greeting.slice(0, 160),
+                greetingPreview: (greeting || "").slice(0, 160),
+                speaksFirst,
                 transcodesEstimate: 1,
                 path: "answered_webhook",
                 pstnAudio: pstnDiag,
@@ -695,7 +713,12 @@ export async function processVoiceWebhookEvent(input: {
             },
           })
           .catch(() => undefined);
-        await startCallRecording(controlId);
+        const { shouldStartCallRecording } = await import("../inbound");
+        const recordingDirection =
+          call.direction === "OUTBOUND" ? "OUTBOUND" : "INBOUND";
+        if (shouldStartCallRecording(cfg.callHandling?.callRecording, recordingDirection)) {
+          await startCallRecording(controlId);
+        }
         await startCallTranscription(controlId);
         const { resolveAiVersionStamp } = await import("../platform/admission");
         const versionStamp = await resolveAiVersionStamp({
@@ -721,7 +744,8 @@ export async function processVoiceWebhookEvent(input: {
                 aiHandoffAt,
                 startupMask: maskResult,
                 settleMs: AI_MEDIA_SETTLE_MS,
-                greetingPreview: greeting.slice(0, 160),
+                greetingPreview: (greeting || "").slice(0, 160),
+                speaksFirst,
                 path: "answered_webhook",
                 transcodesEstimate: 1,
               },
@@ -729,6 +753,7 @@ export async function processVoiceWebhookEvent(input: {
             } as object,
           },
         });
+        }
         }
       }
       }

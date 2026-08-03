@@ -34,15 +34,138 @@ function resolveAiGreeting(input: {
   config: ReturnType<typeof parseVoiceAgentConfig>;
   agentName: string;
   contactName?: string;
+  /** Prepend recording disclosure when it was not spoken separately. */
+  prependDisclosure?: string | null;
 }) {
   const configured =
     (input.config.callHandling?.greeting as string | undefined)?.trim() ||
     DEFAULT_AI_GREETING;
-  if (!input.contactName) return configured;
-  if (/^hi[, ]/i.test(configured) || configured.includes(input.contactName)) {
-    return configured;
+  let greeting = configured;
+  const disclosure = input.prependDisclosure?.trim();
+  if (disclosure) {
+    const alreadyIncludes = greeting.toLowerCase().includes(disclosure.toLowerCase().slice(0, 40));
+    if (!alreadyIncludes) {
+      greeting = `${disclosure} ${greeting}`;
+    }
   }
-  return `Hi ${input.contactName}. ${configured}`;
+  if (!input.contactName) return greeting;
+  if (/^hi[, ]/i.test(greeting) || greeting.includes(input.contactName)) {
+    return greeting;
+  }
+  return `Hi ${input.contactName}. ${greeting}`;
+}
+
+/** Honor draftConfig.callHandling.callRecording: off | inbound_only | all. */
+export function shouldStartCallRecording(
+  callRecording: unknown,
+  direction: "INBOUND" | "OUTBOUND" = "INBOUND",
+): boolean {
+  const mode = String(callRecording ?? "all").toLowerCase();
+  if (mode === "off" || mode === "none" || mode === "disabled") return false;
+  if (mode === "inbound_only") return direction === "INBOUND";
+  // "all" or unrecognized — record
+  return true;
+}
+
+const AI_START_FAILURE_APOLOGY =
+  "We're sorry, our assistant is temporarily unavailable. Please leave your name and number after the tone, or call back shortly. Goodbye.";
+
+export async function handleAiAssistantStartFailure(input: {
+  workspaceId: string;
+  callId: string;
+  telnyxCallControlId: string;
+  fromE164?: string | null;
+  error: unknown;
+}) {
+  const prisma = getPrisma();
+  const errMsg =
+    input.error instanceof Error ? input.error.message : String(input.error);
+  console.error("[voice/inbound] ai_assistant_start failed", input.error);
+
+  let spoke = false;
+  if (input.telnyxCallControlId && isTelnyxVoiceConfigured()) {
+    try {
+      await speakOnCall(input.telnyxCallControlId, AI_START_FAILURE_APOLOGY);
+      spoke = true;
+    } catch (speakErr) {
+      console.warn(
+        "[voice/inbound] ai_start failure apology speak failed",
+        speakErr instanceof Error ? speakErr.message : speakErr,
+      );
+    }
+  }
+
+  const existing = await prisma.voiceCall.findFirst({
+    where: { id: input.callId, workspaceId: input.workspaceId },
+    select: { metadata: true, fromE164: true },
+  });
+  const prevMeta = (existing?.metadata || {}) as Record<string, unknown>;
+  const fromPhone = input.fromE164 || existing?.fromE164 || "";
+
+  await prisma.voiceCall
+    .update({
+      where: { id: input.callId },
+      data: {
+        outcome: "message_taken",
+        status: "COMPLETED",
+        endedAt: new Date(),
+        metadata: {
+          ...prevMeta,
+          aiStarted: false,
+          aiStartFailed: true,
+          aiStartError: errMsg.slice(0, 500),
+          structuredMessage: {
+            callerName: "",
+            phone: fromPhone,
+            reason: "AI assistant failed to start — caller offered apology fallback",
+            urgency: "normal",
+            notes: spoke
+              ? "Apology spoken via Call Control; no interactive message capture."
+              : "Apology speak unavailable; take-message disposition recorded.",
+          },
+        } as object,
+      },
+    })
+    .catch(() => undefined);
+
+  await prisma.voiceCallEvent
+    .create({
+      data: {
+        workspaceId: input.workspaceId,
+        callId: input.callId,
+        eventType: "media.ai_assistant_start_failed",
+        payload: {
+          error: errMsg.slice(0, 500),
+          apologySpoken: spoke,
+          disposition: "message_taken",
+        } as object,
+      },
+    })
+    .catch(() => undefined);
+
+  await prisma.auditLog
+    .create({
+      data: {
+        workspaceId: input.workspaceId,
+        event: "voice.message_taken",
+        detail: JSON.stringify({
+          callId: input.callId,
+          reason: "ai_assistant_start_failed",
+          apologySpoken: spoke,
+          phone: fromPhone,
+        }),
+      },
+    })
+    .catch(() => undefined);
+
+  if (input.telnyxCallControlId && isTelnyxVoiceConfigured()) {
+    await telnyxRequest(`/calls/${input.telnyxCallControlId}/actions/hangup`, {
+      method: "POST",
+      body: {},
+    }).catch(() => undefined);
+  }
+
+  return { spoke, disposition: "message_taken" as const };
 }
 
 type InboundInput = {
@@ -195,6 +318,7 @@ async function startAiOnInboundCall(input: {
         (startup.connectionGreeting === "transovo_default" ||
           (typeof startup.delayMs === "number" && startup.delayMs <= 1000));
 
+      let disclosureSpoken = false;
       if (!playMaskFirst) {
         await speakRecordingDisclosure(
           input.workspaceId,
@@ -202,6 +326,7 @@ async function startAiOnInboundCall(input: {
           input.telnyxCallControlId,
           agent.id,
         );
+        disclosureSpoken = true;
       }
 
       // Optional TTS/audio mask — connection greeting returns after a short settle.
@@ -222,6 +347,7 @@ async function startAiOnInboundCall(input: {
           input.telnyxCallControlId,
           agent.id,
         ).catch(() => undefined);
+        disclosureSpoken = true;
       }
 
       // When AI speaks the greeting, wait for media settle so the first syllable isn't static.
@@ -249,27 +375,64 @@ async function startAiOnInboundCall(input: {
       if (input.contactName) dynamicVariables.full_name = input.contactName;
       dynamicVariables.output_gain_db = String(outputGainDb);
 
-      const greeting = resolveAiGreeting({
-        config: cfg,
-        agentName: agent.name || "our assistant",
-        contactName: input.contactName,
-      });
+      const speaksFirst =
+        String(cfg.callHandling?.speaksFirst || "ai").toLowerCase() === "caller"
+          ? "caller"
+          : "ai";
+      const recordingOn = shouldStartCallRecording(cfg.callHandling?.callRecording, "INBOUND");
+      const compliance = (cfg.compliance || {}) as Record<string, unknown>;
+      const disclosureText =
+        !disclosureSpoken &&
+        recordingOn &&
+        (compliance.recordingDisclosure === true ||
+          Boolean(compliance.recordingDisclosureText))
+          ? String(
+              compliance.recordingDisclosureText ||
+                "This call may be recorded for quality and training purposes.",
+            )
+          : null;
+      const greeting =
+        speaksFirst === "caller"
+          ? null
+          : resolveAiGreeting({
+              config: cfg,
+              agentName: agent.name || "our assistant",
+              contactName: input.contactName,
+              prependDisclosure: disclosureText,
+            });
 
       const aiHandoffAt = Date.now();
-      await startAiAssistantOnCall({
-        callControlId: input.telnyxCallControlId,
-        assistantId: agent.telnyxAssistantId,
-        // One complete greeting from the selected AI voice — not a short “Thanks”.
-        greeting,
-        dynamicVariables,
-        clientState: {
+      let aiStartOk = false;
+      try {
+        await startAiAssistantOnCall({
+          callControlId: input.telnyxCallControlId,
+          assistantId: agent.telnyxAssistantId,
+          // One complete greeting from the selected AI voice — not a short “Thanks”.
+          // When speaksFirst=caller, omit greeting so the assistant waits.
+          greeting: greeting || undefined,
+          dynamicVariables,
+          clientState: {
+            workspaceId: input.workspaceId,
+            callId: input.callId,
+            agentId: agent.id,
+            // Webhook stops the bed when the assistant conversation is ready.
+            connectionGreetingPlaying: Boolean(concurrentMask || maskResult.concurrent),
+          },
+        });
+        aiStartOk = true;
+      } catch (err) {
+        await handleAiAssistantStartFailure({
           workspaceId: input.workspaceId,
           callId: input.callId,
-          agentId: agent.id,
-          // Webhook stops the bed when the assistant conversation is ready.
-          connectionGreetingPlaying: Boolean(concurrentMask || maskResult.concurrent),
-        },
-      }).catch((err) => console.error("[voice/inbound] ai_assistant_start", err));
+          telnyxCallControlId: input.telnyxCallControlId,
+          error: err,
+        });
+        return { started: false, reason: "ai_assistant_start_failed" };
+      }
+
+      if (!aiStartOk) {
+        return { started: false, reason: "ai_assistant_start_failed" };
+      }
 
       const pstnDiag = buildPstnAudioDiagnostics({
         callControlId: input.telnyxCallControlId,
@@ -287,7 +450,8 @@ async function startAiOnInboundCall(input: {
             at: aiHandoffAt,
             answerToAiMs: aiHandoffAt - answerAt,
             startupMask: maskResult,
-            greetingPreview: greeting.slice(0, 160),
+            greetingPreview: (greeting || "").slice(0, 160),
+            speaksFirst,
             path: "inbound_initiated",
             pstnAudio: pstnDiag,
             transcodesEstimate: 1,
@@ -295,7 +459,9 @@ async function startAiOnInboundCall(input: {
         },
       }).catch(() => undefined);
 
-      await startCallRecording(input.telnyxCallControlId);
+      if (shouldStartCallRecording(cfg.callHandling?.callRecording, "INBOUND")) {
+        await startCallRecording(input.telnyxCallControlId);
+      }
       await startCallTranscription(input.telnyxCallControlId);
 
       const { resolveAiVersionStamp } = await import("./platform/admission");
@@ -329,7 +495,8 @@ async function startAiOnInboundCall(input: {
               answerToAiMs: aiHandoffAt - answerAt,
               startupMask: maskResult,
               settleMs: AI_MEDIA_SETTLE_MS,
-              greetingPreview: greeting.slice(0, 160),
+              greetingPreview: (greeting || "").slice(0, 160),
+              speaksFirst,
               path: "inbound_initiated",
               transcodesEstimate: 1,
             },

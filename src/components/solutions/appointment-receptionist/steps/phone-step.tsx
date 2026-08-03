@@ -274,9 +274,41 @@ export function PhoneStep({
                     <p className="mt-1 text-[11px] text-muted-foreground">0:00 / 0:06</p>
                   </div>
                 </div>
-                <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
-                  “{state.connectionGreetingText || DEFAULT_CONNECTION_GREETING}”
-                </p>
+                {state.connectionGreeting === "upload_custom" ? (
+                  <label className="mt-3 block text-xs text-muted-foreground">
+                    Greeting audio URL (HTTPS MP3/WAV)
+                    <input
+                      className="mt-1 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground"
+                      type="url"
+                      placeholder="https://…"
+                      value={state.connectionGreetingAudioUrl || ""}
+                      onChange={(e) =>
+                        patch({ connectionGreetingAudioUrl: e.target.value })
+                      }
+                    />
+                  </label>
+                ) : null}
+                {state.connectionGreeting === "create_custom" ||
+                state.connectionGreeting === "transovo_professional" ||
+                state.connectionGreeting === "transovo_warm" ? (
+                  <label className="mt-3 block text-xs text-muted-foreground">
+                    {state.connectionGreeting === "create_custom"
+                      ? "Custom greeting text"
+                      : "Greeting text"}
+                    <textarea
+                      className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground"
+                      rows={3}
+                      value={state.connectionGreetingText || ""}
+                      onChange={(e) =>
+                        patch({ connectionGreetingText: e.target.value })
+                      }
+                    />
+                  </label>
+                ) : (
+                  <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+                    “{state.connectionGreetingText || DEFAULT_CONNECTION_GREETING}”
+                  </p>
+                )}
               </div>
             ) : null}
           </div>

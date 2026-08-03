@@ -352,8 +352,29 @@ export async function bookAppointment(
     });
   }
 
-  // SMS confirmation
-  if (phone) {
+  // SMS confirmation — gated by agent messaging.smsConfirmations when agentId is known.
+  let smsSent = false;
+  const agentId = input.agentId ? String(input.agentId) : "";
+  let smsEnabled = !agentId; // legacy callers without agent context keep prior behavior
+  if (agentId) {
+    const agent = await prisma.voiceAgent.findFirst({
+      where: { id: agentId, workspaceId },
+      select: { config: true },
+    });
+    const cfg = (agent?.config || {}) as Record<string, unknown>;
+    const messaging = (cfg.messaging || {}) as Record<string, unknown>;
+    if ("smsConfirmations" in messaging) {
+      smsEnabled = Boolean(messaging.smsConfirmations);
+    } else {
+      const tools = Array.isArray(cfg.enabledBuiltinTools)
+        ? (cfg.enabledBuiltinTools as string[])
+        : [];
+      smsEnabled = tools.includes("send_sms");
+    }
+  }
+  if (input.skipSms === true) smsEnabled = false;
+
+  if (phone && smsEnabled) {
     const when = startsAt.toLocaleString("en-US", {
       timeZone: timezone,
       dateStyle: "medium",
@@ -363,6 +384,7 @@ export async function bookAppointment(
     try {
       const { sendQuickSms } = await import("@/lib/sms/send-quick");
       await sendQuickSms({ workspaceId, to: phone, body: smsBody });
+      smsSent = true;
     } catch (err) {
       console.warn("[calendar] SMS confirmation failed", err);
     }
@@ -417,6 +439,7 @@ export async function bookAppointment(
     startsAt: appointment.startsAt,
     staffName,
     location,
+    smsSent,
     message:
       "Appointment confirmed in the system. You may tell the caller their booking is confirmed.",
   };
