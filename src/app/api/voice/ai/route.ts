@@ -690,6 +690,13 @@ export async function POST(request: Request) {
           data: await probeTelnyxAssistantVoices(),
         });
       }
+      case "list_telnyx_agent_voices": {
+        const { listTelnyxAssistantCompatibleVoices } = await import(
+          "@/lib/voice/telnyx/list-agent-voices"
+        );
+        const data = await listTelnyxAssistantCompatibleVoices();
+        return NextResponse.json({ data });
+      }
       case "elevenlabs_status": {
         const { getElevenLabsSecretStatus } = await import(
           "@/lib/voice/elevenlabs/telnyx-secret"

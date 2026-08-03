@@ -280,6 +280,13 @@ export async function deleteMcpServer(id: string) {
   return telnyxRequest(`/ai/mcp_servers/${enc(id)}`, { method: "DELETE" });
 }
 
+// ── Text-to-speech voices (live catalog) ─────────────────────────────────────
+
+/** GET /text-to-speech/voices — live Telnyx TTS catalog (changes over time). */
+export async function listTextToSpeechVoices(query?: TelnyxAiQuery) {
+  return telnyxRequest("/text-to-speech/voices", { query });
+}
+
 // ── Integration secrets (ElevenLabs api_key_ref, etc.) ──────────────────────
 
 export async function listIntegrationSecrets(query?: TelnyxAiQuery) {
