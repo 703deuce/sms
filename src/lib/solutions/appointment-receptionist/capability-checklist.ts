@@ -1,5 +1,5 @@
 import type { AppointmentReceptionistWizardState } from "./types";
-import { normalizeWizardTransferPhone } from "./sync-transfer";
+import { normalizeWizardTransferPhone } from "./transfer-utils";
 
 export type ActivationIssue = {
   id: string;

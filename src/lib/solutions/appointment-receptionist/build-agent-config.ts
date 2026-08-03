@@ -1,13 +1,12 @@
 import type { VoiceAgentConfig } from "@/lib/voice/types";
 import { parseVoiceAgentConfig } from "@/lib/voice/types";
-import { FALLBACK_PROVIDER_VOICE_ID } from "@/lib/voice/telnyx/voices";
 import { DEFAULT_CONNECTION_GREETING } from "./defaults";
 import type { AppointmentReceptionistWizardState } from "./types";
 import {
   normalizeWizardTransferPhone,
   wizardTransferDestinationName,
   WIZARD_HANDOFF_NAME,
-} from "./sync-transfer";
+} from "./transfer-utils";
 
 const KNOWLEDGE_FALLBACK_PHRASE =
   "If information is not available in the knowledge base, say you don't have that information and offer to take a message or connect someone who can help.";
@@ -325,7 +324,7 @@ export function buildWizardAgentConfig(
     voiceLanguage: {
       ...base.voiceLanguage,
       voiceId: state.voiceId,
-      fallbackVoiceId: FALLBACK_PROVIDER_VOICE_ID,
+      fallbackVoiceId: "Telnyx.NaturalHD.astra",
       voiceProvider: "telnyx",
       speed: state.speakingSpeed,
       responsiveness: responsivenessLevel,
