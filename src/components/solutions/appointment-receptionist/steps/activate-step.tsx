@@ -1,6 +1,10 @@
 "use client";
 
 import { buildReceptionistWillList } from "@/lib/solutions/appointment-receptionist/build-agent-config";
+import {
+  getWizardActivationIssues,
+  hasBlockingActivationIssues,
+} from "@/lib/solutions/appointment-receptionist/capability-checklist";
 import type {
   ActivationMode,
   AppointmentReceptionistWizardState,
@@ -13,6 +17,7 @@ import {
   Play,
   Zap,
 } from "lucide-react";
+import { useEffect, useState } from "react";
 import { InfoCallout, SelectableCard, SidePanel, StatusPill } from "../ui";
 
 export function ActivateStep({
@@ -26,31 +31,78 @@ export function ActivateStep({
   const phone = state.phoneNumberE164
     ? formatPhone(state.phoneNumberE164)
     : "No number assigned";
+  const [hasCalendar, setHasCalendar] = useState(state.calendarConnected);
+
+  useEffect(() => {
+    fetch("/api/voice/calendars")
+      .then((r) => r.json())
+      .then((j) => {
+        const rows = (j.data || []) as Array<{ status?: string }>;
+        const connected = rows.some((r) =>
+          ["connected", "active", "ok"].includes(String(r.status || "")),
+        );
+        setHasCalendar(connected);
+        if (connected && !state.calendarConnected) {
+          patch({ calendarConnected: true });
+        }
+      })
+      .catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const issues = getWizardActivationIssues(state, {
+    hasCalendarConnection: hasCalendar,
+  });
+  const blocked = hasBlockingActivationIssues(issues);
 
   const checklist = [
-    { label: "Phone", ok: Boolean(state.phoneNumberId), detail: "Ready" },
     {
-      label: "Google Calendar",
-      ok: state.calendarConnected,
-      detail: state.calendarConnected ? "Connected" : "Needed",
+      label: "Phone number",
+      ok: Boolean(state.phoneNumberId),
+      detail: state.phoneNumberId ? "Ready" : "Needed",
     },
     {
-      label: "Transfer destination",
-      ok: Boolean(state.transferDestinationPhone),
-      detail: state.transferDestinationPhone ? "Tested" : "Optional",
+      label: "Business information",
+      ok: Boolean(state.businessName?.trim()),
+      detail: state.businessName?.trim() ? "Ready" : "Needed",
     },
-    { label: "Recording disclosure", ok: state.callRecording !== "off", detail: "Enabled" },
-    { label: "AI receptionist", ok: true, detail: "Ready" },
     {
-      label: "Main appointment type",
-      ok: state.appointmentTypes.some((t) => t.enabled && t.status === "ready"),
+      label: "Voice",
+      ok: Boolean(state.voiceId),
+      detail: state.voiceLabel || "Ready",
+    },
+    {
+      label: "Opening greeting",
+      ok: Boolean(state.openingGreeting?.trim()),
       detail: "Ready",
     },
     {
-      label: "SMS confirmations",
-      ok: !state.bookingBehavior.sendSmsAfterBooking,
-      detail: state.bookingBehavior.sendSmsAfterBooking ? "A2P pending" : "Off",
-      warn: state.bookingBehavior.sendSmsAfterBooking,
+      label: "Calendar",
+      ok: hasCalendar,
+      detail: hasCalendar ? "Connected" : "Optional warning",
+      warn: !hasCalendar,
+    },
+    {
+      label: "Transfer destination",
+      ok:
+        !state.capabilities.includes("transfer_calls") ||
+        Boolean(state.transferDestinationPhone),
+      detail: state.transferDestinationPhone ? "Ready" : "Needed if transferring",
+    },
+    {
+      label: "Appointment type",
+      ok: state.appointmentTypes.some((t) => t.enabled),
+      detail: "Ready",
+    },
+    {
+      label: "Message taking + notify",
+      ok: true,
+      detail: "Enabled",
+    },
+    {
+      label: "Post-call summary",
+      ok: true,
+      detail: "Enabled on activate",
     },
     { label: "Time zone", ok: true, detail: state.timezone },
   ];
@@ -63,16 +115,42 @@ export function ActivateStep({
             Make your receptionist live
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Review the generated setup, then activate.
+            Activate pushes knowledge, transfer destinations, appointment types, and insights
+            to the live agent.
           </p>
         </div>
 
         <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3">
           <p className="text-sm font-semibold text-foreground">{state.solutionName}</p>
           <p className="mt-1 text-xs text-muted-foreground">
-            Answers calls and books appointments 24/7 — so you never miss an opportunity.
+            Answers calls, uses business knowledge, collects info, books appointments, transfers,
+            saves messages, and notifies your team.
           </p>
         </div>
+
+        {issues.length ? (
+          <div className="space-y-2 rounded-xl border border-border bg-card p-4">
+            <p className="text-sm font-semibold">Activation checklist</p>
+            {issues.map((issue) => (
+              <div
+                key={issue.id}
+                className="flex items-start gap-2 text-sm text-muted-foreground"
+              >
+                <AlertTriangle
+                  className={`mt-0.5 h-4 w-4 shrink-0 ${
+                    issue.severity === "blocking" ? "text-destructive" : "text-warning"
+                  }`}
+                />
+                <span>
+                  <span className="font-medium text-foreground">
+                    {issue.severity === "blocking" ? "Required: " : "Warning: "}
+                  </span>
+                  {issue.message}
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : null}
 
         <div className="grid gap-2 sm:grid-cols-2">
           {checklist.map((item) => (
@@ -109,29 +187,6 @@ export function ActivateStep({
               </li>
             ))}
           </ol>
-        </div>
-
-        <div className="overflow-x-auto rounded-xl border border-border bg-card p-4">
-          <h3 className="mb-3 text-sm font-semibold">Workflow preview</h3>
-          <div className="flex min-w-max items-center gap-2 text-xs">
-            {[
-              "Incoming call",
-              `AI answers as ${state.agentName || "Maya"}`,
-              "Qualification & availability",
-              "Book appointment",
-              "Send confirmation & reminders",
-              "Transfer or take message",
-            ].map((step, i, arr) => (
-              <div key={step} className="flex items-center gap-2">
-                <span className="rounded-lg border border-border bg-muted/40 px-3 py-2 font-medium">
-                  {step}
-                </span>
-                {i < arr.length - 1 ? (
-                  <span className="text-muted-foreground">→</span>
-                ) : null}
-              </div>
-            ))}
-          </div>
         </div>
 
         <div>
@@ -180,7 +235,8 @@ export function ActivateStep({
         </dl>
         <button
           type="button"
-          className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2.5 text-sm font-medium text-primary-foreground"
+          disabled={blocked && state.activationMode === "activate_now"}
+          className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2.5 text-sm font-medium text-primary-foreground disabled:opacity-50"
           onClick={() => patch({ activationMode: "activate_now" })}
         >
           <Zap className="h-4 w-4" />
@@ -194,9 +250,8 @@ export function ActivateStep({
           Run final test
         </button>
         <InfoCallout>
-          Activate now publishes this agent and assigns {phone} so the next inbound call
-          reaches this receptionist — even if another agent was answering that number before.
-          Only one AI answers a number at a time. SMS pending A2P does not block voice booking.
+          Activate publishes this agent, attaches business knowledge, syncs transfer numbers,
+          creates bookable services, and enables post-call summaries + staff message alerts.
         </InfoCallout>
       </SidePanel>
     </div>

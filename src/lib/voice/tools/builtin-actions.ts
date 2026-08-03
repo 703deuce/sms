@@ -246,6 +246,28 @@ export async function executeBuiltinVoiceAction(input: {
         ok: false as const,
         error: err instanceof Error ? err.message : String(err),
       }));
+
+      // Staff notification — required for every receptionist message-taking path.
+      await import("@/lib/notifications/in-app")
+        .then(({ notifyWorkspace }) =>
+          notifyWorkspace(input.workspaceId, {
+            type: urgency === "high" || urgency === "urgent" ? "system" : "system",
+            title:
+              urgency === "high" || urgency === "urgent"
+                ? "Urgent caller message"
+                : "New caller message",
+            body: [
+              callerName || "Unknown caller",
+              phone || "",
+              reason.slice(0, 160),
+            ]
+              .filter(Boolean)
+              .join(" · "),
+            href: input.callId ? `/voice/calls/${input.callId}` : "/voice/calls",
+          }),
+        )
+        .catch(() => undefined);
+
       return {
         ok: true,
         message: "Message saved. Tell the caller you will make sure the team receives it.",

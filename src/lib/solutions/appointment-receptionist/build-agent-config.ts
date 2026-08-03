@@ -333,6 +333,35 @@ export function buildWizardAgentConfig(
     },
     enabledBuiltinTools: Array.from(enabledTools),
     knowledgeBaseIds: base.knowledgeBaseIds || [],
+    dynamicVariables: {
+      business_name: state.businessName || state.solutionName,
+      agent_name: state.agentName || "Maya",
+      agent_role: state.role || "front-desk receptionist",
+      solution_name: state.solutionName,
+      timezone: state.timezone || "America/New_York",
+      transfer_destination_name: transferName,
+      phone_number: state.phoneNumberE164 || "",
+    },
+    postCall: {
+      ...(base.postCall || {}),
+      extractionFields: [
+        "caller_name",
+        "caller_phone",
+        "intent",
+        "service_requested",
+        "appointment_booked",
+        "appointment_time",
+        "message_taken",
+        "message_reason",
+        "transfer_attempted",
+        "transfer_successful",
+        "follow_up_required",
+        "urgency",
+        "sentiment",
+        "outcome",
+      ],
+      scoringRules: base.postCall?.scoringRules,
+    },
     advanced: {
       ...(base.advanced || {}),
       appointmentReceptionistWizard: {
@@ -342,7 +371,10 @@ export function buildWizardAgentConfig(
         websiteUrl: state.websiteUrl,
         calendarProvider: state.calendarProvider,
         timezone: state.timezone,
+        collectFields: state.collectFields,
+        appointmentTypes: state.appointmentTypes.filter((t) => t.enabled),
       },
+      capabilityPack: "appointment_receptionist",
     },
   };
 }

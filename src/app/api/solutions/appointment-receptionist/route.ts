@@ -6,6 +6,8 @@ import {
   updateVoiceAgentDraft,
 } from "@/lib/voice/agent-service";
 import { buildWizardAgentConfig } from "@/lib/solutions/appointment-receptionist/build-agent-config";
+import { runAppointmentReceptionistActivateHooks } from "@/lib/solutions/appointment-receptionist/activate-hooks";
+import { hasBlockingActivationIssues } from "@/lib/solutions/appointment-receptionist/capability-checklist";
 import type {
   AppointmentReceptionistWizardState,
   WizardPersistAction,
@@ -41,6 +43,35 @@ export async function POST(request: Request) {
       agentId = created.id;
     }
 
+    // Push wizard data into shared platform records (KB, services, transfer, insights).
+    const hooks = await runAppointmentReceptionistActivateHooks({
+      workspaceId: auth.workspaceId,
+      agentId,
+      state,
+      mode: action === "activate" ? "activate" : "save_draft",
+    });
+
+    if (action === "activate" && hasBlockingActivationIssues(hooks.issues)) {
+      return NextResponse.json(
+        {
+          error: "Activation checklist incomplete",
+          data: {
+            agentId,
+            issues: hooks.issues,
+            published: false,
+          },
+        },
+        { status: 400 },
+      );
+    }
+
+    const configWithKb = {
+      ...draftConfig,
+      knowledgeBaseIds: hooks.knowledgeBaseId
+        ? [hooks.knowledgeBaseId]
+        : draftConfig.knowledgeBaseIds || [],
+    };
+
     const updated = await updateVoiceAgentDraft(auth.workspaceId, agentId, {
       name,
       description: "Answer Calls and Book Appointments — wizard setup",
@@ -48,35 +79,9 @@ export async function POST(request: Request) {
       displayName: state.agentName || name,
       purpose: "appointment_receptionist",
       phoneNumberId: state.phoneNumberId,
-      draftConfig,
+      draftConfig: configWithKb,
       status: action === "activate" ? undefined : "DRAFT",
     });
-
-    // Persist transfer destination so escalate_human has a real E.164 at runtime.
-    let transferSynced: { synced: boolean; e164: string | null } = {
-      synced: false,
-      e164: null,
-    };
-    if (state.transferDestinationPhone?.trim()) {
-      try {
-        const { syncWizardTransferDestinations } = await import(
-          "@/lib/solutions/appointment-receptionist/sync-transfer"
-        );
-        const result = await syncWizardTransferDestinations({
-          workspaceId: auth.workspaceId,
-          agentId,
-          destinationName: state.transferDestinationName,
-          destinationPhone: state.transferDestinationPhone,
-          returnToAiOnFail: state.transferFallback === "return_to_ai",
-        });
-        transferSynced = { synced: result.synced, e164: result.e164 };
-      } catch (err) {
-        console.warn(
-          "[appointment-receptionist] transfer destination sync failed",
-          err instanceof Error ? err.message : err,
-        );
-      }
-    }
 
     let published = false;
     let publishError: string | null = null;
@@ -100,7 +105,6 @@ export async function POST(request: Request) {
         await publishVoiceAgent(auth.workspaceId, agentId, auth.session.userId);
         published = true;
       } catch (err) {
-        // Try build-for-test then publish once — common when assistant not synced yet.
         try {
           const { buildVoiceAgentForTest } = await import("@/lib/voice/agent-service");
           await buildVoiceAgentForTest(auth.workspaceId, agentId, auth.session.userId);
@@ -125,8 +129,17 @@ export async function POST(request: Request) {
         published,
         publishError,
         previousAiOwner,
-        transferSynced,
-        telnyxAssistantId: (updated as { telnyxAssistantId?: string | null }).telnyxAssistantId,
+        issues: hooks.issues,
+        hooks: {
+          knowledgeBaseId: hooks.knowledgeBaseId,
+          calendarConnectionId: hooks.calendarConnectionId,
+          serviceIds: hooks.serviceIds,
+          insightGroupId: hooks.insightGroupId,
+          transferSynced: hooks.transferSynced,
+          transferE164: hooks.transferE164,
+        },
+        telnyxAssistantId: (updated as { telnyxAssistantId?: string | null })
+          .telnyxAssistantId,
       },
     });
   } catch (err) {
