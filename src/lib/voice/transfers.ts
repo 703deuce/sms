@@ -226,17 +226,14 @@ export async function initiateTransfer(input: {
       to: destination,
       timeout_secs: input.timeoutSeconds || 30,
     };
-    // Prefer agent draftConfig.transfers.detectVoicemailOnTransfer when set.
+    // Prefer published/draft transfers.detectVoicemailOnTransfer when set.
     let detectAmd = true;
     if (call.agentId) {
-      const agentRow = await prisma.voiceAgent.findUnique({ where: { id: call.agentId } });
-      if (agentRow?.draftConfig) {
-        const { parseVoiceAgentConfig } = await import("./types");
-        const cfg = parseVoiceAgentConfig(agentRow.draftConfig);
-        const transfersCfg = (cfg.transfers || {}) as Record<string, unknown>;
-        if (typeof transfersCfg.detectVoicemailOnTransfer === "boolean") {
-          detectAmd = transfersCfg.detectVoicemailOnTransfer;
-        }
+      const { loadVoiceAgentRuntimeConfig } = await import("./load-agent-config");
+      const cfg = await loadVoiceAgentRuntimeConfig(call.workspaceId, call.agentId);
+      const transfersCfg = (cfg.transfers || {}) as Record<string, unknown>;
+      if (typeof transfersCfg.detectVoicemailOnTransfer === "boolean") {
+        detectAmd = transfersCfg.detectVoicemailOnTransfer;
       }
     }
     if (detectAmd) {

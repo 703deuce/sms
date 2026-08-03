@@ -7,6 +7,10 @@ import {
   isWithinBusinessHours,
 } from "@/lib/messaging/messaging-settings";
 import {
+  applyActionTimezone,
+  resolveRingTimeoutSeconds,
+} from "./routing-action-resolve";
+import {
   isTelnyxVoiceConfigured,
   startAiAssistantOnCall,
   startCallRecording,
@@ -391,6 +395,16 @@ async function startAiOnInboundCall(input: {
                 "This call may be recorded for quality and training purposes.",
             )
           : null;
+      // If the caller speaks first, still speak recording disclosure when needed
+      // (AI greeting path would otherwise skip it entirely).
+      if (speaksFirst === "caller" && disclosureText && input.telnyxCallControlId) {
+        const { speakOnCallControl } = await import("./startup-greeting-runtime");
+        await speakOnCallControl(input.telnyxCallControlId, disclosureText).catch(
+          () => undefined,
+        );
+        disclosureSpoken = true;
+      }
+
       const greeting =
         speaksFirst === "caller"
           ? null
@@ -398,7 +412,7 @@ async function startAiOnInboundCall(input: {
               config: cfg,
               agentName: agent.name || "our assistant",
               contactName: input.contactName,
-              prependDisclosure: disclosureText,
+              prependDisclosure: disclosureSpoken ? null : disclosureText,
             });
 
       const aiHandoffAt = Date.now();
@@ -520,7 +534,7 @@ async function executeHumanFirst(input: {
   routing: Record<string, unknown>;
   actions?: Record<string, unknown>;
 }) {
-  const timeoutSeconds = Number(input.actions?.timeoutSeconds || input.actions?.ringTimeout || 30);
+  const timeoutSeconds = resolveRingTimeoutSeconds(input.actions, 30);
   const queueId = input.actions?.queueId as string | undefined;
   const agentId = input.actions?.agentId as string | undefined;
 
@@ -714,13 +728,14 @@ async function executeOverflow(input: {
 async function resolveEffectiveAction(
   workspaceId: string,
   action: string,
-  _actions?: Record<string, unknown>,
+  actions?: Record<string, unknown>,
   now = new Date(),
 ) {
   if (action !== "ai_after_hours") return action;
 
   const settings = await getMessagingRuntimeSettings(workspaceId);
-  const withinHours = isWithinBusinessHours(settings, now);
+  const effective = applyActionTimezone(settings, actions);
+  const withinHours = isWithinBusinessHours(effective, now);
   if (withinHours) return "human_first";
   return "ai_answer";
 }

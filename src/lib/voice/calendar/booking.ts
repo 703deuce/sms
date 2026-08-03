@@ -15,7 +15,10 @@ type Slot = { startsAt: string; endsAt: string; staffName?: string; location?: s
 
 type ServiceConfig = {
   locations?: string[];
+  /** Singular location from wizard appointment types (normalized to locations). */
+  location?: string | null;
   minimumBookingNoticeMinutes?: number;
+  maxDaysAhead?: number | null;
   staffIds?: string[];
   lastAssignedIndex?: number;
 };
@@ -164,7 +167,15 @@ export async function getAvailability(
   const durationMinutes = service?.durationMinutes || duration;
   const bufferMinutes = service?.bufferMinutes || 0;
   const noticeMinutes = Number(svcCfg.minimumBookingNoticeMinutes || input.minimumBookingNoticeMinutes || 0);
-  const locations = svcCfg.locations || [];
+  const locations =
+    Array.isArray(svcCfg.locations) && svcCfg.locations.length
+      ? svcCfg.locations.map(String)
+      : svcCfg.location
+        ? [String(svcCfg.location)]
+        : [];
+  const maxDaysAhead = Number(svcCfg.maxDaysAhead || 0);
+  const effectiveDays =
+    maxDaysAhead > 0 ? Math.min(Math.max(1, days), maxDaysAhead) : Math.max(1, days);
 
   if (locationFilter && locations.length && !locations.includes(locationFilter)) {
     return { slots: [] };
@@ -179,12 +190,12 @@ export async function getAvailability(
         const token = await getValidAccessToken(cal.id, cal.provider, config);
         if (token) {
           const timeMin = new Date();
-          const timeMax = new Date(timeMin.getTime() + days * 86_400_000);
+          const timeMax = new Date(timeMin.getTime() + effectiveDays * 86_400_000);
           const busy =
             cal.provider === "google"
               ? await getGoogleBusy(token, config.calendarId || "primary", timeMin, timeMax)
               : await getMicrosoftBusy(token, timeMin, timeMax);
-          const raw = computeFreeSlots(busy, durationMinutes, days, timeMin, bufferMinutes);
+          const raw = computeFreeSlots(busy, durationMinutes, effectiveDays, timeMin, bufferMinutes);
           const slots = raw
             .filter((s) => slotPassesNotice(new Date(s.startsAt), noticeMinutes, timeMin))
             .map((s) => ({
@@ -204,7 +215,12 @@ export async function getAvailability(
       const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "availability", serviceName, days, location: locationFilter }),
+        body: JSON.stringify({
+          action: "availability",
+          serviceName,
+          days: effectiveDays,
+          location: locationFilter,
+        }),
       });
       const json = await res.json();
       return { slots: (json.slots as Slot[]) || [] };
@@ -229,7 +245,7 @@ export async function getAvailability(
         workspaceId,
         durationMinutes,
         bufferMinutes,
-        days,
+        days: effectiveDays,
         noticeMinutes,
         location: locationFilter || memberLocations[0],
         staffName: member.name,
@@ -243,7 +259,7 @@ export async function getAvailability(
     workspaceId,
     durationMinutes,
     bufferMinutes,
-    days,
+    days: effectiveDays,
     noticeMinutes,
     location: locationFilter || locations[0],
   });
@@ -271,6 +287,14 @@ export async function bookAppointment(
 
   if (!slotPassesNotice(startsAt, noticeMinutes, now)) {
     throw new Error("Booking is too soon — minimum notice required");
+  }
+
+  const maxDaysAhead = Number(svcCfg.maxDaysAhead || 0);
+  if (maxDaysAhead > 0) {
+    const latest = new Date(now.getTime() + maxDaysAhead * 86_400_000);
+    if (startsAt.getTime() > latest.getTime()) {
+      throw new Error(`Booking is too far ahead — max ${maxDaysAhead} days`);
+    }
   }
 
   const endsAt = new Date(startsAt.getTime() + durationMinutes * 60_000);
@@ -357,11 +381,8 @@ export async function bookAppointment(
   const agentId = input.agentId ? String(input.agentId) : "";
   let smsEnabled = !agentId; // legacy callers without agent context keep prior behavior
   if (agentId) {
-    const agent = await prisma.voiceAgent.findFirst({
-      where: { id: agentId, workspaceId },
-      select: { config: true },
-    });
-    const cfg = (agent?.config || {}) as Record<string, unknown>;
+    const { loadVoiceAgentRuntimeConfigRecord } = await import("../load-agent-config");
+    const cfg = await loadVoiceAgentRuntimeConfigRecord(workspaceId, agentId);
     const messaging = (cfg.messaging || {}) as Record<string, unknown>;
     if ("smsConfirmations" in messaging) {
       smsEnabled = Boolean(messaging.smsConfirmations);

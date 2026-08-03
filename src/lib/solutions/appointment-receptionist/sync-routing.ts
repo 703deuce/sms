@@ -22,19 +22,28 @@ export function resolveWizardRoutingMode(input: {
 }): WizardRoutingMode {
   const { answerWhen, ringBehavior } = input;
 
-  if (answerWhen === "nobody_answers" || ringBehavior === "ring_team_first") {
+  // answerWhen is the source of truth; ringBehavior only fills gaps for nobody_answers.
+  if (answerWhen === "nobody_answers") {
     return "human_first";
   }
   if (answerWhen === "line_busy") {
+    // Intended for DIDs that only receive busy/overflow forwards from another system.
     return "overflow";
   }
-  if (answerWhen === "custom_schedule" || ringBehavior === "custom") {
+  if (answerWhen === "custom_schedule") {
     return "custom_schedule";
   }
-  if (answerWhen === "after_hours" || ringBehavior === "after_hours") {
+  if (answerWhen === "after_hours") {
     return "ai_after_hours";
   }
-  // every_call / ai_immediate — AI answers immediately
+  if (answerWhen === "every_call") {
+    return "ai_answer";
+  }
+  // Legacy: ringBehavior alone (if answerWhen somehow unset)
+  if (ringBehavior === "ring_team_first") return "human_first";
+  if (ringBehavior === "custom") return "custom_schedule";
+  if (ringBehavior === "after_hours") return "ai_after_hours";
+  if (ringBehavior === "line_busy") return "overflow";
   return "ai_answer";
 }
 
@@ -44,11 +53,49 @@ async function clearWizardManagedRules(workspaceId: string, agentId: string) {
   const existing = await prisma.voiceRoutingRule.findMany({
     where: { workspaceId, agentId },
   });
+  const deleted: Array<{
+    name: string;
+    priority: number;
+    isActive: boolean;
+    conditions: unknown;
+    actions: unknown;
+  }> = [];
   for (const rule of existing) {
     const meta = (rule.conditions || {}) as Record<string, unknown>;
     if (meta[WIZARD_ROUTING_MANAGED] || meta.wizardManaged) {
+      deleted.push({
+        name: rule.name,
+        priority: rule.priority,
+        isActive: rule.isActive,
+        conditions: rule.conditions,
+        actions: rule.actions,
+      });
       await prisma.voiceRoutingRule.delete({ where: { id: rule.id } });
     }
+  }
+  return deleted;
+}
+
+async function restoreWizardManagedRules(
+  workspaceId: string,
+  agentId: string,
+  snapshot: Awaited<ReturnType<typeof clearWizardManagedRules>>,
+) {
+  if (!snapshot.length) return;
+  const { getPrisma } = await import("@/lib/db");
+  const prisma = getPrisma();
+  for (const row of snapshot) {
+    await prisma.voiceRoutingRule.create({
+      data: {
+        workspaceId,
+        agentId,
+        name: row.name,
+        priority: row.priority,
+        isActive: row.isActive,
+        conditions: row.conditions as object,
+        actions: row.actions as object,
+      },
+    });
   }
 }
 
@@ -68,7 +115,7 @@ export async function syncWizardRoutingRules(input: {
   const { getPrisma } = await import("@/lib/db");
   const prisma = getPrisma();
 
-  await clearWizardManagedRules(input.workspaceId, input.agentId);
+  const snapshot = await clearWizardManagedRules(input.workspaceId, input.agentId);
 
   const mode = resolveWizardRoutingMode({
     answerWhen: input.answerWhen,
@@ -79,154 +126,166 @@ export async function syncWizardRoutingRules(input: {
   const agentId = input.agentId;
   const workspaceId = input.workspaceId;
 
-  if (mode === "human_first") {
-    await prisma.voiceRoutingRule.create({
-      data: {
-        workspaceId,
-        agentId,
-        name: "Wizard: human first then AI",
-        priority: 10,
-        isActive: true,
-        conditions: {
-          wizardManaged: true,
-          businessHoursOnly: true,
-          timezone,
-        },
-        actions: {
-          type: "human_first",
+  try {
+    if (mode === "human_first") {
+      await prisma.voiceRoutingRule.create({
+        data: {
+          workspaceId,
           agentId,
-          ringSeconds,
-          fallback: "ai_answer",
+          name: "Wizard: human first then AI",
+          priority: 10,
+          isActive: true,
+          conditions: {
+            wizardManaged: true,
+            businessHoursOnly: true,
+            timezone,
+          },
+          actions: {
+            type: "human_first",
+            agentId,
+            ringSeconds,
+            timeoutSeconds: ringSeconds,
+            timezone,
+            fallback: "ai_answer",
+          },
         },
-      },
-    });
-    await prisma.voiceRoutingRule.create({
-      data: {
-        workspaceId,
-        agentId,
-        name: "Wizard: after-hours AI",
-        priority: 20,
-        isActive: true,
-        conditions: {
-          wizardManaged: true,
-          afterHoursOnly: true,
-          timezone,
-        },
-        actions: {
-          type: "ai_after_hours",
+      });
+      await prisma.voiceRoutingRule.create({
+        data: {
+          workspaceId,
           agentId,
+          name: "Wizard: after-hours AI",
+          priority: 20,
+          isActive: true,
+          conditions: {
+            wizardManaged: true,
+            afterHoursOnly: true,
+            timezone,
+          },
+          actions: {
+            type: "ai_after_hours",
+            agentId,
+            timezone,
+          },
         },
-      },
-    });
-    return { mode, rulesCreated: 2 };
-  }
+      });
+      return { mode, rulesCreated: 2 };
+    }
 
-  if (mode === "ai_after_hours") {
-    // Single ai_after_hours rule: resolveEffectiveAction maps to human_first
-    // in-hours and ai_answer after hours (workspace business hours).
+    if (mode === "ai_after_hours") {
+      // Single ai_after_hours rule: resolveEffectiveAction maps to human_first
+      // in-hours and ai_answer after hours using the wizard timezone when set.
+      await prisma.voiceRoutingRule.create({
+        data: {
+          workspaceId,
+          agentId,
+          name: "Wizard: AI after hours",
+          priority: 10,
+          isActive: true,
+          conditions: {
+            wizardManaged: true,
+            timezone,
+          },
+          actions: {
+            type: "ai_after_hours",
+            agentId,
+            timezone,
+          },
+        },
+      });
+      return { mode, rulesCreated: 1 };
+    }
+
+    if (mode === "custom_schedule") {
+      // After-hours-style with wizard timezone on conditions for matching.
+      await prisma.voiceRoutingRule.create({
+        data: {
+          workspaceId,
+          agentId,
+          name: "Wizard: custom schedule after hours AI",
+          priority: 10,
+          isActive: true,
+          conditions: {
+            wizardManaged: true,
+            afterHoursOnly: true,
+            timezone,
+          },
+          actions: {
+            type: "ai_after_hours",
+            agentId,
+            timezone,
+          },
+        },
+      });
+      await prisma.voiceRoutingRule.create({
+        data: {
+          workspaceId,
+          agentId,
+          name: "Wizard: custom schedule business hours",
+          priority: 20,
+          isActive: true,
+          conditions: {
+            wizardManaged: true,
+            businessHoursOnly: true,
+            timezone,
+          },
+          actions: {
+            type: "human_first",
+            agentId,
+            ringSeconds,
+            timeoutSeconds: ringSeconds,
+            timezone,
+            fallback: "ai_answer",
+          },
+        },
+      });
+      return { mode, rulesCreated: 2 };
+    }
+
+    if (mode === "overflow") {
+      // line_busy → overflow to AI agent (existing overflow / ai_agent pattern).
+      await prisma.voiceRoutingRule.create({
+        data: {
+          workspaceId,
+          agentId,
+          name: "Wizard: line busy overflow to AI",
+          priority: 10,
+          isActive: true,
+          conditions: {
+            wizardManaged: true,
+            timezone,
+          },
+          actions: {
+            type: "overflow",
+            overflowType: "ai_agent",
+            agentId,
+            overflowAgentId: agentId,
+          },
+        },
+      });
+      return { mode, rulesCreated: 1 };
+    }
+
+    // every_call / ai_immediate — AI answers immediately (cleared human_first above).
     await prisma.voiceRoutingRule.create({
       data: {
         workspaceId,
         agentId,
-        name: "Wizard: AI after hours",
+        name: "Wizard: AI answer",
         priority: 10,
         isActive: true,
         conditions: {
           wizardManaged: true,
-          timezone,
         },
         actions: {
-          type: "ai_after_hours",
+          type: "ai_answer",
           agentId,
         },
       },
     });
     return { mode, rulesCreated: 1 };
+  } catch (err) {
+    await restoreWizardManagedRules(workspaceId, agentId, snapshot).catch(() => undefined);
+    throw err;
   }
-
-  if (mode === "custom_schedule") {
-    // After-hours-style with wizard timezone on conditions for matching.
-    await prisma.voiceRoutingRule.create({
-      data: {
-        workspaceId,
-        agentId,
-        name: "Wizard: custom schedule after hours AI",
-        priority: 10,
-        isActive: true,
-        conditions: {
-          wizardManaged: true,
-          afterHoursOnly: true,
-          timezone,
-        },
-        actions: {
-          type: "ai_after_hours",
-          agentId,
-        },
-      },
-    });
-    await prisma.voiceRoutingRule.create({
-      data: {
-        workspaceId,
-        agentId,
-        name: "Wizard: custom schedule business hours",
-        priority: 20,
-        isActive: true,
-        conditions: {
-          wizardManaged: true,
-          businessHoursOnly: true,
-          timezone,
-        },
-        actions: {
-          type: "human_first",
-          agentId,
-          ringSeconds,
-          fallback: "ai_answer",
-        },
-      },
-    });
-    return { mode, rulesCreated: 2 };
-  }
-
-  if (mode === "overflow") {
-    // line_busy → overflow to AI agent (existing overflow / ai_agent pattern).
-    await prisma.voiceRoutingRule.create({
-      data: {
-        workspaceId,
-        agentId,
-        name: "Wizard: line busy overflow to AI",
-        priority: 10,
-        isActive: true,
-        conditions: {
-          wizardManaged: true,
-          timezone,
-        },
-        actions: {
-          type: "overflow",
-          overflowType: "ai_agent",
-          agentId,
-          overflowAgentId: agentId,
-        },
-      },
-    });
-    return { mode, rulesCreated: 1 };
-  }
-
-  // every_call / ai_immediate — AI answers immediately (cleared human_first above).
-  await prisma.voiceRoutingRule.create({
-    data: {
-      workspaceId,
-      agentId,
-      name: "Wizard: AI answer",
-      priority: 10,
-      isActive: true,
-      conditions: {
-        wizardManaged: true,
-      },
-      actions: {
-        type: "ai_answer",
-        agentId,
-      },
-    },
-  });
-  return { mode, rulesCreated: 1 };
 }

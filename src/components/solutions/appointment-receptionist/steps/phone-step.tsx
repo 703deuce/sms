@@ -195,13 +195,28 @@ export function PhoneStep({
                   ["ai_immediate", "Answer every incoming call"],
                   ["ring_team_first", "Ring team first then use AI"],
                   ["after_hours", "After-hours only"],
+                  ["line_busy", "When the line is busy"],
                   ["custom", "Custom schedule"],
                 ] as const
               ).map(([id, label]) => (
                 <RadioRow
                   key={id}
                   selected={state.ringBehavior === id}
-                  onClick={() => patch({ ringBehavior: id })}
+                  onClick={() =>
+                    patch({
+                      ringBehavior: id,
+                      answerWhen:
+                        id === "ring_team_first"
+                          ? "nobody_answers"
+                          : id === "after_hours"
+                            ? "after_hours"
+                            : id === "custom"
+                              ? "custom_schedule"
+                              : id === "line_busy"
+                                ? "line_busy"
+                                : "every_call",
+                    })
+                  }
                   label={label}
                 />
               ))}

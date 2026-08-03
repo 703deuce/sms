@@ -3,6 +3,7 @@ import { emitAutomationEvent } from "@/lib/automations/events";
 import { emitVoiceAutomationEvents } from "./automation-events";
 import { recordVoiceUsage } from "./usage";
 import { parseVoiceAgentConfig } from "./types";
+import { resolveTransferInsightFields } from "./routing-action-resolve";
 
 export async function processPostCall(callId: string) {
   const prisma = getPrisma();
@@ -382,9 +383,15 @@ function heuristicExtractedFields(
         out[key] = call.appointmentBooked;
         break;
       case "transfer_attempted":
-      case "transfer_successful":
-        out[key] = call.transferred;
+      case "transfer_successful": {
+        const transfer = resolveTransferInsightFields({
+          text,
+          transferred: call.transferred,
+          outcome: call.outcome,
+        });
+        out[key] = transfer[key];
         break;
+      }
       case "message_taken":
         out[key] = /message|callback|call back/i.test(text);
         break;

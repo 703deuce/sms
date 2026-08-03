@@ -531,13 +531,9 @@ export async function executeBuiltinVoiceAction(input: {
       }
 
       // Cold/blind Call Control transfer — single path for PSTN human handoff.
+      const { loadVoiceAgentRuntimeConfigRecord } = await import("../load-agent-config");
       const agentConfig = input.agentId
-        ? (((
-            await prisma.voiceAgent.findFirst({
-              where: { id: input.agentId, workspaceId: input.workspaceId },
-              select: { config: true },
-            })
-          )?.config || {}) as Record<string, unknown>)
+        ? await loadVoiceAgentRuntimeConfigRecord(input.workspaceId, input.agentId)
         : ({} as Record<string, unknown>);
       const transfersCfg = (agentConfig.transfers || {}) as Record<string, unknown>;
       const shouldAnnounce = Boolean(transfersCfg.announce);
@@ -564,6 +560,9 @@ export async function executeBuiltinVoiceAction(input: {
                 ? "warm_transfer"
                 : "cold_transfer",
           summary: String(args.summary || args.reason || ""),
+          timeoutSeconds: Number(
+            transfersCfg.ringSeconds || transfersCfg.timeoutSeconds || 30,
+          ),
         });
         return {
           ok: true,
@@ -581,6 +580,7 @@ export async function executeBuiltinVoiceAction(input: {
         const message = err instanceof Error ? err.message : String(err);
         console.error("[voice] escalate_human failed", message);
         const takeMessage = fallback === "take_message";
+        const notifyStaff = fallback === "notify_staff";
         if (input.callId) {
           const existing = await prisma.voiceCall.findFirst({
             where: { id: input.callId, workspaceId: input.workspaceId },
@@ -591,24 +591,54 @@ export async function executeBuiltinVoiceAction(input: {
             .update({
               where: { id: input.callId },
               data: {
-                outcome: takeMessage ? "transfer_failed_take_message" : "transfer_failed",
+                outcome: takeMessage
+                  ? "transfer_failed_take_message"
+                  : notifyStaff
+                    ? "transfer_failed_notify_staff"
+                    : "transfer_failed",
                 metadata: {
                   ...prevMeta,
                   transferFailed: true,
                   transferFallback: fallback,
                   transferError: message,
-                  ...(takeMessage ? { follow_up_required: true } : {}),
+                  ...(takeMessage || notifyStaff ? { follow_up_required: true } : {}),
                 },
               },
             })
             .catch(() => undefined);
+        }
+        if (notifyStaff) {
+          await import("@/lib/notifications/in-app")
+            .then(({ notifyWorkspace }) =>
+              notifyWorkspace(input.workspaceId, {
+                type: "system",
+                title: "Transfer failed — staff follow-up needed",
+                body: message.slice(0, 200),
+                href: input.callId ? `/voice/calls/${input.callId}` : "/voice/calls",
+              }),
+            )
+            .catch(() => undefined);
+          await notifyStaffByEmail({
+            workspaceId: input.workspaceId,
+            subject: "Transfer failed — staff follow-up needed",
+            body: [
+              "A live transfer failed.",
+              message,
+              input.callId ? `Call: ${input.callId}` : "",
+            ]
+              .filter(Boolean)
+              .join("\n"),
+            callId: input.callId,
+          }).catch(() => undefined);
         }
         return {
           ok: false,
           error: message,
           speak: takeMessage
             ? "I wasn't able to connect that transfer. I can take a detailed message and have someone call you back."
-            : "I wasn't able to connect that transfer. I can help another way or try again shortly.",
+            : notifyStaff
+              ? "I wasn't able to connect that transfer. I've notified the team and someone will follow up."
+              : "I wasn't able to connect that transfer. I can help another way or try again shortly.",
         };
       }
     }
@@ -913,11 +943,8 @@ async function agentSmsConfirmationsEnabled(
   agentId?: string,
 ): Promise<boolean> {
   if (!agentId) return false;
-  const agent = await getPrisma().voiceAgent.findFirst({
-    where: { id: agentId, workspaceId },
-    select: { config: true },
-  });
-  const cfg = (agent?.config || {}) as Record<string, unknown>;
+  const { loadVoiceAgentRuntimeConfigRecord } = await import("../load-agent-config");
+  const cfg = await loadVoiceAgentRuntimeConfigRecord(workspaceId, agentId);
   const messaging = (cfg.messaging || {}) as Record<string, unknown>;
   if ("smsConfirmations" in messaging) return Boolean(messaging.smsConfirmations);
   const tools = Array.isArray(cfg.enabledBuiltinTools)

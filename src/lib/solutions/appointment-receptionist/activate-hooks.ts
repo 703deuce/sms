@@ -15,6 +15,7 @@ import {
   hasBlockingActivationIssues,
   type ActivationIssue,
 } from "./capability-checklist";
+import { parseNoticeMinutes } from "./notice-utils";
 
 export type ActivateHooksResult = {
   issues: ActivationIssue[];
@@ -209,9 +210,11 @@ async function ensureWizardCalendarServices(input: {
             wizardTypeId: t.id,
             description: t.description || null,
             location: t.location || null,
+            locations: t.location ? [t.location] : [],
             modality: t.modality || null,
             bookingHours: t.bookingHours || null,
             minNotice: t.minNotice || null,
+            minimumBookingNoticeMinutes: parseNoticeMinutes(t.minNotice),
             maxDaysAhead: t.maxDaysAhead || null,
             requiredFields: t.requiredFields || [],
             bookingPermission: t.bookingPermission,
@@ -231,9 +234,11 @@ async function ensureWizardCalendarServices(input: {
             wizardTypeId: t.id,
             description: t.description || null,
             location: t.location || null,
+            locations: t.location ? [t.location] : [],
             modality: t.modality || null,
             bookingHours: t.bookingHours || null,
             minNotice: t.minNotice || null,
+            minimumBookingNoticeMinutes: parseNoticeMinutes(t.minNotice),
             maxDaysAhead: t.maxDaysAhead || null,
             requiredFields: t.requiredFields || [],
             bookingPermission: t.bookingPermission,
@@ -409,6 +414,37 @@ export async function runAppointmentReceptionistActivateHooks(input: {
       err instanceof Error ? err.message : err,
     );
   });
+
+  // Post-hook gates: transfer/routing must actually sync before go-live.
+  if (input.mode === "activate") {
+    if (
+      input.state.capabilities.includes("transfer_calls") &&
+      input.state.transferDestinationPhone?.trim() &&
+      !transferSynced
+    ) {
+      issues.push({
+        id: "transfer_sync",
+        severity: "blocking",
+        message:
+          "Could not sync the transfer destination — check the phone number and try again.",
+      });
+    }
+    if (!routingSynced) {
+      issues.push({
+        id: "routing_sync",
+        severity: "blocking",
+        message: "Could not sync call routing rules — activation blocked.",
+      });
+    }
+    if (!knowledgeBaseId) {
+      issues.push({
+        id: "knowledge_sync",
+        severity: "warning",
+        message:
+          "Knowledge base sync did not complete — the agent will still use the system prompt knowledge.",
+      });
+    }
+  }
 
   return {
     issues,

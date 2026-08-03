@@ -86,11 +86,17 @@ export function GoalsStep({
                 selected={state.answerWhen === opt.id}
                 onClick={() => {
                   const answerWhen = opt.id as AnswerWhen;
-                  patch({
-                    answerWhen,
-                    ringBehavior:
-                      answerWhen === "nobody_answers" ? "ring_team_first" : "ai_immediate",
-                  });
+                  const ringBehavior =
+                    answerWhen === "nobody_answers"
+                      ? "ring_team_first"
+                      : answerWhen === "after_hours"
+                        ? "after_hours"
+                        : answerWhen === "custom_schedule"
+                          ? "custom"
+                          : answerWhen === "line_busy"
+                            ? "line_busy"
+                            : "ai_immediate";
+                  patch({ answerWhen, ringBehavior });
                 }}
                 label={opt.label}
                 description={opt.description}
