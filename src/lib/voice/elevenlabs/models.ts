@@ -25,9 +25,19 @@ export const ELEVENLABS_CANDIDATE_MODELS = [
     modelId: "eleven_v3",
     shortLabel: "Eleven v3",
     uiTier: "elevenlabs_v3" as const,
-    uiTierLabel: "ElevenLabs v3 — Most expressive ElevenLabs voice",
-    purpose: "most expressive / emotionally rich TTS",
+    // Telnyx Assistants relay ElevenLabs over TTS WebSockets; eleven_v3 does not
+    // support WS. Config may PATCH OK but live greeting audio fails.
+    uiTierLabel:
+      "ElevenLabs v3 — Expressive (not for live Telnyx phone; use Multilingual v2)",
+    purpose:
+      "most expressive / emotionally rich TTS — content/HTTP only, not Telnyx live WS",
   },
+] as const;
+
+/** Live Telnyx Assistants: Flash (speed) + Multilingual v2 (quality). Not v3. */
+export const ELEVENLABS_LIVE_TELNYX_MODELS = [
+  "eleven_flash_v2_5",
+  "eleven_multilingual_v2",
 ] as const;
 
 export type ElevenLabsCandidateModelId =
