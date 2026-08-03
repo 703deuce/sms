@@ -10,12 +10,13 @@ import { runSharedReceptionistHooks } from "@/lib/solutions/hooks";
 import type { AppointmentReceptionistWizardState } from "./types";
 import { syncWizardTransferDestinations } from "./sync-transfer";
 import { syncWizardRoutingRules } from "./sync-routing";
+import { normalizeWizardTransferPhone } from "./transfer-utils";
 import {
   getWizardActivationIssues,
   hasBlockingActivationIssues,
   type ActivationIssue,
 } from "./capability-checklist";
-import { parseNoticeMinutes } from "./notice-utils";
+import { parseNoticeMinutes, parseDaysAhead } from "./notice-utils";
 
 export type ActivateHooksResult = {
   issues: ActivationIssue[];
@@ -216,8 +217,10 @@ async function ensureWizardCalendarServices(input: {
             minNotice: t.minNotice || null,
             minimumBookingNoticeMinutes: parseNoticeMinutes(t.minNotice),
             maxDaysAhead: t.maxDaysAhead || null,
+            maximumBookingDaysAhead: parseDaysAhead(t.maxDaysAhead),
             requiredFields: t.requiredFields || [],
             bookingPermission: t.bookingPermission,
+            timezone: input.state.timezone || null,
           },
         },
       });
@@ -240,8 +243,10 @@ async function ensureWizardCalendarServices(input: {
             minNotice: t.minNotice || null,
             minimumBookingNoticeMinutes: parseNoticeMinutes(t.minNotice),
             maxDaysAhead: t.maxDaysAhead || null,
+            maximumBookingDaysAhead: parseDaysAhead(t.maxDaysAhead),
             requiredFields: t.requiredFields || [],
             bookingPermission: t.bookingPermission,
+            timezone: input.state.timezone || null,
           },
         },
       });
@@ -328,7 +333,19 @@ export async function runAppointmentReceptionistActivateHooks(input: {
 
   let transferSynced = false;
   let transferE164: string | null = null;
-  if (input.state.transferDestinationPhone?.trim()) {
+  // Destinations are shared with live escalate_human. Only mutate them for
+  // draft/testing agents, or during an activate attempt (not casual draft edits
+  // on an already-ACTIVE agent).
+  const agentRow = await prisma.voiceAgent.findFirst({
+    where: { id: input.agentId, workspaceId: input.workspaceId },
+    select: { status: true },
+  });
+  const mayMutateTransferDestinations =
+    input.mode === "activate" ||
+    agentRow?.status === "DRAFT" ||
+    agentRow?.status === "TESTING" ||
+    !agentRow?.status;
+  if (input.state.transferDestinationPhone?.trim() && mayMutateTransferDestinations) {
     const result = await syncWizardTransferDestinations({
       workspaceId: input.workspaceId,
       agentId: input.agentId,
@@ -344,6 +361,16 @@ export async function runAppointmentReceptionistActivateHooks(input: {
     });
     transferSynced = result.synced;
     transferE164 = result.e164;
+  } else if (
+    input.state.transferDestinationPhone?.trim() &&
+    input.mode === "save_draft" &&
+    agentRow?.status === "ACTIVE"
+  ) {
+    // Keep prior live destinations; mark as synced for checklist purposes when
+    // the number is still valid (actual rewrite waits for activate).
+    transferSynced = Boolean(
+      normalizeWizardTransferPhone(input.state.transferDestinationPhone),
+    );
   }
 
   let insightGroupId: string | null = null;
@@ -361,23 +388,29 @@ export async function runAppointmentReceptionistActivateHooks(input: {
       return null;
     });
 
-    const routing = await syncWizardRoutingRules({
-      workspaceId: input.workspaceId,
-      agentId: input.agentId,
-      answerWhen: input.state.answerWhen,
-      ringBehavior: input.state.ringBehavior,
-      ringTeamSeconds: input.state.ringTeamSeconds,
-      timezone: input.state.timezone,
-    }).catch((err) => {
-      console.warn(
-        "[appointment-receptionist] routing hook failed",
-        err instanceof Error ? err.message : err,
-      );
-      return null;
-    });
-    if (routing) {
-      routingSynced = true;
-      routingMode = routing.mode;
+    const transferRequired =
+      input.state.capabilities.includes("transfer_calls") &&
+      Boolean(input.state.transferDestinationPhone?.trim());
+    // Don't wipe/replace live routing if a required transfer sync already failed.
+    if (!(transferRequired && !transferSynced)) {
+      const routing = await syncWizardRoutingRules({
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+        answerWhen: input.state.answerWhen,
+        ringBehavior: input.state.ringBehavior,
+        ringTeamSeconds: input.state.ringTeamSeconds,
+        timezone: input.state.timezone,
+      }).catch((err) => {
+        console.warn(
+          "[appointment-receptionist] routing hook failed",
+          err instanceof Error ? err.message : err,
+        );
+        return null;
+      });
+      if (routing) {
+        routingSynced = true;
+        routingMode = routing.mode;
+      }
     }
   }
 

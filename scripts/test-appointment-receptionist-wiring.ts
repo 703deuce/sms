@@ -4,13 +4,21 @@
  *   npx tsx scripts/test-appointment-receptionist-wiring.ts
  */
 import { normalizeWizardTransferPhone } from "../src/lib/solutions/appointment-receptionist/transfer-utils";
-import { resolveWizardRoutingMode } from "../src/lib/solutions/appointment-receptionist/sync-routing";
-import { parseNoticeMinutes } from "../src/lib/solutions/appointment-receptionist/notice-utils";
+import { resolveWizardRoutingMode } from "../src/lib/solutions/appointment-receptionist/routing-mode";
+import {
+  parseNoticeMinutes,
+  parseDaysAhead,
+  parseBookingHours,
+} from "../src/lib/solutions/appointment-receptionist/notice-utils";
 import {
   getWizardActivationIssues,
   hasBlockingActivationIssues,
 } from "../src/lib/solutions/appointment-receptionist/capability-checklist";
 import { createDefaultWizardState } from "../src/lib/solutions/appointment-receptionist/defaults";
+import {
+  buildSystemPrompt,
+  buildWizardAgentConfig,
+} from "../src/lib/solutions/appointment-receptionist/build-agent-config";
 import {
   applyActionTimezone,
   resolveRingTimeoutSeconds,
@@ -20,6 +28,11 @@ import {
   isWithinBusinessHours,
   type MessagingRuntimeSettings,
 } from "../src/lib/messaging/messaging-settings";
+import {
+  wallTimeInZoneToUtc,
+  zonedDateParts,
+} from "../src/lib/voice/calendar/timezone-slots";
+import { mergeVoiceConfig, parseVoiceAgentConfig } from "../src/lib/voice/types";
 
 const failures: string[] = [];
 const ok = (label: string) => console.log(`✓ ${label}`);
@@ -213,6 +226,86 @@ assert("empty → 0", parseNoticeMinutes("") === 0);
   assert(
     "invalid transfer blocks when capability on",
     xferIssues.some((i) => i.id === "transfer" && i.severity === "blocking"),
+  );
+}
+
+// --- max days ahead / booking hours parsers ---
+assert("30 days → 30", parseDaysAhead("30 days") === 30);
+assert("2 weeks → 14", parseDaysAhead("2 weeks") === 14);
+assert("bare 14 → 14", parseDaysAhead("14") === 14);
+assert("Number(30 days) was NaN bug", Number("30 days") !== 30);
+assert(
+  "parsed days usable where Number fails",
+  parseDaysAhead("30 days") === 30 && !(Number("30 days") > 0),
+);
+
+{
+  const hours = parseBookingHours("Mon - Fri, 8:00 AM - 6:00 PM");
+  assert("booking hours parsed", Boolean(hours));
+  assert("booking hours start 8", hours?.startHour === 8);
+  assert("booking hours end 18", hours?.endHour === 18);
+  assert("booking hours weekdays", hours?.weekdaysOnly === true);
+}
+
+// --- timezone wall clock ---
+{
+  // 2026-07-29 10:00 America/New_York = 14:00 UTC (EDT)
+  const utc = wallTimeInZoneToUtc("America/New_York", 2026, 7, 29, 10, 0);
+  assert("NY 10:00 → 14:00Z", utc.toISOString() === "2026-07-29T14:00:00.000Z");
+  const parts = zonedDateParts(utc, "America/New_York");
+  assert("zoned parts hour 10", parts.hour === 10);
+  assert("zoned parts weekday wed", parts.weekday === "wed");
+}
+
+// --- greeting merge prefers wizard base ---
+{
+  const base = parseVoiceAgentConfig({
+    callHandling: { greeting: "Thanks for calling Acme Dental, this is Maya." },
+  });
+  const merged = mergeVoiceConfig(base, {
+    callHandling: {
+      greeting: "Thank you for calling. I'm the virtual assistant. How can I help you today?",
+    },
+  });
+  // mergeVoiceConfig still overwrites — apply.ts must prefer base. Simulate apply preference:
+  const preferred =
+    String(base.callHandling?.greeting || "").trim() ||
+    String(merged.callHandling?.greeting || "").trim();
+  assert(
+    "wizard greeting preferred over flow default",
+    preferred.includes("Acme Dental"),
+  );
+}
+
+// --- draft config answerMode for line_busy is overflow, not ring_team_first ---
+{
+  const state = createDefaultWizardState();
+  state.answerWhen = "line_busy";
+  state.ringBehavior = "line_busy";
+  state.agentName = "Maya";
+  state.openingGreeting = "Hi, thanks for calling.";
+  state.businessName = "Acme";
+  const cfg = buildWizardAgentConfig(state);
+  assert(
+    "line_busy answerMode is overflow",
+    String(cfg.callHandling?.answerMode) === "overflow",
+  );
+  assert(
+    "wizard greeting in draft",
+    String(cfg.callHandling?.greeting || "").includes("thanks for calling"),
+  );
+}
+
+{
+  const state = createDefaultWizardState();
+  state.bookingBehavior = {
+    ...state.bookingBehavior,
+    distinguishNewExisting: true,
+  };
+  const prompt = buildSystemPrompt(state);
+  assert(
+    "distinguishNewExisting in system prompt",
+    /new or an existing/i.test(prompt),
   );
 }
 

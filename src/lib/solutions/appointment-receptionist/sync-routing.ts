@@ -1,51 +1,15 @@
 import type { AnswerWhen, AppointmentReceptionistWizardState } from "./types";
+import {
+  resolveWizardRoutingMode,
+  type WizardRoutingMode,
+} from "./routing-mode";
+
+export { resolveWizardRoutingMode, type WizardRoutingMode };
 
 /** Soft-replace tag for wizard-owned VoiceRoutingRule rows. */
 export const WIZARD_ROUTING_MANAGED = "wizardManaged" as const;
 
 type RingBehavior = AppointmentReceptionistWizardState["ringBehavior"];
-
-export type WizardRoutingMode =
-  | "ai_answer"
-  | "human_first"
-  | "ai_after_hours"
-  | "overflow"
-  | "custom_schedule";
-
-/**
- * Resolve routing mode from wizard answerWhen / ringBehavior.
- * Mirrors shapes used by syncRoutingRulesFromFlow in voice/flow/compile.ts.
- */
-export function resolveWizardRoutingMode(input: {
-  answerWhen: AnswerWhen;
-  ringBehavior: RingBehavior;
-}): WizardRoutingMode {
-  const { answerWhen, ringBehavior } = input;
-
-  // answerWhen is the source of truth; ringBehavior only fills gaps for nobody_answers.
-  if (answerWhen === "nobody_answers") {
-    return "human_first";
-  }
-  if (answerWhen === "line_busy") {
-    // Intended for DIDs that only receive busy/overflow forwards from another system.
-    return "overflow";
-  }
-  if (answerWhen === "custom_schedule") {
-    return "custom_schedule";
-  }
-  if (answerWhen === "after_hours") {
-    return "ai_after_hours";
-  }
-  if (answerWhen === "every_call") {
-    return "ai_answer";
-  }
-  // Legacy: ringBehavior alone (if answerWhen somehow unset)
-  if (ringBehavior === "ring_team_first") return "human_first";
-  if (ringBehavior === "custom") return "custom_schedule";
-  if (ringBehavior === "after_hours") return "ai_after_hours";
-  if (ringBehavior === "line_busy") return "overflow";
-  return "ai_answer";
-}
 
 async function clearWizardManagedRules(workspaceId: string, agentId: string) {
   const { getPrisma } = await import("@/lib/db");
@@ -285,6 +249,8 @@ export async function syncWizardRoutingRules(input: {
     });
     return { mode, rulesCreated: 1 };
   } catch (err) {
+    // Clear any partially created rules before restoring the prior snapshot.
+    await clearWizardManagedRules(workspaceId, agentId).catch(() => undefined);
     await restoreWizardManagedRules(workspaceId, agentId, snapshot).catch(() => undefined);
     throw err;
   }

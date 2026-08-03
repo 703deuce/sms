@@ -1,6 +1,10 @@
 import { getPrisma } from "@/lib/db";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import {
+  parseBookingHours,
+  parseDaysAhead,
+} from "@/lib/solutions/appointment-receptionist/notice-utils";
+import {
   computeFreeSlots,
   getGoogleBusy,
   getMicrosoftBusy,
@@ -10,6 +14,11 @@ import {
   insertMicrosoftEvent,
   type CalendarConfig,
 } from "./providers";
+import {
+  addCalendarDays,
+  wallTimeInZoneToUtc,
+  zonedDateParts,
+} from "./timezone-slots";
 
 type Slot = { startsAt: string; endsAt: string; staffName?: string; location?: string };
 
@@ -18,9 +27,14 @@ type ServiceConfig = {
   /** Singular location from wizard appointment types (normalized to locations). */
   location?: string | null;
   minimumBookingNoticeMinutes?: number;
-  maxDaysAhead?: number | null;
+  maxDaysAhead?: number | string | null;
+  maximumBookingDaysAhead?: number | null;
+  bookingHours?: string | null;
+  bookingPermission?: string | null;
+  requiredFields?: string[];
   staffIds?: string[];
   lastAssignedIndex?: number;
+  timezone?: string | null;
 };
 
 type StaffConfig = {
@@ -28,9 +42,23 @@ type StaffConfig = {
   lastAssignedIndex?: number;
 };
 
+function serviceMaxDaysAhead(svcCfg: ServiceConfig): number {
+  const parsed = Number(svcCfg.maximumBookingDaysAhead || 0);
+  if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  return parseDaysAhead(svcCfg.maxDaysAhead ?? null);
+}
+
+function serviceLocations(svcCfg: ServiceConfig): string[] {
+  if (Array.isArray(svcCfg.locations) && svcCfg.locations.length) {
+    return svcCfg.locations.map(String);
+  }
+  if (svcCfg.location) return [String(svcCfg.location)];
+  return [];
+}
+
 async function resolveCalendarConnection(
   workspaceId: string,
-  calendarId?: string,
+  calendarId?: string | null,
 ) {
   const prisma = getPrisma();
   if (calendarId) {
@@ -53,6 +81,36 @@ function slotPassesNotice(start: Date, noticeMinutes: number, now: Date) {
   return start.getTime() >= now.getTime() + noticeMinutes * 60_000;
 }
 
+function assertBookingPermission(svcCfg: ServiceConfig) {
+  const permission = String(svcCfg.bookingPermission || "book_directly").toLowerCase();
+  if (permission === "collect_info_only" || permission === "request_only") {
+    throw new Error(
+      "This service does not allow direct booking — collect caller details and create a follow-up instead.",
+    );
+  }
+  if (permission === "suggest_then_confirm") {
+    // Allow booking but caller should have confirmed — tool path still books after AI confirmation.
+    return;
+  }
+}
+
+function assertRequiredFields(
+  svcCfg: ServiceConfig,
+  input: Record<string, unknown>,
+) {
+  const required = Array.isArray(svcCfg.requiredFields)
+    ? svcCfg.requiredFields.map(String)
+    : [];
+  for (const field of required) {
+    const key = field.trim();
+    if (!key) continue;
+    const val = input[key] ?? input[key.toLowerCase()];
+    if (val == null || String(val).trim() === "") {
+      throw new Error(`Missing required booking field: ${key}`);
+    }
+  }
+}
+
 async function internalAvailabilitySlots(input: {
   workspaceId: string;
   durationMinutes: number;
@@ -61,18 +119,30 @@ async function internalAvailabilitySlots(input: {
   noticeMinutes: number;
   location?: string;
   staffName?: string;
+  timezone?: string;
+  bookingHours?: string | null;
 }) {
   const prisma = getPrisma();
   const slots: Slot[] = [];
   const now = new Date();
   const bufferMs = input.bufferMinutes * 60_000;
+  const tz = (input.timezone || "America/New_York").trim() || "America/New_York";
+  const hours = parseBookingHours(input.bookingHours || undefined) || {
+    startHour: 9,
+    endHour: 17,
+    weekdaysOnly: true,
+  };
+  const today = zonedDateParts(now, tz);
 
   for (let d = 0; d < input.days; d += 1) {
-    const day = new Date(now);
-    day.setDate(day.getDate() + d);
-    for (let hour = 9; hour < 17; hour += 1) {
-      const start = new Date(day);
-      start.setHours(hour, 0, 0, 0);
+    const day = addCalendarDays(today.year, today.month, today.day, d);
+    // Peek weekday via noon UTC-ish wall time
+    const noon = wallTimeInZoneToUtc(tz, day.year, day.month, day.day, 12, 0);
+    const weekday = zonedDateParts(noon, tz).weekday;
+    if (hours.weekdaysOnly && (weekday === "sat" || weekday === "sun")) continue;
+
+    for (let hour = hours.startHour; hour < hours.endHour; hour += 1) {
+      const start = wallTimeInZoneToUtc(tz, day.year, day.month, day.day, hour, 0);
       const end = new Date(start.getTime() + input.durationMinutes * 60_000);
       if (!slotPassesNotice(start, input.noticeMinutes, now)) continue;
 
@@ -155,7 +225,6 @@ export async function getAvailability(
 ): Promise<{ slots: Slot[] }> {
   const prisma = getPrisma();
   const serviceName = String(input.serviceName || input.service || "default");
-  const calendarId = input.calendarId as string | undefined;
   const duration = Number(input.durationMinutes || 30);
   const days = Number(input.daysAhead || 7);
   const locationFilter = input.location ? String(input.location) : undefined;
@@ -166,21 +235,23 @@ export async function getAvailability(
   const svcCfg = (service?.config || {}) as ServiceConfig;
   const durationMinutes = service?.durationMinutes || duration;
   const bufferMinutes = service?.bufferMinutes || 0;
-  const noticeMinutes = Number(svcCfg.minimumBookingNoticeMinutes || input.minimumBookingNoticeMinutes || 0);
-  const locations =
-    Array.isArray(svcCfg.locations) && svcCfg.locations.length
-      ? svcCfg.locations.map(String)
-      : svcCfg.location
-        ? [String(svcCfg.location)]
-        : [];
-  const maxDaysAhead = Number(svcCfg.maxDaysAhead || 0);
+  const noticeMinutes = Number(
+    svcCfg.minimumBookingNoticeMinutes || input.minimumBookingNoticeMinutes || 0,
+  );
+  const locations = serviceLocations(svcCfg);
+  const maxDaysAhead = serviceMaxDaysAhead(svcCfg);
   const effectiveDays =
     maxDaysAhead > 0 ? Math.min(Math.max(1, days), maxDaysAhead) : Math.max(1, days);
+  const timezone =
+    String(input.timezone || svcCfg.timezone || "America/New_York").trim() ||
+    "America/New_York";
 
   if (locationFilter && locations.length && !locations.includes(locationFilter)) {
     return { slots: [] };
   }
 
+  const calendarId =
+    (input.calendarId as string | undefined) || service?.calendarId || undefined;
   const cal = await resolveCalendarConnection(workspaceId, calendarId);
   if (cal && (cal.provider === "google" || cal.provider === "microsoft")) {
     const config = (cal.config || {}) as CalendarConfig;
@@ -195,7 +266,20 @@ export async function getAvailability(
             cal.provider === "google"
               ? await getGoogleBusy(token, config.calendarId || "primary", timeMin, timeMax)
               : await getMicrosoftBusy(token, timeMin, timeMax);
-          const raw = computeFreeSlots(busy, durationMinutes, effectiveDays, timeMin, bufferMinutes);
+          const hours = parseBookingHours(svcCfg.bookingHours || undefined);
+          const raw = computeFreeSlots(
+            busy,
+            durationMinutes,
+            effectiveDays,
+            timeMin,
+            bufferMinutes,
+            {
+              timezone,
+              startHour: hours?.startHour,
+              endHour: hours?.endHour,
+              weekdaysOnly: hours?.weekdaysOnly,
+            },
+          );
           const slots = raw
             .filter((s) => slotPassesNotice(new Date(s.startsAt), noticeMinutes, timeMin))
             .map((s) => ({
@@ -249,6 +333,8 @@ export async function getAvailability(
         noticeMinutes,
         location: locationFilter || memberLocations[0],
         staffName: member.name,
+        timezone,
+        bookingHours: svcCfg.bookingHours,
       });
       allSlots.push(...memberSlots);
     }
@@ -262,6 +348,8 @@ export async function getAvailability(
     days: effectiveDays,
     noticeMinutes,
     location: locationFilter || locations[0],
+    timezone,
+    bookingHours: svcCfg.bookingHours,
   });
   return { slots };
 }
@@ -279,6 +367,9 @@ export async function bookAppointment(
     where: { workspaceId, name: serviceName },
   });
   const svcCfg = (service?.config || {}) as ServiceConfig;
+  assertBookingPermission(svcCfg);
+  assertRequiredFields(svcCfg, input);
+
   const durationMinutes = Number(input.durationMinutes || service?.durationMinutes || 30);
   const bufferMinutes = service?.bufferMinutes || 0;
   const bufferMs = bufferMinutes * 60_000;
@@ -289,7 +380,7 @@ export async function bookAppointment(
     throw new Error("Booking is too soon — minimum notice required");
   }
 
-  const maxDaysAhead = Number(svcCfg.maxDaysAhead || 0);
+  const maxDaysAhead = serviceMaxDaysAhead(svcCfg);
   if (maxDaysAhead > 0) {
     const latest = new Date(now.getTime() + maxDaysAhead * 86_400_000);
     if (startsAt.getTime() > latest.getTime()) {
@@ -319,10 +410,11 @@ export async function bookAppointment(
     if (picked) staffName = picked.name;
   }
 
-  const timezone = String(input.timezone || "America/New_York");
+  const timezone = String(input.timezone || svcCfg.timezone || "America/New_York");
 
   let externalId: string | null = null;
-  const calendarId = input.calendarId as string | undefined;
+  const calendarId =
+    (input.calendarId as string | undefined) || service?.calendarId || undefined;
   const cal = await resolveCalendarConnection(workspaceId, calendarId);
   if (cal && (cal.provider === "google" || cal.provider === "microsoft")) {
     const config = (cal.config || {}) as CalendarConfig;
@@ -346,9 +438,15 @@ export async function bookAppointment(
             cal.provider === "google"
               ? await insertGoogleEvent(token, config.calendarId || "primary", event)
               : await insertMicrosoftEvent(token, event);
+        } else {
+          throw new Error("Calendar access token unavailable");
         }
       } catch (err) {
-        console.warn("[calendar] event insert failed", cal.id, err);
+        const message = err instanceof Error ? err.message : String(err);
+        console.warn("[calendar] event insert failed", cal.id, message);
+        throw new Error(
+          `Could not create the calendar event — booking not confirmed (${message.slice(0, 120)})`,
+        );
       }
     }
   }

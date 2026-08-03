@@ -7,6 +7,7 @@ import {
   wizardTransferDestinationName,
   WIZARD_HANDOFF_NAME,
 } from "./transfer-utils";
+import { resolveWizardRoutingMode } from "./routing-mode";
 
 const KNOWLEDGE_FALLBACK_PHRASE =
   "If information is not available in the knowledge base, say you don't have that information and offer to take a message or connect someone who can help.";
@@ -98,6 +99,11 @@ export function buildSystemPrompt(state: AppointmentReceptionistWizardState): st
     );
   }
   if (caps.includes("qualify_callers")) lines.push("- Qualify new callers before booking or transfer.");
+  if (state.bookingBehavior.distinguishNewExisting) {
+    lines.push(
+      "- Ask whether the caller is new or an existing patient/client before booking, and tailor questions accordingly.",
+    );
+  }
   if (caps.includes("transfer_calls") && transferPhone) {
     lines.push(
       `- Transfer to ${transferName} when transfer rules apply (use the escalate_human tool).`,
@@ -272,10 +278,10 @@ export function buildWizardAgentConfig(
     enabledTools.add("create_crm_task");
   }
 
-  const ringHumanFirst =
-    state.answerWhen === "nobody_answers" ||
-    state.answerWhen === "line_busy" ||
-    state.ringBehavior === "ring_team_first";
+  const ringMode = resolveWizardRoutingMode({
+    answerWhen: state.answerWhen,
+    ringBehavior: state.ringBehavior,
+  });
 
   const transferTargets = transferPhone
     ? [
@@ -349,7 +355,14 @@ export function buildWizardAgentConfig(
       speaksFirst: state.speaksFirst,
       closingStatement: "Thanks for calling. Goodbye.",
       startupGreeting,
-      answerMode: ringHumanFirst ? "ring_team_first" : "ai_immediate",
+      answerMode:
+        ringMode === "human_first" || ringMode === "custom_schedule"
+          ? "ring_team_first"
+          : ringMode === "ai_after_hours"
+            ? "after_hours"
+            : ringMode === "overflow"
+              ? "overflow"
+              : "ai_immediate",
       ringTeamSeconds: state.ringTeamSeconds,
       callRecording: state.callRecording,
       solutionSlug: "appointment-assistant",

@@ -96,8 +96,21 @@ export async function applyFlowToAgentDraft(input: {
   // Keep wizard (or builder) system prompt first; append flow/global rules.
   const mergedSystem = [wizardSystem, flowSystem].filter(Boolean).join("\n\n");
 
+  const baseHandling = (base.callHandling || {}) as Record<string, unknown>;
+  const patchHandling = (compiled.configPatch.callHandling || {}) as Record<
+    string,
+    unknown
+  >;
+  const baseGreeting = String(baseHandling.greeting || "").trim();
+  const patchGreeting = String(patchHandling.greeting || "").trim();
+
   const config = mergeVoiceConfig(base, {
     ...compiled.configPatch,
+    callHandling: {
+      ...patchHandling,
+      // Prefer wizard / existing greeting over catalog flow default text.
+      greeting: baseGreeting || patchGreeting,
+    },
     instructions: {
       ...baseInstructions,
       ...patchInstructions,
