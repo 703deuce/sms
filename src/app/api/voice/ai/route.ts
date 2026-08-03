@@ -848,7 +848,7 @@ export async function POST(request: Request) {
           orderBy: { createdAt: "desc" },
           take: 10,
         });
-        const recent = rows.map((row) => {
+        const recent = rows.map((row: (typeof rows)[number]) => {
           const meta = (row.metadata || {}) as Record<string, unknown>;
           const nested = (meta.metadata || {}) as Record<string, unknown>;
           return {
