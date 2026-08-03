@@ -8,6 +8,28 @@ export type ActivationIssue = {
 };
 
 /**
+ * Wizard activation wiring status for appointment receptionist capabilities.
+ * Mirrors receptionist-checklist tiers that the Activate step depends on.
+ * Values: live | wizard_wired (DONE) — keep in sync with voice/capabilities/receptionist-checklist.
+ */
+export const APPOINTMENT_RECEPTIONIST_WIRING = {
+  phone_connection: "wizard_wired",
+  call_opening: "live",
+  voice: "wizard_wired",
+  recording_disclosure: "live",
+  human_transfer: "live",
+  warm_transfer: "wizard_wired",
+  voicemail_detection: "wizard_wired",
+  long_term_memory: "wizard_wired",
+  crm_connection: "wizard_wired",
+  calendar_connection: "wizard_wired",
+  booking_tools: "live",
+  message_taking: "live",
+  activation_modes: "wizard_wired",
+  live_webrtc_test_gate: "wizard_wired",
+} as const;
+
+/**
  * Minimum activation checklist for Appointment Receptionist.
  * Blocking issues prevent Activate; warnings surface but allow go-live.
  */

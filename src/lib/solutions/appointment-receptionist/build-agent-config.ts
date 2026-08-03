@@ -196,6 +196,7 @@ export function buildWizardAgentConfig(
   const transferPhone = normalizeWizardTransferPhone(state.transferDestinationPhone);
   const canTransfer =
     state.capabilities.includes("transfer_calls") && Boolean(transferPhone);
+  const customAudioUrl = (state.connectionGreetingAudioUrl || "").trim();
 
   const startupGreeting =
     connectionMode === "none"
@@ -207,6 +208,15 @@ export function buildWizardAgentConfig(
           delayMs: "auto" as const,
           handOffWhenReady: true,
         }
+      : connectionMode === "upload_custom" && customAudioUrl
+        ? {
+            enabled: true,
+            mode: "audio_url" as const,
+            text: state.connectionGreetingText || DEFAULT_CONNECTION_GREETING,
+            audioUrl: customAudioUrl,
+            delayMs: 500 as const,
+            handOffWhenReady: true,
+          }
       : connectionMode === "transovo_professional" || connectionMode === "transovo_warm"
         ? {
             enabled: true,
@@ -217,10 +227,11 @@ export function buildWizardAgentConfig(
             handOffWhenReady: true,
           }
         : {
+            // create_custom (and upload_custom without URL) use TTS/text mask
             enabled: true,
             mode: "ai" as const,
             text: state.connectionGreetingText || DEFAULT_CONNECTION_GREETING,
-            audioUrl: "",
+            audioUrl: customAudioUrl,
             delayMs: "auto" as const,
             handOffWhenReady: true,
           };
@@ -253,6 +264,13 @@ export function buildWizardAgentConfig(
     state.bookingBehavior.sendSmsAfterBooking
   ) {
     enabledTools.add("send_sms");
+  }
+  // Always enable CRM notes with message taking for receptionist; crmEnabled adds full CRM set.
+  enabledTools.add("create_crm_note");
+  if (state.crmEnabled) {
+    enabledTools.add("search_crm_contacts");
+    enabledTools.add("upsert_crm_contact");
+    enabledTools.add("create_crm_task");
   }
 
   const ringHumanFirst =
@@ -354,9 +372,12 @@ export function buildWizardAgentConfig(
       ringSeconds: state.transferRingSeconds,
       fallback: state.transferFallback,
       announce: true,
-      // Cold Call Control path — warm hold tears down AI mid-call.
-      warmTransfer: false,
-      warmTransferInstructions: "",
+      // Honor wizard warm-transfer preference (cold by default — warm hold tears down AI mid-call).
+      warmTransfer: Boolean(state.warmTransfer),
+      warmTransferInstructions: state.warmTransfer
+        ? "Briefly introduce the caller and reason for transfer before connecting."
+        : "",
+      detectVoicemailOnTransfer: Boolean(state.detectVoicemailOnTransfer),
       targets: transferTargets,
     },
     messaging: {
@@ -452,8 +473,28 @@ export function buildWizardAgentConfig(
         timezone: state.timezone,
         collectFields: state.collectFields,
         appointmentTypes: state.appointmentTypes.filter((t) => t.enabled),
+        activationMode: state.activationMode,
+        scheduledAt: state.scheduledAt || null,
+        longTermMemory: Boolean(state.longTermMemory),
+        crmEnabled: Boolean(state.crmEnabled),
+        warmTransfer: Boolean(state.warmTransfer),
+        detectVoicemailOnTransfer: Boolean(state.detectVoicemailOnTransfer),
       },
       capabilityPack: "appointment_receptionist",
+      ...(state.longTermMemory
+        ? {
+            memory: {
+              enabled: true,
+              mode: "caller",
+              retentionDays: 30,
+            },
+          }
+        : {
+            memory: {
+              enabled: false,
+              mode: "none",
+            },
+          }),
     },
   };
 }

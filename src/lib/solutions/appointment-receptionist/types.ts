@@ -111,6 +111,8 @@ export type AppointmentReceptionistWizardState = {
   callRecording: "off" | "all" | "inbound_only";
   connectionGreeting: ConnectionGreetingMode;
   connectionGreetingText: string;
+  /** HTTPS URL for upload_custom connection greeting audio. */
+  connectionGreetingAudioUrl?: string;
 
   knowledgeSource: KnowledgeSource;
   websiteUrl: string;
@@ -147,6 +149,10 @@ export type AppointmentReceptionistWizardState = {
   transferDestinationPhone: string;
   transferRingSeconds: number;
   transferFallback: FallbackAction;
+  /** Prefer warm (consult) transfer when transferring to a human. */
+  warmTransfer: boolean;
+  /** Run answering-machine detection on transfer legs. */
+  detectVoicemailOnTransfer: boolean;
 
   agentName: string;
   businessName: string;
@@ -175,6 +181,12 @@ export type AppointmentReceptionistWizardState = {
   lastTestPassed: boolean | null;
 
   activationMode: ActivationMode;
+  /** ISO datetime for schedule activation mode. */
+  scheduledAt?: string | null;
+  /** Opt-in long-term caller memory (VoiceMemoryConfig). */
+  longTermMemory: boolean;
+  /** Enable CRM note/contact tools alongside message taking. */
+  crmEnabled: boolean;
   timezone: string;
 };
 

@@ -85,17 +85,33 @@ export function AppointmentReceptionistWizard() {
       const agentId = json.data.agentId as string;
       const telnyxAssistantId =
         (json.data.telnyxAssistantId as string | null | undefined) ?? state.telnyxAssistantId;
+      const clonedAgentId = (json.data.clonedAgentId as string | null | undefined) || null;
+      const warnings = Array.isArray(json.data.warnings)
+        ? (json.data.warnings as string[]).filter(Boolean)
+        : [];
       patch({ agentId, telnyxAssistantId });
+      if (warnings.length) {
+        setError(warnings.join(" "));
+      }
       if (action === "activate") {
         if (json.data.publishError) {
-          setError(json.data.publishError);
-          return { agentId, telnyxAssistantId };
+          setError(
+            [json.data.publishError, ...warnings].filter(Boolean).join(" ") ||
+              "Publish failed",
+          );
+          return { agentId, telnyxAssistantId, clonedAgentId };
+        }
+        // Schedule / draft-style activate keeps the agent and may show a warning.
+        if (!json.data.published && state.activationMode === "schedule") {
+          localStorage.removeItem(STORAGE_KEY);
+          router.push(`/voice/agents/${agentId}`);
+          return { agentId, telnyxAssistantId, clonedAgentId };
         }
         localStorage.removeItem(STORAGE_KEY);
         router.push(`/voice/agents/${agentId}`);
-        return { agentId, telnyxAssistantId };
+        return { agentId, telnyxAssistantId, clonedAgentId };
       }
-      return { agentId, telnyxAssistantId };
+      return { agentId, telnyxAssistantId, clonedAgentId };
     } catch (err) {
       setError(toErrorMessage(err));
       return null;
@@ -123,6 +139,17 @@ export function AppointmentReceptionistWizard() {
       return;
     }
     if (state.activationMode === "save_draft") {
+      const saved = await persist("save_draft");
+      if (saved?.agentId) {
+        localStorage.removeItem(STORAGE_KEY);
+        router.push(`/voice/agents/${saved.agentId}`);
+      }
+      return;
+    }
+    if (state.activationMode === "schedule" && !state.scheduledAt?.trim()) {
+      setError(
+        "Pick a schedule date/time, or choose Save as draft. Saving as draft for now…",
+      );
       const saved = await persist("save_draft");
       if (saved?.agentId) {
         localStorage.removeItem(STORAGE_KEY);
@@ -198,7 +225,11 @@ export function AppointmentReceptionistWizard() {
                   : stepIndex === WIZARD_STEPS.length - 1
                     ? state.activationMode === "save_draft"
                       ? "Save draft"
-                      : "Activate now"
+                      : state.activationMode === "schedule"
+                        ? "Schedule activation"
+                        : state.activationMode === "duplicate_location"
+                          ? "Activate & duplicate"
+                          : "Activate now"
                     : "Continue"}
               </Button>
             </div>

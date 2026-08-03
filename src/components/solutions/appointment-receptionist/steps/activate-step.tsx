@@ -257,6 +257,35 @@ export function ActivateStep({
               />
             ))}
           </div>
+          {state.activationMode === "schedule" ? (
+            <label className="mt-3 block max-w-sm text-xs text-muted-foreground">
+              Go live at
+              <input
+                type="datetime-local"
+                className="mt-1 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground"
+                value={
+                  state.scheduledAt
+                    ? (() => {
+                        try {
+                          const d = new Date(state.scheduledAt);
+                          if (Number.isNaN(d.getTime())) return "";
+                          const pad = (n: number) => String(n).padStart(2, "0");
+                          return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+                        } catch {
+                          return "";
+                        }
+                      })()
+                    : ""
+                }
+                onChange={(e) => {
+                  const v = e.target.value;
+                  patch({
+                    scheduledAt: v ? new Date(v).toISOString() : null,
+                  });
+                }}
+              />
+            </label>
+          ) : null}
         </div>
       </div>
 

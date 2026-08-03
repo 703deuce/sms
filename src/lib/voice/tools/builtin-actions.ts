@@ -560,7 +560,9 @@ export async function executeBuiltinVoiceAction(input: {
           transferType:
             input.toolType === "sip_refer" || dest.destination.startsWith("sip:")
               ? "sip_refer"
-              : "cold_transfer",
+              : transfersCfg.warmTransfer
+                ? "warm_transfer"
+                : "cold_transfer",
           summary: String(args.summary || args.reason || ""),
         });
         return {

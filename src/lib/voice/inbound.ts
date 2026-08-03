@@ -34,15 +34,25 @@ function resolveAiGreeting(input: {
   config: ReturnType<typeof parseVoiceAgentConfig>;
   agentName: string;
   contactName?: string;
+  /** Prepend recording disclosure when it was not spoken separately. */
+  prependDisclosure?: string | null;
 }) {
   const configured =
     (input.config.callHandling?.greeting as string | undefined)?.trim() ||
     DEFAULT_AI_GREETING;
-  if (!input.contactName) return configured;
-  if (/^hi[, ]/i.test(configured) || configured.includes(input.contactName)) {
-    return configured;
+  let greeting = configured;
+  const disclosure = input.prependDisclosure?.trim();
+  if (disclosure) {
+    const alreadyIncludes = greeting.toLowerCase().includes(disclosure.toLowerCase().slice(0, 40));
+    if (!alreadyIncludes) {
+      greeting = `${disclosure} ${greeting}`;
+    }
   }
-  return `Hi ${input.contactName}. ${configured}`;
+  if (!input.contactName) return greeting;
+  if (/^hi[, ]/i.test(greeting) || greeting.includes(input.contactName)) {
+    return greeting;
+  }
+  return `Hi ${input.contactName}. ${greeting}`;
 }
 
 /** Honor draftConfig.callHandling.callRecording: off | inbound_only | all. */
@@ -308,6 +318,7 @@ async function startAiOnInboundCall(input: {
         (startup.connectionGreeting === "transovo_default" ||
           (typeof startup.delayMs === "number" && startup.delayMs <= 1000));
 
+      let disclosureSpoken = false;
       if (!playMaskFirst) {
         await speakRecordingDisclosure(
           input.workspaceId,
@@ -315,6 +326,7 @@ async function startAiOnInboundCall(input: {
           input.telnyxCallControlId,
           agent.id,
         );
+        disclosureSpoken = true;
       }
 
       // Optional TTS/audio mask — connection greeting returns after a short settle.
@@ -335,6 +347,7 @@ async function startAiOnInboundCall(input: {
           input.telnyxCallControlId,
           agent.id,
         ).catch(() => undefined);
+        disclosureSpoken = true;
       }
 
       // When AI speaks the greeting, wait for media settle so the first syllable isn't static.
@@ -366,6 +379,18 @@ async function startAiOnInboundCall(input: {
         String(cfg.callHandling?.speaksFirst || "ai").toLowerCase() === "caller"
           ? "caller"
           : "ai";
+      const recordingOn = shouldStartCallRecording(cfg.callHandling?.callRecording, "INBOUND");
+      const compliance = (cfg.compliance || {}) as Record<string, unknown>;
+      const disclosureText =
+        !disclosureSpoken &&
+        recordingOn &&
+        (compliance.recordingDisclosure === true ||
+          Boolean(compliance.recordingDisclosureText))
+          ? String(
+              compliance.recordingDisclosureText ||
+                "This call may be recorded for quality and training purposes.",
+            )
+          : null;
       const greeting =
         speaksFirst === "caller"
           ? null
@@ -373,6 +398,7 @@ async function startAiOnInboundCall(input: {
               config: cfg,
               agentName: agent.name || "our assistant",
               contactName: input.contactName,
+              prependDisclosure: disclosureText,
             });
 
       const aiHandoffAt = Date.now();

@@ -155,8 +155,9 @@ export const RECEPTIONIST_CAPABILITIES: AgentCapability[] = [
     id: "recording",
     label: "Call recording setting",
     tier: "required_receptionist",
-    status: "wizard_wired",
-    notes: "compliance.recordingDisclosure when callRecording !== off",
+    status: "live",
+    notes:
+      "compliance.recordingDisclosure; inbound speaks disclosure or prepends to greeting when concurrent mask skips speak",
     defaultFor: ["standard_receptionist", "appointment_receptionist"],
   },
   {
@@ -193,7 +194,8 @@ export const RECEPTIONIST_CAPABILITIES: AgentCapability[] = [
     id: "reliability_security",
     label: "Reliability & security controls",
     tier: "required_receptionist",
-    status: "partial",
+    status: "wizard_wired",
+    notes: "Activation gates, transfer destination checks, recording disclosure, emergency disable",
     defaultFor: ["standard_receptionist", "appointment_receptionist"],
   },
 
@@ -203,6 +205,7 @@ export const RECEPTIONIST_CAPABILITIES: AgentCapability[] = [
     label: "Prerecorded connection greeting",
     tier: "optional_receptionist",
     status: "live",
+    notes: "upload_custom audioUrl + Transovo default MP3; create_custom text",
   },
   {
     id: "background_ambience",
@@ -227,20 +230,22 @@ export const RECEPTIONIST_CAPABILITIES: AgentCapability[] = [
     id: "warm_transfer",
     label: "Warm transfer",
     tier: "optional_receptionist",
-    status: "platform_ready",
+    status: "wizard_wired",
+    notes: "wizard warmTransfer → transfers.warmTransfer; builtin escalate uses warm_transfer type",
   },
   {
     id: "voicemail_detection",
     label: "Voicemail detection on transfer",
     tier: "optional_receptionist",
-    status: "partial",
+    status: "wizard_wired",
+    notes: "detectVoicemailOnTransfer gates answering_machine_detection on transfer legs",
   },
   {
     id: "long_term_memory",
     label: "Long-term memory",
     tier: "optional_receptionist",
-    status: "platform_ready",
-    notes: "Conservative / off by default until privacy gates hardened",
+    status: "wizard_wired",
+    notes: "longTermMemory → VoiceMemoryConfig (saveMemoryConfig) + advanced.memory; off by default",
   },
   {
     id: "crm_connection",
@@ -253,7 +258,8 @@ export const RECEPTIONIST_CAPABILITIES: AgentCapability[] = [
       "create_crm_note",
       "create_crm_task",
     ],
-    status: "platform_ready",
+    status: "wizard_wired",
+    notes: "create_crm_note always on for receptionist; full CRM set when crmEnabled",
   },
   {
     id: "sms_followup",
@@ -281,7 +287,8 @@ export const RECEPTIONIST_CAPABILITIES: AgentCapability[] = [
     id: "calendar_connection",
     label: "Calendar connection",
     tier: "required_booking",
-    status: "partial",
+    status: "wizard_wired",
+    notes: "Appointments step + /api/voice/calendars; activation blocks without live Google/Microsoft/internal",
     defaultFor: ["appointment_receptionist"],
   },
   {
