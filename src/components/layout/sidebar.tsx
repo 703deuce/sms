@@ -13,17 +13,36 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState, useTransition } from "react";
 
+function hrefPath(href: string) {
+  return href.split("?")[0] || href;
+}
+
 function isNavHrefActive(pathname: string, search: string, href: string): boolean {
-  const [pathPart, queryPart] = href.split("?");
+  const pathPart = hrefPath(href);
+  const queryPart = href.includes("?") ? href.slice(href.indexOf("?") + 1) : "";
   const have = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
 
   if (queryPart) {
-    if (pathname !== pathPart) return false;
-    const want = new URLSearchParams(queryPart);
-    for (const [key, value] of want) {
-      if (have.get(key) !== value) return false;
+    // Path must match; query params are optional context (e.g. agentId).
+    if (pathname !== pathPart && !pathname.startsWith(`${pathPart}/`)) {
+      return false;
     }
-    return true;
+    if (pathname === pathPart || pathname.startsWith(`${pathPart}/`)) {
+      const want = new URLSearchParams(queryPart);
+      // If the URL includes the link's query keys, require them to match.
+      // If not, still treat the path as active so the menu stays oriented.
+      let matchedQuery = true;
+      let sawWantedKey = false;
+      for (const [key, value] of want) {
+        if (have.has(key)) {
+          sawWantedKey = true;
+          if (have.get(key) !== value) matchedQuery = false;
+        }
+      }
+      if (sawWantedKey) return matchedQuery;
+      return pathname === pathPart || pathname.startsWith(`${pathPart}/`);
+    }
+    return false;
   }
 
   if (pathname === pathPart) {
@@ -34,6 +53,15 @@ function isNavHrefActive(pathname: string, search: string, href: string): boolea
   return pathname.startsWith(`${pathPart}/`);
 }
 
+/** Higher score = better owner of the current route for accordion expansion. */
+function linkMatchScore(pathname: string, search: string, href: string): number {
+  if (!isNavHrefActive(pathname, search, href)) return -1;
+  const pathPart = hrefPath(href);
+  if (pathname === pathPart) return 20_000 + pathPart.length;
+  if (pathname.startsWith(`${pathPart}/`)) return 10_000 + pathPart.length;
+  return pathPart.length;
+}
+
 function sectionHasActiveChild(
   children: NavChild[] | undefined,
   pathname: string,
@@ -42,6 +70,53 @@ function sectionHasActiveChild(
   return flattenNavLinks(children).some((link) =>
     isNavHrefActive(pathname, search, link.href),
   );
+}
+
+function bestExpandedLabel(
+  navItems: NavItem[],
+  pathname: string,
+  search: string,
+): string | null {
+  // Solutions routes always keep their owning solution open.
+  const outcomesSlug = pathname.match(/^\/outcomes\/([^/]+)/)?.[1];
+  if (outcomesSlug) {
+    const owned = navItems.find((item) => hrefPath(item.href) === `/outcomes/${outcomesSlug}`);
+    if (owned?.children?.length) return owned.label;
+  }
+
+  let bestLabel: string | null = null;
+  let bestScore = -1;
+
+  for (const item of navItems) {
+    let score = -1;
+
+    for (const link of flattenNavLinks(item.children)) {
+      score = Math.max(score, linkMatchScore(pathname, search, link.href));
+    }
+
+    if (pathname === hrefPath(item.href)) {
+      score = Math.max(score, 5_000 + hrefPath(item.href).length);
+    } else if (
+      item.href !== "/dashboard" &&
+      item.href !== "/outcomes" &&
+      pathname.startsWith(`${hrefPath(item.href)}/`)
+    ) {
+      // Prefer items with children (solution sections) over leaf Shared links
+      // when both could claim a prefix match.
+      const base = hrefPath(item.href).length + (item.children?.length ? 2_000 : 0);
+      score = Math.max(score, base);
+    }
+
+    // Prefer solution sections over Advanced when scores tie (e.g. /voice/agents/:id).
+    if (score > bestScore || (score === bestScore && item.children?.length && score >= 0)) {
+      if (score > bestScore) {
+        bestScore = score;
+        bestLabel = item.label;
+      }
+    }
+  }
+
+  return bestScore >= 0 ? bestLabel : null;
 }
 
 function NavLinkRow({
@@ -57,22 +132,27 @@ function NavLinkRow({
   search: string;
   onClose?: () => void;
 }) {
-  const exactOrQuery = isNavHrefActive(pathname, search, link.href);
+  const pathPart = hrefPath(link.href);
+  const sectionPath = hrefPath(sectionHref);
+  const matched = isNavHrefActive(pathname, search, link.href);
   const prefix =
-    !link.href.includes("?") &&
-    link.href !== sectionHref &&
-    pathname.startsWith(`${link.href}/`);
-  const active = exactOrQuery || prefix;
+    pathPart !== sectionPath && pathname.startsWith(`${pathPart}/`);
+  // Exact page the user is on (not a parent overview covering a deeper child path).
+  const isCurrentPage = pathname === pathPart && matched;
+  const active = isCurrentPage || (prefix && matched);
 
   return (
     <Link
       href={link.href}
       onClick={onClose}
+      data-nav-active={isCurrentPage ? "true" : undefined}
       className={cn(
         "block rounded-md px-2.5 py-1 text-[12px] transition",
-        active
-          ? "bg-white/10 font-medium text-white"
-          : "text-sidebar-muted hover:bg-white/5 hover:text-white",
+        isCurrentPage
+          ? "bg-white/15 font-semibold text-white"
+          : active || matched
+            ? "bg-white/10 font-medium text-white"
+            : "text-sidebar-muted hover:bg-white/5 hover:text-white",
       )}
     >
       {link.label}
@@ -163,23 +243,16 @@ export function Sidebar({
     return buildSolutionsNav({ instancesBySolution: outcomeInstances });
   }, [navView, outcomeInstances]);
 
-  // Keep only the section for the current route open (accordion).
+  // Keep the section that owns the current route open (and prefer Solutions over Advanced).
   useEffect(() => {
-    const match = navItems.find((item) => {
-      if (sectionHasActiveChild(item.children, pathname, search)) return true;
-      if (pathname === item.href) return true;
-      if (
-        item.href !== "/dashboard" &&
-        item.href !== "/outcomes" &&
-        !item.children &&
-        pathname.startsWith(`${item.href}/`)
-      ) {
-        return true;
-      }
-      return pathname.startsWith(`${item.href}/`) && Boolean(item.children);
-    });
-    setExpanded(match?.label ?? null);
+    setExpanded(bestExpandedLabel(navItems, pathname, search));
   }, [pathname, search, navItems]);
+
+  // Scroll the active child into view inside the sidebar.
+  useEffect(() => {
+    const el = document.querySelector<HTMLElement>('[data-nav-active="true"]');
+    el?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [pathname, search, expanded, navView]);
 
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -250,13 +323,15 @@ export function Sidebar({
         {navItems.map((item) => {
           const Icon = item.icon;
           const childActive = sectionHasActiveChild(item.children, pathname, search);
+          const ownedOutcome =
+            pathname.startsWith(`${hrefPath(item.href)}/`) ||
+            pathname === hrefPath(item.href);
           const active =
             isNavHrefActive(pathname, search, item.href) ||
             Boolean(childActive) ||
             (item.href !== "/dashboard" &&
               item.href !== "/outcomes" &&
-              pathname.startsWith(`${item.href}/`) &&
-              !item.children);
+              ownedOutcome);
           const isOpen = expanded === item.label;
 
           return (
@@ -279,7 +354,10 @@ export function Sidebar({
                 ) : null}
                 <Link
                   href={item.href}
-                  onClick={onClose}
+                  onClick={() => {
+                    if (item.children?.length) setExpanded(item.label);
+                    onClose?.();
+                  }}
                   className="flex min-w-0 flex-1 items-center gap-2.5 py-[7px] pl-3 pr-1 text-[13px] font-medium"
                 >
                   <Icon
