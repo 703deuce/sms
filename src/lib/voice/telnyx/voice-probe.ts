@@ -8,11 +8,18 @@ import * as ai from "@/lib/voice/telnyx/ai-client";
 import { TelnyxApiError } from "@/lib/voice/telnyx/ai-client";
 import {
   buildAssistantVoiceSettings,
+  DOCUMENTED_ULTRA_VOICES,
   FALLBACK_PROVIDER_VOICE_ID,
   logVoiceAssistantUpdate,
   sanitizeTelnyxVoiceError,
   validateUltraProviderVoiceId,
 } from "@/lib/voice/telnyx/voices";
+
+/** Verified Assistants Ultra UUID (short names like Telnyx.Ultra.Clara fail with 10015). */
+const ULTRA_CLARA = DOCUMENTED_ULTRA_VOICES[0].providerVoiceId;
+const ULTRA_CALLIE = DOCUMENTED_ULTRA_VOICES[1].providerVoiceId;
+const ULTRA_ASHER = DOCUMENTED_ULTRA_VOICES[2].providerVoiceId;
+const ULTRA_CINDY = DOCUMENTED_ULTRA_VOICES[3].providerVoiceId;
 
 function unwrapId(res: unknown): string | null {
   if (!res || typeof res !== "object") return null;
@@ -71,22 +78,33 @@ export async function probeTelnyxAssistantVoices(input?: {
           },
           {
             label: "ultra_clara_expressive_off",
-            voice: "Telnyx.Ultra.Clara",
+            voice: ULTRA_CLARA,
             expressiveMode: false,
           },
           {
             label: "ultra_clara_expressive_on",
-            voice: "Telnyx.Ultra.Clara",
+            voice: ULTRA_CLARA,
             expressiveMode: true,
           },
           {
             label: "ultra_callie_expressive_on",
-            voice: "Telnyx.Ultra.Callie",
+            voice: ULTRA_CALLIE,
             expressiveMode: true,
           },
           {
             label: "ultra_asher_expressive_on",
-            voice: "Telnyx.Ultra.Asher",
+            voice: ULTRA_ASHER,
+            expressiveMode: true,
+          },
+          {
+            label: "ultra_cindy_expressive_on",
+            voice: ULTRA_CINDY,
+            expressiveMode: true,
+          },
+          // Regression: short names must still fail at Telnyx (or be remapped by resolve).
+          {
+            label: "legacy_short_clara_should_resolve_or_fail",
+            voice: "Telnyx.Ultra.Clara",
             expressiveMode: true,
           },
         ];
@@ -192,7 +210,7 @@ export async function probeTelnyxAssistantVoices(input?: {
     },
     newUltraPayloadShape: {
       voice_settings: {
-        voice: "Telnyx.Ultra.Clara",
+        voice: ULTRA_CLARA,
         expressive_mode: true,
       },
     },
@@ -218,7 +236,7 @@ export async function testVoiceOnClone(input: {
 
   const built = buildAssistantVoiceSettings({
     voiceRef: input.voiceRef,
-    expressiveMode: Boolean(input.expressiveMode),
+    expressiveMode: input.expressiveMode,
   });
 
   const cloned = await ai.cloneAssistant(input.sourceAssistantId, {

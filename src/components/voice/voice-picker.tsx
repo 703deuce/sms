@@ -106,7 +106,9 @@ export function VoicePicker({
           action: "test_voice",
           agentId,
           voice: v.id,
-          expressiveMode: Boolean(expressiveMode && v.supportsExpressive),
+          expressiveMode:
+            v.supportsExpressive &&
+            (expressiveMode == null ? true : Boolean(expressiveMode)),
         }),
       });
       const j = await res.json();

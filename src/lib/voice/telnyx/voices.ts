@@ -47,15 +47,49 @@ export const DEFAULT_VOICE_PREVIEW_TEXT =
   "Hi, thanks for calling Transovo. I can answer questions, take a message, or help connect you with the right person.";
 
 /**
- * Documented Telnyx Ultra sample voices (TTS + Assistants Voice Settings).
- * Do not invent IDs — only use values Telnyx publishes / returns.
- * @see https://developers.telnyx.com/docs/voice/tts/providers/telnyx/ultra
+ * Documented Telnyx Ultra voices for Assistants.
+ * Assistants require Telnyx.Ultra.<uuid> — short names like "Clara" alone are rejected.
+ * Source: https://developers.telnyx.com/docs/tts-stt/tts-available-voices
  */
-export const DOCUMENTED_ULTRA_VOICE_IDS = [
-  "Telnyx.Ultra.Clara",
-  "Telnyx.Ultra.Callie",
-  "Telnyx.Ultra.Asher",
+export const DOCUMENTED_ULTRA_VOICES = [
+  {
+    catalogId: "clara-ultra",
+    displayName: "Clara",
+    style: "Instructor — expressive Ultra US English",
+    providerVoiceId: "Telnyx.Ultra.01eaafa9-308a-4276-a017-6ab0cf061b1f",
+    locale: "en-US",
+    gender: "female" as const,
+  },
+  {
+    catalogId: "callie-ultra",
+    displayName: "Callie",
+    style: "Encourager — expressive Ultra US English",
+    providerVoiceId: "Telnyx.Ultra.00a77add-48d5-4ef6-8157-71e5437b282d",
+    locale: "en-US",
+    gender: "female" as const,
+  },
+  {
+    catalogId: "asher-ultra",
+    displayName: "Asher",
+    style: "Podcaster — expressive Ultra US English",
+    providerVoiceId: "Telnyx.Ultra.00967b2f-88a6-4a31-8153-110a92134b9f",
+    locale: "en-US",
+    gender: "male" as const,
+  },
+  {
+    catalogId: "cindy-ultra",
+    displayName: "Cindy",
+    style: "Receptionist — expressive Ultra US English",
+    providerVoiceId: "Telnyx.Ultra.1242fb95-7ddd-44ac-8a05-9e8a22a6137d",
+    locale: "en-US",
+    gender: "female" as const,
+  },
 ] as const;
+
+/** @deprecated short names — Assistants reject these; use DOCUMENTED_ULTRA_VOICES */
+export const DOCUMENTED_ULTRA_VOICE_IDS = DOCUMENTED_ULTRA_VOICES.map(
+  (v) => v.providerVoiceId,
+);
 
 export const CURATED_VOICE_CATALOG: CuratedVoice[] = [
   {
@@ -154,13 +188,13 @@ export const CURATED_VOICE_CATALOG: CuratedVoice[] = [
     previewText:
       "Bonjour, merci d'appeler Transovo. Je peux répondre à vos questions ou prendre un message.",
   },
-  // Ultra — same Voice AI minute rate as NaturalHD inside Assistants.
+  // Ultra — Assistants require Telnyx.Ultra.<uuid> (short names like Clara fail with 10015).
   {
     catalogId: "clara-ultra",
     displayName: "Clara",
-    style: "Expressive Ultra — warm US English",
+    style: "Instructor — expressive Ultra US English",
     provider: "telnyx",
-    providerVoiceId: "Telnyx.Ultra.Clara",
+    providerVoiceId: "Telnyx.Ultra.01eaafa9-308a-4276-a017-6ab0cf061b1f",
     model: "Ultra",
     language: "en",
     locale: "en-US",
@@ -177,12 +211,12 @@ export const CURATED_VOICE_CATALOG: CuratedVoice[] = [
   {
     catalogId: "callie-ultra",
     displayName: "Callie",
-    style: "Expressive Ultra — clear English",
+    style: "Encourager — expressive Ultra US English",
     provider: "telnyx",
-    providerVoiceId: "Telnyx.Ultra.Callie",
+    providerVoiceId: "Telnyx.Ultra.00a77add-48d5-4ef6-8157-71e5437b282d",
     model: "Ultra",
     language: "en",
-    locale: "en",
+    locale: "en-US",
     gender: "female",
     qualityTier: "premium",
     costTier: "standard",
@@ -196,13 +230,32 @@ export const CURATED_VOICE_CATALOG: CuratedVoice[] = [
   {
     catalogId: "asher-ultra",
     displayName: "Asher",
-    style: "Expressive Ultra — confident male English",
+    style: "Podcaster — expressive Ultra US English",
     provider: "telnyx",
-    providerVoiceId: "Telnyx.Ultra.Asher",
+    providerVoiceId: "Telnyx.Ultra.00967b2f-88a6-4a31-8153-110a92134b9f",
     model: "Ultra",
     language: "en",
-    locale: "en",
+    locale: "en-US",
     gender: "male",
+    qualityTier: "premium",
+    costTier: "standard",
+    uiTier: "ultra",
+    supportsSpeed: true,
+    supportsExpressive: true,
+    enabled: true,
+    assistantCompatible: true,
+    previewText: DEFAULT_VOICE_PREVIEW_TEXT,
+  },
+  {
+    catalogId: "cindy-ultra",
+    displayName: "Cindy",
+    style: "Receptionist — expressive Ultra US English",
+    provider: "telnyx",
+    providerVoiceId: "Telnyx.Ultra.1242fb95-7ddd-44ac-8a05-9e8a22a6137d",
+    model: "Ultra",
+    language: "en",
+    locale: "en-US",
+    gender: "female",
     qualityTier: "premium",
     costTier: "standard",
     uiTier: "ultra",
@@ -268,7 +321,8 @@ export function validateUltraProviderVoiceId(voice: string): {
   if (!voiceId || voiceId.includes(" ")) {
     return {
       ok: false,
-      error: "Ultra voice requires a voice_id after Telnyx.Ultra. (e.g. Telnyx.Ultra.Clara)",
+      error:
+        "Ultra voice requires a voice_id after Telnyx.Ultra. (Assistants use UUID ids)",
     };
   }
   if (voiceId.toLowerCase() === "ultra" || raw === "Telnyx.Ultra") {
@@ -298,6 +352,20 @@ export function resolveProviderVoiceId(catalogOrProviderId: string | undefined |
     return v.providerVoiceId;
   }
   const raw = String(catalogOrProviderId || "").trim();
+  // Legacy short names (Telnyx.Ultra.Clara) are invalid for Assistants — map to UUID catalog
+  // BEFORE accepting any Telnyx.Ultra.* string (short names pass format validation).
+  const legacyShort: Record<string, string> = {
+    "Telnyx.Ultra.Clara": "Telnyx.Ultra.01eaafa9-308a-4276-a017-6ab0cf061b1f",
+    "Telnyx.Ultra.Callie": "Telnyx.Ultra.00a77add-48d5-4ef6-8157-71e5437b282d",
+    "Telnyx.Ultra.Asher": "Telnyx.Ultra.00967b2f-88a6-4a31-8153-110a92134b9f",
+    "Telnyx.Ultra.Cindy": "Telnyx.Ultra.1242fb95-7ddd-44ac-8a05-9e8a22a6137d",
+    "Telnyx.Ultra.clara": "Telnyx.Ultra.01eaafa9-308a-4276-a017-6ab0cf061b1f",
+    "Telnyx.Ultra.callie": "Telnyx.Ultra.00a77add-48d5-4ef6-8157-71e5437b282d",
+    "Telnyx.Ultra.asher": "Telnyx.Ultra.00967b2f-88a6-4a31-8153-110a92134b9f",
+    "Telnyx.Ultra.cindy": "Telnyx.Ultra.1242fb95-7ddd-44ac-8a05-9e8a22a6137d",
+    "Telnyx.Ultra.Nova": FALLBACK_PROVIDER_VOICE_ID,
+  };
+  if (legacyShort[raw]) return legacyShort[raw];
   if (raw.startsWith("Telnyx.Ultra.")) {
     const check = validateUltraProviderVoiceId(raw);
     if (check.ok) return raw;
@@ -388,7 +456,11 @@ export function buildAssistantVoiceSettings(input: AssistantVoiceSettingsInput):
       throw new Error(check.error || "Invalid Ultra voice");
     }
   }
-  const expressiveMode = Boolean(isUltra && input.expressiveMode);
+  // Ultra defaults expressive_mode on; callers can pass expressiveMode: false to disable.
+  // Never force expressive_mode on Natural / NaturalHD.
+  const expressiveMode = Boolean(
+    isUltra && (input.expressiveMode == null ? true : input.expressiveMode),
+  );
   const voice_settings: Record<string, unknown> = {
     voice: providerVoiceId,
   };

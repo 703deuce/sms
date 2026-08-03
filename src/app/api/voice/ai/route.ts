@@ -710,7 +710,11 @@ export async function POST(request: Request) {
         const result = await testVoiceOnClone({
           sourceAssistantId: telnyxAssistantId,
           voiceRef,
-          expressiveMode: Boolean(body.expressiveMode),
+          // Preserve null so Ultra can default expressive_mode on in buildAssistantVoiceSettings.
+          expressiveMode:
+            body.expressiveMode === undefined || body.expressiveMode === null
+              ? undefined
+              : Boolean(body.expressiveMode),
         });
         if (!result.ok) {
           return NextResponse.json(

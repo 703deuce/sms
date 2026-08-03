@@ -17,7 +17,7 @@ import {
 } from "@/lib/voice/tools/catalog";
 import { VoiceFlowBuilder } from "@/components/voice/flow-builder/voice-flow-builder";
 import { toErrorMessage } from "@/lib/errors";
-import { voiceLabel } from "@/lib/voice/telnyx/voices";
+import { isUltraVoice, voiceLabel } from "@/lib/voice/telnyx/voices";
 import { cn } from "@/lib/utils";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -885,11 +885,18 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
               speed={cfg.voiceLanguage?.speed}
               agentId={agentId}
               expressiveMode={cfg.voiceLanguage?.expressiveMode}
-              onChange={(voiceId) =>
+              onChange={(voiceId) => {
                 updateConfig({
-                  voiceLanguage: { ...cfg.voiceLanguage, voiceId },
-                })
-              }
+                  voiceLanguage: {
+                    ...cfg.voiceLanguage,
+                    voiceId,
+                    // Ultra defaults expressive on when not yet chosen.
+                    ...(isUltraVoice(voiceId) && cfg.voiceLanguage?.expressiveMode == null
+                      ? { expressiveMode: true }
+                      : {}),
+                  },
+                });
+              }}
             />
             <p className="text-xs text-muted-foreground">
               After changing voice, save (or start Test Voice Agent) so Telnyx syncs the voice
@@ -1030,7 +1037,10 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
             <label className="flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
-                checked={cfg.voiceLanguage?.expressiveMode ?? false}
+                checked={
+                  cfg.voiceLanguage?.expressiveMode ??
+                  isUltraVoice(cfg.voiceLanguage?.voiceId)
+                }
                 onChange={(e) =>
                   updateConfig({
                     voiceLanguage: {
