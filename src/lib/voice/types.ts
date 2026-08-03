@@ -208,6 +208,12 @@ export const DEFAULT_VOICE_CONFIG: VoiceAgentConfig = {
     temperature: 0.4,
     maxTokens: 1024,
   },
+  transcription: {
+    enabled: true,
+    sttProvider: "deepgram",
+    sttModel: "deepgram/nova-3",
+    language: "en",
+  },
   callHandling: {
     greeting:
       "Thank you for calling. I'm the virtual assistant, and I can answer questions or take a message. How can I help you today?",
