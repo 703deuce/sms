@@ -71,82 +71,51 @@ function instanceShortcutLinks(
 }
 
 /**
- * Adaptive solution submenu:
- * - No setups: Overview + Set Up
- * - 1–2 setups: Overview, + Set Up Another, each instance with shortcuts
- * - 3+ setups: Overview, + Set Up Another, Your Setups (N)
+ * Always show the full permanent management submenu so customers can browse
+ * what a solution includes before setup. After setup:
+ * - Rename Set Up → + Set Up Another
+ * - 1–2 instances: surface them under Set Up with quick shortcuts
+ * - 3+ instances: badge the inventory page as Your Setups (N)
  */
 function solutionChildren(
   solution: OutcomeSolutionDef,
   instances: SolutionNavInstance[] | undefined,
 ): NavChild[] {
-  const hasRoles = solution.pages.some((p) => p.navRole);
   const count = instances?.length ?? 0;
-  const setupPage = solution.pages.find((p) => p.kind === "setup");
-  const listPage = solution.pages.find((p) => p.navRole === "list" || p.kind === "active");
-  const listLabel = solution.setupsListLabel || listPage?.label || "Your Setups";
+  const children: NavChild[] = [];
 
-  if (!hasRoles) {
-    const links: NavChild[] = solution.pages.map((page) => ({
-      label: page.label,
-      href: outcomeHref(solution.slug, page.slug),
-    }));
-    if (count === 0) return links;
-    if (count > 2) {
-      const activeIdx = links.findIndex(
-        (c) =>
-          !("type" in c && c.type === "group") &&
-          /active|setups|workflows|campaigns/i.test((c as NavLink).label),
-      );
-      if (activeIdx >= 0) {
-        (links[activeIdx] as NavLink).label = `${(links[activeIdx] as NavLink).label} (${count})`;
-      }
-      return links;
+  for (const page of solution.pages) {
+    const isSetup = page.kind === "setup";
+    const isList = page.navRole === "list" || page.kind === "active";
+    let label = page.label;
+    if (isSetup && count > 0) label = "+ Set Up Another";
+    if (isList && count > 2) {
+      label = `${solution.setupsListLabel || page.label} (${count})`;
     }
-    const group: NavGroup = {
-      type: "group",
-      label: "Your setups",
-      children: instances!.map((inst) => ({
-        label: `${inst.label} · ${inst.status}`,
-        href: inst.href,
-      })),
-    };
-    links.splice(2, 0, group);
-    return links;
-  }
-
-  const children: NavChild[] = [
-    { label: "Overview", href: outcomeHref(solution.slug) },
-  ];
-
-  if (setupPage) {
     children.push({
-      label: count > 0 ? "+ Set Up Another" : setupPage.label,
-      href: outcomeHref(solution.slug, setupPage.slug),
+      label,
+      href: outcomeHref(solution.slug, page.slug),
     });
   }
 
-  if (count === 0) return children;
+  if (count === 0 || count > 2) return children;
 
-  if (count > 2) {
-    children.push({
-      label: `${listLabel} (${count})`,
-      href: outcomeHref(solution.slug, listPage?.slug || "active"),
-    });
-    return children;
-  }
-
-  for (const inst of instances!) {
-    children.push({
-      type: "group",
-      label: `${inst.label} · ${inst.status}`,
-      children: [
-        { label: "Open", href: inst.href },
-        ...instanceShortcutLinks(solution, inst.id),
-      ],
-    });
-  }
-
+  // 1–2 setups: insert named instances right after Set Up / Create.
+  const setupIdx = children.findIndex(
+    (c) =>
+      !("type" in c && c.type === "group") &&
+      (/^\+ Set Up Another$|^Set Up$|^Create /i.test((c as NavLink).label)),
+  );
+  const insertAt = setupIdx >= 0 ? setupIdx + 1 : 1;
+  const instanceGroups: NavGroup[] = instances!.map((inst) => ({
+    type: "group",
+    label: `${inst.label} · ${inst.status}`,
+    children: [
+      { label: "Open", href: inst.href },
+      ...instanceShortcutLinks(solution, inst.id),
+    ],
+  }));
+  children.splice(insertAt, 0, ...instanceGroups);
   return children;
 }
 

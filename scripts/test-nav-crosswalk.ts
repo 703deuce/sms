@@ -83,16 +83,18 @@ for (const slug of launchSlugs) {
   );
 }
 
-// Adaptive submenu: before setup, only Overview + Set Up for managed call solutions.
+// Full permanent submenu is always visible — even before the customer sets up.
 const answering = solutionsNav.find((i) => i.label === "AI Answering Service");
 assert.ok(answering, "AI Answering Service required");
 const answeringChildLabels = (answering.children || []).map((c) =>
   "type" in c && c.type === "group" ? c.label : c.label,
 );
-assert.deepEqual(
-  answeringChildLabels,
-  ["Overview", "Set Up"],
-  "Empty AI Answering Service submenu should only show Overview + Set Up",
+assert.ok(
+  answeringChildLabels.includes("Overview") &&
+    answeringChildLabels.includes("Set Up") &&
+    answeringChildLabels.includes("Answering Rules") &&
+    answeringChildLabels.includes("Calls & Results"),
+  "Empty AI Answering Service submenu should still show the full management tree",
 );
 
 const withInstances = buildSolutionsNav({
@@ -133,8 +135,8 @@ assert.ok(
   "After setup, instance name should appear in the submenu",
 );
 assert.ok(
-  !answeringWithLabels.includes("Answering Rules"),
-  "Full management pages should nest under the instance, not top-level, when 1–2 setups exist",
+  answeringWithLabels.includes("Answering Rules"),
+  "Full management pages remain visible alongside instance shortcuts",
 );
 
 console.log(
