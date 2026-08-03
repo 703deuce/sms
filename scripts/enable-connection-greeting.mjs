@@ -72,8 +72,11 @@ async function main() {
     startupGreeting.connectionGreeting = "transovo_default";
     startupGreeting.mode = "transovo_default";
     startupGreeting.enabled = true;
-    startupGreeting.delayMs = 5000;
+    // Concurrent: play bed while AI initializes — do not wait out the clip.
+    startupGreeting.delayMs = 0;
     startupGreeting.handOffWhenReady = true;
+    // Clear any stale override so hosted Transovo asset is used after deploy.
+    startupGreeting.audioUrl = "";
   }
   callHandling.startupGreeting = startupGreeting;
 

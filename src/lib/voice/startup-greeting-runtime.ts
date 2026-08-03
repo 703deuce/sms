@@ -29,23 +29,39 @@ async function playbackOnCall(callControlId: string, audioUrl: string) {
   }).catch(() => undefined);
 }
 
+export async function stopPlaybackOnCall(callControlId: string) {
+  if (!callControlId || callControlId.startsWith("mock_") || !isTelnyxVoiceConfigured()) return;
+  await telnyxRequest(`/calls/${callControlId}/actions/playback_stop`, {
+    method: "POST",
+    body: {},
+  }).catch(() => undefined);
+}
+
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/**
+ * Start the pre-AI mask. For Transovo connection greeting (audio_url + concurrent),
+ * this returns immediately after playback_start so AI can initialize in parallel.
+ * Pass wait:false to never block; otherwise uses resolveStartupWaitMs.
+ */
 export async function playStartupGreetingMask(input: {
   workspaceId: string;
   callId: string;
   callControlId: string;
   config: VoiceAgentConfig;
+  /** When false, start playback/speak and return without waiting (concurrent AI). */
+  wait?: boolean;
 }): Promise<{
   played: boolean;
   waitMs: number;
   mode: StartupGreetingConfig["mode"];
+  concurrent: boolean;
 }> {
   const mask = startupGreetingFromConfig(input.config);
   if (!shouldPlayPreAiMask(mask)) {
-    return { played: false, waitMs: 0, mode: mask.mode };
+    return { played: false, waitMs: 0, mode: mask.mode, concurrent: false };
   }
 
   const prisma = getPrisma();
@@ -55,7 +71,14 @@ export async function playStartupGreetingMask(input: {
   } else {
     await speakOnCall(input.callControlId, mask.text.trim());
   }
-  const waitMs = resolveStartupWaitMs(mask);
+
+  // Connection greeting: play under AI init — never wait out the full clip.
+  const concurrent =
+    mask.connectionGreeting === "transovo_default" ||
+    input.wait === false ||
+    (mask.mode === "audio_url" && mask.delayMs === 0);
+
+  const waitMs = concurrent || input.wait === false ? 0 : resolveStartupWaitMs(mask);
   await prisma.voiceCallEvent
     .create({
       data: {
@@ -67,6 +90,7 @@ export async function playStartupGreetingMask(input: {
           text: mask.mode === "tts" ? mask.text : null,
           audioUrl: mask.mode === "audio_url" ? mask.audioUrl : null,
           waitMs,
+          concurrent,
           startedAt,
         } as object,
       },
@@ -75,20 +99,22 @@ export async function playStartupGreetingMask(input: {
 
   if (waitMs > 0) await sleep(waitMs);
 
-  await prisma.voiceCallEvent
-    .create({
-      data: {
-        workspaceId: input.workspaceId,
-        callId: input.callId,
-        eventType: "media.startup_greeting_mask_ended",
-        payload: {
-          mode: mask.mode,
-          waitedMs: Date.now() - startedAt,
-          aiHandoffAt: Date.now(),
-        } as object,
-      },
-    })
-    .catch(() => undefined);
+  if (!concurrent) {
+    await prisma.voiceCallEvent
+      .create({
+        data: {
+          workspaceId: input.workspaceId,
+          callId: input.callId,
+          eventType: "media.startup_greeting_mask_ended",
+          payload: {
+            mode: mask.mode,
+            waitedMs: Date.now() - startedAt,
+            aiHandoffAt: Date.now(),
+          } as object,
+        },
+      })
+      .catch(() => undefined);
+  }
 
-  return { played: true, waitMs, mode: mask.mode };
+  return { played: true, waitMs, mode: mask.mode, concurrent };
 }

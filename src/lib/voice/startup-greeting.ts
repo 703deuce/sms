@@ -109,10 +109,13 @@ export function parseStartupGreeting(
       process.env.NEXT_PUBLIC_APP_URL ||
       "https://transovo.ai"
     ).replace(/\/$/, "");
-    audioUrl = `${appUrl}/connection-greeting/transovo-connection-greeting-phone.mp3`;
+    // Prefer explicit override URL when set; else hosted Transovo default asset.
+    if (!audioUrl) {
+      audioUrl = `${appUrl}/connection-greeting/transovo-connection-greeting-phone.mp3`;
+    }
     resolvedMode = "audio_url";
-    // ~4.8s file + small buffer; override if delayMs set explicitly
-    if (delayMs === "auto") delayMs = 5000;
+    // Concurrent: play while AI initializes — do not wait out the full clip.
+    if (delayMs === "auto") delayMs = 0;
   }
 
   const enabled =

@@ -184,12 +184,16 @@ async function startAiOnInboundCall(input: {
       const startup = startupGreetingFromConfig(cfg);
       const outputGainDb = normalizeOutputGainDb(cfg.voiceLanguage?.outputGainDb);
 
-      // Play prerecorded connection greeting immediately after answer (before
-      // compliance speak) so callers hear polished audio with no dead air.
+      // Play prerecorded connection greeting immediately after answer, then
+      // initialize the AI concurrently (do not wait for the clip to finish).
       const playMaskFirst =
         startup.enabled &&
         startup.mode === "audio_url" &&
         Boolean(startup.audioUrl);
+      const concurrentMask =
+        playMaskFirst &&
+        (startup.connectionGreeting === "transovo_default" ||
+          startup.delayMs === 0);
 
       if (!playMaskFirst) {
         await speakRecordingDisclosure(
@@ -200,15 +204,18 @@ async function startAiOnInboundCall(input: {
         );
       }
 
-      // Optional TTS/audio mask — default mode is "ai" (no mask).
+      // Optional TTS/audio mask — connection greeting returns immediately.
       const maskResult = await playStartupGreetingMask({
         workspaceId: input.workspaceId,
         callId: input.callId,
         callControlId: input.telnyxCallControlId,
         config: cfg,
+        wait: concurrentMask ? false : undefined,
       });
 
-      if (playMaskFirst) {
+      // Do not inject recording-disclosure speak under a concurrent bed — it
+      // would collide with the prerecorded file and delay AI start.
+      if (playMaskFirst && !concurrentMask) {
         await speakRecordingDisclosure(
           input.workspaceId,
           input.callId,
@@ -218,8 +225,11 @@ async function startAiOnInboundCall(input: {
       }
 
       // When AI speaks the greeting, wait for media settle so the first syllable isn't static.
+      // Concurrent connection greeting: tiny settle only, then start AI while bed plays.
       if (startup.mode === "ai" || startup.mode === "none" || !maskResult.played) {
         await sleep(AI_MEDIA_SETTLE_MS);
+      } else if (concurrentMask) {
+        await sleep(150);
       }
 
       const callRow = await prisma.voiceCall.findUnique({ where: { id: input.callId } });
@@ -254,6 +264,8 @@ async function startAiOnInboundCall(input: {
           workspaceId: input.workspaceId,
           callId: input.callId,
           agentId: agent.id,
+          // Webhook stops the bed when the assistant conversation is ready.
+          connectionGreetingPlaying: Boolean(concurrentMask || maskResult.concurrent),
         },
       }).catch((err) => console.error("[voice/inbound] ai_assistant_start", err));
 

@@ -19,9 +19,9 @@ const BASE = (process.env.BASE_URL || "https://transovo.ai").replace(/\/$/, "");
 const BOOTSTRAP = "transovo-smoke-bootstrap-b56f-aug2026";
 const OWNER_EMAIL = (process.env.OWNER_EMAIL || "703deuce@gmail.com").trim().toLowerCase();
 
+const MUSIC_UNDER_SPEECH_DB = -9; // audible on PSTN; was -21 (inaudible)
 const SPEECH_DELAY_MS = 200; // 150–250ms speech start after music
 const TARGET_DURATION_S = 4.8; // keep finished file ~4–5s
-const MUSIC_UNDER_SPEECH_DB = -21; // ~18–24 dB under voice
 
 function cookieHeader(jar) {
   return [...jar.entries()].map(([k, v]) => `${k}=${v}`).join("; ");

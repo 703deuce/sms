@@ -371,6 +371,32 @@ export async function processVoiceWebhookEvent(input: {
     },
   });
 
+  // Connection greeting plays under AI init. When the assistant conversation is
+  // ready, stop the bed so AI speech does not overlap the prerecorded file.
+  if (
+    eventType === "call.conversation.created" ||
+    eventType === "conversation.created"
+  ) {
+    const controlId = String(eventPayload.call_control_id || call.telnyxCallControlId || "");
+    if (controlId) {
+      const { stopPlaybackOnCall } = await import("../startup-greeting-runtime");
+      await stopPlaybackOnCall(controlId);
+      await prisma.voiceCallEvent
+        .create({
+          data: {
+            workspaceId,
+            callId: call.id,
+            eventType: "media.connection_greeting_stopped",
+            payload: {
+              reason: eventType,
+              at: Date.now(),
+            } as object,
+          },
+        })
+        .catch(() => undefined);
+    }
+  }
+
   // Secondary legs (warm consult, etc.) must not overwrite the parent VoiceCall
   // control id or mark the live AI/customer call completed on consult hangup.
   const isSecondaryVoiceLeg = warmState.kind === "warm_transfer_consult";
@@ -578,14 +604,23 @@ export async function processVoiceWebhookEvent(input: {
 
         await startInboundNoiseSuppression(controlId);
 
+        const concurrentMask =
+          startup.enabled &&
+          startup.mode === "audio_url" &&
+          Boolean(startup.audioUrl) &&
+          (startup.connectionGreeting === "transovo_default" || startup.delayMs === 0);
+
         const maskResult = await playStartupGreetingMask({
           workspaceId,
           callId: call.id,
           callControlId: controlId,
           config: cfg,
+          wait: concurrentMask ? false : undefined,
         });
         if (startup.mode === "ai" || startup.mode === "none" || !maskResult.played) {
           await new Promise((r) => setTimeout(r, AI_MEDIA_SETTLE_MS));
+        } else if (concurrentMask || maskResult.concurrent) {
+          await new Promise((r) => setTimeout(r, 150));
         }
 
         const storedVars = (call.dynamicVariables || {}) as Record<string, unknown>;
@@ -616,6 +651,7 @@ export async function processVoiceWebhookEvent(input: {
               workspaceId,
               callId: call.id,
               agentId: agent.id,
+              connectionGreetingPlaying: Boolean(concurrentMask || maskResult.concurrent),
             },
           });
         } catch (err) {
