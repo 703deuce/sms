@@ -240,7 +240,6 @@ export function buildSolutionsNav(options: SolutionsNavOptions = {}): NavItem[] 
       label: "Dashboard",
       href: "/outcomes",
       icon: LayoutDashboard,
-      children: [{ label: "Overview", href: "/outcomes" }],
     },
   ];
 

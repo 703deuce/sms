@@ -166,7 +166,6 @@ export const appNav: NavItem[] = [
     label: "Dashboard",
     href: "/dashboard",
     icon: LayoutDashboard,
-    children: [{ label: "Overview", href: "/dashboard" }],
   },
   {
     label: "Messaging",
