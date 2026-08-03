@@ -697,6 +697,28 @@ export async function POST(request: Request) {
         const data = await listTelnyxAssistantCompatibleVoices();
         return NextResponse.json({ data });
       }
+      case "generate_connection_greeting_sources": {
+        const { generateConnectionGreetingSources } = await import(
+          "@/lib/voice/connection-greeting/generate"
+        );
+        const result = await generateConnectionGreetingSources({
+          writeFiles: Boolean(body.writeFiles),
+        });
+        if (!result.ok) {
+          return NextResponse.json(
+            {
+              error: result.error,
+              data: {
+                ok: false,
+                alternatives: result.alternatives,
+              },
+            },
+            { status: 422 },
+          );
+        }
+        // Return base64 sources for offline FFmpeg mix (do not log audio).
+        return NextResponse.json({ data: result });
+      }
       case "elevenlabs_status": {
         const { getElevenLabsSecretStatus } = await import(
           "@/lib/voice/elevenlabs/telnyx-secret"

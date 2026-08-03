@@ -149,23 +149,62 @@ export async function synthesizeElevenLabsPreview(input: {
   modelId: string;
   text: string;
 }): Promise<ArrayBuffer> {
+  return synthesizeElevenLabsSpeech({
+    voiceId: input.voiceId,
+    modelId: input.modelId,
+    text: input.text,
+  });
+}
+
+/** Full TTS with optional voice_settings (server-side only). */
+export async function synthesizeElevenLabsSpeech(input: {
+  voiceId: string;
+  modelId: string;
+  text: string;
+  outputFormat?: string;
+  stability?: number;
+  similarityBoost?: number;
+  style?: number;
+  useSpeakerBoost?: boolean;
+}): Promise<ArrayBuffer> {
   const apiKey = getElevenLabsApiKey();
   if (!apiKey) throw new Error("ELEVENLABS_KEY is not configured on the server");
-  const res = await fetch(
+
+  const voiceSettings: Record<string, unknown> = {};
+  if (input.stability != null && Number.isFinite(input.stability)) {
+    voiceSettings.stability = Number(input.stability);
+  }
+  if (input.similarityBoost != null && Number.isFinite(input.similarityBoost)) {
+    voiceSettings.similarity_boost = Number(input.similarityBoost);
+  }
+  if (input.style != null && Number.isFinite(input.style)) {
+    voiceSettings.style = Number(input.style);
+  }
+  if (input.useSpeakerBoost != null) {
+    voiceSettings.use_speaker_boost = Boolean(input.useSpeakerBoost);
+  }
+
+  const format = String(input.outputFormat || "mp3_44100_128").trim();
+  const url = new URL(
     `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(input.voiceId)}`,
-    {
-      method: "POST",
-      headers: {
-        "xi-api-key": apiKey,
-        accept: "audio/mpeg",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        text: input.text.slice(0, 500),
-        model_id: input.modelId,
-      }),
-    },
   );
+  if (format) url.searchParams.set("output_format", format);
+
+  const res = await fetch(url.toString(), {
+    method: "POST",
+    headers: {
+      "xi-api-key": apiKey,
+      accept: "audio/mpeg",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      text: input.text.slice(0, 500),
+      model_id: input.modelId,
+      ...(Object.keys(voiceSettings).length
+        ? { voice_settings: voiceSettings }
+        : {}),
+    }),
+  });
   if (!res.ok) {
     const text = await res.text();
     let body: unknown = text;
@@ -175,6 +214,49 @@ export async function synthesizeElevenLabsPreview(input: {
       // keep text
     }
     throw new ElevenLabsApiError(`ElevenLabs TTS HTTP ${res.status}`, res.status, body);
+  }
+  return res.arrayBuffer();
+}
+
+/** Eleven Music compose — instrumental bed (server-side only). */
+export async function composeElevenMusic(input: {
+  prompt: string;
+  musicLengthMs: number;
+  forceInstrumental?: boolean;
+  modelId?: string;
+  outputFormat?: string;
+}): Promise<ArrayBuffer> {
+  const apiKey = getElevenLabsApiKey();
+  if (!apiKey) throw new Error("ELEVENLABS_KEY is not configured on the server");
+
+  const length = Math.max(3000, Math.min(600_000, Math.round(input.musicLengthMs)));
+  const format = String(input.outputFormat || "mp3_44100_128").trim();
+  const url = new URL("https://api.elevenlabs.io/v1/music");
+  if (format) url.searchParams.set("output_format", format);
+
+  const res = await fetch(url.toString(), {
+    method: "POST",
+    headers: {
+      "xi-api-key": apiKey,
+      accept: "audio/mpeg",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      prompt: String(input.prompt || "").slice(0, 4000),
+      music_length_ms: length,
+      force_instrumental: input.forceInstrumental !== false,
+      model_id: input.modelId || "music_v1",
+    }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    let body: unknown = text;
+    try {
+      body = JSON.parse(text);
+    } catch {
+      // keep text
+    }
+    throw new ElevenLabsApiError(`ElevenLabs Music HTTP ${res.status}`, res.status, body);
   }
   return res.arrayBuffer();
 }

@@ -5,7 +5,12 @@
 
 import type { VoiceAgentConfig } from "@/lib/voice/types";
 
-export type StartupGreetingMode = "none" | "ai" | "tts" | "audio_url";
+export type StartupGreetingMode =
+  | "none"
+  | "ai"
+  | "tts"
+  | "audio_url"
+  | "transovo_default";
 
 export type StartupGreetingConfig = {
   /** Master switch — when false, behave like mode "none". */
@@ -21,6 +26,11 @@ export type StartupGreetingConfig = {
   delayMs: "auto" | number;
   /** When true, wait for mask to finish (or timeout) before ai_assistant_start. */
   handOffWhenReady: boolean;
+  /**
+   * Connection greeting preset (UI): Off | Transovo default.
+   * Maps onto mode/audioUrl without changing the assistant spoken greeting.
+   */
+  connectionGreeting?: "off" | "transovo_default";
 };
 
 /**
@@ -47,14 +57,33 @@ export function parseStartupGreeting(
   callHandling: Record<string, unknown> | undefined | null,
 ): StartupGreetingConfig {
   const raw = (callHandling?.startupGreeting || {}) as Record<string, unknown>;
+  const connectionGreetingRaw = String(
+    raw.connectionGreeting || callHandling?.connectionGreeting || "",
+  );
+  const connectionGreeting: "off" | "transovo_default" | undefined =
+    connectionGreetingRaw === "transovo_default"
+      ? "transovo_default"
+      : connectionGreetingRaw === "off"
+        ? "off"
+        : undefined;
+
   const modeRaw = String(raw.mode || DEFAULT_STARTUP_GREETING.mode);
-  const mode: StartupGreetingMode =
+  let mode: StartupGreetingMode =
     modeRaw === "none" ||
     modeRaw === "ai" ||
     modeRaw === "tts" ||
-    modeRaw === "audio_url"
+    modeRaw === "audio_url" ||
+    modeRaw === "transovo_default"
       ? modeRaw
       : "ai";
+
+  // Preset: Transovo default prerecorded connection greeting.
+  if (connectionGreeting === "transovo_default" || mode === "transovo_default") {
+    mode = "audio_url";
+  }
+  if (connectionGreeting === "off") {
+    mode = "ai";
+  }
 
   let delayMs: "auto" | number = "auto";
   if (typeof raw.delayMs === "number" && Number.isFinite(raw.delayMs)) {
@@ -71,7 +100,20 @@ export function parseStartupGreeting(
     /^thank you for calling\.?$/i.test(text.trim()) &&
     raw.enabled !== false;
 
-  const resolvedMode: StartupGreetingMode = legacyShortMask ? "ai" : mode;
+  let resolvedMode: StartupGreetingMode = legacyShortMask ? "ai" : mode;
+
+  let audioUrl = String(raw.audioUrl || "").trim();
+  if (connectionGreeting === "transovo_default" || modeRaw === "transovo_default") {
+    const appUrl = (
+      process.env.APP_URL ||
+      process.env.NEXT_PUBLIC_APP_URL ||
+      "https://transovo.ai"
+    ).replace(/\/$/, "");
+    audioUrl = `${appUrl}/connection-greeting/transovo-connection-greeting-phone.mp3`;
+    resolvedMode = "audio_url";
+    // ~4.8s file + small buffer; override if delayMs set explicitly
+    if (delayMs === "auto") delayMs = 5000;
+  }
 
   const enabled =
     raw.enabled === undefined
@@ -82,9 +124,12 @@ export function parseStartupGreeting(
     enabled,
     mode: resolvedMode,
     text: legacyShortMask ? DEFAULT_STARTUP_GREETING.text : text,
-    audioUrl: String(raw.audioUrl || "").trim(),
+    audioUrl,
     delayMs,
     handOffWhenReady: raw.handOffWhenReady !== false,
+    connectionGreeting:
+      connectionGreeting ||
+      (modeRaw === "transovo_default" ? "transovo_default" : undefined),
   };
 }
 

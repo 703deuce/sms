@@ -179,17 +179,26 @@ async function startAiOnInboundCall(input: {
     // Inbound-only NS — do not process outbound AI playback.
     await startInboundNoiseSuppression(input.telnyxCallControlId);
 
-    await speakRecordingDisclosure(
-      input.workspaceId,
-      input.callId,
-      input.telnyxCallControlId,
-      agent.id,
-    );
-
     if (agent.telnyxAssistantId) {
       const cfg = parseVoiceAgentConfig(agent.draftConfig);
       const startup = startupGreetingFromConfig(cfg);
       const outputGainDb = normalizeOutputGainDb(cfg.voiceLanguage?.outputGainDb);
+
+      // Play prerecorded connection greeting immediately after answer (before
+      // compliance speak) so callers hear polished audio with no dead air.
+      const playMaskFirst =
+        startup.enabled &&
+        startup.mode === "audio_url" &&
+        Boolean(startup.audioUrl);
+
+      if (!playMaskFirst) {
+        await speakRecordingDisclosure(
+          input.workspaceId,
+          input.callId,
+          input.telnyxCallControlId,
+          agent.id,
+        );
+      }
 
       // Optional TTS/audio mask — default mode is "ai" (no mask).
       const maskResult = await playStartupGreetingMask({
@@ -198,6 +207,15 @@ async function startAiOnInboundCall(input: {
         callControlId: input.telnyxCallControlId,
         config: cfg,
       });
+
+      if (playMaskFirst) {
+        await speakRecordingDisclosure(
+          input.workspaceId,
+          input.callId,
+          input.telnyxCallControlId,
+          agent.id,
+        ).catch(() => undefined);
+      }
 
       // When AI speaks the greeting, wait for media settle so the first syllable isn't static.
       if (startup.mode === "ai" || startup.mode === "none" || !maskResult.played) {

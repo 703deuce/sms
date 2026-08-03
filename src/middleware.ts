@@ -54,6 +54,8 @@ function isPublicPath(pathname: string) {
   if (pathname === "/embed/form.js") return true;
   // Public Telnyx AI Assistants voice catalog downloads (NaturalHD + Ultra UUID)
   if (pathname.startsWith("/telnyx-agent-voices")) return true;
+  // Prerecorded connection greeting media (public HTTPS for Telnyx playback_start)
+  if (pathname.startsWith("/connection-greeting")) return true;
   // Signed expiring recording streams (token-gated, no session cookie)
   if (pathname.startsWith("/api/voice/recordings/") && pathname.endsWith("/stream")) return true;
   // Calendar OAuth callbacks (provider redirects without session)

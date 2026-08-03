@@ -2241,22 +2241,71 @@ function StartupGreetingEditor({
       {enabled ? (
         <>
           <div>
-            <Label>Greeting type</Label>
+            <Label>Connection greeting</Label>
             <select
               className="mt-1 w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm"
-              value={mode}
-              onChange={(e) => patch({ mode: e.target.value })}
+              value={
+                String(value.connectionGreeting || "") === "transovo_default" ||
+                mode === "transovo_default"
+                  ? "transovo_default"
+                  : "off"
+              }
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v === "transovo_default") {
+                  patch({
+                    connectionGreeting: "transovo_default",
+                    mode: "transovo_default",
+                    delayMs: 5000,
+                    handOffWhenReady: true,
+                  });
+                } else {
+                  patch({
+                    connectionGreeting: "off",
+                    mode: mode === "transovo_default" || mode === "audio_url" ? "ai" : mode,
+                  });
+                }
+              }}
+            >
+              <option value="off">Off</option>
+              <option value="transovo_default">Transovo default</option>
+            </select>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Plays a polished prerecorded greeting with soft music immediately on
+              answer while the AI initializes. Does not replace the AI greeting.
+            </p>
+          </div>
+          {String(value.connectionGreeting || "") !== "transovo_default" &&
+          mode !== "transovo_default" ? (
+          <div>
+            <Label>Greeting type (advanced)</Label>
+            <select
+              className="mt-1 w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm"
+              value={mode === "transovo_default" ? "ai" : mode}
+              onChange={(e) => {
+                const v = e.target.value;
+                patch({ connectionGreeting: "off", mode: v });
+              }}
             >
               <option value="ai">AI voice — one full greeting (recommended)</option>
               <option value="tts">Pre-mask TTS, then AI (advanced)</option>
               <option value="audio_url">Pre-mask audio URL, then AI</option>
-              <option value="none">None</option>
+              <option value="none">None / Off</option>
             </select>
           </div>
-          {mode === "ai" ? (
+          ) : null}
+          {mode === "ai" &&
+          String(value.connectionGreeting || "") !== "transovo_default" ? (
             <p className="text-[11px] text-muted-foreground">
               Uses the AI greeting above. We settle media ~700 ms after answer,
               then start the assistant once (no duplicate greetings).
+            </p>
+          ) : null}
+          {String(value.connectionGreeting || "") === "transovo_default" ||
+          mode === "transovo_default" ? (
+            <p className="text-[11px] text-muted-foreground">
+              Prerecorded file plays immediately on answer (~4–5 s). AI greeting
+              starts after playback so the two never overlap.
             </p>
           ) : null}
           {mode === "tts" ? (
