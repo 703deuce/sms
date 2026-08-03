@@ -1,0 +1,67 @@
+{
+  "generatedAt": "2026-08-03T15:45:13.598Z",
+  "text": "Thank you for calling. One moment, please, while I connect you with our receptionist.",
+  "voice": {
+    "id": "kdmDKE6EkgrWrrykO9Qt",
+    "name": "Alexandra - Conversational and Real",
+    "model": "eleven_v3"
+  },
+  "ttsRequest": {
+    "voiceId": "kdmDKE6EkgrWrrykO9Qt",
+    "modelId": "eleven_v3",
+    "text": "Thank you for calling. One moment, please, while I connect you with our receptionist.",
+    "outputFormat": "mp3_44100_128",
+    "stability": 0.45,
+    "similarityBoost": 0.78
+  },
+  "musicRequest": {
+    "prompt": "Short, subtle professional telephone connection music. Warm modern corporate ambience, soft electric piano and gentle ambient pad, calm and welcoming, minimal melody, no drums, no percussion hits, no vocals, no singing, no sound effects, no dramatic build, suitable underneath a business receptionist greeting.",
+    "musicLengthMs": 6000,
+    "forceInstrumental": true,
+    "modelId": "music_v1",
+    "outputFormat": "mp3_44100_128"
+  },
+  "ffmpegFilterComplex": "[0:a]afade=t=in:st=0:d=0.1,volume=-21dB,apad=whole_dur=4.8,atrim=0:4.8,afade=t=out:st=4.1:d=0.7[bed];[1:a]adelay=200|200:all=1,loudnorm=I=-16:TP=-1.5:LRA=11,apad=whole_dur=4.8,atrim=0:4.8[spk];[spk]asplit=2[spk_sc][spk_mix];[bed][spk_sc]sidechaincompress=threshold=0.05:ratio=4:attack=30:release=300:makeup=1:knee=2.82843[ducked];[ducked][spk_mix]amix=inputs=2:duration=longest:dropout_transition=0:normalize=0,alimiter=limit=0.95:level=disabled[out]",
+  "speechDelayMs": 200,
+  "musicUnderSpeechDb": -21,
+  "targetDurationSec": 4.8,
+  "sources": {
+    "speech": {
+      "path": "/workspace/public/connection-greeting/sources/connection-greeting-speech-original.mp3",
+      "bytes": 66499,
+      "durationSec": 4.127347
+    },
+    "music": {
+      "path": "/workspace/public/connection-greeting/sources/connection-greeting-music-original.mp3",
+      "bytes": 96593,
+      "durationSec": 6.03425
+    }
+  },
+  "outputs": {
+    "masterWav": {
+      "path": "/workspace/public/connection-greeting/transovo-connection-greeting-master.wav",
+      "bytes": 421674,
+      "durationSec": 4.78
+    },
+    "phoneWav": {
+      "path": "/workspace/public/connection-greeting/transovo-connection-greeting-phone.wav",
+      "bytes": 76558,
+      "durationSec": 4.78
+    },
+    "phoneMp3": {
+      "path": "/workspace/public/connection-greeting/transovo-connection-greeting-phone.mp3",
+      "bytes": 38914,
+      "durationSec": 4.832653
+    }
+  },
+  "publicUrls": {
+    "phoneMp3": "/connection-greeting/transovo-connection-greeting-phone.mp3",
+    "phoneWav": "/connection-greeting/transovo-connection-greeting-phone.wav",
+    "masterWav": "/connection-greeting/transovo-connection-greeting-master.wav"
+  },
+  "hostedAt": {
+    "phoneMp3": "https://transovo.ai/connection-greeting/transovo-connection-greeting-phone.mp3",
+    "phoneWav": "https://transovo.ai/connection-greeting/transovo-connection-greeting-phone.wav",
+    "masterWav": "https://transovo.ai/connection-greeting/transovo-connection-greeting-master.wav"
+  }
+}

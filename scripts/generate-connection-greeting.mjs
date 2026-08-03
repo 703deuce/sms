@@ -137,13 +137,15 @@ async function main() {
   );
   const fadeOutStart = Math.max(0, totalDur - 0.7);
 
-  // adelay for speech; sidechaincompress ducks music from speech; volume on music bed
-  // music volume ~ -21dB relative; speech normalized with loudnorm lightly
+  // Music bed: fade in 100ms, -21 dB under speech, fade out last 700ms, pad/trim to target.
+  // Speech: start ~200ms after music, loudnorm for PSTN clarity.
+  // Sidechain ducking + amix; duration=longest so we keep the full 4.8s bed.
   const filter = [
-    `[0:a]afade=t=in:st=0:d=0.1,volume=${MUSIC_UNDER_SPEECH_DB}dB,afade=t=out:st=${fadeOutStart}:d=0.7[music]`,
-    `[1:a]adelay=${SPEECH_DELAY_MS}|${SPEECH_DELAY_MS},loudnorm=I=-16:TP=-1.5:LRA=11[speech]`,
-    `[music][speech]sidechaincompress=threshold=0.02:ratio=6:attack=20:release=250:level_sc=1[ducked]`,
-    `[ducked][speech]amix=inputs=2:duration=first:dropout_transition=0,atrim=0:${totalDur},alimit=limit=0.95[out]`,
+    `[0:a]afade=t=in:st=0:d=0.1,volume=${MUSIC_UNDER_SPEECH_DB}dB,apad=whole_dur=${totalDur},atrim=0:${totalDur},afade=t=out:st=${fadeOutStart}:d=0.7[bed]`,
+    `[1:a]adelay=${SPEECH_DELAY_MS}|${SPEECH_DELAY_MS}:all=1,loudnorm=I=-16:TP=-1.5:LRA=11,apad=whole_dur=${totalDur},atrim=0:${totalDur}[spk]`,
+    `[spk]asplit=2[spk_sc][spk_mix]`,
+    `[bed][spk_sc]sidechaincompress=threshold=0.05:ratio=4:attack=30:release=300:makeup=1:knee=2.82843[ducked]`,
+    `[ducked][spk_mix]amix=inputs=2:duration=longest:dropout_transition=0:normalize=0,alimiter=limit=0.95:level=disabled[out]`,
   ].join(";");
 
   const ffmpegCmd = [
