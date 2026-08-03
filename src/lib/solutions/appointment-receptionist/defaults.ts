@@ -264,6 +264,7 @@ export function applyWizardPreset(
           "answer_questions",
           "take_messages",
           "transfer_calls",
+          "qualify_callers",
           // Booking optional — leave enabled so users can opt out in Goals.
           "book_appointments",
         ],

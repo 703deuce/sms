@@ -35,53 +35,118 @@ export type SolutionsNavOptions = {
   instancesBySolution?: Record<string, SolutionNavInstance[]>;
 };
 
+function pageBySlug(solution: OutcomeSolutionDef, slug: string) {
+  return solution.pages.find((p) => p.slug === slug);
+}
+
+function instanceShortcutLinks(
+  solution: OutcomeSolutionDef,
+  instanceId: string,
+): NavLink[] {
+  const slugs = solution.instanceShortcutSlugs;
+  if (!slugs?.length) {
+    return [
+      { label: "Open", href: `/voice/agents/${instanceId}` },
+      {
+        label: "Results",
+        href: outcomeHref(solution.slug, "results"),
+      },
+    ];
+  }
+  return slugs
+    .map((slug) => {
+      const page = pageBySlug(solution, slug);
+      if (!page) return null;
+      return {
+        label: page.label,
+        // Instance-scoped management still uses the solution page; agent context via query.
+        href: `${outcomeHref(solution.slug, slug)}?agentId=${encodeURIComponent(instanceId)}`,
+      } satisfies NavLink;
+    })
+    .filter((x): x is NavLink => Boolean(x));
+}
+
+/**
+ * Adaptive solution submenu:
+ * - No setups: Overview + Set Up
+ * - 1–2 setups: Overview, + Set Up Another, each instance with shortcuts
+ * - 3+ setups: Overview, + Set Up Another, Your Setups (N)
+ *
+ * Solutions without navRole metadata keep the full page list (legacy/SMS).
+ */
 function solutionChildren(
   solution: OutcomeSolutionDef,
   instances: SolutionNavInstance[] | undefined,
 ): NavChild[] {
-  const links: NavChild[] = [];
+  const hasRoles = solution.pages.some((p) => p.navRole);
+  const count = instances?.length ?? 0;
+  const setupPage = solution.pages.find((p) => p.kind === "setup");
+  const listPage = solution.pages.find((p) => p.navRole === "list" || p.kind === "active");
+  const listLabel = solution.setupsListLabel || listPage?.label || "Your Setups";
 
-  for (const page of solution.pages) {
-    links.push({
+  if (!hasRoles) {
+    // Legacy / SMS solutions: show all pages; light instance injection.
+    const links: NavChild[] = solution.pages.map((page) => ({
       label: page.label,
       href: outcomeHref(solution.slug, page.slug),
-    });
-  }
-
-  const count = instances?.length ?? 0;
-  if (count === 0) return links;
-
-  if (count > 2) {
-    // Prefer a count badge on Active Setups rather than listing dozens.
-    const activeIdx = links.findIndex(
-      (c) => !("type" in c && c.type === "group") && (c as NavLink).label === "Active Setups",
-    );
-    if (activeIdx >= 0) {
-      (links[activeIdx] as NavLink).label = `Active Setups (${count})`;
-    } else {
-      links.splice(2, 0, {
-        label: `Active Setups (${count})`,
-        href: outcomeHref(solution.slug, "active"),
-      });
+    }));
+    if (count === 0) return links;
+    if (count > 2) {
+      const activeIdx = links.findIndex(
+        (c) => !("type" in c && c.type === "group") && /active|setups|workflows/i.test((c as NavLink).label),
+      );
+      if (activeIdx >= 0) {
+        (links[activeIdx] as NavLink).label = `${(links[activeIdx] as NavLink).label} (${count})`;
+      }
+      return links;
     }
+    const group: NavGroup = {
+      type: "group",
+      label: "Your setups",
+      children: instances!.map((inst) => ({
+        label: `${inst.label} · ${inst.status}`,
+        href: inst.href,
+      })),
+    };
+    links.splice(2, 0, group);
     return links;
   }
 
-  const instanceGroup: NavGroup = {
-    type: "group",
-    label: "Your setups",
-    children: instances!.map((inst) => ({
-      label: `${inst.label} · ${inst.status}`,
-      href: inst.href,
-    })),
-  };
+  const children: NavChild[] = [
+    { label: "Overview", href: outcomeHref(solution.slug) },
+  ];
 
-  const setupIdx = links.findIndex(
-    (c) => !("type" in c && c.type === "group") && (c as NavLink).label === "Set Up",
-  );
-  const insertAt = setupIdx >= 0 ? setupIdx + 1 : 1;
-  links.splice(insertAt, 0, instanceGroup);
-  return links;
+  if (setupPage) {
+    children.push({
+      label: count > 0 ? "+ Set Up Another" : "Set Up",
+      href: outcomeHref(solution.slug, setupPage.slug),
+    });
+  }
+
+  if (count === 0) {
+    return children;
+  }
+
+  if (count > 2) {
+    children.push({
+      label: `${listLabel} (${count})`,
+      href: outcomeHref(solution.slug, listPage?.slug || "active"),
+    });
+    return children;
+  }
+
+  for (const inst of instances!) {
+    children.push({
+      type: "group",
+      label: `${inst.label} · ${inst.status}`,
+      children: [
+        { label: "Open", href: inst.href },
+        ...instanceShortcutLinks(solution, inst.id),
+      ],
+    });
+  }
+
+  return children;
 }
 
 function iconFor(slug: string): LucideIcon {
@@ -91,7 +156,8 @@ function iconFor(slug: string): LucideIcon {
     slug.startsWith("ai-") ||
     slug.includes("call") ||
     slug.includes("hours") ||
-    slug.includes("overflow")
+    slug.includes("overflow") ||
+    slug.includes("answer")
   ) {
     return AudioLines;
   }
@@ -105,7 +171,6 @@ function iconFor(slug: string): LucideIcon {
 export function buildSolutionsNav(options: SolutionsNavOptions = {}): NavItem[] {
   const instances = options.instancesBySolution ?? {};
 
-  // AI Receptionist is the section title — not its own clickable row.
   const receptionistHub = outcomeSolutions.find((s) => s.slug === "ai-receptionist");
   const callOutcomes = outcomeSolutions.filter(
     (s) => s.category === "calls-ai" && s.slug !== "ai-receptionist",
@@ -127,7 +192,6 @@ export function buildSolutionsNav(options: SolutionsNavOptions = {}): NavItem[] 
       href: outcomeHref(solution.slug),
       icon: iconFor(solution.slug),
       children: solutionChildren(solution, instances[solution.slug]),
-      // First outcome opens the AI Receptionist section; Your Receptionists follows last.
       sectionLabel: index === 0 ? "AI Receptionist" : undefined,
     });
   }

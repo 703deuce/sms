@@ -79,6 +79,18 @@ for (const solution of outcomeSolutions) {
   );
 }
 
+// Adaptive submenu: before setup, only Overview + Set Up for managed call solutions.
+const answering = solutionsNav.find((i) => i.label === "AI Answering Service");
+assert.ok(answering, "AI Answering Service required");
+const answeringChildLabels = (answering.children || []).map((c) =>
+  "type" in c && c.type === "group" ? c.label : c.label,
+);
+assert.deepEqual(
+  answeringChildLabels,
+  ["Overview", "Set Up"],
+  "Empty AI Answering Service submenu should only show Overview + Set Up",
+);
+
 const withInstances = buildSolutionsNav({
   instancesBySolution: {
     "appointment-booking": [
@@ -89,12 +101,36 @@ const withInstances = buildSolutionsNav({
         href: "/voice/agents/a1",
       },
     ],
+    "answer-every-call": [
+      {
+        id: "a2",
+        label: "Maya — Main Office",
+        status: "Active",
+        href: "/voice/agents/a2",
+      },
+    ],
   },
 });
 const withInstanceHrefs = new Set(collectNavHrefs(withInstances));
 assert.ok(
   withInstanceHrefs.has("/voice/agents/a1"),
   "Instance shortcuts should appear in Solutions nav when 1–2 setups exist",
+);
+const answeringWith = withInstances.find((i) => i.label === "AI Answering Service");
+const answeringWithLabels = (answeringWith?.children || []).map((c) =>
+  "type" in c && c.type === "group" ? c.label : (c as { label: string }).label,
+);
+assert.ok(
+  answeringWithLabels.includes("+ Set Up Another"),
+  "After setup, Set Up should rename to + Set Up Another",
+);
+assert.ok(
+  answeringWithLabels.some((l) => l.includes("Maya — Main Office")),
+  "After setup, instance name should appear in the submenu",
+);
+assert.ok(
+  !answeringWithLabels.includes("Answering Rules"),
+  "Full management pages should nest under the instance, not top-level, when 1–2 setups exist",
 );
 
 console.log(

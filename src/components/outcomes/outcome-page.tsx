@@ -59,16 +59,39 @@ export function OutcomePageView({
           title={solution.title}
           description={solution.summary}
           actions={
-            solution.setupHref ? (
-              <Link href={solution.setupHref}>
-                <Button size="sm" className="gap-1.5">
-                  {solution.slug === "ai-receptionist"
-                    ? "Create receptionist"
-                    : "Set Up"}
-                  <ArrowRight className="h-3.5 w-3.5" />
-                </Button>
-              </Link>
-            ) : null
+            <>
+              {instances.length > 0 ? (
+                <Link href={outcomeHref(solution.slug, "active")}>
+                  <Button variant="outline" size="sm">
+                    Manage
+                  </Button>
+                </Link>
+              ) : null}
+              {solution.pages.some((p) => p.kind === "test") ? (
+                <Link
+                  href={outcomeHref(
+                    solution.slug,
+                    solution.pages.find((p) => p.kind === "test")!.slug,
+                  )}
+                >
+                  <Button variant="outline" size="sm">
+                    Test
+                  </Button>
+                </Link>
+              ) : null}
+              {solution.setupHref ? (
+                <Link href={solution.setupHref}>
+                  <Button size="sm" className="gap-1.5">
+                    {solution.slug === "ai-receptionist"
+                      ? "Create receptionist"
+                      : instances.length > 0
+                        ? "Set up another"
+                        : "Set Up"}
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </Button>
+                </Link>
+              ) : null}
+            </>
           }
         />
 
@@ -133,7 +156,15 @@ export function OutcomePageView({
               <CardTitle>Shortcuts</CardTitle>
               <ul className="mt-3 divide-y divide-border">
                 {solution.pages
-                  .filter((p) => p.slug && p.kind !== "overview")
+                  .filter(
+                    (p) =>
+                      p.slug &&
+                      p.kind !== "overview" &&
+                      p.kind !== "setup" &&
+                      (p.navRole === "manage" ||
+                        p.navRole === "list" ||
+                        !p.navRole),
+                  )
                   .map((p) => (
                     <li key={p.slug}>
                       <Link
@@ -302,14 +333,28 @@ export function OutcomePageView({
         </CardTitle>
         <p className="mt-2 text-sm text-muted-foreground">
           {page.kind === "results"
-            ? "Track calls rescued, conversations, bookings, messages, and recovery texts for this solution. Detailed charts live in Reports and Voice Analytics."
+            ? "Activity and outcomes for this solution. Detailed charts also live in Reports and Voice Analytics."
             : page.kind === "test"
-              ? "Launch the Testing Lab to rehearse booking and call-handling scenarios before going live."
-              : "These shortcuts open the underlying platform controls for this solution. Use them for small edits; use Set Up only for major reconfiguration or a new location."}
+              ? "Run the scenarios below in the Testing Lab before going live."
+              : "Change these without reopening the full setup wizard. Shared tools (phone numbers, calendars, contacts) stay in the top-level sections."}
         </p>
 
+        {page.bullets?.length ? (
+          <ul className="mt-4 grid gap-2 sm:grid-cols-2">
+            {page.bullets.map((item) => (
+              <li
+                key={item}
+                className="flex items-start gap-2 text-sm text-foreground"
+              >
+                <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
+                {item}
+              </li>
+            ))}
+          </ul>
+        ) : null}
+
         {page.launchHref ? (
-          <div className="mt-4">
+          <div className="mt-5">
             <Link href={page.launchHref}>
               <Button className="gap-1.5">
                 Continue to {page.label}
@@ -317,12 +362,12 @@ export function OutcomePageView({
               </Button>
             </Link>
           </div>
-        ) : (
+        ) : !page.bullets?.length ? (
           <div className="mt-4 rounded-lg border border-dashed border-border bg-muted/30 px-4 py-6 text-sm text-muted-foreground">
             Settings UI for this shortcut is coming next. For now, manage related configuration from
             Advanced → Voice Agents, Automations, or the platform tools linked in the sidebar.
           </div>
-        )}
+        ) : null}
 
         {instances.length > 0 ? (
           <div className="mt-6 border-t border-border pt-4">

@@ -1,5 +1,9 @@
 import { getPrisma } from "@/lib/db";
-import { outcomeHref, outcomeSolutions } from "@/lib/outcomes/registry";
+import {
+  getOutcomeSolution,
+  outcomeHref,
+  outcomeSolutions,
+} from "@/lib/outcomes/registry";
 import type { SolutionNavInstance } from "@/lib/solutions-nav";
 
 type AgentRow = {
@@ -86,31 +90,24 @@ function instanceChildren(
   solutionSlug: string,
   agentId: string,
 ): { label: string; href: string }[] {
-  const base = `/voice/agents/${agentId}`;
-  switch (solutionSlug) {
-    case "appointment-booking":
-      return [
-        { label: "Calendar", href: "/voice/calendars" },
-        { label: "Appointment Types", href: "/voice/calendars" },
-        { label: "Booking Rules", href: `${base}` },
-        { label: "Confirmations", href: "/templates" },
-        { label: "Test", href: "/voice/testing" },
-        { label: "Results", href: outcomeHref(solutionSlug, "results") },
-      ];
-    case "missed-overflow":
-      return [
-        { label: "Ring Rules", href: "/voice/inbound-routing" },
-        { label: "Call Handling", href: base },
-        { label: "Follow-Up", href: "/automations" },
-        { label: "Notifications", href: "/settings/notifications" },
-        { label: "Results", href: outcomeHref(solutionSlug, "results") },
-      ];
-    default:
-      return [
-        { label: "Open agent", href: base },
-        { label: "Results", href: outcomeHref(solutionSlug, "results") },
-      ];
+  const solution = getOutcomeSolution(solutionSlug);
+  const slugs = solution?.instanceShortcutSlugs;
+  if (!slugs?.length) {
+    return [
+      { label: "Open agent", href: `/voice/agents/${agentId}` },
+      { label: "Results", href: outcomeHref(solutionSlug, "results") },
+    ];
   }
+  return slugs
+    .map((slug) => {
+      const page = solution!.pages.find((p) => p.slug === slug);
+      if (!page) return null;
+      return {
+        label: page.label,
+        href: `${outcomeHref(solutionSlug, slug)}?agentId=${encodeURIComponent(agentId)}`,
+      };
+    })
+    .filter((x): x is { label: string; href: string } => Boolean(x));
 }
 
 /** Load voice agents and map them into Solutions-nav instance shortcuts. */
