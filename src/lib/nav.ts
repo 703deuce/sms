@@ -1,26 +1,39 @@
 import {
   LayoutDashboard,
-  Send,
   Inbox,
   Users,
   Megaphone,
+  MessageSquare,
   Workflow,
   FileText,
   Sprout,
   BarChart3,
   Phone,
+  Hash,
   ShieldCheck,
   Puzzle,
   Settings,
   AudioLines,
   ClipboardList,
+  Sparkles,
   type LucideIcon,
 } from "lucide-react";
 
-export type NavChild = {
+/** Leaf link in the sidebar. */
+export type NavLink = {
+  type?: "link";
   label: string;
   href: string;
 };
+
+/** Visual group header with nested links (not a route by itself). */
+export type NavGroup = {
+  type: "group";
+  label: string;
+  children: NavLink[];
+};
+
+export type NavChild = NavLink | NavGroup;
 
 export type NavItem = {
   label: string;
@@ -31,23 +44,231 @@ export type NavItem = {
   emphasize?: boolean;
 };
 
+/** @deprecated use NavLink — kept for gradual call-site typing */
+export type NavChildLegacy = { label: string; href: string };
+
+export function isNavGroup(child: NavChild): child is NavGroup {
+  return child.type === "group";
+}
+
+export function flattenNavLinks(children: NavChild[] | undefined): NavLink[] {
+  if (!children?.length) return [];
+  const out: NavLink[] = [];
+  for (const child of children) {
+    if (isNavGroup(child)) out.push(...child.children);
+    else out.push(child);
+  }
+  return out;
+}
+
+export function collectNavHrefs(items: NavItem[]): string[] {
+  const hrefs = new Set<string>();
+  for (const item of items) {
+    hrefs.add(item.href);
+    for (const link of flattenNavLinks(item.children)) {
+      hrefs.add(link.href);
+    }
+  }
+  return [...hrefs].sort();
+}
+
+/**
+ * Every href that was reachable from the previous flat appNav.
+ * Navigation migration is incomplete if any of these are missing.
+ */
+export const LEGACY_APP_NAV_HREFS = [
+  "/dashboard",
+  "/inbox",
+  "/inbox/mine",
+  "/inbox/unassigned",
+  "/campaigns",
+  "/messaging/media",
+  "/messaging/links",
+  "/messaging/payments",
+  "/templates",
+  "/send/ai",
+  "/contacts",
+  "/contacts/lists",
+  "/contacts/segments",
+  "/contacts/tags",
+  "/contacts/fields",
+  "/contacts/imports",
+  "/contacts/validation",
+  "/contacts/unsubscribed",
+  "/contacts/blocked",
+  "/contacts/invalid",
+  "/automations",
+  "/automations/templates",
+  "/automations/new",
+  "/automations/logs",
+  "/surveys",
+  "/surveys?type=poll",
+  "/surveys?type=nps",
+  "/grow/keywords",
+  "/grow/forms",
+  "/grow/popups",
+  "/grow/pages",
+  "/grow/qr-codes",
+  "/grow/click-to-text",
+  "/grow/contests",
+  "/grow/contact-cards",
+  "/grow/sources",
+  "/voice/overview",
+  "/voice/agents",
+  "/voice/ai-platform",
+  "/voice/knowledge",
+  "/voice/tools",
+  "/voice/calendars",
+  "/voice/testing",
+  "/voice/numbers",
+  "/voice/inbound-routing",
+  "/voice/campaigns",
+  "/voice/calls",
+  "/voice/conversations",
+  "/voice/analytics",
+  "/voice/billing",
+  "/voice/settings",
+  "/reports",
+  "/reports/campaigns",
+  "/reports/messages",
+  "/reports/contacts",
+  "/reports/inbox",
+  "/reports/automations",
+  "/reports/links",
+  "/reports/usage",
+  "/reports/integrations",
+  "/numbers",
+  "/phone",
+  "/phone/calls",
+  "/phone/queues",
+  "/phone/ivr",
+  "/phone/settings",
+  "/compliance",
+  "/integrations",
+  "/integrations/native",
+  "/integrations/crm",
+  "/integrations/crm/pipeline",
+  "/integrations/native/tasks",
+  "/integrations/native/orders",
+  "/integrations/native/leads",
+  "/integrations/native/appointments",
+  "/integrations/native/audit",
+  "/integrations/native/ai-policy",
+  "/integrations/api",
+  "/integrations/webhooks",
+  "/integrations/logs",
+  "/settings/business",
+] as const;
+
 export const appNav: NavItem[] = [
-  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  {
+    label: "Dashboard",
+    href: "/dashboard",
+    icon: LayoutDashboard,
+    children: [{ label: "Overview", href: "/dashboard" }],
+  },
+  {
+    label: "Solutions",
+    href: "/solutions",
+    icon: Sparkles,
+    emphasize: true,
+    children: [
+      { label: "Solution Center", href: "/solutions" },
+      {
+        type: "group",
+        label: "Lead Recovery",
+        children: [
+          { label: "Missed Call Text Back", href: "/solutions/lead-recovery/missed-call-text-back" },
+          { label: "Lead Follow-Up", href: "/solutions/lead-recovery/lead-follow-up" },
+          { label: "Customer Reactivation", href: "/solutions/lead-recovery/customer-reactivation" },
+        ],
+      },
+      {
+        type: "group",
+        label: "AI Call Handling",
+        children: [
+          { label: "AI Answering Machine", href: "/solutions/ai-call-handling/ai-answering-machine" },
+          { label: "After-Hours Assistant", href: "/solutions/ai-call-handling/after-hours-assistant" },
+          { label: "Lead Intake Assistant", href: "/solutions/ai-call-handling/lead-intake-assistant" },
+          { label: "Appointment Assistant", href: "/solutions/ai-call-handling/appointment-assistant" },
+        ],
+      },
+      {
+        type: "group",
+        label: "Customer Growth",
+        children: [
+          {
+            label: "Automated Review Requests",
+            href: "/solutions/customer-growth/automated-review-requests",
+          },
+          { label: "Appointment Reminders", href: "/solutions/customer-growth/appointment-reminders" },
+          { label: "Customer Surveys", href: "/solutions/customer-growth/customer-surveys" },
+        ],
+      },
+      {
+        type: "group",
+        label: "Team Performance",
+        children: [
+          {
+            label: "Sales Call Intelligence",
+            href: "/solutions/team-performance/sales-call-intelligence",
+          },
+          {
+            label: "Call Quality & Coaching",
+            href: "/solutions/team-performance/call-quality-coaching",
+          },
+        ],
+      },
+      {
+        type: "group",
+        label: "Custom",
+        children: [{ label: "Build a Custom Solution", href: "/solutions/custom/build" }],
+      },
+    ],
+  },
   {
     label: "Messaging",
     href: "/inbox",
-    icon: Send,
-    emphasize: true,
+    icon: MessageSquare,
     children: [
-      { label: "Inbox", href: "/inbox" },
-      { label: "Assigned to me", href: "/inbox/mine" },
-      { label: "Unassigned", href: "/inbox/unassigned" },
-      { label: "Campaigns", href: "/campaigns" },
-      { label: "Media & MMS", href: "/messaging/media" },
-      { label: "Link tracking", href: "/messaging/links" },
-      { label: "Text-to-pay", href: "/messaging/payments" },
-      { label: "Templates", href: "/templates" },
-      { label: "AI Composer", href: "/send/ai" },
+      {
+        type: "group",
+        label: "Inbox",
+        children: [
+          { label: "All Conversations", href: "/inbox" },
+          { label: "Assigned to Me", href: "/inbox/mine" },
+          { label: "Unassigned", href: "/inbox/unassigned" },
+        ],
+      },
+      {
+        type: "group",
+        label: "Campaigns",
+        children: [
+          { label: "All Campaigns", href: "/campaigns" },
+          { label: "Send Campaign", href: "/send" },
+        ],
+      },
+      {
+        type: "group",
+        label: "Message Creation",
+        children: [
+          { label: "Templates", href: "/templates" },
+          { label: "AI Composer", href: "/send/ai" },
+        ],
+      },
+      {
+        type: "group",
+        label: "Content & Tracking",
+        children: [
+          { label: "Media & MMS", href: "/messaging/media" },
+          { label: "Link Tracking", href: "/messaging/links" },
+        ],
+      },
+      {
+        type: "group",
+        label: "Payments",
+        children: [{ label: "Text-to-Pay", href: "/messaging/payments" }],
+      },
     ],
   },
   {
@@ -56,15 +277,33 @@ export const appNav: NavItem[] = [
     icon: Users,
     children: [
       { label: "All Contacts", href: "/contacts" },
-      { label: "Lists", href: "/contacts/lists" },
-      { label: "Segments", href: "/contacts/segments" },
-      { label: "Tags", href: "/contacts/tags" },
-      { label: "Custom fields", href: "/contacts/fields" },
-      { label: "Imports", href: "/contacts/imports" },
-      { label: "Validation", href: "/contacts/validation" },
-      { label: "Unsubscribed", href: "/contacts/unsubscribed" },
-      { label: "Blocked", href: "/contacts/blocked" },
-      { label: "Invalid", href: "/contacts/invalid" },
+      {
+        type: "group",
+        label: "Organization",
+        children: [
+          { label: "Lists", href: "/contacts/lists" },
+          { label: "Segments", href: "/contacts/segments" },
+          { label: "Tags", href: "/contacts/tags" },
+          { label: "Custom Fields", href: "/contacts/fields" },
+        ],
+      },
+      {
+        type: "group",
+        label: "Data Management",
+        children: [
+          { label: "Imports", href: "/contacts/imports" },
+          { label: "Validation", href: "/contacts/validation" },
+        ],
+      },
+      {
+        type: "group",
+        label: "Suppression & Deliverability",
+        children: [
+          { label: "Unsubscribed", href: "/contacts/unsubscribed" },
+          { label: "Blocked", href: "/contacts/blocked" },
+          { label: "Invalid", href: "/contacts/invalid" },
+        ],
+      },
     ],
   },
   {
@@ -75,7 +314,43 @@ export const appNav: NavItem[] = [
       { label: "Flows", href: "/automations" },
       { label: "Templates", href: "/automations/templates" },
       { label: "Builder", href: "/automations/new" },
-      { label: "Logs", href: "/automations/logs" },
+      { label: "Run History", href: "/automations/logs" },
+    ],
+  },
+  {
+    label: "Growth",
+    href: "/grow/keywords",
+    icon: Sprout,
+    children: [
+      { label: "SMS Keywords", href: "/grow/keywords" },
+      {
+        type: "group",
+        label: "Lead Capture",
+        children: [
+          { label: "Forms", href: "/grow/forms" },
+          { label: "Popups & Widgets", href: "/grow/popups" },
+          { label: "Signup Pages", href: "/grow/pages" },
+          { label: "Click-to-Text", href: "/grow/click-to-text" },
+        ],
+      },
+      {
+        type: "group",
+        label: "QR & Sharing",
+        children: [
+          { label: "QR Codes", href: "/grow/qr-codes" },
+          { label: "Contact Cards", href: "/grow/contact-cards" },
+        ],
+      },
+      {
+        type: "group",
+        label: "Engagement",
+        children: [{ label: "Contests", href: "/grow/contests" }],
+      },
+      {
+        type: "group",
+        label: "Attribution",
+        children: [{ label: "Sources", href: "/grow/sources" }],
+      },
     ],
   },
   {
@@ -83,25 +358,9 @@ export const appNav: NavItem[] = [
     href: "/surveys",
     icon: ClipboardList,
     children: [
-      { label: "All surveys", href: "/surveys" },
+      { label: "All Surveys", href: "/surveys" },
       { label: "Polls", href: "/surveys?type=poll" },
       { label: "NPS", href: "/surveys?type=nps" },
-    ],
-  },
-  {
-    label: "Grow",
-    href: "/grow/keywords",
-    icon: Sprout,
-    children: [
-      { label: "Keywords", href: "/grow/keywords" },
-      { label: "Forms", href: "/grow/forms" },
-      { label: "Popups & widgets", href: "/grow/popups" },
-      { label: "Signup pages", href: "/grow/pages" },
-      { label: "QR codes", href: "/grow/qr-codes" },
-      { label: "Click-to-text", href: "/grow/click-to-text" },
-      { label: "Contests", href: "/grow/contests" },
-      { label: "Contact cards", href: "/grow/contact-cards" },
-      { label: "Sources", href: "/grow/sources" },
     ],
   },
   {
@@ -110,20 +369,66 @@ export const appNav: NavItem[] = [
     icon: AudioLines,
     children: [
       { label: "Overview", href: "/voice/overview" },
-      { label: "Agents", href: "/voice/agents" },
-      { label: "AI platform", href: "/voice/ai-platform" },
-      { label: "Knowledge bases", href: "/voice/knowledge" },
-      { label: "Tools", href: "/voice/tools" },
-      { label: "Calendars", href: "/voice/calendars" },
-      { label: "Testing lab", href: "/voice/testing" },
-      { label: "Phone numbers", href: "/voice/numbers" },
-      { label: "Inbound routing", href: "/voice/inbound-routing" },
-      { label: "Outbound campaigns", href: "/voice/campaigns" },
-      { label: "Calls", href: "/voice/calls" },
-      { label: "Conversations", href: "/voice/conversations" },
-      { label: "Analytics", href: "/voice/analytics" },
-      { label: "Usage & billing", href: "/voice/billing" },
-      { label: "Settings", href: "/voice/settings" },
+      {
+        type: "group",
+        label: "Build",
+        children: [
+          { label: "Agents", href: "/voice/agents" },
+          { label: "AI Platform", href: "/voice/ai-platform" },
+          { label: "Knowledge Bases", href: "/voice/knowledge" },
+          { label: "Tools", href: "/voice/tools" },
+          { label: "Calendars", href: "/voice/calendars" },
+        ],
+      },
+      {
+        type: "group",
+        label: "Numbers & Routing",
+        children: [
+          { label: "AI Phone Numbers", href: "/voice/numbers" },
+          { label: "Inbound Routing", href: "/voice/inbound-routing" },
+        ],
+      },
+      {
+        type: "group",
+        label: "Operations",
+        children: [
+          { label: "Testing Lab", href: "/voice/testing" },
+          { label: "Outbound Campaigns", href: "/voice/campaigns" },
+        ],
+      },
+      {
+        type: "group",
+        label: "Activity",
+        children: [
+          { label: "Calls", href: "/voice/calls" },
+          { label: "Conversations", href: "/voice/conversations" },
+        ],
+      },
+      {
+        type: "group",
+        label: "Performance",
+        children: [
+          { label: "Analytics", href: "/voice/analytics" },
+          { label: "Usage & Billing", href: "/voice/billing" },
+        ],
+      },
+      {
+        type: "group",
+        label: "Configuration",
+        children: [{ label: "Settings", href: "/voice/settings" }],
+      },
+    ],
+  },
+  {
+    label: "Business Phone",
+    href: "/phone",
+    icon: Phone,
+    children: [
+      { label: "Softphone", href: "/phone" },
+      { label: "Call History", href: "/phone/calls" },
+      { label: "Queues", href: "/phone/queues" },
+      { label: "IVR Menus", href: "/phone/ivr" },
+      { label: "Settings", href: "/phone/settings" },
     ],
   },
   {
@@ -132,50 +437,87 @@ export const appNav: NavItem[] = [
     icon: BarChart3,
     children: [
       { label: "Overview", href: "/reports" },
-      { label: "Campaigns", href: "/reports/campaigns" },
-      { label: "Messages", href: "/reports/messages" },
-      { label: "Contacts", href: "/reports/contacts" },
-      { label: "Inbox", href: "/reports/inbox" },
-      { label: "Automations", href: "/reports/automations" },
-      { label: "Links", href: "/reports/links" },
-      { label: "Usage", href: "/reports/usage" },
-      { label: "Integrations", href: "/reports/integrations" },
+      {
+        type: "group",
+        label: "Messaging",
+        children: [
+          { label: "Campaigns", href: "/reports/campaigns" },
+          { label: "Messages", href: "/reports/messages" },
+          { label: "Inbox", href: "/reports/inbox" },
+          { label: "Links", href: "/reports/links" },
+        ],
+      },
+      {
+        type: "group",
+        label: "Customers",
+        children: [{ label: "Contacts", href: "/reports/contacts" }],
+      },
+      {
+        type: "group",
+        label: "Workflows",
+        children: [{ label: "Automations", href: "/reports/automations" }],
+      },
+      {
+        type: "group",
+        label: "Platform",
+        children: [
+          { label: "Usage", href: "/reports/usage" },
+          { label: "Integrations", href: "/reports/integrations" },
+        ],
+      },
     ],
   },
-  { label: "Phone Numbers", href: "/numbers", icon: Phone },
   {
-    label: "Phone",
-    href: "/phone",
-    icon: Phone,
-    children: [
-      { label: "Softphone", href: "/phone" },
-      { label: "Call history", href: "/phone/calls" },
-      { label: "Queues", href: "/phone/queues" },
-      { label: "IVR menus", href: "/phone/ivr" },
-      { label: "Settings", href: "/phone/settings" },
-    ],
+    label: "Phone Numbers",
+    href: "/numbers",
+    icon: Hash,
+    children: [{ label: "My Numbers", href: "/numbers" }],
   },
-  { label: "Compliance", href: "/compliance", icon: ShieldCheck },
   {
     label: "Integrations",
     href: "/integrations",
     icon: Puzzle,
     children: [
       { label: "Directory", href: "/integrations" },
-      { label: "Connect apps", href: "/integrations/native" },
-      { label: "CRM", href: "/integrations/crm" },
-      { label: "Pipeline", href: "/integrations/crm/pipeline" },
-      { label: "Tasks", href: "/integrations/native/tasks" },
-      { label: "Orders", href: "/integrations/native/orders" },
-      { label: "Lead inbox", href: "/integrations/native/leads" },
-      { label: "Appointments", href: "/integrations/native/appointments" },
-      { label: "Action audit", href: "/integrations/native/audit" },
-      { label: "AI safety", href: "/integrations/native/ai-policy" },
-      { label: "API Keys", href: "/integrations/api" },
-      { label: "Webhooks", href: "/integrations/webhooks" },
-      { label: "Developer Logs", href: "/integrations/logs" },
+      { label: "Connect Apps", href: "/integrations/native" },
+      {
+        type: "group",
+        label: "CRM",
+        children: [
+          { label: "CRM Connections", href: "/integrations/crm" },
+          { label: "CRM Pipeline", href: "/integrations/crm/pipeline" },
+        ],
+      },
+      {
+        type: "group",
+        label: "Integration Data",
+        children: [
+          { label: "Tasks", href: "/integrations/native/tasks" },
+          { label: "Orders", href: "/integrations/native/orders" },
+          { label: "Lead Inbox", href: "/integrations/native/leads" },
+          { label: "Appointments", href: "/integrations/native/appointments" },
+        ],
+      },
+      {
+        type: "group",
+        label: "Governance",
+        children: [
+          { label: "Action Audit", href: "/integrations/native/audit" },
+          { label: "AI Safety", href: "/integrations/native/ai-policy" },
+        ],
+      },
+      {
+        type: "group",
+        label: "Developer",
+        children: [
+          { label: "API Keys", href: "/integrations/api" },
+          { label: "Webhooks", href: "/integrations/webhooks" },
+          { label: "Developer Logs", href: "/integrations/logs" },
+        ],
+      },
     ],
   },
+  { label: "Compliance", href: "/compliance", icon: ShieldCheck },
   { label: "Settings", href: "/settings/business", icon: Settings },
 ];
 
@@ -201,8 +543,27 @@ export const adminNav: NavItem[] = [
 export const pageTitles: Record<string, string> = {
   "/dashboard": "Dashboard",
   "/getting-started": "Getting Started",
+  "/solutions": "Solution Center",
+  "/solutions/lead-recovery": "Lead Recovery",
+  "/solutions/lead-recovery/missed-call-text-back": "Missed Call Text Back",
+  "/solutions/lead-recovery/lead-follow-up": "Lead Follow-Up",
+  "/solutions/lead-recovery/customer-reactivation": "Customer Reactivation",
+  "/solutions/ai-call-handling": "AI Call Handling",
+  "/solutions/ai-call-handling/ai-answering-machine": "AI Answering Machine",
+  "/solutions/ai-call-handling/after-hours-assistant": "After-Hours Assistant",
+  "/solutions/ai-call-handling/lead-intake-assistant": "Lead Intake Assistant",
+  "/solutions/ai-call-handling/appointment-assistant": "Appointment Assistant",
+  "/solutions/customer-growth": "Customer Growth",
+  "/solutions/customer-growth/automated-review-requests": "Automated Review Requests",
+  "/solutions/customer-growth/appointment-reminders": "Appointment Reminders",
+  "/solutions/customer-growth/customer-surveys": "Customer Surveys",
+  "/solutions/team-performance": "Team Performance",
+  "/solutions/team-performance/sales-call-intelligence": "Sales Call Intelligence",
+  "/solutions/team-performance/call-quality-coaching": "Call Quality & Coaching",
+  "/solutions/custom": "Custom Solutions",
+  "/solutions/custom/build": "Build a Custom Solution",
   "/send": "New Campaign",
-  "/send/quick": "Quick Text",
+  "/send/quick": "Quick Send",
   "/send/test": "Test Message",
   "/send/ai": "AI Campaign Composer",
   "/inbox": "Inbox",
@@ -233,7 +594,7 @@ export const pageTitles: Record<string, string> = {
   "/automations": "Automations",
   "/automations/new": "New Automation",
   "/automations/templates": "Automation Templates",
-  "/automations/logs": "Automation Logs",
+  "/automations/logs": "Automation Run History",
   "/surveys": "Surveys",
   "/voice/overview": "AI Voice Overview",
   "/voice/agents": "Voice Agents",
@@ -254,7 +615,7 @@ export const pageTitles: Record<string, string> = {
   "/templates": "Templates",
   "/templates/new": "Create Template",
   "/templates/ai": "AI Template Generator",
-  "/grow/keywords": "Keywords",
+  "/grow/keywords": "SMS Keywords",
   "/grow/forms": "Opt-in Forms",
   "/grow/popups": "Popups & Widgets",
   "/grow/contests": "Contests",
@@ -262,6 +623,7 @@ export const pageTitles: Record<string, string> = {
   "/grow/qr-codes": "QR Codes",
   "/grow/pages": "Signup Pages",
   "/grow/sources": "Subscriber Sources",
+  "/grow/click-to-text": "Click-to-Text",
   "/reports": "Reports Overview",
   "/reports/campaigns": "Campaign Reports",
   "/reports/messages": "Message Reports",
@@ -271,6 +633,7 @@ export const pageTitles: Record<string, string> = {
   "/reports/links": "Link Reports",
   "/reports/usage": "Usage & Cost",
   "/reports/audit-log": "Audit Log",
+  "/reports/integrations": "Integration Reports",
   "/numbers": "Phone Numbers",
   "/numbers/buy": "Buy Number",
   "/numbers/port": "Port Number",
@@ -325,6 +688,7 @@ export const pageTitles: Record<string, string> = {
 
 export function getPageTitle(pathname: string) {
   if (pageTitles[pathname]) return pageTitles[pathname];
+  if (pathname.startsWith("/solutions/")) return "Solutions";
   if (pathname.startsWith("/campaigns/")) return "Campaign Detail";
   if (pathname.startsWith("/contacts/")) return "Contact Detail";
   if (pathname.startsWith("/automations/")) return "Automation Detail";
@@ -332,7 +696,7 @@ export function getPageTitle(pathname: string) {
   if (pathname.startsWith("/voice/agents/")) return "Agent builder";
   if (pathname.startsWith("/voice/calls/")) return "Call detail";
   if (pathname.startsWith("/voice/")) return "AI Voice";
-  if (pathname.startsWith("/phone/")) return "Phone";
+  if (pathname.startsWith("/phone/")) return "Business Phone";
   if (pathname.startsWith("/numbers/")) return "Number Detail";
   if (pathname.startsWith("/admin/customers/")) return "Customer Detail";
   return "Transovo SMS";

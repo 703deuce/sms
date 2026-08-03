@@ -6,7 +6,7 @@ import { Sidebar } from "@/components/layout/sidebar";
 import { getPageTitle } from "@/lib/nav";
 import type { DashboardMetrics, PhoneNumber, Workspace } from "@/lib/types";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { Suspense, useState } from "react";
 
 export function AppShell({
   children,
@@ -33,13 +33,15 @@ export function AppShell({
 
   return (
     <div className="min-h-screen bg-background">
-      <Sidebar
-        workspaceId={workspaceId}
-        userName={userName}
-        workspaces={workspaces}
-        open={menuOpen}
-        onClose={() => setMenuOpen(false)}
-      />
+      <Suspense fallback={null}>
+        <Sidebar
+          workspaceId={workspaceId}
+          userName={userName}
+          workspaces={workspaces}
+          open={menuOpen}
+          onClose={() => setMenuOpen(false)}
+        />
+      </Suspense>
       <div className="lg:pl-[260px]">
         <Header
           title={title}
