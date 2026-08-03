@@ -106,6 +106,35 @@ async function main() {
     throw new Error(`deploy failed: ${JSON.stringify(deployed.json).slice(0, 500)}`);
   }
 
+  // Phone Test Desk must answer with AI immediately (not human-first ring).
+  // A human-first rule with no staff online yields "cannot be completed as dialed".
+  const rulesRes = await api(jar, "/api/voice/routing");
+  const agentRules = (rulesRes.json?.data || []).filter((r) => r.agentId === AGENT_ID);
+  const hasBad = agentRules.some(
+    (r) => r.actions?.type === "human_first" || r.actions?.type === "ai_after_hours",
+  );
+  const hasAi = agentRules.some((r) => r.actions?.type === "ai_answer");
+  if (hasBad || !hasAi) {
+    for (const r of agentRules) {
+      await api(jar, `/api/voice/routing/${r.id}`, { method: "DELETE" });
+    }
+    await api(jar, "/api/voice/routing", {
+      method: "POST",
+      body: {
+        name: "Phone Test Desk: AI answer always",
+        agentId: AGENT_ID,
+        priority: 1,
+        conditions: { flowManaged: true, forceAiAnswer: true },
+        actions: { type: "ai_answer", agentId: AGENT_ID },
+      },
+    });
+  }
+
+  const rulesAfter = await api(jar, "/api/voice/routing");
+  const finalRules = (rulesAfter.json?.data || [])
+    .filter((r) => r.agentId === AGENT_ID)
+    .map((r) => ({ name: r.name, type: r.actions?.type, priority: r.priority }));
+
   console.log(
     JSON.stringify(
       {
@@ -119,6 +148,7 @@ async function main() {
         health: built.json.healthStatus || built.json.data?.healthStatus,
         savedStartup:
           saved.json?.data?.draftConfig?.callHandling?.startupGreeting,
+        routing: finalRules,
         audioUrl:
           "https://transovo.ai/connection-greeting/transovo-connection-greeting-phone.mp3",
       },
