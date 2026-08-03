@@ -23,9 +23,13 @@ import { InfoCallout, SelectableCard, SidePanel, StatusPill } from "../ui";
 export function ActivateStep({
   state,
   patch,
+  onActivate,
+  onGoToTest,
 }: {
   state: AppointmentReceptionistWizardState;
   patch: (p: Partial<AppointmentReceptionistWizardState>) => void;
+  onActivate?: () => void | Promise<void>;
+  onGoToTest?: () => void;
 }) {
   const will = buildReceptionistWillList(state);
   const phone = state.phoneNumberE164
@@ -310,7 +314,10 @@ export function ActivateStep({
           type="button"
           disabled={blocked && state.activationMode === "activate_now"}
           className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2.5 text-sm font-medium text-primary-foreground disabled:opacity-50"
-          onClick={() => patch({ activationMode: "activate_now" })}
+          onClick={() => {
+            patch({ activationMode: "activate_now" });
+            void onActivate?.();
+          }}
         >
           <Zap className="h-4 w-4" />
           Activate now
@@ -318,6 +325,7 @@ export function ActivateStep({
         <button
           type="button"
           className="flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 py-2.5 text-sm font-medium"
+          onClick={() => onGoToTest?.()}
         >
           <Play className="h-4 w-4" />
           Run final test

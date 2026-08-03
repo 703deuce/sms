@@ -567,7 +567,8 @@ export async function processVoiceWebhookEvent(input: {
           startInboundNoiseSuppression,
         } = await import("../pstn-audio");
 
-        const cfg = parseVoiceAgentConfig(agent.draftConfig);
+        const { loadVoiceAgentRuntimeConfig } = await import("../load-agent-config");
+        const cfg = await loadVoiceAgentRuntimeConfig(workspaceId, agent.id);
         const startup = startupGreetingFromConfig(cfg);
         const outputGainDb = normalizeOutputGainDb(cfg.voiceLanguage?.outputGainDb);
 

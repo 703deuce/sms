@@ -183,17 +183,48 @@ async function ensureWizardCalendarServices(input: {
   state: AppointmentReceptionistWizardState;
 }): Promise<{ calendarConnectionId: string | null; serviceIds: string[] }> {
   const prisma = getPrisma();
-  const calendar = await prisma.voiceCalendarConnection.findFirst({
+  let calendar = await prisma.voiceCalendarConnection.findFirst({
     where: {
       workspaceId: input.workspaceId,
       status: { in: ["connected", "active", "ok"] },
-      provider: { in: ["google", "microsoft", "internal"] },
+      provider: { in: ["google", "microsoft", "internal", "calendly"] },
     },
     orderBy: { updatedAt: "desc" },
   });
 
+  // Integrations Calendly counts even without a VoiceCalendarConnection row.
+  if (!calendar) {
+    try {
+      const { getConnection } = await import("@/lib/integrations/connections");
+      const conn = await getConnection(input.workspaceId, "calendly");
+      if (conn?.status === "connected") {
+        const existing = await prisma.voiceCalendarConnection.findFirst({
+          where: { workspaceId: input.workspaceId, provider: "calendly" },
+        });
+        calendar = existing
+          ? await prisma.voiceCalendarConnection.update({
+              where: { id: existing.id },
+              data: { status: "connected" },
+            })
+          : await prisma.voiceCalendarConnection.create({
+              data: {
+                workspaceId: input.workspaceId,
+                name: "Calendly",
+                provider: "calendly",
+                status: "connected",
+                config: { source: "integrations" },
+              },
+            });
+      }
+    } catch {
+      // ignore
+    }
+  }
+
   const serviceIds: string[] = [];
   const enabled = input.state.appointmentTypes.filter((t) => t.enabled);
+  const enabledIds = new Set(enabled.map((t) => t.id));
+
   for (const t of enabled) {
     const existing = await prisma.voiceService.findFirst({
       where: {
@@ -202,13 +233,16 @@ async function ensureWizardCalendarServices(input: {
       },
     });
     if (existing) {
+      const prev = (existing.config || {}) as Record<string, unknown>;
       const updated = await prisma.voiceService.update({
         where: { id: existing.id },
         data: {
           durationMinutes: t.durationMin || 30,
           calendarId: calendar?.id || existing.calendarId,
           config: {
+            ...prev,
             wizardTypeId: t.id,
+            enabled: true,
             description: t.description || null,
             location: t.location || null,
             locations: t.location ? [t.location] : [],
@@ -235,6 +269,7 @@ async function ensureWizardCalendarServices(input: {
           calendarId: calendar?.id || null,
           config: {
             wizardTypeId: t.id,
+            enabled: true,
             description: t.description || null,
             location: t.location || null,
             locations: t.location ? [t.location] : [],
@@ -252,6 +287,26 @@ async function ensureWizardCalendarServices(input: {
       });
       serviceIds.push(created.id);
     }
+  }
+
+  // Soft-disable wizard-managed services that were turned off in the wizard.
+  const wizardServices = await prisma.voiceService.findMany({
+    where: { workspaceId: input.workspaceId },
+  });
+  for (const svc of wizardServices) {
+    const cfg = (svc.config || {}) as Record<string, unknown>;
+    const wizardTypeId = typeof cfg.wizardTypeId === "string" ? cfg.wizardTypeId : null;
+    if (!wizardTypeId) continue;
+    if (enabledIds.has(wizardTypeId)) continue;
+    await prisma.voiceService.update({
+      where: { id: svc.id },
+      data: {
+        config: {
+          ...cfg,
+          enabled: false,
+        },
+      },
+    });
   }
 
   return {
@@ -284,13 +339,24 @@ export async function runAppointmentReceptionistActivateHooks(input: {
     where: {
       workspaceId: input.workspaceId,
       status: { in: ["connected", "active", "ok"] },
-      provider: { in: ["google", "microsoft", "internal"] },
+      provider: { in: ["google", "microsoft", "internal", "calendly"] },
     },
     select: { id: true },
   });
 
+  let hasCalendarConnection = Boolean(calendar);
+  if (!hasCalendarConnection) {
+    try {
+      const { getConnection } = await import("@/lib/integrations/connections");
+      const conn = await getConnection(input.workspaceId, "calendly");
+      hasCalendarConnection = conn?.status === "connected";
+    } catch {
+      // ignore
+    }
+  }
+
   const issues = getWizardActivationIssues(input.state, {
-    hasCalendarConnection: Boolean(calendar),
+    hasCalendarConnection: hasCalendarConnection || Boolean(input.state.calendarConnected),
     hasKnowledgeText: Boolean(input.state.businessName?.trim()),
   });
 

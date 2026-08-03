@@ -1,10 +1,6 @@
 /**
  * Promote appointment / receptionist agents whose activation was scheduled
  * and whose scheduledAt is now in the past.
- *
- * Wizard stores `advanced.activationMode === "schedule"` + `advanced.scheduledAt`
- * and keeps the agent as DRAFT until this publisher runs (unless it was already
- * ACTIVE and schedule was an edit — then status is preserved).
  */
 
 import { getPrisma } from "@/lib/db";
@@ -66,10 +62,74 @@ function readScheduleMeta(draftConfig: unknown): {
   };
 }
 
-function mergeWizardState(
-  partial: Partial<AppointmentReceptionistWizardState>,
-): AppointmentReceptionistWizardState {
-  return { ...createDefaultWizardState(), ...partial };
+async function hydrateWizardState(input: {
+  workspaceId: string;
+  agent: {
+    id: string;
+    phoneNumberId: string | null;
+    displayName: string | null;
+    name: string;
+    draftConfig: unknown;
+  };
+  partial: Partial<AppointmentReceptionistWizardState>;
+}): Promise<AppointmentReceptionistWizardState> {
+  const prisma = getPrisma();
+  const state = { ...createDefaultWizardState(), ...input.partial };
+
+  if (!state.phoneNumberId && input.agent.phoneNumberId) {
+    state.phoneNumberId = input.agent.phoneNumberId;
+  }
+  if (!state.agentName?.trim()) {
+    state.agentName = input.agent.displayName || input.agent.name || state.agentName;
+  }
+
+  if (state.phoneNumberId && !state.phoneNumberE164) {
+    const pn = await prisma.phoneNumber.findFirst({
+      where: { id: state.phoneNumberId, workspaceId: input.workspaceId },
+      select: { e164: true },
+    });
+    if (pn?.e164) state.phoneNumberE164 = pn.e164;
+  }
+
+  const calendar = await prisma.voiceCalendarConnection.findFirst({
+    where: {
+      workspaceId: input.workspaceId,
+      status: { in: ["connected", "active", "ok"] },
+      provider: { in: ["google", "microsoft", "internal", "calendly"] },
+    },
+    select: { id: true, provider: true },
+  });
+  if (calendar) {
+    state.calendarConnected = true;
+    if (!state.calendarProvider) {
+      state.calendarProvider = calendar.provider as AppointmentReceptionistWizardState["calendarProvider"];
+    }
+  } else {
+    // Integrations Calendly (no VoiceCalendarConnection row)
+    try {
+      const { getConnection } = await import("@/lib/integrations/connections");
+      const conn = await getConnection(input.workspaceId, "calendly");
+      if (conn?.status === "connected") {
+        state.calendarConnected = true;
+        state.calendarProvider = "calendly";
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  // Prefer draftConfig greeting / voice when snapshot is incomplete.
+  const draft = (input.agent.draftConfig || {}) as Record<string, unknown>;
+  const callHandling = (draft.callHandling || {}) as Record<string, unknown>;
+  const voiceLanguage = (draft.voiceLanguage || {}) as Record<string, unknown>;
+  if (!state.openingGreeting?.trim() && typeof callHandling.greeting === "string") {
+    state.openingGreeting = callHandling.greeting;
+  }
+  if (!state.voiceId?.trim() && typeof voiceLanguage.voiceId === "string") {
+    state.voiceId = voiceLanguage.voiceId;
+  }
+
+  return state;
 }
 
 export async function promoteScheduledReceptionists(opts?: {
@@ -84,11 +144,7 @@ export async function promoteScheduledReceptionists(opts?: {
   const candidates = await prisma.voiceAgent.findMany({
     where: {
       ...(opts?.workspaceId ? { workspaceId: opts.workspaceId } : {}),
-      OR: [
-        { status: "DRAFT" },
-        { status: "ACTIVE" },
-        { status: "TESTING" },
-      ],
+      OR: [{ status: "DRAFT" }, { status: "ACTIVE" }, { status: "TESTING" }],
       purpose: "appointment_receptionist",
     },
     take: limit * 3,
@@ -125,7 +181,11 @@ export async function promoteScheduledReceptionists(opts?: {
     }
 
     try {
-      const state = mergeWizardState(meta.wizard);
+      const state = await hydrateWizardState({
+        workspaceId: agent.workspaceId,
+        agent,
+        partial: meta.wizard,
+      });
       const preIssues = getWizardActivationIssues(state, {
         hasCalendarConnection: Boolean(state.calendarConnected),
         hasKnowledgeText: Boolean(state.businessName?.trim()),
@@ -156,7 +216,9 @@ export async function promoteScheduledReceptionists(opts?: {
 
       await publishVoiceAgent(agent.workspaceId, agent.id, "scheduled_activation");
 
-      const draft = (agent.draftConfig || {}) as Record<string, unknown>;
+      // Re-read after publish so we don't wipe flow-applied draftConfig.
+      const fresh = await prisma.voiceAgent.findUnique({ where: { id: agent.id } });
+      const draft = (fresh?.draftConfig || agent.draftConfig || {}) as Record<string, unknown>;
       const advanced = (draft.advanced || {}) as Record<string, unknown>;
       const wizard =
         advanced.appointmentReceptionistWizard &&
@@ -179,6 +241,7 @@ export async function promoteScheduledReceptionists(opts?: {
               scheduledActivatedAt: now.toISOString(),
               appointmentReceptionistWizard: {
                 ...wizard,
+                ...state,
                 activationMode: "activate_now",
                 scheduledAt: meta.scheduledAt,
                 scheduledActivatedAt: now.toISOString(),

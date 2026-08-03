@@ -49,10 +49,9 @@ export function AppointmentsStep({
         const json = await res.json();
         const rows = (json.data || []) as Array<{ id: string; name: string; provider: string; status: string }>;
         setCalendars(rows);
-        // Only treat Google/Microsoft/internal as live calendar connections.
         const connected = rows.find(
           (r) =>
-            ["google", "microsoft", "internal"].includes(r.provider) &&
+            ["google", "microsoft", "internal", "calendly"].includes(r.provider) &&
             ["connected", "active", "ok"].includes(String(r.status || "")),
         );
         if (connected) {
@@ -194,6 +193,31 @@ export function AppointmentsStep({
             <button
               type="button"
               className="inline-flex items-center gap-1 text-xs font-medium text-primary"
+              onClick={() => {
+                const id = `type_${Date.now()}`;
+                patch({
+                  appointmentTypes: [
+                    ...state.appointmentTypes,
+                    {
+                      id,
+                      name: "New appointment",
+                      durationMin: 30,
+                      calendar: "Primary calendar",
+                      status: "needs_rules",
+                      enabled: true,
+                      description: "",
+                      location: "",
+                      modality: "in_person",
+                      bookingHours: "Mon - Fri, 8:00 AM - 6:00 PM",
+                      minNotice: "2 hours",
+                      maxDaysAhead: "30 days",
+                      requiredFields: ["full_name", "phone"],
+                      bookingPermission: "book_directly",
+                    },
+                  ],
+                  selectedAppointmentTypeId: id,
+                });
+              }}
             >
               <Plus className="h-3.5 w-3.5" />
               Add appointment
@@ -219,7 +243,25 @@ export function AppointmentsStep({
                     }`}
                     onClick={() => patch({ selectedAppointmentTypeId: row.id })}
                   >
-                    <td className="px-4 py-3 font-medium">{row.name}</td>
+                    <td className="px-4 py-3 font-medium">
+                      <label className="inline-flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={row.enabled}
+                          onChange={() => {
+                            patch({
+                              appointmentTypes: state.appointmentTypes.map((t) =>
+                                t.id === row.id ? { ...t, enabled: !t.enabled } : t,
+                              ),
+                            });
+                          }}
+                          className="h-4 w-4 rounded border-border text-primary"
+                        />
+                        <span className={!row.enabled ? "text-muted-foreground line-through" : ""}>
+                          {row.name}
+                        </span>
+                      </label>
+                    </td>
                     <td className="px-4 py-3 text-muted-foreground">{row.durationMin} min</td>
                     <td className="px-4 py-3 text-muted-foreground">{row.calendar}</td>
                     <td className="px-4 py-3">
@@ -245,6 +287,7 @@ export function AppointmentsStep({
                 type="button"
                 className="rounded-md p-1 text-muted-foreground hover:bg-muted"
                 aria-label="Close"
+                onClick={() => patch({ selectedAppointmentTypeId: null })}
               >
                 <X className="h-4 w-4" />
               </button>

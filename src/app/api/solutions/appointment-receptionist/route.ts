@@ -141,16 +141,25 @@ export async function POST(request: Request) {
       status: shouldPublish || preserveActiveOnSchedule ? undefined : "DRAFT",
     });
 
-    // Long-term memory via VoiceMemoryConfig when opted in.
-    if (state.longTermMemory && (shouldPublish || scheduleOnly || effectiveAction !== "create_draft")) {
+    // Long-term memory via VoiceMemoryConfig — enable or explicitly disable.
+    if (shouldPublish || scheduleOnly || effectiveAction !== "create_draft") {
       try {
         const { saveMemoryConfig } = await import("@/lib/voice/platform/ai-platform");
-        await saveMemoryConfig(auth.workspaceId, agentId, {
-          mode: "caller",
-          retentionDays: 30,
-        });
+        if (state.longTermMemory) {
+          await saveMemoryConfig(auth.workspaceId, agentId, {
+            mode: "caller",
+            retentionDays: 30,
+          });
+        } else {
+          await saveMemoryConfig(auth.workspaceId, agentId, {
+            mode: "none",
+            retentionDays: 0,
+          });
+        }
       } catch {
-        warnings.push("Could not enable long-term memory — configure it later in AI platform.");
+        if (state.longTermMemory) {
+          warnings.push("Could not enable long-term memory — configure it later in AI platform.");
+        }
       }
     }
 
@@ -234,7 +243,9 @@ export async function POST(request: Request) {
       }
     } else if (scheduleOnly) {
       warnings.push(
-        `Activation scheduled for ${state.scheduledAt} — agent kept as DRAFT until then.`,
+        preserveActiveOnSchedule
+          ? `Activation changes scheduled for ${state.scheduledAt} — live agent stays ACTIVE until then.`
+          : `Activation scheduled for ${state.scheduledAt} — agent kept as DRAFT until then.`,
       );
     }
 

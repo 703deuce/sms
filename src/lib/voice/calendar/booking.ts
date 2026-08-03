@@ -4,6 +4,7 @@ import {
   parseBookingHours,
   parseDaysAhead,
 } from "@/lib/solutions/appointment-receptionist/notice-utils";
+import { fieldSatisfied, normalizeBookingToolArgs } from "./booking-args";
 import {
   computeFreeSlots,
   getGoogleBusy,
@@ -35,6 +36,7 @@ type ServiceConfig = {
   staffIds?: string[];
   lastAssignedIndex?: number;
   timezone?: string | null;
+  enabled?: boolean;
 };
 
 type StaffConfig = {
@@ -83,9 +85,21 @@ function slotPassesNotice(start: Date, noticeMinutes: number, now: Date) {
 
 export function assertBookingPermission(svcCfg: ServiceConfig) {
   const permission = String(svcCfg.bookingPermission || "book_directly").toLowerCase();
-  if (permission === "collect_info_only" || permission === "request_only") {
+  if (
+    permission === "collect_info_only" ||
+    permission === "request_only" ||
+    permission === "send_booking_link" ||
+    permission === "waitlist" ||
+    permission === "require_deposit"
+  ) {
     throw new Error(
-      "This service does not allow direct booking — collect caller details and create a follow-up instead.",
+      permission === "send_booking_link"
+        ? "This service requires sending a booking link — do not book directly; collect the caller’s contact info and send or promise a scheduling link."
+        : permission === "waitlist"
+          ? "This service is waitlist-only — collect caller details instead of booking a time."
+          : permission === "require_deposit"
+            ? "This service requires a deposit before booking — collect details and have staff follow up."
+            : "This service does not allow direct booking — collect caller details and create a follow-up instead.",
     );
   }
   if (permission === "suggest_then_confirm") {
@@ -101,12 +115,10 @@ export function assertRequiredFields(
   const required = Array.isArray(svcCfg.requiredFields)
     ? svcCfg.requiredFields.map(String)
     : [];
+  const normalized = normalizeBookingToolArgs(input);
   for (const field of required) {
-    const key = field.trim();
-    if (!key) continue;
-    const val = input[key] ?? input[key.toLowerCase()];
-    if (val == null || String(val).trim() === "") {
-      throw new Error(`Missing required booking field: ${key}`);
+    if (!fieldSatisfied(field, normalized)) {
+      throw new Error(`Missing required booking field: ${field}`);
     }
   }
 }
@@ -289,26 +301,30 @@ export async function getAvailability(
   input: Record<string, unknown>,
 ): Promise<{ slots: Slot[] }> {
   const prisma = getPrisma();
-  const serviceName = String(input.serviceName || input.service || "default");
-  const duration = Number(input.durationMinutes || 30);
-  const days = Number(input.daysAhead || 7);
-  const locationFilter = input.location ? String(input.location) : undefined;
+  const args = normalizeBookingToolArgs(input);
+  const serviceName = String(args.serviceName || args.service || "Appointment");
+  const duration = Number(args.durationMinutes || 30);
+  const days = Number(args.daysAhead || 7);
+  const locationFilter = args.location ? String(args.location) : undefined;
 
   const service = await prisma.voiceService.findFirst({
     where: { workspaceId, name: serviceName },
   });
   const svcCfg = (service?.config || {}) as ServiceConfig;
+  if (svcCfg.enabled === false) {
+    return { slots: [] };
+  }
   const durationMinutes = service?.durationMinutes || duration;
   const bufferMinutes = service?.bufferMinutes || 0;
   const noticeMinutes = Number(
-    svcCfg.minimumBookingNoticeMinutes || input.minimumBookingNoticeMinutes || 0,
+    svcCfg.minimumBookingNoticeMinutes || args.minimumBookingNoticeMinutes || 0,
   );
   const locations = serviceLocations(svcCfg);
   const maxDaysAhead = serviceMaxDaysAhead(svcCfg);
   const effectiveDays =
     maxDaysAhead > 0 ? Math.min(Math.max(1, days), maxDaysAhead) : Math.max(1, days);
   const timezone =
-    String(input.timezone || svcCfg.timezone || "America/New_York").trim() ||
+    String(args.timezone || svcCfg.timezone || "America/New_York").trim() ||
     "America/New_York";
 
   if (locationFilter && locations.length && !locations.includes(locationFilter)) {
@@ -316,7 +332,7 @@ export async function getAvailability(
   }
 
   const calendarId =
-    (input.calendarId as string | undefined) || service?.calendarId || undefined;
+    (args.calendarId as string | undefined) || service?.calendarId || undefined;
   const cal = await resolveCalendarConnection(workspaceId, calendarId);
   if (cal && (cal.provider === "google" || cal.provider === "microsoft")) {
     const config = (cal.config || {}) as CalendarConfig;
@@ -432,18 +448,22 @@ export async function bookAppointment(
   input: Record<string, unknown>,
 ) {
   const prisma = getPrisma();
-  const startsAt = new Date(String(input.startsAt || ""));
+  const args = normalizeBookingToolArgs(input);
+  const startsAt = new Date(String(args.startsAt || ""));
   if (Number.isNaN(startsAt.getTime())) throw new Error("startsAt required");
 
-  const serviceName = String(input.serviceName || input.service || "Appointment");
+  const serviceName = String(args.serviceName || args.service || "Appointment");
   const service = await prisma.voiceService.findFirst({
     where: { workspaceId, name: serviceName },
   });
   const svcCfg = (service?.config || {}) as ServiceConfig;
+  if (svcCfg.enabled === false) {
+    throw new Error("This appointment type is not currently bookable");
+  }
   assertBookingPermission(svcCfg);
-  assertRequiredFields(svcCfg, input);
+  assertRequiredFields(svcCfg, args);
 
-  const durationMinutes = Number(input.durationMinutes || service?.durationMinutes || 30);
+  const durationMinutes = Number(args.durationMinutes || service?.durationMinutes || 30);
   const bufferMinutes = service?.bufferMinutes || 0;
   const bufferMs = bufferMinutes * 60_000;
   const noticeMinutes = Number(svcCfg.minimumBookingNoticeMinutes || 0);
@@ -452,10 +472,10 @@ export async function bookAppointment(
   assertBookingTimingGates({ startsAt, noticeMinutes, maxDaysAhead, now });
 
   const endsAt = new Date(startsAt.getTime() + durationMinutes * 60_000);
-  const phone = input.phone ? normalizeE164(String(input.phone)) : "";
-  const contactId = input.contactId as string | undefined;
-  const callId = input.callId as string | undefined;
-  const location = input.location ? String(input.location) : null;
+  const phone = args.phone ? normalizeE164(String(args.phone)) : "";
+  const contactId = args.contactId as string | undefined;
+  const callId = args.callId as string | undefined;
+  const location = args.location ? String(args.location) : null;
 
   const conflict = await prisma.voiceAppointment.findFirst({
     where: {
@@ -468,17 +488,17 @@ export async function bookAppointment(
   if (conflict) throw new Error("Slot no longer available");
 
   // Re-check provider busy right before insert (availability can go stale).
-  let staffName = String(input.staffName || "") || null;
+  let staffName = String(args.staffName || "") || null;
   if (!staffName) {
     const picked = await pickStaffRoundRobin(workspaceId, service?.id, svcCfg.staffIds);
     if (picked) staffName = picked.name;
   }
 
-  const timezone = String(input.timezone || svcCfg.timezone || "America/New_York");
+  const timezone = String(args.timezone || svcCfg.timezone || "America/New_York");
 
   let externalId: string | null = null;
   const calendarId =
-    (input.calendarId as string | undefined) || service?.calendarId || undefined;
+    (args.calendarId as string | undefined) || service?.calendarId || undefined;
   const cal = await resolveCalendarConnection(workspaceId, calendarId);
   if (cal && (cal.provider === "google" || cal.provider === "microsoft")) {
     const config = (cal.config || {}) as CalendarConfig;
@@ -548,7 +568,7 @@ export async function bookAppointment(
       timezone,
       status: "confirmed",
       externalId,
-      metadata: { ...input, location } as object,
+      metadata: { ...args, location } as object,
     },
   });
 
@@ -561,7 +581,7 @@ export async function bookAppointment(
 
   // SMS confirmation — gated by agent messaging.smsConfirmations when agentId is known.
   let smsSent = false;
-  const agentId = input.agentId ? String(input.agentId) : "";
+  const agentId = args.agentId ? String(args.agentId) : "";
   let smsEnabled = !agentId; // legacy callers without agent context keep prior behavior
   if (agentId) {
     const { loadVoiceAgentRuntimeConfigRecord } = await import("../load-agent-config");
@@ -576,7 +596,7 @@ export async function bookAppointment(
       smsEnabled = tools.includes("send_sms");
     }
   }
-  if (input.skipSms === true) smsEnabled = false;
+  if (args.skipSms === true) smsEnabled = false;
 
   if (phone && smsEnabled) {
     const when = startsAt.toLocaleString("en-US", {
@@ -595,7 +615,7 @@ export async function bookAppointment(
   }
 
   // Email confirmation job
-  let emailTo = input.email ? String(input.email) : null;
+  let emailTo = args.email ? String(args.email) : null;
   if (!emailTo && contactId) {
     const contact = await prisma.contact.findUnique({ where: { id: contactId } });
     emailTo = contact?.email || null;

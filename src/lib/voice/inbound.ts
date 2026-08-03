@@ -220,7 +220,8 @@ async function resolveRecordingDisclosure(workspaceId: string, agentId?: string 
   if (!agentId) return null;
   const agent = await prisma.voiceAgent.findUnique({ where: { id: agentId } });
   if (!agent) return null;
-  const cfg = parseVoiceAgentConfig(agent.draftConfig);
+  const { loadVoiceAgentRuntimeConfig } = await import("./load-agent-config");
+  const cfg = await loadVoiceAgentRuntimeConfig(agent.workspaceId, agentId);
   const fromCompliance = (cfg.compliance || {}) as Record<string, unknown>;
   if (fromCompliance.recordingDisclosureText) {
     return String(fromCompliance.recordingDisclosureText);
@@ -307,7 +308,8 @@ async function startAiOnInboundCall(input: {
     await startInboundNoiseSuppression(input.telnyxCallControlId);
 
     if (agent.telnyxAssistantId) {
-      const cfg = parseVoiceAgentConfig(agent.draftConfig);
+      const { loadVoiceAgentRuntimeConfig } = await import("./load-agent-config");
+      const cfg = await loadVoiceAgentRuntimeConfig(input.workspaceId, agent.id);
       const startup = startupGreetingFromConfig(cfg);
       const outputGainDb = normalizeOutputGainDb(cfg.voiceLanguage?.outputGainDb);
 
@@ -617,9 +619,12 @@ async function executeVoicemail(input: {
 
   if (!input.greetingText && input.agentId) {
     const agent = await prisma.voiceAgent.findUnique({ where: { id: input.agentId } });
-    const cfg = parseVoiceAgentConfig(agent?.draftConfig);
-    const vm = (cfg.voicemail || {}) as Record<string, unknown>;
-    if (vm.greetingText) greeting = String(vm.greetingText);
+    if (agent) {
+      const { loadVoiceAgentRuntimeConfig } = await import("./load-agent-config");
+      const cfg = await loadVoiceAgentRuntimeConfig(agent.workspaceId, agent.id);
+      const vm = (cfg.voicemail || {}) as Record<string, unknown>;
+      if (vm.greetingText) greeting = String(vm.greetingText);
+    }
   }
 
   if (input.telnyxCallControlId && isTelnyxVoiceConfigured()) {

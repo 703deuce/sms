@@ -232,9 +232,9 @@ export function buildWizardAgentConfig(
             handOffWhenReady: true,
           }
         : {
-            // create_custom (and upload_custom without URL) use TTS/text mask
+            // create_custom (and upload_custom without URL) — TTS mask before AI.
             enabled: true,
-            mode: "ai" as const,
+            mode: "tts" as const,
             text: state.connectionGreetingText || DEFAULT_CONNECTION_GREETING,
             audioUrl: customAudioUrl,
             delayMs: "auto" as const,
@@ -479,20 +479,23 @@ export function buildWizardAgentConfig(
     advanced: {
       ...(base.advanced || {}),
       appointmentReceptionistWizard: {
-        solutionName: state.solutionName,
-        answerWhen: state.answerWhen,
-        knowledgeSource: state.knowledgeSource,
-        websiteUrl: state.websiteUrl,
+        // Full wizard snapshot so scheduled promote can re-run activate hooks.
+        ...state,
+        phoneNumberId: state.phoneNumberId,
+        phoneNumberE164: state.phoneNumberE164,
+        agentName: state.agentName,
+        voiceId: state.voiceId,
+        openingGreeting: state.openingGreeting,
+        businessName: state.businessName,
+        capabilities: state.capabilities,
+        transferDestinationPhone: state.transferDestinationPhone,
+        transferDestinationName: state.transferDestinationName,
+        calendarConnected: state.calendarConnected,
         calendarProvider: state.calendarProvider,
-        timezone: state.timezone,
-        collectFields: state.collectFields,
-        appointmentTypes: state.appointmentTypes.filter((t) => t.enabled),
+        appointmentTypes: state.appointmentTypes,
         activationMode: state.activationMode,
         scheduledAt: state.scheduledAt || null,
-        longTermMemory: Boolean(state.longTermMemory),
-        crmEnabled: Boolean(state.crmEnabled),
-        warmTransfer: Boolean(state.warmTransfer),
-        detectVoicemailOnTransfer: Boolean(state.detectVoicemailOnTransfer),
+        lastTestPassed: state.lastTestPassed,
       },
       capabilityPack: "appointment_receptionist",
       ...(state.longTermMemory

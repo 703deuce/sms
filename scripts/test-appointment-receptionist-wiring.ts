@@ -20,6 +20,10 @@ import {
   buildWizardAgentConfig,
 } from "../src/lib/solutions/appointment-receptionist/build-agent-config";
 import {
+  fieldSatisfied,
+  normalizeBookingToolArgs,
+} from "../src/lib/voice/calendar/booking-args";
+import {
   applyActionTimezone,
   resolveRingTimeoutSeconds,
   resolveTransferInsightFields,
@@ -339,6 +343,59 @@ assert(
     return Boolean(buildWizardAgentConfig(state).messaging?.smsConfirmations);
   })(),
 );
+
+// --- Booking arg aliases (Telnyx schema ↔ handler) ---
+{
+  const n = normalizeBookingToolArgs({
+    startAt: "2026-08-04T15:00:00.000Z",
+    customerPhone: "+15551234567",
+    customerName: "Jane Doe",
+    customerEmail: "jane@example.com",
+    serviceId: "Initial Consultation",
+  });
+  assert("alias startAt→startsAt", n.startsAt === "2026-08-04T15:00:00.000Z");
+  assert("alias customerPhone→phone", n.phone === "+15551234567");
+  assert("alias customerName→name", n.name === "Jane Doe");
+  assert("alias customerEmail→email", n.email === "jane@example.com");
+  assert("alias serviceId name→serviceName", n.serviceName === "Initial Consultation");
+  assert(
+    "required full_name satisfied by name",
+    fieldSatisfied("full_name", n) === true,
+  );
+  assert("required service satisfied by serviceName", fieldSatisfied("service", n) === true);
+  assert("required phone satisfied", fieldSatisfied("phone", n) === true);
+}
+
+{
+  const cfg = buildWizardAgentConfig(createDefaultWizardState());
+  const startup = cfg.callHandling?.startupGreeting as { mode?: string } | undefined;
+  // default connection greeting is transovo_professional
+  assert(
+    "full wizard snapshot persisted for promote",
+    Boolean(
+      (cfg.advanced as { appointmentReceptionistWizard?: { phoneNumberId?: unknown } })
+        ?.appointmentReceptionistWizard &&
+        "capabilities" in
+          ((cfg.advanced as { appointmentReceptionistWizard: object })
+            .appointmentReceptionistWizard || {}),
+    ),
+  );
+  assert("default agent name matches voice Astra", createDefaultWizardState().agentName === "Astra");
+  void startup;
+}
+
+{
+  const state = createDefaultWizardState();
+  state.connectionGreeting = "create_custom";
+  state.connectionGreetingText = "One moment while I connect you.";
+  const cfg = buildWizardAgentConfig(state);
+  const startup = cfg.callHandling?.startupGreeting as { mode?: string; text?: string };
+  assert("create_custom uses tts mode", startup?.mode === "tts");
+  assert(
+    "create_custom keeps text",
+    String(startup?.text || "").includes("connect you"),
+  );
+}
 
 console.log("");
 if (failures.length) {

@@ -9,7 +9,7 @@ export async function executeBuiltinVoiceAction(input: {
   input: Record<string, unknown>;
 }) {
   const prisma = getPrisma();
-  const args = input.input || {};
+  let args = input.input || {};
 
   switch (input.toolType) {
     case "lookup_customer":
@@ -659,6 +659,8 @@ export async function executeBuiltinVoiceAction(input: {
       return { ok: true, queued: true, to, subject };
     }
     case "calendar_availability": {
+      const { normalizeBookingToolArgs } = await import("../calendar/booking-args");
+      args = normalizeBookingToolArgs(args);
       // Prefer Calendly Scheduling API when the workspace has Calendly connected.
       try {
         const { getConnection } = await import("@/lib/integrations/connections");
@@ -720,6 +722,8 @@ export async function executeBuiltinVoiceAction(input: {
       return await getAvailability(input.workspaceId, args);
     }
     case "book_appointment": {
+      const { normalizeBookingToolArgs } = await import("../calendar/booking-args");
+      args = normalizeBookingToolArgs(args);
       // Prefer Calendly POST /invitees when connected so bookings land on the
       // host calendar and fire invitee webhooks (same path as automations).
       try {

@@ -141,6 +141,38 @@ export async function applyFlowToAgentDraft(input: {
         String(baseTransfers.warmTransferInstructions || "").trim() || "",
     },
     flows: bundle,
+    // Prefer wizard booking/message conversation sections over flow graph wipe.
+    conversationFlow: (() => {
+      const baseSections = Array.isArray(base.conversationFlow?.sections)
+        ? base.conversationFlow!.sections
+        : [];
+      const patchSections = Array.isArray(compiled.configPatch.conversationFlow?.sections)
+        ? compiled.configPatch.conversationFlow!.sections!
+        : [];
+      if (!baseSections.length) {
+        return compiled.configPatch.conversationFlow || base.conversationFlow;
+      }
+      const byId = new Map<string, (typeof baseSections)[number]>();
+      for (const s of patchSections) byId.set(String(s.id || s.type), s);
+      for (const s of baseSections) {
+        const key = String(s.id || s.type);
+        const existing = byId.get(key);
+        if (!existing) {
+          byId.set(key, s);
+          continue;
+        }
+        // Keep wizard section config (appointmentTypes, collectFields, etc.).
+        byId.set(key, {
+          ...existing,
+          ...s,
+          config: {
+            ...((existing as { config?: object }).config || {}),
+            ...((s as { config?: object }).config || {}),
+          },
+        });
+      }
+      return { sections: [...byId.values()] };
+    })(),
     enabledBuiltinTools: [
       ...new Set([
         ...(compiled.enabledBuiltinTools || []),

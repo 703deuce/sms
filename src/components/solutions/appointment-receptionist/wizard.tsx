@@ -199,7 +199,17 @@ export function AppointmentReceptionistWizard() {
         {step.id === "test" ? (
           <TestStep state={state} patch={patch} onEnsureAgent={ensureAgentForTest} />
         ) : null}
-        {step.id === "activate" ? <ActivateStep state={state} patch={patch} /> : null}
+        {step.id === "activate" ? (
+          <ActivateStep
+            state={state}
+            patch={patch}
+            onActivate={() => void persist("activate")}
+            onGoToTest={() => {
+              const testIdx = WIZARD_STEPS.findIndex((s) => s.id === "test");
+              if (testIdx >= 0) setStepIndex(testIdx);
+            }}
+          />
+        ) : null}
       </div>
 
       <div className="sticky bottom-0 z-20 -mx-4 mt-6 border-t border-border bg-card/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6 lg:static lg:mx-0 lg:mt-8 lg:rounded-xl lg:border lg:px-5">
