@@ -194,8 +194,9 @@ export function ActivateStep({
           Run final test
         </button>
         <InfoCallout>
-          Once activated, the receptionist will start answering calls according to the set
-          schedule. SMS pending A2P does not block voice booking.
+          Activate now publishes this agent and assigns {phone} so the next inbound call
+          reaches this receptionist — even if another agent was answering that number before.
+          Only one AI answers a number at a time. SMS pending A2P does not block voice booking.
         </InfoCallout>
       </SidePanel>
     </div>

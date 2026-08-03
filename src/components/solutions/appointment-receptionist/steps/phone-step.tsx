@@ -11,7 +11,14 @@ import { CheckCircle2, Circle, Play } from "lucide-react";
 import { useEffect, useState } from "react";
 import { InfoCallout, RadioRow, SelectableCard, SidePanel, StatusPill } from "../ui";
 
-type PhoneRow = { id: string; e164: string; friendlyName: string | null; status: string };
+type PhoneRow = {
+  id: string;
+  e164: string;
+  friendlyName: string | null;
+  status: string;
+  aiOwner?: { id: string; name: string; status: string } | null;
+  hasSoftphoneAssignment?: boolean;
+};
 
 const GREETING_OPTIONS: Array<{ id: ConnectionGreetingMode; label: string }> = [
   { id: "none", label: "No connection greeting" },
@@ -54,6 +61,10 @@ export function PhoneStep({
     : state.phoneNumberE164
       ? formatPhone(state.phoneNumberE164)
       : "No number selected";
+  const otherOwner =
+    selected?.aiOwner && selected.aiOwner.id !== state.agentId
+      ? selected.aiOwner
+      : null;
 
   return (
     <div className="flex gap-6">
@@ -118,27 +129,60 @@ export function PhoneStep({
         </div>
         {state.numberSource === "existing" && numbers.length ? (
           <div className="mt-3 space-y-1.5">
-            {numbers.map((n) => (
-              <button
-                key={n.id}
-                type="button"
-                onClick={() => {
-                  patch({
-                    phoneNumberId: n.id,
-                    phoneNumberE164: n.e164,
-                    numberSource: "existing",
-                  });
-                }}
-                className={`block w-full max-w-md rounded-lg border px-2.5 py-1.5 text-left text-xs ${
-                  state.phoneNumberId === n.id
-                    ? "border-primary bg-primary/5 font-medium text-primary"
-                    : "border-border"
-                }`}
-              >
-                {formatPhone(n.e164)}
-                {n.friendlyName ? ` · ${n.friendlyName}` : ""}
-              </button>
-            ))}
+            {numbers.map((n) => {
+              const ownedByOther =
+                n.aiOwner && n.aiOwner.id !== state.agentId ? n.aiOwner : null;
+              return (
+                <button
+                  key={n.id}
+                  type="button"
+                  onClick={() => {
+                    patch({
+                      phoneNumberId: n.id,
+                      phoneNumberE164: n.e164,
+                      numberSource: "existing",
+                    });
+                  }}
+                  className={`block w-full max-w-md rounded-lg border px-2.5 py-1.5 text-left text-xs ${
+                    state.phoneNumberId === n.id
+                      ? "border-primary bg-primary/5 font-medium text-primary"
+                      : "border-border"
+                  }`}
+                >
+                  <span className="block">
+                    {formatPhone(n.e164)}
+                    {n.friendlyName ? ` · ${n.friendlyName}` : ""}
+                  </span>
+                  {ownedByOther ? (
+                    <span className="mt-0.5 block font-normal text-muted-foreground">
+                      Currently answered by {ownedByOther.name}
+                      {ownedByOther.status === "ACTIVE" ? " (live)" : ""} — activate to switch
+                    </span>
+                  ) : n.aiOwner?.id === state.agentId ? (
+                    <span className="mt-0.5 block font-normal text-muted-foreground">
+                      Already assigned to this receptionist
+                    </span>
+                  ) : (
+                    <span className="mt-0.5 block font-normal text-muted-foreground">
+                      Available — activate to put this receptionist on the line
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+            {otherOwner ? (
+              <InfoCallout>
+                Selecting this number switches inbound calls from{" "}
+                <strong>{otherOwner.name}</strong> to this appointment receptionist when you
+                activate. Only one AI agent answers a number at a time.
+              </InfoCallout>
+            ) : null}
+            {selected?.hasSoftphoneAssignment ? (
+              <InfoCallout>
+                This number also has a softphone / team assignment. Human routing can take
+                priority over AI until that assignment is removed in Numbers.
+              </InfoCallout>
+            ) : null}
           </div>
         ) : null}
 
@@ -270,7 +314,9 @@ export function PhoneStep({
             </ol>
           </div>
           <InfoCallout>
-            Connection greeting plays while the AI initializes.
+            Activate publishes this agent to Telnyx and assigns your selected number so
+            inbound callers reach this receptionist. Connection greeting plays while the AI
+            initializes.
           </InfoCallout>
         </div>
       </SidePanel>

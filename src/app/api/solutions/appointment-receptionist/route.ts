@@ -54,7 +54,22 @@ export async function POST(request: Request) {
 
     let published = false;
     let publishError: string | null = null;
+    let previousAiOwner: { id: string; name: string } | null = null;
     if (action === "activate") {
+      if (state.phoneNumberId) {
+        try {
+          const { getPhoneNumberAiOwner } = await import("@/lib/voice/agent-phone");
+          const owner = await getPhoneNumberAiOwner(
+            auth.workspaceId,
+            state.phoneNumberId,
+          );
+          if (owner && owner.id !== agentId) {
+            previousAiOwner = { id: owner.id, name: owner.name };
+          }
+        } catch {
+          // non-blocking
+        }
+      }
       try {
         await publishVoiceAgent(auth.workspaceId, agentId, auth.session.userId);
         published = true;
@@ -83,6 +98,7 @@ export async function POST(request: Request) {
         status: published ? "ACTIVE" : updated.status,
         published,
         publishError,
+        previousAiOwner,
         telnyxAssistantId: (updated as { telnyxAssistantId?: string | null }).telnyxAssistantId,
       },
     });
