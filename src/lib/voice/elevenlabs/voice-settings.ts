@@ -104,7 +104,11 @@ export function validateElevenLabsBeforePatch(input: {
 
 /**
  * Minimal payload first (voice + api_key_ref). Optional tuning afterwards.
- * Never sets expressive_mode (Telnyx Ultra only).
+ * Never enables expressive_mode (Telnyx Ultra only).
+ *
+ * Important: Telnyx MERGES voice_settings across PATCHes. After switching from
+ * Ultra/NaturalHD, leftovers like expressive_mode / language_boost / voice_speed
+ * can remain on the assistant. Explicitly clear those for ElevenLabs.
  */
 export function buildElevenLabsVoiceSettings(
   input: ElevenLabsVoiceSettingsInput,
@@ -116,10 +120,36 @@ export function buildElevenLabsVoiceSettings(
     throw new Error("api_key_ref is required for ElevenLabs");
   }
 
+  const caps = input.modelCapabilities;
+  // Account discovery: Flash + v3 report can_use_style/speaker_boost = false.
+  const canStyle = caps ? caps.can_use_style : modelId === "eleven_multilingual_v2";
+  const canBoost = caps
+    ? caps.can_use_speaker_boost
+    : modelId === "eleven_multilingual_v2";
+
   const voice_settings: Record<string, unknown> = {
     voice: providerVoiceId,
     api_key_ref: apiKeyRef,
+    // Clear Ultra / NaturalHD leftovers that Telnyx otherwise merges through.
+    expressive_mode: false,
+    language_boost: null,
+    // Natural-only speed field — reset so a prior 1.4 Ultra speed does not linger.
+    voice_speed: 1,
   };
+
+  // Always neutralize unsupported ElevenLabs knobs so leftovers cannot be relayed.
+  voice_settings.use_speaker_boost = canBoost
+    ? input.useSpeakerBoost == null
+      ? true
+      : Boolean(input.useSpeakerBoost)
+    : false;
+  voice_settings.style = canStyle
+    ? input.style != null && Number.isFinite(input.style)
+      ? Number(input.style)
+      : modelId === "eleven_multilingual_v2"
+        ? 0.25
+        : 0.2
+    : 0;
 
   if (input.includeTuning) {
     const stability =
@@ -133,21 +163,10 @@ export function buildElevenLabsVoiceSettings(
     // Telnyx maps ElevenLabs "stability" to voice_settings.temperature
     voice_settings.temperature = stability;
     voice_settings.similarity_boost = similarity;
-
-    const caps = input.modelCapabilities;
-    const styleDefault = modelId === "eleven_multilingual_v2" ? 0.25 : 0.2;
-    const canStyle = caps ? caps.can_use_style : true;
-    const canBoost = caps ? caps.can_use_speaker_boost : true;
-    if (canStyle) {
-      voice_settings.style =
-        input.style != null && Number.isFinite(input.style)
-          ? Number(input.style)
-          : styleDefault;
-    }
-    if (canBoost) {
-      voice_settings.use_speaker_boost =
-        input.useSpeakerBoost == null ? true : Boolean(input.useSpeakerBoost);
-    }
+  } else {
+    // Neutral defaults — avoid leaving stale similarity_boost from prior Ultra/EL sync.
+    voice_settings.similarity_boost = 0.75;
+    voice_settings.temperature = 0.5;
   }
 
   return {

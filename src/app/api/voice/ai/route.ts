@@ -782,6 +782,86 @@ export async function POST(request: Request) {
         });
         return NextResponse.json({ data: result });
       }
+      case "probe_elevenlabs_direct_tts": {
+        const modelId = String(body.modelId || "").trim();
+        const voiceId = String(body.voiceId || body.elevenLabsVoiceId || "").trim();
+        const text = String(
+          body.text ||
+            "Thank you for calling. I'm the virtual assistant. How can I help you today?",
+        ).slice(0, 500);
+        if (!modelId || !voiceId) {
+          return NextResponse.json(
+            { error: "modelId and voiceId are required" },
+            { status: 400 },
+          );
+        }
+        const { synthesizeElevenLabsPreview } = await import(
+          "@/lib/voice/elevenlabs/client"
+        );
+        const started = Date.now();
+        try {
+          const audio = await synthesizeElevenLabsPreview({
+            voiceId,
+            modelId,
+            text,
+          });
+          return NextResponse.json({
+            data: {
+              ok: true,
+              modelId,
+              voiceId,
+              bytes: audio.byteLength,
+              elapsedMs: Date.now() - started,
+              // never return audio blob to keep response small — size proves generation worked
+            },
+          });
+        } catch (err) {
+          const status =
+            err && typeof err === "object" && "status" in err
+              ? Number((err as { status: number }).status)
+              : 502;
+          const elBody =
+            err && typeof err === "object" && "body" in err
+              ? (err as { body: unknown }).body
+              : null;
+          return NextResponse.json(
+            {
+              error: err instanceof Error ? err.message : String(err),
+              status,
+              body: elBody,
+              data: { ok: false, modelId, voiceId, elapsedMs: Date.now() - started },
+            },
+            { status: status >= 400 && status < 600 ? status : 502 },
+          );
+        }
+      }
+      case "diagnose_recent_voice_calls": {
+        // Re-pull Telnyx conversations so greeting TTS errors are fresh.
+        await import("@/lib/voice/platform/ai-platform").then((m) =>
+          m.syncConversations(workspaceId),
+        );
+        const rows = await getPrisma().voiceAiConversation.findMany({
+          where: {
+            workspaceId,
+            ...(agentId ? { agentId } : {}),
+          },
+          orderBy: { createdAt: "desc" },
+          take: 10,
+        });
+        const recent = rows.map((row) => {
+          const meta = (row.metadata || {}) as Record<string, unknown>;
+          const nested = (meta.metadata || {}) as Record<string, unknown>;
+          return {
+            callId: row.callId,
+            telnyxConversationId: row.telnyxConversationId,
+            createdAt: row.createdAt,
+            telnyxError: meta.error != null ? String(meta.error) : null,
+            assistantVersionId: nested.assistant_version_id ?? null,
+            assistantId: nested.assistant_id ?? null,
+          };
+        });
+        return NextResponse.json({ data: { recent } });
+      }
       case "test_voice": {
         const agentRow = await getPrisma().voiceAgent.findFirst({
           where: { id: agentId, workspaceId },
