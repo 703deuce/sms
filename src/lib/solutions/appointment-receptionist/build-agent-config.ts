@@ -520,7 +520,7 @@ export function buildReceptionistWillList(state: AppointmentReceptionistWizardSt
   const phone = state.phoneNumberE164 || "your assigned number";
   const items = [
     `Answer incoming calls on ${phone}`,
-    `Greet the caller as ${state.agentName || "Maya"}${state.businessName ? ` from ${state.businessName}` : ""}`,
+    `Greet the caller as ${state.agentName || "Astra"}${state.businessName ? ` from ${state.businessName}` : ""}`,
   ];
   if (state.capabilities.includes("answer_questions")) {
     items.push("Answer questions using your business knowledge base");
