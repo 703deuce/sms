@@ -219,30 +219,30 @@ export function VoiceStep({
             <h3 className="text-sm font-semibold">Choose a voice</h3>
             <div className="grid gap-2 sm:grid-cols-2">
               {WIZARD_VOICES.map((v) => (
-                <SelectableCard
-                  key={v.id}
-                  selected={state.voiceId === v.id}
-                  onClick={() => patch({ voiceId: v.id, voiceLabel: v.label })}
-                  title={v.label}
-                  description={v.description}
-                >
-                  <div className="mt-2 flex items-center justify-between">
-                    <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium">
-                      {v.badge}
-                    </span>
-                    <button
-                      type="button"
-                      className="rounded-full p-1.5 text-primary hover:bg-primary/10"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        void previewVoice(v.id);
-                      }}
-                      aria-label={`Preview ${v.label}`}
-                    >
-                      <Play className={`h-3.5 w-3.5 ${previewing === v.id ? "animate-pulse" : ""}`} />
-                    </button>
-                  </div>
-                </SelectableCard>
+                <div key={v.id} className="relative">
+                  <SelectableCard
+                    selected={state.voiceId === v.id}
+                    onClick={() => patch({ voiceId: v.id, voiceLabel: v.label })}
+                    title={v.label}
+                    description={v.description}
+                  >
+                    <div className="mt-2">
+                      <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium">
+                        {v.badge}
+                      </span>
+                    </div>
+                  </SelectableCard>
+                  <button
+                    type="button"
+                    className="absolute bottom-3 right-3 z-10 rounded-full p-1.5 text-primary hover:bg-primary/10"
+                    onClick={() => void previewVoice(v.id)}
+                    aria-label={`Preview ${v.label}`}
+                  >
+                    <Play
+                      className={`h-3.5 w-3.5 ${previewing === v.id ? "animate-pulse" : ""}`}
+                    />
+                  </button>
+                </div>
               ))}
             </div>
 

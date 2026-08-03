@@ -59,8 +59,20 @@ export async function POST(request: Request) {
         await publishVoiceAgent(auth.workspaceId, agentId, auth.session.userId);
         published = true;
       } catch (err) {
-        publishError = err instanceof Error ? err.message : "Publish failed";
-        // Keep draft saved even if publish is blocked (e.g. missing phone).
+        // Try build-for-test then publish once — common when assistant not synced yet.
+        try {
+          const { buildVoiceAgentForTest } = await import("@/lib/voice/agent-service");
+          await buildVoiceAgentForTest(auth.workspaceId, agentId, auth.session.userId);
+          await publishVoiceAgent(auth.workspaceId, agentId, auth.session.userId);
+          published = true;
+        } catch (err2) {
+          publishError =
+            err2 instanceof Error
+              ? err2.message
+              : err instanceof Error
+                ? err.message
+                : "Publish failed";
+        }
       }
     }
 

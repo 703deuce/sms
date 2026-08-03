@@ -99,30 +99,7 @@ export function PhoneStep({
                 ? "Pick a number already in your workspace."
                 : "No numbers yet — buy or port one first."
             }
-          >
-            {state.numberSource === "existing" && numbers.length ? (
-              <div className="mt-3 space-y-1.5">
-                {numbers.map((n) => (
-                  <button
-                    key={n.id}
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      patch({ phoneNumberId: n.id, phoneNumberE164: n.e164 });
-                    }}
-                    className={`block w-full rounded-lg border px-2.5 py-1.5 text-left text-xs ${
-                      state.phoneNumberId === n.id
-                        ? "border-primary bg-primary/5 font-medium text-primary"
-                        : "border-border"
-                    }`}
-                  >
-                    {formatPhone(n.e164)}
-                    {n.friendlyName ? ` · ${n.friendlyName}` : ""}
-                  </button>
-                ))}
-              </div>
-            ) : null}
-          </SelectableCard>
+          />
           <SelectableCard
             selected={state.numberSource === "buy_new"}
             onClick={() => patch({ numberSource: "buy_new" })}
@@ -139,6 +116,31 @@ export function PhoneStep({
             description="Keep your current number and route calls to Transovo."
           />
         </div>
+        {state.numberSource === "existing" && numbers.length ? (
+          <div className="mt-3 space-y-1.5">
+            {numbers.map((n) => (
+              <button
+                key={n.id}
+                type="button"
+                onClick={() => {
+                  patch({
+                    phoneNumberId: n.id,
+                    phoneNumberE164: n.e164,
+                    numberSource: "existing",
+                  });
+                }}
+                className={`block w-full max-w-md rounded-lg border px-2.5 py-1.5 text-left text-xs ${
+                  state.phoneNumberId === n.id
+                    ? "border-primary bg-primary/5 font-medium text-primary"
+                    : "border-border"
+                }`}
+              >
+                {formatPhone(n.e164)}
+                {n.friendlyName ? ` · ${n.friendlyName}` : ""}
+              </button>
+            ))}
+          </div>
+        ) : null}
 
         <div className="grid gap-6 lg:grid-cols-2">
           <div>

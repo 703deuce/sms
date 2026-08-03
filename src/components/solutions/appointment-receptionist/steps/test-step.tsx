@@ -32,6 +32,7 @@ export function TestStep({
     TEST_SCENARIOS.find((s) => s.id === state.testScenario) || TEST_SCENARIOS[2];
   const [mode, setMode] = useState<"browser" | "my_phone" | "agent">("browser");
   const [running, setRunning] = useState(false);
+  const [liveNote, setLiveNote] = useState("");
   const [messages, setMessages] = useState<ChatMsg[]>([
     {
       role: "ai",
@@ -76,6 +77,7 @@ export function TestStep({
 
   async function runScenario() {
     setRunning(true);
+    setLiveNote("");
     setMessages([
       {
         role: "ai",
@@ -83,6 +85,35 @@ export function TestStep({
       },
     ]);
     setTools([]);
+
+    if (state.agentId) {
+      try {
+        await fetch(`/api/voice/agents/${state.agentId}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ action: "build_for_test" }),
+        });
+        const res = await fetch(`/api/voice/agents/${state.agentId}/test-session`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            sync: true,
+            testVariables: { scenario: scenario.id, prompt: scenario.prompt },
+          }),
+        });
+        const json = await res.json();
+        if (res.ok) {
+          setLiveNote(
+            `Live test session ready · ${json.data?.voice?.displayName || state.voiceLabel} · WebRTC target synced`,
+          );
+        } else {
+          setLiveNote(json.error || "Could not start live test session — running guided scenario.");
+        }
+      } catch {
+        setLiveNote("Live test session unavailable — running guided scenario.");
+      }
+    }
+
     for (let i = 0; i < transcript.length; i++) {
       await new Promise((r) => setTimeout(r, 350));
       setMessages((prev) => [...prev, transcript[i]]);
@@ -177,6 +208,11 @@ export function TestStep({
                 {running ? "Running…" : "Run test scenario"}
               </Button>
             </div>
+            {liveNote ? (
+              <p className="border-b border-border bg-primary/5 px-4 py-2 text-xs text-foreground">
+                {liveNote}
+              </p>
+            ) : null}
 
             <div className="max-h-[360px] space-y-3 overflow-y-auto p-4">
               {messages.map((m, i) => (

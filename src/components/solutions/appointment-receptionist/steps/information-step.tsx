@@ -106,30 +106,7 @@ export function InformationStep({
               title="Import from your website"
               description="Scan your site for services, hours, FAQs, and more."
               icon={<Globe className="h-4 w-4" />}
-            >
-              {state.knowledgeSource === "website" ? (
-                <div className="mt-3 space-y-2" onClick={(e) => e.stopPropagation()}>
-                  <Label htmlFor="website-url" className="text-xs">
-                    Business website URL
-                  </Label>
-                  <div className="flex gap-2">
-                    <Input
-                      id="website-url"
-                      value={state.websiteUrl}
-                      onChange={(e) => patch({ websiteUrl: e.target.value })}
-                      placeholder="https://www.example.com"
-                    />
-                    <button
-                      type="button"
-                      onClick={simulateWebsiteImport}
-                      className="shrink-0 rounded-lg bg-primary px-3 text-xs font-medium text-primary-foreground"
-                    >
-                      Scan
-                    </button>
-                  </div>
-                </div>
-              ) : null}
-            </SelectableCard>
+            />
             <SelectableCard
               selected={state.knowledgeSource === "guided_profile"}
               onClick={() => patch({ knowledgeSource: "guided_profile" })}
@@ -152,6 +129,28 @@ export function InformationStep({
               icon={<Link2 className="h-4 w-4" />}
             />
           </div>
+          {state.knowledgeSource === "website" ? (
+            <div className="mt-3 rounded-xl border border-primary/30 bg-card p-4">
+              <Label htmlFor="website-url" className="text-xs">
+                Business website URL
+              </Label>
+              <div className="mt-1.5 flex gap-2">
+                <Input
+                  id="website-url"
+                  value={state.websiteUrl}
+                  onChange={(e) => patch({ websiteUrl: e.target.value })}
+                  placeholder="https://www.example.com"
+                />
+                <button
+                  type="button"
+                  onClick={simulateWebsiteImport}
+                  className="shrink-0 rounded-lg bg-primary px-3 text-xs font-medium text-primary-foreground"
+                >
+                  Scan
+                </button>
+              </div>
+            </div>
+          ) : null}
         </div>
 
         <div className="space-y-2">
