@@ -15,7 +15,7 @@ import * as reviews from "./reviews";
 import * as reminders from "./reminders";
 
 export type { CapabilityHookContext, CapabilityRegistration, CapabilityHookStatus } from "./types";
-export { markCapabilityHook, defineCapabilityHook } from "./mark-capability";
+export { markCapabilityHook, defineCapabilityHook, applyCapabilityDraftPatch } from "./mark-capability";
 export { runSharedReceptionistHooks } from "./shared-receptionist";
 
 /** All known capability hook modules. */

@@ -375,24 +375,27 @@ export const RECEPTIONIST_CAPABILITIES: AgentCapability[] = [
     id: "medical",
     label: "Medical / HIPAA receptionist",
     tier: "specialized",
-    status: "planned",
-    notes: "Activate hook stub under solutions/hooks/medical",
+    status: "wizard_wired",
+    notes:
+      "Activate hook: medical guardrails, medicalReceptionist, take_structured_message, compliance flags",
     defaultFor: ["medical"],
   },
   {
     id: "legal",
     label: "Legal intake receptionist",
     tier: "specialized",
-    status: "planned",
-    notes: "Activate hook stub under solutions/hooks/legal",
+    status: "wizard_wired",
+    notes:
+      "Activate hook: no-advice guardrails, legalReceptionist, conflict-check collectFields",
     defaultFor: ["legal"],
   },
   {
     id: "property_management",
     label: "Property management receptionist",
     tier: "specialized",
-    status: "planned",
-    notes: "Activate hook stub under solutions/hooks/property-management",
+    status: "wizard_wired",
+    notes:
+      "Activate hook: unit/address intake, maintenance vs emergency, create_task, propertyReceptionist",
     defaultFor: ["property_management"],
   },
 
@@ -402,14 +405,14 @@ export const RECEPTIONIST_CAPABILITIES: AgentCapability[] = [
     label: "Outbound dialing / AMD",
     tier: "other_solutions",
     status: "platform_ready",
-    notes: "Activate hook stub under solutions/hooks/outbound",
+    notes: "Activate hook under solutions/hooks/outbound",
   },
   {
     id: "campaigns",
     label: "Campaigns / bulk lists",
     tier: "other_solutions",
     status: "platform_ready",
-    notes: "Activate hook stub under solutions/hooks/campaigns",
+    notes: "Activate hook under solutions/hooks/campaigns",
   },
   {
     id: "dtmf_navigation",
@@ -422,29 +425,31 @@ export const RECEPTIONIST_CAPABILITIES: AgentCapability[] = [
     id: "payments",
     label: "Payment collection",
     tier: "other_solutions",
-    status: "planned",
-    notes: "Activate hook stub under solutions/hooks/payments",
+    status: "platform_ready",
+    notes:
+      "Activate hook: paymentsEnabled + webhook URL config; use payment_link when available",
   },
   {
     id: "surveys",
     label: "Surveys",
     tier: "other_solutions",
-    status: "planned",
-    notes: "Activate hook stub under solutions/hooks/surveys",
+    status: "platform_ready",
+    notes: "Activate hook: advanced.surveyMode post-call survey offer",
   },
   {
     id: "review_requests",
     label: "Review requests",
     tier: "other_solutions",
-    status: "planned",
-    notes: "Activate hook stub under solutions/hooks/reviews",
+    status: "platform_ready",
+    notes: "Activate hook: advanced.reviewRequests + workspace reviewLink",
   },
   {
     id: "appointment_reminders",
     label: "Appointment reminders",
     tier: "other_solutions",
-    status: "planned",
-    notes: "Activate hook stub under solutions/hooks/reminders",
+    status: "live",
+    notes:
+      "Activate hook wires advanced.appointmentReminders to live appointment-reminders scan jobs",
   },
 ];
 

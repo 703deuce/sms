@@ -540,6 +540,15 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       );
       return scanAppointmentsCompleted();
     }
+    case "promote_scheduled_receptionists": {
+      const { promoteScheduledReceptionists } = await import(
+        "@/lib/solutions/appointment-receptionist/promote-scheduled"
+      );
+      return promoteScheduledReceptionists({
+        workspaceId: payload.workspaceId ? String(payload.workspaceId) : undefined,
+        limit: typeof payload.limit === "number" ? payload.limit : undefined,
+      });
+    }
     case "crm_task_due_scan": {
       const { scanCrmTasksDueAndOverdue } = await import("@/lib/crm/task-due-scan");
       return scanCrmTasksDueAndOverdue();
@@ -745,6 +754,14 @@ export async function processDueJobs(limit = 25) {
     queueName: "maintenance",
     payload: { minuteKey },
     idempotencyKey: `appt-completed:${minuteKey}`,
+  });
+
+  // Scheduled receptionist activation (wizard activationMode=schedule).
+  await enqueueJob({
+    jobType: "promote_scheduled_receptionists",
+    queueName: "maintenance",
+    payload: { minuteKey },
+    idempotencyKey: `promote-scheduled-receptionists:${minuteKey}`,
   });
 
   // CRM task due / overdue automation windows (every minute drain).

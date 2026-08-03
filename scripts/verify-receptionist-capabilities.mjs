@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 /**
- * Verify appointment_receptionist required capabilities are not still planned/partial.
+ * Verify RECEPTIONIST_CAPABILITIES has no planned/partial items (any tier).
  *
  * Usage: node scripts/verify-receptionist-capabilities.mjs
  *        (spawns tsx to load the TypeScript checklist)
- * Exit 1 if any required_receptionist or required_booking capability is planned or partial.
+ * Exit 1 if ANY capability is planned or partial.
  */
 
 import { spawnSync } from "node:child_process";
@@ -20,38 +20,26 @@ import {
 } from "./src/lib/voice/capabilities/receptionist-checklist.ts";
 
 const caps = capabilitiesForSolution("appointment_receptionist");
-const requiredGaps = caps.filter(
-  (c) =>
-    (c.tier === "required_receptionist" || c.tier === "required_booking") &&
-    (c.status === "planned" || c.status === "partial"),
-);
 const allGaps = RECEPTIONIST_CAPABILITIES.filter(
   (c) => c.status === "planned" || c.status === "partial",
 );
 
-console.log("Appointment receptionist capability verification");
-console.log("Checked " + caps.length + " default capabilities for appointment_receptionist");
+console.log("Receptionist capability verification");
+console.log("Checked " + RECEPTIONIST_CAPABILITIES.length + " capabilities in RECEPTIONIST_CAPABILITIES");
+console.log("Appointment receptionist defaults: " + caps.length);
 console.log("");
 
 if (allGaps.length) {
-  console.log("Still planned/partial (any tier):");
+  console.error("FAIL: capabilities still planned/partial:");
   for (const g of allGaps) {
-    console.log(
+    console.error(
       "  - [" + g.tier + "] " + g.id + ": " + g.status + (g.notes ? " — " + g.notes : ""),
     );
-  }
-  console.log("");
-}
-
-if (requiredGaps.length) {
-  console.error("FAIL: required capabilities still planned/partial:");
-  for (const g of requiredGaps) {
-    console.error("  - " + g.id + " (" + g.tier + "): " + g.status);
   }
   process.exit(1);
 }
 
-console.log("OK: no required_receptionist / required_booking capability is planned or partial.");
+console.log("OK: no capability in RECEPTIONIST_CAPABILITIES is planned or partial.");
 process.exit(0);
 `;
 
