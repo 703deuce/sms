@@ -406,6 +406,18 @@ export async function POST(request: Request) {
                   : undefined,
           }),
         });
+      case "sweep_stale_voice_calls": {
+        const { sweepStaleOpenVoiceCalls, countActiveAiCalls } = await import(
+          "@/lib/voice/platform/admission"
+        );
+        const olderThanMs =
+          body.olderThanMs != null ? Number(body.olderThanMs) : 2 * 60 * 1000;
+        const swept = await sweepStaleOpenVoiceCalls(workspaceId, { olderThanMs });
+        const activeInbound = await countActiveAiCalls(workspaceId, "INBOUND");
+        return NextResponse.json({
+          data: { ...swept, activeInboundAfter: activeInbound },
+        });
+      }
       case "set_flags":
         return NextResponse.json({
           data: await platform.setAgentFlags(workspaceId, agentId, {

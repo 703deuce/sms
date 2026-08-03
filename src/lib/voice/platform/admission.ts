@@ -44,14 +44,67 @@ export async function countActiveAiCalls(
   workspaceId: string,
   direction?: "INBOUND" | "OUTBOUND",
 ) {
+  // Ignore stale legs that never answered / hung — otherwise abandoned
+  // INITIATED/RINGING rows permanently block inbound pickup (concurrency_cap).
+  const staleBefore = new Date(Date.now() - 3 * 60 * 1000);
   return getPrisma().voiceCall.count({
     where: {
       workspaceId,
       agentId: { not: null },
       status: { in: ["QUEUED", "INITIATED", "RINGING", "IN_PROGRESS", "ANSWERED"] },
+      startedAt: { gte: staleBefore },
       ...(direction ? { direction } : {}),
     },
   });
+}
+
+/** Mark abandoned open calls completed so admission counters recover. */
+export async function sweepStaleOpenVoiceCalls(
+  workspaceId: string,
+  opts?: { olderThanMs?: number },
+) {
+  const olderThanMs = opts?.olderThanMs ?? 2 * 60 * 1000;
+  const cutoff = new Date(Date.now() - olderThanMs);
+  const prisma = getPrisma();
+  const stale = await prisma.voiceCall.findMany({
+    where: {
+      workspaceId,
+      status: { in: ["QUEUED", "INITIATED", "RINGING", "IN_PROGRESS", "ANSWERED"] },
+      startedAt: { lt: cutoff },
+    },
+    select: { id: true, telnyxCallControlId: true, status: true },
+    take: 200,
+  });
+  if (!stale.length) return { swept: 0, ids: [] as string[] };
+
+  // Best-effort hangup on Telnyx so parked legs do not keep ringing.
+  try {
+    const { telnyxRequest } = await import("@/lib/messaging/telnyx/client");
+    const { isTelnyxVoiceConfigured } = await import("@/lib/voice/telnyx/assistant-sync");
+    if (isTelnyxVoiceConfigured()) {
+      await Promise.all(
+        stale.map(async (c) => {
+          if (!c.telnyxCallControlId || c.telnyxCallControlId.startsWith("mock_")) return;
+          await telnyxRequest(`/calls/${c.telnyxCallControlId}/actions/hangup`, {
+            method: "POST",
+            body: {},
+          }).catch(() => undefined);
+        }),
+      );
+    }
+  } catch {
+    // ignore telnyx hangup failures — DB sweep still unblocks admission
+  }
+
+  await prisma.voiceCall.updateMany({
+    where: { id: { in: stale.map((c) => c.id) } },
+    data: {
+      status: "COMPLETED",
+      endedAt: new Date(),
+      outcome: "stale_swept",
+    },
+  });
+  return { swept: stale.length, ids: stale.map((c) => c.id) };
 }
 
 /**
