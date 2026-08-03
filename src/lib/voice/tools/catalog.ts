@@ -387,9 +387,13 @@ const TEMPLATE_DEFAULTS: Record<string, readonly string[]> = {
   appointment_booking: [
     "hangup",
     "transfer",
+    "escalate_human",
     "send_sms",
     "lookup_customer",
     "take_structured_message",
+    "save_caller_info",
+    "create_task",
+    "mark_disposition",
     "calendar_availability",
     "book_appointment",
     "reschedule_appointment",

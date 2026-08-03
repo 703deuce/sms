@@ -367,7 +367,7 @@ export const VOICE_FLOW_TEMPLATES: VoiceFlowTemplate[] = [
   {
     id: "appointment_request",
     name: "Appointment Request Assistant",
-    description: "Collect preferred time, send link, create follow-up.",
+    description: "Collect preferred time, book or send link, transfer or take a message.",
     agentLevel: "intake",
     bundle: {
       routing: aiFirstRouting(),
@@ -378,10 +378,21 @@ export const VOICE_FLOW_TEMPLATES: VoiceFlowTemplate[] = [
         });
         const sms = n("send_sms", 80, 300, { template: "booking_link" });
         const task = n("create_crm_task", 80, 440);
+        const message = n("take_message", 320, 440);
+        const human = n("escalate_human", 520, 300);
         const end = n("end_call", 80, 580);
         return graph(
-          [g, intake, sms, task, end],
-          [e(g, intake), e(intake, sms), e(sms, task), e(task, end)],
+          [g, intake, sms, task, message, human, end],
+          [
+            e(g, intake),
+            e(intake, sms),
+            e(sms, task),
+            e(task, end),
+            e(intake, message, "message"),
+            e(intake, human, "human"),
+            e(message, end),
+            e(human, end),
+          ],
         );
       })(),
       globalRules: DEFAULT_GLOBAL,

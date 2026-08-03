@@ -208,6 +208,27 @@ export async function syncTelnyxAssistant(
     // keep config.targets
   }
 
+  // Wizard / draft fallback: destinationPhone + destinationName when DB empty
+  // or when targets exist without a dialable `to`.
+  const destPhone = String(
+    (transferCfg as { destinationPhone?: string }).destinationPhone || "",
+  ).trim();
+  const destName = String(
+    (transferCfg as { destinationName?: string }).destinationName || "Agent Handoff",
+  ).trim();
+  if (destPhone) {
+    const byName = new Map<string, { name: string; to: string }>();
+    for (const t of transferTargets || []) {
+      if (t?.name) byName.set(t.name.toLowerCase(), { name: t.name, to: t.to || destPhone });
+    }
+    for (const name of [destName, "Agent Handoff", "Front Desk"]) {
+      const key = name.toLowerCase();
+      const prev = byName.get(key);
+      if (!prev || !prev.to) byName.set(key, { name, to: destPhone });
+    }
+    transferTargets = [...byName.values()];
+  }
+
   const tools = buildAssistantTools({
     workspaceId,
     agentId: agent.id,
