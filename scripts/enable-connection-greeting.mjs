@@ -54,7 +54,7 @@ async function main() {
     throw new Error(`smoke-login failed: ${JSON.stringify(login).slice(0, 300)}`);
   }
 
-  const loaded = await api(jar, `/api/voice/ai?agentId=${AGENT_ID}`);
+  const loaded = await api(jar, `/api/voice/agents/${AGENT_ID}`);
   const agent = loaded.json?.data;
   if (!loaded.res.ok || !agent) {
     throw new Error(`load agent failed: ${JSON.stringify(loaded.json).slice(0, 400)}`);
@@ -77,7 +77,7 @@ async function main() {
   }
   callHandling.startupGreeting = startupGreeting;
 
-  const saved = await api(jar, `/api/voice/ai?agentId=${AGENT_ID}`, {
+  const saved = await api(jar, `/api/voice/agents/${AGENT_ID}`, {
     method: "PATCH",
     body: {
       draftConfig: {
@@ -90,10 +90,22 @@ async function main() {
     throw new Error(`save failed: ${JSON.stringify(saved.json).slice(0, 500)}`);
   }
 
-  const build = await api(jar, "/api/voice/ai", {
-    method: "POST",
-    body: { action: "build", agentId: AGENT_ID },
+  const built = await api(jar, `/api/voice/agents/${AGENT_ID}`, {
+    method: "PATCH",
+    body: { action: "build" },
   });
+  if (!built.res.ok) {
+    throw new Error(`build failed: ${JSON.stringify(built.json).slice(0, 500)}`);
+  }
+
+  const deployed = await api(jar, `/api/voice/agents/${AGENT_ID}`, {
+    method: "PATCH",
+    body: { action: "deploy" },
+  });
+  if (!deployed.res.ok) {
+    throw new Error(`deploy failed: ${JSON.stringify(deployed.json).slice(0, 500)}`);
+  }
+
   console.log(
     JSON.stringify(
       {
@@ -101,8 +113,12 @@ async function main() {
         connectionGreeting: startupGreeting.connectionGreeting,
         startupMode: startupGreeting.mode,
         saveOk: saved.res.ok,
-        buildOk: build.res.ok,
-        build: build.json?.data || build.json,
+        buildOk: built.res.ok,
+        deployOk: deployed.res.ok,
+        buildVersion: built.json.version || built.json.data?.version,
+        health: built.json.healthStatus || built.json.data?.healthStatus,
+        savedStartup:
+          saved.json?.data?.draftConfig?.callHandling?.startupGreeting,
         audioUrl:
           "https://transovo.ai/connection-greeting/transovo-connection-greeting-phone.mp3",
       },

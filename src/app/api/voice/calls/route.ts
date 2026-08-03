@@ -76,8 +76,13 @@ export async function GET(request: Request) {
     const startOfDay = new Date();
     startOfDay.setHours(0, 0, 0, 0);
     const baseWhere = { workspaceId: auth.workspaceId, isTest: isTest === "1" };
-    const [todayCount, handledToday, transferredToday, leadsToday, avgAgg] =
-      await Promise.all([
+    let todayCount = 0;
+    let handledToday = 0;
+    let transferredToday = 0;
+    let leadsToday = 0;
+    let avgDurationSecToday: number | null = null;
+    try {
+      const [t, h, x, l, avgAgg] = await Promise.all([
         prisma.voiceCall.count({
           where: { ...baseWhere, startedAt: { gte: startOfDay } },
         }),
@@ -102,15 +107,27 @@ export async function GET(request: Request) {
             leadScore: { gte: 40 },
           },
         }),
-        prisma.voiceCall.aggregate({
-          where: {
-            ...baseWhere,
-            startedAt: { gte: startOfDay },
-            durationSeconds: { not: null },
-          },
-          _avg: { durationSeconds: true },
-        }),
+        typeof prisma.voiceCall.aggregate === "function"
+          ? prisma.voiceCall.aggregate({
+              where: {
+                ...baseWhere,
+                startedAt: { gte: startOfDay },
+                durationSeconds: { not: null },
+              },
+              _avg: { durationSeconds: true },
+            })
+          : Promise.resolve({ _avg: { durationSeconds: null } }),
       ]);
+      todayCount = t;
+      handledToday = h;
+      transferredToday = x;
+      leadsToday = l;
+      avgDurationSecToday = avgAgg._avg.durationSeconds
+        ? Math.round(avgAgg._avg.durationSeconds)
+        : null;
+    } catch {
+      // Analytics helpers are best-effort — call list must still return.
+    }
 
     return NextResponse.json({
       data: rows.map((c: (typeof rows)[number]) => {
@@ -153,9 +170,7 @@ export async function GET(request: Request) {
         aiHandledToday: handledToday,
         transferredToday,
         leadsToday,
-        avgDurationSecToday: avgAgg._avg.durationSeconds
-          ? Math.round(avgAgg._avg.durationSeconds)
-          : null,
+        avgDurationSecToday,
       },
     });
   } catch (err) {
