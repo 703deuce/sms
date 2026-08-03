@@ -1,7 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import type {
   AppointmentReceptionistWizardState,
+  KnowledgeItemStatus,
   KnowledgeSource,
 } from "@/lib/solutions/appointment-receptionist/types";
 import { Input, Label } from "@/components/ui/input";
@@ -16,6 +18,165 @@ import {
 } from "lucide-react";
 import { InfoCallout, SelectableCard, SidePanel, StatusPill } from "../ui";
 
+type KnowledgeItem = AppointmentReceptionistWizardState["knowledgeItems"][number];
+
+function guessBusinessNameFromUrl(url: string): string {
+  let host = url;
+  try {
+    host = new URL(url.startsWith("http") ? url : `https://${url}`).hostname.replace(
+      /^www\./,
+      "",
+    );
+  } catch {
+    // keep raw
+  }
+  return host
+    .split(".")[0]
+    .replace(/[-_]/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function normalizeWebsiteUrl(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return "";
+  return trimmed.startsWith("http") ? trimmed : `https://${trimmed}`;
+}
+
+function itemsForScanResult(input: {
+  businessName: string;
+  url: string;
+  sourceStatus?: string | null;
+  chunkCount?: number | null;
+  preview?: string | null;
+  errorMessage?: string | null;
+  deferredToActivate?: boolean;
+}): KnowledgeItem[] {
+  const { businessName, url, sourceStatus, chunkCount, preview, errorMessage, deferredToActivate } =
+    input;
+
+  if (deferredToActivate) {
+    return [
+      {
+        id: "business",
+        label: "Business details",
+        summary: businessName
+          ? `${businessName} · will import from website on activate`
+          : "Will import from website on activate",
+        status: "warning",
+        statusLabel: "Pending activate",
+      },
+      {
+        id: "hours",
+        label: "Hours",
+        summary: "Will be extracted when knowledge sync runs on activate",
+        status: "warning",
+        statusLabel: "Pending activate",
+      },
+      {
+        id: "services",
+        label: "Services",
+        summary: `Queued URL: ${url}`,
+        status: "warning",
+        statusLabel: "Pending activate",
+      },
+      {
+        id: "pricing",
+        label: "Pricing",
+        summary: "Review after website import completes",
+        status: "warning",
+        statusLabel: "Needs review",
+      },
+      {
+        id: "faqs",
+        label: "FAQs",
+        summary: "Will import from website on activate",
+        status: "warning",
+        statusLabel: "Pending activate",
+      },
+      {
+        id: "policies",
+        label: "Policies",
+        summary: "Configure cancellation and warranty policies",
+        status: "warning",
+        statusLabel: "Not configured",
+      },
+    ];
+  }
+
+  const status = (sourceStatus || "pending").toLowerCase();
+  const indexed = status === "indexed" || status === "ready" || status === "active";
+  const failed = status === "failed" || status === "error";
+  const processing = status === "processing" || status === "pending";
+
+  const itemStatus = (ok: boolean): KnowledgeItemStatus =>
+    failed ? "warning" : ok && indexed ? "complete" : processing ? "warning" : "warning";
+
+  const statusLabel = failed
+    ? errorMessage?.slice(0, 48) || "Import failed"
+    : indexed
+      ? chunkCount
+        ? `${chunkCount} chunks indexed`
+        : "Indexed"
+      : processing
+        ? "Indexing…"
+        : status;
+
+  const previewBits = preview?.replace(/\s+/g, " ").trim().slice(0, 80);
+
+  return [
+    {
+      id: "business",
+      label: "Business details",
+      summary: previewBits
+        ? `${businessName || "Business"} · ${previewBits}`
+        : `${businessName || "Business"} · source from ${url}`,
+      status: itemStatus(true),
+      statusLabel: indexed ? "Complete" : statusLabel,
+    },
+    {
+      id: "hours",
+      label: "Hours",
+      summary: indexed
+        ? "Check indexed content for hours — edit if incomplete"
+        : "Waiting for website index to finish",
+      status: itemStatus(false),
+      statusLabel: indexed ? "Needs review" : statusLabel,
+    },
+    {
+      id: "services",
+      label: "Services",
+      summary: indexed
+        ? "Services may be in the crawled pages — verify in knowledge"
+        : "Waiting for website index to finish",
+      status: itemStatus(Boolean(indexed && (chunkCount || 0) > 0)),
+      statusLabel: indexed ? (chunkCount ? `${chunkCount} chunks` : "Indexed") : statusLabel,
+    },
+    {
+      id: "pricing",
+      label: "Pricing",
+      summary: "Pricing is rarely complete from a crawl — add prices manually",
+      status: "warning",
+      statusLabel: "Needs review",
+    },
+    {
+      id: "faqs",
+      label: "FAQs",
+      summary: indexed
+        ? "FAQ content may be included in the crawl — verify answers"
+        : "Waiting for website index to finish",
+      status: itemStatus(Boolean(indexed)),
+      statusLabel: indexed ? "Needs review" : statusLabel,
+    },
+    {
+      id: "policies",
+      label: "Policies",
+      summary: "Cancellation and warranty policies usually need manual setup",
+      status: "warning",
+      statusLabel: "Not configured",
+    },
+  ];
+}
+
 export function InformationStep({
   state,
   patch,
@@ -23,70 +184,118 @@ export function InformationStep({
   state: AppointmentReceptionistWizardState;
   patch: (p: Partial<AppointmentReceptionistWizardState>) => void;
 }) {
-  function simulateWebsiteImport() {
-    const url = state.websiteUrl.trim();
-    if (!url) return;
-    let host = url;
-    try {
-      host = new URL(url.startsWith("http") ? url : `https://${url}`).hostname.replace(
-        /^www\./,
-        "",
-      );
-    } catch {
-      // keep raw
-    }
-    const businessName = host
-      .split(".")[0]
-      .replace(/[-_]/g, " ")
-      .replace(/\b\w/g, (c) => c.toUpperCase());
+  const [scanning, setScanning] = useState(false);
+  const [scanError, setScanError] = useState<string | null>(null);
 
+  async function importWebsiteKnowledge() {
+    const url = normalizeWebsiteUrl(state.websiteUrl);
+    if (!url || scanning) return;
+
+    setScanning(true);
+    setScanError(null);
+
+    const guessedName = guessBusinessNameFromUrl(url);
+    const businessName = state.businessName || guessedName;
+
+    // Optimistic scanning state
     patch({
-      businessName: state.businessName || businessName,
-      knowledgeItems: [
-        {
-          id: "business",
-          label: "Business details",
-          summary: `${businessName} · imported from website`,
-          status: "complete",
-          statusLabel: "Complete",
-        },
-        {
-          id: "hours",
-          label: "Hours",
-          summary: "Mon–Fri 8:00 AM–6:00 PM · Sat 9:00 AM–1:00 PM",
-          status: "complete",
-          statusLabel: "Complete",
-        },
-        {
-          id: "services",
-          label: "Services",
-          summary: "Core services detected from your site",
-          status: "complete",
-          statusLabel: "8 added",
-        },
-        {
-          id: "pricing",
-          label: "Pricing",
-          summary: "Some services still need prices",
-          status: "warning",
-          statusLabel: "3 services missing prices",
-        },
-        {
-          id: "faqs",
-          label: "FAQs",
-          summary: "Common questions imported",
-          status: "complete",
-          statusLabel: "12 questions added",
-        },
-        {
-          id: "policies",
-          label: "Policies",
-          summary: "Cancellation and warranty policies",
-          status: "warning",
-          statusLabel: "Not configured",
-        },
-      ],
+      businessName,
+      websiteUrl: url,
+      knowledgeItems: state.knowledgeItems.map((item) => ({
+        ...item,
+        status: "warning" as const,
+        statusLabel: "Scanning…",
+        summary: item.id === "business" ? `Scanning ${url}` : item.summary,
+      })),
     });
+
+    try {
+      const kbRes = await fetch("/api/voice/knowledge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: `${businessName || "Business"} Website`,
+          description: `Wizard website import: ${url}`,
+        }),
+      });
+
+      if (kbRes.status === 401 || kbRes.status === 403) {
+        patch({
+          businessName,
+          websiteUrl: url,
+          knowledgeItems: itemsForScanResult({
+            businessName,
+            url,
+            deferredToActivate: true,
+          }),
+        });
+        setScanError("Sign in required to scan now — URL will import on activate.");
+        return;
+      }
+
+      if (!kbRes.ok) {
+        const errJson = (await kbRes.json().catch(() => ({}))) as { error?: string };
+        throw new Error(errJson.error || `Knowledge create failed (${kbRes.status})`);
+      }
+
+      const kbJson = (await kbRes.json()) as { data?: { id?: string } };
+      const kbId = kbJson.data?.id;
+      if (!kbId) throw new Error("Knowledge base create returned no id");
+
+      const sourceRes = await fetch(`/api/voice/knowledge/${kbId}/sources`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "Wizard website",
+          sourceType: "url",
+          crawlUrl: url,
+        }),
+      });
+
+      if (!sourceRes.ok) {
+        const errJson = (await sourceRes.json().catch(() => ({}))) as { error?: string };
+        throw new Error(errJson.error || `URL source failed (${sourceRes.status})`);
+      }
+
+      const sourceJson = (await sourceRes.json()) as {
+        data?: {
+          status?: string;
+          chunkCount?: number | null;
+          extractedPreview?: string | null;
+          contentText?: string | null;
+          errorMessage?: string | null;
+        };
+      };
+      const source = sourceJson.data;
+
+      patch({
+        businessName,
+        websiteUrl: url,
+        knowledgeItems: itemsForScanResult({
+          businessName,
+          url,
+          sourceStatus: source?.status,
+          chunkCount: source?.chunkCount,
+          preview: source?.extractedPreview || source?.contentText,
+          errorMessage: source?.errorMessage,
+        }),
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Website scan failed";
+      setScanError(message);
+      patch({
+        businessName,
+        websiteUrl: url,
+        knowledgeItems: itemsForScanResult({
+          businessName,
+          url,
+          sourceStatus: "failed",
+          errorMessage: message,
+        }),
+      });
+    } finally {
+      setScanning(false);
+    }
   }
 
   return (
@@ -140,15 +349,20 @@ export function InformationStep({
                   value={state.websiteUrl}
                   onChange={(e) => patch({ websiteUrl: e.target.value })}
                   placeholder="https://www.example.com"
+                  disabled={scanning}
                 />
                 <button
                   type="button"
-                  onClick={simulateWebsiteImport}
-                  className="shrink-0 rounded-lg bg-primary px-3 text-xs font-medium text-primary-foreground"
+                  onClick={() => void importWebsiteKnowledge()}
+                  disabled={scanning || !state.websiteUrl.trim()}
+                  className="shrink-0 rounded-lg bg-primary px-3 text-xs font-medium text-primary-foreground disabled:opacity-60"
                 >
-                  Scan
+                  {scanning ? "Scanning…" : "Scan"}
                 </button>
               </div>
+              {scanError ? (
+                <p className="mt-2 text-xs text-warning">{scanError}</p>
+              ) : null}
             </div>
           ) : null}
         </div>

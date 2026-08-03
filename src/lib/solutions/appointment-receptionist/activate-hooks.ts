@@ -4,6 +4,7 @@ import {
   attachInsightGroupToAgent,
   seedDefaultInsights,
 } from "@/lib/voice/platform/ai-platform";
+import { runSharedReceptionistHooks } from "@/lib/solutions/hooks";
 import type { AppointmentReceptionistWizardState } from "./types";
 import { syncWizardTransferDestinations } from "./sync-transfer";
 import { syncWizardRoutingRules } from "./sync-routing";
@@ -388,6 +389,22 @@ export async function runAppointmentReceptionistActivateHooks(input: {
       },
     });
   }
+
+  await runSharedReceptionistHooks({
+    workspaceId: input.workspaceId,
+    agentId: input.agentId,
+    mode: input.mode,
+    answerWhen: input.state.answerWhen,
+    meta: {
+      ringBehavior: input.state.ringBehavior,
+      solutionSlug: "appointment-assistant",
+    },
+  }).catch((err) => {
+    console.warn(
+      "[appointment-receptionist] shared receptionist hooks failed",
+      err instanceof Error ? err.message : err,
+    );
+  });
 
   return {
     issues,

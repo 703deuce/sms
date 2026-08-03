@@ -49,8 +49,23 @@ export async function processPostCall(callId: string) {
 
   // Generate insights (Telnyx or internal stub)
   const insight = await generateCallInsights(call, config);
+  const extractionFields = config?.postCall?.extractionFields || [];
 
   if (insight) {
+    const extractedCustom: Record<string, unknown> = {
+      urgency: insight.urgency,
+      ...(insight.extractedFields || {}),
+    };
+    // Always surface configured extraction field keys, even when null.
+    for (const key of extractionFields) {
+      if (!(key in extractedCustom)) {
+        extractedCustom[key] =
+          insight.extractedFields?.[key] !== undefined
+            ? insight.extractedFields[key]
+            : null;
+      }
+    }
+
     await prisma.voiceConversationInsight.create({
       data: {
         workspaceId: call.workspaceId,
@@ -64,9 +79,7 @@ export async function processPostCall(callId: string) {
         topics: insight.topics as object,
         objections: insight.objections as object,
         actionItems: (insight.actionItems || []) as object,
-        customFields: {
-          urgency: insight.urgency,
-        } as object,
+        customFields: extractedCustom as object,
         needsReview: insight.needsReview || insight.urgency === "high",
         confidence: insight.confidence,
       },
@@ -248,6 +261,9 @@ async function generateCallInsights(
   const urgency = heuristicUrgency(text, call);
 
   // Structured heuristic baseline (always available, no external deps).
+  const extractionFields = config?.postCall?.extractionFields || [];
+  const heuristicExtracted = heuristicExtractedFields(text, call, extractionFields);
+
   const heuristic = {
     summary: text
       ? `Call ${call.direction.toLowerCase()} — ${text.slice(0, 200)}`
@@ -269,12 +285,13 @@ async function generateCallInsights(
     actionItems: call.appointmentBooked ? ["Appointment booked — send confirmation"] : [],
     needsReview: leadScore > 0 && leadScore < 40 || urgency === "high",
     confidence: text ? 0.75 : 0.4,
+    extractedFields: heuristicExtracted,
   };
 
   // Upgrade with an LLM summary when a transcript and OpenAI key are available.
   if (text.trim().length > 40) {
     try {
-      const llm = await llmInsights(text, call.direction);
+      const llm = await llmInsights(text, call.direction, extractionFields);
       if (llm) {
         return {
           ...heuristic,
@@ -286,6 +303,10 @@ async function generateCallInsights(
           objections: llm.objections?.length ? llm.objections : heuristic.objections,
           actionItems: llm.actionItems?.length ? llm.actionItems : heuristic.actionItems,
           confidence: 0.9,
+          extractedFields: {
+            ...heuristicExtracted,
+            ...(llm.fields || {}),
+          },
         };
       }
     } catch (err) {
@@ -344,22 +365,71 @@ function heuristicObjections(text: string): string[] {
   return objections;
 }
 
-async function llmInsights(text: string, direction: string) {
+function heuristicExtractedFields(
+  text: string,
+  call: {
+    appointmentBooked: boolean;
+    transferred: boolean;
+    voicemailDetected: boolean;
+    outcome?: string | null;
+  },
+  fields: string[],
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const key of fields) {
+    switch (key) {
+      case "appointment_booked":
+        out[key] = call.appointmentBooked;
+        break;
+      case "transfer_attempted":
+      case "transfer_successful":
+        out[key] = call.transferred;
+        break;
+      case "message_taken":
+        out[key] = /message|callback|call back/i.test(text);
+        break;
+      case "outcome":
+        out[key] = call.outcome || null;
+        break;
+      case "caller_phone": {
+        const m = text.match(/\+?\d[\d\s().-]{8,}\d/);
+        out[key] = m ? m[0].replace(/\s+/g, "") : null;
+        break;
+      }
+      case "caller_name": {
+        const m = text.match(/(?:my name is|this is|i'm|i am)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i);
+        out[key] = m?.[1] || null;
+        break;
+      }
+      default:
+        out[key] = null;
+    }
+  }
+  return out;
+}
+
+async function llmInsights(text: string, direction: string, extractionFields: string[] = []) {
   const { openAiChatCompletion, getOpenAiApiKey } = await import("@/lib/ai/openai");
   if (!getOpenAiApiKey()) return null;
+
+  const fieldHint = extractionFields.length
+    ? ` Also include a "fields" object with these keys (use null when unknown): ${extractionFields.join(", ")}.`
+    : "";
 
   const system =
     "You analyze phone call transcripts and return ONLY strict JSON with keys: " +
     "summary (string, 1-2 sentences), intent (short snake_case string), " +
     "sentiment (positive|neutral|negative), urgency (high|normal|low), topics (string array), " +
-    "objections (string array), actionItems (string array). No markdown.";
+    "objections (string array), actionItems (string array)." +
+    fieldHint +
+    " No markdown.";
   const user = `Direction: ${direction}\nTranscript:\n${text.slice(0, 6000)}`;
 
-  const raw = await openAiChatCompletion(system, user, { temperature: 0.2, maxTokens: 500 });
+  const raw = await openAiChatCompletion(system, user, { temperature: 0.2, maxTokens: 700 });
   if (!raw) return null;
 
   const jsonText = raw.replace(/```json|```/g, "").trim();
-  const parsed = JSON.parse(jsonText) as {
+  const parsed = JSON.parse(jsonText) as Record<string, unknown> & {
     summary?: string;
     intent?: string;
     sentiment?: string;
@@ -367,7 +437,22 @@ async function llmInsights(text: string, direction: string) {
     topics?: string[];
     objections?: string[];
     actionItems?: string[];
+    fields?: Record<string, unknown>;
   };
+
+  const fields: Record<string, unknown> = {};
+  const nested =
+    parsed.fields && typeof parsed.fields === "object" && !Array.isArray(parsed.fields)
+      ? parsed.fields
+      : {};
+  for (const key of extractionFields) {
+    if (nested[key] !== undefined) {
+      fields[key] = nested[key];
+    } else if (parsed[key] !== undefined && !["summary", "intent", "sentiment", "urgency", "topics", "objections", "actionItems", "fields"].includes(key)) {
+      fields[key] = parsed[key];
+    }
+  }
+
   return {
     summary: parsed.summary,
     intent: parsed.intent,
@@ -380,5 +465,6 @@ async function llmInsights(text: string, direction: string) {
     topics: Array.isArray(parsed.topics) ? parsed.topics.slice(0, 8) : [],
     objections: Array.isArray(parsed.objections) ? parsed.objections.slice(0, 8) : [],
     actionItems: Array.isArray(parsed.actionItems) ? parsed.actionItems.slice(0, 8) : [],
+    fields,
   };
 }

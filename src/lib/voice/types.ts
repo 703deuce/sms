@@ -80,6 +80,8 @@ export type VoiceAgentConfig = {
   };
   voiceLanguage?: {
     voiceId?: string;
+    /** Provider voice id used if the primary voice fails to resolve. */
+    fallbackVoiceId?: string;
     voiceProvider?: string;
     speed?: number;
     pitch?: number;
