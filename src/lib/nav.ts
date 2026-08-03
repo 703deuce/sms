@@ -190,7 +190,10 @@ export const appNav: NavItem[] = [
           { label: "AI Answering Machine", href: "/solutions/ai-call-handling/ai-answering-machine" },
           { label: "After-Hours Assistant", href: "/solutions/ai-call-handling/after-hours-assistant" },
           { label: "Lead Intake Assistant", href: "/solutions/ai-call-handling/lead-intake-assistant" },
-          { label: "Appointment Assistant", href: "/solutions/ai-call-handling/appointment-assistant" },
+          {
+            label: "Answer Calls & Book Appointments",
+            href: "/solutions/ai-call-handling/appointment-assistant",
+          },
         ],
       },
       {
@@ -552,7 +555,8 @@ export const pageTitles: Record<string, string> = {
   "/solutions/ai-call-handling/ai-answering-machine": "AI Answering Machine",
   "/solutions/ai-call-handling/after-hours-assistant": "After-Hours Assistant",
   "/solutions/ai-call-handling/lead-intake-assistant": "Lead Intake Assistant",
-  "/solutions/ai-call-handling/appointment-assistant": "Appointment Assistant",
+  "/solutions/ai-call-handling/appointment-assistant": "Answer Calls & Book Appointments",
+  "/solutions/ai-call-handling/appointment-assistant/setup": "Create AI Receptionist",
   "/solutions/customer-growth": "Customer Growth",
   "/solutions/customer-growth/automated-review-requests": "Automated Review Requests",
   "/solutions/customer-growth/appointment-reminders": "Appointment Reminders",

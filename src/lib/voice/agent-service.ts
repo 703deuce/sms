@@ -91,10 +91,15 @@ export async function updateVoiceAgentDraft(
 
   if (patch.phoneNumberId !== undefined) {
     const { syncVoiceAgentPhoneAssignment } = await import("./agent-phone");
+    // Drafts reserve the DID without stealing a live ACTIVE agent's inbound ownership.
+    // Publish/activate claims exclusively via publishVoiceAgent → sync (exclusive).
+    const nextStatus = patch.status || existing.status;
+    const exclusive = nextStatus === "ACTIVE";
     await syncVoiceAgentPhoneAssignment({
       workspaceId,
       agentId,
       phoneNumberId: patch.phoneNumberId,
+      exclusive,
     });
   }
 
@@ -329,6 +334,7 @@ export async function publishVoiceAgent(
       workspaceId,
       agentId,
       phoneNumberId: updated.phoneNumberId,
+      exclusive: true,
     });
   } catch (err) {
     console.error("[voice] phone assignment sync failed", err);

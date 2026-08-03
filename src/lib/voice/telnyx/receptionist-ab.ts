@@ -59,6 +59,8 @@ export type VoiceAbCandidate = {
  */
 export const MIA_CATALOG_STATUS = {
   requestedName: "Mia - Agent",
+  /** Telnyx TTS Library / reviewed Ultra shortlist UUID (may be absent from Available Voices dump). */
+  reviewedShortlistVoiceId: "Telnyx.Ultra.1d3ba41a-96e6-44ad-aabb-9817c56caa68",
   foundInTelnyxCatalog: false as const,
   substitute: {
     displayName: "Maia",
@@ -66,7 +68,20 @@ export const MIA_CATALOG_STATUS = {
     providerVoiceId: "Telnyx.Ultra.5a033900-2ed6-4fd4-a257-707f2688e713",
   },
   retrievedAt: "2026-08-03",
-  source: "https://developers.telnyx.com/docs/tts-stt/tts-available-voices",
+  source: "https://ttslibrary.com/resources/top-20-telnyx-ultra-tts-voices",
+} as const;
+
+export const HARRY_CATALOG_STATUS = {
+  requestedName: "Harry - Service Advisor",
+  reviewedShortlistVoiceId: "Telnyx.Ultra.3dcaa773-fb1a-47f7-82a4-1bf756c4e1fb",
+  foundInTelnyxCatalog: false as const,
+  substitute: {
+    displayName: "Orion",
+    style: "NaturalHD male backup",
+    providerVoiceId: "Telnyx.NaturalHD.orion",
+  },
+  retrievedAt: "2026-08-03",
+  source: "https://ttslibrary.com/resources/top-20-telnyx-ultra-tts-voices",
 } as const;
 
 export const VOICE_AB_CANDIDATES: VoiceAbCandidate[] = [

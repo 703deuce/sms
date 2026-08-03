@@ -117,15 +117,20 @@ export const solutionCategories: SolutionCategory[] = [
       },
       {
         slug: "appointment-assistant",
-        title: "Appointment Assistant",
-        summary: "Let AI check availability and book using connected calendars.",
+        title: "Answer Calls and Book Appointments",
+        summary:
+          "Answer incoming calls, respond to questions, check availability, book appointments, and transfer callers when necessary.",
         href: `${base}/ai-call-handling/appointment-assistant`,
         uses: [
+          { label: "Phone", href: "/phone" },
+          { label: "AI Voice agents", href: "/voice/agents" },
           { label: "Calendars", href: "/voice/calendars" },
           { label: "Appointments", href: "/integrations/native/appointments" },
-          { label: "Agents", href: "/voice/agents" },
         ],
-        cta: { label: "Open calendars", href: "/voice/calendars" },
+        cta: {
+          label: "Set Up",
+          href: `${base}/ai-call-handling/appointment-assistant/setup`,
+        },
       },
     ],
   },

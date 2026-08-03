@@ -87,6 +87,7 @@ export async function evaluateInboundRouting(ctx: RoutingContext): Promise<Routi
   // Resolve which agent owns the dialed DID — never let another agent's
   // flow-managed after-hours rule steal the call (that sent live PSTN to
   // Billing Specialist with empty transfer targets).
+  // Prefer the inbound join table (authoritative after number switches).
   const toE164 = ctx.toE164;
   const pn = toE164
     ? await prisma.phoneNumber.findFirst({
@@ -94,24 +95,49 @@ export async function evaluateInboundRouting(ctx: RoutingContext): Promise<Routi
         select: { id: true },
       })
     : null;
-  const ownerAgent = pn
-    ? await prisma.voiceAgent.findFirst({
+  let ownerAgentId: string | null = null;
+  if (pn) {
+    const join = await prisma.voiceAgentPhoneNumber.findFirst({
+      where: {
+        workspaceId: ctx.workspaceId,
+        phoneNumberId: pn.id,
+        inboundEnabled: true,
+      },
+      select: { agentId: true },
+    });
+    if (join?.agentId) {
+      const joined = await prisma.voiceAgent.findFirst({
+        where: {
+          id: join.agentId,
+          workspaceId: ctx.workspaceId,
+          status: { in: ["ACTIVE", "TESTING"] },
+        },
+        select: { id: true },
+      });
+      ownerAgentId = joined?.id || null;
+    }
+    if (!ownerAgentId) {
+      const ownerAgent = await prisma.voiceAgent.findFirst({
         where: {
           workspaceId: ctx.workspaceId,
           phoneNumberId: pn.id,
           status: { in: ["ACTIVE", "TESTING"] },
         },
         select: { id: true },
-      })
-    : await prisma.voiceAgent.findFirst({
-        where: {
-          workspaceId: ctx.workspaceId,
-          phoneNumberId: { not: null },
-          status: "ACTIVE",
-        },
-        select: { id: true },
       });
-  const ownerAgentId = ownerAgent?.id || null;
+      ownerAgentId = ownerAgent?.id || null;
+    }
+  } else {
+    const ownerAgent = await prisma.voiceAgent.findFirst({
+      where: {
+        workspaceId: ctx.workspaceId,
+        phoneNumberId: { not: null },
+        status: "ACTIVE",
+      },
+      select: { id: true },
+    });
+    ownerAgentId = ownerAgent?.id || null;
+  }
 
   const rules = await prisma.voiceRoutingRule.findMany({
     where: { workspaceId: ctx.workspaceId, isActive: true },
