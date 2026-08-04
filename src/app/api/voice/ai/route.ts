@@ -748,16 +748,33 @@ export async function POST(request: Request) {
 
         let listed: unknown = null;
         let listedUltravox: string[] = [];
+        let listedAudio: string[] = [];
+        let listedSample: string[] = [];
         try {
           listed = await telnyxRequest("/ai/openai/models", { method: "GET" });
           const rows = Array.isArray((listed as { data?: unknown[] }).data)
-            ? ((listed as { data: Array<{ id?: string; owned_by?: string }> }).data)
+            ? ((listed as {
+                data: Array<{
+                  id?: string;
+                  owned_by?: string;
+                  task?: string;
+                }>;
+              }).data)
             : Array.isArray(listed)
-              ? (listed as Array<{ id?: string }>)
+              ? (listed as Array<{ id?: string; task?: string }>)
               : [];
+          listedSample = rows.map((r) => String(r.id || "")).filter(Boolean).slice(0, 40);
           listedUltravox = rows
             .map((r) => String(r.id || ""))
             .filter((id) => /ultravox|fixie/i.test(id));
+          listedAudio = rows
+            .filter(
+              (r) =>
+                /audio/i.test(String(r.task || "")) ||
+                /ultravox|audio-text/i.test(String(r.id || "")),
+            )
+            .map((r) => String(r.id || ""))
+            .filter(Boolean);
         } catch (err) {
           listed = {
             error: err instanceof Error ? err.message : String(err),
@@ -852,6 +869,12 @@ export async function POST(request: Request) {
           data: {
             primaryModelId: NATIVE_AUDIO_MODEL_ID,
             listedUltravox,
+            listedAudio,
+            listedSample,
+            accountBlocker:
+              listedUltravox.length === 0
+                ? "No Ultravox models are listed on this Telnyx account. Telnyx returns 10027 (not available for inference) for known Ultravox IDs — Version C cannot run until Telnyx enables an audio-language model for this account."
+                : null,
             listedError:
               listed && typeof listed === "object" && "error" in listed
                 ? (listed as { error: string }).error

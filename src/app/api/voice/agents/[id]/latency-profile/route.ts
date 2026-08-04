@@ -167,6 +167,15 @@ export async function POST(req: Request, ctx: Ctx) {
         action,
         telnyxAssistantId: refreshed?.telnyxAssistantId,
         deploy,
+        telnyxSyncError:
+          deploy && typeof deploy === "object" && "telnyxSyncError" in deploy
+            ? (deploy as { telnyxSyncError?: string | null }).telnyxSyncError
+            : null,
+        ok: !(
+          deploy &&
+          typeof deploy === "object" &&
+          (deploy as { telnyxSyncError?: string | null }).telnyxSyncError
+        ),
       },
     });
   } catch (err) {

@@ -248,7 +248,7 @@ export const NATIVE_AUDIO_ULTRAVOX_PROFILE: LatencyProfileDefinition = {
   versionLabel: "C",
   label: "Version C — Ultravox native-audio input + Ultra TTS",
   description:
-    "fixie-ai/ultravox-v0_4_1-llama-3_1-8b for native audio understanding. Transcription ignored. Outgoing audio expected via selected Ultra TTS (text→speech), not Ultravox-native speech. Timing endpointing plan cleared. Dynvar webhook skipped.",
+    "Requires Telnyx account access to fixie-ai/ultravox-v0_4_1-llama-3_1-8b (native audio understanding). Fails with Telnyx 10027 if Ultravox is not enabled on the account. Transcription ignored when available. Outgoing audio expected via Ultra TTS.",
   fields: {
     transcription: {
       enabled: false,
