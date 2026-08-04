@@ -3,6 +3,8 @@
  * overview, setup, instances, quick settings, and results.
  */
 
+import { phoneOutcomeSolutions } from "@/lib/outcomes/phone-solutions";
+
 export type OutcomePageKind =
   | "overview"
   | "setup"
@@ -43,7 +45,8 @@ export type OutcomeSolutionDef = {
     | "customers"
     | "shared"
     | "advanced"
-    | "automations";
+    | "automations"
+    | "phone";
   /** Channels this solution can use (shown on overview / Email shortcuts). */
   channels?: Array<"sms" | "email" | "ai-call">;
   /** What this outcome does (overview body). */
@@ -3397,6 +3400,7 @@ export const outcomeSolutions: OutcomeSolutionDef[] = [
     ),
   },
 
+  ...phoneOutcomeSolutions,
 ];
 
 export function getOutcomeSolution(slug: string): OutcomeSolutionDef | undefined {

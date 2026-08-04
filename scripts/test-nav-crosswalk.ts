@@ -131,6 +131,19 @@ const expectedLaunchMenu: Array<{ section: string; labels: string[] }> = [
     ],
   },
   {
+    section: "Phone",
+    labels: [
+      "Set Up a Business Phone",
+      "Give Your Team One Number",
+      "Route Calls to the Right Person",
+      "Handle High Call Volume",
+      "Make Outbound Sales Calls",
+      "Record & Review Calls",
+      "Manage Voicemail",
+      "Create a Phone Menu",
+    ],
+  },
+  {
     section: "Automations",
     labels: [
       "Welcome New Customers",
@@ -177,7 +190,16 @@ assert.equal(
   "Email shortcuts should not duplicate the full management tree",
 );
 
-const sharedSections = ["Inbox", "Contacts", "Phone", "Calendars", "Integrations", "Reports", "Compliance", "Advanced", "Settings"];
+const sharedSections = [
+  "Inbox",
+  "Contacts",
+  "Calendars",
+  "Integrations",
+  "Reports",
+  "Compliance",
+  "Advanced",
+  "Settings",
+];
 for (const label of sharedSections) {
   assert.ok(
     solutionsNav.some((i) => i.label === label),
@@ -187,6 +209,30 @@ for (const label of sharedSections) {
 assert.ok(
   !solutionsNav.some((i) => i.sectionLabel === "Shared"),
   "Legacy Shared section header should be removed",
+);
+// Phone is a product-area solutions section, not a raw Softphone dump.
+assert.ok(
+  solutionsNav.some((i) => i.sectionLabel === "Phone"),
+  "Phone product-area section required after Email",
+);
+assert.ok(
+  !solutionsNav.some(
+    (i) => i.label === "Phone" && i.href === "/numbers",
+  ),
+  "Raw Phone shared dump should not appear in Solutions (use Platform view)",
+);
+
+const phoneMenu = solutionsNav.find((i) => i.label === "Create a Phone Menu");
+assert.ok(phoneMenu?.children?.length, "Create a Phone Menu needs a full submenu");
+const phoneMenuLabels = (phoneMenu?.children || []).map((c) =>
+  "type" in c && c.type === "group" ? c.label : c.label,
+);
+assert.ok(
+  phoneMenuLabels.includes("Overview") &&
+    phoneMenuLabels.includes("Set Up") &&
+    phoneMenuLabels.includes("Menu Options") &&
+    phoneMenuLabels.includes("Calls & Results"),
+  "Phone Menu submenu should include permanent management pages",
 );
 
 // Full permanent submenu is always visible — even before the customer sets up.

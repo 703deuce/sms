@@ -134,6 +134,7 @@ function iconForSection(section: string, slug: string): LucideIcon {
   if (section === "AI Receptionist") return AudioLines;
   if (section === "SMS & Messaging") return MessageSquare;
   if (section === "Email") return Mail;
+  if (section === "Phone") return Phone;
   if (section === "Automations") return Workflow;
   if (slug.includes("appointment") || slug.includes("booking")) return CalendarDays;
   return Sparkles;
@@ -207,6 +208,19 @@ const LAUNCH_SECTIONS: SectionDef[] = [
     ],
   },
   {
+    label: "Phone",
+    entries: [
+      { slug: "business-phone" },
+      { slug: "shared-team-number" },
+      { slug: "call-routing" },
+      { slug: "call-queues" },
+      { slug: "outbound-sales-calls" },
+      { slug: "record-review-calls" },
+      { slug: "manage-voicemail" },
+      { slug: "phone-menu" },
+    ],
+  },
+  {
     label: "Automations",
     entries: [
       { slug: "client-onboarding" },
@@ -275,17 +289,6 @@ export function buildSolutionsNav(options: SolutionsNavOptions = {}): NavItem[] 
         { label: "Lists & Segments", href: "/contacts/lists" },
         { label: "Imports", href: "/contacts/imports" },
         { label: "Contact Settings", href: "/contacts/fields" },
-      ],
-    },
-    {
-      label: "Phone",
-      href: "/numbers",
-      icon: Phone,
-      children: [
-        { label: "Phone Numbers", href: "/numbers" },
-        { label: "Softphone", href: "/phone" },
-        { label: "Call History", href: "/phone/calls" },
-        { label: "Routing", href: "/voice/inbound-routing" },
       ],
     },
     {
