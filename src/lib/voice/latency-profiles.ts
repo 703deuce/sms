@@ -79,8 +79,9 @@ export type LatencyProfileProviderFields = {
      * Transovo local field. For cascade assistants it maps ONLY to
      * interruption_settings.start_speaking_plan.wait_seconds (ms → s).
      * It is NOT a separate Telnyx "endpointing" API field.
+     * Omit (undefined) for native-audio profiles that do not send wait_seconds.
      */
-    endpointingMs?: number | null;
+    endpointingMs?: number;
     silenceTimeoutMs?: number;
     bargeIn?: boolean;
     /** Prefer Ultra for Version B when switching from NaturalHD. */
@@ -247,8 +248,7 @@ export const NATIVE_AUDIO_ULTRAVOX_PROFILE: LatencyProfileDefinition = {
       settings: undefined,
     },
     voiceLanguage: {
-      // Do not invent a third endpointing layer for Ultravox.
-      endpointingMs: null,
+      // Do not invent a third endpointing layer for Ultravox (omit wait alias).
       silenceTimeoutMs: 2500,
       bargeIn: true,
       preferUltra: true,
@@ -439,10 +439,22 @@ export function applyLatencyProfileToConfig(
         )
       : config.callHandling?.greeting;
 
-  const endpointingMs =
-    profile.fields.voiceLanguage.endpointingMs === null
-      ? undefined
-      : profile.fields.voiceLanguage.endpointingMs;
+  const nextVoiceLanguage: VoiceAgentConfig["voiceLanguage"] = {
+    ...config.voiceLanguage,
+    voiceId: nextVoiceId,
+    silenceTimeoutMs:
+      profile.fields.voiceLanguage.silenceTimeoutMs ??
+      config.voiceLanguage?.silenceTimeoutMs ??
+      2500,
+    bargeIn:
+      profile.fields.voiceLanguage.bargeIn ??
+      config.voiceLanguage?.bargeIn !== false,
+  };
+  if (typeof profile.fields.voiceLanguage.endpointingMs === "number") {
+    nextVoiceLanguage.endpointingMs = profile.fields.voiceLanguage.endpointingMs;
+  } else if (profile.fields.nativeAudio) {
+    delete nextVoiceLanguage.endpointingMs;
+  }
 
   const next: VoiceAgentConfig = {
     ...config,
@@ -467,20 +479,7 @@ export function applyLatencyProfileToConfig(
             ? { ...profile.fields.transcription.settings }
             : undefined,
         },
-    voiceLanguage: {
-      ...config.voiceLanguage,
-      voiceId: nextVoiceId,
-      ...(endpointingMs !== undefined
-        ? { endpointingMs }
-        : { endpointingMs: undefined }),
-      silenceTimeoutMs:
-        profile.fields.voiceLanguage.silenceTimeoutMs ??
-        config.voiceLanguage?.silenceTimeoutMs ??
-        2500,
-      bargeIn:
-        profile.fields.voiceLanguage.bargeIn ??
-        config.voiceLanguage?.bargeIn !== false,
-    },
+    voiceLanguage: nextVoiceLanguage,
     model: {
       ...config.model,
       ...(profile.fields.model?.modelId
@@ -533,6 +532,10 @@ export function rollbackLatencyProfileConfig(
   }
 
   const f = snap.fields;
+  const restoredEndpointing =
+    typeof f.voiceLanguage.endpointingMs === "number"
+      ? f.voiceLanguage.endpointingMs
+      : undefined;
   return {
     ...config,
     transcription: {
@@ -544,7 +547,11 @@ export function rollbackLatencyProfileConfig(
     },
     voiceLanguage: {
       ...config.voiceLanguage,
-      ...f.voiceLanguage,
+      bargeIn: f.voiceLanguage.bargeIn,
+      silenceTimeoutMs: f.voiceLanguage.silenceTimeoutMs,
+      ...(restoredEndpointing !== undefined
+        ? { endpointingMs: restoredEndpointing }
+        : {}),
       ...(f.voiceId ? { voiceId: f.voiceId } : {}),
       ...(f.speed != null ? { speed: f.speed } : {}),
     },
