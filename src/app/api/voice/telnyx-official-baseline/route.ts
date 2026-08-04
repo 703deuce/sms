@@ -17,18 +17,36 @@ import {
   OPENAI_API_KEY_REF,
   OFFICIAL_BASELINE_NAME,
 } from "@/lib/voice/telnyx/official-baseline";
+import {
+  DEFAULT_TEXML_APP_ID,
+  TURN_CLONE_PROFILES,
+  TURN_TIMING_BASELINE,
+  TURN_TIMING_FAST,
+  TURN_TIMING_AGGRESSIVE,
+  UNTOUCHED_BASELINE_ASSISTANT_ID,
+  ensureAllTurnCloneAssistants,
+  resolveTurnCloneProfileId,
+  routeTexmlToAssistant,
+  switchToTurnCloneProfile,
+} from "@/lib/voice/telnyx/official-baseline-turn-clones";
 
 const BOOTSTRAP_HEADER = "x-smoke-bootstrap";
 const BOOTSTRAP_VALUE = "transovo-smoke-bootstrap-b56f-aug2026";
 
 /**
- * Create / route / switch A|B|C|D / restore the Telnyx-direct latency baseline.
+ * Create / route / switch profiles / restore the Telnyx-direct latency baseline.
  *
- * Profiles (LLM only — Flux + Ultra + prompt stay identical):
+ * A/B/C/D — LLM only on the untouched baseline (timing unchanged):
  *   A = anthropic/claude-haiku-4-5
- *   B = moonshotai/Kimi-K2.5
+ *   B = moonshotai/Kimi (live id)
  *   C = google/gemini-2.5-flash-lite (+ gemini_api_key)
- *   D = openai/gpt-4o-mini (+ openai_key)
+ *   D = openai/gpt-5.4-mini (+ openai_key)
+ *
+ * E/F/G/H — separate clones (baseline assistant never overwritten):
+ *   E = Haiku Fast
+ *   F = Haiku Aggressive (experimental)
+ *   G = Kimi Fast
+ *   H = Kimi Aggressive (experimental)
  */
 export async function POST(request: Request) {
   try {
@@ -44,6 +62,8 @@ export async function POST(request: Request) {
       secretIdentifier?: string;
       workspaceId?: string;
       limit?: number;
+      texmlAppId?: string;
+      sourceAssistantId?: string;
       snapshot?: OfficialBaselineRouteSnapshot;
     };
 
@@ -73,13 +93,31 @@ export async function POST(request: Request) {
       return NextResponse.json({
         data: {
           profiles: BASELINE_MODEL_PROFILES,
+          turnClones: TURN_CLONE_PROFILES,
+          timing: {
+            baseline: TURN_TIMING_BASELINE,
+            fast: TURN_TIMING_FAST,
+            aggressive: TURN_TIMING_AGGRESSIVE,
+          },
           shared: BASELINE_REQUESTED,
+          untouchedBaselineAssistantId: UNTOUCHED_BASELINE_ASSISTANT_ID,
           secrets: {
             gemini: GEMINI_API_KEY_REF,
             openai: OPENAI_API_KEY_REF,
           },
         },
       });
+    }
+
+    if (action === "ensure_turn_clones") {
+      const data = await ensureAllTurnCloneAssistants({
+        sourceAssistantId:
+          body.sourceAssistantId ||
+          body.assistantId ||
+          UNTOUCHED_BASELINE_ASSISTANT_ID,
+        voiceId: body.voiceId,
+      });
+      return NextResponse.json({ data });
     }
 
     if (action === "verify") {
@@ -105,19 +143,42 @@ export async function POST(request: Request) {
       return NextResponse.json({ data });
     }
 
-    if (action === "switch_model") {
-      const assistantId = String(body.assistantId || "").trim();
+    if (action === "switch_model" || action === "switch_profile") {
+      const turnCloneId = resolveTurnCloneProfileId(body.profileId);
+      if (turnCloneId) {
+        const data = await switchToTurnCloneProfile({
+          profileId: turnCloneId,
+          sourceAssistantId:
+            body.sourceAssistantId ||
+            body.assistantId ||
+            UNTOUCHED_BASELINE_ASSISTANT_ID,
+          texmlAppId: body.texmlAppId || DEFAULT_TEXML_APP_ID,
+          e164,
+          voiceId: body.voiceId,
+        });
+        return NextResponse.json({ data });
+      }
+
+      const assistantId = String(
+        body.assistantId || UNTOUCHED_BASELINE_ASSISTANT_ID,
+      ).trim();
       const profileId = body.profileId;
       const modelId = body.modelId;
       if (!assistantId || (!profileId && !modelId)) {
         return NextResponse.json(
           {
             error:
-              "assistantId and profileId (A|B|C|D) or modelId required for switch_model",
+              "assistantId and profileId (A|B|C|D|E|F|G|H) or modelId required for switch_model",
           },
           { status: 400 },
         );
       }
+      // A/B/C/D: route phone back to untouched baseline, then LLM-only switch.
+      const route = await routeTexmlToAssistant({
+        assistantId,
+        texmlAppId: body.texmlAppId || DEFAULT_TEXML_APP_ID,
+        e164,
+      });
       const data = await switchOfficialBaselineModel({
         assistantId,
         profileId,
@@ -125,7 +186,13 @@ export async function POST(request: Request) {
         geminiKeyRef,
         openaiKeyRef,
       });
-      return NextResponse.json({ data });
+      return NextResponse.json({
+        data: {
+          ...data,
+          route,
+          note: "A/B/C/D LLM-only on untouched baseline timing",
+        },
+      });
     }
 
     if (action === "restore") {
@@ -211,7 +278,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         error:
-          "action must be create | create_and_route | verify | restore | switch_model | verify_secret | list_profiles | score_latency",
+          "action must be create | create_and_route | verify | restore | switch_model | switch_profile | ensure_turn_clones | verify_secret | list_profiles | score_latency",
       },
       { status: 400 },
     );

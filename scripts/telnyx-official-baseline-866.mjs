@@ -1,27 +1,26 @@
 /**
- * Telnyx-direct baseline A/B/C/D model switcher for +1866.
+ * Telnyx-direct baseline profile switcher for +1866.
  *
- * Shared (identical for all profiles): Flux STT + Ultra TTS + short prompt + fixed greeting.
- * Only the LLM (+ provider key ref) changes.
+ * Shared: Flux STT + Ultra TTS + short prompt + fixed greeting. No tools / webhooks.
  *
- *   A = anthropic/claude-haiku-4-5          (Telnyx native)
- *   B = moonshotai/Kimi-K2.5               (Telnyx native)
- *   C = google/gemini-2.5-flash-lite       (secret: gemini_api_key)
- *   D = openai/gpt-4o-mini                 (secret: openai_key)
+ * A/B/C/D — LLM only on the untouched baseline (timing unchanged):
+ *   A = anthropic/claude-haiku-4-5
+ *   B = moonshotai/Kimi (live id)
+ *   C = google/gemini-2.5-flash (+ gemini_api_key)
+ *   D = openai/gpt-5.4-mini (+ openai_key)
+ *
+ * E/F/G/H — separate clones (baseline assistant never overwritten):
+ *   E = Haiku Fast
+ *   F = Haiku Aggressive (experimental)
+ *   G = Kimi Fast
+ *   H = Kimi Aggressive (experimental)
  *
  * Usage:
- *   node scripts/telnyx-official-baseline-866.mjs --verify-secret
  *   node scripts/telnyx-official-baseline-866.mjs --list-profiles
- *   node scripts/telnyx-official-baseline-866.mjs --profile A
- *   node scripts/telnyx-official-baseline-866.mjs --profile B
- *   node scripts/telnyx-official-baseline-866.mjs --profile C
- *   node scripts/telnyx-official-baseline-866.mjs --profile D
+ *   node scripts/telnyx-official-baseline-866.mjs --ensure-clones
+ *   node scripts/telnyx-official-baseline-866.mjs --profile A|B|C|D|E|F|G|H
  *   node scripts/telnyx-official-baseline-866.mjs --verify
  *   node scripts/telnyx-official-baseline-866.mjs --score
- *   node scripts/telnyx-official-baseline-866.mjs --score --limit 10
- *   node scripts/telnyx-official-baseline-866.mjs --restore <snapshot.json>
- *
- * --score pulls user→assistant message gaps from Telnyx (ms). Does not change the agent.
  */
 import { writeFileSync, readFileSync, mkdirSync, existsSync } from "fs";
 import { join } from "path";
@@ -43,7 +42,9 @@ const OPENAI_KEY_REF = process.env.OPENAI_API_KEY_REF || "openai_key";
 const CREATE_ONLY = process.argv.includes("--create-only");
 const VERIFY_SECRET = process.argv.includes("--verify-secret");
 const LIST_PROFILES = process.argv.includes("--list-profiles");
-const SCORE = process.argv.includes("--score") || process.argv.includes("--pull-latency");
+const ENSURE_CLONES = process.argv.includes("--ensure-clones");
+const SCORE =
+  process.argv.includes("--score") || process.argv.includes("--pull-latency");
 const VERIFY_IDX = process.argv.indexOf("--verify");
 const RESTORE_IDX = process.argv.indexOf("--restore");
 const PROFILE_IDX = process.argv.indexOf("--profile");
@@ -159,6 +160,27 @@ async function main() {
     process.exit(out.ok ? 0 : 1);
   }
 
+  if (ENSURE_CLONES) {
+    console.log("Ensuring E/F/G/H turn clones (A–D baseline untouched)…");
+    const out = await post(jar, {
+      action: "ensure_turn_clones",
+      assistantId: resolveAssistantId(),
+    });
+    if (!out.ok) {
+      console.error("FAIL", out.status, JSON.stringify(out.json).slice(0, 4000));
+      process.exit(1);
+    }
+    save("turn-clones.json", out.json);
+    const d = out.json?.data || {};
+    console.log("kimi model:", d.kimi?.modelId, `(${d.kimi?.source})`);
+    for (const c of d.clones || []) {
+      console.log(
+        `  ${c.profileId} ${c.profile?.label} → ${c.assistantId} model=${c.usedModel} live=${c.verification?.liveLabel} created=${c.created}`,
+      );
+    }
+    process.exit(0);
+  }
+
   if (VERIFY_SECRET) {
     for (const id of [GEMINI_KEY_REF, OPENAI_KEY_REF]) {
       const out = await post(jar, {
@@ -177,23 +199,22 @@ async function main() {
   const profileOrSwitch = PROFILE_ARG || SWITCH_MODEL;
   if (profileOrSwitch) {
     const assistantId = resolveAssistantId();
-    const isLetter = /^[A-D]$/i.test(profileOrSwitch);
+    const letter = String(profileOrSwitch).trim().toUpperCase();
+    const isLetter = /^[A-H]$/.test(letter);
     console.log(
-      `Switching ${assistantId} → ${isLetter ? `profile ${profileOrSwitch.toUpperCase()}` : profileOrSwitch}`,
+      `Switching → ${isLetter ? `profile ${letter}` : profileOrSwitch} (source ${assistantId})`,
     );
     const out = await post(jar, {
-      action: "switch_model",
+      action: "switch_profile",
       assistantId,
-      ...(isLetter
-        ? { profileId: profileOrSwitch.toUpperCase() }
-        : { modelId: profileOrSwitch }),
+      ...(isLetter ? { profileId: letter } : { modelId: profileOrSwitch }),
     });
     if (!out.ok) {
-      console.error("FAIL", out.status, JSON.stringify(out.json).slice(0, 2500));
+      console.error("FAIL", out.status, JSON.stringify(out.json).slice(0, 4000));
       process.exit(1);
     }
     const tag = isLetter
-      ? profileOrSwitch.toUpperCase()
+      ? letter
       : profileOrSwitch.replace(/\//g, "_");
     save(`switch-${tag}.json`, out.json);
     const d = out.json?.data || {};
@@ -201,11 +222,13 @@ async function main() {
       JSON.stringify(
         {
           profileId: d.profileId,
-          profile: d.profile,
-          before: d.before,
-          live: d.live,
-          matched: d.matched,
-          sharedUnchanged: d.sharedUnchanged,
+          label: d.profile?.label || d.profile?.id,
+          assistantId: d.assistantId || d.live?.name,
+          usedModel: d.usedModel || d.live?.model,
+          verification: d.verification?.liveLabel || d.matched,
+          route: d.route?.path || d.route,
+          experimental: d.profile?.experimental,
+          timing: d.profile?.timing || d.profile?.timingId,
         },
         null,
         2,
@@ -238,7 +261,7 @@ async function main() {
       JSON.stringify(d.overall),
       `from ${d.sampleCount || 0} turns / ${d.conversationCount || 0} calls`,
     );
-    console.log("\nby profile A/B/C/D:");
+    console.log("\nby profile:");
     for (const row of d.byProfile || []) {
       console.log(
         `  ${row.profileId}: n=${row.sampleCount} calls=${row.callCount} p50=${row.p50Ms}ms p75=${row.p75Ms}ms p95=${row.p95Ms}ms mean=${row.meanMs}ms min=${row.minMs}ms max=${row.maxMs}ms`,
@@ -303,7 +326,7 @@ async function main() {
   console.log("usedModel:", d.usedModel);
   console.log("llm_api_key_ref:", d.live?.llm_api_key_ref ?? d.llmApiKeyRef);
   if (d.route?.route) console.log("ROUTE:", d.route.route.path);
-  console.log(`\nCall ${E164}. Switch with --profile A|B|C|D`);
+  console.log(`\nCall ${E164}. Switch with --profile A|B|C|D|E|F|G|H`);
 }
 
 main().catch((err) => {
