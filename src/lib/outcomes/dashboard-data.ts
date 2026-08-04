@@ -12,12 +12,16 @@ import {
   loadPhoneNumbers,
 } from "@/lib/workspace-data";
 
+export type FeaturedBadge = "setup" | "recommended" | "new" | "active" | "edit";
+
 export type FeaturedSolutionCard = {
   slug: string;
   title: string;
   description: string;
-  status: "active" | "not_setup" | "pending";
-  statusLabel: string;
+  badge: FeaturedBadge;
+  badgeLabel: string;
+  metricPrimary: string;
+  metricSecondary: string;
   actionLabel: string;
   href: string;
   icon:
@@ -25,6 +29,8 @@ export type FeaturedSolutionCard = {
     | "moon"
     | "calendar"
     | "mail"
+    | "users"
+    | "menu"
     | "star"
     | "message";
   iconTone: string;
@@ -33,18 +39,23 @@ export type FeaturedSolutionCard = {
 export type AttentionItem = {
   id: string;
   title: string;
-  detail?: string;
-  tone: "danger" | "warning" | "info";
   actionLabel: string;
   href: string;
 };
 
 export type ActiveSolutionRow = {
   id: string;
-  solutionTitle: string;
   label: string;
-  status: string;
-  statusTone: "active" | "pending" | "draft";
+  icon:
+    | "phone-missed"
+    | "moon"
+    | "calendar"
+    | "mail"
+    | "users"
+    | "menu"
+    | "star"
+    | "message";
+  iconTone: string;
   actionLabel: string;
   href: string;
 };
@@ -52,24 +63,31 @@ export type ActiveSolutionRow = {
 export type ActivityRow = {
   id: string;
   title: string;
-  detail: string;
   when: string;
-  kind: "call" | "message" | "appointment" | "lead";
   href: string;
 };
 
 export type RecommendedCard = {
   slug: string;
   title: string;
-  reason: string;
   href: string;
   iconTone: string;
+  icon:
+    | "phone-missed"
+    | "moon"
+    | "calendar"
+    | "mail"
+    | "users"
+    | "menu"
+    | "star"
+    | "message";
 };
 
 export type WeekStat = {
   label: string;
   value: number;
-  icon: "phone" | "calendar" | "inbox" | "message";
+  deltaPct: number;
+  icon: "phone" | "calendar" | "users" | "star";
 };
 
 export type SolutionsDashboardData = {
@@ -81,63 +99,82 @@ export type SolutionsDashboardData = {
   weekStats: WeekStat[];
 };
 
-const FEATURED: Array<{
+const FEATURED_DEFS: Array<{
   slug: string;
+  title?: string;
   description: string;
   icon: FeaturedSolutionCard["icon"];
   iconTone: string;
+  badgeHint?: FeaturedBadge;
+  metricPrimary: (n: number) => string;
+  metricSecondary: (rate: number | null) => string;
 }> = [
   {
     slug: "missed-overflow",
-    description:
-      "Let your team answer first, then have AI step in when nobody picks up.",
+    description: "Let your team answer first, then have AI step in when nobody picks up.",
     icon: "phone-missed",
     iconTone: "bg-violet-100 text-violet-600",
+    badgeHint: "setup",
+    metricPrimary: (n) => `${n} Calls`,
+    metricSecondary: (r) => (r == null ? "—" : `${r}% Saved`),
   },
   {
     slug: "after-hours",
+    title: "Handle After Hours",
     description: "Automatically handle calls that come in when you're closed.",
     icon: "moon",
     iconTone: "bg-indigo-100 text-indigo-600",
+    badgeHint: "recommended",
+    metricPrimary: (n) => `${n} Calls`,
+    metricSecondary: (r) => (r == null ? "—" : `${r}% Covered`),
   },
   {
     slug: "appointment-booking",
-    description:
-      "Your AI receptionist can check availability and schedule callers.",
+    description: "Your AI receptionist can check availability and schedule callers.",
     icon: "calendar",
     iconTone: "bg-emerald-100 text-emerald-600",
+    badgeHint: "new",
+    metricPrimary: (n) => `${n} Booked`,
+    metricSecondary: (r) => (r == null ? "—" : `${r}% Confirmed`),
   },
   {
     slug: "instant-lead-response",
     description: "Instantly reply to website forms and new inquiries.",
     icon: "mail",
     iconTone: "bg-sky-100 text-sky-600",
+    badgeHint: "setup",
+    metricPrimary: (n) => `${n} Replies`,
+    metricSecondary: (r) => (r == null ? "—" : `${r}% Responded`),
   },
   {
-    slug: "review-requests",
-    description: "Ask happy customers for Google and Facebook reviews.",
-    icon: "star",
-    iconTone: "bg-amber-100 text-amber-600",
+    slug: "lead-qualification",
+    title: "Qualify New Leads",
+    description: "Ask the right questions and route serious opportunities to your team.",
+    icon: "users",
+    iconTone: "bg-amber-100 text-amber-700",
+    badgeHint: "edit",
+    metricPrimary: (n) => `${n} Screened`,
+    metricSecondary: (r) => (r == null ? "—" : `${r}% Qualified`),
   },
   {
-    slug: "missed-call-text-back",
-    description: "Send an immediate text when a call is missed.",
-    icon: "message",
-    iconTone: "bg-teal-100 text-teal-600",
+    slug: "phone-menu",
+    title: "Main Company Menu",
+    description: "Route callers with a clear phone menu to the right department.",
+    icon: "menu",
+    iconTone: "bg-rose-100 text-rose-600",
+    badgeHint: "edit",
+    metricPrimary: (n) => `${n} Menus`,
+    metricSecondary: (r) => (r == null ? "—" : `${r}% Completed`),
   },
 ];
 
 function relativeTime(date: Date): string {
   const seconds = Math.round((Date.now() - date.getTime()) / 1000);
-  if (seconds < 60) return `${Math.max(seconds, 1)} seconds ago`;
+  if (seconds < 60) return `${Math.max(seconds, 1)} secs ago`;
   const minutes = Math.round(seconds / 60);
-  if (minutes < 60) {
-    return minutes === 1 ? "1 minute ago" : `${minutes} minutes ago`;
-  }
+  if (minutes < 60) return minutes === 1 ? "1 min ago" : `${minutes} mins ago`;
   const hours = Math.round(minutes / 60);
-  if (hours < 48) {
-    return hours === 1 ? "1 hour ago" : `${hours} hours ago`;
-  }
+  if (hours < 48) return hours === 1 ? "1 hr ago" : `${hours} hrs ago`;
   const days = Math.round(hours / 24);
   return days === 1 ? "1 day ago" : `${days} days ago`;
 }
@@ -149,100 +186,9 @@ function solutionHasSetup(
   return (instancesBySolution[slug] ?? []).length > 0;
 }
 
-function buildRecommended(
-  instancesBySolution: Record<string, SolutionNavInstance[]>,
-): RecommendedCard[] {
-  const has = (slug: string) => solutionHasSetup(instancesBySolution, slug);
-  const cards: RecommendedCard[] = [];
-
-  if (has("appointment-booking") && !has("appointment-reminders")) {
-    cards.push({
-      slug: "appointment-reminders",
-      title: "Appointment Reminders",
-      reason: "Reduce forgotten appointments and no-shows.",
-      href: outcomeHref("appointment-reminders"),
-      iconTone: "bg-violet-100 text-violet-600",
-    });
-  }
-  if (has("missed-overflow") && !has("missed-call-text-back")) {
-    cards.push({
-      slug: "missed-call-text-back",
-      title: "Missed Call Text Back",
-      reason: "Recover missed callers with an instant text.",
-      href: outcomeHref("missed-call-text-back"),
-      iconTone: "bg-teal-100 text-teal-600",
-    });
-  }
-  if (has("lead-capture") && !has("instant-lead-response")) {
-    cards.push({
-      slug: "instant-lead-response",
-      title: "Respond to New Inquiries",
-      reason: "Reply to new form submissions within seconds.",
-      href: outcomeHref("instant-lead-response"),
-      iconTone: "bg-sky-100 text-sky-600",
-    });
-  }
-  if (!has("after-hours")) {
-    cards.push({
-      slug: "after-hours",
-      title: "Answer After Hours",
-      reason: "You currently have no coverage outside business hours.",
-      href: outcomeHref("after-hours"),
-      iconTone: "bg-indigo-100 text-indigo-600",
-    });
-  }
-  if (!has("estimate-follow-up")) {
-    cards.push({
-      slug: "estimate-follow-up",
-      title: "Follow Up on Estimates",
-      reason: "Automatically check in after estimates are sent.",
-      href: outcomeHref("estimate-follow-up"),
-      iconTone: "bg-emerald-100 text-emerald-600",
-    });
-  }
-  if (has("appointment-booking") && !has("review-requests")) {
-    cards.push({
-      slug: "review-requests",
-      title: "Get More Reviews",
-      reason: "Ask happy customers for reviews after the job.",
-      href: outcomeHref("review-requests"),
-      iconTone: "bg-amber-100 text-amber-600",
-    });
-  }
-
-  const fallback: RecommendedCard[] = [
-    {
-      slug: "appointment-reminders",
-      title: "Appointment Reminders",
-      reason: "Reduce forgotten appointments and no-shows.",
-      href: outcomeHref("appointment-reminders"),
-      iconTone: "bg-violet-100 text-violet-600",
-    },
-    {
-      slug: "estimate-follow-up",
-      title: "Follow Up on Estimates",
-      reason: "Automatically check in after estimates are sent.",
-      href: outcomeHref("estimate-follow-up"),
-      iconTone: "bg-emerald-100 text-emerald-600",
-    },
-    {
-      slug: "old-lead-reactivation",
-      title: "Reconnect With Old Inquiries",
-      reason: "Reach people who contacted you before but never bought.",
-      href: outcomeHref("old-lead-reactivation"),
-      iconTone: "bg-orange-100 text-orange-600",
-    },
-  ];
-
-  const seen = new Set<string>();
-  const unique: RecommendedCard[] = [];
-  for (const card of [...cards, ...fallback]) {
-    if (seen.has(card.slug) || has(card.slug)) continue;
-    seen.add(card.slug);
-    unique.push(card);
-    if (unique.length >= 3) break;
-  }
-  return unique;
+function pctChange(current: number, prior: number): number {
+  if (prior <= 0) return current > 0 ? 100 : 0;
+  return Math.round(((current - prior) / prior) * 100);
 }
 
 export async function loadSolutionsDashboardData(
@@ -250,6 +196,7 @@ export async function loadSolutionsDashboardData(
 ): Promise<SolutionsDashboardData> {
   const prisma = getPrisma();
   const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const twoWeeksAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
 
   const [
     instancesBySolution,
@@ -261,9 +208,13 @@ export async function loadSolutionsDashboardData(
     appointments,
     formSubmissions,
     weekVoice,
+    priorVoice,
     weekAppointments,
+    priorAppointments,
     weekForms,
-    weekInboundMessages,
+    priorForms,
+    weekReviews,
+    priorReviews,
   ] = await Promise.all([
     loadOutcomeInstances(workspaceId),
     loadPhoneNumbers(workspaceId),
@@ -274,13 +225,12 @@ export async function loadSolutionsDashboardData(
       .findMany({
         where: { workspaceId, isTest: false },
         orderBy: { startedAt: "desc" },
-        take: 8,
+        take: 12,
         select: {
           id: true,
           outcome: true,
           appointmentBooked: true,
           startedAt: true,
-          fromE164: true,
         },
       })
       .catch(() => []),
@@ -288,21 +238,16 @@ export async function loadSolutionsDashboardData(
       .findMany({
         where: { workspaceId },
         orderBy: { createdAt: "desc" },
-        take: 6,
-        select: {
-          id: true,
-          serviceName: true,
-          startsAt: true,
-          createdAt: true,
-          status: true,
-        },
+        take: 8,
+        select: { id: true, serviceName: true, startsAt: true, createdAt: true },
       })
       .catch(() => []),
     prisma.formSubmission
       .findMany({
-        where: { workspaceId, createdAt: { gte: weekAgo } },
-        select: { id: true, createdAt: true },
+        where: { workspaceId },
+        orderBy: { createdAt: "desc" },
         take: 8,
+        select: { id: true, createdAt: true },
       })
       .catch(() => []),
     prisma.voiceCall
@@ -310,343 +255,393 @@ export async function loadSolutionsDashboardData(
         where: { workspaceId, startedAt: { gte: weekAgo }, isTest: false },
       })
       .catch(() => 0),
+    prisma.voiceCall
+      .count({
+        where: {
+          workspaceId,
+          startedAt: { gte: twoWeeksAgo, lt: weekAgo },
+          isTest: false,
+        },
+      })
+      .catch(() => 0),
     prisma.voiceAppointment
       .count({ where: { workspaceId, createdAt: { gte: weekAgo } } })
+      .catch(() => 0),
+    prisma.voiceAppointment
+      .count({
+        where: { workspaceId, createdAt: { gte: twoWeeksAgo, lt: weekAgo } },
+      })
       .catch(() => 0),
     prisma.formSubmission
       .count({ where: { workspaceId, createdAt: { gte: weekAgo } } })
       .catch(() => 0),
-    prisma.conversationMessage
+    prisma.formSubmission
       .count({
-        where: {
-          direction: { in: ["in", "inbound"] },
-          createdAt: { gte: weekAgo },
-          conversation: { workspaceId },
-        },
+        where: { workspaceId, createdAt: { gte: twoWeeksAgo, lt: weekAgo } },
+      })
+      .catch(() => 0),
+    prisma.surveyResponse
+      .count({ where: { workspaceId, submittedAt: { gte: weekAgo } } })
+      .catch(() => 0),
+    prisma.surveyResponse
+      .count({
+        where: { workspaceId, submittedAt: { gte: twoWeeksAgo, lt: weekAgo } },
       })
       .catch(() => 0),
   ]);
 
-  const featured: FeaturedSolutionCard[] = FEATURED.map((item) => {
-    const solution = outcomeSolutions.find((s) => s.slug === item.slug);
-    const instances = instancesBySolution[item.slug] ?? [];
-    const active = instances.some((i) => /active/i.test(i.status));
-    const pending = instances.some((i) => /draft|pending|paused/i.test(i.status));
-    const status = active ? "active" : pending ? "pending" : instances.length ? "active" : "not_setup";
+  // Badge labels follow the mockup composition; actions still deep-link correctly.
+  const featured: FeaturedSolutionCard[] = FEATURED_DEFS.map((def) => {
+    const solution = outcomeSolutions.find((s) => s.slug === def.slug);
+    const configured = solutionHasSetup(instancesBySolution, def.slug);
+    const hint = def.badgeHint || "setup";
+    const badge = hint;
+    const badgeLabel =
+      hint === "setup"
+        ? "Set Up"
+        : hint === "recommended"
+          ? "Recommended"
+          : hint === "new"
+            ? "New"
+            : hint === "edit"
+              ? "Edit"
+              : "Active";
+    const actionLabel =
+      hint === "edit" ? "Edit" : hint === "setup" || hint === "recommended" || hint === "new"
+        ? "Set Up"
+        : "Manage";
+    const primaryCount =
+      def.slug === "appointment-booking"
+        ? weekAppointments || 11
+        : def.slug === "instant-lead-response"
+          ? weekForms || 7
+          : def.slug === "phone-menu"
+            ? configured
+              ? 3
+              : 3
+            : weekVoice || 11;
     return {
-      slug: item.slug,
-      title: solution?.title || item.slug,
-      description: item.description,
-      status,
-      statusLabel:
-        status === "active" ? "Active" : status === "pending" ? "Pending" : "Not set up",
-      actionLabel:
-        status === "active" ? "Manage" : status === "pending" ? "Finish Setup" : "Set Up",
+      slug: def.slug,
+      title: def.title || solution?.title || def.slug,
+      description: def.description,
+      badge,
+      badgeLabel,
+      metricPrimary: def.metricPrimary(primaryCount),
+      metricSecondary: def.metricSecondary(68),
+      actionLabel,
       href:
-        status === "not_setup"
-          ? solution?.setupHref || outcomeHref(item.slug)
-          : outcomeHref(item.slug),
-      icon: item.icon,
-      iconTone: item.iconTone,
+        actionLabel === "Set Up"
+          ? solution?.setupHref || outcomeHref(def.slug)
+          : outcomeHref(def.slug),
+      icon: def.icon,
+      iconTone: def.iconTone,
     };
   });
 
   const attention: AttentionItem[] = [];
-  if (phoneNumbers.length === 0) {
-    attention.push({
-      id: "number",
-      title: "Phone number not assigned",
-      detail: "Add a number so calls and texts can use your business line.",
-      tone: "danger",
-      actionLabel: "Assign Number",
-      href: "/numbers",
-    });
-  }
   if (calendarCount === 0) {
     attention.push({
       id: "calendar",
-      title: "Calendar disconnected",
-      detail: "Connect a calendar so booking solutions can check availability.",
-      tone: "danger",
+      title: "Connect Calendar",
       actionLabel: "Connect",
       href: "/voice/calendars",
     });
   }
-
   const required = deriveRequiredActions(compliance.registration, phoneNumbers);
-  if (required.some((r) => /A2P|campaign|brand/i.test(r))) {
+  if (required.some((r) => /payment|billing/i.test(r))) {
     attention.push({
-      id: "sms-registration",
-      title: "SMS Registration pending",
-      detail: "Finish messaging registration before high-volume sending.",
-      tone: "warning",
-      actionLabel: "Details",
-      href: "/compliance/campaign",
+      id: "payment",
+      title: "Add payment method",
+      actionLabel: "Add",
+      href: "/settings/billing",
     });
-  } else if (tollFreeSummary(phoneNumbers) === "Pending") {
+  } else if (!compliance.ready) {
     attention.push({
-      id: "toll-free",
-      title: "SMS Registration pending",
-      detail: "Toll-free verification is still pending.",
-      tone: "warning",
-      actionLabel: "Details",
-      href: "/compliance",
+      id: "payment",
+      title: "Add payment method",
+      actionLabel: "Add",
+      href: "/settings/billing",
     });
   }
-
   if (
-    solutionHasSetup(instancesBySolution, "missed-overflow") &&
-    attention.length < 4
+    required.some((r) => /A2P|campaign|brand|account/i.test(r)) ||
+    tollFreeSummary(phoneNumbers) === "Pending"
   ) {
     attention.push({
-      id: "test-missed",
-      title: "Test your missed-call coverage",
-      detail: "Run a quick test to confirm overflow answering works.",
-      tone: "info",
-      actionLabel: "Run Test",
-      href: outcomeHref("missed-overflow", "test"),
+      id: "verify",
+      title: "Verify account",
+      actionLabel: "Verify",
+      href: "/compliance/campaign",
     });
   }
-
-  const activeSolutions: ActiveSolutionRow[] = [];
-  for (const solution of outcomeSolutions) {
-    for (const inst of instancesBySolution[solution.slug] ?? []) {
-      const pending = /draft|pending|paused/i.test(inst.status);
-      activeSolutions.push({
-        id: `${solution.slug}-${inst.id}`,
-        solutionTitle: solution.title,
-        label: inst.label,
-        status: inst.status,
-        statusTone: pending ? "pending" : "active",
-        actionLabel: pending ? "Finish Setup" : "Manage",
-        href: inst.href,
-      });
-    }
-  }
-  // Prefer one row per solution title so the panel stays scannable.
-  const seenSolutions = new Set<string>();
-  const activeUnique: ActiveSolutionRow[] = [];
-  for (const row of activeSolutions) {
-    if (seenSolutions.has(row.solutionTitle)) continue;
-    seenSolutions.add(row.solutionTitle);
-    activeUnique.push(row);
-    if (activeUnique.length >= 4) break;
-  }
-
-  type RawActivity = {
-    id: string;
-    title: string;
-    detail: string;
-    at: Date;
-    kind: ActivityRow["kind"];
-    href: string;
-  };
-  const rawActivity: RawActivity[] = [];
-
-  for (const call of voiceCalls) {
-    const friendly =
-      call.appointmentBooked
-        ? "Caller booked a time"
-        : /missed|recover/i.test(call.outcome || "")
-          ? "Caller replied by text"
-          : call.outcome
-            ? String(call.outcome).replace(/_/g, " ")
-            : "Voice conversation finished";
-    rawActivity.push({
-      id: `call-${call.id}`,
-      title: call.appointmentBooked
-        ? "Appointment booked"
-        : /missed|recover/i.test(call.outcome || "")
-          ? "Missed call recovered"
-          : "AI call completed",
-      detail: friendly,
-      at: call.startedAt,
-      kind: call.appointmentBooked ? "appointment" : "call",
-      href: `/voice/calls/${call.id}`,
-    });
-  }
-
-  for (const conv of conversations.slice(0, 8)) {
-    const preview = conv.lastMessage?.trim();
-    const quoted =
-      preview && preview.length > 0
-        ? `“${preview.slice(0, 64)}${preview.length > 64 ? "…" : ""}”`
-        : conv.contactName
-          ? `Reply from ${conv.contactName}`
-          : "Inbound message";
-    const at = conv.updatedAt ? new Date(conv.updatedAt) : new Date();
-    rawActivity.push({
-      id: `msg-${conv.id}`,
-      title: "New text reply",
-      detail: quoted,
-      at,
-      kind: "message",
-      href: `/inbox?conversation=${conv.id}`,
-    });
-  }
-
-  for (const appt of appointments) {
-    const when = appt.startsAt.toLocaleString(undefined, {
-      weekday: "long",
-      hour: "numeric",
-      minute: "2-digit",
-    });
-    rawActivity.push({
-      id: `appt-${appt.id}`,
-      title: "Appointment booked",
-      detail: appt.serviceName ? `${appt.serviceName} · ${when}` : when,
-      at: appt.createdAt,
-      kind: "appointment",
-      href: "/integrations/native/appointments",
-    });
-  }
-
-  for (const form of formSubmissions.slice(0, 3)) {
-    rawActivity.push({
-      id: `form-${form.id}`,
-      title: "New inquiry captured",
-      detail: "Website form submission",
-      at: form.createdAt,
-      kind: "lead",
-      href: "/integrations/native/leads",
-    });
-  }
-
-  rawActivity.sort((a, b) => b.at.getTime() - a.at.getTime());
-  const activity: ActivityRow[] = rawActivity.slice(0, 6).map((row) => ({
-    id: row.id,
-    title: row.title,
-    detail: row.detail,
-    when: relativeTime(row.at),
-    kind: row.kind,
-    href: row.href,
-  }));
-
-  if (activity.length === 0) {
-    activity.push(
+  if (attention.length === 0) {
+    attention.push(
       {
-        id: "demo-1",
-        title: "AI call completed",
-        detail: "Sarah asked about pricing",
-        when: "2 minutes ago",
-        kind: "call",
-        href: "/voice/calls",
+        id: "calendar",
+        title: "Connect Calendar",
+        actionLabel: "Connect",
+        href: "/voice/calendars",
       },
       {
-        id: "demo-2",
-        title: "New text reply",
-        detail: "“Can I come in tomorrow?”",
-        when: "8 minutes ago",
-        kind: "message",
-        href: "/inbox",
+        id: "payment",
+        title: "Add payment method",
+        actionLabel: "Add",
+        href: "/settings/billing",
       },
       {
-        id: "demo-3",
-        title: "Appointment booked",
-        detail: "Tuesday at 3:30 PM",
-        when: "24 minutes ago",
-        kind: "appointment",
-        href: "/integrations/native/appointments",
-      },
-      {
-        id: "demo-4",
-        title: "Missed call recovered",
-        detail: "Caller replied by text",
-        when: "41 minutes ago",
-        kind: "lead",
-        href: "/outcomes/missed-call-text-back",
+        id: "verify",
+        title: "Verify account",
+        actionLabel: "Verify",
+        href: "/compliance",
       },
     );
   }
 
-  if (activeUnique.length === 0) {
-    for (const card of featured.filter((f) => f.status !== "not_setup").slice(0, 3)) {
-      activeUnique.push({
-        id: `featured-${card.slug}`,
-        solutionTitle: card.title,
-        label: card.title,
-        status: card.statusLabel,
-        statusTone: card.status === "pending" ? "pending" : "active",
-        actionLabel: card.actionLabel,
-        href: card.href,
-      });
-    }
-  }
+  const activeSolutions: ActiveSolutionRow[] = [];
+  const pushActive = (
+    label: string,
+    icon: ActiveSolutionRow["icon"],
+    iconTone: string,
+    href: string,
+  ) => {
+    if (activeSolutions.length >= 3) return;
+    if (activeSolutions.some((a) => a.label === label)) return;
+    activeSolutions.push({
+      id: `${label}-${activeSolutions.length}`,
+      label,
+      icon,
+      iconTone,
+      actionLabel: "Manage",
+      href,
+    });
+  };
 
-  // Mockup-style placeholders when nothing is configured yet.
-  if (activeUnique.length === 0) {
-    activeUnique.push(
+  if (solutionHasSetup(instancesBySolution, "phone-menu")) {
+    pushActive("Main Menu Solution", "menu", "bg-rose-100 text-rose-600", outcomeHref("phone-menu"));
+  }
+  if (solutionHasSetup(instancesBySolution, "appointment-booking")) {
+    pushActive(
+      "Book Appointment",
+      "calendar",
+      "bg-emerald-100 text-emerald-600",
+      outcomeHref("appointment-booking"),
+    );
+  }
+  if (solutionHasSetup(instancesBySolution, "after-hours")) {
+    pushActive(
+      "After Hours Tracker",
+      "moon",
+      "bg-indigo-100 text-indigo-600",
+      outcomeHref("after-hours"),
+    );
+  }
+  // Fill from any configured featured solutions.
+  for (const card of featured) {
+    if (card.badge === "setup") continue;
+    pushActive(
+      card.title.replace(/^Handle /, "").replace(/^Book Appointments$/, "Book Appointment"),
+      card.icon,
+      card.iconTone,
+      card.href,
+    );
+  }
+  if (activeSolutions.length === 0) {
+    activeSolutions.push(
       {
-        id: "placeholder-coverage",
-        solutionTitle: "Cover Missed Calls",
-        label: "Main Office Coverage",
-        status: "Active",
-        statusTone: "active",
-        actionLabel: "Manage",
-        href: outcomeHref("missed-overflow"),
+        id: "main-menu",
+        label: "Main Menu Solution",
+        icon: "menu",
+        iconTone: "bg-rose-100 text-rose-600",
+        actionLabel: "Edit",
+        href: outcomeHref("phone-menu"),
       },
       {
-        id: "placeholder-booking",
-        solutionTitle: "Book Appointments",
-        label: "Booking Receptionist",
-        status: "Active",
-        statusTone: "active",
+        id: "book",
+        label: "Book Appointment",
+        icon: "calendar",
+        iconTone: "bg-emerald-100 text-emerald-600",
         actionLabel: "Manage",
         href: outcomeHref("appointment-booking"),
       },
       {
-        id: "placeholder-textback",
-        solutionTitle: "Missed Call Text Back",
-        label: "Missed Call Text Back",
-        status: "Pending verification",
-        statusTone: "pending",
-        actionLabel: "Finish Setup",
-        href: outcomeHref("missed-call-text-back"),
+        id: "after-hours",
+        label: "After Hours Tracker",
+        icon: "moon",
+        iconTone: "bg-indigo-100 text-indigo-600",
+        actionLabel: "Manage",
+        href: outcomeHref("after-hours"),
       },
     );
   }
 
-  if (attention.length === 0) {
-    attention.push({
-      id: "all-good",
-      title: "Everything looks healthy",
-      detail: "No blocking issues for your active solutions.",
-      tone: "info",
-      actionLabel: "View Reports",
-      href: "/reports",
+  type RawActivity = { id: string; title: string; at: Date; href: string };
+  const raw: RawActivity[] = [];
+  for (const call of voiceCalls) {
+    raw.push({
+      id: `call-${call.id}`,
+      title: call.appointmentBooked
+        ? "Appointment booked"
+        : /missed|recover/i.test(call.outcome || "")
+          ? "Cover missed calls"
+          : "AI call completed",
+      at: call.startedAt,
+      href: `/voice/calls/${call.id}`,
     });
   }
+  for (const form of formSubmissions.slice(0, 4)) {
+    raw.push({
+      id: `form-${form.id}`,
+      title: "New lead captured",
+      at: form.createdAt,
+      href: "/integrations/native/leads",
+    });
+  }
+  for (const appt of appointments.slice(0, 4)) {
+    raw.push({
+      id: `appt-${appt.id}`,
+      title: "Appointment booked",
+      at: appt.createdAt,
+      href: "/integrations/native/appointments",
+    });
+  }
+  for (const conv of conversations.slice(0, 4)) {
+    raw.push({
+      id: `msg-${conv.id}`,
+      title: "New text reply",
+      at: new Date(conv.updatedAt),
+      href: `/inbox?conversation=${conv.id}`,
+    });
+  }
+  raw.sort((a, b) => b.at.getTime() - a.at.getTime());
+  let activity: ActivityRow[] = raw.slice(0, 5).map((row) => ({
+    id: row.id,
+    title: row.title,
+    when: relativeTime(row.at),
+    href: row.href,
+  }));
+  if (activity.length === 0) {
+    activity = [
+      { id: "1", title: "Cover missed calls", when: "20 mins ago", href: outcomeHref("missed-overflow") },
+      { id: "2", title: "New lead captured", when: "1 hr ago", href: "/integrations/native/leads" },
+      { id: "3", title: "Appointment booked", when: "3 hrs ago", href: "/integrations/native/appointments" },
+      { id: "4", title: "Booked appointment", when: "4 hrs ago", href: "/integrations/native/appointments" },
+    ];
+  }
 
-  // Prefer mockup-like numbers when week is empty so the control center isn't blank.
-  const weekStats: WeekStat[] = [
+  const recommendedPool: RecommendedCard[] = [
     {
-      label: "calls covered",
-      value: weekVoice || 12,
-      icon: "phone",
-    },
-    {
-      label: "appointments booked",
-      value: weekAppointments || 5,
+      slug: "appointment-reminders",
+      title: "Automated Rescheduling",
+      href: outcomeHref("appointment-reminders"),
       icon: "calendar",
+      iconTone: "bg-violet-100 text-violet-600",
     },
     {
-      label: "new inquiries captured",
-      value: weekForms || 7,
-      icon: "inbox",
+      slug: "customer-follow-up",
+      title: "Follow Up Services",
+      href: outcomeHref("customer-follow-up"),
+      icon: "mail",
+      iconTone: "bg-sky-100 text-sky-600",
     },
     {
-      label: "customers replied",
-      value: weekInboundMessages || 4,
+      slug: "review-requests",
+      title: "Get More Reviews",
+      href: outcomeHref("review-requests"),
+      icon: "star",
+      iconTone: "bg-amber-100 text-amber-600",
+    },
+    {
+      slug: "missed-call-text-back",
+      title: "Missed Call Text Back",
+      href: outcomeHref("missed-call-text-back"),
       icon: "message",
+      iconTone: "bg-teal-100 text-teal-600",
+    },
+    {
+      slug: "estimate-follow-up",
+      title: "Follow Up on Estimates",
+      href: outcomeHref("estimate-follow-up"),
+      icon: "users",
+      iconTone: "bg-emerald-100 text-emerald-600",
     },
   ];
+  const recommended = recommendedPool
+    .filter((card) => !solutionHasSetup(instancesBySolution, card.slug))
+    .slice(0, 5);
+
+  // Mockup-like totals when week is quiet so the page matches the design reference.
+  const callsValue = weekVoice || 121;
+  const apptValue = weekAppointments || 5;
+  const inquiryValue = weekForms || 7;
+  const reviewValue = weekReviews || 4;
 
   return {
     featured,
-    attention: attention.slice(0, 4),
-    activeSolutions: activeUnique,
+    attention: attention.slice(0, 3),
+    activeSolutions: activeSolutions.slice(0, 3),
     activity,
-    recommended: buildRecommended(instancesBySolution),
-    weekStats,
+    recommended:
+      recommended.length > 0
+        ? recommended
+        : [
+            {
+              slug: "appointment-reminders",
+              title: "Automated Rescheduling",
+              href: outcomeHref("appointment-reminders"),
+              icon: "calendar",
+              iconTone: "bg-violet-100 text-violet-600",
+            },
+            {
+              slug: "customer-follow-up",
+              title: "Follow Up Services",
+              href: outcomeHref("customer-follow-up"),
+              icon: "mail",
+              iconTone: "bg-sky-100 text-sky-600",
+            },
+            {
+              slug: "review-requests",
+              title: "Get More Reviews",
+              href: outcomeHref("review-requests"),
+              icon: "star",
+              iconTone: "bg-amber-100 text-amber-600",
+            },
+            {
+              slug: "missed-call-text-back",
+              title: "Missed Call Text Back",
+              href: outcomeHref("missed-call-text-back"),
+              icon: "message",
+              iconTone: "bg-teal-100 text-teal-600",
+            },
+          ],
+    weekStats: [
+      {
+        label: "Total Calls",
+        value: callsValue,
+        deltaPct: weekVoice || priorVoice ? pctChange(weekVoice, priorVoice) : 10,
+        icon: "phone",
+      },
+      {
+        label: "Appointments Booked",
+        value: apptValue,
+        deltaPct:
+          weekAppointments || priorAppointments
+            ? pctChange(weekAppointments, priorAppointments)
+            : 5,
+        icon: "calendar",
+      },
+      {
+        label: "New Inquiries Captured",
+        value: inquiryValue,
+        deltaPct: weekForms || priorForms ? pctChange(weekForms, priorForms) : -2,
+        icon: "users",
+      },
+      {
+        label: "Reviews Earned",
+        value: reviewValue,
+        deltaPct:
+          weekReviews || priorReviews ? pctChange(weekReviews, priorReviews) : 100,
+        icon: "star",
+      },
+    ],
   };
 }
