@@ -1,9 +1,5 @@
 import type { VoiceAgentConfig } from "@/lib/voice/types";
 import { parseVoiceAgentConfig } from "@/lib/voice/types";
-import {
-  resolveVoiceSpeed,
-  resolveVoiceTiming,
-} from "@/lib/voice/timing-presets";
 import { DEFAULT_CONNECTION_GREETING } from "./defaults";
 import type { AppointmentReceptionistWizardState } from "./types";
 import {
@@ -56,6 +52,12 @@ function mapResponsivenessLevel(value: number): "high" | "medium" | "low" {
   if (value >= 0.7) return "high";
   if (value >= 0.4) return "medium";
   return "low";
+}
+
+/** Higher responsiveness → shorter silence before the agent continues. */
+function silenceTimeoutFromResponsiveness(responsiveness: number): number {
+  const clamped = Math.max(0, Math.min(1, responsiveness));
+  return Math.round(3500 - clamped * 2000);
 }
 
 function buildTranscriptionKeyterms(state: AppointmentReceptionistWizardState): string[] {
@@ -294,21 +296,9 @@ export function buildWizardAgentConfig(
   const lang = mapWizardLanguage(state.language);
   const responsivenessLevel = mapResponsivenessLevel(state.responsiveness);
   const interruptionLevel = mapResponsivenessLevel(state.interruptionSensitivity);
+  const silenceTimeoutMs = silenceTimeoutFromResponsiveness(state.responsiveness);
   const keyterms = buildTranscriptionKeyterms(state);
   const recordingOn = state.callRecording !== "off";
-
-  const timing = resolveVoiceTiming({
-    presetId: "NATURAL_DEFAULT",
-    voiceId: state.voiceId,
-    explicitSpeed: state.speakingSpeed,
-    bargeIn: state.interruptionSensitivity >= 0.3,
-  });
-  // Prefer wizard speakingSpeed when set; otherwise Astra 0.98 / others 1.3.
-  const speed = resolveVoiceSpeed({
-    voiceId: state.voiceId,
-    explicitSpeed: state.speakingSpeed,
-    presetSpeed: timing.preset.speech.speed,
-  });
 
   return {
     ...base,
@@ -342,18 +332,14 @@ export function buildWizardAgentConfig(
       voiceId: state.voiceId,
       fallbackVoiceId: "Telnyx.NaturalHD.astra",
       voiceProvider: "telnyx",
-      speed,
-      timingPreset: timing.preset.id,
+      speed: state.speakingSpeed,
       responsiveness: responsivenessLevel,
       interruptionHandling: interruptionLevel,
-      silenceTimeoutMs: timing.silenceTimeoutMs,
-      endpointingMs: timing.endpointingMs,
+      silenceTimeoutMs,
+      // Higher interruption sensitivity → shorter endpointing wait.
+      endpointingMs: Math.round(450 - state.interruptionSensitivity * 250),
       primaryLanguage: lang.primaryLanguage,
-      bargeIn: timing.bargeIn,
-    },
-    voiceTiming: {
-      presetId: timing.preset.id,
-      diagnostics: timing.diagnostics as unknown as Record<string, unknown>,
+      bargeIn: state.interruptionSensitivity >= 0.3,
     },
     transcription: {
       ...base.transcription,

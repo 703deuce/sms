@@ -91,7 +91,7 @@ export const WIZARD_VOICES = [
     badge: "NaturalHD",
     description: "Warm, clear, and friendly — proven phone finalist",
     gender: "female" as const,
-    recommendedSpeed: 0.98,
+    recommendedSpeed: 1,
   },
   {
     id: "allie-ultra",
@@ -99,7 +99,7 @@ export const WIZARD_VOICES = [
     badge: "Ultra",
     description: "Natural conversationalist — best slightly sped up",
     gender: "female" as const,
-    recommendedSpeed: 1.3,
+    recommendedSpeed: 1.15,
   },
   {
     id: "maya-energetic-us",
@@ -107,7 +107,7 @@ export const WIZARD_VOICES = [
     badge: "NaturalHD",
     description: "Calm, smooth, and reassuring",
     gender: "female" as const,
-    recommendedSpeed: 1.3,
+    recommendedSpeed: 1,
   },
   {
     id: "celeste-naturalhd",
@@ -115,7 +115,7 @@ export const WIZARD_VOICES = [
     badge: "NaturalHD",
     description: "Polished, slightly more formal receptionist",
     gender: "female" as const,
-    recommendedSpeed: 1.3,
+    recommendedSpeed: 1,
   },
   {
     id: "sofia-friendly-us",
@@ -123,7 +123,7 @@ export const WIZARD_VOICES = [
     badge: "NaturalHD",
     description: "Modern general-purpose assistant",
     gender: "female" as const,
-    recommendedSpeed: 1.3,
+    recommendedSpeed: 1,
   },
   {
     id: "marcus-confident-us",
@@ -131,7 +131,7 @@ export const WIZARD_VOICES = [
     badge: "NaturalHD",
     description: "Confident, crisp, professional male",
     gender: "male" as const,
-    recommendedSpeed: 1.3,
+    recommendedSpeed: 1,
   },
   {
     id: "mia-ultra",
@@ -139,7 +139,7 @@ export const WIZARD_VOICES = [
     badge: "Ultra",
     description: "Task-oriented agent — appointment & structured service",
     gender: "female" as const,
-    recommendedSpeed: 1.3,
+    recommendedSpeed: 1,
     note: "Falls back to Maia if Mia is unavailable on your Telnyx account",
     fallbackId: "maia-ultra",
   },
@@ -149,7 +149,7 @@ export const WIZARD_VOICES = [
     badge: "Ultra",
     description: "Mature, steady, trustworthy male",
     gender: "male" as const,
-    recommendedSpeed: 1.3,
+    recommendedSpeed: 1,
   },
   {
     id: "harry-ultra",
@@ -157,7 +157,7 @@ export const WIZARD_VOICES = [
     badge: "Ultra",
     description: "Service advisor — warm seasoned male",
     gender: "male" as const,
-    recommendedSpeed: 1.3,
+    recommendedSpeed: 1,
     note: "Falls back to Orion if Harry is unavailable on your Telnyx account",
     fallbackId: "orion-naturalhd",
   },
@@ -167,7 +167,7 @@ export const WIZARD_VOICES = [
     badge: "Ultra",
     description: "Friendly, sales-adjacent service specialist",
     gender: "male" as const,
-    recommendedSpeed: 1.3,
+    recommendedSpeed: 1,
   },
 ] as const;
 
@@ -178,7 +178,7 @@ export const WIZARD_VOICE_BACKUPS = [
     badge: "NaturalHD",
     description: "Second NaturalHD male option",
     gender: "male" as const,
-    recommendedSpeed: 1.3,
+    recommendedSpeed: 1,
   },
   {
     id: "callie-ultra",
@@ -186,7 +186,7 @@ export const WIZARD_VOICE_BACKUPS = [
     badge: "Ultra",
     description: "Warm encourager — backup female Ultra",
     gender: "female" as const,
-    recommendedSpeed: 1.3,
+    recommendedSpeed: 1,
   },
 ] as const;
 
@@ -496,10 +496,9 @@ export function createDefaultWizardState(): AppointmentReceptionistWizardState {
 
     voiceId: "ava-warm-us",
     voiceLabel: "Astra",
-    // Astra keeps natural speed; non-Astra agents default to 1.3.
-    speakingSpeed: 0.98,
+    speakingSpeed: 1,
     responsiveness: 0.8,
-    interruptionSensitivity: 0.85,
+    interruptionSensitivity: 0.75,
 
     testScenario: "appointment_booking",
     lastTestPassed: null,

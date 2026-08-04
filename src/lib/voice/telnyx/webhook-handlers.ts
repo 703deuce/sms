@@ -1046,29 +1046,9 @@ export async function processVoiceWebhookEvent(input: {
       const { captureCallResponseLatency } = await import(
         "@/lib/voice/response-latency"
       );
-      let presetId: string | null = null;
-      if (call.agentId) {
-        const agentRow = await prisma.voiceAgent
-          .findUnique({
-            where: { id: call.agentId },
-            select: { draftConfig: true, publishedConfig: true },
-          })
-          .catch(() => null);
-        const cfg = (agentRow?.publishedConfig ||
-          agentRow?.draftConfig ||
-          {}) as {
-          voiceLanguage?: { timingPreset?: string };
-          voiceTiming?: { presetId?: string };
-        };
-        presetId =
-          cfg.voiceLanguage?.timingPreset ||
-          cfg.voiceTiming?.presetId ||
-          null;
-      }
       await captureCallResponseLatency({
         callId: call.id,
         workspaceId,
-        presetId,
       }).catch((err) =>
         console.warn("[voice/webhook] response latency capture failed", err),
       );

@@ -2,11 +2,6 @@
  * Voice agent configuration types and defaults.
  */
 
-import {
-  DEFAULT_AGENT_VOICE_SPEED,
-  isAstraVoice,
-} from "@/lib/voice/timing-presets";
-
 export type VoiceAgentType =
   | "receptionist"
   | "lead_qualification"
@@ -88,10 +83,6 @@ export type VoiceAgentConfig = {
     /** Provider voice id used if the primary voice fails to resolve. */
     fallbackVoiceId?: string;
     voiceProvider?: string;
-    /**
-     * Speaking speed sent to Telnyx (`voice_speed`).
-     * Product default: 1.3 for non-Astra voices; Astra defaults to 0.98.
-     */
     speed?: number;
     pitch?: number;
     volume?: number;
@@ -122,17 +113,17 @@ export type VoiceAgentConfig = {
     autoLanguageDetection?: boolean;
     pronunciationDictionary?: Record<string, string>;
     /**
-     * Measurable timing preset id (NATURAL_DEFAULT, FAST_RECEPTIONIST, …).
-     * Provider fields are mapped at Telnyx sync; Transovo targets stay local.
+     * Optional experimental timing preset id. Not auto-applied to Telnyx.
+     * Live timing uses endpointingMs / bargeIn / silenceTimeoutMs + provider defaults.
      */
-    timingPreset?: string;
+    timingPreset?: string | null;
   };
   /**
-   * Resolved timing snapshot + diagnostics (latency targets, pre-roll, etc.).
-   * Not all fields map to Telnyx — see `timing-presets.ts`.
+   * Optional experimental timing metadata. Never auto-applied to production Telnyx sync.
    */
   voiceTiming?: {
-    presetId?: string;
+    presetId?: string | null;
+    experimental?: boolean;
     diagnostics?: Record<string, unknown>;
   };
   transcription?: {
@@ -217,19 +208,14 @@ export const DEFAULT_VOICE_CONFIG: VoiceAgentConfig = {
   voiceLanguage: {
     voiceProvider: "telnyx",
     voiceId: "ava-warm-us",
-    // Default catalog voice is Astra → natural 0.98. Non-Astra agents use 1.3.
-    speed: 0.98,
+    speed: 1,
     primaryLanguage: "en-US",
-    timingPreset: "NATURAL_DEFAULT",
-    // Aligned with NATURAL_DEFAULT: response start delay + first silence check-in.
-    silenceTimeoutMs: 5000,
-    endpointingMs: 200,
+    // Faster conversational turn-taking (target <1s after caller stops).
+    silenceTimeoutMs: 2500,
+    endpointingMs: 300,
     bargeIn: true,
     noiseSuppression: true,
     outputGainDb: -5,
-  },
-  voiceTiming: {
-    presetId: "NATURAL_DEFAULT",
   },
   model: {
     provider: "telnyx",
@@ -319,19 +305,10 @@ export function parseVoiceAgentConfig(raw: unknown): VoiceAgentConfig {
     identity: { ...base.identity, ...obj.identity },
     instructions: { ...base.instructions, ...obj.instructions },
     conversationFlow: obj.conversationFlow ?? base.conversationFlow,
-    voiceLanguage: (() => {
-      const merged = { ...base.voiceLanguage, ...obj.voiceLanguage };
-      const explicitSpeed =
-        obj.voiceLanguage != null &&
-        Object.prototype.hasOwnProperty.call(obj.voiceLanguage, "speed");
-      // Base defaults include Astra's 0.98. Non-Astra voices without an
-      // explicit speed should use the product default (1.3).
-      if (!explicitSpeed && merged?.voiceId && !isAstraVoice(merged.voiceId)) {
-        merged.speed = DEFAULT_AGENT_VOICE_SPEED;
-      }
-      return merged;
-    })(),
-    voiceTiming: { ...base.voiceTiming, ...obj.voiceTiming },
+    voiceLanguage: { ...base.voiceLanguage, ...obj.voiceLanguage },
+    voiceTiming: obj.voiceTiming
+      ? { ...(base.voiceTiming || {}), ...obj.voiceTiming }
+      : base.voiceTiming,
     transcription: { ...base.transcription, ...obj.transcription },
     model: { ...base.model, ...obj.model },
     callHandling: {

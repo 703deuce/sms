@@ -314,7 +314,7 @@ export function VoiceStep({
             <div className="space-y-4 pt-2">
               {(
                 [
-                  ["speakingSpeed", "Speaking speed", "Slower", "Faster", 0.7, 1.5],
+                  ["speakingSpeed", "Speaking speed", "Slower", "Faster", 0.7, 1.3],
                   ["responsiveness", "Responsiveness", "Less", "More responsive", 0, 1],
                   [
                     "interruptionSensitivity",
