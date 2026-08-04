@@ -171,29 +171,23 @@ const LAUNCH_SECTIONS: SectionDef[] = [
       { slug: "missed-overflow" },
       { slug: "after-hours" },
       { slug: "appointment-booking" },
-      { slug: "lead-capture" },
-      { slug: "lead-qualification" },
-      { slug: "service-intake" },
-      { slug: "customer-support" },
+      { slug: "lead-capture", label: "Capture & Screen Inquiries" },
     ],
   },
   {
     label: "SMS & Messaging",
     entries: [
       { slug: "missed-call-text-back" },
-      { slug: "instant-lead-response" },
-      { slug: "lead-follow-up" },
+      { slug: "instant-lead-response", label: "Respond & Follow Up" },
       { slug: "estimate-follow-up" },
-      { slug: "old-lead-reactivation" },
       { slug: "appointment-reminders" },
       { slug: "review-requests" },
-      { slug: "client-onboarding" }, // Welcome New Customers
-      { slug: "customer-follow-up", label: "Follow Up With Customers" },
-      { slug: "payment-follow-up" },
-      { slug: "promotional-broadcast" },
+      { slug: "old-lead-reactivation" },
       { slug: "customer-reactivation" },
-      { slug: "referral-campaigns" },
-      { slug: "event-offer-campaigns" },
+      {
+        slug: "promotional-broadcast",
+        label: "Send Promotions & Announcements",
+      },
     ],
   },
 ];
@@ -246,14 +240,6 @@ export function buildSolutionsNav(options: SolutionsNavOptions = {}): NavItem[] 
         sectionLabel: first ? section.label : undefined,
       });
       first = false;
-    }
-
-    if (section.label === "SMS & Messaging") {
-      nav.push({
-        label: "Run a Contest",
-        href: "/grow/contests",
-        icon: MessageSquare,
-      });
     }
   }
 

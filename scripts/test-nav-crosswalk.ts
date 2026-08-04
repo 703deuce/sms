@@ -93,29 +93,20 @@ const expectedLaunchMenu: Array<{ section: string; labels: string[] }> = [
       "Cover Missed Calls",
       "Answer After Hours",
       "Book Appointments",
-      "Capture New Inquiries",
-      "Screen New Inquiries",
-      "Handle New Service Calls",
-      "Customer Support",
+      "Capture & Screen Inquiries",
     ],
   },
   {
     section: "SMS & Messaging",
     labels: [
       "Missed Call Text Back",
-      "Respond to New Inquiries",
-      "Follow Up With Inquiries",
+      "Respond & Follow Up",
       "Follow Up on Estimates",
-      "Reconnect With Old Inquiries",
       "Appointment Reminders",
       "Get More Reviews",
-      "Welcome New Customers",
-      "Follow Up With Customers",
-      "Payment Reminders",
-      "Send a Promotion",
+      "Reconnect With Old Inquiries",
       "Bring Back Past Customers",
-      "Get More Referrals",
-      "Promote Events & Offers",
+      "Send Promotions & Announcements",
     ],
   },
 ];
@@ -141,13 +132,29 @@ assert.equal(
   expectedLaunchMenu.reduce((n, s) => n + s.labels.length, 0),
   "Solutions launch menu length mismatch",
 );
+assert.equal(cursor, 13, "Packaged Solutions catalog should be 13 items");
 
-assert.ok(
-  solutionsNav.some(
-    (i) => i.label === "Run a Contest" && i.href === "/grow/contests",
-  ),
-  "Run a Contest belongs under SMS & Messaging",
-);
+const removedFromCatalog = [
+  "Handle New Service Calls",
+  "Customer Support",
+  "Welcome New Customers",
+  "Follow Up With Customers",
+  "Payment Reminders",
+  "Get More Referrals",
+  "Run a Contest",
+  "Capture New Inquiries",
+  "Screen New Inquiries",
+  "Respond to New Inquiries",
+  "Follow Up With Inquiries",
+  "Send a Promotion",
+  "Promote Events & Offers",
+];
+for (const label of removedFromCatalog) {
+  assert.ok(
+    !solutionsNav.some((i) => i.label === label),
+    `"${label}" removed or merged out of Solutions catalog`,
+  );
+}
 
 const expectedStaticSections: Array<{ section: string; labels: string[] }> = [
   {

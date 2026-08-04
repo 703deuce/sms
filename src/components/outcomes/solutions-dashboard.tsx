@@ -6,8 +6,6 @@ import { cn } from "@/lib/utils";
 import {
   Banknote,
   CalendarDays,
-  ChevronDown,
-  ChevronRight,
   Clock3,
   MessageSquare,
   Moon,
@@ -44,11 +42,13 @@ function StatusBadge({
   return (
     <span
       className={cn(
-        "inline-flex h-[22px] shrink-0 items-center rounded-full px-2.5 text-[11px] font-semibold leading-none",
+        "inline-flex h-[22px] shrink-0 items-center rounded-md px-2 text-[11px] font-semibold leading-none",
+        badge === "voice" && "bg-violet-100 text-violet-700",
+        badge === "automated" && "bg-[#EFF6FF] text-[#2563EB]",
+        badge === "new" && "bg-emerald-50 text-emerald-700",
         badge === "running" && "bg-[#EFF6FF] text-[#2563EB]",
         badge === "active" && "bg-emerald-50 text-emerald-700",
         badge === "recommended" && "bg-violet-100 text-violet-700",
-        badge === "new" && "bg-emerald-50 text-emerald-700",
         badge === "hot" && "bg-amber-50 text-amber-700",
       )}
     >
@@ -74,6 +74,23 @@ function PrimaryBtn({
   );
 }
 
+function OutlineBtn({
+  href,
+  children,
+}: {
+  href: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <Link
+      href={href}
+      className="inline-flex h-8 shrink-0 items-center justify-center rounded-md border border-[#D1D5DB] bg-white px-3 text-[12px] font-semibold text-[#374151] hover:bg-[#F9FAFB]"
+    >
+      {children}
+    </Link>
+  );
+}
+
 export function SolutionsDashboardView({ data }: { data: SolutionsDashboardData }) {
   return (
     <div className="space-y-7">
@@ -84,24 +101,22 @@ export function SolutionsDashboardView({ data }: { data: SolutionsDashboardData 
             Solutions Dashboard
           </h2>
           <p className="mt-1.5 text-[14px] leading-relaxed text-[#6B7280]">
-            Enable new solutions or monitor performance from your central
-            command center.
+            Choose a solution below to start getting results for your business.
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2.5">
           <Link
             href="/outcomes/custom-automation"
-            className="inline-flex h-9 items-center gap-1 text-[13px] font-semibold text-[#111827] hover:text-[#3B82F6]"
+            className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[#D1D5DB] bg-white px-3.5 text-[13px] font-semibold text-[#111827] hover:bg-[#F9FAFB]"
           >
             <Plus className="h-3.5 w-3.5" />
             New Solution
           </Link>
           <Link
-            href="/numbers"
-            className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[#3B82F6] px-3.5 text-[13px] font-semibold text-white shadow-sm hover:bg-[#2563EB]"
+            href="/voice/agents"
+            className="inline-flex h-9 items-center rounded-lg bg-[#3B82F6] px-3.5 text-[13px] font-semibold text-white shadow-sm hover:bg-[#2563EB]"
           >
-            Add Channel
-            <ChevronDown className="h-3.5 w-3.5 opacity-90" />
+            Manage AI Voice
           </Link>
         </div>
       </div>
@@ -138,23 +153,17 @@ export function SolutionsDashboardView({ data }: { data: SolutionsDashboardData 
                     <p className="mt-1.5 line-clamp-2 text-[12px] leading-snug text-[#6B7280]">
                       {card.description}
                     </p>
-                    <div className="mt-2.5 flex items-center gap-3 text-[12px] font-medium text-[#6B7280]">
-                      <span>{card.metricPrimary}</span>
-                      {card.metricLinkLabel ? (
-                        <Link
-                          href={card.metricLinkHref || card.href}
-                          className="font-semibold text-[#3B82F6] hover:underline"
-                        >
-                          {card.metricLinkLabel}
-                        </Link>
-                      ) : card.metricSecondary ? (
-                        <span>{card.metricSecondary}</span>
-                      ) : null}
-                    </div>
                   </div>
                 </div>
-                <div className="mt-auto flex justify-end pt-4">
-                  <PrimaryBtn href={card.href}>{card.actionLabel}</PrimaryBtn>
+                <div className="mt-auto flex items-center justify-between gap-3 pt-4">
+                  <span className="text-[11px] font-medium text-[#9CA3AF]">
+                    {card.channelLabel}
+                  </span>
+                  {card.actionVariant === "primary" ? (
+                    <PrimaryBtn href={card.href}>{card.actionLabel}</PrimaryBtn>
+                  ) : (
+                    <OutlineBtn href={card.href}>{card.actionLabel}</OutlineBtn>
+                  )}
                 </div>
               </div>
             );
@@ -168,10 +177,7 @@ export function SolutionsDashboardView({ data }: { data: SolutionsDashboardData 
         <div className="rounded-xl border border-[#E5E7EB] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
           <div className="flex items-center justify-between border-b border-[#F3F4F6] px-5 py-3.5">
             <h3 className="text-[14px] font-bold text-[#111827]">
-              Active Solutions{" "}
-              <span className="font-medium text-[#9CA3AF]">
-                · {data.activeSolutions.length}
-              </span>
+              Active Solutions
             </h3>
           </div>
           <ul className="divide-y divide-[#E5E7EB]">
@@ -202,40 +208,32 @@ export function SolutionsDashboardView({ data }: { data: SolutionsDashboardData 
           </ul>
         </div>
 
-        {/* Your Latest Statistics */}
+        {/* Top Active Solutions */}
         <div className="rounded-xl border border-[#E5E7EB] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
           <div className="flex items-center justify-between border-b border-[#F3F4F6] px-5 py-3.5">
             <h3 className="text-[14px] font-bold text-[#111827]">
-              Your Latest Statistics{" "}
-              <span className="font-medium text-[#9CA3AF]">
-                · {data.statistics.length}
-              </span>
+              Top Active Solutions
             </h3>
           </div>
           <ul className="divide-y divide-[#E5E7EB]">
-            {data.statistics.map((row) => (
+            {data.topActive.map((row) => (
               <li
                 key={row.id}
                 className="flex items-center justify-between gap-3 px-5 py-3"
               >
                 <div className="min-w-0">
-                  <p className="text-[13px] font-semibold text-[#111827]">
-                    {row.service}
+                  <p className="truncate text-[13px] font-semibold text-[#111827]">
+                    {row.label}
                   </p>
-                  <p className="mt-0.5 flex items-center gap-1.5 text-[12px] text-[#6B7280]">
-                    <span className="font-semibold text-[#111827]">{row.value}</span>
-                    <span
-                      className={cn(
-                        "font-semibold",
-                        row.trendTone === "up" && "text-emerald-600",
-                        row.trendTone === "down" && "text-rose-500",
-                      )}
-                    >
-                      {row.update}
+                  <p className="mt-0.5 flex items-center gap-2 text-[12px] text-[#6B7280]">
+                    <span className="inline-flex items-center gap-1.5 font-medium text-emerald-700">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                      {row.status}
                     </span>
+                    <span className="text-[#9CA3AF]">{row.date}</span>
                   </p>
                 </div>
-                <PrimaryBtn href={row.href || "/reports"}>View</PrimaryBtn>
+                <OutlineBtn href={row.href}>Setup</OutlineBtn>
               </li>
             ))}
           </ul>
@@ -245,10 +243,7 @@ export function SolutionsDashboardView({ data }: { data: SolutionsDashboardData 
         <div className="rounded-xl border border-[#E5E7EB] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
           <div className="flex items-center justify-between border-b border-[#F3F4F6] px-5 py-3.5">
             <h3 className="text-[14px] font-bold text-[#111827]">
-              Recent Activity{" "}
-              <span className="font-medium text-[#9CA3AF]">
-                · {data.activity.length}
-              </span>
+              Recent Activity
             </h3>
           </div>
           <ul className="divide-y divide-[#E5E7EB]">
@@ -269,14 +264,13 @@ export function SolutionsDashboardView({ data }: { data: SolutionsDashboardData 
                       >
                         <Icon className="h-3.5 w-3.5" />
                       </span>
-                      <span className="min-w-0">
-                        <span className="block truncate text-[13px] font-medium text-[#111827]">
-                          {row.title}
-                        </span>
-                        <span className="text-[11px] text-[#9CA3AF]">{row.when}</span>
+                      <span className="truncate text-[13px] font-medium text-[#111827]">
+                        {row.title}
                       </span>
                     </span>
-                    <ChevronRight className="h-4 w-4 shrink-0 text-[#D1D5DB]" />
+                    <span className="shrink-0 text-[11px] text-[#9CA3AF]">
+                      {row.when}
+                    </span>
                   </Link>
                 </li>
               );
@@ -306,20 +300,10 @@ export function SolutionsDashboardView({ data }: { data: SolutionsDashboardData 
                 >
                   <Icon className="h-4 w-4" />
                 </span>
-                <span className="min-w-0 flex-1">
-                  <span className="flex items-center gap-2">
-                    <span className="truncate text-[13px] font-semibold text-[#111827]">
-                      {card.title}
-                    </span>
-                    {card.badgeLabel ? (
-                      <StatusBadge
-                        badge={card.badge || "recommended"}
-                        label={card.badgeLabel}
-                      />
-                    ) : null}
-                  </span>
+                <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-[#111827]">
+                  {card.title}
                 </span>
-                <PrimaryBtn href={card.href}>Set up</PrimaryBtn>
+                <PrimaryBtn href={card.href}>Open</PrimaryBtn>
               </div>
             );
           })}
@@ -335,7 +319,7 @@ export function SolutionsDashboardView({ data }: { data: SolutionsDashboardData 
               key={stat.label}
               className="relative overflow-hidden rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
             >
-              <div className="flex items-start gap-3">
+              <div className="flex items-center gap-3">
                 <span
                   className={cn(
                     "flex h-12 w-12 shrink-0 items-center justify-center rounded-xl",
@@ -350,16 +334,6 @@ export function SolutionsDashboardView({ data }: { data: SolutionsDashboardData 
                   </p>
                   <p className="mt-1 text-[13px] font-semibold text-[#4B5563]">
                     {stat.label}
-                  </p>
-                  <p
-                    className={cn(
-                      "mt-1 text-[12px] font-medium",
-                      stat.deltaTone === "up" && "text-emerald-600",
-                      stat.deltaTone === "down" && "text-rose-500",
-                      stat.deltaTone === "flat" && "text-[#9CA3AF]",
-                    )}
-                  >
-                    {stat.deltaLabel}
                   </p>
                 </div>
               </div>

@@ -33,33 +33,34 @@ async function checkReady(page) {
     : await page.locator("body").innerText();
   const checks = {
     hasHero: /What do you want Transovo to handle/i.test(text),
-    hasSubtitle: /Enable new solutions or monitor performance from your central command center/i.test(
+    hasSubtitle: /Choose a solution below to start getting results for your business/i.test(
       text,
     ),
     hasCards:
       /Cover Missed Calls/i.test(text) &&
       /Answer After Hours/i.test(text) &&
-      /Respond to New Inquiries/i.test(text) &&
+      /Missed Call Text Back/i.test(text) &&
       /Bring Back Past Customers/i.test(text),
     hasBadges:
-      /\bRunning\b/i.test(text) &&
-      /\bRecommended\b/i.test(text) &&
-      /\bActive\b/i.test(text),
+      /AI Voice/i.test(text) &&
+      /Automated/i.test(text) &&
+      /\bNew\b/i.test(text),
     hasMiddle:
       /Active Solutions/i.test(text) &&
-      /Your Latest Statistics/i.test(text) &&
+      /Top Active Solutions/i.test(text) &&
       /Recent Activity/i.test(text),
     hasButtons:
-      (/Open/i.test(text) || /Set up/i.test(text)) &&
-      /View/i.test(text),
+      /Setup/i.test(text) &&
+      /Open/i.test(text) &&
+      /Manage AI Voice/i.test(text),
     hasStats:
-      /Calls Handled/i.test(text) &&
-      /Appts Booked/i.test(text) &&
-      /New Inquiries/i.test(text) &&
-      /Leads Won/i.test(text),
+      /Missed Calls Saved/i.test(text) &&
+      /Appointments Booked/i.test(text) &&
+      /New Reviews Collected/i.test(text) &&
+      /Estimates Sent/i.test(text),
     hasRecommended:
       /Recommended Next/i.test(text) && /Appointment Reminders/i.test(text),
-    hasHeaderActions: /New Solution/i.test(text) && /Add Channel/i.test(text),
+    hasHeaderActions: /New Solution/i.test(text) && /Manage AI Voice/i.test(text),
     oldDash:
       /Choose from our library of pre-built solutions/i.test(text) ||
       /Action Needed/i.test(text) ||
@@ -67,7 +68,10 @@ async function checkReady(page) {
       /125 Runs/i.test(text) ||
       /Win Back Past Plans/i.test(text) ||
       /Catch Missed Call/i.test(text) ||
-      /Get Started/i.test(text),
+      /Get Started/i.test(text) ||
+      /Add Channel/i.test(text) ||
+      /Your Latest Statistics/i.test(text) ||
+      /Enable new solutions or monitor performance/i.test(text),
   };
 
   const aside = (await page.locator("aside").count())
@@ -77,7 +81,12 @@ async function checkReady(page) {
     /AI Receptionist/i.test(aside) &&
     /SMS & Messaging/i.test(aside) &&
     /Connect With Customers/i.test(aside) &&
-    !/Client Onboarding/i.test(aside);
+    /Capture & Screen Inquiries/i.test(aside) &&
+    /Respond & Follow Up/i.test(aside) &&
+    /Send Promotions & Announcements/i.test(aside) &&
+    !/Client Onboarding/i.test(aside) &&
+    !/Handle New Service Calls/i.test(aside) &&
+    !/Run a Contest/i.test(aside);
 
   return {
     ...checks,
