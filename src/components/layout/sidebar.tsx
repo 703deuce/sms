@@ -212,15 +212,14 @@ function ViewToggle({
   pending: boolean;
 }) {
   return (
-    <div className="mt-3">
-      <div
-        className={cn(
-          "grid grid-cols-2 rounded-[10px] border border-white/10 bg-white/5 p-0.5",
-          pending && "opacity-70",
-        )}
-        role="tablist"
-        aria-label="Navigation view"
-      >
+    <div
+      className={cn(
+        "grid grid-cols-2 rounded-[10px] border border-white/10 bg-white/5 p-0.5",
+        pending && "opacity-70",
+      )}
+      role="tablist"
+      aria-label="Navigation view"
+    >
         {(
           [
             { id: "solutions", label: "Solutions" },
@@ -247,7 +246,6 @@ function ViewToggle({
             </button>
           );
         })}
-      </div>
     </div>
   );
 }
@@ -370,7 +368,7 @@ export function Sidebar({
           </div>
         ) : null}
 
-        <div className={cn(navView === "solutions" ? "mt-3" : "mt-0")}>
+        <div className="mt-3">
           <ViewToggle view={navView} onChange={switchNavView} pending={pending} />
         </div>
       </div>
