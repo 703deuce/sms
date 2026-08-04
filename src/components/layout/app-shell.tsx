@@ -4,7 +4,6 @@ import { Header } from "@/components/layout/header";
 import { MobileNav } from "@/components/layout/mobile-nav";
 import { Sidebar } from "@/components/layout/sidebar";
 import { getPageTitle } from "@/lib/nav";
-import type { NavView } from "@/lib/nav-view";
 import type { SolutionNavInstance } from "@/lib/solutions-nav";
 import type { DashboardMetrics, PhoneNumber, Workspace } from "@/lib/types";
 import { usePathname } from "next/navigation";
@@ -17,7 +16,6 @@ export function AppShell({
   metrics,
   activeFromNumberId,
   unreadNotifications,
-  navView = "solutions",
   outcomeInstances = {},
 }: {
   children: React.ReactNode;
@@ -28,13 +26,15 @@ export function AppShell({
   metrics: DashboardMetrics;
   activeFromNumberId?: string | null;
   unreadNotifications?: number;
-  navView?: NavView;
   outcomeInstances?: Record<string, SolutionNavInstance[]>;
 }) {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
   // Page hero owns the Solutions Dashboard title — avoid a duplicate chrome h1.
-  const title = pathname === "/outcomes" ? "" : getPageTitle(pathname);
+  const title =
+    pathname === "/outcomes" || pathname === "/systems"
+      ? ""
+      : getPageTitle(pathname);
 
   return (
     <div className="min-h-screen bg-background">
@@ -43,7 +43,6 @@ export function AppShell({
           userName={userName}
           open={menuOpen}
           onClose={() => setMenuOpen(false)}
-          initialNavView={navView}
           outcomeInstances={outcomeInstances}
         />
       </Suspense>

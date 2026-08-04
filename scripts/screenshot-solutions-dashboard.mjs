@@ -81,10 +81,12 @@ async function checkReady(page) {
     /AI Receptionist/i.test(aside) &&
     /SMS & Messaging/i.test(aside) &&
     /Connect With Customers/i.test(aside) &&
+    /My Systems/i.test(aside) &&
+    /Automations/i.test(aside) &&
     /Capture & Screen Inquiries/i.test(aside) &&
     /Respond & Follow Up/i.test(aside) &&
-    /Send Promotions & Announcements/i.test(aside) &&
     !/Client Onboarding/i.test(aside) &&
+    !/\bPlatform\b/i.test(aside) &&
     !/Handle New Service Calls/i.test(aside) &&
     !/Run a Contest/i.test(aside);
 

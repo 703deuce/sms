@@ -1,8 +1,7 @@
 "use client";
 
-import { appNav, flattenNavLinks, isNavGroup } from "@/lib/nav";
+import { flattenNavLinks, isNavGroup } from "@/lib/nav";
 import type { NavChild, NavItem, NavLink } from "@/lib/nav";
-import type { NavView } from "@/lib/nav-view";
 import {
   buildSolutionsNav,
   type SolutionNavInstance,
@@ -11,7 +10,7 @@ import { cn } from "@/lib/utils";
 import { ChevronDown, LogOut, MessageSquare } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 function hrefPath(href: string) {
   return href.split("?")[0] || href;
@@ -23,18 +22,14 @@ function isNavHrefActive(pathname: string, search: string, href: string): boolea
   const have = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
 
   if (queryPart) {
-    // Path must match; query params are optional context (e.g. agentId).
     if (pathname !== pathPart && !pathname.startsWith(`${pathPart}/`)) {
       return false;
     }
     if (pathname === pathPart || pathname.startsWith(`${pathPart}/`)) {
       const want = new URLSearchParams(queryPart);
-      // Channel shortcuts only highlight when that channel is active.
       if (want.has("channel")) {
         return have.get("channel") === want.get("channel");
       }
-      // If the URL includes the link's query keys, require them to match.
-      // If not, still treat the path as active so the menu stays oriented.
       let matchedQuery = true;
       let sawWantedKey = false;
       for (const [key, value] of want) {
@@ -51,7 +46,6 @@ function isNavHrefActive(pathname: string, search: string, href: string): boolea
 
   if (pathname === pathPart) {
     if (have.has("type")) return false;
-    // Channel-focused URLs belong to the Email (etc.) shortcut row.
     if (have.has("channel")) return false;
     return true;
   }
@@ -60,7 +54,6 @@ function isNavHrefActive(pathname: string, search: string, href: string): boolea
   return pathname.startsWith(`${pathPart}/`);
 }
 
-/** Higher score = better owner of the current route for accordion expansion. */
 function linkMatchScore(pathname: string, search: string, href: string): number {
   if (!isNavHrefActive(pathname, search, href)) return -1;
   const pathPart = hrefPath(href);
@@ -69,7 +62,6 @@ function linkMatchScore(pathname: string, search: string, href: string): number 
   let score = pathPart.length;
   if (pathname === pathPart) score += 20_000;
   else if (pathname.startsWith(`${pathPart}/`)) score += 10_000;
-  // Prefer the nav row whose channel (or other query) matches the URL.
   if (queryPart) {
     const want = new URLSearchParams(queryPart);
     for (const [key, value] of want) {
@@ -82,8 +74,7 @@ function linkMatchScore(pathname: string, search: string, href: string): number 
 }
 
 function itemExpandKey(item: NavItem): string {
-  // Href is unique even when the same solution appears under SMS and Email.
-  return item.href;
+  return `${item.href}::${item.label}`;
 }
 
 function sectionHasActiveChild(
@@ -101,8 +92,6 @@ function bestExpandedKey(
   pathname: string,
   search: string,
 ): string | null {
-  // Solutions routes keep the best-matching product-area entry open
-  // (SMS full tree vs Email channel shortcut).
   const outcomesSlug = pathname.match(/^\/outcomes\/([^/]+)/)?.[1];
   if (outcomesSlug) {
     const matches = navItems.filter(
@@ -118,8 +107,6 @@ function bestExpandedKey(
       }
     }
     if (best?.children?.length) return itemExpandKey(best);
-    // Email shortcuts have no children — fall through so sibling product
-    // areas with a management tree can still expand when appropriate.
     if (best && !best.children?.length) {
       const withTree = matches.find((item) => item.children?.length);
       if (withTree && bestScore < 50_000) return itemExpandKey(withTree);
@@ -143,13 +130,10 @@ function bestExpandedKey(
       item.href !== "/outcomes" &&
       pathname.startsWith(`${hrefPath(item.href)}/`)
     ) {
-      // Prefer items with children (solution sections) over leaf Shared links
-      // when both could claim a prefix match.
       const base = hrefPath(item.href).length + (item.children?.length ? 2_000 : 0);
       score = Math.max(score, base);
     }
 
-    // Prefer solution sections over Advanced when scores tie (e.g. /voice/agents/:id).
     if (score > bestScore || (score === bestScore && item.children?.length && score >= 0)) {
       if (score > bestScore) {
         bestScore = score;
@@ -178,23 +162,20 @@ function NavLinkRow({
   const sectionPath = hrefPath(sectionHref);
   const matched = isNavHrefActive(pathname, search, link.href);
   const prefix =
-    pathPart !== sectionPath && pathname.startsWith(`${pathPart}/`);
-  // Exact page the user is on (not a parent overview covering a deeper child path).
-  const isCurrentPage = pathname === pathPart && matched;
-  const active = isCurrentPage || (prefix && matched);
+    pathPart !== sectionPath &&
+    (pathname === pathPart || pathname.startsWith(`${pathPart}/`));
+  const active = matched || prefix;
 
   return (
     <Link
       href={link.href}
+      data-nav-active={active ? "true" : undefined}
       onClick={onClose}
-      data-nav-active={isCurrentPage ? "true" : undefined}
       className={cn(
         "block rounded-md px-2.5 py-1 text-[12px] transition",
-        isCurrentPage
-          ? "bg-white/15 font-semibold text-white"
-          : active || matched
-            ? "bg-white/10 font-medium text-white"
-            : "text-sidebar-muted hover:bg-white/5 hover:text-white",
+        active
+          ? "bg-primary/10 font-semibold text-primary"
+          : "text-sidebar-muted hover:bg-white/5 hover:text-white",
       )}
     >
       {link.label}
@@ -202,70 +183,15 @@ function NavLinkRow({
   );
 }
 
-function ViewToggle({
-  view,
-  onChange,
-  pending,
-}: {
-  view: NavView;
-  onChange: (view: NavView) => void;
-  pending: boolean;
-}) {
-  return (
-    <div className="mt-3">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-sidebar-muted">
-        Navigation
-      </p>
-      <div
-        className={cn(
-          "mt-1 grid grid-cols-2 rounded-[10px] border border-white/10 bg-white/5 p-0.5",
-          pending && "opacity-70",
-        )}
-        role="tablist"
-        aria-label="Navigation view"
-      >
-        {(
-          [
-            { id: "solutions", label: "Solutions" },
-            { id: "platform", label: "Platform" },
-          ] as const
-        ).map((option) => {
-          const active = view === option.id;
-          return (
-            <button
-              key={option.id}
-              type="button"
-              role="tab"
-              aria-selected={active}
-              disabled={pending}
-              onClick={() => onChange(option.id)}
-              className={cn(
-                "rounded-[8px] px-2 py-1.5 text-[12px] font-semibold transition",
-                active
-                  ? "bg-primary text-white shadow-sm"
-                  : "text-sidebar-muted hover:text-white",
-              )}
-            >
-              {option.label}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
 export function Sidebar({
   userName,
   open,
   onClose,
-  initialNavView = "solutions",
   outcomeInstances = {},
 }: {
   userName: string;
   open?: boolean;
   onClose?: () => void;
-  initialNavView?: NavView;
   outcomeInstances?: Record<string, SolutionNavInstance[]>;
 }) {
   const pathname = usePathname();
@@ -273,28 +199,20 @@ export function Sidebar({
   const search = searchParams?.toString() ? `?${searchParams.toString()}` : "";
   const router = useRouter();
   const [expanded, setExpanded] = useState<string | null>(null);
-  const [navView, setNavView] = useState<NavView>(initialNavView);
-  const [pending, startTransition] = useTransition();
 
-  useEffect(() => {
-    setNavView(initialNavView);
-  }, [initialNavView]);
+  const navItems: NavItem[] = useMemo(
+    () => buildSolutionsNav({ instancesBySolution: outcomeInstances }),
+    [outcomeInstances],
+  );
 
-  const navItems: NavItem[] = useMemo(() => {
-    if (navView === "platform") return appNav;
-    return buildSolutionsNav({ instancesBySolution: outcomeInstances });
-  }, [navView, outcomeInstances]);
-
-  // Keep the section that owns the current route open (and prefer Solutions over Advanced).
   useEffect(() => {
     setExpanded(bestExpandedKey(navItems, pathname, search));
   }, [pathname, search, navItems]);
 
-  // Scroll the active child into view inside the sidebar.
   useEffect(() => {
     const el = document.querySelector<HTMLElement>('[data-nav-active="true"]');
     el?.scrollIntoView({ block: "nearest", inline: "nearest" });
-  }, [pathname, search, expanded, navView]);
+  }, [pathname, search, expanded]);
 
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -302,34 +220,10 @@ export function Sidebar({
     router.refresh();
   }
 
-  function switchNavView(next: NavView) {
-    if (next === navView) return;
-    setNavView(next);
-    startTransition(async () => {
-      await fetch("/api/nav-view", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ view: next }),
-      });
-      if (next === "solutions" && !pathname.startsWith("/outcomes")) {
-        router.push("/outcomes");
-      } else if (next === "platform" && pathname.startsWith("/outcomes")) {
-        router.push("/dashboard");
-      } else {
-        router.refresh();
-      }
-    });
-  }
-
   const content = (
     <aside className="flex h-dvh w-[260px] flex-col overflow-hidden bg-sidebar text-sidebar-foreground">
-      {/* Brand + view toggle — fixed top */}
       <div className="shrink-0 px-3.5 pb-2.5 pt-3.5">
-        <Link
-          href={navView === "solutions" ? "/outcomes" : "/dashboard"}
-          className="flex items-start gap-2.5"
-          onClick={onClose}
-        >
+        <Link href="/outcomes" className="flex items-start gap-2.5" onClick={onClose}>
           <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] bg-primary text-white shadow-[0_8px_18px_rgba(16,185,129,0.35)]">
             <MessageSquare className="h-3.5 w-3.5" fill="currentColor" />
           </span>
@@ -338,30 +232,13 @@ export function Sidebar({
               Transovo SMS
             </span>
             <span className="mt-0.5 block text-[10px] leading-tight text-sidebar-muted">
-              {navView === "solutions"
-                ? "Solutions by product area"
-                : "Business texting platform"}
+              Solutions-first workspace
             </span>
           </span>
         </Link>
-
-        <ViewToggle view={navView} onChange={switchNavView} pending={pending} />
       </div>
 
-      {/* Nav — only this region scrolls, and only when needed */}
       <nav className="sidebar-nav min-h-0 flex-1 space-y-px overflow-y-auto overscroll-contain px-2 pb-1.5">
-        {navView === "platform" ? (
-          <div className="mb-1.5 px-1">
-            <Link
-              href="/send"
-              onClick={onClose}
-              className="flex items-center justify-center gap-2 rounded-[10px] bg-primary px-3 py-2 text-[12px] font-semibold text-white shadow-[0_8px_18px_rgba(16,185,129,0.25)] transition hover:bg-primary/90"
-            >
-              Send Campaign
-            </Link>
-          </div>
-        ) : null}
-
         {navItems.map((item) => {
           const Icon = item.icon;
           const childActive = sectionHasActiveChild(item.children, pathname, search);
@@ -370,8 +247,6 @@ export function Sidebar({
             pathname === hrefPath(item.href);
           const expandKey = itemExpandKey(item);
           const itemHrefActive = isNavHrefActive(pathname, search, item.href);
-          // When the same solution appears in SMS and Email, only highlight
-          // the row whose query context matches (or the non-channel primary).
           const active =
             itemHrefActive ||
             Boolean(childActive) ||
@@ -388,10 +263,20 @@ export function Sidebar({
           const isOpen = expanded === expandKey;
 
           return (
-            <div key={`${navView}-${expandKey}`}>
+            <div key={expandKey}>
               {item.sectionLabel ? (
                 <p className="px-2.5 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-[0.08em] text-sidebar-muted/80">
                   {item.sectionLabel}
+                </p>
+              ) : null}
+              {item.areaLabel ? (
+                <p
+                  className={cn(
+                    "px-2.5 pb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-sidebar-muted/80",
+                    !item.sectionLabel && "pt-3",
+                  )}
+                >
+                  {item.areaLabel}
                 </p>
               ) : null}
               <div
@@ -495,7 +380,6 @@ export function Sidebar({
           );
         })}
 
-        {/* Account sits at the end of the scrollable nav — not a pinned footer. */}
         <div className="mt-3 border-t border-white/10 px-1 pb-3 pt-3">
           <div className="flex items-center gap-2 rounded-[12px] bg-white/[0.04] px-2 py-1.5">
             {/* eslint-disable-next-line @next/next/no-img-element */}

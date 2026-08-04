@@ -1,6 +1,6 @@
 /**
  * Assert every legacy sidebar route remains reachable in Platform appNav,
- * and that Solutions view covers the outcome-based navigation.
+ * and that the unified Solutions-first nav covers the launch catalog.
  * Run: npx tsx scripts/test-nav-crosswalk.ts
  */
 
@@ -72,11 +72,11 @@ for (const category of solutionCategories) {
   }
 }
 
-// Solutions view covers outcome dashboards and permanent solution sections.
+// Unified Solutions-first nav covers outcome dashboards and management.
 const solutionsHrefs = new Set(collectNavHrefs(solutionsNav));
 assert.ok(solutionsHrefs.has("/outcomes"), "Solutions dashboard required");
+assert.ok(solutionsHrefs.has("/systems"), "My Systems inventory required");
 
-// Primary launch outcomes appear in Solutions nav.
 for (const slug of solutionsLaunchSlugs()) {
   assert.ok(
     solutionsHrefs.has(`/outcomes/${slug}`),
@@ -84,10 +84,14 @@ for (const slug of solutionsLaunchSlugs()) {
   );
 }
 
-// Section headers = product areas; entries = solutions.
-const expectedLaunchMenu: Array<{ section: string; labels: string[] }> = [
+const expectedLaunchMenu: Array<{
+  section?: string;
+  area?: string;
+  labels: string[];
+}> = [
   {
-    section: "AI Receptionist",
+    section: "Solutions",
+    area: "AI Receptionist",
     labels: [
       "AI Answering Service",
       "Cover Missed Calls",
@@ -97,7 +101,7 @@ const expectedLaunchMenu: Array<{ section: string; labels: string[] }> = [
     ],
   },
   {
-    section: "SMS & Messaging",
+    area: "SMS & Messaging",
     labels: [
       "Missed Call Text Back",
       "Respond & Follow Up",
@@ -110,14 +114,24 @@ const expectedLaunchMenu: Array<{ section: string; labels: string[] }> = [
     ],
   },
 ];
+
 const launchItems = solutionsNav.filter((i) => i.href.startsWith("/outcomes/"));
 let cursor = 0;
 for (const section of expectedLaunchMenu) {
-  assert.equal(
-    launchItems[cursor]?.sectionLabel,
-    section.section,
-    `Expected section ${section.section} at position ${cursor}`,
-  );
+  if (section.section) {
+    assert.equal(
+      launchItems[cursor]?.sectionLabel,
+      section.section,
+      `Expected section ${section.section} at position ${cursor}`,
+    );
+  }
+  if (section.area) {
+    assert.equal(
+      launchItems[cursor]?.areaLabel,
+      section.area,
+      `Expected area ${section.area} at position ${cursor}`,
+    );
+  }
   for (const label of section.labels) {
     assert.equal(
       launchItems[cursor]?.label,
@@ -127,162 +141,106 @@ for (const section of expectedLaunchMenu) {
     cursor += 1;
   }
 }
-assert.equal(
-  cursor,
-  expectedLaunchMenu.reduce((n, s) => n + s.labels.length, 0),
-  "Solutions launch menu length mismatch",
-);
 assert.equal(cursor, 13, "Packaged Solutions catalog should be 13 items");
+
+const connect = solutionsNav.find(
+  (i) => i.areaLabel === "Connect With Customers",
+);
+assert.ok(connect, "Connect With Customers area required");
+const connectStart = solutionsNav.indexOf(connect!);
+const connectLabels = [
+  "Forms",
+  "Website Popups",
+  "Signup Pages",
+  "QR Codes",
+  "Click-to-Text",
+  "Contact Cards",
+  "Text-to-Pay",
+];
+for (let i = 0; i < connectLabels.length; i += 1) {
+  assert.equal(
+    solutionsNav[connectStart + i]?.label,
+    connectLabels[i],
+    `Expected Connect item "${connectLabels[i]}"`,
+  );
+}
+
+const manageOrder = [
+  "My Systems",
+  "Automations",
+  "Inbox",
+  "Calls",
+  "Campaigns",
+  "Contacts",
+  "Calendar",
+  "Phone",
+  "Reports",
+  "Integrations",
+  "Compliance",
+];
+const manageStart = solutionsNav.findIndex((i) => i.label === "My Systems");
+assert.ok(manageStart >= 0, "My Systems required under Manage");
+assert.equal(
+  solutionsNav[manageStart]?.sectionLabel,
+  "Manage",
+  "My Systems starts the Manage band",
+);
+for (let i = 0; i < manageOrder.length; i += 1) {
+  assert.equal(
+    solutionsNav[manageStart + i]?.label,
+    manageOrder[i],
+    `Expected Manage item "${manageOrder[i]}"`,
+  );
+}
+
+const automations = solutionsNav.find((i) => i.label === "Automations");
+assert.ok(automations, "Automations required");
+const automationChildLabels = (automations?.children || []).map((c) =>
+  "type" in c && c.type === "group" ? c.label : c.label,
+);
+assert.deepEqual(
+  automationChildLabels,
+  ["Flows", "Templates", "Logs"],
+  "Automations sidebar must be Flows / Templates / Logs (no permanent Builder)",
+);
+assert.ok(
+  !automationChildLabels.includes("Builder"),
+  "Builder belongs to a selected flow, not the sidebar",
+);
+
+const advanced = solutionsNav.find((i) => i.sectionLabel === "Advanced");
+assert.ok(advanced, "Advanced band required");
+assert.equal(advanced?.label, "Phone & Routing");
+assert.ok(
+  solutionsNav.some((i) => i.label === "Developer Tools"),
+  "Developer Tools under Advanced",
+);
+assert.ok(
+  solutionsNav.some((i) => i.label === "Settings"),
+  "Settings required",
+);
 
 const removedFromCatalog = [
   "Handle New Service Calls",
   "Customer Support",
   "Welcome New Customers",
-  "Follow Up With Customers",
-  "Payment Reminders",
-  "Get More Referrals",
+  "Client Onboarding",
   "Run a Contest",
-  "Capture New Inquiries",
-  "Screen New Inquiries",
-  "Respond to New Inquiries",
-  "Follow Up With Inquiries",
-  "Send a Promotion",
-  "Promote Events & Offers",
+  "Surveys",
+  "Growth",
+  "Business Phone",
+  "AI Voice",
 ];
 for (const label of removedFromCatalog) {
   assert.ok(
     !solutionsNav.some((i) => i.label === label),
-    `"${label}" removed or merged out of Solutions catalog`,
+    `"${label}" must be hidden from launch navigation`,
   );
 }
 
-const expectedStaticSections: Array<{ section: string; labels: string[] }> = [
-  {
-    section: "Connect With Customers",
-    labels: [
-      "Forms",
-      "Website Popups",
-      "Signup Pages",
-      "QR Codes",
-      "Click-to-Text",
-      "Contact Cards",
-    ],
-  },
-  {
-    section: "Phone",
-    labels: [
-      "Make & Receive Calls",
-      "Phone Numbers",
-      "Call History",
-      "Voicemail",
-    ],
-  },
-  {
-    section: "Email",
-    labels: [
-      "Email Activity",
-      "Sent Emails",
-      "Scheduled Emails",
-      "Drafts",
-      "Templates",
-      "Email Settings",
-    ],
-  },
-];
-for (const section of expectedStaticSections) {
-  const first = solutionsNav.find((i) => i.sectionLabel === section.section);
-  assert.ok(first, `Section ${section.section} required`);
-  const start = solutionsNav.indexOf(first!);
-  for (let i = 0; i < section.labels.length; i += 1) {
-    assert.equal(
-      solutionsNav[start + i]?.label,
-      section.labels[i],
-      `Expected ${section.section} item "${section.labels[i]}"`,
-    );
-  }
-}
-
-assert.ok(
-  !solutionsNav.some((i) => i.label === "Client Onboarding"),
-  "Client Onboarding removed from Solutions catalog",
-);
-assert.ok(
-  !solutionsHrefs.has("/outcomes/structured-onboarding"),
-  "structured-onboarding must not appear in Solutions nav",
-);
-assert.ok(
-  !solutionsNav.some((i) => i.sectionLabel === "Automations"),
-  "Separate Automations solution category removed (builder lives under Advanced)",
-);
 assert.ok(
   !solutionsNav.some((i) => i.href.includes("channel=email")),
-  "Duplicate email channel shortcuts removed from Solutions catalog",
-);
-
-const sharedSections = [
-  "Inbox",
-  "Contacts",
-  "Calendars",
-  "Integrations",
-  "Reports",
-  "Compliance",
-  "Advanced",
-  "Settings",
-];
-for (const label of sharedSections) {
-  assert.ok(
-    solutionsNav.some((i) => i.label === label),
-    `Shared section ${label} required`,
-  );
-}
-assert.ok(
-  !solutionsNav.some((i) => i.sectionLabel === "Shared"),
-  "Legacy Shared section header should be removed",
-);
-
-assert.ok(
-  solutionsNav.some((i) => i.sectionLabel === "Phone"),
-  "Phone operational section required",
-);
-assert.ok(
-  !solutionsNav.some(
-    (i) => i.label === "Phone" && i.href === "/numbers",
-  ),
-  "Raw Phone shared dump should not appear in Solutions (use Platform view)",
-);
-assert.ok(
-  !solutionsNav.some((i) => i.label === "Create a Phone Menu"),
-  "Full Phone solution catalog removed from Solutions view",
-);
-assert.ok(
-  !solutionsNav.some((i) => i.label === "No-Show Recovery"),
-  "No-Show Recovery folded into Appointment Reminders",
-);
-
-const reports = solutionsNav.find((i) => i.label === "Reports");
-const reportLabels = (reports?.children || []).map((c) =>
-  "type" in c && c.type === "group" ? c.label : c.label,
-);
-assert.ok(
-  reportLabels.includes("Inquiry Sources"),
-  "Inquiry Sources belongs under Reports",
-);
-
-const advanced = solutionsNav.find((i) => i.label === "Advanced");
-assert.ok(advanced, "Advanced section required");
-const advancedLabels = (advanced?.children || []).map((c) =>
-  "type" in c && c.type === "group" ? c.label : c.label,
-);
-assert.deepEqual(
-  advancedLabels,
-  [
-    "Automations",
-    "Voice Agents",
-    "Knowledge Bases",
-    "Testing Lab",
-    "Developer Tools",
-  ],
-  "Advanced should hold builders and technical controls only",
+  "Duplicate email channel shortcuts removed",
 );
 
 // Full permanent submenu is always visible — even before the customer sets up.

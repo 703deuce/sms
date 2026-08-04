@@ -66,6 +66,10 @@ export function Header({
   const [unread, setUnread] = useState(unreadNotifications);
   const notifRef = useRef<HTMLDivElement>(null);
 
+  // Account menu
+  const [accountOpen, setAccountOpen] = useState(false);
+  const accountRef = useRef<HTMLDivElement>(null);
+
   const initials = userName
     .split(" ")
     .map((p) => p[0])
@@ -103,6 +107,9 @@ export function Header({
       }
       if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
         setNotifOpen(false);
+      }
+      if (accountRef.current && !accountRef.current.contains(e.target as Node)) {
+        setAccountOpen(false);
       }
     }
     document.addEventListener("mousedown", onClick);
@@ -320,13 +327,52 @@ export function Header({
             <CircleHelp className="h-5 w-5" />
           </Link>
 
-          <Link
-            href="/settings/users"
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-[12px] font-bold text-muted-foreground ring-1 ring-border hover:bg-muted/80"
-            aria-label="Account"
-          >
-            {initials}
-          </Link>
+          <div className="relative" ref={accountRef}>
+            <button
+              type="button"
+              onClick={() => setAccountOpen((v) => !v)}
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-[12px] font-bold text-muted-foreground ring-1 ring-border hover:bg-muted/80"
+              aria-label="Account menu"
+              aria-expanded={accountOpen}
+            >
+              {initials}
+            </button>
+            {accountOpen ? (
+              <div className="absolute right-0 top-12 z-40 w-56 overflow-hidden rounded-xl border border-border bg-card py-1 shadow-lg">
+                {[
+                  { label: "Workspace", href: "/settings/workspaces" },
+                  { label: "Team", href: "/settings/users" },
+                  { label: "Usage & Credits", href: "/settings/limits" },
+                  { label: "Billing", href: "/settings/billing" },
+                  { label: "Plan", href: "/settings/billing" },
+                  { label: "Notifications", href: "/settings/notifications" },
+                  { label: "Settings", href: "/settings/business" },
+                ].map((item) => (
+                  <Link
+                    key={item.label}
+                    href={item.href}
+                    onClick={() => setAccountOpen(false)}
+                    className="block px-3.5 py-2 text-[13px] font-medium text-foreground hover:bg-muted"
+                  >
+                    {item.label}
+                  </Link>
+                ))}
+                <div className="my-1 border-t border-border" />
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setAccountOpen(false);
+                    await fetch("/api/auth/logout", { method: "POST" });
+                    router.push("/login");
+                    router.refresh();
+                  }}
+                  className="block w-full px-3.5 py-2 text-left text-[13px] font-medium text-rose-600 hover:bg-rose-50"
+                >
+                  Sign Out
+                </button>
+              </div>
+            ) : null}
+          </div>
         </div>
       </div>
     </header>

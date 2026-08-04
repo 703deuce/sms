@@ -1,14 +1,17 @@
 import {
   AudioLines,
   BarChart3,
+  Boxes,
   CalendarDays,
   Inbox,
   LayoutDashboard,
-  Mail,
+  Megaphone,
   MessageSquare,
   MousePointerClick,
   Phone,
+  PhoneCall,
   Puzzle,
+  Route,
   Settings,
   ShieldCheck,
   Sparkles,
@@ -62,7 +65,6 @@ function instanceShortcutLinks(
       { label: "Results", href: outcomeHref(solution.slug, "results") },
     ];
   }
-  // Keep instance menus tight: most-used settings + test + results.
   const preferred = slugs.filter((s) =>
     /^(test|results|ring-rules|hours|calendars|triggers|sources|schedule|messages|eligibility)$/.test(
       s,
@@ -112,7 +114,6 @@ function solutionChildren(
 
   if (count === 0 || count > 2) return children;
 
-  // 1–2 setups: insert named instances right after Set Up / Create.
   const setupIdx = children.findIndex(
     (c) =>
       !("type" in c && c.type === "group") &&
@@ -134,23 +135,14 @@ function solutionChildren(
 function iconForSection(section: string, slug: string): LucideIcon {
   if (section === "AI Receptionist") return AudioLines;
   if (section === "SMS & Messaging") return MessageSquare;
-  if (section === "Email") return Mail;
-  if (section === "Phone") return Phone;
-  if (section === "Automations") return Workflow;
   if (slug.includes("appointment") || slug.includes("booking")) return CalendarDays;
   return Sparkles;
 }
 
 type LaunchEntry = {
   slug: string;
-  /** When set, link into the same solution with a channel focus (Email shortcuts). */
   channel?: "email" | "sms";
-  /**
-   * Email (and similar) shortcuts open the same solution without duplicating
-   * the full management tree under a second section.
-   */
   shortcut?: boolean;
-  /** Optional label override for the nav row. */
   label?: string;
 };
 
@@ -160,8 +152,8 @@ type SectionDef = {
 };
 
 /**
- * Section headers = product areas of the platform.
- * Entries = solution-based problems being solved.
+ * Packaged solution catalog (13 items).
+ * Wizards create real underlying agents / AutomationFlow / campaigns.
  */
 const LAUNCH_SECTIONS: SectionDef[] = [
   {
@@ -193,7 +185,10 @@ const LAUNCH_SECTIONS: SectionDef[] = [
 ];
 
 function staticSectionItems(
-  sectionLabel: string,
+  opts: {
+    sectionLabel?: string;
+    areaLabel?: string;
+  },
   icon: LucideIcon,
   items: Array<{ label: string; href: string; children?: NavChild[] }>,
 ): NavItem[] {
@@ -202,13 +197,14 @@ function staticSectionItems(
     href: item.href,
     icon,
     children: item.children,
-    sectionLabel: index === 0 ? sectionLabel : undefined,
+    sectionLabel: index === 0 ? opts.sectionLabel : undefined,
+    areaLabel: index === 0 ? opts.areaLabel : undefined,
   }));
 }
 
 /**
- * Outcome-based Solutions sidebar.
- * Only the expanded top-level item reveals its children (accordion in Sidebar).
+ * Single solution-first sidebar (Platform/Solutions switch removed).
+ * Solutions create systems · My Systems inventories them · Automations edits flows.
  */
 export function buildSolutionsNav(options: SolutionsNavOptions = {}): NavItem[] {
   const instances = options.instancesBySolution ?? {};
@@ -222,8 +218,9 @@ export function buildSolutionsNav(options: SolutionsNavOptions = {}): NavItem[] 
     },
   ];
 
+  let solutionsBandStarted = false;
   for (const section of LAUNCH_SECTIONS) {
-    let first = true;
+    let firstInArea = true;
     for (const entry of section.entries) {
       const solution = bySlug.get(entry.slug);
       if (!solution) continue;
@@ -237,35 +234,44 @@ export function buildSolutionsNav(options: SolutionsNavOptions = {}): NavItem[] 
         children: entry.shortcut
           ? undefined
           : solutionChildren(solution, instances[solution.slug], entry.channel),
-        sectionLabel: first ? section.label : undefined,
+        sectionLabel: !solutionsBandStarted ? "Solutions" : undefined,
+        areaLabel: firstInArea ? section.label : undefined,
       });
-      first = false;
+      solutionsBandStarted = true;
+      firstInArea = false;
     }
   }
 
   nav.push(
-    ...staticSectionItems("Connect With Customers", MousePointerClick, [
-      { label: "Forms", href: "/grow/forms" },
-      { label: "Website Popups", href: "/grow/popups" },
-      { label: "Signup Pages", href: "/grow/pages" },
-      { label: "QR Codes", href: "/grow/qr-codes" },
-      { label: "Click-to-Text", href: "/grow/click-to-text" },
-      { label: "Contact Cards", href: "/grow/contact-cards" },
-    ]),
-    ...staticSectionItems("Phone", Phone, [
-      { label: "Make & Receive Calls", href: "/phone" },
-      { label: "Phone Numbers", href: "/numbers" },
-      { label: "Call History", href: "/phone/calls" },
-      { label: "Voicemail", href: "/phone/settings" },
-    ]),
-    ...staticSectionItems("Email", Mail, [
-      { label: "Email Activity", href: "/reports/messages" },
-      { label: "Sent Emails", href: "/campaigns" },
-      { label: "Scheduled Emails", href: "/campaigns/scheduled" },
-      { label: "Drafts", href: "/campaigns/drafts" },
-      { label: "Templates", href: "/templates" },
-      { label: "Email Settings", href: "/settings/email-to-sms" },
-    ]),
+    ...staticSectionItems(
+      { areaLabel: "Connect With Customers" },
+      MousePointerClick,
+      [
+        { label: "Forms", href: "/grow/forms" },
+        { label: "Website Popups", href: "/grow/popups" },
+        { label: "Signup Pages", href: "/grow/pages" },
+        { label: "QR Codes", href: "/grow/qr-codes" },
+        { label: "Click-to-Text", href: "/grow/click-to-text" },
+        { label: "Contact Cards", href: "/grow/contact-cards" },
+        { label: "Text-to-Pay", href: "/messaging/payments" },
+      ],
+    ),
+    {
+      label: "My Systems",
+      href: "/systems",
+      icon: Boxes,
+      sectionLabel: "Manage",
+    },
+    {
+      label: "Automations",
+      href: "/automations",
+      icon: Workflow,
+      children: [
+        { label: "Flows", href: "/automations" },
+        { label: "Templates", href: "/automations/templates" },
+        { label: "Logs", href: "/automations/logs" },
+      ],
+    },
     {
       label: "Inbox",
       href: "/inbox",
@@ -277,36 +283,71 @@ export function buildSolutionsNav(options: SolutionsNavOptions = {}): NavItem[] 
       ],
     },
     {
+      label: "Calls",
+      href: "/phone/calls",
+      icon: PhoneCall,
+      children: [
+        { label: "All Calls", href: "/phone/calls" },
+        { label: "Conversations", href: "/inbox" },
+        { label: "Voicemails", href: "/phone/settings" },
+      ],
+    },
+    {
+      label: "Campaigns",
+      href: "/campaigns",
+      icon: Megaphone,
+      children: [
+        { label: "All Campaigns", href: "/campaigns" },
+        { label: "Scheduled", href: "/campaigns/scheduled" },
+        { label: "Drafts", href: "/campaigns/drafts" },
+        { label: "Running", href: "/campaigns" },
+        { label: "Completed", href: "/campaigns/completed" },
+        { label: "Templates", href: "/templates" },
+      ],
+    },
+    {
       label: "Contacts",
       href: "/contacts",
       icon: Users,
       children: [
         { label: "All Contacts", href: "/contacts" },
-        { label: "Lists & Segments", href: "/contacts/lists" },
+        { label: "Lists", href: "/contacts/lists" },
+        { label: "Segments", href: "/contacts/segments" },
+        { label: "Tags", href: "/contacts/tags" },
+        { label: "Custom Fields", href: "/contacts/fields" },
         { label: "Imports", href: "/contacts/imports" },
-        { label: "Contact Settings", href: "/contacts/fields" },
+        { label: "Sources", href: "/grow/sources" },
+        {
+          type: "group",
+          label: "Contact Settings",
+          children: [
+            { label: "Validation", href: "/contacts/validation" },
+            { label: "Unsubscribed", href: "/contacts/unsubscribed" },
+            { label: "Blocked", href: "/contacts/blocked" },
+            { label: "Invalid", href: "/contacts/invalid" },
+            { label: "Consent Status", href: "/compliance/consent" },
+          ],
+        },
       ],
     },
     {
-      label: "Calendars",
-      href: "/voice/calendars",
+      label: "Calendar",
+      href: "/campaigns/calendar",
       icon: CalendarDays,
       children: [
-        { label: "Connections", href: "/voice/calendars" },
-        { label: "Appointment Types", href: "/voice/calendars" },
+        { label: "Calendar", href: "/campaigns/calendar" },
         { label: "Appointments", href: "/integrations/native/appointments" },
+        { label: "Connections", href: "/voice/calendars" },
       ],
     },
     {
-      label: "Integrations",
-      href: "/integrations",
-      icon: Puzzle,
+      label: "Phone",
+      href: "/phone",
+      icon: Phone,
       children: [
-        { label: "App Directory", href: "/integrations" },
-        { label: "Connected Apps", href: "/integrations/native" },
-        { label: "CRM", href: "/integrations/crm" },
-        { label: "Webhooks", href: "/integrations/webhooks" },
-        { label: "API Keys", href: "/integrations/api" },
+        { label: "Make & Receive Calls", href: "/phone" },
+        { label: "Phone Numbers", href: "/numbers" },
+        { label: "Phone Settings", href: "/phone/settings" },
       ],
     },
     {
@@ -317,11 +358,25 @@ export function buildSolutionsNav(options: SolutionsNavOptions = {}): NavItem[] 
         { label: "Overview", href: "/reports" },
         { label: "Calls", href: "/voice/analytics" },
         { label: "Messages", href: "/reports/messages" },
+        { label: "Campaigns", href: "/reports/campaigns" },
         { label: "Appointments", href: "/integrations/native/appointments" },
         { label: "Inquiries", href: "/integrations/native/leads" },
-        { label: "Campaigns", href: "/reports/campaigns" },
-        { label: "Inquiry Sources", href: "/integrations/native/leads" },
+        { label: "Sources", href: "/grow/sources" },
+        { label: "Automations", href: "/reports/automations" },
         { label: "Usage", href: "/reports/usage" },
+      ],
+    },
+    {
+      label: "Integrations",
+      href: "/integrations",
+      icon: Puzzle,
+      children: [
+        { label: "App Directory", href: "/integrations" },
+        { label: "Connected Apps", href: "/integrations/native" },
+        { label: "CRM", href: "/integrations/crm" },
+        { label: "Calendars", href: "/voice/calendars" },
+        { label: "Webhooks", href: "/integrations/webhooks" },
+        { label: "API Keys", href: "/integrations/api" },
       ],
     },
     {
@@ -336,34 +391,31 @@ export function buildSolutionsNav(options: SolutionsNavOptions = {}): NavItem[] 
       ],
     },
     {
-      label: "Advanced",
-      href: "/automations",
+      label: "Phone & Routing",
+      href: "/phone/queues",
+      icon: Route,
+      sectionLabel: "Advanced",
+      children: [
+        { label: "Inbound Routing", href: "/phone/queues" },
+        { label: "Business Hours", href: "/voice/settings" },
+        { label: "Overflow & Fallback", href: "/phone/queues" },
+        { label: "VIP Rules", href: "/phone/queues" },
+        { label: "AI Handoff", href: "/voice/agents" },
+        { label: "Queues", href: "/phone/queues" },
+        { label: "Phone Menus", href: "/phone/ivr" },
+        { label: "Routing Logs", href: "/integrations/logs" },
+      ],
+    },
+    {
+      label: "Developer Tools",
+      href: "/integrations/api",
       icon: Wrench,
       children: [
-        {
-          type: "group",
-          label: "Automations",
-          children: [
-            { label: "Flows", href: "/automations" },
-            { label: "Templates", href: "/automations" },
-            { label: "Builder", href: "/automations/new" },
-            { label: "Logs", href: "/automations" },
-          ],
-        },
-        { label: "Voice Agents", href: "/voice/agents" },
-        { label: "Knowledge Bases", href: "/voice/knowledge" },
-        { label: "Testing Lab", href: "/voice/testing" },
-        {
-          type: "group",
-          label: "Developer Tools",
-          children: [
-            { label: "API Keys", href: "/integrations/api" },
-            { label: "Webhooks", href: "/integrations/webhooks" },
-            { label: "Developer Logs", href: "/integrations/logs" },
-            { label: "Action Audit", href: "/integrations/native/audit" },
-            { label: "AI Safety", href: "/integrations/native/ai-policy" },
-          ],
-        },
+        { label: "API Keys", href: "/integrations/api" },
+        { label: "Webhooks", href: "/integrations/webhooks" },
+        { label: "Developer Logs", href: "/integrations/logs" },
+        { label: "Action Audit", href: "/integrations/native/audit" },
+        { label: "AI Safety", href: "/integrations/native/ai-policy" },
       ],
     },
     {
@@ -378,6 +430,9 @@ export function buildSolutionsNav(options: SolutionsNavOptions = {}): NavItem[] 
 
 /** Static solutions nav (no live instances) — used for titles / tests. */
 export const solutionsNav: NavItem[] = buildSolutionsNav();
+
+/** Alias — there is one app nav now. */
+export const appSolutionsNav = solutionsNav;
 
 /** Slugs that appear as primary (non-shortcut) Solutions launch entries. */
 export function solutionsLaunchSlugs(): string[] {

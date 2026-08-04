@@ -41,8 +41,10 @@ export type NavItem = {
   children?: NavChild[];
   badge?: string | number;
   emphasize?: boolean;
-  /** Optional sidebar section header rendered above this item (Solutions view). */
+  /** Major sidebar band (Solutions / Manage / Advanced). */
   sectionLabel?: string;
+  /** Product-area header under a major band (AI Receptionist, SMS, …). */
+  areaLabel?: string;
 };
 
 /** @deprecated use NavLink — kept for gradual call-site typing */
@@ -463,7 +465,7 @@ export const appNav: NavItem[] = [
 ];
 
 export const mobilePrimaryNav = [
-  { label: "Home", href: "/dashboard", icon: LayoutDashboard },
+  { label: "Home", href: "/outcomes", icon: LayoutDashboard },
   { label: "Inbox", href: "/inbox", icon: Inbox },
   { label: "Campaigns", href: "/campaigns", icon: Megaphone },
   { label: "Contacts", href: "/contacts", icon: Users },
@@ -485,6 +487,7 @@ export const pageTitles: Record<string, string> = {
   "/dashboard": "Dashboard",
   "/getting-started": "Getting Started",
   "/outcomes": "Solutions Dashboard",
+  "/systems": "My Systems",
   "/solutions": "Solution Center",
   "/solutions/lead-recovery": "Lead Recovery",
   "/solutions/lead-recovery/missed-call-text-back": "Missed Call Text Back",
