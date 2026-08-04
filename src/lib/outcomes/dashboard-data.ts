@@ -115,7 +115,7 @@ const FEATURED: Array<{
   },
   {
     slug: "review-requests",
-    description: "Automatically ask happy customers for Google/Facebook reviews.",
+    description: "Ask happy customers for Google and Facebook reviews.",
     icon: "star",
     iconTone: "bg-amber-100 text-amber-600",
   },
@@ -339,7 +339,7 @@ export async function loadSolutionsDashboardData(
       description: item.description,
       status,
       statusLabel:
-        status === "active" ? "Active" : status === "pending" ? "Pending" : "Not setup",
+        status === "active" ? "Active" : status === "pending" ? "Pending" : "Not set up",
       actionLabel:
         status === "active" ? "Manage" : status === "pending" ? "Finish Setup" : "Set Up",
       href:
@@ -423,7 +423,15 @@ export async function loadSolutionsDashboardData(
       });
     }
   }
-  const activeUnique = activeSolutions.slice(0, 6);
+  // Prefer one row per solution title so the panel stays scannable.
+  const seenSolutions = new Set<string>();
+  const activeUnique: ActiveSolutionRow[] = [];
+  for (const row of activeSolutions) {
+    if (seenSolutions.has(row.solutionTitle)) continue;
+    seenSolutions.add(row.solutionTitle);
+    activeUnique.push(row);
+    if (activeUnique.length >= 4) break;
+  }
 
   type RawActivity = {
     id: string;
@@ -436,6 +444,14 @@ export async function loadSolutionsDashboardData(
   const rawActivity: RawActivity[] = [];
 
   for (const call of voiceCalls) {
+    const friendly =
+      call.appointmentBooked
+        ? "Caller booked a time"
+        : /missed|recover/i.test(call.outcome || "")
+          ? "Caller replied by text"
+          : call.outcome
+            ? String(call.outcome).replace(/_/g, " ")
+            : "Voice conversation finished";
     rawActivity.push({
       id: `call-${call.id}`,
       title: call.appointmentBooked
@@ -443,7 +459,7 @@ export async function loadSolutionsDashboardData(
         : /missed|recover/i.test(call.outcome || "")
           ? "Missed call recovered"
           : "AI call completed",
-      detail: call.fromE164 ? `Caller ${call.fromE164}` : "Voice conversation",
+      detail: friendly,
       at: call.startedAt,
       kind: call.appointmentBooked ? "appointment" : "call",
       href: `/voice/calls/${call.id}`,
@@ -451,12 +467,18 @@ export async function loadSolutionsDashboardData(
   }
 
   for (const conv of conversations.slice(0, 8)) {
-    const preview = conv.lastMessage || conv.contactName || "Conversation update";
+    const preview = conv.lastMessage?.trim();
+    const quoted =
+      preview && preview.length > 0
+        ? `“${preview.slice(0, 64)}${preview.length > 64 ? "…" : ""}”`
+        : conv.contactName
+          ? `Reply from ${conv.contactName}`
+          : "Inbound message";
     const at = conv.updatedAt ? new Date(conv.updatedAt) : new Date();
     rawActivity.push({
       id: `msg-${conv.id}`,
       title: "New text reply",
-      detail: String(preview).slice(0, 80),
+      detail: quoted,
       at,
       kind: "message",
       href: `/inbox?conversation=${conv.id}`,
@@ -464,12 +486,15 @@ export async function loadSolutionsDashboardData(
   }
 
   for (const appt of appointments) {
+    const when = appt.startsAt.toLocaleString(undefined, {
+      weekday: "long",
+      hour: "numeric",
+      minute: "2-digit",
+    });
     rawActivity.push({
       id: `appt-${appt.id}`,
       title: "Appointment booked",
-      detail: appt.serviceName
-        ? `${appt.serviceName} · ${appt.startsAt.toLocaleString()}`
-        : appt.startsAt.toLocaleString(),
+      detail: appt.serviceName ? `${appt.serviceName} · ${when}` : when,
       at: appt.createdAt,
       kind: "appointment",
       href: "/integrations/native/appointments",
