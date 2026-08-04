@@ -667,6 +667,18 @@ export async function syncTelnyxAssistant(
     let coreError: string | null = null;
     try {
       await ai.updateAssistant(agent.telnyxAssistantId, corePayload);
+      // Telnyx may return 200 while silently ignoring an unsupported model id.
+      if (isLatencyOptimizedProfile(config.voiceTiming?.activeProfile) || isNativeAudioModel(modelId)) {
+        const remote = await ai.getAssistant(agent.telnyxAssistantId);
+        const data = ((remote as { data?: Record<string, unknown> }).data ||
+          remote) as Record<string, unknown>;
+        const liveModel = String(data.model || "");
+        if (liveModel && liveModel !== modelId) {
+          coreError =
+            `Telnyx kept model "${liveModel}" after requesting "${modelId}" ` +
+            `(unsupported or ignored model id for AI Assistants)`;
+        }
+      }
     } catch (err) {
       coreError = err instanceof Error ? err.message : String(err);
       console.error("[assistant-sync] core update failed", {

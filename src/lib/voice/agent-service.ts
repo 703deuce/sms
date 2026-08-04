@@ -187,7 +187,7 @@ async function syncAssistantToTelnyx(
         err instanceof Error ? err.message : err,
       ),
     );
-  return assistantId;
+  return sync;
 }
 
 /**
@@ -255,12 +255,18 @@ export async function buildVoiceAgentForTest(
   });
 
   try {
-    const assistantId = await syncAssistantToTelnyx(
+    const sync = await syncAssistantToTelnyx(
       workspaceId,
       agentId,
       updated,
       config,
     );
+    const assistantId =
+      sync && typeof sync === "object" && "assistantId" in sync
+        ? String((sync as { assistantId?: string }).assistantId || "")
+        : typeof sync === "string"
+          ? sync
+          : null;
     updated = (await prisma.voiceAgent.findUnique({ where: { id: agentId } })) || updated;
     if (!assistantId && !updated.telnyxAssistantId) {
       updated = await prisma.voiceAgent.update({
@@ -394,20 +400,31 @@ export async function publishVoiceAgent(
     console.error("[voice] phone assignment sync failed", err);
   }
 
+  let telnyxSync: unknown = null;
+  let telnyxSyncError: string | null = null;
   try {
-    await syncAssistantToTelnyx(workspaceId, agentId, updated, config);
+    telnyxSync = await syncAssistantToTelnyx(workspaceId, agentId, updated, config);
   } catch (err) {
+    telnyxSyncError = err instanceof Error ? err.message : String(err);
     console.error("[voice] Telnyx assistant sync failed", err);
     await prisma.voiceAgent.update({
       where: { id: agentId },
       data: {
         healthStatus: "warning",
-        healthMessage: "Deployed locally but Telnyx sync failed",
+        healthMessage: `Deployed locally but Telnyx sync failed: ${telnyxSyncError}`.slice(
+          0,
+          500,
+        ),
       },
     });
   }
 
-  return { agent: updated, version: versionRow };
+  return {
+    agent: updated,
+    version: versionRow,
+    telnyxSync,
+    telnyxSyncError,
+  };
 }
 
 export async function rollbackVoiceAgent(

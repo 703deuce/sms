@@ -29,8 +29,16 @@ export const ACTIVE_LATENCY_PROFILE_DEFAULT: LatencyProfileId = "legacy_cascade"
 /** Fast LLM for ordinary receptionist turns (Telnyx docs / Haiku-class). */
 export const FAST_LLM_MODEL_ID = "anthropic/claude-haiku-4-5";
 
-/** Native-audio experiment model (Telnyx-supported). */
-export const NATIVE_AUDIO_MODEL_ID = "fixie-ai/ultravox-v0_4";
+/** Native-audio experiment model (Telnyx Inference audio-language model ID). */
+export const NATIVE_AUDIO_MODEL_ID = "fixie-ai/ultravox-v0_4_1-llama-3_1-8b";
+
+/** Candidate IDs to probe if the primary Ultravox model is rejected. */
+export const NATIVE_AUDIO_MODEL_CANDIDATES = [
+  "fixie-ai/ultravox-v0_4_1-llama-3_1-8b",
+  "Fixie-ai/ultravox-v0_4_1-llama-3_1-8b",
+  "fixie-ai/ultravox-v0_4",
+  "Fixie-ai/ultravox-v0_4",
+] as const;
 
 /**
  * Reporting bands for ordinary non-tool turns (not artificial delays).
@@ -227,7 +235,7 @@ export const FLUX_EAGER_LOW_LATENCY_PROFILE: LatencyProfileDefinition = {
 /**
  * Version C — Ultravox native-audio INPUT.
  *
- * Telnyx ignores transcription for fixie-ai/ultravox-v0_4.
+ * Telnyx ignores transcription for fixie-ai/ultravox-v0_4_1-llama-3_1-8b.
  * Ultravox (Fixie/HF) generates text output; Telnyx assistants still expose a
  * selectable TTS voice — so Howard Ultra is the intended OUTGOING path
  * (native input → text → Ultra TTS), not "Ultravox speaks natively."
@@ -240,7 +248,7 @@ export const NATIVE_AUDIO_ULTRAVOX_PROFILE: LatencyProfileDefinition = {
   versionLabel: "C",
   label: "Version C — Ultravox native-audio input + Ultra TTS",
   description:
-    "fixie-ai/ultravox-v0_4 for native audio understanding. Transcription ignored. Outgoing audio expected via selected Ultra TTS (text→speech), not Ultravox-native speech. Timing endpointing plan not sent. Dynvar webhook skipped.",
+    "fixie-ai/ultravox-v0_4_1-llama-3_1-8b for native audio understanding. Transcription ignored. Outgoing audio expected via selected Ultra TTS (text→speech), not Ultravox-native speech. Timing endpointing plan cleared. Dynvar webhook skipped.",
   fields: {
     transcription: {
       enabled: false,

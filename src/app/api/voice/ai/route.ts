@@ -736,6 +736,134 @@ export async function POST(request: Request) {
         }
         return NextResponse.json({ data: { results } });
       }
+      case "probe_ultravox_models": {
+        if (!ai.isTelnyxAiConfigured()) {
+          return NextResponse.json({ error: "TELNYX_API_KEY not configured" }, { status: 400 });
+        }
+        const {
+          NATIVE_AUDIO_MODEL_CANDIDATES,
+          NATIVE_AUDIO_MODEL_ID,
+        } = await import("@/lib/voice/latency-profiles");
+        const { telnyxRequest } = await import("@/lib/messaging/telnyx/client");
+
+        let listed: unknown = null;
+        let listedUltravox: string[] = [];
+        try {
+          listed = await telnyxRequest("/ai/openai/models", { method: "GET" });
+          const rows = Array.isArray((listed as { data?: unknown[] }).data)
+            ? ((listed as { data: Array<{ id?: string; owned_by?: string }> }).data)
+            : Array.isArray(listed)
+              ? (listed as Array<{ id?: string }>)
+              : [];
+          listedUltravox = rows
+            .map((r) => String(r.id || ""))
+            .filter((id) => /ultravox|fixie/i.test(id));
+        } catch (err) {
+          listed = {
+            error: err instanceof Error ? err.message : String(err),
+          };
+        }
+
+        const stamp = Date.now().toString(36);
+        const attempts: Array<Record<string, unknown>> = [];
+        for (const model of NATIVE_AUDIO_MODEL_CANDIDATES) {
+          try {
+            const created = await ai.createAssistant({
+              name: `Ultravox probe ${stamp}`.slice(0, 80),
+              instructions: "You are a brief test assistant.",
+              model,
+              greeting: "Hi, this is an Ultravox probe.",
+            });
+            const id = String(
+              (created as { id?: string }).id ||
+                (created as { data?: { id?: string } }).data?.id ||
+                "",
+            );
+            let liveModel: string | null = null;
+            if (id) {
+              const remote = await ai.getAssistant(id);
+              const data = ((remote as { data?: Record<string, unknown> }).data ||
+                remote) as Record<string, unknown>;
+              liveModel = String(data.model || "") || null;
+              await ai.deleteAssistant(id).catch(() => undefined);
+            }
+            attempts.push({
+              model,
+              ok: true,
+              createdId: id || null,
+              liveModel,
+              stuck: liveModel === model,
+            });
+          } catch (err) {
+            attempts.push({
+              model,
+              ok: false,
+              error: err instanceof Error ? err.message : String(err),
+            });
+          }
+        }
+
+        // Also try PATCH on the caller's assistant if provided.
+        let patchAttempt: Record<string, unknown> | null = null;
+        if (agentId) {
+          const agentRow = await getPrisma().voiceAgent.findFirst({
+            where: { id: agentId, workspaceId },
+            select: { telnyxAssistantId: true },
+          });
+          const assistantId = agentRow?.telnyxAssistantId;
+          if (assistantId) {
+            const before = await ai.getAssistant(assistantId);
+            const beforeData = ((before as { data?: Record<string, unknown> }).data ||
+              before) as Record<string, unknown>;
+            const beforeModel = String(beforeData.model || "");
+            try {
+              await ai.updateAssistant(assistantId, {
+                model: NATIVE_AUDIO_MODEL_ID,
+              });
+              const after = await ai.getAssistant(assistantId);
+              const afterData = ((after as { data?: Record<string, unknown> }).data ||
+                after) as Record<string, unknown>;
+              const afterModel = String(afterData.model || "");
+              patchAttempt = {
+                assistantId,
+                requested: NATIVE_AUDIO_MODEL_ID,
+                beforeModel,
+                afterModel,
+                stuck: afterModel === NATIVE_AUDIO_MODEL_ID,
+              };
+              // Restore prior model so we don't strand the live agent mid-probe.
+              if (beforeModel && beforeModel !== afterModel) {
+                await ai
+                  .updateAssistant(assistantId, { model: beforeModel })
+                  .catch(() => undefined);
+              }
+            } catch (err) {
+              patchAttempt = {
+                assistantId,
+                requested: NATIVE_AUDIO_MODEL_ID,
+                beforeModel,
+                error: err instanceof Error ? err.message : String(err),
+              };
+            }
+          }
+        }
+
+        return NextResponse.json({
+          data: {
+            primaryModelId: NATIVE_AUDIO_MODEL_ID,
+            listedUltravox,
+            listedError:
+              listed && typeof listed === "object" && "error" in listed
+                ? (listed as { error: string }).error
+                : null,
+            createAttempts: attempts,
+            patchAttempt,
+            recommended:
+              attempts.find((a) => a.stuck)?.model ||
+              (patchAttempt?.stuck ? NATIVE_AUDIO_MODEL_ID : null),
+          },
+        });
+      }
       case "probe_ultra_voices": {
         const { probeTelnyxAssistantVoices } = await import(
           "@/lib/voice/telnyx/voice-probe"

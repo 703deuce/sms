@@ -61,6 +61,7 @@ assert.equal(
 section("Version C Ultravox: no copied endpointing plan; TTS voice expected");
 assert.equal(NATIVE_AUDIO_ULTRAVOX_PROFILE.fields.nativeAudio, true);
 assert.equal(NATIVE_AUDIO_ULTRAVOX_PROFILE.fields.model?.modelId, NATIVE_AUDIO_MODEL_ID);
+assert.match(NATIVE_AUDIO_MODEL_ID, /ultravox-v0_4_1-llama-3_1-8b/);
 assert.equal(NATIVE_AUDIO_ULTRAVOX_PROFILE.fields.startSpeakingPlan, null);
 assert.equal(NATIVE_AUDIO_ULTRAVOX_PROFILE.fields.transcription.enabled, false);
 assert.equal(NATIVE_AUDIO_ULTRAVOX_PROFILE.fields.voiceLanguage.preferUltra, true);
