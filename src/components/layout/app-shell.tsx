@@ -33,7 +33,8 @@ export function AppShell({
 }) {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
-  const title = getPageTitle(pathname);
+  // Solutions Dashboard renders its own hero title/subtitle/actions.
+  const title = pathname === "/outcomes" ? "" : getPageTitle(pathname);
 
   return (
     <div className="min-h-screen bg-background">
