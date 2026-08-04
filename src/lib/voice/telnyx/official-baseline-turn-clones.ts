@@ -16,7 +16,6 @@ import * as ai from "@/lib/voice/telnyx/ai-client";
 import {
   BASELINE_SHARED,
   BASELINE_ULTRA_VOICE,
-  OFFICIAL_BASELINE_NAME,
   assistantModelFields,
 } from "@/lib/voice/telnyx/official-baseline";
 
