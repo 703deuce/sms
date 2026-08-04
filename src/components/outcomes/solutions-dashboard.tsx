@@ -6,6 +6,8 @@ import { cn } from "@/lib/utils";
 import {
   Banknote,
   CalendarDays,
+  ChevronDown,
+  ChevronRight,
   Clock3,
   MessageSquare,
   Moon,
@@ -43,7 +45,8 @@ function StatusBadge({
     <span
       className={cn(
         "inline-flex h-[22px] shrink-0 items-center rounded-full px-2.5 text-[11px] font-semibold leading-none",
-        badge === "active" && "bg-[#EFF6FF] text-[#2563EB]",
+        badge === "running" && "bg-[#EFF6FF] text-[#2563EB]",
+        badge === "active" && "bg-emerald-50 text-emerald-700",
         badge === "recommended" && "bg-violet-100 text-violet-700",
         badge === "new" && "bg-emerald-50 text-emerald-700",
         badge === "hot" && "bg-amber-50 text-amber-700",
@@ -51,6 +54,23 @@ function StatusBadge({
     >
       {label}
     </span>
+  );
+}
+
+function PrimaryBtn({
+  href,
+  children,
+}: {
+  href: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <Link
+      href={href}
+      className="inline-flex h-8 shrink-0 items-center justify-center rounded-md bg-[#3B82F6] px-3 text-[12px] font-semibold text-white shadow-sm hover:bg-[#2563EB]"
+    >
+      {children}
+    </Link>
   );
 }
 
@@ -64,23 +84,24 @@ export function SolutionsDashboardView({ data }: { data: SolutionsDashboardData 
             Solutions Dashboard
           </h2>
           <p className="mt-1.5 text-[14px] leading-relaxed text-[#6B7280]">
-            Centralized view of everything Transovo is doing for you and your
-            patients.
+            Enable new solutions or monitor performance from your central
+            command center.
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2.5">
           <Link
             href="/outcomes/custom-automation"
-            className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[#3B82F6] bg-white px-3.5 text-[13px] font-semibold text-[#3B82F6] hover:bg-[#EFF6FF]"
+            className="inline-flex h-9 items-center gap-1 text-[13px] font-semibold text-[#111827] hover:text-[#3B82F6]"
           >
             <Plus className="h-3.5 w-3.5" />
             New Solution
           </Link>
           <Link
-            href="/outcomes/answer-every-call"
-            className="inline-flex h-9 items-center rounded-lg bg-[#3B82F6] px-4 text-[13px] font-semibold text-white shadow-sm hover:bg-[#2563EB]"
+            href="/numbers"
+            className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[#3B82F6] px-3.5 text-[13px] font-semibold text-white shadow-sm hover:bg-[#2563EB]"
           >
-            Get Started
+            Add Channel
+            <ChevronDown className="h-3.5 w-3.5 opacity-90" />
           </Link>
         </div>
       </div>
@@ -90,7 +111,7 @@ export function SolutionsDashboardView({ data }: { data: SolutionsDashboardData 
         <h3 className="mb-3.5 text-[16px] font-bold tracking-tight text-[#111827]">
           What do you want Transovo to handle?
         </h3>
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
           {data.featured.map((card) => {
             const Icon = iconMap[card.icon];
             return (
@@ -101,7 +122,7 @@ export function SolutionsDashboardView({ data }: { data: SolutionsDashboardData 
                 <div className="flex items-start gap-3">
                   <span
                     className={cn(
-                      "flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white",
+                      "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-white",
                       card.iconTone,
                     )}
                   >
@@ -114,25 +135,26 @@ export function SolutionsDashboardView({ data }: { data: SolutionsDashboardData 
                       </h4>
                       <StatusBadge badge={card.badge} label={card.badgeLabel} />
                     </div>
-                    <div className="mt-2.5 flex items-center gap-4 text-[12px] font-medium text-[#6B7280]">
-                      <span className="inline-flex items-center gap-1.5">
-                        <Phone className="h-3 w-3 text-[#9CA3AF]" />
-                        {card.metricPrimary}
-                      </span>
-                      <span className="inline-flex items-center gap-1.5">
-                        <Clock3 className="h-3 w-3 text-[#9CA3AF]" />
-                        {card.metricSecondary}
-                      </span>
+                    <p className="mt-1.5 line-clamp-2 text-[12px] leading-snug text-[#6B7280]">
+                      {card.description}
+                    </p>
+                    <div className="mt-2.5 flex items-center gap-3 text-[12px] font-medium text-[#6B7280]">
+                      <span>{card.metricPrimary}</span>
+                      {card.metricLinkLabel ? (
+                        <Link
+                          href={card.metricLinkHref || card.href}
+                          className="font-semibold text-[#3B82F6] hover:underline"
+                        >
+                          {card.metricLinkLabel}
+                        </Link>
+                      ) : card.metricSecondary ? (
+                        <span>{card.metricSecondary}</span>
+                      ) : null}
                     </div>
                   </div>
                 </div>
                 <div className="mt-auto flex justify-end pt-4">
-                  <Link
-                    href={card.href}
-                    className="inline-flex h-8 items-center rounded-md bg-[#F3F4F6] px-3 text-[12px] font-semibold text-[#374151] hover:bg-[#E5E7EB]"
-                  >
-                    {card.actionLabel}
-                  </Link>
+                  <PrimaryBtn href={card.href}>{card.actionLabel}</PrimaryBtn>
                 </div>
               </div>
             );
@@ -141,20 +163,16 @@ export function SolutionsDashboardView({ data }: { data: SolutionsDashboardData 
       </section>
 
       {/* Middle row — three separate panels */}
-      <section className="grid gap-4 lg:grid-cols-3">
+      <section className="grid gap-5 lg:grid-cols-3">
         {/* Active Solutions */}
         <div className="rounded-xl border border-[#E5E7EB] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-          <div className="flex items-center justify-between border-b border-[#F3F4F6] px-5 py-4">
-            <h3 className="flex items-center gap-2 text-[14px] font-bold text-[#111827]">
-              <span className="h-2 w-2 rounded-full bg-rose-500" />
-              Active Solutions
+          <div className="flex items-center justify-between border-b border-[#F3F4F6] px-5 py-3.5">
+            <h3 className="text-[14px] font-bold text-[#111827]">
+              Active Solutions{" "}
+              <span className="font-medium text-[#9CA3AF]">
+                · {data.activeSolutions.length}
+              </span>
             </h3>
-            <Link
-              href="/outcomes/answer-every-call"
-              className="text-[12px] font-semibold text-[#3B82F6] hover:underline"
-            >
-              View All
-            </Link>
           </div>
           <ul className="divide-y divide-[#E5E7EB]">
             {data.activeSolutions.map((row) => {
@@ -162,80 +180,62 @@ export function SolutionsDashboardView({ data }: { data: SolutionsDashboardData 
               return (
                 <li
                   key={row.id}
-                  className="flex items-start justify-between gap-3 px-5 py-3.5"
+                  className="flex items-center justify-between gap-3 px-5 py-3"
                 >
-                  <div className="flex min-w-0 items-start gap-2.5">
+                  <div className="flex min-w-0 items-center gap-2.5">
                     <span
                       className={cn(
-                        "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md",
+                        "flex h-8 w-8 shrink-0 items-center justify-center rounded-md",
                         row.iconTone,
                       )}
                     >
                       <Icon className="h-3.5 w-3.5" />
                     </span>
-                    <div className="min-w-0">
-                      <p className="text-[13px] font-semibold text-[#111827]">
-                        {row.label}
-                      </p>
-                      <p className="mt-0.5 text-[12px] leading-snug text-[#6B7280]">
-                        {row.description}
-                      </p>
-                    </div>
+                    <p className="truncate text-[13px] font-semibold text-[#111827]">
+                      {row.label}
+                    </p>
                   </div>
-                  <Link
-                    href={row.href}
-                    className="shrink-0 text-[12px] font-semibold text-[#3B82F6] hover:underline"
-                  >
-                    View
-                  </Link>
+                  <PrimaryBtn href={row.href}>Open</PrimaryBtn>
                 </li>
               );
             })}
           </ul>
         </div>
 
-        {/* The Latest Statistics */}
+        {/* Your Latest Statistics */}
         <div className="rounded-xl border border-[#E5E7EB] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-          <div className="flex items-center justify-between border-b border-[#F3F4F6] px-5 py-4">
-            <h3 className="flex items-center gap-2 text-[14px] font-bold text-[#111827]">
-              <span className="flex h-4 w-4 items-center justify-center rounded-sm bg-[#DBEAFE] text-[#2563EB]">
-                <Sparkles className="h-2.5 w-2.5" />
+          <div className="flex items-center justify-between border-b border-[#F3F4F6] px-5 py-3.5">
+            <h3 className="text-[14px] font-bold text-[#111827]">
+              Your Latest Statistics{" "}
+              <span className="font-medium text-[#9CA3AF]">
+                · {data.statistics.length}
               </span>
-              The Latest Statistics
             </h3>
-            <Link
-              href="/reports"
-              className="text-[12px] font-semibold text-[#3B82F6] hover:underline"
-            >
-              View All
-            </Link>
-          </div>
-          <div className="grid grid-cols-[1fr_auto_auto] items-center gap-x-3 border-b border-[#E5E7EB] px-5 py-2 text-[10px] font-semibold uppercase tracking-[0.06em] text-[#9CA3AF]">
-            <span>Service</span>
-            <span>Update</span>
-            <span className="text-right">Last Activity</span>
           </div>
           <ul className="divide-y divide-[#E5E7EB]">
             {data.statistics.map((row) => (
               <li
                 key={row.id}
-                className="grid grid-cols-[1fr_auto_auto] items-center gap-x-3 px-5 py-3"
+                className="flex items-center justify-between gap-3 px-5 py-3"
               >
-                <span className="truncate text-[13px] font-semibold text-[#111827]">
-                  {row.service}
-                </span>
-                <span
-                  className={cn(
-                    "text-[12px] font-semibold",
-                    row.trendTone === "up" && "text-emerald-600",
-                    row.trendTone === "down" && "text-rose-500",
-                  )}
-                >
-                  {row.update}
-                </span>
-                <span className="text-right text-[11px] text-[#9CA3AF]">
-                  {row.lastActivity}
-                </span>
+                <div className="min-w-0">
+                  <p className="text-[13px] font-semibold text-[#111827]">
+                    {row.service}
+                  </p>
+                  <p className="mt-0.5 flex items-center gap-1.5 text-[12px] text-[#6B7280]">
+                    <span className="font-semibold text-[#111827]">{row.value}</span>
+                    <span
+                      className={cn(
+                        "font-semibold",
+                        row.trendTone === "up" && "text-emerald-600",
+                        row.trendTone === "down" && "text-rose-500",
+                      )}
+                    >
+                      {row.update}
+                    </span>
+                  </p>
+                </div>
+                <PrimaryBtn href={row.href || "/reports"}>View</PrimaryBtn>
               </li>
             ))}
           </ul>
@@ -243,19 +243,13 @@ export function SolutionsDashboardView({ data }: { data: SolutionsDashboardData 
 
         {/* Recent Activity */}
         <div className="rounded-xl border border-[#E5E7EB] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-          <div className="flex items-center justify-between border-b border-[#F3F4F6] px-5 py-4">
-            <h3 className="flex items-center gap-2 text-[14px] font-bold text-[#111827]">
-              <span className="flex h-4 w-4 items-center justify-center rounded-sm bg-emerald-100 text-emerald-600">
-                <Phone className="h-2.5 w-2.5" />
+          <div className="flex items-center justify-between border-b border-[#F3F4F6] px-5 py-3.5">
+            <h3 className="text-[14px] font-bold text-[#111827]">
+              Recent Activity{" "}
+              <span className="font-medium text-[#9CA3AF]">
+                · {data.activity.length}
               </span>
-              Recent Activity
             </h3>
-            <Link
-              href="/integrations/native/leads"
-              className="text-[12px] font-semibold text-[#3B82F6] hover:underline"
-            >
-              View All
-            </Link>
           </div>
           <ul className="divide-y divide-[#E5E7EB]">
             {data.activity.map((row) => {
@@ -264,24 +258,25 @@ export function SolutionsDashboardView({ data }: { data: SolutionsDashboardData 
                 <li key={row.id}>
                   <Link
                     href={row.href}
-                    className="flex items-start justify-between gap-3 px-5 py-3 hover:bg-slate-50"
+                    className="flex items-center justify-between gap-3 px-5 py-3 hover:bg-slate-50"
                   >
-                    <span className="flex min-w-0 items-start gap-2.5">
+                    <span className="flex min-w-0 items-center gap-2.5">
                       <span
                         className={cn(
-                          "mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md",
+                          "flex h-8 w-8 shrink-0 items-center justify-center rounded-md",
                           row.iconTone,
                         )}
                       >
                         <Icon className="h-3.5 w-3.5" />
                       </span>
-                      <span className="text-[13px] font-medium leading-snug text-[#111827]">
-                        {row.title}
+                      <span className="min-w-0">
+                        <span className="block truncate text-[13px] font-medium text-[#111827]">
+                          {row.title}
+                        </span>
+                        <span className="text-[11px] text-[#9CA3AF]">{row.when}</span>
                       </span>
                     </span>
-                    <span className="shrink-0 pt-0.5 text-[11px] text-[#9CA3AF]">
-                      {row.when}
-                    </span>
+                    <ChevronRight className="h-4 w-4 shrink-0 text-[#D1D5DB]" />
                   </Link>
                 </li>
               );
@@ -290,12 +285,12 @@ export function SolutionsDashboardView({ data }: { data: SolutionsDashboardData 
         </div>
       </section>
 
-      {/* Recommended Apps */}
+      {/* Recommended Next */}
       <section>
-        <h3 className="mb-3.5 text-[16px] font-bold tracking-tight text-[#111827]">
-          Recommended Apps
+        <h3 className="mb-3.5 text-[15px] font-bold tracking-tight text-[#111827]">
+          Recommended Next
         </h3>
-        <div className="grid gap-3 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-3">
           {data.recommended.map((card) => {
             const Icon = iconMap[card.icon];
             return (
@@ -305,26 +300,26 @@ export function SolutionsDashboardView({ data }: { data: SolutionsDashboardData 
               >
                 <span
                   className={cn(
-                    "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg",
+                    "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg",
                     card.iconTone,
                   )}
                 >
-                  <Icon className="h-[18px] w-[18px]" />
+                  <Icon className="h-4 w-4" />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block text-[13px] font-semibold text-[#111827]">
-                    {card.title}
-                  </span>
-                  <span className="mt-0.5 block text-[12px] text-[#6B7280]">
-                    {card.description}
+                  <span className="flex items-center gap-2">
+                    <span className="truncate text-[13px] font-semibold text-[#111827]">
+                      {card.title}
+                    </span>
+                    {card.badgeLabel ? (
+                      <StatusBadge
+                        badge={card.badge || "recommended"}
+                        label={card.badgeLabel}
+                      />
+                    ) : null}
                   </span>
                 </span>
-                <Link
-                  href={card.href}
-                  className="inline-flex h-8 shrink-0 items-center rounded-md bg-[#F3F4F6] px-3 text-[12px] font-semibold text-[#374151] hover:bg-[#E5E7EB]"
-                >
-                  View
-                </Link>
+                <PrimaryBtn href={card.href}>Set up</PrimaryBtn>
               </div>
             );
           })}

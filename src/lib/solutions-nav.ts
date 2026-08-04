@@ -6,6 +6,7 @@ import {
   LayoutDashboard,
   Mail,
   MessageSquare,
+  MousePointerClick,
   Phone,
   Puzzle,
   Settings,
@@ -186,6 +187,8 @@ const LAUNCH_SECTIONS: SectionDef[] = [
       { slug: "old-lead-reactivation" },
       { slug: "appointment-reminders" },
       { slug: "review-requests" },
+      { slug: "client-onboarding" }, // Welcome New Customers
+      { slug: "customer-follow-up", label: "Follow Up With Customers" },
       { slug: "payment-follow-up" },
       { slug: "promotional-broadcast" },
       { slug: "customer-reactivation" },
@@ -193,44 +196,21 @@ const LAUNCH_SECTIONS: SectionDef[] = [
       { slug: "event-offer-campaigns" },
     ],
   },
-  {
-    label: "Email",
-    entries: [
-      { slug: "instant-lead-response", channel: "email", shortcut: true },
-      { slug: "lead-follow-up", channel: "email", shortcut: true },
-      { slug: "estimate-follow-up", channel: "email", shortcut: true },
-      { slug: "appointment-reminders", channel: "email", shortcut: true },
-      { slug: "review-requests", channel: "email", shortcut: true },
-      { slug: "client-onboarding", channel: "email", shortcut: true },
-      { slug: "payment-follow-up", channel: "email", shortcut: true },
-      { slug: "promotional-broadcast", channel: "email", shortcut: true },
-      { slug: "customer-reactivation", channel: "email", shortcut: true },
-    ],
-  },
-  {
-    label: "Phone",
-    entries: [
-      { slug: "business-phone" },
-      { slug: "shared-team-number" },
-      { slug: "call-routing" },
-      { slug: "call-queues" },
-      { slug: "outbound-sales-calls" },
-      { slug: "record-review-calls" },
-      { slug: "manage-voicemail" },
-      { slug: "phone-menu" },
-    ],
-  },
-  {
-    label: "Automations",
-    entries: [
-      { slug: "client-onboarding" },
-      { slug: "customer-follow-up" },
-      { slug: "structured-onboarding" },
-      { slug: "no-show-recovery" },
-      { slug: "custom-automation" },
-    ],
-  },
 ];
+
+function staticSectionItems(
+  sectionLabel: string,
+  icon: LucideIcon,
+  items: Array<{ label: string; href: string; children?: NavChild[] }>,
+): NavItem[] {
+  return items.map((item, index) => ({
+    label: item.label,
+    href: item.href,
+    icon,
+    children: item.children,
+    sectionLabel: index === 0 ? sectionLabel : undefined,
+  }));
+}
 
 /**
  * Outcome-based Solutions sidebar.
@@ -267,9 +247,39 @@ export function buildSolutionsNav(options: SolutionsNavOptions = {}): NavItem[] 
       });
       first = false;
     }
+
+    if (section.label === "SMS & Messaging") {
+      nav.push({
+        label: "Run a Contest",
+        href: "/grow/contests",
+        icon: MessageSquare,
+      });
+    }
   }
 
   nav.push(
+    ...staticSectionItems("Connect With Customers", MousePointerClick, [
+      { label: "Forms", href: "/grow/forms" },
+      { label: "Website Popups", href: "/grow/popups" },
+      { label: "Signup Pages", href: "/grow/pages" },
+      { label: "QR Codes", href: "/grow/qr-codes" },
+      { label: "Click-to-Text", href: "/grow/click-to-text" },
+      { label: "Contact Cards", href: "/grow/contact-cards" },
+    ]),
+    ...staticSectionItems("Phone", Phone, [
+      { label: "Make & Receive Calls", href: "/phone" },
+      { label: "Phone Numbers", href: "/numbers" },
+      { label: "Call History", href: "/phone/calls" },
+      { label: "Voicemail", href: "/phone/settings" },
+    ]),
+    ...staticSectionItems("Email", Mail, [
+      { label: "Email Activity", href: "/reports/messages" },
+      { label: "Sent Emails", href: "/campaigns" },
+      { label: "Scheduled Emails", href: "/campaigns/scheduled" },
+      { label: "Drafts", href: "/campaigns/drafts" },
+      { label: "Templates", href: "/templates" },
+      { label: "Email Settings", href: "/settings/email-to-sms" },
+    ]),
     {
       label: "Inbox",
       href: "/inbox",
@@ -296,7 +306,7 @@ export function buildSolutionsNav(options: SolutionsNavOptions = {}): NavItem[] 
       href: "/voice/calendars",
       icon: CalendarDays,
       children: [
-        { label: "Calendar Connections", href: "/voice/calendars" },
+        { label: "Connections", href: "/voice/calendars" },
         { label: "Appointment Types", href: "/voice/calendars" },
         { label: "Appointments", href: "/integrations/native/appointments" },
       ],
@@ -324,6 +334,7 @@ export function buildSolutionsNav(options: SolutionsNavOptions = {}): NavItem[] 
         { label: "Appointments", href: "/integrations/native/appointments" },
         { label: "Inquiries", href: "/integrations/native/leads" },
         { label: "Campaigns", href: "/reports/campaigns" },
+        { label: "Inquiry Sources", href: "/integrations/native/leads" },
         { label: "Usage", href: "/reports/usage" },
       ],
     },
@@ -340,16 +351,22 @@ export function buildSolutionsNav(options: SolutionsNavOptions = {}): NavItem[] 
     },
     {
       label: "Advanced",
-      href: "/voice/agents",
+      href: "/automations",
       icon: Wrench,
       children: [
-        { label: "Workflow Builder", href: "/automations/new" },
+        {
+          type: "group",
+          label: "Automations",
+          children: [
+            { label: "Flows", href: "/automations" },
+            { label: "Templates", href: "/automations" },
+            { label: "Builder", href: "/automations/new" },
+            { label: "Logs", href: "/automations" },
+          ],
+        },
         { label: "Voice Agents", href: "/voice/agents" },
         { label: "Knowledge Bases", href: "/voice/knowledge" },
-        { label: "Tools", href: "/voice/tools" },
         { label: "Testing Lab", href: "/voice/testing" },
-        { label: "Surveys", href: "/surveys" },
-        { label: "Growth Tools", href: "/grow/keywords" },
         {
           type: "group",
           label: "Developer Tools",
@@ -358,7 +375,7 @@ export function buildSolutionsNav(options: SolutionsNavOptions = {}): NavItem[] 
             { label: "Webhooks", href: "/integrations/webhooks" },
             { label: "Developer Logs", href: "/integrations/logs" },
             { label: "Action Audit", href: "/integrations/native/audit" },
-            { label: "AI Safety Policies", href: "/integrations/native/ai-policy" },
+            { label: "AI Safety", href: "/integrations/native/ai-policy" },
           ],
         },
       ],

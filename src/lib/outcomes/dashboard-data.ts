@@ -5,15 +5,23 @@
 
 import { outcomeHref } from "@/lib/outcomes/registry";
 
-export type FeaturedBadge = "active" | "recommended" | "new" | "hot";
+export type FeaturedBadge =
+  | "running"
+  | "active"
+  | "recommended"
+  | "new"
+  | "hot";
 
 export type FeaturedSolutionCard = {
   slug: string;
   title: string;
+  description: string;
   badge: FeaturedBadge;
   badgeLabel: string;
   metricPrimary: string;
   metricSecondary: string;
+  metricLinkLabel?: string;
+  metricLinkHref?: string;
   actionLabel: string;
   href: string;
   icon:
@@ -22,15 +30,16 @@ export type FeaturedSolutionCard = {
     | "calendar"
     | "mail"
     | "welcome"
-    | "reactivate";
+    | "reactivate"
+    | "star";
   iconTone: string;
 };
 
 export type ActiveSolutionRow = {
   id: string;
   label: string;
-  description: string;
-  icon: "phone-missed" | "moon" | "calendar" | "mail" | "sparkles";
+  description?: string;
+  icon: "phone-missed" | "moon" | "calendar" | "mail" | "sparkles" | "star";
   iconTone: string;
   href: string;
 };
@@ -38,9 +47,10 @@ export type ActiveSolutionRow = {
 export type StatisticRow = {
   id: string;
   service: string;
+  value: string;
   update: string;
   trendTone: "up" | "down";
-  lastActivity: string;
+  href?: string;
 };
 
 export type ActivityRow = {
@@ -55,9 +65,11 @@ export type ActivityRow = {
 export type RecommendedCard = {
   slug: string;
   title: string;
-  description: string;
+  description?: string;
+  badge?: FeaturedBadge;
+  badgeLabel?: string;
   href: string;
-  icon: "clock" | "phone-missed" | "users";
+  icon: "clock" | "phone-missed" | "users" | "mail";
   iconTone: string;
 };
 
@@ -87,23 +99,29 @@ export async function loadSolutionsDashboardData(
     featured: [
       {
         slug: "missed-overflow",
-        title: "Catch Missed Call",
-        badge: "active",
-        badgeLabel: "Active",
-        metricPrimary: "12 Call",
-        metricSecondary: "30 Min",
-        actionLabel: "Set up",
-        href: outcomeHref("missed-overflow", "setup"),
+        title: "Cover Missed Calls",
+        description: "Let AI step in when your team can’t answer.",
+        badge: "running",
+        badgeLabel: "Running",
+        metricPrimary: "78 Total",
+        metricSecondary: "",
+        metricLinkLabel: "Buy Phone",
+        metricLinkHref: "/numbers",
+        actionLabel: "Open",
+        href: outcomeHref("missed-overflow"),
         icon: "phone-missed",
         iconTone: "bg-violet-500",
       },
       {
         slug: "after-hours",
-        title: "Handle After Hours",
+        title: "Answer After Hours",
+        description: "Handle nights and weekends automatically.",
         badge: "recommended",
         badgeLabel: "Recommended",
-        metricPrimary: "8 Call",
-        metricSecondary: "45 Min",
+        metricPrimary: "12 Total",
+        metricSecondary: "",
+        metricLinkLabel: "Set Hours",
+        metricLinkHref: outcomeHref("after-hours", "hours"),
         actionLabel: "Set up",
         href: outcomeHref("after-hours", "setup"),
         icon: "moon",
@@ -112,11 +130,12 @@ export async function loadSolutionsDashboardData(
       {
         slug: "appointment-booking",
         title: "Book Appointments",
-        badge: "new",
-        badgeLabel: "New",
-        metricPrimary: "5 Book",
-        metricSecondary: "12 Min",
-        actionLabel: "View",
+        description: "Schedule callers directly onto your calendar.",
+        badge: "active",
+        badgeLabel: "Active",
+        metricPrimary: "5 Booked",
+        metricSecondary: "12 SMS",
+        actionLabel: "Open",
         href: outcomeHref("appointment-booking"),
         icon: "calendar",
         iconTone: "bg-emerald-500",
@@ -124,35 +143,40 @@ export async function loadSolutionsDashboardData(
       {
         slug: "instant-lead-response",
         title: "Respond to New Inquiries",
-        badge: "active",
-        badgeLabel: "Active",
+        description: "Reply instantly to forms and new leads.",
+        badge: "running",
+        badgeLabel: "Running",
         metricPrimary: "20 SMS",
-        metricSecondary: "5 Min",
-        actionLabel: "Set up",
-        href: outcomeHref("instant-lead-response", "setup"),
+        metricSecondary: "11 Voice",
+        actionLabel: "Open",
+        href: outcomeHref("instant-lead-response"),
         icon: "mail",
         iconTone: "bg-sky-500",
       },
       {
         slug: "review-requests",
         title: "Get More Reviews",
-        badge: "hot",
-        badgeLabel: "Hot",
-        metricPrimary: "4 Ask",
-        metricSecondary: "2 Min",
+        description: "Ask happy customers for Google reviews.",
+        badge: "recommended",
+        badgeLabel: "Recommended",
+        metricPrimary: "4 Sent",
+        metricSecondary: "",
+        metricLinkLabel: "Add Profile",
+        metricLinkHref: outcomeHref("review-requests", "setup"),
         actionLabel: "Set up",
         href: outcomeHref("review-requests", "setup"),
-        icon: "welcome",
+        icon: "star",
         iconTone: "bg-amber-500",
       },
       {
         slug: "customer-reactivation",
-        title: "Win Back Past Plans",
-        badge: "new",
-        badgeLabel: "New",
-        metricPrimary: "6 Win",
-        metricSecondary: "15 Min",
-        actionLabel: "View",
+        title: "Bring Back Past Customers",
+        description: "Re-engage customers who haven’t returned.",
+        badge: "active",
+        badgeLabel: "Active",
+        metricPrimary: "6 Won",
+        metricSecondary: "2 Booked",
+        actionLabel: "Open",
         href: outcomeHref("customer-reactivation"),
         icon: "reactivate",
         iconTone: "bg-emerald-500",
@@ -161,16 +185,14 @@ export async function loadSolutionsDashboardData(
     activeSolutions: [
       {
         id: "missed",
-        label: "Catch Missed Call",
-        description: "AI covers overflow when your team is busy.",
+        label: "Cover Missed Calls",
         icon: "phone-missed",
         iconTone: "bg-violet-100 text-violet-600",
         href: outcomeHref("missed-overflow"),
       },
       {
         id: "after-hours",
-        label: "Handle After Hours",
-        description: "Auto-answer and capture leads overnight.",
+        label: "Answer After Hours",
         icon: "moon",
         iconTone: "bg-indigo-100 text-indigo-600",
         href: outcomeHref("after-hours"),
@@ -178,64 +200,87 @@ export async function loadSolutionsDashboardData(
       {
         id: "book",
         label: "Book Appointments",
-        description: "Schedule callers straight onto your calendar.",
         icon: "calendar",
         iconTone: "bg-emerald-100 text-emerald-600",
         href: outcomeHref("appointment-booking"),
+      },
+      {
+        id: "inquiries",
+        label: "Respond to New Inquiries",
+        icon: "mail",
+        iconTone: "bg-sky-100 text-sky-600",
+        href: outcomeHref("instant-lead-response"),
+      },
+      {
+        id: "reviews",
+        label: "Get More Reviews",
+        icon: "star",
+        iconTone: "bg-amber-100 text-amber-600",
+        href: outcomeHref("review-requests"),
+      },
+      {
+        id: "reactivate",
+        label: "Bring Back Past Customers",
+        icon: "sparkles",
+        iconTone: "bg-emerald-100 text-emerald-600",
+        href: outcomeHref("customer-reactivation"),
       },
     ],
     statistics: [
       {
         id: "1",
-        service: "Catch Missed Call",
-        update: "+12%",
+        service: "Calls this week",
+        value: "131",
+        update: "↑ 7%",
         trendTone: "up",
-        lastActivity: "2m ago",
+        href: "/voice/analytics",
       },
       {
         id: "2",
-        service: "Book Appointments",
-        update: "+5%",
+        service: "New leads",
+        value: "7",
+        update: "↑ 5%",
         trendTone: "up",
-        lastActivity: "18m ago",
+        href: "/integrations/native/leads",
       },
       {
         id: "3",
-        service: "Respond to Inquiries",
-        update: "-2%",
+        service: "Appointments booked",
+        value: "5",
+        update: "↓ 2%",
         trendTone: "down",
-        lastActivity: "1h ago",
+        href: "/integrations/native/appointments",
       },
     ],
     activity: [
       {
         id: "1",
-        title: "Missed call from +1 234 567 8901",
-        when: "4:15 PM",
-        href: outcomeHref("missed-overflow"),
-        icon: "phone",
-        iconTone: "bg-violet-100 text-violet-600",
-      },
-      {
-        id: "2",
-        title: "New inquiry from Sarah Smith",
-        when: "3:42 PM",
-        href: "/integrations/native/leads",
-        icon: "mail",
-        iconTone: "bg-sky-100 text-sky-600",
-      },
-      {
-        id: "3",
-        title: "Appointment booked with Dr. Miller",
-        when: "2:00 PM",
+        title: "James Booked",
+        when: "12:44 pm",
         href: "/integrations/native/appointments",
         icon: "calendar",
         iconTone: "bg-emerald-100 text-emerald-600",
       },
       {
+        id: "2",
+        title: "Call missed",
+        when: "12:31 pm",
+        href: outcomeHref("missed-overflow"),
+        icon: "phone",
+        iconTone: "bg-violet-100 text-violet-600",
+      },
+      {
+        id: "3",
+        title: "New inquiry captured",
+        when: "11:58 am",
+        href: "/integrations/native/leads",
+        icon: "mail",
+        iconTone: "bg-sky-100 text-sky-600",
+      },
+      {
         id: "4",
-        title: "5-star review from John Doe",
-        when: "1:18 PM",
+        title: "Review received",
+        when: "10:12 am",
         href: outcomeHref("review-requests"),
         icon: "star",
         iconTone: "bg-amber-100 text-amber-600",
@@ -245,23 +290,26 @@ export async function loadSolutionsDashboardData(
       {
         slug: "appointment-reminders",
         title: "Appointment Reminders",
-        description: "Cut no-shows with timed SMS reminders.",
+        badge: "recommended",
+        badgeLabel: "Recommended",
         href: outcomeHref("appointment-reminders"),
         icon: "clock",
         iconTone: "bg-violet-100 text-violet-600",
       },
       {
-        slug: "missed-call-text-back",
-        title: "Follow Up on Missed",
-        description: "Text back anyone who didn’t reach you.",
-        href: outcomeHref("missed-call-text-back"),
-        icon: "phone-missed",
-        iconTone: "bg-emerald-100 text-emerald-600",
+        slug: "estimate-follow-up",
+        title: "Follow Up on Estimates",
+        badge: "new",
+        badgeLabel: "New",
+        href: outcomeHref("estimate-follow-up"),
+        icon: "mail",
+        iconTone: "bg-sky-100 text-sky-600",
       },
       {
         slug: "customer-reactivation",
-        title: "Bring Back Old Customers",
-        description: "Re-engage quiet patients with a warm offer.",
+        title: "Bring Back Past Customers",
+        badge: "hot",
+        badgeLabel: "Hot",
         href: outcomeHref("customer-reactivation"),
         icon: "users",
         iconTone: "bg-amber-100 text-amber-600",
@@ -270,32 +318,32 @@ export async function loadSolutionsDashboardData(
     weekStats: [
       {
         label: "Calls Handled",
-        value: 12,
-        deltaLabel: "+12% last 7 days",
+        value: 131,
+        deltaLabel: "7% since yesterday",
         deltaTone: "up",
         icon: "phone",
         iconTone: "bg-violet-100 text-violet-500",
       },
       {
-        label: "Appointments Booked",
+        label: "Appts Booked",
         value: 5,
-        deltaLabel: "+5% last 7 days",
+        deltaLabel: "5% since yesterday",
         deltaTone: "up",
         icon: "calendar",
         iconTone: "bg-emerald-100 text-emerald-500",
       },
       {
-        label: "New Leads Captured",
+        label: "New Inquiries",
         value: 7,
-        deltaLabel: "+10% last 7 days",
+        deltaLabel: "3% since yesterday",
         deltaTone: "up",
         icon: "sparkles",
         iconTone: "bg-sky-100 text-sky-500",
       },
       {
-        label: "Reviews Collected",
+        label: "Leads Won",
         value: 4,
-        deltaLabel: "+2% last 7 days",
+        deltaLabel: "2% since yesterday",
         deltaTone: "up",
         icon: "star",
         iconTone: "bg-amber-100 text-amber-500",

@@ -109,48 +109,13 @@ const expectedLaunchMenu: Array<{ section: string; labels: string[] }> = [
       "Reconnect With Old Inquiries",
       "Appointment Reminders",
       "Get More Reviews",
+      "Welcome New Customers",
+      "Follow Up With Customers",
       "Payment Reminders",
       "Send a Promotion",
       "Bring Back Past Customers",
       "Get More Referrals",
       "Promote Events & Offers",
-    ],
-  },
-  {
-    section: "Email",
-    labels: [
-      "Respond to New Inquiries",
-      "Follow Up With Inquiries",
-      "Follow Up on Estimates",
-      "Appointment Reminders",
-      "Get More Reviews",
-      "Welcome New Customers",
-      "Payment Reminders",
-      "Send a Promotion",
-      "Bring Back Past Customers",
-    ],
-  },
-  {
-    section: "Phone",
-    labels: [
-      "Set Up a Business Phone",
-      "Give Your Team One Number",
-      "Route Calls to the Right Person",
-      "Handle High Call Volume",
-      "Make Outbound Sales Calls",
-      "Record & Review Calls",
-      "Manage Voicemail",
-      "Create a Phone Menu",
-    ],
-  },
-  {
-    section: "Automations",
-    labels: [
-      "Welcome New Customers",
-      "Customer Follow-Up",
-      "Client Onboarding",
-      "No-Show Recovery",
-      "Custom Automation",
     ],
   },
 ];
@@ -177,17 +142,74 @@ assert.equal(
   "Solutions launch menu length mismatch",
 );
 
-// Email shortcuts open the same solution with channel=email (not duplicates).
-const emailRespond = solutionsNav.find(
-  (i) =>
-    i.label === "Respond to New Inquiries" &&
-    i.href.includes("channel=email"),
+assert.ok(
+  solutionsNav.some(
+    (i) => i.label === "Run a Contest" && i.href === "/grow/contests",
+  ),
+  "Run a Contest belongs under SMS & Messaging",
 );
-assert.ok(emailRespond, "Email shortcut for Respond to New Inquiries required");
-assert.equal(
-  emailRespond?.children,
-  undefined,
-  "Email shortcuts should not duplicate the full management tree",
+
+const expectedStaticSections: Array<{ section: string; labels: string[] }> = [
+  {
+    section: "Connect With Customers",
+    labels: [
+      "Forms",
+      "Website Popups",
+      "Signup Pages",
+      "QR Codes",
+      "Click-to-Text",
+      "Contact Cards",
+    ],
+  },
+  {
+    section: "Phone",
+    labels: [
+      "Make & Receive Calls",
+      "Phone Numbers",
+      "Call History",
+      "Voicemail",
+    ],
+  },
+  {
+    section: "Email",
+    labels: [
+      "Email Activity",
+      "Sent Emails",
+      "Scheduled Emails",
+      "Drafts",
+      "Templates",
+      "Email Settings",
+    ],
+  },
+];
+for (const section of expectedStaticSections) {
+  const first = solutionsNav.find((i) => i.sectionLabel === section.section);
+  assert.ok(first, `Section ${section.section} required`);
+  const start = solutionsNav.indexOf(first!);
+  for (let i = 0; i < section.labels.length; i += 1) {
+    assert.equal(
+      solutionsNav[start + i]?.label,
+      section.labels[i],
+      `Expected ${section.section} item "${section.labels[i]}"`,
+    );
+  }
+}
+
+assert.ok(
+  !solutionsNav.some((i) => i.label === "Client Onboarding"),
+  "Client Onboarding removed from Solutions catalog",
+);
+assert.ok(
+  !solutionsHrefs.has("/outcomes/structured-onboarding"),
+  "structured-onboarding must not appear in Solutions nav",
+);
+assert.ok(
+  !solutionsNav.some((i) => i.sectionLabel === "Automations"),
+  "Separate Automations solution category removed (builder lives under Advanced)",
+);
+assert.ok(
+  !solutionsNav.some((i) => i.href.includes("channel=email")),
+  "Duplicate email channel shortcuts removed from Solutions catalog",
 );
 
 const sharedSections = [
@@ -210,10 +232,10 @@ assert.ok(
   !solutionsNav.some((i) => i.sectionLabel === "Shared"),
   "Legacy Shared section header should be removed",
 );
-// Phone is a product-area solutions section, not a raw Softphone dump.
+
 assert.ok(
   solutionsNav.some((i) => i.sectionLabel === "Phone"),
-  "Phone product-area section required after Email",
+  "Phone operational section required",
 );
 assert.ok(
   !solutionsNav.some(
@@ -221,18 +243,39 @@ assert.ok(
   ),
   "Raw Phone shared dump should not appear in Solutions (use Platform view)",
 );
+assert.ok(
+  !solutionsNav.some((i) => i.label === "Create a Phone Menu"),
+  "Full Phone solution catalog removed from Solutions view",
+);
+assert.ok(
+  !solutionsNav.some((i) => i.label === "No-Show Recovery"),
+  "No-Show Recovery folded into Appointment Reminders",
+);
 
-const phoneMenu = solutionsNav.find((i) => i.label === "Create a Phone Menu");
-assert.ok(phoneMenu?.children?.length, "Create a Phone Menu needs a full submenu");
-const phoneMenuLabels = (phoneMenu?.children || []).map((c) =>
+const reports = solutionsNav.find((i) => i.label === "Reports");
+const reportLabels = (reports?.children || []).map((c) =>
   "type" in c && c.type === "group" ? c.label : c.label,
 );
 assert.ok(
-  phoneMenuLabels.includes("Overview") &&
-    phoneMenuLabels.includes("Set Up") &&
-    phoneMenuLabels.includes("Menu Options") &&
-    phoneMenuLabels.includes("Calls & Results"),
-  "Phone Menu submenu should include permanent management pages",
+  reportLabels.includes("Inquiry Sources"),
+  "Inquiry Sources belongs under Reports",
+);
+
+const advanced = solutionsNav.find((i) => i.label === "Advanced");
+assert.ok(advanced, "Advanced section required");
+const advancedLabels = (advanced?.children || []).map((c) =>
+  "type" in c && c.type === "group" ? c.label : c.label,
+);
+assert.deepEqual(
+  advancedLabels,
+  [
+    "Automations",
+    "Voice Agents",
+    "Knowledge Bases",
+    "Testing Lab",
+    "Developer Tools",
+  ],
+  "Advanced should hold builders and technical controls only",
 );
 
 // Full permanent submenu is always visible — even before the customer sets up.
