@@ -608,7 +608,58 @@ export async function syncTelnyxAssistant(
         }
       }
     }
+
+    // Force-clear stale punctuation endpointing + re-assert Flux EOT.
+    // Omitting nested keys on PATCH leaves prior Telnyx values (e.g. 1.0s no-punct).
+    if (
+      isDeepgramFluxModel(sttModel) ||
+      isLatencyOptimizedProfile(config.voiceTiming?.activeProfile)
+    ) {
+      try {
+        await ai.updateAssistant(assistantId, {
+          interruption_settings: interruptionSettingsFromConfig(config),
+          ...(enrichPayload.transcription
+            ? { transcription: enrichPayload.transcription }
+            : {}),
+        });
+      } catch (err) {
+        console.warn(
+          "[assistant-sync] latency timing re-patch failed",
+          err instanceof Error ? err.message : err,
+        );
+      }
+    }
+
     return pushTools(assistantId);
+  }
+
+  async function readLiveLatencySnapshot(assistantId: string) {
+    try {
+      const remote = await ai.getAssistant(assistantId);
+      const data = ((remote as { data?: Record<string, unknown> }).data ||
+        remote) as Record<string, unknown>;
+      const interruption = (data.interruption_settings || {}) as Record<
+        string,
+        unknown
+      >;
+      const transcriptionRemote = (data.transcription || {}) as Record<
+        string,
+        unknown
+      >;
+      const voiceSettings = (data.voice_settings || {}) as Record<string, unknown>;
+      return {
+        model: data.model,
+        voice: voiceSettings.voice,
+        transcriptionModel: transcriptionRemote.model,
+        transcriptionSettings: transcriptionRemote.settings ?? null,
+        startSpeakingPlan: interruption.start_speaking_plan ?? null,
+        dynamicVariablesWebhookUrl: data.dynamic_variables_webhook_url ?? null,
+      };
+    } catch (err) {
+      return {
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
   }
 
   if (agent.telnyxAssistantId) {
@@ -661,6 +712,7 @@ export async function syncTelnyxAssistant(
         `Telnyx rejected assistant core update (model=${modelId}): ${coreError}`,
       );
     }
+    const liveLatency = await readLiveLatencySnapshot(agent.telnyxAssistantId);
     return {
       mode: "telnyx",
       assistantId: agent.telnyxAssistantId,
@@ -670,6 +722,7 @@ export async function syncTelnyxAssistant(
       toolSyncError: null,
       coreError,
       requestedModel: modelId,
+      liveLatency,
     };
   }
 

@@ -633,15 +633,23 @@ export function buildStartSpeakingPlanFromConfig(
     | undefined;
 
   if (isNativeAudioModel(config.model?.modelId)) {
-    return undefined;
+    // Explicitly clear any leftover cascade start-speaking plan.
+    return {
+      wait_seconds: 0.1,
+      transcription_endpointing_plan: null,
+    };
   }
 
   const profile = isLatencyProfileId(config.voiceTiming?.activeProfile)
     ? getLatencyProfile(config.voiceTiming?.activeProfile)
     : null;
 
-  if (profile?.fields.startSpeakingPlan === null) {
-    return undefined;
+  if (profile?.fields.startSpeakingPlan === null && !isDeepgramFluxModel(config.transcription?.sttModel)) {
+    // Native-audio profile with null plan — still clear leftover Telnyx punctuation waits.
+    return {
+      wait_seconds: 0.1,
+      transcription_endpointing_plan: null,
+    };
   }
 
   const diagnosticsPlan =
@@ -682,7 +690,12 @@ export function buildStartSpeakingPlanFromConfig(
   );
 
   if (omitEndpointingPlan) {
-    return { wait_seconds: waitSeconds };
+    // Explicit null clears any previously stored punctuation/number waits on Telnyx
+    // (omitting the key leaves stale 1.0s no-punct values from earlier syncs).
+    return {
+      wait_seconds: waitSeconds,
+      transcription_endpointing_plan: null,
+    };
   }
 
   return {

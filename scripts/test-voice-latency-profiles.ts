@@ -107,7 +107,7 @@ section("Apply B: Flux settings + wait-only plan");
   const plan = buildStartSpeakingPlanFromConfig(applied);
   assert.ok(plan);
   assert.equal(plan!.wait_seconds, 0.1);
-  assert.equal("transcription_endpointing_plan" in plan!, false);
+  assert.equal(plan!.transcription_endpointing_plan, null);
 
   const fluxSettings = buildFluxTranscriptionSettings(applied);
   assert.ok(fluxSettings);
@@ -133,7 +133,9 @@ section("Apply C: omit start_speaking_plan; Ultra preferred for TTS");
   assert.equal(c.transcription?.enabled, false);
   assert.equal(c.voiceLanguage?.voiceId, "howard-ultra");
   assert.equal(buildFluxTranscriptionSettings(c), undefined);
-  assert.equal(buildStartSpeakingPlanFromConfig(c), undefined);
+  const cPlan = buildStartSpeakingPlanFromConfig(c);
+  assert.ok(cPlan);
+  assert.equal(cPlan!.transcription_endpointing_plan, null);
   assert.equal(shouldSkipDynamicVariablesWebhook(c), true);
 }
 
