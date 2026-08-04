@@ -14,6 +14,27 @@ import type {
   WizardPersistAction,
 } from "@/lib/solutions/appointment-receptionist/types";
 import { parseVoiceAgentConfig } from "@/lib/voice/types";
+import {
+  loadAppointmentReceptionistSetup,
+  upsertAppointmentReceptionistSetup,
+} from "@/lib/solutions/appointment-receptionist/save-setup";
+
+export async function GET(request: Request) {
+  try {
+    const auth = await requireSession();
+    if ("error" in auth) return auth.error;
+    const url = new URL(request.url);
+    const setupId = url.searchParams.get("setupId") || undefined;
+    const agentId = url.searchParams.get("agentId") || undefined;
+    const data = await loadAppointmentReceptionistSetup(auth.workspaceId, {
+      setupId,
+      agentId,
+    });
+    return NextResponse.json({ data });
+  } catch (err) {
+    return jsonError(err, 500);
+  }
+}
 
 export async function POST(request: Request) {
   try {
@@ -158,7 +179,9 @@ export async function POST(request: Request) {
         }
       } catch {
         if (state.longTermMemory) {
-          warnings.push("Could not enable long-term memory — configure it later in AI platform.");
+          warnings.push(
+            "Could not enable long-term memory — configure it later in AI platform.",
+          );
         }
       }
     }
@@ -233,6 +256,21 @@ export async function POST(request: Request) {
             }).catch(() => undefined);
           }
           clonedAgentId = clone.id;
+          await upsertAppointmentReceptionistSetup({
+            workspaceId: auth.workspaceId,
+            agentId: clone.id,
+            state: {
+              ...state,
+              agentId: clone.id,
+              setupId: undefined,
+              phoneNumberId: null,
+              solutionName: copyName,
+            },
+            published: false,
+            links: {
+              calendarConnectionId: hooks.calendarConnectionId,
+            },
+          }).catch(() => undefined);
         } catch (err) {
           warnings.push(
             err instanceof Error
@@ -249,9 +287,25 @@ export async function POST(request: Request) {
       );
     }
 
+    // Connected architecture: durable SolutionSetup ↔ VoiceAgent link.
+    const setup = await upsertAppointmentReceptionistSetup({
+      workspaceId: auth.workspaceId,
+      agentId,
+      state: { ...state, agentId },
+      published:
+        published ||
+        preserveActiveOnSchedule ||
+        existingAgent?.status === "ACTIVE",
+      links: {
+        calendarConnectionId: hooks.calendarConnectionId,
+      },
+    });
+
     return NextResponse.json({
       data: {
         agentId,
+        setupId: setup.setupId,
+        outcomeSlug: setup.outcomeSlug,
         clonedAgentId,
         agentIds: clonedAgentId ? [agentId, clonedAgentId] : [agentId],
         name: updated.name,

@@ -19,10 +19,21 @@ function readAnswerWhen(draftConfig: unknown): string | null {
   if (!draftConfig || typeof draftConfig !== "object") return null;
   const cfg = draftConfig as Record<string, unknown>;
   if (typeof cfg.answerWhen === "string") return cfg.answerWhen;
-  const wizard = (cfg.wizardState ?? cfg.appointmentReceptionist ?? null) as Record<
-    string,
-    unknown
-  > | null;
+
+  const advanced =
+    cfg.advanced && typeof cfg.advanced === "object"
+      ? (cfg.advanced as Record<string, unknown>)
+      : null;
+  const fromAdvanced = advanced?.appointmentReceptionistWizard as
+    | Record<string, unknown>
+    | undefined;
+  if (fromAdvanced && typeof fromAdvanced.answerWhen === "string") {
+    return fromAdvanced.answerWhen;
+  }
+
+  const wizard = (cfg.wizardState ??
+    cfg.appointmentReceptionist ??
+    null) as Record<string, unknown> | null;
   if (!wizard) return null;
   const goals = (wizard.goals ?? wizard) as Record<string, unknown>;
   const answerWhen = goals.answerWhen ?? wizard.answerWhen;
@@ -32,6 +43,16 @@ function readAnswerWhen(draftConfig: unknown): string | null {
 function hasBooking(draftConfig: unknown): boolean {
   if (!draftConfig || typeof draftConfig !== "object") return false;
   const cfg = draftConfig as Record<string, unknown>;
+  const advanced =
+    cfg.advanced && typeof cfg.advanced === "object"
+      ? (cfg.advanced as Record<string, unknown>)
+      : null;
+  const wizardCaps = (
+    advanced?.appointmentReceptionistWizard as { capabilities?: unknown } | undefined
+  )?.capabilities;
+  if (Array.isArray(wizardCaps)) {
+    if (wizardCaps.includes("book_appointments")) return true;
+  }
   const caps = cfg.capabilities ?? cfg.enabledCapabilities;
   if (Array.isArray(caps)) {
     return caps.some(

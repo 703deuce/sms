@@ -46,3 +46,9 @@ export {
   loadMissedCallTextBack,
 } from "@/lib/solutions/missed-call-text-back/save";
 export { SOLUTION_TYPE as MISSED_CALL_TEXT_BACK_SOLUTION_TYPE } from "@/lib/solutions/missed-call-text-back/types";
+export {
+  upsertAppointmentReceptionistSetup,
+  loadAppointmentReceptionistSetup,
+  SOLUTION_TYPE_CANONICAL as APPOINTMENT_RECEPTIONIST_SOLUTION_TYPE,
+  outcomeSlugFromWizard,
+} from "@/lib/solutions/appointment-receptionist/save-setup";

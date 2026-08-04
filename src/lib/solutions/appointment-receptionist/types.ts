@@ -98,6 +98,12 @@ export type AppointmentTypeConfig = {
 
 export type AppointmentReceptionistWizardState = {
   agentId?: string;
+  /** Durable SolutionSetup id — set after first save. */
+  setupId?: string;
+  /** Outcome registry slug this wizard run represents (e.g. appointment-booking). */
+  outcomeSlug?: string;
+  /** URL preset that seeded this run (e.g. every_call). */
+  preset?: string | null;
   telnyxAssistantId?: string | null;
   capabilities: CapabilityId[];
   answerWhen: AnswerWhen;

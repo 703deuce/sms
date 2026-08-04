@@ -37,27 +37,75 @@ export function AppointmentReceptionistWizard() {
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      // Fresh Solutions-view presets win over a stale local draft.
-      if (preset) {
-        setState(applyWizardPreset(createDefaultWizardState(), preset));
-        setStepIndex(0);
-      } else if (raw) {
-        const parsed = JSON.parse(raw) as {
-          stepIndex?: number;
-          state?: AppointmentReceptionistWizardState;
-        };
-        if (parsed.state) setState({ ...createDefaultWizardState(), ...parsed.state });
-        if (typeof parsed.stepIndex === "number") {
-          setStepIndex(Math.min(Math.max(parsed.stepIndex, 0), WIZARD_STEPS.length - 1));
+    let cancelled = false;
+    async function hydrate() {
+      try {
+        const setupId = searchParams?.get("setupId");
+        const agentId = searchParams?.get("agentId");
+        // Server durable state wins over localStorage when reopening a setup.
+        if (setupId || agentId) {
+          const qs = new URLSearchParams();
+          if (setupId) qs.set("setupId", setupId);
+          if (agentId) qs.set("agentId", agentId);
+          const res = await fetch(
+            `/api/solutions/appointment-receptionist?${qs.toString()}`,
+          );
+          if (res.ok) {
+            const json = await res.json();
+            const loaded = json?.data;
+            if (loaded?.state && !cancelled) {
+              const base = applyWizardPreset(
+                createDefaultWizardState(),
+                preset || loaded.state.preset || null,
+              );
+              setState({
+                ...base,
+                ...loaded.state,
+                setupId: loaded.setupId || undefined,
+                agentId: loaded.agentId || loaded.state.agentId,
+                outcomeSlug: loaded.outcomeSlug || loaded.state.outcomeSlug,
+                preset: preset || loaded.state.preset || null,
+              });
+              setStepIndex(0);
+              setHydrated(true);
+              return;
+            }
+          }
         }
+
+        const raw = localStorage.getItem(STORAGE_KEY);
+        // Fresh Solutions-view presets win over a stale local draft.
+        if (preset) {
+          setState(
+            applyWizardPreset(
+              { ...createDefaultWizardState(), preset },
+              preset,
+            ),
+          );
+          setStepIndex(0);
+        } else if (raw) {
+          const parsed = JSON.parse(raw) as {
+            stepIndex?: number;
+            state?: AppointmentReceptionistWizardState;
+          };
+          if (parsed.state)
+            setState({ ...createDefaultWizardState(), ...parsed.state });
+          if (typeof parsed.stepIndex === "number") {
+            setStepIndex(
+              Math.min(Math.max(parsed.stepIndex, 0), WIZARD_STEPS.length - 1),
+            );
+          }
+        }
+      } catch {
+        // ignore corrupt draft
       }
-    } catch {
-      // ignore corrupt draft
+      if (!cancelled) setHydrated(true);
     }
-    setHydrated(true);
-  }, [preset]);
+    void hydrate();
+    return () => {
+      cancelled = true;
+    };
+  }, [preset, searchParams]);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -92,13 +140,22 @@ export function AppointmentReceptionistWizard() {
         throw new Error(issueMsgs || json.error || "Save failed");
       }
       const agentId = json.data.agentId as string;
+      const setupId = (json.data.setupId as string | undefined) || state.setupId;
+      const outcomeSlug =
+        (json.data.outcomeSlug as string | undefined) || state.outcomeSlug;
       const telnyxAssistantId =
         (json.data.telnyxAssistantId as string | null | undefined) ?? state.telnyxAssistantId;
       const clonedAgentId = (json.data.clonedAgentId as string | null | undefined) || null;
       const warnings = Array.isArray(json.data.warnings)
         ? (json.data.warnings as string[]).filter(Boolean)
         : [];
-      patch({ agentId, telnyxAssistantId });
+      patch({
+        agentId,
+        setupId,
+        outcomeSlug,
+        telnyxAssistantId,
+        preset: preset || state.preset || null,
+      });
       if (warnings.length) {
         setError(warnings.join(" "));
       }

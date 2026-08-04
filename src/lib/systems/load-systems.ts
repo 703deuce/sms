@@ -69,6 +69,7 @@ function relativeTime(date: Date | string | null | undefined): string | null {
 }
 
 function solutionTitle(slug: string): string {
+  if (slug === "appointment-receptionist") return "AI Receptionist";
   return getOutcomeSolution(slug)?.title || slug;
 }
 
@@ -145,19 +146,32 @@ export async function loadMySystems(
     solutionType: string;
     status: string;
     updatedAt: Date;
+    configJson?: unknown;
     linkedAgentIds: string[];
     linkedAutomationIds: string[];
     linkedCampaignIds: string[];
     linkedPhoneNumberIds: string[];
     linkedRoutingRuleIds: string[];
   }>) {
-    const children: SystemResource[] = [];
-    const solution = getOutcomeSolution(setup.solutionType);
+    const cfgJson = (setup as { configJson?: unknown }).configJson as
+      | { outcomeSlug?: string }
+      | null
+      | undefined;
+    const outcomeSlugForLabel =
+      setup.solutionType === "appointment-receptionist" && cfgJson?.outcomeSlug
+        ? cfgJson.outcomeSlug
+        : setup.solutionType;
+
+    const solution = getOutcomeSolution(outcomeSlugForLabel);
     const channels = solution?.channels?.length
       ? solution.channels.map((c) =>
           c === "ai-call" ? "AI Voice" : c === "sms" ? "SMS" : "Email",
         )
-      : ["SMS"];
+      : setup.solutionType === "appointment-receptionist"
+        ? ["AI Voice"]
+        : ["SMS"];
+
+    const children: SystemResource[] = [];
 
     for (const agentId of setup.linkedAgentIds || []) {
       linkedAgentIds.add(agentId);
@@ -348,7 +362,7 @@ export async function loadMySystems(
       name: setup.name,
       type: "solution_setup",
       typeLabel: "Solution Setup",
-      createdFrom: solutionTitle(setup.solutionType),
+      createdFrom: solutionTitle(outcomeSlugForLabel),
       status,
       statusLabel: statusLabel(status),
       channels,
@@ -363,6 +377,23 @@ export async function loadMySystems(
       href:
         setup.solutionType === "missed-call-text-back"
           ? `/solutions/missed-call-text-back/setup?setupId=${setup.id}`
+          : setup.solutionType === "appointment-receptionist"
+            ? (() => {
+                const outcomeSlug = cfgJson?.outcomeSlug || "appointment-booking";
+                const agentId = (setup.linkedAgentIds || [])[0];
+                const params = new URLSearchParams({ setupId: setup.id });
+                if (agentId) params.set("agentId", agentId);
+                const presetBySlug: Record<string, string> = {
+                  "answer-every-call": "every_call",
+                  "missed-overflow": "nobody_answers",
+                  "after-hours": "after_hours",
+                  "lead-capture": "lead_capture",
+                  "service-intake": "service_intake",
+                };
+                const preset = presetBySlug[outcomeSlug];
+                if (preset) params.set("preset", preset);
+                return `/solutions/ai-call-handling/appointment-assistant/setup?${params.toString()}`;
+              })()
           : outcomeHref(setup.solutionType),
       children,
     });
