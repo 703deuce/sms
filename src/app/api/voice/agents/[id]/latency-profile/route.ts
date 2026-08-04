@@ -3,7 +3,10 @@ import { requireSession, jsonError } from "@/lib/api-auth";
 import { getPrisma } from "@/lib/db";
 import { parseVoiceAgentConfig } from "@/lib/voice/types";
 import {
+  LATENCY_PROFILES,
+  ORDINARY_TURN_LATENCY_BANDS,
   applyLatencyProfileToConfig,
+  getLatencyProfile,
   isLatencyProfileId,
   rollbackLatencyProfileConfig,
   type LatencyProfileId,
@@ -11,11 +14,33 @@ import {
 
 type Ctx = { params: Promise<{ id: string }> };
 
+function profileSummary(cfg: ReturnType<typeof parseVoiceAgentConfig>) {
+  const active = cfg.voiceTiming?.activeProfile || "legacy_cascade";
+  const def = getLatencyProfile(active);
+  return {
+    agentId: undefined as string | undefined,
+    name: undefined as string | undefined,
+    status: undefined as string | undefined,
+    activeProfile: active,
+    versionLabel: def.versionLabel,
+    hasRollbackSnapshot: Boolean(cfg.voiceTiming?.rollbackSnapshot),
+    transcription: cfg.transcription,
+    endpointingMs: cfg.voiceLanguage?.endpointingMs,
+    bargeIn: cfg.voiceLanguage?.bargeIn,
+    voiceId: cfg.voiceLanguage?.voiceId,
+    modelId: cfg.model?.modelId,
+    greeting: cfg.callHandling?.greeting,
+    startSpeakingPlan: def.fields.startSpeakingPlan,
+    ordinaryTurnPrimaryGoalMs: ORDINARY_TURN_LATENCY_BANDS.primaryGoalMs,
+    note: "Do not claim sub-500ms until real telephone measurements confirm it.",
+  };
+}
+
 /**
- * Opt-in latency profile A/B for a single agent.
+ * Opt-in latency profile A/B/C for a single agent.
  * Does NOT auto-migrate other agents.
  *
- * POST { action: "apply", profileId: "flux_eager_low_latency" | "legacy_cascade" }
+ * POST { action: "apply", profileId: "legacy_cascade" | "flux_eager_low_latency" | "native_audio_ultravox" }
  * POST { action: "rollback" }
  * GET  → current profile + rollback availability
  */
@@ -30,16 +55,19 @@ export async function GET(_req: Request, ctx: Ctx) {
     });
     if (!agent) return NextResponse.json({ error: "Not found" }, { status: 404 });
     const cfg = parseVoiceAgentConfig(agent.draftConfig);
+    const summary = profileSummary(cfg);
     return NextResponse.json({
       data: {
+        ...summary,
         agentId: agent.id,
         name: agent.name,
         status: agent.status,
-        activeProfile: cfg.voiceTiming?.activeProfile || "legacy_cascade",
-        hasRollbackSnapshot: Boolean(cfg.voiceTiming?.rollbackSnapshot),
-        transcription: cfg.transcription,
-        endpointingMs: cfg.voiceLanguage?.endpointingMs,
-        bargeIn: cfg.voiceLanguage?.bargeIn,
+        availableProfiles: Object.values(LATENCY_PROFILES).map((p) => ({
+          id: p.id,
+          versionLabel: p.versionLabel,
+          label: p.label,
+          description: p.description,
+        })),
       },
     });
   } catch (err) {
@@ -72,7 +100,7 @@ export async function POST(req: Request, ctx: Ctx) {
         return NextResponse.json(
           {
             error:
-              "profileId must be legacy_cascade or flux_eager_low_latency",
+              "profileId must be legacy_cascade, flux_eager_low_latency, or native_audio_ultravox",
           },
           { status: 400 },
         );
@@ -122,16 +150,15 @@ export async function POST(req: Request, ctx: Ctx) {
       },
     });
     const cfg = parseVoiceAgentConfig(refreshed?.draftConfig);
+    const summary = profileSummary(cfg);
 
     return NextResponse.json({
       data: {
+        ...summary,
         agentId: id,
+        name: refreshed?.name,
+        status: refreshed?.status,
         action,
-        activeProfile: cfg.voiceTiming?.activeProfile,
-        hasRollbackSnapshot: Boolean(cfg.voiceTiming?.rollbackSnapshot),
-        transcription: cfg.transcription,
-        endpointingMs: cfg.voiceLanguage?.endpointingMs,
-        bargeIn: cfg.voiceLanguage?.bargeIn,
         telnyxAssistantId: refreshed?.telnyxAssistantId,
         deploy,
       },

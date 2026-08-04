@@ -15,7 +15,10 @@ import { CONVERSATIONAL_PROMPT_GUIDANCE } from "../timing-presets";
 import {
   LOW_LATENCY_CONVERSATION_GUIDANCE,
   buildFluxTranscriptionSettings,
+  buildStartSpeakingPlanFromConfig,
   isDeepgramFluxModel,
+  isLatencyOptimizedProfile,
+  isNativeAudioModel,
 } from "../latency-profiles";
 
 function unwrapTelnyxId(res: unknown): string | null {
@@ -156,21 +159,12 @@ function outputGainLinear(config: VoiceAgentConfig): number | null {
   return Math.round(Math.pow(10, db / 20) * 1000) / 1000;
 }
 
-function interruptionSettingsFromConfig(
-  config: VoiceAgentConfig,
-  sttModel?: string,
-) {
-  // wait_seconds comes from agent endpointingMs only.
-  // Flux recommends ~0.1s; legacy nova path keeps the prior 0.15s floor.
-  const rawWait = (config.voiceLanguage?.endpointingMs ?? 300) / 1000;
-  const minWait = isDeepgramFluxModel(sttModel) ? 0.1 : 0.15;
-  const waitSec = Math.max(minWait, Math.min(1.5, rawWait));
+function interruptionSettingsFromConfig(config: VoiceAgentConfig) {
+  // Barge-in preserved; wait + transcription_endpointing_plan from latency profile.
   return {
     enable: config.voiceLanguage?.bargeIn !== false,
     disable_greeting_interruption: true,
-    start_speaking_plan: {
-      wait_seconds: waitSec,
-    },
+    start_speaking_plan: buildStartSpeakingPlanFromConfig(config),
   };
 }
 
@@ -252,6 +246,9 @@ export async function syncTelnyxAssistant(
     transferTargets = [...byName.values()];
   }
 
+  const optimizeToolLatency = isLatencyOptimizedProfile(
+    config.voiceTiming?.activeProfile,
+  );
   const tools = buildAssistantTools({
     workspaceId,
     agentId: agent.id,
@@ -262,6 +259,7 @@ export async function syncTelnyxAssistant(
     warmTransferInstructions: transferCfg.warmTransferInstructions,
     enabledBuiltinTools: config.enabledBuiltinTools,
     agentType: agent.agentType || undefined,
+    optimizeToolLatency,
   });
 
   const personality = [
@@ -305,7 +303,7 @@ export async function syncTelnyxAssistant(
     CONVERSATIONAL_PROMPT_GUIDANCE,
     isDeepgramFluxModel(
       config.transcription?.sttModel || process.env.VOICE_TRANSCRIPTION_MODEL,
-    )
+    ) || isLatencyOptimizedProfile(config.voiceTiming?.activeProfile)
       ? LOW_LATENCY_CONVERSATION_GUIDANCE
       : "",
     digest,
@@ -386,6 +384,7 @@ export async function syncTelnyxAssistant(
   // TeXML app id only — never Call Control TELNYX_CONNECTION_ID (causes 10015).
   const texmlAppId = process.env.TELNYX_TEXML_APP_ID?.trim() || "";
 
+  const nativeAudio = isNativeAudioModel(modelId);
   const sttModel =
     transcription.sttModel?.trim() ||
     process.env.VOICE_TRANSCRIPTION_MODEL?.trim() ||
@@ -393,8 +392,8 @@ export async function syncTelnyxAssistant(
 
   const enrichPayload: Record<string, unknown> = {
     voice_settings: voiceBuilt.voice_settings,
-    // Barge-in unchanged; wait_seconds from endpointingMs (0.1s floor for Flux).
-    interruption_settings: interruptionSettingsFromConfig(config, sttModel),
+    // Barge-in unchanged; start_speaking_plan includes Flux endpointing plan when opted in.
+    interruption_settings: interruptionSettingsFromConfig(config),
     enabled_features: ["telephony"] as string[],
     // Required for in-app browser test calls (TelnyxRTC anonymous_login).
     telephony_settings: {
@@ -415,12 +414,13 @@ export async function syncTelnyxAssistant(
     // them in the voice/telephony enrich payload (failed combined updates were
     // silently falling back and leaving hangup-only assistants).
   };
-  if (transcription.enabled !== false) {
+  // Native-audio models (e.g. Ultravox) ignore STT config — do not attach transcription.
+  if (!nativeAudio && transcription.enabled !== false) {
     (enrichPayload.enabled_features as string[]).push("transcription");
   }
   // STT model from agent config. Flux settings only when model is deepgram/flux
-  // (opt-in A/B). Do not invent AssemblyAI/endpointing-plan fields here.
-  {
+  // (opt-in A/B). Native-audio models skip transcription entirely.
+  if (!nativeAudio) {
     const langRaw =
       transcription.language ||
       config.voiceLanguage?.primaryLanguage ||

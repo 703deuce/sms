@@ -8,6 +8,11 @@ import { getAppBaseUrl } from "@/lib/messaging/telnyx/config";
 import * as ai from "@/lib/voice/telnyx/ai-client";
 import { capabilityRegistrySnapshot } from "@/lib/voice/telnyx/capability-registry";
 import { TelnyxApiError } from "@/lib/messaging/telnyx/client";
+import {
+  buildStartSpeakingPlanFromConfig,
+  isLatencyOptimizedProfile,
+} from "@/lib/voice/latency-profiles";
+import { parseVoiceAgentConfig } from "@/lib/voice/types";
 
 function asData<T = Record<string, unknown>>(res: unknown): T {
   if (res && typeof res === "object" && "data" in (res as object)) {
@@ -82,9 +87,14 @@ export async function enrichAssistantRemoteConfig(input: {
     take: 10,
   });
 
+  const agentCfg = parseVoiceAgentConfig(agent.draftConfig);
+  const latencyOptimized = isLatencyOptimizedProfile(
+    agentCfg.voiceTiming?.activeProfile,
+  );
+  // Latency-sensitive: fail fast on slow dynamic-variable webhooks (defaults still apply).
   const body: Record<string, unknown> = {
     dynamic_variables_webhook_url: `${base}/api/telnyx/voice/dynamic-variables`,
-    dynamic_variables_webhook_timeout_ms: 1500,
+    dynamic_variables_webhook_timeout_ms: latencyOptimized ? 500 : 1500,
   };
 
   if (memory) {
@@ -1499,12 +1509,19 @@ export async function enableWebCallsAndSyncVoice(
       0.1,
       Math.min(1.5, (config.voiceLanguage?.endpointingMs ?? 100) / 1000),
     );
+    const startSpeakingPlan = buildStartSpeakingPlanFromConfig(config);
+    // Prefer full plan (wait + endpointing) when Flux/latency profile is active;
+    // otherwise keep wait_seconds-only for legacy web-call path compatibility.
+    const speakingPlan =
+      isFlux || isLatencyOptimizedProfile(config.voiceTiming?.activeProfile)
+        ? startSpeakingPlan
+        : { wait_seconds: isFlux ? fluxWait : waitSec };
     await ai.updateAssistant(agent.telnyxAssistantId, {
       voice_settings: voiceBuilt.voice_settings,
       interruption_settings: {
         enable: config.voiceLanguage?.bargeIn !== false,
         disable_greeting_interruption: true,
-        start_speaking_plan: { wait_seconds: isFlux ? fluxWait : waitSec },
+        start_speaking_plan: speakingPlan,
       },
       telephony_settings: {
         supports_unauthenticated_web_calls: true,

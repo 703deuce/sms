@@ -82,11 +82,11 @@ export function classifyResponseLatencyMs(
   _targets: ResponseLatencyTargets = SHARED_LATENCY_TARGETS,
 ): ResponseLatencyRating {
   if (!Number.isFinite(latencyMs) || latencyMs < 0) return "unknown";
-  // Reporting bands for cascaded Telnyx assistants (not artificial delays).
-  // Production goal: under 600 ms on ordinary non-tool turns.
-  if (latencyMs <= 400) return "excellent";
-  if (latencyMs <= 600) return "natural";
-  if (latencyMs <= 800) return "usable";
+  // Reporting bands for ordinary non-tool Telnyx turns (not artificial delays).
+  // Primary goal: p50 under 500 ms. Do not claim success without phone measurements.
+  if (latencyMs <= 450) return "excellent";
+  if (latencyMs <= 500) return "natural";
+  if (latencyMs <= 700) return "usable";
   if (latencyMs <= 1000) return "slow";
   if (latencyMs <= 1500) return "investigate";
   return "poor";

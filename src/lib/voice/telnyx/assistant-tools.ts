@@ -13,6 +13,11 @@ import {
   isBuiltinToolEnabled,
   resolveEnabledBuiltinTools,
 } from "@/lib/voice/tools/catalog";
+import {
+  ASYNC_TOOL_TYPES,
+  SYNC_TOOL_FILLERS,
+  SYNC_TOOL_TYPES,
+} from "@/lib/voice/latency-profiles";
 
 type ToolRow = {
   id: string;
@@ -28,6 +33,30 @@ const HANGUP_DESCRIPTION =
   "NEVER use hangup to transfer, connect a human, look up CRM, send SMS, or recover from a tool error. " +
   "NEVER use hangup immediately after another tool. If unsure, keep talking or take a message.";
 
+/**
+ * Classify webhook tools for latency-optimized profiles:
+ * - async:true for background work (logging, tags, SMS) so speech is not blocked
+ * - filler_messages request_start for sync tools that callers must wait on
+ */
+function applyLatencyWebhookDecorations(
+  toolType: string,
+  webhook: Record<string, unknown>,
+  optimize: boolean,
+): Record<string, unknown> {
+  if (!optimize) return webhook;
+  if (ASYNC_TOOL_TYPES.has(toolType)) {
+    return { ...webhook, async: true };
+  }
+  const filler = SYNC_TOOL_FILLERS[toolType];
+  if (filler && (SYNC_TOOL_TYPES.has(toolType) || Boolean(filler))) {
+    return {
+      ...webhook,
+      filler_messages: [{ type: "request_start", content: filler }],
+    };
+  }
+  return webhook;
+}
+
 export function buildAssistantTools(input: {
   workspaceId: string;
   agentId: string;
@@ -39,11 +68,14 @@ export function buildAssistantTools(input: {
   /** Catalog keys enabled for this agent. */
   enabledBuiltinTools?: string[];
   agentType?: string | null;
+  /** Version B/C: async nonessential tools + sync request_start fillers. */
+  optimizeToolLatency?: boolean;
 }) {
   const enabled = resolveEnabledBuiltinTools({
     enabledBuiltinTools: input.enabledBuiltinTools,
     agentType: input.agentType,
   });
+  const optimize = Boolean(input.optimizeToolLatency);
 
   const tools: Record<string, unknown>[] = [];
   const retrieval = retrievalToolForBuckets(input.bucketIds);
@@ -118,9 +150,9 @@ export function buildAssistantTools(input: {
       (tool.inputSchema as Record<string, unknown> | null) ||
       defaultBodySchema(tool.toolType);
 
-    tools.push({
-      type: "webhook",
-      webhook: {
+    const webhook = applyLatencyWebhookDecorations(
+      tool.toolType,
+      {
         name: sanitizeToolName(tool.name || tool.toolType),
         description:
           tool.description ||
@@ -143,6 +175,12 @@ export function buildAssistantTools(input: {
           required: Array.isArray(schema.required) ? schema.required : [],
         },
       },
+      optimize,
+    );
+
+    tools.push({
+      type: "webhook",
+      webhook,
     });
   }
 
@@ -167,9 +205,9 @@ export function buildAssistantTools(input: {
     const description = escalateSolePath
       ? "Transfer the caller to a named human phone destination (e.g. Agent Handoff / Front Desk). This is the ONLY human phone transfer tool. Call it once when they ask for a person. If it returns ok=true, say you are connecting them and stay silent — never say the transfer failed while they are being connected. If it returns ok=false, then apologize and take a message. Never invent a phone number. Never hang up to transfer."
       : `${builtin.description} If this tool fails, do NOT hang up — apologize and offer to take a message.`;
-    tools.push({
-      type: "webhook",
-      webhook: {
+    const webhook = applyLatencyWebhookDecorations(
+      builtin.toolType || key,
+      {
         name: builtin.name,
         description,
         url: webhookUrl,
@@ -182,6 +220,11 @@ export function buildAssistantTools(input: {
         ],
         body_parameters: builtin.body,
       },
+      optimize,
+    );
+    tools.push({
+      type: "webhook",
+      webhook,
     });
   }
 
@@ -191,9 +234,9 @@ export function buildAssistantTools(input: {
     !tools.some((t) => (t as { webhook?: { name?: string } }).webhook?.name === "crm_lookup")
   ) {
     const body = BUILTIN_WEBHOOK_BODIES.search_crm_contacts;
-    tools.push({
-      type: "webhook",
-      webhook: {
+    const webhook = applyLatencyWebhookDecorations(
+      "search_crm_contacts",
+      {
         name: "crm_lookup",
         description:
           "Alias for search_crm_contacts. Look up a contact by name/phone/email. Never hang up after this tool.",
@@ -207,6 +250,11 @@ export function buildAssistantTools(input: {
         ],
         body_parameters: body.body,
       },
+      optimize,
+    );
+    tools.push({
+      type: "webhook",
+      webhook,
     });
   }
 
