@@ -212,14 +212,18 @@ function ViewToggle({
   pending: boolean;
 }) {
   return (
-    <div
-      className={cn(
-        "grid grid-cols-2 rounded-[10px] border border-white/10 bg-white/5 p-0.5",
-        pending && "opacity-70",
-      )}
-      role="tablist"
-      aria-label="Navigation view"
-    >
+    <div className="mt-3">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-sidebar-muted">
+        Navigation
+      </p>
+      <div
+        className={cn(
+          "mt-1 grid grid-cols-2 rounded-[10px] border border-white/10 bg-white/5 p-0.5",
+          pending && "opacity-70",
+        )}
+        role="tablist"
+        aria-label="Navigation view"
+      >
         {(
           [
             { id: "solutions", label: "Solutions" },
@@ -238,7 +242,7 @@ function ViewToggle({
               className={cn(
                 "rounded-[8px] px-2 py-1.5 text-[12px] font-semibold transition",
                 active
-                  ? "bg-[#3B82F6] text-white shadow-sm"
+                  ? "bg-primary text-white shadow-sm"
                   : "text-sidebar-muted hover:text-white",
               )}
             >
@@ -246,22 +250,19 @@ function ViewToggle({
             </button>
           );
         })}
+      </div>
     </div>
   );
 }
 
 export function Sidebar({
   userName,
-  workspaceName = "Main Office",
-  workspaceId,
   open,
   onClose,
   initialNavView = "solutions",
   outcomeInstances = {},
 }: {
   userName: string;
-  workspaceName?: string;
-  workspaceId?: string;
   open?: boolean;
   onClose?: () => void;
   initialNavView?: NavView;
@@ -329,47 +330,22 @@ export function Sidebar({
           className="flex items-start gap-2.5"
           onClick={onClose}
         >
-          {navView === "solutions" ? (
-            <span className="block text-[18px] font-bold lowercase tracking-tight text-white">
-              transovo
+          <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] bg-primary text-white shadow-[0_8px_18px_rgba(16,185,129,0.35)]">
+            <MessageSquare className="h-3.5 w-3.5" fill="currentColor" />
+          </span>
+          <span>
+            <span className="block text-[14px] font-bold tracking-tight text-white">
+              Transovo SMS
             </span>
-          ) : (
-            <>
-              <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] bg-primary text-white shadow-[0_8px_18px_rgba(16,185,129,0.35)]">
-                <MessageSquare className="h-3.5 w-3.5" fill="currentColor" />
-              </span>
-              <span>
-                <span className="block text-[15px] font-bold tracking-tight text-white">
-                  Transovo SMS
-                </span>
-                <span className="mt-0.5 block text-[10px] leading-tight text-sidebar-muted">
-                  Business texting platform
-                </span>
-              </span>
-            </>
-          )}
+            <span className="mt-0.5 block text-[10px] leading-tight text-sidebar-muted">
+              {navView === "solutions"
+                ? "Solutions by product area"
+                : "Business texting platform"}
+            </span>
+          </span>
         </Link>
 
-        {navView === "solutions" ? (
-          <div className="mt-3 flex w-full items-center gap-2.5 rounded-lg border border-white/10 bg-white/[0.06] px-2.5 py-2">
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-500/40 text-[11px] font-semibold text-white">
-              JR
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-[12px] font-semibold text-white">
-                Jane Riley
-              </span>
-              <span className="block truncate text-[10px] text-sidebar-muted">
-                Admin
-              </span>
-            </span>
-            <ChevronDown className="h-3.5 w-3.5 shrink-0 text-sidebar-muted" />
-          </div>
-        ) : null}
-
-        <div className="mt-3">
-          <ViewToggle view={navView} onChange={switchNavView} pending={pending} />
-        </div>
+        <ViewToggle view={navView} onChange={switchNavView} pending={pending} />
       </div>
 
       {/* Nav — only this region scrolls, and only when needed */}
@@ -422,19 +398,12 @@ export function Sidebar({
                 className={cn(
                   "group relative flex items-center rounded-[10px] transition",
                   active
-                    ? navView === "solutions"
-                      ? "bg-[#3B82F6]/15 text-[#60A5FA]"
-                      : "bg-primary/15 text-primary"
+                    ? "bg-primary/15 text-primary"
                     : "text-sidebar-foreground/90 hover:bg-white/5 hover:text-white",
                 )}
               >
                 {active ? (
-                  <span
-                    className={cn(
-                      "absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r-full",
-                      navView === "solutions" ? "bg-[#3B82F6]" : "bg-primary",
-                    )}
-                  />
+                  <span className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r-full bg-primary" />
                 ) : null}
                 <Link
                   href={item.href}
@@ -447,21 +416,12 @@ export function Sidebar({
                   <Icon
                     className={cn(
                       "h-4 w-4 shrink-0",
-                      active
-                        ? navView === "solutions"
-                          ? "text-[#60A5FA]"
-                          : "text-primary"
-                        : "text-sidebar-muted group-hover:text-white",
+                      active ? "text-primary" : "text-sidebar-muted group-hover:text-white",
                     )}
                   />
                   <span className="truncate">{item.label}</span>
                   {item.badge != null ? (
-                    <span
-                      className={cn(
-                        "ml-auto flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1.5 text-[10px] font-bold text-white",
-                        navView === "solutions" ? "bg-[#3B82F6]" : "bg-primary",
-                      )}
-                    >
+                    <span className="ml-auto flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-white">
                       {item.badge}
                     </span>
                   ) : null}
@@ -472,9 +432,7 @@ export function Sidebar({
                     className={cn(
                       "mr-1.5 rounded-md p-1.5 transition",
                       active
-                        ? navView === "solutions"
-                          ? "text-[#60A5FA] hover:bg-[#3B82F6]/10"
-                          : "text-primary hover:bg-primary/10"
+                        ? "text-primary hover:bg-primary/10"
                         : "text-sidebar-muted hover:bg-white/5 hover:text-white",
                     )}
                     onClick={() =>

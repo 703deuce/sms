@@ -63,8 +63,7 @@ async function checkReady(page) {
   const aside = (await page.locator("aside").count())
     ? await page.locator("aside").first().innerText()
     : "";
-  checks.hasJane = /Jane Riley/i.test(aside);
-  checks.hasLowerBrand = /transovo/i.test(aside) && !/Transovo SMS/i.test(aside);
+  checks.hasSharedSidebar = /Transovo SMS/i.test(aside);
 
   return {
     ...checks,
@@ -79,7 +78,7 @@ async function checkReady(page) {
       checks.hasStats &&
       checks.hasRecommended &&
       checks.hasButtons &&
-      checks.hasJane &&
+      checks.hasSharedSidebar &&
       !checks.oldDash,
     snippet: text.replace(/\s+/g, " ").slice(0, 280),
   };
@@ -125,7 +124,7 @@ for (let i = 1; i <= 48; i++) {
     await page.waitForTimeout(800);
     lastStatus = await checkReady(page);
     console.log(
-      `[${i}] ready=${lastStatus.ready} subtitle=${lastStatus.hasSubtitle} cards=${lastStatus.hasCards} jane=${lastStatus.hasJane} old=${lastStatus.oldDash}`,
+      `[${i}] ready=${lastStatus.ready} subtitle=${lastStatus.hasSubtitle} cards=${lastStatus.hasCards} sidebar=${lastStatus.hasSharedSidebar} old=${lastStatus.oldDash}`,
     );
     if (lastStatus.ready) {
       ready = true;
