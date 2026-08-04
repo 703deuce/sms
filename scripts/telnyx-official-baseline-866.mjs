@@ -17,7 +17,11 @@
  *   node scripts/telnyx-official-baseline-866.mjs --profile C
  *   node scripts/telnyx-official-baseline-866.mjs --profile D
  *   node scripts/telnyx-official-baseline-866.mjs --verify
+ *   node scripts/telnyx-official-baseline-866.mjs --score
+ *   node scripts/telnyx-official-baseline-866.mjs --score --limit 10
  *   node scripts/telnyx-official-baseline-866.mjs --restore <snapshot.json>
+ *
+ * --score pulls user→assistant message gaps from Telnyx (ms). Does not change the agent.
  */
 import { writeFileSync, readFileSync, mkdirSync, existsSync } from "fs";
 import { join } from "path";
@@ -39,12 +43,16 @@ const OPENAI_KEY_REF = process.env.OPENAI_API_KEY_REF || "openai_key";
 const CREATE_ONLY = process.argv.includes("--create-only");
 const VERIFY_SECRET = process.argv.includes("--verify-secret");
 const LIST_PROFILES = process.argv.includes("--list-profiles");
+const SCORE = process.argv.includes("--score") || process.argv.includes("--pull-latency");
 const VERIFY_IDX = process.argv.indexOf("--verify");
 const RESTORE_IDX = process.argv.indexOf("--restore");
 const PROFILE_IDX = process.argv.indexOf("--profile");
 const MODEL_IDX = process.argv.indexOf("--model");
 const SWITCH_IDX = process.argv.indexOf("--switch-model");
 const ASSISTANT_IDX = process.argv.indexOf("--assistant");
+const LIMIT_IDX = process.argv.indexOf("--limit");
+const LIMIT_ARG =
+  LIMIT_IDX >= 0 ? Number(process.argv[LIMIT_IDX + 1] || "20") : 20;
 
 const PROFILE_ARG =
   PROFILE_IDX >= 0 ? String(process.argv[PROFILE_IDX + 1] || "").trim() : "";
@@ -204,6 +212,45 @@ async function main() {
       ),
     );
     console.log(`\nCall ${E164} now to test this profile.`);
+    process.exit(0);
+  }
+
+  if (SCORE) {
+    const assistantId = resolveAssistantId();
+    console.log(
+      `Pulling Telnyx response gaps for ${assistantId} (limit=${LIMIT_ARG})…`,
+    );
+    const out = await post(jar, {
+      action: "score_latency",
+      assistantId,
+      limit: Number.isFinite(LIMIT_ARG) ? LIMIT_ARG : 20,
+    });
+    if (!out.ok) {
+      console.error("FAIL", out.status, JSON.stringify(out.json).slice(0, 2500));
+      process.exit(1);
+    }
+    save("latency-score.json", out.json);
+    const d = out.json?.data || {};
+    console.log("\n=== TIME-TO-RESPONSE (Telnyx message gaps, ms) ===");
+    console.log("metric:", d.metric);
+    console.log(
+      "overall:",
+      JSON.stringify(d.overall),
+      `from ${d.sampleCount || 0} turns / ${d.conversationCount || 0} calls`,
+    );
+    console.log("\nby profile A/B/C/D:");
+    for (const row of d.byProfile || []) {
+      console.log(
+        `  ${row.profileId}: n=${row.sampleCount} calls=${row.callCount} p50=${row.p50Ms}ms p75=${row.p75Ms}ms p95=${row.p95Ms}ms mean=${row.meanMs}ms min=${row.minMs}ms max=${row.maxMs}ms`,
+      );
+    }
+    console.log("\nper call:");
+    for (const call of d.calls || []) {
+      const gaps = (call.samples || []).map((s) => s.latencyMs).join(",");
+      console.log(
+        `  ${call.createdAt || "?"} profile=${call.profileId || "?"} model=${call.model || "?"} msgs=${call.messageCount} p50=${call.p50Ms}ms gaps=[${gaps}]${call.messageFetchError ? ` ERR=${call.messageFetchError}` : ""}`,
+      );
+    }
     process.exit(0);
   }
 

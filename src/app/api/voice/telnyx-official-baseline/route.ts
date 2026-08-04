@@ -6,6 +6,7 @@ import {
   fetchOfficialBaselineLive,
   restoreOfficialBaselineRoute,
   routePhoneToOfficialBaseline,
+  scoreOfficialBaselineLatency,
   switchOfficialBaselineModel,
   verifyIntegrationSecret,
   type OfficialBaselineRouteSnapshot,
@@ -42,6 +43,7 @@ export async function POST(request: Request) {
       openaiKeyRef?: string;
       secretIdentifier?: string;
       workspaceId?: string;
+      limit?: number;
       snapshot?: OfficialBaselineRouteSnapshot;
     };
 
@@ -89,6 +91,17 @@ export async function POST(request: Request) {
         );
       }
       const data = await fetchOfficialBaselineLive(assistantId);
+      return NextResponse.json({ data });
+    }
+
+    if (action === "score_latency" || action === "pull_latency") {
+      const assistantId = String(
+        body.assistantId || "assistant-f2a573af-dde1-4441-a6f1-846aeccc1020",
+      ).trim();
+      const data = await scoreOfficialBaselineLatency({
+        assistantId,
+        limit: body.limit,
+      });
       return NextResponse.json({ data });
     }
 
@@ -198,7 +211,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         error:
-          "action must be create | create_and_route | verify | restore | switch_model | verify_secret | list_profiles",
+          "action must be create | create_and_route | verify | restore | switch_model | verify_secret | list_profiles | score_latency",
       },
       { status: 400 },
     );

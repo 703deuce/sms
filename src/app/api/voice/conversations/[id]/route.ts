@@ -25,10 +25,24 @@ export async function GET(
       take: 500,
     });
     let remote: unknown = null;
+    let remoteMessages: unknown[] = [];
     if (local.telnyxConversationId && ai.isTelnyxAiConfigured()) {
       remote = await ai.getConversation(local.telnyxConversationId).catch(() => null);
+      try {
+        const msgsRemote = await ai.listConversationMessages(local.telnyxConversationId);
+        const data = (msgsRemote as { data?: unknown[] })?.data;
+        remoteMessages = Array.isArray(data)
+          ? data
+          : Array.isArray(msgsRemote)
+            ? (msgsRemote as unknown[])
+            : [];
+      } catch {
+        remoteMessages = [];
+      }
     }
-    return NextResponse.json({ data: { conversation: local, messages, remote } });
+    return NextResponse.json({
+      data: { conversation: local, messages, remote, remoteMessages },
+    });
   } catch (err) {
     return jsonError(err, 500);
   }

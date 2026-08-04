@@ -671,3 +671,308 @@ export async function fetchOfficialBaselineLive(assistantId: string) {
     providerInserted: providerInsertedFields(live),
   };
 }
+
+function profileIdForModel(modelId: string): BaselineModelProfileId | null {
+  const model = String(modelId || "").trim();
+  for (const p of Object.values(BASELINE_MODEL_PROFILES)) {
+    if (p.modelId === model) return p.id;
+    if ("fallbackModelId" in p && p.fallbackModelId === model) return p.id;
+  }
+  return null;
+}
+
+function unwrapMessageRows(remote: unknown): Record<string, unknown>[] {
+  const root = asRecord(remote);
+  const data = root?.data;
+  if (Array.isArray(data)) return data as Record<string, unknown>[];
+  const nested = asRecord(data);
+  if (Array.isArray(nested?.messages)) {
+    return nested!.messages as Record<string, unknown>[];
+  }
+  if (Array.isArray(root?.messages)) {
+    return root!.messages as Record<string, unknown>[];
+  }
+  if (Array.isArray(remote)) return remote as Record<string, unknown>[];
+  return [];
+}
+
+function messageTimestampMs(m: Record<string, unknown>): number | null {
+  const meta = asRecord(m.metadata) || {};
+  const candidates = [
+    m.created_at,
+    m.sent_at,
+    m.timestamp,
+    m.updated_at,
+    meta.created_at,
+    meta.sent_at,
+    meta.timestamp,
+    meta.started_at,
+  ];
+  for (const raw of candidates) {
+    if (raw == null || raw === "") continue;
+    if (typeof raw === "number" && Number.isFinite(raw)) {
+      return raw < 1e12 ? Math.round(raw * 1000) : Math.round(raw);
+    }
+    const ms = new Date(String(raw)).getTime();
+    if (Number.isFinite(ms)) return ms;
+  }
+  return null;
+}
+
+function deriveGapsFromMessages(messages: Record<string, unknown>[]) {
+  const samples: Array<{
+    latencyMs: number;
+    userAt: string;
+    assistantAt: string;
+    userText: string;
+    assistantText: string;
+    category: "first_response" | "conversational";
+  }> = [];
+  let pendingUserAt: number | null = null;
+  let pendingUserText = "";
+  let turnIndex = 0;
+
+  for (const m of messages) {
+    const role = String(m.role || m.sender || m.speaker || "").toLowerCase();
+    const ts = messageTimestampMs(m);
+    if (ts == null) continue;
+    const text = String(m.content || m.text || m.message || "")
+      .trim()
+      .slice(0, 120);
+
+    if (role === "user" || role === "caller" || role === "human") {
+      pendingUserAt = ts;
+      pendingUserText = text;
+      continue;
+    }
+    if (
+      pendingUserAt != null &&
+      (role === "assistant" || role === "agent" || role === "ai")
+    ) {
+      const latencyMs = ts - pendingUserAt;
+      if (latencyMs >= 0 && latencyMs < 30_000) {
+        samples.push({
+          latencyMs,
+          userAt: new Date(pendingUserAt).toISOString(),
+          assistantAt: new Date(ts).toISOString(),
+          userText: pendingUserText,
+          assistantText: text,
+          category: turnIndex === 0 ? "first_response" : "conversational",
+        });
+        turnIndex += 1;
+      }
+      pendingUserAt = null;
+      pendingUserText = "";
+    }
+  }
+  return samples;
+}
+
+function percentileSorted(sortedAsc: number[], p: number): number | null {
+  if (!sortedAsc.length) return null;
+  const idx = Math.min(
+    sortedAsc.length - 1,
+    Math.max(0, Math.ceil((p / 100) * sortedAsc.length) - 1),
+  );
+  return sortedAsc[idx] ?? null;
+}
+
+/**
+ * Pull caller→agent response gaps directly from Telnyx conversations/messages.
+ * Does not change the live assistant — read-only measurement for A/B/C/D.
+ *
+ * Metric: user message timestamp → next assistant message timestamp (ms).
+ * This approximates end-of-speech → agent reply start when Telnyx stamps
+ * turns at those boundaries. Prefer call recordings for audible-first-audio
+ * when message stamps are coarse.
+ */
+export async function scoreOfficialBaselineLatency(input: {
+  assistantId: string;
+  /** Max conversations to inspect (newest first). */
+  limit?: number;
+}) {
+  const assistantId = String(input.assistantId || "").trim();
+  if (!assistantId) throw new Error("assistantId required");
+  const limit = Math.min(50, Math.max(1, Number(input.limit) || 20));
+
+  const versionMap = new Map<
+    string,
+    { model: string; profileId: BaselineModelProfileId | null }
+  >();
+  try {
+    const versionsRemote = await ai.listVersions(assistantId);
+    const rows = Array.isArray(asRecord(versionsRemote)?.data)
+      ? (asRecord(versionsRemote)!.data as Array<Record<string, unknown>>)
+      : Array.isArray(versionsRemote)
+        ? (versionsRemote as Array<Record<string, unknown>>)
+        : [];
+    for (const v of rows) {
+      const versionId = String(v.version_id || v.id || "").trim();
+      const model = String(v.model || "").trim();
+      if (!versionId) continue;
+      versionMap.set(versionId, {
+        model,
+        profileId: profileIdForModel(model),
+      });
+    }
+  } catch {
+    // version map optional — calls still scored unlabeled
+  }
+
+  const convRemote = await ai.listConversations({
+    "page[size]": String(Math.max(limit * 2, 30)),
+  });
+  const allConvs = Array.isArray(asRecord(convRemote)?.data)
+    ? (asRecord(convRemote)!.data as Array<Record<string, unknown>>)
+    : Array.isArray(convRemote)
+      ? (convRemote as Array<Record<string, unknown>>)
+      : [];
+
+  const matched = allConvs
+    .filter((c) => {
+      const meta = asRecord(c.metadata) || {};
+      return String(meta.assistant_id || "") === assistantId;
+    })
+    .slice(0, limit);
+
+  const calls: Array<{
+    conversationId: string;
+    createdAt: string | null;
+    versionId: string | null;
+    model: string | null;
+    profileId: BaselineModelProfileId | null;
+    callSessionId: string | null;
+    messageCount: number;
+    samples: ReturnType<typeof deriveGapsFromMessages>;
+    p50Ms: number | null;
+    meanMs: number | null;
+    messageFetchError?: string;
+  }> = [];
+
+  for (const c of matched) {
+    const conversationId = String(c.id || "");
+    const meta = asRecord(c.metadata) || {};
+    const versionId = String(meta.assistant_version_id || "") || null;
+    const mapped = versionId ? versionMap.get(versionId) : undefined;
+    let samples: ReturnType<typeof deriveGapsFromMessages> = [];
+    let messageCount = 0;
+    let messageFetchError: string | undefined;
+    try {
+      const msgsRemote = await ai.listConversationMessages(conversationId);
+      const rows = unwrapMessageRows(msgsRemote);
+      messageCount = rows.length;
+      // Chronological order
+      const ordered = [...rows].sort((a, b) => {
+        const ta = messageTimestampMs(a) ?? 0;
+        const tb = messageTimestampMs(b) ?? 0;
+        return ta - tb;
+      });
+      samples = deriveGapsFromMessages(ordered);
+    } catch (err) {
+      messageFetchError = err instanceof Error ? err.message : String(err);
+    }
+    const latencies = samples.map((s) => s.latencyMs).sort((a, b) => a - b);
+    calls.push({
+      conversationId,
+      createdAt: c.created_at ? String(c.created_at) : null,
+      versionId,
+      model: mapped?.model ?? null,
+      profileId: mapped?.profileId ?? null,
+      callSessionId: meta.call_session_id
+        ? String(meta.call_session_id)
+        : null,
+      messageCount,
+      samples,
+      p50Ms: percentileSorted(latencies, 50),
+      meanMs: latencies.length
+        ? Math.round(
+            latencies.reduce((a, b) => a + b, 0) / latencies.length,
+          )
+        : null,
+      ...(messageFetchError ? { messageFetchError } : {}),
+    });
+  }
+
+  const byProfile: Record<
+    string,
+    {
+      profileId: string;
+      callCount: number;
+      sampleCount: number;
+      latenciesMs: number[];
+      p50Ms: number | null;
+      p75Ms: number | null;
+      p95Ms: number | null;
+      meanMs: number | null;
+      minMs: number | null;
+      maxMs: number | null;
+    }
+  > = {};
+
+  for (const call of calls) {
+    const key = call.profileId || "unknown";
+    if (!byProfile[key]) {
+      byProfile[key] = {
+        profileId: key,
+        callCount: 0,
+        sampleCount: 0,
+        latenciesMs: [],
+        p50Ms: null,
+        p75Ms: null,
+        p95Ms: null,
+        meanMs: null,
+        minMs: null,
+        maxMs: null,
+      };
+    }
+    byProfile[key].callCount += 1;
+    for (const s of call.samples) {
+      byProfile[key].latenciesMs.push(s.latencyMs);
+    }
+  }
+
+  for (const row of Object.values(byProfile)) {
+    const sorted = [...row.latenciesMs].sort((a, b) => a - b);
+    row.sampleCount = sorted.length;
+    row.p50Ms = percentileSorted(sorted, 50);
+    row.p75Ms = percentileSorted(sorted, 75);
+    row.p95Ms = percentileSorted(sorted, 95);
+    row.meanMs = sorted.length
+      ? Math.round(sorted.reduce((a, b) => a + b, 0) / sorted.length)
+      : null;
+    row.minMs = sorted[0] ?? null;
+    row.maxMs = sorted[sorted.length - 1] ?? null;
+  }
+
+  const allLatencies = calls
+    .flatMap((c) => c.samples.map((s) => s.latencyMs))
+    .sort((a, b) => a - b);
+
+  return {
+    assistantId,
+    metric:
+      "telnyx_conversation_message_gap_ms (user message created_at → next assistant message created_at)",
+    metricNote:
+      "Read-only pull from Telnyx. Not LLM-only time. Approximates caller turn → agent reply; audible first-audio may differ slightly from message stamps.",
+    agentUnchanged: true,
+    conversationCount: calls.length,
+    sampleCount: allLatencies.length,
+    overall: {
+      p50Ms: percentileSorted(allLatencies, 50),
+      p75Ms: percentileSorted(allLatencies, 75),
+      p95Ms: percentileSorted(allLatencies, 95),
+      meanMs: allLatencies.length
+        ? Math.round(
+            allLatencies.reduce((a, b) => a + b, 0) / allLatencies.length,
+          )
+        : null,
+      minMs: allLatencies[0] ?? null,
+      maxMs: allLatencies[allLatencies.length - 1] ?? null,
+    },
+    byProfile: Object.values(byProfile).sort((a, b) =>
+      a.profileId.localeCompare(b.profileId),
+    ),
+    calls,
+    profiles: BASELINE_MODEL_PROFILES,
+  };
+}

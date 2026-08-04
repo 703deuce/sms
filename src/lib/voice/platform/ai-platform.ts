@@ -614,10 +614,24 @@ export async function syncConversations(workspaceId: string, query?: Record<stri
         () => ai.listConversationMessages(telnyxConversationId),
         { data: [] },
       );
-      const msgs = ((msgsRemote as { data?: unknown[] }).data || []) as Record<
-        string,
-        unknown
-      >[];
+      const remoteRoot =
+        msgsRemote && typeof msgsRemote === "object"
+          ? (msgsRemote as Record<string, unknown>)
+          : null;
+      const dataField = remoteRoot?.data;
+      const msgs = (
+        Array.isArray(dataField)
+          ? dataField
+          : Array.isArray(
+                (dataField as { messages?: unknown } | null)?.messages,
+              )
+            ? (dataField as { messages: unknown[] }).messages
+            : Array.isArray(remoteRoot?.messages)
+              ? remoteRoot!.messages
+              : Array.isArray(msgsRemote)
+                ? msgsRemote
+                : []
+      ) as Record<string, unknown>[];
       for (const m of msgs.slice(0, 100)) {
         const telnyxMessageId = String(m.id || "");
         if (!telnyxMessageId) continue;
