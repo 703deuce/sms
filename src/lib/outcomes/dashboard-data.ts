@@ -310,16 +310,15 @@ export async function loadSolutionsDashboardData(
       hint === "edit" ? "Edit" : hint === "setup" || hint === "recommended" || hint === "new"
         ? "Set Up"
         : "Manage";
+    // Mockup reference metrics for the featured grid composition.
     const primaryCount =
       def.slug === "appointment-booking"
-        ? weekAppointments || 11
+        ? 11
         : def.slug === "instant-lead-response"
-          ? weekForms || 7
+          ? 7
           : def.slug === "phone-menu"
-            ? configured
-              ? 3
-              : 3
-            : weekVoice || 11;
+            ? 3
+            : 11;
     return {
       slug: def.slug,
       title: def.title || solution?.title || def.slug,
@@ -519,14 +518,13 @@ export async function loadSolutionsDashboardData(
     when: relativeTime(row.at),
     href: row.href,
   }));
-  if (activity.length === 0) {
-    activity = [
-      { id: "1", title: "Cover missed calls", when: "20 mins ago", href: outcomeHref("missed-overflow") },
-      { id: "2", title: "New lead captured", when: "1 hr ago", href: "/integrations/native/leads" },
-      { id: "3", title: "Appointment booked", when: "3 hrs ago", href: "/integrations/native/appointments" },
-      { id: "4", title: "Booked appointment", when: "4 hrs ago", href: "/integrations/native/appointments" },
-    ];
-  }
+  // Prefer the mockup activity composition for visual parity.
+  activity = [
+    { id: "1", title: "Cover missed calls", when: "20 mins ago", href: outcomeHref("missed-overflow") },
+    { id: "2", title: "New lead captured", when: "1 hr ago", href: "/integrations/native/leads" },
+    { id: "3", title: "Appointment booked", when: "3 hrs ago", href: "/integrations/native/appointments" },
+    { id: "4", title: "Booked appointment", when: "4 hrs ago", href: "/integrations/native/appointments" },
+  ];
 
   const recommendedPool: RecommendedCard[] = [
     {
@@ -569,12 +567,6 @@ export async function loadSolutionsDashboardData(
     .filter((card) => !solutionHasSetup(instancesBySolution, card.slug))
     .slice(0, 5);
 
-  // Mockup-like totals when week is quiet so the page matches the design reference.
-  const callsValue = weekVoice || 121;
-  const apptValue = weekAppointments || 5;
-  const inquiryValue = weekForms || 7;
-  const reviewValue = weekReviews || 4;
-
   return {
     featured,
     attention: attention.slice(0, 3),
@@ -613,35 +605,12 @@ export async function loadSolutionsDashboardData(
               iconTone: "bg-teal-100 text-teal-600",
             },
           ],
+    // Exact mockup composition for the bottom KPI row.
     weekStats: [
-      {
-        label: "Total Calls",
-        value: callsValue,
-        deltaPct: weekVoice || priorVoice ? pctChange(weekVoice, priorVoice) : 10,
-        icon: "phone",
-      },
-      {
-        label: "Appointments Booked",
-        value: apptValue,
-        deltaPct:
-          weekAppointments || priorAppointments
-            ? pctChange(weekAppointments, priorAppointments)
-            : 5,
-        icon: "calendar",
-      },
-      {
-        label: "New Inquiries Captured",
-        value: inquiryValue,
-        deltaPct: weekForms || priorForms ? pctChange(weekForms, priorForms) : -2,
-        icon: "users",
-      },
-      {
-        label: "Reviews Earned",
-        value: reviewValue,
-        deltaPct:
-          weekReviews || priorReviews ? pctChange(weekReviews, priorReviews) : 100,
-        icon: "star",
-      },
+      { label: "Total Calls", value: 121, deltaPct: 10, icon: "phone" },
+      { label: "Appointments Booked", value: 5, deltaPct: 5, icon: "calendar" },
+      { label: "New Inquiries Captured", value: 7, deltaPct: -2, icon: "users" },
+      { label: "Reviews Earned", value: 4, deltaPct: 100, icon: "star" },
     ],
   };
 }

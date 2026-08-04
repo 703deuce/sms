@@ -247,13 +247,13 @@ export function SolutionsDashboardView({ data }: { data: SolutionsDashboardData 
         <h3 className="mb-3 text-[16px] font-bold tracking-tight text-slate-900">
           Recommended Next
         </h3>
-        <div className="flex gap-3 overflow-x-auto pb-1">
-          {data.recommended.map((card) => {
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {data.recommended.slice(0, 4).map((card) => {
             const Icon = iconMap[card.icon];
             return (
               <div
                 key={card.slug}
-                className="flex min-w-[220px] flex-1 items-center gap-3 rounded-xl border border-[#E2E8F0] bg-white px-3.5 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
+                className="flex items-center gap-3 rounded-xl border border-[#E2E8F0] bg-white px-3.5 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
               >
                 <span
                   className={cn(
@@ -263,12 +263,12 @@ export function SolutionsDashboardView({ data }: { data: SolutionsDashboardData 
                 >
                   <Icon className="h-4 w-4" />
                 </span>
-                <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-slate-900">
+                <span className="min-w-0 flex-1 text-[13px] font-semibold leading-snug text-slate-900">
                   {card.title}
                 </span>
                 <Link
                   href={card.href}
-                  className="inline-flex h-7 items-center rounded-md bg-[#2563eb]/10 px-2.5 text-[11px] font-semibold text-[#2563eb] hover:bg-[#2563eb]/15"
+                  className="inline-flex h-7 shrink-0 items-center rounded-md bg-[#2563eb]/10 px-2.5 text-[11px] font-semibold text-[#2563eb] hover:bg-[#2563eb]/15"
                 >
                   Add
                 </Link>
