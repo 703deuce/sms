@@ -1,13 +1,22 @@
 /**
- * Telnyx-direct ultra-low-latency baseline ops for +1866.
+ * Telnyx-direct baseline A/B/C/D model switcher for +1866.
  *
- *   node scripts/telnyx-official-baseline-866.mjs
- *   node scripts/telnyx-official-baseline-866.mjs --create-only
+ * Shared (identical for all profiles): Flux STT + Ultra TTS + short prompt + fixed greeting.
+ * Only the LLM (+ provider key ref) changes.
+ *
+ *   A = anthropic/claude-haiku-4-5          (Telnyx native)
+ *   B = moonshotai/Kimi-K2.5               (Telnyx native)
+ *   C = google/gemini-2.5-flash-lite       (secret: gemini_api_key)
+ *   D = openai/gpt-4o-mini                 (secret: openai_key)
+ *
+ * Usage:
  *   node scripts/telnyx-official-baseline-866.mjs --verify-secret
- *   node scripts/telnyx-official-baseline-866.mjs --model google/gemini-2.5-flash-lite
- *   node scripts/telnyx-official-baseline-866.mjs --switch-model google/gemini-2.5-flash-lite
- *   node scripts/telnyx-official-baseline-866.mjs --switch-model anthropic/claude-haiku-4-5
- *   node scripts/telnyx-official-baseline-866.mjs --verify <assistantId>
+ *   node scripts/telnyx-official-baseline-866.mjs --list-profiles
+ *   node scripts/telnyx-official-baseline-866.mjs --profile A
+ *   node scripts/telnyx-official-baseline-866.mjs --profile B
+ *   node scripts/telnyx-official-baseline-866.mjs --profile C
+ *   node scripts/telnyx-official-baseline-866.mjs --profile D
+ *   node scripts/telnyx-official-baseline-866.mjs --verify
  *   node scripts/telnyx-official-baseline-866.mjs --restore <snapshot.json>
  */
 import { writeFileSync, readFileSync, mkdirSync, existsSync } from "fs";
@@ -15,22 +24,30 @@ import { join } from "path";
 
 const BASE = (process.env.BASE_URL || "https://transovo.ai").replace(/\/$/, "");
 const BOOTSTRAP = "transovo-smoke-bootstrap-b56f-aug2026";
-const OWNER_EMAIL = (process.env.OWNER_EMAIL || "703deuce@gmail.com").trim().toLowerCase();
+const OWNER_EMAIL = (process.env.OWNER_EMAIL || "703deuce@gmail.com")
+  .trim()
+  .toLowerCase();
 const E164 = (process.env.PHONE_E164 || "+18663464256").trim();
-const OUT_DIR = process.env.BASELINE_OUT || "/opt/cursor/artifacts/telnyx-official-baseline";
+const OUT_DIR =
+  process.env.BASELINE_OUT || "/opt/cursor/artifacts/telnyx-official-baseline";
 const DEFAULT_ASSISTANT =
   process.env.BASELINE_ASSISTANT_ID ||
   "assistant-f2a573af-dde1-4441-a6f1-846aeccc1020";
 const GEMINI_KEY_REF = process.env.GEMINI_API_KEY_REF || "gemini_api_key";
+const OPENAI_KEY_REF = process.env.OPENAI_API_KEY_REF || "openai_key";
 
 const CREATE_ONLY = process.argv.includes("--create-only");
 const VERIFY_SECRET = process.argv.includes("--verify-secret");
+const LIST_PROFILES = process.argv.includes("--list-profiles");
 const VERIFY_IDX = process.argv.indexOf("--verify");
 const RESTORE_IDX = process.argv.indexOf("--restore");
+const PROFILE_IDX = process.argv.indexOf("--profile");
 const MODEL_IDX = process.argv.indexOf("--model");
 const SWITCH_IDX = process.argv.indexOf("--switch-model");
 const ASSISTANT_IDX = process.argv.indexOf("--assistant");
 
+const PROFILE_ARG =
+  PROFILE_IDX >= 0 ? String(process.argv[PROFILE_IDX + 1] || "").trim() : "";
 const MODEL_ARG =
   MODEL_IDX >= 0 ? String(process.argv[MODEL_IDX + 1] || "").trim() : "";
 const SWITCH_MODEL =
@@ -64,6 +81,7 @@ async function post(jar, body) {
       workspaceId: "ws_1",
       e164: E164,
       geminiKeyRef: GEMINI_KEY_REF,
+      openaiKeyRef: OPENAI_KEY_REF,
     }),
   });
   const text = await res.text();
@@ -127,32 +145,72 @@ async function main() {
   }
   console.log("OK login", login.workspaceName || OWNER_EMAIL);
 
-  if (VERIFY_SECRET) {
-    const out = await post(jar, { action: "verify_secret" });
+  if (LIST_PROFILES) {
+    const out = await post(jar, { action: "list_profiles" });
     console.log(JSON.stringify(out.json, null, 2));
-    process.exit(out.ok && out.json?.data?.exists ? 0 : 1);
+    process.exit(out.ok ? 0 : 1);
   }
 
-  if (SWITCH_MODEL) {
+  if (VERIFY_SECRET) {
+    for (const id of [GEMINI_KEY_REF, OPENAI_KEY_REF]) {
+      const out = await post(jar, {
+        action: "verify_secret",
+        secretIdentifier: id,
+      });
+      console.log(
+        id,
+        out.ok && out.json?.data?.exists ? "OK present" : "MISSING",
+        JSON.stringify(out.json?.data || out.json),
+      );
+    }
+    process.exit(0);
+  }
+
+  const profileOrSwitch = PROFILE_ARG || SWITCH_MODEL;
+  if (profileOrSwitch) {
     const assistantId = resolveAssistantId();
-    console.log(`Switching ${assistantId} → ${SWITCH_MODEL} (key=${GEMINI_KEY_REF})`);
+    const isLetter = /^[A-D]$/i.test(profileOrSwitch);
+    console.log(
+      `Switching ${assistantId} → ${isLetter ? `profile ${profileOrSwitch.toUpperCase()}` : profileOrSwitch}`,
+    );
     const out = await post(jar, {
       action: "switch_model",
       assistantId,
-      modelId: SWITCH_MODEL,
+      ...(isLetter
+        ? { profileId: profileOrSwitch.toUpperCase() }
+        : { modelId: profileOrSwitch }),
     });
     if (!out.ok) {
-      console.error("FAIL", out.status, JSON.stringify(out.json).slice(0, 2000));
+      console.error("FAIL", out.status, JSON.stringify(out.json).slice(0, 2500));
       process.exit(1);
     }
-    save(`switch-${SWITCH_MODEL.replace(/\//g, "_")}.json`, out.json);
-    console.log(JSON.stringify(out.json?.data, null, 2));
-    console.log(`\nCall ${E164} to test ${SWITCH_MODEL}.`);
+    const tag = isLetter
+      ? profileOrSwitch.toUpperCase()
+      : profileOrSwitch.replace(/\//g, "_");
+    save(`switch-${tag}.json`, out.json);
+    const d = out.json?.data || {};
+    console.log(
+      JSON.stringify(
+        {
+          profileId: d.profileId,
+          profile: d.profile,
+          before: d.before,
+          live: d.live,
+          matched: d.matched,
+          sharedUnchanged: d.sharedUnchanged,
+        },
+        null,
+        2,
+      ),
+    );
+    console.log(`\nCall ${E164} now to test this profile.`);
     process.exit(0);
   }
 
   if (VERIFY_IDX >= 0) {
-    const assistantId = process.argv[VERIFY_IDX + 1] || resolveAssistantId();
+    const maybeId = process.argv[VERIFY_IDX + 1];
+    const assistantId =
+      maybeId && !maybeId.startsWith("--") ? maybeId : resolveAssistantId();
     const out = await post(jar, { action: "verify", assistantId });
     console.log(JSON.stringify(out.json, null, 2));
     save(`verify-${assistantId}.json`, out.json);
@@ -171,16 +229,14 @@ async function main() {
   }
 
   const action = CREATE_ONLY ? "create" : "create_and_route";
-  console.log(
-    `Calling ${BASE} action=${action} e164=${E164}` +
-      (MODEL_ARG ? ` model=${MODEL_ARG}` : ""),
-  );
+  console.log(`Calling ${BASE} action=${action} e164=${E164}`);
   const out = await post(jar, {
     action,
     ...(MODEL_ARG ? { modelId: MODEL_ARG } : {}),
+    ...(PROFILE_ARG ? { profileId: PROFILE_ARG } : { profileId: "A" }),
   });
   if (!out.ok) {
-    console.error("FAIL", out.status, JSON.stringify(out.json).slice(0, 2000));
+    console.error("FAIL", out.status, JSON.stringify(out.json).slice(0, 2500));
     process.exit(1);
   }
 
@@ -194,35 +250,13 @@ async function main() {
   save("route.json", d.route);
   if (d.route?.snapshot) save("snapshot.json", d.route);
 
-  console.log("\n=== TELNYX ULTRA-LOW-LATENCY BASELINE ===");
+  console.log("\n=== BASELINE READY ===");
   console.log("assistantId:", d.assistantId);
-  console.log("activeVersionId:", d.activeVersionId);
-  console.log("preferredModel:", d.preferredModel);
+  console.log("profileId:", d.profileId);
   console.log("usedModel:", d.usedModel);
-  console.log("geminiKeyRef:", d.geminiKeyRef);
-  console.log("modelNote:", d.modelNote);
-  console.log("modelAttempts:", JSON.stringify(d.modelAttempts));
-  console.log("model live:", d.live?.model);
-  console.log("llm_api_key_ref live:", d.live?.llm_api_key_ref ?? null);
-  console.log("stt live:", d.live?.transcription?.model);
-  console.log(
-    "stt settings (Telnyx-inserted):",
-    JSON.stringify(d.live?.transcription?.settings),
-  );
-  console.log("voice live:", d.live?.voice_settings?.voice);
-  console.log(
-    "tools:",
-    Array.isArray(d.live?.tools) ? d.live.tools.length : d.providerInserted?.tool_count,
-  );
-  console.log("dynvar webhook:", d.live?.dynamic_variables_webhook_url ?? null);
-  if (d.route?.route) {
-    console.log("\nROUTE:", d.route.route.path);
-    console.log("matched:", d.route.route.matched);
-  }
-  console.log(`\nCall ${E164} now. Measure caller-end → first assistant audio.`);
-  console.log(
-    "Switch models later:\n  node scripts/telnyx-official-baseline-866.mjs --switch-model google/gemini-2.5-flash-lite\n  node scripts/telnyx-official-baseline-866.mjs --switch-model anthropic/claude-haiku-4-5",
-  );
+  console.log("llm_api_key_ref:", d.live?.llm_api_key_ref ?? d.llmApiKeyRef);
+  if (d.route?.route) console.log("ROUTE:", d.route.route.path);
+  console.log(`\nCall ${E164}. Switch with --profile A|B|C|D`);
 }
 
 main().catch((err) => {
