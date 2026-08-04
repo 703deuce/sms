@@ -92,7 +92,8 @@ export async function middleware(request: NextRequest) {
     "transovo-smoke-bootstrap-b56f-aug2026";
   const smokeOpsPath =
     pathname === "/api/numbers/telnyx-outbound-repair" ||
-    pathname === "/api/numbers/telnyx-inbound-repair";
+    pathname === "/api/numbers/telnyx-inbound-repair" ||
+    pathname === "/api/voice/telnyx-official-baseline";
 
   if (!session && !isPublic && !(smokeBootstrap && smokeOpsPath)) {
     // API routes without a session should 401 JSON, not HTML login redirect.
