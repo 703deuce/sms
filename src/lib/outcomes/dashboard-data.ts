@@ -25,7 +25,6 @@ export type AttentionItem = {
   id: string;
   title: string;
   tone: "danger" | "warning" | "caution";
-  icon: "calendar" | "sms" | "balance";
   actionLabel: string;
   href: string;
 };
@@ -166,7 +165,6 @@ export async function loadSolutionsDashboardData(
         id: "calendar",
         title: "Calendar Disconnected",
         tone: "danger",
-        icon: "calendar",
         actionLabel: "Reconnect",
         href: "/voice/calendars",
       },
@@ -174,7 +172,6 @@ export async function loadSolutionsDashboardData(
         id: "opt-in",
         title: "SMS Opt-In Missing",
         tone: "warning",
-        icon: "sms",
         actionLabel: "Fix Now",
         href: "/compliance/consent",
       },
@@ -182,7 +179,6 @@ export async function loadSolutionsDashboardData(
         id: "balance",
         title: "Low Balance",
         tone: "caution",
-        icon: "balance",
         actionLabel: "Fix Now",
         href: "/settings/billing",
       },
@@ -192,7 +188,7 @@ export async function loadSolutionsDashboardData(
         id: "book",
         label: "Book Appointments",
         countLabel: "7 events",
-        progress: 70,
+        progress: 78,
         icon: "calendar",
         iconTone: "bg-emerald-100 text-emerald-600",
         href: outcomeHref("appointment-booking"),
@@ -201,7 +197,7 @@ export async function loadSolutionsDashboardData(
         id: "after-hours",
         label: "Answer After Hours",
         countLabel: "12 calls",
-        progress: 55,
+        progress: 52,
         icon: "moon",
         iconTone: "bg-violet-100 text-violet-600",
         href: outcomeHref("after-hours"),
@@ -210,7 +206,7 @@ export async function loadSolutionsDashboardData(
         id: "reviews",
         label: "Get More Reviews",
         countLabel: "4 reviews",
-        progress: 35,
+        progress: 22,
         icon: "star",
         iconTone: "bg-amber-100 text-amber-600",
         href: outcomeHref("review-requests"),
