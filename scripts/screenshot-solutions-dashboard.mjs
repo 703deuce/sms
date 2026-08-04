@@ -27,49 +27,44 @@ async function smokeLogin(context) {
 }
 
 async function checkReady(page) {
-  // Scope to main so sidebar labels don't false-positive.
   const mainEl = page.locator("main");
   const text = (await mainEl.count())
     ? await mainEl.first().innerText()
     : await page.locator("body").innerText();
   const checks = {
     hasHero: /What do you want Transovo to handle/i.test(text),
-    hasSubtitle: /Quickly manage your AI and messaging solutions/i.test(text),
+    hasSubtitle: /Choose from our library of pre-built solutions/i.test(text),
     hasCards:
-      /Cover Missed Calls/i.test(text) &&
-      /Welcome New Customers/i.test(text) &&
-      /Get More Reviews/i.test(text) &&
-      /Answer After Hours/i.test(text) &&
-      /12 Calls/i.test(text) &&
-      /20 SMS/i.test(text),
-    hasBadges:
-      /\bWorking\b/i.test(text) &&
-      /Ready to Start/i.test(text) &&
-      /\bDraft\b/i.test(text),
-    hasAttention:
-      /Needs Attention/i.test(text) &&
-      /Calendar Disconnected/i.test(text) &&
-      /SMS Opt-In Missing/i.test(text) &&
-      /Low Balance/i.test(text),
+      /Catch Missed Calls/i.test(text) &&
+      /Capture Leads After Hours/i.test(text) &&
+      /Welcome & Wow Customers/i.test(text) &&
+      /Nurture New Leads/i.test(text) &&
+      /Win Back Lost Leads/i.test(text),
+    hasBadges: /125 Runs/i.test(text) && /240 Runs/i.test(text) && /\bDraft\b/i.test(text),
+    hasActionNeeded:
+      /Action Needed/i.test(text) &&
+      /Collect Testimonials/i.test(text) &&
+      /Low Account Balance/i.test(text),
     hasActive:
-      /Top Active Solutions/i.test(text) && /7 events/i.test(text),
-    hasStats: /Total Calls Today/i.test(text) && /from yesterday/i.test(text),
+      /The Active Solutions/i.test(text) && /Running/i.test(text),
+    hasEvents: /Recent Events/i.test(text) && /Sarah Smith/i.test(text),
+    hasStats: /Calls Answered/i.test(text) && /from last week/i.test(text),
     hasRecommended:
-      /Recommended Next/i.test(text) && /Bring Back Past Customers/i.test(text),
-    hasButtons: /View All Solutions/i.test(text) && /Add Solution/i.test(text),
-    hasMiddotMetrics: /12 Calls\s*·\s*0 SMS/i.test(text) || /12 Calls\s*·\s*0 SMS/.test(text),
+      /Recommended Next/i.test(text) && /Bring Back Old Customers/i.test(text),
+    hasButtons: /New Solution/i.test(text) && /View All Solutions/i.test(text),
     oldDash:
-      /A high-level view of your current solutions/i.test(text) ||
-      /Qualify New Leads/i.test(text) ||
-      /Main Company Menu/i.test(text) ||
-      /New Solution/i.test(text) ||
-      /Add Number/i.test(text),
+      /Quickly manage your AI and messaging solutions/i.test(text) ||
+      /Cover Missed Calls/i.test(text) ||
+      /Ready to Start/i.test(text) ||
+      /Needs Attention/i.test(text) ||
+      /Top Active Solutions/i.test(text),
   };
-  // Sticky header should not repeat the hero title on /outcomes.
-  const headerTitleCount = await page.locator("header h1").count();
-  const headerTitleText =
-    headerTitleCount > 0 ? (await page.locator("header h1").first().innerText()).trim() : "";
-  checks.noChromeTitle = !headerTitleText;
+
+  const aside = (await page.locator("aside").count())
+    ? await page.locator("aside").first().innerText()
+    : "";
+  checks.hasJane = /Jane Riley/i.test(aside);
+  checks.hasLowerBrand = /transovo/i.test(aside) && !/Transovo SMS/i.test(aside);
 
   return {
     ...checks,
@@ -78,13 +73,13 @@ async function checkReady(page) {
       checks.hasSubtitle &&
       checks.hasCards &&
       checks.hasBadges &&
-      checks.hasAttention &&
+      checks.hasActionNeeded &&
       checks.hasActive &&
+      checks.hasEvents &&
       checks.hasStats &&
       checks.hasRecommended &&
       checks.hasButtons &&
-      checks.hasMiddotMetrics &&
-      checks.noChromeTitle &&
+      checks.hasJane &&
       !checks.oldDash,
     snippet: text.replace(/\s+/g, " ").slice(0, 280),
   };
@@ -121,24 +116,16 @@ for (let i = 1; i <= 48; i++) {
   try {
     await smokeLogin(context);
     await context.addCookies([
-      {
-        name: "transovo_nav_view",
-        value: "solutions",
-        url: BASE,
-      },
+      { name: "transovo_nav_view", value: "solutions", url: BASE },
     ]);
-    await page.goto(`${BASE}/outcomes`, { waitUntil: "networkidle", timeout: 60000 });
-    await page.waitForTimeout(1000);
-    const toggle = page.getByRole("button", { name: /^Solutions$/i });
-    if (await toggle.count()) {
-      await toggle.first().click().catch(() => null);
-      await page.waitForTimeout(400);
-      await page.goto(`${BASE}/outcomes`, { waitUntil: "networkidle", timeout: 60000 });
-      await page.waitForTimeout(800);
-    }
+    await page.goto(`${BASE}/outcomes?v=${Date.now()}`, {
+      waitUntil: "networkidle",
+      timeout: 60000,
+    });
+    await page.waitForTimeout(800);
     lastStatus = await checkReady(page);
     console.log(
-      `[${i}] ready=${lastStatus.ready} subtitle=${lastStatus.hasSubtitle} cards=${lastStatus.hasCards} badges=${lastStatus.hasBadges} old=${lastStatus.oldDash}`,
+      `[${i}] ready=${lastStatus.ready} subtitle=${lastStatus.hasSubtitle} cards=${lastStatus.hasCards} jane=${lastStatus.hasJane} old=${lastStatus.oldDash}`,
     );
     if (lastStatus.ready) {
       ready = true;

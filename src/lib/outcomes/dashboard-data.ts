@@ -1,11 +1,11 @@
 /**
- * Solutions Dashboard data shaped to the control-center mockup.
+ * Solutions Dashboard data shaped to the latest control-center mockup.
  * Values mirror the reference composition for pixel-parity.
  */
 
 import { outcomeHref } from "@/lib/outcomes/registry";
 
-export type FeaturedBadge = "working" | "ready" | "active" | "draft";
+export type FeaturedBadge = "runs" | "active" | "draft";
 
 export type FeaturedSolutionCard = {
   slug: string;
@@ -16,15 +16,16 @@ export type FeaturedSolutionCard = {
   metricPrimary: string;
   metricSecondary: string;
   actionLabel: string;
+  actionTone: "primary" | "outline";
   href: string;
-  icon: "phone-missed" | "moon" | "calendar" | "mail" | "star" | "welcome";
+  icon: "phone-missed" | "moon" | "calendar" | "welcome" | "sparkles" | "reactivate";
   iconTone: string;
 };
 
-export type AttentionItem = {
+export type ActionNeededItem = {
   id: string;
   title: string;
-  tone: "danger" | "warning" | "caution";
+  description: string;
   actionLabel: string;
   href: string;
 };
@@ -32,10 +33,9 @@ export type AttentionItem = {
 export type ActiveSolutionRow = {
   id: string;
   label: string;
-  countLabel: string;
-  progress: number;
-  icon: "calendar" | "moon" | "star";
-  iconTone: string;
+  sparkline: number[];
+  status: "active" | "draft" | "running";
+  statusLabel: string;
   href: string;
 };
 
@@ -50,7 +50,7 @@ export type RecommendedCard = {
   slug: string;
   title: string;
   href: string;
-  icon: "calendar" | "mail" | "users";
+  icon: "clock" | "phone-missed" | "users";
   iconTone: string;
 };
 
@@ -59,12 +59,13 @@ export type WeekStat = {
   value: number;
   deltaLabel: string;
   deltaTone: "up" | "down" | "flat";
-  icon: "phone" | "calendar" | "users" | "star";
+  icon: "phone" | "calendar" | "sparkles" | "star";
+  iconTone: string;
 };
 
 export type SolutionsDashboardData = {
   featured: FeaturedSolutionCard[];
-  attention: AttentionItem[];
+  actionNeeded: ActionNeededItem[];
   activeSolutions: ActiveSolutionRow[];
   activity: ActivityRow[];
   recommended: RecommendedCard[];
@@ -79,29 +80,31 @@ export async function loadSolutionsDashboardData(
     featured: [
       {
         slug: "missed-overflow",
-        title: "Cover Missed Calls",
+        title: "Catch Missed Calls",
         description:
-          "Let your team answer first, then have AI step in when nobody picks up.",
-        badge: "working",
-        badgeLabel: "Working",
-        metricPrimary: "12 Calls",
-        metricSecondary: "0 SMS",
-        actionLabel: "Setup",
+          "Never miss a customer again. Automatically answer and log calls.",
+        badge: "runs",
+        badgeLabel: "125 Runs",
+        metricPrimary: "12 Today",
+        metricSecondary: "98% Success",
+        actionLabel: "Manage",
+        actionTone: "outline",
         href: outcomeHref("missed-overflow"),
         icon: "phone-missed",
         iconTone: "bg-violet-100 text-violet-600",
       },
       {
         slug: "after-hours",
-        title: "Answer After Hours",
+        title: "Capture Leads After Hours",
         description:
-          "Automatically handle calls that come in when you're closed.",
-        badge: "ready",
-        badgeLabel: "Ready to Start",
-        metricPrimary: "0 Calls",
-        metricSecondary: "Set Hours",
-        actionLabel: "Set up",
-        href: outcomeHref("after-hours", "setup"),
+          "Engage visitors when your team is away with smart auto-responses.",
+        badge: "runs",
+        badgeLabel: "240 Runs",
+        metricPrimary: "22 Today",
+        metricSecondary: "96.5% Success",
+        actionLabel: "Manage",
+        actionTone: "outline",
+        href: outcomeHref("after-hours"),
         icon: "moon",
         iconTone: "bg-violet-100 text-violet-600",
       },
@@ -109,126 +112,135 @@ export async function loadSolutionsDashboardData(
         slug: "appointment-booking",
         title: "Book Appointments",
         description:
-          "Your AI receptionist can check availability and schedule callers.",
+          "AI-powered scheduling that syncs directly with your calendar.",
         badge: "active",
         badgeLabel: "Active",
-        metricPrimary: "5 Booked",
-        metricSecondary: "12 SMS",
-        actionLabel: "Manage",
+        metricPrimary: "105 Monthly",
+        metricSecondary: "5 Today",
+        actionLabel: "View",
+        actionTone: "outline",
         href: outcomeHref("appointment-booking"),
         icon: "calendar",
         iconTone: "bg-emerald-100 text-emerald-600",
       },
       {
-        slug: "instant-lead-response",
-        title: "Respond to New Inquiries",
-        description: "Instantly reply to website forms and new inquiries.",
-        badge: "working",
-        badgeLabel: "Working",
-        metricPrimary: "20 SMS",
-        metricSecondary: "11 Voice",
-        actionLabel: "Setup",
-        href: outcomeHref("instant-lead-response"),
-        icon: "mail",
+        slug: "client-onboarding",
+        title: "Welcome & Wow Customers",
+        description:
+          "Send personalized onboarding messages to new clients automatically.",
+        badge: "runs",
+        badgeLabel: "58 Runs",
+        metricPrimary: "88 Total",
+        metricSecondary: "5 Today",
+        actionLabel: "View",
+        actionTone: "outline",
+        href: outcomeHref("client-onboarding"),
+        icon: "welcome",
         iconTone: "bg-sky-100 text-sky-600",
       },
       {
-        slug: "review-requests",
-        title: "Get More Reviews",
-        description: "Ask happy customers for Google and Facebook reviews.",
+        slug: "instant-lead-response",
+        title: "Nurture New Leads",
+        description:
+          "Automatic follow-ups to turn interested visitors into paying customers.",
         badge: "draft",
         badgeLabel: "Draft",
-        metricPrimary: "0 SMS",
-        metricSecondary: "0 Links",
-        actionLabel: "Set up",
-        href: outcomeHref("review-requests", "setup"),
-        icon: "star",
+        metricPrimary: "88 Total",
+        metricSecondary: "5 Today",
+        actionLabel: "Edit",
+        actionTone: "outline",
+        href: outcomeHref("instant-lead-response", "setup"),
+        icon: "sparkles",
         iconTone: "bg-amber-100 text-amber-600",
       },
       {
-        slug: "client-onboarding",
-        title: "Welcome New Customers",
+        slug: "customer-reactivation",
+        title: "Win Back Lost Leads",
         description:
-          "Send welcome messages, collect information, and schedule next steps.",
+          "Re-engage customers who haven't interacted in a while.",
         badge: "active",
         badgeLabel: "Active",
-        metricPrimary: "4 Sent",
-        metricSecondary: "",
+        metricPrimary: "88 Total",
+        metricSecondary: "5 Today",
         actionLabel: "Manage",
-        href: outcomeHref("client-onboarding"),
-        icon: "welcome",
+        actionTone: "primary",
+        href: outcomeHref("customer-reactivation"),
+        icon: "reactivate",
         iconTone: "bg-emerald-100 text-emerald-600",
       },
     ],
-    attention: [
+    actionNeeded: [
       {
-        id: "calendar",
-        title: "Calendar Disconnected",
-        tone: "danger",
-        actionLabel: "Reconnect",
-        href: "/voice/calendars",
+        id: "testimonials",
+        title: "Collect Testimonials",
+        description: "Complete your campaign setup to start collecting reviews.",
+        actionLabel: "Configure",
+        href: outcomeHref("review-requests", "setup"),
       },
       {
-        id: "opt-in",
-        title: "SMS Opt-In Missing",
-        tone: "warning",
-        actionLabel: "Fix Now",
-        href: "/compliance/consent",
+        id: "appointment",
+        title: "New Appointment Pending",
+        description: "A customer requested a slot and is waiting for confirmation.",
+        actionLabel: "Confirm",
+        href: "/integrations/native/appointments",
       },
       {
         id: "balance",
-        title: "Low Balance",
-        tone: "caution",
-        actionLabel: "Fix Now",
+        title: "Low Account Balance",
+        description: "Your SMS credits are running low — top up to stay live.",
+        actionLabel: "Add Credits",
         href: "/settings/billing",
       },
     ],
     activeSolutions: [
       {
+        id: "missed",
+        label: "Catch Missed Calls",
+        sparkline: [4, 8, 6, 10, 7, 12, 9, 14, 11, 13],
+        status: "active",
+        statusLabel: "Active",
+        href: outcomeHref("missed-overflow"),
+      },
+      {
+        id: "nurture",
+        label: "Nurture New Leads",
+        sparkline: [2, 3, 5, 4, 6, 5, 7, 6, 8, 7],
+        status: "draft",
+        statusLabel: "Draft",
+        href: outcomeHref("instant-lead-response"),
+      },
+      {
         id: "book",
         label: "Book Appointments",
-        countLabel: "7 events",
-        progress: 78,
-        icon: "calendar",
-        iconTone: "bg-emerald-100 text-emerald-600",
+        sparkline: [6, 9, 8, 12, 10, 14, 11, 15, 13, 16],
+        status: "running",
+        statusLabel: "Running",
         href: outcomeHref("appointment-booking"),
-      },
-      {
-        id: "after-hours",
-        label: "Answer After Hours",
-        countLabel: "12 calls",
-        progress: 52,
-        icon: "moon",
-        iconTone: "bg-violet-100 text-violet-600",
-        href: outcomeHref("after-hours"),
-      },
-      {
-        id: "reviews",
-        label: "Get More Reviews",
-        countLabel: "4 reviews",
-        progress: 22,
-        icon: "star",
-        iconTone: "bg-amber-100 text-amber-600",
-        href: outcomeHref("review-requests"),
       },
     ],
     activity: [
       {
         id: "1",
-        title: "Appointment scheduled - John Smith",
-        when: "2m ago",
-        href: "/integrations/native/appointments",
+        title: "Missed Call Back - 555-0123 handled",
+        when: "5m ago",
+        href: outcomeHref("missed-overflow"),
       },
       {
         id: "2",
-        title: "New inquiry from Sarah J",
-        when: "18m ago",
+        title: "Lead Captured - Sarah Smith (Facebook)",
+        when: "12m ago",
         href: "/integrations/native/leads",
       },
       {
         id: "3",
-        title: "Review received - Dave Wilson",
-        when: "41m ago",
+        title: "Appointment Booked - Dr. Miller (2:00 PM)",
+        when: "1hr ago",
+        href: "/integrations/native/appointments",
+      },
+      {
+        id: "4",
+        title: "Review Received - 5 stars (John Doe)",
+        when: "2hr ago",
         href: outcomeHref("review-requests"),
       },
     ],
@@ -237,52 +249,56 @@ export async function loadSolutionsDashboardData(
         slug: "appointment-reminders",
         title: "Appointment Reminders",
         href: outcomeHref("appointment-reminders"),
-        icon: "calendar",
+        icon: "clock",
         iconTone: "bg-violet-100 text-violet-600",
       },
       {
-        slug: "estimate-follow-up",
-        title: "Follow Up on Estimates",
-        href: outcomeHref("estimate-follow-up"),
-        icon: "mail",
-        iconTone: "bg-sky-100 text-sky-600",
+        slug: "missed-call-text-back",
+        title: "Follow Up on Missed",
+        href: outcomeHref("missed-call-text-back"),
+        icon: "phone-missed",
+        iconTone: "bg-emerald-100 text-emerald-600",
       },
       {
         slug: "customer-reactivation",
-        title: "Bring Back Past Customers",
+        title: "Bring Back Old Customers",
         href: outcomeHref("customer-reactivation"),
         icon: "users",
-        iconTone: "bg-emerald-100 text-emerald-600",
+        iconTone: "bg-orange-100 text-orange-600",
       },
     ],
     weekStats: [
       {
-        label: "Total Calls Today",
+        label: "Calls Answered",
         value: 12,
-        deltaLabel: "+2 from yesterday",
+        deltaLabel: "+15% from last week",
         deltaTone: "up",
         icon: "phone",
+        iconTone: "bg-violet-100 text-violet-600",
       },
       {
         label: "Appointments Booked",
         value: 5,
-        deltaLabel: "+1 from yesterday",
+        deltaLabel: "+5% from last week",
         deltaTone: "up",
         icon: "calendar",
+        iconTone: "bg-emerald-100 text-emerald-600",
       },
       {
-        label: "New Inquiries Received",
+        label: "New Leads Captured",
         value: 7,
-        deltaLabel: "-2 from yesterday",
-        deltaTone: "down",
-        icon: "users",
+        deltaLabel: "+10% from last week",
+        deltaTone: "up",
+        icon: "sparkles",
+        iconTone: "bg-sky-100 text-sky-600",
       },
       {
-        label: "Customer Reviews",
+        label: "Reviews Collected",
         value: 4,
-        deltaLabel: "0 from yesterday",
-        deltaTone: "flat",
+        deltaLabel: "+2% from last week",
+        deltaTone: "up",
         icon: "star",
+        iconTone: "bg-orange-100 text-orange-600",
       },
     ],
   };

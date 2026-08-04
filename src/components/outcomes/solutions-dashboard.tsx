@@ -4,14 +4,15 @@ import type {
 } from "@/lib/outcomes/dashboard-data";
 import { cn } from "@/lib/utils";
 import {
-  AlertTriangle,
   Banknote,
   CalendarDays,
-  Mail,
+  Clock3,
   Moon,
   Phone,
   PhoneMissed,
   Plus,
+  RefreshCw,
+  Sparkles,
   Star,
   Users,
 } from "lucide-react";
@@ -21,10 +22,12 @@ const iconMap = {
   "phone-missed": PhoneMissed,
   moon: Moon,
   calendar: CalendarDays,
-  mail: Mail,
-  star: Star,
   welcome: Banknote,
+  sparkles: Sparkles,
+  reactivate: RefreshCw,
   phone: Phone,
+  star: Star,
+  clock: Clock3,
   users: Users,
 } as const;
 
@@ -39,14 +42,67 @@ function StatusBadge({
     <span
       className={cn(
         "inline-flex h-[22px] items-center rounded-full px-2.5 text-[11px] font-semibold leading-none",
-        badge === "working" && "bg-emerald-50 text-emerald-700",
-        badge === "ready" && "bg-[#EEF2FF] text-[#4F46E5]",
+        badge === "runs" && "bg-slate-100 text-slate-600",
         badge === "active" && "bg-emerald-50 text-emerald-700",
-        badge === "draft" && "bg-[#FFF7ED] text-[#C2410C]",
+        badge === "draft" && "bg-amber-50 text-amber-700",
       )}
     >
       {label}
     </span>
+  );
+}
+
+function ActiveStatusBadge({
+  status,
+  label,
+}: {
+  status: "active" | "draft" | "running";
+  label: string;
+}) {
+  return (
+    <span
+      className={cn(
+        "inline-flex h-[22px] items-center rounded-full px-2.5 text-[11px] font-semibold leading-none",
+        status === "active" && "bg-emerald-50 text-emerald-700",
+        status === "draft" && "bg-amber-50 text-amber-700",
+        status === "running" && "bg-sky-50 text-sky-700",
+      )}
+    >
+      {label}
+    </span>
+  );
+}
+
+function MiniSparkline({ values }: { values: number[] }) {
+  const max = Math.max(...values, 1);
+  const min = Math.min(...values, 0);
+  const range = Math.max(max - min, 1);
+  const w = 72;
+  const h = 22;
+  const points = values
+    .map((v, i) => {
+      const x = (i / Math.max(values.length - 1, 1)) * w;
+      const y = h - ((v - min) / range) * (h - 2) - 1;
+      return `${x},${y}`;
+    })
+    .join(" ");
+  return (
+    <svg
+      width={w}
+      height={h}
+      viewBox={`0 0 ${w} ${h}`}
+      className="shrink-0 text-[#3B82F6]"
+      aria-hidden
+    >
+      <polyline
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        points={points}
+      />
+    </svg>
   );
 }
 
@@ -55,28 +111,28 @@ export function SolutionsDashboardView({ data }: { data: SolutionsDashboardData 
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="max-w-[560px]">
+        <div className="max-w-[640px]">
           <h2 className="text-[28px] font-bold leading-tight tracking-[-0.02em] text-[#111827]">
             Solutions Dashboard
           </h2>
           <p className="mt-1.5 text-[14px] leading-relaxed text-[#6B7280]">
-            Quickly manage your AI and messaging solutions to drive results for
-            your business.
+            Choose from our library of pre-built solutions to supercharge your
+            business.
           </p>
         </div>
-        <div className="flex shrink-0 items-center gap-2.5">
-          <Link
-            href="/outcomes/answer-every-call"
-            className="inline-flex h-9 items-center rounded-lg border border-[#E5E7EB] bg-white px-3.5 text-[13px] font-semibold text-[#111827] shadow-sm hover:bg-slate-50"
-          >
-            View All Solutions
-          </Link>
+        <div className="flex shrink-0 items-center gap-3">
           <Link
             href="/outcomes/custom-automation"
-            className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[#3B82F6] px-3.5 text-[13px] font-semibold text-white shadow-sm hover:bg-[#2563EB]"
+            className="inline-flex h-9 items-center gap-1 text-[13px] font-semibold text-[#3B82F6] hover:text-[#2563EB]"
           >
             <Plus className="h-3.5 w-3.5" />
-            Add Solution
+            New Solution
+          </Link>
+          <Link
+            href="/outcomes/answer-every-call"
+            className="inline-flex h-9 items-center rounded-lg bg-[#3B82F6] px-3.5 text-[13px] font-semibold text-white shadow-sm hover:bg-[#2563EB]"
+          >
+            View All Solutions
           </Link>
         </div>
       </div>
@@ -89,8 +145,6 @@ export function SolutionsDashboardView({ data }: { data: SolutionsDashboardData 
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {data.featured.map((card) => {
             const Icon = iconMap[card.icon];
-            const primaryAction =
-              card.actionLabel === "Manage" ? "outline" : "primary";
             return (
               <div
                 key={card.slug}
@@ -116,18 +170,14 @@ export function SolutionsDashboardView({ data }: { data: SolutionsDashboardData 
                 <div className="mt-auto flex items-center justify-between gap-3 pt-4">
                   <div className="flex items-center gap-2 text-[12px] font-medium text-[#6B7280]">
                     <span>{card.metricPrimary}</span>
-                    {card.metricSecondary ? (
-                      <>
-                        <span className="text-[#D1D5DB]">·</span>
-                        <span>{card.metricSecondary}</span>
-                      </>
-                    ) : null}
+                    <span className="text-[#D1D5DB]">·</span>
+                    <span>{card.metricSecondary}</span>
                   </div>
                   <Link
                     href={card.href}
                     className={cn(
                       "inline-flex h-8 items-center rounded-lg px-3 text-[12px] font-semibold transition",
-                      primaryAction === "primary"
+                      card.actionTone === "primary"
                         ? "bg-[#3B82F6] text-white hover:bg-[#2563EB]"
                         : "border border-[#E5E7EB] bg-white text-[#111827] hover:bg-slate-50",
                     )}
@@ -144,26 +194,24 @@ export function SolutionsDashboardView({ data }: { data: SolutionsDashboardData 
       {/* Middle row */}
       <section className="grid gap-4 lg:grid-cols-3">
         <div className="rounded-xl border border-[#E5E7EB] bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-          <h3 className="text-[14px] font-bold text-[#111827]">Needs Attention</h3>
-          <ul className="mt-3.5 space-y-3">
-            {data.attention.map((item) => (
-              <li key={item.id} className="flex items-center gap-2.5">
-                <span
-                  className={cn(
-                    "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg",
-                    item.tone === "danger" && "bg-rose-100 text-rose-600",
-                    item.tone === "warning" && "bg-orange-100 text-orange-600",
-                    item.tone === "caution" && "bg-amber-100 text-amber-600",
-                  )}
-                >
-                  <AlertTriangle className="h-3.5 w-3.5" strokeWidth={2.25} />
-                </span>
-                <span className="min-w-0 flex-1 text-[13px] font-medium text-[#111827]">
-                  {item.title}
-                </span>
+          <h3 className="flex items-center gap-2 text-[14px] font-bold text-[#111827]">
+            <span className="h-2 w-2 rounded-full bg-rose-500" />
+            Action Needed
+          </h3>
+          <ul className="mt-3.5 space-y-3.5">
+            {data.actionNeeded.map((item) => (
+              <li key={item.id} className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-[13px] font-semibold text-[#111827]">
+                    {item.title}
+                  </p>
+                  <p className="mt-0.5 line-clamp-2 text-[12px] leading-snug text-[#6B7280]">
+                    {item.description}
+                  </p>
+                </div>
                 <Link
                   href={item.href}
-                  className="shrink-0 text-[12px] font-semibold text-[#3B82F6] hover:underline"
+                  className="inline-flex h-8 shrink-0 items-center rounded-lg border border-[#E5E7EB] bg-white px-2.5 text-[12px] font-semibold text-[#111827] hover:bg-slate-50"
                 >
                   {item.actionLabel}
                 </Link>
@@ -174,45 +222,33 @@ export function SolutionsDashboardView({ data }: { data: SolutionsDashboardData 
 
         <div className="rounded-xl border border-[#E5E7EB] bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
           <h3 className="text-[14px] font-bold text-[#111827]">
-            Top Active Solutions
+            The Active Solutions
           </h3>
-          <ul className="mt-3.5 space-y-3.5">
-            {data.activeSolutions.map((row) => {
-              const Icon = iconMap[row.icon];
-              return (
-                <li key={row.id}>
-                  <Link href={row.href} className="block rounded-md hover:bg-slate-50">
-                    <div className="flex items-center gap-2.5 px-0.5">
-                      <span
-                        className={cn(
-                          "flex h-7 w-7 shrink-0 items-center justify-center rounded-md",
-                          row.iconTone,
-                        )}
-                      >
-                        <Icon className="h-3.5 w-3.5" />
-                      </span>
-                      <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-[#111827]">
-                        {row.label}
-                      </span>
-                      <span className="shrink-0 text-[11px] font-medium text-[#6B7280]">
-                        {row.countLabel}
-                      </span>
-                    </div>
-                    <div className="mt-1.5 ml-9 h-1.5 overflow-hidden rounded-full bg-[#F3F4F6]">
-                      <div
-                        className="h-full rounded-full bg-[#3B82F6]"
-                        style={{ width: `${row.progress}%` }}
-                      />
-                    </div>
-                  </Link>
-                </li>
-              );
-            })}
+          <div className="mt-3 grid grid-cols-[1fr_auto_auto] items-center gap-x-3 gap-y-1 border-b border-[#F3F4F6] pb-2 text-[10px] font-semibold uppercase tracking-[0.06em] text-[#9CA3AF]">
+            <span>Solution</span>
+            <span>Activity</span>
+            <span>Status</span>
+          </div>
+          <ul className="mt-1 divide-y divide-[#F3F4F6]">
+            {data.activeSolutions.map((row) => (
+              <li key={row.id}>
+                <Link
+                  href={row.href}
+                  className="grid grid-cols-[1fr_auto_auto] items-center gap-x-3 py-2.5 hover:bg-slate-50"
+                >
+                  <span className="truncate text-[13px] font-semibold text-[#111827]">
+                    {row.label}
+                  </span>
+                  <MiniSparkline values={row.sparkline} />
+                  <ActiveStatusBadge status={row.status} label={row.statusLabel} />
+                </Link>
+              </li>
+            ))}
           </ul>
         </div>
 
         <div className="rounded-xl border border-[#E5E7EB] bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-          <h3 className="text-[14px] font-bold text-[#111827]">Recent Activity</h3>
+          <h3 className="text-[14px] font-bold text-[#111827]">Recent Events</h3>
           <ul className="mt-3.5 space-y-3">
             {data.activity.map((row) => (
               <li key={row.id}>
@@ -280,7 +316,12 @@ export function SolutionsDashboardView({ data }: { data: SolutionsDashboardData 
               className="rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
             >
               <div className="flex items-center gap-3">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#EFF6FF] text-[#3B82F6]">
+                <span
+                  className={cn(
+                    "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg",
+                    stat.iconTone,
+                  )}
+                >
                   <Icon className="h-[18px] w-[18px]" />
                 </span>
                 <div className="min-w-0">
