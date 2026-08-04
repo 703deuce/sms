@@ -4,45 +4,57 @@ import type {
 } from "@/lib/outcomes/dashboard-data";
 import { cn } from "@/lib/utils";
 import {
-  AlertTriangle,
+  Banknote,
   CalendarDays,
-  LayoutGrid,
+  CalendarX2,
+  CircleDollarSign,
   Mail,
-  MessageSquare,
+  MessageSquareOff,
   Moon,
   Phone,
   PhoneMissed,
   Plus,
   Star,
-  TrendingDown,
-  TrendingUp,
   Users,
 } from "lucide-react";
 import Link from "next/link";
-import type { ReactNode } from "react";
+import type { LucideIcon } from "lucide-react";
 
 const iconMap = {
   "phone-missed": PhoneMissed,
   moon: Moon,
   calendar: CalendarDays,
   mail: Mail,
-  users: Users,
-  menu: LayoutGrid,
   star: Star,
-  message: MessageSquare,
+  welcome: Banknote,
   phone: Phone,
+  users: Users,
 } as const;
 
-function Badge({ badge, label }: { badge: FeaturedBadge; label: string }) {
+const attentionIconMap: Record<
+  SolutionsDashboardData["attention"][number]["icon"],
+  LucideIcon
+> = {
+  calendar: CalendarX2,
+  sms: MessageSquareOff,
+  balance: CircleDollarSign,
+};
+
+function StatusBadge({
+  badge,
+  label,
+}: {
+  badge: FeaturedBadge;
+  label: string;
+}) {
   return (
     <span
       className={cn(
-        "inline-flex h-5 items-center rounded-full px-2 text-[10px] font-semibold leading-none",
-        badge === "setup" && "bg-[#2563eb]/10 text-[#2563eb]",
-        badge === "recommended" && "bg-violet-100 text-violet-700",
-        badge === "new" && "bg-emerald-100 text-emerald-700",
-        badge === "active" && "bg-emerald-100 text-emerald-700",
-        badge === "edit" && "bg-slate-100 text-slate-600",
+        "inline-flex h-[22px] items-center rounded-md px-2 text-[11px] font-semibold leading-none",
+        badge === "working" && "bg-emerald-50 text-emerald-700",
+        badge === "ready" && "bg-[#EEF2FF] text-[#4F46E5]",
+        badge === "active" && "bg-emerald-50 text-emerald-700",
+        badge === "draft" && "bg-amber-50 text-amber-700",
       )}
     >
       {label}
@@ -50,114 +62,87 @@ function Badge({ badge, label }: { badge: FeaturedBadge; label: string }) {
   );
 }
 
-function PillButton({
-  href,
-  children,
-  variant = "primary",
-}: {
-  href: string;
-  children: ReactNode;
-  variant?: "primary" | "outline" | "ghost";
-}) {
-  return (
-    <Link
-      href={href}
-      className={cn(
-        "inline-flex h-8 shrink-0 items-center justify-center rounded-lg px-3 text-[12px] font-semibold transition",
-        variant === "primary" &&
-          "bg-[#2563eb] text-white shadow-sm hover:bg-[#1d4ed8]",
-        variant === "outline" &&
-          "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50",
-        variant === "ghost" &&
-          "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50",
-      )}
-    >
-      {children}
-    </Link>
-  );
-}
-
 export function SolutionsDashboardView({ data }: { data: SolutionsDashboardData }) {
   return (
     <div className="space-y-6">
-      {/* Hero */}
+      {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="max-w-2xl">
-          <h2 className="text-[28px] font-bold tracking-[-0.025em] text-slate-900">
+        <div className="max-w-[560px]">
+          <h2 className="text-[28px] font-bold leading-tight tracking-[-0.02em] text-[#111827]">
             Solutions Dashboard
           </h2>
-          <p className="mt-1.5 text-[14px] leading-relaxed text-slate-500">
-            A high-level view of your current solutions and suggestions on how to
-            improve your business.
+          <p className="mt-1.5 text-[14px] leading-relaxed text-[#6B7280]">
+            Quickly manage your AI and messaging solutions to drive results for
+            your business.
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2.5">
           <Link
-            href="/outcomes/custom-automation"
-            className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3.5 text-[13px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+            href="/outcomes/answer-every-call"
+            className="inline-flex h-9 items-center rounded-md border border-[#E5E7EB] bg-white px-3.5 text-[13px] font-semibold text-[#111827] shadow-sm hover:bg-slate-50"
           >
-            <Plus className="h-3.5 w-3.5" />
-            New Solution
+            View All Solutions
           </Link>
           <Link
-            href="/numbers"
-            className="inline-flex h-9 items-center rounded-lg bg-[#2563eb] px-4 text-[13px] font-semibold text-white shadow-sm hover:bg-[#1d4ed8]"
+            href="/outcomes/custom-automation"
+            className="inline-flex h-9 items-center gap-1.5 rounded-md bg-[#3B82F6] px-3.5 text-[13px] font-semibold text-white shadow-sm hover:bg-[#2563EB]"
           >
-            Add Number
+            <Plus className="h-3.5 w-3.5" />
+            Add Solution
           </Link>
         </div>
       </div>
 
-      {/* Featured solution cards */}
+      {/* Featured grid */}
       <section>
-        <h3 className="mb-3 text-[16px] font-bold tracking-tight text-slate-900">
+        <h3 className="mb-3 text-[16px] font-bold tracking-tight text-[#111827]">
           What do you want Transovo to handle?
         </h3>
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {data.featured.map((card) => {
             const Icon = iconMap[card.icon];
+            const primaryAction =
+              card.actionLabel === "Manage" ? "outline" : "primary";
             return (
               <div
                 key={card.slug}
-                className="flex min-h-[132px] flex-col rounded-xl border border-[#E2E8F0] bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
+                className="flex min-h-[168px] flex-col rounded-lg border border-[#E5E7EB] bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
               >
-                <div className="flex items-start gap-3">
+                <div className="flex items-start justify-between gap-3">
                   <span
                     className={cn(
-                      "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl",
+                      "flex h-9 w-9 items-center justify-center rounded-lg",
                       card.iconTone,
                     )}
                   >
-                    <Icon className="h-[18px] w-[18px]" />
+                    <Icon className="h-4 w-4" />
                   </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h4 className="text-[14px] font-bold tracking-tight text-slate-900">
-                        {card.title}
-                      </h4>
-                      <Badge badge={card.badge} label={card.badgeLabel} />
-                    </div>
-                    <p className="mt-1 line-clamp-2 text-[12px] leading-snug text-slate-500">
-                      {card.description}
-                    </p>
-                    <div className="mt-2.5 flex items-center gap-3 text-[11px] font-medium text-slate-500">
-                      <span>{card.metricPrimary}</span>
-                      <span className="text-slate-300">·</span>
-                      <span>{card.metricSecondary}</span>
-                    </div>
-                  </div>
+                  <StatusBadge badge={card.badge} label={card.badgeLabel} />
                 </div>
-                <div className="mt-auto flex justify-end pt-3">
-                  <PillButton
+                <h4 className="mt-3 text-[15px] font-bold tracking-tight text-[#111827]">
+                  {card.title}
+                </h4>
+                <p className="mt-1 line-clamp-2 text-[12px] leading-[1.45] text-[#6B7280]">
+                  {card.description}
+                </p>
+                <div className="mt-auto flex items-center justify-between gap-3 pt-3">
+                  <div className="flex items-center gap-3 text-[12px] font-medium text-[#6B7280]">
+                    <span>{card.metricPrimary}</span>
+                    {card.metricSecondary ? (
+                      <span>{card.metricSecondary}</span>
+                    ) : null}
+                  </div>
+                  <Link
                     href={card.href}
-                    variant={
-                      card.actionLabel === "Set Up" || card.badge === "new"
-                        ? "primary"
-                        : "outline"
-                    }
+                    className={cn(
+                      "inline-flex h-8 items-center rounded-md px-3 text-[12px] font-semibold transition",
+                      primaryAction === "primary"
+                        ? "bg-[#3B82F6] text-white hover:bg-[#2563EB]"
+                        : "border border-[#E5E7EB] bg-white text-[#111827] hover:bg-slate-50",
+                    )}
                   >
                     {card.actionLabel}
-                  </PillButton>
+                  </Link>
                 </div>
               </div>
             );
@@ -165,76 +150,95 @@ export function SolutionsDashboardView({ data }: { data: SolutionsDashboardData 
         </div>
       </section>
 
-      {/* Middle utility row */}
+      {/* Middle row */}
       <section className="grid gap-4 lg:grid-cols-3">
-        <div className="rounded-xl border border-[#E2E8F0] bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-          <div className="flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4 text-rose-500" />
-            <h3 className="text-[14px] font-bold text-slate-900">Needs Attention</h3>
-          </div>
-          <ul className="mt-3 space-y-2">
-            {data.attention.map((item) => (
-              <li
-                key={item.id}
-                className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2.5"
-              >
-                <span className="text-[13px] font-medium text-slate-800">
-                  {item.title}
-                </span>
-                <PillButton href={item.href} variant="outline">
-                  {item.actionLabel}
-                </PillButton>
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        <div className="rounded-xl border border-[#E2E8F0] bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-          <h3 className="text-[14px] font-bold text-slate-900">Top Active Solutions</h3>
-          <ul className="mt-3 space-y-2">
-            {data.activeSolutions.map((row) => {
-              const Icon = iconMap[row.icon];
+        <div className="rounded-lg border border-[#E5E7EB] bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+          <h3 className="text-[14px] font-bold text-[#111827]">Needs Attention</h3>
+          <ul className="mt-3 space-y-2.5">
+            {data.attention.map((item) => {
+              const Icon = attentionIconMap[item.icon];
               return (
-                <li
-                  key={row.id}
-                  className="flex items-center gap-2.5 rounded-lg border border-slate-100 px-3 py-2.5"
-                >
+                <li key={item.id} className="flex items-center gap-2.5">
                   <span
                     className={cn(
-                      "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg",
-                      row.iconTone,
+                      "flex h-7 w-7 shrink-0 items-center justify-center rounded-full",
+                      item.tone === "danger" && "bg-rose-100 text-rose-600",
+                      item.tone === "warning" && "bg-orange-100 text-orange-600",
+                      item.tone === "caution" && "bg-amber-100 text-amber-600",
                     )}
                   >
                     <Icon className="h-3.5 w-3.5" />
                   </span>
-                  <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-slate-900">
-                    {row.label}
+                  <span className="min-w-0 flex-1 text-[13px] font-medium text-[#111827]">
+                    {item.title}
                   </span>
-                  <PillButton href={row.href} variant="outline">
-                    {row.actionLabel}
-                  </PillButton>
+                  <Link
+                    href={item.href}
+                    className="shrink-0 text-[12px] font-semibold text-[#3B82F6] hover:underline"
+                  >
+                    {item.actionLabel}
+                  </Link>
                 </li>
               );
             })}
           </ul>
         </div>
 
-        <div className="rounded-xl border border-[#E2E8F0] bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-          <h3 className="text-[14px] font-bold text-slate-900">Recent Activity</h3>
+        <div className="rounded-lg border border-[#E5E7EB] bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+          <h3 className="text-[14px] font-bold text-[#111827]">
+            Top Active Solutions
+          </h3>
+          <ul className="mt-3 space-y-3">
+            {data.activeSolutions.map((row) => {
+              const Icon = iconMap[row.icon];
+              return (
+                <li key={row.id}>
+                  <Link href={row.href} className="block rounded-md hover:bg-slate-50">
+                    <div className="flex items-center gap-2.5 px-0.5">
+                      <span
+                        className={cn(
+                          "flex h-7 w-7 shrink-0 items-center justify-center rounded-md",
+                          row.iconTone,
+                        )}
+                      >
+                        <Icon className="h-3.5 w-3.5" />
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-[#111827]">
+                        {row.label}
+                      </span>
+                      <span className="shrink-0 text-[11px] font-medium text-[#6B7280]">
+                        {row.countLabel}
+                      </span>
+                    </div>
+                    <div className="mt-1.5 ml-9 h-1.5 overflow-hidden rounded-full bg-slate-100">
+                      <div
+                        className="h-full rounded-full bg-[#3B82F6]"
+                        style={{ width: `${row.progress}%` }}
+                      />
+                    </div>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+
+        <div className="rounded-lg border border-[#E5E7EB] bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+          <h3 className="text-[14px] font-bold text-[#111827]">Recent Activity</h3>
           <ul className="mt-3 space-y-2.5">
             {data.activity.map((row) => (
               <li key={row.id}>
                 <Link
                   href={row.href}
-                  className="flex items-center justify-between gap-3 rounded-lg px-1 py-1 hover:bg-slate-50"
+                  className="flex items-start justify-between gap-3 rounded-md px-0.5 py-0.5 hover:bg-slate-50"
                 >
-                  <span className="flex min-w-0 items-center gap-2">
-                    <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#2563eb]" />
-                    <span className="truncate text-[13px] font-medium text-slate-800">
+                  <span className="flex min-w-0 items-start gap-2">
+                    <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[#3B82F6]" />
+                    <span className="text-[13px] font-medium leading-snug text-[#111827]">
                       {row.title}
                     </span>
                   </span>
-                  <span className="shrink-0 text-[11px] text-slate-400">{row.when}</span>
+                  <span className="shrink-0 text-[11px] text-[#9CA3AF]">{row.when}</span>
                 </Link>
               </li>
             ))}
@@ -244,16 +248,16 @@ export function SolutionsDashboardView({ data }: { data: SolutionsDashboardData 
 
       {/* Recommended Next */}
       <section>
-        <h3 className="mb-3 text-[16px] font-bold tracking-tight text-slate-900">
+        <h3 className="mb-3 text-[16px] font-bold tracking-tight text-[#111827]">
           Recommended Next
         </h3>
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {data.recommended.slice(0, 4).map((card) => {
+        <div className="grid gap-3 md:grid-cols-3">
+          {data.recommended.map((card) => {
             const Icon = iconMap[card.icon];
             return (
               <div
                 key={card.slug}
-                className="flex items-center gap-3 rounded-xl border border-[#E2E8F0] bg-white px-3.5 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
+                className="flex items-center gap-3 rounded-lg border border-[#E5E7EB] bg-white px-3.5 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
               >
                 <span
                   className={cn(
@@ -263,14 +267,14 @@ export function SolutionsDashboardView({ data }: { data: SolutionsDashboardData 
                 >
                   <Icon className="h-4 w-4" />
                 </span>
-                <span className="min-w-0 flex-1 text-[13px] font-semibold leading-snug text-slate-900">
+                <span className="min-w-0 flex-1 text-[13px] font-semibold text-[#111827]">
                   {card.title}
                 </span>
                 <Link
                   href={card.href}
-                  className="inline-flex h-7 shrink-0 items-center rounded-md bg-[#2563eb]/10 px-2.5 text-[11px] font-semibold text-[#2563eb] hover:bg-[#2563eb]/15"
+                  className="inline-flex h-8 shrink-0 items-center rounded-md bg-[#3B82F6] px-3 text-[12px] font-semibold text-white hover:bg-[#2563EB]"
                 >
-                  Add
+                  Set Up
                 </Link>
               </div>
             );
@@ -282,32 +286,34 @@ export function SolutionsDashboardView({ data }: { data: SolutionsDashboardData 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {data.weekStats.map((stat) => {
           const Icon = iconMap[stat.icon];
-          const up = stat.deltaPct >= 0;
-          const Trend = up ? TrendingUp : TrendingDown;
           return (
             <div
               key={stat.label}
-              className="rounded-xl border border-[#E2E8F0] bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
+              className="rounded-lg border border-[#E5E7EB] bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
             >
-              <div className="flex items-start justify-between gap-2">
-                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#2563eb]/10 text-[#2563eb]">
+              <div className="flex items-center gap-2.5">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#EFF6FF] text-[#3B82F6]">
                   <Icon className="h-4 w-4" />
                 </span>
-                <span
-                  className={cn(
-                    "inline-flex items-center gap-1 text-[11px] font-semibold",
-                    up ? "text-emerald-600" : "text-rose-500",
-                  )}
-                >
-                  <Trend className="h-3 w-3" />
-                  {up ? "+" : ""}
-                  {stat.deltaPct}% last 7 days
-                </span>
+                <div className="min-w-0">
+                  <p className="text-[20px] font-bold tracking-tight text-[#111827]">
+                    {stat.value}{" "}
+                    <span className="text-[13px] font-semibold text-[#6B7280]">
+                      {stat.label}
+                    </span>
+                  </p>
+                  <p
+                    className={cn(
+                      "mt-0.5 text-[12px] font-medium",
+                      stat.deltaTone === "up" && "text-emerald-600",
+                      stat.deltaTone === "down" && "text-rose-500",
+                      stat.deltaTone === "flat" && "text-[#9CA3AF]",
+                    )}
+                  >
+                    {stat.deltaLabel}
+                  </p>
+                </div>
               </div>
-              <p className="mt-3 text-[22px] font-bold tracking-tight text-slate-900">
-                {stat.value}
-              </p>
-              <p className="mt-0.5 text-[12px] font-medium text-slate-500">{stat.label}</p>
             </div>
           );
         })}
