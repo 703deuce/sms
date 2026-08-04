@@ -18,6 +18,11 @@ import {
 import { VoiceFlowBuilder } from "@/components/voice/flow-builder/voice-flow-builder";
 import { toErrorMessage } from "@/lib/errors";
 import { isUltraVoice, voiceLabel } from "@/lib/voice/telnyx/voices";
+import {
+  DEFAULT_AGENT_VOICE_SPEED,
+  isAstraVoice,
+  resolveVoiceSpeed,
+} from "@/lib/voice/timing-presets";
 import { cn } from "@/lib/utils";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -886,12 +891,34 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
               agentId={agentId}
               expressiveMode={cfg.voiceLanguage?.expressiveMode}
               onChange={(voiceId) => {
+                const prevId = cfg.voiceLanguage?.voiceId;
+                const prevWasAstra = isAstraVoice(prevId);
+                const nextIsAstra = isAstraVoice(voiceId);
+                const prevSpeed = cfg.voiceLanguage?.speed;
+                // When switching Astra ↔ other, adopt the product default speed
+                // unless the user already set a custom non-default value.
+                const prevDefault = prevWasAstra
+                  ? 0.98
+                  : DEFAULT_AGENT_VOICE_SPEED;
+                const shouldRetargetSpeed =
+                  prevWasAstra !== nextIsAstra &&
+                  (prevSpeed == null ||
+                    Math.abs(Number(prevSpeed) - prevDefault) < 0.011);
                 updateConfig({
                   voiceLanguage: {
                     ...cfg.voiceLanguage,
                     voiceId,
+                    ...(shouldRetargetSpeed
+                      ? {
+                          speed: resolveVoiceSpeed({
+                            voiceId,
+                            presetSpeed: DEFAULT_AGENT_VOICE_SPEED,
+                          }),
+                        }
+                      : {}),
                     // Ultra defaults expressive on when not yet chosen.
-                    ...(isUltraVoice(voiceId) && cfg.voiceLanguage?.expressiveMode == null
+                    ...(isUltraVoice(voiceId) &&
+                    cfg.voiceLanguage?.expressiveMode == null
                       ? { expressiveMode: true }
                       : {}),
                   },
@@ -910,7 +937,13 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
                   step="0.1"
                   min="0.5"
                   max="2"
-                  value={cfg.voiceLanguage?.speed ?? 1}
+                  value={
+                    cfg.voiceLanguage?.speed ??
+                    resolveVoiceSpeed({
+                      voiceId: cfg.voiceLanguage?.voiceId,
+                      presetSpeed: DEFAULT_AGENT_VOICE_SPEED,
+                    })
+                  }
                   onChange={(e) =>
                     updateConfig({
                       voiceLanguage: {
@@ -921,7 +954,38 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
                   }
                 />
                 <p className="mt-1 text-[11px] text-muted-foreground">
-                  0.5–2.0 · preview uses the same speed
+                  Default 1.3 for most voices · Astra defaults to 0.98 · 0.5–2.0
+                </p>
+              </div>
+              <div>
+                <Label>Timing preset</Label>
+                <select
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  value={
+                    cfg.voiceLanguage?.timingPreset ||
+                    cfg.voiceTiming?.presetId ||
+                    "NATURAL_DEFAULT"
+                  }
+                  onChange={(e) =>
+                    updateConfig({
+                      voiceLanguage: {
+                        ...cfg.voiceLanguage,
+                        timingPreset: e.target.value,
+                      },
+                      voiceTiming: {
+                        ...cfg.voiceTiming,
+                        presetId: e.target.value,
+                      },
+                    })
+                  }
+                >
+                  <option value="NATURAL_DEFAULT">Natural default</option>
+                  <option value="FAST_RECEPTIONIST">Fast receptionist</option>
+                  <option value="PATIENT_INTAKE">Patient intake</option>
+                  <option value="NOISY_ENVIRONMENT">Noisy environment</option>
+                </select>
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Maps turn-taking / idle reply to Telnyx-supported fields
                 </p>
               </div>
               <div>

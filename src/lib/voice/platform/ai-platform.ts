@@ -1433,15 +1433,32 @@ export async function enableWebCallsAndSyncVoice(
     logVoiceAssistantUpdate,
     sanitizeTelnyxVoiceError,
   } = await import("../telnyx/voices");
+  const {
+    buildTelnyxInterruptionSettings,
+    resolveVoiceTiming,
+    resolveVoiceSpeed,
+  } = await import("../timing-presets");
   const config = parseVoiceAgentConfig(agent.draftConfig);
+  const timing = resolveVoiceTiming({
+    presetId:
+      config.voiceLanguage?.timingPreset || config.voiceTiming?.presetId,
+    voiceId: config.voiceLanguage?.voiceId,
+    explicitSpeed: config.voiceLanguage?.speed,
+    bargeIn: config.voiceLanguage?.bargeIn,
+  });
   const gainDb = Number(config.voiceLanguage?.outputGainDb ?? -5);
   const gainLinear =
     gainDb < 0 && gainDb >= -12
       ? Math.round(Math.pow(10, gainDb / 20) * 1000) / 1000
       : null;
+  const resolvedSpeed = resolveVoiceSpeed({
+    voiceId: config.voiceLanguage?.voiceId || DEFAULT_AGENT_VOICE_ID,
+    explicitSpeed: config.voiceLanguage?.speed,
+    presetSpeed: timing.preset.speech.speed,
+  });
   const voiceBuilt = buildAssistantVoiceSettings({
     voiceRef: config.voiceLanguage?.voiceId || DEFAULT_AGENT_VOICE_ID,
-    speed: config.voiceLanguage?.speed,
+    speed: resolvedSpeed,
     expressiveMode: config.voiceLanguage?.expressiveMode,
     volume: gainLinear,
     apiKeyRef: config.voiceLanguage?.elevenLabsApiKeyRef,
@@ -1486,17 +1503,16 @@ export async function enableWebCallsAndSyncVoice(
   let voiceError: string | null = null;
   let voiceErrorDetail: ReturnType<typeof sanitizeTelnyxVoiceError> | null = null;
   try {
-    const waitSec = Math.max(
-      0.15,
-      Math.min(1.5, (config.voiceLanguage?.endpointingMs ?? 300) / 1000),
-    );
+    const sttModel =
+      config.transcription?.sttModel?.trim() ||
+      process.env.VOICE_TRANSCRIPTION_MODEL?.trim() ||
+      "deepgram/nova-3";
     await ai.updateAssistant(agent.telnyxAssistantId, {
       voice_settings: voiceBuilt.voice_settings,
-      interruption_settings: {
-        enable: config.voiceLanguage?.bargeIn !== false,
-        disable_greeting_interruption: true,
-        start_speaking_plan: { wait_seconds: waitSec },
-      },
+      interruption_settings: buildTelnyxInterruptionSettings(timing.preset, {
+        bargeIn: config.voiceLanguage?.bargeIn,
+        sttModel,
+      }),
       telephony_settings: {
         supports_unauthenticated_web_calls: true,
         ...(config.voiceLanguage?.noiseSuppression === false

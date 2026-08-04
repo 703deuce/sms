@@ -124,6 +124,39 @@ export async function loadVoiceAnalytics(
       ]
     : 0;
 
+  // Caller end-of-speech → first audible agent audio (not LLM completion time).
+  const responseLatencySamples: number[] = [];
+  for (const c of calls) {
+    const meta = (c.metadata || {}) as {
+      responseLatency?: {
+        samples?: Array<{ latencyMs?: number }>;
+        summary?: { medianMs?: number | null };
+      };
+    };
+    const samples = meta.responseLatency?.samples;
+    if (Array.isArray(samples) && samples.length) {
+      for (const s of samples) {
+        if (typeof s?.latencyMs === "number" && s.latencyMs >= 0) {
+          responseLatencySamples.push(s.latencyMs);
+        }
+      }
+    } else if (typeof meta.responseLatency?.summary?.medianMs === "number") {
+      responseLatencySamples.push(meta.responseLatency.summary.medianMs);
+    }
+  }
+  const responseSorted = [...responseLatencySamples].sort((a, b) => a - b);
+  const avgResponseLatencyMs = responseSorted.length
+    ? Math.round(responseSorted.reduce((a, b) => a + b, 0) / responseSorted.length)
+    : null;
+  const medianResponseLatencyMs = responseSorted.length
+    ? responseSorted[Math.floor((responseSorted.length - 1) / 2)]
+    : null;
+  const p95ResponseLatencyMs = responseSorted.length
+    ? responseSorted[
+        Math.min(responseSorted.length - 1, Math.floor(responseSorted.length * 0.95))
+      ]
+    : null;
+
   const diagnostics = await prisma.voiceFailureDiagnostic.findMany({
     where: { workspaceId, createdAt: { gte: since } },
     select: { category: true, code: true },
@@ -179,6 +212,12 @@ export async function loadVoiceAnalytics(
       avgToolLatencyMs,
       p95ToolLatencyMs,
       toolSampleSize: toolLatencies.length,
+      /** Caller end-of-speech → first audible agent audio — not LLM time. */
+      responseLatencyMetric: "caller_end_of_speech_to_first_audible_agent_audio",
+      avgResponseLatencyMs,
+      medianResponseLatencyMs,
+      p95ResponseLatencyMs,
+      responseLatencySampleSize: responseSorted.length,
       diagnosticCounts,
     },
   };

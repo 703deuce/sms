@@ -11,6 +11,14 @@ import {
   resolveProviderVoiceId,
   sanitizeTelnyxVoiceError,
 } from "./voices";
+import {
+  buildTelnyxInterruptionSettings,
+  buildTelnyxTranscriptionSettings,
+  buildTelnyxUserIdleReplySecs,
+  buildTimingInstructionGuidance,
+  resolveVoiceTiming,
+  resolveVoiceSpeed,
+} from "../timing-presets";
 
 function unwrapTelnyxId(res: unknown): string | null {
   if (!res || typeof res !== "object") return null;
@@ -150,18 +158,27 @@ function outputGainLinear(config: VoiceAgentConfig): number | null {
   return Math.round(Math.pow(10, db / 20) * 1000) / 1000;
 }
 
-function interruptionSettingsFromConfig(config: VoiceAgentConfig) {
-  const waitSec = Math.max(
-    0.15,
-    Math.min(1.5, (config.voiceLanguage?.endpointingMs ?? 300) / 1000),
-  );
-  return {
-    enable: config.voiceLanguage?.bargeIn !== false,
-    disable_greeting_interruption: true,
-    start_speaking_plan: {
-      wait_seconds: waitSec,
-    },
-  };
+function resolveTimingForConfig(config: VoiceAgentConfig) {
+  const presetId =
+    config.voiceLanguage?.timingPreset || config.voiceTiming?.presetId;
+  return resolveVoiceTiming({
+    presetId,
+    voiceId: config.voiceLanguage?.voiceId,
+    // Explicit builder speed wins; Astra defaults to 0.98 when unset elsewhere.
+    explicitSpeed: config.voiceLanguage?.speed,
+    bargeIn: config.voiceLanguage?.bargeIn,
+  });
+}
+
+function interruptionSettingsFromConfig(
+  config: VoiceAgentConfig,
+  sttModel?: string,
+) {
+  const timing = resolveTimingForConfig(config);
+  return buildTelnyxInterruptionSettings(timing.preset, {
+    bargeIn: config.voiceLanguage?.bargeIn,
+    sttModel,
+  });
 }
 
 export async function syncTelnyxAssistant(
@@ -273,6 +290,7 @@ export async function syncTelnyxAssistant(
     .filter(Boolean)
     .join(" ");
 
+  const timing = resolveTimingForConfig(config);
   const instructions = [
     config.instructions?.raw ||
       [
@@ -291,6 +309,7 @@ export async function syncTelnyxAssistant(
         .filter(Boolean)
         .join("\n\n"),
     speaksFirstDirective(config),
+    buildTimingInstructionGuidance(timing.preset),
     digest,
     bucketIds.length
       ? "You have a knowledge retrieval tool backed by the business document store. Use it for FAQs, policies, pricing, and detailed questions instead of guessing."
@@ -346,9 +365,14 @@ export async function syncTelnyxAssistant(
   }
 
   const gainLinear = outputGainLinear(config);
+  const resolvedSpeed = resolveVoiceSpeed({
+    voiceId: config.voiceLanguage?.voiceId || DEFAULT_AGENT_VOICE_ID,
+    explicitSpeed: config.voiceLanguage?.speed,
+    presetSpeed: timing.preset.speech.speed,
+  });
   const voiceBuilt = buildAssistantVoiceSettings({
     voiceRef: config.voiceLanguage?.voiceId || DEFAULT_AGENT_VOICE_ID,
-    speed: config.voiceLanguage?.speed,
+    speed: resolvedSpeed,
     expressiveMode: config.voiceLanguage?.expressiveMode,
     volume: gainLinear,
     apiKeyRef: config.voiceLanguage?.elevenLabsApiKeyRef,
@@ -368,10 +392,16 @@ export async function syncTelnyxAssistant(
   const voiceId = voiceBuilt.providerVoiceId;
   // TeXML app id only — never Call Control TELNYX_CONNECTION_ID (causes 10015).
   const texmlAppId = process.env.TELNYX_TEXML_APP_ID?.trim() || "";
+
+  // Resolve STT model before interruption settings (endpointing vs Flux EOT).
+  const sttModel =
+    transcription.sttModel?.trim() ||
+    process.env.VOICE_TRANSCRIPTION_MODEL?.trim() ||
+    "deepgram/nova-3";
+
   const enrichPayload: Record<string, unknown> = {
     voice_settings: voiceBuilt.voice_settings,
-    // Faster turn-taking: shorter wait after caller stops speaking.
-    interruption_settings: interruptionSettingsFromConfig(config),
+    interruption_settings: interruptionSettingsFromConfig(config, sttModel),
     enabled_features: ["telephony"] as string[],
     // Required for in-app browser test calls (TelnyxRTC anonymous_login).
     telephony_settings: {
@@ -382,11 +412,8 @@ export async function syncTelnyxAssistant(
       ...(config.voiceLanguage?.noiseSuppression === false
         ? { noise_suppression: "disabled" }
         : { noise_suppression: "krisp" }),
-      // Soft idle check-in — keep low so the agent doesn't sit in silence.
-      user_idle_reply_secs: Math.max(
-        5,
-        Math.min(30, Math.round((config.voiceLanguage?.silenceTimeoutMs ?? 2500) / 1000) + 3),
-      ),
+      // Soft idle check-in — Telnyx exposes a single timer (first reprompt).
+      user_idle_reply_secs: buildTelnyxUserIdleReplySecs(timing.preset),
     },
     // Tools are pushed and verified separately via pushTools() — do not embed
     // them in the voice/telephony enrich payload (failed combined updates were
@@ -397,10 +424,6 @@ export async function syncTelnyxAssistant(
   }
   // Default assistant STT to Deepgram Nova-3 (punctuated). Builder can override.
   {
-    const sttModel =
-      transcription.sttModel?.trim() ||
-      process.env.VOICE_TRANSCRIPTION_MODEL?.trim() ||
-      "deepgram/nova-3";
     const langRaw =
       transcription.language ||
       config.voiceLanguage?.primaryLanguage ||
@@ -408,10 +431,12 @@ export async function syncTelnyxAssistant(
     const lang = String(langRaw).toLowerCase().startsWith("en")
       ? "en"
       : String(langRaw).split("-")[0] || "en";
+    const settings = buildTelnyxTranscriptionSettings(sttModel, timing.preset);
     enrichPayload.transcription = {
       model: sttModel,
       language: lang,
       ...(transcription.keyterms?.length ? { keyterms: transcription.keyterms } : {}),
+      ...(settings ? { settings } : {}),
     };
   }
 
