@@ -27,33 +27,42 @@ async function smokeLogin(context) {
 }
 
 async function checkReady(page) {
-  const body = await page.locator("body").innerText();
+  // Scope to main so sidebar labels don't false-positive.
+  const mainEl = page.locator("main");
+  const text = (await mainEl.count())
+    ? await mainEl.first().innerText()
+    : await page.locator("body").innerText();
   const checks = {
-    hasHero: /What do you want Transovo to handle/i.test(body),
-    hasSubtitle: /Quickly manage your AI and messaging solutions/i.test(body),
+    hasHero: /What do you want Transovo to handle/i.test(text),
+    hasSubtitle: /Quickly manage your AI and messaging solutions/i.test(text),
     hasCards:
-      /Cover Missed Calls/i.test(body) &&
-      /Welcome New Customers/i.test(body) &&
-      /Get More Reviews/i.test(body) &&
-      /Answer After Hours/i.test(body),
+      /Cover Missed Calls/i.test(text) &&
+      /Welcome New Customers/i.test(text) &&
+      /Get More Reviews/i.test(text) &&
+      /Answer After Hours/i.test(text) &&
+      /12 Calls/i.test(text) &&
+      /20 SMS/i.test(text),
     hasBadges:
-      /Working/i.test(body) &&
-      /Ready to Start/i.test(body) &&
-      /Draft/i.test(body),
+      /\bWorking\b/i.test(text) &&
+      /Ready to Start/i.test(text) &&
+      /\bDraft\b/i.test(text),
     hasAttention:
-      /Needs Attention/i.test(body) &&
-      /Calendar Disconnected/i.test(body) &&
-      /SMS Opt-In Missing/i.test(body),
+      /Needs Attention/i.test(text) &&
+      /Calendar Disconnected/i.test(text) &&
+      /SMS Opt-In Missing/i.test(text) &&
+      /Low Balance/i.test(text),
     hasActive:
-      /Top Active Solutions/i.test(body) && /7 events/i.test(body),
-    hasStats: /Total Calls Today/i.test(body) && /from yesterday/i.test(body),
+      /Top Active Solutions/i.test(text) && /7 events/i.test(text),
+    hasStats: /Total Calls Today/i.test(text) && /from yesterday/i.test(text),
     hasRecommended:
-      /Recommended Next/i.test(body) && /Bring Back Past Customers/i.test(body),
-    hasButtons: /View All Solutions/i.test(body) && /Add Solution/i.test(body),
+      /Recommended Next/i.test(text) && /Bring Back Past Customers/i.test(text),
+    hasButtons: /View All Solutions/i.test(text) && /Add Solution/i.test(text),
     oldDash:
-      /A high-level view of your current solutions/i.test(body) ||
-      /Qualify New Leads/i.test(body) ||
-      /Main Company Menu/i.test(body),
+      /A high-level view of your current solutions/i.test(text) ||
+      /Qualify New Leads/i.test(text) ||
+      /Main Company Menu/i.test(text) ||
+      /New Solution/i.test(text) ||
+      /Add Number/i.test(text),
   };
   return {
     ...checks,
@@ -68,7 +77,7 @@ async function checkReady(page) {
       checks.hasRecommended &&
       checks.hasButtons &&
       !checks.oldDash,
-    snippet: body.replace(/\s+/g, " ").slice(0, 280),
+    snippet: text.replace(/\s+/g, " ").slice(0, 280),
   };
 }
 
