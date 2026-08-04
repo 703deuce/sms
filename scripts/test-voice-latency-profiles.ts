@@ -5,6 +5,9 @@
 import assert from "node:assert/strict";
 import {
   FAST_LLM_MODEL_ID,
+  FLUX_B_BALANCED_PROFILE,
+  FLUX_B_FAST_PROFILE,
+  FLUX_B_PATIENT_PROFILE,
   FLUX_EAGER_LOW_LATENCY_PROFILE,
   LEGACY_CASCADE_PROFILE,
   NATIVE_AUDIO_MODEL_ID,
@@ -16,6 +19,7 @@ import {
   isDeepgramFluxModel,
   isLatencyOptimizedProfile,
   isNativeAudioModel,
+  resolveLatencyProfileAlias,
   rollbackLatencyProfileConfig,
   shouldSkipDynamicVariablesWebhook,
   snapshotProviderLatencyFields,
@@ -54,9 +58,43 @@ assert.equal(
   "not_sent",
 );
 assert.equal(
-  FLUX_EAGER_LOW_LATENCY_PROFILE.fields.telnyxFieldPlan?.endpointingMs_local,
-  "local_ui_only",
+  FLUX_EAGER_LOW_LATENCY_PROFILE.fields.voiceLanguage.endpointingMs,
+  undefined,
 );
+
+section("B_FAST / B_BALANCED / B_PATIENT EOT pairs");
+{
+  assert.deepEqual(FLUX_B_FAST_PROFILE.fields.transcription.settings, {
+    eot_threshold: 0.75,
+    eager_eot_threshold: 0.35,
+    eot_timeout_ms: 5000,
+  });
+  assert.deepEqual(FLUX_B_BALANCED_PROFILE.fields.transcription.settings, {
+    eot_threshold: 0.8,
+    eager_eot_threshold: 0.4,
+    eot_timeout_ms: 5000,
+  });
+  assert.deepEqual(FLUX_B_PATIENT_PROFILE.fields.transcription.settings, {
+    eot_threshold: 0.85,
+    eager_eot_threshold: 0.45,
+    eot_timeout_ms: 5000,
+  });
+  assert.equal(resolveLatencyProfileAlias("B_FAST"), "flux_b_fast");
+  assert.equal(resolveLatencyProfileAlias("B"), "flux_b_balanced");
+  assert.equal(isLatencyOptimizedProfile("flux_b_fast"), true);
+
+  const fast = applyLatencyProfileToConfig(
+    parseVoiceAgentConfig({
+      transcription: { sttModel: "deepgram/nova-3" },
+      voiceLanguage: { voiceId: "howard-ultra", endpointingMs: 300, bargeIn: true },
+    }),
+    "flux_b_fast",
+  );
+  assert.equal(fast.transcription?.settings?.eot_threshold, 0.75);
+  assert.equal(fast.transcription?.settings?.eager_eot_threshold, 0.35);
+  assert.equal(fast.voiceLanguage?.endpointingMs, undefined);
+  assert.equal(fast.model?.modelId, FAST_LLM_MODEL_ID);
+}
 
 section("Version C Ultravox: no copied endpointing plan; TTS voice expected");
 assert.equal(NATIVE_AUDIO_ULTRAVOX_PROFILE.fields.nativeAudio, true);
@@ -101,7 +139,7 @@ section("Apply B: Flux settings + wait-only plan");
   const applied = applyLatencyProfileToConfig(base, "flux_eager_low_latency");
   assert.equal(applied.transcription?.sttModel, "deepgram/flux");
   assert.equal(applied.transcription?.settings?.eot_timeout_ms, 5000);
-  assert.equal(applied.voiceLanguage?.endpointingMs, 100);
+  assert.equal(applied.voiceLanguage?.endpointingMs, undefined);
   assert.equal(applied.model?.modelId, FAST_LLM_MODEL_ID);
   assert.equal(shouldSkipDynamicVariablesWebhook(applied), true);
 

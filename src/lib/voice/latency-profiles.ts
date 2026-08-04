@@ -13,7 +13,10 @@ import type { VoiceAgentConfig } from "@/lib/voice/types";
 
 export const LATENCY_PROFILE_IDS = [
   "legacy_cascade",
-  "flux_eager_low_latency",
+  "flux_eager_low_latency", // alias: B_BALANCED (backward compatible)
+  "flux_b_fast",
+  "flux_b_balanced",
+  "flux_b_patient",
   "native_audio_ultravox",
 ] as const;
 
@@ -22,6 +25,9 @@ export type LatencyProfileId = (typeof LATENCY_PROFILE_IDS)[number];
 /** Aliases matching the test-matrix naming. */
 export const VERSION_A_BASELINE: LatencyProfileId = "legacy_cascade";
 export const VERSION_B_LATENCY_OPTIMIZED: LatencyProfileId = "flux_eager_low_latency";
+export const VERSION_B_FAST: LatencyProfileId = "flux_b_fast";
+export const VERSION_B_BALANCED: LatencyProfileId = "flux_b_balanced";
+export const VERSION_B_PATIENT: LatencyProfileId = "flux_b_patient";
 export const VERSION_C_NATIVE_AUDIO: LatencyProfileId = "native_audio_ultravox";
 
 export const ACTIVE_LATENCY_PROFILE_DEFAULT: LatencyProfileId = "legacy_cascade";
@@ -46,6 +52,8 @@ export const NATIVE_AUDIO_MODEL_CANDIDATES = [
  */
 export const ORDINARY_TURN_LATENCY_BANDS = {
   primaryGoalMs: 500,
+  p75GoalMs: 650,
+  p95GoalMs: 900,
   strongResultMs: 450,
   warningMs: 700,
   investigateMs: 1000,
@@ -170,38 +178,28 @@ export const LEGACY_CASCADE_PROFILE: LatencyProfileDefinition = {
 };
 
 /**
- * Version B — Flux turn-taking + minimal wait.
- *
- * Telnyx: for deepgram/flux, end-of-turn is driven by transcription.settings
- * (eot_threshold / eager_eot_threshold / eot_timeout_ms). The punctuation /
- * no-punctuation / number timers in transcription_endpointing_plan apply to
- * NON turn-taking models — do not layer a universal 1.0s no-punct wait on Flux
- * (that alone blocks a sub-500ms target on unpunctuated turns like "Tuesday").
- *
- * endpointingMs is only a local alias for wait_seconds (100 → 0.1s), not a
- * third Telnyx endpointing API.
+ * Shared Flux cascade fields for Version B variants.
+ * Turn-taking is Flux EOT only — no punctuation/number endpointing plan,
+ * no local "endpointingMs" third layer.
  */
-export const FLUX_EAGER_LOW_LATENCY_PROFILE: LatencyProfileDefinition = {
-  id: "flux_eager_low_latency",
-  versionLabel: "B",
-  label: "Version B — Flux + eager EOT + Haiku + Ultra",
-  description:
-    "Deepgram Flux EOT (0.8/0.4/5000) + wait_seconds 0.1 only. No punctuation/number endpointing plan. Fast Haiku + Ultra TTS + fixed greeting. Dynvar webhook skipped for clean first-turn benchmarks.",
-  fields: {
+function buildFluxCascadeFields(input: {
+  eotThreshold: number;
+  eagerEotThreshold: number;
+}): LatencyProfileProviderFields {
+  return {
     transcription: {
       enabled: true,
       sttProvider: "deepgram",
       sttModel: "deepgram/flux",
       language: "en",
       settings: {
-        eot_threshold: 0.8,
-        eager_eot_threshold: 0.4,
+        eot_threshold: input.eotThreshold,
+        eager_eot_threshold: input.eagerEotThreshold,
         eot_timeout_ms: 5000,
       },
     },
     voiceLanguage: {
-      // Local alias → wait_seconds only (NOT a separate Telnyx endpointing field).
-      endpointingMs: 100,
+      // Do not set endpointingMs — that was a confusing local alias, not Telnyx.
       silenceTimeoutMs: 2500,
       bargeIn: true,
       preferUltra: true,
@@ -209,6 +207,9 @@ export const FLUX_EAGER_LOW_LATENCY_PROFILE: LatencyProfileDefinition = {
     model: {
       modelId: FAST_LLM_MODEL_ID,
     },
+    // Telnyx: Flux EOT drives turn end. Clear legacy punctuation waits.
+    // Optional wait_seconds 0.1 is Telnyx's recommended Flux companion floor,
+    // not a universal 1s no-punct delay.
     startSpeakingPlan: {
       waitSeconds: 0.1,
       fluxOmitTranscriptionEndpointingPlan: true,
@@ -225,11 +226,64 @@ export const FLUX_EAGER_LOW_LATENCY_PROFILE: LatencyProfileDefinition = {
       on_punctuation_seconds: "not_sent",
       on_no_punctuation_seconds: "not_sent",
       on_number_seconds: "not_sent",
-      endpointingMs_local: "local_ui_only",
+      endpointingMs_local: "not_sent",
       voice_settings_ultra: "sent_and_applicable",
       dynamic_variables_webhook: "not_sent",
     },
-  },
+  };
+}
+
+/**
+ * B_BALANCED — Telnyx-documented Flux defaults (0.80 / 0.40).
+ * Production candidate. Also registered as flux_eager_low_latency for compat.
+ */
+export const FLUX_B_BALANCED_PROFILE: LatencyProfileDefinition = {
+  id: "flux_b_balanced",
+  versionLabel: "B",
+  label: "B-Balanced — Flux 0.80/0.40 + Haiku + Ultra",
+  description:
+    "Recommended production candidate. Deepgram Flux EOT 0.80/0.40/5000, Haiku, Ultra, fixed greeting. No punctuation/number waits.",
+  fields: buildFluxCascadeFields({
+    eotThreshold: 0.8,
+    eagerEotThreshold: 0.4,
+  }),
+};
+
+/** Backward-compatible id for B_BALANCED. */
+export const FLUX_EAGER_LOW_LATENCY_PROFILE: LatencyProfileDefinition = {
+  ...FLUX_B_BALANCED_PROFILE,
+  id: "flux_eager_low_latency",
+  label: "Version B — Flux + eager EOT + Haiku + Ultra (B-Balanced)",
+};
+
+/**
+ * B_FAST — aggressive eager EOT (0.75 / 0.35). Test only; do not auto-promote.
+ */
+export const FLUX_B_FAST_PROFILE: LatencyProfileDefinition = {
+  id: "flux_b_fast",
+  versionLabel: "B",
+  label: "B-Fast — Flux 0.75/0.35 + Haiku + Ultra",
+  description:
+    "Maximum-speed Flux test. EOT 0.75 / eager 0.35. Promote only if premature-response rate stays acceptable.",
+  fields: buildFluxCascadeFields({
+    eotThreshold: 0.75,
+    eagerEotThreshold: 0.35,
+  }),
+};
+
+/**
+ * B_PATIENT — more conservative EOT (0.85 / 0.45) for long answers / intake.
+ */
+export const FLUX_B_PATIENT_PROFILE: LatencyProfileDefinition = {
+  id: "flux_b_patient",
+  versionLabel: "B",
+  label: "B-Patient — Flux 0.85/0.45 + Haiku + Ultra",
+  description:
+    "Patient Flux variant for long answers and intake. EOT 0.85 / eager 0.45. Prefer a dedicated collection workflow for phone/address rather than slowing every turn.",
+  fields: buildFluxCascadeFields({
+    eotThreshold: 0.85,
+    eagerEotThreshold: 0.45,
+  }),
 };
 
 /**
@@ -291,6 +345,9 @@ export const LATENCY_PROFILES: Record<LatencyProfileId, LatencyProfileDefinition
   {
     legacy_cascade: LEGACY_CASCADE_PROFILE,
     flux_eager_low_latency: FLUX_EAGER_LOW_LATENCY_PROFILE,
+    flux_b_fast: FLUX_B_FAST_PROFILE,
+    flux_b_balanced: FLUX_B_BALANCED_PROFILE,
+    flux_b_patient: FLUX_B_PATIENT_PROFILE,
     native_audio_ultravox: NATIVE_AUDIO_ULTRAVOX_PROFILE,
   };
 
@@ -348,12 +405,15 @@ export function isNativeAudioModel(model?: string | null): boolean {
   return m.includes("ultravox") || m.startsWith("fixie-ai/");
 }
 
-/** Version B or C — apply tool async/fillers and low-latency startup prefs. */
+/** Version B variants or C — apply tool async/fillers and low-latency startup prefs. */
 export function isLatencyOptimizedProfile(
   profileId?: string | null,
 ): boolean {
   return (
     profileId === VERSION_B_LATENCY_OPTIMIZED ||
+    profileId === VERSION_B_FAST ||
+    profileId === VERSION_B_BALANCED ||
+    profileId === VERSION_B_PATIENT ||
     profileId === VERSION_C_NATIVE_AUDIO
   );
 }
@@ -361,7 +421,34 @@ export function isLatencyOptimizedProfile(
 export function isFluxEagerLatencyProfile(
   profileId?: string | null,
 ): boolean {
-  return profileId === VERSION_B_LATENCY_OPTIMIZED;
+  return (
+    profileId === VERSION_B_LATENCY_OPTIMIZED ||
+    profileId === VERSION_B_FAST ||
+    profileId === VERSION_B_BALANCED ||
+    profileId === VERSION_B_PATIENT
+  );
+}
+
+/** Resolve CLI / short aliases (B_FAST, B-Balanced, etc.) to profile ids. */
+export function resolveLatencyProfileAlias(
+  value?: string | null,
+): LatencyProfileId | null {
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+  if (isLatencyProfileId(raw)) return raw;
+  const key = raw.toUpperCase().replace(/-/g, "_");
+  const aliases: Record<string, LatencyProfileId> = {
+    A: "legacy_cascade",
+    B: "flux_b_balanced",
+    B_BALANCED: "flux_b_balanced",
+    B_FAST: "flux_b_fast",
+    B_PATIENT: "flux_b_patient",
+    C: "native_audio_ultravox",
+    BALANCED: "flux_b_balanced",
+    FAST: "flux_b_fast",
+    PATIENT: "flux_b_patient",
+  };
+  return aliases[key] || null;
 }
 
 export function snapshotProviderLatencyFields(
@@ -461,7 +548,11 @@ export function applyLatencyProfileToConfig(
   };
   if (typeof profile.fields.voiceLanguage.endpointingMs === "number") {
     nextVoiceLanguage.endpointingMs = profile.fields.voiceLanguage.endpointingMs;
-  } else if (profile.fields.nativeAudio) {
+  } else if (
+    profile.fields.nativeAudio ||
+    isFluxEagerLatencyProfile(profileId)
+  ) {
+    // Flux / native-audio: do not keep a leftover local endpointingMs layer.
     delete nextVoiceLanguage.endpointingMs;
   }
 
@@ -668,7 +759,7 @@ export function buildStartSpeakingPlanFromConfig(
 
   const isFlux =
     isDeepgramFluxModel(config.transcription?.sttModel) ||
-    profile?.id === VERSION_B_LATENCY_OPTIMIZED;
+    isFluxEagerLatencyProfile(config.voiceTiming?.activeProfile);
 
   if (diagnosticsPlan === null && isFlux) {
     // Explicit null plan + Flux → wait only from endpointingMs / default 0.1

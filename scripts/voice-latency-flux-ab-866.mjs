@@ -1,17 +1,16 @@
 /**
- * Opt-in latency A/B/C for the live +1866 test receptionist.
+ * Opt-in latency A/B profiles for the live +1866 test receptionist.
  *
- * VERSION A — legacy_cascade (baseline / rollback)
- * VERSION B — flux_eager_low_latency (Flux + eager EOT + 0.1s plan + Haiku + Ultra)
- * VERSION C — native_audio_ultravox (experiment)
- *
- * Snapshots current provider fields into rollbackSnapshot, applies profile,
- * publishes, and prints how to roll back. Does NOT migrate other agents.
+ * A            — legacy_cascade
+ * B / B_BALANCED — flux_b_balanced (0.80 / 0.40) production candidate
+ * B_FAST       — flux_b_fast (0.75 / 0.35) speed test — default for this script
+ * B_PATIENT    — flux_b_patient (0.85 / 0.45)
+ * C            — native_audio_ultravox (account may block Ultravox)
  *
  * Usage:
  *   node scripts/voice-latency-flux-ab-866.mjs
- *   node scripts/voice-latency-flux-ab-866.mjs --profile B
- *   node scripts/voice-latency-flux-ab-866.mjs --profile C
+ *   node scripts/voice-latency-flux-ab-866.mjs --profile B_FAST
+ *   node scripts/voice-latency-flux-ab-866.mjs --profile B_BALANCED
  *   node scripts/voice-latency-flux-ab-866.mjs --rollback
  */
 const BASE = (process.env.BASE_URL || "https://transovo.ai").replace(/\/$/, "");
@@ -22,19 +21,32 @@ const ROLLBACK = process.argv.includes("--rollback");
 
 const PROFILE_FLAG_IDX = process.argv.indexOf("--profile");
 const PROFILE_ARG =
-  PROFILE_FLAG_IDX >= 0 ? String(process.argv[PROFILE_FLAG_IDX + 1] || "B").toUpperCase() : "B";
+  PROFILE_FLAG_IDX >= 0 ? String(process.argv[PROFILE_FLAG_IDX + 1] || "B_FAST") : "B_FAST";
 
 const PROFILE_BY_VERSION = {
   A: "legacy_cascade",
-  B: "flux_eager_low_latency",
+  B: "flux_b_balanced",
+  B_BALANCED: "flux_b_balanced",
+  B_FAST: "flux_b_fast",
+  B_PATIENT: "flux_b_patient",
   C: "native_audio_ultravox",
+  FAST: "flux_b_fast",
+  BALANCED: "flux_b_balanced",
+  PATIENT: "flux_b_patient",
 };
 
 const PROFILE_ID =
-  PROFILE_BY_VERSION[PROFILE_ARG] ||
-  (["legacy_cascade", "flux_eager_low_latency", "native_audio_ultravox"].includes(PROFILE_ARG)
+  PROFILE_BY_VERSION[PROFILE_ARG.toUpperCase().replace(/-/g, "_")] ||
+  ([
+    "legacy_cascade",
+    "flux_eager_low_latency",
+    "flux_b_fast",
+    "flux_b_balanced",
+    "flux_b_patient",
+    "native_audio_ultravox",
+  ].includes(PROFILE_ARG)
     ? PROFILE_ARG
-    : "flux_eager_low_latency");
+    : "flux_b_fast");
 
 function cookieHeader(jar) {
   return [...jar.entries()].map(([k, v]) => `${k}=${v}`).join("; ");

@@ -103,13 +103,20 @@ export async function POST(req: Request, ctx: Ctx) {
 
     if (action === "apply") {
       if (!isLatencyProfileId(body.profileId)) {
-        return NextResponse.json(
-          {
-            error:
-              "profileId must be legacy_cascade, flux_eager_low_latency, or native_audio_ultravox",
-          },
-          { status: 400 },
+        const { resolveLatencyProfileAlias } = await import(
+          "@/lib/voice/latency-profiles"
         );
+        const aliased = resolveLatencyProfileAlias(body.profileId);
+        if (!aliased) {
+          return NextResponse.json(
+            {
+              error:
+                "profileId must be legacy_cascade, flux_b_fast, flux_b_balanced, flux_b_patient, flux_eager_low_latency, or native_audio_ultravox (aliases: A, B, B_FAST, B_BALANCED, B_PATIENT, C)",
+            },
+            { status: 400 },
+          );
+        }
+        body.profileId = aliased;
       }
       next = applyLatencyProfileToConfig(prev, body.profileId as LatencyProfileId);
     } else if (action === "rollback") {
