@@ -76,7 +76,7 @@ for (const category of solutionCategories) {
 const solutionsHrefs = new Set(collectNavHrefs(solutionsNav));
 assert.ok(solutionsHrefs.has("/outcomes"), "Solutions dashboard required");
 
-// Primary launch outcomes appear in Solutions nav (Email shortcuts reuse them).
+// Primary launch outcomes appear in Solutions nav.
 for (const slug of solutionsLaunchSlugs()) {
   assert.ok(
     solutionsHrefs.has(`/outcomes/${slug}`),
