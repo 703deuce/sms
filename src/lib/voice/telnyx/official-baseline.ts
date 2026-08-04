@@ -16,6 +16,20 @@ import { getPrisma } from "@/lib/db";
 
 export const OFFICIAL_BASELINE_NAME = "TELNYX_ULTRA_LOW_LATENCY_BASELINE";
 
+/** Telnyx engineer-recommended model (may be unavailable on some accounts). */
+export const BASELINE_PREFERRED_MODEL = "google/gemini-2.5-flash-lite";
+
+/**
+ * Closest account-available Gemini Flash model when Lite is blocked (Telnyx 10027).
+ * Verified present on this workspace's /ai/openai/models list.
+ */
+export const BASELINE_FALLBACK_MODEL = "google/gemini-2.5-flash";
+
+export const BASELINE_MODEL_CANDIDATES = [
+  BASELINE_PREFERRED_MODEL,
+  BASELINE_FALLBACK_MODEL,
+] as const;
+
 /** Known-good Ultra voice on this Telnyx account (Howard). */
 export const BASELINE_ULTRA_VOICE =
   "Telnyx.Ultra.0d42f0f6-c019-4082-b250-1c16133d1c82";
@@ -25,7 +39,7 @@ export const BASELINE_REQUESTED = {
   instructions:
     "You are a concise phone assistant.\nAnswer immediately in one short sentence.\nUse no more than twelve words.",
   greeting: "Hi, how can I help?",
-  model: "google/gemini-2.5-flash-lite",
+  model: BASELINE_PREFERRED_MODEL,
   transcription: {
     model: "deepgram/flux",
   },
@@ -114,13 +128,72 @@ function providerInsertedFields(live: Record<string, unknown>) {
 
 export async function createOfficialBaselineAssistant(opts?: {
   voiceId?: string;
+  modelId?: string;
 }) {
   const voice = opts?.voiceId?.trim() || BASELINE_ULTRA_VOICE;
+  const candidates = opts?.modelId?.trim()
+    ? [opts.modelId.trim(), ...BASELINE_MODEL_CANDIDATES]
+    : [...BASELINE_MODEL_CANDIDATES];
+  const uniqueCandidates = [...new Set(candidates)];
+
+  // Intentionally omitted (Telnyx defaults):
+  // tools, interruption_settings, start_speaking_plan, wait_seconds,
+  // punctuation waits, eot_threshold / eager_eot_threshold / eot_timeout_ms,
+  // dynamic_variables_webhook, mcp, knowledge, memory, external LLM keys.
+
+  let created: unknown = null;
+  let assistantId = "";
+  let usedModel = "";
+  const modelAttempts: Array<{ model: string; ok: boolean; error?: string }> =
+    [];
+
+  for (const model of uniqueCandidates) {
+    const createBody: Record<string, unknown> = {
+      name: BASELINE_REQUESTED.name,
+      instructions: BASELINE_REQUESTED.instructions,
+      greeting: BASELINE_REQUESTED.greeting,
+      model,
+      transcription: {
+        model: BASELINE_REQUESTED.transcription.model,
+      },
+      voice_settings: {
+        voice,
+      },
+    };
+    try {
+      created = await ai.createAssistant(createBody);
+      assistantId = unwrapId(created);
+      if (!assistantId) {
+        modelAttempts.push({
+          model,
+          ok: false,
+          error: `no id: ${JSON.stringify(created).slice(0, 300)}`,
+        });
+        continue;
+      }
+      usedModel = model;
+      modelAttempts.push({ model, ok: true });
+      break;
+    } catch (err) {
+      modelAttempts.push({
+        model,
+        ok: false,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  if (!assistantId || !created) {
+    throw new Error(
+      `Telnyx createAssistant failed for all models ${uniqueCandidates.join(", ")}: ${JSON.stringify(modelAttempts)}`,
+    );
+  }
+
   const createBody: Record<string, unknown> = {
     name: BASELINE_REQUESTED.name,
     instructions: BASELINE_REQUESTED.instructions,
     greeting: BASELINE_REQUESTED.greeting,
-    model: BASELINE_REQUESTED.model,
+    model: usedModel,
     transcription: {
       model: BASELINE_REQUESTED.transcription.model,
     },
@@ -128,19 +201,6 @@ export async function createOfficialBaselineAssistant(opts?: {
       voice,
     },
   };
-
-  // Intentionally omitted (Telnyx defaults):
-  // tools, interruption_settings, start_speaking_plan, wait_seconds,
-  // punctuation waits, eot_threshold / eager_eot_threshold / eot_timeout_ms,
-  // dynamic_variables_webhook, mcp, knowledge, memory, external LLM keys.
-
-  const created = await ai.createAssistant(createBody);
-  const assistantId = unwrapId(created);
-  if (!assistantId) {
-    throw new Error(
-      `Telnyx createAssistant returned no id: ${JSON.stringify(created).slice(0, 500)}`,
-    );
-  }
 
   const liveRemote = await ai.getAssistant(assistantId);
   const live = (asRecord(liveRemote)?.data || asRecord(liveRemote) || {}) as Record<
@@ -170,20 +230,22 @@ export async function createOfficialBaselineAssistant(opts?: {
     };
   }
 
-  const requested = {
-    ...createBody,
-    voice_settings: { voice },
-  };
-
   return {
-    createBody: requested,
+    createBody,
     createResponse: created,
     assistantId,
     activeVersionId,
     live,
     versions,
-    diffs: diffRequestedVsLive(requested, live),
+    diffs: diffRequestedVsLive(createBody, live),
     providerInserted: providerInsertedFields(live),
+    modelAttempts,
+    preferredModel: BASELINE_PREFERRED_MODEL,
+    usedModel,
+    modelNote:
+      usedModel === BASELINE_PREFERRED_MODEL
+        ? "Using Telnyx-recommended google/gemini-2.5-flash-lite."
+        : `Preferred ${BASELINE_PREFERRED_MODEL} unavailable on this Telnyx account (10027). Using account-available ${usedModel}.`,
     note:
       "Undocumented timing fields were omitted. Any eot_*/wait_*/endpointing values below were inserted by Telnyx, not by Transovo.",
   };

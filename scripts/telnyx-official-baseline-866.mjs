@@ -123,6 +123,10 @@ async function main() {
   console.log("\n=== TELNYX ULTRA-LOW-LATENCY BASELINE ===");
   console.log("assistantId:", d.assistantId);
   console.log("activeVersionId:", d.activeVersionId);
+  console.log("preferredModel:", d.preferredModel);
+  console.log("usedModel:", d.usedModel);
+  console.log("modelNote:", d.modelNote);
+  console.log("modelAttempts:", JSON.stringify(d.modelAttempts));
   console.log("model live:", d.live?.model);
   console.log("stt live:", d.live?.transcription?.model);
   console.log(
