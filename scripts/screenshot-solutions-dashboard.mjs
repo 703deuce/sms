@@ -57,6 +57,7 @@ async function checkReady(page) {
     hasRecommended:
       /Recommended Next/i.test(text) && /Bring Back Past Customers/i.test(text),
     hasButtons: /View All Solutions/i.test(text) && /Add Solution/i.test(text),
+    hasMiddotMetrics: /12 Calls\s*·\s*0 SMS/i.test(text) || /12 Calls\s*·\s*0 SMS/.test(text),
     oldDash:
       /A high-level view of your current solutions/i.test(text) ||
       /Qualify New Leads/i.test(text) ||
@@ -64,6 +65,12 @@ async function checkReady(page) {
       /New Solution/i.test(text) ||
       /Add Number/i.test(text),
   };
+  // Sticky header should not repeat the hero title on /outcomes.
+  const headerTitleCount = await page.locator("header h1").count();
+  const headerTitleText =
+    headerTitleCount > 0 ? (await page.locator("header h1").first().innerText()).trim() : "";
+  checks.noChromeTitle = !headerTitleText;
+
   return {
     ...checks,
     ready:
@@ -76,6 +83,8 @@ async function checkReady(page) {
       checks.hasStats &&
       checks.hasRecommended &&
       checks.hasButtons &&
+      checks.hasMiddotMetrics &&
+      checks.noChromeTitle &&
       !checks.oldDash,
     snippet: text.replace(/\s+/g, " ").slice(0, 280),
   };

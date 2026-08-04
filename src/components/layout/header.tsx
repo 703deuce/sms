@@ -182,9 +182,13 @@ export function Header({
           <Menu className="h-5 w-5" />
         </button>
 
-        <h1 className="shrink-0 text-[18px] font-bold tracking-tight text-foreground">
-          {title}
-        </h1>
+        {title ? (
+          <h1 className="shrink-0 text-[18px] font-bold tracking-tight text-foreground">
+            {title}
+          </h1>
+        ) : (
+          <span className="shrink-0" aria-hidden />
+        )}
 
         <div className="mx-auto hidden w-full max-w-[440px] flex-1 md:block" ref={searchRef}>
           <div className="relative">
