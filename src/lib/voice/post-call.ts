@@ -111,6 +111,7 @@ export async function processPostCall(callId: string) {
   if (call.contactId) {
     await emitVoiceAutomationEvents(call);
     if (isMissed) {
+      // Fan-out to automation triggers happens inside emitPlatformEvent.
       await emitPlatformEvent({
         workspaceId: call.workspaceId,
         type: "CALL_MISSED",
@@ -119,11 +120,6 @@ export async function processPostCall(callId: string) {
         callId: call.id,
         payload: { status: call.status, outcome: call.outcome },
         idempotencyKey: `call-missed:${call.id}`,
-      }).catch(() => undefined);
-      await emitAutomationEvent(call.workspaceId, "call.missed", call.contactId, {
-        callId: call.id,
-        status: call.status,
-        outcome: call.outcome,
       }).catch(() => undefined);
     }
     await emitPlatformEvent({
@@ -147,17 +143,12 @@ export async function processPostCall(callId: string) {
       callId: call.id,
       payload: {
         outcome: call.outcome,
+        status: call.status,
         summary: insight?.summary || null,
         transcriptReady: true,
       },
       idempotencyKey: `ai-call-completed:${call.id}`,
     }).catch(() => undefined);
-    await emitAutomationEvent(
-      call.workspaceId,
-      "call.completed",
-      call.contactId,
-      { callId: call.id, outcome: call.outcome },
-    ).catch(() => undefined);
 
     // Agent → Automation: post-call / outcome-rule start.
     if (agent?.postCallAutomationId) {

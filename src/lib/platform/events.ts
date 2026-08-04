@@ -55,7 +55,8 @@ const PLATFORM_TO_AUTOMATION: Record<string, string> = {
   CALL_COMPLETED: "call.completed",
   CALL_MISSED: "call.missed",
   CALL_TRANSFERRED: "call.transferred",
-  AI_CALL_COMPLETED: "call.completed",
+  // AI_CALL_COMPLETED is logged + used to resume wait_for_call_result;
+  // it must not re-trigger call_completed enrollments (CALL_COMPLETED owns that).
   APPOINTMENT_BOOKED: "call.appointment_booked",
 };
 
