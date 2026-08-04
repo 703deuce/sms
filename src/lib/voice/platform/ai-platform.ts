@@ -1490,12 +1490,21 @@ export async function enableWebCallsAndSyncVoice(
       0.15,
       Math.min(1.5, (config.voiceLanguage?.endpointingMs ?? 300) / 1000),
     );
+    const sttModel =
+      config.transcription?.sttModel?.trim() ||
+      process.env.VOICE_TRANSCRIPTION_MODEL?.trim() ||
+      "deepgram/nova-3";
+    const isFlux = sttModel.toLowerCase() === "deepgram/flux";
+    const fluxWait = Math.max(
+      0.1,
+      Math.min(1.5, (config.voiceLanguage?.endpointingMs ?? 100) / 1000),
+    );
     await ai.updateAssistant(agent.telnyxAssistantId, {
       voice_settings: voiceBuilt.voice_settings,
       interruption_settings: {
         enable: config.voiceLanguage?.bargeIn !== false,
         disable_greeting_interruption: true,
-        start_speaking_plan: { wait_seconds: waitSec },
+        start_speaking_plan: { wait_seconds: isFlux ? fluxWait : waitSec },
       },
       telephony_settings: {
         supports_unauthenticated_web_calls: true,

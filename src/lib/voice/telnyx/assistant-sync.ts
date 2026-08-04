@@ -12,6 +12,11 @@ import {
   sanitizeTelnyxVoiceError,
 } from "./voices";
 import { CONVERSATIONAL_PROMPT_GUIDANCE } from "../timing-presets";
+import {
+  LOW_LATENCY_CONVERSATION_GUIDANCE,
+  buildFluxTranscriptionSettings,
+  isDeepgramFluxModel,
+} from "../latency-profiles";
 
 function unwrapTelnyxId(res: unknown): string | null {
   if (!res || typeof res !== "object") return null;
@@ -151,15 +156,15 @@ function outputGainLinear(config: VoiceAgentConfig): number | null {
   return Math.round(Math.pow(10, db / 20) * 1000) / 1000;
 }
 
-function interruptionSettingsFromConfig(config: VoiceAgentConfig) {
-  // Restore pre-tuning behavior: wait_seconds from agent endpointingMs only.
-  // Do not inject speculative preset delays or transcription_endpointing_plan.
-  // Artificial responseStartDelay is not added — processing should start once
-  // the provider turn detector finishes; wait_seconds is the existing agent field.
-  const waitSec = Math.max(
-    0.15,
-    Math.min(1.5, (config.voiceLanguage?.endpointingMs ?? 300) / 1000),
-  );
+function interruptionSettingsFromConfig(
+  config: VoiceAgentConfig,
+  sttModel?: string,
+) {
+  // wait_seconds comes from agent endpointingMs only.
+  // Flux recommends ~0.1s; legacy nova path keeps the prior 0.15s floor.
+  const rawWait = (config.voiceLanguage?.endpointingMs ?? 300) / 1000;
+  const minWait = isDeepgramFluxModel(sttModel) ? 0.1 : 0.15;
+  const waitSec = Math.max(minWait, Math.min(1.5, rawWait));
   return {
     enable: config.voiceLanguage?.bargeIn !== false,
     disable_greeting_interruption: true,
@@ -298,6 +303,11 @@ export async function syncTelnyxAssistant(
     speaksFirstDirective(config),
     // Soft prompt guidance only — not hard truncation or provider timing.
     CONVERSATIONAL_PROMPT_GUIDANCE,
+    isDeepgramFluxModel(
+      config.transcription?.sttModel || process.env.VOICE_TRANSCRIPTION_MODEL,
+    )
+      ? LOW_LATENCY_CONVERSATION_GUIDANCE
+      : "",
     digest,
     bucketIds.length
       ? "You have a knowledge retrieval tool backed by the business document store. Use it for FAQs, policies, pricing, and detailed questions instead of guessing."
@@ -375,10 +385,16 @@ export async function syncTelnyxAssistant(
   const voiceId = voiceBuilt.providerVoiceId;
   // TeXML app id only — never Call Control TELNYX_CONNECTION_ID (causes 10015).
   const texmlAppId = process.env.TELNYX_TEXML_APP_ID?.trim() || "";
+
+  const sttModel =
+    transcription.sttModel?.trim() ||
+    process.env.VOICE_TRANSCRIPTION_MODEL?.trim() ||
+    "deepgram/nova-3";
+
   const enrichPayload: Record<string, unknown> = {
     voice_settings: voiceBuilt.voice_settings,
-    // Pre-tuning interruption mapping — bargeIn + endpointingMs only.
-    interruption_settings: interruptionSettingsFromConfig(config),
+    // Barge-in unchanged; wait_seconds from endpointingMs (0.1s floor for Flux).
+    interruption_settings: interruptionSettingsFromConfig(config, sttModel),
     enabled_features: ["telephony"] as string[],
     // Required for in-app browser test calls (TelnyxRTC anonymous_login).
     telephony_settings: {
@@ -402,14 +418,9 @@ export async function syncTelnyxAssistant(
   if (transcription.enabled !== false) {
     (enrichPayload.enabled_features as string[]).push("transcription");
   }
-  // Default assistant STT to Deepgram Nova-3 (punctuated). Builder can override.
-  // Do not send speculative EOT / Flux / AssemblyAI turn settings unless the
-  // agent config explicitly opts into verified provider fields later.
+  // STT model from agent config. Flux settings only when model is deepgram/flux
+  // (opt-in A/B). Do not invent AssemblyAI/endpointing-plan fields here.
   {
-    const sttModel =
-      transcription.sttModel?.trim() ||
-      process.env.VOICE_TRANSCRIPTION_MODEL?.trim() ||
-      "deepgram/nova-3";
     const langRaw =
       transcription.language ||
       config.voiceLanguage?.primaryLanguage ||
@@ -417,10 +428,15 @@ export async function syncTelnyxAssistant(
     const lang = String(langRaw).toLowerCase().startsWith("en")
       ? "en"
       : String(langRaw).split("-")[0] || "en";
+    const fluxSettings = buildFluxTranscriptionSettings({
+      ...config,
+      transcription: { ...transcription, sttModel },
+    });
     enrichPayload.transcription = {
       model: sttModel,
       language: lang,
       ...(transcription.keyterms?.length ? { keyterms: transcription.keyterms } : {}),
+      ...(fluxSettings ? { settings: fluxSettings } : {}),
     };
   }
 

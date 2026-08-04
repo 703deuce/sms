@@ -116,6 +116,10 @@ export async function updateVoiceAgentDraft(
           ...(prevConfig.transcription || {}),
           ...(patch.draftConfig.transcription || {}),
         },
+        voiceTiming: {
+          ...(prevConfig.voiceTiming || {}),
+          ...(patch.draftConfig.voiceTiming || {}),
+        },
         postCall: {
           ...(prevConfig.postCall || {}),
           ...(patch.draftConfig.postCall || {}),

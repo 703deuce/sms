@@ -119,11 +119,15 @@ export type VoiceAgentConfig = {
     timingPreset?: string | null;
   };
   /**
-   * Optional experimental timing metadata. Never auto-applied to production Telnyx sync.
+   * Optional latency profile metadata.
+   * `activeProfile` drives Telnyx Flux/legacy mapping.
+   * `rollbackSnapshot` stores prior provider fields for one-click restore.
    */
   voiceTiming?: {
     presetId?: string | null;
+    activeProfile?: string | null;
     experimental?: boolean;
+    rollbackSnapshot?: Record<string, unknown>;
     diagnostics?: Record<string, unknown>;
   };
   transcription?: {
@@ -132,6 +136,11 @@ export type VoiceAgentConfig = {
     sttModel?: string;
     keyterms?: string[];
     language?: string;
+    /**
+     * Provider-specific STT settings (e.g. Flux eot_threshold /
+     * eager_eot_threshold). Only sent when the selected model supports them.
+     */
+    settings?: Record<string, unknown>;
   };
   model?: {
     provider?: string;
@@ -309,7 +318,14 @@ export function parseVoiceAgentConfig(raw: unknown): VoiceAgentConfig {
     voiceTiming: obj.voiceTiming
       ? { ...(base.voiceTiming || {}), ...obj.voiceTiming }
       : base.voiceTiming,
-    transcription: { ...base.transcription, ...obj.transcription },
+    transcription: {
+      ...base.transcription,
+      ...obj.transcription,
+      settings:
+        obj.transcription?.settings !== undefined
+          ? obj.transcription.settings
+          : base.transcription?.settings,
+    },
     model: { ...base.model, ...obj.model },
     callHandling: {
       ...(base.callHandling || {}),

@@ -32,7 +32,7 @@ export type ResponseLatencyTargets = {
 };
 
 export const SHARED_LATENCY_TARGETS: ResponseLatencyTargets = {
-  medianTargetMs: 500,
+  medianTargetMs: 600,
   medianAcceptableMs: 800,
   medianWarningMs: 1000,
   medianCriticalMs: 1500,
