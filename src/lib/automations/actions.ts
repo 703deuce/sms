@@ -269,11 +269,23 @@ export async function runNodeAction(
     }
     if (!ctx.testMode) {
       const idempotencyKey = `auto:${ctx.executionId}:${node.id}`;
+      let from = cfg.fromNumber ? String(cfg.fromNumber) : undefined;
+      // Solution wizards store phoneNumberId; resolve to E.164 for sendQuickSms.
+      if (!from && cfg.phoneNumberId) {
+        const pn = await prisma.phoneNumber.findFirst({
+          where: {
+            id: String(cfg.phoneNumberId),
+            workspaceId: ctx.workspaceId,
+          },
+          select: { e164: true },
+        });
+        from = pn?.e164 || undefined;
+      }
       const result = await sendQuickSms({
         workspaceId: ctx.workspaceId,
         to: contact.phone,
         body,
-        from: cfg.fromNumber ? String(cfg.fromNumber) : undefined,
+        from,
         idempotencyKey,
       });
       await mergeExecutionMetadata(ctx.executionId, {
@@ -464,6 +476,9 @@ export async function runNodeAction(
       await mergeExecutionMetadata(ctx.executionId, {
         pendingAiCallAgentId: agentId,
         waitingForCallResult: false,
+        callResultConsumed: false,
+        callResult: null,
+        pendingCallId: null,
       });
     }
     return {
@@ -474,12 +489,14 @@ export async function runNodeAction(
 
   if (block === "wait_for_call_result") {
     const timeoutMinutes = Math.max(1, Number(cfg.timeoutMinutes || 30));
+    const timeoutMs = timeoutMinutes * 60_000;
     const exec = await prisma.automationExecution.findUnique({
       where: { id: ctx.executionId },
       select: { metadata: true },
     });
     const meta = (exec?.metadata || {}) as Record<string, unknown>;
     const callResult = meta.callResult as Record<string, unknown> | undefined;
+    const consumed = meta.callResultConsumed === true;
 
     const resolveBranchTarget = (handle: string) => {
       const exact = def.edges.find(
@@ -494,11 +511,15 @@ export async function runNodeAction(
       return fallback?.target || getNextNodeId(def, node.id);
     };
 
-    if (callResult) {
+    if (callResult && !consumed) {
       const branch = normalizeCallResultBranch(callResult);
       await mergeExecutionMetadata(ctx.executionId, {
         waitingForCallResult: false,
+        callResultConsumed: true,
         lastCallResultBranch: branch,
+        // Clear so a later wait_for_call_result in the same run is not poisoned.
+        callResult: null,
+        pendingCallId: null,
       });
       const output: Prisma.InputJsonValue = {
         branch,
@@ -531,13 +552,24 @@ export async function runNodeAction(
       };
     }
 
-    // Woken by timeout without a call result — branch to failed/no_answer.
+    const deadline = Number(meta.callWaitDeadline || 0);
     if (meta.waitingForCallResult === true) {
+      if (deadline && Date.now() < deadline) {
+        // Spurious wake (race with call-result resume) — keep waiting.
+        return {
+          waiting: true,
+          waitMs: Math.max(deadline - Date.now(), 1_000),
+          nextNodeId: node.id,
+          output: { waitingForCallResult: true, spuriousWake: true },
+        };
+      }
       const branch = "failed";
       await mergeExecutionMetadata(ctx.executionId, {
         waitingForCallResult: false,
+        callResultConsumed: true,
         lastCallResultBranch: branch,
-        callResult: { type: "TIMEOUT", outcome: branch },
+        callResult: null,
+        pendingCallId: null,
       });
       return {
         nextNodeId: resolveBranchTarget(branch),
@@ -545,12 +577,16 @@ export async function runNodeAction(
       };
     }
 
+    const callWaitDeadline = Date.now() + timeoutMs;
     await mergeExecutionMetadata(ctx.executionId, {
       waitingForCallResult: true,
+      callResultConsumed: false,
+      callResult: null,
+      callWaitDeadline,
     });
     return {
       waiting: true,
-      waitMs: timeoutMinutes * 60_000,
+      waitMs: timeoutMs,
       // Stay on this node so resume/timeout can re-evaluate and branch.
       nextNodeId: node.id,
       output: { waitingForCallResult: true },

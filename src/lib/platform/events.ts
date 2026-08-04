@@ -84,9 +84,13 @@ export async function emitPlatformEvent(input: EmitPlatformEventInput) {
       },
     });
   } catch (err) {
-    // Unique idempotency collisions are OK — treat as already emitted.
+    // Unique idempotency collisions mean this event was already fully handled.
+    // Do NOT fan out again (would duplicate enrollments / resumes).
     const message = err instanceof Error ? err.message : String(err);
-    if (!/duplicate|unique/i.test(message)) throw err;
+    if (/duplicate|unique/i.test(message)) {
+      return { id, deduped: true as const };
+    }
+    throw err;
   }
 
   const automationKey = PLATFORM_TO_AUTOMATION[input.type];
@@ -106,6 +110,8 @@ export async function emitPlatformEvent(input: EmitPlatformEventInput) {
   }
 
   // Resume WAIT_FOR_CALL_RESULT executions when a call completes.
+  // Prefer AI_CALL_COMPLETED / CALL_MISSED for resume; CALL_COMPLETED also
+  // resumes so non-AI call waits still wake. Deduped by execution status.
   if (
     (input.type === "CALL_COMPLETED" ||
       input.type === "AI_CALL_COMPLETED" ||
@@ -115,7 +121,7 @@ export async function emitPlatformEvent(input: EmitPlatformEventInput) {
     await resumeWaitForCallResult(input).catch(() => undefined);
   }
 
-  return { id };
+  return { id, deduped: false as const };
 }
 
 async function resumeWaitForCallResult(input: EmitPlatformEventInput) {
@@ -144,9 +150,8 @@ async function resumeWaitForCallResult(input: EmitPlatformEventInput) {
         nextActionAt: null,
         metadata: {
           ...meta,
-          // Keep waitingForCallResult true so the wait node knows this is a resume
-          // with a result (it clears the flag after branching).
           waitingForCallResult: true,
+          callResultConsumed: false,
           callResult: {
             callId: input.callId,
             type: input.type,

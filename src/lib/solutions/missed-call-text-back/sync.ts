@@ -25,6 +25,31 @@ function totalMinutesFromWait(cfg: Record<string, unknown>): number {
   );
 }
 
+function edgeKey(source: string, target: string, handle?: string | null) {
+  return `${source}>${target}|${handle || "default"}`;
+}
+
+function canonicalOwnedEdgeKeys(hasFollowUp: boolean): Set<string> {
+  const N = MCTB_NODES;
+  const keys = [
+    edgeKey(N.TRIGGER, N.WAIT_INITIAL),
+    edgeKey(N.WAIT_INITIAL, N.SEND_INITIAL_SMS),
+    edgeKey(N.SEND_INITIAL_SMS, N.WAIT_FOR_REPLY),
+    edgeKey(N.WAIT_FOR_REPLY, N.CONDITION_REPLY),
+    edgeKey(N.CONDITION_REPLY, N.END_REPLIED, "yes"),
+  ];
+  if (hasFollowUp) {
+    keys.push(
+      edgeKey(N.CONDITION_REPLY, N.WAIT_FOLLOW_UP, "no"),
+      edgeKey(N.WAIT_FOLLOW_UP, N.SEND_FOLLOW_UP_SMS),
+      edgeKey(N.SEND_FOLLOW_UP_SMS, N.END_DONE),
+    );
+  } else {
+    keys.push(edgeKey(N.CONDITION_REPLY, N.END_DONE, "no"));
+  }
+  return new Set(keys);
+}
+
 /**
  * Detect whether the graph has structural changes outside wizard-owned nodes
  * or unexpected edges between wizard nodes.
@@ -53,14 +78,29 @@ export function detectAdvancedCustomization(
     if (expected && node.data.blockType !== expected) return true;
   }
 
-  // Extra edges between owned nodes that aren't part of the canonical shape.
-  const ownedIds = new Set(def.nodes.map((n) => n.id));
+  const ownedIds = new Set(
+    def.nodes.map((n) => n.id).filter((id) => WIZARD_OWNED_NODE_IDS.has(id)),
+  );
   const foreignEdges = def.edges.filter(
     (e) =>
       (!WIZARD_OWNED_NODE_IDS.has(e.source) || !WIZARD_OWNED_NODE_IDS.has(e.target)) &&
       (ownedIds.has(e.source) || ownedIds.has(e.target)),
   );
   if (foreignEdges.length > 0) return true;
+
+  // Rewired edges between wizard-owned nodes (even without unknown nodes).
+  const hasFollowUp = ownedIds.has(MCTB_NODES.SEND_FOLLOW_UP_SMS);
+  const expected = canonicalOwnedEdgeKeys(hasFollowUp);
+  const actualOwned = def.edges
+    .filter(
+      (e) =>
+        WIZARD_OWNED_NODE_IDS.has(e.source) && WIZARD_OWNED_NODE_IDS.has(e.target),
+    )
+    .map((e) => edgeKey(e.source, e.target, e.sourceHandle));
+  if (actualOwned.length !== expected.size) return true;
+  for (const key of actualOwned) {
+    if (!expected.has(key)) return true;
+  }
 
   return false;
 }
@@ -183,16 +223,34 @@ export function configFromDefinition(
   const sendFollow = byId.get(MCTB_NODES.SEND_FOLLOW_UP_SMS)?.data.config || {};
   const hasFollowUp = Boolean(byId.get(MCTB_NODES.SEND_FOLLOW_UP_SMS));
 
+  const readMinutes = (
+    cfg: Record<string, unknown>,
+    fallbackMinutes: number,
+    present: boolean,
+  ) => {
+    if (!present) return fallbackMinutes;
+    return totalMinutesFromWait(cfg);
+  };
+
   return {
     ...fallback,
-    initialDelayMinutes:
-      totalMinutesFromWait(waitInitial) || fallback.initialDelayMinutes,
+    initialDelayMinutes: readMinutes(
+      waitInitial,
+      fallback.initialDelayMinutes,
+      Boolean(byId.get(MCTB_NODES.WAIT_INITIAL)),
+    ),
     firstMessage: String(sendInitial.body || fallback.firstMessage),
-    replyWindowMinutes:
-      totalMinutesFromWait(waitReply) || fallback.replyWindowMinutes,
+    replyWindowMinutes: readMinutes(
+      waitReply,
+      fallback.replyWindowMinutes,
+      Boolean(byId.get(MCTB_NODES.WAIT_FOR_REPLY)),
+    ),
     followUpEnabled: hasFollowUp,
-    followUpDelayMinutes:
-      totalMinutesFromWait(waitFollow) || fallback.followUpDelayMinutes,
+    followUpDelayMinutes: readMinutes(
+      waitFollow,
+      fallback.followUpDelayMinutes,
+      hasFollowUp,
+    ),
     followUpMessage: String(sendFollow.body || fallback.followUpMessage),
     stopOnReply: Boolean(
       sendInitial.stopOnReply ?? fallback.stopOnReply,

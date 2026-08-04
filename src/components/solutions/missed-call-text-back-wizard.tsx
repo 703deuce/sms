@@ -32,6 +32,7 @@ export function MissedCallTextBackWizard({
   const [advancedCustomized, setAdvancedCustomized] = useState(
     Boolean(initial?.advancedCustomized),
   );
+  const [status, setStatus] = useState(initial?.status || "DRAFT");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -41,6 +42,7 @@ export function MissedCallTextBackWizard({
     if (initial?.setupId) setSetupId(initial.setupId);
     if (initial?.flowId) setFlowId(initial.flowId);
     setAdvancedCustomized(Boolean(initial?.advancedCustomized));
+    if (initial?.status) setStatus(initial.status);
   }, [initial]);
 
   async function save(activate: boolean) {
@@ -62,6 +64,8 @@ export function MissedCallTextBackWizard({
       setSetupId(json.data.setupId);
       setFlowId(json.data.flowId);
       setAdvancedCustomized(Boolean(json.data.advancedCustomized));
+      if (json.data.status) setStatus(String(json.data.status));
+      else if (activate) setStatus("ACTIVE");
       setSaved(true);
       if (activate) {
         router.push(`/automations/${json.data.flowId}`);
@@ -247,7 +251,7 @@ export function MissedCallTextBackWizard({
           disabled={saving}
           onClick={() => save(false)}
         >
-          Save draft
+          {setupId && status === "ACTIVE" ? "Save changes" : "Save draft"}
         </Button>
         {flowId ? (
           <>

@@ -92,6 +92,16 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       }
       if (payload.purpose) dynamicVariables.purpose = String(payload.purpose);
 
+      // Optional callerId may be a PhoneNumber id or E.164.
+      const callerId = String(payload.callerId || "").trim();
+      let fromPhoneNumberId: string | undefined;
+      let fromE164: string | undefined;
+      if (callerId.startsWith("+")) {
+        fromE164 = callerId;
+      } else if (callerId) {
+        fromPhoneNumberId = callerId;
+      }
+
       const { initiateOutboundCall } = await import("@/lib/voice/call-service");
       const { call } = await initiateOutboundCall({
         workspaceId,
@@ -99,6 +109,8 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
         toPhone: contact.phone,
         contactId,
         dynamicVariables,
+        fromPhoneNumberId,
+        fromE164,
       });
 
       const executionId = String(payload.automationExecutionId || "");
@@ -115,6 +127,7 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
               ...meta,
               pendingCallId: call.id,
               pendingAiCallAgentId: agentId,
+              callResultConsumed: false,
             },
           },
         });

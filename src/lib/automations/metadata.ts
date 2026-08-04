@@ -50,6 +50,20 @@ export async function markFactsForContact(
   });
   for (const ex of active) {
     await mergeExecutionMetadata(ex.id, patch);
+    // Wake WAITING executions so reply-sensitive conditions can run early
+    // (e.g. Missed Call Text Back wait-for-reply window).
+    if (ex.status === "WAITING") {
+      const meta = (ex.metadata || {}) as Record<string, unknown>;
+      // Do not steal wait_for_call_result waits — those resume via call events.
+      if (meta.waitingForCallResult === true) {
+        continue;
+      }
+      await prisma.automationExecution.update({
+        where: { id: ex.id },
+        data: { status: "RUNNING", nextActionAt: null },
+      });
+    }
+    if (ex.status === "PAUSED") continue;
     await enqueueJob({
       jobType: "automation_advance",
       queueName: "automations",

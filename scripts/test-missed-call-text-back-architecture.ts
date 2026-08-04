@@ -165,4 +165,32 @@ assert.equal(
   "transferred",
 );
 
+// 9. Zero-minute delays round-trip (must not collapse to defaults via ||)
+const zeroDelay = buildMissedCallTextBackDefinition({
+  ...DEFAULT_MISSED_CALL_TEXT_BACK_CONFIG,
+  initialDelayMinutes: 0,
+  followUpDelayMinutes: 0,
+});
+const zeroCfg = configFromDefinition(
+  zeroDelay,
+  DEFAULT_MISSED_CALL_TEXT_BACK_CONFIG,
+);
+assert.equal(zeroCfg.initialDelayMinutes, 0);
+assert.equal(zeroCfg.followUpDelayMinutes, 0);
+
+// 10. Rewiring owned edges marks advanced customization
+const rewired = parseAutomationDefinition(
+  buildMissedCallTextBackDefinition(DEFAULT_MISSED_CALL_TEXT_BACK_CONFIG),
+);
+const yesEdge = rewired.edges.find((e) => e.id === "e_cond_yes");
+assert.ok(yesEdge);
+yesEdge!.target = MCTB_NODES.END_DONE;
+assert.equal(detectAdvancedCustomization(rewired), true);
+assert.equal(
+  detectAdvancedCustomization(
+    buildMissedCallTextBackDefinition(DEFAULT_MISSED_CALL_TEXT_BACK_CONFIG),
+  ),
+  false,
+);
+
 console.log("missed-call-text-back architecture checks passed");

@@ -61,19 +61,36 @@ async function completeExecution(
       currentNodeId: null,
     },
   });
-  if (completed) {
-    const ex = await prisma.automationExecution.findUnique({ where: { id: executionId } });
-    if (ex) {
-      const total = await prisma.automationExecution.count({
-        where: { flowId: ex.flowId, status: "COMPLETED" },
+  const ex = await prisma.automationExecution.findUnique({
+    where: { id: executionId },
+  });
+  if (completed && ex) {
+    const total = await prisma.automationExecution.count({
+      where: { flowId: ex.flowId, status: "COMPLETED" },
+    });
+    const enrolled = await prisma.automationExecution.count({
+      where: { flowId: ex.flowId },
+    });
+    await prisma.automationFlow.update({
+      where: { id: ex.flowId },
+      data: {
+        completionRate: enrolled > 0 ? (total / enrolled) * 100 : 0,
+      },
+    });
+  }
+  if (ex && (status === "COMPLETED" || status === "FAILED")) {
+    try {
+      const { emitPlatformEvent } = await import("@/lib/platform/events");
+      await emitPlatformEvent({
+        workspaceId: ex.workspaceId,
+        type: status === "COMPLETED" ? "AUTOMATION_COMPLETED" : "AUTOMATION_FAILED",
+        contactId: ex.contactId,
+        automationId: ex.flowId,
+        payload: { executionId, error: error || null },
+        idempotencyKey: `automation-${status.toLowerCase()}:${executionId}`,
       });
-      const enrolled = await prisma.automationExecution.count({ where: { flowId: ex.flowId } });
-      await prisma.automationFlow.update({
-        where: { id: ex.flowId },
-        data: {
-          completionRate: enrolled > 0 ? (total / enrolled) * 100 : 0,
-        },
-      });
+    } catch {
+      /* non-fatal */
     }
   }
 }

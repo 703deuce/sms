@@ -388,6 +388,31 @@ export async function processInboundMessage(input: {
     });
   }
 
+  // Mark active automation executions so condition_has_responded / stop-on-reply work.
+  try {
+    const { markFactsForContact } = await import("@/lib/automations/metadata");
+    await markFactsForContact(input.workspaceId, contact.id, {
+      customer_replied: true,
+    });
+  } catch {
+    /* non-fatal */
+  }
+  try {
+    const { emitPlatformEvent } = await import("@/lib/platform/events");
+    await emitPlatformEvent({
+      workspaceId: input.workspaceId,
+      type: "MESSAGE_RECEIVED",
+      contactId: contact.id,
+      messageId: input.providerMessageId || null,
+      payload: { from, to: input.to, body: (body || "").slice(0, 500) },
+      idempotencyKey: input.providerMessageId
+        ? `message-received:${input.workspaceId}:${input.providerMessageId}`
+        : `message-received:${input.workspaceId}:${contact.id}:${Date.now()}`,
+    });
+  } catch {
+    /* non-fatal */
+  }
+
   let conversation = await prisma.conversation.findFirst({
     where: { workspaceId: input.workspaceId, contactId: contact.id, status: { not: "CLOSED" } },
   });

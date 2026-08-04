@@ -57,6 +57,10 @@ export async function initiateOutboundCall(input: {
   campaignId?: string;
   isTest?: boolean;
   dynamicVariables?: Record<string, unknown>;
+  /** Optional override for outbound caller ID (PhoneNumber id). */
+  fromPhoneNumberId?: string;
+  /** Optional override for outbound caller ID (E.164). */
+  fromE164?: string;
 }) {
   const prisma = getPrisma();
   const agent = await prisma.voiceAgent.findFirst({
@@ -130,10 +134,11 @@ export async function initiateOutboundCall(input: {
     }
   }
 
-  let fromE164 = "";
-  let phoneNumberId: string | null = agent.phoneNumberId;
+  let fromE164 = input.fromE164 ? normalizeE164(input.fromE164) : "";
+  let phoneNumberId: string | null =
+    input.fromPhoneNumberId || agent.phoneNumberId;
 
-  if (phoneNumberId) {
+  if (!fromE164 && phoneNumberId) {
     const pn = await prisma.phoneNumber.findFirst({
       where: { id: phoneNumberId, workspaceId: input.workspaceId },
     });
