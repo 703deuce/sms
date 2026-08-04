@@ -58,19 +58,19 @@ export const BASELINE_MODEL_PROFILES = {
   },
   C: {
     id: "C",
-    label: "Gemini Flash Lite",
+    label: "Gemini Flash",
     modelId: "google/gemini-2.5-flash-lite",
     llmApiKeyRef: GEMINI_API_KEY_REF,
     fallbackModelId: "google/gemini-2.5-flash",
-    note: "Google Gemini via llm_api_key_ref=gemini_api_key. Falls back to gemini-2.5-flash if Lite is blocked.",
+    note: "Google Gemini via llm_api_key_ref=gemini_api_key. Prefers Flash Lite; this account falls back to gemini-2.5-flash when Lite is blocked (10027).",
   },
   D: {
     id: "D",
-    label: "OpenAI GPT-4o mini",
-    modelId: "openai/gpt-4o-mini",
+    label: "OpenAI GPT-5.4 mini",
+    modelId: "openai/gpt-5.4-mini",
     llmApiKeyRef: OPENAI_API_KEY_REF,
-    fallbackModelId: "openai/gpt-5.4-mini",
-    note: "OpenAI via llm_api_key_ref=openai_key. Fast mini model; falls back to gpt-5.4-mini if needed.",
+    fallbackModelId: "openai/gpt-4o-mini",
+    note: "OpenAI via llm_api_key_ref=openai_key. Prefers gpt-5.4-mini (fast); falls back to gpt-4o-mini.",
   },
 } as const;
 
