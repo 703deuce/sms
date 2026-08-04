@@ -83,6 +83,74 @@ for (const slug of launchSlugs) {
   );
 }
 
+// Final Solutions launch menu: owner-action labels, not Platform jargon.
+const expectedLaunchMenu: Array<{ section: string; labels: string[] }> = [
+  {
+    section: "Calls & AI",
+    labels: [
+      "AI Answering Service",
+      "Cover Missed Calls",
+      "Answer After Hours",
+      "Book Appointments",
+      "Capture New Inquiries",
+      "Screen New Inquiries",
+      "Handle New Service Calls",
+      "Customer Support",
+    ],
+  },
+  {
+    section: "New Business",
+    labels: [
+      "Respond to New Inquiries",
+      "Missed Call Text Back",
+      "Follow Up With Inquiries",
+      "Follow Up on Estimates",
+      "Reconnect With Old Inquiries",
+    ],
+  },
+  {
+    section: "Customer Experience",
+    labels: [
+      "Appointment Reminders",
+      "Get More Reviews",
+      "Follow Up With Customers",
+      "Welcome New Customers",
+      "Payment Reminders",
+    ],
+  },
+  {
+    section: "Marketing",
+    labels: [
+      "Send a Promotion",
+      "Bring Back Past Customers",
+      "Get More Referrals",
+      "Promote Events & Offers",
+    ],
+  },
+];
+const launchItems = solutionsNav.filter((i) => i.label !== "Dashboard");
+let cursor = 0;
+for (const section of expectedLaunchMenu) {
+  assert.equal(
+    launchItems[cursor]?.sectionLabel,
+    section.section,
+    `Expected section ${section.section} at position ${cursor}`,
+  );
+  for (const label of section.labels) {
+    assert.equal(
+      launchItems[cursor]?.label,
+      label,
+      `Expected Solutions menu item "${label}"`,
+    );
+    cursor += 1;
+  }
+}
+assert.equal(
+  cursor,
+  expectedLaunchMenu.reduce((n, s) => n + s.labels.length, 0),
+  "Solutions launch menu length mismatch",
+);
+
 // Full permanent submenu is always visible — even before the customer sets up.
 const answering = solutionsNav.find((i) => i.label === "AI Answering Service");
 assert.ok(answering, "AI Answering Service required");
