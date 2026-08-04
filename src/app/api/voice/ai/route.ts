@@ -246,18 +246,58 @@ export async function POST(request: Request) {
           );
         }
         const remote = await ai.getAssistant(telnyxAssistantId);
-        const data = (remote as { data?: Record<string, unknown> }).data || remote;
-        const tools = Array.isArray((data as { tools?: unknown[] }).tools)
-          ? ((data as { tools: unknown[] }).tools as Array<Record<string, unknown>>)
+        const data = ((remote as { data?: Record<string, unknown> }).data ||
+          remote) as Record<string, unknown>;
+        const tools = Array.isArray(data.tools)
+          ? (data.tools as Array<Record<string, unknown>>)
           : [];
+        const interruption = (data.interruption_settings || {}) as Record<
+          string,
+          unknown
+        >;
+        const startPlan = (interruption.start_speaking_plan || {}) as Record<
+          string,
+          unknown
+        >;
+        const transcription = (data.transcription || {}) as Record<string, unknown>;
+        const voiceSettings = (data.voice_settings || {}) as Record<string, unknown>;
         return NextResponse.json({
           data: {
             telnyxAssistantId,
-            model: (data as { model?: string }).model,
-            name: (data as { name?: string }).name,
+            model: data.model,
+            name: data.name,
+            greeting: data.greeting,
+            dynamic_variables_webhook_url: data.dynamic_variables_webhook_url ?? null,
+            dynamic_variables_webhook_timeout_ms:
+              data.dynamic_variables_webhook_timeout_ms ?? null,
+            transcription: {
+              model: transcription.model,
+              language: transcription.language,
+              settings: transcription.settings ?? null,
+            },
+            voice_settings: {
+              voice: voiceSettings.voice,
+              speed: voiceSettings.speed,
+              expressive_mode: voiceSettings.expressive_mode,
+            },
+            interruption_settings: {
+              enable: interruption.enable,
+              disable_greeting_interruption:
+                interruption.disable_greeting_interruption,
+              start_speaking_plan: startPlan,
+            },
+            enabled_features: data.enabled_features,
             toolCount: tools.length,
             tools: tools.map((t) => {
-              const webhook = t.webhook as { name?: string; url?: string; timeout_ms?: number } | undefined;
+              const webhook = t.webhook as
+                | {
+                    name?: string;
+                    url?: string;
+                    timeout_ms?: number;
+                    async?: boolean;
+                    filler_messages?: unknown;
+                  }
+                | undefined;
               const transfer = t.transfer as { targets?: unknown } | undefined;
               return {
                 type: t.type,
@@ -270,6 +310,8 @@ export async function POST(request: Request) {
                 hangup: t.hangup,
                 webhookUrl: webhook?.url,
                 timeout_ms: webhook?.timeout_ms,
+                async: webhook?.async,
+                filler_messages: webhook?.filler_messages,
               };
             }),
             rawTools: tools,

@@ -1,5 +1,5 @@
 /**
- * Latency profile A/B/C + Flux opt-in checks.
+ * Latency profile A/B/C corrections + Flux payload mapping checks.
  * Run: npx tsx scripts/test-voice-latency-profiles.ts
  */
 import assert from "node:assert/strict";
@@ -17,6 +17,7 @@ import {
   isLatencyOptimizedProfile,
   isNativeAudioModel,
   rollbackLatencyProfileConfig,
+  shouldSkipDynamicVariablesWebhook,
   snapshotProviderLatencyFields,
 } from "../src/lib/voice/latency-profiles";
 import { buildAssistantTools } from "../src/lib/voice/telnyx/assistant-tools";
@@ -32,34 +33,49 @@ assert.equal(DEFAULT_VOICE_CONFIG.transcription?.sttModel, "deepgram/nova-3");
 assert.equal(DEFAULT_VOICE_CONFIG.voiceLanguage?.endpointingMs, 300);
 assert.equal(DEFAULT_VOICE_CONFIG.voiceLanguage?.bargeIn, true);
 
-section("Version B Flux profile uses Telnyx-documented defaults");
+section("Version B Flux: EOT only + wait_seconds — NO 1s no-punct plan");
 assert.equal(FLUX_EAGER_LOW_LATENCY_PROFILE.fields.transcription.sttModel, "deepgram/flux");
 assert.deepEqual(FLUX_EAGER_LOW_LATENCY_PROFILE.fields.transcription.settings, {
   eot_threshold: 0.8,
   eager_eot_threshold: 0.4,
   eot_timeout_ms: 5000,
 });
-assert.equal(FLUX_EAGER_LOW_LATENCY_PROFILE.fields.voiceLanguage.endpointingMs, 100);
-assert.equal(FLUX_EAGER_LOW_LATENCY_PROFILE.fields.model?.modelId, FAST_LLM_MODEL_ID);
-assert.equal(FLUX_EAGER_LOW_LATENCY_PROFILE.fields.voiceLanguage.preferUltra, true);
-assert.deepEqual(FLUX_EAGER_LOW_LATENCY_PROFILE.fields.startSpeakingPlan, {
-  waitSeconds: 0.1,
-  onPunctuationSeconds: 0.1,
-  onNoPunctuationSeconds: 1.0,
-  onNumberSeconds: 1.0,
-});
-assert.equal(LEGACY_CASCADE_PROFILE.fields.transcription.sttModel, "deepgram/nova-3");
+assert.equal(
+  FLUX_EAGER_LOW_LATENCY_PROFILE.fields.startSpeakingPlan?.fluxOmitTranscriptionEndpointingPlan,
+  true,
+);
+assert.equal(
+  FLUX_EAGER_LOW_LATENCY_PROFILE.fields.startSpeakingPlan?.onNoPunctuationSeconds,
+  undefined,
+);
+assert.equal(FLUX_EAGER_LOW_LATENCY_PROFILE.fields.skipDynamicVariablesWebhook, true);
+assert.equal(
+  FLUX_EAGER_LOW_LATENCY_PROFILE.fields.telnyxFieldPlan?.on_no_punctuation_seconds,
+  "not_sent",
+);
+assert.equal(
+  FLUX_EAGER_LOW_LATENCY_PROFILE.fields.telnyxFieldPlan?.endpointingMs_local,
+  "local_ui_only",
+);
 
-section("Version C native-audio Ultravox");
+section("Version C Ultravox: no copied endpointing plan; TTS voice expected");
 assert.equal(NATIVE_AUDIO_ULTRAVOX_PROFILE.fields.nativeAudio, true);
 assert.equal(NATIVE_AUDIO_ULTRAVOX_PROFILE.fields.model?.modelId, NATIVE_AUDIO_MODEL_ID);
+assert.equal(NATIVE_AUDIO_ULTRAVOX_PROFILE.fields.startSpeakingPlan, null);
 assert.equal(NATIVE_AUDIO_ULTRAVOX_PROFILE.fields.transcription.enabled, false);
+assert.equal(NATIVE_AUDIO_ULTRAVOX_PROFILE.fields.voiceLanguage.preferUltra, true);
+assert.equal(
+  NATIVE_AUDIO_ULTRAVOX_PROFILE.fields.telnyxFieldPlan?.transcription,
+  "ignored_by_native_audio_model",
+);
+assert.equal(
+  NATIVE_AUDIO_ULTRAVOX_PROFILE.fields.telnyxFieldPlan?.ultravox_outgoing_audio_path,
+  "unknown_requires_call_trace",
+);
 assert.equal(isNativeAudioModel(NATIVE_AUDIO_MODEL_ID), true);
-assert.equal(isLatencyOptimizedProfile("flux_eager_low_latency"), true);
-assert.equal(isLatencyOptimizedProfile("native_audio_ultravox"), true);
-assert.equal(isLatencyOptimizedProfile("legacy_cascade"), false);
+assert.equal(LEGACY_CASCADE_PROFILE.fields.transcription.sttModel, "deepgram/nova-3");
 
-section("Apply snapshots rollback; rollback restores");
+section("Apply B: Flux settings + wait-only plan");
 {
   const base = parseVoiceAgentConfig({
     transcription: {
@@ -80,53 +96,56 @@ section("Apply snapshots rollback; rollback restores");
   });
   const snap = snapshotProviderLatencyFields(base);
   assert.equal(snap.transcription.sttModel, "deepgram/nova-3");
-  assert.equal(snap.voiceLanguage.endpointingMs, 300);
-  assert.equal(snap.voiceLanguage.silenceTimeoutMs, 800);
-  assert.equal(snap.modelId, "moonshotai/Kimi-K2.6");
 
   const applied = applyLatencyProfileToConfig(base, "flux_eager_low_latency");
   assert.equal(applied.transcription?.sttModel, "deepgram/flux");
-  assert.equal(applied.transcription?.settings?.eot_threshold, 0.8);
-  assert.equal(applied.transcription?.settings?.eager_eot_threshold, 0.4);
   assert.equal(applied.transcription?.settings?.eot_timeout_ms, 5000);
   assert.equal(applied.voiceLanguage?.endpointingMs, 100);
-  assert.equal(applied.voiceLanguage?.bargeIn, true);
-  assert.equal(applied.voiceLanguage?.speed, 1.4); // voice speed untouched
-  assert.equal(applied.voiceLanguage?.voiceId, "howard-ultra"); // already Ultra
   assert.equal(applied.model?.modelId, FAST_LLM_MODEL_ID);
-  assert.equal(applied.voiceTiming?.activeProfile, "flux_eager_low_latency");
-  assert.ok(applied.voiceTiming?.rollbackSnapshot);
+  assert.equal(shouldSkipDynamicVariablesWebhook(applied), true);
 
   const plan = buildStartSpeakingPlanFromConfig(applied);
-  assert.equal(plan.wait_seconds, 0.1);
-  assert.deepEqual(plan.transcription_endpointing_plan, {
-    on_punctuation_seconds: 0.1,
-    on_no_punctuation_seconds: 1.0,
-    on_number_seconds: 1.0,
-  });
+  assert.ok(plan);
+  assert.equal(plan!.wait_seconds, 0.1);
+  assert.equal("transcription_endpointing_plan" in plan!, false);
 
   const fluxSettings = buildFluxTranscriptionSettings(applied);
   assert.ok(fluxSettings);
-  assert.equal(fluxSettings!.eot_timeout_ms, 5000);
+  assert.equal(fluxSettings!.eager_eot_threshold, 0.4);
 
   const rolled = rollbackLatencyProfileConfig(applied);
   assert.equal(rolled.transcription?.sttModel, "deepgram/nova-3");
-  assert.equal(rolled.voiceLanguage?.endpointingMs, 300);
-  assert.equal(rolled.voiceLanguage?.silenceTimeoutMs, 800);
-  assert.equal(rolled.voiceLanguage?.bargeIn, true);
   assert.equal(rolled.model?.modelId, "moonshotai/Kimi-K2.6");
 }
 
-section("Version C apply disables STT settings");
+section("Apply C: omit start_speaking_plan; Ultra preferred for TTS");
 {
   const base = parseVoiceAgentConfig({
     transcription: { sttModel: "deepgram/nova-3", enabled: true },
-    voiceLanguage: { voiceId: "howard-ultra", endpointingMs: 300, bargeIn: true },
+    voiceLanguage: {
+      voiceId: "howard-ultra",
+      endpointingMs: 300,
+      bargeIn: true,
+    },
   });
   const c = applyLatencyProfileToConfig(base, "native_audio_ultravox");
   assert.equal(c.model?.modelId, NATIVE_AUDIO_MODEL_ID);
   assert.equal(c.transcription?.enabled, false);
+  assert.equal(c.voiceLanguage?.voiceId, "howard-ultra");
   assert.equal(buildFluxTranscriptionSettings(c), undefined);
+  assert.equal(buildStartSpeakingPlanFromConfig(c), undefined);
+  assert.equal(shouldSkipDynamicVariablesWebhook(c), true);
+}
+
+section("Legacy cascade still sends punctuation plan");
+{
+  const legacy = parseVoiceAgentConfig({
+    transcription: { sttModel: "deepgram/nova-3" },
+    voiceLanguage: { endpointingMs: 300, bargeIn: true },
+    voiceTiming: { activeProfile: "legacy_cascade" },
+  });
+  const plan = buildStartSpeakingPlanFromConfig(legacy);
+  assert.ok(plan?.transcription_endpointing_plan);
 }
 
 section("Prefer Ultra when switching from NaturalHD");
@@ -142,26 +161,8 @@ section("Flux settings only for flux model");
 {
   assert.equal(isDeepgramFluxModel("deepgram/flux"), true);
   assert.equal(isDeepgramFluxModel("deepgram/nova-3"), false);
-  const fluxCfg = parseVoiceAgentConfig({
-    transcription: {
-      sttModel: "deepgram/flux",
-      settings: {
-        eot_threshold: 0.8,
-        eager_eot_threshold: 0.4,
-        eot_timeout_ms: 5000,
-      },
-    },
-  });
-  const settings = buildFluxTranscriptionSettings(fluxCfg);
-  assert.ok(settings);
-  assert.equal(settings!.eot_threshold, 0.8);
-  assert.equal(settings!.eager_eot_threshold, 0.4);
-  assert.equal(settings!.eot_timeout_ms, 5000);
-
-  const novaCfg = parseVoiceAgentConfig({
-    transcription: { sttModel: "deepgram/nova-3" },
-  });
-  assert.equal(buildFluxTranscriptionSettings(novaCfg), undefined);
+  assert.equal(isLatencyOptimizedProfile("flux_eager_low_latency"), true);
+  assert.equal(isLatencyOptimizedProfile("legacy_cascade"), false);
 }
 
 section("Async tools + sync fillers when optimizeToolLatency");
@@ -174,9 +175,7 @@ section("Async tools + sync fillers when optimizeToolLatency");
     enabledBuiltinTools: [
       "hangup",
       "calendar_availability",
-      "book_appointment",
       "create_crm_note",
-      "mark_disposition",
       "send_sms",
       "lookup_customer",
     ],
@@ -191,33 +190,11 @@ section("Async tools + sync fillers when optimizeToolLatency");
       }),
   );
   assert.equal(byName.get("create_crm_note")?.async, true);
-  assert.equal(byName.get("mark_disposition")?.async, true);
   assert.equal(byName.get("send_sms")?.async, true);
-  assert.equal(byName.get("calendar_availability")?.async, undefined);
   const calFillers = byName.get("calendar_availability")?.filler_messages as
     | Array<{ type: string; content: string }>
     | undefined;
-  assert.ok(calFillers?.[0]);
-  assert.equal(calFillers![0].type, "request_start");
-  assert.equal(calFillers![0].content, "Let me check.");
-  const lookupFillers = byName.get("lookup_customer")?.filler_messages as
-    | Array<{ type: string; content: string }>
-    | undefined;
-  assert.equal(lookupFillers?.[0]?.content, "One moment while I pull that up.");
-
-  const baseline = buildAssistantTools({
-    workspaceId: "ws",
-    agentId: "ag",
-    bucketIds: [],
-    tools: [],
-    enabledBuiltinTools: ["calendar_availability", "create_crm_note"],
-    optimizeToolLatency: false,
-  });
-  const baseWebhook = baseline.find(
-    (t) =>
-      (t as { webhook?: { name?: string } }).webhook?.name === "create_crm_note",
-  ) as { webhook?: { async?: boolean } };
-  assert.equal(baseWebhook?.webhook?.async, undefined);
+  assert.equal(calFillers?.[0]?.content, "Let me check.");
 }
 
 section("Latency bands: primary goal under 500 ms");

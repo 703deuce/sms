@@ -26,11 +26,17 @@ function profileSummary(cfg: ReturnType<typeof parseVoiceAgentConfig>) {
     hasRollbackSnapshot: Boolean(cfg.voiceTiming?.rollbackSnapshot),
     transcription: cfg.transcription,
     endpointingMs: cfg.voiceLanguage?.endpointingMs,
+    endpointingMsMapsTo:
+      "interruption_settings.start_speaking_plan.wait_seconds only (not a separate Telnyx endpointing API)",
     bargeIn: cfg.voiceLanguage?.bargeIn,
     voiceId: cfg.voiceLanguage?.voiceId,
     modelId: cfg.model?.modelId,
     greeting: cfg.callHandling?.greeting,
     startSpeakingPlan: def.fields.startSpeakingPlan,
+    telnyxFieldPlan: def.fields.telnyxFieldPlan || {},
+    skipDynamicVariablesWebhook: Boolean(
+      def.fields.skipDynamicVariablesWebhook,
+    ),
     ordinaryTurnPrimaryGoalMs: ORDINARY_TURN_LATENCY_BANDS.primaryGoalMs,
     note: "Do not claim sub-500ms until real telephone measurements confirm it.",
   };

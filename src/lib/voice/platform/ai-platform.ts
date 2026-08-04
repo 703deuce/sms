@@ -11,6 +11,7 @@ import { TelnyxApiError } from "@/lib/messaging/telnyx/client";
 import {
   buildStartSpeakingPlanFromConfig,
   isLatencyOptimizedProfile,
+  shouldSkipDynamicVariablesWebhook,
 } from "@/lib/voice/latency-profiles";
 import { parseVoiceAgentConfig } from "@/lib/voice/types";
 
@@ -88,14 +89,22 @@ export async function enrichAssistantRemoteConfig(input: {
   });
 
   const agentCfg = parseVoiceAgentConfig(agent.draftConfig);
-  const latencyOptimized = isLatencyOptimizedProfile(
-    agentCfg.voiceTiming?.activeProfile,
-  );
-  // Latency-sensitive: fail fast on slow dynamic-variable webhooks (defaults still apply).
-  const body: Record<string, unknown> = {
-    dynamic_variables_webhook_url: `${base}/api/telnyx/voice/dynamic-variables`,
-    dynamic_variables_webhook_timeout_ms: latencyOptimized ? 500 : 1500,
-  };
+  const skipDynVar = shouldSkipDynamicVariablesWebhook(agentCfg);
+  // Benchmark / Version B+C: omit startup webhook so it cannot add up to timeout_ms
+  // before the greeting. Pass known vars at call start instead when needed.
+  const body: Record<string, unknown> = skipDynVar
+    ? {
+        dynamic_variables_webhook_url: null,
+        dynamic_variables_webhook_timeout_ms: null,
+      }
+    : {
+        dynamic_variables_webhook_url: `${base}/api/telnyx/voice/dynamic-variables`,
+        dynamic_variables_webhook_timeout_ms: isLatencyOptimizedProfile(
+          agentCfg.voiceTiming?.activeProfile,
+        )
+          ? 500
+          : 1500,
+      };
 
   if (memory) {
     body.privacy_settings = {
@@ -1496,32 +1505,15 @@ export async function enableWebCallsAndSyncVoice(
   let voiceError: string | null = null;
   let voiceErrorDetail: ReturnType<typeof sanitizeTelnyxVoiceError> | null = null;
   try {
-    const waitSec = Math.max(
-      0.15,
-      Math.min(1.5, (config.voiceLanguage?.endpointingMs ?? 300) / 1000),
-    );
-    const sttModel =
-      config.transcription?.sttModel?.trim() ||
-      process.env.VOICE_TRANSCRIPTION_MODEL?.trim() ||
-      "deepgram/nova-3";
-    const isFlux = sttModel.toLowerCase() === "deepgram/flux";
-    const fluxWait = Math.max(
-      0.1,
-      Math.min(1.5, (config.voiceLanguage?.endpointingMs ?? 100) / 1000),
-    );
     const startSpeakingPlan = buildStartSpeakingPlanFromConfig(config);
-    // Prefer full plan (wait + endpointing) when Flux/latency profile is active;
-    // otherwise keep wait_seconds-only for legacy web-call path compatibility.
-    const speakingPlan =
-      isFlux || isLatencyOptimizedProfile(config.voiceTiming?.activeProfile)
-        ? startSpeakingPlan
-        : { wait_seconds: isFlux ? fluxWait : waitSec };
     await ai.updateAssistant(agent.telnyxAssistantId, {
       voice_settings: voiceBuilt.voice_settings,
       interruption_settings: {
         enable: config.voiceLanguage?.bargeIn !== false,
         disable_greeting_interruption: true,
-        start_speaking_plan: speakingPlan,
+        ...(startSpeakingPlan
+          ? { start_speaking_plan: startSpeakingPlan }
+          : {}),
       },
       telephony_settings: {
         supports_unauthenticated_web_calls: true,

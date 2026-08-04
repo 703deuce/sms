@@ -45,10 +45,25 @@ export const ORDINARY_TURN_LATENCY_BANDS = {
 
 export type StartSpeakingPlanConfig = {
   waitSeconds: number;
-  onPunctuationSeconds: number;
-  onNoPunctuationSeconds: number;
-  onNumberSeconds: number;
+  onPunctuationSeconds?: number;
+  onNoPunctuationSeconds?: number;
+  onNumberSeconds?: number;
+  /**
+   * When true (Flux), only wait_seconds is sent to Telnyx.
+   * Telnyx docs: transcription_endpointing_plan applies to non turn-taking
+   * models; Flux uses transcription.settings EOT instead.
+   */
+  fluxOmitTranscriptionEndpointingPlan?: boolean;
 };
+
+/** Provenance of a field in the live Telnyx assistant request. */
+export type TelnyxFieldStatus =
+  | "sent_and_applicable"
+  | "sent_may_be_ignored"
+  | "not_sent"
+  | "ignored_by_native_audio_model"
+  | "local_ui_only"
+  | "unknown_requires_call_trace";
 
 export type LatencyProfileProviderFields = {
   transcription: {
@@ -60,7 +75,12 @@ export type LatencyProfileProviderFields = {
     settings?: Record<string, unknown>;
   };
   voiceLanguage: {
-    endpointingMs?: number;
+    /**
+     * Transovo local field. For cascade assistants it maps ONLY to
+     * interruption_settings.start_speaking_plan.wait_seconds (ms → s).
+     * It is NOT a separate Telnyx "endpointing" API field.
+     */
+    endpointingMs?: number | null;
     silenceTimeoutMs?: number;
     bargeIn?: boolean;
     /** Prefer Ultra for Version B when switching from NaturalHD. */
@@ -69,10 +89,17 @@ export type LatencyProfileProviderFields = {
   model?: {
     modelId?: string;
   };
-  startSpeakingPlan?: StartSpeakingPlanConfig;
+  startSpeakingPlan?: StartSpeakingPlanConfig | null;
   /** Native-audio models ignore normal transcription config. */
   nativeAudio?: boolean;
   greetingMode?: "fixed" | "preserve";
+  /**
+   * When true, publish clears dynamic_variables_webhook_url so startup
+   * webhook latency cannot contaminate first-turn benchmarks.
+   */
+  skipDynamicVariablesWebhook?: boolean;
+  /** Documented Telnyx field applicability for this profile. */
+  telnyxFieldPlan?: Record<string, TelnyxFieldStatus>;
 };
 
 export type LatencyProfileRollbackSnapshot = {
@@ -122,19 +149,35 @@ export const LEGACY_CASCADE_PROFILE: LatencyProfileDefinition = {
     },
     greetingMode: "preserve",
     nativeAudio: false,
+    skipDynamicVariablesWebhook: false,
+    telnyxFieldPlan: {
+      transcription_model: "sent_and_applicable",
+      start_speaking_wait_seconds: "sent_and_applicable",
+      transcription_endpointing_plan: "sent_and_applicable",
+      voice_settings: "sent_and_applicable",
+      endpointingMs_local: "local_ui_only",
+    },
   },
 };
 
 /**
- * Version B — Telnyx-documented Flux defaults + low start-speaking plan.
- * eot_timeout_ms 5000 is the force-end fallback, not desired conversational delay.
+ * Version B — Flux turn-taking + minimal wait.
+ *
+ * Telnyx: for deepgram/flux, end-of-turn is driven by transcription.settings
+ * (eot_threshold / eager_eot_threshold / eot_timeout_ms). The punctuation /
+ * no-punctuation / number timers in transcription_endpointing_plan apply to
+ * NON turn-taking models — do not layer a universal 1.0s no-punct wait on Flux
+ * (that alone blocks a sub-500ms target on unpunctuated turns like "Tuesday").
+ *
+ * endpointingMs is only a local alias for wait_seconds (100 → 0.1s), not a
+ * third Telnyx endpointing API.
  */
 export const FLUX_EAGER_LOW_LATENCY_PROFILE: LatencyProfileDefinition = {
   id: "flux_eager_low_latency",
   versionLabel: "B",
-  label: "Version B — latency optimized cascade",
+  label: "Version B — Flux + eager EOT + Haiku + Ultra",
   description:
-    "Deepgram Flux eager EOT (0.8/0.4/5000), wait 0.1s + endpointing plan, fast Haiku-class LLM, prefer Ultra TTS, fixed greeting.",
+    "Deepgram Flux EOT (0.8/0.4/5000) + wait_seconds 0.1 only. No punctuation/number endpointing plan. Fast Haiku + Ultra TTS + fixed greeting. Dynvar webhook skipped for clean first-turn benchmarks.",
   fields: {
     transcription: {
       enabled: true,
@@ -148,6 +191,7 @@ export const FLUX_EAGER_LOW_LATENCY_PROFILE: LatencyProfileDefinition = {
       },
     },
     voiceLanguage: {
+      // Local alias → wait_seconds only (NOT a separate Telnyx endpointing field).
       endpointingMs: 100,
       silenceTimeoutMs: 2500,
       bargeIn: true,
@@ -158,46 +202,79 @@ export const FLUX_EAGER_LOW_LATENCY_PROFILE: LatencyProfileDefinition = {
     },
     startSpeakingPlan: {
       waitSeconds: 0.1,
-      onPunctuationSeconds: 0.1,
-      // Begin test at 1.0s (Telnyx customer-service default is 1.5; we test slightly faster).
-      onNoPunctuationSeconds: 1.0,
-      onNumberSeconds: 1.0,
+      fluxOmitTranscriptionEndpointingPlan: true,
     },
     greetingMode: "fixed",
     nativeAudio: false,
+    skipDynamicVariablesWebhook: true,
+    telnyxFieldPlan: {
+      transcription_model_deepgram_flux: "sent_and_applicable",
+      eot_threshold: "sent_and_applicable",
+      eager_eot_threshold: "sent_and_applicable",
+      eot_timeout_ms: "sent_and_applicable",
+      start_speaking_wait_seconds: "sent_and_applicable",
+      on_punctuation_seconds: "not_sent",
+      on_no_punctuation_seconds: "not_sent",
+      on_number_seconds: "not_sent",
+      endpointingMs_local: "local_ui_only",
+      voice_settings_ultra: "sent_and_applicable",
+      dynamic_variables_webhook: "not_sent",
+    },
   },
 };
 
+/**
+ * Version C — Ultravox native-audio INPUT.
+ *
+ * Telnyx ignores transcription for fixie-ai/ultravox-v0_4.
+ * Ultravox (Fixie/HF) generates text output; Telnyx assistants still expose a
+ * selectable TTS voice — so Howard Ultra is the intended OUTGOING path
+ * (native input → text → Ultra TTS), not "Ultravox speaks natively."
+ * Confirm via live Telnyx payload + call audio that voice_settings is honored.
+ *
+ * Do not copy Flux punctuation endpointing timers into this profile.
+ */
 export const NATIVE_AUDIO_ULTRAVOX_PROFILE: LatencyProfileDefinition = {
   id: "native_audio_ultravox",
   versionLabel: "C",
-  label: "Version C — native audio Ultravox",
+  label: "Version C — Ultravox native-audio input + Ultra TTS",
   description:
-    "Telnyx native-audio model fixie-ai/ultravox-v0_4. Transcription settings are ignored by Telnyx for native-audio models.",
+    "fixie-ai/ultravox-v0_4 for native audio understanding. Transcription ignored. Outgoing audio expected via selected Ultra TTS (text→speech), not Ultravox-native speech. Timing endpointing plan not sent. Dynvar webhook skipped.",
   fields: {
     transcription: {
-      // Telnyx ignores normal transcription config for native-audio models.
       enabled: false,
       sttModel: undefined,
       settings: undefined,
     },
     voiceLanguage: {
-      endpointingMs: 100,
+      // Do not invent a third endpointing layer for Ultravox.
+      endpointingMs: null,
       silenceTimeoutMs: 2500,
       bargeIn: true,
-      preferUltra: false,
+      preferUltra: true,
     },
     model: {
       modelId: NATIVE_AUDIO_MODEL_ID,
     },
-    startSpeakingPlan: {
-      waitSeconds: 0.1,
-      onPunctuationSeconds: 0.1,
-      onNoPunctuationSeconds: 1.0,
-      onNumberSeconds: 1.0,
-    },
+    startSpeakingPlan: null,
     greetingMode: "fixed",
     nativeAudio: true,
+    skipDynamicVariablesWebhook: true,
+    telnyxFieldPlan: {
+      transcription: "ignored_by_native_audio_model",
+      eot_threshold: "not_sent",
+      eager_eot_threshold: "not_sent",
+      eot_timeout_ms: "not_sent",
+      start_speaking_wait_seconds: "not_sent",
+      on_punctuation_seconds: "not_sent",
+      on_no_punctuation_seconds: "not_sent",
+      on_number_seconds: "not_sent",
+      endpointingMs_local: "not_sent",
+      voice_settings_ultra:
+        "sent_may_be_ignored", // sent; Ultravox→text then TTS expected — verify on call
+      dynamic_variables_webhook: "not_sent",
+      ultravox_outgoing_audio_path: "unknown_requires_call_trace",
+    },
   },
 };
 
@@ -362,6 +439,11 @@ export function applyLatencyProfileToConfig(
         )
       : config.callHandling?.greeting;
 
+  const endpointingMs =
+    profile.fields.voiceLanguage.endpointingMs === null
+      ? undefined
+      : profile.fields.voiceLanguage.endpointingMs;
+
   const next: VoiceAgentConfig = {
     ...config,
     transcription: profile.fields.nativeAudio
@@ -388,7 +470,9 @@ export function applyLatencyProfileToConfig(
     voiceLanguage: {
       ...config.voiceLanguage,
       voiceId: nextVoiceId,
-      endpointingMs: profile.fields.voiceLanguage.endpointingMs,
+      ...(endpointingMs !== undefined
+        ? { endpointingMs }
+        : { endpointingMs: undefined }),
       silenceTimeoutMs:
         profile.fields.voiceLanguage.silenceTimeoutMs ??
         config.voiceLanguage?.silenceTimeoutMs ??
@@ -418,7 +502,17 @@ export function applyLatencyProfileToConfig(
         ordinaryTurnPrimaryGoalMs: ORDINARY_TURN_LATENCY_BANDS.primaryGoalMs,
         metric: "caller_end_of_speech_to_first_audible_agent_audio",
         note: "Do not claim sub-500ms until real telephone measurements confirm it.",
-        startSpeakingPlan: profile.fields.startSpeakingPlan,
+        startSpeakingPlan: profile.fields.startSpeakingPlan ?? null,
+        skipDynamicVariablesWebhook: Boolean(
+          profile.fields.skipDynamicVariablesWebhook,
+        ),
+        telnyxFieldPlan: profile.fields.telnyxFieldPlan || {},
+        endpointingMsMapsTo:
+          "interruption_settings.start_speaking_plan.wait_seconds only — not a separate Telnyx endpointing API",
+        outgoingAudioPathNote:
+          profile.fields.nativeAudio
+            ? "Ultravox understands audio natively and generates text; Telnyx TTS voice_settings expected for outbound audio — verify on call"
+            : "Cascade STT→LLM→Ultra TTS",
       },
     },
   };
@@ -511,29 +605,65 @@ export function buildFluxTranscriptionSettings(
 
 /**
  * Build Telnyx interruption_settings.start_speaking_plan from profile/config.
- * Includes transcription_endpointing_plan (Telnyx-supported).
+ *
+ * Flux (turn-taking): only wait_seconds — Telnyx docs say
+ * transcription_endpointing_plan applies to NON turn-taking models; Flux uses
+ * transcription.settings EOT instead. Do NOT send a 1.0s no-punct timer on Flux.
+ *
+ * Native-audio (Ultravox): omit start_speaking_plan unless proven needed —
+ * status unknown / not sent for clean C benchmarks.
+ *
+ * Legacy nova cascade: wait + punctuation/number plan.
  */
 export function buildStartSpeakingPlanFromConfig(
   config: VoiceAgentConfig,
-): Record<string, unknown> {
-  const diagnosticsPlan = (
-    config.voiceTiming?.diagnostics as
-      | { startSpeakingPlan?: StartSpeakingPlanConfig }
-      | undefined
-  )?.startSpeakingPlan;
+): Record<string, unknown> | undefined {
+  const diagnostics = config.voiceTiming?.diagnostics as
+    | {
+        startSpeakingPlan?: StartSpeakingPlanConfig | null;
+        skipDynamicVariablesWebhook?: boolean;
+      }
+    | undefined;
+
+  if (isNativeAudioModel(config.model?.modelId)) {
+    return undefined;
+  }
 
   const profile = isLatencyProfileId(config.voiceTiming?.activeProfile)
     ? getLatencyProfile(config.voiceTiming?.activeProfile)
     : null;
 
-  const plan =
+  if (profile?.fields.startSpeakingPlan === null) {
+    return undefined;
+  }
+
+  const diagnosticsPlan =
+    diagnostics?.startSpeakingPlan === null
+      ? null
+      : diagnostics?.startSpeakingPlan;
+
+  const isFlux =
+    isDeepgramFluxModel(config.transcription?.sttModel) ||
+    profile?.id === VERSION_B_LATENCY_OPTIMIZED;
+
+  if (diagnosticsPlan === null && isFlux) {
+    // Explicit null plan + Flux → wait only from endpointingMs / default 0.1
+  }
+
+  const plan: StartSpeakingPlanConfig =
     diagnosticsPlan ||
     profile?.fields.startSpeakingPlan ||
-    (isDeepgramFluxModel(config.transcription?.sttModel)
-      ? FLUX_EAGER_LOW_LATENCY_PROFILE.fields.startSpeakingPlan!
+    (isFlux
+      ? {
+          waitSeconds: 0.1,
+          fluxOmitTranscriptionEndpointingPlan: true,
+        }
       : LEGACY_CASCADE_PROFILE.fields.startSpeakingPlan!);
 
-  // Prefer explicit endpointingMs when set (maps to wait_seconds).
+  const omitEndpointingPlan =
+    Boolean(plan.fluxOmitTranscriptionEndpointingPlan) || isFlux;
+
+  // endpointingMs is a local alias for wait_seconds only (not a Telnyx field).
   const waitFromEndpointing =
     config.voiceLanguage?.endpointingMs != null
       ? config.voiceLanguage.endpointingMs / 1000
@@ -541,17 +671,35 @@ export function buildStartSpeakingPlanFromConfig(
 
   const waitSeconds = Math.max(
     0.1,
-    Math.min(1.5, waitFromEndpointing ?? plan.waitSeconds),
+    Math.min(1.5, waitFromEndpointing ?? plan.waitSeconds ?? 0.1),
   );
+
+  if (omitEndpointingPlan) {
+    return { wait_seconds: waitSeconds };
+  }
 
   return {
     wait_seconds: waitSeconds,
     transcription_endpointing_plan: {
-      on_punctuation_seconds: plan.onPunctuationSeconds,
-      on_no_punctuation_seconds: plan.onNoPunctuationSeconds,
-      on_number_seconds: plan.onNumberSeconds,
+      on_punctuation_seconds: plan.onPunctuationSeconds ?? 0.1,
+      on_no_punctuation_seconds: plan.onNoPunctuationSeconds ?? 1.5,
+      on_number_seconds: plan.onNumberSeconds ?? 1.0,
     },
   };
+}
+
+/** Whether publish should omit the dynamic-variables webhook (benchmark / B/C). */
+export function shouldSkipDynamicVariablesWebhook(
+  config: VoiceAgentConfig,
+): boolean {
+  const diagnostics = config.voiceTiming?.diagnostics as
+    | { skipDynamicVariablesWebhook?: boolean }
+    | undefined;
+  if (diagnostics?.skipDynamicVariablesWebhook) return true;
+  const profile = isLatencyProfileId(config.voiceTiming?.activeProfile)
+    ? getLatencyProfile(config.voiceTiming?.activeProfile)
+    : null;
+  return Boolean(profile?.fields.skipDynamicVariablesWebhook);
 }
 
 export const LOW_LATENCY_CONVERSATION_GUIDANCE = [

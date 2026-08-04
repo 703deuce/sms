@@ -160,11 +160,14 @@ function outputGainLinear(config: VoiceAgentConfig): number | null {
 }
 
 function interruptionSettingsFromConfig(config: VoiceAgentConfig) {
-  // Barge-in preserved; wait + transcription_endpointing_plan from latency profile.
+  // Barge-in preserved. Flux: wait_seconds only (no punctuation endpointing plan).
+  const startSpeakingPlan = buildStartSpeakingPlanFromConfig(config);
   return {
     enable: config.voiceLanguage?.bargeIn !== false,
     disable_greeting_interruption: true,
-    start_speaking_plan: buildStartSpeakingPlanFromConfig(config),
+    ...(startSpeakingPlan
+      ? { start_speaking_plan: startSpeakingPlan }
+      : {}),
   };
 }
 
@@ -609,11 +612,17 @@ export async function syncTelnyxAssistant(
   }
 
   if (agent.telnyxAssistantId) {
-    // Core first (must not swallow tool failures).
+    // Core first — surface model/greeting failures for latency A/B (do not swallow).
+    let coreError: string | null = null;
     try {
       await ai.updateAssistant(agent.telnyxAssistantId, corePayload);
-    } catch {
-      // continue — tool push / enrich still attempted
+    } catch (err) {
+      coreError = err instanceof Error ? err.message : String(err);
+      console.error("[assistant-sync] core update failed", {
+        assistantId: agent.telnyxAssistantId,
+        model: modelId,
+        error: coreError,
+      });
     }
     const toolResult = await enrichBestEffort(agent.telnyxAssistantId);
     if (!toolResult.ok) {
@@ -642,7 +651,15 @@ export async function syncTelnyxAssistant(
         previousAssistantId: agent.telnyxAssistantId,
         toolSync: verified,
         toolSyncError: verified.ok ? null : verified.error,
+        coreError,
+        requestedModel: modelId,
       };
+    }
+    // If model update failed, do not pretend latency profile is live on Telnyx.
+    if (coreError && isLatencyOptimizedProfile(config.voiceTiming?.activeProfile)) {
+      throw new Error(
+        `Telnyx rejected assistant core update (model=${modelId}): ${coreError}`,
+      );
     }
     return {
       mode: "telnyx",
@@ -651,6 +668,8 @@ export async function syncTelnyxAssistant(
       toolCount: tools.length,
       toolSync: toolResult,
       toolSyncError: null,
+      coreError,
+      requestedModel: modelId,
     };
   }
 

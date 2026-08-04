@@ -9,6 +9,7 @@ import { resolveCallDynamicVariables } from "@/lib/voice/dynamic-variables";
  * @see https://developers.telnyx.com/docs/inference/ai-assistants/dynamic-variables
  */
 export async function POST(request: Request) {
+  const started = Date.now();
   try {
     const verified = await readTelnyxWebhook(request);
     if (!verified.ok) return verified.response;
@@ -54,6 +55,10 @@ export async function POST(request: Request) {
     }
 
     if (!workspaceId) {
+      console.info("[telnyx/dynamic-variables]", {
+        ms: Date.now() - started,
+        empty: true,
+      });
       return NextResponse.json({ dynamic_variables: {} });
     }
 
@@ -67,11 +72,18 @@ export async function POST(request: Request) {
       direction: "INBOUND",
     });
 
+    console.info("[telnyx/dynamic-variables]", {
+      ms: Date.now() - started,
+      workspaceId,
+      agentId,
+      varCount: Object.keys(vars || {}).length,
+    });
     return NextResponse.json({ dynamic_variables: vars });
   } catch (err) {
     console.warn(
       "[telnyx/dynamic-variables]",
       err instanceof Error ? err.message : err,
+      { ms: Date.now() - started },
     );
     return NextResponse.json({ dynamic_variables: {} });
   }
