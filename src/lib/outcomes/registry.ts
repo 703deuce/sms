@@ -878,20 +878,20 @@ export const outcomeSolutions: OutcomeSolutionDef[] = [
 
   {
     slug: "lead-capture",
-    title: "Lead Capture",
+    title: "Capture New Inquiries",
     summary:
-      "Collect contact details, need, timeline, and urgency — then route the lead to your team or CRM.",
+      "Collect name, need, timeline, and urgency when someone reaches out — then send the inquiry to your team.",
     category: "calls-ai",
     whatItDoes: [
-      "Capture name, phone, email, and service needed",
-      "Qualify by area, budget, timeline, and urgency",
-      "Route hot leads to the right person or CRM",
+      "Capture contact details and what they need",
+      "Ask follow-up questions without sounding like a form",
+      "Route serious inquiries to the right person",
     ],
     requiredConnections: ["Phone number"],
     setupTime: "10–15 minutes",
     setupHref:
       "/solutions/ai-call-handling/appointment-assistant/setup?preset=lead_capture",
-    setupsListLabel: "Your Lead Capture Setups",
+    setupsListLabel: "Your Inquiry Capture Setups",
     instanceShortcutSlugs: [
       "capture-fields",
       "intake",
@@ -916,7 +916,7 @@ export const outcomeSolutions: OutcomeSolutionDef[] = [
       },
       {
         slug: "active",
-        label: "Your Lead Capture Setups",
+        label: "Your Inquiry Capture Setups",
         kind: "active",
         navRole: "list",
       },
@@ -1015,20 +1015,20 @@ export const outcomeSolutions: OutcomeSolutionDef[] = [
   },
   {
     slug: "lead-qualification",
-    title: "Lead Qualification",
+    title: "Screen New Inquiries",
     summary:
-      "Score and sort inbound callers so only good-fit leads reach sales — or get booked immediately.",
+      "Ask the right questions and route serious opportunities to your team.",
     category: "calls-ai",
     whatItDoes: [
-      "Ask qualification questions on the call",
-      "Score budget, timeline, fit, and urgency",
-      "Route qualified, nurture, or disqualified outcomes",
+      "Screen new inquiries with clear questions",
+      "Score fit by budget, timing, location, and urgency",
+      "Book, transfer, nurture, or set aside based on the answers",
     ],
     requiredConnections: ["Phone number"],
     setupTime: "10–15 minutes",
     setupHref:
       "/solutions/ai-call-handling/appointment-assistant/setup?preset=lead_capture",
-    setupsListLabel: "Your Qualification Setups",
+    setupsListLabel: "Your Screening Setups",
     instanceShortcutSlugs: [
       "questions",
       "scoring",
@@ -1052,7 +1052,7 @@ export const outcomeSolutions: OutcomeSolutionDef[] = [
       },
       {
         slug: "active",
-        label: "Your Qualification Setups",
+        label: "Your Screening Setups",
         kind: "active",
         navRole: "list",
       },
@@ -1141,14 +1141,14 @@ export const outcomeSolutions: OutcomeSolutionDef[] = [
   },
   {
     slug: "service-intake",
-    title: "Service Intake & Dispatch",
+    title: "Handle New Service Calls",
     summary:
-      "For home services and field teams — collect the job, set urgency, and route the right person.",
+      "Collect job details, determine urgency, and send the request to the right person.",
     category: "calls-ai",
     whatItDoes: [
-      "Collect service address, problem, and access details",
-      "Classify routine, same-day, or emergency jobs",
-      "Create jobs and dispatch to the right technician",
+      "Collect job details, address, and access notes",
+      "Identify routine, same-day, or emergency needs",
+      "Create the request and route it to the right person",
     ],
     requiredConnections: ["Phone number"],
     setupTime: "10–15 minutes",
@@ -1546,14 +1546,14 @@ export const outcomeSolutions: OutcomeSolutionDef[] = [
   },
   {
     slug: "instant-lead-response",
-    title: "Instant Lead Response",
+    title: "Respond to New Inquiries",
     summary:
-      "When a new lead comes in, text or call them right away — or let them choose.",
+      "Automatically text or call new prospects within seconds.",
     category: "leads-follow-up",
     whatItDoes: [
-      "Watch forms, ads, CRM, and webhooks",
-      "Respond by text, call, or a mix by source",
-      "Qualify, book, escalate, and route the lead",
+      "Watch forms, ads, CRM, and webhooks for new inquiries",
+      "Respond by text, call, or a mix you choose",
+      "Qualify, book, or hand off to your team",
     ],
     requiredConnections: ["Lead source", "Messaging number"],
     setupTime: "10–15 minutes",
@@ -1687,12 +1687,12 @@ export const outcomeSolutions: OutcomeSolutionDef[] = [
   },
   {
     slug: "lead-follow-up",
-    title: "Lead Follow-Up",
+    title: "Follow Up With Inquiries",
     summary:
-      "Keep following up with uncontacted or quiet leads until they reply, book, or opt out.",
+      "Keep following up with people who reached out until they reply, book, or opt out.",
     category: "leads-follow-up",
     whatItDoes: [
-      "Enroll leads from pipeline stages or no-reply rules",
+      "Enroll unanswered or quiet inquiries automatically",
       "Run a timed follow-up sequence",
       "Stop when they reply, book, win, lose, or opt out",
     ],
@@ -1817,13 +1817,14 @@ export const outcomeSolutions: OutcomeSolutionDef[] = [
   },
   {
     slug: "estimate-follow-up",
-    title: "Estimate Follow-Up",
-    summary: "Nudge customers after you send an estimate until they book or decline.",
+    title: "Follow Up on Estimates",
+    summary:
+      "Nudge people after you send an estimate until they book or decline.",
     category: "leads-follow-up",
     whatItDoes: [
-      "Watch estimate sources and CRM stages",
-      "Handle pricing and timing objections",
-      "Offer booking or a salesperson callback",
+      "Watch estimates from your CRM or job system",
+      "Handle pricing and timing questions",
+      "Offer booking or a callback with your team",
     ],
     requiredConnections: ["CRM or estimate source"],
     setupTime: "10 minutes",
@@ -1954,15 +1955,15 @@ export const outcomeSolutions: OutcomeSolutionDef[] = [
   },
   {
     slug: "old-lead-reactivation",
-    title: "Old Lead Reactivation",
+    title: "Reconnect With Old Inquiries",
     summary:
-      "For people who inquired but never purchased — unresponsive leads, lost opportunities, unaccepted estimates, no-shows, and CRM leads that went quiet.",
+      "Reach people who contacted you before but never became customers — unanswered prospects, unaccepted estimates, lost opportunities, old form submissions, and previous no-shows.",
     category: "leads-follow-up",
     whatItDoes: [
-      "Re-engage leads who never became customers",
-      "Target unresponsive leads, lost deals, unaccepted estimates, and no-shows",
-      "Pull from CRM stages where leads are sitting idle",
-      "Route replies to booking or sales — not past-customer offers",
+      "Reconnect with people who inquired but never purchased",
+      "Target unanswered prospects, lost opportunities, unaccepted estimates, and no-shows",
+      "Pull from old form submissions and CRM inquiries that went quiet",
+      "Not for past buyers — use Bring Back Past Customers for those",
     ],
     requiredConnections: ["Contacts / segments"],
     setupTime: "10 minutes",
@@ -2218,8 +2219,9 @@ export const outcomeSolutions: OutcomeSolutionDef[] = [
   },
   {
     slug: "review-requests",
-    title: "Review Requests",
-    summary: "Ask happy customers for reviews — and catch unhappy ones privately first.",
+    title: "Get More Reviews",
+    summary:
+      "Ask happy customers for reviews — and catch unhappy ones privately first.",
     category: "customer-experience",
     whatItDoes: [
       "Trigger after jobs, appointments, or payments",
@@ -2346,13 +2348,13 @@ export const outcomeSolutions: OutcomeSolutionDef[] = [
   },
   {
     slug: "customer-follow-up",
-    title: "Customer Follow-Up",
+    title: "Follow Up With Customers",
     summary:
       "Thank customers after a job, check satisfaction, share care tips, and offer the next visit.",
     category: "customer-experience",
     whatItDoes: [
       "Trigger after jobs, deliveries, or resolved tickets",
-      "Send thank-you, instructions, and review asks",
+      "Send thank-you messages, instructions, and review asks",
       "Offer rebooking or related services",
     ],
     requiredConnections: ["Messaging number"],
@@ -2468,14 +2470,14 @@ export const outcomeSolutions: OutcomeSolutionDef[] = [
   },
   {
     slug: "client-onboarding",
-    title: "Client Onboarding",
+    title: "Welcome New Customers",
     summary:
-      "Welcome new clients, collect forms and documents, assign the team, and track progress.",
+      "Send welcome messages, collect information, request documents, and schedule next steps.",
     category: "customer-experience",
     whatItDoes: [
-      "Start when a new client is won or booked",
-      "Send welcome messages, forms, and required info requests",
-      "Schedule kickoff appointments and assign the team",
+      "Start when a new customer is won or booked",
+      "Send welcome messages and collect required information",
+      "Request documents and schedule next steps with your team",
     ],
     requiredConnections: ["Messaging number"],
     setupTime: "15 minutes",
@@ -2590,8 +2592,9 @@ export const outcomeSolutions: OutcomeSolutionDef[] = [
   },
   {
     slug: "payment-follow-up",
-    title: "Payment Follow-Up",
-    summary: "Remind customers about due and overdue invoices with payment links and escalation.",
+    title: "Payment Reminders",
+    summary:
+      "Remind customers about due and overdue invoices with payment links when needed.",
     category: "customer-experience",
     whatItDoes: [
       "Watch invoices that are due soon or overdue",
@@ -2726,13 +2729,14 @@ export const outcomeSolutions: OutcomeSolutionDef[] = [
   },
   {
     slug: "promotional-broadcast",
-    title: "Promotional Broadcast",
-    summary: "Send offers and announcements to the right audience at the right time.",
+    title: "Send a Promotion",
+    summary:
+      "Send offers and announcements to the right audience at the right time.",
     category: "marketing",
     whatItDoes: [
       "Build audiences from lists and segments",
-      "Draft SMS/MMS with AI Composer",
-      "Track clicks, replies, opt-outs, and conversions",
+      "Draft SMS or MMS with your offer details",
+      "Track clicks, replies, opt-outs, and results",
     ],
     requiredConnections: ["Messaging number", "Audience"],
     setupTime: "5–10 minutes",
@@ -2868,15 +2872,15 @@ export const outcomeSolutions: OutcomeSolutionDef[] = [
   },
   {
     slug: "customer-reactivation",
-    title: "Customer Reactivation",
+    title: "Bring Back Past Customers",
     summary:
-      "For people who previously purchased — customers due for service, lapsed memberships, seasonal reminders, past-customer promotions, and rebooking.",
+      "Reach people who already bought from you — customers due for another service, lapsed members, seasonal customers, past buyers, and rebooking opportunities.",
     category: "marketing",
     whatItDoes: [
-      "Win back people who already bought from you",
+      "Win back people who previously purchased",
       "Target due-for-service, lapsed memberships, and seasonal cycles",
-      "Lead with a past-customer offer or rebooking CTA",
-      "Not for first-time leads who never purchased — use Old Lead Reactivation for those",
+      "Lead with a past-customer offer or rebooking invite",
+      "Not for first-time inquiries — use Reconnect With Old Inquiries for those",
     ],
     requiredConnections: ["Contacts / segments"],
     setupTime: "10 minutes",
@@ -2991,8 +2995,9 @@ export const outcomeSolutions: OutcomeSolutionDef[] = [
   },
   {
     slug: "referral-campaigns",
-    title: "Referral Campaigns",
-    summary: "Ask happy customers to refer friends, track links, and reward successful referrals.",
+    title: "Get More Referrals",
+    summary:
+      "Ask happy customers to refer friends, track links, and reward successful referrals.",
     category: "marketing",
     whatItDoes: [
       "Choose who is eligible to refer",
@@ -3096,8 +3101,9 @@ export const outcomeSolutions: OutcomeSolutionDef[] = [
   },
   {
     slug: "event-offer-campaigns",
-    title: "Event & Offer Campaigns",
-    summary: "Promote events and limited-time offers with registration, reminders, and follow-up.",
+    title: "Promote Events & Offers",
+    summary:
+      "Promote events and limited-time offers with registration, reminders, and follow-up.",
     category: "marketing",
     whatItDoes: [
       "Announce events and offers to the right audience",

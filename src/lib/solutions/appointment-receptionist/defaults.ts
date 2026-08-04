@@ -301,7 +301,7 @@ export function applyWizardPreset(
         ...state,
         answerWhen: "every_call",
         ringBehavior: "ai_immediate",
-        solutionName: "Capture New Leads",
+        solutionName: "Capture New Inquiries",
         capabilities: [
           "answer_questions",
           "qualify_callers",
@@ -314,7 +314,7 @@ export function applyWizardPreset(
         ...state,
         answerWhen: "every_call",
         ringBehavior: "ai_immediate",
-        solutionName: "Take Job Requests",
+        solutionName: "Handle New Service Calls",
         capabilities: [
           "answer_questions",
           "qualify_callers",

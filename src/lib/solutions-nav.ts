@@ -163,7 +163,7 @@ const LAUNCH_SECTIONS: SectionDef[] = [
     ],
   },
   {
-    label: "Leads & Follow-Up",
+    label: "New Business",
     category: "leads-follow-up",
     slugs: [
       "instant-lead-response",
@@ -251,7 +251,7 @@ export function buildSolutionsNav(options: SolutionsNavOptions = {}): NavItem[] 
       ],
     },
     {
-      label: "Lead Inbox",
+      label: "Inquiry Inbox",
       href: "/integrations/native/leads",
       icon: ClipboardList,
     },
