@@ -8,7 +8,7 @@ import {
   type SolutionNavInstance,
 } from "@/lib/solutions-nav";
 import { cn } from "@/lib/utils";
-import { ChevronDown, LogOut, MessageSquare } from "lucide-react";
+import { Building2, ChevronDown, LogOut, MessageSquare } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState, useTransition } from "react";
@@ -254,12 +254,16 @@ function ViewToggle({
 
 export function Sidebar({
   userName,
+  workspaceName = "Main Office",
+  workspaceId,
   open,
   onClose,
   initialNavView = "solutions",
   outcomeInstances = {},
 }: {
   userName: string;
+  workspaceName?: string;
+  workspaceId?: string;
   open?: boolean;
   onClose?: () => void;
   initialNavView?: NavView;
@@ -327,22 +331,48 @@ export function Sidebar({
           className="flex items-start gap-2.5"
           onClick={onClose}
         >
-          <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] bg-primary text-white shadow-[0_8px_18px_rgba(16,185,129,0.35)]">
+          <span
+            className={cn(
+              "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] text-white",
+              navView === "solutions"
+                ? "bg-[#3B82F6] shadow-[0_8px_18px_rgba(59,130,246,0.35)]"
+                : "bg-primary shadow-[0_8px_18px_rgba(16,185,129,0.35)]",
+            )}
+          >
             <MessageSquare className="h-3.5 w-3.5" fill="currentColor" />
           </span>
           <span>
-            <span className="block text-[14px] font-bold tracking-tight text-white">
-              Transovo SMS
+            <span className="block text-[15px] font-bold tracking-tight text-white">
+              {navView === "solutions" ? "Transovo" : "Transovo SMS"}
             </span>
-            <span className="mt-0.5 block text-[10px] leading-tight text-sidebar-muted">
-              {navView === "solutions"
-                ? "Solutions by product area"
-                : "Business texting platform"}
-            </span>
+            {navView === "platform" ? (
+              <span className="mt-0.5 block text-[10px] leading-tight text-sidebar-muted">
+                Business texting platform
+              </span>
+            ) : null}
           </span>
         </Link>
 
-        <ViewToggle view={navView} onChange={switchNavView} pending={pending} />
+        {navView === "solutions" ? (
+          <div className="mt-3 flex w-full items-center gap-2.5 rounded-lg border border-white/10 bg-white/[0.06] px-2.5 py-2">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-white/10 text-white">
+              <Building2 className="h-3.5 w-3.5" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[12px] font-semibold text-white">
+                {workspaceName || "Main Office"}
+              </span>
+              <span className="block truncate text-[10px] text-sidebar-muted">
+                {workspaceId ? workspaceId.slice(0, 8).toUpperCase() : "WS-1001"}
+              </span>
+            </span>
+            <ChevronDown className="h-3.5 w-3.5 shrink-0 text-sidebar-muted" />
+          </div>
+        ) : null}
+
+        <div className={cn(navView === "solutions" ? "mt-3" : "mt-0")}>
+          <ViewToggle view={navView} onChange={switchNavView} pending={pending} />
+        </div>
       </div>
 
       {/* Nav — only this region scrolls, and only when needed */}

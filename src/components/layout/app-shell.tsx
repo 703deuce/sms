@@ -13,6 +13,8 @@ import { Suspense, useState } from "react";
 export function AppShell({
   children,
   userName,
+  workspaceId,
+  workspaces = [],
   phoneNumbers,
   metrics,
   activeFromNumberId,
@@ -35,12 +37,18 @@ export function AppShell({
   const [menuOpen, setMenuOpen] = useState(false);
   // Solutions Dashboard renders its own hero title/subtitle/actions.
   const title = pathname === "/outcomes" ? "" : getPageTitle(pathname);
+  const workspaceName =
+    workspaces.find((w) => w.id === workspaceId)?.name ||
+    workspaces[0]?.name ||
+    "Main Office";
 
   return (
     <div className="min-h-screen bg-background">
       <Suspense fallback={null}>
         <Sidebar
           userName={userName}
+          workspaceName={workspaceName}
+          workspaceId={workspaceId}
           open={menuOpen}
           onClose={() => setMenuOpen(false)}
           initialNavView={navView}
