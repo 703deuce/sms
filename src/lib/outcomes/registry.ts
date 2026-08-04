@@ -42,7 +42,10 @@ export type OutcomeSolutionDef = {
     | "sms-messaging"
     | "customers"
     | "shared"
-    | "advanced";
+    | "advanced"
+    | "automations";
+  /** Channels this solution can use (shown on overview / Email shortcuts). */
+  channels?: Array<"sms" | "email" | "ai-call">;
   /** What this outcome does (overview body). */
   whatItDoes: string[];
   requiredConnections?: string[];
@@ -111,6 +114,7 @@ export const outcomeSolutions: OutcomeSolutionDef[] = [
     summary:
       "Replace the voicemail box — AI answers every incoming call right away.",
     category: "calls-ai",
+    channels: ["ai-call", "sms"],
     whatItDoes: [
       "Answers every incoming call immediately",
       "Answers business questions from your information",
@@ -319,6 +323,7 @@ export const outcomeSolutions: OutcomeSolutionDef[] = [
     summary:
       "Your team rings first. AI picks up when nobody answers or the line is busy.",
     category: "calls-ai",
+    channels: ["ai-call", "sms"],
     whatItDoes: [
       "Ring your team first",
       "AI answers on no-answer or busy",
@@ -492,6 +497,7 @@ export const outcomeSolutions: OutcomeSolutionDef[] = [
     summary:
       "Cover nights, weekends, and holidays — and escalate urgent callers to on-call staff.",
     category: "calls-ai",
+    channels: ["ai-call", "sms"],
     whatItDoes: [
       "After-hours greeting when closed",
       "Handles questions and routine requests",
@@ -686,6 +692,7 @@ export const outcomeSolutions: OutcomeSolutionDef[] = [
     summary:
       "Callers can check availability and book, reschedule, or cancel on your live calendar.",
     category: "calls-ai",
+    channels: ["ai-call", "sms"],
     whatItDoes: [
       "Check live calendar availability",
       "Book, reschedule, or cancel appointments",
@@ -882,6 +889,7 @@ export const outcomeSolutions: OutcomeSolutionDef[] = [
     summary:
       "Collect name, need, timeline, and urgency when someone reaches out — then send the inquiry to your team.",
     category: "calls-ai",
+    channels: ["ai-call", "sms"],
     whatItDoes: [
       "Capture contact details and what they need",
       "Ask follow-up questions without sounding like a form",
@@ -1019,6 +1027,7 @@ export const outcomeSolutions: OutcomeSolutionDef[] = [
     summary:
       "Ask the right questions and route serious opportunities to your team.",
     category: "calls-ai",
+    channels: ["ai-call", "sms"],
     whatItDoes: [
       "Screen new inquiries with clear questions",
       "Score fit by budget, timing, location, and urgency",
@@ -1145,6 +1154,7 @@ export const outcomeSolutions: OutcomeSolutionDef[] = [
     summary:
       "Collect job details, determine urgency, and send the request to the right person.",
     category: "calls-ai",
+    channels: ["ai-call", "sms"],
     whatItDoes: [
       "Collect job details, address, and access notes",
       "Identify routine, same-day, or emergency needs",
@@ -1286,6 +1296,7 @@ export const outcomeSolutions: OutcomeSolutionDef[] = [
     summary:
       "Answer support questions, verify the caller, create tickets, and escalate when a human is needed.",
     category: "calls-ai",
+    channels: ["ai-call", "sms"],
     whatItDoes: [
       "Answer FAQs from your knowledge base",
       "Verify the customer before account details",
@@ -1419,6 +1430,7 @@ export const outcomeSolutions: OutcomeSolutionDef[] = [
     title: "Missed Call Text Back",
     summary: "Automatically text people who called and could not reach you.",
     category: "leads-follow-up",
+    channels: ["sms"],
     whatItDoes: [
       "Detect missed, busy, and abandoned calls",
       "Send the right message by business hours",
@@ -1550,6 +1562,7 @@ export const outcomeSolutions: OutcomeSolutionDef[] = [
     summary:
       "Automatically text or call new prospects within seconds.",
     category: "leads-follow-up",
+    channels: ["sms", "email", "ai-call"],
     whatItDoes: [
       "Watch forms, ads, CRM, and webhooks for new inquiries",
       "Respond by text, call, or a mix you choose",
@@ -1691,6 +1704,7 @@ export const outcomeSolutions: OutcomeSolutionDef[] = [
     summary:
       "Keep following up with people who reached out until they reply, book, or opt out.",
     category: "leads-follow-up",
+    channels: ["sms", "email"],
     whatItDoes: [
       "Enroll unanswered or quiet inquiries automatically",
       "Run a timed follow-up sequence",
@@ -1821,6 +1835,7 @@ export const outcomeSolutions: OutcomeSolutionDef[] = [
     summary:
       "Nudge people after you send an estimate until they book or decline.",
     category: "leads-follow-up",
+    channels: ["sms", "email"],
     whatItDoes: [
       "Watch estimates from your CRM or job system",
       "Handle pricing and timing questions",
@@ -1959,6 +1974,7 @@ export const outcomeSolutions: OutcomeSolutionDef[] = [
     summary:
       "Reach people who contacted you before but never became customers.",
     category: "leads-follow-up",
+    channels: ["sms", "email"],
     whatItDoes: [
       "Reconnect with people who inquired but never purchased",
       "Target unanswered prospects, lost opportunities, unaccepted estimates, and no-shows",
@@ -2093,6 +2109,7 @@ export const outcomeSolutions: OutcomeSolutionDef[] = [
     summary:
       "Remind customers before appointments and escalate only when they stay unconfirmed.",
     category: "customer-experience",
+    channels: ["sms", "email", "ai-call"],
     whatItDoes: [
       "Pull upcoming appointments from connected calendars",
       "Confirm, reschedule, or cancel by text",
@@ -2223,6 +2240,7 @@ export const outcomeSolutions: OutcomeSolutionDef[] = [
     summary:
       "Ask happy customers for reviews — and catch unhappy ones privately first.",
     category: "customer-experience",
+    channels: ["sms", "email"],
     whatItDoes: [
       "Start after jobs, appointments, or payments",
       "Send the right review link by location",
@@ -2348,10 +2366,11 @@ export const outcomeSolutions: OutcomeSolutionDef[] = [
   },
   {
     slug: "customer-follow-up",
-    title: "Follow Up With Customers",
+    title: "Customer Follow-Up",
     summary:
       "Thank customers after a job, check satisfaction, share care tips, and offer the next visit.",
-    category: "customer-experience",
+    category: "automations",
+    channels: ["sms", "email"],
     whatItDoes: [
       "Start after jobs, deliveries, or resolved tickets",
       "Send thank-you messages, instructions, and review asks",
@@ -2473,7 +2492,8 @@ export const outcomeSolutions: OutcomeSolutionDef[] = [
     title: "Welcome New Customers",
     summary:
       "Send welcome messages, collect information, request documents, and schedule next steps.",
-    category: "customer-experience",
+    category: "automations",
+    channels: ["sms", "email"],
     whatItDoes: [
       "Start when a new customer is won or booked",
       "Send welcome messages and collect required information",
@@ -2596,6 +2616,7 @@ export const outcomeSolutions: OutcomeSolutionDef[] = [
     summary:
       "Remind customers about due and overdue invoices with payment links when needed.",
     category: "customer-experience",
+    channels: ["sms", "email"],
     whatItDoes: [
       "Watch invoices that are due soon or overdue",
       "Send reminder texts with payment links",
@@ -2733,6 +2754,7 @@ export const outcomeSolutions: OutcomeSolutionDef[] = [
     summary:
       "Send offers and announcements to the right audience at the right time.",
     category: "marketing",
+    channels: ["sms", "email"],
     whatItDoes: [
       "Build audiences from lists and segments",
       "Draft SMS or MMS with your offer details",
@@ -2876,6 +2898,7 @@ export const outcomeSolutions: OutcomeSolutionDef[] = [
     summary:
       "Reach people who already bought from you and are due for another visit.",
     category: "marketing",
+    channels: ["sms", "email"],
     whatItDoes: [
       "Win back people who previously purchased",
       "Target due-for-service, lapsed memberships, and seasonal cycles",
@@ -2999,6 +3022,7 @@ export const outcomeSolutions: OutcomeSolutionDef[] = [
     summary:
       "Ask happy customers to refer friends, track links, and reward successful referrals.",
     category: "marketing",
+    channels: ["sms", "email"],
     whatItDoes: [
       "Choose who is eligible to refer",
       "Share referral offers and tracked links",
@@ -3105,6 +3129,7 @@ export const outcomeSolutions: OutcomeSolutionDef[] = [
     summary:
       "Promote events and limited-time offers with registration, reminders, and follow-up.",
     category: "marketing",
+    channels: ["sms", "email"],
     whatItDoes: [
       "Announce events and offers to the right audience",
       "Collect registrations or claim responses",
@@ -3186,6 +3211,188 @@ export const outcomeSolutions: OutcomeSolutionDef[] = [
         kind: "results",
         navRole: "manage",
         launchHref: "/reports/campaigns",
+      },
+    ),
+  },
+  {
+    slug: "structured-onboarding",
+    title: "Client Onboarding",
+    summary:
+      "Run a multi-step onboarding workflow across messages, forms, tasks, and appointments.",
+    category: "automations",
+    channels: ["sms", "email"],
+    whatItDoes: [
+      "Combine welcome messages, forms, documents, and tasks in one workflow",
+      "Assign owners and track progress until onboarding is complete",
+      "Schedule kickoff or next appointments along the way",
+    ],
+    requiredConnections: ["Messaging number"],
+    setupTime: "15–20 minutes",
+    setupHref: "/automations/new",
+    setupsListLabel: "Your Setups",
+    pages: pages(
+      { slug: "", label: "Overview", kind: "overview", navRole: "core" },
+      {
+        slug: "setup",
+        label: "Set Up",
+        kind: "setup",
+        navRole: "core",
+        launchHref: "/automations/new",
+      },
+      {
+        slug: "active",
+        label: "Your Setups",
+        kind: "active",
+        navRole: "list",
+      },
+      {
+        slug: "steps",
+        label: "Onboarding Steps",
+        kind: "settings",
+        navRole: "manage",
+        launchHref: "/automations",
+        bullets: [
+          "Welcome message",
+          "Collect information",
+          "Request documents",
+          "Create tasks",
+          "Schedule next steps",
+        ],
+      },
+      {
+        slug: "assignment",
+        label: "Team Assignment",
+        kind: "settings",
+        navRole: "manage",
+        launchHref: "/automations",
+      },
+      {
+        slug: "results",
+        label: "Results",
+        kind: "results",
+        navRole: "manage",
+        launchHref: "/reports/automations",
+      },
+    ),
+  },
+  {
+    slug: "no-show-recovery",
+    title: "No-Show Recovery",
+    summary:
+      "Reach people who missed appointments and help them rebook quickly.",
+    category: "automations",
+    channels: ["sms", "email", "ai-call"],
+    whatItDoes: [
+      "Detect no-shows from your calendar or booking system",
+      "Send a recovery message with rebooking options",
+      "Escalate to a call or team handoff when needed",
+    ],
+    requiredConnections: ["Calendar", "Messaging number"],
+    setupTime: "10 minutes",
+    setupHref: "/automations/new",
+    setupsListLabel: "Your Setups",
+    pages: pages(
+      { slug: "", label: "Overview", kind: "overview", navRole: "core" },
+      {
+        slug: "setup",
+        label: "Set Up",
+        kind: "setup",
+        navRole: "core",
+        launchHref: "/automations/new",
+      },
+      {
+        slug: "active",
+        label: "Your Setups",
+        kind: "active",
+        navRole: "list",
+      },
+      {
+        slug: "when",
+        label: "When It Runs",
+        kind: "settings",
+        navRole: "manage",
+        launchHref: "/automations",
+        bullets: [
+          "Missed appointment",
+          "Late cancellation",
+          "No confirmation before visit",
+        ],
+      },
+      {
+        slug: "messages",
+        label: "Recovery Messages",
+        kind: "settings",
+        navRole: "manage",
+        launchHref: "/templates",
+      },
+      {
+        slug: "rebooking",
+        label: "Rebooking",
+        kind: "settings",
+        navRole: "manage",
+        launchHref: "/outcomes/appointment-booking",
+      },
+      {
+        slug: "results",
+        label: "Results",
+        kind: "results",
+        navRole: "manage",
+        launchHref: "/reports/automations",
+      },
+    ),
+  },
+  {
+    slug: "custom-automation",
+    title: "Custom Automation",
+    summary:
+      "Build your own multi-step workflow across SMS, email, calls, tasks, and CRM updates.",
+    category: "automations",
+    channels: ["sms", "email", "ai-call"],
+    whatItDoes: [
+      "Start from a trigger you choose",
+      "Combine messaging, calls, waits, and conditions",
+      "Hand off to your team or update connected systems",
+    ],
+    requiredConnections: [],
+    setupTime: "Varies",
+    setupHref: "/automations/new",
+    setupsListLabel: "Your Automations",
+    pages: pages(
+      { slug: "", label: "Overview", kind: "overview", navRole: "core" },
+      {
+        slug: "setup",
+        label: "Set Up",
+        kind: "setup",
+        navRole: "core",
+        launchHref: "/automations/new",
+      },
+      {
+        slug: "active",
+        label: "Your Automations",
+        kind: "active",
+        navRole: "list",
+        launchHref: "/automations",
+      },
+      {
+        slug: "builder",
+        label: "Workflow Builder",
+        kind: "settings",
+        navRole: "manage",
+        launchHref: "/automations/new",
+      },
+      {
+        slug: "templates",
+        label: "Templates",
+        kind: "settings",
+        navRole: "manage",
+        launchHref: "/automations/templates",
+      },
+      {
+        slug: "logs",
+        label: "Run Logs",
+        kind: "results",
+        navRole: "manage",
+        launchHref: "/automations/logs",
       },
     ),
   },

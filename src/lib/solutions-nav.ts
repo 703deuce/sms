@@ -2,10 +2,9 @@ import {
   AudioLines,
   BarChart3,
   CalendarDays,
-  ClipboardList,
   Inbox,
   LayoutDashboard,
-  Megaphone,
+  Mail,
   MessageSquare,
   Phone,
   Puzzle,
@@ -13,6 +12,7 @@ import {
   ShieldCheck,
   Sparkles,
   Users,
+  Workflow,
   Wrench,
   type LucideIcon,
 } from "lucide-react";
@@ -38,6 +38,16 @@ export type SolutionsNavOptions = {
 
 function pageBySlug(solution: OutcomeSolutionDef, slug: string) {
   return solution.pages.find((p) => p.slug === slug);
+}
+
+function withQuery(href: string, query: Record<string, string>): string {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    if (value) params.set(key, value);
+  }
+  const qs = params.toString();
+  if (!qs) return href;
+  return href.includes("?") ? `${href}&${qs}` : `${href}?${qs}`;
 }
 
 function instanceShortcutLinks(
@@ -80,6 +90,7 @@ function instanceShortcutLinks(
 function solutionChildren(
   solution: OutcomeSolutionDef,
   instances: SolutionNavInstance[] | undefined,
+  channel?: string,
 ): NavChild[] {
   const count = instances?.length ?? 0;
   const children: NavChild[] = [];
@@ -92,10 +103,10 @@ function solutionChildren(
     if (isList && count > 2) {
       label = `${solution.setupsListLabel || page.label} (${count})`;
     }
-    children.push({
-      label,
-      href: outcomeHref(solution.slug, page.slug),
-    });
+    const href = channel
+      ? withQuery(outcomeHref(solution.slug, page.slug), { channel })
+      : outcomeHref(solution.slug, page.slug);
+    children.push({ label, href });
   }
 
   if (count === 0 || count > 2) return children;
@@ -119,79 +130,90 @@ function solutionChildren(
   return children;
 }
 
-function iconFor(slug: string, category: string): LucideIcon {
-  if (category === "marketing") return Megaphone;
-  if (category === "customer-experience") return Sparkles;
-  if (category === "leads-follow-up") return MessageSquare;
+function iconForSection(section: string, slug: string): LucideIcon {
+  if (section === "AI Receptionist") return AudioLines;
+  if (section === "SMS & Messaging") return MessageSquare;
+  if (section === "Email") return Mail;
+  if (section === "Automations") return Workflow;
   if (slug.includes("appointment") || slug.includes("booking")) return CalendarDays;
-  if (slug.includes("lead") || slug.includes("intake") || slug.includes("dispatch")) {
-    return Users;
-  }
-  if (
-    slug.includes("call") ||
-    slug.includes("hours") ||
-    slug.includes("overflow") ||
-    slug.includes("answer") ||
-    slug.includes("support") ||
-    slug.includes("reception")
-  ) {
-    return AudioLines;
-  }
   return Sparkles;
 }
 
-type SectionDef = {
-  label: string;
-  category: OutcomeSolutionDef["category"];
-  /** Explicit slug order for the launch menu. */
-  slugs: string[];
+type LaunchEntry = {
+  slug: string;
+  /** When set, link into the same solution with a channel focus (Email shortcuts). */
+  channel?: "email" | "sms";
+  /**
+   * Email (and similar) shortcuts open the same solution without duplicating
+   * the full management tree under a second section.
+   */
+  shortcut?: boolean;
+  /** Optional label override for the nav row. */
+  label?: string;
 };
 
+type SectionDef = {
+  label: string;
+  entries: LaunchEntry[];
+};
+
+/**
+ * Section headers = product areas of the platform.
+ * Entries = solution-based problems being solved.
+ */
 const LAUNCH_SECTIONS: SectionDef[] = [
   {
-    label: "Calls & AI",
-    category: "calls-ai",
-    slugs: [
-      "answer-every-call",
-      "missed-overflow",
-      "after-hours",
-      "appointment-booking",
-      "lead-capture",
-      "lead-qualification",
-      "service-intake",
-      "customer-support",
+    label: "AI Receptionist",
+    entries: [
+      { slug: "answer-every-call" },
+      { slug: "missed-overflow" },
+      { slug: "after-hours" },
+      { slug: "appointment-booking" },
+      { slug: "lead-capture" },
+      { slug: "lead-qualification" },
+      { slug: "service-intake" },
+      { slug: "customer-support" },
     ],
   },
   {
-    label: "New Business",
-    category: "leads-follow-up",
-    slugs: [
-      "instant-lead-response",
-      "missed-call-text-back",
-      "lead-follow-up",
-      "estimate-follow-up",
-      "old-lead-reactivation",
+    label: "SMS & Messaging",
+    entries: [
+      { slug: "missed-call-text-back" },
+      { slug: "instant-lead-response" },
+      { slug: "lead-follow-up" },
+      { slug: "estimate-follow-up" },
+      { slug: "old-lead-reactivation" },
+      { slug: "appointment-reminders" },
+      { slug: "review-requests" },
+      { slug: "payment-follow-up" },
+      { slug: "promotional-broadcast" },
+      { slug: "customer-reactivation" },
+      { slug: "referral-campaigns" },
+      { slug: "event-offer-campaigns" },
     ],
   },
   {
-    label: "Customer Experience",
-    category: "customer-experience",
-    slugs: [
-      "appointment-reminders",
-      "review-requests",
-      "customer-follow-up",
-      "client-onboarding",
-      "payment-follow-up",
+    label: "Email",
+    entries: [
+      { slug: "instant-lead-response", channel: "email", shortcut: true },
+      { slug: "lead-follow-up", channel: "email", shortcut: true },
+      { slug: "estimate-follow-up", channel: "email", shortcut: true },
+      { slug: "appointment-reminders", channel: "email", shortcut: true },
+      { slug: "review-requests", channel: "email", shortcut: true },
+      { slug: "client-onboarding", channel: "email", shortcut: true },
+      { slug: "payment-follow-up", channel: "email", shortcut: true },
+      { slug: "promotional-broadcast", channel: "email", shortcut: true },
+      { slug: "customer-reactivation", channel: "email", shortcut: true },
     ],
   },
   {
-    label: "Marketing",
-    category: "marketing",
-    slugs: [
-      "promotional-broadcast",
-      "customer-reactivation",
-      "referral-campaigns",
-      "event-offer-campaigns",
+    label: "Automations",
+    entries: [
+      { slug: "client-onboarding" },
+      { slug: "customer-follow-up" },
+      { slug: "structured-onboarding" },
+      { slug: "no-show-recovery" },
+      { slug: "custom-automation" },
     ],
   },
 ];
@@ -214,14 +236,19 @@ export function buildSolutionsNav(options: SolutionsNavOptions = {}): NavItem[] 
 
   for (const section of LAUNCH_SECTIONS) {
     let first = true;
-    for (const slug of section.slugs) {
-      const solution = bySlug.get(slug);
+    for (const entry of section.entries) {
+      const solution = bySlug.get(entry.slug);
       if (!solution) continue;
+      const href = entry.channel
+        ? withQuery(outcomeHref(solution.slug), { channel: entry.channel })
+        : outcomeHref(solution.slug);
       nav.push({
-        label: solution.title,
-        href: outcomeHref(solution.slug),
-        icon: iconFor(solution.slug, section.category),
-        children: solutionChildren(solution, instances[solution.slug]),
+        label: entry.label || solution.title,
+        href,
+        icon: iconForSection(section.label, solution.slug),
+        children: entry.shortcut
+          ? undefined
+          : solutionChildren(solution, instances[solution.slug], entry.channel),
         sectionLabel: first ? section.label : undefined,
       });
       first = false;
@@ -233,7 +260,6 @@ export function buildSolutionsNav(options: SolutionsNavOptions = {}): NavItem[] 
       label: "Inbox",
       href: "/inbox",
       icon: Inbox,
-      sectionLabel: "Shared",
       children: [
         { label: "All Conversations", href: "/inbox" },
         { label: "Assigned to Me", href: "/inbox/mine" },
@@ -248,61 +274,73 @@ export function buildSolutionsNav(options: SolutionsNavOptions = {}): NavItem[] 
         { label: "All Contacts", href: "/contacts" },
         { label: "Lists & Segments", href: "/contacts/lists" },
         { label: "Imports", href: "/contacts/imports" },
+        { label: "Contact Settings", href: "/contacts/fields" },
       ],
     },
     {
-      label: "Inquiry Inbox",
-      href: "/integrations/native/leads",
-      icon: ClipboardList,
-    },
-    {
-      label: "Pipeline",
-      href: "/integrations/crm/pipeline",
-      icon: BarChart3,
-    },
-    {
-      label: "Appointments",
-      href: "/integrations/native/appointments",
-      icon: CalendarDays,
-    },
-    {
-      label: "Phone Numbers",
+      label: "Phone",
       href: "/numbers",
       icon: Phone,
-    },
-    {
-      label: "Call History",
-      href: "/phone/calls",
-      icon: Phone,
+      children: [
+        { label: "Phone Numbers", href: "/numbers" },
+        { label: "Softphone", href: "/phone" },
+        { label: "Call History", href: "/phone/calls" },
+        { label: "Routing", href: "/voice/inbound-routing" },
+      ],
     },
     {
       label: "Calendars",
       href: "/voice/calendars",
       icon: CalendarDays,
+      children: [
+        { label: "Calendar Connections", href: "/voice/calendars" },
+        { label: "Appointment Types", href: "/voice/calendars" },
+        { label: "Appointments", href: "/integrations/native/appointments" },
+      ],
     },
     {
       label: "Integrations",
       href: "/integrations",
       icon: Puzzle,
+      children: [
+        { label: "App Directory", href: "/integrations" },
+        { label: "Connected Apps", href: "/integrations/native" },
+        { label: "CRM", href: "/integrations/crm" },
+        { label: "Webhooks", href: "/integrations/webhooks" },
+        { label: "API Keys", href: "/integrations/api" },
+      ],
     },
     {
       label: "Reports",
       href: "/reports",
       icon: BarChart3,
+      children: [
+        { label: "Overview", href: "/reports" },
+        { label: "Calls", href: "/voice/analytics" },
+        { label: "Messages", href: "/reports/messages" },
+        { label: "Appointments", href: "/integrations/native/appointments" },
+        { label: "Inquiries", href: "/integrations/native/leads" },
+        { label: "Campaigns", href: "/reports/campaigns" },
+        { label: "Usage", href: "/reports/usage" },
+      ],
     },
     {
       label: "Compliance",
       href: "/compliance",
       icon: ShieldCheck,
+      children: [
+        { label: "Messaging Registration", href: "/compliance/campaign" },
+        { label: "Consent & Opt-Outs", href: "/compliance/consent" },
+        { label: "Calling Compliance", href: "/compliance" },
+        { label: "Recording Disclosures", href: "/voice/settings" },
+      ],
     },
     {
       label: "Advanced",
       href: "/voice/agents",
       icon: Wrench,
-      sectionLabel: "Advanced",
       children: [
         { label: "Workflow Builder", href: "/automations/new" },
-        { label: "Automations", href: "/automations" },
         { label: "Voice Agents", href: "/voice/agents" },
         { label: "Knowledge Bases", href: "/voice/knowledge" },
         { label: "Tools", href: "/voice/tools" },
@@ -326,7 +364,6 @@ export function buildSolutionsNav(options: SolutionsNavOptions = {}): NavItem[] 
       label: "Settings",
       href: "/settings/business",
       icon: Settings,
-      sectionLabel: "Settings",
     },
   );
 
@@ -335,3 +372,14 @@ export function buildSolutionsNav(options: SolutionsNavOptions = {}): NavItem[] 
 
 /** Static solutions nav (no live instances) — used for titles / tests. */
 export const solutionsNav: NavItem[] = buildSolutionsNav();
+
+/** Slugs that appear as primary (non-shortcut) Solutions launch entries. */
+export function solutionsLaunchSlugs(): string[] {
+  const slugs = new Set<string>();
+  for (const section of LAUNCH_SECTIONS) {
+    for (const entry of section.entries) {
+      if (!entry.shortcut) slugs.add(entry.slug);
+    }
+  }
+  return [...slugs];
+}

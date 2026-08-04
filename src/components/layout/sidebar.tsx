@@ -29,6 +29,10 @@ function isNavHrefActive(pathname: string, search: string, href: string): boolea
     }
     if (pathname === pathPart || pathname.startsWith(`${pathPart}/`)) {
       const want = new URLSearchParams(queryPart);
+      // Channel shortcuts only highlight when that channel is active.
+      if (want.has("channel")) {
+        return have.get("channel") === want.get("channel");
+      }
       // If the URL includes the link's query keys, require them to match.
       // If not, still treat the path as active so the menu stays oriented.
       let matchedQuery = true;
@@ -47,9 +51,12 @@ function isNavHrefActive(pathname: string, search: string, href: string): boolea
 
   if (pathname === pathPart) {
     if (have.has("type")) return false;
+    // Channel-focused URLs belong to the Email (etc.) shortcut row.
+    if (have.has("channel")) return false;
     return true;
   }
 
+  if (have.has("channel")) return false;
   return pathname.startsWith(`${pathPart}/`);
 }
 
@@ -57,9 +64,26 @@ function isNavHrefActive(pathname: string, search: string, href: string): boolea
 function linkMatchScore(pathname: string, search: string, href: string): number {
   if (!isNavHrefActive(pathname, search, href)) return -1;
   const pathPart = hrefPath(href);
-  if (pathname === pathPart) return 20_000 + pathPart.length;
-  if (pathname.startsWith(`${pathPart}/`)) return 10_000 + pathPart.length;
-  return pathPart.length;
+  const queryPart = href.includes("?") ? href.slice(href.indexOf("?") + 1) : "";
+  const have = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
+  let score = pathPart.length;
+  if (pathname === pathPart) score += 20_000;
+  else if (pathname.startsWith(`${pathPart}/`)) score += 10_000;
+  // Prefer the nav row whose channel (or other query) matches the URL.
+  if (queryPart) {
+    const want = new URLSearchParams(queryPart);
+    for (const [key, value] of want) {
+      if (have.get(key) === value) score += 50_000;
+    }
+  } else if (!have.has("channel")) {
+    score += 25_000;
+  }
+  return score;
+}
+
+function itemExpandKey(item: NavItem): string {
+  // Href is unique even when the same solution appears under SMS and Email.
+  return item.href;
 }
 
 function sectionHasActiveChild(
@@ -72,31 +96,49 @@ function sectionHasActiveChild(
   );
 }
 
-function bestExpandedLabel(
+function bestExpandedKey(
   navItems: NavItem[],
   pathname: string,
   search: string,
 ): string | null {
-  // Solutions routes always keep their owning solution open.
+  // Solutions routes keep the best-matching product-area entry open
+  // (SMS full tree vs Email channel shortcut).
   const outcomesSlug = pathname.match(/^\/outcomes\/([^/]+)/)?.[1];
   if (outcomesSlug) {
-    const owned = navItems.find((item) => hrefPath(item.href) === `/outcomes/${outcomesSlug}`);
-    if (owned?.children?.length) return owned.label;
+    const matches = navItems.filter(
+      (item) => hrefPath(item.href) === `/outcomes/${outcomesSlug}`,
+    );
+    let best: NavItem | undefined;
+    let bestScore = -1;
+    for (const item of matches) {
+      const score = linkMatchScore(pathname, search, item.href);
+      if (score > bestScore) {
+        bestScore = score;
+        best = item;
+      }
+    }
+    if (best?.children?.length) return itemExpandKey(best);
+    // Email shortcuts have no children — fall through so sibling product
+    // areas with a management tree can still expand when appropriate.
+    if (best && !best.children?.length) {
+      const withTree = matches.find((item) => item.children?.length);
+      if (withTree && bestScore < 50_000) return itemExpandKey(withTree);
+      return itemExpandKey(best);
+    }
   }
 
-  let bestLabel: string | null = null;
+  let bestKey: string | null = null;
   let bestScore = -1;
 
   for (const item of navItems) {
     let score = -1;
 
+    score = Math.max(score, linkMatchScore(pathname, search, item.href));
     for (const link of flattenNavLinks(item.children)) {
       score = Math.max(score, linkMatchScore(pathname, search, link.href));
     }
 
-    if (pathname === hrefPath(item.href)) {
-      score = Math.max(score, 5_000 + hrefPath(item.href).length);
-    } else if (
+    if (
       item.href !== "/dashboard" &&
       item.href !== "/outcomes" &&
       pathname.startsWith(`${hrefPath(item.href)}/`)
@@ -111,12 +153,12 @@ function bestExpandedLabel(
     if (score > bestScore || (score === bestScore && item.children?.length && score >= 0)) {
       if (score > bestScore) {
         bestScore = score;
-        bestLabel = item.label;
+        bestKey = itemExpandKey(item);
       }
     }
   }
 
-  return bestScore >= 0 ? bestLabel : null;
+  return bestScore >= 0 ? bestKey : null;
 }
 
 function NavLinkRow({
@@ -245,7 +287,7 @@ export function Sidebar({
 
   // Keep the section that owns the current route open (and prefer Solutions over Advanced).
   useEffect(() => {
-    setExpanded(bestExpandedLabel(navItems, pathname, search));
+    setExpanded(bestExpandedKey(navItems, pathname, search));
   }, [pathname, search, navItems]);
 
   // Scroll the active child into view inside the sidebar.
@@ -297,7 +339,7 @@ export function Sidebar({
             </span>
             <span className="mt-0.5 block text-[10px] leading-tight text-sidebar-muted">
               {navView === "solutions"
-                ? "Business outcomes"
+                ? "Solutions by product area"
                 : "Business texting platform"}
             </span>
           </span>
@@ -326,16 +368,27 @@ export function Sidebar({
           const ownedOutcome =
             pathname.startsWith(`${hrefPath(item.href)}/`) ||
             pathname === hrefPath(item.href);
+          const expandKey = itemExpandKey(item);
+          const itemHrefActive = isNavHrefActive(pathname, search, item.href);
+          // When the same solution appears in SMS and Email, only highlight
+          // the row whose query context matches (or the non-channel primary).
           const active =
-            isNavHrefActive(pathname, search, item.href) ||
+            itemHrefActive ||
             Boolean(childActive) ||
             (item.href !== "/dashboard" &&
               item.href !== "/outcomes" &&
-              ownedOutcome);
-          const isOpen = expanded === item.label;
+              ownedOutcome &&
+              !navItems.some(
+                (other) =>
+                  other !== item &&
+                  hrefPath(other.href) === hrefPath(item.href) &&
+                  linkMatchScore(pathname, search, other.href) >
+                    linkMatchScore(pathname, search, item.href),
+              ));
+          const isOpen = expanded === expandKey;
 
           return (
-            <div key={`${navView}-${item.label}`}>
+            <div key={`${navView}-${expandKey}`}>
               {item.sectionLabel ? (
                 <p className="px-2.5 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-[0.08em] text-sidebar-muted/80">
                   {item.sectionLabel}
@@ -355,7 +408,7 @@ export function Sidebar({
                 <Link
                   href={item.href}
                   onClick={() => {
-                    if (item.children?.length) setExpanded(item.label);
+                    if (item.children?.length) setExpanded(expandKey);
                     onClose?.();
                   }}
                   className="flex min-w-0 flex-1 items-center gap-2.5 py-[7px] pl-3 pr-1 text-[13px] font-medium"
@@ -384,7 +437,7 @@ export function Sidebar({
                     )}
                     onClick={() =>
                       setExpanded((current) =>
-                        current === item.label ? null : item.label,
+                        current === expandKey ? null : expandKey,
                       )
                     }
                     aria-expanded={isOpen}

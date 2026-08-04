@@ -11,7 +11,11 @@ import {
   collectNavHrefs,
 } from "../src/lib/nav";
 import { outcomeSolutions } from "../src/lib/outcomes/registry";
-import { buildSolutionsNav, solutionsNav } from "../src/lib/solutions-nav";
+import {
+  buildSolutionsNav,
+  solutionsLaunchSlugs,
+  solutionsNav,
+} from "../src/lib/solutions-nav";
 import { solutionCategories } from "../src/lib/solutions-catalog";
 
 const navHrefs = new Set(collectNavHrefs(appNav));
@@ -72,21 +76,18 @@ for (const category of solutionCategories) {
 const solutionsHrefs = new Set(collectNavHrefs(solutionsNav));
 assert.ok(solutionsHrefs.has("/outcomes"), "Solutions dashboard required");
 
-// Launch menu outcomes (ai-receptionist hub is route-only, not a nav row).
-const launchSlugs = outcomeSolutions
-  .filter((s) => s.slug !== "ai-receptionist")
-  .map((s) => s.slug);
-for (const slug of launchSlugs) {
+// Primary launch outcomes appear in Solutions nav (Email shortcuts reuse them).
+for (const slug of solutionsLaunchSlugs()) {
   assert.ok(
     solutionsHrefs.has(`/outcomes/${slug}`),
     `Outcome ${slug} missing from solutionsNav`,
   );
 }
 
-// Final Solutions launch menu: owner-action labels, not Platform jargon.
+// Section headers = product areas; entries = solutions.
 const expectedLaunchMenu: Array<{ section: string; labels: string[] }> = [
   {
-    section: "Calls & AI",
+    section: "AI Receptionist",
     labels: [
       "AI Answering Service",
       "Cover Missed Calls",
@@ -99,36 +100,48 @@ const expectedLaunchMenu: Array<{ section: string; labels: string[] }> = [
     ],
   },
   {
-    section: "New Business",
+    section: "SMS & Messaging",
     labels: [
-      "Respond to New Inquiries",
       "Missed Call Text Back",
+      "Respond to New Inquiries",
       "Follow Up With Inquiries",
       "Follow Up on Estimates",
       "Reconnect With Old Inquiries",
-    ],
-  },
-  {
-    section: "Customer Experience",
-    labels: [
       "Appointment Reminders",
       "Get More Reviews",
-      "Follow Up With Customers",
-      "Welcome New Customers",
       "Payment Reminders",
-    ],
-  },
-  {
-    section: "Marketing",
-    labels: [
       "Send a Promotion",
       "Bring Back Past Customers",
       "Get More Referrals",
       "Promote Events & Offers",
     ],
   },
+  {
+    section: "Email",
+    labels: [
+      "Respond to New Inquiries",
+      "Follow Up With Inquiries",
+      "Follow Up on Estimates",
+      "Appointment Reminders",
+      "Get More Reviews",
+      "Welcome New Customers",
+      "Payment Reminders",
+      "Send a Promotion",
+      "Bring Back Past Customers",
+    ],
+  },
+  {
+    section: "Automations",
+    labels: [
+      "Welcome New Customers",
+      "Customer Follow-Up",
+      "Client Onboarding",
+      "No-Show Recovery",
+      "Custom Automation",
+    ],
+  },
 ];
-const launchItems = solutionsNav.filter((i) => i.label !== "Dashboard");
+const launchItems = solutionsNav.filter((i) => i.href.startsWith("/outcomes/"));
 let cursor = 0;
 for (const section of expectedLaunchMenu) {
   assert.equal(
@@ -149,6 +162,31 @@ assert.equal(
   cursor,
   expectedLaunchMenu.reduce((n, s) => n + s.labels.length, 0),
   "Solutions launch menu length mismatch",
+);
+
+// Email shortcuts open the same solution with channel=email (not duplicates).
+const emailRespond = solutionsNav.find(
+  (i) =>
+    i.label === "Respond to New Inquiries" &&
+    i.href.includes("channel=email"),
+);
+assert.ok(emailRespond, "Email shortcut for Respond to New Inquiries required");
+assert.equal(
+  emailRespond?.children,
+  undefined,
+  "Email shortcuts should not duplicate the full management tree",
+);
+
+const sharedSections = ["Inbox", "Contacts", "Phone", "Calendars", "Integrations", "Reports", "Compliance", "Advanced", "Settings"];
+for (const label of sharedSections) {
+  assert.ok(
+    solutionsNav.some((i) => i.label === label),
+    `Shared section ${label} required`,
+  );
+}
+assert.ok(
+  !solutionsNav.some((i) => i.sectionLabel === "Shared"),
+  "Legacy Shared section header should be removed",
 );
 
 // Full permanent submenu is always visible — even before the customer sets up.

@@ -9,10 +9,13 @@ import { notFound } from "next/navigation";
 
 export default async function OutcomeSolutionPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ solution: string; section?: string[] }>;
+  searchParams: Promise<{ channel?: string }>;
 }) {
   const { solution: solutionSlug, section } = await params;
+  const { channel } = await searchParams;
   const solution = getOutcomeSolution(solutionSlug);
   if (!solution) notFound();
 
@@ -28,6 +31,11 @@ export default async function OutcomeSolutionPage({
   const instances = instancesBySolution[solution.slug] ?? [];
 
   return (
-    <OutcomePageView solution={solution} page={page} instances={instances} />
+    <OutcomePageView
+      solution={solution}
+      page={page}
+      instances={instances}
+      channel={channel}
+    />
   );
 }

@@ -38,26 +38,45 @@ function WorkflowDiagram() {
   );
 }
 
+const CHANNEL_LABELS: Record<"sms" | "email" | "ai-call", string> = {
+  sms: "SMS",
+  email: "Email",
+  "ai-call": "AI Call",
+};
+
 export function OutcomePageView({
   solution,
   page,
   instances = [],
+  channel,
 }: {
   solution: OutcomeSolutionDef;
   page: OutcomePageDef;
   instances?: SolutionNavInstance[];
+  /** Product-area focus from Solutions nav (e.g. Email shortcut). */
+  channel?: string;
 }) {
   // Setup pages with a launch href jump straight into the wizard / builder.
   if (page.kind === "setup" && page.launchHref) {
     redirect(page.launchHref);
   }
 
+  const focusChannel =
+    channel === "email" || channel === "sms" || channel === "ai-call"
+      ? channel
+      : undefined;
+  const channels = solution.channels ?? [];
+
   if (page.kind === "overview" || page.slug === "") {
     return (
       <div className="space-y-5">
         <PageHeader
           title={solution.title}
-          description={solution.summary}
+          description={
+            focusChannel === "email"
+              ? `${solution.summary} Opened from Email — configure the email channel for this solution.`
+              : solution.summary
+          }
           actions={
             <>
               {instances.length > 0 ? (
@@ -116,6 +135,35 @@ export function OutcomePageView({
           </Card>
 
           <div className="space-y-4">
+            {channels.length ? (
+              <Card>
+                <CardTitle>Channels enabled</CardTitle>
+                <ul className="mt-3 space-y-2 text-sm">
+                  {(["sms", "email", "ai-call"] as const).map((key) => {
+                    const enabled = channels.includes(key);
+                    const focused = focusChannel === key;
+                    return (
+                      <li
+                        key={key}
+                        className={
+                          focused
+                            ? "font-medium text-foreground"
+                            : "text-muted-foreground"
+                        }
+                      >
+                        {enabled ? "✓" : "○"} {CHANNEL_LABELS[key]}
+                        {focused ? " · viewing" : null}
+                      </li>
+                    );
+                  })}
+                </ul>
+                <p className="mt-3 text-[12px] text-muted-foreground">
+                  Same solution across product areas — Email is a channel shortcut,
+                  not a separate product.
+                </p>
+              </Card>
+            ) : null}
+
             <Card>
               <CardTitle>Setup</CardTitle>
               <dl className="mt-3 space-y-3 text-sm">
