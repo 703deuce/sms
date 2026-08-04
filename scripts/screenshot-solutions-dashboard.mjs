@@ -33,31 +33,32 @@ async function checkReady(page) {
     : await page.locator("body").innerText();
   const checks = {
     hasHero: /What do you want Transovo to handle/i.test(text),
-    hasSubtitle: /Choose from our library of pre-built solutions/i.test(text),
+    hasSubtitle: /Centralized view of everything Transovo is doing/i.test(text),
     hasCards:
-      /Catch Missed Calls/i.test(text) &&
-      /Capture Leads After Hours/i.test(text) &&
-      /Welcome & Wow Customers/i.test(text) &&
-      /Nurture New Leads/i.test(text) &&
-      /Win Back Lost Leads/i.test(text),
-    hasBadges: /125 Runs/i.test(text) && /240 Runs/i.test(text) && /\bDraft\b/i.test(text),
+      /Catch Missed Call/i.test(text) &&
+      /Handle After Hours/i.test(text) &&
+      /Respond to New Inquiries/i.test(text) &&
+      /Win Back Past Plans/i.test(text),
+    hasBadges:
+      /\bRecommended\b/i.test(text) &&
+      /\bHot\b/i.test(text) &&
+      /\bNew\b/i.test(text),
     hasActionNeeded:
-      /Action Needed/i.test(text) &&
-      /Collect Testimonials/i.test(text) &&
-      /Low Account Balance/i.test(text),
-    hasActive:
-      /The Active Solutions/i.test(text) && /Running/i.test(text),
-    hasEvents: /Recent Events/i.test(text) && /Sarah Smith/i.test(text),
-    hasStats: /Calls Answered/i.test(text) && /from last week/i.test(text),
+      /Active Solutions/i.test(text) &&
+      /The Latest Statistics/i.test(text) &&
+      /View All/i.test(text),
+    hasActive: /Service/i.test(text) && /Last Activity/i.test(text),
+    hasEvents: /Recent Activity/i.test(text) && /4:15 PM/i.test(text),
+    hasStats: /Calls Handled/i.test(text) && /last 7 days/i.test(text),
     hasRecommended:
-      /Recommended Next/i.test(text) && /Bring Back Old Customers/i.test(text),
-    hasButtons: /New Solution/i.test(text) && /View All Solutions/i.test(text),
+      /Recommended Apps/i.test(text) && /Appointment Reminders/i.test(text),
+    hasButtons: /New Solution/i.test(text) && /Get Started/i.test(text),
     oldDash:
-      /Quickly manage your AI and messaging solutions/i.test(text) ||
-      /Cover Missed Calls/i.test(text) ||
-      /Ready to Start/i.test(text) ||
-      /Needs Attention/i.test(text) ||
-      /Top Active Solutions/i.test(text),
+      /Choose from our library of pre-built solutions/i.test(text) ||
+      /Action Needed/i.test(text) ||
+      /Recommended Next/i.test(text) ||
+      /View All Solutions/i.test(text) ||
+      /125 Runs/i.test(text),
   };
 
   const aside = (await page.locator("aside").count())
