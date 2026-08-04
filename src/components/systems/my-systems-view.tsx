@@ -16,6 +16,7 @@ const TYPE_FILTERS: Array<{ id: "all" | SystemType; label: string }> = [
   { id: "ai_agent", label: "AI Agents" },
   { id: "automation", label: "Automations" },
   { id: "campaign", label: "Campaigns" },
+  { id: "routing", label: "Routing" },
 ];
 
 const STATUS_FILTERS: Array<{ id: "all" | SystemStatus; label: string }> = [

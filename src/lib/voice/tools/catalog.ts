@@ -126,6 +126,17 @@ export const TOOL_CATALOG: CatalogToolDef[] = [
     requiresIntegration: "sms",
   },
   {
+    key: "start_automation",
+    name: "Start automation",
+    description:
+      "Start a linked AutomationFlow for the current caller (follow-up sequences, estimate follow-up, etc.).",
+    category: "communications",
+    provider: "transovo_builtin",
+    toolType: "start_automation",
+    access: "write",
+    risk: "medium",
+  },
+  {
     key: "send_email",
     name: "Send email",
     description: "Send an email follow-up to the caller or contact.",

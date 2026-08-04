@@ -1,5 +1,7 @@
 import { getPrisma } from "@/lib/db";
 import { emitAutomationEvent } from "@/lib/automations/events";
+import { enrollInAutomation } from "@/lib/automations/enroll";
+import { emitPlatformEvent } from "@/lib/platform/events";
 import { emitVoiceAutomationEvents } from "./automation-events";
 import { recordVoiceUsage } from "./usage";
 import { parseVoiceAgentConfig } from "./types";
@@ -109,18 +111,82 @@ export async function processPostCall(callId: string) {
   if (call.contactId) {
     await emitVoiceAutomationEvents(call);
     if (isMissed) {
+      await emitPlatformEvent({
+        workspaceId: call.workspaceId,
+        type: "CALL_MISSED",
+        contactId: call.contactId,
+        agentId: call.agentId,
+        callId: call.id,
+        payload: { status: call.status, outcome: call.outcome },
+        idempotencyKey: `call-missed:${call.id}`,
+      }).catch(() => undefined);
       await emitAutomationEvent(call.workspaceId, "call.missed", call.contactId, {
         callId: call.id,
         status: call.status,
         outcome: call.outcome,
       }).catch(() => undefined);
     }
+    await emitPlatformEvent({
+      workspaceId: call.workspaceId,
+      type: "CALL_COMPLETED",
+      contactId: call.contactId,
+      agentId: call.agentId,
+      callId: call.id,
+      payload: {
+        outcome: call.outcome,
+        status: call.status,
+        summary: insight?.summary || null,
+      },
+      idempotencyKey: `call-completed:${call.id}`,
+    }).catch(() => undefined);
+    await emitPlatformEvent({
+      workspaceId: call.workspaceId,
+      type: "AI_CALL_COMPLETED",
+      contactId: call.contactId,
+      agentId: call.agentId,
+      callId: call.id,
+      payload: {
+        outcome: call.outcome,
+        summary: insight?.summary || null,
+        transcriptReady: true,
+      },
+      idempotencyKey: `ai-call-completed:${call.id}`,
+    }).catch(() => undefined);
     await emitAutomationEvent(
       call.workspaceId,
       "call.completed",
       call.contactId,
       { callId: call.id, outcome: call.outcome },
     ).catch(() => undefined);
+
+    // Agent → Automation: post-call / outcome-rule start.
+    if (agent?.postCallAutomationId) {
+      await enrollInAutomation({
+        workspaceId: call.workspaceId,
+        flowId: agent.postCallAutomationId,
+        contactId: call.contactId,
+      }).catch(() => undefined);
+    } else if (agent?.fallbackAutomationId && isMissed) {
+      await enrollInAutomation({
+        workspaceId: call.workspaceId,
+        flowId: agent.fallbackAutomationId,
+        contactId: call.contactId,
+      }).catch(() => undefined);
+    }
+
+    // Outcome rule from draftConfig.postCall.startAutomationOnOutcomes
+    const outcomeRules =
+      (config?.postCall as { startAutomationOnOutcomes?: Record<string, string> } | null)
+        ?.startAutomationOnOutcomes || {};
+    const outcomeKey = String(call.outcome || insight?.intent || "").toLowerCase();
+    const ruleFlowId = outcomeKey ? outcomeRules[outcomeKey] : undefined;
+    if (ruleFlowId) {
+      await enrollInAutomation({
+        workspaceId: call.workspaceId,
+        flowId: ruleFlowId,
+        contactId: call.contactId,
+      }).catch(() => undefined);
+    }
   }
 
   // CRM framework — one call lifecycle + transcript/summary updates.

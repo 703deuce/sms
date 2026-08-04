@@ -41,6 +41,8 @@ const MODEL_TO_TABLE: Record<string, string> = {
   automationFlow: "AutomationFlow",
   automationExecution: "AutomationExecution",
   automationStepExecution: "AutomationStepExecution",
+  solutionSetup: "solution_setups",
+  platformEvent: "platform_events",
   keyword: "Keyword",
   optInForm: "OptInForm",
   formSubmission: "FormSubmission",
@@ -290,7 +292,6 @@ const RELATIONS: Record<string, Record<string, { table: string; fk: string; pk?:
   paymentLink: { workspace: { table: "Workspace", fk: "workspaceId" } },
   linkClickEvent: { workspace: { table: "Workspace", fk: "workspaceId" } },
   mediaAsset: { workspace: { table: "Workspace", fk: "workspaceId" } },
-  voiceAgent: { workspace: { table: "Workspace", fk: "workspaceId" } },
   voiceAgentVersion: {
     workspace: { table: "Workspace", fk: "workspaceId" },
     agent: { table: "voice_agents", fk: "agentId" },
@@ -357,7 +358,16 @@ const RELATIONS: Record<string, Record<string, { table: string; fk: string; pk?:
     agent: { table: "voice_agents", fk: "agentId" },
   },
   conversationMessage: { conversation: { table: "Conversation", fk: "conversationId" } },
-  automationFlow: { workspace: { table: "Workspace", fk: "workspaceId" } },
+  automationFlow: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+    sourceSolutionSetup: { table: "solution_setups", fk: "sourceSolutionSetupId" },
+  },
+  solutionSetup: { workspace: { table: "Workspace", fk: "workspaceId" } },
+  platformEvent: { workspace: { table: "Workspace", fk: "workspaceId" } },
+  voiceAgent: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+    sourceSolutionSetup: { table: "solution_setups", fk: "sourceSolutionSetupId" },
+  },
   automationExecution: {
     flow: { table: "AutomationFlow", fk: "flowId" },
     contact: { table: "Contact", fk: "contactId" },

@@ -261,7 +261,16 @@ export function mapAutomation(a: {
   completionRate: number;
   status: string;
   updatedAt: Date | string;
+  sourceSolutionSetupId?: string | null;
+  advancedCustomized?: boolean | null;
+  description?: string | null;
 }): AutomationFlow {
+  const createdFrom =
+    a.description?.startsWith("Generated from ")
+      ? a.description.replace(/^Generated from\s+/, "")
+      : a.sourceSolutionSetupId
+        ? "Solution setup"
+        : null;
   return {
     id: a.id,
     name: a.name,
@@ -271,6 +280,9 @@ export function mapAutomation(a: {
     completionRate: a.completionRate,
     status: titleCaseStatus(a.status),
     updatedAt: new Date(a.updatedAt).toISOString(),
+    sourceSolutionSetupId: a.sourceSolutionSetupId ?? null,
+    advancedCustomized: Boolean(a.advancedCustomized),
+    createdFrom,
   };
 }
 

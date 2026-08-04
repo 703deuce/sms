@@ -913,6 +913,44 @@ export async function executeBuiltinVoiceAction(input: {
         body: String(args.body || ""),
       });
     }
+    case "start_automation": {
+      // Prefer explicit automationId; fall back to agent's postCallAutomationId.
+      let flowId = String(args.automationId || args.flowId || "").trim();
+      if (!flowId && input.agentId) {
+        const agent = await prisma.voiceAgent.findFirst({
+          where: { id: input.agentId, workspaceId: input.workspaceId },
+          select: { postCallAutomationId: true, linkedAutomationIds: true },
+        });
+        flowId =
+          agent?.postCallAutomationId ||
+          (agent?.linkedAutomationIds as string[] | undefined)?.[0] ||
+          "";
+      }
+      if (!flowId) throw new Error("automationId required");
+      let contactId = String(args.contactId || "");
+      if (!contactId && input.callId) {
+        const call = await prisma.voiceCall.findFirst({
+          where: { id: input.callId, workspaceId: input.workspaceId },
+          select: { contactId: true, fromE164: true },
+        });
+        contactId = call?.contactId || "";
+        if (!contactId && call?.fromE164) {
+          const c = await prisma.contact.findFirst({
+            where: { workspaceId: input.workspaceId, phone: call.fromE164 },
+            select: { id: true },
+          });
+          contactId = c?.id || "";
+        }
+      }
+      if (!contactId) throw new Error("contactId required");
+      const { enrollInAutomation } = await import("@/lib/automations/enroll");
+      const result = await enrollInAutomation({
+        workspaceId: input.workspaceId,
+        flowId,
+        contactId,
+      });
+      return { ok: true, flowId, contactId, result };
+    }
     case "end_call": {
       // Prefer Telnyx-native hangup. Only hang up after an explicit reason that
       // indicates the conversation is finished — never after CRM/lookup failures.

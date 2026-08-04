@@ -1441,7 +1441,7 @@ export const outcomeSolutions: OutcomeSolutionDef[] = [
     ],
     requiredConnections: ["Phone number", "Messaging number"],
     setupTime: "5–10 minutes",
-    setupHref: "/automations/new",
+    setupHref: "/solutions/missed-call-text-back/setup",
     setupsListLabel: "Your Setups",
     instanceShortcutSlugs: [
       "triggers",
@@ -1462,7 +1462,7 @@ export const outcomeSolutions: OutcomeSolutionDef[] = [
         label: "Set Up",
         kind: "setup",
         navRole: "core",
-        launchHref: "/automations/new",
+        launchHref: "/solutions/missed-call-text-back/setup",
       },
       {
         slug: "active",

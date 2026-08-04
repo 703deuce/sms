@@ -158,6 +158,57 @@ export type StepResult = {
   error?: string;
 };
 
+/** Map call completion payload → wait_for_call_result branch handle. */
+export function normalizeCallResultBranch(
+  callResult: Record<string, unknown>,
+): string {
+  const type = String(callResult.type || "").toUpperCase();
+  const outcome = String(callResult.outcome || callResult.status || "").toLowerCase();
+  if (
+    outcome.includes("book") ||
+    outcome === "appointment_booked" ||
+    callResult.appointmentBooked === true
+  ) {
+    return "booked";
+  }
+  if (outcome.includes("transfer") || type === "CALL_TRANSFERRED") {
+    return "transferred";
+  }
+  if (outcome.includes("voicemail") || callResult.voicemailDetected === true) {
+    return "voicemail";
+  }
+  if (
+    outcome.includes("busy") ||
+    outcome === "busy" ||
+    String(callResult.status || "").toUpperCase() === "BUSY"
+  ) {
+    return "busy";
+  }
+  if (
+    type === "CALL_MISSED" ||
+    outcome.includes("no_answer") ||
+    outcome.includes("no-answer") ||
+    outcome.includes("missed") ||
+    ["NO_ANSWER", "CANCELLED"].includes(String(callResult.status || "").toUpperCase())
+  ) {
+    return "no_answer";
+  }
+  if (
+    outcome.includes("fail") ||
+    type === "TIMEOUT" ||
+    String(callResult.status || "").toUpperCase() === "FAILED"
+  ) {
+    return "failed";
+  }
+  if (outcome.includes("answer") || outcome === "completed" || type === "CALL_COMPLETED") {
+    return outcome.includes("answer") && !outcome.includes("no")
+      ? "answered"
+      : "completed";
+  }
+  if (type === "AI_CALL_COMPLETED") return "completed";
+  return "completed";
+}
+
 export async function runNodeAction(
   node: AutomationCanvasNode,
   def: AutomationDefinition,
@@ -348,24 +399,170 @@ export async function runNodeAction(
     return { nextNodeId: getNextNodeId(def, node.id) };
   }
 
-  if (block === "enroll_in_automation") {
-    const targetFlowId = String(cfg.flowId || "").trim();
+  if (block === "enroll_in_automation" || block === "start_automation") {
+    const targetFlowId = String(cfg.automationId || cfg.flowId || "").trim();
     if (targetFlowId && !ctx.testMode) {
+      let variables: Record<string, unknown> = {};
+      const rawVars = cfg.variablesJson ?? cfg.variables;
+      if (typeof rawVars === "string" && rawVars.trim()) {
+        try {
+          variables = JSON.parse(rawVars) as Record<string, unknown>;
+        } catch {
+          variables = {};
+        }
+      } else if (rawVars && typeof rawVars === "object") {
+        variables = rawVars as Record<string, unknown>;
+      }
       await enrollInAutomation({
         workspaceId: ctx.workspaceId,
         flowId: targetFlowId,
         contactId: ctx.contactId,
+        variables,
       });
     }
     return { nextNodeId: getNextNodeId(def, node.id) };
   }
 
   if (block === "remove_from_automation") {
-    const targetFlowId = String(cfg.flowId || "").trim();
+    const targetFlowId = String(cfg.flowId || cfg.automationId || "").trim();
     if (targetFlowId && !ctx.testMode) {
       await cancelExecutionsInFlow(ctx.workspaceId, ctx.contactId, targetFlowId);
     }
     return { nextNodeId: getNextNodeId(def, node.id) };
+  }
+
+  if (block === "start_ai_call") {
+    const agentId = String(cfg.agentId || "").trim();
+    if (!agentId) {
+      return { error: "start_ai_call_missing_agent", nextNodeId: getNextNodeId(def, node.id) };
+    }
+    if (!ctx.testMode) {
+      const { enqueueJob } = await import("@/lib/messaging/enqueue-advance");
+      const contextRaw = cfg.contextJson;
+      const context =
+        typeof contextRaw === "string"
+          ? contextRaw
+          : JSON.stringify(contextRaw ?? {});
+      await enqueueJob({
+        jobType: "voice_outbound_ai_call",
+        queueName: "voice-outbound",
+        workspaceId: ctx.workspaceId,
+        payload: {
+          workspaceId: ctx.workspaceId,
+          agentId,
+          contactId: ctx.contactId,
+          purpose: String(cfg.purpose || ""),
+          callerId: String(cfg.callerId || ""),
+          timeoutSeconds: Number(cfg.timeoutSeconds || 60),
+          retryCount: Number(cfg.retryCount || 0),
+          context,
+          automationExecutionId: ctx.executionId,
+          automationFlowId: ctx.flowId,
+        },
+        idempotencyKey: `ai-call:${ctx.executionId}:${node.id}`,
+      });
+      await mergeExecutionMetadata(ctx.executionId, {
+        pendingAiCallAgentId: agentId,
+        waitingForCallResult: false,
+      });
+    }
+    return {
+      nextNodeId: getNextNodeId(def, node.id),
+      output: { queued: true, agentId },
+    };
+  }
+
+  if (block === "wait_for_call_result") {
+    const timeoutMinutes = Math.max(1, Number(cfg.timeoutMinutes || 30));
+    const exec = await prisma.automationExecution.findUnique({
+      where: { id: ctx.executionId },
+      select: { metadata: true },
+    });
+    const meta = (exec?.metadata || {}) as Record<string, unknown>;
+    const callResult = meta.callResult as Record<string, unknown> | undefined;
+
+    const resolveBranchTarget = (handle: string) => {
+      const exact = def.edges.find(
+        (e) => e.source === node.id && (e.sourceHandle || "default") === handle,
+      );
+      if (exact) return exact.target;
+      const fallback = def.edges.find(
+        (e) =>
+          e.source === node.id &&
+          (!e.sourceHandle || e.sourceHandle === "default"),
+      );
+      return fallback?.target || getNextNodeId(def, node.id);
+    };
+
+    if (callResult) {
+      const branch = normalizeCallResultBranch(callResult);
+      await mergeExecutionMetadata(ctx.executionId, {
+        waitingForCallResult: false,
+        lastCallResultBranch: branch,
+      });
+      const output: Prisma.InputJsonValue = {
+        branch,
+        answered:
+          branch === "answered" || branch === "completed" || branch === "booked",
+        no_answer: branch === "no_answer",
+        busy: branch === "busy",
+        failed: branch === "failed",
+        completed: branch === "completed",
+        transferred: branch === "transferred",
+        booked: branch === "booked",
+        voicemail: branch === "voicemail",
+        callId:
+          typeof callResult.callId === "string" ? callResult.callId : null,
+        summary:
+          typeof callResult.summary === "string" ? callResult.summary : null,
+        transcript:
+          typeof callResult.transcript === "string"
+            ? callResult.transcript
+            : null,
+        extractedFields:
+          callResult.extractedFields &&
+          typeof callResult.extractedFields === "object"
+            ? (callResult.extractedFields as Prisma.InputJsonValue)
+            : null,
+      };
+      return {
+        nextNodeId: resolveBranchTarget(branch),
+        output,
+      };
+    }
+
+    // Woken by timeout without a call result — branch to failed/no_answer.
+    if (meta.waitingForCallResult === true) {
+      const branch = "failed";
+      await mergeExecutionMetadata(ctx.executionId, {
+        waitingForCallResult: false,
+        lastCallResultBranch: branch,
+        callResult: { type: "TIMEOUT", outcome: branch },
+      });
+      return {
+        nextNodeId: resolveBranchTarget(branch),
+        output: { branch, failed: true, timedOut: true },
+      };
+    }
+
+    await mergeExecutionMetadata(ctx.executionId, {
+      waitingForCallResult: true,
+    });
+    return {
+      waiting: true,
+      waitMs: timeoutMinutes * 60_000,
+      // Stay on this node so resume/timeout can re-evaluate and branch.
+      nextNodeId: node.id,
+      output: { waitingForCallResult: true },
+    };
+  }
+
+  if (block === "use_ai_agent") {
+    // Placeholder for future non-call agent actions.
+    return {
+      nextNodeId: getNextNodeId(def, node.id),
+      output: { stub: true, agentId: String(cfg.agentId || "") },
+    };
   }
 
   if (block === "send_webhook") {

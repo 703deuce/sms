@@ -1,9 +1,9 @@
 /**
  * Unified inventory of everything created through solutions, builders, or manual setup.
+ * Prefers real SolutionSetup links when present.
  */
 
 import { getPrisma } from "@/lib/db";
-import { loadOutcomeInstances } from "@/lib/outcomes/instances";
 import {
   getOutcomeSolution,
   outcomeHref,
@@ -36,27 +36,14 @@ export type SystemResource = {
   children?: SystemResource[];
 };
 
-function mapAgentStatus(status: string, health?: string | null): SystemStatus {
+function mapStatus(status: string, health?: string | null): SystemStatus {
   if (health && health !== "ok") return "needs_attention";
   const s = status.toUpperCase();
-  if (s === "LIVE" || s === "ACTIVE" || s === "PUBLISHED") return "active";
+  if (s === "LIVE" || s === "ACTIVE" || s === "PUBLISHED" || s === "RUNNING" || s === "SCHEDULED")
+    return "active";
   if (s === "PAUSED") return "paused";
-  return "draft";
-}
-
-function mapFlowStatus(status: string): SystemStatus {
-  const s = status.toUpperCase();
-  if (s === "ACTIVE") return "active";
-  if (s === "PAUSED") return "paused";
-  if (s === "ERROR" || s === "FAILED") return "needs_attention";
-  return "draft";
-}
-
-function mapCampaignStatus(status: string): SystemStatus {
-  const s = status.toUpperCase();
-  if (s === "RUNNING" || s === "ACTIVE" || s === "SCHEDULED") return "active";
-  if (s === "PAUSED") return "paused";
-  if (s === "FAILED") return "needs_attention";
+  if (s === "ERROR" || s === "FAILED" || s === "NEEDS_ATTENTION" || s === "CONFIGURATION_ERROR")
+    return "needs_attention";
   return "draft";
 }
 
@@ -81,129 +68,305 @@ function relativeTime(date: Date | string | null | undefined): string | null {
   return `${days}d ago`;
 }
 
-function solutionTitleForPurpose(purpose: string | null): string {
-  if (!purpose) return "AI Agent";
-  const match = outcomeSolutions.find(
-    (s) => s.slug === purpose || s.title.toLowerCase() === purpose.toLowerCase(),
-  );
-  return match?.title || purpose;
+function solutionTitle(slug: string): string {
+  return getOutcomeSolution(slug)?.title || slug;
 }
 
 export async function loadMySystems(
   workspaceId: string,
 ): Promise<SystemResource[]> {
   const prisma = getPrisma();
-  const [agents, flows, campaigns, instancesBySolution] = await Promise.all([
-    prisma.voiceAgent.findMany({
-      where: { workspaceId, archivedAt: null },
-      orderBy: { updatedAt: "desc" },
-      take: 100,
-      include: {
-        phoneAssignments: { take: 1 },
-      },
-    }),
-    prisma.automationFlow.findMany({
-      where: { workspaceId },
-      orderBy: { updatedAt: "desc" },
-      take: 100,
-      include: {
-        executions: {
-          orderBy: { startedAt: "desc" },
-          take: 1,
-          select: { startedAt: true, nextActionAt: true, status: true, error: true },
+  const [setups, agents, flows, campaigns, routingRules, phones] =
+    await Promise.all([
+      prisma.solutionSetup.findMany({
+        where: { workspaceId },
+        orderBy: { updatedAt: "desc" },
+        take: 100,
+      }),
+      prisma.voiceAgent.findMany({
+        where: { workspaceId, archivedAt: null },
+        orderBy: { updatedAt: "desc" },
+        take: 100,
+      }),
+      prisma.automationFlow.findMany({
+        where: { workspaceId },
+        orderBy: { updatedAt: "desc" },
+        take: 100,
+        include: {
+          executions: {
+            orderBy: { startedAt: "desc" },
+            take: 1,
+            select: {
+              startedAt: true,
+              nextActionAt: true,
+              status: true,
+              error: true,
+            },
+          },
         },
-      },
-    }),
-    prisma.campaign.findMany({
-      where: { workspaceId },
-      orderBy: { createdAt: "desc" },
-      take: 100,
-    }),
-    loadOutcomeInstances(workspaceId),
-  ]);
+      }),
+      prisma.campaign.findMany({
+        where: { workspaceId },
+        orderBy: { createdAt: "desc" },
+        take: 100,
+      }),
+      prisma.voiceRoutingRule.findMany({
+        where: { workspaceId },
+        orderBy: { updatedAt: "desc" },
+        take: 50,
+      }),
+      prisma.phoneNumber.findMany({
+        where: { workspaceId },
+        select: { id: true, e164: true, friendlyName: true },
+      }),
+    ]);
+
+  const phoneById = new Map(
+    phones.map((p: { id: string; e164: string; friendlyName: string | null }) => [
+      p.id,
+      p,
+    ]),
+  );
+  const agentById = new Map(agents.map((a: { id: string }) => [a.id, a]));
+  const flowById = new Map(flows.map((f: { id: string }) => [f.id, f]));
+  const campaignById = new Map(campaigns.map((c: { id: string }) => [c.id, c]));
+  const ruleById = new Map(routingRules.map((r: { id: string }) => [r.id, r]));
+
+  const linkedAgentIds = new Set<string>();
+  const linkedFlowIds = new Set<string>();
+  const linkedCampaignIds = new Set<string>();
+  const linkedRuleIds = new Set<string>();
 
   const systems: SystemResource[] = [];
 
-  // Packaged solution setups (grouped by outcome slug from agent instances).
-  for (const [slug, instances] of Object.entries(instancesBySolution)) {
-    const solution = getOutcomeSolution(slug);
-    if (!solution || !instances.length) continue;
-    const childResources: SystemResource[] = instances.map((inst) => ({
-      id: `agent-child-${inst.id}`,
-      name: inst.label,
-      type: "ai_agent" as const,
-      typeLabel: "AI Agent",
-      createdFrom: solution.title,
-      status: mapAgentStatus(inst.status),
-      statusLabel: statusLabel(mapAgentStatus(inst.status)),
-      channels: ["Voice"],
-      phoneNumber: null,
-      lastActivity: null,
-      nextAction: null,
-      warning: null,
-      href: inst.href,
-    }));
+  for (const setup of setups as Array<{
+    id: string;
+    name: string;
+    solutionType: string;
+    status: string;
+    updatedAt: Date;
+    linkedAgentIds: string[];
+    linkedAutomationIds: string[];
+    linkedCampaignIds: string[];
+    linkedPhoneNumberIds: string[];
+    linkedRoutingRuleIds: string[];
+  }>) {
+    const children: SystemResource[] = [];
+    const solution = getOutcomeSolution(setup.solutionType);
+    const channels = solution?.channels?.length
+      ? solution.channels.map((c) =>
+          c === "ai-call" ? "AI Voice" : c === "sms" ? "SMS" : "Email",
+        )
+      : ["SMS"];
 
-    const anyPaused = childResources.some((c) => c.status === "paused");
-    const anyDraft = childResources.every((c) => c.status === "draft");
-    const status: SystemStatus = anyDraft
-      ? "draft"
-      : anyPaused
-        ? "paused"
-        : "active";
+    for (const agentId of setup.linkedAgentIds || []) {
+      linkedAgentIds.add(agentId);
+      const agent = agentById.get(agentId) as
+        | {
+            id: string;
+            name: string;
+            displayName: string | null;
+            status: string;
+            healthStatus: string | null;
+            healthMessage: string | null;
+            updatedAt: Date;
+            phoneNumberId: string | null;
+          }
+        | undefined;
+      if (!agent) continue;
+      const phone = agent.phoneNumberId
+        ? phoneById.get(agent.phoneNumberId)
+        : null;
+      children.push({
+        id: `agent-${agent.id}`,
+        name: agent.displayName || agent.name,
+        type: "ai_agent",
+        typeLabel: "AI Agent",
+        createdFrom: solutionTitle(setup.solutionType),
+        status: mapStatus(agent.status, agent.healthStatus),
+        statusLabel: statusLabel(mapStatus(agent.status, agent.healthStatus)),
+        channels: ["Voice"],
+        phoneNumber:
+          (phone as { e164?: string; friendlyName?: string | null } | undefined)
+            ?.e164 ||
+          (phone as { friendlyName?: string | null } | undefined)?.friendlyName ||
+          null,
+        lastActivity: relativeTime(agent.updatedAt),
+        nextAction: null,
+        warning:
+          agent.healthStatus && agent.healthStatus !== "ok"
+            ? agent.healthMessage || "Needs attention"
+            : null,
+        href: `/voice/agents/${agent.id}`,
+      });
+    }
+
+    for (const flowId of setup.linkedAutomationIds || []) {
+      linkedFlowIds.add(flowId);
+      const flow = flowById.get(flowId) as
+        | {
+            id: string;
+            name: string;
+            status: string;
+            advancedCustomized?: boolean;
+            updatedAt: Date;
+            executions?: Array<{
+              startedAt: Date;
+              nextActionAt: Date | null;
+              error: string | null;
+            }>;
+          }
+        | undefined;
+      if (!flow) continue;
+      const lastExec = flow.executions?.[0];
+      children.push({
+        id: `flow-${flow.id}`,
+        name: flow.name,
+        type: "automation",
+        typeLabel: "Automation",
+        createdFrom: solutionTitle(setup.solutionType),
+        status: mapStatus(flow.status),
+        statusLabel: statusLabel(mapStatus(flow.status)),
+        channels: ["SMS"],
+        phoneNumber: null,
+        lastActivity: relativeTime(lastExec?.startedAt || flow.updatedAt),
+        nextAction: lastExec?.nextActionAt
+          ? new Date(lastExec.nextActionAt).toLocaleString(undefined, {
+              month: "short",
+              day: "numeric",
+              hour: "numeric",
+              minute: "2-digit",
+            })
+          : null,
+        warning:
+          lastExec?.error ||
+          (flow.advancedCustomized ? "Advanced customizations" : null),
+        href: `/automations/${flow.id}`,
+      });
+    }
+
+    for (const campaignId of setup.linkedCampaignIds || []) {
+      linkedCampaignIds.add(campaignId);
+      const campaign = campaignById.get(campaignId) as
+        | {
+            id: string;
+            name: string;
+            status: string;
+            type: string;
+            createdAt: Date;
+            scheduledAt: Date | null;
+          }
+        | undefined;
+      if (!campaign) continue;
+      children.push({
+        id: `campaign-${campaign.id}`,
+        name: campaign.name,
+        type: "campaign",
+        typeLabel: "Campaign",
+        createdFrom: solutionTitle(setup.solutionType),
+        status: mapStatus(campaign.status),
+        statusLabel: statusLabel(mapStatus(campaign.status)),
+        channels: [campaign.type?.toUpperCase() === "EMAIL" ? "Email" : "SMS"],
+        phoneNumber: null,
+        lastActivity: relativeTime(campaign.createdAt),
+        nextAction: campaign.scheduledAt
+          ? new Date(campaign.scheduledAt).toLocaleString()
+          : null,
+        warning: null,
+        href: `/campaigns/${campaign.id}`,
+      });
+    }
+
+    for (const ruleId of setup.linkedRoutingRuleIds || []) {
+      linkedRuleIds.add(ruleId);
+      const rule = ruleById.get(ruleId) as
+        | { id: string; name: string; isActive: boolean; updatedAt: Date }
+        | undefined;
+      if (!rule) continue;
+      children.push({
+        id: `routing-${rule.id}`,
+        name: rule.name,
+        type: "routing",
+        typeLabel: "Routing",
+        createdFrom: solutionTitle(setup.solutionType),
+        status: rule.isActive ? "active" : "paused",
+        statusLabel: rule.isActive ? "Active" : "Paused",
+        channels: ["Voice"],
+        phoneNumber: null,
+        lastActivity: relativeTime(rule.updatedAt),
+        nextAction: null,
+        warning: null,
+        href: "/phone/queues",
+      });
+    }
+
+    // Also include flows linked via sourceSolutionSetupId even if array stale.
+    for (const flow of flows as Array<{
+      id: string;
+      name: string;
+      status: string;
+      sourceSolutionSetupId?: string | null;
+      advancedCustomized?: boolean;
+      updatedAt: Date;
+      executions?: Array<{
+        startedAt: Date;
+        nextActionAt: Date | null;
+        error: string | null;
+      }>;
+    }>) {
+      if (flow.sourceSolutionSetupId !== setup.id) continue;
+      if (linkedFlowIds.has(flow.id)) continue;
+      linkedFlowIds.add(flow.id);
+      const lastExec = flow.executions?.[0];
+      children.push({
+        id: `flow-${flow.id}`,
+        name: flow.name,
+        type: "automation",
+        typeLabel: "Automation",
+        createdFrom: solutionTitle(setup.solutionType),
+        status: mapStatus(flow.status),
+        statusLabel: statusLabel(mapStatus(flow.status)),
+        channels: ["SMS"],
+        phoneNumber: null,
+        lastActivity: relativeTime(lastExec?.startedAt || flow.updatedAt),
+        nextAction: lastExec?.nextActionAt
+          ? new Date(lastExec.nextActionAt).toLocaleString()
+          : null,
+        warning:
+          lastExec?.error ||
+          (flow.advancedCustomized ? "Advanced customizations" : null),
+        href: `/automations/${flow.id}`,
+      });
+    }
+
+    const phoneId = (setup.linkedPhoneNumberIds || [])[0];
+    const phone = phoneId ? phoneById.get(phoneId) : null;
+    const status = mapStatus(setup.status);
 
     systems.push({
-      id: `setup-${slug}`,
-      name:
-        instances.length === 1
-          ? instances[0]!.label
-          : `${solution.title} (${instances.length})`,
+      id: `setup-${setup.id}`,
+      name: setup.name,
       type: "solution_setup",
       typeLabel: "Solution Setup",
-      createdFrom: solution.title,
+      createdFrom: solutionTitle(setup.solutionType),
       status,
       statusLabel: statusLabel(status),
-      channels: solution.channels?.length
-        ? solution.channels.map((c) =>
-            c === "ai-call" ? "AI Voice" : c === "sms" ? "SMS" : "Email",
-          )
-        : ["Voice"],
-      phoneNumber: null,
-      lastActivity: null,
+      channels,
+      phoneNumber:
+        (phone as { e164?: string; friendlyName?: string | null } | undefined)
+          ?.e164 ||
+        (phone as { friendlyName?: string | null } | undefined)?.friendlyName ||
+        null,
+      lastActivity: relativeTime(setup.updatedAt),
       nextAction: null,
       warning: null,
-      href: outcomeHref(slug),
-      children: childResources,
+      href:
+        setup.solutionType === "missed-call-text-back"
+          ? `/solutions/missed-call-text-back/setup?setupId=${setup.id}`
+          : outcomeHref(setup.solutionType),
+      children,
     });
   }
-
-  const phoneIds = [
-    ...new Set(
-      agents
-        .map(
-          (a: { phoneAssignments: Array<{ phoneNumberId: string }>; phoneNumberId: string | null }) =>
-            a.phoneAssignments[0]?.phoneNumberId || a.phoneNumberId,
-        )
-        .filter((id: string | null | undefined): id is string => Boolean(id)),
-    ),
-  ];
-  const phones =
-    phoneIds.length > 0
-      ? await prisma.phoneNumber.findMany({
-          where: { id: { in: phoneIds } },
-          select: { id: true, e164: true, friendlyName: true },
-        })
-      : ([] as Array<{ id: string; e164: string; friendlyName: string | null }>);
-  const phoneById = new Map<
-    string,
-    { id: string; e164: string; friendlyName: string | null }
-  >(phones.map((p: { id: string; e164: string; friendlyName: string | null }) => [p.id, p]));
-
-  const coveredAgentIds = new Set(
-    Object.values(instancesBySolution)
-      .flat()
-      .map((i) => i.id),
-  );
 
   for (const agent of agents as Array<{
     id: string;
@@ -215,24 +378,28 @@ export async function loadMySystems(
     healthMessage: string | null;
     updatedAt: Date;
     phoneNumberId: string | null;
-    phoneAssignments: Array<{ phoneNumberId: string }>;
+    sourceSolutionSetupId?: string | null;
   }>) {
-    if (coveredAgentIds.has(agent.id)) continue;
-    const status = mapAgentStatus(agent.status, agent.healthStatus);
-    const phoneId =
-      agent.phoneAssignments[0]?.phoneNumberId || agent.phoneNumberId || null;
-    const phoneRow = phoneId ? phoneById.get(phoneId) : undefined;
-    const phone = phoneRow?.e164 || phoneRow?.friendlyName || null;
+    if (linkedAgentIds.has(agent.id) || agent.sourceSolutionSetupId) continue;
+    const status = mapStatus(agent.status, agent.healthStatus);
+    const phone = agent.phoneNumberId
+      ? phoneById.get(agent.phoneNumberId)
+      : null;
     systems.push({
       id: `agent-${agent.id}`,
       name: agent.displayName || agent.name,
       type: "ai_agent",
       typeLabel: "AI Agent",
-      createdFrom: solutionTitleForPurpose(agent.purpose),
+      createdFrom:
+        outcomeSolutions.find((s) => s.slug === agent.purpose)?.title ||
+        agent.purpose ||
+        "AI Agent",
       status,
       statusLabel: statusLabel(status),
       channels: ["Voice"],
-      phoneNumber: phone,
+      phoneNumber:
+        (phone as { e164?: string; friendlyName?: string | null } | undefined)
+          ?.e164 || null,
       lastActivity: relativeTime(agent.updatedAt),
       nextAction: null,
       warning:
@@ -243,35 +410,59 @@ export async function loadMySystems(
     });
   }
 
-  for (const flow of flows) {
-    const status = mapFlowStatus(flow.status);
-    const lastExec = flow.executions[0];
+  for (const flow of flows as Array<{
+    id: string;
+    name: string;
+    trigger: string;
+    description?: string | null;
+    status: string;
+    sourceSolutionSetupId?: string | null;
+    advancedCustomized?: boolean;
+    updatedAt: Date;
+    executions?: Array<{
+      startedAt: Date;
+      nextActionAt: Date | null;
+      error: string | null;
+    }>;
+  }>) {
+    if (linkedFlowIds.has(flow.id) || flow.sourceSolutionSetupId) continue;
+    const status = mapStatus(flow.status);
+    const lastExec = flow.executions?.[0];
+    const createdFrom = flow.description?.startsWith("Generated from ")
+      ? flow.description.replace(/^Generated from\s+/, "")
+      : flow.trigger || "Automation";
     systems.push({
       id: `flow-${flow.id}`,
       name: flow.name,
       type: "automation",
       typeLabel: "Automation",
-      createdFrom: flow.trigger || "Automation",
+      createdFrom,
       status,
       statusLabel: statusLabel(status),
       channels: ["SMS"],
       phoneNumber: null,
       lastActivity: relativeTime(lastExec?.startedAt || flow.updatedAt),
       nextAction: lastExec?.nextActionAt
-        ? new Date(lastExec.nextActionAt).toLocaleString(undefined, {
-            month: "short",
-            day: "numeric",
-            hour: "numeric",
-            minute: "2-digit",
-          })
+        ? new Date(lastExec.nextActionAt).toLocaleString()
         : null,
-      warning: lastExec?.error || null,
+      warning:
+        lastExec?.error ||
+        (flow.advancedCustomized ? "Advanced customizations" : null),
       href: `/automations/${flow.id}`,
     });
   }
 
-  for (const campaign of campaigns) {
-    const status = mapCampaignStatus(campaign.status);
+  for (const campaign of campaigns as Array<{
+    id: string;
+    name: string;
+    type: string;
+    category: string | null;
+    status: string;
+    createdAt: Date;
+    scheduledAt: Date | null;
+  }>) {
+    if (linkedCampaignIds.has(campaign.id)) continue;
+    const status = mapStatus(campaign.status);
     systems.push({
       id: `campaign-${campaign.id}`,
       name: campaign.name,
@@ -284,15 +475,34 @@ export async function loadMySystems(
       phoneNumber: null,
       lastActivity: relativeTime(campaign.createdAt),
       nextAction: campaign.scheduledAt
-        ? new Date(campaign.scheduledAt).toLocaleString(undefined, {
-            month: "short",
-            day: "numeric",
-            hour: "numeric",
-            minute: "2-digit",
-          })
+        ? new Date(campaign.scheduledAt).toLocaleString()
         : null,
       warning: null,
       href: `/campaigns/${campaign.id}`,
+    });
+  }
+
+  for (const rule of routingRules as Array<{
+    id: string;
+    name: string;
+    isActive: boolean;
+    updatedAt: Date;
+  }>) {
+    if (linkedRuleIds.has(rule.id)) continue;
+    systems.push({
+      id: `routing-${rule.id}`,
+      name: rule.name,
+      type: "routing",
+      typeLabel: "Routing",
+      createdFrom: "Phone & Routing",
+      status: rule.isActive ? "active" : "paused",
+      statusLabel: rule.isActive ? "Active" : "Paused",
+      channels: ["Voice"],
+      phoneNumber: null,
+      lastActivity: relativeTime(rule.updatedAt),
+      nextAction: null,
+      warning: null,
+      href: "/phone/queues",
     });
   }
 

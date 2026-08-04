@@ -136,6 +136,9 @@ export type AutomationFlow = {
   completionRate: number;
   status: StatusChip;
   updatedAt: string;
+  sourceSolutionSetupId?: string | null;
+  advancedCustomized?: boolean;
+  createdFrom?: string | null;
 };
 
 export type DashboardMetrics = {

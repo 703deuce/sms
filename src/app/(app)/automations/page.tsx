@@ -185,6 +185,7 @@ export default function AutomationsPage() {
             <THead>
               <TR>
                 <TH>Name</TH>
+                <TH>Created From</TH>
                 <TH>Trigger</TH>
                 <TH>Enrolled</TH>
                 <TH>Messages sent</TH>
@@ -219,6 +220,9 @@ export default function AutomationsPage() {
                         </span>
                         <span className="font-semibold text-foreground">{flow.name}</span>
                       </Link>
+                    </TD>
+                    <TD className="max-w-[180px] text-[13px] text-muted-foreground">
+                      {flow.createdFrom || "—"}
                     </TD>
                     <TD className="max-w-[200px] text-[13px] text-muted-foreground">
                       {flow.trigger}

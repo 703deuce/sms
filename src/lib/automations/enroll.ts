@@ -8,12 +8,14 @@ export async function enrollInAutomation({
   contactId,
   testMode = false,
   forceVersion,
+  variables,
 }: {
   workspaceId: string;
   flowId: string;
   contactId: string;
   testMode?: boolean;
   forceVersion?: number;
+  variables?: Record<string, unknown>;
 }) {
   const prisma = getPrisma();
   const flow = await prisma.automationFlow.findFirst({
@@ -58,7 +60,10 @@ export async function enrollInAutomation({
       enrollmentKey,
       status: "RUNNING",
       currentNodeId: trigger.id,
-      metadata: { testMode } as import("@/lib/domain").Prisma.InputJsonValue,
+      metadata: {
+        testMode,
+        ...(variables && Object.keys(variables).length ? { variables } : {}),
+      } as import("@/lib/domain").Prisma.InputJsonValue,
     },
   });
 
@@ -76,6 +81,20 @@ export async function enrollInAutomation({
     payload: { executionId: execution.id },
     idempotencyKey: `automation-advance:${execution.id}:start`,
   });
+
+  try {
+    const { emitPlatformEvent } = await import("@/lib/platform/events");
+    await emitPlatformEvent({
+      workspaceId,
+      type: "AUTOMATION_STARTED",
+      contactId,
+      automationId: flowId,
+      payload: { executionId: execution.id, variables: variables || {} },
+      idempotencyKey: `automation-started:${execution.id}`,
+    });
+  } catch {
+    /* non-fatal */
+  }
 
   await prisma.auditLog.create({
     data: {

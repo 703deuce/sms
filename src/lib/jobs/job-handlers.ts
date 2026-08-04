@@ -64,6 +64,64 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       if (!callId) throw new Error("callId required");
       return processPostCall(callId);
     }
+    case "voice_outbound_ai_call": {
+      const workspaceId = String(payload.workspaceId || "");
+      const agentId = String(payload.agentId || "");
+      const contactId = String(payload.contactId || "");
+      if (!workspaceId || !agentId || !contactId) {
+        throw new Error("workspaceId, agentId, and contactId required");
+      }
+      const { getPrisma } = await import("@/lib/db");
+      const prisma = getPrisma();
+      const contact = await prisma.contact.findFirst({
+        where: { id: contactId, workspaceId },
+        select: { phone: true },
+      });
+      if (!contact?.phone) throw new Error("contact phone required for AI call");
+
+      let dynamicVariables: Record<string, unknown> = {};
+      try {
+        const raw = payload.context;
+        if (typeof raw === "string" && raw.trim()) {
+          dynamicVariables = JSON.parse(raw) as Record<string, unknown>;
+        } else if (raw && typeof raw === "object") {
+          dynamicVariables = raw as Record<string, unknown>;
+        }
+      } catch {
+        dynamicVariables = {};
+      }
+      if (payload.purpose) dynamicVariables.purpose = String(payload.purpose);
+
+      const { initiateOutboundCall } = await import("@/lib/voice/call-service");
+      const { call } = await initiateOutboundCall({
+        workspaceId,
+        agentId,
+        toPhone: contact.phone,
+        contactId,
+        dynamicVariables,
+      });
+
+      const executionId = String(payload.automationExecutionId || "");
+      if (executionId) {
+        const exec = await prisma.automationExecution.findFirst({
+          where: { id: executionId, workspaceId },
+          select: { metadata: true },
+        });
+        const meta = (exec?.metadata || {}) as Record<string, unknown>;
+        await prisma.automationExecution.update({
+          where: { id: executionId },
+          data: {
+            metadata: {
+              ...meta,
+              pendingCallId: call.id,
+              pendingAiCallAgentId: agentId,
+            },
+          },
+        });
+      }
+
+      return { ok: true, callId: call.id };
+    }
     case "voice_campaign_batch": {
       const { processVoiceCampaignBatch } = await import("@/lib/voice/call-service");
       return processVoiceCampaignBatch();

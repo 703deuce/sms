@@ -146,6 +146,8 @@ model Workspace {
   conversations Conversation[]
   templates   Template[]
   flows       AutomationFlow[]
+  solutionSetups SolutionSetup[]
+  platformEvents PlatformEvent[]
   keywords    Keyword[]
   forms       OptInForm[]
   consentRecords ConsentRecord[]
@@ -950,6 +952,60 @@ model Template {
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 }
 
+/// Packaged solution instance created by a wizard (one customer-facing "system").
+model SolutionSetup {
+  id                   String   @id @default(cuid())
+  workspaceId          String
+  /// Outcome registry slug, e.g. missed-call-text-back
+  solutionType         String
+  name                 String
+  status               String   @default("DRAFT")
+  /// Simple wizard settings (synced into linked AutomationFlow nodes when possible)
+  configJson           Json?
+  linkedAgentIds       String[] @default([])
+  linkedAutomationIds  String[] @default([])
+  linkedCampaignIds    String[] @default([])
+  linkedPhoneNumberIds String[] @default([])
+  linkedCalendarIds    String[] @default([])
+  linkedRoutingRuleIds String[] @default([])
+  linkedTemplateIds    String[] @default([])
+  /// Stable key for idempotent create-or-update per workspace+solution
+  externalKey          String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  workspace            Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  flows                AutomationFlow[]
+  agents               VoiceAgent[]
+
+  @@unique([workspaceId, solutionType, externalKey])
+  @@index([workspaceId, solutionType])
+  @@index([workspaceId, status])
+  @@map("solution_setups")
+}
+
+/// Cross-system activity events consumed by automations and reporting.
+model PlatformEvent {
+  id               String   @id @default(cuid())
+  workspaceId      String
+  type             String
+  contactId        String?
+  solutionSetupId  String?
+  automationId     String?
+  agentId          String?
+  campaignId       String?
+  callId           String?
+  messageId        String?
+  payload          Json?
+  idempotencyKey   String?
+  createdAt        DateTime @default(now())
+  workspace        Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, idempotencyKey])
+  @@index([workspaceId, type, createdAt])
+  @@index([workspaceId, contactId])
+  @@map("platform_events")
+}
+
 model AutomationFlow {
   id                   String     @id @default(cuid())
   workspaceId          String
@@ -963,11 +1019,22 @@ model AutomationFlow {
   messagesSent         Int        @default(0)
   completionRate       Float      @default(0)
   status               FlowStatus @default(DRAFT)
+  sourceSolutionSetupId String?
+  linkedAgentIds       String[]   @default([])
+  linkedCampaignIds    String[]   @default([])
+  linkedPhoneNumberIds String[]   @default([])
+  linkedCalendarIds    String[]   @default([])
+  linkedTemplateIds    String[]   @default([])
+  /// True when the visual builder made structural changes the wizard cannot safely represent.
+  advancedCustomized   Boolean    @default(false)
   createdAt            DateTime   @default(now())
   updatedAt            DateTime   @updatedAt
   publishedAt          DateTime?
   workspace            Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  sourceSolutionSetup  SolutionSetup? @relation(fields: [sourceSolutionSetupId], references: [id], onDelete: SetNull)
   executions           AutomationExecution[]
+
+  @@index([workspaceId, sourceSolutionSetupId])
 }
 
 enum AutomationExecutionStatus {
@@ -1269,10 +1336,17 @@ model VoiceAgent {
   memoryConfigId  String?
   insightGroupId  String?
   observabilityConfigId String?
+  sourceSolutionSetupId String?
+  linkedAutomationIds String[]     @default([])
+  linkedPhoneNumberIds String[]    @default([])
+  linkedCalendarIds String[]       @default([])
+  postCallAutomationId String?
+  fallbackAutomationId String?
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
   archivedAt      DateTime?
   workspace       Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  sourceSolutionSetup SolutionSetup? @relation(fields: [sourceSolutionSetupId], references: [id], onDelete: SetNull)
   versions        VoiceAgentVersion[]
   phoneAssignments VoiceAgentPhoneNumber[]
   knowledgeLinks  VoiceAgentKnowledgeBase[]

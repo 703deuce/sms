@@ -4,6 +4,7 @@ import { getPrisma } from "@/lib/db";
 import { mapAutomation } from "@/lib/mappers";
 import { parseAutomationDefinition, findTriggerNode } from "@/lib/automations/types";
 import { triggerFromBlockType } from "@/lib/automations/catalog";
+import { detectAdvancedCustomization } from "@/lib/solutions/missed-call-text-back/sync";
 
 export async function GET(
   _request: Request,
@@ -26,6 +27,9 @@ export async function GET(
         definition: flow.definition,
         publishedDefinition: flow.publishedDefinition,
         version: flow.version,
+        sourceSolutionSetupId: flow.sourceSolutionSetupId ?? null,
+        advancedCustomized: Boolean(flow.advancedCustomized),
+        linkedAgentIds: flow.linkedAgentIds || [],
         publishedAt: flow.publishedAt?.toISOString() ?? null,
         createdAt: flow.createdAt.toISOString(),
       },
@@ -85,11 +89,20 @@ export async function PATCH(
     }
 
     let trigger = existing.trigger;
+    let advancedCustomized = Boolean(existing.advancedCustomized);
     if (body.definition) {
       const def = parseAutomationDefinition(body.definition);
       const triggerNode = findTriggerNode(def);
       if (triggerNode) {
         trigger = triggerFromBlockType(triggerNode.data.blockType);
+      }
+      // Once a solution-linked flow is structurally customized in the builder,
+      // lock advancedCustomized so wizards cannot silently overwrite it.
+      if (
+        existing.sourceSolutionSetupId &&
+        detectAdvancedCustomization(body.definition)
+      ) {
+        advancedCustomized = true;
       }
     }
 
@@ -101,10 +114,17 @@ export async function PATCH(
         definition: body.definition ? (body.definition as object) : undefined,
         trigger,
         status,
+        advancedCustomized,
       },
     });
 
-    return NextResponse.json({ data: mapAutomation(row) });
+    return NextResponse.json({
+      data: {
+        ...mapAutomation(row),
+        advancedCustomized: Boolean(row.advancedCustomized),
+        sourceSolutionSetupId: row.sourceSolutionSetupId ?? null,
+      },
+    });
   } catch (err) {
     return jsonError(err, 400);
   }
