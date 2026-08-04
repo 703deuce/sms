@@ -142,8 +142,8 @@ export async function POST(request: Request) {
           name: OFFICIAL_BASELINE_NAME,
           requestedStack: BASELINE_REQUESTED,
           modelCandidates: BASELINE_MODEL_CANDIDATES,
-          geminiKeyRef,
           ...created,
+          geminiKeyRef: created.geminiKeyRef ?? geminiKeyRef,
           route,
           testProcedure: [
             "Hello.",
