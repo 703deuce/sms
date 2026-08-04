@@ -514,7 +514,7 @@ export async function ensureAllTurnCloneAssistants(input?: {
   };
 }
 
-/** Point existing TeXML app at a specific assistant (direct Telnyx route). */
+/** Point phone at a specific assistant via TeXML (direct Telnyx route). */
 export async function routeTexmlToAssistant(input: {
   e164?: string;
   assistantId: string;
@@ -523,28 +523,10 @@ export async function routeTexmlToAssistant(input: {
 }) {
   const assistantId = String(input.assistantId || "").trim();
   if (!assistantId) throw new Error("assistantId required");
-  const texmlAppId = String(
+  const e164 = String(input.e164 || "+18663464256").trim();
+  const preferredTexmlAppId = String(
     input.texmlAppId || DEFAULT_TEXML_APP_ID,
   ).trim();
-  const e164 = String(input.e164 || "+18663464256").trim();
-
-  await telnyxRequest(`/texml_applications/${encodeURIComponent(texmlAppId)}`, {
-    method: "PATCH",
-    body: {
-      ai_assistant_id: assistantId,
-      voice_url: `https://api.telnyx.com/v2/ai/assistants/${assistantId}/call`,
-      voice_method: "POST",
-      active: true,
-    },
-  });
-
-  await ai
-    .updateAssistant(assistantId, {
-      telephony_settings: {
-        default_texml_app_id: texmlAppId,
-      },
-    })
-    .catch(() => undefined);
 
   let providerNumberId = input.providerNumberId
     ? String(input.providerNumberId)
@@ -557,44 +539,106 @@ export async function routeTexmlToAssistant(input: {
     const rows = Array.isArray(listed.data) ? listed.data : [];
     providerNumberId = String(rows[0]?.id || "");
   }
-
-  if (providerNumberId) {
-    await telnyxRequest(
-      `/phone_numbers/${encodeURIComponent(providerNumberId)}`,
-      {
-        method: "PATCH",
-        body: { connection_id: texmlAppId },
-      },
-    );
+  if (!providerNumberId) {
+    throw new Error(`Phone ${e164} missing providerNumberId`);
   }
 
-  const phoneVerify = providerNumberId
-    ? await telnyxRequest<{ data?: Record<string, unknown> }>(
-        `/phone_numbers/${encodeURIComponent(providerNumberId)}`,
-      )
-    : null;
-  const liveConnectionId = phoneVerify
-    ? String(
-        (asRecord(phoneVerify.data) || asRecord(phoneVerify) || {})
-          .connection_id || "",
-      ) || null
-    : null;
+  const voiceUrl = `https://api.telnyx.com/v2/ai/assistants/${assistantId}/call`;
+  let texmlAppId = preferredTexmlAppId;
+  let patchedExisting = false;
 
-  const texmlLive = await telnyxRequest<{ data?: Record<string, unknown> }>(
-    `/texml_applications/${encodeURIComponent(texmlAppId)}`,
+  // Try updating the shared TeXML app first.
+  try {
+    await telnyxRequest(
+      `/texml_applications/${encodeURIComponent(preferredTexmlAppId)}`,
+      {
+        method: "PATCH",
+        body: {
+          ai_assistant_id: assistantId,
+          voice_url: voiceUrl,
+          voice_method: "POST",
+          active: true,
+        },
+      },
+    );
+    patchedExisting = true;
+  } catch {
+    patchedExisting = false;
+  }
+
+  // Verify whether the existing app now points at this assistant.
+  let voiceUrlLive = "";
+  if (patchedExisting) {
+    const texmlLive = await telnyxRequest<{ data?: Record<string, unknown> }>(
+      `/texml_applications/${encodeURIComponent(preferredTexmlAppId)}`,
+    ).catch(() => null);
+    const texmlData = asRecord(texmlLive?.data) || asRecord(texmlLive) || {};
+    voiceUrlLive = String(texmlData.voice_url || "");
+  }
+
+  if (!voiceUrlLive.includes(assistantId)) {
+    // Create a dedicated TeXML app for this assistant (proven path).
+    const stamp = new Date().toISOString().replace(/[-:T.Z]/g, "").slice(0, 14);
+    const texmlRes = await telnyxRequest<{ data?: Record<string, unknown> }>(
+      "/texml_applications",
+      {
+        method: "POST",
+        body: {
+          friendly_name: `ULL ${assistantId.slice(-8)} ${stamp}`.slice(0, 60),
+          active: true,
+          ai_assistant_id: assistantId,
+          voice_url: voiceUrl,
+          voice_method: "POST",
+        },
+      },
+    );
+    const created = asRecord(texmlRes.data) || asRecord(texmlRes) || {};
+    texmlAppId = String(created.id || "");
+    if (!texmlAppId) {
+      throw new Error(
+        `TeXML create returned no id: ${JSON.stringify(texmlRes).slice(0, 500)}`,
+      );
+    }
+    voiceUrlLive = String(created.voice_url || voiceUrl);
+  } else {
+    texmlAppId = preferredTexmlAppId;
+  }
+
+  await ai
+    .updateAssistant(assistantId, {
+      telephony_settings: {
+        default_texml_app_id: texmlAppId,
+      },
+    })
+    .catch(() => undefined);
+
+  await telnyxRequest(
+    `/phone_numbers/${encodeURIComponent(providerNumberId)}`,
+    {
+      method: "PATCH",
+      body: { connection_id: texmlAppId },
+    },
   );
-  const texmlData = asRecord(texmlLive.data) || asRecord(texmlLive) || {};
+
+  const phoneVerify = await telnyxRequest<{ data?: Record<string, unknown> }>(
+    `/phone_numbers/${encodeURIComponent(providerNumberId)}`,
+  );
+  const liveConnectionId = String(
+    (asRecord(phoneVerify.data) || asRecord(phoneVerify) || {}).connection_id ||
+      "",
+  ) || null;
+
+  const matched =
+    voiceUrlLive.includes(assistantId) && liveConnectionId === texmlAppId;
 
   return {
     e164,
     assistantId,
     texmlAppId,
-    providerNumberId: providerNumberId || null,
+    providerNumberId,
     liveConnectionId,
-    texmlAiAssistantId: texmlData.ai_assistant_id ?? null,
-    matched:
-      String(texmlData.ai_assistant_id || "") === assistantId &&
-      (!liveConnectionId || liveConnectionId === texmlAppId),
+    voiceUrl: voiceUrlLive || voiceUrl,
+    matched,
     path: `${e164} → TeXML ${texmlAppId} → assistant ${assistantId}`,
   };
 }
@@ -628,5 +672,6 @@ export async function switchToTurnCloneProfile(input: {
     ...ensured,
     route,
     liveStatus: "Live" as const,
+    routingStrategy: "texml_create_fallback",
   };
 }
