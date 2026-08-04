@@ -213,12 +213,9 @@ function ViewToggle({
 }) {
   return (
     <div className="mt-3">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-sidebar-muted">
-        Navigation
-      </p>
       <div
         className={cn(
-          "mt-1 grid grid-cols-2 rounded-[10px] border border-white/10 bg-white/5 p-0.5",
+          "grid grid-cols-2 rounded-[10px] border border-white/10 bg-white/5 p-0.5",
           pending && "opacity-70",
         )}
         role="tablist"
@@ -242,7 +239,7 @@ function ViewToggle({
               className={cn(
                 "rounded-[8px] px-2 py-1.5 text-[12px] font-semibold transition",
                 active
-                  ? "bg-primary text-white shadow-sm"
+                  ? "bg-[#3B82F6] text-white shadow-sm"
                   : "text-sidebar-muted hover:text-white",
               )}
             >
@@ -398,12 +395,19 @@ export function Sidebar({
                 className={cn(
                   "group relative flex items-center rounded-[10px] transition",
                   active
-                    ? "bg-primary/15 text-primary"
+                    ? navView === "solutions"
+                      ? "bg-[#3B82F6]/15 text-[#60A5FA]"
+                      : "bg-primary/15 text-primary"
                     : "text-sidebar-foreground/90 hover:bg-white/5 hover:text-white",
                 )}
               >
                 {active ? (
-                  <span className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r-full bg-primary" />
+                  <span
+                    className={cn(
+                      "absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r-full",
+                      navView === "solutions" ? "bg-[#3B82F6]" : "bg-primary",
+                    )}
+                  />
                 ) : null}
                 <Link
                   href={item.href}
@@ -416,12 +420,21 @@ export function Sidebar({
                   <Icon
                     className={cn(
                       "h-4 w-4 shrink-0",
-                      active ? "text-primary" : "text-sidebar-muted group-hover:text-white",
+                      active
+                        ? navView === "solutions"
+                          ? "text-[#60A5FA]"
+                          : "text-primary"
+                        : "text-sidebar-muted group-hover:text-white",
                     )}
                   />
                   <span className="truncate">{item.label}</span>
                   {item.badge != null ? (
-                    <span className="ml-auto flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-white">
+                    <span
+                      className={cn(
+                        "ml-auto flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1.5 text-[10px] font-bold text-white",
+                        navView === "solutions" ? "bg-[#3B82F6]" : "bg-primary",
+                      )}
+                    >
                       {item.badge}
                     </span>
                   ) : null}
@@ -432,7 +445,9 @@ export function Sidebar({
                     className={cn(
                       "mr-1.5 rounded-md p-1.5 transition",
                       active
-                        ? "text-primary hover:bg-primary/10"
+                        ? navView === "solutions"
+                          ? "text-[#60A5FA] hover:bg-[#3B82F6]/10"
+                          : "text-primary hover:bg-primary/10"
                         : "text-sidebar-muted hover:bg-white/5 hover:text-white",
                     )}
                     onClick={() =>
