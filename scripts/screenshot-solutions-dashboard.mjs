@@ -33,38 +33,51 @@ async function checkReady(page) {
     : await page.locator("body").innerText();
   const checks = {
     hasHero: /What do you want Transovo to handle/i.test(text),
-    hasSubtitle: /Centralized view of everything Transovo is doing/i.test(text),
+    hasSubtitle: /Enable new solutions or monitor performance from your central command center/i.test(
+      text,
+    ),
     hasCards:
-      /Catch Missed Call/i.test(text) &&
-      /Handle After Hours/i.test(text) &&
+      /Cover Missed Calls/i.test(text) &&
+      /Answer After Hours/i.test(text) &&
       /Respond to New Inquiries/i.test(text) &&
-      /Win Back Past Plans/i.test(text),
+      /Bring Back Past Customers/i.test(text),
     hasBadges:
+      /\bRunning\b/i.test(text) &&
       /\bRecommended\b/i.test(text) &&
-      /\bHot\b/i.test(text) &&
-      /\bNew\b/i.test(text),
-    hasActionNeeded:
+      /\bActive\b/i.test(text),
+    hasMiddle:
       /Active Solutions/i.test(text) &&
-      /The Latest Statistics/i.test(text) &&
-      /View All/i.test(text),
-    hasActive: /Service/i.test(text) && /Last Activity/i.test(text),
-    hasEvents: /Recent Activity/i.test(text) && /4:15 PM/i.test(text),
-    hasStats: /Calls Handled/i.test(text) && /last 7 days/i.test(text),
+      /Your Latest Statistics/i.test(text) &&
+      /Recent Activity/i.test(text),
+    hasButtons:
+      (/Open/i.test(text) || /Set up/i.test(text)) &&
+      /View/i.test(text),
+    hasStats:
+      /Calls Handled/i.test(text) &&
+      /Appts Booked/i.test(text) &&
+      /New Inquiries/i.test(text) &&
+      /Leads Won/i.test(text),
     hasRecommended:
-      /Recommended Apps/i.test(text) && /Appointment Reminders/i.test(text),
-    hasButtons: /New Solution/i.test(text) && /Get Started/i.test(text),
+      /Recommended Next/i.test(text) && /Appointment Reminders/i.test(text),
+    hasHeaderActions: /New Solution/i.test(text) && /Add Channel/i.test(text),
     oldDash:
       /Choose from our library of pre-built solutions/i.test(text) ||
       /Action Needed/i.test(text) ||
-      /Recommended Next/i.test(text) ||
       /View All Solutions/i.test(text) ||
-      /125 Runs/i.test(text),
+      /125 Runs/i.test(text) ||
+      /Win Back Past Plans/i.test(text) ||
+      /Catch Missed Call/i.test(text) ||
+      /Get Started/i.test(text),
   };
 
   const aside = (await page.locator("aside").count())
     ? await page.locator("aside").first().innerText()
     : "";
-  checks.hasSharedSidebar = /Transovo SMS/i.test(aside);
+  checks.hasSharedSidebar =
+    /AI Receptionist/i.test(aside) &&
+    /SMS & Messaging/i.test(aside) &&
+    /Connect With Customers/i.test(aside) &&
+    !/Client Onboarding/i.test(aside);
 
   return {
     ...checks,
@@ -73,15 +86,15 @@ async function checkReady(page) {
       checks.hasSubtitle &&
       checks.hasCards &&
       checks.hasBadges &&
-      checks.hasActionNeeded &&
-      checks.hasActive &&
-      checks.hasEvents &&
+      checks.hasMiddle &&
+      checks.hasButtons &&
       checks.hasStats &&
       checks.hasRecommended &&
-      checks.hasButtons &&
+      checks.hasHeaderActions &&
       checks.hasSharedSidebar &&
       !checks.oldDash,
     snippet: text.replace(/\s+/g, " ").slice(0, 280),
+    asideSnippet: aside.replace(/\s+/g, " ").slice(0, 280),
   };
 }
 
@@ -91,12 +104,17 @@ async function shoot(page, label) {
     viewport: `${OUT}/solutions-dashboard-${label}-viewport.png`,
     full: `${OUT}/solutions-dashboard-${label}-full.png`,
     main: `${OUT}/solutions-dashboard-${label}-main.png`,
+    sidebar: `${OUT}/solutions-dashboard-${label}-sidebar.png`,
   };
   await page.screenshot({ path: paths.viewport, fullPage: false });
   await page.screenshot({ path: paths.full, fullPage: true });
   const main = page.locator("main");
   if (await main.count()) {
     await main.first().screenshot({ path: paths.main });
+  }
+  const aside = page.locator("aside");
+  if (await aside.count()) {
+    await aside.first().screenshot({ path: paths.sidebar });
   }
   console.log(JSON.stringify(paths));
   return paths;
