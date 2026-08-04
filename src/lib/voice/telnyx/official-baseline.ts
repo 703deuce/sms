@@ -20,14 +20,19 @@ export const OFFICIAL_BASELINE_NAME = "TELNYX_ULTRA_LOW_LATENCY_BASELINE";
 export const BASELINE_PREFERRED_MODEL = "google/gemini-2.5-flash-lite";
 
 /**
- * Closest account-available Gemini Flash model when Lite is blocked (Telnyx 10027).
- * Verified present on this workspace's /ai/openai/models list.
+ * Account-available native models tried when Gemini Flash Lite is blocked.
+ * Do not require llm_api_key_ref (baseline forbids external provider keys).
+ * google/gemini-2.5-flash is listed but requires a Google integration secret (10015).
  */
-export const BASELINE_FALLBACK_MODEL = "google/gemini-2.5-flash";
+export const BASELINE_FALLBACK_MODELS = [
+  "anthropic/claude-haiku-4-5",
+  "openai/gpt-4o-mini",
+  "moonshotai/Kimi-K2.6",
+] as const;
 
 export const BASELINE_MODEL_CANDIDATES = [
   BASELINE_PREFERRED_MODEL,
-  BASELINE_FALLBACK_MODEL,
+  ...BASELINE_FALLBACK_MODELS,
 ] as const;
 
 /** Known-good Ultra voice on this Telnyx account (Howard). */
