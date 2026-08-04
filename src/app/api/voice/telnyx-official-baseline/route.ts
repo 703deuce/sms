@@ -6,8 +6,12 @@ import {
   fetchOfficialBaselineLive,
   restoreOfficialBaselineRoute,
   routePhoneToOfficialBaseline,
+  switchOfficialBaselineModel,
+  verifyGeminiIntegrationSecret,
   type OfficialBaselineRouteSnapshot,
   BASELINE_REQUESTED,
+  BASELINE_MODEL_CANDIDATES,
+  GEMINI_API_KEY_REF,
   OFFICIAL_BASELINE_NAME,
 } from "@/lib/voice/telnyx/official-baseline";
 
@@ -15,16 +19,14 @@ const BOOTSTRAP_HEADER = "x-smoke-bootstrap";
 const BOOTSTRAP_VALUE = "transovo-smoke-bootstrap-b56f-aug2026";
 
 /**
- * Create / route / restore the Telnyx-direct ultra-low-latency baseline.
+ * Create / route / switch-model / restore the Telnyx-direct latency baseline.
  *
  * Does NOT use Transovo publish/sync — Telnyx Assistants API only.
  *
  * POST body:
- *   { action: "create" | "create_and_route" | "verify" | "restore",
- *     e164?: "+18663464256",
- *     assistantId?: string,
- *     snapshot?: OfficialBaselineRouteSnapshot,
- *     voiceId?: string }
+ *   { action: "create" | "create_and_route" | "verify" | "restore"
+ *            | "switch_model" | "verify_secret",
+ *     e164?, assistantId?, modelId?, geminiKeyRef?, voiceId?, snapshot? }
  */
 export async function POST(request: Request) {
   try {
@@ -33,6 +35,8 @@ export async function POST(request: Request) {
       e164?: string;
       assistantId?: string;
       voiceId?: string;
+      modelId?: string;
+      geminiKeyRef?: string;
       workspaceId?: string;
       snapshot?: OfficialBaselineRouteSnapshot;
     };
@@ -48,6 +52,12 @@ export async function POST(request: Request) {
 
     const action = String(body.action || "create").toLowerCase();
     const e164 = String(body.e164 || "+18663464256").trim();
+    const geminiKeyRef = String(body.geminiKeyRef || GEMINI_API_KEY_REF).trim();
+
+    if (action === "verify_secret") {
+      const data = await verifyGeminiIntegrationSecret(geminiKeyRef);
+      return NextResponse.json({ data });
+    }
 
     if (action === "verify") {
       const assistantId = String(body.assistantId || "").trim();
@@ -58,6 +68,23 @@ export async function POST(request: Request) {
         );
       }
       const data = await fetchOfficialBaselineLive(assistantId);
+      return NextResponse.json({ data });
+    }
+
+    if (action === "switch_model") {
+      const assistantId = String(body.assistantId || "").trim();
+      const modelId = String(body.modelId || "").trim();
+      if (!assistantId || !modelId) {
+        return NextResponse.json(
+          { error: "assistantId and modelId required for switch_model" },
+          { status: 400 },
+        );
+      }
+      const data = await switchOfficialBaselineModel({
+        assistantId,
+        modelId,
+        geminiKeyRef,
+      });
       return NextResponse.json({ data });
     }
 
@@ -75,6 +102,8 @@ export async function POST(request: Request) {
     if (action === "create" || action === "create_and_route") {
       const created = await createOfficialBaselineAssistant({
         voiceId: body.voiceId,
+        modelId: body.modelId,
+        geminiKeyRef,
       });
 
       let route: unknown = null;
@@ -92,7 +121,10 @@ export async function POST(request: Request) {
           : await prisma.voiceAgent.findFirst({
               where: {
                 workspaceId,
-                name: { contains: "Main Office Appointment", mode: "insensitive" },
+                name: {
+                  contains: "Main Office Appointment",
+                  mode: "insensitive",
+                },
               },
               select: { id: true, telnyxAssistantId: true, name: true },
             });
@@ -109,6 +141,8 @@ export async function POST(request: Request) {
         data: {
           name: OFFICIAL_BASELINE_NAME,
           requestedStack: BASELINE_REQUESTED,
+          modelCandidates: BASELINE_MODEL_CANDIDATES,
+          geminiKeyRef,
           ...created,
           route,
           testProcedure: [
@@ -133,7 +167,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         error:
-          "action must be create | create_and_route | verify | restore",
+          "action must be create | create_and_route | verify | restore | switch_model | verify_secret",
       },
       { status: 400 },
     );

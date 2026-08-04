@@ -16,23 +16,23 @@ import { getPrisma } from "@/lib/db";
 
 export const OFFICIAL_BASELINE_NAME = "TELNYX_ULTRA_LOW_LATENCY_BASELINE";
 
-/** Telnyx engineer-recommended model (may be unavailable on some accounts). */
+/** Telnyx engineer-recommended ultra-low-latency model. */
 export const BASELINE_PREFERRED_MODEL = "google/gemini-2.5-flash-lite";
 
+/** Telnyx integration secret identifier for Google Gemini (Mission Control). */
+export const GEMINI_API_KEY_REF = "gemini_api_key";
+
 /**
- * Account-available native models tried when Gemini Flash Lite is blocked.
- * Do not require llm_api_key_ref (baseline forbids external provider keys).
- * google/gemini-2.5-flash is listed but requires a Google integration secret (10015).
+ * Model try-order for the clean latency baseline.
+ * Google models require llm_api_key_ref = gemini_api_key.
+ * Native models (Haiku / GPT-mini / Kimi) need no external key.
  */
-export const BASELINE_FALLBACK_MODELS = [
+export const BASELINE_MODEL_CANDIDATES = [
+  "google/gemini-2.5-flash-lite",
+  "google/gemini-2.5-flash",
   "anthropic/claude-haiku-4-5",
   "openai/gpt-4o-mini",
   "moonshotai/Kimi-K2.6",
-] as const;
-
-export const BASELINE_MODEL_CANDIDATES = [
-  BASELINE_PREFERRED_MODEL,
-  ...BASELINE_FALLBACK_MODELS,
 ] as const;
 
 /** Known-good Ultra voice on this Telnyx account (Howard). */
@@ -45,6 +45,7 @@ export const BASELINE_REQUESTED = {
     "You are a concise phone assistant.\nAnswer immediately in one short sentence.\nUse no more than twelve words.",
   greeting: "Hi, how can I help?",
   model: BASELINE_PREFERRED_MODEL,
+  llm_api_key_ref: GEMINI_API_KEY_REF,
   transcription: {
     model: "deepgram/flux",
   },
@@ -52,6 +53,27 @@ export const BASELINE_REQUESTED = {
     voice: BASELINE_ULTRA_VOICE,
   },
 } as const;
+
+export function modelNeedsGeminiKey(modelId: string) {
+  return /^google\//i.test(String(modelId || "").trim());
+}
+
+/** Build create/update body fields for a model (+ Gemini secret when needed). */
+export function assistantModelFields(
+  modelId: string,
+  opts?: { geminiKeyRef?: string | null },
+) {
+  const model = String(modelId || "").trim();
+  const geminiRef = (opts?.geminiKeyRef ?? GEMINI_API_KEY_REF).trim();
+  const fields: Record<string, unknown> = { model };
+  if (modelNeedsGeminiKey(model)) {
+    fields.llm_api_key_ref = geminiRef;
+  } else {
+    // Clear a prior Google key ref when switching to a native model.
+    fields.llm_api_key_ref = null;
+  }
+  return fields;
+}
 
 export type OfficialBaselineRouteSnapshot = {
   e164: string;
@@ -134,8 +156,10 @@ function providerInsertedFields(live: Record<string, unknown>) {
 export async function createOfficialBaselineAssistant(opts?: {
   voiceId?: string;
   modelId?: string;
+  geminiKeyRef?: string;
 }) {
   const voice = opts?.voiceId?.trim() || BASELINE_ULTRA_VOICE;
+  const geminiKeyRef = opts?.geminiKeyRef?.trim() || GEMINI_API_KEY_REF;
   const candidates = opts?.modelId?.trim()
     ? [opts.modelId.trim(), ...BASELINE_MODEL_CANDIDATES]
     : [...BASELINE_MODEL_CANDIDATES];
@@ -144,20 +168,24 @@ export async function createOfficialBaselineAssistant(opts?: {
   // Intentionally omitted (Telnyx defaults):
   // tools, interruption_settings, start_speaking_plan, wait_seconds,
   // punctuation waits, eot_threshold / eager_eot_threshold / eot_timeout_ms,
-  // dynamic_variables_webhook, mcp, knowledge, memory, external LLM keys.
+  // dynamic_variables_webhook, mcp, knowledge, memory.
 
   let created: unknown = null;
   let assistantId = "";
   let usedModel = "";
-  const modelAttempts: Array<{ model: string; ok: boolean; error?: string }> =
-    [];
+  const modelAttempts: Array<{
+    model: string;
+    ok: boolean;
+    usedGeminiKey?: boolean;
+    error?: string;
+  }> = [];
 
   for (const model of uniqueCandidates) {
     const createBody: Record<string, unknown> = {
       name: BASELINE_REQUESTED.name,
       instructions: BASELINE_REQUESTED.instructions,
       greeting: BASELINE_REQUESTED.greeting,
-      model,
+      ...assistantModelFields(model, { geminiKeyRef }),
       transcription: {
         model: BASELINE_REQUESTED.transcription.model,
       },
@@ -172,17 +200,23 @@ export async function createOfficialBaselineAssistant(opts?: {
         modelAttempts.push({
           model,
           ok: false,
+          usedGeminiKey: modelNeedsGeminiKey(model),
           error: `no id: ${JSON.stringify(created).slice(0, 300)}`,
         });
         continue;
       }
       usedModel = model;
-      modelAttempts.push({ model, ok: true });
+      modelAttempts.push({
+        model,
+        ok: true,
+        usedGeminiKey: modelNeedsGeminiKey(model),
+      });
       break;
     } catch (err) {
       modelAttempts.push({
         model,
         ok: false,
+        usedGeminiKey: modelNeedsGeminiKey(model),
         error: err instanceof Error ? err.message : String(err),
       });
     }
@@ -198,7 +232,7 @@ export async function createOfficialBaselineAssistant(opts?: {
     name: BASELINE_REQUESTED.name,
     instructions: BASELINE_REQUESTED.instructions,
     greeting: BASELINE_REQUESTED.greeting,
-    model: usedModel,
+    ...assistantModelFields(usedModel, { geminiKeyRef }),
     transcription: {
       model: BASELINE_REQUESTED.transcription.model,
     },
@@ -247,12 +281,91 @@ export async function createOfficialBaselineAssistant(opts?: {
     modelAttempts,
     preferredModel: BASELINE_PREFERRED_MODEL,
     usedModel,
+    geminiKeyRef: modelNeedsGeminiKey(usedModel) ? geminiKeyRef : null,
     modelNote:
       usedModel === BASELINE_PREFERRED_MODEL
-        ? "Using Telnyx-recommended google/gemini-2.5-flash-lite."
-        : `Preferred ${BASELINE_PREFERRED_MODEL} unavailable on this Telnyx account (10027). Using account-available ${usedModel}.`,
+        ? `Using Telnyx-recommended ${BASELINE_PREFERRED_MODEL} with llm_api_key_ref=${geminiKeyRef}.`
+        : modelNeedsGeminiKey(usedModel)
+          ? `Using ${usedModel} with llm_api_key_ref=${geminiKeyRef}.`
+          : `${BASELINE_PREFERRED_MODEL} unavailable; using native ${usedModel} (no external key).`,
     note:
       "Undocumented timing fields were omitted. Any eot_*/wait_*/endpointing values below were inserted by Telnyx, not by Transovo.",
+  };
+}
+
+/** Confirm the Mission Control integration secret exists (never returns the key). */
+export async function verifyGeminiIntegrationSecret(
+  identifier = GEMINI_API_KEY_REF,
+) {
+  const listed = await ai.listIntegrationSecrets();
+  const rows = Array.isArray(asRecord(listed)?.data)
+    ? (asRecord(listed)!.data as Array<Record<string, unknown>>)
+    : Array.isArray(listed)
+      ? (listed as Array<Record<string, unknown>>)
+      : [];
+  const found = rows.find((r) => String(r.identifier || "") === identifier);
+  return {
+    identifier,
+    exists: Boolean(found),
+    identifiers: rows.map((r) => String(r.identifier || "")).filter(Boolean),
+    message: found
+      ? `Telnyx integration secret "${identifier}" is present`
+      : `Telnyx integration secret "${identifier}" not found — create it in Mission Control → Integration Secrets`,
+  };
+}
+
+/**
+ * Switch the LLM on an existing baseline assistant (no recreate / no TeXML change).
+ * Use this to A/B models on the already-routed 866 number.
+ */
+export async function switchOfficialBaselineModel(input: {
+  assistantId: string;
+  modelId: string;
+  geminiKeyRef?: string;
+}) {
+  const assistantId = String(input.assistantId || "").trim();
+  const modelId = String(input.modelId || "").trim();
+  if (!assistantId) throw new Error("assistantId required");
+  if (!modelId) throw new Error("modelId required");
+  const geminiKeyRef = input.geminiKeyRef?.trim() || GEMINI_API_KEY_REF;
+
+  const beforeRemote = await ai.getAssistant(assistantId);
+  const before = (asRecord(beforeRemote)?.data ||
+    asRecord(beforeRemote) ||
+    {}) as Record<string, unknown>;
+
+  const patch = assistantModelFields(modelId, { geminiKeyRef });
+  await ai.updateAssistant(assistantId, patch);
+
+  const afterRemote = await ai.getAssistant(assistantId);
+  const after = (asRecord(afterRemote)?.data || asRecord(afterRemote) || {}) as Record<
+    string,
+    unknown
+  >;
+  const liveModel = String(after.model || "");
+  const liveKeyRef = after.llm_api_key_ref ?? null;
+
+  if (liveModel && liveModel !== modelId) {
+    throw new Error(
+      `Telnyx kept model "${liveModel}" after requesting "${modelId}"`,
+    );
+  }
+
+  return {
+    assistantId,
+    requested: patch,
+    before: {
+      model: before.model ?? null,
+      llm_api_key_ref: before.llm_api_key_ref ?? null,
+    },
+    live: {
+      model: liveModel,
+      llm_api_key_ref: liveKeyRef,
+      name: after.name ?? null,
+      transcription: after.transcription ?? null,
+      voice: asRecord(after.voice_settings)?.voice ?? null,
+    },
+    matched: liveModel === modelId,
   };
 }
 
@@ -267,7 +380,6 @@ async function resolvePhone(e164: string) {
       e164: true,
       providerNumberId: true,
       workspaceId: true,
-      voiceAgentId: true,
     },
   });
   if (!num?.providerNumberId) {
