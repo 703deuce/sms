@@ -69,7 +69,7 @@ export async function updateVoiceAgentDraft(
   if (!existing) throw new Error("Agent not found");
 
   const prevConfig = parseVoiceAgentConfig(existing.draftConfig);
-  const nextConfig = patch.draftConfig
+  let nextConfig = patch.draftConfig
     ? {
         ...prevConfig,
         ...patch.draftConfig,
@@ -126,6 +126,16 @@ export async function updateVoiceAgentDraft(
         },
       }
     : prevConfig;
+
+  // Flux profiles must not keep a leftover local endpointingMs from a prior cascade.
+  {
+    const { isFluxEagerLatencyProfile } = await import("./latency-profiles");
+    if (isFluxEagerLatencyProfile(nextConfig.voiceTiming?.activeProfile)) {
+      const vl = { ...(nextConfig.voiceLanguage || {}) };
+      delete vl.endpointingMs;
+      nextConfig = { ...nextConfig, voiceLanguage: vl };
+    }
+  }
 
   const updated = await prisma.voiceAgent.update({
     where: { id: agentId },

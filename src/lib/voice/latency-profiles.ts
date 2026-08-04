@@ -778,9 +778,11 @@ export function buildStartSpeakingPlanFromConfig(
   const omitEndpointingPlan =
     Boolean(plan.fluxOmitTranscriptionEndpointingPlan) || isFlux;
 
-  // endpointingMs is a local alias for wait_seconds only (not a Telnyx field).
+  // endpointingMs is a local alias for wait_seconds on legacy cascade only.
+  // For Flux, turn-taking is EOT settings — do not let a leftover endpointingMs
+  // from a prior profile reintroduce a competing wait.
   const waitFromEndpointing =
-    config.voiceLanguage?.endpointingMs != null
+    !omitEndpointingPlan && config.voiceLanguage?.endpointingMs != null
       ? config.voiceLanguage.endpointingMs / 1000
       : plan.waitSeconds;
 
