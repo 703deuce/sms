@@ -1,5 +1,4 @@
 import { getPrisma } from "@/lib/db";
-import { emitAutomationEvent } from "@/lib/automations/events";
 import { enrollInAutomation } from "@/lib/automations/enroll";
 import { emitPlatformEvent } from "@/lib/platform/events";
 import { emitVoiceAutomationEvents } from "./automation-events";
