@@ -358,10 +358,12 @@ export function Sidebar({
             </span>
             <span className="min-w-0 flex-1">
               <span className="block truncate text-[12px] font-semibold text-white">
-                {workspaceName || "Main Office"}
+                Main Office
               </span>
               <span className="block truncate text-[10px] text-sidebar-muted">
-                {workspaceId ? workspaceId.slice(0, 8).toUpperCase() : "WS-1001"}
+                {workspaceId
+                  ? `ID ${workspaceId.replace(/[^a-zA-Z0-9]/g, "").slice(-6).toUpperCase()}`
+                  : "ID 100421"}
               </span>
             </span>
             <ChevronDown className="h-3.5 w-3.5 shrink-0 text-sidebar-muted" />
