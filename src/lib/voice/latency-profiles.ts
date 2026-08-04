@@ -265,7 +265,7 @@ export const NATIVE_AUDIO_ULTRAVOX_PROFILE: LatencyProfileDefinition = {
       eot_threshold: "not_sent",
       eager_eot_threshold: "not_sent",
       eot_timeout_ms: "not_sent",
-      start_speaking_wait_seconds: "not_sent",
+      start_speaking_wait_seconds: "sent_may_be_ignored",
       on_punctuation_seconds: "not_sent",
       on_no_punctuation_seconds: "not_sent",
       on_number_seconds: "not_sent",
@@ -274,6 +274,7 @@ export const NATIVE_AUDIO_ULTRAVOX_PROFILE: LatencyProfileDefinition = {
         "sent_may_be_ignored", // sent; Ultravox→text then TTS expected — verify on call
       dynamic_variables_webhook: "not_sent",
       ultravox_outgoing_audio_path: "unknown_requires_call_trace",
+      transcription_endpointing_plan_cleared: "sent_and_applicable",
     },
   },
 };
