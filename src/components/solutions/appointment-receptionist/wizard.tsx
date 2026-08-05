@@ -147,14 +147,18 @@ export function AppointmentReceptionistWizard() {
     setStepIndex((i) => Math.min(i, Math.max(0, steps.length - 1)));
   }, [steps.length]);
 
-  async function persist(action: "save_draft" | "activate" | "create_draft") {
+  async function persist(
+    action: "save_draft" | "activate" | "create_draft",
+    stateOverride?: Partial<AppointmentReceptionistWizardState>,
+  ) {
     setBusy(true);
     setError("");
+    const payload = stateOverride ? { ...state, ...stateOverride } : state;
     try {
       const res = await fetch("/api/solutions/appointment-receptionist", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action, state }),
+        body: JSON.stringify({ action, state: payload }),
       });
       const json = await res.json();
       if (!res.ok) {
@@ -167,11 +171,12 @@ export function AppointmentReceptionistWizard() {
         throw new Error(issueMsgs || json.error || "Save failed");
       }
       const agentId = json.data.agentId as string;
-      const setupId = (json.data.setupId as string | undefined) || state.setupId;
+      const setupId = (json.data.setupId as string | undefined) || payload.setupId;
       const outcomeSlug =
-        (json.data.outcomeSlug as string | undefined) || state.outcomeSlug;
+        (json.data.outcomeSlug as string | undefined) || payload.outcomeSlug;
       const telnyxAssistantId =
-        (json.data.telnyxAssistantId as string | null | undefined) ?? state.telnyxAssistantId;
+        (json.data.telnyxAssistantId as string | null | undefined) ??
+        payload.telnyxAssistantId;
       const clonedAgentId = (json.data.clonedAgentId as string | null | undefined) || null;
       const warnings = Array.isArray(json.data.warnings)
         ? (json.data.warnings as string[]).filter(Boolean)
@@ -181,7 +186,8 @@ export function AppointmentReceptionistWizard() {
         setupId,
         outcomeSlug,
         telnyxAssistantId,
-        preset: preset || state.preset || null,
+        preset: preset || payload.preset || null,
+        ...(stateOverride || {}),
       });
       if (warnings.length) {
         setError(warnings.join(" "));
@@ -195,7 +201,7 @@ export function AppointmentReceptionistWizard() {
           return { agentId, telnyxAssistantId, clonedAgentId };
         }
         // Schedule / draft-style activate keeps the agent and may show a warning.
-        if (!json.data.published && state.activationMode === "schedule") {
+        if (!json.data.published && payload.activationMode === "schedule") {
           localStorage.removeItem(STORAGE_KEY);
           router.push(`/voice/agents/${agentId}`);
           return { agentId, telnyxAssistantId, clonedAgentId };
@@ -325,7 +331,13 @@ export function AppointmentReceptionistWizard() {
               <Button variant="outline" disabled={busy} onClick={() => void onSaveDraft()}>
                 Save draft
               </Button>
-              <Button disabled={busy} onClick={() => void onContinue()}>
+              <Button
+                data-testid={
+                  stepIndex === steps.length - 1 ? "wizard-activate-footer" : "wizard-continue"
+                }
+                disabled={busy}
+                onClick={() => void onContinue()}
+              >
                 {busy
                   ? "Working…"
                   : stepIndex === steps.length - 1

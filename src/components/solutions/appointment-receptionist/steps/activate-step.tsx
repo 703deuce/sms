@@ -267,7 +267,11 @@ export function ActivateStep({
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             {(
               [
-                ["activate_now", "Activate now", "Go live on this number immediately."],
+                [
+                  "activate_now",
+                  "Go live immediately",
+                  "Publish on this number as soon as you confirm.",
+                ],
                 ["schedule", "Schedule activation", "Pick a date and time to go live."],
                 ["save_draft", "Save as draft", "Keep editing without answering calls."],
                 [
@@ -337,6 +341,7 @@ export function ActivateStep({
         </dl>
         <button
           type="button"
+          data-testid="wizard-activate-submit"
           disabled={blocked && state.activationMode === "activate_now"}
           className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2.5 text-sm font-medium text-primary-foreground disabled:opacity-50"
           onClick={() => {

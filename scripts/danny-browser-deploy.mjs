@@ -377,18 +377,56 @@ async function main() {
       await shot(page, "08b-activate-blocked");
     }
 
-    // Activate now — must be enabled (calendar gate fixed)
+    // Activate now — must click the real submit (not the mode card).
+    // Mode card used to also say "Activate now" and stole the first() match.
     await waitReady(page);
-    const activateBtn = page.getByRole("button", { name: /Activate now/i }).first();
+    const activatePosts = [];
+    const onActivateResp = async (res) => {
+      try {
+        if (!res.url().includes("/api/solutions/appointment-receptionist")) return;
+        if (res.request().method() !== "POST") return;
+        const reqBody = res.request().postDataJSON?.() || null;
+        const json = await res.json().catch(() => null);
+        if (reqBody?.action === "activate" || json?.data?.published != null) {
+          activatePosts.push({
+            status: res.status(),
+            action: reqBody?.action,
+            published: json?.data?.published,
+            publishError: json?.data?.publishError,
+            error: json?.error,
+            issues: json?.data?.issues,
+            agentId: json?.data?.agentId,
+            telnyxAssistantId: json?.data?.telnyxAssistantId,
+            primaryFlowId: json?.data?.primaryFlowId,
+          });
+          if (json?.data?.agentId) report.agentId = json.data.agentId;
+          if (json?.data?.primaryFlowId) report.flowId = json.data.primaryFlowId;
+          if (json?.data?.published != null) report.published = json.data.published;
+          if (json?.data?.publishError) report.publishError = json.data.publishError;
+          if (json?.data?.telnyxAssistantId)
+            report.telnyxAssistantId = json.data.telnyxAssistantId;
+        }
+      } catch {
+        /* ignore */
+      }
+    };
+    page.on("response", onActivateResp);
+
+    const submit =
+      (await page.locator('[data-testid="wizard-activate-submit"]').count())
+        ? page.locator('[data-testid="wizard-activate-submit"]').first()
+        : page.locator('[data-testid="wizard-activate-footer"]').first();
+    // Fallback for older deploy without test ids: last "Activate now" (footer/side), not first (was mode card)
+    const activateBtn = (await submit.count())
+      ? submit
+      : page.getByRole("button", { name: /^Activate now$/i }).last();
+
     const disabled = await activateBtn.isDisabled().catch(() => true);
     if (disabled) {
       report.errors.push("Activate now button disabled in browser");
       await shot(page, "08c-activate-disabled");
-    } else if (!(await activateBtn.isVisible().catch(() => false))) {
-      // Last step Continue might be labeled Activate now already handled — try Activate
-      const alt = page.getByRole("button", { name: /Activate/i }).last();
-      await alt.click();
     } else {
+      await activateBtn.scrollIntoViewIfNeeded();
       await activateBtn.click();
       log("activate-clicked");
     }
