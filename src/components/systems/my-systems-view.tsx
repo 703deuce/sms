@@ -139,14 +139,22 @@ function AgentCard({ system }: { system: SystemResource }) {
         </div>
       </dl>
 
-      <div className="mt-5 flex items-center gap-2 border-t border-[#F3F4F6] pt-4">
+      <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-[#F3F4F6] pt-4">
         <Link
           href={system.href}
           className="inline-flex h-9 flex-1 items-center justify-center rounded-md bg-[#111827] px-3 text-[12px] font-semibold text-white hover:bg-[#1F2937]"
         >
-          Open agent
+          Manage
         </Link>
-        {system.children?.[0]?.href ? (
+        {system.workflowHref ? (
+          <Link
+            href={system.workflowHref}
+            className="inline-flex h-9 items-center justify-center rounded-md px-3 text-[12px] font-semibold text-[#2563EB] ring-1 ring-[#BFDBFE] hover:bg-[#EFF6FF]"
+          >
+            Edit Workflow
+          </Link>
+        ) : null}
+        {system.children?.[0]?.href && !system.workflowHref ? (
           <Link
             href={system.children[0].href}
             className="inline-flex h-9 items-center justify-center rounded-md px-3 text-[12px] font-semibold text-[#2563EB] ring-1 ring-[#BFDBFE] hover:bg-[#EFF6FF]"
@@ -178,8 +186,9 @@ export function MySystemsView({ systems }: { systems: SystemResource[] }) {
           My Agents
         </h1>
         <p className="mt-1.5 max-w-2xl text-[14px] text-[#6B7280]">
-          Every agent you create from the menu — voice receptionists, missed-call
-          text backs, reminders, and more. Type is fixed; capabilities can change.
+          Every agent you create — voice, SMS, and more. Wizards generate the
+          agent and its workflow. Manage settings simply, or open Edit Workflow
+          for the visual builder.
         </p>
       </div>
 

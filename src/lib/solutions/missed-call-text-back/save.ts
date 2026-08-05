@@ -14,8 +14,12 @@ import {
   SOLUTION_TYPE,
   type MissedCallTextBackConfig,
 } from "@/lib/solutions/missed-call-text-back/types";
-import { emitPlatformEvent } from "@/lib/platform/events";
 import { agentTypeFromOutcomeSlug } from "@/lib/agents/types";
+import {
+  agentWorkflowName,
+  ownerLabelForOutcome,
+} from "@/lib/agents/workflows";
+import { emitPlatformEvent } from "@/lib/platform/events";
 
 export type SaveMissedCallTextBackResult = {
   setupId: string;
@@ -232,13 +236,15 @@ export async function saveMissedCallTextBack(
     const createData: Record<string, unknown> = {
       id: flowId,
       workspaceId,
-      name: config.name,
+      name: agentWorkflowName(config.name),
       description: "Generated from Missed Call Text Back",
       trigger: triggerLabel,
       definition: definition as unknown as Prisma.InputJsonValue,
       version: nextVersion,
       status,
       sourceSolutionSetupId: setupId,
+      ownershipKind: "agent_workflow",
+      ownerLabel: ownerLabelForOutcome(SOLUTION_TYPE, config.name),
       linkedPhoneNumberIds: config.phoneNumberId ? [config.phoneNumberId] : [],
       advancedCustomized: false,
       createdAt: now,
@@ -252,13 +258,15 @@ export async function saveMissedCallTextBack(
     await prisma.automationFlow.create({ data: createData });
   } else {
     const updateData: Record<string, unknown> = {
-      name: config.name,
+      name: agentWorkflowName(config.name),
       description: "Generated from Missed Call Text Back",
       trigger: triggerLabel,
       definition: definition as unknown as Prisma.InputJsonValue,
       version: nextVersion,
       status,
       sourceSolutionSetupId: setupId,
+      ownershipKind: "agent_workflow",
+      ownerLabel: ownerLabelForOutcome(SOLUTION_TYPE, config.name),
       linkedPhoneNumberIds: config.phoneNumberId ? [config.phoneNumberId] : [],
       advancedCustomized,
       updatedAt: now,
@@ -278,6 +286,7 @@ export async function saveMissedCallTextBack(
     where: { id: setupId! },
     data: {
       linkedAutomationIds: [flowId!],
+      primaryFlowId: flowId!,
       updatedAt: now,
     },
   });

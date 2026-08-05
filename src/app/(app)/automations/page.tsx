@@ -22,7 +22,6 @@ import {
   MoreHorizontal,
   Plus,
   Send,
-  SlidersHorizontal,
   Users,
   Wand2,
   Workflow,
@@ -84,6 +83,9 @@ function CompletionCell({
 export default function AutomationsPage() {
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
   const [automations, setAutomations] = useState<AutomationFlow[]>([]);
+  const [ownershipFilter, setOwnershipFilter] = useState<
+    "all" | "agent_workflow" | "standalone"
+  >("all");
 
   useEffect(() => {
     fetch("/api/automations")
@@ -94,9 +96,17 @@ export default function AutomationsPage() {
       .catch(() => undefined);
   }, []);
 
-  const activeCount = automations.filter((a) => a.status === "Active").length;
-  const totalEnrolled = automations.reduce((sum, a) => sum + a.enrolled, 0);
-  const totalMessages = automations.reduce((sum, a) => sum + a.messagesSent, 0);
+  const filtered = automations.filter((a) => {
+    if (ownershipFilter === "all") return true;
+    const kind =
+      a.ownershipKind ||
+      (a.createdFrom === "Agent workflow" ? "agent_workflow" : "standalone");
+    return kind === ownershipFilter;
+  });
+
+  const activeCount = filtered.filter((a) => a.status === "Active").length;
+  const totalEnrolled = filtered.reduce((sum, a) => sum + a.enrolled, 0);
+  const totalMessages = filtered.reduce((sum, a) => sum + a.messagesSent, 0);
 
   return (
     <div className="space-y-5">
@@ -104,7 +114,7 @@ export default function AutomationsPage() {
         icon={Zap}
         iconTone="bg-emerald-50 text-emerald-600"
         title="Automations"
-        description="Build SMS flows that trigger on contact events, keywords, and time-based rules."
+        description="Agent workflows and standalone automations. Wizard-created agents open here via Edit Workflow."
         actions={
           <Link href="/automations/new">
             <Button className="h-9 rounded-[10px] text-[13px]">
@@ -146,10 +156,29 @@ export default function AutomationsPage() {
 
       <Card className="p-5">
         <TableToolbar title="All flows" searchPlaceholder="Search flows…">
-          <Button variant="outline" size="sm" className="h-9 rounded-[10px] text-[13px]">
-            <SlidersHorizontal className="h-4 w-4" />
-            Filters
-          </Button>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {(
+              [
+                ["all", "All"],
+                ["agent_workflow", "Agent Workflows"],
+                ["standalone", "Standalone"],
+              ] as const
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setOwnershipFilter(id)}
+                className={cn(
+                  "inline-flex h-8 items-center rounded-full px-3 text-[12px] font-semibold",
+                  ownershipFilter === id
+                    ? "bg-[#111827] text-white"
+                    : "bg-white text-[#4B5563] ring-1 ring-[#E5E7EB]",
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
           <div className="flex items-center rounded-[10px] border border-border p-0.5">
             <button
               type="button"
@@ -186,6 +215,7 @@ export default function AutomationsPage() {
               <TR>
                 <TH>Name</TH>
                 <TH>Created From</TH>
+                <TH>Owned by</TH>
                 <TH>Trigger</TH>
                 <TH>Enrolled</TH>
                 <TH>Messages sent</TH>
@@ -196,7 +226,7 @@ export default function AutomationsPage() {
               </TR>
             </THead>
             <TBody>
-              {automations.map((flow) => {
+              {filtered.map((flow) => {
                 const meta = flowIcons[flow.id] ?? {
                   icon: Workflow,
                   tone: "bg-muted text-muted-foreground",
@@ -207,7 +237,7 @@ export default function AutomationsPage() {
                   <TR key={flow.id}>
                     <TD>
                       <Link
-                        href={`/automations/${flow.id}`}
+                        href={`/automations/${flow.id}/edit`}
                         className="flex items-center gap-3 hover:opacity-80"
                       >
                         <span
@@ -221,8 +251,11 @@ export default function AutomationsPage() {
                         <span className="font-semibold text-foreground">{flow.name}</span>
                       </Link>
                     </TD>
+                    <TD className="max-w-[160px] text-[13px] text-muted-foreground">
+                      {flow.createdFrom || "Standalone automation"}
+                    </TD>
                     <TD className="max-w-[180px] text-[13px] text-muted-foreground">
-                      {flow.createdFrom || "—"}
+                      {flow.ownedBy || "—"}
                     </TD>
                     <TD className="max-w-[200px] text-[13px] text-muted-foreground">
                       {flow.trigger}
@@ -254,7 +287,7 @@ export default function AutomationsPage() {
           </Table>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {automations.map((flow) => {
+            {filtered.map((flow) => {
               const meta = flowIcons[flow.id] ?? {
                 icon: Workflow,
                 tone: "bg-muted text-muted-foreground",
@@ -263,7 +296,7 @@ export default function AutomationsPage() {
               return (
                 <Link
                   key={flow.id}
-                  href={`/automations/${flow.id}`}
+                  href={`/automations/${flow.id}/edit`}
                   className="rounded-[12px] border border-border p-4 transition hover:border-primary/30 hover:shadow-sm"
                 >
                   <div className="flex items-start gap-3">
@@ -277,6 +310,10 @@ export default function AutomationsPage() {
                     </span>
                     <div className="min-w-0 flex-1">
                       <p className="font-semibold text-foreground">{flow.name}</p>
+                      <p className="mt-0.5 text-[12px] text-muted-foreground">
+                        {flow.createdFrom}
+                        {flow.ownedBy ? ` · ${flow.ownedBy}` : ""}
+                      </p>
                       <p className="mt-1 text-[12px] text-muted-foreground">{flow.trigger}</p>
                       <div className="mt-3 flex items-center justify-between gap-2">
                         <StatusChip status={flow.status} />
@@ -294,8 +331,8 @@ export default function AutomationsPage() {
 
         <PaginationBar
           rangeLabel={
-            automations.length
-              ? `1–${automations.length} of ${automations.length}`
+            filtered.length
+              ? `1–${filtered.length} of ${filtered.length}`
               : "0 of 0"
           }
         />

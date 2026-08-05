@@ -221,6 +221,8 @@ export async function loadTemplates(workspaceId: string): Promise<Template[]> {
 }
 
 export async function loadAutomations(workspaceId: string): Promise<AutomationFlow[]> {
+  const { backfillAgentWorkflows } = await import("@/lib/agents/workflows");
+  await backfillAgentWorkflows(workspaceId).catch(() => 0);
   const rows = await getPrisma().automationFlow.findMany({
     where: { workspaceId },
     orderBy: { updatedAt: "desc" },

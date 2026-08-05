@@ -15,6 +15,10 @@ import {
   capabilityLabel,
   getAgentType,
 } from "@/lib/agents/types";
+import {
+  resolvePrimaryFlowId,
+  workflowEditHref,
+} from "@/lib/agents/workflows";
 
 export type SystemType =
   | "solution_setup"
@@ -43,6 +47,8 @@ export type SystemResource = {
   nextAction: string | null;
   warning: string | null;
   href: string;
+  /** Direct link into the visual workflow builder for this agent. */
+  workflowHref?: string | null;
   /** Capability toggles (booking, transfers, …) — not used for ownership. */
   capabilities?: string[];
   /** What this agent handles, e.g. "Every call", "After hours". */
@@ -238,6 +244,7 @@ export async function loadMySystems(
     linkedCampaignIds: string[];
     linkedPhoneNumberIds: string[];
     linkedRoutingRuleIds: string[];
+    primaryFlowId?: string | null;
   }>) {
     const cfgJson = (setup as { configJson?: unknown }).configJson as
       | { outcomeSlug?: string }
@@ -457,12 +464,31 @@ export async function loadMySystems(
     const linkedVoice = (setup.linkedAgentIds || [])
       .map((id) => agentById.get(id))
       .find(Boolean) as
-      | { draftConfig?: unknown; healthStatus?: string | null; healthMessage?: string | null }
+      | {
+          draftConfig?: unknown;
+          healthStatus?: string | null;
+          healthMessage?: string | null;
+          primaryFlowId?: string | null;
+          linkedAutomationIds?: string[] | null;
+          postCallAutomationId?: string | null;
+          fallbackAutomationId?: string | null;
+        }
       | undefined;
     const caps = readCapabilities(setup.configJson, linkedVoice?.draftConfig);
     const handles = answerWhenLabel(
       readAnswerWhen(setup.configJson, linkedVoice?.draftConfig),
     );
+    const primaryFlowId = resolvePrimaryFlowId({
+      primaryFlowId: setup.primaryFlowId,
+      linkedAutomationIds: setup.linkedAutomationIds,
+      postCallAutomationId: linkedVoice?.postCallAutomationId,
+      fallbackAutomationId: linkedVoice?.fallbackAutomationId,
+    }) || resolvePrimaryFlowId({
+      primaryFlowId: linkedVoice?.primaryFlowId,
+      linkedAutomationIds: linkedVoice?.linkedAutomationIds,
+      postCallAutomationId: linkedVoice?.postCallAutomationId,
+      fallbackAutomationId: linkedVoice?.fallbackAutomationId,
+    });
     systems.push({
       id: `setup-${setup.id}`,
       name: setup.name,
@@ -487,6 +513,7 @@ export async function loadMySystems(
           : null,
       capabilities: caps,
       handles,
+      workflowHref: workflowEditHref(primaryFlowId),
       href:
         setup.solutionType === "missed-call-text-back"
           ? `/solutions/missed-call-text-back/setup?setupId=${setup.id}`
@@ -525,6 +552,10 @@ export async function loadMySystems(
     phoneNumberId: string | null;
     draftConfig?: unknown;
     sourceSolutionSetupId?: string | null;
+    primaryFlowId?: string | null;
+    linkedAutomationIds?: string[] | null;
+    postCallAutomationId?: string | null;
+    fallbackAutomationId?: string | null;
   }>) {
     if (linkedAgentIds.has(agent.id) || agent.sourceSolutionSetupId) continue;
     const status = mapStatus(agent.status, agent.healthStatus);
@@ -562,6 +593,14 @@ export async function loadMySystems(
           : null,
       capabilities: readCapabilities(null, agent.draftConfig),
       handles: answerWhenLabel(readAnswerWhen(null, agent.draftConfig)),
+      workflowHref: workflowEditHref(
+        resolvePrimaryFlowId({
+          primaryFlowId: agent.primaryFlowId,
+          linkedAutomationIds: agent.linkedAutomationIds,
+          postCallAutomationId: agent.postCallAutomationId,
+          fallbackAutomationId: agent.fallbackAutomationId,
+        }),
+      ),
       href: `/voice/agents/${agent.id}`,
     });
   }

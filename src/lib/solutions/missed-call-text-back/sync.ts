@@ -1,7 +1,9 @@
 import type { AutomationDefinition } from "@/lib/automations/types";
 import { parseAutomationDefinition } from "@/lib/automations/types";
+import { stampManagedDefinition } from "@/lib/agents/workflows";
 import {
   buildMissedCallTextBackDefinition,
+  MCTB_TEMPLATE_KEYS,
   WIZARD_OWNED_NODE_IDS,
 } from "@/lib/solutions/missed-call-text-back/graph";
 import {
@@ -206,7 +208,10 @@ export function applyWizardConfigToDefinition(
     phoneNumberId: config.phoneNumberId || cfg.phoneNumberId || "",
   }));
 
-  return { definition: def, advancedCustomized };
+  return {
+    definition: stampManagedDefinition(def, MCTB_TEMPLATE_KEYS),
+    advancedCustomized,
+  };
 }
 
 /** Read wizard config back from an existing definition (best-effort). */

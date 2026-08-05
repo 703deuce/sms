@@ -4,6 +4,8 @@
 
 export type AutomationNodeCategory = "trigger" | "action" | "logic" | "end";
 
+export type NodeOrigin = "template_managed" | "custom" | "system_required";
+
 export type AutomationCanvasNode = {
   id: string;
   type: AutomationNodeCategory;
@@ -12,6 +14,15 @@ export type AutomationCanvasNode = {
     blockType: string;
     label: string;
     config: Record<string, unknown>;
+    /**
+     * Who owns this node for wizard re-sync.
+     * template_managed — wizard may update config safely
+     * custom — customer added; never regenerate away
+     * system_required — must remain for runtime
+     */
+    origin?: NodeOrigin;
+    /** Stable semantic key e.g. initial_message, follow_up_delay */
+    templateNodeKey?: string;
   };
 };
 

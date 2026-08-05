@@ -1,4 +1,5 @@
 import type { AutomationDefinition } from "@/lib/automations/types";
+import { stampManagedDefinition } from "@/lib/agents/workflows";
 import {
   MCTB_NODES,
   type MissedCallTextBackConfig,
@@ -10,6 +11,19 @@ function waitConfig(totalMinutes: number) {
   const rem = minutes % 60;
   return { days: 0, hours, minutes: rem, weeks: 0, respectBusinessHours: false };
 }
+
+/** nodeId → templateNodeKey for managed-node wizard sync. */
+export const MCTB_TEMPLATE_KEYS: Record<string, string> = {
+  [MCTB_NODES.TRIGGER]: "trigger",
+  [MCTB_NODES.WAIT_INITIAL]: "initial_delay",
+  [MCTB_NODES.SEND_INITIAL_SMS]: "initial_message",
+  [MCTB_NODES.WAIT_FOR_REPLY]: "reply_window",
+  [MCTB_NODES.CONDITION_REPLY]: "stop_condition",
+  [MCTB_NODES.WAIT_FOLLOW_UP]: "follow_up_delay",
+  [MCTB_NODES.SEND_FOLLOW_UP_SMS]: "follow_up_message",
+  [MCTB_NODES.END_REPLIED]: "end_replied",
+  [MCTB_NODES.END_DONE]: "end_done",
+};
 
 /** Build the canonical Missed Call Text Back AutomationFlow graph. */
 export function buildMissedCallTextBackDefinition(
@@ -166,12 +180,15 @@ export function buildMissedCallTextBackDefinition(
     });
   }
 
-  return {
-    version: 1,
-    nodes,
-    edges,
-    viewport: { x: 0, y: 0, zoom: 0.85 },
-  };
+  return stampManagedDefinition(
+    {
+      version: 1,
+      nodes,
+      edges,
+      viewport: { x: 0, y: 0, zoom: 0.85 },
+    },
+    MCTB_TEMPLATE_KEYS,
+  );
 }
 
 /** Semantic node IDs the wizard owns. */

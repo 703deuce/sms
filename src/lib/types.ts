@@ -137,8 +137,14 @@ export type AutomationFlow = {
   status: StatusChip;
   updatedAt: string;
   sourceSolutionSetupId?: string | null;
+  ownerAgentId?: string | null;
+  ownershipKind?: "agent_workflow" | "standalone" | string | null;
+  ownerLabel?: string | null;
   advancedCustomized?: boolean;
+  /** "Agent workflow" | solution name | "Standalone automation" */
   createdFrom?: string | null;
+  /** Owning agent display name when this is an agent workflow. */
+  ownedBy?: string | null;
 };
 
 export type DashboardMetrics = {
