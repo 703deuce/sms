@@ -122,6 +122,8 @@ export type AppointmentReceptionistWizardState = {
 
   knowledgeSource: KnowledgeSource;
   websiteUrl: string;
+  /** Optional existing VoiceKnowledgeBase to attach on save/activate. */
+  linkedKnowledgeBaseId?: string | null;
   knowledgeItems: Array<{
     id: string;
     label: string;

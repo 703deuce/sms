@@ -1,6 +1,7 @@
 "use client";
 
 import { DEFAULT_CONNECTION_GREETING } from "@/lib/solutions/appointment-receptionist/defaults";
+import { hasBookingCapability } from "@/lib/solutions/appointment-receptionist/wizard-presets";
 import type {
   AppointmentReceptionistWizardState,
   ConnectionGreetingMode,
@@ -56,6 +57,7 @@ export function PhoneStep({
   }, []);
 
   const selected = numbers.find((n) => n.id === state.phoneNumberId);
+  const booking = hasBookingCapability(state.capabilities);
   const displayNumber = selected
     ? formatPhone(selected.e164)
     : state.phoneNumberE164
@@ -65,6 +67,23 @@ export function PhoneStep({
     selected?.aiOwner && selected.aiOwner.id !== state.agentId
       ? selected.aiOwner
       : null;
+
+  const previewSteps: Array<[string, string]> = [
+    ["Inbound call", "Callers reach your number."],
+    ["Connection greeting", "Greeting plays while AI initializes."],
+    ["AI agent answers", "AI answers and assists the caller."],
+  ];
+  if (booking) {
+    previewSteps.push(
+      ["Books appointments", "Appointments scheduled on your calendar."],
+      ["Confirmation", "Caller receives confirmation by text or email."],
+    );
+  } else {
+    previewSteps.push(
+      ["Take messages / transfer", "Capture details or hand off to a person."],
+      ["End call", "Call outcome recorded for the workflow."],
+    );
+  }
 
   return (
     <div className="flex gap-6">
@@ -127,6 +146,68 @@ export function PhoneStep({
             description="Keep your current number and route calls to Transovo."
           />
         </div>
+        {state.numberSource === "buy_new" ? (
+          <div className="mt-3 max-w-md rounded-xl border border-primary/30 bg-card p-4 text-sm">
+            <p className="font-medium">Buy a number in Numbers</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Open Numbers to purchase a DID, then return here and choose
+              &quot;Use existing Transovo number.&quot;
+            </p>
+            <a
+              href="/my-numbers"
+              className="mt-3 inline-flex rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground"
+            >
+              Open My Numbers
+            </a>
+          </div>
+        ) : null}
+        {state.numberSource === "forward_existing" ||
+        state.numberSource === "connect_existing" ? (
+          <div className="mt-3 max-w-lg space-y-2 rounded-xl border border-primary/30 bg-card p-4 text-sm">
+            <p className="font-medium">Forward your carrier number to Transovo</p>
+            <ol className="list-decimal space-y-1 pl-4 text-xs text-muted-foreground">
+              <li>Buy or pick a Transovo number below (or in My Numbers).</li>
+              <li>
+                In your carrier portal, set call forwarding to that Transovo
+                number.
+              </li>
+              <li>
+                Select the Transovo number here so Activate publishes AI routing.
+              </li>
+            </ol>
+            {numbers.length ? (
+              <div className="mt-2 space-y-1">
+                {numbers.map((n) => (
+                  <button
+                    key={n.id}
+                    type="button"
+                    onClick={() =>
+                      patch({
+                        phoneNumberId: n.id,
+                        phoneNumberE164: n.e164,
+                        numberSource: "forward_existing",
+                      })
+                    }
+                    className={`block w-full rounded-lg border px-2.5 py-1.5 text-left text-xs ${
+                      state.phoneNumberId === n.id
+                        ? "border-primary bg-primary/5 font-medium text-primary"
+                        : "border-border"
+                    }`}
+                  >
+                    Forward to {formatPhone(n.e164)}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <a
+                href="/my-numbers"
+                className="mt-2 inline-flex text-xs font-medium text-primary underline"
+              >
+                Get a Transovo number first
+              </a>
+            )}
+          </div>
+        ) : null}
         {state.numberSource === "existing" && numbers.length ? (
           <div className="mt-3 space-y-1.5">
             {numbers.map((n) => {
@@ -282,12 +363,28 @@ export function PhoneStep({
             {state.connectionGreeting !== "none" ? (
               <div className="rounded-xl border border-border bg-card p-4">
                 <div className="flex items-center gap-3">
-                  <span className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                  <button
+                    type="button"
+                    className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground"
+                    aria-label="Preview greeting"
+                    onClick={() => {
+                      const text =
+                        state.connectionGreetingText ||
+                        DEFAULT_CONNECTION_GREETING;
+                      if (typeof window !== "undefined" && window.speechSynthesis) {
+                        window.speechSynthesis.cancel();
+                        const u = new SpeechSynthesisUtterance(text);
+                        window.speechSynthesis.speak(u);
+                      }
+                    }}
+                  >
                     <Play className="h-4 w-4 fill-current" />
-                  </span>
+                  </button>
                   <div className="min-w-0 flex-1">
-                    <div className="h-8 rounded-md bg-gradient-to-r from-primary/20 via-primary/40 to-primary/10" />
-                    <p className="mt-1 text-[11px] text-muted-foreground">0:00 / 0:06</p>
+                    <p className="text-xs font-medium">Preview connection greeting</p>
+                    <p className="mt-0.5 line-clamp-2 text-[11px] text-muted-foreground">
+                      {state.connectionGreetingText || DEFAULT_CONNECTION_GREETING}
+                    </p>
                   </div>
                 </div>
                 {state.connectionGreeting === "upload_custom" ? (
@@ -347,13 +444,7 @@ export function PhoneStep({
               Call flow preview
             </p>
             <ol className="space-y-3 border-l border-border pl-3 text-xs">
-              {[
-                ["Inbound call", "Callers reach your number."],
-                ["Connection greeting", "Greeting plays while AI initializes."],
-                ["AI receptionist answers", "AI answers and assists the caller."],
-                ["Books appointments", "Appointments scheduled on your calendar."],
-                ["Confirmation", "Caller receives confirmation by text or email."],
-              ].map(([t, d]) => (
+              {previewSteps.map(([t, d]) => (
                 <li key={t}>
                   <p className="font-medium text-foreground">{t}</p>
                   <p className="text-muted-foreground">{d}</p>

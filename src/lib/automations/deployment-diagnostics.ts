@@ -2,6 +2,11 @@
  * Deployment diagnostics for agent primary workflows.
  * Surfaces whether failure is in flow generation, number, activation,
  * Telnyx routing, assistant launch, webhook correlation, or resume.
+ *
+ * Status meanings:
+ * - ok: proven with real data (traffic, publish flag, etc.)
+ * - ready: published path is configured but not yet proven by traffic
+ * - unknown / missing / draft / error: not ready or failed
  */
 
 import { getPrisma } from "@/lib/db";
@@ -10,6 +15,14 @@ import {
   findTriggerConflicts,
 } from "@/lib/automations/trigger-deployments";
 import { parseAutomationDefinition } from "@/lib/automations/types";
+
+export type LayerStatus =
+  | "ok"
+  | "ready"
+  | "missing"
+  | "error"
+  | "draft"
+  | "unknown";
 
 export type DeploymentDiagnostics = {
   workflowId: string;
@@ -43,13 +56,13 @@ export type DeploymentDiagnostics = {
     conflicts: Array<{ message: string }>;
   };
   layers: {
-    flowGeneration: "ok" | "missing" | "error";
+    flowGeneration: LayerStatus;
     missingNumber: boolean;
-    activationCompiler: "ok" | "draft" | "error" | "unknown";
-    telnyxRouting: "ok" | "error" | "unknown";
-    assistantLaunch: "ok" | "missing" | "unknown";
-    webhookCorrelation: "ok" | "unknown";
-    workflowResume: "ok" | "unknown";
+    activationCompiler: LayerStatus;
+    telnyxRouting: LayerStatus;
+    assistantLaunch: LayerStatus;
+    webhookCorrelation: LayerStatus;
+    workflowResume: LayerStatus;
   };
 };
 
@@ -76,7 +89,7 @@ export async function getFlowDeploymentDiagnostics(
     String(runVoice?.data.config?.agentId || flow.ownerAgentId || "").trim() ||
     null;
 
-  const [deployment, agent, phone, lastExec, lastInboundEvent, conflicts] =
+  const [deployment, agent, phoneFromTrigger, lastExec, lastInboundEvent, conflicts] =
     await Promise.all([
       inbound
         ? prisma.triggerDeployment.findFirst({
@@ -133,14 +146,44 @@ export async function getFlowDeploymentDiagnostics(
       findTriggerConflicts(workspaceId, triggers, flowId),
     ]);
 
+  // Resolve phone: trigger id → agent DID → E164 on trigger config.
+  let phone = phoneFromTrigger;
+  if (!phone && agent?.phoneNumberId) {
+    phone = await prisma.phoneNumber.findFirst({
+      where: { id: agent.phoneNumberId, workspaceId },
+      select: { id: true, e164: true },
+    });
+  }
+  if (!phone) {
+    const e164FromCfg = String(
+      def.nodes.find((n) => n.data.blockType === "inbound_call")?.data.config
+        ?.phoneNumberE164 || "",
+    ).trim();
+    if (e164FromCfg) {
+      phone = await prisma.phoneNumber.findFirst({
+        where: { workspaceId, e164: e164FromCfg },
+        select: { id: true, e164: true },
+      });
+    }
+  }
+
   const providerConfig = (deployment?.providerConfig || {}) as Record<
     string,
     unknown
   >;
 
-  const phoneReady = Boolean(phone?.id);
+  const cfgE164 = String(
+    def.nodes.find((n) => n.data.blockType === "inbound_call")?.data.config
+      ?.phoneNumberE164 || "",
+  ).trim();
+
+  const phoneReady = Boolean(phone?.id || phone?.e164 || cfgE164);
   const assistantReady = Boolean(agent?.telnyxAssistantId);
   const deploymentStatus = deployment?.status || null;
+  const telnyxPublished = providerConfig.telnyxPublished === true;
+  const liveDeploy =
+    deploymentStatus === "live" || deploymentStatus === "test";
+  const flowLive = flow.status === "ACTIVE";
 
   return {
     workflowId: flow.id,
@@ -153,8 +196,9 @@ export async function getFlowDeploymentDiagnostics(
     agentName: agent?.name || null,
     telnyxAssistantId: agent?.telnyxAssistantId || null,
     telnyxConnectionId: agent?.telnyxConnectionId || null,
-    phoneNumberId: inbound?.phoneNumberId || phone?.id || null,
-    phoneE164: phone?.e164 || null,
+    phoneNumberId:
+      inbound?.phoneNumberId || phone?.id || agent?.phoneNumberId || null,
+    phoneE164: phone?.e164 || cfgE164 || null,
     texmlApplicationOrConnection:
       (typeof providerConfig.providerResourceId === "string"
         ? providerConfig.providerResourceId
@@ -164,7 +208,7 @@ export async function getFlowDeploymentDiagnostics(
     publishedRoutingTarget:
       typeof providerConfig.publishedRoutingTarget === "string"
         ? providerConfig.publishedRoutingTarget
-        : deploymentStatus === "live"
+        : liveDeploy
           ? "texml_assistant"
           : null,
     deploymentStatus,
@@ -189,26 +233,31 @@ export async function getFlowDeploymentDiagnostics(
       agent?.healthMessage ||
       null,
     readiness: {
-      phoneNumberRequired: Boolean(inbound) && !inbound?.phoneNumberId,
+      phoneNumberRequired: Boolean(inbound) && !phoneReady,
       phoneReady,
       assistantReady,
-      triggerConfigured: Boolean(inbound?.phoneNumberId),
+      triggerConfigured: Boolean(
+        inbound?.phoneNumberId || cfgE164 || agent?.phoneNumberId,
+      ),
       conflicts: conflicts.map((c) => ({ message: c.message })),
     },
     layers: {
-      flowGeneration: flow.id ? "ok" : "missing",
+      flowGeneration: def.nodes.length >= 3 ? "ok" : "missing",
       missingNumber: Boolean(inbound) && !phoneReady,
       activationCompiler:
         deploymentStatus === "error"
           ? "error"
-          : deploymentStatus === "live" || deploymentStatus === "test"
+          : liveDeploy
             ? "ok"
-            : flow.status === "DRAFT"
-              ? "draft"
-              : "unknown",
-      telnyxRouting:
-        providerConfig.telnyxPublished === true
-          ? "ok"
+            : flowLive && !deployment
+              ? "error"
+              : flow.status === "DRAFT"
+                ? "draft"
+                : "unknown",
+      telnyxRouting: telnyxPublished
+        ? "ok"
+        : liveDeploy && assistantReady
+          ? "ready"
           : deploymentStatus === "error"
             ? "error"
             : "unknown",
@@ -217,8 +266,17 @@ export async function getFlowDeploymentDiagnostics(
         : agentId
           ? "missing"
           : "unknown",
-      webhookCorrelation: lastInboundEvent ? "ok" : "unknown",
-      workflowResume: lastExec ? "ok" : "unknown",
+      // ok = real inbound enroll; ready = live path waiting for first call
+      webhookCorrelation: lastInboundEvent
+        ? "ok"
+        : liveDeploy && assistantReady
+          ? "ready"
+          : "unknown",
+      workflowResume: lastExec
+        ? "ok"
+        : liveDeploy && assistantReady
+          ? "ready"
+          : "unknown",
     },
   };
 }

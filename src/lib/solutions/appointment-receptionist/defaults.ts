@@ -246,6 +246,26 @@ export type WizardPresetId =
   | "lead_capture"
   | "service_intake";
 
+/** Default display name for a new agent of this preset (user can rename). */
+export function defaultSolutionNameForPreset(
+  preset: string | null | undefined,
+): string {
+  switch (preset) {
+    case "every_call":
+      return "AI Answering Agent";
+    case "nobody_answers":
+      return "Missed Call Cover";
+    case "after_hours":
+      return "After Hours Agent";
+    case "lead_capture":
+      return "Inquiry Capture Agent";
+    case "service_intake":
+      return "Service Intake Agent";
+    default:
+      return "Appointment Receptionist";
+  }
+}
+
 /** Apply Solutions-view presets onto a wizard state (answer mode + capabilities). */
 export function applyWizardPreset(
   state: AppointmentReceptionistWizardState,
@@ -262,13 +282,14 @@ export function applyWizardPreset(
         ringBehavior: "ai_immediate",
         solutionName: state.solutionName?.trim()
           ? state.solutionName
-          : "AI Answering Service",
+          : defaultSolutionNameForPreset("every_call"),
         capabilities: [
           "answer_questions",
           "take_messages",
           "transfer_calls",
           "qualify_callers",
         ],
+        testScenario: "business_question",
       };
     case "nobody_answers":
       return {
@@ -279,12 +300,13 @@ export function applyWizardPreset(
         ringTeamSeconds: state.ringTeamSeconds || 20,
         solutionName: state.solutionName?.trim()
           ? state.solutionName
-          : "Cover Missed Calls",
+          : defaultSolutionNameForPreset("nobody_answers"),
         capabilities: [
           "answer_questions",
           "take_messages",
           "transfer_calls",
         ],
+        testScenario: "business_question",
       };
     case "after_hours":
       return {
@@ -294,12 +316,13 @@ export function applyWizardPreset(
         ringBehavior: "after_hours",
         solutionName: state.solutionName?.trim()
           ? state.solutionName
-          : "Answer After Hours",
+          : defaultSolutionNameForPreset("after_hours"),
         capabilities: [
           "answer_questions",
           "take_messages",
           "transfer_calls",
         ],
+        testScenario: "business_question",
       };
     case "lead_capture":
       return {
@@ -309,13 +332,14 @@ export function applyWizardPreset(
         ringBehavior: "ai_immediate",
         solutionName: state.solutionName?.trim()
           ? state.solutionName
-          : "Capture New Inquiries",
+          : defaultSolutionNameForPreset("lead_capture"),
         capabilities: [
           "answer_questions",
           "qualify_callers",
           "take_messages",
           "transfer_calls",
         ],
+        testScenario: "business_question",
       };
     case "service_intake":
       return {
@@ -325,13 +349,14 @@ export function applyWizardPreset(
         ringBehavior: "ai_immediate",
         solutionName: state.solutionName?.trim()
           ? state.solutionName
-          : "Handle New Service Calls",
+          : defaultSolutionNameForPreset("service_intake"),
         capabilities: [
           "answer_questions",
           "qualify_callers",
           "take_messages",
           "transfer_calls",
         ],
+        testScenario: "business_question",
       };
     default:
       return state;
@@ -361,6 +386,7 @@ export function createDefaultWizardState(): AppointmentReceptionistWizardState {
 
     knowledgeSource: "website",
     websiteUrl: "",
+    linkedKnowledgeBaseId: null,
     knowledgeItems: [
       {
         id: "business",

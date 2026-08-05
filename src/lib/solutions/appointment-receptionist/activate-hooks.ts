@@ -175,6 +175,31 @@ async function ensureWizardKnowledgeBase(input: {
     update: {},
   });
 
+  // Attach an existing KB the user picked in Connect existing data / uploads.
+  const linkedId = String(input.state.linkedKnowledgeBaseId || "").trim();
+  if (linkedId && linkedId !== kb.id) {
+    const linked = await prisma.voiceKnowledgeBase.findFirst({
+      where: { id: linkedId, workspaceId: input.workspaceId },
+      select: { id: true },
+    });
+    if (linked) {
+      await prisma.voiceAgentKnowledgeBase.upsert({
+        where: {
+          agentId_knowledgeBaseId: {
+            agentId: input.agentId,
+            knowledgeBaseId: linked.id,
+          },
+        },
+        create: {
+          workspaceId: input.workspaceId,
+          agentId: input.agentId,
+          knowledgeBaseId: linked.id,
+        },
+        update: {},
+      });
+    }
+  }
+
   return kb.id;
 }
 
@@ -480,19 +505,26 @@ export async function runAppointmentReceptionistActivateHooks(input: {
     }
   }
 
-  // Persist KB id onto draft config for Telnyx retrieval attach.
-  if (knowledgeBaseId) {
+  // Persist KB id(s) onto draft config for Telnyx retrieval attach.
+  if (knowledgeBaseId || input.state.linkedKnowledgeBaseId) {
     const agent = await prisma.voiceAgent.findFirst({
       where: { id: input.agentId, workspaceId: input.workspaceId },
       select: { draftConfig: true },
     });
     const draft = (agent?.draftConfig || {}) as Record<string, unknown>;
+    const ids = [
+      ...new Set(
+        [knowledgeBaseId, input.state.linkedKnowledgeBaseId]
+          .filter(Boolean)
+          .map(String),
+      ),
+    ];
     await prisma.voiceAgent.update({
       where: { id: input.agentId },
       data: {
         draftConfig: {
           ...draft,
-          knowledgeBaseIds: [knowledgeBaseId],
+          knowledgeBaseIds: ids,
         },
       },
     });

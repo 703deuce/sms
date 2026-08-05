@@ -1,9 +1,7 @@
 "use client";
 
 import {
-  ANSWER_WHEN_OPTIONS,
-} from "@/lib/solutions/appointment-receptionist/defaults";
-import {
+  answerWhenOptionsForPreset,
   capabilityOptionsForPreset,
   goalsSidePanelCopy,
 } from "@/lib/solutions/appointment-receptionist/wizard-presets";
@@ -45,6 +43,7 @@ export function GoalsStep({
   patch: (p: Partial<AppointmentReceptionistWizardState>) => void;
 }) {
   const options = capabilityOptionsForPreset(state.preset);
+  const answerOptions = answerWhenOptionsForPreset(state.preset);
   const panel = goalsSidePanelCopy(state.preset);
 
   function toggleCap(id: CapabilityId) {
@@ -68,7 +67,19 @@ export function GoalsStep({
             id="solution-name"
             className="mt-1.5 max-w-lg"
             value={state.solutionName}
-            onChange={(e) => patch({ solutionName: e.target.value })}
+            onChange={(e) => {
+              const solutionName = e.target.value;
+              patch({
+                solutionName,
+                // Keep spoken persona name in sync until user customizes Voice step.
+                agentName:
+                  !state.agentName ||
+                  state.agentName === "Astra" ||
+                  state.agentName === state.solutionName
+                    ? solutionName.slice(0, 40) || state.agentName
+                    : state.agentName,
+              });
+            }}
             placeholder="e.g. Front Desk — Main Office"
           />
           <p className="mt-1.5 text-xs text-muted-foreground">
@@ -105,7 +116,7 @@ export function GoalsStep({
             When should this agent answer?
           </h3>
           <div className="mt-3 grid gap-2">
-            {ANSWER_WHEN_OPTIONS.map((opt) => (
+            {answerOptions.map((opt) => (
               <RadioRow
                 key={opt.id}
                 selected={state.answerWhen === opt.id}

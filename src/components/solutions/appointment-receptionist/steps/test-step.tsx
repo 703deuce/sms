@@ -1,10 +1,10 @@
 "use client";
 
-import { TEST_SCENARIOS } from "@/lib/solutions/appointment-receptionist/defaults";
 import type {
   AppointmentReceptionistWizardState,
   TestScenarioId,
 } from "@/lib/solutions/appointment-receptionist/types";
+import { testScenariosForCapabilities } from "@/lib/solutions/appointment-receptionist/wizard-presets";
 import { AgentBrowserCall } from "@/components/voice/agent-browser-call";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,7 +16,7 @@ import {
   ArrowDown,
   ArrowUp,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { SelectableCard, SidePanel, StatusPill } from "../ui";
 
 type ToolLog = { name: string; system: string; status: "ok" | "pending" | "error" };
@@ -31,8 +31,12 @@ export function TestStep({
   /** Persist draft + build_for_test so WebRTC can talk to the real assistant. */
   onEnsureAgent?: () => Promise<{ agentId: string; telnyxAssistantId?: string | null } | null>;
 }) {
+  const scenarios = useMemo(
+    () => testScenariosForCapabilities(state.capabilities),
+    [state.capabilities],
+  );
   const scenario =
-    TEST_SCENARIOS.find((s) => s.id === state.testScenario) || TEST_SCENARIOS[2];
+    scenarios.find((s) => s.id === state.testScenario) || scenarios[0];
   const [mode, setMode] = useState<"browser" | "my_phone" | "agent">("browser");
   const [preparing, setPreparing] = useState(false);
   const [prepareError, setPrepareError] = useState("");
@@ -40,6 +44,12 @@ export function TestStep({
   const [assistantId, setAssistantId] = useState<string | null>(
     state.telnyxAssistantId || null,
   );
+
+  useEffect(() => {
+    if (!scenarios.some((s) => s.id === state.testScenario) && scenarios[0]) {
+      patch({ testScenario: scenarios[0].id as TestScenarioId });
+    }
+  }, [scenarios, state.testScenario, patch]);
 
   useEffect(() => {
     setAssistantId(state.telnyxAssistantId || null);
@@ -89,24 +99,25 @@ export function TestStep({
 
   async function runGuidedScenario() {
     setTools([]);
-    await prepareLiveTest();
-    // Visual expected-tool checklist for the selected scenario (live talk uses WebRTC above).
-    if (scenario.id === "appointment_booking") {
+    const prepared = await prepareLiveTest();
+    // Expected-tool checklist only — does not claim tools ran successfully.
+    if (scenario?.id === "appointment_booking") {
       setTools([
-        { name: "Check availability", system: "Calendar", status: "ok" },
-        { name: "Book appointment", system: "Calendar", status: "ok" },
+        { name: "Check availability", system: "Calendar", status: "pending" },
+        { name: "Book appointment", system: "Calendar", status: "pending" },
         {
           name: "Send SMS confirmation",
           system: "SMS",
-          status: state.bookingBehavior.sendSmsAfterBooking ? "pending" : "ok",
+          status: "pending",
         },
       ]);
-    } else if (scenario.id === "transfer" || scenario.id === "frustrated") {
-      setTools([{ name: "Transfer call", system: "Phone", status: "ok" }]);
+    } else if (scenario?.id === "transfer" || scenario?.id === "frustrated") {
+      setTools([{ name: "Transfer call", system: "Phone", status: "pending" }]);
     } else {
-      setTools([{ name: "Search knowledge", system: "Knowledge", status: "ok" }]);
+      setTools([{ name: "Search knowledge", system: "Knowledge", status: "pending" }]);
     }
-    patch({ lastTestPassed: true });
+    // Mark checked only after a live assistant is available for talk-back.
+    patch({ lastTestPassed: Boolean(prepared?.telnyxAssistantId || assistantId) });
   }
 
   return (
@@ -127,7 +138,7 @@ export function TestStep({
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Test scenarios
             </p>
-            {TEST_SCENARIOS.map((s) => (
+            {scenarios.map((s) => (
               <SelectableCard
                 key={s.id}
                 selected={state.testScenario === s.id}
@@ -140,7 +151,7 @@ export function TestStep({
             <div className="rounded-xl border border-border bg-card p-3">
               <p className="text-xs font-semibold">Expected outcomes</p>
               <ul className="mt-2 space-y-1.5 text-xs">
-                {scenario.outcomes.map((o) => (
+                {(scenario?.outcomes || []).map((o) => (
                   <li key={o} className="flex items-start gap-1.5">
                     <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 text-success" />
                     {o}
@@ -148,7 +159,7 @@ export function TestStep({
                 ))}
               </ul>
               <p className="mt-3 text-[11px] text-muted-foreground">
-                Try saying: “{scenario.prompt}”
+                Try saying: “{scenario?.prompt || "Hello"}”
               </p>
             </div>
           </div>
@@ -318,7 +329,7 @@ export function TestStep({
           <dl className="mt-3 space-y-1.5 text-muted-foreground">
             <div className="flex justify-between">
               <dt>Scenario</dt>
-              <dd className="text-foreground">{scenario.title}</dd>
+              <dd className="text-foreground">{scenario?.title || "—"}</dd>
             </div>
           </dl>
         </div>

@@ -229,6 +229,7 @@ export function CallHandlingStep({
                   </span>
                 </span>
               </label>
+              {booking || state.capabilities.includes("qualify_callers") ? (
               <label className="flex items-start gap-2 text-sm">
                 <input
                   type="checkbox"
@@ -243,6 +244,7 @@ export function CallHandlingStep({
                   </span>
                 </span>
               </label>
+              ) : null}
             </div>
           </div>
         </div>
@@ -250,7 +252,16 @@ export function CallHandlingStep({
 
       <SidePanel title="Call handling preview">
         <ol className="space-y-2 border-l border-border pl-3 text-xs">
-          {FLOW_STEPS.map((s) => (
+          {(booking
+            ? FLOW_STEPS
+            : [
+                "Greet caller",
+                "Answer from knowledge",
+                "Take a message if needed",
+                "Transfer when requested",
+                "Confirm next steps",
+              ]
+          ).map((s) => (
             <li key={s} className="font-medium text-foreground">
               {s}
             </li>

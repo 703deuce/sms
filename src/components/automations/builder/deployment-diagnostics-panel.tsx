@@ -181,11 +181,13 @@ export function DeploymentDiagnosticsPanel({ flowId }: { flowId: string }) {
                   "rounded-md px-2 py-1 text-[11px] font-medium",
                   v === "ok" || v === true
                     ? "bg-emerald-50 text-emerald-700"
-                    : v === "error" || v === false
-                      ? "bg-rose-50 text-rose-700"
-                      : v === "missing" || v === "draft"
-                        ? "bg-amber-50 text-amber-700"
-                        : "bg-slate-100 text-slate-600",
+                    : v === "ready"
+                      ? "bg-sky-50 text-sky-700"
+                      : v === "error" || v === false
+                        ? "bg-rose-50 text-rose-700"
+                        : v === "missing" || v === "draft"
+                          ? "bg-amber-50 text-amber-700"
+                          : "bg-slate-100 text-slate-600",
                 )}
               >
                 {k}: {String(v)}

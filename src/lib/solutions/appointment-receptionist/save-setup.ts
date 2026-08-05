@@ -10,6 +10,7 @@ import { createId } from "@/lib/supabase/id";
 import { emitPlatformEvent } from "@/lib/platform/events";
 import type { AppointmentReceptionistWizardState } from "@/lib/solutions/appointment-receptionist/types";
 import { agentTypeFromOutcomeSlug } from "@/lib/agents/types";
+import { uniqueAgentDisplayName } from "@/lib/solutions/appointment-receptionist/wizard-presets";
 
 export const SOLUTION_TYPE_CANONICAL = "appointment-receptionist" as const;
 
@@ -111,8 +112,6 @@ export async function upsertAppointmentReceptionistSetup(
   const prisma = getPrisma();
   const now = new Date().toISOString();
   const outcomeSlug = outcomeSlugFromWizard(input.state);
-  const name =
-    (input.state.solutionName || "AI Receptionist").trim() || "AI Receptionist";
   const status = input.published ? "ACTIVE" : "DRAFT";
   const externalKey = input.agentId;
 
@@ -154,6 +153,11 @@ export async function upsertAppointmentReceptionistSetup(
     });
   }
 
+  const rawName =
+    (input.state.solutionName || "AI Receptionist").trim() || "AI Receptionist";
+  // New setups get a unique stamp so Automations / My Agents are distinguishable.
+  const name = existing ? rawName : uniqueAgentDisplayName(rawName);
+
   const routingRuleIds =
     input.links?.routingRuleIds ||
     (
@@ -178,15 +182,11 @@ export async function upsertAppointmentReceptionistSetup(
     answerWhen: input.state.answerWhen,
     capabilities: input.state.capabilities,
     agentId: input.agentId,
+    // Full wizard snapshot so reload does not depend only on VoiceAgent.draftConfig.
     wizard: {
-      solutionName: input.state.solutionName,
-      agentName: input.state.agentName,
-      phoneNumberId: input.state.phoneNumberId,
-      answerWhen: input.state.answerWhen,
-      ringBehavior: input.state.ringBehavior,
-      capabilities: input.state.capabilities,
-      activationMode: input.state.activationMode,
-      scheduledAt: input.state.scheduledAt || null,
+      ...input.state,
+      solutionName: name,
+      agentId: input.agentId,
     },
   } as unknown as Prisma.InputJsonValue;
 
@@ -248,6 +248,8 @@ export async function upsertAppointmentReceptionistSetup(
   await prisma.voiceAgent.update({
     where: { id: input.agentId },
     data: {
+      name,
+      displayName: input.state.agentName || name,
       sourceSolutionSetupId: setupId,
       linkedPhoneNumberIds,
       linkedCalendarIds,
@@ -292,6 +294,17 @@ export async function upsertAppointmentReceptionistSetup(
       agentRow?.phoneNumberId ||
       linkedPhoneNumberIds[0] ||
       null;
+    const bookingCaps = new Set(input.state.capabilities || []);
+    const includeBooking =
+      bookingCaps.has("book_appointments") ||
+      bookingCaps.has("reschedule") ||
+      bookingCaps.has("cancel") ||
+      outcomeSlug === "appointment-booking";
+    const includeSms =
+      includeBooking &&
+      (bookingCaps.has("send_sms_confirmations") ||
+        Boolean(input.state.bookingBehavior?.sendSmsAfterBooking));
+    const routingMode = routingModeFromAnswerWhen(input.state.answerWhen);
     const compiled = await ensureAgentPrimaryWorkflow({
       workspaceId: input.workspaceId,
       agentName: name,
@@ -300,10 +313,14 @@ export async function upsertAppointmentReceptionistSetup(
       agentId: input.agentId,
       setupId,
       triggerBlock: triggerBlockFromAnswerWhen(input.state.answerWhen),
-      routingMode: routingModeFromAnswerWhen(input.state.answerWhen),
+      routingMode,
+      schedule:
+        routingMode === "after_hours" ? "after_hours" : "always",
       phoneNumberId,
       phoneNumberE164: input.state.phoneNumberE164 || null,
       ringSeconds: input.state.ringTeamSeconds || 20,
+      includeBookingBranches: includeBooking,
+      includeSmsConfirmation: includeSms,
       telnyxAssistantId: agentRow?.telnyxAssistantId || null,
       purpose: name,
       activate: false,
@@ -430,14 +447,17 @@ export async function loadAppointmentReceptionistSetup(
       setup?.name ||
       agent?.displayName ||
       agent?.name ||
-      String(wizardSnap.solutionName || "AI Receptionist"),
+      String(wizardSnap.solutionName || storedWizard.solutionName || "AI Receptionist"),
     agentName:
-      String(wizardSnap.agentName || agent?.displayName || "") || undefined,
+      String(wizardSnap.agentName || storedWizard.agentName || agent?.displayName || "") ||
+      undefined,
     phoneNumberId:
       (agent?.phoneNumberId as string | null) ||
       (typeof wizardSnap.phoneNumberId === "string"
         ? wizardSnap.phoneNumberId
-        : null),
+        : typeof storedWizard.phoneNumberId === "string"
+          ? storedWizard.phoneNumberId
+          : null),
     answerWhen: (wizardSnap.answerWhen ||
       storedWizard.answerWhen ||
       "every_call") as AppointmentReceptionistWizardState["answerWhen"],
@@ -447,7 +467,10 @@ export async function loadAppointmentReceptionistSetup(
         "book_appointments",
       ]) as AppointmentReceptionistWizardState["capabilities"],
     ringBehavior: (wizardSnap.ringBehavior ||
+      storedWizard.ringBehavior ||
       "ai_immediate") as AppointmentReceptionistWizardState["ringBehavior"],
+    // Prefer draftConfig snapshot; fall back to durable setup.wizard (full form).
+    ...storedWizard,
     ...wizardSnap,
   };
 

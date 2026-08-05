@@ -81,8 +81,10 @@ assert.ok(solutionsHrefs.has("/my-numbers"), "My Numbers inventory required");
 assert.equal(solutionsNav[0]?.label, "Dashboard");
 assert.equal(solutionsNav[1]?.label, "My Agents");
 assert.equal(solutionsNav[1]?.href, "/systems");
-assert.equal(solutionsNav[2]?.label, "My Numbers");
-assert.equal(solutionsNav[2]?.href, "/my-numbers");
+assert.equal(solutionsNav[2]?.label, "Automations");
+assert.equal(solutionsNav[2]?.href, "/automations");
+assert.equal(solutionsNav[3]?.label, "My Numbers");
+assert.equal(solutionsNav[3]?.href, "/my-numbers");
 
 for (const slug of solutionsLaunchSlugs()) {
   assert.ok(
@@ -177,8 +179,13 @@ for (let i = 0; i < connectLabels.length; i += 1) {
   );
 }
 
+// Automations lives under My Agents (inventory band), not Manage.
+assert.equal(solutionsNav[2]?.label, "Automations");
+assert.ok(
+  !solutionsNav.some((i) => i.label === "My Systems"),
+  "My Systems renamed/moved — should not remain in nav",
+);
 const manageOrder = [
-  "Automations",
   "Inbox",
   "Calls",
   "Campaigns",
@@ -189,17 +196,8 @@ const manageOrder = [
   "Integrations",
   "Compliance",
 ];
-const manageStart = solutionsNav.findIndex((i) => i.label === "Automations");
-assert.ok(manageStart >= 0, "Automations required under Manage");
-assert.equal(
-  solutionsNav[manageStart]?.sectionLabel,
-  "Manage",
-  "Automations starts the Manage band",
-);
-assert.ok(
-  !solutionsNav.some((i) => i.label === "My Systems"),
-  "My Systems renamed/moved — should not remain under Manage",
-);
+const manageStart = solutionsNav.findIndex((i) => i.label === "Inbox");
+assert.ok(manageStart >= 0, "Inbox required in product nav");
 for (let i = 0; i < manageOrder.length; i += 1) {
   assert.equal(
     solutionsNav[manageStart + i]?.label,

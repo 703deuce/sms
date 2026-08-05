@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type {
   AppointmentReceptionistWizardState,
   KnowledgeItemStatus,
@@ -20,6 +20,93 @@ import {
 import { InfoCallout, SelectableCard, SidePanel, StatusPill } from "../ui";
 
 type KnowledgeItem = AppointmentReceptionistWizardState["knowledgeItems"][number];
+
+function ConnectExistingKnowledge({
+  selectedId,
+  onSelect,
+}: {
+  selectedId: string | null;
+  onSelect: (id: string | null) => void;
+}) {
+  const [rows, setRows] = useState<Array<{ id: string; name: string }>>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      try {
+        const res = await fetch("/api/voice/knowledge");
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(json?.error || "Failed to load knowledge bases");
+        if (!cancelled) {
+          setRows(
+            (json?.data || []).map((r: { id: string; name: string }) => ({
+              id: r.id,
+              name: r.name,
+            })),
+          );
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "Failed to load");
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return (
+    <div className="mt-3 space-y-3 rounded-xl border border-primary/30 bg-card p-4 text-sm">
+      <p className="font-medium">Connect existing knowledge</p>
+      <p className="text-xs text-muted-foreground">
+        Attach a knowledge base already in this workspace. It is linked to the
+        agent on save/activate. You can also open Integrations for CRM.
+      </p>
+      {loading ? (
+        <p className="text-xs text-muted-foreground">Loading knowledge bases…</p>
+      ) : error ? (
+        <p className="text-xs text-warning">{error}</p>
+      ) : rows.length === 0 ? (
+        <p className="text-xs text-muted-foreground">
+          No knowledge bases yet — use Guided profile or Upload first.
+        </p>
+      ) : (
+        <select
+          className="h-10 w-full rounded-lg border border-border bg-card px-3 text-sm"
+          value={selectedId || ""}
+          onChange={(e) => onSelect(e.target.value || null)}
+        >
+          <option value="">Select a knowledge base…</option>
+          {rows.map((r) => (
+            <option key={r.id} value={r.id}>
+              {r.name}
+            </option>
+          ))}
+        </select>
+      )}
+      <div className="flex flex-wrap gap-2">
+        <a
+          href="/integrations"
+          className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground"
+        >
+          Open Integrations
+        </a>
+        <a
+          href="/voice/knowledge"
+          className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium"
+        >
+          Open Knowledge bases
+        </a>
+      </div>
+    </div>
+  );
+}
 
 function guessBusinessNameFromUrl(url: string): string {
   let host = url;
@@ -167,23 +254,30 @@ export function InformationStep({
           action: "scan_website",
           url,
           name: `${businessName || "Business"} website`,
+          knowledgeBaseId: state.linkedKnowledgeBaseId || undefined,
         }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
         throw new Error(json?.error || "Website scan failed");
       }
-      const source = json?.data?.source || json?.data;
+      const payload = json?.data || {};
+      const source = payload?.source || payload;
       patch({
         businessName,
         websiteUrl: url,
+        linkedKnowledgeBaseId:
+          payload.knowledgeBaseId || state.linkedKnowledgeBaseId || null,
         knowledgeItems: itemsForScanResult({
           businessName,
           url,
-          sourceStatus: source?.status,
-          chunkCount: source?.chunkCount,
-          preview: source?.extractedPreview || source?.contentText,
-          errorMessage: source?.errorMessage,
+          sourceStatus: source?.status || payload.sourceStatus,
+          chunkCount: source?.chunkCount ?? payload.chunkCount,
+          preview:
+            source?.extractedPreview ||
+            source?.contentText ||
+            payload.extractedPreview,
+          errorMessage: source?.errorMessage || payload.errorMessage,
         }),
       });
     } catch (err) {
@@ -204,6 +298,116 @@ export function InformationStep({
     } finally {
       setScanning(false);
     }
+  }
+
+  async function ensureWizardKnowledgeBase(): Promise<string> {
+    if (state.linkedKnowledgeBaseId) return state.linkedKnowledgeBaseId;
+    const name = `${state.solutionName || "Agent"} Knowledge`;
+    const res = await fetch("/api/voice/knowledge", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        name,
+        description: "Created from appointment receptionist wizard",
+      }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(json?.error || "Could not create knowledge base");
+    const id = String(json?.data?.id || "");
+    if (!id) throw new Error("Knowledge base id missing");
+    patch({ linkedKnowledgeBaseId: id });
+    return id;
+  }
+
+  async function onUploadFiles(files: FileList | null) {
+    if (!files?.length) return;
+    setUploadNote("");
+    let items = [...state.knowledgeItems];
+    let kbId = state.linkedKnowledgeBaseId || null;
+    let uploaded = 0;
+    let warned = 0;
+
+    for (const file of Array.from(files)) {
+      const lower = file.name.toLowerCase();
+      const isText =
+        file.type.startsWith("text/") ||
+        /\.(txt|md|csv|json)$/i.test(lower);
+      const isBinaryDoc = /\.(pdf|docx?)$/i.test(lower);
+
+      if (isText) {
+        const text = (await file.text()).slice(0, 20_000);
+        items = upsertItem(items, `file-${file.name}`, {
+          label: file.name,
+          summary: text.slice(0, 2000),
+          status: "complete",
+          statusLabel: "Uploaded",
+        });
+        uploaded += 1;
+        continue;
+      }
+
+      if (isBinaryDoc) {
+        try {
+          if (!kbId) kbId = await ensureWizardKnowledgeBase();
+          const form = new FormData();
+          form.append("file", file);
+          const res = await fetch(`/api/voice/knowledge/${kbId}/upload`, {
+            method: "POST",
+            body: form,
+          });
+          const json = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            throw new Error(json?.error || "Upload failed");
+          }
+          const src = json?.data;
+          items = upsertItem(items, `file-${file.name}`, {
+            label: file.name,
+            summary:
+              (src?.extractedPreview || src?.contentText || "").slice(0, 500) ||
+              `Indexed for RAG (${file.type || "document"})`,
+            status:
+              src?.status === "indexed" || src?.status === "ready"
+                ? "complete"
+                : "warning",
+            statusLabel:
+              src?.status === "indexed" || src?.status === "ready"
+                ? "Uploaded & indexed"
+                : "Uploaded — indexing",
+          });
+          uploaded += 1;
+        } catch (err) {
+          warned += 1;
+          items = upsertItem(items, `file-${file.name}`, {
+            label: file.name,
+            summary:
+              err instanceof Error
+                ? err.message
+                : "Upload failed — paste key facts below",
+            status: "warning",
+            statusLabel: "Upload failed",
+          });
+        }
+        continue;
+      }
+
+      warned += 1;
+      items = upsertItem(items, `file-${file.name}`, {
+        label: file.name,
+        summary: `Unsupported type (${file.type || "binary"}). Use PDF, DOCX, TXT, MD, or CSV.`,
+        status: "warning",
+        statusLabel: "Unsupported",
+      });
+    }
+
+    patch({
+      knowledgeItems: items,
+      knowledgeSource: "upload_docs",
+      linkedKnowledgeBaseId: kbId || state.linkedKnowledgeBaseId,
+    });
+    setUploadNote(
+      `${uploaded} file(s) added${warned ? `, ${warned} need attention` : ""}.`,
+    );
+    if (fileRef.current) fileRef.current.value = "";
   }
 
   function saveGuidedProfile() {
@@ -254,37 +458,6 @@ export function InformationStep({
       knowledgeItems: items,
       knowledgeSource: "guided_profile",
     });
-  }
-
-  async function onUploadFiles(files: FileList | null) {
-    if (!files?.length) return;
-    setUploadNote("");
-    let items = [...state.knowledgeItems];
-    for (const file of Array.from(files)) {
-      const lower = file.name.toLowerCase();
-      const isText =
-        file.type.startsWith("text/") ||
-        /\.(txt|md|csv|json)$/i.test(lower);
-      if (!isText) {
-        items = upsertItem(items, `file-${file.name}`, {
-          label: file.name,
-          summary: `Uploaded file (${file.type || "binary"}). Paste key facts into an editable knowledge item if the AI must answer from this PDF/DOCX.`,
-          status: "warning",
-          statusLabel: "Name saved — add text facts",
-        });
-        continue;
-      }
-      const text = (await file.text()).slice(0, 20_000);
-      items = upsertItem(items, `file-${file.name}`, {
-        label: file.name,
-        summary: text.slice(0, 2000),
-        status: "complete",
-        statusLabel: "Uploaded",
-      });
-    }
-    patch({ knowledgeItems: items, knowledgeSource: "upload_docs" });
-    setUploadNote(`${files.length} file(s) added to knowledge.`);
-    if (fileRef.current) fileRef.current.value = "";
   }
 
   function openEdit(item: KnowledgeItem) {
@@ -342,14 +515,14 @@ export function InformationStep({
               selected={state.knowledgeSource === "upload_docs"}
               onClick={() => patch({ knowledgeSource: "upload_docs" })}
               title="Upload documents"
-              description="TXT, MD, CSV (PDF/DOCX: add text facts after upload)."
+              description="PDF, DOCX, TXT, MD, CSV — indexed into agent knowledge."
               icon={<CloudUpload className="h-4 w-4" />}
             />
             <SelectableCard
               selected={state.knowledgeSource === "connect_data"}
               onClick={() => patch({ knowledgeSource: "connect_data" })}
               title="Connect existing data"
-              description="Use website scan or guided profile for now — CRM sync comes next."
+              description="Attach an existing knowledge base or open Integrations."
               icon={<Link2 className="h-4 w-4" />}
             />
           </div>
@@ -478,8 +651,8 @@ export function InformationStep({
                 <CloudUpload className="h-6 w-6 text-muted-foreground" />
                 <p className="mt-2 text-sm font-medium">Upload knowledge files</p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Click to choose TXT/MD/CSV (best). PDF/DOCX names are saved —
-                  paste key facts into an item below.
+                  PDF, DOCX, TXT, MD, CSV — PDFs upload to your knowledge base for
+                  Telnyx RAG.
                 </p>
               </button>
               {uploadNote ? (
@@ -489,11 +662,22 @@ export function InformationStep({
           ) : null}
 
           {state.knowledgeSource === "connect_data" ? (
-            <div className="mt-3 rounded-xl border border-border bg-muted/30 p-4 text-sm text-muted-foreground">
-              Connect CRM / Google Business later from Integrations. For this
-              agent, use website scan or the guided profile so facts land in
-              knowledge on Activate.
-            </div>
+            <ConnectExistingKnowledge
+              selectedId={state.linkedKnowledgeBaseId || null}
+              onSelect={(id) => {
+                patch({
+                  linkedKnowledgeBaseId: id,
+                  knowledgeItems: upsertItem(state.knowledgeItems, "linked-kb", {
+                    label: "Linked knowledge base",
+                    summary: id
+                      ? `Attached knowledge base ${id}`
+                      : "No knowledge base selected",
+                    status: id ? "complete" : "missing",
+                    statusLabel: id ? "Linked" : "Not linked",
+                  }),
+                });
+              }}
+            />
           ) : null}
         </div>
 

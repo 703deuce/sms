@@ -19,6 +19,7 @@ import {
   upsertAppointmentReceptionistSetup,
 } from "@/lib/solutions/appointment-receptionist/save-setup";
 import { agentTypeFromOutcomeSlug } from "@/lib/agents/types";
+import { uniqueAgentDisplayName } from "@/lib/solutions/appointment-receptionist/wizard-presets";
 
 export async function GET(request: Request) {
   try {
@@ -71,7 +72,16 @@ export async function POST(request: Request) {
       effectiveAction = "save_draft";
     }
 
-    const name = (state.solutionName || "Appointment Receptionist").trim();
+    const rawName =
+      (state.solutionName || "Appointment Receptionist").trim() ||
+      "Appointment Receptionist";
+    // Stamp uniqueness only on first create so five answering agents differ.
+    const name = state.agentId
+      ? rawName
+      : uniqueAgentDisplayName(rawName);
+    if (!state.agentId && name !== state.solutionName) {
+      state.solutionName = name;
+    }
     const draftConfig = buildWizardAgentConfig(state);
     const outcomeSlug = outcomeSlugFromWizard(state);
     const productAgentType = agentTypeFromOutcomeSlug(outcomeSlug);
@@ -289,7 +299,9 @@ export async function POST(request: Request) {
           auth.workspaceId,
           primaryFlowId,
           def,
-          { forceTakeover: Boolean(previousAiOwner) },
+          // Always claim the DID on Activate so the new agent replaces any
+          // prior live TriggerDeployment / AI owner for this number.
+          { forceTakeover: true },
         );
         if (triggerResult.conflicts.length) {
           return NextResponse.json(

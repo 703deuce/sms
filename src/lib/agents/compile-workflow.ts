@@ -41,7 +41,12 @@ export const VOICE_TEMPLATE_KEYS = {
   RUN_VOICE: "run_voice_agent",
   CALL_OUTCOME: "call_outcome",
   END: "end",
+  SEND_BOOKING_SMS: "send_booking_sms",
+  END_BOOKED: "end_booked",
 } as const;
+
+/** All keys reconcile may add or strip when booking branches toggle. */
+export const VOICE_MANAGED_TEMPLATE_KEYS = Object.values(VOICE_TEMPLATE_KEYS);
 
 export const VOICE_NODE_IDS = {
   TRIGGER: "TRIGGER_AGENT_WORKFLOW",
@@ -68,130 +73,206 @@ export function buildVoiceAgentPrimaryDefinition(input: {
   phoneNumberE164?: string | null;
   routingMode?: string | null;
   ringSeconds?: number | null;
+  schedule?: string | null;
   telnyxAssistantId?: string | null;
+  /** When false, omit booked outcome edge (answering / lead agents). */
+  includeBookingBranches?: boolean;
+  /** Adds SMS confirmation node after booked (booking agents only). */
+  includeSmsConfirmation?: boolean;
+  outcomeSlug?: string | null;
 }): AutomationDefinition {
   const triggerId = VOICE_NODE_IDS.TRIGGER;
   const voiceNodeId = VOICE_NODE_IDS.RUN_VOICE;
   const outcomeId = VOICE_NODE_IDS.CALL_OUTCOME;
   const endId = VOICE_NODE_IDS.END;
+  const smsId = "SEND_BOOKING_SMS";
+  const endBookedId = "END_BOOKED";
   const triggerBlock = input.triggerBlock || "inbound_call";
+  const includeBooking = input.includeBookingBranches === true;
+  const includeSms = includeBooking && input.includeSmsConfirmation === true;
+  const routingMode = input.routingMode || "every_call";
+  const schedule =
+    input.schedule ||
+    (routingMode === "after_hours" ? "after_hours" : "always");
+
   const label =
     input.triggerLabel ||
-    triggerFromBlockType(triggerBlock) ||
-    "Inbound Call";
+    (routingMode === "overflow"
+      ? "Inbound Call (overflow)"
+      : routingMode === "after_hours"
+        ? "Inbound Call (after hours)"
+        : triggerFromBlockType(triggerBlock) || "Inbound Call");
 
   const triggerConfig =
     triggerBlock === "inbound_call"
       ? {
           phoneNumberId: input.phoneNumberId || "",
           phoneNumberE164: input.phoneNumberE164 || "",
-          routingMode: input.routingMode || "every_call",
-          schedule: "always",
+          routingMode,
+          schedule,
           ringSeconds: Math.max(1, Number(input.ringSeconds || 20)),
           mode: "live",
           pauseFallback: "human",
           pauseFallbackNumber: "",
           pauseFallbackFlowId: "",
+          outcomeSlug: input.outcomeSlug || "",
         }
       : {
           phoneNumberId: input.phoneNumberId || "",
           phoneNumberE164: input.phoneNumberE164 || "",
         };
 
-  const def: AutomationDefinition = {
-    version: 1,
-    nodes: [
-      {
-        id: triggerId,
-        type: "trigger",
-        position: { x: 80, y: 120 },
-        data: {
-          blockType: triggerBlock,
-          label,
-          config: triggerConfig,
+  const nodes: AutomationDefinition["nodes"] = [
+    {
+      id: triggerId,
+      type: "trigger",
+      position: { x: 80, y: 120 },
+      data: {
+        blockType: triggerBlock,
+        label,
+        config: triggerConfig,
+      },
+    },
+    {
+      id: voiceNodeId,
+      type: "action",
+      position: { x: 360, y: 120 },
+      data: {
+        blockType: "run_voice_agent",
+        label: `Run Voice Agent: ${input.agentName}`,
+        config: {
+          agentId: input.agentId || "",
+          agentName: input.agentName,
+          purpose: input.purpose || input.agentName,
+          telnyxAssistantId: input.telnyxAssistantId || "",
+          mode: "realtime_voice",
+          waitForOutcome: true,
+          attachInbound: true,
+          timeoutSeconds: 60,
+          retryCount: 0,
         },
       },
-      {
-        id: voiceNodeId,
+    },
+    {
+      id: outcomeId,
+      type: "logic",
+      position: { x: 640, y: 120 },
+      data: {
+        blockType: "wait_for_call_result",
+        label: "Call Outcome",
+        config: {
+          timeoutMinutes: 60,
+          branchField: "outcome",
+          includeBookingBranches: includeBooking,
+        },
+      },
+    },
+    {
+      id: endId,
+      type: "end",
+      position: { x: 920, y: includeBooking ? 200 : 120 },
+      data: {
+        blockType: "end_automation",
+        label: includeBooking ? "End (other)" : "End",
+        config: {},
+      },
+    },
+  ];
+
+  const edges: AutomationDefinition["edges"] = [
+    { id: "e_trigger_voice", source: triggerId, target: voiceNodeId },
+    { id: "e_voice_outcome", source: voiceNodeId, target: outcomeId },
+    {
+      id: "e_outcome_end",
+      source: outcomeId,
+      target: endId,
+      sourceHandle: "default",
+    },
+    {
+      id: "e_outcome_completed",
+      source: outcomeId,
+      target: endId,
+      sourceHandle: "completed",
+    },
+    {
+      id: "e_outcome_failed",
+      source: outcomeId,
+      target: endId,
+      sourceHandle: "failed",
+    },
+    {
+      id: "e_outcome_no_answer",
+      source: outcomeId,
+      target: endId,
+      sourceHandle: "no_answer",
+    },
+  ];
+
+  if (includeBooking) {
+    if (includeSms) {
+      nodes.push({
+        id: smsId,
         type: "action",
-        position: { x: 360, y: 120 },
+        position: { x: 920, y: 40 },
         data: {
-          blockType: "run_voice_agent",
-          label: `Run Voice Agent: ${input.agentName}`,
+          blockType: "send_sms",
+          label: "Send booking confirmation",
           config: {
-            agentId: input.agentId || "",
-            agentName: input.agentName,
-            purpose: input.purpose || input.agentName,
-            telnyxAssistantId: input.telnyxAssistantId || "",
-            mode: "realtime_voice",
-            waitForOutcome: true,
-            attachInbound: true,
-            timeoutSeconds: 60,
-            retryCount: 0,
+            body: "You're booked! Reply if you need to reschedule.",
+            fromPhoneNumberId: input.phoneNumberId || "",
           },
         },
-      },
-      {
-        id: outcomeId,
-        type: "logic",
-        position: { x: 640, y: 120 },
-        data: {
-          blockType: "wait_for_call_result",
-          label: "Call Outcome",
-          config: {
-            timeoutMinutes: 60,
-            branchField: "outcome",
-          },
-        },
-      },
-      {
-        id: endId,
+      });
+      nodes.push({
+        id: endBookedId,
         type: "end",
-        position: { x: 920, y: 120 },
+        position: { x: 1180, y: 40 },
         data: {
           blockType: "end_automation",
-          label: "End",
+          label: "End (booked)",
           config: {},
         },
-      },
-    ],
-    edges: [
-      { id: "e_trigger_voice", source: triggerId, target: voiceNodeId },
-      { id: "e_voice_outcome", source: voiceNodeId, target: outcomeId },
-      {
-        id: "e_outcome_end",
+      });
+      edges.push({
+        id: "e_outcome_booked",
         source: outcomeId,
-        target: endId,
-        sourceHandle: "default",
-      },
-      {
+        target: smsId,
+        sourceHandle: "booked",
+      });
+      edges.push({
+        id: "e_sms_end_booked",
+        source: smsId,
+        target: endBookedId,
+      });
+    } else {
+      edges.push({
         id: "e_outcome_booked",
         source: outcomeId,
         target: endId,
         sourceHandle: "booked",
-      },
-      {
-        id: "e_outcome_completed",
-        source: outcomeId,
-        target: endId,
-        sourceHandle: "completed",
-      },
-      {
-        id: "e_outcome_failed",
-        source: outcomeId,
-        target: endId,
-        sourceHandle: "failed",
-      },
-    ],
+      });
+    }
+  }
+
+  const def: AutomationDefinition = {
+    version: 1,
+    nodes,
+    edges,
     viewport: { x: 0, y: 0, zoom: 0.85 },
   };
 
-  return stampManagedDefinition(def, {
+  const keyMap: Record<string, string> = {
     [triggerId]: VOICE_TEMPLATE_KEYS.INBOUND_CALL,
     [voiceNodeId]: VOICE_TEMPLATE_KEYS.RUN_VOICE,
     [outcomeId]: VOICE_TEMPLATE_KEYS.CALL_OUTCOME,
     [endId]: VOICE_TEMPLATE_KEYS.END,
-  });
+  };
+  if (includeSms) {
+    keyMap[smsId] = VOICE_TEMPLATE_KEYS.SEND_BOOKING_SMS;
+    keyMap[endBookedId] = VOICE_TEMPLATE_KEYS.END_BOOKED;
+  }
+
+  return stampManagedDefinition(def, keyMap);
 }
 
 /** @deprecated Prefer buildVoiceAgentPrimaryDefinition for voice agents. */
@@ -255,6 +336,9 @@ export type EnsurePrimaryWorkflowInput = {
   phoneNumberE164?: string | null;
   routingMode?: string | null;
   ringSeconds?: number | null;
+  schedule?: string | null;
+  includeBookingBranches?: boolean;
+  includeSmsConfirmation?: boolean;
   telnyxAssistantId?: string | null;
   activate?: boolean;
   description?: string;
@@ -299,6 +383,10 @@ export async function ensureAgentPrimaryWorkflow(
           phoneNumberE164: input.phoneNumberE164,
           routingMode: input.routingMode,
           ringSeconds: input.ringSeconds,
+          schedule: input.schedule,
+          includeBookingBranches: input.includeBookingBranches === true,
+          includeSmsConfirmation: input.includeSmsConfirmation === true,
+          outcomeSlug: input.outcomeSlug,
           telnyxAssistantId,
         })
       : stampManagedDefinition(
@@ -446,7 +534,7 @@ export async function ensureAgentPrimaryWorkflow(
       nextGraph = reconcileManagedNodes(
         existing.definition,
         templateGraph,
-        Object.values(VOICE_TEMPLATE_KEYS),
+        VOICE_MANAGED_TEMPLATE_KEYS,
       );
     } else if (existing?.advancedCustomized) {
       // Preserve full custom graph; only stamp ownership below.

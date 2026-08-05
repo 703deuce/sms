@@ -386,6 +386,8 @@ export function reconcileManagedNodes(
         });
         continue;
       }
+      // Managed in a prior template revision but removed now (e.g. booking SMS off).
+      continue;
     }
 
     // Custom / unknown — preserve.
