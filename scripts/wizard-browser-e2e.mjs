@@ -52,25 +52,66 @@ async function shot(page, name) {
   return path;
 }
 
+async function waitReady(page) {
+  // Wait out create_draft / save_draft (can take ~8s on production).
+  for (let i = 0; i < 60; i++) {
+    const working = await page
+      .getByRole("button", { name: /Working/i })
+      .count();
+    if (!working) return;
+    await page.waitForTimeout(500);
+  }
+  throw new Error("Wizard stayed in Working… too long");
+}
+
 async function clickContinue(page) {
-  const btn = page.getByRole("button", { name: /Continue|Activate now|Save draft/i }).last();
+  await waitReady(page);
+  const btn = page.getByRole("button", { name: /^Continue$/i }).first();
   await btn.click();
-  await page.waitForTimeout(800);
+  await waitReady(page);
+  await page.waitForTimeout(400);
 }
 
 async function saveDraft(page) {
+  await waitReady(page);
   const btn = page.getByRole("button", { name: /^Save draft$/i }).first();
   if (await btn.isVisible().catch(() => false)) {
     await btn.click();
-    await page.waitForTimeout(1500);
+    await waitReady(page);
+    await page.waitForTimeout(800);
   }
 }
 
 async function walkWizard(page, { preset, label }) {
+  // Isolate drafts so answering/booking runs do not pollute each other.
+  await page.goto(`${BASE}/outcomes`, { waitUntil: "domcontentloaded" });
+  await page.evaluate(() => {
+    try {
+      localStorage.removeItem("transovo.appointment-receptionist.wizard.v1");
+    } catch {
+      /* ignore */
+    }
+  });
+
   const url =
     preset === null
       ? `${BASE}/solutions/ai-call-handling/appointment-assistant/setup`
       : `${BASE}/solutions/ai-call-handling/appointment-assistant/setup?preset=${preset}`;
+
+  // Capture agentId from create_draft / save_draft API.
+  page.on("response", async (res) => {
+    try {
+      if (!res.url().includes("/api/solutions/appointment-receptionist")) return;
+      if (res.request().method() !== "POST") return;
+      const json = await res.json().catch(() => null);
+      const id = json?.data?.agentId;
+      if (id) report[`lastAgentId_${label}`] = id;
+      const flow = json?.data?.primaryFlowId;
+      if (flow) report[`lastFlowId_${label}`] = flow;
+    } catch {
+      /* ignore */
+    }
+  });
 
   await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60000 });
   await page.waitForTimeout(1500);
@@ -86,7 +127,7 @@ async function walkWizard(page, { preset, label }) {
     });
   }
   log(`${label}:goals`, {
-    message: `bookingCard=${hasBookingCard}`,
+    message: `bookingCard=${hasBookingCard} title=${/Create Appointment Receptionist|Create AI Answering/i.exec(bodyText)?.[0]}`,
     url: page.url(),
   });
 
@@ -165,19 +206,24 @@ async function walkWizard(page, { preset, label }) {
   await clickContinue(page);
   await page.waitForTimeout(1000);
 
-  // Appointments (booking only)
-  const onAppointments = /appointment type|Calendar|Booking hours/i.test(
-    await page.locator("body").innerText(),
-  );
+  // Appointments (booking only) — detect by stepper / headline, not loose "Calendar" text.
+  const stepper = await page.locator("body").innerText();
+  const onAppointments =
+    /Appointments/i.test(stepper) &&
+    (/appointment type|Booking hours|What can callers book/i.test(stepper) ||
+      page.url().includes("setup"));
+  const appointmentsHeadline = await page
+    .getByRole("heading", { name: /appointment|book/i })
+    .count();
   if (expectBooking) {
-    if (!onAppointments) {
+    if (!appointmentsHeadline && !/Booking hours|appointment type/i.test(stepper)) {
       report.errors.push({ label, issue: "Expected Appointments step for booking wizard" });
     } else {
       await shot(page, `${label}-03-appointments`);
       log(`${label}:appointments`);
       await clickContinue(page);
     }
-  } else if (onAppointments) {
+  } else if (/Booking hours|appointment type|What can callers book/i.test(stepper)) {
     report.errors.push({
       label,
       issue: "Appointments step shown for non-booking agent",
@@ -250,60 +296,57 @@ async function walkWizard(page, { preset, label }) {
   return { agentId, url: page.url() };
 }
 
-async function openAutomationsAndBuilder(page) {
-  await page.goto(`${BASE}/automations`, { waitUntil: "domcontentloaded" });
-  await page.waitForTimeout(1500);
-  await shot(page, "automations-list");
-  const listText = await page.locator("body").innerText();
-  const hasUntitled = /Untitled automation/i.test(listText);
-  log("automations-list", { hasUntitled, message: listText.slice(0, 200) });
-
-  // Open first flow edit link
-  const editLink = page.locator('a[href*="/automations/"][href*="/edit"]').first();
-  const flowLink = page.locator('a[href^="/automations/"]').filter({ hasText: /.+/ }).first();
-  if (await editLink.count()) {
-    await editLink.click();
-  } else if (await flowLink.count()) {
-    await flowLink.click();
-    await page.waitForTimeout(1000);
-    const openEdit = page.getByRole("link", { name: /Edit|Open flow|Builder/i }).first();
-    if (await openEdit.isVisible().catch(() => false)) {
-      await openEdit.click();
-    } else {
-      // try /edit directly from URL
-      const u = page.url();
-      const id = u.match(/\/automations\/([^/?#]+)/)?.[1];
-      if (id && id !== "new" && id !== "templates" && id !== "logs") {
-        await page.goto(`${BASE}/automations/${id}/edit`, {
-          waitUntil: "domcontentloaded",
-        });
-      }
-    }
+async function openAutomationsAndBuilder(page, preferredFlowId) {
+  if (preferredFlowId) {
+    await page.goto(`${BASE}/automations/${preferredFlowId}/edit`, {
+      waitUntil: "domcontentloaded",
+    });
   } else {
-    // Create scratch automation
-    await page.goto(`${BASE}/automations/new`, { waitUntil: "domcontentloaded" });
-    await page.waitForTimeout(3000);
+    await page.goto(`${BASE}/automations`, { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(1500);
+    await shot(page, "automations-list");
+    const listText = await page.locator("body").innerText();
+    const hasUntitled = /Untitled automation/i.test(listText);
+    log("automations-list", { hasUntitled, message: listText.slice(0, 200) });
+
+    const editLink = page.locator('a[href*="/automations/"][href$="/edit"]').first();
+    if (await editLink.count()) {
+      await editLink.click();
+    } else {
+      await page.goto(`${BASE}/automations/new`, { waitUntil: "domcontentloaded" });
+      await page.waitForTimeout(4000);
+    }
   }
 
   await page.waitForTimeout(2000);
   await shot(page, "flow-builder");
   const builderText = await page.locator("body").innerText();
-  const hasInbound = /Inbound Call|inbound/i.test(builderText);
-  const hasSearch = await page
-    .locator('input[placeholder*="Search"], input[placeholder*="search"], input[placeholder*="block"]')
-    .count();
+  const hasInbound = /Inbound Call/i.test(builderText);
+  const hasRunVoice = /Run Voice Agent/i.test(builderText);
+  const hasOutcome = /Call Outcome/i.test(builderText);
+  const hasDiag = /Deployment diagnostics|Failure layer|flowGeneration/i.test(
+    builderText,
+  );
+  const hasSearch = await page.locator("#block-search, input[placeholder*='Search']").count();
   log("flow-builder", {
     hasInbound,
+    hasRunVoice,
+    hasOutcome,
+    hasDiag,
     hasSearch: Boolean(hasSearch),
     url: page.url(),
   });
+  if (!hasInbound || !hasRunVoice || !hasOutcome) {
+    report.errors.push({
+      issue: `Builder missing nodes inbound=${hasInbound} voice=${hasRunVoice} outcome=${hasOutcome}`,
+    });
+  }
+  if (!hasDiag) {
+    report.errors.push({ issue: "Deployment diagnostics not at top of builder" });
+  }
 
   if (hasSearch) {
-    const search = page
-      .locator(
-        'input[placeholder*="Search"], input[placeholder*="search"], input[placeholder*="block"]',
-      )
-      .first();
+    const search = page.locator("#block-search, input[placeholder*='Search']").first();
     await search.fill("inbound");
     await page.waitForTimeout(500);
     await shot(page, "flow-builder-search-inbound");
@@ -319,15 +362,6 @@ async function openAutomationsAndBuilder(page) {
     await shot(page, "flow-builder-search-voice");
   }
 
-  // Diagnostics panel
-  if (/Deployment diagnostics|Failure layer|flowGeneration/i.test(builderText)) {
-    log("diagnostics-visible", { message: "ok" });
-  } else {
-    // maybe on flow detail not edit — still note
-    log("diagnostics-visible", { message: "not on this view" });
-  }
-
-  // Nav order: Automations near My Agents
   await page.goto(`${BASE}/systems`, { waitUntil: "domcontentloaded" });
   await page.waitForTimeout(1000);
   await shot(page, "my-agents");
@@ -403,7 +437,19 @@ async function main() {
     });
     report.booking = booking;
 
-    await openAutomationsAndBuilder(page);
+    // Prefer flow from API-created agent if wizard UI didn't navigate.
+    let flowId = null;
+    const flowsRes = await page.request.get(`${BASE}/api/automations`);
+    const flowsJson = await flowsRes.json().catch(() => ({}));
+    const flows = flowsJson?.data || [];
+    if (answering.agentId) {
+      flowId =
+        flows.find((f) => f.ownerAgentId === answering.agentId)?.id || null;
+    }
+    if (!flowId && flows[0]?.id) flowId = flows[0].id;
+    report.flowId = flowId;
+
+    await openAutomationsAndBuilder(page, flowId);
 
     report.ok = report.errors.length === 0;
   } catch (err) {

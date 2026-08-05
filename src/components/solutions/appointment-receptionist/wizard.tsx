@@ -77,7 +77,7 @@ export function AppointmentReceptionistWizard() {
         }
 
         const raw = localStorage.getItem(STORAGE_KEY);
-        // Fresh Solutions-view presets win over a stale local draft.
+        // Fresh Solutions-view presets always win over a stale local draft.
         if (preset) {
           setState(
             applyWizardPreset(
@@ -91,11 +91,27 @@ export function AppointmentReceptionistWizard() {
             stepIndex?: number;
             state?: AppointmentReceptionistWizardState;
           };
-          if (parsed.state)
+          const draftPreset = parsed.state?.preset || null;
+          // Booking setup URL has no ?preset= — never restore an answering /
+          // overflow / after-hours draft into the Book Appointments wizard.
+          const answeringDraft =
+            draftPreset === "every_call" ||
+            draftPreset === "nobody_answers" ||
+            draftPreset === "after_hours" ||
+            draftPreset === "lead_capture" ||
+            draftPreset === "service_intake";
+          if (answeringDraft || !parsed.state) {
+            setState(createDefaultWizardState());
+            setStepIndex(0);
+          } else {
             setState({ ...createDefaultWizardState(), ...parsed.state });
-          if (typeof parsed.stepIndex === "number") {
-            setStepIndex(Math.min(Math.max(parsed.stepIndex, 0), 7));
+            if (typeof parsed.stepIndex === "number") {
+              setStepIndex(Math.min(Math.max(parsed.stepIndex, 0), 7));
+            }
           }
+        } else {
+          setState(createDefaultWizardState());
+          setStepIndex(0);
         }
       } catch {
         // ignore corrupt draft
@@ -206,11 +222,16 @@ export function AppointmentReceptionistWizard() {
   async function onContinue() {
     if (stepIndex < steps.length - 1) {
       if (stepIndex === 0 && !state.agentId) {
-        await persist("create_draft");
+        const created = await persist("create_draft");
+        if (!created?.agentId) {
+          // Stay on Goals so the user can fix errors — do not skip ahead.
+          return;
+        }
       }
       // Entering Test: save latest voice + config so live talk-back can build.
       if (steps[stepIndex + 1]?.id === "test") {
-        await persist("save_draft");
+        const saved = await persist("save_draft");
+        if (!saved?.agentId) return;
       }
       setStepIndex((i) => i + 1);
       return;
