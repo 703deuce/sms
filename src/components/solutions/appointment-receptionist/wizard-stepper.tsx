@@ -1,14 +1,20 @@
 "use client";
 
-import { WIZARD_STEPS } from "@/lib/solutions/appointment-receptionist/types";
 import { cn } from "@/lib/utils";
 import { Check } from "lucide-react";
+import type { WIZARD_STEPS } from "@/lib/solutions/appointment-receptionist/types";
 
-export function WizardStepper({ currentIndex }: { currentIndex: number }) {
+export function WizardStepper({
+  steps,
+  currentIndex,
+}: {
+  steps: Array<(typeof WIZARD_STEPS)[number]>;
+  currentIndex: number;
+}) {
   return (
     <nav aria-label="Setup progress" className="w-full overflow-x-auto pb-1">
       <ol className="flex min-w-max items-center gap-0">
-        {WIZARD_STEPS.map((step, index) => {
+        {steps.map((step, index) => {
           const done = index < currentIndex;
           const active = index === currentIndex;
           return (
@@ -22,7 +28,11 @@ export function WizardStepper({ currentIndex }: { currentIndex: number }) {
                     !done && !active && "bg-muted text-muted-foreground",
                   )}
                 >
-                  {done ? <Check className="h-3.5 w-3.5" strokeWidth={3} /> : index + 1}
+                  {done ? (
+                    <Check className="h-3.5 w-3.5" strokeWidth={3} />
+                  ) : (
+                    index + 1
+                  )}
                 </span>
                 <span
                   className={cn(
@@ -33,7 +43,7 @@ export function WizardStepper({ currentIndex }: { currentIndex: number }) {
                   {step.label}
                 </span>
               </div>
-              {index < WIZARD_STEPS.length - 1 ? (
+              {index < steps.length - 1 ? (
                 <div
                   className={cn(
                     "mb-5 h-px w-6 sm:w-10",

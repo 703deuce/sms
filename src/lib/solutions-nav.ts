@@ -222,6 +222,16 @@ export function buildSolutionsNav(options: SolutionsNavOptions = {}): NavItem[] 
       icon: Bot,
     },
     {
+      label: "Automations",
+      href: "/automations",
+      icon: Workflow,
+      children: [
+        { label: "Flows", href: "/automations" },
+        { label: "Templates", href: "/automations/templates" },
+        { label: "Logs", href: "/automations/logs" },
+      ],
+    },
+    {
       label: "My Numbers",
       href: "/my-numbers",
       icon: Phone,
@@ -264,17 +274,6 @@ export function buildSolutionsNav(options: SolutionsNavOptions = {}): NavItem[] 
         { label: "Text-to-Pay", href: "/messaging/payments" },
       ],
     ),
-    {
-      label: "Automations",
-      href: "/automations",
-      icon: Workflow,
-      sectionLabel: "Manage",
-      children: [
-        { label: "Flows", href: "/automations" },
-        { label: "Templates", href: "/automations/templates" },
-        { label: "Logs", href: "/automations/logs" },
-      ],
-    },
     {
       label: "Inbox",
       href: "/inbox",

@@ -73,7 +73,15 @@ function AgentCard({ system }: { system: SystemResource }) {
               {system.name}
             </h2>
             <p className="mt-0.5 text-[12px] font-medium text-[#6B7280]">
-              {system.agentType}
+              {[system.createdFrom && system.createdFrom !== system.name
+                ? system.createdFrom
+                : null,
+                system.agentType && system.agentType !== system.name
+                  ? system.agentType
+                  : null]
+                .filter(Boolean)
+                .filter((v, i, a) => a.indexOf(v) === i)
+                .join(" · ") || "Agent"}
             </p>
           </div>
         </div>

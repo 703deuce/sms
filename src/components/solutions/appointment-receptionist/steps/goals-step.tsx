@@ -2,8 +2,11 @@
 
 import {
   ANSWER_WHEN_OPTIONS,
-  CAPABILITY_OPTIONS,
 } from "@/lib/solutions/appointment-receptionist/defaults";
+import {
+  capabilityOptionsForPreset,
+  goalsSidePanelCopy,
+} from "@/lib/solutions/appointment-receptionist/wizard-presets";
 import type {
   AnswerWhen,
   AppointmentReceptionistWizardState,
@@ -41,12 +44,18 @@ export function GoalsStep({
   state: AppointmentReceptionistWizardState;
   patch: (p: Partial<AppointmentReceptionistWizardState>) => void;
 }) {
+  const options = capabilityOptionsForPreset(state.preset);
+  const panel = goalsSidePanelCopy(state.preset);
+
   function toggleCap(id: CapabilityId) {
     const has = state.capabilities.includes(id);
+    const next = has
+      ? state.capabilities.filter((c) => c !== id)
+      : [...state.capabilities, id];
+    // Keep only options allowed for this agent type.
+    const allowed = new Set(options.map((o) => o.id));
     patch({
-      capabilities: has
-        ? state.capabilities.filter((c) => c !== id)
-        : [...state.capabilities, id],
+      capabilities: next.filter((c) => allowed.has(c)),
     });
   }
 
@@ -54,12 +63,28 @@ export function GoalsStep({
     <div className="flex gap-6">
       <div className="min-w-0 flex-1 space-y-8">
         <div>
+          <Label htmlFor="solution-name">Agent name</Label>
+          <Input
+            id="solution-name"
+            className="mt-1.5 max-w-lg"
+            value={state.solutionName}
+            onChange={(e) => patch({ solutionName: e.target.value })}
+            placeholder="e.g. Front Desk — Main Office"
+          />
+          <p className="mt-1.5 text-xs text-muted-foreground">
+            This name shows in My Agents and Automations so you can tell agents apart.
+          </p>
+        </div>
+
+        <div>
           <h2 className="font-display text-xl font-semibold tracking-tight text-foreground">
-            What should your receptionist do?
+            What should this agent do?
           </h2>
-          <p className="mt-1 text-sm text-muted-foreground">Select all that apply.</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Options match this agent type — select all that apply.
+          </p>
           <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {CAPABILITY_OPTIONS.map((opt) => {
+            {options.map((opt) => {
               const Icon = ICONS[opt.icon as keyof typeof ICONS];
               return (
                 <SelectableCard
@@ -77,7 +102,7 @@ export function GoalsStep({
 
         <div>
           <h3 className="text-sm font-semibold text-foreground">
-            When should this receptionist answer?
+            When should this agent answer?
           </h3>
           <div className="mt-3 grid gap-2">
             {ANSWER_WHEN_OPTIONS.map((opt) => (
@@ -104,17 +129,6 @@ export function GoalsStep({
             ))}
           </div>
         </div>
-
-        <div>
-          <Label htmlFor="solution-name">Solution name</Label>
-          <Input
-            id="solution-name"
-            className="mt-1.5 max-w-lg"
-            value={state.solutionName}
-            onChange={(e) => patch({ solutionName: e.target.value })}
-            placeholder="Main Office Appointment Receptionist"
-          />
-        </div>
       </div>
 
       <SidePanel title="Recommended setup">
@@ -125,8 +139,7 @@ export function GoalsStep({
               Outcome
             </div>
             <p className="text-xs leading-relaxed text-muted-foreground">
-              Your AI receptionist will answer calls, help callers, and book appointments
-              24/7—so you never miss an opportunity.
+              {panel.outcome}
             </p>
           </div>
           <div>
@@ -134,24 +147,14 @@ export function GoalsStep({
               Required products
             </p>
             <ul className="mt-2 space-y-2 text-xs">
-              <li className="flex gap-2">
-                <span className="mt-0.5 h-2 w-2 rounded-full bg-success" />
-                <span>
-                  <strong>Phone</strong> — Receive and manage calls
-                </span>
-              </li>
-              <li className="flex gap-2">
-                <span className="mt-0.5 h-2 w-2 rounded-full bg-purple" />
-                <span>
-                  <strong>AI Voice</strong> — Power conversations with AI
-                </span>
-              </li>
-              <li className="flex gap-2">
-                <span className="mt-0.5 h-2 w-2 rounded-full bg-accent" />
-                <span>
-                  <strong>Calendar</strong> — Book and manage appointments
-                </span>
-              </li>
+              {panel.required.map((r) => (
+                <li key={r.label} className="flex gap-2">
+                  <span className={`mt-0.5 h-2 w-2 rounded-full ${r.tone}`} />
+                  <span>
+                    <strong>{r.label}</strong> — {r.detail}
+                  </span>
+                </li>
+              ))}
             </ul>
           </div>
           <div>
@@ -159,18 +162,16 @@ export function GoalsStep({
               Optional products
             </p>
             <ul className="mt-2 space-y-2 text-xs">
-              <li className="flex gap-2">
-                <span className="mt-0.5 h-2 w-2 rounded-full bg-success" />
-                SMS — Send texts and reminders
-              </li>
-              <li className="flex gap-2">
-                <span className="mt-0.5 h-2 w-2 rounded-full bg-orange" />
-                CRM — Sync with your CRM
-              </li>
+              {panel.optional.map((o) => (
+                <li key={o} className="flex gap-2">
+                  <span className="mt-0.5 h-2 w-2 rounded-full bg-muted-foreground/40" />
+                  {o}
+                </li>
+              ))}
             </ul>
           </div>
           <InfoCallout>
-            After you continue, we&apos;ll automatically generate your visual workflow.
+            After you continue, we&apos;ll generate your visual workflow for this agent.
           </InfoCallout>
         </div>
       </SidePanel>
