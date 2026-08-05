@@ -88,6 +88,7 @@ export type UpsertAppointmentReceptionistSetupResult = {
   agentId: string;
   outcomeSlug: string;
   created: boolean;
+  primaryFlowId?: string | null;
 };
 
 function isUniqueViolation(err: unknown): boolean {
@@ -256,21 +257,61 @@ export async function upsertAppointmentReceptionistSetup(
     },
   });
 
+  // Every wizard leaves a runnable primary workflow (Trigger → Use Agent → End).
+  // Customers open Edit Workflow to add nodes around the agent. Overall
+  // automations compose this agent via the Use Agent block.
+  let primaryFlowId: string | null = null;
+  try {
+    const { ensureAgentPrimaryWorkflow, triggerBlockFromAnswerWhen } =
+      await import("@/lib/agents/compile-workflow");
+    const agentRow = await prisma.voiceAgent.findFirst({
+      where: { id: input.agentId },
+      select: { primaryFlowId: true, linkedAutomationIds: true },
+    });
+    const setupRow = await prisma.solutionSetup.findFirst({
+      where: { id: setupId },
+      select: { primaryFlowId: true, linkedAutomationIds: true },
+    });
+    const existingFlowId =
+      setupRow?.primaryFlowId ||
+      agentRow?.primaryFlowId ||
+      setupRow?.linkedAutomationIds?.[0] ||
+      agentRow?.linkedAutomationIds?.[0] ||
+      null;
+    const compiled = await ensureAgentPrimaryWorkflow({
+      workspaceId: input.workspaceId,
+      agentName: name,
+      outcomeSlug,
+      existingFlowId,
+      agentId: input.agentId,
+      setupId,
+      triggerBlock: triggerBlockFromAnswerWhen(input.state.answerWhen),
+      purpose: name,
+      activate: false,
+      description: `Generated from ${name}`,
+    });
+    primaryFlowId = compiled.flowId;
+  } catch {
+    primaryFlowId = null;
+  }
+
   await emitPlatformEvent({
     workspaceId: input.workspaceId,
     type: created ? "SOLUTION_SETUP_CREATED" : "SOLUTION_SETUP_UPDATED",
     solutionSetupId: setupId!,
     agentId: input.agentId,
+    automationId: primaryFlowId || undefined,
     payload: {
       solutionType: SOLUTION_TYPE_CANONICAL,
       outcomeSlug,
       name,
       published: input.published,
+      primaryFlowId,
     },
     idempotencyKey: `ar-setup:${setupId}:${status}:${Date.now()}`,
   }).catch(() => undefined);
 
-  return { setupId: setupId!, agentId: input.agentId, outcomeSlug, created };
+  return { setupId: setupId!, agentId: input.agentId, outcomeSlug, created, primaryFlowId };
 }
 
 export async function loadAppointmentReceptionistSetup(

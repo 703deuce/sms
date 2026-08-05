@@ -124,6 +124,16 @@ export function nodeSummary(node: AutomationCanvasNode): string {
 
   if (block === "end_automation") return "End automation";
 
+  if (block === "use_ai_agent") {
+    const name = String(cfg.agentName || "").trim();
+    return name ? `Use ${name}` : "Use Agent";
+  }
+
+  if (block === "start_ai_call") {
+    const name = String(cfg.agentName || cfg.purpose || "").trim();
+    return name ? `AI call · ${name}` : "Start AI call";
+  }
+
   return node.data.label || block;
 }
 

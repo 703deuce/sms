@@ -594,10 +594,158 @@ export async function runNodeAction(
   }
 
   if (block === "use_ai_agent") {
-    // Placeholder for future non-call agent actions.
+    const agentId = String(cfg.agentId || "").trim();
+    const setupId = String(cfg.setupId || "").trim();
+    const mode = String(cfg.mode || "auto").trim();
+    if (!agentId && !setupId) {
+      return {
+        error: "use_agent_missing_agent",
+        nextNodeId: getNextNodeId(def, node.id),
+      };
+    }
+
+    const prisma = getPrisma();
+    let resolvedAgentId = agentId || null;
+    let primaryFlowId: string | null = null;
+    let family = "other";
+    let executionType = "workflow_agent";
+
+    if (setupId) {
+      const setup = await prisma.solutionSetup.findFirst({
+        where: { id: setupId, workspaceId: ctx.workspaceId },
+        select: {
+          primaryFlowId: true,
+          linkedAutomationIds: true,
+          linkedAgentIds: true,
+          solutionType: true,
+          configJson: true,
+        },
+      });
+      if (setup) {
+        primaryFlowId =
+          setup.primaryFlowId || setup.linkedAutomationIds?.[0] || null;
+        resolvedAgentId = resolvedAgentId || setup.linkedAgentIds?.[0] || null;
+        const cfgJson = setup.configJson as { agentType?: string } | null;
+        if (cfgJson?.agentType) {
+          const { getAgentType } = await import("@/lib/agents/types");
+          family = getAgentType(cfgJson.agentType).family;
+        } else if (setup.solutionType === "missed-call-text-back") {
+          family = "sms";
+        } else if (setup.solutionType === "appointment-receptionist") {
+          family = "receptionist";
+        }
+      }
+    }
+
+    if (resolvedAgentId) {
+      const agent = await prisma.voiceAgent.findFirst({
+        where: { id: resolvedAgentId, workspaceId: ctx.workspaceId },
+        select: {
+          primaryFlowId: true,
+          linkedAutomationIds: true,
+          postCallAutomationId: true,
+          fallbackAutomationId: true,
+          agentType: true,
+          executionType: true,
+        },
+      });
+      if (agent) {
+        primaryFlowId =
+          primaryFlowId ||
+          agent.primaryFlowId ||
+          agent.postCallAutomationId ||
+          agent.fallbackAutomationId ||
+          agent.linkedAutomationIds?.[0] ||
+          null;
+        const { getAgentType } = await import("@/lib/agents/types");
+        family = getAgentType(agent.agentType).family;
+        executionType = agent.executionType || executionType;
+      }
+    }
+
+    // Prefer composing through the agent's primary workflow so custom nodes
+    // the customer added after the wizard still run. Only invoke voice/runtime
+    // directly when we are already on that primary flow (or none exists).
+    if (
+      primaryFlowId &&
+      primaryFlowId !== ctx.flowId &&
+      !ctx.testMode
+    ) {
+      await enrollInAutomation({
+        workspaceId: ctx.workspaceId,
+        flowId: primaryFlowId,
+        contactId: ctx.contactId,
+        variables: {
+          usedAgentId: resolvedAgentId,
+          usedAgentSetupId: setupId || null,
+          purpose: String(cfg.purpose || ""),
+        },
+      });
+      await mergeExecutionMetadata(ctx.executionId, {
+        usedAgentId: resolvedAgentId,
+        usedAgentSetupId: setupId || null,
+        enrolledAgentFlowId: primaryFlowId,
+      });
+      return {
+        nextNodeId: getNextNodeId(def, node.id),
+        output: {
+          mode: "enroll_primary_flow",
+          agentId: resolvedAgentId,
+          setupId: setupId || null,
+          flowId: primaryFlowId,
+        },
+      };
+    }
+
+    const wantVoice =
+      mode === "voice_call" ||
+      (mode === "auto" &&
+        (family === "receptionist" || executionType === "realtime_voice"));
+
+    // On the agent's own primary flow (or when no primary exists): run voice.
+    if (wantVoice && resolvedAgentId && !ctx.testMode) {
+      const { enqueueJob } = await import("@/lib/messaging/enqueue-advance");
+      await enqueueJob({
+        jobType: "voice_outbound_ai_call",
+        queueName: "voice-outbound",
+        workspaceId: ctx.workspaceId,
+        payload: {
+          workspaceId: ctx.workspaceId,
+          agentId: resolvedAgentId,
+          contactId: ctx.contactId,
+          purpose: String(cfg.purpose || cfg.agentName || ""),
+          callerId: String(cfg.callerId || ""),
+          timeoutSeconds: Number(cfg.timeoutSeconds || 60),
+          retryCount: Number(cfg.retryCount || 0),
+          context: "{}",
+          automationExecutionId: ctx.executionId,
+          automationFlowId: ctx.flowId,
+        },
+        idempotencyKey: `use-agent-call:${ctx.executionId}:${node.id}`,
+      });
+      await mergeExecutionMetadata(ctx.executionId, {
+        pendingAiCallAgentId: resolvedAgentId,
+        usedAgentId: resolvedAgentId,
+        usedAgentSetupId: setupId || null,
+      });
+      return {
+        nextNodeId: getNextNodeId(def, node.id),
+        output: {
+          mode: "voice_call",
+          agentId: resolvedAgentId,
+          setupId: setupId || null,
+        },
+      };
+    }
+
     return {
       nextNodeId: getNextNodeId(def, node.id),
-      output: { stub: true, agentId: String(cfg.agentId || "") },
+      output: {
+        mode: "noop",
+        agentId: resolvedAgentId,
+        setupId: setupId || null,
+        primaryFlowId,
+      },
     };
   }
 

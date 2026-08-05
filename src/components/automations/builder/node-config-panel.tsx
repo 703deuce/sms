@@ -17,6 +17,16 @@ type TagOption = { id: string; name: string };
 type NumberOption = { id: string; number: string };
 type FlowOption = { id: string; name: string };
 type ContactOption = { id: string; firstName?: string | null; lastName?: string | null; phone: string };
+type AgentOption = {
+  id: string;
+  kind: "voice" | "setup";
+  name: string;
+  agentTypeLabel: string;
+  channel: string;
+  agentId: string | null;
+  setupId: string | null;
+  primaryFlowId: string | null;
+};
 
 type IntegrationMetadata = {
   provider: string;
@@ -51,6 +61,7 @@ export function NodeConfigPanel({
   const [tags, setTags] = useState<TagOption[]>([]);
   const [numbers, setNumbers] = useState<NumberOption[]>([]);
   const [flows, setFlows] = useState<FlowOption[]>([]);
+  const [agents, setAgents] = useState<AgentOption[]>([]);
   const [contacts, setContacts] = useState<ContactOption[]>([]);
   const [testContactId, setTestContactId] = useState("");
   const [testSending, setTestSending] = useState(false);
@@ -85,6 +96,10 @@ export function NodeConfigPanel({
       .then((j) =>
         setFlows((j?.data || []).map((f: { id: string; name: string }) => ({ id: f.id, name: f.name }))),
       )
+      .catch(() => undefined);
+    fetch("/api/agents")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => setAgents((j?.data || []) as AgentOption[]))
       .catch(() => undefined);
     fetch("/api/contacts?status=subscribed")
       .then((r) => (r.ok ? r.json() : null))
@@ -840,12 +855,22 @@ export function NodeConfigPanel({
           </>
         )}
 
-        {(block === "enroll_in_automation" || block === "remove_from_automation") && (
+        {(block === "enroll_in_automation" ||
+          block === "remove_from_automation" ||
+          block === "start_automation") && (
           <div>
             <Label>Automation</Label>
             <Select
-              value={String(cfg.flowId || "")}
-              onChange={(e) => onUpdate({ config: { ...cfg, flowId: e.target.value } })}
+              value={String(cfg.flowId || cfg.automationId || "")}
+              onChange={(e) =>
+                onUpdate({
+                  config: {
+                    ...cfg,
+                    flowId: e.target.value,
+                    automationId: e.target.value,
+                  },
+                })
+              }
             >
               <option value="">Select automation</option>
               {flows.filter((f) => f.id !== flowId).map((f) => (
@@ -853,6 +878,77 @@ export function NodeConfigPanel({
               ))}
             </Select>
           </div>
+        )}
+
+        {(block === "use_ai_agent" || block === "start_ai_call") && (
+          <>
+            <div>
+              <Label>Agent</Label>
+              <Select
+                value={
+                  cfg.setupId
+                    ? `setup:${cfg.setupId}`
+                    : cfg.agentId
+                      ? agents.find((a) => a.agentId === cfg.agentId)?.id ||
+                        `voice:${cfg.agentId}`
+                      : ""
+                }
+                onChange={(e) => {
+                  const selected = agents.find((a) => a.id === e.target.value);
+                  if (!selected) {
+                    onUpdate({
+                      config: {
+                        ...cfg,
+                        agentId: "",
+                        setupId: "",
+                        agentName: "",
+                      },
+                    });
+                    return;
+                  }
+                  onUpdate({
+                    label: selected.name,
+                    config: {
+                      ...cfg,
+                      agentId: selected.agentId || "",
+                      setupId: selected.setupId || "",
+                      agentName: selected.name,
+                      agentType: selected.agentTypeLabel,
+                      purpose: selected.agentTypeLabel,
+                    },
+                  });
+                }}
+              >
+                <option value="">Select agent</option>
+                {agents.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name} · {a.agentTypeLabel}
+                    {a.primaryFlowId ? "" : " (no workflow yet)"}
+                  </option>
+                ))}
+              </Select>
+              <p className="mt-1.5 text-[12px] text-muted-foreground">
+                {block === "use_ai_agent"
+                  ? "Runs this agent’s primary workflow (or starts a voice agent). Use this to connect agents on overall automations."
+                  : "Places an outbound AI voice call with the selected receptionist agent."}
+              </p>
+            </div>
+            {block === "use_ai_agent" ? (
+              <div>
+                <Label>Mode</Label>
+                <Select
+                  value={String(cfg.mode || "auto")}
+                  onChange={(e) =>
+                    onUpdate({ config: { ...cfg, mode: e.target.value } })
+                  }
+                >
+                  <option value="auto">Auto (workflow or voice)</option>
+                  <option value="workflow">Primary workflow only</option>
+                  <option value="voice_call">Voice call</option>
+                </Select>
+              </div>
+            ) : null}
+          </>
         )}
 
         {block === "send_webhook" && (

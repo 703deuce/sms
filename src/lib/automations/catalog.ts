@@ -390,10 +390,18 @@ export const AUTOMATION_BLOCKS: BlockDefinition[] = [
   block({
     blockType: "use_ai_agent",
     category: "action",
-    label: "Use AI agent",
-    description: "Invoke a non-call AI agent action (future)",
-    icon: "sparkles",
-    defaultConfig: { agentId: "", purpose: "" },
+    label: "Use Agent",
+    description:
+      "Run another agent as a step — enrolls its primary workflow or starts a voice agent. Compose agents on overall automations.",
+    icon: "bot",
+    defaultConfig: {
+      agentId: "",
+      setupId: "",
+      agentName: "",
+      agentType: "",
+      purpose: "",
+      mode: "auto",
+    },
   }),
   block({
     blockType: "send_webhook",
