@@ -6,12 +6,15 @@ import {
   createDefaultWizardState,
 } from "@/lib/solutions/appointment-receptionist/defaults";
 import {
-  WIZARD_STEPS,
+  visibleWizardSteps,
+  wizardHeadline,
+} from "@/lib/solutions/appointment-receptionist/wizard-presets";
+import {
   type AppointmentReceptionistWizardState,
 } from "@/lib/solutions/appointment-receptionist/types";
 import { toErrorMessage } from "@/lib/errors";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { WizardStepper } from "./wizard-stepper";
 import { GoalsStep } from "./steps/goals-step";
 import { PhoneStep } from "./steps/phone-step";
@@ -91,9 +94,7 @@ export function AppointmentReceptionistWizard() {
           if (parsed.state)
             setState({ ...createDefaultWizardState(), ...parsed.state });
           if (typeof parsed.stepIndex === "number") {
-            setStepIndex(
-              Math.min(Math.max(parsed.stepIndex, 0), WIZARD_STEPS.length - 1),
-            );
+            setStepIndex(Math.min(Math.max(parsed.stepIndex, 0), 7));
           }
         }
       } catch {
@@ -119,6 +120,16 @@ export function AppointmentReceptionistWizard() {
   const patch = useCallback((p: Partial<AppointmentReceptionistWizardState>) => {
     setState((prev) => ({ ...prev, ...p }));
   }, []);
+
+  const steps = useMemo(() => visibleWizardSteps(state), [state]);
+  const headline = useMemo(
+    () => wizardHeadline(state.preset || preset),
+    [state.preset, preset],
+  );
+
+  useEffect(() => {
+    setStepIndex((i) => Math.min(i, Math.max(0, steps.length - 1)));
+  }, [steps.length]);
 
   async function persist(action: "save_draft" | "activate" | "create_draft") {
     setBusy(true);
@@ -193,12 +204,12 @@ export function AppointmentReceptionistWizard() {
   }
 
   async function onContinue() {
-    if (stepIndex < WIZARD_STEPS.length - 1) {
+    if (stepIndex < steps.length - 1) {
       if (stepIndex === 0 && !state.agentId) {
         await persist("create_draft");
       }
       // Entering Test: save latest voice + config so live talk-back can build.
-      if (WIZARD_STEPS[stepIndex + 1]?.id === "test") {
+      if (steps[stepIndex + 1]?.id === "test") {
         await persist("save_draft");
       }
       setStepIndex((i) => i + 1);
@@ -230,48 +241,46 @@ export function AppointmentReceptionistWizard() {
     await persist("save_draft");
   }
 
-  const step = WIZARD_STEPS[stepIndex];
+  const step = steps[stepIndex];
 
   return (
     <div className="flex min-h-[calc(100vh-7rem)] flex-col">
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground">
-            Create AI Receptionist
+            {headline.title}
           </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Answer Calls and Book Appointments — guided setup
-          </p>
+          <p className="mt-1 text-sm text-muted-foreground">{headline.subtitle}</p>
         </div>
       </div>
 
       <div className="mb-6 rounded-xl border border-border bg-card px-3 py-4 sm:px-5">
-        <WizardStepper currentIndex={stepIndex} />
+        <WizardStepper steps={steps} currentIndex={stepIndex} />
       </div>
 
       <div className="flex-1">
-        {step.id === "goals" ? <GoalsStep state={state} patch={patch} /> : null}
-        {step.id === "phone" ? <PhoneStep state={state} patch={patch} /> : null}
-        {step.id === "information" ? (
+        {step?.id === "goals" ? <GoalsStep state={state} patch={patch} /> : null}
+        {step?.id === "phone" ? <PhoneStep state={state} patch={patch} /> : null}
+        {step?.id === "information" ? (
           <InformationStep state={state} patch={patch} />
         ) : null}
-        {step.id === "appointments" ? (
+        {step?.id === "appointments" ? (
           <AppointmentsStep state={state} patch={patch} />
         ) : null}
-        {step.id === "call-handling" ? (
+        {step?.id === "call-handling" ? (
           <CallHandlingStep state={state} patch={patch} />
         ) : null}
-        {step.id === "voice" ? <VoiceStep state={state} patch={patch} /> : null}
-        {step.id === "test" ? (
+        {step?.id === "voice" ? <VoiceStep state={state} patch={patch} /> : null}
+        {step?.id === "test" ? (
           <TestStep state={state} patch={patch} onEnsureAgent={ensureAgentForTest} />
         ) : null}
-        {step.id === "activate" ? (
+        {step?.id === "activate" ? (
           <ActivateStep
             state={state}
             patch={patch}
             onActivate={() => void persist("activate")}
             onGoToTest={() => {
-              const testIdx = WIZARD_STEPS.findIndex((s) => s.id === "test");
+              const testIdx = steps.findIndex((s) => s.id === "test");
               if (testIdx >= 0) setStepIndex(testIdx);
             }}
           />
@@ -298,7 +307,7 @@ export function AppointmentReceptionistWizard() {
               <Button disabled={busy} onClick={() => void onContinue()}>
                 {busy
                   ? "Working…"
-                  : stepIndex === WIZARD_STEPS.length - 1
+                  : stepIndex === steps.length - 1
                     ? state.activationMode === "save_draft"
                       ? "Save draft"
                       : state.activationMode === "schedule"

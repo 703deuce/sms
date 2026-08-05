@@ -25,12 +25,13 @@ export function BlockSidebar({
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return AUTOMATION_BLOCKS.filter(
-      (b) =>
-        !q ||
-        b.label.toLowerCase().includes(q) ||
-        b.description.toLowerCase().includes(q),
-    );
+    return AUTOMATION_BLOCKS.filter((b) => {
+      if (!q) return true;
+      if (b.label.toLowerCase().includes(q)) return true;
+      if (b.description.toLowerCase().includes(q)) return true;
+      if (b.blockType.toLowerCase().includes(q)) return true;
+      return (b.searchTerms || []).some((t) => t.toLowerCase().includes(q));
+    });
   }, [search]);
 
   return (

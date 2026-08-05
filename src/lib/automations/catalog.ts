@@ -11,6 +11,8 @@ export type BlockDefinition = {
   icon: string;
   enabled: boolean;
   defaultConfig: Record<string, unknown>;
+  /** Extra terms for sidebar search (e.g. Call Outcome). */
+  searchTerms?: string[];
   /** When set, also listed under Integrations sidebar group. */
   integrationGroup?: "crm" | "calendly" | "other";
 };
@@ -130,6 +132,14 @@ export const AUTOMATION_BLOCKS: BlockDefinition[] = [
     description:
       "When a call arrives on a selected number. Activating the workflow publishes Telnyx routing for this trigger (direct audio path — automation is not in the media plane).",
     icon: "phone",
+    searchTerms: [
+      "phone",
+      "incoming call",
+      "did",
+      "number",
+      "telnyx",
+      "voice trigger",
+    ],
     defaultConfig: {
       phoneNumberId: "",
       /** every_call | overflow | after_hours | unanswered */
@@ -405,6 +415,14 @@ export const AUTOMATION_BLOCKS: BlockDefinition[] = [
     description:
       "Start or attach the real-time Telnyx voice agent for this contact/call. Use inside a voice agent’s primary workflow — not Use Agent targeting itself.",
     icon: "phone",
+    searchTerms: [
+      "maya",
+      "ai agent",
+      "telnyx assistant",
+      "attach inbound",
+      "voice agent",
+      "receptionist",
+    ],
     defaultConfig: {
       agentId: "",
       agentName: "",
@@ -421,9 +439,18 @@ export const AUTOMATION_BLOCKS: BlockDefinition[] = [
   block({
     blockType: "wait_for_call_result",
     category: "logic",
-    label: "Wait for call result",
-    description: "Pause until the AI/human call completes, then branch on outcome",
+    label: "Call Outcome",
+    description:
+      "Pause until the AI/human call completes, then branch on outcome (booked, completed, failed, …)",
     icon: "clock",
+    searchTerms: [
+      "wait for call result",
+      "call result",
+      "outcome",
+      "branch",
+      "booked",
+      "hangup",
+    ],
     defaultConfig: {
       timeoutMinutes: 30,
       branchField: "outcome",

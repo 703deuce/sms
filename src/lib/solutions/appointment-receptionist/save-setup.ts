@@ -302,6 +302,8 @@ export async function upsertAppointmentReceptionistSetup(
       triggerBlock: triggerBlockFromAnswerWhen(input.state.answerWhen),
       routingMode: routingModeFromAnswerWhen(input.state.answerWhen),
       phoneNumberId,
+      phoneNumberE164: input.state.phoneNumberE164 || null,
+      ringSeconds: input.state.ringTeamSeconds || 20,
       telnyxAssistantId: agentRow?.telnyxAssistantId || null,
       purpose: name,
       activate: false,

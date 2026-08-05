@@ -61,8 +61,8 @@ export type AgentTypeDef = {
 const DEFS: AgentTypeDef[] = [
   {
     id: "answer_every_call",
-    label: "AI Answering Agent",
-    shortLabel: "AI Answering",
+    label: "Answering",
+    shortLabel: "Answering",
     outcomeSlug: "answer-every-call",
     channel: "voice",
     family: "receptionist",
@@ -70,7 +70,7 @@ const DEFS: AgentTypeDef[] = [
   },
   {
     id: "missed_overflow",
-    label: "Cover Missed Calls Agent",
+    label: "Missed / Overflow",
     shortLabel: "Missed / Overflow",
     outcomeSlug: "missed-overflow",
     channel: "voice",

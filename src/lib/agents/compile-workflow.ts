@@ -65,7 +65,9 @@ export function buildVoiceAgentPrimaryDefinition(input: {
   agentName: string;
   purpose?: string | null;
   phoneNumberId?: string | null;
+  phoneNumberE164?: string | null;
   routingMode?: string | null;
+  ringSeconds?: number | null;
   telnyxAssistantId?: string | null;
 }): AutomationDefinition {
   const triggerId = VOICE_NODE_IDS.TRIGGER;
@@ -82,15 +84,19 @@ export function buildVoiceAgentPrimaryDefinition(input: {
     triggerBlock === "inbound_call"
       ? {
           phoneNumberId: input.phoneNumberId || "",
+          phoneNumberE164: input.phoneNumberE164 || "",
           routingMode: input.routingMode || "every_call",
           schedule: "always",
-          ringSeconds: 20,
+          ringSeconds: Math.max(1, Number(input.ringSeconds || 20)),
           mode: "live",
           pauseFallback: "human",
           pauseFallbackNumber: "",
           pauseFallbackFlowId: "",
         }
-      : { phoneNumberId: input.phoneNumberId || "" };
+      : {
+          phoneNumberId: input.phoneNumberId || "",
+          phoneNumberE164: input.phoneNumberE164 || "",
+        };
 
   const def: AutomationDefinition = {
     version: 1,
@@ -246,7 +252,9 @@ export type EnsurePrimaryWorkflowInput = {
   triggerLabel?: string;
   purpose?: string | null;
   phoneNumberId?: string | null;
+  phoneNumberE164?: string | null;
   routingMode?: string | null;
+  ringSeconds?: number | null;
   telnyxAssistantId?: string | null;
   activate?: boolean;
   description?: string;
@@ -288,7 +296,9 @@ export async function ensureAgentPrimaryWorkflow(
           agentName: input.agentName,
           purpose: input.purpose || typeDef.label,
           phoneNumberId: input.phoneNumberId,
+          phoneNumberE164: input.phoneNumberE164,
           routingMode: input.routingMode,
+          ringSeconds: input.ringSeconds,
           telnyxAssistantId,
         })
       : stampManagedDefinition(

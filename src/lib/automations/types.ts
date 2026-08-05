@@ -141,6 +141,18 @@ export function nodeSummary(node: AutomationCanvasNode): string {
     return name ? `Run Voice Agent: ${name}` : "Run Voice Agent";
   }
 
+  if (block === "inbound_call") {
+    const e164 = String(cfg.phoneNumberE164 || cfg.e164 || "").trim();
+    const mode = String(cfg.routingMode || "every_call").replace(/_/g, " ");
+    if (e164) return `${e164} · ${mode}`;
+    const id = String(cfg.phoneNumberId || "").trim();
+    return id ? `Number selected · ${mode}` : `Select number · ${mode}`;
+  }
+
+  if (block === "wait_for_call_result") {
+    return "Call Outcome";
+  }
+
   if (block === "start_ai_call") {
     const name = String(cfg.agentName || cfg.purpose || "").trim();
     return name ? `AI call · ${name}` : "Start AI call";

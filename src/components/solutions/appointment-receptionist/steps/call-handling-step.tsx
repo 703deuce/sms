@@ -4,6 +4,7 @@ import type {
   AppointmentReceptionistWizardState,
   FallbackAction,
 } from "@/lib/solutions/appointment-receptionist/types";
+import { hasBookingCapability } from "@/lib/solutions/appointment-receptionist/wizard-presets";
 import { Input, Label } from "@/components/ui/input";
 import {
   ArrowRight,
@@ -32,17 +33,20 @@ export function CallHandlingStep({
   patch: (p: Partial<AppointmentReceptionistWizardState>) => void;
 }) {
   const b = state.bookingBehavior;
+  const booking = hasBookingCapability(state.capabilities);
 
   return (
     <div className="flex gap-6">
       <div className="min-w-0 flex-1 space-y-8">
         <div>
           <h2 className="font-display text-xl font-semibold tracking-tight">
-            How should your receptionist handle calls?
+            How should your agent handle calls?
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Configure how your AI receptionist will manage incoming calls.
+            Configure transfers, messages
+            {booking ? ", and booking behavior" : ", and fallbacks"}.
           </p>
+          {booking ? (
           <div className="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card p-4">
             {FLOW_STEPS.map((step, i) => (
               <div key={step} className="flex items-center gap-2">
@@ -56,9 +60,11 @@ export function CallHandlingStep({
               </div>
             ))}
           </div>
+          ) : null}
         </div>
 
         <div className="grid gap-4 lg:grid-cols-3">
+          {booking ? (
           <div className="rounded-xl border border-border bg-card p-4">
             <h3 className="text-sm font-semibold">Booking behavior</h3>
             <div className="mt-3 space-y-3">
@@ -105,6 +111,7 @@ export function CallHandlingStep({
               ))}
             </div>
           </div>
+          ) : null}
 
           <div className="rounded-xl border border-border bg-card p-4">
             <h3 className="text-sm font-semibold">Human transfer</h3>

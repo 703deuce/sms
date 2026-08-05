@@ -839,19 +839,40 @@ export function NodeConfigPanel({
               <Label>Number</Label>
               <Select
                 value={String(cfg.phoneNumberId || "")}
-                onChange={(e) =>
+                onChange={(e) => {
+                  const id = e.target.value;
+                  const match = numbers.find((n) => n.id === id);
                   onUpdate({
-                    config: { ...cfg, phoneNumberId: e.target.value },
-                  })
-                }
+                    config: {
+                      ...cfg,
+                      phoneNumberId: id,
+                      phoneNumberE164: match?.number || "",
+                    },
+                  });
+                }}
               >
                 <option value="">Select phone number</option>
                 {numbers.map((n) => (
                   <option key={n.id} value={n.id}>
-                    {n.number}
+                    {n.number || n.id}
                   </option>
                 ))}
               </Select>
+              {(() => {
+                const selected =
+                  numbers.find((n) => n.id === cfg.phoneNumberId)?.number ||
+                  String(cfg.phoneNumberE164 || "");
+                return selected ? (
+                  <p className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12px] font-medium text-emerald-800">
+                    Connected number: {selected}
+                  </p>
+                ) : (
+                  <p className="mt-1.5 text-[12px] text-amber-700">
+                    Choose which DID this trigger owns. Activate publishes Telnyx
+                    routing for that number.
+                  </p>
+                );
+              })()}
               <p className="mt-1.5 text-[12px] text-muted-foreground">
                 Activating this workflow publishes Telnyx routing for this
                 number (direct audio path). My Numbers shows the same

@@ -257,51 +257,59 @@ export function applyWizardPreset(
     case "every_call":
       return {
         ...state,
+        preset: "every_call",
         answerWhen: "every_call",
         ringBehavior: "ai_immediate",
-        solutionName: "AI Answering Service",
+        solutionName: state.solutionName?.trim()
+          ? state.solutionName
+          : "AI Answering Service",
         capabilities: [
           "answer_questions",
           "take_messages",
           "transfer_calls",
           "qualify_callers",
-          // Booking optional — leave enabled so users can opt out in Goals.
-          "book_appointments",
         ],
       };
     case "nobody_answers":
       return {
         ...state,
+        preset: "nobody_answers",
         answerWhen: "nobody_answers",
         ringBehavior: "ring_team_first",
         ringTeamSeconds: state.ringTeamSeconds || 20,
-        solutionName: "Cover Missed Calls",
+        solutionName: state.solutionName?.trim()
+          ? state.solutionName
+          : "Cover Missed Calls",
         capabilities: [
           "answer_questions",
           "take_messages",
           "transfer_calls",
-          "book_appointments",
         ],
       };
     case "after_hours":
       return {
         ...state,
+        preset: "after_hours",
         answerWhen: "after_hours",
         ringBehavior: "after_hours",
-        solutionName: "Answer After Hours",
+        solutionName: state.solutionName?.trim()
+          ? state.solutionName
+          : "Answer After Hours",
         capabilities: [
           "answer_questions",
           "take_messages",
           "transfer_calls",
-          "book_appointments",
         ],
       };
     case "lead_capture":
       return {
         ...state,
+        preset: "lead_capture",
         answerWhen: "every_call",
         ringBehavior: "ai_immediate",
-        solutionName: "Capture New Inquiries",
+        solutionName: state.solutionName?.trim()
+          ? state.solutionName
+          : "Capture New Inquiries",
         capabilities: [
           "answer_questions",
           "qualify_callers",
@@ -312,9 +320,12 @@ export function applyWizardPreset(
     case "service_intake":
       return {
         ...state,
+        preset: "service_intake",
         answerWhen: "every_call",
         ringBehavior: "ai_immediate",
-        solutionName: "Handle New Service Calls",
+        solutionName: state.solutionName?.trim()
+          ? state.solutionName
+          : "Handle New Service Calls",
         capabilities: [
           "answer_questions",
           "qualify_callers",
