@@ -5,6 +5,7 @@ import {
   getWizardActivationIssues,
   hasBlockingActivationIssues,
 } from "@/lib/solutions/appointment-receptionist/capability-checklist";
+import { resolveLiveCalendar } from "@/lib/solutions/appointment-receptionist/live-calendar";
 import type {
   ActivationMode,
   AppointmentReceptionistWizardState,
@@ -40,26 +41,50 @@ export function ActivateStep({
   const transfers = state.capabilities.includes("transfer_calls");
 
   useEffect(() => {
-    fetch("/api/voice/calendars")
-      .then((r) => r.json())
-      .then((j) => {
-        const rows = (j.data || []) as Array<{ status?: string; provider?: string }>;
-        const connected = rows.some(
-          (r) =>
-            ["connected", "active", "ok"].includes(String(r.status || "")) &&
-            ["google", "microsoft", "internal"].includes(String(r.provider || "")),
-        );
-        setHasCalendar(connected);
-        if (connected && !state.calendarConnected) {
-          patch({ calendarConnected: true });
-        } else if (!connected && state.calendarConnected) {
-          patch({ calendarConnected: false });
+    void (async () => {
+      try {
+        const [calRes, intRes] = await Promise.all([
+          fetch("/api/voice/calendars"),
+          fetch("/api/integrations/connections"),
+        ]);
+        const calJson = await calRes.json().catch(() => ({ data: [] }));
+        const intJson = await intRes.json().catch(() => ({ data: {} }));
+        const live = resolveLiveCalendar({
+          voiceCalendars: (calJson.data || []) as Array<{
+            status?: string;
+            provider?: string;
+            name?: string;
+          }>,
+          integrationConnections: (intJson.data?.connections || []) as Array<{
+            provider?: string;
+            status?: string;
+            config?: Record<string, unknown> | null;
+          }>,
+        });
+        setHasCalendar(live.connected);
+        if (live.connected) {
+          if (
+            !state.calendarConnected ||
+            state.calendarProvider !== live.provider ||
+            state.calendarEmail !== live.name
+          ) {
+            patch({
+              calendarConnected: true,
+              calendarProvider: live.provider,
+              calendarEmail: live.name,
+            });
+          }
+        } else if (state.calendarConnected) {
+          // Do not clear a wizard-only flag mid-activate when APIs briefly fail —
+          // only clear when we successfully confirmed nothing is live.
+          patch({ calendarConnected: false, calendarEmail: null });
         }
-      })
-      .catch(() => undefined);
+      } catch {
+        // Keep existing state.calendarConnected if probes fail.
+      }
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
   const issues = getWizardActivationIssues(state, {
     hasCalendarConnection: hasCalendar,
   });

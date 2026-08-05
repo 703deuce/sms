@@ -5,6 +5,10 @@ import type {
   AppointmentTypeConfig,
   BookingPermission,
 } from "@/lib/solutions/appointment-receptionist/types";
+import {
+  isLiveCalendarStatus,
+  resolveLiveCalendar,
+} from "@/lib/solutions/appointment-receptionist/live-calendar";
 import { Input, Label } from "@/components/ui/input";
 import { CheckCircle2, MoreHorizontal, Plus, X } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -40,25 +44,42 @@ export function AppointmentsStep({
   }
 
   const [calendars, setCalendars] = useState<Array<{ id: string; name: string; provider: string; status: string }>>([]);
+  const [integrationProviders, setIntegrationProviders] = useState<
+    Array<{ provider: string; status: string; config?: Record<string, unknown> | null }>
+  >([]);
   const [busyProvider, setBusyProvider] = useState<string | null>(null);
 
   useEffect(() => {
     void (async () => {
       try {
-        const res = await fetch("/api/voice/calendars");
-        const json = await res.json();
-        const rows = (json.data || []) as Array<{ id: string; name: string; provider: string; status: string }>;
+        const [calRes, intRes] = await Promise.all([
+          fetch("/api/voice/calendars"),
+          fetch("/api/integrations/connections"),
+        ]);
+        const json = await calRes.json();
+        const intJson = await intRes.json().catch(() => ({ data: {} }));
+        const rows = (json.data || []) as Array<{
+          id: string;
+          name: string;
+          provider: string;
+          status: string;
+        }>;
+        const connections = (intJson.data?.connections || []) as Array<{
+          provider: string;
+          status: string;
+          config?: Record<string, unknown> | null;
+        }>;
         setCalendars(rows);
-        const connected = rows.find(
-          (r) =>
-            ["google", "microsoft", "internal", "calendly"].includes(r.provider) &&
-            ["connected", "active", "ok"].includes(String(r.status || "")),
-        );
-        if (connected) {
+        setIntegrationProviders(connections);
+        const live = resolveLiveCalendar({
+          voiceCalendars: rows,
+          integrationConnections: connections,
+        });
+        if (live.connected) {
           patch({
             calendarConnected: true,
-            calendarProvider: connected.provider,
-            calendarEmail: connected.name,
+            calendarProvider: live.provider,
+            calendarEmail: live.name,
           });
         } else if (
           state.calendarConnected ||
@@ -77,6 +98,43 @@ export function AppointmentsStep({
     setBusyProvider(providerId);
     try {
       const provider = providerId === "outlook" ? "microsoft" : providerId;
+
+      // Calendly / Acuity / Cal.com — prefer live Integrations connection.
+      if (["calendly", "acuity", "calcom"].includes(provider)) {
+        const intRes = await fetch("/api/integrations/connections");
+        const intJson = await intRes.json().catch(() => ({ data: {} }));
+        const connections = (intJson.data?.connections || []) as Array<{
+          provider: string;
+          status: string;
+          config?: Record<string, unknown> | null;
+        }>;
+        setIntegrationProviders(connections);
+        if (provider === "calendly") {
+          const live = resolveLiveCalendar({
+            voiceCalendars: calendars,
+            integrationConnections: connections,
+          });
+          if (live.connected && live.provider === "calendly") {
+            patch({
+              calendarProvider: "calendly",
+              calendarConnected: true,
+              calendarEmail: live.name,
+            });
+            return;
+          }
+          // No live Calendly — send user to Integrations to connect.
+          window.location.href = "/integrations/native/calendly";
+          return;
+        }
+        // acuity / calcom not wired for live booking yet
+        patch({
+          calendarProvider: provider,
+          calendarConnected: false,
+          calendarEmail: null,
+        });
+        return;
+      }
+
       const existing = calendars.find((c) => c.provider === provider);
       let connectionId = existing?.id;
       if (!connectionId) {
@@ -110,7 +168,7 @@ export function AppointmentsStep({
       const row = rows.find((c) => c.id === connectionId) || rows.find((c) => c.provider === provider);
 
       if (provider === "internal") {
-        const live = row && ["connected", "active", "ok"].includes(row.status);
+        const live = row && isLiveCalendarStatus(row.status);
         patch({
           calendarProvider: provider,
           calendarConnected: Boolean(live),
@@ -119,7 +177,6 @@ export function AppointmentsStep({
         return;
       }
 
-      // calendly / acuity / calcom — creating a calendar row is not a live connection
       patch({
         calendarProvider: provider,
         calendarConnected: false,
@@ -134,13 +191,23 @@ export function AppointmentsStep({
 
   function isProviderConnected(providerId: string) {
     const provider = providerId === "outlook" ? "microsoft" : providerId;
-    if (["calendly", "acuity", "calcom"].includes(provider)) {
-      // External schedulers need a real integration connection — creating a
-      // VoiceCalendarConnection row alone does not count.
+    if (provider === "calendly") {
+      const live = resolveLiveCalendar({
+        voiceCalendars: calendars,
+        integrationConnections: integrationProviders,
+      });
+      if (live.connected && live.provider === "calendly") return true;
+      return (
+        state.calendarConnected &&
+        (state.calendarProvider === "calendly" || state.calendarProvider === providerId)
+      );
+    }
+    if (["acuity", "calcom"].includes(provider)) {
+      // Not live-bookable yet — creating a VoiceCalendarConnection row alone does not count.
       return false;
     }
     const row = calendars.find((c) => c.provider === provider);
-    if (row && ["connected", "active", "ok"].includes(row.status)) return true;
+    if (row && isLiveCalendarStatus(row.status)) return true;
     return (
       state.calendarConnected &&
       (state.calendarProvider === providerId || state.calendarProvider === provider)
@@ -447,7 +514,15 @@ export function AppointmentsStep({
           <p className="font-medium">Calendar connection</p>
           <p className="mt-1 text-muted-foreground">
             {state.calendarConnected
-              ? state.calendarEmail || "Connected"
+              ? [
+                  state.calendarProvider
+                    ? CALENDARS.find((c) => c.id === state.calendarProvider)?.label ||
+                      state.calendarProvider
+                    : null,
+                  state.calendarEmail,
+                ]
+                  .filter(Boolean)
+                  .join(" · ") || "Connected"
               : "No calendar connected yet"}
           </p>
           {state.calendarConnected ? (

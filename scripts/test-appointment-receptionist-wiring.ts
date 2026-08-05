@@ -14,6 +14,7 @@ import {
   getWizardActivationIssues,
   hasBlockingActivationIssues,
 } from "../src/lib/solutions/appointment-receptionist/capability-checklist";
+import { resolveLiveCalendar } from "../src/lib/solutions/appointment-receptionist/live-calendar";
 import { createDefaultWizardState } from "../src/lib/solutions/appointment-receptionist/defaults";
 import {
   buildSystemPrompt,
@@ -231,6 +232,65 @@ assert("empty → 0", parseNoticeMinutes("") === 0);
   assert(
     "invalid transfer blocks when capability on",
     xferIssues.some((i) => i.id === "transfer" && i.severity === "blocking"),
+  );
+}
+
+// --- Live calendar resolution (Calendly must count like activate-hooks) ---
+{
+  const none = resolveLiveCalendar({ voiceCalendars: [], integrationConnections: [] });
+  assert("no calendars → not connected", !none.connected);
+
+  const calendlyVoice = resolveLiveCalendar({
+    voiceCalendars: [
+      { provider: "calendly", status: "connected", name: "Calendly" },
+    ],
+  });
+  assert(
+    "voice calendly connected counts",
+    calendlyVoice.connected && calendlyVoice.provider === "calendly",
+  );
+
+  const calendlyIntegration = resolveLiveCalendar({
+    voiceCalendars: [{ provider: "calendly", status: "pending", name: "Calendly" }],
+    integrationConnections: [
+      {
+        provider: "calendly",
+        status: "connected",
+        config: { email: "owner@example.com" },
+      },
+    ],
+  });
+  assert(
+    "integrations calendly counts when voice row is pending",
+    calendlyIntegration.connected &&
+      calendlyIntegration.source === "integrations" &&
+      calendlyIntegration.name === "owner@example.com",
+  );
+
+  const googleOnly = resolveLiveCalendar({
+    voiceCalendars: [{ provider: "google", status: "connected", name: "Work" }],
+  });
+  assert("google voice calendar counts", googleOnly.connected && googleOnly.provider === "google");
+
+  // Booking wizard must not block when calendly is live (Activate used to ignore calendly).
+  const bookingState = createDefaultWizardState();
+  bookingState.phoneNumberId = "pn";
+  bookingState.agentName = "Danny";
+  bookingState.voiceId = "allie-ultra";
+  bookingState.openingGreeting = "Hi";
+  bookingState.businessName = "Lakeside";
+  bookingState.capabilities = ["book_appointments"];
+  bookingState.appointmentTypes = bookingState.appointmentTypes.map((t) => ({
+    ...t,
+    enabled: true,
+  }));
+  bookingState.calendarConnected = false; // UI flag stale — live probe wins
+  const calendlyOk = getWizardActivationIssues(bookingState, {
+    hasCalendarConnection: calendlyVoice.connected,
+  });
+  assert(
+    "calendly live probe unblocks booking activate",
+    !calendlyOk.some((i) => i.id === "calendar" && i.severity === "blocking"),
   );
 }
 
