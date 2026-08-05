@@ -171,6 +171,9 @@ export function buildSystemPrompt(state: AppointmentReceptionistWizardState): st
   );
   if (caps.includes("book_appointments")) {
     lines.push("- calendar_availability / book_appointment: check live availability and book only after confirmation.");
+    lines.push(
+      "- Never offer, confirm, or book a day/time unless that exact startsAt came from the latest calendar_availability slots. If the caller asks for a time that is not in the returned slots, say it is unavailable and offer 2–3 of the returned label times instead.",
+    );
   }
   if (caps.includes("transfer_calls") && transferPhone) {
     lines.push(
@@ -199,6 +202,9 @@ export function buildSystemPrompt(state: AppointmentReceptionistWizardState): st
   }
   lines.push("- Never claim an appointment is booked until the booking tool succeeds.");
   lines.push("- Never invent availability or pricing.");
+  lines.push(
+    "- When booking, pass book_appointment startsAt exactly as returned by calendar_availability (ISO). Speak the matching label. Do not convert spoken clock times yourself.",
+  );
   lines.push("");
   lines.push("Collect caller information in this order when needed:");
   for (const field of state.collectFields.filter((f) => f.enabled)) {
