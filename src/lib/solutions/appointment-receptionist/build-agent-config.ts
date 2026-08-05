@@ -171,6 +171,9 @@ export function buildSystemPrompt(state: AppointmentReceptionistWizardState): st
   );
   if (caps.includes("book_appointments")) {
     lines.push("- calendar_availability / book_appointment: check live availability and book only after confirmation.");
+    lines.push(
+      "- When calendar_availability returns slots, read the label field and offer 2–3 of those exact times. Never say the calendar is down or that the dates look wrong if slots were returned. Current-year dates (including August) are normal.",
+    );
   }
   if (caps.includes("transfer_calls") && transferPhone) {
     lines.push(

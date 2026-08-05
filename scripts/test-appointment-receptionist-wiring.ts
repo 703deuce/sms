@@ -22,6 +22,7 @@ import {
 } from "../src/lib/solutions/appointment-receptionist/build-agent-config";
 import {
   fieldSatisfied,
+  formatAvailabilitySlotsForAgent,
   normalizeBookingToolArgs,
   resolveAvailabilityTimeWindow,
 } from "../src/lib/voice/calendar/booking-args";
@@ -503,6 +504,14 @@ assert(
   assert("caps daysAhead 7→3", clock.daysAhead === 3);
   assert("clock times become ISO start", clock.startTime.includes("T"));
   assert("clock preferred morning", clock.preferredStartMinute === 480);
+  const openEnded = resolveAvailabilityTimeWindow(
+    { daysAhead: 3, serviceName: "Initial Consultation" },
+    { now, maxDays: 7 },
+  );
+  assert("open-ended daysAhead 3→7", openEnded.daysAhead === 7);
+  const end = new Date(openEnded.endTime).getTime();
+  const tue = Date.parse("2026-08-11T12:00:00.000Z");
+  assert("7-day window reaches next Tuesday", tue <= end);
   const iso = resolveAvailabilityTimeWindow(
     {
       startTime: "2026-08-11T12:00:00.000Z",
@@ -512,6 +521,12 @@ assert(
   );
   assert("ISO window keeps Tuesday", iso.startTime.startsWith("2026-08-11"));
   assert("ISO window daysAhead 1", iso.daysAhead === 1);
+
+  const labeled = formatAvailabilitySlotsForAgent(
+    [{ startsAt: "2026-08-06T12:00:00.000Z" }],
+    "America/New_York",
+  );
+  assert("slot label includes weekday", /Thursday|Aug/i.test(labeled[0]?.label || ""));
 }
 
 console.log("");

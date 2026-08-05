@@ -576,7 +576,7 @@ export const BUILTIN_WEBHOOK_BODIES: Record<
     name: "calendar_availability",
     toolType: "calendar_availability",
     description:
-      "Check live calendar availability before offering times. When the caller names a day (e.g. next Tuesday morning), pass startTime/endTime as ISO datetimes for that day — not bare clock times like 08:00. Keep daysAhead ≤ 3.",
+      "Check live calendar availability before offering times. When the caller names a day (e.g. next Tuesday morning), pass startTime/endTime as ISO datetimes for that day — not bare clock times like 08:00. Use daysAhead up to 7 when the caller asks what is available or names a day next week. When slots return, offer the label fields — never claim the calendar is down if slots were returned.",
     body: {
       type: "object",
       properties: {
@@ -593,7 +593,10 @@ export const BUILTIN_WEBHOOK_BODIES: Record<
           type: "string",
           description: "ISO datetime preferred window end (not HH:MM alone)",
         },
-        daysAhead: { type: "number", description: "Max days to scan (prefer 1–3)" },
+        daysAhead: {
+          type: "number",
+          description: "Max days to scan (1–7; use 7 for open-ended or next-week requests)",
+        },
       },
       required: [],
     },

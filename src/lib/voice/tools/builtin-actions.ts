@@ -224,30 +224,10 @@ export async function executeBuiltinVoiceAction(input: {
           }),
         },
       });
-      const { createCrmNoteForVoice } = await import("./crm-writes");
-      const crm = await createCrmNoteForVoice({
-        workspaceId: input.workspaceId,
-        subject: `Caller message: ${reason.slice(0, 80)}`,
-        body: [
-          `From: ${callerName || "Unknown"}`,
-          phone ? `Phone: ${phone}` : "",
-          email ? `Email: ${email}` : "",
-          `Urgency: ${urgency}`,
-          preferredCallback ? `Callback: ${preferredCallback}` : "",
-          "",
-          reason,
-          notes,
-        ]
-          .filter(Boolean)
-          .join("\n"),
-        phone: phone || undefined,
-        email: email || undefined,
-        callId: input.callId,
-      }).catch((err) => ({
-        ok: false as const,
-        error: err instanceof Error ? err.message : String(err),
-      }));
 
+      // Persist first, then notify in the background. CRM + email often exceed
+      // Telnyx's mid-call webhook timeout (~8s), which made the agent claim a
+      // save that never finished (structured message / follow-up missing).
       const notifyTitle =
         urgency === "high" || urgency === "urgent"
           ? "Urgent caller message"
@@ -257,64 +237,78 @@ export async function executeBuiltinVoiceAction(input: {
         .join(" · ");
       const notifyHref = input.callId ? `/voice/calls/${input.callId}` : "/voice/calls";
 
-      // Staff notification — required for every receptionist message-taking path.
-      await import("@/lib/notifications/in-app")
-        .then(({ notifyWorkspace }) =>
-          notifyWorkspace(input.workspaceId, {
-            type: "system",
-            title: notifyTitle,
-            body: notifyBody,
-            href: notifyHref,
-          }),
-        )
-        .catch(() => undefined);
-
-      // Best-effort email via Brevo / voice_send_email when staff emails are available.
-      await notifyStaffByEmail({
-        workspaceId: input.workspaceId,
-        subject: notifyTitle,
-        body: [
-          notifyBody,
-          preferredCallback ? `Preferred callback: ${preferredCallback}` : "",
-          notes ? `Notes: ${notes}` : "",
-          notifyHref.startsWith("/")
-            ? `Open: ${(process.env.APP_URL || "").replace(/\/$/, "")}${notifyHref}`
-            : "",
-        ]
-          .filter(Boolean)
-          .join("\n"),
-        callId: input.callId,
-        kind: "caller_message",
-      }).catch(() => undefined);
-
-      // High/urgent messages also create a follow-up task for the team.
-      let task: unknown = null;
-      if (urgency === "high" || urgency === "urgent") {
-        task = await executeBuiltinVoiceAction({
+      void (async () => {
+        const { createCrmNoteForVoice } = await import("./crm-writes");
+        await createCrmNoteForVoice({
           workspaceId: input.workspaceId,
-          agentId: input.agentId,
+          subject: `Caller message: ${reason.slice(0, 80)}`,
+          body: [
+            `From: ${callerName || "Unknown"}`,
+            phone ? `Phone: ${phone}` : "",
+            email ? `Email: ${email}` : "",
+            `Urgency: ${urgency}`,
+            preferredCallback ? `Callback: ${preferredCallback}` : "",
+            "",
+            reason,
+            notes,
+          ]
+            .filter(Boolean)
+            .join("\n"),
+          phone: phone || undefined,
+          email: email || undefined,
           callId: input.callId,
-          toolType: "create_task",
-          input: {
-            title: `Urgent callback: ${callerName || phone || "caller"}`,
-            notes: [reason, preferredCallback ? `Callback: ${preferredCallback}` : "", notes]
-              .filter(Boolean)
-              .join("\n"),
-            phone: phone || undefined,
-          },
-        }).catch((err) => ({
-          ok: false as const,
-          error: err instanceof Error ? err.message : String(err),
-        }));
-      }
+        }).catch(() => undefined);
+
+        await import("@/lib/notifications/in-app")
+          .then(({ notifyWorkspace }) =>
+            notifyWorkspace(input.workspaceId, {
+              type: "system",
+              title: notifyTitle,
+              body: notifyBody,
+              href: notifyHref,
+            }),
+          )
+          .catch(() => undefined);
+
+        await notifyStaffByEmail({
+          workspaceId: input.workspaceId,
+          subject: notifyTitle,
+          body: [
+            notifyBody,
+            preferredCallback ? `Preferred callback: ${preferredCallback}` : "",
+            notes ? `Notes: ${notes}` : "",
+            notifyHref.startsWith("/")
+              ? `Open: ${(process.env.APP_URL || "").replace(/\/$/, "")}${notifyHref}`
+              : "",
+          ]
+            .filter(Boolean)
+            .join("\n"),
+          callId: input.callId,
+          kind: "caller_message",
+        }).catch(() => undefined);
+
+        if (urgency === "high" || urgency === "urgent") {
+          await executeBuiltinVoiceAction({
+            workspaceId: input.workspaceId,
+            agentId: input.agentId,
+            callId: input.callId,
+            toolType: "create_task",
+            input: {
+              title: `Urgent callback: ${callerName || phone || "caller"}`,
+              notes: [reason, preferredCallback ? `Callback: ${preferredCallback}` : "", notes]
+                .filter(Boolean)
+                .join("\n"),
+              phone: phone || undefined,
+            },
+          }).catch(() => undefined);
+        }
+      })();
 
       return {
         ok: true,
         message: "Message saved. Tell the caller you will make sure the team receives it.",
         contactId,
-        crm,
         follow_up_required: true,
-        task,
       };
     }
     case "mark_disposition": {
@@ -659,18 +653,32 @@ export async function executeBuiltinVoiceAction(input: {
       return { ok: true, queued: true, to, subject };
     }
     case "calendar_availability": {
-      const { normalizeBookingToolArgs, resolveAvailabilityTimeWindow } = await import(
-        "../calendar/booking-args"
-      );
+      const {
+        normalizeBookingToolArgs,
+        resolveAvailabilityTimeWindow,
+        formatAvailabilitySlotsForAgent,
+      } = await import("../calendar/booking-args");
       args = normalizeBookingToolArgs(args);
-      // Voice webhook tools must finish well under Telnyx's effective timeout
-      // (live calls timed out around 5s even when timeout_ms=10000).
-      const window = resolveAvailabilityTimeWindow(args, { maxDays: 3 });
+      // Cover up to 7 days so "next Tuesday" is reachable; scan still stops
+      // early once enough slots are found.
+      const window = resolveAvailabilityTimeWindow(args, { maxDays: 7 });
       args = {
         ...args,
         startTime: window.startTime,
         endTime: window.endTime,
         daysAhead: window.daysAhead,
+      };
+      const timeZone = String(args.timezone || "America/New_York");
+      const speakSlots = (slots: Array<{ startsAt: string; endsAt?: string }>) => {
+        const labeled = formatAvailabilitySlotsForAgent(slots.slice(0, 5), timeZone);
+        return {
+          slots: labeled,
+          window: { startTime: window.startTime, endTime: window.endTime },
+          instruction:
+            labeled.length > 0
+              ? "Offer 2–3 of these exact label times to the caller. Do not say the calendar is down or that the dates look wrong."
+              : "No slots in this window — ask for another day or take a callback message.",
+        };
       };
 
       // Prefer Calendly Scheduling API when the workspace has Calendly connected.
@@ -713,15 +721,15 @@ export async function executeBuiltinVoiceAction(input: {
                 startsAt: String(s.startsAt || s.startTime || ""),
               }),
             );
-            let slots = filterSlotsByNoticeAndMaxDays(
+            const slots = filterSlotsByNoticeAndMaxDays(
               normalized.filter((s) => s.startsAt),
               gates.noticeMinutes,
               gates.maxDaysAhead,
             );
             return {
+              ok: true,
               provider: "calendly",
-              slots: slots.slice(0, 5),
-              window: { startTime: window.startTime, endTime: window.endTime },
+              ...speakSlots(slots),
             };
           }
         }
@@ -747,10 +755,10 @@ export async function executeBuiltinVoiceAction(input: {
         maxSlots: 5,
       });
       return {
+        ok: true,
         ...availability,
-        slots: (availability.slots || []).slice(0, 5),
         provider: "internal",
-        window: { startTime: window.startTime, endTime: window.endTime },
+        ...speakSlots(availability.slots || []),
       };
     }    case "book_appointment": {
       const { normalizeBookingToolArgs } = await import("../calendar/booking-args");

@@ -108,6 +108,12 @@ export async function POST(request: Request) {
     const conversationId =
       request.headers.get("x-telnyx-conversation-id") ||
       String(body.telnyx_conversation_id || body.conversation_id || "");
+    const endUserTarget =
+      request.headers.get("x-telnyx-end-user-target") ||
+      String(body.from || body.caller_id_number || body.telnyx_end_user_target || "");
+    const agentTarget =
+      request.headers.get("x-telnyx-agent-target") ||
+      String(body.to || body.destination_number || body.telnyx_agent_target || "");
 
     let callId: string | undefined;
     if (callControlId) {
@@ -141,6 +147,91 @@ export async function POST(request: Request) {
         select: { id: true },
       });
       callId = call?.id;
+    }
+
+    // TeXML-direct often creates VoiceCall only on hangup. Mid-call tools
+    // (escalate_human, take_structured_message) need a row + call_control_id.
+    if (!callId && callControlId) {
+      try {
+        let toE164 = agentTarget;
+        let fromE164 = endUserTarget;
+        let phoneNumberId: string | null = null;
+        let agentVersionId: string | null = null;
+        let telnyxAssistantId = String(body.assistant_id || "");
+
+        if (agentId) {
+          const agent = await prisma.voiceAgent.findFirst({
+            where: { id: agentId, workspaceId },
+            select: {
+              phoneNumberId: true,
+              publishedVersionId: true,
+              telnyxAssistantId: true,
+            },
+          });
+          phoneNumberId = agent?.phoneNumberId || null;
+          agentVersionId = agent?.publishedVersionId || null;
+          if (!telnyxAssistantId) {
+            telnyxAssistantId = agent?.telnyxAssistantId || "";
+          }
+          if (!toE164 && agent?.phoneNumberId) {
+            const pn = await prisma.phoneNumber.findFirst({
+              where: { id: agent.phoneNumberId },
+              select: { e164: true },
+            });
+            toE164 = pn?.e164 || "";
+          }
+        }
+
+        const { ensureVoiceCallForTelnyxEvent } = await import(
+          "@/lib/voice/ensure-call-from-event"
+        );
+        const ensured = await ensureVoiceCallForTelnyxEvent({
+          eventType: "assistant.tool",
+          eventPayload: {
+            call_control_id: callControlId,
+            conversation_id: conversationId || undefined,
+            from: fromE164 || undefined,
+            to: toE164 || undefined,
+            assistant_id: telnyxAssistantId || undefined,
+          },
+        });
+        callId = ensured?.callId;
+
+        // Last resort: create a minimal IN_PROGRESS row so transfer/message tools
+        // can bind to call_control_id even when Telnyx omits from/to headers.
+        if (!callId && toE164) {
+          const { normalizeE164 } = await import("@/lib/messaging/twilio-mappings");
+          const fromNorm = fromE164
+            ? normalizeE164(fromE164) || fromE164
+            : "unknown";
+          const toNorm = normalizeE164(toE164) || toE164;
+          const created = await prisma.voiceCall.create({
+            data: {
+              workspaceId,
+              agentId: agentId || null,
+              agentVersionId,
+              phoneNumberId,
+              direction: "INBOUND",
+              status: "IN_PROGRESS",
+              fromE164: fromNorm,
+              toE164: toNorm,
+              telnyxCallControlId: callControlId,
+              telnyxConversationId: conversationId || null,
+              answeredAt: new Date(),
+              metadata: {
+                source: "tool_webhook_ensure",
+                eventType: "assistant.tool",
+              } as object,
+            },
+          });
+          callId = created.id;
+        }
+      } catch (err) {
+        console.warn(
+          "[telnyx/voice/tools] ensure VoiceCall mid-call",
+          err instanceof Error ? err.message : err,
+        );
+      }
     }
 
     if (toolId) {
