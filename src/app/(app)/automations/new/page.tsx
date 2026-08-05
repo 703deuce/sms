@@ -26,12 +26,16 @@ export default function NewAutomationPage() {
         // Templates never auto-activate; the new flow is always created as DRAFT.
         const templateId = new URLSearchParams(window.location.search).get("template");
         const template = templateId ? getIntegrationTemplate(templateId) : null;
+        const stamp = new Date()
+          .toISOString()
+          .slice(5, 16)
+          .replace("T", " ");
         const body: {
           name: string;
           definition?: ReturnType<typeof buildAutomationDefinitionFromTemplate>;
         } = template
           ? { name: template.title, definition: buildAutomationDefinitionFromTemplate(template) }
-          : { name: "Untitled automation" };
+          : { name: `New automation · ${stamp}` };
 
         const res = await fetch("/api/automations", {
           method: "POST",

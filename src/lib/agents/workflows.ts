@@ -214,7 +214,8 @@ export async function backfillAgentWorkflows(
         ownerLabel,
         ownerAgentId,
         name:
-          flow.name === "Untitled automation"
+          flow.name === "Untitled automation" ||
+          flow.name.startsWith("New automation ·")
             ? agentWorkflowName(ownerLabel)
             : flow.name,
         updatedAt: new Date(),
