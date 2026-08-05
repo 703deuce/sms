@@ -1,7 +1,7 @@
 /**
  * Durable SolutionSetup linking for the AI Receptionist / booking agent wizard.
  * Voice conversation graph stays on VoiceAgent; this creates the inventory record
- * My Systems / Solutions use — same pattern as Missed Call Text Back.
+ * My Agents / catalog use — same pattern as Missed Call Text Back.
  */
 
 import type { Prisma } from "@/lib/domain";

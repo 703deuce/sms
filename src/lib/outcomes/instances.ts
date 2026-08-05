@@ -4,6 +4,8 @@ import {
   outcomeHref,
   outcomeSolutions,
 } from "@/lib/outcomes/registry";
+import { outcomeSlugFromWizard } from "@/lib/solutions/appointment-receptionist/save-setup";
+import type { AppointmentReceptionistWizardState } from "@/lib/solutions/appointment-receptionist/types";
 import type { SolutionNavInstance } from "@/lib/solutions-nav";
 
 type AgentRow = {
@@ -13,125 +15,172 @@ type AgentRow = {
   status: string;
   purpose: string | null;
   draftConfig: unknown;
+  sourceSolutionSetupId: string | null;
 };
 
-function readAnswerWhen(draftConfig: unknown): string | null {
-  if (!draftConfig || typeof draftConfig !== "object") return null;
-  const cfg = draftConfig as Record<string, unknown>;
-  if (typeof cfg.answerWhen === "string") return cfg.answerWhen;
+type SetupRow = {
+  id: string;
+  name: string;
+  status: string;
+  solutionType: string;
+  configJson: unknown;
+  linkedAgentIds: string[];
+  linkedAutomationIds: string[];
+  externalKey: string | null;
+};
 
-  const advanced =
-    cfg.advanced && typeof cfg.advanced === "object"
-      ? (cfg.advanced as Record<string, unknown>)
-      : null;
-  const fromAdvanced = advanced?.appointmentReceptionistWizard as
-    | Record<string, unknown>
-    | undefined;
-  if (fromAdvanced && typeof fromAdvanced.answerWhen === "string") {
-    return fromAdvanced.answerWhen;
-  }
-
-  const wizard = (cfg.wizardState ??
-    cfg.appointmentReceptionist ??
-    null) as Record<string, unknown> | null;
-  if (!wizard) return null;
-  const goals = (wizard.goals ?? wizard) as Record<string, unknown>;
-  const answerWhen = goals.answerWhen ?? wizard.answerWhen;
-  return typeof answerWhen === "string" ? answerWhen : null;
-}
-
-function hasBooking(draftConfig: unknown): boolean {
-  if (!draftConfig || typeof draftConfig !== "object") return false;
-  const cfg = draftConfig as Record<string, unknown>;
-  const advanced =
-    cfg.advanced && typeof cfg.advanced === "object"
-      ? (cfg.advanced as Record<string, unknown>)
-      : null;
-  const wizardCaps = (
-    advanced?.appointmentReceptionistWizard as { capabilities?: unknown } | undefined
-  )?.capabilities;
-  if (Array.isArray(wizardCaps)) {
-    if (wizardCaps.includes("book_appointments")) return true;
-  }
-  const caps = cfg.capabilities ?? cfg.enabledCapabilities;
-  if (Array.isArray(caps)) {
-    return caps.some(
-      (c) =>
-        c === "book_appointments" ||
-        c === "booking" ||
-        (typeof c === "object" &&
-          c &&
-          ((c as { id?: string }).id === "book_appointments" ||
-            (c as { key?: string }).key === "book_appointments")),
-    );
-  }
-  const tools = cfg.tools;
-  if (Array.isArray(tools)) {
-    return tools.some(
-      (t) =>
-        typeof t === "string" &&
-        /book|appointment|calendar|calendly/i.test(t),
-    );
-  }
-  return Boolean(
-    (cfg as { bookingEnabled?: boolean }).bookingEnabled ||
-      (cfg as { capabilityPack?: string }).capabilityPack === "appointment_receptionist",
-  );
+function asRecord(v: unknown): Record<string, unknown> | null {
+  return v && typeof v === "object" && !Array.isArray(v)
+    ? (v as Record<string, unknown>)
+    : null;
 }
 
 function statusLabel(status: string): string {
-  if (status === "ACTIVE" || status === "PUBLISHED") return "Active";
+  if (status === "ACTIVE" || status === "PUBLISHED" || status === "LIVE")
+    return "Active";
   if (status === "DRAFT") return "Draft";
   if (status === "PAUSED") return "Paused";
   return status.charAt(0) + status.slice(1).toLowerCase();
 }
 
-function matchesSolution(
-  agent: AgentRow,
-  match: NonNullable<(typeof outcomeSolutions)[number]["agentMatch"]>,
-): boolean {
-  if (match.purposes?.length) {
-    const purpose = agent.purpose || "";
-    if (!match.purposes.includes(purpose)) {
-      // Still allow purpose-null agents that look like receptionists via booking pack.
-      if (!(match.booking && hasBooking(agent.draftConfig))) return false;
+function readWizardBits(draftConfig: unknown): {
+  answerWhen?: string;
+  capabilities?: string[];
+  preset?: string | null;
+  outcomeSlug?: string | null;
+} {
+  const cfg = asRecord(draftConfig);
+  if (!cfg) return {};
+  const advanced = asRecord(cfg.advanced);
+  const snap = asRecord(advanced?.appointmentReceptionistWizard);
+  const wizard = asRecord(cfg.wizardState) || asRecord(cfg.appointmentReceptionist);
+  const goals = asRecord(wizard?.goals) || wizard;
+
+  const capsRaw =
+    snap?.capabilities ??
+    cfg.capabilities ??
+    cfg.enabledCapabilities ??
+    goals?.capabilities;
+  const capabilities = Array.isArray(capsRaw)
+    ? capsRaw.filter((c): c is string => typeof c === "string")
+    : undefined;
+
+  const answerWhen =
+    (typeof snap?.answerWhen === "string" && snap.answerWhen) ||
+    (typeof cfg.answerWhen === "string" && cfg.answerWhen) ||
+    (typeof goals?.answerWhen === "string" && goals.answerWhen) ||
+    (typeof wizard?.answerWhen === "string" && wizard.answerWhen) ||
+    undefined;
+
+  return {
+    answerWhen,
+    capabilities,
+    preset:
+      (typeof snap?.preset === "string" && snap.preset) ||
+      (typeof cfg.preset === "string" && cfg.preset) ||
+      null,
+    outcomeSlug:
+      (typeof snap?.outcomeSlug === "string" && snap.outcomeSlug) ||
+      (typeof cfg.outcomeSlug === "string" && cfg.outcomeSlug) ||
+      null,
+  };
+}
+
+/** Resolve the single outcome slug that owns a SolutionSetup. */
+export function outcomeSlugFromSetup(setup: {
+  solutionType: string;
+  configJson?: unknown;
+}): string {
+  const cfg = asRecord(setup.configJson);
+  if (typeof cfg?.outcomeSlug === "string" && cfg.outcomeSlug.trim()) {
+    return cfg.outcomeSlug.trim();
+  }
+  if (setup.solutionType === "appointment-receptionist") {
+    return "appointment-booking";
+  }
+  if (getOutcomeSolution(setup.solutionType)) {
+    return setup.solutionType;
+  }
+  return setup.solutionType;
+}
+
+function inferOutcomeSlugForOrphanAgent(agent: AgentRow): string | null {
+  if (
+    agent.purpose !== "appointment_receptionist" &&
+    agent.purpose !== "ai_receptionist"
+  ) {
+    const bits = readWizardBits(agent.draftConfig);
+    if (!bits.capabilities?.includes("book_appointments") && !bits.answerWhen) {
+      return null;
     }
   }
-  if (match.answerWhen?.length) {
-    const when = readAnswerWhen(agent.draftConfig);
-    if (!when || !match.answerWhen.includes(when)) return false;
-  }
-  if (match.booking && !hasBooking(agent.draftConfig) && agent.purpose !== "appointment_receptionist") {
-    return false;
-  }
-  return true;
+  const bits = readWizardBits(agent.draftConfig);
+  return outcomeSlugFromWizard({
+    outcomeSlug: bits.outcomeSlug,
+    preset: bits.preset,
+    answerWhen: (bits.answerWhen ||
+      "every_call") as AppointmentReceptionistWizardState["answerWhen"],
+    capabilities:
+      (bits.capabilities as AppointmentReceptionistWizardState["capabilities"]) ||
+      [],
+  });
 }
 
 function instanceChildren(
   solutionSlug: string,
-  agentId: string,
+  instanceId: string,
+  kind: "agent" | "setup",
 ): { label: string; href: string }[] {
   const solution = getOutcomeSolution(solutionSlug);
   const slugs = solution?.instanceShortcutSlugs;
   if (!slugs?.length) {
     return [
-      { label: "Open agent", href: `/voice/agents/${agentId}` },
+      {
+        label: "Open",
+        href:
+          kind === "agent"
+            ? `/voice/agents/${instanceId}`
+            : outcomeHref(solutionSlug, "setup"),
+      },
       { label: "Results", href: outcomeHref(solutionSlug, "results") },
     ];
   }
+  const q =
+    kind === "agent"
+      ? `agentId=${encodeURIComponent(instanceId)}`
+      : `setupId=${encodeURIComponent(instanceId)}`;
   return slugs
     .map((slug) => {
       const page = solution!.pages.find((p) => p.slug === slug);
       if (!page) return null;
       return {
         label: page.label,
-        href: `${outcomeHref(solutionSlug, slug)}?agentId=${encodeURIComponent(agentId)}`,
+        href: `${outcomeHref(solutionSlug, slug)}?${q}`,
       };
     })
     .filter((x): x is { label: string; href: string } => Boolean(x));
 }
 
-/** Load voice agents and map them into Solutions-nav instance shortcuts. */
+function pushInstance(
+  out: Record<string, SolutionNavInstance[]>,
+  outcomeSlug: string,
+  instance: SolutionNavInstance,
+) {
+  if (!getOutcomeSolution(outcomeSlug) && outcomeSlug !== "ai-receptionist") {
+    return;
+  }
+  if (!out[outcomeSlug]) out[outcomeSlug] = [];
+  // Exclusive: never list the same id twice under one outcome.
+  if (out[outcomeSlug].some((i) => i.id === instance.id)) return;
+  out[outcomeSlug].push(instance);
+}
+
+/**
+ * Load created agents/setups into Solutions-nav instance shortcuts.
+ *
+ * Ownership is exclusive: each agent appears under exactly one outcome,
+ * driven by SolutionSetup.configJson.outcomeSlug (not loose purpose matching).
+ */
 export async function loadOutcomeInstances(
   workspaceId: string,
 ): Promise<Record<string, SolutionNavInstance[]>> {
@@ -139,57 +188,133 @@ export async function loadOutcomeInstances(
 
   try {
     const prisma = getPrisma();
-    const agents = (await prisma.voiceAgent.findMany({
-      where: { workspaceId, archivedAt: null },
-      select: {
-        id: true,
-        name: true,
-        displayName: true,
-        status: true,
-        purpose: true,
-        draftConfig: true,
-      },
-      orderBy: { updatedAt: "desc" },
-      take: 50,
-    })) as AgentRow[];
+    const [setups, agents] = await Promise.all([
+      prisma.solutionSetup.findMany({
+        where: { workspaceId },
+        select: {
+          id: true,
+          name: true,
+          status: true,
+          solutionType: true,
+          configJson: true,
+          linkedAgentIds: true,
+          linkedAutomationIds: true,
+          externalKey: true,
+        },
+        orderBy: { updatedAt: "desc" },
+        take: 100,
+      }) as Promise<SetupRow[]>,
+      prisma.voiceAgent.findMany({
+        where: { workspaceId, archivedAt: null },
+        select: {
+          id: true,
+          name: true,
+          displayName: true,
+          status: true,
+          purpose: true,
+          draftConfig: true,
+          sourceSolutionSetupId: true,
+        },
+        orderBy: { updatedAt: "desc" },
+        take: 50,
+      }) as Promise<AgentRow[]>,
+    ]);
 
+    const agentById = new Map(agents.map((a) => [a.id, a]));
+    const claimedAgentIds = new Set<string>();
+    const claimedSetupIds = new Set<string>();
     const out: Record<string, SolutionNavInstance[]> = {};
 
-    for (const solution of outcomeSolutions) {
-      if (!solution.agentMatch) continue;
-      const matched = agents.filter((a) => matchesSolution(a, solution.agentMatch!));
-      if (!matched.length) continue;
+    for (const setup of setups) {
+      const outcomeSlug = outcomeSlugFromSetup(setup);
+      const solution = getOutcomeSolution(outcomeSlug);
+      if (!solution && setup.solutionType !== "appointment-receptionist") {
+        // Still allow known SMS solution types mapped 1:1.
+        if (!getOutcomeSolution(setup.solutionType)) continue;
+      }
 
-      out[solution.slug] = matched.map((agent) => {
-        const label = agent.displayName?.trim() || agent.name;
-        return {
-          id: agent.id,
-          label,
-          status: statusLabel(String(agent.status)),
-          href: `/voice/agents/${agent.id}`,
-          children: instanceChildren(solution.slug, agent.id),
-        };
+      const linkedAgents = (setup.linkedAgentIds || [])
+        .map((id) => agentById.get(id))
+        .filter((a): a is AgentRow => Boolean(a));
+
+      if (linkedAgents.length) {
+        for (const agent of linkedAgents) {
+          if (claimedAgentIds.has(agent.id)) continue;
+          claimedAgentIds.add(agent.id);
+          claimedSetupIds.add(setup.id);
+          const label = agent.displayName?.trim() || agent.name || setup.name;
+          pushInstance(out, outcomeSlug, {
+            id: agent.id,
+            label,
+            status: statusLabel(String(agent.status)),
+            href: `/voice/agents/${agent.id}`,
+            children: instanceChildren(outcomeSlug, agent.id, "agent"),
+          });
+        }
+        continue;
+      }
+
+      // SMS / automation agents (e.g. missed-call-text-back) — setup is the agent.
+      if (claimedSetupIds.has(setup.id)) continue;
+      claimedSetupIds.add(setup.id);
+      const href =
+        setup.solutionType === "missed-call-text-back"
+          ? `/solutions/missed-call-text-back/setup?setupId=${encodeURIComponent(setup.id)}`
+          : outcomeHref(outcomeSlug, "setup") +
+            `?setupId=${encodeURIComponent(setup.id)}`;
+      pushInstance(out, outcomeSlug, {
+        id: setup.id,
+        label: setup.name,
+        status: statusLabel(String(setup.status)),
+        href,
+        children: instanceChildren(outcomeSlug, setup.id, "setup"),
       });
     }
 
-    // AI Receptionist overview lists every receptionist-purpose agent.
-    const receptionists = agents.filter(
-      (a) =>
-        a.purpose === "appointment_receptionist" ||
-        hasBooking(a.draftConfig),
-    );
-    if (receptionists.length) {
-      out["ai-receptionist"] = receptionists.map((agent) => ({
+    // Orphan voice agents (no SolutionSetup yet): infer ONE exclusive outcome.
+    for (const agent of agents) {
+      if (claimedAgentIds.has(agent.id)) continue;
+      const outcomeSlug = inferOutcomeSlugForOrphanAgent(agent);
+      if (!outcomeSlug) continue;
+      claimedAgentIds.add(agent.id);
+      const label = agent.displayName?.trim() || agent.name;
+      pushInstance(out, outcomeSlug, {
         id: agent.id,
-        label: agent.displayName?.trim() || agent.name,
+        label,
         status: statusLabel(String(agent.status)),
         href: `/voice/agents/${agent.id}`,
-        children: [
-          { label: "Open agent", href: `/voice/agents/${agent.id}` },
-          { label: "Inbound routing", href: "/voice/inbound-routing" },
-        ],
-      }));
+        children: instanceChildren(outcomeSlug, agent.id, "agent"),
+      });
     }
+
+    // Umbrella AI Receptionist list — every owned voice receptionist, once.
+    const receptionistSlugs = new Set(
+      outcomeSolutions
+        .filter(
+          (s) =>
+            s.category === "calls-ai" ||
+            s.agentMatch?.purposes?.includes("appointment_receptionist"),
+        )
+        .map((s) => s.slug),
+    );
+    const umbrella: SolutionNavInstance[] = [];
+    const seen = new Set<string>();
+    for (const slug of receptionistSlugs) {
+      for (const inst of out[slug] || []) {
+        if (seen.has(inst.id)) continue;
+        // Only voice agents in the umbrella (not SMS setup ids that happen to share).
+        if (!agentById.has(inst.id)) continue;
+        seen.add(inst.id);
+        umbrella.push({
+          ...inst,
+          children: [
+            { label: "Open agent", href: `/voice/agents/${inst.id}` },
+            { label: "Inbound routing", href: "/voice/inbound-routing" },
+          ],
+        });
+      }
+    }
+    if (umbrella.length) out["ai-receptionist"] = umbrella;
 
     return out;
   } catch {

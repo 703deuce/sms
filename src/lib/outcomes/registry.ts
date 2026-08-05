@@ -914,7 +914,12 @@ export const outcomeSolutions: OutcomeSolutionDef[] = [
       "test",
       "results",
     ],
-    agentMatch: { purposes: ["appointment_receptionist"] },
+    // Ownership is SolutionSetup.outcomeSlug === "lead-capture" only.
+    // Do not match every receptionist by purpose (caused Maya cross-contamination).
+    agentMatch: {
+      purposes: ["appointment_receptionist"],
+      answerWhen: ["every_call"],
+    },
     pages: pages(
       { slug: "", label: "Overview", kind: "overview", navRole: "core" },
       {

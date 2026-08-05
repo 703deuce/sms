@@ -24,6 +24,8 @@ export type SystemResource = {
   name: string;
   type: SystemType;
   typeLabel: string;
+  /** Product type e.g. "Book Appointments", "Missed Call Text Back". */
+  agentType: string;
   createdFrom: string;
   status: SystemStatus;
   statusLabel: string;
@@ -70,7 +72,15 @@ function relativeTime(date: Date | string | null | undefined): string | null {
 
 function solutionTitle(slug: string): string {
   if (slug === "appointment-receptionist") return "AI Receptionist";
+  if (slug === "missed-call-text-back") return "Missed Call Text Back";
   return getOutcomeSolution(slug)?.title || slug;
+}
+
+/** Human label for the agent product type (Book Appointments, AI Answering, …). */
+function agentTypeLabel(outcomeSlug: string, solutionType: string): string {
+  const fromOutcome = solutionTitle(outcomeSlug);
+  if (fromOutcome && fromOutcome !== outcomeSlug) return fromOutcome;
+  return solutionTitle(solutionType);
 }
 
 export async function loadMySystems(
@@ -195,8 +205,9 @@ export async function loadMySystems(
         id: `agent-${agent.id}`,
         name: agent.displayName || agent.name,
         type: "ai_agent",
-        typeLabel: "AI Agent",
-        createdFrom: solutionTitle(setup.solutionType),
+        typeLabel: "Voice Agent",
+        agentType: agentTypeLabel(outcomeSlugForLabel, setup.solutionType),
+        createdFrom: agentTypeLabel(outcomeSlugForLabel, setup.solutionType),
         status: mapStatus(agent.status, agent.healthStatus),
         statusLabel: statusLabel(mapStatus(agent.status, agent.healthStatus)),
         channels: ["Voice"],
@@ -238,6 +249,7 @@ export async function loadMySystems(
         name: flow.name,
         type: "automation",
         typeLabel: "Automation",
+        agentType: solutionTitle(setup.solutionType),
         createdFrom: solutionTitle(setup.solutionType),
         status: mapStatus(flow.status),
         statusLabel: statusLabel(mapStatus(flow.status)),
@@ -277,6 +289,7 @@ export async function loadMySystems(
         name: campaign.name,
         type: "campaign",
         typeLabel: "Campaign",
+        agentType: solutionTitle(setup.solutionType),
         createdFrom: solutionTitle(setup.solutionType),
         status: mapStatus(campaign.status),
         statusLabel: statusLabel(mapStatus(campaign.status)),
@@ -302,6 +315,7 @@ export async function loadMySystems(
         name: rule.name,
         type: "routing",
         typeLabel: "Routing",
+        agentType: solutionTitle(setup.solutionType),
         createdFrom: solutionTitle(setup.solutionType),
         status: rule.isActive ? "active" : "paused",
         statusLabel: rule.isActive ? "Active" : "Paused",
@@ -337,6 +351,7 @@ export async function loadMySystems(
         name: flow.name,
         type: "automation",
         typeLabel: "Automation",
+        agentType: solutionTitle(setup.solutionType),
         createdFrom: solutionTitle(setup.solutionType),
         status: mapStatus(flow.status),
         statusLabel: statusLabel(mapStatus(flow.status)),
@@ -357,12 +372,14 @@ export async function loadMySystems(
     const phone = phoneId ? phoneById.get(phoneId) : null;
     const status = mapStatus(setup.status);
 
+    const setupAgentType = agentTypeLabel(outcomeSlugForLabel, setup.solutionType);
     systems.push({
       id: `setup-${setup.id}`,
       name: setup.name,
       type: "solution_setup",
-      typeLabel: "Solution Setup",
-      createdFrom: solutionTitle(outcomeSlugForLabel),
+      typeLabel: setupAgentType,
+      agentType: setupAgentType,
+      createdFrom: setupAgentType,
       status,
       statusLabel: statusLabel(status),
       channels,
@@ -420,11 +437,15 @@ export async function loadMySystems(
       id: `agent-${agent.id}`,
       name: agent.displayName || agent.name,
       type: "ai_agent",
-      typeLabel: "AI Agent",
+      typeLabel: "Voice Agent",
+      agentType:
+        outcomeSolutions.find((s) => s.slug === agent.purpose)?.title ||
+        agent.purpose ||
+        "Voice Agent",
       createdFrom:
         outcomeSolutions.find((s) => s.slug === agent.purpose)?.title ||
         agent.purpose ||
-        "AI Agent",
+        "Voice Agent",
       status,
       statusLabel: statusLabel(status),
       channels: ["Voice"],
@@ -467,6 +488,7 @@ export async function loadMySystems(
       name: flow.name,
       type: "automation",
       typeLabel: "Automation",
+      agentType: createdFrom,
       createdFrom,
       status,
       statusLabel: statusLabel(status),
@@ -499,6 +521,7 @@ export async function loadMySystems(
       name: campaign.name,
       type: "campaign",
       typeLabel: "Campaign",
+      agentType: campaign.category || campaign.type || "Campaign",
       createdFrom: campaign.category || campaign.type || "Campaign",
       status,
       statusLabel: statusLabel(status),
@@ -525,6 +548,7 @@ export async function loadMySystems(
       name: rule.name,
       type: "routing",
       typeLabel: "Routing",
+      agentType: "Phone & Routing",
       createdFrom: "Phone & Routing",
       status: rule.isActive ? "active" : "paused",
       statusLabel: rule.isActive ? "Active" : "Paused",

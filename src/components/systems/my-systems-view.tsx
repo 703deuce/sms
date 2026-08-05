@@ -12,9 +12,9 @@ import { useMemo, useState } from "react";
 
 const TYPE_FILTERS: Array<{ id: "all" | SystemType; label: string }> = [
   { id: "all", label: "All" },
-  { id: "solution_setup", label: "Solution Setups" },
-  { id: "ai_agent", label: "AI Agents" },
-  { id: "automation", label: "Automations" },
+  { id: "solution_setup", label: "Agents" },
+  { id: "ai_agent", label: "Voice" },
+  { id: "automation", label: "SMS Automations" },
   { id: "campaign", label: "Campaigns" },
   { id: "routing", label: "Routing" },
 ];
@@ -50,7 +50,7 @@ function SystemRow({
   system: SystemResource;
   depth?: number;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(depth === 0);
   const hasChildren = Boolean(system.children?.length);
 
   return (
@@ -78,9 +78,15 @@ function SystemRow({
               <p className="truncate text-[13px] font-semibold text-[#111827]">
                 {system.name}
               </p>
-              <p className="mt-0.5 text-[12px] text-[#6B7280]">
-                Created from: {system.createdFrom}
-              </p>
+              {depth === 0 ? (
+                <p className="mt-0.5 text-[12px] text-[#6B7280]">
+                  Agent type: {system.agentType}
+                </p>
+              ) : (
+                <p className="mt-0.5 text-[12px] text-[#6B7280]">
+                  Part of: {system.createdFrom}
+                </p>
+              )}
               {system.warning ? (
                 <p className="mt-1 text-[12px] font-medium text-rose-600">
                   {system.warning}
@@ -90,7 +96,10 @@ function SystemRow({
           </div>
         </td>
         <td className="px-4 py-3 text-[12px] font-medium text-[#4B5563]">
-          {system.typeLabel}
+          <div>{system.agentType}</div>
+          <div className="mt-0.5 text-[11px] font-normal text-[#9CA3AF]">
+            {system.typeLabel}
+          </div>
         </td>
         <td className="px-4 py-3">
           <StatusPill status={system.status} label={system.statusLabel} />
@@ -141,11 +150,11 @@ export function MySystemsView({ systems }: { systems: SystemResource[] }) {
     <div className="space-y-5">
       <div>
         <h1 className="text-[28px] font-bold tracking-tight text-[#111827]">
-          My Systems
+          My Agents
         </h1>
         <p className="mt-1.5 text-[14px] text-[#6B7280]">
-          Everything created through a solution, template, builder, or manual
-          setup — in one inventory.
+          Every voice and SMS agent you create from the menu — with a clear
+          agent type so they stay organized.
         </p>
       </div>
 
@@ -189,7 +198,7 @@ export function MySystemsView({ systems }: { systems: SystemResource[] }) {
             <thead className="border-b border-[#E5E7EB] bg-[#F9FAFB] text-[11px] font-semibold uppercase tracking-wide text-[#6B7280]">
               <tr>
                 <th className="px-4 py-3">Name</th>
-                <th className="px-4 py-3">Type</th>
+                <th className="px-4 py-3">Agent type</th>
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3">Channels</th>
                 <th className="px-4 py-3">Phone</th>
@@ -205,8 +214,8 @@ export function MySystemsView({ systems }: { systems: SystemResource[] }) {
                     colSpan={8}
                     className="px-4 py-12 text-center text-[13px] text-[#6B7280]"
                   >
-                    No systems match these filters yet. Set up a solution from
-                    the dashboard to populate this inventory.
+                    No agents yet. Create one from AI Receptionist or SMS &amp;
+                    Messaging above.
                   </td>
                 </tr>
               ) : (

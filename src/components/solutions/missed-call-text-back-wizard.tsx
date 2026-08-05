@@ -273,7 +273,7 @@ export function MissedCallTextBackWizard({
           href="/systems"
           className="inline-flex h-10 items-center rounded-lg px-3 text-[13px] font-semibold text-[#6B7280] hover:underline"
         >
-          View in My Systems
+          View in My Agents
         </Link>
       </div>
     </div>

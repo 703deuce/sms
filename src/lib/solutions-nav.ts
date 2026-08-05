@@ -1,7 +1,7 @@
 import {
   AudioLines,
   BarChart3,
-  Boxes,
+  Bot,
   CalendarDays,
   Inbox,
   LayoutDashboard,
@@ -203,8 +203,8 @@ function staticSectionItems(
 }
 
 /**
- * Single solution-first sidebar (Platform/Solutions switch removed).
- * Solutions create systems · My Systems inventories them · Automations edits flows.
+ * Single product sidebar (no Platform/Solutions switch).
+ * Catalog creates agents · My Agents inventories them · Automations edits flows.
  */
 export function buildSolutionsNav(options: SolutionsNavOptions = {}): NavItem[] {
   const instances = options.instancesBySolution ?? {};
@@ -216,9 +216,13 @@ export function buildSolutionsNav(options: SolutionsNavOptions = {}): NavItem[] 
       href: "/outcomes",
       icon: LayoutDashboard,
     },
+    {
+      label: "My Agents",
+      href: "/systems",
+      icon: Bot,
+    },
   ];
 
-  let solutionsBandStarted = false;
   for (const section of LAUNCH_SECTIONS) {
     let firstInArea = true;
     for (const entry of section.entries) {
@@ -234,10 +238,9 @@ export function buildSolutionsNav(options: SolutionsNavOptions = {}): NavItem[] 
         children: entry.shortcut
           ? undefined
           : solutionChildren(solution, instances[solution.slug], entry.channel),
-        sectionLabel: !solutionsBandStarted ? "Solutions" : undefined,
+        // No "Solutions" band — AI Receptionist / SMS & Messaging are the areas.
         areaLabel: firstInArea ? section.label : undefined,
       });
-      solutionsBandStarted = true;
       firstInArea = false;
     }
   }
@@ -257,15 +260,10 @@ export function buildSolutionsNav(options: SolutionsNavOptions = {}): NavItem[] 
       ],
     ),
     {
-      label: "My Systems",
-      href: "/systems",
-      icon: Boxes,
-      sectionLabel: "Manage",
-    },
-    {
       label: "Automations",
       href: "/automations",
       icon: Workflow,
+      sectionLabel: "Manage",
       children: [
         { label: "Flows", href: "/automations" },
         { label: "Templates", href: "/automations/templates" },

@@ -72,10 +72,14 @@ for (const category of solutionCategories) {
   }
 }
 
-// Unified Solutions-first nav covers outcome dashboards and management.
+// Unified product nav covers outcome dashboards and management.
 const solutionsHrefs = new Set(collectNavHrefs(solutionsNav));
 assert.ok(solutionsHrefs.has("/outcomes"), "Solutions dashboard required");
-assert.ok(solutionsHrefs.has("/systems"), "My Systems inventory required");
+assert.ok(solutionsHrefs.has("/systems"), "My Agents inventory required");
+
+assert.equal(solutionsNav[0]?.label, "Dashboard");
+assert.equal(solutionsNav[1]?.label, "My Agents");
+assert.equal(solutionsNav[1]?.href, "/systems");
 
 for (const slug of solutionsLaunchSlugs()) {
   assert.ok(
@@ -90,7 +94,6 @@ const expectedLaunchMenu: Array<{
   labels: string[];
 }> = [
   {
-    section: "Solutions",
     area: "AI Receptionist",
     labels: [
       "AI Answering Service",
@@ -124,6 +127,12 @@ for (const section of expectedLaunchMenu) {
       section.section,
       `Expected section ${section.section} at position ${cursor}`,
     );
+  } else {
+    assert.equal(
+      launchItems[cursor]?.sectionLabel,
+      undefined,
+      `Expected no Solutions band at position ${cursor}`,
+    );
   }
   if (section.area) {
     assert.equal(
@@ -136,12 +145,12 @@ for (const section of expectedLaunchMenu) {
     assert.equal(
       launchItems[cursor]?.label,
       label,
-      `Expected Solutions menu item "${label}"`,
+      `Expected catalog menu item "${label}"`,
     );
     cursor += 1;
   }
 }
-assert.equal(cursor, 13, "Packaged Solutions catalog should be 13 items");
+assert.equal(cursor, 13, "Packaged catalog should be 13 items");
 
 const connect = solutionsNav.find(
   (i) => i.areaLabel === "Connect With Customers",
@@ -166,7 +175,6 @@ for (let i = 0; i < connectLabels.length; i += 1) {
 }
 
 const manageOrder = [
-  "My Systems",
   "Automations",
   "Inbox",
   "Calls",
@@ -178,12 +186,16 @@ const manageOrder = [
   "Integrations",
   "Compliance",
 ];
-const manageStart = solutionsNav.findIndex((i) => i.label === "My Systems");
-assert.ok(manageStart >= 0, "My Systems required under Manage");
+const manageStart = solutionsNav.findIndex((i) => i.label === "Automations");
+assert.ok(manageStart >= 0, "Automations required under Manage");
 assert.equal(
   solutionsNav[manageStart]?.sectionLabel,
   "Manage",
-  "My Systems starts the Manage band",
+  "Automations starts the Manage band",
+);
+assert.ok(
+  !solutionsNav.some((i) => i.label === "My Systems"),
+  "My Systems renamed/moved — should not remain under Manage",
 );
 for (let i = 0; i < manageOrder.length; i += 1) {
   assert.equal(

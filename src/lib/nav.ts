@@ -487,7 +487,7 @@ export const pageTitles: Record<string, string> = {
   "/dashboard": "Dashboard",
   "/getting-started": "Getting Started",
   "/outcomes": "Solutions Dashboard",
-  "/systems": "My Systems",
+  "/systems": "My Agents",
   "/solutions": "Solution Center",
   "/solutions/lead-recovery": "Lead Recovery",
   "/solutions/lead-recovery/missed-call-text-back": "Missed Call Text Back",
