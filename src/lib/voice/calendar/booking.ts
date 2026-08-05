@@ -324,8 +324,9 @@ export async function getAvailability(
   const maxDaysAhead = serviceMaxDaysAhead(svcCfg);
   const effectiveDays =
     maxDaysAhead > 0 ? Math.min(Math.max(1, days), maxDaysAhead) : Math.max(1, days);
-  // Mid-call voice webhooks must stay under Telnyx tool timeouts (~5–10s).
-  const scanDays = Math.min(effectiveDays, 3);
+  // Mid-call voice webhooks must stay under Telnyx tool timeouts.
+  // Allow up to 7 days when requested ("next Tuesday") but stop once we have enough slots.
+  const scanDays = Math.min(effectiveDays, 7);
   const timezone =
     String(args.timezone || svcCfg.timezone || "America/New_York").trim() ||
     "America/New_York";

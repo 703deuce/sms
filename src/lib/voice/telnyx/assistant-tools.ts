@@ -200,7 +200,9 @@ export function buildAssistantTools(input: {
       key === "search_crm_contacts" ||
       key === "send_sms" ||
       key === "book_appointment" ||
-      key === "calendar_availability";
+      key === "calendar_availability" ||
+      key === "take_structured_message" ||
+      key === "save_caller_info";
     const escalateSolePath = key === "escalate_human" && useCallControlTransfer;
     const description = escalateSolePath
       ? "Transfer the caller to a named human phone destination (e.g. Agent Handoff / Front Desk). This is the ONLY human phone transfer tool. Call it once when they ask for a person. If it returns ok=true, say you are connecting them and stay silent — never say the transfer failed while they are being connected. If it returns ok=false, then apologize and take a message. Never invent a phone number. Never hang up to transfer."

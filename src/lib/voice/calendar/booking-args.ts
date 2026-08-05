@@ -71,13 +71,16 @@ export type AvailabilityTimeWindow = {
 /**
  * Voice models often pass wall-clock times ("08:00") with daysAhead instead of
  * ISO datetimes. Calendly requires ISO — convert before calling providers.
- * Caps the window so mid-call webhooks stay under Telnyx tool timeouts (~5–10s).
+ *
+ * When the caller wants "next Tuesday", the model should pass ISO for that day.
+ * If it only passes daysAhead, keep enough runway to reach next week (7 days)
+ * while still capping extreme scans.
  */
 export function resolveAvailabilityTimeWindow(
   args: Record<string, unknown>,
   opts?: { maxDays?: number; now?: Date },
 ): AvailabilityTimeWindow {
-  const maxDays = Math.max(1, Math.min(14, opts?.maxDays ?? 3));
+  const maxDays = Math.max(1, Math.min(14, opts?.maxDays ?? 7));
   const now = opts?.now ? new Date(opts.now) : new Date();
   const rawStart = String(args.startTime || args.from || "").trim();
   const rawEnd = String(args.endTime || args.to || "").trim();
@@ -98,7 +101,7 @@ export function resolveAvailabilityTimeWindow(
     return {
       startTime: start.toISOString(),
       endTime: end.toISOString(),
-      daysAhead: Math.min(spanDays, maxDays),
+      daysAhead: Math.min(Math.max(spanDays, 1), maxDays),
       preferredStartMinute: null,
       preferredEndMinute: null,
     };
@@ -117,9 +120,12 @@ export function resolveAvailabilityTimeWindow(
     };
   }
 
+  // Default / clock-only: always cover at least a week when allowed so
+  // "next Tuesday" works even if the model passes daysAhead:3.
+  const floor = Math.min(7, maxDays);
   const days = Math.min(
     maxDays,
-    requestedDays > 0 ? requestedDays : maxDays,
+    requestedDays > 0 ? Math.max(requestedDays, floor) : floor,
   );
   const start = new Date(now.getTime() + 30 * 60_000);
   const end = new Date(start.getTime() + days * 86_400_000);
@@ -130,6 +136,38 @@ export function resolveAvailabilityTimeWindow(
     preferredStartMinute: startClock,
     preferredEndMinute: endClock,
   };
+}
+
+/** Speakable slot labels so the model offers real times instead of UTC ISO. */
+export function formatAvailabilitySlotsForAgent(
+  slots: Array<{ startsAt: string; endsAt?: string }>,
+  timeZone = "America/New_York",
+): Array<{ startsAt: string; endsAt?: string; label: string }> {
+  return slots.map((s) => {
+    const start = new Date(s.startsAt);
+    let label = s.startsAt;
+    if (!Number.isNaN(start.getTime())) {
+      try {
+        label = new Intl.DateTimeFormat("en-US", {
+          timeZone,
+          weekday: "long",
+          month: "long",
+          day: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+          hour12: true,
+          timeZoneName: "short",
+        }).format(start);
+      } catch {
+        label = start.toISOString();
+      }
+    }
+    return {
+      startsAt: s.startsAt,
+      ...(s.endsAt ? { endsAt: s.endsAt } : {}),
+      label,
+    };
+  });
 }
 
 /** Map wizard requiredField ids onto normalized tool arg keys. */
