@@ -644,6 +644,139 @@ export async function routeTexmlToAssistant(input: {
 }
 
 /**
+ * Apply official ULL Flux timing to an existing production assistant
+ * without wiping name, instructions, tools, model, voice, or greeting.
+ *
+ * Used to put H/F aggressive (or fast/baseline) timing on Danny while
+ * keeping the real receptionist agent intact.
+ */
+export async function applyTimingToExistingAssistant(input: {
+  assistantId: string;
+  timingId?: TurnTimingId;
+  /** When true, also send H-style punctuation endpointing waits. Default false for Flux. */
+  includePunctuationPlan?: boolean;
+}) {
+  const assistantId = String(input.assistantId || "").trim();
+  if (!assistantId) throw new Error("assistantId required");
+  const timingId = (input.timingId || "aggressive") as TurnTimingId;
+  const timing =
+    timingId === "aggressive"
+      ? TURN_TIMING_AGGRESSIVE
+      : timingId === "fast"
+        ? TURN_TIMING_FAST
+        : TURN_TIMING_BASELINE;
+
+  const beforeRemote = await ai.getAssistant(assistantId);
+  const before = (asRecord(beforeRemote)?.data ||
+    asRecord(beforeRemote) ||
+    {}) as Record<string, unknown>;
+  const beforeTools = Array.isArray(before.tools) ? before.tools : [];
+  const beforeName = String(before.name || "");
+  const beforeModel = String(before.model || "");
+
+  const startSpeakingPlan: Record<string, unknown> = {
+    wait_seconds: timing.wait_seconds,
+  };
+  if (input.includePunctuationPlan) {
+    startSpeakingPlan.transcription_endpointing_plan = {
+      on_punctuation_seconds: timing.on_punctuation_seconds,
+      on_no_punctuation_seconds: timing.on_no_punctuation_seconds,
+      on_number_seconds: timing.on_number_seconds,
+    };
+  } else {
+    // Clear stale punctuation waits from earlier cascade syncs.
+    startSpeakingPlan.transcription_endpointing_plan = null;
+  }
+
+  const patch = {
+    transcription: {
+      model: "deepgram/flux",
+      language: String(asRecord(before.transcription)?.language || "en"),
+      settings: {
+        eot_threshold: timing.eot_threshold,
+        eager_eot_threshold: timing.eager_eot_threshold,
+        eot_timeout_ms: timing.eot_timeout_ms,
+      },
+    },
+    interruption_settings: {
+      enable: true,
+      disable_greeting_interruption: Boolean(
+        asRecord(before.interruption_settings)?.disable_greeting_interruption ??
+          false,
+      ),
+      interrupt_prediction_threshold: Number(
+        asRecord(before.interruption_settings)?.interrupt_prediction_threshold ??
+          0,
+      ),
+      start_speaking_plan: startSpeakingPlan,
+    },
+  };
+
+  await ai.updateAssistant(assistantId, patch);
+  const afterRemote = await ai.getAssistant(assistantId);
+  const after = (asRecord(afterRemote)?.data ||
+    asRecord(afterRemote) ||
+    {}) as Record<string, unknown>;
+  const afterTools = Array.isArray(after.tools) ? after.tools : [];
+  const settings = asRecord(asRecord(after.transcription)?.settings) || {};
+  const waitLive = asRecord(
+    asRecord(after.interruption_settings)?.start_speaking_plan,
+  )?.wait_seconds;
+
+  const preserved = {
+    name: String(after.name || "") === beforeName,
+    model: String(after.model || "") === beforeModel,
+    toolCount: afterTools.length === beforeTools.length,
+    instructionsUnchanged:
+      String(after.instructions || "") === String(before.instructions || ""),
+  };
+
+  const timingMatched =
+    nearlyEqual(settings.eot_threshold, timing.eot_threshold) &&
+    nearlyEqual(settings.eager_eot_threshold, timing.eager_eot_threshold) &&
+    nearlyEqual(settings.eot_timeout_ms, timing.eot_timeout_ms) &&
+    nearlyEqual(waitLive, timing.wait_seconds);
+
+  if (!preserved.name || !preserved.model || !preserved.toolCount) {
+    throw new Error(
+      `Timing patch risked assistant identity: ${JSON.stringify(preserved)}`,
+    );
+  }
+  if (!timingMatched) {
+    throw new Error(
+      `Timing patch did not stick: live=${JSON.stringify({
+        eot_threshold: settings.eot_threshold,
+        eager_eot_threshold: settings.eager_eot_threshold,
+        eot_timeout_ms: settings.eot_timeout_ms,
+        wait_seconds: waitLive,
+      })} expected=${JSON.stringify(timing)}`,
+    );
+  }
+
+  return {
+    assistantId,
+    timingId,
+    timing,
+    preserved,
+    timingMatched,
+    before: {
+      name: beforeName,
+      model: beforeModel,
+      toolCount: beforeTools.length,
+      transcription: before.transcription ?? null,
+      interruption_settings: before.interruption_settings ?? null,
+    },
+    live: {
+      name: after.name ?? null,
+      model: after.model ?? null,
+      toolCount: afterTools.length,
+      transcription: after.transcription ?? null,
+      interruption_settings: after.interruption_settings ?? null,
+    },
+  };
+}
+
+/**
  * Ensure clone + route + verify. Does not modify A/B/C/D baseline timing.
  */
 export async function switchToTurnCloneProfile(input: {

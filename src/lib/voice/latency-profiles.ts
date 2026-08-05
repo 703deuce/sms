@@ -21,6 +21,7 @@ export const LATENCY_PROFILE_IDS = [
   "flux_b_fast",
   "flux_b_balanced",
   "flux_b_patient",
+  "flux_h_aggressive",
   "native_audio_ultravox",
 ] as const;
 
@@ -32,7 +33,12 @@ export const VERSION_B_LATENCY_OPTIMIZED: LatencyProfileId = "flux_eager_low_lat
 export const VERSION_B_FAST: LatencyProfileId = "flux_b_fast";
 export const VERSION_B_BALANCED: LatencyProfileId = "flux_b_balanced";
 export const VERSION_B_PATIENT: LatencyProfileId = "flux_b_patient";
+/** Matches official-baseline turn-clone H / F aggressive Flux timing. */
+export const VERSION_H_AGGRESSIVE: LatencyProfileId = "flux_h_aggressive";
 export const VERSION_C_NATIVE_AUDIO: LatencyProfileId = "native_audio_ultravox";
+
+/** Minimum wait_seconds allowed for Flux start_speaking_plan (H-aggressive uses 0.05). */
+export const FLUX_WAIT_SECONDS_MIN = 0.05;
 
 export const ACTIVE_LATENCY_PROFILE_DEFAULT: LatencyProfileId = "flux_b_balanced";
 
@@ -189,7 +195,10 @@ export const LEGACY_CASCADE_PROFILE: LatencyProfileDefinition = {
 function buildFluxCascadeFields(input: {
   eotThreshold: number;
   eagerEotThreshold: number;
+  eotTimeoutMs?: number;
+  waitSeconds?: number;
 }): LatencyProfileProviderFields {
+  const waitSeconds = input.waitSeconds ?? 0.1;
   return {
     transcription: {
       enabled: true,
@@ -199,7 +208,7 @@ function buildFluxCascadeFields(input: {
       settings: {
         eot_threshold: input.eotThreshold,
         eager_eot_threshold: input.eagerEotThreshold,
-        eot_timeout_ms: 5000,
+        eot_timeout_ms: input.eotTimeoutMs ?? 5000,
       },
     },
     voiceLanguage: {
@@ -213,9 +222,9 @@ function buildFluxCascadeFields(input: {
     },
     // Telnyx: Flux EOT drives turn end. Clear legacy punctuation waits.
     // Optional wait_seconds 0.1 is Telnyx's recommended Flux companion floor,
-    // not a universal 1s no-punct delay.
+    // not a universal 1s no-punct delay. H-aggressive may use 0.05.
     startSpeakingPlan: {
-      waitSeconds: 0.1,
+      waitSeconds,
       fluxOmitTranscriptionEndpointingPlan: true,
     },
     greetingMode: "fixed",
@@ -291,6 +300,25 @@ export const FLUX_B_PATIENT_PROFILE: LatencyProfileDefinition = {
 };
 
 /**
+ * H_AGGRESSIVE — same Flux/start-speaking timing as official-baseline
+ * turn-clone H (Kimi Aggressive) / F (Haiku Aggressive).
+ * Keeps Haiku on the production agent; timing only. Experimental.
+ */
+export const FLUX_H_AGGRESSIVE_PROFILE: LatencyProfileDefinition = {
+  id: "flux_h_aggressive",
+  versionLabel: "H",
+  label: "H-Aggressive — Flux 0.70/0.30 + wait 0.05 + Haiku + Ultra",
+  description:
+    "Experimental max-speed Flux timing matching official ULL profile H/F: EOT 0.70 / eager 0.30 / timeout 3000 / wait 0.05. Higher cutoff risk — do not auto-promote.",
+  fields: buildFluxCascadeFields({
+    eotThreshold: 0.7,
+    eagerEotThreshold: 0.3,
+    eotTimeoutMs: 3000,
+    waitSeconds: 0.05,
+  }),
+};
+
+/**
  * Version C — Ultravox native-audio INPUT.
  *
  * Telnyx ignores transcription for fixie-ai/ultravox-v0_4_1-llama-3_1-8b.
@@ -352,6 +380,7 @@ export const LATENCY_PROFILES: Record<LatencyProfileId, LatencyProfileDefinition
     flux_b_fast: FLUX_B_FAST_PROFILE,
     flux_b_balanced: FLUX_B_BALANCED_PROFILE,
     flux_b_patient: FLUX_B_PATIENT_PROFILE,
+    flux_h_aggressive: FLUX_H_AGGRESSIVE_PROFILE,
     native_audio_ultravox: NATIVE_AUDIO_ULTRAVOX_PROFILE,
   };
 
@@ -418,6 +447,7 @@ export function isLatencyOptimizedProfile(
     profileId === VERSION_B_FAST ||
     profileId === VERSION_B_BALANCED ||
     profileId === VERSION_B_PATIENT ||
+    profileId === VERSION_H_AGGRESSIVE ||
     profileId === VERSION_C_NATIVE_AUDIO
   );
 }
@@ -429,7 +459,8 @@ export function isFluxEagerLatencyProfile(
     profileId === VERSION_B_LATENCY_OPTIMIZED ||
     profileId === VERSION_B_FAST ||
     profileId === VERSION_B_BALANCED ||
-    profileId === VERSION_B_PATIENT
+    profileId === VERSION_B_PATIENT ||
+    profileId === VERSION_H_AGGRESSIVE
   );
 }
 
@@ -447,6 +478,9 @@ export function resolveLatencyProfileAlias(
     B_BALANCED: "flux_b_balanced",
     B_FAST: "flux_b_fast",
     B_PATIENT: "flux_b_patient",
+    H: "flux_h_aggressive",
+    H_AGGRESSIVE: "flux_h_aggressive",
+    AGGRESSIVE: "flux_h_aggressive",
     C: "native_audio_ultravox",
     BALANCED: "flux_b_balanced",
     FAST: "flux_b_fast",
@@ -801,7 +835,7 @@ export function buildStartSpeakingPlanFromConfig(
       : plan.waitSeconds;
 
   const waitSeconds = Math.max(
-    0.1,
+    FLUX_WAIT_SECONDS_MIN,
     Math.min(1.5, waitFromEndpointing ?? plan.waitSeconds ?? 0.1),
   );
 

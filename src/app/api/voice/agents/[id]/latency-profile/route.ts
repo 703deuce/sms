@@ -113,7 +113,7 @@ export async function POST(req: Request, ctx: Ctx) {
           return NextResponse.json(
             {
               error:
-                "profileId must be legacy_cascade, flux_b_fast, flux_b_balanced, flux_b_patient, flux_eager_low_latency, or native_audio_ultravox (aliases: A, B, B_FAST, B_BALANCED, B_PATIENT, C)",
+                "profileId must be legacy_cascade, flux_b_fast, flux_b_balanced, flux_b_patient, flux_h_aggressive, flux_eager_low_latency, or native_audio_ultravox (aliases: A, B, B_FAST, B_BALANCED, B_PATIENT, H, H_AGGRESSIVE, C)",
             },
             { status: 400 },
           );
