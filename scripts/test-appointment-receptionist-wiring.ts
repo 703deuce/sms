@@ -16,6 +16,7 @@ import {
 } from "../src/lib/solutions/appointment-receptionist/capability-checklist";
 import { resolveLiveCalendar } from "../src/lib/solutions/appointment-receptionist/live-calendar";
 import { createDefaultWizardState } from "../src/lib/solutions/appointment-receptionist/defaults";
+import { resolveServiceRequiredFields } from "../src/lib/solutions/appointment-receptionist/required-fields";
 import {
   buildSystemPrompt,
   buildWizardAgentConfig,
@@ -491,6 +492,27 @@ assert(
     "create_custom keeps text",
     String(startup?.text || "").includes("connect you"),
   );
+  assert(
+    "prompt forbids inventing slot times",
+    String(cfg.instructions?.system || "").includes(
+      "Never offer, confirm, or book a day/time unless",
+    ),
+  );
+}
+
+{
+  const fields = resolveServiceRequiredFields(
+    ["full_name", "phone", "email", "service", "address"],
+    [
+      { id: "full_name", enabled: true },
+      { id: "phone", enabled: true },
+      { id: "email", enabled: true },
+      { id: "service", enabled: true },
+      { id: "address", enabled: false },
+    ],
+  );
+  assert("drops disabled address from requiredFields", !fields.includes("address"));
+  assert("keeps phone required", fields.includes("phone"));
 }
 
 // --- Availability window for voice calendar tools ---

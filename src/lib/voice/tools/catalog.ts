@@ -602,11 +602,14 @@ export const BUILTIN_WEBHOOK_BODIES: Record<
     name: "book_appointment",
     toolType: "book_appointment",
     description:
-      "Book an appointment. NEVER tell the caller they are booked until this returns success.",
+      "Book an appointment using a startsAt value from the latest calendar_availability slots only. NEVER invent a time. NEVER tell the caller they are booked until this returns success. If a required field is missing (e.g. address), ask for it and include it on the next call.",
     body: {
       type: "object",
       properties: {
-        startAt: { type: "string", description: "ISO start time (alias: startsAt)" },
+        startAt: {
+          type: "string",
+          description: "ISO start time from calendar_availability.slots[].startsAt (alias: startsAt)",
+        },
         startsAt: { type: "string" },
         startTime: { type: "string" },
         serviceId: { type: "string" },
@@ -620,6 +623,8 @@ export const BUILTIN_WEBHOOK_BODIES: Record<
         phone: { type: "string" },
         customerEmail: { type: "string" },
         email: { type: "string" },
+        address: { type: "string", description: "Required only when the service requires address" },
+        location: { type: "string" },
       },
       required: ["startAt", "customerPhone"],
     },

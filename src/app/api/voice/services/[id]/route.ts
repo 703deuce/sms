@@ -19,12 +19,19 @@ export async function PATCH(
       durationMinutes?: number;
       bufferMinutes?: number;
       calendarId?: string | null;
+      config?: Record<string, unknown>;
     };
     const data: Record<string, unknown> = {};
     if (body.name !== undefined) data.name = body.name.trim();
     if (body.durationMinutes !== undefined) data.durationMinutes = Number(body.durationMinutes) || 30;
     if (body.bufferMinutes !== undefined) data.bufferMinutes = Number(body.bufferMinutes) || 0;
     if (body.calendarId !== undefined) data.calendarId = body.calendarId || null;
+    if (body.config && typeof body.config === "object") {
+      data.config = {
+        ...((existing.config as Record<string, unknown>) || {}),
+        ...body.config,
+      };
+    }
     const row = await getPrisma().voiceService.update({ where: { id }, data });
     return NextResponse.json({ data: row });
   } catch (err) {
