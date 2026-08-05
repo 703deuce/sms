@@ -20,6 +20,16 @@ export async function processKnowledgeSource(sourceId: string) {
   });
   if (!source) throw new Error("Source not found");
 
+  // prisma-compat may omit includes if RELATIONS is incomplete — load KB explicitly.
+  const knowledgeBase =
+    source.knowledgeBase ||
+    (await prisma.voiceKnowledgeBase.findFirst({
+      where: { id: source.knowledgeBaseId, workspaceId: source.workspaceId },
+    }));
+  if (!knowledgeBase) {
+    throw new Error(`Knowledge base ${source.knowledgeBaseId} not found for source`);
+  }
+
   await prisma.voiceKnowledgeSource.update({
     where: { id: sourceId },
     data: { status: "processing" },
@@ -27,7 +37,7 @@ export async function processKnowledgeSource(sourceId: string) {
 
   try {
     let text = source.contentText || source.extractedPreview || "";
-    let bucketName = source.knowledgeBase.telnyxBucketName;
+    let bucketName = knowledgeBase.telnyxBucketName;
     let objectKey = source.telnyxObjectKey;
     let taskId: string | null = null;
     let ragMode: "telnyx" | "mock" | "local" = "local";
@@ -242,15 +252,29 @@ function extractSnippet(text: string, q: string): string {
 /** List Telnyx bucket names assigned to an agent (via KB links or config). */
 export async function getAgentRagBucketIds(workspaceId: string, agentId: string) {
   const prisma = getPrisma();
+  // Avoid depending on include hydration — fetch KB ids then bucket names.
   const links = await prisma.voiceAgentKnowledgeBase.findMany({
     where: { agentId, workspaceId },
-    include: { knowledgeBase: { select: { telnyxBucketName: true, status: true } } },
+    select: { knowledgeBaseId: true },
   });
-  const fromLinks = links
-    .map((l: (typeof links)[number]) => l.knowledgeBase.telnyxBucketName)
-    .filter((b: string | null): b is string => Boolean(b));
+  const kbIds = links
+    .map((l: { knowledgeBaseId: string }) => l.knowledgeBaseId)
+    .filter(Boolean);
 
-  if (fromLinks.length) return [...new Set(fromLinks)];
+  if (kbIds.length) {
+    const linked = await prisma.voiceKnowledgeBase.findMany({
+      where: {
+        workspaceId,
+        id: { in: kbIds },
+        telnyxBucketName: { not: null },
+      },
+      select: { telnyxBucketName: true },
+    });
+    const fromLinks = linked
+      .map((k: { telnyxBucketName: string | null }) => k.telnyxBucketName)
+      .filter((b: string | null): b is string => Boolean(b));
+    if (fromLinks.length) return [...new Set(fromLinks)];
+  }
 
   // Fallback: all workspace KBs with buckets (until agent links are set).
   const kbs = await prisma.voiceKnowledgeBase.findMany({

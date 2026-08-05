@@ -375,6 +375,26 @@ const RELATIONS: Record<string, Record<string, { table: string; fk: string; pk?:
     workspace: { table: "Workspace", fk: "workspaceId" },
     sourceSolutionSetup: { table: "solution_setups", fk: "sourceSolutionSetupId" },
   },
+  voiceKnowledgeBase: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+  },
+  voiceKnowledgeSource: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+    knowledgeBase: { table: "voice_knowledge_bases", fk: "knowledgeBaseId" },
+  },
+  voiceAgentKnowledgeBase: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+    agent: { table: "voice_agents", fk: "agentId" },
+    knowledgeBase: { table: "voice_knowledge_bases", fk: "knowledgeBaseId" },
+  },
+  voiceAgentTool: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+    agent: { table: "voice_agents", fk: "agentId" },
+    tool: { table: "voice_tools", fk: "toolId" },
+  },
+  voiceTool: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+  },
   automationExecution: {
     flow: { table: "AutomationFlow", fk: "flowId" },
     contact: { table: "Contact", fk: "contactId" },
