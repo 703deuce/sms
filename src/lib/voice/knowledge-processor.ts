@@ -180,6 +180,35 @@ export async function processKnowledgeSource(sourceId: string) {
     };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
+    // Wizard text profiles must still be answerable when Telnyx RAG sync fails.
+    // Keep contentText and mark indexed so assistant digest / local search work.
+    const fallbackText = (
+      source.contentText ||
+      source.extractedPreview ||
+      ""
+    ).trim();
+    if (fallbackText && (source.sourceType === "text" || source.sourceType === "faq")) {
+      const preview = fallbackText.slice(0, 500);
+      await prisma.voiceKnowledgeSource.update({
+        where: { id: sourceId },
+        data: {
+          status: "indexed",
+          extractedPreview: preview,
+          chunkCount: Math.max(1, Math.ceil(fallbackText.length / CHUNK_SIZE)),
+          contentText: fallbackText.slice(0, LOCAL_TEXT_CAP),
+          errorMessage: `Telnyx RAG sync failed; using local text. ${msg}`.slice(0, 500),
+          lastSyncedAt: new Date(),
+        },
+      });
+      return {
+        chunks: Math.max(1, Math.ceil(fallbackText.length / CHUNK_SIZE)),
+        preview,
+        ragMode: "local" as const,
+        bucketName: null,
+        taskId: null,
+        warning: msg,
+      };
+    }
     await prisma.voiceKnowledgeSource.update({
       where: { id: sourceId },
       data: { status: "failed", errorMessage: msg },

@@ -10,10 +10,54 @@ import {
 import { resolveWizardRoutingMode } from "./routing-mode";
 
 const KNOWLEDGE_FALLBACK_PHRASE =
-  "If information is not available in the knowledge base, say you don't have that information and offer to take a message or connect someone who can help.";
+  "If a caller asks about something that is not covered in the Business knowledge section below (and not returned by an attached knowledge tool), say you don't have that information and offer to take a message or connect someone who can help. Never invent business facts.";
 
 const DEFAULT_RECORDING_DISCLOSURE =
   "This call may be recorded for quality and training purposes.";
+
+/** Pull configured wizard knowledge into a prompt block the voice model can answer from. */
+export function buildBusinessKnowledgePromptSection(
+  state: AppointmentReceptionistWizardState,
+): string {
+  const lines: string[] = [];
+  const business = state.businessName?.trim();
+  if (business) lines.push(`Business name: ${business}`);
+  if (state.phoneNumberE164) lines.push(`Main phone: ${state.phoneNumberE164}`);
+  if (state.websiteUrl?.trim()) lines.push(`Website: ${state.websiteUrl.trim()}`);
+  if (state.timezone) lines.push(`Time zone: ${state.timezone}`);
+
+  const facts = (state.knowledgeItems || []).filter((item) => {
+    const summary = (item.summary || "").trim();
+    if (!summary) return false;
+    // Skip unused defaults still marked missing.
+    if (item.status === "missing") return false;
+    return true;
+  });
+
+  if (facts.length) {
+    lines.push("");
+    lines.push("Known facts (answer from these — do not say you lack access when the answer is here):");
+    for (const item of facts) {
+      lines.push(`- ${item.label}: ${item.summary.trim()}`);
+    }
+  }
+
+  const enabledTypes = (state.appointmentTypes || []).filter((t) => t.enabled);
+  if (enabledTypes.length) {
+    lines.push("");
+    lines.push("Bookable appointment types:");
+    for (const t of enabledTypes) {
+      const bits = [
+        t.name,
+        t.durationMin ? `${t.durationMin} min` : null,
+        t.bookingHours || null,
+      ].filter(Boolean);
+      lines.push(`- ${bits.join(" · ")}`);
+    }
+  }
+
+  return lines.join("\n").trim();
+}
 
 function interpolateGreeting(state: AppointmentReceptionistWizardState) {
   const business = state.businessName.trim() || "our office";
@@ -84,7 +128,9 @@ export function buildSystemPrompt(state: AppointmentReceptionistWizardState): st
   lines.push("");
   lines.push("Goals:");
   if (caps.includes("answer_questions")) {
-    lines.push("- Answer common business questions using the knowledge base only.");
+    lines.push(
+      "- Answer common business questions using the Business knowledge section below (and any attached knowledge tools).",
+    );
   }
   if (caps.includes("book_appointments")) {
     lines.push("- Help callers book appointments using live calendar tools.");
@@ -181,13 +227,21 @@ export function buildSystemPrompt(state: AppointmentReceptionistWizardState): st
   if (b.confirmDetails) lines.push("- Confirm names, numbers, dates, and addresses.");
   if (b.neverInventPricing) lines.push("- Never invent pricing.");
   if (b.neverInventAvailability) lines.push("- Never invent availability.");
-  lines.push("- Use the knowledge base for business facts.");
+  lines.push("- Use the Business knowledge section for hours, pricing, services, policies, and FAQs.");
   lines.push("- Use calendar tools for availability.");
   lines.push(`- ${KNOWLEDGE_FALLBACK_PHRASE}`);
   lines.push("");
   lines.push("Guardrails:");
   for (const g of state.guardrails) lines.push(`- ${g}`);
   lines.push(`- ${KNOWLEDGE_FALLBACK_PHRASE}`);
+
+  const knowledgeBlock = buildBusinessKnowledgePromptSection(state);
+  if (knowledgeBlock) {
+    lines.push("");
+    lines.push("Business knowledge:");
+    lines.push(knowledgeBlock);
+  }
+
   return lines.join("\n");
 }
 

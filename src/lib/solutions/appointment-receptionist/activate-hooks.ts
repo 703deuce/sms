@@ -72,14 +72,41 @@ async function ensureWizardKnowledgeBase(input: {
   state: AppointmentReceptionistWizardState;
 }): Promise<string | null> {
   const prisma = getPrisma();
-  const kbName = `${input.state.solutionName || "Appointment Receptionist"} Knowledge`;
+  const kbName = input.agentId
+    ? `Agent ${input.agentId.slice(0, 12)} Knowledge`
+    : `${input.state.solutionName || "Appointment Receptionist"} Knowledge`;
 
-  let kb = await prisma.voiceKnowledgeBase.findFirst({
-    where: {
-      workspaceId: input.workspaceId,
-      name: kbName,
-    },
-  });
+  let kb = null as Awaited<
+    ReturnType<typeof prisma.voiceKnowledgeBase.findFirst>
+  >;
+  if (input.agentId) {
+    const link = await prisma.voiceAgentKnowledgeBase.findFirst({
+      where: { agentId: input.agentId, workspaceId: input.workspaceId },
+      select: { knowledgeBaseId: true },
+    });    if (link?.knowledgeBaseId) {
+      kb = await prisma.voiceKnowledgeBase.findFirst({
+        where: { id: link.knowledgeBaseId, workspaceId: input.workspaceId },
+      });
+    }
+  }
+  if (!kb) {
+    kb = await prisma.voiceKnowledgeBase.findFirst({
+      where: {
+        workspaceId: input.workspaceId,
+        name: kbName,
+      },
+    });
+  }
+  if (!kb && input.state.solutionName?.trim()) {
+    // Prefer a KB already named for this receptionist (legacy naming).
+    kb = await prisma.voiceKnowledgeBase.findFirst({
+      where: {
+        workspaceId: input.workspaceId,
+        name: `${input.state.solutionName.trim()} Knowledge`,
+      },
+      orderBy: { updatedAt: "desc" },
+    });
+  }
   if (!kb) {
     kb = await prisma.voiceKnowledgeBase.create({
       data: {
@@ -89,9 +116,7 @@ async function ensureWizardKnowledgeBase(input: {
         status: "active",
       },
     });
-  }
-
-  const profileText = buildBusinessProfileText(input.state);
+  }  const profileText = buildBusinessProfileText(input.state);
   const sourceName = "Wizard business profile";
   let source = await prisma.voiceKnowledgeSource.findFirst({
     where: {

@@ -61,27 +61,27 @@ async function buildShortKnowledgeDigest(workspaceId: string, agentId: string): 
     const sources = (await prisma.voiceKnowledgeSource.findMany({
       where: {
         workspaceId,
-        status: "indexed",
+        status: { in: ["indexed", "ready", "pending", "failed", "processing"] },
         sourceType: { in: ["text", "faq"] },
         ...(kbIds.length ? { knowledgeBaseId: { in: kbIds } } : {}),
       },
       orderBy: { updatedAt: "desc" },
-      take: 3,
+      take: 5,
       select: { contentText: true, name: true, extractedPreview: true },
     })) as KbSource[];
     const chunks = sources
       .map((s: KbSource) => {
-        const body = (s.contentText || s.extractedPreview || "").trim().slice(0, 600);
+        // Wizard business profiles need the full text in-prompt when RAG is down.
+        const body = (s.contentText || s.extractedPreview || "").trim().slice(0, 4000);
         if (!body) return "";
         return `### ${s.name || "FAQ"}\n${body}`;
       })
       .filter(Boolean);
     if (!chunks.length) return "";
     return [
-      "Quick FAQ digest (for longer documents, use the retrieval knowledge tool — do not invent facts):",
+      "Business knowledge digest (answer from this — do not invent facts; for longer docs also use the retrieval knowledge tool when available):",
       ...chunks,
-    ].join("\n\n");
-  } catch {
+    ].join("\n\n");  } catch {
     return "";
   }
 }

@@ -372,6 +372,41 @@ assert(
     "distinguishNewExisting in system prompt",
     /new or an existing/i.test(prompt),
   );
+
+  state.businessName = "Lakeside Family Dentistry";
+  state.agentName = "Danny";
+  state.knowledgeItems = state.knowledgeItems.map((i) =>
+    i.id === "hours"
+      ? {
+          ...i,
+          status: "complete" as const,
+          summary: "Friday until 3pm. First Saturday 9–1.",
+        }
+      : i.id === "pricing"
+        ? {
+            ...i,
+            status: "complete" as const,
+            summary: "New patient exam + cleaning + X-rays: $189",
+          }
+        : i,
+  );
+  const withKnowledge = buildSystemPrompt(state);
+  assert(
+    "prompt embeds hours knowledge",
+    withKnowledge.includes("Friday until 3pm"),
+  );
+  assert(
+    "prompt embeds pricing knowledge",
+    withKnowledge.includes("$189"),
+  );
+  assert(
+    "prompt does not say knowledge-base-only",
+    !withKnowledge.includes("knowledge base only"),
+  );
+  assert(
+    "prompt has Business knowledge section",
+    withKnowledge.includes("Business knowledge:"),
+  );
 }
 
 assert(

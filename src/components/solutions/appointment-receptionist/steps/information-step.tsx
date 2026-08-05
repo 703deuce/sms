@@ -410,45 +410,45 @@ export function InformationStep({
     if (fileRef.current) fileRef.current.value = "";
   }
 
-  function saveGuidedProfile() {
+  function saveGuidedProfile(nextGuided = guided) {
     let items = [...state.knowledgeItems];
-    const biz = guided.businessName.trim() || state.businessName;
+    const biz = nextGuided.businessName.trim() || state.businessName;
     if (biz) {
       items = upsertItem(items, "business", {
         label: "Business details",
-        summary: [biz, guided.address.trim()].filter(Boolean).join(" · "),
+        summary: [biz, nextGuided.address.trim()].filter(Boolean).join(" · "),
         status: "complete",
         statusLabel: "Configured",
       });
     }
-    if (guided.hours.trim()) {
+    if (nextGuided.hours.trim()) {
       items = upsertItem(items, "hours", {
         label: "Hours",
-        summary: guided.hours.trim(),
+        summary: nextGuided.hours.trim(),
         status: "complete",
         statusLabel: "Configured",
       });
     }
-    if (guided.services.trim()) {
+    if (nextGuided.services.trim()) {
       items = upsertItem(items, "services", {
         label: "Services",
-        summary: guided.services.trim(),
+        summary: nextGuided.services.trim(),
         status: "complete",
         statusLabel: "Configured",
       });
     }
-    if (guided.pricing.trim()) {
+    if (nextGuided.pricing.trim()) {
       items = upsertItem(items, "pricing", {
         label: "Pricing",
-        summary: guided.pricing.trim(),
+        summary: nextGuided.pricing.trim(),
         status: "complete",
         statusLabel: "Configured",
       });
     }
-    if (guided.policies.trim()) {
+    if (nextGuided.policies.trim()) {
       items = upsertItem(items, "policies", {
         label: "Policies",
-        summary: guided.policies.trim(),
+        summary: nextGuided.policies.trim(),
         status: "complete",
         statusLabel: "Configured",
       });
@@ -458,6 +458,14 @@ export function InformationStep({
       knowledgeItems: items,
       knowledgeSource: "guided_profile",
     });
+  }
+
+  function updateGuided<K extends keyof typeof guided>(key: K, value: string) {
+    const next = { ...guided, [key]: value };
+    setGuided(next);
+    // Keep wizard knowledgeItems in sync without requiring a separate Save click
+    // (Playwright/browser fills update the DOM; onChange keeps React state + agent knowledge).
+    saveGuidedProfile(next);
   }
 
   function openEdit(item: KnowledgeItem) {
@@ -562,9 +570,7 @@ export function InformationStep({
                 <Input
                   className="mt-1"
                   value={guided.businessName}
-                  onChange={(e) =>
-                    setGuided((g) => ({ ...g, businessName: e.target.value }))
-                  }
+                  onChange={(e) => updateGuided("businessName", e.target.value)}
                   placeholder="Acme Dental"
                 />
               </div>
@@ -573,9 +579,7 @@ export function InformationStep({
                 <Input
                   className="mt-1"
                   value={guided.address}
-                  onChange={(e) =>
-                    setGuided((g) => ({ ...g, address: e.target.value }))
-                  }
+                  onChange={(e) => updateGuided("address", e.target.value)}
                   placeholder="123 Main St, Austin TX"
                 />
               </div>
@@ -584,9 +588,7 @@ export function InformationStep({
                 <Textarea
                   className="mt-1 min-h-[72px]"
                   value={guided.hours}
-                  onChange={(e) =>
-                    setGuided((g) => ({ ...g, hours: e.target.value }))
-                  }
+                  onChange={(e) => updateGuided("hours", e.target.value)}
                   placeholder="Mon–Fri 9am–5pm, Sat 10am–2pm, closed Sunday"
                 />
               </div>
@@ -595,9 +597,7 @@ export function InformationStep({
                 <Textarea
                   className="mt-1 min-h-[72px]"
                   value={guided.services}
-                  onChange={(e) =>
-                    setGuided((g) => ({ ...g, services: e.target.value }))
-                  }
+                  onChange={(e) => updateGuided("services", e.target.value)}
                   placeholder="Cleanings, fillings, whitening…"
                 />
               </div>
@@ -606,9 +606,7 @@ export function InformationStep({
                 <Textarea
                   className="mt-1 min-h-[56px]"
                   value={guided.pricing}
-                  onChange={(e) =>
-                    setGuided((g) => ({ ...g, pricing: e.target.value }))
-                  }
+                  onChange={(e) => updateGuided("pricing", e.target.value)}
                   placeholder="Cleanings from $120…"
                 />
               </div>
@@ -617,15 +615,13 @@ export function InformationStep({
                 <Textarea
                   className="mt-1 min-h-[56px]"
                   value={guided.policies}
-                  onChange={(e) =>
-                    setGuided((g) => ({ ...g, policies: e.target.value }))
-                  }
+                  onChange={(e) => updateGuided("policies", e.target.value)}
                   placeholder="24h cancellation policy…"
                 />
               </div>
               <button
                 type="button"
-                onClick={saveGuidedProfile}
+                onClick={() => saveGuidedProfile()}
                 className="rounded-lg bg-primary px-3 py-2 text-xs font-medium text-primary-foreground"
               >
                 Save profile to knowledge
