@@ -658,6 +658,40 @@ export async function executeBuiltinVoiceAction(input: {
       });
       return { ok: true, queued: true, to, subject };
     }
+    case "resolve_datetime": {
+      const { resolveSpokenDatetime } = await import("../calendar/resolve-datetime");
+      let timezone = String(args.timezone || args.business_timezone || "").trim();
+      if (!timezone && input.agentId) {
+        try {
+          const { loadVoiceAgentRuntimeConfigRecord } = await import("../load-agent-config");
+          const cfg = await loadVoiceAgentRuntimeConfigRecord(
+            input.workspaceId,
+            input.agentId,
+          );
+          const dyn = (cfg.dynamicVariables || {}) as Record<string, unknown>;
+          timezone = String(
+            dyn.business_timezone || dyn.timezone || cfg.timezone || "",
+          ).trim();
+        } catch {
+          // fall through
+        }
+      }
+      if (!timezone) {
+        try {
+          const messaging = await prisma.workspaceMessagingSettings.findUnique({
+            where: { workspaceId: input.workspaceId },
+            select: { timezone: true },
+          });
+          timezone = String(messaging?.timezone || "").trim();
+        } catch {
+          // fall through
+        }
+      }
+      return resolveSpokenDatetime({
+        spoken: String(args.spoken || args.query || args.text || ""),
+        timezone: timezone || "America/New_York",
+      });
+    }
     case "calendar_availability": {
       const { normalizeBookingToolArgs, resolveAvailabilityTimeWindow } = await import(
         "../calendar/booking-args"

@@ -220,6 +220,8 @@ function buildFluxCascadeFields(input: {
     },
     greetingMode: "fixed",
     nativeAudio: false,
+    // Skip call-start dynvar webhook so greeting is not blocked. Fresh clock
+    // comes from the resolve_datetime tool mid-call when relative times matter.
     skipDynamicVariablesWebhook: true,
     telnyxFieldPlan: {
       transcription_model_deepgram_flux: "sent_and_applicable",
@@ -800,8 +802,9 @@ export function buildStartSpeakingPlanFromConfig(
       ? config.voiceLanguage.endpointingMs / 1000
       : plan.waitSeconds;
 
+  // Allow H-aggressive 0.05; Telnyx Flux companion floor used to be 0.1.
   const waitSeconds = Math.max(
-    0.1,
+    0.05,
     Math.min(1.5, waitFromEndpointing ?? plan.waitSeconds ?? 0.1),
   );
 

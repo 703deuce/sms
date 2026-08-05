@@ -268,6 +268,17 @@ export const TOOL_CATALOG: CatalogToolDef[] = [
     requiresIntegration: "crm",
   },
   {
+    key: "resolve_datetime",
+    name: "Resolve date/time",
+    description:
+      "Resolve relative dates/times (today, tomorrow, in three hours, this Friday) using the business timezone clock. Call when the caller uses relative timing — do not invent today's date.",
+    category: "scheduling",
+    provider: "transovo_builtin",
+    toolType: "resolve_datetime",
+    access: "read",
+    risk: "low",
+  },
+  {
     key: "calendar_availability",
     name: "Check availability",
     description: "Check live calendar availability before offering times.",
@@ -360,6 +371,7 @@ export const FULL_RECEPTIONIST_TOOLS = [
   "create_crm_note",
   "create_crm_task",
   "upsert_crm_contact",
+  "resolve_datetime",
   "calendar_availability",
   "book_appointment",
 ] as const;
@@ -391,6 +403,7 @@ const TEMPLATE_DEFAULTS: Record<string, readonly string[]> = {
     "create_crm_note",
     "create_crm_task",
     "upsert_crm_contact",
+    "resolve_datetime",
     "calendar_availability",
     "book_appointment",
     "end_call",
@@ -405,6 +418,7 @@ const TEMPLATE_DEFAULTS: Record<string, readonly string[]> = {
     "save_caller_info",
     "create_task",
     "mark_disposition",
+    "resolve_datetime",
     "calendar_availability",
     "book_appointment",
     "reschedule_appointment",
@@ -430,6 +444,7 @@ const TEMPLATE_DEFAULTS: Record<string, readonly string[]> = {
     "send_sms",
     "lookup_customer",
     "create_crm_note",
+    "resolve_datetime",
     "calendar_availability",
     "book_appointment",
     "end_call",
@@ -447,6 +462,7 @@ const TEMPLATE_DEFAULTS: Record<string, readonly string[]> = {
     "create_crm_note",
     "create_crm_task",
     "upsert_crm_contact",
+    "resolve_datetime",
     "calendar_availability",
     "book_appointment",
     "end_call",
@@ -572,6 +588,27 @@ export const BUILTIN_WEBHOOK_BODIES: Record<
       required: ["to", "subject", "body"],
     },
   },
+  resolve_datetime: {
+    name: "resolve_datetime",
+    toolType: "resolve_datetime",
+    description:
+      "Resolve relative dates/times using the live business timezone clock. Call when the caller says today, tomorrow, this Friday, in three hours, etc. Do NOT invent today's date. You may keep talking while this runs; use the result before offering or booking slots.",
+    body: {
+      type: "object",
+      properties: {
+        spoken: {
+          type: "string",
+          description:
+            "Caller phrase to resolve, e.g. 'tomorrow at 2pm', 'in three hours', 'this Friday morning'",
+        },
+        timezone: {
+          type: "string",
+          description: "Optional IANA timezone override; defaults to business timezone",
+        },
+      },
+      required: ["spoken"],
+    },
+  },
   calendar_availability: {
     name: "calendar_availability",
     toolType: "calendar_availability",
@@ -602,11 +639,14 @@ export const BUILTIN_WEBHOOK_BODIES: Record<
     name: "book_appointment",
     toolType: "book_appointment",
     description:
-      "Book an appointment. NEVER tell the caller they are booked until this returns success.",
+      "Book an appointment using a startsAt value from the latest calendar_availability slots only. NEVER invent a time. NEVER tell the caller they are booked until this returns success. If a required field is missing (e.g. address), ask for it and include it on the next call.",
     body: {
       type: "object",
       properties: {
-        startAt: { type: "string", description: "ISO start time (alias: startsAt)" },
+        startAt: {
+          type: "string",
+          description: "ISO start time from calendar_availability.slots[].startsAt (alias: startsAt)",
+        },
         startsAt: { type: "string" },
         startTime: { type: "string" },
         serviceId: { type: "string" },
@@ -620,6 +660,8 @@ export const BUILTIN_WEBHOOK_BODIES: Record<
         phone: { type: "string" },
         customerEmail: { type: "string" },
         email: { type: "string" },
+        address: { type: "string", description: "Required only when the service requires address" },
+        location: { type: "string" },
       },
       required: ["startAt", "customerPhone"],
     },

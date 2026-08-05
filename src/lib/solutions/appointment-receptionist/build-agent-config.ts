@@ -126,6 +126,18 @@ export function buildSystemPrompt(state: AppointmentReceptionistWizardState): st
   lines.push(`Tone: ${state.tone}. Speaking style: ${state.speakingStyle}.`);
   lines.push(`Primary language: ${state.language}.`);
   lines.push("");
+  lines.push("Date and time (do not invent a calendar):");
+  lines.push(`- Business timezone: {{business_timezone}}`);
+  lines.push(
+    "- When the caller uses relative timing (today, tomorrow, this Friday, in three hours, next week, before closing), call resolve_datetime with their phrase. Do not invent today's date or guess the weekday.",
+  );
+  lines.push(
+    "- You may keep the conversation moving while resolve_datetime runs; use its result before offering slots or booking.",
+  );
+  lines.push(
+    "- Before booking, repeat the full date, day of week, time, and timezone. Never book based only on an ambiguous phrase such as \"Friday at five.\"",
+  );
+  lines.push("");
   lines.push("Goals:");
   if (caps.includes("answer_questions")) {
     lines.push(
@@ -170,7 +182,13 @@ export function buildSystemPrompt(state: AppointmentReceptionistWizardState): st
     "- lookup_customer: look up an existing contact by phone before booking when helpful.",
   );
   if (caps.includes("book_appointments")) {
+    lines.push(
+      "- resolve_datetime: resolve relative dates/times to a concrete local datetime before checking availability.",
+    );
     lines.push("- calendar_availability / book_appointment: check live availability and book only after confirmation.");
+    lines.push(
+      "- Never offer, confirm, or book a day/time unless that exact startsAt came from the latest calendar_availability slots. If the caller asks for a time that is not in the returned slots, say it is unavailable and offer 2–3 of the returned label times instead.",
+    );
   }
   if (caps.includes("transfer_calls") && transferPhone) {
     lines.push(
@@ -199,6 +217,9 @@ export function buildSystemPrompt(state: AppointmentReceptionistWizardState): st
   }
   lines.push("- Never claim an appointment is booked until the booking tool succeeds.");
   lines.push("- Never invent availability or pricing.");
+  lines.push(
+    "- When booking, pass book_appointment startsAt exactly as returned by calendar_availability (ISO). Speak the matching label. Do not convert spoken clock times yourself.",
+  );
   lines.push("");
   lines.push("Collect caller information in this order when needed:");
   for (const field of state.collectFields.filter((f) => f.enabled)) {
@@ -309,6 +330,7 @@ export function buildWizardAgentConfig(
     enabledTools.add("escalate_human");
   }
   if (state.capabilities.includes("book_appointments")) {
+    enabledTools.add("resolve_datetime");
     enabledTools.add("calendar_availability");
     enabledTools.add("book_appointment");
   }
@@ -507,6 +529,9 @@ export function buildWizardAgentConfig(
       agent_role: state.role || "front-desk receptionist",
       solution_name: state.solutionName,
       timezone: state.timezone || "America/New_York",
+      // Static — safe at publish time. Live clock comes from resolve_datetime,
+      // not from call-start dynvars (avoids delaying first speech).
+      business_timezone: state.timezone || "America/New_York",
       transfer_destination_name: transferName,
       phone_number: state.phoneNumberE164 || "",
     },

@@ -458,7 +458,8 @@ export function createDefaultWizardState(): AppointmentReceptionistWizardState {
         bookingHours: "Mon - Fri, 8:00 AM - 6:00 PM",
         minNotice: "2 hours",
         maxDaysAhead: "30 days",
-        requiredFields: ["full_name", "phone", "email", "service", "address"],
+        // Office visits: do not require address unless collectFields enables it.
+        requiredFields: ["full_name", "phone", "email", "service"],
         bookingPermission: "book_directly",
         enabled: true,
       },

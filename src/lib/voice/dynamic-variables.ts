@@ -1,4 +1,5 @@
 import { getPrisma } from "@/lib/db";
+import { buildBusinessLocalClock } from "./runtime-clock";
 import { parseVoiceAgentConfig, type VoiceAgentConfig } from "./types";
 
 /**
@@ -25,6 +26,9 @@ export async function resolveCallDynamicVariables(input: {
     out[key] = s;
   };
 
+  let workspaceTimezone: string | null = null;
+  let agentTimezone: string | null = null;
+
   // Workspace / business defaults
   try {
     const ws = await prisma.workspace.findUnique({
@@ -37,7 +41,8 @@ export async function resolveCallDynamicVariables(input: {
     const messaging = await prisma.workspaceMessagingSettings.findUnique({
       where: { workspaceId: input.workspaceId },
     });
-    set("business_timezone", messaging?.timezone);
+    workspaceTimezone = messaging?.timezone ? String(messaging.timezone) : null;
+    set("business_timezone", workspaceTimezone);
   } catch {
     // ignore
   }
@@ -57,6 +62,10 @@ export async function resolveCallDynamicVariables(input: {
         const defaults = cfg.dynamicVariables;
         if (defaults && typeof defaults === "object") {
           for (const [k, v] of Object.entries(defaults)) set(k, v);
+          if (defaults.timezone != null) agentTimezone = String(defaults.timezone);
+          if (defaults.business_timezone != null) {
+            agentTimezone = String(defaults.business_timezone);
+          }
         }
       }
     } catch {
@@ -109,10 +118,26 @@ export async function resolveCallDynamicVariables(input: {
     }
   }
 
-  // Explicit per-call overrides win
+  // Explicit per-call overrides win (including timezone for the clock below)
   if (input.overrides && typeof input.overrides === "object") {
     for (const [k, v] of Object.entries(input.overrides)) set(k, v);
   }
+
+  // If this webhook runs, attach a fresh clock. Flux latency profiles skip the
+  // webhook entirely so greeting is not blocked — those agents use resolve_datetime.
+  const clock = buildBusinessLocalClock(
+    out.business_timezone ||
+      out.timezone ||
+      agentTimezone ||
+      workspaceTimezone,
+  );
+  set("business_timezone", clock.business_timezone);
+  set("timezone", clock.business_timezone);
+  set("current_date", clock.current_date);
+  set("current_day", clock.current_day);
+  set("current_time", clock.current_time);
+  set("utc_offset", clock.utc_offset);
+  set("current_iso_local", clock.current_iso_local);
 
   // Memory privacy: strip excluded fields before sending to Telnyx.
   if (input.agentId) {
