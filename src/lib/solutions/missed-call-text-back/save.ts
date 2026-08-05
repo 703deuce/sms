@@ -301,6 +301,26 @@ export async function saveMissedCallTextBack(
     idempotencyKey: `mctb-save:${setupId}:${status}:${nextVersion}:${Date.now()}`,
   }).catch(() => undefined);
 
+  if (config.phoneNumberId) {
+    try {
+      const { upsertAgentDeployment } = await import("@/lib/agents/deployments");
+      await upsertAgentDeployment({
+        workspaceId,
+        solutionSetupId: setupId!,
+        phoneNumberId: config.phoneNumberId,
+        channel: "sms",
+        routingMode: status === "ACTIVE" ? "live" : "test",
+        scheduleKey: "missed_call",
+        status: status === "ACTIVE" ? "live" : "draft",
+      });
+    } catch (err) {
+      console.warn(
+        "[mctb] deployment upsert skipped",
+        err instanceof Error ? err.message : err,
+      );
+    }
+  }
+
   return {
     setupId: setupId!,
     flowId: flowId!,

@@ -256,6 +256,31 @@ export async function upsertAppointmentReceptionistSetup(
     },
   });
 
+  // Deployment record: agent ↔ Transovo number (test vs live).
+  if (input.state.phoneNumberId) {
+    try {
+      const {
+        upsertAgentDeployment,
+        scheduleKeyFromAnswerWhen,
+      } = await import("@/lib/agents/deployments");
+      await upsertAgentDeployment({
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+        solutionSetupId: setupId,
+        phoneNumberId: input.state.phoneNumberId,
+        channel: "voice",
+        routingMode: input.published ? "live" : "test",
+        scheduleKey: scheduleKeyFromAnswerWhen(input.state.answerWhen),
+        status: input.published ? "live" : "test",
+      });
+    } catch (err) {
+      console.warn(
+        "[ar-setup] deployment upsert skipped",
+        err instanceof Error ? err.message : err,
+      );
+    }
+  }
+
   await emitPlatformEvent({
     workspaceId: input.workspaceId,
     type: created ? "SOLUTION_SETUP_CREATED" : "SOLUTION_SETUP_UPDATED",

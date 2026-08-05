@@ -138,6 +138,8 @@ model Workspace {
   createdAt            DateTime @default(now())
   memberships Membership[]
   phoneNumbers PhoneNumber[]
+  externalNumbers ExternalNumber[]
+  agentDeployments AgentDeployment[]
   contacts    Contact[]
   lists       ContactList[]
   segments    Segment[]
@@ -312,8 +314,12 @@ model PhoneNumber {
   webhookUrl       String?
   capabilitiesJson Json?
   settingsJson     Json?
+  /// transovo | ported — Transovo-managed DIDs that receive AI/SMS traffic.
+  ownershipType    String   @default("transovo")
   workspace        Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   assignments      PhoneNumberAssignment[]
+  deployments      AgentDeployment[]
+  externalForwards ExternalNumber[]
 
   @@unique([workspaceId, e164])
   @@index([twilioSid])
@@ -330,6 +336,68 @@ model PhoneNumberAssignment {
   @@unique([phoneNumberId, userId])
   @@index([userId])
   @@map("phone_number_assignments")
+}
+
+/// Customer-facing public number (website / GBP / ads) that may forward into a Transovo DID.
+/// Voice forwarding ≠ SMS — SMS stays on the messaging-ready Transovo number.
+model ExternalNumber {
+  id                         String   @id @default(cuid())
+  workspaceId                String
+  e164                       String
+  displayName                String?
+  carrier                    String?
+  /// Transovo DID that receives forwarded voice calls.
+  forwardingDestinationId    String?
+  /// none | pending | active | failed | unconfirmed
+  forwardingStatus           String   @default("none")
+  /// always | unanswered | busy | after_hours | custom
+  forwardingMode             String   @default("always")
+  notes                      String?
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+  workspace                  Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  forwardingDestination      PhoneNumber? @relation(fields: [forwardingDestinationId], references: [id], onDelete: SetNull)
+  deployments                AgentDeployment[]
+
+  @@unique([workspaceId, e164])
+  @@index([workspaceId, forwardingStatus])
+  @@map("external_numbers")
+}
+
+/// Connects an agent to a number under a routing condition (test vs live, voice vs SMS).
+model AgentDeployment {
+  id                String   @id @default(cuid())
+  workspaceId       String
+  /// VoiceAgent id when this is a voice/receptionist deployment.
+  agentId           String?
+  /// SolutionSetup id for SMS / automation agents (missed-call text-back, etc.).
+  solutionSetupId   String?
+  /// Transovo/Telnyx DID that receives the traffic.
+  phoneNumberId     String?
+  /// Optional customer public number (forwarding source for voice).
+  externalNumberId  String?
+  /// voice | sms
+  channel           String
+  /// test | live | paused
+  routingMode       String   @default("test")
+  /// every_call | after_hours | nobody_answers | missed_call | always | custom
+  scheduleKey       String   @default("always")
+  /// draft | test | live | paused | error
+  status            String   @default("draft")
+  errorMessage      String?
+  deployedAt        DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  workspace         Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  agent             VoiceAgent? @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  phoneNumber       PhoneNumber? @relation(fields: [phoneNumberId], references: [id], onDelete: SetNull)
+  externalNumber    ExternalNumber? @relation(fields: [externalNumberId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, status])
+  @@index([workspaceId, phoneNumberId])
+  @@index([workspaceId, agentId])
+  @@index([workspaceId, solutionSetupId])
+  @@map("agent_deployments")
 }
 
 model WorkspaceInvite {
@@ -1349,6 +1417,7 @@ model VoiceAgent {
   sourceSolutionSetup SolutionSetup? @relation(fields: [sourceSolutionSetupId], references: [id], onDelete: SetNull)
   versions        VoiceAgentVersion[]
   phoneAssignments VoiceAgentPhoneNumber[]
+  deployments     AgentDeployment[]
   knowledgeLinks  VoiceAgentKnowledgeBase[]
   toolLinks       VoiceAgentTool[]
   calls           VoiceCall[]
