@@ -32,6 +32,14 @@ function stripBakedClock(system) {
     /\n*- Interpret today, tomorrow[^\n]*\n?/gi,
     "\n",
   );
+  // Prior live patch told the model to prefer call-start dynvars — remove that.
+  s = s.replace(
+    /\n*When dynamic variables are available, prefer \{\{current_date\}\}[^\n]*\n?/gi,
+    "\n",
+  );
+  s = s.replace(/\{\{current_date\}\}/g, "the resolve_datetime tool");
+  s = s.replace(/\{\{current_day\}\}/g, "the resolve_datetime tool");
+  s = s.replace(/\{\{current_time\}\}/g, "the resolve_datetime tool");
 
   // Prefer tool path when enabled on this agent; otherwise do not invent dates.
   const hasResolveTool = /\bresolve_datetime\b/.test(s);
@@ -195,7 +203,18 @@ async function main() {
   ) {
     report.ok = false;
   }
-  console.log(JSON.stringify(report, null, 2));
+  // Keep the report small — full publish payload is huge.
+  const slim = {
+    ...report,
+    publish: {
+      id: report.publish?.id,
+      status: report.publish?.status || report.publish?.rawStatus,
+      publishedVersionId: report.publish?.publishedVersionId,
+      telnyxAssistantId: report.publish?.telnyxAssistantId,
+      healthStatus: report.publish?.healthStatus,
+    },
+  };
+  console.log(JSON.stringify(slim, null, 2));
   if (!report.ok) process.exit(1);
 }
 
