@@ -110,12 +110,28 @@ export function DeploymentDiagnosticsPanel({ flowId }: { flowId: string }) {
           <h2 className="text-[15px] font-semibold text-[#111827]">
             Deployment diagnostics
           </h2>
-          <p className="mt-0.5 text-[12px] text-[#6B7280]">
-            Proves activation, Telnyx routing, and post-call workflow resume —
-            not just canvas nodes.
+          <p className="mt-0.5 text-[12px] text-muted-foreground">
+            Prove activation and Telnyx routing, then open an{" "}
+            <span className="font-semibold">Execution</span> after a live call
+            to prove resume and branches.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {data?.lastExecutionId ? (
+            <a
+              href={`/automations/${flowId}/executions/${data.lastExecutionId}`}
+              className="inline-flex h-8 items-center rounded-md px-3 text-[12px] font-semibold text-[#2563EB] ring-1 ring-[#BFDBFE]"
+            >
+              Open last execution
+            </a>
+          ) : (
+            <a
+              href={`/automations/${flowId}?tab=executions`}
+              className="inline-flex h-8 items-center rounded-md px-3 text-[12px] font-semibold ring-1 ring-[#E5E7EB]"
+            >
+              Executions
+            </a>
+          )}
           <button
             type="button"
             onClick={() => void load()}

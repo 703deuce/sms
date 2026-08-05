@@ -1,39 +1,56 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
-import { Card, CardTitle } from "@/components/ui/card";
-import { StatusChip } from "@/components/ui/status-chip";
-import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+import { cn } from "@/lib/utils";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
-type Execution = {
+type ExecutionSummary = {
   id: string;
+  shortId: string;
   status: string;
-  currentNodeId: string | null;
+  statusLabel: string;
+  phone: string | null;
+  phoneDisplay: string | null;
+  contactName: string | null;
   startedAt: string;
   completedAt: string | null;
   error: string | null;
-  contact: { firstName?: string | null; lastName?: string | null; phone: string };
-  steps: Array<{ nodeId: string; status: string; branchTaken?: string | null; error?: string | null }>;
+  currentNodeLabel: string | null;
+  pendingCallId: string | null;
+  branch: string | null;
   testMode?: boolean;
+  href: string;
 };
 
-type ExecutionDetail = {
-  path: Array<{
-    nodeId: string;
-    label: string;
-    blockType?: string;
-    status: string;
-    branchTaken?: string | null;
-    error?: string | null;
-  }>;
-};
+function StatusBadge({ status, label }: { status: string; label: string }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex h-6 items-center rounded-full px-2 text-[11px] font-semibold",
+        status === "COMPLETED" && "bg-emerald-50 text-emerald-700",
+        status === "RUNNING" && "bg-sky-50 text-sky-700",
+        status === "WAITING" && "bg-amber-50 text-amber-800",
+        status === "FAILED" && "bg-rose-50 text-rose-700",
+        status === "CANCELLED" && "bg-slate-100 text-slate-600",
+        status === "PAUSED" && "bg-amber-50 text-amber-800",
+        ![
+          "COMPLETED",
+          "RUNNING",
+          "WAITING",
+          "FAILED",
+          "CANCELLED",
+          "PAUSED",
+        ].includes(status) && "bg-slate-100 text-slate-600",
+      )}
+    >
+      {label}
+    </span>
+  );
+}
 
 export function AutomationExecutionHistory({ flowId }: { flowId: string }) {
-  const [executions, setExecutions] = useState<Execution[]>([]);
+  const [executions, setExecutions] = useState<ExecutionSummary[]>([]);
   const [loading, setLoading] = useState(true);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [detail, setDetail] = useState<ExecutionDetail | null>(null);
 
   useEffect(() => {
     fetch(`/api/automations/${flowId}/executions`)
@@ -44,106 +61,101 @@ export function AutomationExecutionHistory({ flowId }: { flowId: string }) {
       .finally(() => setLoading(false));
   }, [flowId]);
 
-  async function loadDetail(executionId: string) {
-    if (expandedId === executionId) {
-      setExpandedId(null);
-      setDetail(null);
-      return;
-    }
-    setExpandedId(executionId);
-    const res = await fetch(`/api/automations/${flowId}/executions/${executionId}`);
-    const json = await res.json();
-    if (json?.data) setDetail({ path: json.data.path });
-  }
-
-  if (loading) return <p className="text-sm text-muted-foreground">Loading history…</p>;
-
-  if (!executions.length) {
+  if (loading) {
     return (
-      <p className="text-sm text-muted-foreground py-8 text-center">
-        No execution history yet. Publish the automation and trigger it to see runs here.
+      <p className="py-8 text-center text-sm text-muted-foreground">
+        Loading executions…
       </p>
     );
   }
 
+  if (!executions.length) {
+    return (
+      <div className="rounded-xl border border-dashed border-[#D1D5DB] bg-white px-6 py-12 text-center">
+        <p className="text-[14px] font-medium text-[#111827]">
+          No executions yet
+        </p>
+        <p className="mt-1 text-[13px] text-[#6B7280]">
+          The workflow is the template. Each inbound call creates an{" "}
+          <span className="font-semibold">Execution</span> — open one to see
+          status, current node, call, transcript, and branch.
+        </p>
+      </div>
+    );
+  }
+
   return (
-    <Card>
-      <CardTitle>Execution history</CardTitle>
-      <Table className="mt-4">
-        <THead>
-          <TR>
-            <TH>Customer</TH>
-            <TH>Started</TH>
-            <TH>Status</TH>
-            <TH>Current step</TH>
-            <TH>Completed</TH>
-            <TH>Error</TH>
-            <TH />
-          </TR>
-        </THead>
-        <TBody>
-          {executions.map((ex) => (
-            <>
-              <TR key={ex.id}>
-                <TD>
-                  {ex.contact.firstName} {ex.contact.lastName}
-                  <span className="block text-xs text-muted-foreground">{ex.contact.phone}</span>
-                </TD>
-                <TD className="text-muted-foreground whitespace-nowrap">
+    <div className="overflow-hidden rounded-xl border border-[#E5E7EB] bg-white">
+      <div className="border-b border-[#F3F4F6] px-5 py-4">
+        <h2 className="text-[15px] font-semibold text-[#111827]">Executions</h2>
+        <p className="mt-0.5 text-[12px] text-[#6B7280]">
+          One row per run of this workflow. Click through to debug a call.
+        </p>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="min-w-full text-left text-[13px]">
+          <thead className="bg-[#F9FAFB] text-[11px] uppercase tracking-wide text-[#9CA3AF]">
+            <tr>
+              <th className="px-4 py-2 font-semibold">Execution</th>
+              <th className="px-4 py-2 font-semibold">Phone</th>
+              <th className="px-4 py-2 font-semibold">Started</th>
+              <th className="px-4 py-2 font-semibold">Status</th>
+              <th className="px-4 py-2 font-semibold">Current node</th>
+              <th className="px-4 py-2 font-semibold">Branch</th>
+              <th className="px-4 py-2 font-semibold" />
+            </tr>
+          </thead>
+          <tbody>
+            {executions.map((ex) => (
+              <tr
+                key={ex.id}
+                className="border-t border-[#F3F4F6] hover:bg-[#F9FAFB]"
+              >
+                <td className="px-4 py-3 font-semibold text-[#111827]">
+                  #{ex.shortId}
+                  {ex.testMode ? (
+                    <span className="ml-1 text-[11px] font-medium text-[#9CA3AF]">
+                      test
+                    </span>
+                  ) : null}
+                </td>
+                <td className="px-4 py-3 text-[#374151]">
+                  <div>{ex.phoneDisplay || ex.phone || "—"}</div>
+                  {ex.contactName ? (
+                    <div className="text-[11px] text-[#9CA3AF]">
+                      {ex.contactName}
+                    </div>
+                  ) : null}
+                </td>
+                <td className="whitespace-nowrap px-4 py-3 text-[#6B7280]">
                   {new Date(ex.startedAt).toLocaleString()}
-                </TD>
-                <TD>
-                  <StatusChip
-                    status={
-                      ex.status === "COMPLETED"
-                        ? "Completed"
-                        : ex.status === "FAILED"
-                          ? "Failed"
-                          : ex.status === "WAITING"
-                            ? "Pending"
-                            : ex.status === "CANCELLED"
-                              ? "Canceled"
-                              : "Active"
-                    }
-                  />
-                  {ex.testMode ? <span className="ml-1 text-xs text-muted-foreground">(test)</span> : null}
-                </TD>
-                <TD className="text-muted-foreground text-xs">{ex.currentNodeId || "—"}</TD>
-                <TD className="text-muted-foreground whitespace-nowrap">
-                  {ex.completedAt ? new Date(ex.completedAt).toLocaleString() : "—"}
-                </TD>
-                <TD className="text-rose-600 text-xs max-w-[160px] truncate">{ex.error || "—"}</TD>
-                <TD>
-                  <Button variant="outline" size="sm" onClick={() => loadDetail(ex.id)}>
-                    {expandedId === ex.id ? "Hide" : "Path"}
-                  </Button>
-                </TD>
-              </TR>
-              {expandedId === ex.id && detail ? (
-                <TR key={`${ex.id}-detail`}>
-                  <TD colSpan={7} className="bg-muted/30">
-                    <ol className="space-y-2 py-2 text-sm">
-                      {detail.path.map((step, i) => (
-                        <li key={step.nodeId} className="flex flex-wrap items-center gap-2">
-                          <span className="font-medium">{i + 1}. {step.label}</span>
-                          <StatusChip status={step.status === "completed" ? "Completed" : step.status === "failed" ? "Failed" : "Pending"} />
-                          {step.branchTaken ? (
-                            <span className="text-xs text-muted-foreground">
-                              Branch: {step.branchTaken === "yes" ? "Yes" : step.branchTaken === "no" ? "No" : step.branchTaken}
-                            </span>
-                          ) : null}
-                          {step.error ? <span className="text-xs text-rose-600">{step.error}</span> : null}
-                        </li>
-                      ))}
-                    </ol>
-                  </TD>
-                </TR>
-              ) : null}
-            </>
-          ))}
-        </TBody>
-      </Table>
-    </Card>
+                </td>
+                <td className="px-4 py-3">
+                  <StatusBadge status={ex.status} label={ex.statusLabel} />
+                  {ex.error ? (
+                    <div className="mt-1 max-w-[160px] truncate text-[11px] text-rose-600">
+                      {ex.error}
+                    </div>
+                  ) : null}
+                </td>
+                <td className="px-4 py-3 text-[#374151]">
+                  {ex.currentNodeLabel || "—"}
+                </td>
+                <td className="px-4 py-3 text-[#374151]">{ex.branch || "—"}</td>
+                <td className="px-4 py-3 text-right">
+                  <Link
+                    href={ex.href}
+                    className="text-[12px] font-semibold text-[#2563EB] hover:underline"
+                  >
+                    Open
+                  </Link>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }
 
@@ -164,7 +176,10 @@ export function FlowActionButtons({
   }
 
   async function publish() {
-    const res = await fetch(`/api/automations/${flowId}/publish`, { method: "POST", body: JSON.stringify({}) });
+    const res = await fetch(`/api/automations/${flowId}/publish`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
     if (!res.ok) {
       const json = await res.json();
       alert(json.error || "Publish failed");
@@ -173,24 +188,56 @@ export function FlowActionButtons({
     window.location.reload();
   }
 
-  if (status === "Draft") {
+  if (status === "Draft" || status === "DRAFT") {
     return (
       <>
-        <Button onClick={() => publish()}>Activate flow</Button>
-        <a href={`/automations/${flowId}/edit`}>
-          <Button variant="outline">Edit in builder</Button>
+        <button
+          type="button"
+          onClick={() => void publish()}
+          className="inline-flex h-9 items-center rounded-md bg-[#111827] px-3 text-[12px] font-semibold text-white"
+        >
+          Activate flow
+        </button>
+        <a
+          href={`/automations/${flowId}/edit`}
+          className="inline-flex h-9 items-center rounded-md px-3 text-[12px] font-semibold ring-1 ring-[#E5E7EB]"
+        >
+          Edit in builder
         </a>
       </>
     );
   }
-  if (status === "Paused") {
-    return <Button onClick={() => patch("resume")}>Resume</Button>;
+  if (status === "Paused" || status === "PAUSED") {
+    return (
+      <button
+        type="button"
+        onClick={() => void patch("resume")}
+        className="inline-flex h-9 items-center rounded-md bg-[#111827] px-3 text-[12px] font-semibold text-white"
+      >
+        Resume
+      </button>
+    );
   }
   return (
     <>
-      <Button variant="outline" onClick={() => patch("pause")}>Pause</Button>
-      <a href={`/automations/${flowId}/edit`}>
-        <Button variant="outline">Edit in builder</Button>
+      <button
+        type="button"
+        onClick={() => void patch("pause")}
+        className="inline-flex h-9 items-center rounded-md px-3 text-[12px] font-semibold ring-1 ring-[#E5E7EB]"
+      >
+        Pause
+      </button>
+      <a
+        href={`/automations/${flowId}/edit`}
+        className="inline-flex h-9 items-center rounded-md px-3 text-[12px] font-semibold ring-1 ring-[#E5E7EB]"
+      >
+        Edit in builder
+      </a>
+      <a
+        href={`/automations/${flowId}?tab=executions`}
+        className="inline-flex h-9 items-center rounded-md px-3 text-[12px] font-semibold text-[#2563EB] ring-1 ring-[#BFDBFE]"
+      >
+        Executions
       </a>
     </>
   );

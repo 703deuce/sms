@@ -174,6 +174,14 @@ function AgentCard({ system }: { system: SystemResource }) {
         ) : null}
         {system.primaryFlowId ? (
           <Link
+            href={`/automations/${system.primaryFlowId}?tab=executions`}
+            className="inline-flex h-9 items-center justify-center rounded-md px-3 text-[12px] font-semibold text-[#4B5563] ring-1 ring-[#E5E7EB] hover:bg-slate-50"
+          >
+            Executions
+          </Link>
+        ) : null}
+        {system.primaryFlowId ? (
+          <Link
             href={`/automations/${system.primaryFlowId}/edit?diagnostics=1`}
             className="inline-flex h-9 items-center justify-center rounded-md px-3 text-[12px] font-semibold text-[#4B5563] ring-1 ring-[#E5E7EB] hover:bg-slate-50"
           >

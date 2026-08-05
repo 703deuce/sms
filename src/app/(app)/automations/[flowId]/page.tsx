@@ -19,9 +19,8 @@ import { notFound } from "next/navigation";
 
 const tabItems = [
   { id: "builder", label: "Builder" },
+  { id: "executions", label: "Executions" },
   { id: "performance", label: "Performance" },
-  { id: "contacts", label: "Contacts" },
-  { id: "logs", label: "Logs" },
   { id: "settings", label: "Settings" },
 ] as const;
 
@@ -143,6 +142,10 @@ export default async function AutomationDetailPage({
         </div>
       )}
 
+      {activeTab === "executions" && (
+        <AutomationExecutionHistory flowId={flowId} />
+      )}
+
       {activeTab === "performance" && (
         <>
           <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -176,10 +179,6 @@ export default async function AutomationDetailPage({
           </Card>
         </>
       )}
-
-      {activeTab === "contacts" && <AutomationExecutionHistory flowId={flowId} />}
-
-      {activeTab === "logs" && <AutomationExecutionHistory flowId={flowId} />}
 
       {activeTab === "settings" && <FlowSettingsForm flow={flow} />}
     </div>
