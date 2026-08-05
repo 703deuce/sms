@@ -274,7 +274,7 @@ async function walkWizard(page, { preset, label }) {
   await page.waitForTimeout(2000);
 
   // Capture agent id from URL after save/activate navigation or stay
-  let agentId = null;
+  let agentId = report[`lastAgentId_${label}`] || null;
   const current = page.url();
   const m = current.match(/\/voice\/agents\/([^/?#]+)/);
   if (m) agentId = m[1];
@@ -284,16 +284,22 @@ async function walkWizard(page, { preset, label }) {
     const activate = page.getByRole("button", { name: /Activate now/i }).first();
     if (await activate.isVisible().catch(() => false)) {
       await activate.click();
-      await page.waitForTimeout(4000);
+      await waitReady(page);
+      await page.waitForTimeout(2000);
       await shot(page, `${label}-08-after-activate`);
       const after = page.url();
       const m2 = after.match(/\/voice\/agents\/([^/?#]+)/);
       if (m2) agentId = m2[1];
+      agentId = agentId || report[`lastAgentId_${label}`] || null;
       log(`${label}:activate-click`, { url: after, agentId });
     }
   }
 
-  return { agentId, url: page.url() };
+  return {
+    agentId,
+    flowId: report[`lastFlowId_${label}`] || null,
+    url: page.url(),
+  };
 }
 
 async function openAutomationsAndBuilder(page, preferredFlowId) {
