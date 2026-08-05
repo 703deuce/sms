@@ -575,18 +575,25 @@ export const BUILTIN_WEBHOOK_BODIES: Record<
   calendar_availability: {
     name: "calendar_availability",
     toolType: "calendar_availability",
-    description: "Check live calendar availability before offering times.",
+    description:
+      "Check live calendar availability before offering times. When the caller names a day (e.g. next Tuesday morning), pass startTime/endTime as ISO datetimes for that day — not bare clock times like 08:00. Keep daysAhead ≤ 3.",
     body: {
       type: "object",
       properties: {
         serviceId: { type: "string" },
         serviceName: { type: "string", description: "Appointment type / service name" },
         service: { type: "string" },
-        from: { type: "string" },
-        to: { type: "string" },
-        startTime: { type: "string" },
-        endTime: { type: "string" },
-        daysAhead: { type: "number" },
+        from: { type: "string", description: "ISO datetime window start" },
+        to: { type: "string", description: "ISO datetime window end" },
+        startTime: {
+          type: "string",
+          description: "ISO datetime preferred window start (not HH:MM alone)",
+        },
+        endTime: {
+          type: "string",
+          description: "ISO datetime preferred window end (not HH:MM alone)",
+        },
+        daysAhead: { type: "number", description: "Max days to scan (prefer 1–3)" },
       },
       required: [],
     },

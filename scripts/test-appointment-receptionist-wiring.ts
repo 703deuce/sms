@@ -23,6 +23,7 @@ import {
 import {
   fieldSatisfied,
   normalizeBookingToolArgs,
+  resolveAvailabilityTimeWindow,
 } from "../src/lib/voice/calendar/booking-args";
 import {
   applyActionTimezone,
@@ -490,6 +491,27 @@ assert(
     "create_custom keeps text",
     String(startup?.text || "").includes("connect you"),
   );
+}
+
+// --- Availability window for voice calendar tools ---
+{
+  const now = new Date("2026-08-05T18:00:00.000Z");
+  const clock = resolveAvailabilityTimeWindow(
+    { daysAhead: 7, startTime: "08:00", endTime: "12:00" },
+    { now, maxDays: 3 },
+  );
+  assert("caps daysAhead 7→3", clock.daysAhead === 3);
+  assert("clock times become ISO start", clock.startTime.includes("T"));
+  assert("clock preferred morning", clock.preferredStartMinute === 480);
+  const iso = resolveAvailabilityTimeWindow(
+    {
+      startTime: "2026-08-11T12:00:00.000Z",
+      endTime: "2026-08-11T16:00:00.000Z",
+    },
+    { now, maxDays: 3 },
+  );
+  assert("ISO window keeps Tuesday", iso.startTime.startsWith("2026-08-11"));
+  assert("ISO window daysAhead 1", iso.daysAhead === 1);
 }
 
 console.log("");

@@ -306,6 +306,7 @@ export async function getAvailability(
   const duration = Number(args.durationMinutes || 30);
   const days = Number(args.daysAhead || 7);
   const locationFilter = args.location ? String(args.location) : undefined;
+  const maxSlots = Math.max(1, Math.min(20, Number(args.maxSlots || 8)));
 
   const service = await prisma.voiceService.findFirst({
     where: { workspaceId, name: serviceName },
@@ -323,6 +324,8 @@ export async function getAvailability(
   const maxDaysAhead = serviceMaxDaysAhead(svcCfg);
   const effectiveDays =
     maxDaysAhead > 0 ? Math.min(Math.max(1, days), maxDaysAhead) : Math.max(1, days);
+  // Mid-call voice webhooks must stay under Telnyx tool timeouts (~5–10s).
+  const scanDays = Math.min(effectiveDays, 3);
   const timezone =
     String(args.timezone || svcCfg.timezone || "America/New_York").trim() ||
     "America/New_York";
@@ -342,7 +345,7 @@ export async function getAvailability(
         const token = await getValidAccessToken(cal.id, cal.provider, config);
         if (token) {
           const timeMin = new Date();
-          const timeMax = new Date(timeMin.getTime() + effectiveDays * 86_400_000);
+          const timeMax = new Date(timeMin.getTime() + scanDays * 86_400_000);
           const busy =
             cal.provider === "google"
               ? await getGoogleBusy(token, config.calendarId || "primary", timeMin, timeMax)
@@ -351,7 +354,7 @@ export async function getAvailability(
           const raw = computeFreeSlots(
             busy,
             durationMinutes,
-            effectiveDays,
+            scanDays,
             timeMin,
             bufferMinutes,
             {
@@ -367,7 +370,7 @@ export async function getAvailability(
               ...s,
               location: locationFilter || locations[0] || undefined,
             }));
-          return { slots };
+          return { slots: slots.slice(0, maxSlots) };
         }
       } catch (err) {
         console.warn("[calendar] availability lookup failed, falling back", cal.id, err);
@@ -383,7 +386,7 @@ export async function getAvailability(
         body: JSON.stringify({
           action: "availability",
           serviceName,
-          days: effectiveDays,
+          days: scanDays,
           location: locationFilter,
         }),
       });
@@ -395,7 +398,7 @@ export async function getAvailability(
           noticeMinutes,
           maxDaysAhead,
           new Date(),
-        ) as Slot[],
+        ).slice(0, maxSlots) as Slot[],
       };
     }
   }
@@ -418,7 +421,7 @@ export async function getAvailability(
         workspaceId,
         durationMinutes,
         bufferMinutes,
-        days: effectiveDays,
+        days: scanDays,
         noticeMinutes,
         location: locationFilter || memberLocations[0],
         staffName: member.name,
@@ -426,23 +429,23 @@ export async function getAvailability(
         bookingHours: svcCfg.bookingHours,
       });
       allSlots.push(...memberSlots);
+      if (allSlots.length >= maxSlots) break;
     }
-    return { slots: allSlots.slice(0, 20) };
+    return { slots: allSlots.slice(0, maxSlots) };
   }
 
   const slots = await internalAvailabilitySlots({
     workspaceId,
     durationMinutes,
     bufferMinutes,
-    days: effectiveDays,
+    days: scanDays,
     noticeMinutes,
     location: locationFilter || locations[0],
     timezone,
     bookingHours: svcCfg.bookingHours,
   });
-  return { slots };
+  return { slots: slots.slice(0, maxSlots) };
 }
-
 export async function bookAppointment(
   workspaceId: string,
   input: Record<string, unknown>,

@@ -659,8 +659,20 @@ export async function executeBuiltinVoiceAction(input: {
       return { ok: true, queued: true, to, subject };
     }
     case "calendar_availability": {
-      const { normalizeBookingToolArgs } = await import("../calendar/booking-args");
+      const { normalizeBookingToolArgs, resolveAvailabilityTimeWindow } = await import(
+        "../calendar/booking-args"
+      );
       args = normalizeBookingToolArgs(args);
+      // Voice webhook tools must finish well under Telnyx's effective timeout
+      // (live calls timed out around 5s even when timeout_ms=10000).
+      const window = resolveAvailabilityTimeWindow(args, { maxDays: 3 });
+      args = {
+        ...args,
+        startTime: window.startTime,
+        endTime: window.endTime,
+        daysAhead: window.daysAhead,
+      };
+
       // Prefer Calendly Scheduling API when the workspace has Calendly connected.
       try {
         const { getConnection } = await import("@/lib/integrations/connections");
@@ -684,8 +696,8 @@ export async function executeBuiltinVoiceAction(input: {
             actionId: "appointment.list_available_times",
             params: {
               eventTypeUri: args.eventTypeUri || args.eventTypeId,
-              startTime: args.startTime || args.from,
-              endTime: args.endTime || args.to,
+              startTime: window.startTime,
+              endTime: window.endTime,
             },
             contactId: (args.contactId as string) || null,
             actorUserId: null,
@@ -693,14 +705,24 @@ export async function executeBuiltinVoiceAction(input: {
           });
           if (result.ok) {
             const raw =
-              (result.data as { slots?: Array<{ startsAt: string }> })?.slots ||
+              (result.data as { slots?: Array<{ startsAt?: string; startTime?: string }> })
+                ?.slots ||
               (Array.isArray(result.data) ? result.data : []);
-            const slots = filterSlotsByNoticeAndMaxDays(
-              (raw as Array<{ startsAt: string }>) || [],
+            const normalized = (raw as Array<{ startsAt?: string; startTime?: string }>).map(
+              (s) => ({
+                startsAt: String(s.startsAt || s.startTime || ""),
+              }),
+            );
+            let slots = filterSlotsByNoticeAndMaxDays(
+              normalized.filter((s) => s.startsAt),
               gates.noticeMinutes,
               gates.maxDaysAhead,
             );
-            return { provider: "calendly", slots };
+            return {
+              provider: "calendly",
+              slots: slots.slice(0, 5),
+              window: { startTime: window.startTime, endTime: window.endTime },
+            };
           }
         }
       } catch (err) {
@@ -719,9 +741,18 @@ export async function executeBuiltinVoiceAction(input: {
         }
       }
       const { getAvailability } = await import("../calendar/booking");
-      return await getAvailability(input.workspaceId, args);
-    }
-    case "book_appointment": {
+      const availability = await getAvailability(input.workspaceId, {
+        ...args,
+        daysAhead: window.daysAhead,
+        maxSlots: 5,
+      });
+      return {
+        ...availability,
+        slots: (availability.slots || []).slice(0, 5),
+        provider: "internal",
+        window: { startTime: window.startTime, endTime: window.endTime },
+      };
+    }    case "book_appointment": {
       const { normalizeBookingToolArgs } = await import("../calendar/booking-args");
       args = normalizeBookingToolArgs(args);
       // Prefer Calendly POST /invitees when connected so bookings land on the

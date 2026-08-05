@@ -212,7 +212,7 @@ export function buildAssistantTools(input: {
         description,
         url: webhookUrl,
         method: "POST",
-        timeout_ms: escalateSolePath ? 12000 : slow ? 10000 : 8000,
+        timeout_ms: escalateSolePath ? 12000 : slow ? 20000 : 8000,
         headers: [
           { name: "X-Transovo-Workspace-Id", value: input.workspaceId },
           { name: "X-Transovo-Agent-Id", value: input.agentId },

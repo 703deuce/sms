@@ -39,6 +39,99 @@ export function normalizeBookingToolArgs(
   return out;
 }
 
+const CLOCK_RE = /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/;
+
+function isIsoDateTime(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}/.test(value)) return false;
+  const t = Date.parse(value);
+  return Number.isFinite(t);
+}
+
+function parseClockToMinutes(value: string): number | null {
+  const m = CLOCK_RE.exec(value.trim());
+  if (!m) return null;
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  if (!Number.isFinite(h) || !Number.isFinite(min) || h > 23 || min > 59) return null;
+  return h * 60 + min;
+}
+
+export type AvailabilityTimeWindow = {
+  /** ISO start of search window */
+  startTime: string;
+  /** ISO end of search window */
+  endTime: string;
+  /** Days spanned (1–7), for internal slot generators */
+  daysAhead: number;
+  /** Optional morning/afternoon filter in minutes from midnight */
+  preferredStartMinute: number | null;
+  preferredEndMinute: number | null;
+};
+
+/**
+ * Voice models often pass wall-clock times ("08:00") with daysAhead instead of
+ * ISO datetimes. Calendly requires ISO — convert before calling providers.
+ * Caps the window so mid-call webhooks stay under Telnyx tool timeouts (~5–10s).
+ */
+export function resolveAvailabilityTimeWindow(
+  args: Record<string, unknown>,
+  opts?: { maxDays?: number; now?: Date },
+): AvailabilityTimeWindow {
+  const maxDays = Math.max(1, Math.min(14, opts?.maxDays ?? 3));
+  const now = opts?.now ? new Date(opts.now) : new Date();
+  const rawStart = String(args.startTime || args.from || "").trim();
+  const rawEnd = String(args.endTime || args.to || "").trim();
+  const requestedDays = Number(args.daysAhead || 0);
+
+  const startIsIso = rawStart ? isIsoDateTime(rawStart) : false;
+  const endIsIso = rawEnd ? isIsoDateTime(rawEnd) : false;
+  const startClock = rawStart && !startIsIso ? parseClockToMinutes(rawStart) : null;
+  const endClock = rawEnd && !endIsIso ? parseClockToMinutes(rawEnd) : null;
+
+  if (startIsIso && endIsIso) {
+    const start = new Date(rawStart);
+    const end = new Date(rawEnd);
+    const spanDays = Math.max(
+      1,
+      Math.ceil(Math.abs(end.getTime() - start.getTime()) / 86_400_000),
+    );
+    return {
+      startTime: start.toISOString(),
+      endTime: end.toISOString(),
+      daysAhead: Math.min(spanDays, maxDays),
+      preferredStartMinute: null,
+      preferredEndMinute: null,
+    };
+  }
+
+  if (startIsIso && !endIsIso) {
+    const start = new Date(rawStart);
+    const days = Math.min(maxDays, requestedDays > 0 ? requestedDays : 1);
+    const end = new Date(start.getTime() + days * 86_400_000);
+    return {
+      startTime: start.toISOString(),
+      endTime: end.toISOString(),
+      daysAhead: days,
+      preferredStartMinute: endClock,
+      preferredEndMinute: endClock,
+    };
+  }
+
+  const days = Math.min(
+    maxDays,
+    requestedDays > 0 ? requestedDays : maxDays,
+  );
+  const start = new Date(now.getTime() + 30 * 60_000);
+  const end = new Date(start.getTime() + days * 86_400_000);
+  return {
+    startTime: start.toISOString(),
+    endTime: end.toISOString(),
+    daysAhead: days,
+    preferredStartMinute: startClock,
+    preferredEndMinute: endClock,
+  };
+}
+
 /** Map wizard requiredField ids onto normalized tool arg keys. */
 const REQUIRED_FIELD_ALIASES: Record<string, string[]> = {
   full_name: ["name", "customerName", "full_name", "caller_name"],
