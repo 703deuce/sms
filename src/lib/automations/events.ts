@@ -14,8 +14,8 @@ const EVENT_TO_TRIGGER: Record<string, string> = {
   "customer.no_response": "customer_no_response",
   "customer.tag_added": "tag_added",
   "form.submitted": "form_submitted",
-  "call.created": "call_received",
-  "call.ringing": "call_received",
+  "call.created": "inbound_call",
+  "call.ringing": "inbound_call",
   "call.answered": "call_answered",
   "call.completed": "call_completed",
   "call.failed": "call_failed",
@@ -54,7 +54,13 @@ export async function emitAutomationEvent(
     });
   }
 
-  return enrollForTrigger(workspaceId, triggerType, contactId);
+  return enrollForTrigger(workspaceId, triggerType, contactId, {
+    phoneNumberId:
+      typeof payload?.phoneNumberId === "string"
+        ? payload.phoneNumberId
+        : undefined,
+    callId: typeof payload?.callId === "string" ? payload.callId : undefined,
+  });
 }
 
 /** Manual enroll API helper. */

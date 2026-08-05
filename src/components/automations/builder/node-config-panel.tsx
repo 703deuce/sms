@@ -17,6 +17,16 @@ type TagOption = { id: string; name: string };
 type NumberOption = { id: string; number: string };
 type FlowOption = { id: string; name: string };
 type ContactOption = { id: string; firstName?: string | null; lastName?: string | null; phone: string };
+type AgentOption = {
+  id: string;
+  kind: "voice" | "setup";
+  name: string;
+  agentTypeLabel: string;
+  channel: string;
+  agentId: string | null;
+  setupId: string | null;
+  primaryFlowId: string | null;
+};
 
 type IntegrationMetadata = {
   provider: string;
@@ -51,6 +61,7 @@ export function NodeConfigPanel({
   const [tags, setTags] = useState<TagOption[]>([]);
   const [numbers, setNumbers] = useState<NumberOption[]>([]);
   const [flows, setFlows] = useState<FlowOption[]>([]);
+  const [agents, setAgents] = useState<AgentOption[]>([]);
   const [contacts, setContacts] = useState<ContactOption[]>([]);
   const [testContactId, setTestContactId] = useState("");
   const [testSending, setTestSending] = useState(false);
@@ -85,6 +96,10 @@ export function NodeConfigPanel({
       .then((j) =>
         setFlows((j?.data || []).map((f: { id: string; name: string }) => ({ id: f.id, name: f.name }))),
       )
+      .catch(() => undefined);
+    fetch("/api/agents")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => setAgents((j?.data || []) as AgentOption[]))
       .catch(() => undefined);
     fetch("/api/contacts?status=subscribed")
       .then((r) => (r.ok ? r.json() : null))
@@ -818,6 +833,133 @@ export function NodeConfigPanel({
           </>
         )}
 
+        {block === "inbound_call" && (
+          <>
+            <div>
+              <Label>Number</Label>
+              <Select
+                value={String(cfg.phoneNumberId || "")}
+                onChange={(e) =>
+                  onUpdate({
+                    config: { ...cfg, phoneNumberId: e.target.value },
+                  })
+                }
+              >
+                <option value="">Select phone number</option>
+                {numbers.map((n) => (
+                  <option key={n.id} value={n.id}>
+                    {n.number}
+                  </option>
+                ))}
+              </Select>
+              <p className="mt-1.5 text-[12px] text-muted-foreground">
+                Activating this workflow publishes Telnyx routing for this
+                number (direct audio path). My Numbers shows the same
+                deployment.
+              </p>
+            </div>
+            <div>
+              <Label>When</Label>
+              <Select
+                value={String(cfg.routingMode || "every_call")}
+                onChange={(e) =>
+                  onUpdate({
+                    config: { ...cfg, routingMode: e.target.value },
+                  })
+                }
+              >
+                <option value="every_call">Every call</option>
+                <option value="overflow">Overflow / unanswered</option>
+                <option value="after_hours">After hours</option>
+                <option value="unanswered">Unanswered only</option>
+              </Select>
+            </div>
+            <div>
+              <Label>Schedule</Label>
+              <Select
+                value={String(cfg.schedule || "always")}
+                onChange={(e) =>
+                  onUpdate({ config: { ...cfg, schedule: e.target.value } })
+                }
+              >
+                <option value="always">Always</option>
+                <option value="business_hours">Business hours</option>
+                <option value="custom">Custom</option>
+              </Select>
+            </div>
+            <div>
+              <Label>Ring seconds (overflow)</Label>
+              <Input
+                type="number"
+                min={1}
+                value={String(cfg.ringSeconds ?? 20)}
+                onChange={(e) =>
+                  onUpdate({
+                    config: {
+                      ...cfg,
+                      ringSeconds: Number(e.target.value || 20),
+                    },
+                  })
+                }
+              />
+            </div>
+            <div>
+              <Label>When this flow is paused</Label>
+              <Select
+                value={String(cfg.pauseFallback || "human")}
+                onChange={(e) =>
+                  onUpdate({
+                    config: { ...cfg, pauseFallback: e.target.value },
+                  })
+                }
+              >
+                <option value="human">Send to human / fallback number</option>
+                <option value="voicemail">Voicemail</option>
+                <option value="backup_flow">Backup workflow</option>
+                <option value="reject">Reject calls</option>
+              </Select>
+            </div>
+            {String(cfg.pauseFallback || "human") === "human" ? (
+              <div>
+                <Label>Fallback number (E.164)</Label>
+                <Input
+                  value={String(cfg.pauseFallbackNumber || "")}
+                  onChange={(e) =>
+                    onUpdate({
+                      config: {
+                        ...cfg,
+                        pauseFallbackNumber: e.target.value,
+                      },
+                    })
+                  }
+                  placeholder="+17035550198"
+                />
+              </div>
+            ) : null}
+          </>
+        )}
+
+        {(block === "call_missed" || block === "call_completed") && (
+          <div>
+            <Label>Number (optional filter)</Label>
+            <Select
+              value={String(cfg.phoneNumberId || "")}
+              onChange={(e) =>
+                onUpdate({
+                  config: { ...cfg, phoneNumberId: e.target.value },
+                })
+              }
+            >
+              <option value="">Any number</option>
+              {numbers.map((n) => (
+                <option key={n.id} value={n.id}>
+                  {n.number}
+                </option>
+              ))}
+            </Select>
+          </div>
+        )}
+
         {block === "scheduled_datetime" && (
           <>
             <div>
@@ -840,12 +982,22 @@ export function NodeConfigPanel({
           </>
         )}
 
-        {(block === "enroll_in_automation" || block === "remove_from_automation") && (
+        {(block === "enroll_in_automation" ||
+          block === "remove_from_automation" ||
+          block === "start_automation") && (
           <div>
             <Label>Automation</Label>
             <Select
-              value={String(cfg.flowId || "")}
-              onChange={(e) => onUpdate({ config: { ...cfg, flowId: e.target.value } })}
+              value={String(cfg.flowId || cfg.automationId || "")}
+              onChange={(e) =>
+                onUpdate({
+                  config: {
+                    ...cfg,
+                    flowId: e.target.value,
+                    automationId: e.target.value,
+                  },
+                })
+              }
             >
               <option value="">Select automation</option>
               {flows.filter((f) => f.id !== flowId).map((f) => (
@@ -853,6 +1005,130 @@ export function NodeConfigPanel({
               ))}
             </Select>
           </div>
+        )}
+
+        {(block === "use_ai_agent" ||
+          block === "start_ai_call" ||
+          block === "run_voice_agent") && (
+          <>
+            <div>
+              <Label>
+                {block === "run_voice_agent" ? "Voice agent" : "Agent"}
+              </Label>
+              <Select
+                value={
+                  cfg.setupId
+                    ? `setup:${cfg.setupId}`
+                    : cfg.agentId
+                      ? agents.find((a) => a.agentId === cfg.agentId)?.id ||
+                        `voice:${cfg.agentId}`
+                      : ""
+                }
+                onChange={(e) => {
+                  const selected = agents.find((a) => a.id === e.target.value);
+                  if (!selected) {
+                    onUpdate({
+                      config: {
+                        ...cfg,
+                        agentId: "",
+                        setupId: "",
+                        agentName: "",
+                      },
+                    });
+                    return;
+                  }
+                  onUpdate({
+                    label:
+                      block === "run_voice_agent"
+                        ? `Run Voice Agent: ${selected.name}`
+                        : selected.name,
+                    config: {
+                      ...cfg,
+                      agentId: selected.agentId || "",
+                      setupId:
+                        block === "run_voice_agent"
+                          ? ""
+                          : selected.setupId || "",
+                      agentName: selected.name,
+                      agentType: selected.agentTypeLabel,
+                      purpose: selected.agentTypeLabel,
+                    },
+                  });
+                }}
+              >
+                <option value="">Select agent</option>
+                {agents
+                  .filter((a) =>
+                    block === "run_voice_agent" || block === "start_ai_call"
+                      ? Boolean(a.agentId)
+                      : true,
+                  )
+                  .map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.name} · {a.agentTypeLabel}
+                      {a.primaryFlowId ? "" : " (no workflow yet)"}
+                    </option>
+                  ))}
+              </Select>
+              <p className="mt-1.5 text-[12px] text-muted-foreground">
+                {block === "use_ai_agent"
+                  ? "Invoke a different agent from an overall automation. Never target the agent that owns this flow — use Run Voice Agent inside voice primary workflows."
+                  : block === "run_voice_agent"
+                    ? "Starts or attaches the real-time Telnyx voice agent for this call. Use inside this agent’s primary workflow."
+                    : "Places an outbound AI voice call with the selected receptionist agent."}
+              </p>
+            </div>
+            {block === "use_ai_agent" ? (
+              <>
+                <div>
+                  <Label>Mode</Label>
+                  <Select
+                    value={String(cfg.mode || "run_primary_workflow")}
+                    onChange={(e) =>
+                      onUpdate({ config: { ...cfg, mode: e.target.value } })
+                    }
+                  >
+                    <option value="run_primary_workflow">
+                      Run primary workflow
+                    </option>
+                    <option value="invoke_task">Invoke task</option>
+                    <option value="hand_off_conversation">
+                      Hand off conversation
+                    </option>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Wait for completion</Label>
+                  <Select
+                    value={cfg.waitForCompletion ? "yes" : "no"}
+                    onChange={(e) =>
+                      onUpdate({
+                        config: {
+                          ...cfg,
+                          waitForCompletion: e.target.value === "yes",
+                        },
+                      })
+                    }
+                  >
+                    <option value="no">No — continue immediately</option>
+                    <option value="yes">Yes — wait (recorded; runner support expanding)</option>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Context (JSON)</Label>
+                  <Textarea
+                    value={String(cfg.contextJson || "{}")}
+                    onChange={(e) =>
+                      onUpdate({
+                        config: { ...cfg, contextJson: e.target.value },
+                      })
+                    }
+                    rows={3}
+                  />
+                </div>
+              </>
+            ) : null}
+          </>
         )}
 
         {block === "send_webhook" && (

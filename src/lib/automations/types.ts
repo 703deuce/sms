@@ -4,6 +4,8 @@
 
 export type AutomationNodeCategory = "trigger" | "action" | "logic" | "end";
 
+export type NodeOrigin = "template_managed" | "custom" | "system_required";
+
 export type AutomationCanvasNode = {
   id: string;
   type: AutomationNodeCategory;
@@ -12,6 +14,15 @@ export type AutomationCanvasNode = {
     blockType: string;
     label: string;
     config: Record<string, unknown>;
+    /**
+     * Who owns this node for wizard re-sync.
+     * template_managed — wizard may update config safely
+     * custom — customer added; never regenerate away
+     * system_required — must remain for runtime
+     */
+    origin?: NodeOrigin;
+    /** Stable semantic key e.g. initial_message, follow_up_delay */
+    templateNodeKey?: string;
   };
 };
 
@@ -112,6 +123,28 @@ export function nodeSummary(node: AutomationCanvasNode): string {
   }
 
   if (block === "end_automation") return "End automation";
+
+  if (block === "use_ai_agent") {
+    const name = String(cfg.agentName || "").trim();
+    const mode = String(cfg.mode || "run_primary_workflow");
+    const modeShort =
+      mode === "invoke_task"
+        ? "task"
+        : mode === "hand_off_conversation"
+          ? "hand off"
+          : "workflow";
+    return name ? `Use ${name} (${modeShort})` : "Use Agent";
+  }
+
+  if (block === "run_voice_agent") {
+    const name = String(cfg.agentName || "").trim();
+    return name ? `Run Voice Agent: ${name}` : "Run Voice Agent";
+  }
+
+  if (block === "start_ai_call") {
+    const name = String(cfg.agentName || cfg.purpose || "").trim();
+    return name ? `AI call · ${name}` : "Start AI call";
+  }
 
   return node.data.label || block;
 }

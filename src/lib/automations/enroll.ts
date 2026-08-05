@@ -9,6 +9,7 @@ export async function enrollInAutomation({
   testMode = false,
   forceVersion,
   variables,
+  enrollmentSuffix,
 }: {
   workspaceId: string;
   flowId: string;
@@ -16,6 +17,8 @@ export async function enrollInAutomation({
   testMode?: boolean;
   forceVersion?: number;
   variables?: Record<string, unknown>;
+  /** Unique per-call (or per-event) suffix so inbound can re-enroll the same contact. */
+  enrollmentSuffix?: string;
 }) {
   const prisma = getPrisma();
   const flow = await prisma.automationFlow.findFirst({
@@ -37,7 +40,9 @@ export async function enrollInAutomation({
   const version = forceVersion ?? flow.version;
   const enrollmentKey = testMode
     ? `test:${flowId}:${contactId}:${Date.now()}`
-    : `${flowId}:${contactId}:v${version}`;
+    : enrollmentSuffix
+      ? `${flowId}:${contactId}:v${version}:${enrollmentSuffix}`
+      : `${flowId}:${contactId}:v${version}`;
 
   if (!testMode) {
     const existing = await prisma.automationExecution.findUnique({
@@ -51,6 +56,9 @@ export async function enrollInAutomation({
   const trigger = findTriggerNode(def);
   if (!trigger) throw new Error("Automation has no trigger");
 
+  const pendingCallId =
+    typeof variables?.callId === "string" ? variables.callId : null;
+
   const execution = await prisma.automationExecution.create({
     data: {
       workspaceId,
@@ -62,6 +70,7 @@ export async function enrollInAutomation({
       currentNodeId: trigger.id,
       metadata: {
         testMode,
+        ...(pendingCallId ? { pendingCallId } : {}),
         ...(variables && Object.keys(variables).length ? { variables } : {}),
       } as import("@/lib/domain").Prisma.InputJsonValue,
     },
@@ -129,6 +138,8 @@ export async function enrollForTrigger(
     changedField?: string;
     phoneExists?: boolean;
     emailExists?: boolean;
+    phoneNumberId?: string;
+    callId?: string;
   },
 ) {
   const prisma = getPrisma();
@@ -232,8 +243,34 @@ export async function enrollForTrigger(
       }
     }
 
+    // Inbound Call: only enroll when the dialed number matches the trigger.
+    if (
+      (triggerBlockType === "inbound_call" ||
+        triggerBlockType === "call_missed" ||
+        triggerBlockType === "call_completed") &&
+      filters?.phoneNumberId
+    ) {
+      const required = String(cfg.phoneNumberId || "").trim();
+      if (required && required !== filters.phoneNumberId) continue;
+    }
+
+    // Prefer TriggerDeployment path for inbound_call (avoids double enroll).
+    if (triggerBlockType === "inbound_call") {
+      continue;
+    }
+
     results.push(
-      await enrollInAutomation({ workspaceId, flowId: flow.id, contactId }),
+      await enrollInAutomation({
+        workspaceId,
+        flowId: flow.id,
+        contactId,
+        enrollmentSuffix: filters?.callId
+          ? `call:${filters.callId}`
+          : undefined,
+        variables: filters?.callId
+          ? { callId: filters.callId, phoneNumberId: filters.phoneNumberId }
+          : undefined,
+      }),
     );
   }
   return results;

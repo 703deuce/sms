@@ -995,6 +995,51 @@ export async function handleInboundCallEvent(input: InboundInput) {
     },
   });
 
+  // Bind workflow execution for live TriggerDeployments (orchestration only —
+  // TeXML already launched the assistant; worker is not in the audio path).
+  try {
+    const {
+      ensureInboundCallerContact,
+      enrollInboundCallTriggers,
+    } = await import("@/lib/automations/inbound-trigger-enroll");
+    let contactId = contact?.id || null;
+    if (!contactId && from) {
+      const ensured = await ensureInboundCallerContact({
+        workspaceId: input.workspaceId,
+        fromE164: from,
+      });
+      contactId = ensured.id;
+      await prisma.voiceCall.update({
+        where: { id: call.id },
+        data: { contactId },
+      });
+    }
+    if (contactId && pn?.id) {
+      const enrollments = await enrollInboundCallTriggers({
+        workspaceId: input.workspaceId,
+        callId: call.id,
+        phoneNumberId: pn.id,
+        contactId,
+        agentId: inboundAgentId,
+        eventType: "every_call",
+      });
+      if (enrollments.length) {
+        await prisma.voiceCallEvent
+          .create({
+            data: {
+              workspaceId: input.workspaceId,
+              callId: call.id,
+              eventType: "inbound.workflow_enrolled",
+              payload: { enrollments } as object,
+            },
+          })
+          .catch(() => undefined);
+      }
+    }
+  } catch (err) {
+    console.error("[inbound] workflow enroll failed", err);
+  }
+
   const contactName = [contact?.firstName, contact?.lastName].filter(Boolean).join(" ");
 
   const actionResult = await executeInboundRoutingAction({

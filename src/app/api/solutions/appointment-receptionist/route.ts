@@ -3,7 +3,6 @@ import { requireSession, jsonError } from "@/lib/api-auth";
 import { getPrisma } from "@/lib/db";
 import {
   createVoiceAgent,
-  publishVoiceAgent,
   updateVoiceAgentDraft,
 } from "@/lib/voice/agent-service";
 import { buildWizardAgentConfig } from "@/lib/solutions/appointment-receptionist/build-agent-config";
@@ -194,8 +193,67 @@ export async function POST(request: Request) {
     let publishError: string | null = null;
     let previousAiOwner: { id: string; name: string } | null = null;
     let clonedAgentId: string | null = null;
+    let triggerDeployments: unknown[] = [];
+    let primaryFlowId: string | null = null;
+    let workflowCompileError: string | null = null;
+
+    // Connected architecture: durable SolutionSetup ↔ VoiceAgent link + primary flow.
+    // Save first so Activate can compile TriggerDeployment from the canvas.
+    const setup = await upsertAppointmentReceptionistSetup({
+      workspaceId: auth.workspaceId,
+      agentId,
+      state: { ...state, agentId },
+      published:
+        !shouldPublish &&
+        (preserveActiveOnSchedule || existingAgent?.status === "ACTIVE"),
+      links: {
+        calendarConnectionId: hooks.calendarConnectionId,
+      },
+    });
+    primaryFlowId = setup.primaryFlowId || null;
+    workflowCompileError = setup.workflowCompileError || null;
+    if (workflowCompileError) {
+      warnings.push(`Workflow compile: ${workflowCompileError}`);
+    }
 
     if (shouldPublish) {
+      if (!state.phoneNumberId) {
+        return NextResponse.json(
+          {
+            error: "Phone number required",
+            data: {
+              agentId,
+              setupId: setup.setupId,
+              primaryFlowId,
+              published: false,
+              issues: [
+                {
+                  severity: "error",
+                  message: "Phone number required before Activate",
+                },
+              ],
+              warnings,
+            },
+          },
+          { status: 400 },
+        );
+      }
+      if (!primaryFlowId) {
+        return NextResponse.json(
+          {
+            error: "Primary workflow missing — resave the agent first",
+            data: {
+              agentId,
+              setupId: setup.setupId,
+              published: false,
+              workflowCompileError,
+              warnings,
+            },
+          },
+          { status: 400 },
+        );
+      }
+
       if (state.phoneNumberId) {
         try {
           const { getPhoneNumberAiOwner } = await import("@/lib/voice/agent-phone");
@@ -210,23 +268,81 @@ export async function POST(request: Request) {
           // non-blocking
         }
       }
+
+      // Activation transaction: validate → TriggerDeployment → Telnyx → ACTIVE.
+      // Do NOT mark workflow active if Telnyx publish fails.
       try {
-        await publishVoiceAgent(auth.workspaceId, agentId, auth.session.userId);
-        published = true;
-      } catch (err) {
-        try {
-          const { buildVoiceAgentForTest } = await import("@/lib/voice/agent-service");
-          await buildVoiceAgentForTest(auth.workspaceId, agentId, auth.session.userId);
-          await publishVoiceAgent(auth.workspaceId, agentId, auth.session.userId);
-          published = true;
-        } catch (err2) {
-          publishError =
-            err2 instanceof Error
-              ? err2.message
-              : err instanceof Error
-                ? err.message
-                : "Publish failed";
+        const prisma = getPrisma();
+        const flow = await prisma.automationFlow.findFirst({
+          where: { id: primaryFlowId, workspaceId: auth.workspaceId },
+        });
+        if (!flow) throw new Error("Primary workflow not found");
+
+        const { activateFlowTriggers } = await import(
+          "@/lib/automations/trigger-deployments"
+        );
+        const { parseAutomationDefinition } = await import(
+          "@/lib/automations/types"
+        );
+        const def = parseAutomationDefinition(flow.definition);
+        const triggerResult = await activateFlowTriggers(
+          auth.workspaceId,
+          primaryFlowId,
+          def,
+          { forceTakeover: Boolean(previousAiOwner) },
+        );
+        if (triggerResult.conflicts.length) {
+          return NextResponse.json(
+            {
+              error: "Trigger conflict",
+              conflicts: triggerResult.conflicts,
+              message: triggerResult.conflicts[0]?.message,
+              data: {
+                agentId,
+                setupId: setup.setupId,
+                primaryFlowId,
+                published: false,
+              },
+            },
+            { status: 409 },
+          );
         }
+
+        // Voice inbound: refuse to mark ACTIVE without Telnyx publish proof.
+        if (!triggerResult.telnyxPublished) {
+          throw new Error(
+            "Activation did not publish Telnyx routing — workflow left inactive",
+          );
+        }
+
+        const newVersion = Math.max(1, (flow.version || 0) + 1);
+        await prisma.automationFlow.update({
+          where: { id: primaryFlowId },
+          data: {
+            status: "ACTIVE",
+            version: newVersion,
+            publishedDefinition: flow.definition as object,
+            publishedAt: new Date(),
+            updatedAt: new Date(),
+          },
+        });
+
+        published = true;
+        triggerDeployments = triggerResult.deployments;
+
+        await upsertAppointmentReceptionistSetup({
+          workspaceId: auth.workspaceId,
+          agentId,
+          state: { ...state, agentId },
+          published: true,
+          links: {
+            calendarConnectionId: hooks.calendarConnectionId,
+          },
+        });
+      } catch (err) {
+        publishError =
+          err instanceof Error ? err.message : "Activation / Telnyx publish failed";
+        published = false;
       }
 
       // Duplicate for another location: clone agent with same config, leave as DRAFT
@@ -289,27 +405,27 @@ export async function POST(request: Request) {
           ? `Activation changes scheduled for ${state.scheduledAt} — live agent stays ACTIVE until then.`
           : `Activation scheduled for ${state.scheduledAt} — agent kept as DRAFT until then.`,
       );
+      // Keep setup linked for schedule; mark published only if already live.
+      await upsertAppointmentReceptionistSetup({
+        workspaceId: auth.workspaceId,
+        agentId,
+        state: { ...state, agentId },
+        published:
+          preserveActiveOnSchedule || existingAgent?.status === "ACTIVE",
+        links: {
+          calendarConnectionId: hooks.calendarConnectionId,
+        },
+      });
     }
-
-    // Connected architecture: durable SolutionSetup ↔ VoiceAgent link.
-    const setup = await upsertAppointmentReceptionistSetup({
-      workspaceId: auth.workspaceId,
-      agentId,
-      state: { ...state, agentId },
-      published:
-        published ||
-        preserveActiveOnSchedule ||
-        existingAgent?.status === "ACTIVE",
-      links: {
-        calendarConnectionId: hooks.calendarConnectionId,
-      },
-    });
 
     return NextResponse.json({
       data: {
         agentId,
         setupId: setup.setupId,
         outcomeSlug: setup.outcomeSlug,
+        primaryFlowId,
+        workflowCompileError,
+        triggerDeployments,
         clonedAgentId,
         agentIds: clonedAgentId ? [agentId, clonedAgentId] : [agentId],
         name: updated.name,

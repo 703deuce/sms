@@ -15,6 +15,10 @@ import {
   capabilityLabel,
   getAgentType,
 } from "@/lib/agents/types";
+import {
+  resolvePrimaryFlowId,
+  workflowEditHref,
+} from "@/lib/agents/workflows";
 
 export type SystemType =
   | "solution_setup"
@@ -43,6 +47,14 @@ export type SystemResource = {
   nextAction: string | null;
   warning: string | null;
   href: string;
+  /** Direct link into the visual workflow builder for this agent. */
+  workflowHref?: string | null;
+  /** Primary workflow id for diagnostics / activate. */
+  primaryFlowId?: string | null;
+  primaryFlowName?: string | null;
+  /** TriggerDeployment status: draft | test | live | paused | error */
+  deploymentStatus?: string | null;
+  lastExecutionStatus?: string | null;
   /** Capability toggles (booking, transfers, …) — not used for ownership. */
   capabilities?: string[];
   /** What this agent handles, e.g. "Every call", "After hours". */
@@ -163,7 +175,7 @@ export async function loadMySystems(
   workspaceId: string,
 ): Promise<SystemResource[]> {
   const prisma = getPrisma();
-  const [setups, agents, flows, campaigns, routingRules, phones] =
+  const [setups, agents, flows, campaigns, routingRules, phones, deployments] =
     await Promise.all([
       prisma.solutionSetup.findMany({
         where: { workspaceId },
@@ -206,6 +218,21 @@ export async function loadMySystems(
         where: { workspaceId },
         select: { id: true, e164: true, friendlyName: true },
       }),
+      prisma.triggerDeployment
+        .findMany({
+          where: { workspaceId },
+          orderBy: { updatedAt: "desc" },
+          take: 200,
+          select: {
+            id: true,
+            flowId: true,
+            status: true,
+            phoneNumberId: true,
+            errorMessage: true,
+            updatedAt: true,
+          },
+        })
+        .catch(() => []),
     ]);
 
   const phoneById = new Map(
@@ -218,6 +245,25 @@ export async function loadMySystems(
   const flowById = new Map(flows.map((f: { id: string }) => [f.id, f]));
   const campaignById = new Map(campaigns.map((c: { id: string }) => [c.id, c]));
   const ruleById = new Map(routingRules.map((r: { id: string }) => [r.id, r]));
+  const deploymentByFlowId = new Map<
+    string,
+    {
+      id: string;
+      flowId: string;
+      status: string;
+      phoneNumberId: string | null;
+      errorMessage: string | null;
+    }
+  >();
+  for (const d of deployments as Array<{
+    id: string;
+    flowId: string;
+    status: string;
+    phoneNumberId: string | null;
+    errorMessage: string | null;
+  }>) {
+    if (!deploymentByFlowId.has(d.flowId)) deploymentByFlowId.set(d.flowId, d);
+  }
 
   const linkedAgentIds = new Set<string>();
   const linkedFlowIds = new Set<string>();
@@ -238,6 +284,7 @@ export async function loadMySystems(
     linkedCampaignIds: string[];
     linkedPhoneNumberIds: string[];
     linkedRoutingRuleIds: string[];
+    primaryFlowId?: string | null;
   }>) {
     const cfgJson = (setup as { configJson?: unknown }).configJson as
       | { outcomeSlug?: string }
@@ -457,12 +504,56 @@ export async function loadMySystems(
     const linkedVoice = (setup.linkedAgentIds || [])
       .map((id) => agentById.get(id))
       .find(Boolean) as
-      | { draftConfig?: unknown; healthStatus?: string | null; healthMessage?: string | null }
+      | {
+          draftConfig?: unknown;
+          healthStatus?: string | null;
+          healthMessage?: string | null;
+          primaryFlowId?: string | null;
+          linkedAutomationIds?: string[] | null;
+          postCallAutomationId?: string | null;
+          fallbackAutomationId?: string | null;
+        }
       | undefined;
     const caps = readCapabilities(setup.configJson, linkedVoice?.draftConfig);
     const handles = answerWhenLabel(
       readAnswerWhen(setup.configJson, linkedVoice?.draftConfig),
     );
+    const primaryFlowId = resolvePrimaryFlowId({
+      primaryFlowId: setup.primaryFlowId,
+      linkedAutomationIds: setup.linkedAutomationIds,
+      postCallAutomationId: linkedVoice?.postCallAutomationId,
+      fallbackAutomationId: linkedVoice?.fallbackAutomationId,
+    }) || resolvePrimaryFlowId({
+      primaryFlowId: linkedVoice?.primaryFlowId,
+      linkedAutomationIds: linkedVoice?.linkedAutomationIds,
+      postCallAutomationId: linkedVoice?.postCallAutomationId,
+      fallbackAutomationId: linkedVoice?.fallbackAutomationId,
+    });
+    const primaryFlow = primaryFlowId
+      ? (flowById.get(primaryFlowId) as
+          | {
+              id: string;
+              name: string;
+              status: string;
+              executions?: Array<{ status?: string; error?: string | null }>;
+            }
+          | undefined)
+      : undefined;
+    const deployment = primaryFlowId
+      ? deploymentByFlowId.get(primaryFlowId)
+      : undefined;
+    const deployStatus = deployment?.status || null;
+    let cardStatus = status;
+    if (deployStatus === "live") cardStatus = "active";
+    else if (deployStatus === "paused") cardStatus = "paused";
+    else if (deployStatus === "error") cardStatus = "needs_attention";
+    else if (deployStatus === "draft" || deployStatus === "test") {
+      /* keep setup status */
+    }
+    if (!setup.linkedPhoneNumberIds?.[0] && !phone) {
+      // Not ready without a number.
+      if (cardStatus === "active") cardStatus = "draft";
+    }
     systems.push({
       id: `setup-${setup.id}`,
       name: setup.name,
@@ -471,8 +562,19 @@ export async function loadMySystems(
       agentType: setupAgentType,
       agentTypeId: agentTypeFromOutcomeSlug(outcomeSlugForLabel),
       createdFrom: setupAgentType,
-      status,
-      statusLabel: statusLabel(status),
+      status: cardStatus,
+      statusLabel:
+        deployStatus === "live"
+          ? "Live"
+          : deployStatus === "paused"
+            ? "Paused"
+            : deployStatus === "error"
+              ? "Error"
+              : deployStatus === "test"
+                ? "Test"
+                : !phone
+                  ? "Draft — phone required"
+                  : statusLabel(cardStatus),
       channels,
       phoneNumber:
         (phone as { e164?: string; friendlyName?: string | null } | undefined)
@@ -482,11 +584,17 @@ export async function loadMySystems(
       lastActivity: relativeTime(setup.updatedAt),
       nextAction: null,
       warning:
-        linkedVoice?.healthStatus && linkedVoice.healthStatus !== "ok"
+        deployment?.errorMessage ||
+        (linkedVoice?.healthStatus && linkedVoice.healthStatus !== "ok"
           ? linkedVoice.healthMessage || "Needs attention"
-          : null,
+          : null),
       capabilities: caps,
       handles,
+      primaryFlowId,
+      primaryFlowName: primaryFlow?.name || null,
+      deploymentStatus: deployStatus,
+      lastExecutionStatus: primaryFlow?.executions?.[0]?.status || null,
+      workflowHref: workflowEditHref(primaryFlowId),
       href:
         setup.solutionType === "missed-call-text-back"
           ? `/solutions/missed-call-text-back/setup?setupId=${setup.id}`
@@ -525,6 +633,10 @@ export async function loadMySystems(
     phoneNumberId: string | null;
     draftConfig?: unknown;
     sourceSolutionSetupId?: string | null;
+    primaryFlowId?: string | null;
+    linkedAutomationIds?: string[] | null;
+    postCallAutomationId?: string | null;
+    fallbackAutomationId?: string | null;
   }>) {
     if (linkedAgentIds.has(agent.id) || agent.sourceSolutionSetupId) continue;
     const status = mapStatus(agent.status, agent.healthStatus);
@@ -562,6 +674,14 @@ export async function loadMySystems(
           : null,
       capabilities: readCapabilities(null, agent.draftConfig),
       handles: answerWhenLabel(readAnswerWhen(null, agent.draftConfig)),
+      workflowHref: workflowEditHref(
+        resolvePrimaryFlowId({
+          primaryFlowId: agent.primaryFlowId,
+          linkedAutomationIds: agent.linkedAutomationIds,
+          postCallAutomationId: agent.postCallAutomationId,
+          fallbackAutomationId: agent.fallbackAutomationId,
+        }),
+      ),
       href: `/voice/agents/${agent.id}`,
     });
   }

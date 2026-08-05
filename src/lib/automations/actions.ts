@@ -443,11 +443,65 @@ export async function runNodeAction(
     return { nextNodeId: getNextNodeId(def, node.id) };
   }
 
-  if (block === "start_ai_call") {
+  if (block === "start_ai_call" || block === "run_voice_agent") {
     const agentId = String(cfg.agentId || "").trim();
     if (!agentId) {
-      return { error: "start_ai_call_missing_agent", nextNodeId: getNextNodeId(def, node.id) };
+      return {
+        error:
+          block === "run_voice_agent"
+            ? "run_voice_agent_missing_agent"
+            : "start_ai_call_missing_agent",
+        nextNodeId: getNextNodeId(def, node.id),
+      };
     }
+
+    const attachInbound = Boolean(cfg.attachInbound);
+    const waitForOutcome = cfg.waitForOutcome !== false;
+    const mode = String(cfg.mode || "realtime_voice");
+
+    // Inbound attach: Telnyx already owns live audio (published on Activate).
+    // Do NOT outbound-dial. Bind pendingCallId and advance to Call Outcome wait.
+    if (block === "run_voice_agent" && attachInbound) {
+      const exec = await prisma.automationExecution.findUnique({
+        where: { id: ctx.executionId },
+        select: { metadata: true },
+      });
+      const meta = (exec?.metadata || {}) as Record<string, unknown>;
+      const vars = (meta.variables || {}) as Record<string, unknown>;
+      const pendingCallId =
+        (typeof meta.pendingCallId === "string" && meta.pendingCallId) ||
+        (typeof vars.callId === "string" && vars.callId) ||
+        null;
+
+      await mergeExecutionMetadata(ctx.executionId, {
+        pendingAiCallAgentId: agentId,
+        pendingCallId,
+        waitingForCallResult: false,
+        callResultConsumed: false,
+        inboundAttach: true,
+        lastAgentResult: {
+          status: "attached",
+          mode,
+          agentId,
+          telnyxAssistantId: String(cfg.telnyxAssistantId || "") || null,
+          waitForOutcome,
+          attachInbound: true,
+        },
+      });
+
+      return {
+        nextNodeId: getNextNodeId(def, node.id),
+        output: {
+          attached: true,
+          agentId,
+          pendingCallId,
+          mode,
+          waitForOutcome,
+          block,
+        },
+      };
+    }
+
     if (!ctx.testMode) {
       const { enqueueJob } = await import("@/lib/messaging/enqueue-advance");
       const contextRaw = cfg.contextJson;
@@ -463,15 +517,17 @@ export async function runNodeAction(
           workspaceId: ctx.workspaceId,
           agentId,
           contactId: ctx.contactId,
-          purpose: String(cfg.purpose || ""),
+          purpose: String(cfg.purpose || cfg.agentName || ""),
           callerId: String(cfg.callerId || ""),
           timeoutSeconds: Number(cfg.timeoutSeconds || 60),
           retryCount: Number(cfg.retryCount || 0),
           context,
           automationExecutionId: ctx.executionId,
           automationFlowId: ctx.flowId,
+          attachInbound: false,
+          mode,
         },
-        idempotencyKey: `ai-call:${ctx.executionId}:${node.id}`,
+        idempotencyKey: `${block}:${ctx.executionId}:${node.id}`,
       });
       await mergeExecutionMetadata(ctx.executionId, {
         pendingAiCallAgentId: agentId,
@@ -479,11 +535,16 @@ export async function runNodeAction(
         callResultConsumed: false,
         callResult: null,
         pendingCallId: null,
+        lastAgentResult: {
+          status: "started",
+          mode: block,
+          agentId,
+        },
       });
     }
     return {
       nextNodeId: getNextNodeId(def, node.id),
-      output: { queued: true, agentId },
+      output: { queued: true, agentId, block },
     };
   }
 
@@ -495,8 +556,61 @@ export async function runNodeAction(
       select: { metadata: true },
     });
     const meta = (exec?.metadata || {}) as Record<string, unknown>;
-    const callResult = meta.callResult as Record<string, unknown> | undefined;
+    let callResult = meta.callResult as Record<string, unknown> | undefined;
     const consumed = meta.callResultConsumed === true;
+
+    // Hydrate from an already-ended VoiceCall when the completion webhook
+    // arrived before this node entered WAITING (common on short calls).
+    if (!callResult && !consumed) {
+      const vars = (meta.variables || {}) as Record<string, unknown>;
+      const pendingCallId =
+        (typeof meta.pendingCallId === "string" && meta.pendingCallId) ||
+        (typeof vars.callId === "string" && vars.callId) ||
+        null;
+      if (pendingCallId) {
+        const call = await prisma.voiceCall.findFirst({
+          where: { id: pendingCallId, workspaceId: ctx.workspaceId },
+          select: {
+            id: true,
+            status: true,
+            outcome: true,
+            answeredAt: true,
+            endedAt: true,
+            appointmentBooked: true,
+            transferred: true,
+            voicemailDetected: true,
+            durationSeconds: true,
+          },
+        });
+        const terminal = [
+          "COMPLETED",
+          "NO_ANSWER",
+          "BUSY",
+          "CANCELLED",
+          "FAILED",
+          "VOICEMAIL",
+        ];
+        if (call?.endedAt || (call && terminal.includes(call.status))) {
+          callResult = {
+            callId: call.id,
+            type: "CALL_COMPLETED",
+            status: call.status,
+            callStatus: call.status,
+            outcome: call.outcome,
+            answered: Boolean(call.answeredAt),
+            appointmentBooked: Boolean(call.appointmentBooked),
+            transferCompleted: Boolean(call.transferred),
+            voicemailLeft: Boolean(call.voicemailDetected),
+            duration: call.durationSeconds,
+          };
+          await mergeExecutionMetadata(ctx.executionId, {
+            callResult,
+            callResultConsumed: false,
+            pendingCallId: call.id,
+          });
+        }
+      }
+    }
 
     const resolveBranchTarget = (handle: string) => {
       const exact = def.edges.find(
@@ -594,10 +708,285 @@ export async function runNodeAction(
   }
 
   if (block === "use_ai_agent") {
-    // Placeholder for future non-call agent actions.
+    const {
+      agentInvokeKey,
+      checkAgentInvokeGuards,
+      normalizeUseAgentMode,
+      readAgentChainFromMetadata,
+    } = await import("@/lib/automations/agent-invoke");
+
+    const agentId = String(cfg.agentId || "").trim();
+    const setupId = String(cfg.setupId || "").trim();
+    const mode = normalizeUseAgentMode(cfg.mode);
+    const waitForCompletion = Boolean(cfg.waitForCompletion);
+    if (!agentId && !setupId) {
+      return {
+        error: "use_agent_missing_agent",
+        nextNodeId: getNextNodeId(def, node.id),
+      };
+    }
+
+    const targetKey = agentInvokeKey({ agentId, setupId });
+    if (!targetKey) {
+      return {
+        error: "use_agent_missing_agent",
+        nextNodeId: getNextNodeId(def, node.id),
+      };
+    }
+
+    let resolvedAgentId = agentId || null;
+    let primaryFlowId: string | null = null;
+    let currentOwnerKey: string | null = null;
+
+    const currentFlow = await prisma.automationFlow.findFirst({
+      where: { id: ctx.flowId, workspaceId: ctx.workspaceId },
+      select: {
+        ownerAgentId: true,
+        sourceSolutionSetupId: true,
+      },
+    });
+    currentOwnerKey = agentInvokeKey({
+      agentId: currentFlow?.ownerAgentId,
+      setupId: currentFlow?.sourceSolutionSetupId,
+    });
+
+    if (setupId) {
+      const setup = await prisma.solutionSetup.findFirst({
+        where: { id: setupId, workspaceId: ctx.workspaceId },
+        select: {
+          primaryFlowId: true,
+          linkedAutomationIds: true,
+          linkedAgentIds: true,
+        },
+      });
+      if (setup) {
+        primaryFlowId =
+          setup.primaryFlowId || setup.linkedAutomationIds?.[0] || null;
+        resolvedAgentId = resolvedAgentId || setup.linkedAgentIds?.[0] || null;
+      }
+    }
+
+    if (resolvedAgentId) {
+      const agent = await prisma.voiceAgent.findFirst({
+        where: { id: resolvedAgentId, workspaceId: ctx.workspaceId },
+        select: {
+          primaryFlowId: true,
+          linkedAutomationIds: true,
+          postCallAutomationId: true,
+          fallbackAutomationId: true,
+        },
+      });
+      if (agent) {
+        primaryFlowId =
+          primaryFlowId ||
+          agent.primaryFlowId ||
+          agent.postCallAutomationId ||
+          agent.fallbackAutomationId ||
+          agent.linkedAutomationIds?.[0] ||
+          null;
+      }
+    }
+
+    const execRow = await prisma.automationExecution.findUnique({
+      where: { id: ctx.executionId },
+      select: { metadata: true },
+    });
+    const agentChain = readAgentChainFromMetadata(execRow?.metadata);
+    const guard = checkAgentInvokeGuards({
+      targetKey,
+      currentFlowId: ctx.flowId,
+      targetPrimaryFlowId: primaryFlowId,
+      currentOwnerKey,
+      agentChain,
+    });
+    if (!guard.ok) {
+      await mergeExecutionMetadata(ctx.executionId, {
+        lastAgentResult: {
+          status: "failure",
+          mode,
+          error: guard.error,
+          message: guard.message,
+          agentId: resolvedAgentId,
+          setupId: setupId || null,
+        },
+      });
+      return {
+        error: guard.error,
+        nextNodeId: getNextNodeId(def, node.id),
+        output: { status: "failure", error: guard.error },
+      };
+    }
+
+    let context: Record<string, unknown> = {};
+    if (typeof cfg.contextJson === "string" && cfg.contextJson.trim()) {
+      try {
+        context = JSON.parse(cfg.contextJson) as Record<string, unknown>;
+      } catch {
+        context = {};
+      }
+    } else if (cfg.context && typeof cfg.context === "object") {
+      context = cfg.context as Record<string, unknown>;
+    }
+
+    // —— Mode: run_primary_workflow ——
+    if (mode === "run_primary_workflow") {
+      if (!primaryFlowId) {
+        await mergeExecutionMetadata(ctx.executionId, {
+          lastAgentResult: {
+            status: "failure",
+            mode,
+            error: "use_agent_no_primary_flow",
+            agentId: resolvedAgentId,
+            setupId: setupId || null,
+          },
+        });
+        return {
+          error: "use_agent_no_primary_flow",
+          nextNodeId: getNextNodeId(def, node.id),
+        };
+      }
+      if (!ctx.testMode) {
+        const enrolled = await enrollInAutomation({
+          workspaceId: ctx.workspaceId,
+          flowId: primaryFlowId,
+          contactId: ctx.contactId,
+          variables: {
+            ...context,
+            usedAgentId: resolvedAgentId,
+            usedAgentSetupId: setupId || null,
+            purpose: String(cfg.purpose || ""),
+            agentChain: guard.nextChain,
+            agentDepth: guard.depth,
+            parentExecutionId: ctx.executionId,
+            parentFlowId: ctx.flowId,
+            waitForCompletion,
+          },
+        });
+        const skipped =
+          enrolled &&
+          typeof enrolled === "object" &&
+          "skipped" in enrolled &&
+          Boolean((enrolled as { skipped?: boolean }).skipped);
+        await mergeExecutionMetadata(ctx.executionId, {
+          agentChain: guard.nextChain,
+          usedAgentId: resolvedAgentId,
+          usedAgentSetupId: setupId || null,
+          enrolledAgentFlowId: primaryFlowId,
+          lastAgentResult: {
+            status: skipped ? "skipped_already_enrolled" : "started",
+            mode,
+            agentId: resolvedAgentId,
+            setupId: setupId || null,
+            flowId: primaryFlowId,
+            waitForCompletion,
+          },
+        });
+      }
+      return {
+        nextNodeId: getNextNodeId(def, node.id),
+        output: {
+          status: "started",
+          mode,
+          agentId: resolvedAgentId,
+          setupId: setupId || null,
+          flowId: primaryFlowId,
+          waitForCompletion,
+        },
+      };
+    }
+
+    // —— Mode: hand_off_conversation ——
+    if (mode === "hand_off_conversation") {
+      if (!resolvedAgentId) {
+        return {
+          error: "use_agent_hand_off_needs_voice_agent",
+          nextNodeId: getNextNodeId(def, node.id),
+        };
+      }
+      if (!ctx.testMode) {
+        const { enqueueJob } = await import("@/lib/messaging/enqueue-advance");
+        await enqueueJob({
+          jobType: "voice_outbound_ai_call",
+          queueName: "voice-outbound",
+          workspaceId: ctx.workspaceId,
+          payload: {
+            workspaceId: ctx.workspaceId,
+            agentId: resolvedAgentId,
+            contactId: ctx.contactId,
+            purpose: String(cfg.purpose || cfg.agentName || ""),
+            callerId: String(cfg.callerId || ""),
+            timeoutSeconds: Number(cfg.timeoutSeconds || 60),
+            retryCount: Number(cfg.retryCount || 0),
+            context: JSON.stringify(context),
+            automationExecutionId: ctx.executionId,
+            automationFlowId: ctx.flowId,
+          },
+          idempotencyKey: `use-agent-hand-off:${ctx.executionId}:${node.id}`,
+        });
+      }
+      await mergeExecutionMetadata(ctx.executionId, {
+        agentChain: guard.nextChain,
+        pendingAiCallAgentId: resolvedAgentId,
+        lastAgentResult: {
+          status: "started",
+          mode,
+          agentId: resolvedAgentId,
+          setupId: setupId || null,
+        },
+      });
+      return {
+        nextNodeId: getNextNodeId(def, node.id),
+        output: {
+          status: "started",
+          mode,
+          agentId: resolvedAgentId,
+        },
+      };
+    }
+
+    // —— Mode: invoke_task ——
+    // Bounded task: enroll primary workflow with task context when available;
+    // otherwise record a structured pending result for future model runners.
+    if (primaryFlowId && !ctx.testMode) {
+      await enrollInAutomation({
+        workspaceId: ctx.workspaceId,
+        flowId: primaryFlowId,
+        contactId: ctx.contactId,
+        variables: {
+          ...context,
+          taskMode: true,
+          usedAgentId: resolvedAgentId,
+          usedAgentSetupId: setupId || null,
+          purpose: String(cfg.purpose || ""),
+          agentChain: guard.nextChain,
+          agentDepth: guard.depth,
+          parentExecutionId: ctx.executionId,
+          parentFlowId: ctx.flowId,
+          waitForCompletion,
+        },
+      });
+    }
+    await mergeExecutionMetadata(ctx.executionId, {
+      agentChain: guard.nextChain,
+      lastAgentResult: {
+        status: primaryFlowId ? "started" : "pending_task_runner",
+        mode,
+        agentId: resolvedAgentId,
+        setupId: setupId || null,
+        flowId: primaryFlowId,
+        input: context,
+        waitForCompletion,
+      },
+    });
     return {
       nextNodeId: getNextNodeId(def, node.id),
-      output: { stub: true, agentId: String(cfg.agentId || "") },
+      output: {
+        status: primaryFlowId ? "started" : "pending_task_runner",
+        mode,
+        agentId: resolvedAgentId,
+        setupId: setupId || null,
+        flowId: primaryFlowId,
+      },
     };
   }
 

@@ -124,12 +124,34 @@ export const AUTOMATION_BLOCKS: BlockDefinition[] = [
     defaultConfig: { formSlug: "" },
   }),
   block({
+    blockType: "inbound_call",
+    category: "trigger",
+    label: "Inbound Call",
+    description:
+      "When a call arrives on a selected number. Activating the workflow publishes Telnyx routing for this trigger (direct audio path — automation is not in the media plane).",
+    icon: "phone",
+    defaultConfig: {
+      phoneNumberId: "",
+      /** every_call | overflow | after_hours | unanswered */
+      routingMode: "every_call",
+      /** business_hours | always | custom */
+      schedule: "always",
+      ringSeconds: 20,
+      /** test | live — live only when the flow is activated */
+      mode: "live",
+      /** human | voicemail | backup_flow | reject — used when this flow is paused */
+      pauseFallback: "human",
+      pauseFallbackNumber: "",
+      pauseFallbackFlowId: "",
+    },
+  }),
+  block({
     blockType: "call_completed",
     category: "trigger",
     label: "Call completed",
-    description: "When a voice call completes",
+    description: "When a voice call completes (post-call outcome — not live audio routing)",
     icon: "zap",
-    defaultConfig: {},
+    defaultConfig: { phoneNumberId: "" },
   }),
   block({
     blockType: "call_missed",
@@ -137,7 +159,7 @@ export const AUTOMATION_BLOCKS: BlockDefinition[] = [
     label: "Missed call",
     description: "When a call is missed, busy, cancelled, or unanswered",
     icon: "zap",
-    defaultConfig: {},
+    defaultConfig: { phoneNumberId: "" },
   }),
   block({
     blockType: "call_qualified",
@@ -377,6 +399,26 @@ export const AUTOMATION_BLOCKS: BlockDefinition[] = [
     },
   }),
   block({
+    blockType: "run_voice_agent",
+    category: "action",
+    label: "Run Voice Agent",
+    description:
+      "Start or attach the real-time Telnyx voice agent for this contact/call. Use inside a voice agent’s primary workflow — not Use Agent targeting itself.",
+    icon: "phone",
+    defaultConfig: {
+      agentId: "",
+      agentName: "",
+      purpose: "",
+      telnyxAssistantId: "",
+      mode: "realtime_voice",
+      waitForOutcome: true,
+      callerId: "",
+      timeoutSeconds: 60,
+      retryCount: 0,
+      attachInbound: true,
+    },
+  }),
+  block({
     blockType: "wait_for_call_result",
     category: "logic",
     label: "Wait for call result",
@@ -390,10 +432,20 @@ export const AUTOMATION_BLOCKS: BlockDefinition[] = [
   block({
     blockType: "use_ai_agent",
     category: "action",
-    label: "Use AI agent",
-    description: "Invoke a non-call AI agent action (future)",
-    icon: "sparkles",
-    defaultConfig: { agentId: "", purpose: "" },
+    label: "Use Agent",
+    description:
+      "Invoke a different agent from an overall automation. Modes: run primary workflow, invoke task, or hand off conversation. Never use this to call the same agent that owns the current flow.",
+    icon: "bot",
+    defaultConfig: {
+      agentId: "",
+      setupId: "",
+      agentName: "",
+      agentType: "",
+      purpose: "",
+      mode: "run_primary_workflow",
+      waitForCompletion: false,
+      contextJson: "{}",
+    },
   }),
   block({
     blockType: "send_webhook",
@@ -747,6 +799,7 @@ export function triggerFromBlockType(blockType: string): string {
     scheduled_datetime: "Scheduled",
     tag_added: "Tag added",
     form_submitted: "Form submitted",
+    inbound_call: "Inbound Call",
     call_completed: "Call completed",
     call_missed: "Missed call",
     call_qualified: "Call qualified",

@@ -262,15 +262,33 @@ export function mapAutomation(a: {
   status: string;
   updatedAt: Date | string;
   sourceSolutionSetupId?: string | null;
+  ownerAgentId?: string | null;
+  ownershipKind?: string | null;
+  ownerLabel?: string | null;
   advancedCustomized?: boolean | null;
   description?: string | null;
 }): AutomationFlow {
+  const ownershipKind =
+    a.ownershipKind ||
+    (a.sourceSolutionSetupId || a.description?.startsWith("Generated from ")
+      ? "agent_workflow"
+      : "standalone");
+
+  const ownedBy =
+    a.ownerLabel ||
+    (a.description?.startsWith("Generated from ")
+      ? a.description.replace(/^Generated from\s+/, "").trim()
+      : null);
+
   const createdFrom =
-    a.description?.startsWith("Generated from ")
-      ? a.description.replace(/^Generated from\s+/, "")
-      : a.sourceSolutionSetupId
-        ? "Solution setup"
-        : null;
+    ownershipKind === "agent_workflow"
+      ? "Agent workflow"
+      : a.description?.startsWith("Generated from ")
+        ? a.description.replace(/^Generated from\s+/, "")
+        : a.sourceSolutionSetupId
+          ? "Agent workflow"
+          : "Standalone automation";
+
   return {
     id: a.id,
     name: a.name,
@@ -281,8 +299,12 @@ export function mapAutomation(a: {
     status: titleCaseStatus(a.status),
     updatedAt: new Date(a.updatedAt).toISOString(),
     sourceSolutionSetupId: a.sourceSolutionSetupId ?? null,
+    ownerAgentId: a.ownerAgentId ?? null,
+    ownershipKind,
+    ownerLabel: ownedBy,
     advancedCustomized: Boolean(a.advancedCustomized),
     createdFrom,
+    ownedBy,
   };
 }
 

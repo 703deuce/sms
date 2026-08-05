@@ -88,6 +88,8 @@ export type UpsertAppointmentReceptionistSetupResult = {
   agentId: string;
   outcomeSlug: string;
   created: boolean;
+  primaryFlowId?: string | null;
+  workflowCompileError?: string | null;
 };
 
 function isUniqueViolation(err: unknown): boolean {
@@ -256,21 +258,89 @@ export async function upsertAppointmentReceptionistSetup(
     },
   });
 
+  // Voice agents: Inbound Call → Run Voice Agent → Call Outcome → End.
+  // Activate publishes Telnyx routing from the trigger — not Use Agent → self.
+  let primaryFlowId: string | null = null;
+  let workflowCompileError: string | null = null;
+  try {
+    const {
+      ensureAgentPrimaryWorkflow,
+      triggerBlockFromAnswerWhen,
+      routingModeFromAnswerWhen,
+    } = await import("@/lib/agents/compile-workflow");
+    const agentRow = await prisma.voiceAgent.findFirst({
+      where: { id: input.agentId },
+      select: {
+        primaryFlowId: true,
+        linkedAutomationIds: true,
+        phoneNumberId: true,
+        telnyxAssistantId: true,
+      },
+    });
+    const setupRow = await prisma.solutionSetup.findFirst({
+      where: { id: setupId },
+      select: { primaryFlowId: true, linkedAutomationIds: true },
+    });
+    const existingFlowId =
+      setupRow?.primaryFlowId ||
+      agentRow?.primaryFlowId ||
+      setupRow?.linkedAutomationIds?.[0] ||
+      agentRow?.linkedAutomationIds?.[0] ||
+      null;
+    const phoneNumberId =
+      input.state.phoneNumberId ||
+      agentRow?.phoneNumberId ||
+      linkedPhoneNumberIds[0] ||
+      null;
+    const compiled = await ensureAgentPrimaryWorkflow({
+      workspaceId: input.workspaceId,
+      agentName: name,
+      outcomeSlug,
+      existingFlowId,
+      agentId: input.agentId,
+      setupId,
+      triggerBlock: triggerBlockFromAnswerWhen(input.state.answerWhen),
+      routingMode: routingModeFromAnswerWhen(input.state.answerWhen),
+      phoneNumberId,
+      telnyxAssistantId: agentRow?.telnyxAssistantId || null,
+      purpose: name,
+      activate: false,
+      description: phoneNumberId
+        ? `Generated from ${name}`
+        : `Generated from ${name} — Phone number required`,
+    });
+    primaryFlowId = compiled.flowId;
+  } catch (err) {
+    workflowCompileError =
+      err instanceof Error ? err.message : String(err);
+    primaryFlowId = null;
+  }
+
   await emitPlatformEvent({
     workspaceId: input.workspaceId,
     type: created ? "SOLUTION_SETUP_CREATED" : "SOLUTION_SETUP_UPDATED",
     solutionSetupId: setupId!,
     agentId: input.agentId,
+    automationId: primaryFlowId || undefined,
     payload: {
       solutionType: SOLUTION_TYPE_CANONICAL,
       outcomeSlug,
       name,
       published: input.published,
+      primaryFlowId,
+      workflowCompileError,
     },
     idempotencyKey: `ar-setup:${setupId}:${status}:${Date.now()}`,
   }).catch(() => undefined);
 
-  return { setupId: setupId!, agentId: input.agentId, outcomeSlug, created };
+  return {
+    setupId: setupId!,
+    agentId: input.agentId,
+    outcomeSlug,
+    created,
+    primaryFlowId,
+    workflowCompileError,
+  };
 }
 
 export async function loadAppointmentReceptionistSetup(

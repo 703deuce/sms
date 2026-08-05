@@ -221,6 +221,8 @@ export async function loadTemplates(workspaceId: string): Promise<Template[]> {
 }
 
 export async function loadAutomations(workspaceId: string): Promise<AutomationFlow[]> {
+  const { backfillAgentWorkflows } = await import("@/lib/agents/workflows");
+  await backfillAgentWorkflows(workspaceId).catch(() => 0);
   const rows = await getPrisma().automationFlow.findMany({
     where: { workspaceId },
     orderBy: { updatedAt: "desc" },
@@ -232,7 +234,15 @@ export async function loadAutomationById(workspaceId: string, id: string) {
   const a = await getPrisma().automationFlow.findFirst({
     where: { id, workspaceId },
   });
-  return a ? { ...mapAutomation(a), definition: a.definition } : null;
+  return a
+    ? {
+        ...mapAutomation(a),
+        definition: a.definition,
+        ownershipKind: a.ownershipKind ?? null,
+        ownerAgentId: a.ownerAgentId ?? null,
+        ownerLabel: a.ownerLabel ?? null,
+      }
+    : null;
 }
 
 export async function loadSuppressions(workspaceId: string): Promise<Suppression[]> {

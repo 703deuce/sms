@@ -1,12 +1,21 @@
 /**
  * First-class Agent product types.
  *
+ * Agent = reusable worker (behavior, channels, capabilities) — NOT its trigger.
+ * Workflow = when it runs and how nodes/agents connect.
+ * Deployment = number / audience / calendar attachment.
+ *
  * Type = what the customer created (Appointment Booking Agent, Missed Call Agent).
  * Capabilities = toggles on that agent (booking, transfers, CRM, SMS).
  * Never infer menu placement from capabilities — use type / outcomeSlug only.
+ *
+ * See `src/lib/agents/architecture.ts` for the locked operating model.
  */
 
 import { getOutcomeSolution } from "@/lib/outcomes/registry";
+import type { AgentIntelligenceMode } from "@/lib/agents/architecture";
+
+export type { AgentIntelligenceMode } from "@/lib/agents/architecture";
 
 export const AGENT_TYPE_IDS = [
   "answer_every_call",
@@ -37,11 +46,16 @@ export type AgentTypeDef = {
   label: string;
   /** Short label for tables/cards. */
   shortLabel: string;
-  /** Outcome registry slug this type is created from. */
+  /** Outcome registry slug this type is created from (default template only). */
   outcomeSlug: string;
   channel: AgentChannel;
   /** Voice family agents share the receptionist runtime. */
   family: "receptionist" | "sms" | "campaign" | "other";
+  /**
+   * How much of this agent is AI judgment vs deterministic workflow nodes.
+   * Promotion blasts stay customer-facing “agents” but are mostly deterministic.
+   */
+  intelligence: AgentIntelligenceMode;
 };
 
 const DEFS: AgentTypeDef[] = [
@@ -52,6 +66,7 @@ const DEFS: AgentTypeDef[] = [
     outcomeSlug: "answer-every-call",
     channel: "voice",
     family: "receptionist",
+    intelligence: "realtime_ai",
   },
   {
     id: "missed_overflow",
@@ -60,6 +75,7 @@ const DEFS: AgentTypeDef[] = [
     outcomeSlug: "missed-overflow",
     channel: "voice",
     family: "receptionist",
+    intelligence: "realtime_ai",
   },
   {
     id: "after_hours",
@@ -68,6 +84,7 @@ const DEFS: AgentTypeDef[] = [
     outcomeSlug: "after-hours",
     channel: "voice",
     family: "receptionist",
+    intelligence: "realtime_ai",
   },
   {
     id: "appointment_booking",
@@ -76,6 +93,7 @@ const DEFS: AgentTypeDef[] = [
     outcomeSlug: "appointment-booking",
     channel: "voice",
     family: "receptionist",
+    intelligence: "realtime_ai",
   },
   {
     id: "lead_capture",
@@ -84,6 +102,7 @@ const DEFS: AgentTypeDef[] = [
     outcomeSlug: "lead-capture",
     channel: "voice",
     family: "receptionist",
+    intelligence: "realtime_ai",
   },
   {
     id: "service_intake",
@@ -92,6 +111,7 @@ const DEFS: AgentTypeDef[] = [
     outcomeSlug: "service-intake",
     channel: "voice",
     family: "receptionist",
+    intelligence: "realtime_ai",
   },
   {
     id: "missed_call_text_back",
@@ -100,6 +120,7 @@ const DEFS: AgentTypeDef[] = [
     outcomeSlug: "missed-call-text-back",
     channel: "sms",
     family: "sms",
+    intelligence: "mixed",
   },
   {
     id: "instant_lead_response",
@@ -108,6 +129,7 @@ const DEFS: AgentTypeDef[] = [
     outcomeSlug: "instant-lead-response",
     channel: "sms",
     family: "sms",
+    intelligence: "mixed",
   },
   {
     id: "estimate_follow_up",
@@ -116,6 +138,7 @@ const DEFS: AgentTypeDef[] = [
     outcomeSlug: "estimate-follow-up",
     channel: "sms",
     family: "sms",
+    intelligence: "mixed",
   },
   {
     id: "appointment_reminders",
@@ -124,6 +147,7 @@ const DEFS: AgentTypeDef[] = [
     outcomeSlug: "appointment-reminders",
     channel: "sms",
     family: "sms",
+    intelligence: "mixed",
   },
   {
     id: "review_request",
@@ -132,6 +156,7 @@ const DEFS: AgentTypeDef[] = [
     outcomeSlug: "review-requests",
     channel: "sms",
     family: "sms",
+    intelligence: "deterministic",
   },
   {
     id: "old_lead_reactivation",
@@ -140,6 +165,7 @@ const DEFS: AgentTypeDef[] = [
     outcomeSlug: "old-lead-reactivation",
     channel: "sms",
     family: "campaign",
+    intelligence: "deterministic",
   },
   {
     id: "customer_reactivation",
@@ -148,6 +174,7 @@ const DEFS: AgentTypeDef[] = [
     outcomeSlug: "customer-reactivation",
     channel: "sms",
     family: "campaign",
+    intelligence: "deterministic",
   },
   {
     id: "promotional_broadcast",
@@ -156,6 +183,7 @@ const DEFS: AgentTypeDef[] = [
     outcomeSlug: "promotional-broadcast",
     channel: "sms",
     family: "campaign",
+    intelligence: "deterministic",
   },
   {
     id: "receptionist",
@@ -164,6 +192,7 @@ const DEFS: AgentTypeDef[] = [
     outcomeSlug: "ai-receptionist",
     channel: "voice",
     family: "receptionist",
+    intelligence: "realtime_ai",
   },
   {
     id: "custom",
@@ -172,6 +201,7 @@ const DEFS: AgentTypeDef[] = [
     outcomeSlug: "custom",
     channel: "multi",
     family: "other",
+    intelligence: "mixed",
   },
 ];
 
@@ -215,6 +245,12 @@ export function outcomeSlugFromAgentType(
 
 export function agentTypeLabel(agentType: string | null | undefined): string {
   return getAgentType(agentType).label;
+}
+
+export function agentIntelligence(
+  agentType: string | null | undefined,
+): AgentIntelligenceMode {
+  return getAgentType(agentType).intelligence;
 }
 
 export function agentTypeShortLabel(agentType: string | null | undefined): string {

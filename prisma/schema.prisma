@@ -146,6 +146,7 @@ model Workspace {
   conversations Conversation[]
   templates   Template[]
   flows       AutomationFlow[]
+  triggerDeployments TriggerDeployment[]
   solutionSetups SolutionSetup[]
   platformEvents PlatformEvent[]
   keywords    Keyword[]
@@ -314,6 +315,7 @@ model PhoneNumber {
   settingsJson     Json?
   workspace        Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   assignments      PhoneNumberAssignment[]
+  triggerDeployments TriggerDeployment[]
 
   @@unique([workspaceId, e164])
   @@index([twilioSid])
@@ -969,6 +971,8 @@ model SolutionSetup {
   linkedCalendarIds    String[] @default([])
   linkedRoutingRuleIds String[] @default([])
   linkedTemplateIds    String[] @default([])
+  /// Primary generated AutomationFlow for this agent (wizard → workflow).
+  primaryFlowId        String?
   /// Stable key for idempotent create-or-update per workspace+solution
   externalKey          String?
   createdAt            DateTime @default(now())
@@ -980,6 +984,7 @@ model SolutionSetup {
   @@unique([workspaceId, solutionType, externalKey])
   @@index([workspaceId, solutionType])
   @@index([workspaceId, status])
+  @@index([workspaceId, primaryFlowId])
   @@map("solution_setups")
 }
 
@@ -1020,6 +1025,12 @@ model AutomationFlow {
   completionRate       Float      @default(0)
   status               FlowStatus @default(DRAFT)
   sourceSolutionSetupId String?
+  /// VoiceAgent that owns this workflow (agent_workflow). Null for standalone automations.
+  ownerAgentId         String?
+  /// agent_workflow | standalone
+  ownershipKind        String     @default("standalone")
+  /// Customer-facing owner label, e.g. "Missed Call Text-Back Agent"
+  ownerLabel           String?
   linkedAgentIds       String[]   @default([])
   linkedCampaignIds    String[]   @default([])
   linkedPhoneNumberIds String[]   @default([])
@@ -1032,9 +1043,54 @@ model AutomationFlow {
   publishedAt          DateTime?
   workspace            Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   sourceSolutionSetup  SolutionSetup? @relation(fields: [sourceSolutionSetupId], references: [id], onDelete: SetNull)
+  ownerAgent           VoiceAgent? @relation("AgentPrimaryFlows", fields: [ownerAgentId], references: [id], onDelete: SetNull)
   executions           AutomationExecution[]
+  triggerDeployments   TriggerDeployment[]
 
   @@index([workspaceId, sourceSolutionSetupId])
+  @@index([workspaceId, ownerAgentId])
+  @@index([workspaceId, ownershipKind])
+}
+
+/// Compiled from a workflow trigger node on Activate.
+/// Source of truth for editing = trigger node on the canvas.
+/// This record is what the backend audits, conflicts on, and My Numbers displays.
+/// For inbound voice, activation also publishes direct Telnyx routing (not via the automation worker audio path).
+model TriggerDeployment {
+  id                String   @id @default(cuid())
+  workspaceId       String
+  flowId            String
+  triggerNodeId     String
+  /// inbound_call | call_missed | incoming_sms | …
+  triggerBlockType  String
+  /// voice | sms | email | webhook | schedule | manual
+  channel           String
+  phoneNumberId     String?
+  /// every_call | overflow | after_hours | unanswered | keyword | always
+  eventType         String   @default("every_call")
+  /// always | business_hours | custom
+  scheduleKey       String   @default("always")
+  /// draft | test | live | paused | error
+  status            String   @default("draft")
+  /// human | voicemail | backup_flow | reject
+  pauseFallback     String   @default("human")
+  pauseFallbackNumber String?
+  pauseFallbackFlowId String?
+  /// Provider payload snapshot (Telnyx connection/app ids, last error, etc.)
+  providerConfig    Json?
+  errorMessage      String?
+  deployedAt        DateTime?
+  pausedAt          DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  workspace         Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  flow              AutomationFlow @relation(fields: [flowId], references: [id], onDelete: Cascade)
+  phoneNumber       PhoneNumber? @relation(fields: [phoneNumberId], references: [id], onDelete: SetNull)
+
+  @@unique([flowId, triggerNodeId])
+  @@index([workspaceId, phoneNumberId, status])
+  @@index([workspaceId, status, eventType])
+  @@map("trigger_deployments")
 }
 
 enum AutomationExecutionStatus {
@@ -1342,11 +1398,16 @@ model VoiceAgent {
   linkedCalendarIds String[]       @default([])
   postCallAutomationId String?
   fallbackAutomationId String?
+  /// Primary AutomationFlow generated for this agent (around the conversation, not live voice turns).
+  primaryFlowId   String?
+  /// How this agent executes: realtime_voice | event_driven_sms | scheduled_messaging | workflow_agent
+  executionType   String           @default("realtime_voice")
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
   archivedAt      DateTime?
   workspace       Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   sourceSolutionSetup SolutionSetup? @relation(fields: [sourceSolutionSetupId], references: [id], onDelete: SetNull)
+  ownedFlows      AutomationFlow[] @relation("AgentPrimaryFlows")
   versions        VoiceAgentVersion[]
   phoneAssignments VoiceAgentPhoneNumber[]
   knowledgeLinks  VoiceAgentKnowledgeBase[]
@@ -1368,6 +1429,7 @@ model VoiceAgent {
   observabilityConfigs VoiceObservabilityConfig[]
 
   @@index([workspaceId, status])
+  @@index([workspaceId, primaryFlowId])
   @@map("voice_agents")
 }
 

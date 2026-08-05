@@ -50,6 +50,8 @@ export function getTelnyxWebhookUrls() {
     compliance: `${base}/api/telnyx/compliance`,
     /** Call Control + AI assistant events */
     voice: `${base}/api/telnyx/voice`,
+    /** TeXML application status_callback (form or JSON call progress) */
+    texmlStatus: `${base}/api/telnyx/voice/texml-status`,
   };
 }
 

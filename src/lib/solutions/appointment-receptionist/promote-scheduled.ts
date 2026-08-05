@@ -216,6 +216,51 @@ export async function promoteScheduledReceptionists(opts?: {
 
       await publishVoiceAgent(agent.workspaceId, agent.id, "scheduled_activation");
 
+      // Mirror wizard Activate: compile TriggerDeployment from primary flow.
+      try {
+        const setup = await prisma.solutionSetup.findFirst({
+          where: {
+            workspaceId: agent.workspaceId,
+            OR: [
+              { externalKey: agent.id },
+              { linkedAgentIds: { has: agent.id } },
+            ],
+          },
+          select: { primaryFlowId: true, linkedAutomationIds: true },
+        });
+        const flowId =
+          agent.primaryFlowId ||
+          setup?.primaryFlowId ||
+          setup?.linkedAutomationIds?.[0] ||
+          null;
+        if (flowId) {
+          const flow = await prisma.automationFlow.findFirst({
+            where: { id: flowId, workspaceId: agent.workspaceId },
+          });
+          if (flow) {
+            const { activateFlowTriggers } = await import(
+              "@/lib/automations/trigger-deployments"
+            );
+            await activateFlowTriggers(
+              agent.workspaceId,
+              flowId,
+              flow.definition,
+            );
+            await prisma.automationFlow.update({
+              where: { id: flowId },
+              data: {
+                status: "ACTIVE",
+                publishedDefinition: flow.definition as object,
+                publishedAt: new Date(),
+                version: Math.max(1, (flow.version || 0) + 1),
+              },
+            });
+          }
+        }
+      } catch (err) {
+        console.error("[ar] scheduled activateFlowTriggers failed", err);
+      }
+
       // Re-read after publish so we don't wipe flow-applied draftConfig.
       const fresh = await prisma.voiceAgent.findUnique({ where: { id: agent.id } });
       const draft = (fresh?.draftConfig || agent.draftConfig || {}) as Record<string, unknown>;
