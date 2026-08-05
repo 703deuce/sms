@@ -345,7 +345,6 @@ export async function activateFlowTriggers(
         voiceAgentId,
         "trigger-activate",
       )) as Record<string, unknown>;
-      telnyxPublished = true;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       await upsertTriggerRow({
@@ -364,6 +363,48 @@ export async function activateFlowTriggers(
       });
       throw err;
     }
+
+    if (publishResult.telnyxSyncError) {
+      const message = `Telnyx sync error: ${String(publishResult.telnyxSyncError)}`;
+      await upsertTriggerRow({
+        workspaceId,
+        flowId,
+        trigger: inbound,
+        status: "error",
+        errorMessage: message,
+        providerConfig: {
+          provider: "telnyx",
+          telnyxPublished: false,
+          voiceAgentId,
+          publishResult,
+        },
+      });
+      throw new Error(message);
+    }
+
+    const texmlRoute = publishResult.texmlRoute as
+      | { matched?: boolean; path?: string }
+      | null
+      | undefined;
+    if (texmlRoute && texmlRoute.matched !== true) {
+      const message = `TeXML route not confirmed live (${texmlRoute.path || "unknown"})`;
+      await upsertTriggerRow({
+        workspaceId,
+        flowId,
+        trigger: inbound,
+        status: "error",
+        errorMessage: message,
+        providerConfig: {
+          provider: "telnyx",
+          telnyxPublished: false,
+          voiceAgentId,
+          publishResult,
+        },
+      });
+      throw new Error(message);
+    }
+
+    telnyxPublished = true;
 
     const refreshed = await prisma.voiceAgent.findFirst({
       where: { id: voiceAgentId },

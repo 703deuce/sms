@@ -394,6 +394,7 @@ export async function publishVoiceAgent(
     },
   });
 
+  const previousStatus = agent.status;
   const updated = await prisma.voiceAgent.update({
     where: { id: agentId },
     data: {
@@ -403,6 +404,20 @@ export async function publishVoiceAgent(
       healthMessage: null,
     },
   });
+
+  const rollbackPublish = async (message: string) => {
+    await prisma.voiceAgent
+      .update({
+        where: { id: agentId },
+        data: {
+          status: previousStatus === "ACTIVE" ? "DRAFT" : previousStatus,
+          healthStatus: "error",
+          healthMessage: message.slice(0, 500),
+        },
+      })
+      .catch(() => undefined);
+    throw new Error(message);
+  };
 
   try {
     const { syncVoiceAgentPhoneAssignment } = await import("./agent-phone");
@@ -417,68 +432,69 @@ export async function publishVoiceAgent(
   }
 
   let telnyxSync: unknown = null;
-  let telnyxSyncError: string | null = null;
-  let texmlRoute: unknown = null;
   try {
     telnyxSync = await syncAssistantToTelnyx(workspaceId, agentId, updated, config);
   } catch (err) {
-    telnyxSyncError = err instanceof Error ? err.message : String(err);
+    const telnyxSyncError = err instanceof Error ? err.message : String(err);
     console.error("[voice] Telnyx assistant sync failed", err);
-    await prisma.voiceAgent.update({
-      where: { id: agentId },
-      data: {
-        healthStatus: "warning",
-        healthMessage: `Deployed locally but Telnyx sync failed: ${telnyxSyncError}`.slice(
-          0,
-          500,
-        ),
-      },
-    });
+    await rollbackPublish(
+      `Telnyx assistant sync failed — deploy rolled back: ${telnyxSyncError}`,
+    );
+  }
+
+  const refreshedAfterSync =
+    (await prisma.voiceAgent.findUnique({ where: { id: agentId } })) || updated;
+  if (!refreshedAfterSync.telnyxAssistantId) {
+    await rollbackPublish(
+      "Telnyx assistant id missing after sync — deploy rolled back",
+    );
   }
 
   // Product default: point the DID at TeXML → assistant (no Call Control mask).
-  try {
-    const {
-      usesTexmlDirectInbound,
-      routePhoneToTexmlAssistant,
-    } = await import("./telnyx/texml-direct-route");
-    if (usesTexmlDirectInbound(config) && updated.phoneNumberId) {
-      const refreshed =
-        (await prisma.voiceAgent.findUnique({ where: { id: agentId } })) ||
-        updated;
-      const assistantId = refreshed.telnyxAssistantId;
-      const phone = await prisma.phoneNumber.findFirst({
-        where: { id: updated.phoneNumberId, workspaceId },
-        select: { e164: true, providerNumberId: true },
-      });
-      if (assistantId && phone?.e164) {
-        texmlRoute = await routePhoneToTexmlAssistant({
-          e164: phone.e164,
-          assistantId,
-          providerNumberId: phone.providerNumberId,
-        });
-      }
+  let texmlRoute: {
+    matched?: boolean;
+    path?: string;
+    texmlAppId?: string;
+  } | null = null;
+  const {
+    usesTexmlDirectInbound,
+    routePhoneToTexmlAssistant,
+  } = await import("./telnyx/texml-direct-route");
+  if (usesTexmlDirectInbound(config) && updated.phoneNumberId) {
+    const phone = await prisma.phoneNumber.findFirst({
+      where: { id: updated.phoneNumberId, workspaceId },
+      select: { e164: true, providerNumberId: true },
+    });
+    if (!phone?.e164) {
+      await rollbackPublish(
+        "Phone number missing for TeXML direct route — deploy rolled back",
+      );
     }
-  } catch (err) {
-    console.error("[voice] TeXML direct route failed", err);
-    const detail = err instanceof Error ? err.message : String(err);
-    await prisma.voiceAgent
-      .update({
-        where: { id: agentId },
-        data: {
-          healthStatus: "warning",
-          healthMessage:
-            `Deployed but TeXML direct routing failed: ${detail}`.slice(0, 500),
-        },
-      })
-      .catch(() => undefined);
+    try {
+      texmlRoute = await routePhoneToTexmlAssistant({
+        e164: phone!.e164,
+        assistantId: refreshedAfterSync.telnyxAssistantId!,
+        providerNumberId: phone!.providerNumberId,
+      });
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      console.error("[voice] TeXML direct route failed", err);
+      await rollbackPublish(
+        `TeXML direct routing failed — deploy rolled back: ${detail}`,
+      );
+    }
+    if (!texmlRoute?.matched) {
+      await rollbackPublish(
+        `TeXML route did not match live connection — deploy rolled back (${texmlRoute?.path || "no path"})`,
+      );
+    }
   }
 
   return {
-    agent: updated,
+    agent: refreshedAfterSync,
     version: versionRow,
     telnyxSync,
-    telnyxSyncError,
+    telnyxSyncError: null as string | null,
     texmlRoute,
   };
 }

@@ -9,12 +9,22 @@
  */
 
 import { telnyxRequest } from "@/lib/messaging/telnyx/client";
+import { getTelnyxWebhookUrls } from "@/lib/messaging/telnyx/config";
 import * as ai from "@/lib/voice/telnyx/ai-client";
 import {
   isLatencyOptimizedProfile,
   type LatencyProfileId,
 } from "@/lib/voice/latency-profiles";
 import type { VoiceAgentConfig } from "@/lib/voice/types";
+
+/** TeXML apps use status_callback (not Call Control webhook_event_url). */
+function texmlStatusCallbackBody() {
+  const urls = getTelnyxWebhookUrls();
+  return {
+    status_callback: urls.texmlStatus,
+    status_callback_method: "post" as const,
+  };
+}
 
 export type InboundRoutingMode = "texml_direct" | "call_control";
 
@@ -107,6 +117,7 @@ export async function routePhoneToTexmlAssistant(input: {
             voice_url: voiceUrl,
             voice_method: "POST",
             active: true,
+            ...texmlStatusCallbackBody(),
           },
         },
       );
@@ -140,6 +151,7 @@ export async function routePhoneToTexmlAssistant(input: {
           ai_assistant_id: assistantId,
           voice_url: voiceUrl,
           voice_method: "POST",
+          ...texmlStatusCallbackBody(),
         },
       },
     );

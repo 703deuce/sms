@@ -235,16 +235,18 @@ export async function advanceAutomationExecution(executionId: string) {
     });
 
     const nextNode = findNode(def, nextId);
+    // Keep advancing through graph-native control blocks in this job.
+    // Critical: wait_for_call_result must run here so WAITING + waitingForCallResult
+    // are set before the call ends (otherwise resume never wakes the execution).
     if (
       nextNode &&
       (isConditionBlock(nextNode.data.blockType) ||
         nextNode.data.blockType === "wait" ||
         nextNode.data.blockType === "wait_until_datetime" ||
+        nextNode.data.blockType === "wait_for_call_result" ||
+        nextNode.data.blockType === "end_automation" ||
         nextNode.type === "trigger")
     ) {
-      continue;
-    }
-    if (nextNode && nextNode.data.blockType === "end_automation") {
       continue;
     }
     return { ok: true };

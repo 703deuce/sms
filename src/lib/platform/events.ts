@@ -128,15 +128,34 @@ async function resumeWaitForCallResult(input: EmitPlatformEventInput) {
   if (!input.callId) return;
   const prisma = getPrisma();
 
-  // Match by pendingCallId first (most precise). Also fall back to contactId
-  // for WAITING wait_for_call_result rows that haven't bound pendingCallId yet.
-  const candidates = await prisma.automationExecution.findMany({
+  // Prefer pendingCallId match (works without contactId). Also scan
+  // contact-scoped WAITING/RUNNING rows that may not have bound a call yet.
+  const byPending = await prisma.automationExecution.findMany({
     where: {
       workspaceId: input.workspaceId,
       status: { in: ["WAITING", "RUNNING"] },
-      ...(input.contactId ? { contactId: input.contactId } : {}),
+      metadata: {
+        path: ["pendingCallId"],
+        equals: input.callId,
+      },
     },
-    take: 80,
+    take: 20,
+  });
+  const byContact = input.contactId
+    ? await prisma.automationExecution.findMany({
+        where: {
+          workspaceId: input.workspaceId,
+          contactId: input.contactId,
+          status: { in: ["WAITING", "RUNNING"] },
+        },
+        take: 40,
+      })
+    : [];
+  const seen = new Set<string>();
+  const candidates = [...byPending, ...byContact].filter((e) => {
+    if (seen.has(e.id)) return false;
+    seen.add(e.id);
+    return true;
   });
 
   const { enqueueJob } = await import("@/lib/messaging/enqueue-advance");
@@ -181,6 +200,26 @@ async function resumeWaitForCallResult(input: EmitPlatformEventInput) {
             ...nextMeta,
             waitingForCallResult: true,
           } as Prisma.InputJsonValue,
+        },
+      });
+      await enqueueJob({
+        jobType: "automation_advance",
+        queueName: "automations",
+        workspaceId: input.workspaceId,
+        payload: { executionId: exec.id },
+        idempotencyKey: `automation-advance:${exec.id}:call-result:${input.callId}`,
+      }).catch(() => undefined);
+    } else if (
+      exec.status === "RUNNING" &&
+      matchesCall &&
+      (waitingForResult || Boolean(pending))
+    ) {
+      // Stash + wake: runner may have parked on wait_for_call_result without
+      // entering WAITING (or call ended mid-advance). Re-enqueue advance.
+      await prisma.automationExecution.update({
+        where: { id: exec.id },
+        data: {
+          metadata: nextMeta as Prisma.InputJsonValue,
         },
       });
       await enqueueJob({

@@ -107,70 +107,73 @@ export async function processPostCall(callId: string) {
     missedStatuses.includes(call.status) ||
     (!call.answeredAt && !call.voicemailDetected && !call.appointmentBooked);
 
+  // Always emit completion events so wait_for_call_result can resume by callId
+  // even when the caller contact was never created.
   if (call.contactId) {
     await emitVoiceAutomationEvents(call);
-    if (isMissed) {
-      // Fan-out to automation triggers happens inside emitPlatformEvent.
-      await emitPlatformEvent({
-        workspaceId: call.workspaceId,
-        type: "CALL_MISSED",
-        contactId: call.contactId,
-        agentId: call.agentId,
-        callId: call.id,
-        payload: { status: call.status, outcome: call.outcome },
-        idempotencyKey: `call-missed:${call.id}`,
-      }).catch(() => undefined);
-    }
+  }
+  if (isMissed) {
     await emitPlatformEvent({
       workspaceId: call.workspaceId,
-      type: "CALL_COMPLETED",
-      contactId: call.contactId,
+      type: "CALL_MISSED",
+      contactId: call.contactId || undefined,
       agentId: call.agentId,
       callId: call.id,
-      payload: {
-        outcome: call.outcome,
-        status: call.status,
-        callStatus: call.status,
-        answered: Boolean(call.answeredAt),
-        appointmentBooked: Boolean(call.appointmentBooked),
-        transferCompleted: Boolean(call.transferred),
-        leadCaptured: Boolean(insight?.isLead),
-        voicemailLeft: Boolean(call.voicemailDetected),
-        callerHungUp: String(call.outcome || "")
-          .toLowerCase()
-          .includes("hang"),
-        duration,
-        summary: insight?.summary || null,
-        transcriptId: call.id,
-        extractedFields: insight?.extractedFields || null,
-        phoneNumberId: call.phoneNumberId,
-      },
-      idempotencyKey: `call-completed:${call.id}`,
+      payload: { status: call.status, outcome: call.outcome },
+      idempotencyKey: `call-missed:${call.id}`,
     }).catch(() => undefined);
-    await emitPlatformEvent({
-      workspaceId: call.workspaceId,
-      type: "AI_CALL_COMPLETED",
-      contactId: call.contactId,
-      agentId: call.agentId,
-      callId: call.id,
-      payload: {
-        outcome: call.outcome,
-        status: call.status,
-        callStatus: call.status,
-        answered: Boolean(call.answeredAt),
-        appointmentBooked: Boolean(call.appointmentBooked),
-        transferCompleted: Boolean(call.transferred),
-        leadCaptured: Boolean(insight?.isLead),
-        voicemailLeft: Boolean(call.voicemailDetected),
-        duration,
-        summary: insight?.summary || null,
-        transcriptReady: true,
-        extractedFields: insight?.extractedFields || null,
-        phoneNumberId: call.phoneNumberId,
-      },
-      idempotencyKey: `ai-call-completed:${call.id}`,
-    }).catch(() => undefined);
+  }
+  await emitPlatformEvent({
+    workspaceId: call.workspaceId,
+    type: "CALL_COMPLETED",
+    contactId: call.contactId || undefined,
+    agentId: call.agentId,
+    callId: call.id,
+    payload: {
+      outcome: call.outcome,
+      status: call.status,
+      callStatus: call.status,
+      answered: Boolean(call.answeredAt),
+      appointmentBooked: Boolean(call.appointmentBooked),
+      transferCompleted: Boolean(call.transferred),
+      leadCaptured: Boolean(insight?.isLead),
+      voicemailLeft: Boolean(call.voicemailDetected),
+      callerHungUp: String(call.outcome || "")
+        .toLowerCase()
+        .includes("hang"),
+      duration,
+      summary: insight?.summary || null,
+      transcriptId: call.id,
+      extractedFields: insight?.extractedFields || null,
+      phoneNumberId: call.phoneNumberId,
+    },
+    idempotencyKey: `call-completed:${call.id}`,
+  }).catch(() => undefined);
+  await emitPlatformEvent({
+    workspaceId: call.workspaceId,
+    type: "AI_CALL_COMPLETED",
+    contactId: call.contactId || undefined,
+    agentId: call.agentId,
+    callId: call.id,
+    payload: {
+      outcome: call.outcome,
+      status: call.status,
+      callStatus: call.status,
+      answered: Boolean(call.answeredAt),
+      appointmentBooked: Boolean(call.appointmentBooked),
+      transferCompleted: Boolean(call.transferred),
+      leadCaptured: Boolean(insight?.isLead),
+      voicemailLeft: Boolean(call.voicemailDetected),
+      duration,
+      summary: insight?.summary || null,
+      transcriptReady: true,
+      extractedFields: insight?.extractedFields || null,
+      phoneNumberId: call.phoneNumberId,
+    },
+    idempotencyKey: `ai-call-completed:${call.id}`,
+  }).catch(() => undefined);
 
+  if (call.contactId) {
     // Agent → Automation: post-call / outcome-rule start.
     if (agent?.postCallAutomationId) {
       await enrollInAutomation({
