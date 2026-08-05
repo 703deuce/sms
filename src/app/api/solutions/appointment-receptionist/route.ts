@@ -16,8 +16,10 @@ import type {
 import { parseVoiceAgentConfig } from "@/lib/voice/types";
 import {
   loadAppointmentReceptionistSetup,
+  outcomeSlugFromWizard,
   upsertAppointmentReceptionistSetup,
 } from "@/lib/solutions/appointment-receptionist/save-setup";
+import { agentTypeFromOutcomeSlug } from "@/lib/agents/types";
 
 export async function GET(request: Request) {
   try {
@@ -72,6 +74,8 @@ export async function POST(request: Request) {
 
     const name = (state.solutionName || "Appointment Receptionist").trim();
     const draftConfig = buildWizardAgentConfig(state);
+    const outcomeSlug = outcomeSlugFromWizard(state);
+    const productAgentType = agentTypeFromOutcomeSlug(outcomeSlug);
 
     // Store schedule intent on advanced even when not publishing yet.
     if (activationMode === "schedule" && state.scheduledAt?.trim()) {
@@ -92,9 +96,9 @@ export async function POST(request: Request) {
     if (!agentId) {
       const created = await createVoiceAgent(auth.workspaceId, {
         name,
-        agentType: "appointment_booking",
+        agentType: productAgentType,
         templateId: "appointment_booking",
-        description: "Answer Calls and Book Appointments — wizard setup",
+        description: `${productAgentType} — wizard setup`,
       });
       agentId = created.id;
     }
@@ -153,8 +157,8 @@ export async function POST(request: Request) {
 
     const updated = await updateVoiceAgentDraft(auth.workspaceId, agentId, {
       name,
-      description: "Answer Calls and Book Appointments — wizard setup",
-      agentType: "appointment_booking",
+      description: `${productAgentType} — wizard setup`,
+      agentType: productAgentType,
       displayName: state.agentName || name,
       purpose: "appointment_receptionist",
       phoneNumberId: shouldPublish ? state.phoneNumberId : state.phoneNumberId,
@@ -232,16 +236,16 @@ export async function POST(request: Request) {
           const copyName = `${name} (copy)`;
           const clone = await createVoiceAgent(auth.workspaceId, {
             name: copyName,
-            agentType: "appointment_booking",
+            agentType: productAgentType,
             templateId: "appointment_booking",
-            description: "Cloned from Appointment Receptionist wizard",
+            description: `Cloned ${productAgentType} wizard agent`,
           });
           const cloneConfig = parseVoiceAgentConfig(configWithKb);
           // Don't bind the copy to the same DID.
           await updateVoiceAgentDraft(auth.workspaceId, clone.id, {
             name: copyName,
-            description: "Cloned from Appointment Receptionist wizard",
-            agentType: "appointment_booking",
+            description: `Cloned ${productAgentType} wizard agent`,
+            agentType: productAgentType,
             displayName: `${state.agentName || name} (copy)`,
             purpose: "appointment_receptionist",
             phoneNumberId: null,

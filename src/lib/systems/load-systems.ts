@@ -9,6 +9,12 @@ import {
   outcomeHref,
   outcomeSolutions,
 } from "@/lib/outcomes/registry";
+import {
+  agentTypeFromOutcomeSlug,
+  agentTypeLabel as catalogAgentTypeLabel,
+  capabilityLabel,
+  getAgentType,
+} from "@/lib/agents/types";
 
 export type SystemType =
   | "solution_setup"
@@ -24,8 +30,10 @@ export type SystemResource = {
   name: string;
   type: SystemType;
   typeLabel: string;
-  /** Product type e.g. "Book Appointments", "Missed Call Text Back". */
+  /** Product type e.g. "Appointment Booking Agent". */
   agentType: string;
+  /** Canonical agent type id e.g. appointment_booking. */
+  agentTypeId: string;
   createdFrom: string;
   status: SystemStatus;
   statusLabel: string;
@@ -35,6 +43,10 @@ export type SystemResource = {
   nextAction: string | null;
   warning: string | null;
   href: string;
+  /** Capability toggles (booking, transfers, …) — not used for ownership. */
+  capabilities?: string[];
+  /** What this agent handles, e.g. "Every call", "After hours". */
+  handles?: string | null;
   children?: SystemResource[];
 };
 
@@ -76,11 +88,75 @@ function solutionTitle(slug: string): string {
   return getOutcomeSolution(slug)?.title || slug;
 }
 
-/** Human label for the agent product type (Book Appointments, AI Answering, …). */
+/** Human label for the agent product type. */
 function agentTypeLabel(outcomeSlug: string, solutionType: string): string {
+  const typeId = agentTypeFromOutcomeSlug(
+    outcomeSlug !== solutionType || getOutcomeSolution(outcomeSlug)
+      ? outcomeSlug
+      : solutionType === "appointment-receptionist"
+        ? "appointment-booking"
+        : solutionType,
+  );
+  const catalog = catalogAgentTypeLabel(typeId);
+  if (catalog && catalog !== "Custom Agent") return catalog;
   const fromOutcome = solutionTitle(outcomeSlug);
   if (fromOutcome && fromOutcome !== outcomeSlug) return fromOutcome;
   return solutionTitle(solutionType);
+}
+
+function answerWhenLabel(answerWhen: string | null | undefined): string | null {
+  switch (answerWhen) {
+    case "every_call":
+      return "Every call";
+    case "nobody_answers":
+      return "When nobody answers";
+    case "line_busy":
+      return "When the line is busy";
+    case "after_hours":
+      return "After hours";
+    case "custom_schedule":
+      return "Custom schedule";
+    default:
+      return answerWhen || null;
+  }
+}
+
+function readCapabilities(configJson: unknown, draftConfig?: unknown): string[] {
+  const sources = [configJson, draftConfig];
+  for (const src of sources) {
+    if (!src || typeof src !== "object") continue;
+    const obj = src as Record<string, unknown>;
+    const caps = obj.capabilities;
+    if (Array.isArray(caps)) {
+      return caps
+        .filter((c): c is string => typeof c === "string")
+        .map((c) => capabilityLabel(c));
+    }
+    const wizard = obj.wizard;
+    if (wizard && typeof wizard === "object") {
+      const wCaps = (wizard as { capabilities?: unknown }).capabilities;
+      if (Array.isArray(wCaps)) {
+        return wCaps
+          .filter((c): c is string => typeof c === "string")
+          .map((c) => capabilityLabel(c));
+      }
+    }
+  }
+  return [];
+}
+
+function readAnswerWhen(configJson: unknown, draftConfig?: unknown): string | null {
+  for (const src of [configJson, draftConfig]) {
+    if (!src || typeof src !== "object") continue;
+    const obj = src as Record<string, unknown>;
+    if (typeof obj.answerWhen === "string") return obj.answerWhen;
+    const wizard = obj.wizard;
+    if (wizard && typeof wizard === "object") {
+      const aw = (wizard as { answerWhen?: unknown }).answerWhen;
+      if (typeof aw === "string") return aw;
+    }
+  }
+  return null;
 }
 
 export async function loadMySystems(
@@ -207,6 +283,7 @@ export async function loadMySystems(
         type: "ai_agent",
         typeLabel: "Voice Agent",
         agentType: agentTypeLabel(outcomeSlugForLabel, setup.solutionType),
+        agentTypeId: agentTypeFromOutcomeSlug(outcomeSlugForLabel),
         createdFrom: agentTypeLabel(outcomeSlugForLabel, setup.solutionType),
         status: mapStatus(agent.status, agent.healthStatus),
         statusLabel: statusLabel(mapStatus(agent.status, agent.healthStatus)),
@@ -250,6 +327,7 @@ export async function loadMySystems(
         type: "automation",
         typeLabel: "Automation",
         agentType: solutionTitle(setup.solutionType),
+        agentTypeId: agentTypeFromOutcomeSlug(setup.solutionType === "appointment-receptionist" ? "appointment-booking" : setup.solutionType),
         createdFrom: solutionTitle(setup.solutionType),
         status: mapStatus(flow.status),
         statusLabel: statusLabel(mapStatus(flow.status)),
@@ -290,6 +368,7 @@ export async function loadMySystems(
         type: "campaign",
         typeLabel: "Campaign",
         agentType: solutionTitle(setup.solutionType),
+        agentTypeId: agentTypeFromOutcomeSlug(setup.solutionType === "appointment-receptionist" ? "appointment-booking" : setup.solutionType),
         createdFrom: solutionTitle(setup.solutionType),
         status: mapStatus(campaign.status),
         statusLabel: statusLabel(mapStatus(campaign.status)),
@@ -316,6 +395,7 @@ export async function loadMySystems(
         type: "routing",
         typeLabel: "Routing",
         agentType: solutionTitle(setup.solutionType),
+        agentTypeId: agentTypeFromOutcomeSlug(setup.solutionType === "appointment-receptionist" ? "appointment-booking" : setup.solutionType),
         createdFrom: solutionTitle(setup.solutionType),
         status: rule.isActive ? "active" : "paused",
         statusLabel: rule.isActive ? "Active" : "Paused",
@@ -352,6 +432,7 @@ export async function loadMySystems(
         type: "automation",
         typeLabel: "Automation",
         agentType: solutionTitle(setup.solutionType),
+        agentTypeId: agentTypeFromOutcomeSlug(setup.solutionType === "appointment-receptionist" ? "appointment-booking" : setup.solutionType),
         createdFrom: solutionTitle(setup.solutionType),
         status: mapStatus(flow.status),
         statusLabel: statusLabel(mapStatus(flow.status)),
@@ -373,12 +454,22 @@ export async function loadMySystems(
     const status = mapStatus(setup.status);
 
     const setupAgentType = agentTypeLabel(outcomeSlugForLabel, setup.solutionType);
+    const linkedVoice = (setup.linkedAgentIds || [])
+      .map((id) => agentById.get(id))
+      .find(Boolean) as
+      | { draftConfig?: unknown; healthStatus?: string | null; healthMessage?: string | null }
+      | undefined;
+    const caps = readCapabilities(setup.configJson, linkedVoice?.draftConfig);
+    const handles = answerWhenLabel(
+      readAnswerWhen(setup.configJson, linkedVoice?.draftConfig),
+    );
     systems.push({
       id: `setup-${setup.id}`,
       name: setup.name,
       type: "solution_setup",
       typeLabel: setupAgentType,
       agentType: setupAgentType,
+      agentTypeId: agentTypeFromOutcomeSlug(outcomeSlugForLabel),
       createdFrom: setupAgentType,
       status,
       statusLabel: statusLabel(status),
@@ -390,7 +481,12 @@ export async function loadMySystems(
         null,
       lastActivity: relativeTime(setup.updatedAt),
       nextAction: null,
-      warning: null,
+      warning:
+        linkedVoice?.healthStatus && linkedVoice.healthStatus !== "ok"
+          ? linkedVoice.healthMessage || "Needs attention"
+          : null,
+      capabilities: caps,
+      handles,
       href:
         setup.solutionType === "missed-call-text-back"
           ? `/solutions/missed-call-text-back/setup?setupId=${setup.id}`
@@ -421,11 +517,13 @@ export async function loadMySystems(
     name: string;
     displayName: string | null;
     purpose: string | null;
+    agentType?: string | null;
     status: string;
     healthStatus: string | null;
     healthMessage: string | null;
     updatedAt: Date;
     phoneNumberId: string | null;
+    draftConfig?: unknown;
     sourceSolutionSetupId?: string | null;
   }>) {
     if (linkedAgentIds.has(agent.id) || agent.sourceSolutionSetupId) continue;
@@ -433,19 +531,23 @@ export async function loadMySystems(
     const phone = agent.phoneNumberId
       ? phoneById.get(agent.phoneNumberId)
       : null;
+    const typeId = agent.agentType
+      ? getAgentType(agent.agentType).id
+      : "custom";
+    const typeLabel =
+      typeId !== "custom"
+        ? catalogAgentTypeLabel(typeId)
+        : outcomeSolutions.find((s) => s.slug === agent.purpose)?.title ||
+          agent.purpose ||
+          "Voice Agent";
     systems.push({
       id: `agent-${agent.id}`,
       name: agent.displayName || agent.name,
       type: "ai_agent",
       typeLabel: "Voice Agent",
-      agentType:
-        outcomeSolutions.find((s) => s.slug === agent.purpose)?.title ||
-        agent.purpose ||
-        "Voice Agent",
-      createdFrom:
-        outcomeSolutions.find((s) => s.slug === agent.purpose)?.title ||
-        agent.purpose ||
-        "Voice Agent",
+      agentType: typeLabel,
+      agentTypeId: typeId,
+      createdFrom: typeLabel,
       status,
       statusLabel: statusLabel(status),
       channels: ["Voice"],
@@ -458,6 +560,8 @@ export async function loadMySystems(
         agent.healthStatus && agent.healthStatus !== "ok"
           ? agent.healthMessage || "Needs attention"
           : null,
+      capabilities: readCapabilities(null, agent.draftConfig),
+      handles: answerWhenLabel(readAnswerWhen(null, agent.draftConfig)),
       href: `/voice/agents/${agent.id}`,
     });
   }
@@ -489,6 +593,7 @@ export async function loadMySystems(
       type: "automation",
       typeLabel: "Automation",
       agentType: createdFrom,
+      agentTypeId: "custom",
       createdFrom,
       status,
       statusLabel: statusLabel(status),
@@ -522,6 +627,7 @@ export async function loadMySystems(
       type: "campaign",
       typeLabel: "Campaign",
       agentType: campaign.category || campaign.type || "Campaign",
+      agentTypeId: "custom",
       createdFrom: campaign.category || campaign.type || "Campaign",
       status,
       statusLabel: statusLabel(status),
@@ -549,6 +655,7 @@ export async function loadMySystems(
       type: "routing",
       typeLabel: "Routing",
       agentType: "Phone & Routing",
+      agentTypeId: "custom",
       createdFrom: "Phone & Routing",
       status: rule.isActive ? "active" : "paused",
       statusLabel: rule.isActive ? "Active" : "Paused",

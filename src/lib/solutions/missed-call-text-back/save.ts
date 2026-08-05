@@ -15,6 +15,7 @@ import {
   type MissedCallTextBackConfig,
 } from "@/lib/solutions/missed-call-text-back/types";
 import { emitPlatformEvent } from "@/lib/platform/events";
+import { agentTypeFromOutcomeSlug } from "@/lib/agents/types";
 
 export type SaveMissedCallTextBackResult = {
   setupId: string;
@@ -134,6 +135,11 @@ export async function saveMissedCallTextBack(
     existingFlow?.status === "ACTIVE" || existingSetup?.status === "ACTIVE";
   const status = config.activate || wasActive ? "ACTIVE" : "DRAFT";
   const setupStatus = status;
+  const setupConfigJson = {
+    ...config,
+    outcomeSlug: SOLUTION_TYPE,
+    agentType: agentTypeFromOutcomeSlug(SOLUTION_TYPE),
+  } as unknown as Prisma.InputJsonValue;
 
   if (!setupId) {
     created = true;
@@ -146,7 +152,7 @@ export async function saveMissedCallTextBack(
           solutionType: SOLUTION_TYPE,
           name: config.name,
           status: setupStatus,
-          configJson: config as unknown as Prisma.InputJsonValue,
+          configJson: setupConfigJson,
           linkedAutomationIds: [],
           linkedPhoneNumberIds: config.phoneNumberId ? [config.phoneNumberId] : [],
           externalKey: EXTERNAL_KEY,
@@ -185,7 +191,7 @@ export async function saveMissedCallTextBack(
     data: {
       name: config.name,
       status: setupStatus,
-      configJson: config as unknown as Prisma.InputJsonValue,
+      configJson: setupConfigJson,
       linkedPhoneNumberIds: config.phoneNumberId ? [config.phoneNumberId] : [],
       updatedAt: now,
     },

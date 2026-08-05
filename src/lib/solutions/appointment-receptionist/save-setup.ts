@@ -9,6 +9,7 @@ import { getPrisma } from "@/lib/db";
 import { createId } from "@/lib/supabase/id";
 import { emitPlatformEvent } from "@/lib/platform/events";
 import type { AppointmentReceptionistWizardState } from "@/lib/solutions/appointment-receptionist/types";
+import { agentTypeFromOutcomeSlug } from "@/lib/agents/types";
 
 export const SOLUTION_TYPE_CANONICAL = "appointment-receptionist" as const;
 
@@ -170,6 +171,7 @@ export async function upsertAppointmentReceptionistSetup(
 
   const configJson = {
     outcomeSlug,
+    agentType: agentTypeFromOutcomeSlug(outcomeSlug),
     preset: input.state.preset || null,
     answerWhen: input.state.answerWhen,
     capabilities: input.state.capabilities,
@@ -247,6 +249,9 @@ export async function upsertAppointmentReceptionistSetup(
       sourceSolutionSetupId: setupId,
       linkedPhoneNumberIds,
       linkedCalendarIds,
+      // Explicit product type — never infer menu placement from capabilities.
+      agentType: agentTypeFromOutcomeSlug(outcomeSlug),
+      purpose: "appointment_receptionist",
       updatedAt: now,
     },
   });

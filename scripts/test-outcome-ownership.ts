@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
-import { outcomeSlugFromWizard } from "../src/lib/solutions/appointment-receptionist/save-setup";
+import {
+  agentTypeFromOutcomeSlug,
+  getAgentType,
+  outcomeSlugFromAgentType,
+} from "../src/lib/agents/types";
 import { outcomeSlugFromSetup } from "../src/lib/outcomes/instances";
+import { outcomeSlugFromWizard } from "../src/lib/solutions/appointment-receptionist/save-setup";
 
 assert.equal(
   outcomeSlugFromWizard({
@@ -43,5 +48,15 @@ assert.equal(
   }),
   "missed-call-text-back",
 );
+
+assert.equal(agentTypeFromOutcomeSlug("appointment-booking"), "appointment_booking");
+assert.equal(agentTypeFromOutcomeSlug("answer-every-call"), "answer_every_call");
+assert.equal(
+  agentTypeFromOutcomeSlug("missed-call-text-back"),
+  "missed_call_text_back",
+);
+assert.equal(outcomeSlugFromAgentType("appointment_booking"), "appointment-booking");
+assert.equal(getAgentType("lead_capture").label, "Inquiry Capture Agent");
+assert.equal(getAgentType("appointment_booking").family, "receptionist");
 
 console.log("outcome ownership checks passed");

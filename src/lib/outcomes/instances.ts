@@ -6,6 +6,10 @@ import {
 } from "@/lib/outcomes/registry";
 import { outcomeSlugFromWizard } from "@/lib/solutions/appointment-receptionist/save-setup";
 import type { AppointmentReceptionistWizardState } from "@/lib/solutions/appointment-receptionist/types";
+import {
+  outcomeSlugFromAgentType,
+  agentTypeFromOutcomeSlug,
+} from "@/lib/agents/types";
 import type { SolutionNavInstance } from "@/lib/solutions-nav";
 
 type AgentRow = {
@@ -14,6 +18,7 @@ type AgentRow = {
   displayName: string | null;
   status: string;
   purpose: string | null;
+  agentType: string | null;
   draftConfig: unknown;
   sourceSolutionSetupId: string | null;
 };
@@ -53,7 +58,8 @@ function readWizardBits(draftConfig: unknown): {
   if (!cfg) return {};
   const advanced = asRecord(cfg.advanced);
   const snap = asRecord(advanced?.appointmentReceptionistWizard);
-  const wizard = asRecord(cfg.wizardState) || asRecord(cfg.appointmentReceptionist);
+  const wizard =
+    asRecord(cfg.wizardState) || asRecord(cfg.appointmentReceptionist);
   const goals = asRecord(wizard?.goals) || wizard;
 
   const capsRaw =
@@ -95,6 +101,10 @@ export function outcomeSlugFromSetup(setup: {
   if (typeof cfg?.outcomeSlug === "string" && cfg.outcomeSlug.trim()) {
     return cfg.outcomeSlug.trim();
   }
+  if (typeof cfg?.agentType === "string" && cfg.agentType.trim()) {
+    const fromType = outcomeSlugFromAgentType(cfg.agentType);
+    if (fromType) return fromType;
+  }
   if (setup.solutionType === "appointment-receptionist") {
     return "appointment-booking";
   }
@@ -105,6 +115,10 @@ export function outcomeSlugFromSetup(setup: {
 }
 
 function inferOutcomeSlugForOrphanAgent(agent: AgentRow): string | null {
+  // Explicit product type wins — never re-infer from capabilities.
+  const fromType = outcomeSlugFromAgentType(agent.agentType);
+  if (fromType) return fromType;
+
   if (
     agent.purpose !== "appointment_receptionist" &&
     agent.purpose !== "ai_receptionist"
@@ -170,16 +184,13 @@ function pushInstance(
     return;
   }
   if (!out[outcomeSlug]) out[outcomeSlug] = [];
-  // Exclusive: never list the same id twice under one outcome.
   if (out[outcomeSlug].some((i) => i.id === instance.id)) return;
   out[outcomeSlug].push(instance);
 }
 
 /**
- * Load created agents/setups into Solutions-nav instance shortcuts.
- *
- * Ownership is exclusive: each agent appears under exactly one outcome,
- * driven by SolutionSetup.configJson.outcomeSlug (not loose purpose matching).
+ * Load created agents into catalog instance shortcuts.
+ * Ownership is exclusive via SolutionSetup.outcomeSlug / VoiceAgent.agentType.
  */
 export async function loadOutcomeInstances(
   workspaceId: string,
@@ -212,6 +223,7 @@ export async function loadOutcomeInstances(
           displayName: true,
           status: true,
           purpose: true,
+          agentType: true,
           draftConfig: true,
           sourceSolutionSetupId: true,
         },
@@ -227,12 +239,6 @@ export async function loadOutcomeInstances(
 
     for (const setup of setups) {
       const outcomeSlug = outcomeSlugFromSetup(setup);
-      const solution = getOutcomeSolution(outcomeSlug);
-      if (!solution && setup.solutionType !== "appointment-receptionist") {
-        // Still allow known SMS solution types mapped 1:1.
-        if (!getOutcomeSolution(setup.solutionType)) continue;
-      }
-
       const linkedAgents = (setup.linkedAgentIds || [])
         .map((id) => agentById.get(id))
         .filter((a): a is AgentRow => Boolean(a));
@@ -242,19 +248,21 @@ export async function loadOutcomeInstances(
           if (claimedAgentIds.has(agent.id)) continue;
           claimedAgentIds.add(agent.id);
           claimedSetupIds.add(setup.id);
+          const typeSlug = outcomeSlugFromAgentType(agent.agentType);
+          // Setup outcomeSlug is ownership; agentType is kept in sync on save.
+          const ownedSlug = outcomeSlug || typeSlug || "appointment-booking";
           const label = agent.displayName?.trim() || agent.name || setup.name;
-          pushInstance(out, outcomeSlug, {
+          pushInstance(out, ownedSlug, {
             id: agent.id,
             label,
             status: statusLabel(String(agent.status)),
             href: `/voice/agents/${agent.id}`,
-            children: instanceChildren(outcomeSlug, agent.id, "agent"),
+            children: instanceChildren(ownedSlug, agent.id, "agent"),
           });
         }
         continue;
       }
 
-      // SMS / automation agents (e.g. missed-call-text-back) — setup is the agent.
       if (claimedSetupIds.has(setup.id)) continue;
       claimedSetupIds.add(setup.id);
       const href =
@@ -271,7 +279,6 @@ export async function loadOutcomeInstances(
       });
     }
 
-    // Orphan voice agents (no SolutionSetup yet): infer ONE exclusive outcome.
     for (const agent of agents) {
       if (claimedAgentIds.has(agent.id)) continue;
       const outcomeSlug = inferOutcomeSlugForOrphanAgent(agent);
@@ -287,14 +294,9 @@ export async function loadOutcomeInstances(
       });
     }
 
-    // Umbrella AI Receptionist list — every owned voice receptionist, once.
     const receptionistSlugs = new Set(
       outcomeSolutions
-        .filter(
-          (s) =>
-            s.category === "calls-ai" ||
-            s.agentMatch?.purposes?.includes("appointment_receptionist"),
-        )
+        .filter((s) => s.category === "calls-ai")
         .map((s) => s.slug),
     );
     const umbrella: SolutionNavInstance[] = [];
@@ -302,7 +304,6 @@ export async function loadOutcomeInstances(
     for (const slug of receptionistSlugs) {
       for (const inst of out[slug] || []) {
         if (seen.has(inst.id)) continue;
-        // Only voice agents in the umbrella (not SMS setup ids that happen to share).
         if (!agentById.has(inst.id)) continue;
         seen.add(inst.id);
         umbrella.push({
@@ -321,3 +322,6 @@ export async function loadOutcomeInstances(
     return {};
   }
 }
+
+/** Re-export for callers that stamp VoiceAgent.agentType from an outcome. */
+export { agentTypeFromOutcomeSlug };
