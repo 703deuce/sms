@@ -499,15 +499,20 @@ assert(
     ),
   );
   assert(
-    "prompt includes call-start date/time dynvars",
-    String(cfg.instructions?.system || "").includes("{{current_date}}") &&
-      String(cfg.instructions?.system || "").includes("{{current_time}}") &&
-      String(cfg.instructions?.system || "").includes("{{business_timezone}}"),
+    "prompt uses business timezone + resolve_datetime (no baked current_date)",
+    String(cfg.instructions?.system || "").includes("{{business_timezone}}") &&
+      String(cfg.instructions?.system || "").includes("resolve_datetime") &&
+      !String(cfg.instructions?.system || "").includes("{{current_date}}"),
   );
   assert(
-    "dynamicVariables include business_timezone + current_date",
+    "dynamicVariables include business_timezone without stale current_date",
     Boolean(cfg.dynamicVariables?.business_timezone) &&
-      Boolean(cfg.dynamicVariables?.current_date),
+      cfg.dynamicVariables?.current_date == null,
+  );
+  assert(
+    "booking enables resolve_datetime tool",
+    Array.isArray(cfg.enabledBuiltinTools) &&
+      cfg.enabledBuiltinTools.includes("resolve_datetime"),
   );
 }
 

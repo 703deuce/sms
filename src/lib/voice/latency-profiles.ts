@@ -220,9 +220,9 @@ function buildFluxCascadeFields(input: {
     },
     greetingMode: "fixed",
     nativeAudio: false,
-    // Keep a fast dynvar webhook so call-start clock (current_date/time) is fresh.
-    // Timeout is 500ms on latency-optimized profiles — defaults cover webhook miss.
-    skipDynamicVariablesWebhook: false,
+    // Skip call-start dynvar webhook so greeting is not blocked. Fresh clock
+    // comes from the resolve_datetime tool mid-call when relative times matter.
+    skipDynamicVariablesWebhook: true,
     telnyxFieldPlan: {
       transcription_model_deepgram_flux: "sent_and_applicable",
       eot_threshold: "sent_and_applicable",
@@ -234,7 +234,7 @@ function buildFluxCascadeFields(input: {
       on_number_seconds: "not_sent",
       endpointingMs_local: "not_sent",
       voice_settings_ultra: "sent_and_applicable",
-      dynamic_variables_webhook: "sent_and_applicable",
+      dynamic_variables_webhook: "not_sent",
     },
   };
 }

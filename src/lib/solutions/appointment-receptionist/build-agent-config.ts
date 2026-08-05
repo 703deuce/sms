@@ -1,6 +1,5 @@
 import type { VoiceAgentConfig } from "@/lib/voice/types";
 import { parseVoiceAgentConfig } from "@/lib/voice/types";
-import { buildBusinessLocalClock } from "@/lib/voice/runtime-clock";
 import { DEFAULT_CONNECTION_GREETING } from "./defaults";
 import type { AppointmentReceptionistWizardState } from "./types";
 import {
@@ -127,13 +126,13 @@ export function buildSystemPrompt(state: AppointmentReceptionistWizardState): st
   lines.push(`Tone: ${state.tone}. Speaking style: ${state.speakingStyle}.`);
   lines.push(`Primary language: ${state.language}.`);
   lines.push("");
-  lines.push("Runtime context (injected at call start — trust these values):");
+  lines.push("Date and time (do not invent a calendar):");
   lines.push(`- Business timezone: {{business_timezone}}`);
-  lines.push(`- Current date: {{current_date}}`);
-  lines.push(`- Current day: {{current_day}}`);
-  lines.push(`- Current local time: {{current_time}}`);
   lines.push(
-    "- Interpret today, tomorrow, this Friday, three hours from now, next week, and before closing using the business timezone unless the caller explicitly gives another timezone.",
+    "- When the caller uses relative timing (today, tomorrow, this Friday, in three hours, next week, before closing), call resolve_datetime with their phrase. Do not invent today's date or guess the weekday.",
+  );
+  lines.push(
+    "- You may keep the conversation moving while resolve_datetime runs; use its result before offering slots or booking.",
   );
   lines.push(
     "- Before booking, repeat the full date, day of week, time, and timezone. Never book based only on an ambiguous phrase such as \"Friday at five.\"",
@@ -183,6 +182,9 @@ export function buildSystemPrompt(state: AppointmentReceptionistWizardState): st
     "- lookup_customer: look up an existing contact by phone before booking when helpful.",
   );
   if (caps.includes("book_appointments")) {
+    lines.push(
+      "- resolve_datetime: resolve relative dates/times to a concrete local datetime before checking availability.",
+    );
     lines.push("- calendar_availability / book_appointment: check live availability and book only after confirmation.");
     lines.push(
       "- Never offer, confirm, or book a day/time unless that exact startsAt came from the latest calendar_availability slots. If the caller asks for a time that is not in the returned slots, say it is unavailable and offer 2–3 of the returned label times instead.",
@@ -328,6 +330,7 @@ export function buildWizardAgentConfig(
     enabledTools.add("escalate_human");
   }
   if (state.capabilities.includes("book_appointments")) {
+    enabledTools.add("resolve_datetime");
     enabledTools.add("calendar_availability");
     enabledTools.add("book_appointment");
   }
@@ -520,25 +523,18 @@ export function buildWizardAgentConfig(
     },
     enabledBuiltinTools: Array.from(enabledTools),
     knowledgeBaseIds: base.knowledgeBaseIds || [],
-    dynamicVariables: (() => {
-      const clock = buildBusinessLocalClock(state.timezone || "America/New_York");
-      return {
-        business_name: state.businessName || state.solutionName,
-        agent_name: state.agentName || "Maya",
-        agent_role: state.role || "front-desk receptionist",
-        solution_name: state.solutionName,
-        timezone: state.timezone || "America/New_York",
-        business_timezone: state.timezone || "America/New_York",
-        // Publish-time fallbacks if the dynamic-variables webhook times out.
-        // Live calls overwrite these via /api/telnyx/voice/dynamic-variables.
-        current_date: clock.current_date,
-        current_day: clock.current_day,
-        current_time: clock.current_time,
-        utc_offset: clock.utc_offset,
-        transfer_destination_name: transferName,
-        phone_number: state.phoneNumberE164 || "",
-      };
-    })(),
+    dynamicVariables: {
+      business_name: state.businessName || state.solutionName,
+      agent_name: state.agentName || "Maya",
+      agent_role: state.role || "front-desk receptionist",
+      solution_name: state.solutionName,
+      timezone: state.timezone || "America/New_York",
+      // Static — safe at publish time. Live clock comes from resolve_datetime,
+      // not from call-start dynvars (avoids delaying first speech).
+      business_timezone: state.timezone || "America/New_York",
+      transfer_destination_name: transferName,
+      phone_number: state.phoneNumberE164 || "",
+    },
     postCall: {
       ...(base.postCall || {}),
       extractionFields: [

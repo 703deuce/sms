@@ -123,8 +123,8 @@ export async function resolveCallDynamicVariables(input: {
     for (const [k, v] of Object.entries(input.overrides)) set(k, v);
   }
 
-  // Fresh business-local clock — computed at call start (not knowledge-base).
-  // Overwrites any stale current_* defaults from the assistant template.
+  // If this webhook runs, attach a fresh clock. Flux latency profiles skip the
+  // webhook entirely so greeting is not blocked — those agents use resolve_datetime.
   const clock = buildBusinessLocalClock(
     out.business_timezone ||
       out.timezone ||

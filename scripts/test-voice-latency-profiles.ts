@@ -78,7 +78,7 @@ assert.equal(
   FLUX_EAGER_LOW_LATENCY_PROFILE.fields.startSpeakingPlan?.onNoPunctuationSeconds,
   undefined,
 );
-assert.equal(FLUX_EAGER_LOW_LATENCY_PROFILE.fields.skipDynamicVariablesWebhook, false);
+assert.equal(FLUX_EAGER_LOW_LATENCY_PROFILE.fields.skipDynamicVariablesWebhook, true);
 assert.equal(
   FLUX_EAGER_LOW_LATENCY_PROFILE.fields.telnyxFieldPlan?.on_no_punctuation_seconds,
   "not_sent",
@@ -167,7 +167,7 @@ section("Apply B: Flux settings + wait-only plan");
   assert.equal(applied.transcription?.settings?.eot_timeout_ms, 5000);
   assert.equal(applied.voiceLanguage?.endpointingMs, undefined);
   assert.equal(applied.model?.modelId, FAST_LLM_MODEL_ID);
-  assert.equal(shouldSkipDynamicVariablesWebhook(applied), false);
+  assert.equal(shouldSkipDynamicVariablesWebhook(applied), true);
 
   const plan = buildStartSpeakingPlanFromConfig(applied);
   assert.ok(plan);

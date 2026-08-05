@@ -633,7 +633,8 @@ export async function syncTelnyxAssistant(
       }
     }
 
-    // Call-start runtime context: defaults + fast dynvar webhook for current_date/time.
+    // Static dynvars (business_timezone, names). Flux skips the call-start
+    // webhook so greeting is not blocked; resolve_datetime supplies the clock.
     try {
       const dynVars: Record<string, string> = {};
       const raw = (config as { dynamicVariables?: Record<string, unknown> })
