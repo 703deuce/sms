@@ -67,9 +67,15 @@ async function main() {
     body: JSON.stringify({ email: EMAIL }),
   });
   if (!login.ok) throw new Error(`smoke-login ${login.status}`);
-  const cookie = login.headers.getSetCookie?.()?.join("; ") || "";
-  const setCookie = login.headers.get("set-cookie") || "";
-  const cookieHeader = cookie || setCookie;
+  const setCookies =
+    typeof login.headers.getSetCookie === "function"
+      ? login.headers.getSetCookie()
+      : [];
+  const cookieHeader = setCookies
+    .map((c) => String(c).split(";")[0])
+    .filter(Boolean)
+    .join("; ");
+  if (!cookieHeader) throw new Error("smoke-login missing session cookies");
 
   const get = await fetch(`${BASE}/api/voice/agents/${AGENT_ID}`, {
     headers: { cookie: cookieHeader },
@@ -135,7 +141,7 @@ async function main() {
   };
 
   const put = await fetch(`${BASE}/api/voice/agents/${AGENT_ID}`, {
-    method: "PUT",
+    method: "PATCH",
     headers: {
       "content-type": "application/json",
       cookie: cookieHeader,
@@ -143,10 +149,10 @@ async function main() {
     body: JSON.stringify({ draftConfig: nextDraft }),
   });
   const pj = await put.json().catch(() => ({}));
-  if (!put.ok) throw new Error(`put draft ${put.status} ${JSON.stringify(pj)}`);
+  if (!put.ok) throw new Error(`patch draft ${put.status} ${JSON.stringify(pj)}`);
 
   const publish = await fetch(`${BASE}/api/voice/agents/${AGENT_ID}`, {
-    method: "POST",
+    method: "PATCH",
     headers: {
       "content-type": "application/json",
       cookie: cookieHeader,
