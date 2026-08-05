@@ -309,6 +309,22 @@ export async function activateFlowTriggers(
 
   // Compile inbound voice trigger → assign DID + publish Telnyx (fast path).
   if (inbound?.phoneNumberId && voiceAgentId && inbound.mode === "live") {
+    const agent = await prisma.voiceAgent.findFirst({
+      where: { id: voiceAgentId, workspaceId },
+      select: {
+        id: true,
+        telnyxAssistantId: true,
+        phoneNumberId: true,
+        draftConfig: true,
+      },
+    });
+    if (!agent) {
+      throw new Error("Run Voice Agent references a missing VoiceAgent");
+    }
+    if (!agent.telnyxAssistantId) {
+      // publishVoiceAgent will sync; but fail closed if we cannot get one later.
+    }
+
     await prisma.voiceAgent.update({
       where: { id: voiceAgentId },
       data: {
@@ -316,9 +332,15 @@ export async function activateFlowTriggers(
         updatedAt: new Date(),
       },
     });
+
+    let publishResult: Record<string, unknown> = {};
     try {
       const { publishVoiceAgent } = await import("@/lib/voice/agent-service");
-      await publishVoiceAgent(workspaceId, voiceAgentId, "trigger-activate");
+      publishResult = (await publishVoiceAgent(
+        workspaceId,
+        voiceAgentId,
+        "trigger-activate",
+      )) as Record<string, unknown>;
       telnyxPublished = true;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -328,14 +350,98 @@ export async function activateFlowTriggers(
         trigger: inbound,
         status: "error",
         errorMessage: message,
-        providerConfig: { telnyxPublished: false, error: message },
+        providerConfig: {
+          provider: "telnyx",
+          channel: "voice",
+          telnyxPublished: false,
+          error: message,
+          voiceAgentId,
+        },
       });
       throw err;
     }
+
+    const refreshed = await prisma.voiceAgent.findFirst({
+      where: { id: voiceAgentId },
+      select: {
+        telnyxAssistantId: true,
+        telnyxConnectionId: true,
+        phoneNumberId: true,
+      },
+    });
+    if (!refreshed?.telnyxAssistantId) {
+      const message =
+        "Telnyx assistant was not created — cannot mark trigger live";
+      await upsertTriggerRow({
+        workspaceId,
+        flowId,
+        trigger: inbound,
+        status: "error",
+        errorMessage: message,
+        providerConfig: {
+          provider: "telnyx",
+          telnyxPublished: false,
+          voiceAgentId,
+          publishResult,
+        },
+      });
+      throw new Error(message);
+    }
+
+    const publishedConfigHash = [
+      inbound.phoneNumberId,
+      voiceAgentId,
+      refreshed.telnyxAssistantId,
+      inbound.eventType,
+    ].join(":");
+
+    // Persist verified deployment after Telnyx success (before marking live below).
+    await upsertTriggerRow({
+      workspaceId,
+      flowId,
+      trigger: inbound,
+      status: "live",
+      providerConfig: {
+        provider: "telnyx",
+        channel: "voice",
+        telnyxPublished: true,
+        voiceAgentId,
+        telnyxAssistantId: refreshed.telnyxAssistantId,
+        providerResourceId:
+          refreshed.telnyxConnectionId || refreshed.telnyxAssistantId,
+        publishedConfigHash,
+        publishedRoutingTarget: "texml_assistant",
+        lastVerifiedAt: new Date().toISOString(),
+        publishResult,
+      },
+      errorMessage: null,
+    });
   }
 
   const deployments: ActivateTriggersResult["deployments"] = [];
   for (const t of triggers) {
+    // Inbound already upserted above when Telnyx succeeded.
+    if (
+      inbound &&
+      t.nodeId === inbound.nodeId &&
+      inbound.phoneNumberId &&
+      voiceAgentId &&
+      inbound.mode === "live"
+    ) {
+      const row = await prisma.triggerDeployment.findFirst({
+        where: { flowId, triggerNodeId: t.nodeId },
+        select: { id: true, status: true },
+      });
+      if (row) {
+        deployments.push({
+          id: row.id,
+          triggerNodeId: t.nodeId,
+          status: row.status,
+        });
+      }
+      continue;
+    }
+
     const status: TriggerDeployStatus =
       t.mode === "test"
         ? "test"
@@ -348,10 +454,8 @@ export async function activateFlowTriggers(
       trigger: t,
       status,
       providerConfig: {
-        telnyxPublished:
-          t.nodeId === inbound?.nodeId ? telnyxPublished : false,
-        voiceAgentId:
-          t.nodeId === inbound?.nodeId ? voiceAgentId : null,
+        telnyxPublished: false,
+        voiceAgentId: null,
         ringSeconds: t.ringSeconds,
         label: triggerFromBlockType(t.blockType),
       },
@@ -379,53 +483,92 @@ export async function activateFlowTriggers(
 /**
  * Pause = disable triggers without deleting config.
  * Inbound voice: apply pauseFallback so the business number does not go dark.
+ * If fallback publishing fails, leave prior known-good routing intact.
  */
 export async function pauseFlowTriggers(
   workspaceId: string,
   flowId: string,
-): Promise<{ paused: number; fallbackNotes: string[] }> {
+): Promise<{ paused: number; fallbackNotes: string[]; errors: string[] }> {
   const prisma = getPrisma();
   const rows = await prisma.triggerDeployment.findMany({
     where: { workspaceId, flowId, status: { in: ["live", "test"] } },
   });
 
   const fallbackNotes: string[] = [];
+  const errors: string[] = [];
   for (const row of rows) {
+    const providerConfig = (row.providerConfig || {}) as Record<string, unknown>;
+    const voiceAgentId =
+      typeof providerConfig.voiceAgentId === "string"
+        ? providerConfig.voiceAgentId
+        : null;
+
+    if (row.channel === "voice" && row.phoneNumberId) {
+      const fallback = row.pauseFallback || "human";
+      try {
+        if (fallback === "human" && row.pauseFallbackNumber) {
+          await prisma.phoneNumber.update({
+            where: { id: row.phoneNumberId },
+            data: { voiceForwardTo: row.pauseFallbackNumber },
+          });
+          // Clear exclusive AI ownership so the number is not left on a dead assistant.
+          if (voiceAgentId) {
+            await prisma.voiceAgent.updateMany({
+              where: {
+                id: voiceAgentId,
+                workspaceId,
+                phoneNumberId: row.phoneNumberId,
+              },
+              data: { phoneNumberId: null, updatedAt: new Date() },
+            });
+          }
+          fallbackNotes.push(
+            `Paused inbound on ${row.phoneNumberId}: forward to ${row.pauseFallbackNumber}.`,
+          );
+        } else if (fallback === "reject") {
+          fallbackNotes.push(
+            `Paused inbound on ${row.phoneNumberId}: reject until reactivated (configure TeXML reject).`,
+          );
+        } else if (fallback === "voicemail") {
+          fallbackNotes.push(
+            `Paused inbound on ${row.phoneNumberId}: voicemail fallback requested.`,
+          );
+        } else if (fallback === "backup_flow") {
+          fallbackNotes.push(
+            `Paused inbound on ${row.phoneNumberId}: backup flow ${row.pauseFallbackFlowId || "(unset)"}.`,
+          );
+        } else {
+          fallbackNotes.push(
+            `Paused inbound on ${row.phoneNumberId}: configure pauseFallbackNumber for human routing.`,
+          );
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        errors.push(message);
+        // Do not mark paused if we could not apply fallback for a live voice number.
+        await prisma.triggerDeployment.update({
+          where: { id: row.id },
+          data: {
+            errorMessage: `Pause fallback failed: ${message}`,
+            updatedAt: new Date(),
+          },
+        });
+        continue;
+      }
+    }
+
     await prisma.triggerDeployment.update({
       where: { id: row.id },
       data: {
         status: "paused",
         pausedAt: new Date(),
         updatedAt: new Date(),
+        errorMessage: null,
       },
     });
-
-    if (row.channel === "voice" && row.phoneNumberId) {
-      const fallback = row.pauseFallback || "human";
-      const note =
-        fallback === "human"
-          ? `Paused inbound on ${row.phoneNumberId}: route to human/fallback number (${row.pauseFallbackNumber || "configure pauseFallbackNumber"}).`
-          : fallback === "voicemail"
-            ? `Paused inbound on ${row.phoneNumberId}: send to voicemail.`
-            : fallback === "backup_flow"
-              ? `Paused inbound on ${row.phoneNumberId}: hand off to backup flow ${row.pauseFallbackFlowId || "(unset)"}.`
-              : `Paused inbound on ${row.phoneNumberId}: reject calls until reactivated.`;
-      fallbackNotes.push(note);
-
-      // Soft note on phone settings — full Telnyx re-route for human/voicemail
-      // is provider-specific and applied when pauseFallbackNumber is set.
-      if (fallback === "human" && row.pauseFallbackNumber) {
-        await prisma.phoneNumber.update({
-          where: { id: row.phoneNumberId },
-          data: {
-            voiceForwardTo: row.pauseFallbackNumber,
-          },
-        }).catch(() => undefined);
-      }
-    }
   }
 
-  return { paused: rows.length, fallbackNotes };
+  return { paused: rows.length - errors.length, fallbackNotes, errors };
 }
 
 export async function listTriggerDeploymentsForWorkspace(workspaceId: string) {

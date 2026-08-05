@@ -234,7 +234,15 @@ export async function loadAutomationById(workspaceId: string, id: string) {
   const a = await getPrisma().automationFlow.findFirst({
     where: { id, workspaceId },
   });
-  return a ? { ...mapAutomation(a), definition: a.definition } : null;
+  return a
+    ? {
+        ...mapAutomation(a),
+        definition: a.definition,
+        ownershipKind: a.ownershipKind ?? null,
+        ownerAgentId: a.ownerAgentId ?? null,
+        ownerLabel: a.ownerLabel ?? null,
+      }
+    : null;
 }
 
 export async function loadSuppressions(workspaceId: string): Promise<Suppression[]> {

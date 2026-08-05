@@ -100,6 +100,7 @@ export function MyNumbersView({
                           className="text-[#2563EB] hover:underline"
                         >
                           → {r.flowName}
+                          {r.agentName ? ` · ${r.agentName}` : ""}
                         </Link>
                       </div>
                       <span

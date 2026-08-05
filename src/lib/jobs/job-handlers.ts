@@ -71,6 +71,16 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       if (!workspaceId || !agentId || !contactId) {
         throw new Error("workspaceId, agentId, and contactId required");
       }
+
+      // Inbound attach must never place an outbound dial — Telnyx already owns audio.
+      if (payload.attachInbound === true) {
+        return {
+          ok: true,
+          skipped: true,
+          reason: "attach_inbound_no_outbound_dial",
+        };
+      }
+
       const { getPrisma } = await import("@/lib/db");
       const prisma = getPrisma();
       const contact = await prisma.contact.findFirst({

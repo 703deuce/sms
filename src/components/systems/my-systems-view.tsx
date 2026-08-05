@@ -121,9 +121,27 @@ function AgentCard({ system }: { system: SystemResource }) {
           </dd>
         </div>
         <div>
+          <dt className="text-[#9CA3AF]">Primary workflow</dt>
+          <dd className="mt-0.5 font-medium text-[#111827]">
+            {system.primaryFlowName || "—"}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-[#9CA3AF]">Telnyx / deploy</dt>
+          <dd className="mt-0.5 font-medium text-[#111827]">
+            {system.deploymentStatus || "—"}
+          </dd>
+        </div>
+        <div>
           <dt className="text-[#9CA3AF]">Last activity</dt>
           <dd className="mt-0.5 font-medium text-[#111827]">
             {system.lastActivity || "—"}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-[#9CA3AF]">Last execution</dt>
+          <dd className="mt-0.5 font-medium text-[#111827]">
+            {system.lastExecutionStatus || "—"}
           </dd>
         </div>
         <div>
@@ -151,7 +169,15 @@ function AgentCard({ system }: { system: SystemResource }) {
             href={system.workflowHref}
             className="inline-flex h-9 items-center justify-center rounded-md px-3 text-[12px] font-semibold text-[#2563EB] ring-1 ring-[#BFDBFE] hover:bg-[#EFF6FF]"
           >
-            Edit Workflow
+            Open Workflow
+          </Link>
+        ) : null}
+        {system.primaryFlowId ? (
+          <Link
+            href={`/automations/${system.primaryFlowId}/edit?diagnostics=1`}
+            className="inline-flex h-9 items-center justify-center rounded-md px-3 text-[12px] font-semibold text-[#4B5563] ring-1 ring-[#E5E7EB] hover:bg-slate-50"
+          >
+            Test / Diagnostics
           </Link>
         ) : null}
         {system.children?.[0]?.href && !system.workflowHref ? (

@@ -454,6 +454,54 @@ export async function runNodeAction(
         nextNodeId: getNextNodeId(def, node.id),
       };
     }
+
+    const attachInbound = Boolean(cfg.attachInbound);
+    const waitForOutcome = cfg.waitForOutcome !== false;
+    const mode = String(cfg.mode || "realtime_voice");
+
+    // Inbound attach: Telnyx already owns live audio (published on Activate).
+    // Do NOT outbound-dial. Bind pendingCallId and advance to Call Outcome wait.
+    if (block === "run_voice_agent" && attachInbound) {
+      const exec = await prisma.automationExecution.findUnique({
+        where: { id: ctx.executionId },
+        select: { metadata: true },
+      });
+      const meta = (exec?.metadata || {}) as Record<string, unknown>;
+      const vars = (meta.variables || {}) as Record<string, unknown>;
+      const pendingCallId =
+        (typeof meta.pendingCallId === "string" && meta.pendingCallId) ||
+        (typeof vars.callId === "string" && vars.callId) ||
+        null;
+
+      await mergeExecutionMetadata(ctx.executionId, {
+        pendingAiCallAgentId: agentId,
+        pendingCallId,
+        waitingForCallResult: false,
+        callResultConsumed: false,
+        inboundAttach: true,
+        lastAgentResult: {
+          status: "attached",
+          mode,
+          agentId,
+          telnyxAssistantId: String(cfg.telnyxAssistantId || "") || null,
+          waitForOutcome,
+          attachInbound: true,
+        },
+      });
+
+      return {
+        nextNodeId: getNextNodeId(def, node.id),
+        output: {
+          attached: true,
+          agentId,
+          pendingCallId,
+          mode,
+          waitForOutcome,
+          block,
+        },
+      };
+    }
+
     if (!ctx.testMode) {
       const { enqueueJob } = await import("@/lib/messaging/enqueue-advance");
       const contextRaw = cfg.contextJson;
@@ -476,7 +524,8 @@ export async function runNodeAction(
           context,
           automationExecutionId: ctx.executionId,
           automationFlowId: ctx.flowId,
-          attachInbound: Boolean(cfg.attachInbound),
+          attachInbound: false,
+          mode,
         },
         idempotencyKey: `${block}:${ctx.executionId}:${node.id}`,
       });

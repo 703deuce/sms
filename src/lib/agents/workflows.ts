@@ -327,3 +327,111 @@ export function ownerLabelForOutcome(
   const label = getAgentType(typeId).label;
   return label === "Custom Agent" ? fallbackName : label;
 }
+
+/**
+ * Merge template-managed nodes from `template` into an existing graph.
+ * Custom / unknown nodes and their edges are preserved.
+ * Managed nodes (by templateNodeKey or stable id) are updated from the template.
+ */
+export function reconcileManagedNodes(
+  existing: unknown,
+  template: AutomationDefinition,
+  managedKeys: string[],
+): AutomationDefinition {
+  const keySet = new Set(managedKeys);
+  const current = parseAutomationDefinition(existing);
+  const templateByKey = new Map<string, (typeof template.nodes)[number]>();
+  const templateById = new Map(
+    template.nodes.map((n) => [n.id, n] as const),
+  );
+
+  for (const node of template.nodes) {
+    const key = node.data.templateNodeKey;
+    if (key) templateByKey.set(key, node);
+  }
+
+  const managedIds = new Set<string>();
+  const nextNodes: typeof current.nodes = [];
+
+  // Update or keep existing nodes.
+  for (const node of current.nodes) {
+    const key = node.data.templateNodeKey;
+    const isManaged =
+      (key && keySet.has(key)) ||
+      templateById.has(node.id);
+
+    if (isManaged) {
+      const fromTemplate =
+        (key ? templateByKey.get(key) : undefined) ||
+        templateById.get(node.id);
+      if (fromTemplate) {
+        managedIds.add(fromTemplate.id);
+        nextNodes.push({
+          ...fromTemplate,
+          // Keep user's canvas position if they moved a managed node.
+          position: node.position || fromTemplate.position,
+          data: {
+            ...fromTemplate.data,
+            origin: "template_managed",
+            templateNodeKey:
+              fromTemplate.data.templateNodeKey || key || undefined,
+          },
+        });
+        continue;
+      }
+    }
+
+    // Custom / unknown — preserve.
+    nextNodes.push(node);
+  }
+
+  // Add any managed template nodes that were missing (e.g. call_outcome).
+  for (const node of template.nodes) {
+    const key = node.data.templateNodeKey;
+    if (key && keySet.has(key) && !managedIds.has(node.id)) {
+      const already = nextNodes.some(
+        (n) =>
+          n.id === node.id ||
+          n.data.templateNodeKey === key,
+      );
+      if (!already) {
+        nextNodes.push(node);
+        managedIds.add(node.id);
+      }
+    }
+  }
+
+  // Rebuild managed edges from template; keep edges that touch custom nodes.
+  const managedIdSet = new Set(
+    nextNodes
+      .filter(
+        (n) =>
+          (n.data.templateNodeKey &&
+            keySet.has(n.data.templateNodeKey)) ||
+          templateById.has(n.id),
+      )
+      .map((n) => n.id),
+  );
+
+  const customEdges = current.edges.filter(
+    (e) => !managedIdSet.has(e.source) || !managedIdSet.has(e.target),
+  );
+  const templateManagedEdges = template.edges.filter(
+    (e) => managedIdSet.has(e.source) && managedIdSet.has(e.target),
+  );
+
+  // Dedupe by id.
+  const edgeById = new Map<string, (typeof template.edges)[number]>();
+  for (const e of [...templateManagedEdges, ...customEdges]) {
+    edgeById.set(e.id, e);
+  }
+
+  return {
+    ...current,
+    version: template.version || current.version,
+    nodes: nextNodes,
+    edges: [...edgeById.values()],
+    viewport: current.viewport || template.viewport,
+  };
+}
+

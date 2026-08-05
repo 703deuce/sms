@@ -130,7 +130,20 @@ export async function processPostCall(callId: string) {
       payload: {
         outcome: call.outcome,
         status: call.status,
+        callStatus: call.status,
+        answered: Boolean(call.answeredAt),
+        appointmentBooked: Boolean(call.appointmentBooked),
+        transferCompleted: Boolean(call.transferred),
+        leadCaptured: Boolean(insight?.isLead),
+        voicemailLeft: Boolean(call.voicemailDetected),
+        callerHungUp: String(call.outcome || "")
+          .toLowerCase()
+          .includes("hang"),
+        duration,
         summary: insight?.summary || null,
+        transcriptId: call.id,
+        extractedFields: insight?.extractedFields || null,
+        phoneNumberId: call.phoneNumberId,
       },
       idempotencyKey: `call-completed:${call.id}`,
     }).catch(() => undefined);
@@ -143,8 +156,17 @@ export async function processPostCall(callId: string) {
       payload: {
         outcome: call.outcome,
         status: call.status,
+        callStatus: call.status,
+        answered: Boolean(call.answeredAt),
+        appointmentBooked: Boolean(call.appointmentBooked),
+        transferCompleted: Boolean(call.transferred),
+        leadCaptured: Boolean(insight?.isLead),
+        voicemailLeft: Boolean(call.voicemailDetected),
+        duration,
         summary: insight?.summary || null,
         transcriptReady: true,
+        extractedFields: insight?.extractedFields || null,
+        phoneNumberId: call.phoneNumberId,
       },
       idempotencyKey: `ai-call-completed:${call.id}`,
     }).catch(() => undefined);

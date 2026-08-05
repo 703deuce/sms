@@ -89,6 +89,7 @@ export type UpsertAppointmentReceptionistSetupResult = {
   outcomeSlug: string;
   created: boolean;
   primaryFlowId?: string | null;
+  workflowCompileError?: string | null;
 };
 
 function isUniqueViolation(err: unknown): boolean {
@@ -257,9 +258,10 @@ export async function upsertAppointmentReceptionistSetup(
     },
   });
 
-  // Voice agents: Inbound Call (number on trigger) → Run Voice Agent → End.
+  // Voice agents: Inbound Call → Run Voice Agent → Call Outcome → End.
   // Activate publishes Telnyx routing from the trigger — not Use Agent → self.
   let primaryFlowId: string | null = null;
+  let workflowCompileError: string | null = null;
   try {
     const {
       ensureAgentPrimaryWorkflow,
@@ -272,6 +274,7 @@ export async function upsertAppointmentReceptionistSetup(
         primaryFlowId: true,
         linkedAutomationIds: true,
         phoneNumberId: true,
+        telnyxAssistantId: true,
       },
     });
     const setupRow = await prisma.solutionSetup.findFirst({
@@ -299,12 +302,17 @@ export async function upsertAppointmentReceptionistSetup(
       triggerBlock: triggerBlockFromAnswerWhen(input.state.answerWhen),
       routingMode: routingModeFromAnswerWhen(input.state.answerWhen),
       phoneNumberId,
+      telnyxAssistantId: agentRow?.telnyxAssistantId || null,
       purpose: name,
       activate: false,
-      description: `Generated from ${name}`,
+      description: phoneNumberId
+        ? `Generated from ${name}`
+        : `Generated from ${name} — Phone number required`,
     });
     primaryFlowId = compiled.flowId;
-  } catch {
+  } catch (err) {
+    workflowCompileError =
+      err instanceof Error ? err.message : String(err);
     primaryFlowId = null;
   }
 
@@ -320,11 +328,19 @@ export async function upsertAppointmentReceptionistSetup(
       name,
       published: input.published,
       primaryFlowId,
+      workflowCompileError,
     },
     idempotencyKey: `ar-setup:${setupId}:${status}:${Date.now()}`,
   }).catch(() => undefined);
 
-  return { setupId: setupId!, agentId: input.agentId, outcomeSlug, created, primaryFlowId };
+  return {
+    setupId: setupId!,
+    agentId: input.agentId,
+    outcomeSlug,
+    created,
+    primaryFlowId,
+    workflowCompileError,
+  };
 }
 
 export async function loadAppointmentReceptionistSetup(

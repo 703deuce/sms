@@ -17,6 +17,7 @@ export type NumberRoutingRow = {
     status: string;
     flowId: string;
     flowName: string;
+    agentName?: string | null;
     href: string;
   }>;
 };
@@ -55,7 +56,12 @@ export async function loadMyNumbersFromTriggers(workspaceId: string): Promise<{
     eventType: string;
     status: string;
     flowId: string;
-    flow?: { id: string; name: string } | null;
+    providerConfig?: unknown;
+    flow?: {
+      id: string;
+      name: string;
+      ownerLabel?: string | null;
+    } | null;
     phoneNumber?: { id: string; e164: string; friendlyName: string | null } | null;
   }>) {
     if (!d.phoneNumberId) continue;
@@ -71,12 +77,16 @@ export async function loadMyNumbersFromTriggers(workspaceId: string): Promise<{
       byPhone.set(d.phoneNumberId, row);
     }
     if (!row) continue;
+    const provider = (d.providerConfig || {}) as {
+      voiceAgentId?: string;
+    };
     row.routes.push({
       deploymentId: d.id,
       eventType: d.eventType,
       status: d.status,
       flowId: d.flowId,
       flowName: d.flow?.name || "Workflow",
+      agentName: d.flow?.ownerLabel || provider.voiceAgentId || null,
       href: `/automations/${d.flowId}/edit`,
     });
   }
