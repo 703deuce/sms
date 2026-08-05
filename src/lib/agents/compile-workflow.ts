@@ -2,12 +2,11 @@
  * Compile Outcome wizards into agent primary workflows.
  *
  * Two layers:
- * 1. Agent primary flow — what THIS agent does (SMS steps, or trigger→agent for voice).
- * 2. Overall automations — compose agents via Use Agent nodes that enroll / invoke
- *    those primary flows.
- *
- * Wizards only exist for ease of setup. Every completed wizard must leave a runnable
- * AutomationFlow behind (even if it's just Trigger → Use Agent → End).
+ * 1. Agent primary flow — what THIS agent does.
+ *    Voice: Trigger → Run Voice Agent → End (never Use Agent → self).
+ *    SMS/workflow: detailed steps from the wizard (MCTB, review, etc.).
+ * 2. Overall automations — compose *other* agents via Use Agent with an
+ *    explicit mode (run_primary_workflow | invoke_task | hand_off_conversation).
  */
 
 import { createId } from "@/lib/supabase/id";
@@ -36,22 +35,26 @@ export type CompileTriggerBlock =
 
 const TEMPLATE_KEYS = {
   TRIGGER: "trigger",
-  AGENT: "agent",
+  RUN_VOICE: "run_voice_agent",
   END: "end",
 } as const;
 
-/** Minimal composable agent workflow: Trigger → Use Agent → End. */
-export function buildTriggerAgentDefinition(input: {
+/**
+ * Voice agent primary workflow:
+ * Trigger → Run Voice Agent → End
+ *
+ * Run Voice Agent starts/attaches the Telnyx realtime agent for this call.
+ * It must NOT enroll this flow again via Use Agent.
+ */
+export function buildVoiceAgentPrimaryDefinition(input: {
   triggerBlock: CompileTriggerBlock;
   triggerLabel?: string;
   agentId?: string | null;
-  setupId?: string | null;
   agentName: string;
-  agentType?: string | null;
   purpose?: string | null;
 }): AutomationDefinition {
   const triggerId = "TRIGGER_AGENT_WORKFLOW";
-  const agentNodeId = "USE_AGENT";
+  const voiceNodeId = "RUN_VOICE_AGENT";
   const endId = "END_AGENT_WORKFLOW";
   const triggerBlock = input.triggerBlock;
   const label =
@@ -71,19 +74,19 @@ export function buildTriggerAgentDefinition(input: {
         },
       },
       {
-        id: agentNodeId,
+        id: voiceNodeId,
         type: "action",
         position: { x: 360, y: 120 },
         data: {
-          blockType: "use_ai_agent",
-          label: input.agentName || "Use Agent",
+          blockType: "run_voice_agent",
+          label: `Run Voice Agent: ${input.agentName}`,
           config: {
             agentId: input.agentId || "",
-            setupId: input.setupId || "",
             agentName: input.agentName,
-            agentType: input.agentType || "",
-            purpose: input.purpose || "",
-            mode: "auto",
+            purpose: input.purpose || input.agentName,
+            attachInbound: true,
+            timeoutSeconds: 60,
+            retryCount: 0,
           },
         },
       },
@@ -99,17 +102,30 @@ export function buildTriggerAgentDefinition(input: {
       },
     ],
     edges: [
-      { id: "e_trigger_agent", source: triggerId, target: agentNodeId },
-      { id: "e_agent_end", source: agentNodeId, target: endId },
+      { id: "e_trigger_voice", source: triggerId, target: voiceNodeId },
+      { id: "e_voice_end", source: voiceNodeId, target: endId },
     ],
     viewport: { x: 0, y: 0, zoom: 0.9 },
   };
 
   return stampManagedDefinition(def, {
     [triggerId]: TEMPLATE_KEYS.TRIGGER,
-    [agentNodeId]: TEMPLATE_KEYS.AGENT,
+    [voiceNodeId]: TEMPLATE_KEYS.RUN_VOICE,
     [endId]: TEMPLATE_KEYS.END,
   });
+}
+
+/** @deprecated Prefer buildVoiceAgentPrimaryDefinition for voice agents. */
+export function buildTriggerAgentDefinition(input: {
+  triggerBlock: CompileTriggerBlock;
+  triggerLabel?: string;
+  agentId?: string | null;
+  setupId?: string | null;
+  agentName: string;
+  agentType?: string | null;
+  purpose?: string | null;
+}): AutomationDefinition {
+  return buildVoiceAgentPrimaryDefinition(input);
 }
 
 export function triggerBlockFromAnswerWhen(
@@ -132,7 +148,6 @@ export type EnsurePrimaryWorkflowInput = {
   workspaceId: string;
   agentName: string;
   outcomeSlug: string;
-  /** Existing primary flow to update, if any. */
   existingFlowId?: string | null;
   agentId?: string | null;
   setupId?: string | null;
@@ -141,15 +156,12 @@ export type EnsurePrimaryWorkflowInput = {
   triggerBlock?: CompileTriggerBlock;
   triggerLabel?: string;
   purpose?: string | null;
-  /** DRAFT unless activate. */
   activate?: boolean;
   description?: string;
 };
 
 /**
  * Create or update the agent's primary AutomationFlow and two-way ownership links.
- * Does not destroy advanced customizations when updating — callers that patch
- * managed nodes should pass an already-patched definition.
  */
 export async function ensureAgentPrimaryWorkflow(
   input: EnsurePrimaryWorkflowInput,
@@ -164,17 +176,58 @@ export async function ensureAgentPrimaryWorkflow(
     input.triggerBlock ||
     (typeDef.family === "sms" ? "call_missed" : "call_completed");
 
-  const definition =
+  const graph: AutomationDefinition =
     input.definition ||
-    buildTriggerAgentDefinition({
-      triggerBlock,
-      triggerLabel: input.triggerLabel,
-      agentId: input.agentId,
-      setupId: input.setupId,
-      agentName: input.agentName,
-      agentType,
-      purpose: input.purpose || typeDef.label,
-    });
+    (typeDef.family === "receptionist"
+      ? buildVoiceAgentPrimaryDefinition({
+          triggerBlock,
+          triggerLabel: input.triggerLabel,
+          agentId: input.agentId,
+          agentName: input.agentName,
+          purpose: input.purpose || typeDef.label,
+        })
+      : stampManagedDefinition(
+          {
+            version: 1,
+            nodes: [
+              {
+                id: "TRIGGER_AGENT_WORKFLOW",
+                type: "trigger",
+                position: { x: 80, y: 120 },
+                data: {
+                  blockType: triggerBlock,
+                  label:
+                    input.triggerLabel ||
+                    triggerFromBlockType(triggerBlock) ||
+                    "Trigger",
+                  config: {},
+                },
+              },
+              {
+                id: "END_AGENT_WORKFLOW",
+                type: "end",
+                position: { x: 360, y: 120 },
+                data: {
+                  blockType: "end_automation",
+                  label: "End — configure steps",
+                  config: {},
+                },
+              },
+            ],
+            edges: [
+              {
+                id: "e_trigger_end",
+                source: "TRIGGER_AGENT_WORKFLOW",
+                target: "END_AGENT_WORKFLOW",
+              },
+            ],
+            viewport: { x: 0, y: 0, zoom: 0.9 },
+          },
+          {
+            TRIGGER_AGENT_WORKFLOW: "trigger",
+            END_AGENT_WORKFLOW: "end",
+          },
+        ));
 
   const triggerLabel =
     input.triggerLabel ||
@@ -223,7 +276,7 @@ export async function ensureAgentPrimaryWorkflow(
       description:
         input.description || `Generated from ${ownerLabel}`,
       trigger: triggerLabel,
-      definition: definition as unknown as Prisma.InputJsonValue,
+      definition: graph as unknown as Prisma.InputJsonValue,
       version: input.activate ? 1 : 0,
       status,
       sourceSolutionSetupId: input.setupId || null,
@@ -237,7 +290,7 @@ export async function ensureAgentPrimaryWorkflow(
     };
     if (input.activate) {
       createData.publishedDefinition =
-        definition as unknown as Prisma.InputJsonValue;
+        graph as unknown as Prisma.InputJsonValue;
       createData.publishedAt = now;
     }
     await prisma.automationFlow.create({ data: createData });
@@ -246,7 +299,6 @@ export async function ensureAgentPrimaryWorkflow(
       where: { id: flowId },
       select: { advancedCustomized: true, status: true, version: true },
     });
-    // If advanced customized, only refresh ownership/name — keep graph.
     const keepGraph = Boolean(existing?.advancedCustomized);
     const updateData: Record<string, unknown> = {
       name: flowName,
@@ -261,14 +313,18 @@ export async function ensureAgentPrimaryWorkflow(
       updatedAt: now,
     };
     if (!keepGraph) {
-      updateData.definition = definition as unknown as Prisma.InputJsonValue;
+      updateData.definition = graph as unknown as Prisma.InputJsonValue;
     }
     if (input.activate) {
       updateData.status = "ACTIVE";
-      updateData.version = Math.max(1, Number(existing?.version || 0) + (existing?.status === "ACTIVE" ? 0 : 1));
+      updateData.version = Math.max(
+        1,
+        Number(existing?.version || 0) +
+          (existing?.status === "ACTIVE" ? 0 : 1),
+      );
       if (!keepGraph) {
         updateData.publishedDefinition =
-          definition as unknown as Prisma.InputJsonValue;
+          graph as unknown as Prisma.InputJsonValue;
         updateData.publishedAt = now;
       }
     }

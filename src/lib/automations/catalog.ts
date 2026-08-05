@@ -377,6 +377,23 @@ export const AUTOMATION_BLOCKS: BlockDefinition[] = [
     },
   }),
   block({
+    blockType: "run_voice_agent",
+    category: "action",
+    label: "Run Voice Agent",
+    description:
+      "Start or attach the real-time Telnyx voice agent for this contact/call. Use inside a voice agent’s primary workflow — not Use Agent targeting itself.",
+    icon: "phone",
+    defaultConfig: {
+      agentId: "",
+      agentName: "",
+      purpose: "",
+      callerId: "",
+      timeoutSeconds: 60,
+      retryCount: 0,
+      attachInbound: true,
+    },
+  }),
+  block({
     blockType: "wait_for_call_result",
     category: "logic",
     label: "Wait for call result",
@@ -392,7 +409,7 @@ export const AUTOMATION_BLOCKS: BlockDefinition[] = [
     category: "action",
     label: "Use Agent",
     description:
-      "Run another agent as a step — enrolls its primary workflow or starts a voice agent. Compose agents on overall automations.",
+      "Invoke a different agent from an overall automation. Modes: run primary workflow, invoke task, or hand off conversation. Never use this to call the same agent that owns the current flow.",
     icon: "bot",
     defaultConfig: {
       agentId: "",
@@ -400,7 +417,9 @@ export const AUTOMATION_BLOCKS: BlockDefinition[] = [
       agentName: "",
       agentType: "",
       purpose: "",
-      mode: "auto",
+      mode: "run_primary_workflow",
+      waitForCompletion: false,
+      contextJson: "{}",
     },
   }),
   block({

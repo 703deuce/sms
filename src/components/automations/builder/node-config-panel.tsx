@@ -880,10 +880,14 @@ export function NodeConfigPanel({
           </div>
         )}
 
-        {(block === "use_ai_agent" || block === "start_ai_call") && (
+        {(block === "use_ai_agent" ||
+          block === "start_ai_call" ||
+          block === "run_voice_agent") && (
           <>
             <div>
-              <Label>Agent</Label>
+              <Label>
+                {block === "run_voice_agent" ? "Voice agent" : "Agent"}
+              </Label>
               <Select
                 value={
                   cfg.setupId
@@ -907,11 +911,17 @@ export function NodeConfigPanel({
                     return;
                   }
                   onUpdate({
-                    label: selected.name,
+                    label:
+                      block === "run_voice_agent"
+                        ? `Run Voice Agent: ${selected.name}`
+                        : selected.name,
                     config: {
                       ...cfg,
                       agentId: selected.agentId || "",
-                      setupId: selected.setupId || "",
+                      setupId:
+                        block === "run_voice_agent"
+                          ? ""
+                          : selected.setupId || "",
                       agentName: selected.name,
                       agentType: selected.agentTypeLabel,
                       purpose: selected.agentTypeLabel,
@@ -920,33 +930,76 @@ export function NodeConfigPanel({
                 }}
               >
                 <option value="">Select agent</option>
-                {agents.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.name} · {a.agentTypeLabel}
-                    {a.primaryFlowId ? "" : " (no workflow yet)"}
-                  </option>
-                ))}
+                {agents
+                  .filter((a) =>
+                    block === "run_voice_agent" || block === "start_ai_call"
+                      ? Boolean(a.agentId)
+                      : true,
+                  )
+                  .map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.name} · {a.agentTypeLabel}
+                      {a.primaryFlowId ? "" : " (no workflow yet)"}
+                    </option>
+                  ))}
               </Select>
               <p className="mt-1.5 text-[12px] text-muted-foreground">
                 {block === "use_ai_agent"
-                  ? "Runs this agent’s primary workflow (or starts a voice agent). Use this to connect agents on overall automations."
-                  : "Places an outbound AI voice call with the selected receptionist agent."}
+                  ? "Invoke a different agent from an overall automation. Never target the agent that owns this flow — use Run Voice Agent inside voice primary workflows."
+                  : block === "run_voice_agent"
+                    ? "Starts or attaches the real-time Telnyx voice agent for this call. Use inside this agent’s primary workflow."
+                    : "Places an outbound AI voice call with the selected receptionist agent."}
               </p>
             </div>
             {block === "use_ai_agent" ? (
-              <div>
-                <Label>Mode</Label>
-                <Select
-                  value={String(cfg.mode || "auto")}
-                  onChange={(e) =>
-                    onUpdate({ config: { ...cfg, mode: e.target.value } })
-                  }
-                >
-                  <option value="auto">Auto (workflow or voice)</option>
-                  <option value="workflow">Primary workflow only</option>
-                  <option value="voice_call">Voice call</option>
-                </Select>
-              </div>
+              <>
+                <div>
+                  <Label>Mode</Label>
+                  <Select
+                    value={String(cfg.mode || "run_primary_workflow")}
+                    onChange={(e) =>
+                      onUpdate({ config: { ...cfg, mode: e.target.value } })
+                    }
+                  >
+                    <option value="run_primary_workflow">
+                      Run primary workflow
+                    </option>
+                    <option value="invoke_task">Invoke task</option>
+                    <option value="hand_off_conversation">
+                      Hand off conversation
+                    </option>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Wait for completion</Label>
+                  <Select
+                    value={cfg.waitForCompletion ? "yes" : "no"}
+                    onChange={(e) =>
+                      onUpdate({
+                        config: {
+                          ...cfg,
+                          waitForCompletion: e.target.value === "yes",
+                        },
+                      })
+                    }
+                  >
+                    <option value="no">No — continue immediately</option>
+                    <option value="yes">Yes — wait (recorded; runner support expanding)</option>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Context (JSON)</Label>
+                  <Textarea
+                    value={String(cfg.contextJson || "{}")}
+                    onChange={(e) =>
+                      onUpdate({
+                        config: { ...cfg, contextJson: e.target.value },
+                      })
+                    }
+                    rows={3}
+                  />
+                </div>
+              </>
             ) : null}
           </>
         )}

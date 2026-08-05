@@ -127,12 +127,53 @@ const types = new Set(AUTOMATION_BLOCKS.map((b) => b.blockType));
 for (const required of [
   "call_missed",
   "start_ai_call",
+  "run_voice_agent",
   "wait_for_call_result",
   "start_automation",
   "use_ai_agent",
 ]) {
   assert.ok(types.has(required), `catalog includes ${required}`);
 }
+
+const useAgent = AUTOMATION_BLOCKS.find((b) => b.blockType === "use_ai_agent");
+assert.equal(useAgent?.label, "Use Agent");
+assert.equal(useAgent?.defaultConfig?.mode, "run_primary_workflow");
+
+const runVoice = AUTOMATION_BLOCKS.find((b) => b.blockType === "run_voice_agent");
+assert.equal(runVoice?.label, "Run Voice Agent");
+
+// Guard rails for Use Agent composition
+import {
+  checkAgentInvokeGuards,
+  normalizeUseAgentMode,
+} from "../src/lib/automations/agent-invoke";
+assert.equal(normalizeUseAgentMode("auto"), "run_primary_workflow");
+assert.equal(normalizeUseAgentMode("voice_call"), "hand_off_conversation");
+const self = checkAgentInvokeGuards({
+  targetKey: "agent:a1",
+  currentFlowId: "flow1",
+  currentOwnerKey: "agent:a1",
+});
+assert.equal(self.ok, false);
+if (!self.ok) assert.equal(self.error, "use_agent_self_invoke");
+const cycle = checkAgentInvokeGuards({
+  targetKey: "agent:b",
+  currentFlowId: "flow1",
+  agentChain: ["agent:a", "agent:b"],
+});
+assert.equal(cycle.ok, false);
+if (!cycle.ok) assert.equal(cycle.error, "use_agent_cycle");
+
+import { buildVoiceAgentPrimaryDefinition } from "../src/lib/agents/compile-workflow";
+const voicePrimary = buildVoiceAgentPrimaryDefinition({
+  triggerBlock: "call_missed",
+  agentId: "maya",
+  agentName: "Maya",
+});
+assert.deepEqual(
+  voicePrimary.nodes.map((n) => n.data.blockType),
+  ["call_missed", "run_voice_agent", "end_automation"],
+);
 
 // 7. Shared event types present
 for (const t of [

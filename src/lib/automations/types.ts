@@ -126,7 +126,19 @@ export function nodeSummary(node: AutomationCanvasNode): string {
 
   if (block === "use_ai_agent") {
     const name = String(cfg.agentName || "").trim();
-    return name ? `Use ${name}` : "Use Agent";
+    const mode = String(cfg.mode || "run_primary_workflow");
+    const modeShort =
+      mode === "invoke_task"
+        ? "task"
+        : mode === "hand_off_conversation"
+          ? "hand off"
+          : "workflow";
+    return name ? `Use ${name} (${modeShort})` : "Use Agent";
+  }
+
+  if (block === "run_voice_agent") {
+    const name = String(cfg.agentName || "").trim();
+    return name ? `Run Voice Agent: ${name}` : "Run Voice Agent";
   }
 
   if (block === "start_ai_call") {

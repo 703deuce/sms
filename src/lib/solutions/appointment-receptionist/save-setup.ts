@@ -257,9 +257,9 @@ export async function upsertAppointmentReceptionistSetup(
     },
   });
 
-  // Every wizard leaves a runnable primary workflow (Trigger → Use Agent → End).
-  // Customers open Edit Workflow to add nodes around the agent. Overall
-  // automations compose this agent via the Use Agent block.
+  // Every wizard leaves a runnable primary workflow.
+  // Voice agents: Trigger → Run Voice Agent → End (not Use Agent → self).
+  // Customers open Edit Workflow to add outcome handling around the call.
   let primaryFlowId: string | null = null;
   try {
     const { ensureAgentPrimaryWorkflow, triggerBlockFromAnswerWhen } =
