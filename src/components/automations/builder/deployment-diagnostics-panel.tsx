@@ -174,16 +174,27 @@ export function DeploymentDiagnosticsPanel({ flowId }: { flowId: string }) {
             Failure layer map
           </h3>
           <ul className="mt-2 flex flex-wrap gap-2">
-            {Object.entries(data.layers).map(([k, v]) => (
+            {Object.entries(data.layers).map(([k, v]) => {
+              const missingNumberOk = k === "missingNumber" && v === false;
+              const missingNumberBad = k === "missingNumber" && v === true;
+              const good =
+                missingNumberOk ||
+                v === "ok" ||
+                v === true;
+              const bad =
+                missingNumberBad ||
+                v === "error" ||
+                (v === false && k !== "missingNumber");
+              return (
               <li
                 key={k}
                 className={cn(
                   "rounded-md px-2 py-1 text-[11px] font-medium",
-                  v === "ok" || v === true
+                  good
                     ? "bg-emerald-50 text-emerald-700"
                     : v === "ready"
                       ? "bg-sky-50 text-sky-700"
-                      : v === "error" || v === false
+                      : bad
                         ? "bg-rose-50 text-rose-700"
                         : v === "missing" || v === "draft"
                           ? "bg-amber-50 text-amber-700"
@@ -192,7 +203,8 @@ export function DeploymentDiagnosticsPanel({ flowId }: { flowId: string }) {
               >
                 {k}: {String(v)}
               </li>
-            ))}
+              );
+            })}
           </ul>
         </div>
       ) : null}
