@@ -305,7 +305,7 @@ export function AppointmentReceptionistWizard() {
           <ActivateStep
             state={state}
             patch={patch}
-            onActivate={() => void persist("activate")}
+            onActivate={() => void persist("activate", { activationMode: "activate_now" })}
             onGoToTest={() => {
               const testIdx = steps.findIndex((s) => s.id === "test");
               if (testIdx >= 0) setStepIndex(testIdx);
