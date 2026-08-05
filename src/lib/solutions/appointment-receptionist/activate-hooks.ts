@@ -17,6 +17,7 @@ import {
   type ActivationIssue,
 } from "./capability-checklist";
 import { parseNoticeMinutes, parseDaysAhead } from "./notice-utils";
+import { resolveServiceRequiredFields } from "./required-fields";
 
 export type ActivateHooksResult = {
   issues: ActivationIssue[];
@@ -302,7 +303,10 @@ async function ensureWizardCalendarServices(input: {
             minimumBookingNoticeMinutes: parseNoticeMinutes(t.minNotice),
             maxDaysAhead: t.maxDaysAhead || null,
             maximumBookingDaysAhead: parseDaysAhead(t.maxDaysAhead),
-            requiredFields: t.requiredFields || [],
+            requiredFields: resolveServiceRequiredFields(
+              t.requiredFields,
+              input.state.collectFields || [],
+            ),
             bookingPermission: t.bookingPermission,
             timezone: input.state.timezone || null,
           },
@@ -329,7 +333,10 @@ async function ensureWizardCalendarServices(input: {
             minimumBookingNoticeMinutes: parseNoticeMinutes(t.minNotice),
             maxDaysAhead: t.maxDaysAhead || null,
             maximumBookingDaysAhead: parseDaysAhead(t.maxDaysAhead),
-            requiredFields: t.requiredFields || [],
+            requiredFields: resolveServiceRequiredFields(
+              t.requiredFields,
+              input.state.collectFields || [],
+            ),
             bookingPermission: t.bookingPermission,
             timezone: input.state.timezone || null,
           },
