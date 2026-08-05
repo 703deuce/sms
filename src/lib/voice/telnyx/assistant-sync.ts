@@ -249,9 +249,10 @@ export async function syncTelnyxAssistant(
     transferTargets = [...byName.values()];
   }
 
-  const optimizeToolLatency = isLatencyOptimizedProfile(
-    config.voiceTiming?.activeProfile,
-  );
+  const optimizeToolLatency =
+    config.voiceTiming?.activeProfile === "legacy_cascade"
+      ? false
+      : true;
   const tools = buildAssistantTools({
     workspaceId,
     agentId: agent.id,

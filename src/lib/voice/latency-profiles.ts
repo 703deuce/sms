@@ -7,6 +7,10 @@
  *
  * Do not auto-migrate production agents. Opt-in apply + rollback snapshot only.
  * Do not invent provider-internal timestamps or a second media pipeline.
+ *
+ * Product default for NEW agents: flux_b_balanced (Flux + Haiku + Ultra,
+ * skip dynvar webhook, async tools + fillers). legacy_cascade remains available
+ * as an explicit opt-in rollback profile — it is no longer the create default.
  */
 
 import type { VoiceAgentConfig } from "@/lib/voice/types";
@@ -30,7 +34,7 @@ export const VERSION_B_BALANCED: LatencyProfileId = "flux_b_balanced";
 export const VERSION_B_PATIENT: LatencyProfileId = "flux_b_patient";
 export const VERSION_C_NATIVE_AUDIO: LatencyProfileId = "native_audio_ultravox";
 
-export const ACTIVE_LATENCY_PROFILE_DEFAULT: LatencyProfileId = "legacy_cascade";
+export const ACTIVE_LATENCY_PROFILE_DEFAULT: LatencyProfileId = "flux_b_balanced";
 
 /** Fast LLM for ordinary receptionist turns (Telnyx docs / Haiku-class). */
 export const FAST_LLM_MODEL_ID = "anthropic/claude-haiku-4-5";
@@ -589,6 +593,16 @@ export function applyLatencyProfileToConfig(
     callHandling: {
       ...(config.callHandling || {}),
       ...(greeting != null ? { greeting } : {}),
+      // Flux / native-audio → TeXML direct; legacy cascade → Call Control.
+      inboundRoutingMode:
+        profileId === "legacy_cascade" ? "call_control" : "texml_direct",
+      startupGreeting: {
+        ...((config.callHandling as { startupGreeting?: object } | undefined)
+          ?.startupGreeting || {}),
+        ...(profileId === "legacy_cascade"
+          ? {}
+          : { enabled: false }),
+      },
     },
     voiceTiming: {
       ...(config.voiceTiming || {}),

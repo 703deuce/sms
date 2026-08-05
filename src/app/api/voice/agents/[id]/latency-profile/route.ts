@@ -5,6 +5,7 @@ import { parseVoiceAgentConfig } from "@/lib/voice/types";
 import {
   LATENCY_PROFILES,
   ORDINARY_TURN_LATENCY_BANDS,
+  ACTIVE_LATENCY_PROFILE_DEFAULT,
   applyLatencyProfileToConfig,
   getLatencyProfile,
   isLatencyProfileId,
@@ -15,7 +16,8 @@ import {
 type Ctx = { params: Promise<{ id: string }> };
 
 function profileSummary(cfg: ReturnType<typeof parseVoiceAgentConfig>) {
-  const active = cfg.voiceTiming?.activeProfile || "legacy_cascade";
+  const active =
+    cfg.voiceTiming?.activeProfile || ACTIVE_LATENCY_PROFILE_DEFAULT;
   const def = getLatencyProfile(active);
   return {
     agentId: undefined as string | undefined,

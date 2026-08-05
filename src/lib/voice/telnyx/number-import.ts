@@ -1,12 +1,16 @@
 /**
  * Import Telnyx-account phone numbers into a Transovo workspace and (optionally)
  * attach them to the Call Control connection so inbound webhooks fire.
+ *
+ * Numbers already owned by a TeXML-direct AI agent are left on their TeXML app —
+ * never force Call Control onto them (that reintroduces startup latency).
  */
 
 import { getPrisma } from "@/lib/db";
 import { telnyxRequest } from "@/lib/messaging/telnyx/client";
 import { getTelnyxApiKey } from "@/lib/messaging/telnyx/config";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
+import { workspaceNumberUsesTexmlDirect } from "@/lib/voice/telnyx/texml-direct-route";
 
 export type TelnyxOwnedNumber = {
   id: string;
@@ -47,6 +51,13 @@ export async function listTelnyxOwnedNumbers(): Promise<TelnyxOwnedNumber[]> {
     if (page > 20) break;
   }
   return out;
+}
+
+async function agentUsesTexmlDirectForNumber(
+  workspaceId: string,
+  phoneNumberId: string,
+): Promise<boolean> {
+  return workspaceNumberUsesTexmlDirect({ workspaceId, phoneNumberId });
 }
 
 /**
@@ -128,11 +139,32 @@ export async function importTelnyxNumbersIntoWorkspace(input: {
       },
     });
 
+    // Never steal TeXML-direct AI DIDs back onto Call Control.
+    const texmlDirect = await agentUsesTexmlDirectForNumber(
+      input.workspaceId,
+      row.id,
+    );
+    if (texmlDirect) {
+      imported.push({
+        id: row.id,
+        e164: n.e164,
+        providerNumberId: n.id,
+        attached: false,
+        skippedReason:
+          "texml_direct_agent — left on TeXML app (Call Control not attached)",
+      });
+      continue;
+    }
+
     // Attach Call Control for voice — never clear messaging_profile_id (base PATCH).
     let attached = Boolean(
       n.connectionId && connectionId && n.connectionId === connectionId,
     );
-    if (input.attachConnection !== false && connectionId && n.connectionId !== connectionId) {
+    if (
+      input.attachConnection !== false &&
+      connectionId &&
+      n.connectionId !== connectionId
+    ) {
       try {
         await telnyxRequest(`/phone_numbers/${encodeURIComponent(n.id)}`, {
           method: "PATCH",

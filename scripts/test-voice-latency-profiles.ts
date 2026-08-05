@@ -32,10 +32,36 @@ function section(name: string) {
   console.log(`\n== ${name} ==`);
 }
 
-section("Defaults stay on legacy cascade (no auto-migrate)");
-assert.equal(DEFAULT_VOICE_CONFIG.transcription?.sttModel, "deepgram/nova-3");
-assert.equal(DEFAULT_VOICE_CONFIG.voiceLanguage?.endpointingMs, 300);
-assert.equal(DEFAULT_VOICE_CONFIG.voiceLanguage?.bargeIn, true);
+section("Product default: Flux B balanced + TeXML-ready defaults");
+assert.equal(DEFAULT_VOICE_CONFIG.transcription?.sttModel, "deepgram/flux");
+assert.equal(DEFAULT_VOICE_CONFIG.voiceTiming?.activeProfile, "flux_b_balanced");
+assert.equal(DEFAULT_VOICE_CONFIG.model?.modelId, FAST_LLM_MODEL_ID);
+assert.equal(
+  (DEFAULT_VOICE_CONFIG.callHandling as { inboundRoutingMode?: string })
+    ?.inboundRoutingMode,
+  "texml_direct",
+);
+assert.equal(
+  (DEFAULT_VOICE_CONFIG.callHandling as { startupGreeting?: { enabled?: boolean } })
+    ?.startupGreeting?.enabled,
+  false,
+);
+// Existing stored configs without voiceTiming must not be silently migrated.
+{
+  const legacyStored = parseVoiceAgentConfig({
+    transcription: { sttModel: "deepgram/nova-3" },
+    voiceLanguage: { voiceId: "ava-warm-us", endpointingMs: 300, bargeIn: true },
+    model: { modelId: "moonshotai/Kimi-K2.6" },
+  });
+  assert.equal(legacyStored.voiceTiming, undefined);
+  assert.equal(legacyStored.transcription?.sttModel, "deepgram/nova-3");
+  assert.equal(legacyStored.transcription?.settings, undefined);
+  assert.equal(
+    (legacyStored.callHandling as { inboundRoutingMode?: string } | undefined)
+      ?.inboundRoutingMode,
+    undefined,
+  );
+}
 
 section("Version B Flux: EOT only + wait_seconds — NO 1s no-punct plan");
 assert.equal(FLUX_EAGER_LOW_LATENCY_PROFILE.fields.transcription.sttModel, "deepgram/flux");
@@ -236,6 +262,34 @@ section("Async tools + sync fillers when optimizeToolLatency");
     | Array<{ type: string; content: string }>
     | undefined;
   assert.equal(calFillers?.[0]?.content, "Let me check.");
+}
+
+section("Apply Flux profile sets TeXML direct + disables startup mask");
+{
+  const applied = applyLatencyProfileToConfig(
+    parseVoiceAgentConfig({
+      transcription: { sttModel: "deepgram/nova-3" },
+      voiceLanguage: { voiceId: "howard-ultra", endpointingMs: 300 },
+      callHandling: {
+        startupGreeting: { enabled: true, mode: "audio_url" },
+      },
+    }),
+    "flux_b_balanced",
+  );
+  assert.equal(
+    (applied.callHandling as { inboundRoutingMode?: string }).inboundRoutingMode,
+    "texml_direct",
+  );
+  assert.equal(
+    (applied.callHandling as { startupGreeting?: { enabled?: boolean } })
+      .startupGreeting?.enabled,
+    false,
+  );
+  const legacy = applyLatencyProfileToConfig(applied, "legacy_cascade");
+  assert.equal(
+    (legacy.callHandling as { inboundRoutingMode?: string }).inboundRoutingMode,
+    "call_control",
+  );
 }
 
 section("Latency bands: primary goal under 500 ms");

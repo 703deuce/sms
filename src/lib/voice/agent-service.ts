@@ -13,9 +13,15 @@ export async function createVoiceAgent(
   },
 ) {
   const prisma = getPrisma();
-  const config = input.templateId
+  let config = input.templateId
     ? templateConfig(input.templateId)
     : parseVoiceAgentConfig(null);
+
+  // Product default: Flux + TeXML direct (skip Call Control before first audio).
+  const { ensureDefaultLatencyProfile } = await import(
+    "./telnyx/texml-direct-route"
+  );
+  config = ensureDefaultLatencyProfile(config);
 
   // Attach a default visual flow bundle for the agent type / template.
   try {
@@ -412,6 +418,7 @@ export async function publishVoiceAgent(
 
   let telnyxSync: unknown = null;
   let telnyxSyncError: string | null = null;
+  let texmlRoute: unknown = null;
   try {
     telnyxSync = await syncAssistantToTelnyx(workspaceId, agentId, updated, config);
   } catch (err) {
@@ -429,11 +436,50 @@ export async function publishVoiceAgent(
     });
   }
 
+  // Product default: point the DID at TeXML → assistant (no Call Control mask).
+  try {
+    const {
+      usesTexmlDirectInbound,
+      routePhoneToTexmlAssistant,
+    } = await import("./telnyx/texml-direct-route");
+    if (usesTexmlDirectInbound(config) && updated.phoneNumberId) {
+      const refreshed =
+        (await prisma.voiceAgent.findUnique({ where: { id: agentId } })) ||
+        updated;
+      const assistantId = refreshed.telnyxAssistantId;
+      const phone = await prisma.phoneNumber.findFirst({
+        where: { id: updated.phoneNumberId, workspaceId },
+        select: { e164: true, providerNumberId: true },
+      });
+      if (assistantId && phone?.e164) {
+        texmlRoute = await routePhoneToTexmlAssistant({
+          e164: phone.e164,
+          assistantId,
+          providerNumberId: phone.providerNumberId,
+        });
+      }
+    }
+  } catch (err) {
+    console.error("[voice] TeXML direct route failed", err);
+    const detail = err instanceof Error ? err.message : String(err);
+    await prisma.voiceAgent
+      .update({
+        where: { id: agentId },
+        data: {
+          healthStatus: "warning",
+          healthMessage:
+            `Deployed but TeXML direct routing failed: ${detail}`.slice(0, 500),
+        },
+      })
+      .catch(() => undefined);
+  }
+
   return {
     agent: updated,
     version: versionRow,
     telnyxSync,
     telnyxSyncError,
+    texmlRoute,
   };
 }
 

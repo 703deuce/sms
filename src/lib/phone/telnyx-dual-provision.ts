@@ -455,7 +455,16 @@ export async function enableVoiceOnWorkspaceNumber(input: {
     (await fetchMessagingAssignment(row.providerNumberId));
 
   const connectionId = await resolveVoiceConnectionId();
-  await assignVoiceConnection(row.providerNumberId, connectionId);
+  const { workspaceNumberUsesTexmlDirect } = await import(
+    "@/lib/voice/telnyx/texml-direct-route"
+  );
+  const texmlDirect = await workspaceNumberUsesTexmlDirect({
+    workspaceId: input.workspaceId,
+    phoneNumberId: row.id,
+  });
+  if (!texmlDirect) {
+    await assignVoiceConnection(row.providerNumberId, connectionId);
+  }
 
   try {
     const { ensureTelnyxOutboundVoiceReady } = await import(
@@ -632,17 +641,29 @@ export async function repairNumberConfiguration(input: {
   let connectionId: string | null = null;
   if (before.capabilities.voice !== false) {
     try {
-      connectionId = await resolveVoiceConnectionId();
-      if (connectionId && before.connectionId !== connectionId) {
-        await assignVoiceConnection(row.providerNumberId, connectionId);
-      }
-      const { ensureTelnyxOutboundVoiceReady } = await import(
-        "@/lib/phone/telnyx-outbound-voice"
+      const { workspaceNumberUsesTexmlDirect } = await import(
+        "@/lib/voice/telnyx/texml-direct-route"
       );
-      await ensureTelnyxOutboundVoiceReady({
-        connectionId,
-        callerIdE164: row.e164,
+      const texmlDirect = await workspaceNumberUsesTexmlDirect({
+        workspaceId: input.workspaceId,
+        phoneNumberId: row.id,
       });
+      if (texmlDirect) {
+        // Keep existing TeXML app attachment — do not force Call Control.
+        connectionId = before.connectionId;
+      } else {
+        connectionId = await resolveVoiceConnectionId();
+        if (connectionId && before.connectionId !== connectionId) {
+          await assignVoiceConnection(row.providerNumberId, connectionId);
+        }
+        const { ensureTelnyxOutboundVoiceReady } = await import(
+          "@/lib/phone/telnyx-outbound-voice"
+        );
+        await ensureTelnyxOutboundVoiceReady({
+          connectionId,
+          callerIdE164: row.e164,
+        });
+      }
     } catch (err) {
       console.error("[dual-provision] voice/outbound repair", err);
     }

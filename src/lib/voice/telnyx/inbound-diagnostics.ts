@@ -470,9 +470,24 @@ export async function diagnoseAndRepairInboundNumber(input: {
       }
 
       if (input.repair && targetCcId && numberConnId !== targetCcId) {
-        await attachConnection(providerNumberId, targetCcId);
-        repairs.push(`Attached number to Call Control Application ${targetCcId}`);
-        phoneNumber = await fetchPhoneNumber(providerNumberId);
+        const { workspaceNumberUsesTexmlDirect } = await import(
+          "@/lib/voice/telnyx/texml-direct-route"
+        );
+        const texmlDirect = row
+          ? await workspaceNumberUsesTexmlDirect({
+              workspaceId: input.workspaceId,
+              phoneNumberId: row.id,
+            })
+          : false;
+        if (texmlDirect) {
+          repairs.push(
+            `Skipped Call Control attach — agent uses TeXML direct (left on ${numberConnId || "current connection"})`,
+          );
+        } else {
+          await attachConnection(providerNumberId, targetCcId);
+          repairs.push(`Attached number to Call Control Application ${targetCcId}`);
+          phoneNumber = await fetchPhoneNumber(providerNumberId);
+        }
       }
 
       voiceSettings = await fetchVoiceSettings(providerNumberId);

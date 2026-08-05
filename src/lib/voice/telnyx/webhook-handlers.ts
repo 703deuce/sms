@@ -528,6 +528,25 @@ export async function processVoiceWebhookEvent(input: {
       const agent = await prisma.voiceAgent.findUnique({ where: { id: call.agentId } });
       const controlId = String(eventPayload.call_control_id || call.telnyxCallControlId || "");
       if (agent?.telnyxAssistantId && controlId) {
+        const { loadVoiceAgentRuntimeConfig } = await import("../load-agent-config");
+        const { usesTexmlDirectInbound } = await import("../telnyx/texml-direct-route");
+        const cfgPeek = await loadVoiceAgentRuntimeConfig(workspaceId, agent.id);
+        if (usesTexmlDirectInbound(cfgPeek)) {
+          await prisma.voiceCallEvent
+            .create({
+              data: {
+                workspaceId,
+                callId: call.id,
+                eventType: "media.ai_start_skipped",
+                payload: {
+                  reason: "texml_direct_inbound",
+                  path: "answered_webhook",
+                  eventType,
+                } as object,
+              },
+            })
+            .catch(() => undefined);
+        } else {
         const { assertAiCallAdmission } = await import("../platform/admission");
         const admission = await assertAiCallAdmission({
           workspaceId,
@@ -554,7 +573,6 @@ export async function processVoiceWebhookEvent(input: {
         } = await import("../telnyx/assistant-sync");
         const { resolveCallDynamicVariables } = await import("../dynamic-variables");
         const { recordFailureDiagnostic } = await import("../platform/ai-platform");
-        const { parseVoiceAgentConfig } = await import("../types");
         const { playStartupGreetingMask } = await import("../startup-greeting-runtime");
         const {
           AI_MEDIA_SETTLE_MS,
@@ -567,8 +585,10 @@ export async function processVoiceWebhookEvent(input: {
           startInboundNoiseSuppression,
         } = await import("../pstn-audio");
 
-        const { loadVoiceAgentRuntimeConfig } = await import("../load-agent-config");
-        const cfg = await loadVoiceAgentRuntimeConfig(workspaceId, agent.id);
+        const { loadVoiceAgentRuntimeConfig: loadCfg } = await import(
+          "../load-agent-config"
+        );
+        const cfg = await loadCfg(workspaceId, agent.id);
         const startup = startupGreetingFromConfig(cfg);
         const outputGainDb = normalizeOutputGainDb(cfg.voiceLanguage?.outputGainDb);
 
@@ -723,6 +743,7 @@ export async function processVoiceWebhookEvent(input: {
             } as object,
           },
         });
+        }
         }
         }
       }

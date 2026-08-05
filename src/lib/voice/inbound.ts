@@ -283,6 +283,32 @@ async function startAiOnInboundCall(input: {
   }
 
   if (isTelnyxVoiceConfigured() && input.telnyxCallControlId) {
+    // TeXML-direct agents never start AI via Call Control (already on assistant).
+    {
+      const { loadVoiceAgentRuntimeConfig } = await import("./load-agent-config");
+      const { usesTexmlDirectInbound } = await import("./telnyx/texml-direct-route");
+      const cfgPeek = await loadVoiceAgentRuntimeConfig(
+        input.workspaceId,
+        agent.id,
+      );
+      if (usesTexmlDirectInbound(cfgPeek)) {
+        await prisma.voiceCallEvent
+          .create({
+            data: {
+              workspaceId: input.workspaceId,
+              callId: input.callId,
+              eventType: "media.ai_start_skipped",
+              payload: {
+                reason: "texml_direct_inbound",
+                path: "inbound_ai_start",
+              } as object,
+            },
+          })
+          .catch(() => undefined);
+        return { started: false, reason: "texml_direct_inbound" };
+      }
+    }
+
     // Claim BEFORE answer/speak so call.answered cannot start a second mask/AI.
     const claim = await claimAiStart(input.callId);
     if (!claim.claimed) {

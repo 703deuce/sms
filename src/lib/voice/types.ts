@@ -216,36 +216,45 @@ export const DEFAULT_VOICE_CONFIG: VoiceAgentConfig = {
   },
   voiceLanguage: {
     voiceProvider: "telnyx",
-    voiceId: "ava-warm-us",
+    voiceId: "allie-ultra",
     speed: 1,
     primaryLanguage: "en-US",
-    // Faster conversational turn-taking (target <1s after caller stops).
     silenceTimeoutMs: 2500,
-    endpointingMs: 300,
     bargeIn: true,
     noiseSuppression: true,
     outputGainDb: -5,
   },
+  voiceTiming: {
+    activeProfile: "flux_b_balanced",
+    experimental: false,
+  },
   model: {
     provider: "telnyx",
-    modelId: "moonshotai/Kimi-K2.6",
+    modelId: "anthropic/claude-haiku-4-5",
     temperature: 0.4,
     maxTokens: 1024,
   },
   transcription: {
     enabled: true,
     sttProvider: "deepgram",
-    sttModel: "deepgram/nova-3",
+    sttModel: "deepgram/flux",
     language: "en",
+    settings: {
+      eot_threshold: 0.8,
+      eager_eot_threshold: 0.4,
+      eot_timeout_ms: 5000,
+    },
   },
   callHandling: {
     greeting:
-      "Thank you for calling. I'm the virtual assistant, and I can answer questions or take a message. How can I help you today?",
+      "Thank you for calling. I'm the virtual assistant — how can I help you today?",
     closingStatement: "Thanks for calling. Goodbye.",
+    /** Direct TeXML → assistant. Opt out with inboundRoutingMode: "call_control". */
+    inboundRoutingMode: "texml_direct",
     startupGreeting: {
-      enabled: true,
+      enabled: false,
       mode: "ai",
-      text: "Thank you for calling. Please hold for just a moment while I connect you with our AI assistant.",
+      text: "",
       audioUrl: "",
       delayMs: "auto",
       handOffWhenReady: true,
@@ -308,6 +317,35 @@ export function parseVoiceAgentConfig(raw: unknown): VoiceAgentConfig {
   if (!raw || typeof raw !== "object") return structuredClone(DEFAULT_VOICE_CONFIG);
   const base = structuredClone(DEFAULT_VOICE_CONFIG);
   const obj = raw as VoiceAgentConfig;
+  const rawHandling = (obj.callHandling || {}) as Record<string, unknown>;
+  const hasOwnStartup = Object.prototype.hasOwnProperty.call(
+    rawHandling,
+    "startupGreeting",
+  );
+  const hasOwnInboundMode = Object.prototype.hasOwnProperty.call(
+    rawHandling,
+    "inboundRoutingMode",
+  );
+
+  // Merge callHandling, but do not invent product-default TeXML / disabled-mask
+  // fields onto agents that never stored them (avoids silent auto-migrate).
+  const mergedHandling: Record<string, unknown> = {
+    ...(base.callHandling || {}),
+    ...rawHandling,
+  };
+  if (hasOwnStartup) {
+    mergedHandling.startupGreeting = {
+      ...((base.callHandling as { startupGreeting?: object } | undefined)
+        ?.startupGreeting || {}),
+      ...((rawHandling.startupGreeting as object) || {}),
+    };
+  } else {
+    delete mergedHandling.startupGreeting;
+  }
+  if (!hasOwnInboundMode) {
+    delete mergedHandling.inboundRoutingMode;
+  }
+
   return {
     ...base,
     ...obj,
@@ -315,28 +353,23 @@ export function parseVoiceAgentConfig(raw: unknown): VoiceAgentConfig {
     instructions: { ...base.instructions, ...obj.instructions },
     conversationFlow: obj.conversationFlow ?? base.conversationFlow,
     voiceLanguage: { ...base.voiceLanguage, ...obj.voiceLanguage },
+    // Only apply default Flux timing when the stored config already has voiceTiming.
     voiceTiming: obj.voiceTiming
       ? { ...(base.voiceTiming || {}), ...obj.voiceTiming }
-      : base.voiceTiming,
+      : undefined,
     transcription: {
       ...base.transcription,
       ...obj.transcription,
+      // Do not inject Flux EOT settings onto agents that never set settings.
       settings:
         obj.transcription?.settings !== undefined
           ? obj.transcription.settings
-          : base.transcription?.settings,
+          : obj.transcription
+            ? undefined
+            : base.transcription?.settings,
     },
     model: { ...base.model, ...obj.model },
-    callHandling: {
-      ...(base.callHandling || {}),
-      ...(obj.callHandling || {}),
-      startupGreeting: {
-        ...((base.callHandling as { startupGreeting?: object } | undefined)
-          ?.startupGreeting || {}),
-        ...((obj.callHandling as { startupGreeting?: object } | undefined)
-          ?.startupGreeting || {}),
-      },
-    },
+    callHandling: mergedHandling as VoiceAgentConfig["callHandling"],
     multiParty: { ...base.multiParty, ...obj.multiParty },
     postCall: { ...base.postCall, ...obj.postCall },
     enabledBuiltinTools: obj.enabledBuiltinTools ?? base.enabledBuiltinTools,
