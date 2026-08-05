@@ -81,12 +81,27 @@ async function main() {
   const prevSystem = draft.instructions?.system || "";
   const nextSystem = stripBakedClock(prevSystem);
 
+  // Only enable resolve_datetime after production has the handler (ENABLE_RESOLVE_DATETIME=1).
+  const enableResolve = process.env.ENABLE_RESOLVE_DATETIME === "1";
   const tools = new Set(
     Array.isArray(draft.enabledBuiltinTools) ? draft.enabledBuiltinTools : [],
   );
-  tools.add("resolve_datetime");
+  if (enableResolve) {
+    tools.add("resolve_datetime");
+    if (/Tools —/.test(nextSystem) && !/- resolve_datetime:/.test(nextSystem)) {
+      // nextSystem is const from strip — rebuild with tool line below via rewrite
+    }
+  }
   tools.add("calendar_availability");
   tools.add("book_appointment");
+
+  let systemOut = nextSystem;
+  if (enableResolve && /Tools —/.test(systemOut) && !/- resolve_datetime:/.test(systemOut)) {
+    systemOut = systemOut.replace(
+      /(Tools —[^\n]*\n)/,
+      "$1- resolve_datetime: resolve relative dates/times to a concrete local datetime before checking availability.\n",
+    );
+  }
 
   const dyn = { ...(draft.dynamicVariables || {}) };
   delete dyn.current_date;
@@ -111,7 +126,7 @@ async function main() {
     ...draft,
     instructions: {
       ...(draft.instructions || {}),
-      system: nextSystem,
+      system: systemOut,
     },
     enabledBuiltinTools: Array.from(tools),
     dynamicVariables: dyn,
@@ -156,8 +171,9 @@ async function main() {
   const report = {
     ok: true,
     agentId: AGENT_ID,
+    enableResolve,
     promptLen: sys.length,
-    hasResolveDatetime: /resolve_datetime/.test(sys),
+    hasDateGuard: /do not invent a calendar|resolve_datetime/i.test(sys),
     hasBakedWednesday: /Wednesday,\s*2026-08-05|6:32\s*PM/i.test(sys),
     hasCurrentDateMustache: /\{\{current_date\}\}/.test(sys),
     toolsHasResolve: enabled.includes("resolve_datetime"),
@@ -166,10 +182,10 @@ async function main() {
     publish: pubj?.data || pubj,
   };
   if (
-    !report.hasResolveDatetime ||
+    !report.hasDateGuard ||
     report.hasBakedWednesday ||
     report.hasCurrentDateMustache ||
-    !report.toolsHasResolve
+    (enableResolve && !report.toolsHasResolve)
   ) {
     report.ok = false;
   }
