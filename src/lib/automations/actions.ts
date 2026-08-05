@@ -556,8 +556,61 @@ export async function runNodeAction(
       select: { metadata: true },
     });
     const meta = (exec?.metadata || {}) as Record<string, unknown>;
-    const callResult = meta.callResult as Record<string, unknown> | undefined;
+    let callResult = meta.callResult as Record<string, unknown> | undefined;
     const consumed = meta.callResultConsumed === true;
+
+    // Hydrate from an already-ended VoiceCall when the completion webhook
+    // arrived before this node entered WAITING (common on short calls).
+    if (!callResult && !consumed) {
+      const vars = (meta.variables || {}) as Record<string, unknown>;
+      const pendingCallId =
+        (typeof meta.pendingCallId === "string" && meta.pendingCallId) ||
+        (typeof vars.callId === "string" && vars.callId) ||
+        null;
+      if (pendingCallId) {
+        const call = await prisma.voiceCall.findFirst({
+          where: { id: pendingCallId, workspaceId: ctx.workspaceId },
+          select: {
+            id: true,
+            status: true,
+            outcome: true,
+            answeredAt: true,
+            endedAt: true,
+            appointmentBooked: true,
+            transferred: true,
+            voicemailDetected: true,
+            durationSeconds: true,
+          },
+        });
+        const terminal = [
+          "COMPLETED",
+          "NO_ANSWER",
+          "BUSY",
+          "CANCELLED",
+          "FAILED",
+          "VOICEMAIL",
+        ];
+        if (call?.endedAt || (call && terminal.includes(call.status))) {
+          callResult = {
+            callId: call.id,
+            type: "CALL_COMPLETED",
+            status: call.status,
+            callStatus: call.status,
+            outcome: call.outcome,
+            answered: Boolean(call.answeredAt),
+            appointmentBooked: Boolean(call.appointmentBooked),
+            transferCompleted: Boolean(call.transferred),
+            voicemailLeft: Boolean(call.voicemailDetected),
+            duration: call.durationSeconds,
+          };
+          await mergeExecutionMetadata(ctx.executionId, {
+            callResult,
+            callResultConsumed: false,
+            pendingCallId: call.id,
+          });
+        }
+      }
+    }
 
     const resolveBranchTarget = (handle: string) => {
       const exact = def.edges.find(

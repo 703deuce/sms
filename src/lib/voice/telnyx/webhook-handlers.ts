@@ -225,6 +225,32 @@ export async function processVoiceWebhookEvent(input: {
     });
   }
 
+  // TeXML / AI assistant path: conversation events may arrive without a prior
+  // Call Control call.initiated. Create VoiceCall + enroll execution so the
+  // workflow engine still correlates post-call outcomes.
+  if (
+    !call &&
+    (eventType === "call.conversation.created" ||
+      eventType === "conversation.created" ||
+      eventType === "call.conversation.ended" ||
+      eventType === "assistant.conversation.ended" ||
+      eventType === "call.answered")
+  ) {
+    const { ensureVoiceCallForTelnyxEvent } = await import(
+      "@/lib/voice/ensure-call-from-event"
+    );
+    const ensured = await ensureVoiceCallForTelnyxEvent({
+      eventType,
+      eventPayload,
+    }).catch((err) => {
+      console.error("[voice/webhook] ensureVoiceCallForTelnyxEvent", err);
+      return null;
+    });
+    if (ensured?.callId) {
+      call = await prisma.voiceCall.findUnique({ where: { id: ensured.callId } });
+    }
+  }
+
   // New inbound leg — create call + routing
   if (!call && eventType === "call.initiated") {
     const to = String(eventPayload.to || "");
@@ -753,8 +779,28 @@ export async function processVoiceWebhookEvent(input: {
 
   if (
     !isSecondaryVoiceLeg &&
-    (eventType === "call.hangup" || eventType === "call.machine.detection.ended")
+    (eventType === "call.hangup" ||
+      eventType === "call.machine.detection.ended" ||
+      eventType === "call.conversation.ended" ||
+      eventType === "assistant.conversation.ended")
   ) {
+    // Ensure endedAt is set for conversation-end events (TeXML may not send hangup).
+    if (
+      (eventType === "call.conversation.ended" ||
+        eventType === "assistant.conversation.ended") &&
+      !call.endedAt
+    ) {
+      await prisma.voiceCall.update({
+        where: { id: call.id },
+        data: {
+          endedAt: new Date(),
+          status:
+            call.status === "RINGING" || call.status === "QUEUED"
+              ? "COMPLETED"
+              : call.status,
+        },
+      });
+    }
     await enqueueJob({
       jobType: "voice_post_call",
       queueName: "voice-calls",

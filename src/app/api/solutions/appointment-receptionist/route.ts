@@ -308,6 +308,13 @@ export async function POST(request: Request) {
           );
         }
 
+        // Voice inbound: refuse to mark ACTIVE without Telnyx publish proof.
+        if (!triggerResult.telnyxPublished) {
+          throw new Error(
+            "Activation did not publish Telnyx routing — workflow left inactive",
+          );
+        }
+
         const newVersion = Math.max(1, (flow.version || 0) + 1);
         await prisma.automationFlow.update({
           where: { id: primaryFlowId },
@@ -320,8 +327,7 @@ export async function POST(request: Request) {
           },
         });
 
-        // Mark agent published (activateFlowTriggers already called publishVoiceAgent).
-        published = Boolean(triggerResult.telnyxPublished);
+        published = true;
         triggerDeployments = triggerResult.deployments;
 
         await upsertAppointmentReceptionistSetup({

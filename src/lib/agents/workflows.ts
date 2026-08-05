@@ -355,7 +355,12 @@ export function reconcileManagedNodes(
 
   // Update or keep existing nodes.
   for (const node of current.nodes) {
-    const key = node.data.templateNodeKey;
+    // Legacy AR graphs stamped templateNodeKey "trigger" before inbound_call.
+    const rawKey = node.data.templateNodeKey;
+    const key =
+      rawKey === "trigger" && node.type === "trigger"
+        ? "inbound_call"
+        : rawKey;
     const isManaged =
       (key && keySet.has(key)) ||
       templateById.has(node.id);
@@ -375,6 +380,8 @@ export function reconcileManagedNodes(
             origin: "template_managed",
             templateNodeKey:
               fromTemplate.data.templateNodeKey || key || undefined,
+            // Preserve phone/routing overrides only if template left them blank
+            // (template always carries wizard values for AR — use template).
           },
         });
         continue;

@@ -18,6 +18,8 @@ export async function ensureInboundCallerContact(input: {
 }): Promise<{ id: string; created: boolean }> {
   const prisma = getPrisma();
   const phone = input.fromE164;
+  if (!phone) throw new Error("fromE164 required");
+
   const existing = await prisma.contact.findUnique({
     where: {
       workspaceId_phone: { workspaceId: input.workspaceId, phone },
@@ -27,19 +29,31 @@ export async function ensureInboundCallerContact(input: {
   if (existing) return { id: existing.id, created: false };
 
   const id = createId();
-  await prisma.contact.create({
-    data: {
-      id,
-      workspaceId: input.workspaceId,
-      phone,
-      firstName: "Caller",
-      lastName: phone.slice(-4),
-      status: "SUBSCRIBED",
-      consentSource: "inbound_call",
-      customFields: { createdFrom: "inbound_call" },
-    },
-  });
-  return { id, created: true };
+  try {
+    await prisma.contact.create({
+      data: {
+        id,
+        workspaceId: input.workspaceId,
+        phone,
+        firstName: "Caller",
+        lastName: phone.slice(-4) || "new",
+        status: "SUBSCRIBED",
+        consentSource: "inbound_call",
+        customFields: { createdFrom: "inbound_call" },
+      },
+    });
+    return { id, created: true };
+  } catch (err) {
+    // Concurrent inbound from same number — re-read winner.
+    const raced = await prisma.contact.findUnique({
+      where: {
+        workspaceId_phone: { workspaceId: input.workspaceId, phone },
+      },
+      select: { id: true },
+    });
+    if (raced) return { id: raced.id, created: false };
+    throw err;
+  }
 }
 
 export type InboundTriggerEnrollResult = {

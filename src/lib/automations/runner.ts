@@ -195,7 +195,11 @@ export async function advanceAutomationExecution(executionId: string) {
     }
 
     if (result.waiting && result.waitMs) {
-      await recordStep(executionId, node.id, "completed", { output: { waitMs: result.waitMs } });
+      const waitStatus =
+        node.data.blockType === "wait_for_call_result" ? "waiting" : "completed";
+      await recordStep(executionId, node.id, waitStatus, {
+        output: { waitMs: result.waitMs, ...(result.output as object) },
+      });
       await prisma.automationExecution.update({
         where: { id: executionId },
         data: {

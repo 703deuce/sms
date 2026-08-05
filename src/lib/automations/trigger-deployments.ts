@@ -307,8 +307,15 @@ export async function activateFlowTriggers(
     (t) => t.blockType === "inbound_call" && t.phoneNumberId,
   );
 
-  // Compile inbound voice trigger → assign DID + publish Telnyx (fast path).
-  if (inbound?.phoneNumberId && voiceAgentId && inbound.mode === "live") {
+  // Live inbound voice requires a Run Voice Agent + successful Telnyx publish.
+  // Never mark the trigger live without provider confirmation.
+  if (inbound?.phoneNumberId && inbound.mode === "live") {
+    if (!voiceAgentId) {
+      throw new Error(
+        "Inbound Call (live) requires a Run Voice Agent node with an agent selected",
+      );
+    }
+
     const agent = await prisma.voiceAgent.findFirst({
       where: { id: voiceAgentId, workspaceId },
       select: {
@@ -320,9 +327,6 @@ export async function activateFlowTriggers(
     });
     if (!agent) {
       throw new Error("Run Voice Agent references a missing VoiceAgent");
-    }
-    if (!agent.telnyxAssistantId) {
-      // publishVoiceAgent will sync; but fail closed if we cannot get one later.
     }
 
     await prisma.voiceAgent.update({
@@ -395,7 +399,6 @@ export async function activateFlowTriggers(
       inbound.eventType,
     ].join(":");
 
-    // Persist verified deployment after Telnyx success (before marking live below).
     await upsertTriggerRow({
       workspaceId,
       flowId,
@@ -425,7 +428,6 @@ export async function activateFlowTriggers(
       inbound &&
       t.nodeId === inbound.nodeId &&
       inbound.phoneNumberId &&
-      voiceAgentId &&
       inbound.mode === "live"
     ) {
       const row = await prisma.triggerDeployment.findFirst({
@@ -442,10 +444,17 @@ export async function activateFlowTriggers(
       continue;
     }
 
+    // Never silently mark a live inbound trigger without Telnyx publish.
+    if (t.blockType === "inbound_call" && t.mode === "live" && t.phoneNumberId) {
+      throw new Error(
+        "Inbound Call live activation failed — Telnyx publish did not complete",
+      );
+    }
+
     const status: TriggerDeployStatus =
       t.mode === "test"
         ? "test"
-        : t.phoneNumberId || t.channel === "schedule" || t.channel === "manual"
+        : t.channel === "schedule" || t.channel === "manual"
           ? "live"
           : "live";
     const id = await upsertTriggerRow({

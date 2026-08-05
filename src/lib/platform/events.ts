@@ -125,48 +125,78 @@ export async function emitPlatformEvent(input: EmitPlatformEventInput) {
 }
 
 async function resumeWaitForCallResult(input: EmitPlatformEventInput) {
-  if (!input.callId || !input.contactId) return;
+  if (!input.callId) return;
   const prisma = getPrisma();
-  const waiting = await prisma.automationExecution.findMany({
+
+  // Match by pendingCallId first (most precise). Also fall back to contactId
+  // for WAITING wait_for_call_result rows that haven't bound pendingCallId yet.
+  const candidates = await prisma.automationExecution.findMany({
     where: {
       workspaceId: input.workspaceId,
-      contactId: input.contactId,
-      status: "WAITING",
+      status: { in: ["WAITING", "RUNNING"] },
+      ...(input.contactId ? { contactId: input.contactId } : {}),
     },
-    take: 50,
+    take: 80,
   });
 
   const { enqueueJob } = await import("@/lib/messaging/enqueue-advance");
+  const callResult = {
+    callId: input.callId,
+    type: input.type,
+    ...(input.payload || {}),
+  };
 
-  for (const exec of waiting) {
+  for (const exec of candidates) {
     const meta = (exec.metadata || {}) as Record<string, unknown>;
-    if (meta.waitingForCallResult !== true) continue;
-    if (meta.pendingCallId && meta.pendingCallId !== input.callId) continue;
+    const vars = (meta.variables || {}) as Record<string, unknown>;
+    const pending =
+      (typeof meta.pendingCallId === "string" && meta.pendingCallId) ||
+      (typeof vars.callId === "string" && vars.callId) ||
+      null;
 
-    await prisma.automationExecution.update({
-      where: { id: exec.id },
-      data: {
-        status: "RUNNING",
-        nextActionAt: null,
-        metadata: {
-          ...meta,
-          waitingForCallResult: true,
-          callResultConsumed: false,
-          callResult: {
-            callId: input.callId,
-            type: input.type,
-            ...(input.payload || {}),
-          },
-        } as Prisma.InputJsonValue,
-      },
-    });
+    const matchesCall = pending === input.callId;
+    const waitingForResult = meta.waitingForCallResult === true;
+    // If we have a pendingCallId and it doesn't match, skip.
+    if (pending && !matchesCall) continue;
+    // Without pendingCallId, only attach to waiters for this contact.
+    if (!pending && !waitingForResult) continue;
+    if (!pending && !input.contactId) continue;
 
-    await enqueueJob({
-      jobType: "automation_advance",
-      queueName: "automations",
-      workspaceId: input.workspaceId,
-      payload: { executionId: exec.id },
-      idempotencyKey: `automation-advance:${exec.id}:call-result:${input.callId}`,
-    }).catch(() => undefined);
+    // Always stash the result so wait_for_call_result can consume it even if
+    // the call ended before the execution reached WAITING.
+    const nextMeta = {
+      ...meta,
+      pendingCallId: pending || input.callId,
+      callResultConsumed: false,
+      callResult,
+    };
+
+    if (exec.status === "WAITING" && waitingForResult) {
+      await prisma.automationExecution.update({
+        where: { id: exec.id },
+        data: {
+          status: "RUNNING",
+          nextActionAt: null,
+          metadata: {
+            ...nextMeta,
+            waitingForCallResult: true,
+          } as Prisma.InputJsonValue,
+        },
+      });
+      await enqueueJob({
+        jobType: "automation_advance",
+        queueName: "automations",
+        workspaceId: input.workspaceId,
+        payload: { executionId: exec.id },
+        idempotencyKey: `automation-advance:${exec.id}:call-result:${input.callId}`,
+      }).catch(() => undefined);
+    } else {
+      await prisma.automationExecution.update({
+        where: { id: exec.id },
+        data: {
+          metadata: nextMeta as Prisma.InputJsonValue,
+        },
+      });
+    }
   }
 }

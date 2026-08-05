@@ -81,6 +81,23 @@ export async function POST(
       );
     }
 
+    const needsTelnyx = def.nodes.some(
+      (n) =>
+        n.type === "trigger" &&
+        n.data.blockType === "inbound_call" &&
+        String(n.data.config?.phoneNumberId || "").trim() &&
+        n.data.config?.mode !== "test",
+    );
+    if (needsTelnyx && !triggerResult.telnyxPublished) {
+      return NextResponse.json(
+        {
+          error:
+            "Activation did not publish Telnyx routing — workflow left inactive",
+        },
+        { status: 400 },
+      );
+    }
+
     const newVersion = flow.version + 1;
     const row = await getPrisma().automationFlow.update({
       where: { id },
