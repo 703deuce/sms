@@ -1,9 +1,15 @@
 /**
  * Agent ↔ Workflow contract.
  *
+ * Separation (see architecture.ts):
+ *   Agent      — reusable worker; NOT defined by its trigger
+ *   Workflow   — when it runs; which agents/actions; branches
+ *   Deployment — number / audience / calendar / live status
+ *   Trigger    — belongs on the workflow, not agent identity
+ *
  * Every completed Outcome wizard creates:
  * 1. One typed agent (VoiceAgent and/or SolutionSetup)
- * 2. One versioned AutomationFlow
+ * 2. One versioned AutomationFlow (primary workflow)
  * 3. Two-way link: agent.primaryFlowId ↔ flow.ownerAgentId / sourceSolutionSetupId
  *
  * Wizard edits update only template_managed nodes (by templateNodeKey / stable id).
