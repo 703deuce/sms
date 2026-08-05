@@ -322,9 +322,10 @@ export async function syncTelnyxAssistant(
     .filter(Boolean)
     .join("\n\n");
 
-  // Prefer Telnyx-native models (no llm_api_key_ref). Override via builder Model ID.
+  // Prefer Telnyx-native Haiku (matches B-Balanced / ordinary-turn default).
+  // Override via builder Model ID when needed.
   const modelId =
-    config.model?.modelId?.trim() || "moonshotai/Kimi-K2.6";
+    config.model?.modelId?.trim() || "anthropic/claude-haiku-4-5";
 
   const transcription = config.transcription || {};
   const connectionId = process.env.TELNYX_CONNECTION_ID?.trim();

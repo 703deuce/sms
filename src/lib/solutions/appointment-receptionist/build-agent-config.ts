@@ -1,5 +1,6 @@
 import type { VoiceAgentConfig } from "@/lib/voice/types";
 import { parseVoiceAgentConfig } from "@/lib/voice/types";
+import { applyLatencyProfileToConfig } from "@/lib/voice/latency-profiles";
 import { DEFAULT_CONNECTION_GREETING } from "./defaults";
 import type { AppointmentReceptionistWizardState } from "./types";
 import {
@@ -354,7 +355,7 @@ export function buildWizardAgentConfig(
   const keyterms = buildTranscriptionKeyterms(state);
   const recordingOn = state.callRecording !== "off";
 
-  return {
+  const built: VoiceAgentConfig = {
     ...base,
     identity: {
       ...base.identity,
@@ -399,9 +400,17 @@ export function buildWizardAgentConfig(
       ...base.transcription,
       enabled: true,
       sttProvider: "deepgram",
-      sttModel: "deepgram/nova-3",
+      // Keep product default Flux (B-Balanced). Forcing Nova-3 drops eager EOT
+      // and slows ordinary FAQ turns back toward cascade timing.
+      sttModel: base.transcription?.sttModel || "deepgram/flux",
       language: lang.transcriptionLanguage,
       keyterms,
+      settings: base.transcription?.settings,
+    },
+    model: {
+      ...base.model,
+      provider: "telnyx",
+      modelId: "anthropic/claude-haiku-4-5",
     },
     callHandling: {
       ...(base.callHandling || {}),
@@ -568,6 +577,12 @@ export function buildWizardAgentConfig(
           }),
     },
   };
+
+  // Lock Haiku + Flux B-Balanced: no dynamic-variables webhook on startup, so
+  // ordinary (no-tool) turns are not blocked before first audio.
+  return applyLatencyProfileToConfig(built, "flux_b_balanced", {
+    preserveExistingRollback: true,
+  });
 }
 
 export function buildReceptionistWillList(state: AppointmentReceptionistWizardState): string[] {

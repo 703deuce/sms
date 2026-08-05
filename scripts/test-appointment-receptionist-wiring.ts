@@ -491,6 +491,22 @@ assert(
     "create_custom keeps text",
     String(startup?.text || "").includes("connect you"),
   );
+  assert(
+    "wizard defaults to Haiku",
+    String(cfg.model?.modelId || "").includes("claude-haiku"),
+  );
+  assert(
+    "wizard defaults to Flux STT",
+    String(cfg.transcription?.sttModel || "") === "deepgram/flux",
+  );
+  assert(
+    "wizard uses B-Balanced latency profile",
+    cfg.voiceTiming?.activeProfile === "flux_b_balanced",
+  );
+  assert(
+    "wizard Flux eager EOT 0.4",
+    Number(cfg.transcription?.settings?.eager_eot_threshold) === 0.4,
+  );
 }
 
 // --- Availability window for voice calendar tools ---
