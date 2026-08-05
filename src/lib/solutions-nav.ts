@@ -221,6 +221,16 @@ export function buildSolutionsNav(options: SolutionsNavOptions = {}): NavItem[] 
       href: "/systems",
       icon: Bot,
     },
+    {
+      label: "My Numbers",
+      href: "/my-numbers",
+      icon: Phone,
+    },
+    {
+      label: "Deployments",
+      href: "/deployments",
+      icon: Route,
+    },
   ];
 
   for (const section of LAUNCH_SECTIONS) {

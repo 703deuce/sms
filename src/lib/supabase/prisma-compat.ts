@@ -19,6 +19,8 @@ const MODEL_TO_TABLE: Record<string, string> = {
   workspace: "Workspace",
   membership: "Membership",
   phoneNumber: "PhoneNumber",
+  externalNumber: "external_numbers",
+  agentDeployment: "agent_deployments",
   contact: "Contact",
   contactList: "ContactList",
   contactListMember: "ContactListMember",
@@ -367,6 +369,16 @@ const RELATIONS: Record<string, Record<string, { table: string; fk: string; pk?:
   voiceAgent: {
     workspace: { table: "Workspace", fk: "workspaceId" },
     sourceSolutionSetup: { table: "solution_setups", fk: "sourceSolutionSetupId" },
+  },
+  externalNumber: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+    forwardingDestination: { table: "PhoneNumber", fk: "forwardingDestinationId" },
+  },
+  agentDeployment: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+    agent: { table: "voice_agents", fk: "agentId" },
+    phoneNumber: { table: "PhoneNumber", fk: "phoneNumberId" },
+    externalNumber: { table: "external_numbers", fk: "externalNumberId" },
   },
   automationExecution: {
     flow: { table: "AutomationFlow", fk: "flowId" },

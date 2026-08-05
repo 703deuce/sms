@@ -5,7 +5,7 @@ import type {
   SystemStatus,
   SystemType,
 } from "@/lib/systems/load-systems";
-import { cn } from "@/lib/utils";
+import { cn, formatPhone } from "@/lib/utils";
 import {
   AudioLines,
   MessageSquare,
@@ -60,6 +60,8 @@ function channelIcon(channels: string[]) {
 function AgentCard({ system }: { system: SystemResource }) {
   const Icon = channelIcon(system.channels);
   const caps = (system.capabilities || []).slice(0, 6);
+  const deployed = Boolean(system.phoneNumber);
+  const deployStatus = system.deploymentStatus || null;
 
   return (
     <article className="flex flex-col rounded-xl border border-[#E5E7EB] bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
@@ -80,8 +82,39 @@ function AgentCard({ system }: { system: SystemResource }) {
         <StatusPill status={system.status} label={system.statusLabel} />
       </div>
 
+      <div className="mt-4 rounded-lg bg-[#F9FAFB] p-3">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-[#9CA3AF]">
+          Deployment
+        </p>
+        {deployed ? (
+          <dl className="mt-1.5 space-y-1 text-[12px] text-[#111827]">
+            <div className="flex items-start gap-2">
+              <Phone className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#6B7280]" />
+              <div>
+                <p className="font-semibold">
+                  Voice number: {formatPhone(system.phoneNumber!)}
+                </p>
+                {system.customerNumber ? (
+                  <p className="text-[#6B7280]">
+                    Customer number: {formatPhone(system.customerNumber)}
+                  </p>
+                ) : null}
+                <p className="text-[#6B7280]">
+                  {system.deploymentLabel ||
+                    (deployStatus === "live" ? "Live" : "Test routing")}
+                </p>
+              </div>
+            </div>
+          </dl>
+        ) : (
+          <p className="mt-1.5 text-[12px] text-[#6B7280]">
+            No number connected — create the agent, then deploy it to a number.
+          </p>
+        )}
+      </div>
+
       {system.handles ? (
-        <p className="mt-4 text-[12px] text-[#4B5563]">
+        <p className="mt-3 text-[12px] text-[#4B5563]">
           <span className="font-semibold text-[#111827]">Handles:</span>{" "}
           {system.handles}
         </p>
@@ -113,20 +146,6 @@ function AgentCard({ system }: { system: SystemResource }) {
           </dd>
         </div>
         <div>
-          <dt className="flex items-center gap-1 text-[#9CA3AF]">
-            <Phone className="h-3 w-3" /> Phone
-          </dt>
-          <dd className="mt-0.5 font-medium text-[#111827]">
-            {system.phoneNumber || "—"}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-[#9CA3AF]">Last activity</dt>
-          <dd className="mt-0.5 font-medium text-[#111827]">
-            {system.lastActivity || "—"}
-          </dd>
-        </div>
-        <div>
           <dt className="text-[#9CA3AF]">Health</dt>
           <dd
             className={cn(
@@ -139,21 +158,34 @@ function AgentCard({ system }: { system: SystemResource }) {
         </div>
       </dl>
 
-      <div className="mt-5 flex items-center gap-2 border-t border-[#F3F4F6] pt-4">
+      <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-[#F3F4F6] pt-4">
         <Link
           href={system.href}
           className="inline-flex h-9 flex-1 items-center justify-center rounded-md bg-[#111827] px-3 text-[12px] font-semibold text-white hover:bg-[#1F2937]"
         >
           Open agent
         </Link>
-        {system.children?.[0]?.href ? (
+        {deployed ? (
           <Link
-            href={system.children[0].href}
+            href="/my-numbers"
             className="inline-flex h-9 items-center justify-center rounded-md px-3 text-[12px] font-semibold text-[#2563EB] ring-1 ring-[#BFDBFE] hover:bg-[#EFF6FF]"
           >
-            Details
+            Manage number
           </Link>
-        ) : null}
+        ) : (
+          <Link
+            href="/my-numbers"
+            className="inline-flex h-9 items-center justify-center rounded-md px-3 text-[12px] font-semibold text-[#2563EB] ring-1 ring-[#BFDBFE] hover:bg-[#EFF6FF]"
+          >
+            Connect number
+          </Link>
+        )}
+        <Link
+          href="/deployments"
+          className="inline-flex h-9 items-center justify-center rounded-md px-3 text-[12px] font-semibold text-[#4B5563] ring-1 ring-[#E5E7EB] hover:bg-slate-50"
+        >
+          {deployed ? "Deployments" : "Deploy"}
+        </Link>
       </div>
     </article>
   );
@@ -178,8 +210,8 @@ export function MySystemsView({ systems }: { systems: SystemResource[] }) {
           My Agents
         </h1>
         <p className="mt-1.5 max-w-2xl text-[14px] text-[#6B7280]">
-          Every agent you create from the menu — voice receptionists, missed-call
-          text backs, reminders, and more. Type is fixed; capabilities can change.
+          Agents own behavior. Numbers own traffic. Deployments connect them —
+          creating an agent does not make it live until you deploy it to a number.
         </p>
       </div>
 
@@ -221,7 +253,8 @@ export function MySystemsView({ systems }: { systems: SystemResource[] }) {
         <div className="rounded-xl border border-dashed border-[#D1D5DB] bg-white px-6 py-16 text-center">
           <p className="text-[14px] font-medium text-[#111827]">No agents yet</p>
           <p className="mt-1 text-[13px] text-[#6B7280]">
-            Create one from AI Receptionist or SMS &amp; Messaging in the menu.
+            Create one from AI Receptionist or SMS &amp; Messaging, then deploy it
+            to a number.
           </p>
           <Link
             href="/outcomes"

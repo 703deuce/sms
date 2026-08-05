@@ -80,6 +80,12 @@ assert.ok(solutionsHrefs.has("/systems"), "My Agents inventory required");
 assert.equal(solutionsNav[0]?.label, "Dashboard");
 assert.equal(solutionsNav[1]?.label, "My Agents");
 assert.equal(solutionsNav[1]?.href, "/systems");
+assert.equal(solutionsNav[2]?.label, "My Numbers");
+assert.equal(solutionsNav[2]?.href, "/my-numbers");
+assert.equal(solutionsNav[3]?.label, "Deployments");
+assert.equal(solutionsNav[3]?.href, "/deployments");
+assert.ok(solutionsHrefs.has("/my-numbers"), "My Numbers inventory required");
+assert.ok(solutionsHrefs.has("/deployments"), "Deployments inventory required");
 
 for (const slug of solutionsLaunchSlugs()) {
   assert.ok(

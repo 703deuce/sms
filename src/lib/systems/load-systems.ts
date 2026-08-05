@@ -39,6 +39,10 @@ export type SystemResource = {
   statusLabel: string;
   channels: string[];
   phoneNumber: string | null;
+  /** Customer public number when forwarding is configured. */
+  customerNumber: string | null;
+  deploymentStatus: string | null;
+  deploymentLabel: string | null;
   lastActivity: string | null;
   nextAction: string | null;
   warning: string | null;
@@ -159,7 +163,67 @@ function readAnswerWhen(configJson: unknown, draftConfig?: unknown): string | nu
   return null;
 }
 
+async function attachDeploymentSummaries(
+  workspaceId: string,
+  systems: SystemResource[],
+): Promise<SystemResource[]> {
+  try {
+    const {
+      listDeploymentsForWorkspace,
+      deploymentStatusLabel,
+    } = await import("@/lib/agents/deployments");
+    const deployments = await listDeploymentsForWorkspace(workspaceId);
+    const byAgent = new Map<string, (typeof deployments)[number]>();
+    const bySetup = new Map<string, (typeof deployments)[number]>();
+    for (const d of deployments) {
+      if (d.agentId && !byAgent.has(d.agentId)) byAgent.set(d.agentId, d);
+      if (d.solutionSetupId && !bySetup.has(d.solutionSetupId)) {
+        bySetup.set(d.solutionSetupId, d);
+      }
+    }
+
+    return systems.map((s) => {
+      let dep =
+        (s.id.startsWith("agent-")
+          ? byAgent.get(s.id.replace(/^agent-/, ""))
+          : undefined) ||
+        (s.id.startsWith("setup-")
+          ? bySetup.get(s.id.replace(/^setup-/, ""))
+          : undefined);
+
+      // Child voice agents under a setup also match by href agent id.
+      if (!dep && s.href.includes("/voice/agents/")) {
+        const m = s.href.match(/\/voice\/agents\/([^/?#]+)/);
+        if (m?.[1]) dep = byAgent.get(m[1]);
+      }
+      if (!dep) return s;
+
+      const live = dep.status === "live";
+      return {
+        ...s,
+        phoneNumber: dep.phoneE164 || s.phoneNumber,
+        customerNumber: dep.externalE164 || s.customerNumber,
+        deploymentStatus: dep.status,
+        deploymentLabel: dep.phoneE164
+          ? `${deploymentStatusLabel(dep.status)} on ${dep.phoneE164}`
+          : live
+            ? "Live — no number"
+            : "Ready to deploy — no number connected",
+      };
+    });
+  } catch {
+    return systems;
+  }
+}
+
 export async function loadMySystems(
+  workspaceId: string,
+): Promise<SystemResource[]> {
+  const systems = await loadMySystemsCore(workspaceId);
+  return attachDeploymentSummaries(workspaceId, systems);
+}
+
+async function loadMySystemsCore(
   workspaceId: string,
 ): Promise<SystemResource[]> {
   const prisma = getPrisma();
@@ -289,10 +353,13 @@ export async function loadMySystems(
         statusLabel: statusLabel(mapStatus(agent.status, agent.healthStatus)),
         channels: ["Voice"],
         phoneNumber:
-          (phone as { e164?: string; friendlyName?: string | null } | undefined)
+(phone as { e164?: string; friendlyName?: string | null } | undefined)
             ?.e164 ||
           (phone as { friendlyName?: string | null } | undefined)?.friendlyName ||
           null,
+        customerNumber: null,
+        deploymentStatus: null,
+        deploymentLabel: null,
         lastActivity: relativeTime(agent.updatedAt),
         nextAction: null,
         warning:
@@ -333,6 +400,9 @@ export async function loadMySystems(
         statusLabel: statusLabel(mapStatus(flow.status)),
         channels: ["SMS"],
         phoneNumber: null,
+        customerNumber: null,
+        deploymentStatus: null,
+        deploymentLabel: null,
         lastActivity: relativeTime(lastExec?.startedAt || flow.updatedAt),
         nextAction: lastExec?.nextActionAt
           ? new Date(lastExec.nextActionAt).toLocaleString(undefined, {
@@ -374,6 +444,9 @@ export async function loadMySystems(
         statusLabel: statusLabel(mapStatus(campaign.status)),
         channels: [campaign.type?.toUpperCase() === "EMAIL" ? "Email" : "SMS"],
         phoneNumber: null,
+        customerNumber: null,
+        deploymentStatus: null,
+        deploymentLabel: null,
         lastActivity: relativeTime(campaign.createdAt),
         nextAction: campaign.scheduledAt
           ? new Date(campaign.scheduledAt).toLocaleString()
@@ -401,6 +474,9 @@ export async function loadMySystems(
         statusLabel: rule.isActive ? "Active" : "Paused",
         channels: ["Voice"],
         phoneNumber: null,
+        customerNumber: null,
+        deploymentStatus: null,
+        deploymentLabel: null,
         lastActivity: relativeTime(rule.updatedAt),
         nextAction: null,
         warning: null,
@@ -438,6 +514,9 @@ export async function loadMySystems(
         statusLabel: statusLabel(mapStatus(flow.status)),
         channels: ["SMS"],
         phoneNumber: null,
+        customerNumber: null,
+        deploymentStatus: null,
+        deploymentLabel: null,
         lastActivity: relativeTime(lastExec?.startedAt || flow.updatedAt),
         nextAction: lastExec?.nextActionAt
           ? new Date(lastExec.nextActionAt).toLocaleString()
@@ -475,10 +554,13 @@ export async function loadMySystems(
       statusLabel: statusLabel(status),
       channels,
       phoneNumber:
-        (phone as { e164?: string; friendlyName?: string | null } | undefined)
+(phone as { e164?: string; friendlyName?: string | null } | undefined)
           ?.e164 ||
         (phone as { friendlyName?: string | null } | undefined)?.friendlyName ||
         null,
+      customerNumber: null,
+      deploymentStatus: null,
+      deploymentLabel: null,
       lastActivity: relativeTime(setup.updatedAt),
       nextAction: null,
       warning:
@@ -554,6 +636,9 @@ export async function loadMySystems(
       phoneNumber:
         (phone as { e164?: string; friendlyName?: string | null } | undefined)
           ?.e164 || null,
+      customerNumber: null,
+      deploymentStatus: null,
+      deploymentLabel: null,
       lastActivity: relativeTime(agent.updatedAt),
       nextAction: null,
       warning:
@@ -599,6 +684,9 @@ export async function loadMySystems(
       statusLabel: statusLabel(status),
       channels: ["SMS"],
       phoneNumber: null,
+      customerNumber: null,
+      deploymentStatus: null,
+      deploymentLabel: null,
       lastActivity: relativeTime(lastExec?.startedAt || flow.updatedAt),
       nextAction: lastExec?.nextActionAt
         ? new Date(lastExec.nextActionAt).toLocaleString()
@@ -633,6 +721,9 @@ export async function loadMySystems(
       statusLabel: statusLabel(status),
       channels: [campaign.type?.toUpperCase() === "EMAIL" ? "Email" : "SMS"],
       phoneNumber: null,
+      customerNumber: null,
+      deploymentStatus: null,
+      deploymentLabel: null,
       lastActivity: relativeTime(campaign.createdAt),
       nextAction: campaign.scheduledAt
         ? new Date(campaign.scheduledAt).toLocaleString()
@@ -661,6 +752,9 @@ export async function loadMySystems(
       statusLabel: rule.isActive ? "Active" : "Paused",
       channels: ["Voice"],
       phoneNumber: null,
+      customerNumber: null,
+      deploymentStatus: null,
+      deploymentLabel: null,
       lastActivity: relativeTime(rule.updatedAt),
       nextAction: null,
       warning: null,
