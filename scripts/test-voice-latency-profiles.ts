@@ -8,7 +8,9 @@ import {
   FLUX_B_BALANCED_PROFILE,
   FLUX_B_FAST_PROFILE,
   FLUX_B_PATIENT_PROFILE,
+  FLUX_H_AGGRESSIVE_PROFILE,
   FLUX_EAGER_LOW_LATENCY_PROFILE,
+  FLUX_WAIT_SECONDS_MIN,
   LEGACY_CASCADE_PROFILE,
   NATIVE_AUDIO_MODEL_ID,
   NATIVE_AUDIO_ULTRAVOX_PROFILE,
@@ -88,7 +90,7 @@ assert.equal(
   undefined,
 );
 
-section("B_FAST / B_BALANCED / B_PATIENT EOT pairs");
+section("B_FAST / B_BALANCED / B_PATIENT / H_AGGRESSIVE EOT pairs");
 {
   assert.deepEqual(FLUX_B_FAST_PROFILE.fields.transcription.settings, {
     eot_threshold: 0.75,
@@ -105,9 +107,18 @@ section("B_FAST / B_BALANCED / B_PATIENT EOT pairs");
     eager_eot_threshold: 0.45,
     eot_timeout_ms: 5000,
   });
+  assert.deepEqual(FLUX_H_AGGRESSIVE_PROFILE.fields.transcription.settings, {
+    eot_threshold: 0.7,
+    eager_eot_threshold: 0.3,
+    eot_timeout_ms: 3000,
+  });
+  assert.equal(FLUX_H_AGGRESSIVE_PROFILE.fields.startSpeakingPlan?.waitSeconds, 0.05);
   assert.equal(resolveLatencyProfileAlias("B_FAST"), "flux_b_fast");
   assert.equal(resolveLatencyProfileAlias("B"), "flux_b_balanced");
+  assert.equal(resolveLatencyProfileAlias("H"), "flux_h_aggressive");
+  assert.equal(resolveLatencyProfileAlias("H_AGGRESSIVE"), "flux_h_aggressive");
   assert.equal(isLatencyOptimizedProfile("flux_b_fast"), true);
+  assert.equal(isLatencyOptimizedProfile("flux_h_aggressive"), true);
 
   const fast = applyLatencyProfileToConfig(
     parseVoiceAgentConfig({
@@ -120,6 +131,24 @@ section("B_FAST / B_BALANCED / B_PATIENT EOT pairs");
   assert.equal(fast.transcription?.settings?.eager_eot_threshold, 0.35);
   assert.equal(fast.voiceLanguage?.endpointingMs, undefined);
   assert.equal(fast.model?.modelId, FAST_LLM_MODEL_ID);
+
+  const aggressive = applyLatencyProfileToConfig(
+    parseVoiceAgentConfig({
+      transcription: { sttModel: "deepgram/flux", keyterms: ["Danny"] },
+      voiceLanguage: { voiceId: "allie-ultra", bargeIn: true },
+      model: { modelId: FAST_LLM_MODEL_ID },
+      callHandling: { greeting: "Thank you for calling. This is Danny." },
+    }),
+    "flux_h_aggressive",
+  );
+  assert.equal(aggressive.transcription?.settings?.eot_threshold, 0.7);
+  assert.equal(aggressive.transcription?.settings?.eager_eot_threshold, 0.3);
+  assert.equal(aggressive.transcription?.settings?.eot_timeout_ms, 3000);
+  assert.deepEqual(aggressive.transcription?.keyterms, ["Danny"]);
+  assert.equal(aggressive.model?.modelId, FAST_LLM_MODEL_ID);
+  const aggressivePlan = buildStartSpeakingPlanFromConfig(aggressive);
+  assert.equal(aggressivePlan?.wait_seconds, 0.05);
+  assert.equal(FLUX_WAIT_SECONDS_MIN, 0.05);
 }
 
 section("Version C Ultravox: no copied endpointing plan; TTS voice expected");

@@ -28,6 +28,8 @@ import {
   resolveTurnCloneProfileId,
   routeTexmlToAssistant,
   switchToTurnCloneProfile,
+  applyTimingToExistingAssistant,
+  type TurnTimingId,
 } from "@/lib/voice/telnyx/official-baseline-turn-clones";
 
 const BOOTSTRAP_HEADER = "x-smoke-bootstrap";
@@ -65,6 +67,9 @@ export async function POST(request: Request) {
       texmlAppId?: string;
       sourceAssistantId?: string;
       snapshot?: OfficialBaselineRouteSnapshot;
+      timingId?: TurnTimingId;
+      includePunctuationPlan?: boolean;
+      productionAgentId?: string;
     };
 
     let workspaceId = "";
@@ -130,6 +135,65 @@ export async function POST(request: Request) {
       }
       const data = await fetchOfficialBaselineLive(assistantId);
       return NextResponse.json({ data });
+    }
+
+    /**
+     * Apply ULL Flux timing (baseline|fast|aggressive) to a real production
+     * assistant (e.g. Danny) without wiping tools/instructions/model.
+     * Does not switch the DID to a latency clone.
+     */
+    if (action === "apply_agent_timing") {
+      let assistantId = String(body.assistantId || "").trim();
+      if (!assistantId && body.productionAgentId) {
+        const agent = await getPrisma().voiceAgent.findFirst({
+          where: {
+            workspaceId,
+            id: String(body.productionAgentId),
+          },
+          select: { telnyxAssistantId: true, name: true },
+        });
+        assistantId = String(agent?.telnyxAssistantId || "");
+      }
+      if (!assistantId) {
+        // Default: active agent on the test DID.
+        const phone = await getPrisma().phoneNumber.findFirst({
+          where: { workspaceId, e164 },
+          select: { id: true },
+        });
+        const agent = phone?.id
+          ? await getPrisma().voiceAgent.findFirst({
+              where: { workspaceId, phoneNumberId: phone.id },
+              select: { telnyxAssistantId: true, name: true },
+            })
+          : null;
+        assistantId = String(agent?.telnyxAssistantId || "");
+      }
+      if (!assistantId) {
+        return NextResponse.json(
+          {
+            error:
+              "assistantId or productionAgentId required for apply_agent_timing",
+          },
+          { status: 400 },
+        );
+      }
+      const timingId = (["baseline", "fast", "aggressive"] as const).includes(
+        body.timingId as TurnTimingId,
+      )
+        ? (body.timingId as TurnTimingId)
+        : "aggressive";
+      const data = await applyTimingToExistingAssistant({
+        assistantId,
+        timingId,
+        includePunctuationPlan: Boolean(body.includePunctuationPlan),
+      });
+      // Optionally keep the DID on this assistant (Danny), not a ULL clone.
+      const route = await routeTexmlToAssistant({
+        assistantId,
+        texmlAppId: body.texmlAppId || DEFAULT_TEXML_APP_ID,
+        e164,
+      });
+      return NextResponse.json({ data: { ...data, route } });
     }
 
     if (action === "score_latency" || action === "pull_latency") {
@@ -278,7 +342,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         error:
-          "action must be create | create_and_route | verify | restore | switch_model | switch_profile | ensure_turn_clones | verify_secret | list_profiles | score_latency",
+          "action must be create | create_and_route | verify | restore | switch_model | switch_profile | apply_agent_timing | ensure_turn_clones | verify_secret | list_profiles | score_latency",
       },
       { status: 400 },
     );

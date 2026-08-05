@@ -29,6 +29,9 @@ const PROFILE_BY_VERSION = {
   B_BALANCED: "flux_b_balanced",
   B_FAST: "flux_b_fast",
   B_PATIENT: "flux_b_patient",
+  H: "flux_h_aggressive",
+  H_AGGRESSIVE: "flux_h_aggressive",
+  AGGRESSIVE: "flux_h_aggressive",
   C: "native_audio_ultravox",
   FAST: "flux_b_fast",
   BALANCED: "flux_b_balanced",
@@ -43,6 +46,7 @@ const PROFILE_ID =
     "flux_b_fast",
     "flux_b_balanced",
     "flux_b_patient",
+    "flux_h_aggressive",
     "native_audio_ultravox",
   ].includes(PROFILE_ARG)
     ? PROFILE_ARG
