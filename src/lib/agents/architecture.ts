@@ -23,12 +23,17 @@
  *   Agent primary workflow = that agent's own behavior.
  *   Overall / standalone automation = composes multiple agents + nodes.
  *
- * Deployment (AgentDeployment / numbers / calendars / audiences)
+ * Deployment (TriggerDeployment / numbers / calendars / audiences)
  *   Which number, inbox, audience, calendar, or external system is connected.
  *   Test vs live status. Voice readiness ≠ SMS readiness.
+ *   Phone routing: TriggerDeployment is compiled FROM the Inbound Call trigger
+ *   on Activate (canvas is source of truth). My Numbers is the management view.
  *
  * Trigger
  *   Belongs on the workflow, not on the agent identity.
+ *   Inbound Call holds phoneNumberId + routingMode; Activate publishes direct
+ *   Telnyx routing (automation worker is never in the live audio path).
+ *   Outbound call is an action node, not a trigger.
  *   Catalog templates pick a default trigger; customers can reuse the agent
  *   under different triggers via Use Agent / new workflows.
  * ---------------------------------------------------------------------------

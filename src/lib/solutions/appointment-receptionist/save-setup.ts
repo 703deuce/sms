@@ -257,16 +257,22 @@ export async function upsertAppointmentReceptionistSetup(
     },
   });
 
-  // Every wizard leaves a runnable primary workflow.
-  // Voice agents: Trigger → Run Voice Agent → End (not Use Agent → self).
-  // Customers open Edit Workflow to add outcome handling around the call.
+  // Voice agents: Inbound Call (number on trigger) → Run Voice Agent → End.
+  // Activate publishes Telnyx routing from the trigger — not Use Agent → self.
   let primaryFlowId: string | null = null;
   try {
-    const { ensureAgentPrimaryWorkflow, triggerBlockFromAnswerWhen } =
-      await import("@/lib/agents/compile-workflow");
+    const {
+      ensureAgentPrimaryWorkflow,
+      triggerBlockFromAnswerWhen,
+      routingModeFromAnswerWhen,
+    } = await import("@/lib/agents/compile-workflow");
     const agentRow = await prisma.voiceAgent.findFirst({
       where: { id: input.agentId },
-      select: { primaryFlowId: true, linkedAutomationIds: true },
+      select: {
+        primaryFlowId: true,
+        linkedAutomationIds: true,
+        phoneNumberId: true,
+      },
     });
     const setupRow = await prisma.solutionSetup.findFirst({
       where: { id: setupId },
@@ -278,6 +284,11 @@ export async function upsertAppointmentReceptionistSetup(
       setupRow?.linkedAutomationIds?.[0] ||
       agentRow?.linkedAutomationIds?.[0] ||
       null;
+    const phoneNumberId =
+      input.state.phoneNumberId ||
+      agentRow?.phoneNumberId ||
+      linkedPhoneNumberIds[0] ||
+      null;
     const compiled = await ensureAgentPrimaryWorkflow({
       workspaceId: input.workspaceId,
       agentName: name,
@@ -286,6 +297,8 @@ export async function upsertAppointmentReceptionistSetup(
       agentId: input.agentId,
       setupId,
       triggerBlock: triggerBlockFromAnswerWhen(input.state.answerWhen),
+      routingMode: routingModeFromAnswerWhen(input.state.answerWhen),
+      phoneNumberId,
       purpose: name,
       activate: false,
       description: `Generated from ${name}`,

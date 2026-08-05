@@ -146,6 +146,7 @@ model Workspace {
   conversations Conversation[]
   templates   Template[]
   flows       AutomationFlow[]
+  triggerDeployments TriggerDeployment[]
   solutionSetups SolutionSetup[]
   platformEvents PlatformEvent[]
   keywords    Keyword[]
@@ -314,6 +315,7 @@ model PhoneNumber {
   settingsJson     Json?
   workspace        Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   assignments      PhoneNumberAssignment[]
+  triggerDeployments TriggerDeployment[]
 
   @@unique([workspaceId, e164])
   @@index([twilioSid])
@@ -1043,10 +1045,52 @@ model AutomationFlow {
   sourceSolutionSetup  SolutionSetup? @relation(fields: [sourceSolutionSetupId], references: [id], onDelete: SetNull)
   ownerAgent           VoiceAgent? @relation("AgentPrimaryFlows", fields: [ownerAgentId], references: [id], onDelete: SetNull)
   executions           AutomationExecution[]
+  triggerDeployments   TriggerDeployment[]
 
   @@index([workspaceId, sourceSolutionSetupId])
   @@index([workspaceId, ownerAgentId])
   @@index([workspaceId, ownershipKind])
+}
+
+/// Compiled from a workflow trigger node on Activate.
+/// Source of truth for editing = trigger node on the canvas.
+/// This record is what the backend audits, conflicts on, and My Numbers displays.
+/// For inbound voice, activation also publishes direct Telnyx routing (not via the automation worker audio path).
+model TriggerDeployment {
+  id                String   @id @default(cuid())
+  workspaceId       String
+  flowId            String
+  triggerNodeId     String
+  /// inbound_call | call_missed | incoming_sms | …
+  triggerBlockType  String
+  /// voice | sms | email | webhook | schedule | manual
+  channel           String
+  phoneNumberId     String?
+  /// every_call | overflow | after_hours | unanswered | keyword | always
+  eventType         String   @default("every_call")
+  /// always | business_hours | custom
+  scheduleKey       String   @default("always")
+  /// draft | test | live | paused | error
+  status            String   @default("draft")
+  /// human | voicemail | backup_flow | reject
+  pauseFallback     String   @default("human")
+  pauseFallbackNumber String?
+  pauseFallbackFlowId String?
+  /// Provider payload snapshot (Telnyx connection/app ids, last error, etc.)
+  providerConfig    Json?
+  errorMessage      String?
+  deployedAt        DateTime?
+  pausedAt          DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  workspace         Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  flow              AutomationFlow @relation(fields: [flowId], references: [id], onDelete: Cascade)
+  phoneNumber       PhoneNumber? @relation(fields: [phoneNumberId], references: [id], onDelete: SetNull)
+
+  @@unique([flowId, triggerNodeId])
+  @@index([workspaceId, phoneNumberId, status])
+  @@index([workspaceId, status, eventType])
+  @@map("trigger_deployments")
 }
 
 enum AutomationExecutionStatus {

@@ -24,6 +24,7 @@ import {
 import { agentTypeFromOutcomeSlug, getAgentType } from "@/lib/agents/types";
 
 export type CompileTriggerBlock =
+  | "inbound_call"
   | "call_missed"
   | "call_completed"
   | "call_appointment_booked"
@@ -41,24 +42,42 @@ const TEMPLATE_KEYS = {
 
 /**
  * Voice agent primary workflow:
- * Trigger → Run Voice Agent → End
+ * Inbound Call (number on trigger) → Run Voice Agent → End
  *
- * Run Voice Agent starts/attaches the Telnyx realtime agent for this call.
- * It must NOT enroll this flow again via Use Agent.
+ * Activate publishes Telnyx routing from the Inbound Call trigger.
+ * Run Voice Agent starts/attaches the realtime agent — not Use Agent → self.
  */
 export function buildVoiceAgentPrimaryDefinition(input: {
-  triggerBlock: CompileTriggerBlock;
+  triggerBlock?: CompileTriggerBlock;
   triggerLabel?: string;
   agentId?: string | null;
   agentName: string;
   purpose?: string | null;
+  phoneNumberId?: string | null;
+  routingMode?: string | null;
 }): AutomationDefinition {
   const triggerId = "TRIGGER_AGENT_WORKFLOW";
   const voiceNodeId = "RUN_VOICE_AGENT";
   const endId = "END_AGENT_WORKFLOW";
-  const triggerBlock = input.triggerBlock;
+  const triggerBlock = input.triggerBlock || "inbound_call";
   const label =
-    input.triggerLabel || triggerFromBlockType(triggerBlock) || "Trigger";
+    input.triggerLabel ||
+    triggerFromBlockType(triggerBlock) ||
+    "Inbound Call";
+
+  const triggerConfig =
+    triggerBlock === "inbound_call"
+      ? {
+          phoneNumberId: input.phoneNumberId || "",
+          routingMode: input.routingMode || "every_call",
+          schedule: "always",
+          ringSeconds: 20,
+          mode: "live",
+          pauseFallback: "human",
+          pauseFallbackNumber: "",
+          pauseFallbackFlowId: "",
+        }
+      : { phoneNumberId: input.phoneNumberId || "" };
 
   const def: AutomationDefinition = {
     version: 1,
@@ -70,7 +89,7 @@ export function buildVoiceAgentPrimaryDefinition(input: {
         data: {
           blockType: triggerBlock,
           label,
-          config: {},
+          config: triggerConfig,
         },
       },
       {
@@ -134,13 +153,29 @@ export function triggerBlockFromAnswerWhen(
   switch (answerWhen) {
     case "nobody_answers":
     case "line_busy":
-      return "call_missed";
+      return "inbound_call"; // routingMode set separately to overflow/unanswered
     case "after_hours":
     case "custom_schedule":
-      return "call_missed";
+      return "inbound_call";
     case "every_call":
     default:
-      return "call_completed";
+      return "inbound_call";
+  }
+}
+
+export function routingModeFromAnswerWhen(
+  answerWhen?: string | null,
+): string {
+  switch (answerWhen) {
+    case "nobody_answers":
+    case "line_busy":
+      return "overflow";
+    case "after_hours":
+    case "custom_schedule":
+      return "after_hours";
+    case "every_call":
+    default:
+      return "every_call";
   }
 }
 
@@ -156,6 +191,8 @@ export type EnsurePrimaryWorkflowInput = {
   triggerBlock?: CompileTriggerBlock;
   triggerLabel?: string;
   purpose?: string | null;
+  phoneNumberId?: string | null;
+  routingMode?: string | null;
   activate?: boolean;
   description?: string;
 };
@@ -174,7 +211,7 @@ export async function ensureAgentPrimaryWorkflow(
   const flowName = agentWorkflowName(input.agentName);
   const triggerBlock =
     input.triggerBlock ||
-    (typeDef.family === "sms" ? "call_missed" : "call_completed");
+    (typeDef.family === "sms" ? "call_missed" : "inbound_call");
 
   const graph: AutomationDefinition =
     input.definition ||
@@ -185,6 +222,8 @@ export async function ensureAgentPrimaryWorkflow(
           agentId: input.agentId,
           agentName: input.agentName,
           purpose: input.purpose || typeDef.label,
+          phoneNumberId: input.phoneNumberId,
+          routingMode: input.routingMode,
         })
       : stampManagedDefinition(
           {

@@ -833,6 +833,133 @@ export function NodeConfigPanel({
           </>
         )}
 
+        {block === "inbound_call" && (
+          <>
+            <div>
+              <Label>Number</Label>
+              <Select
+                value={String(cfg.phoneNumberId || "")}
+                onChange={(e) =>
+                  onUpdate({
+                    config: { ...cfg, phoneNumberId: e.target.value },
+                  })
+                }
+              >
+                <option value="">Select phone number</option>
+                {numbers.map((n) => (
+                  <option key={n.id} value={n.id}>
+                    {n.number}
+                  </option>
+                ))}
+              </Select>
+              <p className="mt-1.5 text-[12px] text-muted-foreground">
+                Activating this workflow publishes Telnyx routing for this
+                number (direct audio path). My Numbers shows the same
+                deployment.
+              </p>
+            </div>
+            <div>
+              <Label>When</Label>
+              <Select
+                value={String(cfg.routingMode || "every_call")}
+                onChange={(e) =>
+                  onUpdate({
+                    config: { ...cfg, routingMode: e.target.value },
+                  })
+                }
+              >
+                <option value="every_call">Every call</option>
+                <option value="overflow">Overflow / unanswered</option>
+                <option value="after_hours">After hours</option>
+                <option value="unanswered">Unanswered only</option>
+              </Select>
+            </div>
+            <div>
+              <Label>Schedule</Label>
+              <Select
+                value={String(cfg.schedule || "always")}
+                onChange={(e) =>
+                  onUpdate({ config: { ...cfg, schedule: e.target.value } })
+                }
+              >
+                <option value="always">Always</option>
+                <option value="business_hours">Business hours</option>
+                <option value="custom">Custom</option>
+              </Select>
+            </div>
+            <div>
+              <Label>Ring seconds (overflow)</Label>
+              <Input
+                type="number"
+                min={1}
+                value={String(cfg.ringSeconds ?? 20)}
+                onChange={(e) =>
+                  onUpdate({
+                    config: {
+                      ...cfg,
+                      ringSeconds: Number(e.target.value || 20),
+                    },
+                  })
+                }
+              />
+            </div>
+            <div>
+              <Label>When this flow is paused</Label>
+              <Select
+                value={String(cfg.pauseFallback || "human")}
+                onChange={(e) =>
+                  onUpdate({
+                    config: { ...cfg, pauseFallback: e.target.value },
+                  })
+                }
+              >
+                <option value="human">Send to human / fallback number</option>
+                <option value="voicemail">Voicemail</option>
+                <option value="backup_flow">Backup workflow</option>
+                <option value="reject">Reject calls</option>
+              </Select>
+            </div>
+            {String(cfg.pauseFallback || "human") === "human" ? (
+              <div>
+                <Label>Fallback number (E.164)</Label>
+                <Input
+                  value={String(cfg.pauseFallbackNumber || "")}
+                  onChange={(e) =>
+                    onUpdate({
+                      config: {
+                        ...cfg,
+                        pauseFallbackNumber: e.target.value,
+                      },
+                    })
+                  }
+                  placeholder="+17035550198"
+                />
+              </div>
+            ) : null}
+          </>
+        )}
+
+        {(block === "call_missed" || block === "call_completed") && (
+          <div>
+            <Label>Number (optional filter)</Label>
+            <Select
+              value={String(cfg.phoneNumberId || "")}
+              onChange={(e) =>
+                onUpdate({
+                  config: { ...cfg, phoneNumberId: e.target.value },
+                })
+              }
+            >
+              <option value="">Any number</option>
+              {numbers.map((n) => (
+                <option key={n.id} value={n.id}>
+                  {n.number}
+                </option>
+              ))}
+            </Select>
+          </div>
+        )}
+
         {block === "scheduled_datetime" && (
           <>
             <div>

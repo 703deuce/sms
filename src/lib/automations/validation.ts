@@ -55,6 +55,16 @@ export function validateAutomationForPublish(
         });
       }
     }
+    if (trigger.data.blockType === "inbound_call") {
+      const phoneNumberId = String(trigger.data.config?.phoneNumberId || "").trim();
+      if (!phoneNumberId) {
+        issues.push({
+          nodeId: trigger.id,
+          message: "Inbound Call trigger requires a phone number",
+          severity: "error",
+        });
+      }
+    }
     if (trigger.data.blockType === "tag_added") {
       const tag = String(trigger.data.config?.tag || "").trim();
       if (!tag) {

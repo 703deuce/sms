@@ -166,14 +166,23 @@ if (!cycle.ok) assert.equal(cycle.error, "use_agent_cycle");
 
 import { buildVoiceAgentPrimaryDefinition } from "../src/lib/agents/compile-workflow";
 const voicePrimary = buildVoiceAgentPrimaryDefinition({
-  triggerBlock: "call_missed",
   agentId: "maya",
   agentName: "Maya",
+  phoneNumberId: "num1",
+  routingMode: "every_call",
 });
 assert.deepEqual(
   voicePrimary.nodes.map((n) => n.data.blockType),
-  ["call_missed", "run_voice_agent", "end_automation"],
+  ["inbound_call", "run_voice_agent", "end_automation"],
 );
+
+assert.ok(types.has("inbound_call"), "catalog includes inbound_call");
+
+import { extractTriggersFromDefinition } from "../src/lib/automations/trigger-deployments";
+const extracted = extractTriggersFromDefinition(voicePrimary);
+assert.equal(extracted[0]?.blockType, "inbound_call");
+assert.equal(extracted[0]?.eventType, "every_call");
+assert.equal(extracted[0]?.phoneNumberId, "num1");
 
 // 7. Shared event types present
 for (const t of [

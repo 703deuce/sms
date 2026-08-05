@@ -5,6 +5,10 @@ import { mapAutomation } from "@/lib/mappers";
 import { parseAutomationDefinition, findTriggerNode } from "@/lib/automations/types";
 import { triggerFromBlockType } from "@/lib/automations/catalog";
 import { detectAdvancedCustomization } from "@/lib/solutions/missed-call-text-back/sync";
+import {
+  activateFlowTriggers,
+  pauseFlowTriggers,
+} from "@/lib/automations/trigger-deployments";
 
 export async function GET(
   _request: Request,
@@ -103,6 +107,33 @@ export async function PATCH(
         detectAdvancedCustomization(body.definition)
       ) {
         advancedCustomized = true;
+      }
+    }
+
+    if (body.action === "pause" || status === "PAUSED") {
+      await pauseFlowTriggers(auth.workspaceId, id).catch(() => undefined);
+    }
+    if (
+      (body.action === "resume" || (body.status && body.status.toUpperCase() === "ACTIVE")) &&
+      existing.status !== "ACTIVE"
+    ) {
+      const def = parseAutomationDefinition(
+        existing.publishedDefinition ?? existing.definition,
+      );
+      const result = await activateFlowTriggers(
+        auth.workspaceId,
+        id,
+        def,
+      ).catch(() => null);
+      if (result?.conflicts.length) {
+        return NextResponse.json(
+          {
+            error: "Trigger conflict",
+            conflicts: result.conflicts,
+            message: result.conflicts[0]?.message,
+          },
+          { status: 409 },
+        );
       }
     }
 

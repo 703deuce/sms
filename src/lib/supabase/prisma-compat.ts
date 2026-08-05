@@ -39,6 +39,7 @@ const MODEL_TO_TABLE: Record<string, string> = {
   conversationMessage: "ConversationMessage",
   template: "Template",
   automationFlow: "AutomationFlow",
+  triggerDeployment: "trigger_deployments",
   automationExecution: "AutomationExecution",
   automationStepExecution: "AutomationStepExecution",
   solutionSetup: "solution_setups",
@@ -361,6 +362,12 @@ const RELATIONS: Record<string, Record<string, { table: string; fk: string; pk?:
   automationFlow: {
     workspace: { table: "Workspace", fk: "workspaceId" },
     sourceSolutionSetup: { table: "solution_setups", fk: "sourceSolutionSetupId" },
+    ownerAgent: { table: "voice_agents", fk: "ownerAgentId" },
+  },
+  triggerDeployment: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+    flow: { table: "AutomationFlow", fk: "flowId" },
+    phoneNumber: { table: "PhoneNumber", fk: "phoneNumberId" },
   },
   solutionSetup: { workspace: { table: "Workspace", fk: "workspaceId" } },
   platformEvent: { workspace: { table: "Workspace", fk: "workspaceId" } },

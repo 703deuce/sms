@@ -124,12 +124,34 @@ export const AUTOMATION_BLOCKS: BlockDefinition[] = [
     defaultConfig: { formSlug: "" },
   }),
   block({
+    blockType: "inbound_call",
+    category: "trigger",
+    label: "Inbound Call",
+    description:
+      "When a call arrives on a selected number. Activating the workflow publishes Telnyx routing for this trigger (direct audio path — automation is not in the media plane).",
+    icon: "phone",
+    defaultConfig: {
+      phoneNumberId: "",
+      /** every_call | overflow | after_hours | unanswered */
+      routingMode: "every_call",
+      /** business_hours | always | custom */
+      schedule: "always",
+      ringSeconds: 20,
+      /** test | live — live only when the flow is activated */
+      mode: "live",
+      /** human | voicemail | backup_flow | reject — used when this flow is paused */
+      pauseFallback: "human",
+      pauseFallbackNumber: "",
+      pauseFallbackFlowId: "",
+    },
+  }),
+  block({
     blockType: "call_completed",
     category: "trigger",
     label: "Call completed",
-    description: "When a voice call completes",
+    description: "When a voice call completes (post-call outcome — not live audio routing)",
     icon: "zap",
-    defaultConfig: {},
+    defaultConfig: { phoneNumberId: "" },
   }),
   block({
     blockType: "call_missed",
@@ -137,7 +159,7 @@ export const AUTOMATION_BLOCKS: BlockDefinition[] = [
     label: "Missed call",
     description: "When a call is missed, busy, cancelled, or unanswered",
     icon: "zap",
-    defaultConfig: {},
+    defaultConfig: { phoneNumberId: "" },
   }),
   block({
     blockType: "call_qualified",
@@ -774,6 +796,7 @@ export function triggerFromBlockType(blockType: string): string {
     scheduled_datetime: "Scheduled",
     tag_added: "Tag added",
     form_submitted: "Form submitted",
+    inbound_call: "Inbound Call",
     call_completed: "Call completed",
     call_missed: "Missed call",
     call_qualified: "Call qualified",
