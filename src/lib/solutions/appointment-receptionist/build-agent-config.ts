@@ -1,5 +1,6 @@
 import type { VoiceAgentConfig } from "@/lib/voice/types";
 import { parseVoiceAgentConfig } from "@/lib/voice/types";
+import { buildBusinessLocalClock } from "@/lib/voice/runtime-clock";
 import { DEFAULT_CONNECTION_GREETING } from "./defaults";
 import type { AppointmentReceptionistWizardState } from "./types";
 import {
@@ -125,6 +126,18 @@ export function buildSystemPrompt(state: AppointmentReceptionistWizardState): st
   );
   lines.push(`Tone: ${state.tone}. Speaking style: ${state.speakingStyle}.`);
   lines.push(`Primary language: ${state.language}.`);
+  lines.push("");
+  lines.push("Runtime context (injected at call start — trust these values):");
+  lines.push(`- Business timezone: {{business_timezone}}`);
+  lines.push(`- Current date: {{current_date}}`);
+  lines.push(`- Current day: {{current_day}}`);
+  lines.push(`- Current local time: {{current_time}}`);
+  lines.push(
+    "- Interpret today, tomorrow, this Friday, three hours from now, next week, and before closing using the business timezone unless the caller explicitly gives another timezone.",
+  );
+  lines.push(
+    "- Before booking, repeat the full date, day of week, time, and timezone. Never book based only on an ambiguous phrase such as \"Friday at five.\"",
+  );
   lines.push("");
   lines.push("Goals:");
   if (caps.includes("answer_questions")) {
@@ -507,15 +520,25 @@ export function buildWizardAgentConfig(
     },
     enabledBuiltinTools: Array.from(enabledTools),
     knowledgeBaseIds: base.knowledgeBaseIds || [],
-    dynamicVariables: {
-      business_name: state.businessName || state.solutionName,
-      agent_name: state.agentName || "Maya",
-      agent_role: state.role || "front-desk receptionist",
-      solution_name: state.solutionName,
-      timezone: state.timezone || "America/New_York",
-      transfer_destination_name: transferName,
-      phone_number: state.phoneNumberE164 || "",
-    },
+    dynamicVariables: (() => {
+      const clock = buildBusinessLocalClock(state.timezone || "America/New_York");
+      return {
+        business_name: state.businessName || state.solutionName,
+        agent_name: state.agentName || "Maya",
+        agent_role: state.role || "front-desk receptionist",
+        solution_name: state.solutionName,
+        timezone: state.timezone || "America/New_York",
+        business_timezone: state.timezone || "America/New_York",
+        // Publish-time fallbacks if the dynamic-variables webhook times out.
+        // Live calls overwrite these via /api/telnyx/voice/dynamic-variables.
+        current_date: clock.current_date,
+        current_day: clock.current_day,
+        current_time: clock.current_time,
+        utc_offset: clock.utc_offset,
+        transfer_destination_name: transferName,
+        phone_number: state.phoneNumberE164 || "",
+      };
+    })(),
     postCall: {
       ...(base.postCall || {}),
       extractionFields: [

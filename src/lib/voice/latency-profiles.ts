@@ -220,7 +220,9 @@ function buildFluxCascadeFields(input: {
     },
     greetingMode: "fixed",
     nativeAudio: false,
-    skipDynamicVariablesWebhook: true,
+    // Keep a fast dynvar webhook so call-start clock (current_date/time) is fresh.
+    // Timeout is 500ms on latency-optimized profiles — defaults cover webhook miss.
+    skipDynamicVariablesWebhook: false,
     telnyxFieldPlan: {
       transcription_model_deepgram_flux: "sent_and_applicable",
       eot_threshold: "sent_and_applicable",
@@ -232,7 +234,7 @@ function buildFluxCascadeFields(input: {
       on_number_seconds: "not_sent",
       endpointingMs_local: "not_sent",
       voice_settings_ultra: "sent_and_applicable",
-      dynamic_variables_webhook: "not_sent",
+      dynamic_variables_webhook: "sent_and_applicable",
     },
   };
 }
@@ -800,8 +802,9 @@ export function buildStartSpeakingPlanFromConfig(
       ? config.voiceLanguage.endpointingMs / 1000
       : plan.waitSeconds;
 
+  // Allow H-aggressive 0.05; Telnyx Flux companion floor used to be 0.1.
   const waitSeconds = Math.max(
-    0.1,
+    0.05,
     Math.min(1.5, waitFromEndpointing ?? plan.waitSeconds ?? 0.1),
   );
 

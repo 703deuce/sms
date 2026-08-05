@@ -19,7 +19,9 @@ import {
   isDeepgramFluxModel,
   isLatencyOptimizedProfile,
   isNativeAudioModel,
+  shouldSkipDynamicVariablesWebhook,
 } from "../latency-profiles";
+import { getAppBaseUrl } from "@/lib/messaging/telnyx/config";
 
 function unwrapTelnyxId(res: unknown): string | null {
   if (!res || typeof res !== "object") return null;
@@ -629,6 +631,42 @@ export async function syncTelnyxAssistant(
           err instanceof Error ? err.message : err,
         );
       }
+    }
+
+    // Call-start runtime context: defaults + fast dynvar webhook for current_date/time.
+    try {
+      const dynVars: Record<string, string> = {};
+      const raw = (config as { dynamicVariables?: Record<string, unknown> })
+        .dynamicVariables;
+      if (raw && typeof raw === "object") {
+        for (const [k, v] of Object.entries(raw)) {
+          if (v == null) continue;
+          const s = String(v).trim();
+          if (s) dynVars[k] = s;
+        }
+      }
+      const skipWebhook = shouldSkipDynamicVariablesWebhook(config);
+      const webhookBody: Record<string, unknown> = {
+        ...(Object.keys(dynVars).length ? { dynamic_variables: dynVars } : {}),
+      };
+      if (skipWebhook) {
+        webhookBody.dynamic_variables_webhook_url = null;
+        webhookBody.dynamic_variables_webhook_timeout_ms = null;
+      } else {
+        webhookBody.dynamic_variables_webhook_url = `${getAppBaseUrl()}/api/telnyx/voice/dynamic-variables`;
+        webhookBody.dynamic_variables_webhook_timeout_ms =
+          isLatencyOptimizedProfile(config.voiceTiming?.activeProfile)
+            ? 500
+            : 1500;
+      }
+      if (Object.keys(webhookBody).length) {
+        await ai.updateAssistant(assistantId, webhookBody);
+      }
+    } catch (err) {
+      console.warn(
+        "[assistant-sync] dynamic variables / webhook update failed",
+        err instanceof Error ? err.message : err,
+      );
     }
 
     return pushTools(assistantId);

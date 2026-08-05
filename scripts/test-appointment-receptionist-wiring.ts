@@ -498,6 +498,17 @@ assert(
       "Never offer, confirm, or book a day/time unless",
     ),
   );
+  assert(
+    "prompt includes call-start date/time dynvars",
+    String(cfg.instructions?.system || "").includes("{{current_date}}") &&
+      String(cfg.instructions?.system || "").includes("{{current_time}}") &&
+      String(cfg.instructions?.system || "").includes("{{business_timezone}}"),
+  );
+  assert(
+    "dynamicVariables include business_timezone + current_date",
+    Boolean(cfg.dynamicVariables?.business_timezone) &&
+      Boolean(cfg.dynamicVariables?.current_date),
+  );
 }
 
 {
