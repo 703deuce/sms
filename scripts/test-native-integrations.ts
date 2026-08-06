@@ -300,7 +300,9 @@ async function main() {
   });
 
   await ok("AI risk classification levels 1-4", async () => {
-    const { classifyActionRisk } = await import("../src/lib/integrations/framework/ai-policy");
+    const { classifyActionRisk, policyKeyForAction } = await import(
+      "../src/lib/integrations/framework/ai-policy"
+    );
     assert.equal(classifyActionRisk("search_contacts"), 1);
     assert.equal(classifyActionRisk("task.create"), 2);
     assert.equal(classifyActionRisk("contact.upsert"), 3);
@@ -308,6 +310,12 @@ async function main() {
     assert.equal(classifyActionRisk("delete_contact"), 4);
     assert.equal(classifyActionRisk("contact.add_tag", { bulk: true }), 4);
     assert.equal(classifyActionRisk("contact.add_tag", { consentChange: true }), 4);
+    assert.equal(classifyActionRisk("appointment.list_available_times"), 1);
+    assert.equal(classifyActionRisk("appointment.book"), 3);
+    // Availability is a read — must not inherit manageAppointments approval.
+    assert.equal(policyKeyForAction("appointment.list_available_times"), "readExternalData");
+    assert.equal(policyKeyForAction("appointment.book"), "manageAppointments");
+    assert.equal(policyKeyForAction("appointment.retrieve"), "readExternalData");
   });
 
   await ok("approval required for AI level 3 without approval id", async () => {

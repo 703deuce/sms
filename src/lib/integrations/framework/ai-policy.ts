@@ -63,6 +63,7 @@ export function classifyActionRisk(
   if (
     actionId === "appointment.retrieve" ||
     actionId === "appointment.get_scheduling_link" ||
+    actionId === "appointment.list_available_times" ||
     actionId === "appointment.get_cancel_url" ||
     actionId === "appointment.get_reschedule_url"
   ) {
@@ -113,6 +114,16 @@ export function policyKeyForAction(actionId: string): keyof WorkspaceAiIntegrati
   if (actionId === "ticket.create" || actionId === "ticket.update") return "createTickets";
   if (actionId.includes("ticket") && actionId.includes("reply")) return "ticketReplies";
   if (actionId.includes("ticket") && actionId.includes("note")) return "createNotes";
+  // Read-only appointment lookups must not inherit manageAppointments approval.
+  if (
+    actionId === "appointment.list_available_times" ||
+    actionId === "appointment.retrieve" ||
+    actionId === "appointment.get_scheduling_link" ||
+    actionId === "appointment.get_cancel_url" ||
+    actionId === "appointment.get_reschedule_url"
+  ) {
+    return "readExternalData";
+  }
   if (actionId.includes("appointment")) return "manageAppointments";
   if (actionId.includes("order")) return "orderNotes";
   if (actionId.includes("sms") || actionId === "send_sms") return "sendSms";
@@ -207,11 +218,13 @@ export function buildActionPreview(input: {
   };
 }
 
+export type IntegrationActionSource = "human" | "ai" | "automation" | "api" | "voice";
+
 export async function evaluateActionPolicy(input: {
   workspaceId: string;
   provider: ExternalProviderId | string;
   actionId: IntegrationActionId | string;
-  source: "human" | "ai" | "automation" | "api";
+  source: IntegrationActionSource;
   role?: string | null;
   recordCount?: number;
   approvalId?: string | null;
@@ -259,7 +272,9 @@ export async function evaluateActionPolicy(input: {
 
   // Level 4 always needs explicit current approval (never from prior chat permission alone).
   // Humans satisfy this via an in-product confirm that sets source=human.
-  if (riskLevel === 4 && input.source !== "human") {
+  // Voice runtime is the appointment agent's deploy engine — cancel/reschedule must work
+  // mid-call without a separate chat approval (destructive ops still audit-logged).
+  if (riskLevel === 4 && input.source !== "human" && input.source !== "voice") {
     if (!input.approvalId) {
       return {
         allowed: false,
@@ -276,6 +291,10 @@ export async function evaluateActionPolicy(input: {
     mode = policy[key] as PolicyMode;
   } else if (input.source === "automation") {
     mode = policy.preapprovedAutomations;
+  } else if (input.source === "voice") {
+    // Live voice tools are the appointment agent runtime (not supervised chat AI).
+    // Booking/availability must run under the Telnyx tool webhook without per-call approval.
+    mode = "allowed";
   }
 
   if (mode === "disabled") {

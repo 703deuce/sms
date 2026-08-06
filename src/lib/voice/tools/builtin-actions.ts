@@ -708,10 +708,12 @@ export async function executeBuiltinVoiceAction(input: {
       };
 
       // Prefer Calendly Scheduling API when the workspace has Calendly connected.
-      try {
-        const { getConnection } = await import("@/lib/integrations/connections");
-        const conn = await getConnection(input.workspaceId, "calendly");
-        if (conn?.status === "connected") {
+      // Never invent "internal" open-hours slots while Calendly is the live calendar —
+      // that lied to Amy on call cmshzu3kh… and blocked real booking.
+      const { getConnection } = await import("@/lib/integrations/connections");
+      const calendlyConn = await getConnection(input.workspaceId, "calendly").catch(() => null);
+      if (calendlyConn?.status === "connected") {
+        try {
           const serviceName = String(args.serviceName || args.service || "Appointment");
           const {
             assertBookingPermission,
@@ -735,50 +737,77 @@ export async function executeBuiltinVoiceAction(input: {
             },
             contactId: (args.contactId as string) || null,
             actorUserId: null,
-            source: "ai",
+            // Voice runtime — not supervised chat AI (manageAppointments approval).
+            source: "voice",
           });
-          if (result.ok) {
-            const raw =
-              (result.data as { slots?: Array<{ startsAt?: string; startTime?: string }> })
-                ?.slots ||
-              (Array.isArray(result.data) ? result.data : []);
-            const normalized = (raw as Array<{ startsAt?: string; startTime?: string }>).map(
-              (s) => ({
-                startsAt: String(s.startsAt || s.startTime || ""),
-              }),
-            );
-            let slots = filterSlotsByNoticeAndMaxDays(
-              normalized.filter((s) => s.startsAt),
-              gates.noticeMinutes,
-              gates.maxDaysAhead,
-              new Date(),
-              {
-                sameDayCutoff: gates.config.sameDayCutoff,
-                timezone: String(
-                  args.timezone || gates.config.timezone || "America/New_York",
-                ),
-              },
-            );
+          if (!result.ok) {
+            const message =
+              ("message" in result && result.message) || "Calendly availability unavailable";
+            console.warn("[voice] calendly availability rejected", message);
             return {
+              ok: false,
               provider: "calendly",
-              slots: slots.slice(0, 5),
+              slots: [],
+              error: message,
               window: { startTime: window.startTime, endTime: window.endTime },
+              speak:
+                "I'm having trouble checking the live calendar right now. I can offer another time window or take a message for the team.",
             };
           }
-        }
-      } catch (err) {
-        console.warn(
-          "[voice] calendly availability fallback",
-          err instanceof Error ? err.message : err,
-        );
-        // Permission / gate errors should surface to the model.
-        if (
-          err instanceof Error &&
-          /does not allow direct booking|minimum notice|too far ahead|Missing required/i.test(
-            err.message,
-          )
-        ) {
-          throw err;
+          const raw =
+            (result.data as { slots?: Array<{ startsAt?: string; startTime?: string }> })
+              ?.slots ||
+            (Array.isArray(result.data) ? result.data : []);
+          const normalized = (raw as Array<{ startsAt?: string; startTime?: string }>).map(
+            (s) => ({
+              startsAt: String(s.startsAt || s.startTime || ""),
+            }),
+          );
+          const slots = filterSlotsByNoticeAndMaxDays(
+            normalized.filter((s) => s.startsAt),
+            gates.noticeMinutes,
+            gates.maxDaysAhead,
+            new Date(),
+            {
+              sameDayCutoff: gates.config.sameDayCutoff,
+              timezone: String(
+                args.timezone || gates.config.timezone || "America/New_York",
+              ),
+            },
+          );
+          return {
+            ok: true,
+            provider: "calendly",
+            slots: slots.slice(0, 5),
+            window: { startTime: window.startTime, endTime: window.endTime },
+            speak:
+              slots.length === 0
+                ? "That time isn't open on the calendar. Offer the next available times or ask for another day."
+                : undefined,
+          };
+        } catch (err) {
+          console.warn(
+            "[voice] calendly availability error",
+            err instanceof Error ? err.message : err,
+          );
+          // Permission / gate errors should surface to the model.
+          if (
+            err instanceof Error &&
+            /does not allow direct booking|minimum notice|too far ahead|Missing required/i.test(
+              err.message,
+            )
+          ) {
+            throw err;
+          }
+          return {
+            ok: false,
+            provider: "calendly",
+            slots: [],
+            error: err instanceof Error ? err.message : String(err),
+            window: { startTime: window.startTime, endTime: window.endTime },
+            speak:
+              "I'm having trouble checking the live calendar right now. I can take a message for the team.",
+          };
         }
       }
       const { getAvailability } = await import("../calendar/booking");
@@ -926,9 +955,13 @@ export async function executeBuiltinVoiceAction(input: {
             }
           }
           if (!email) {
-            throw new Error(
-              "Calendly booking requires invitee email (pass email or a contact with email)",
-            );
+            return {
+              ok: false,
+              error: "email_required",
+              provider: "calendly",
+              speak:
+                "I still need an email address to confirm this on the calendar. Ask the caller for their email, then call book_appointment again.",
+            };
           }
           if (!name) name = "Caller";
           const { executeIntegrationAction } = await import(
@@ -948,7 +981,8 @@ export async function executeBuiltinVoiceAction(input: {
             },
             contactId: (args.contactId as string) || null,
             actorUserId: null,
-            source: "ai",
+            // Voice runtime — bypass supervised chat manageAppointments approval.
+            source: "voice",
           });
           if (result.ok) {
             const booked = { provider: "calendly", ok: true, ...(result.data as object) };
@@ -968,6 +1002,9 @@ export async function executeBuiltinVoiceAction(input: {
             }).catch(() => undefined);
             return booked;
           }
+          throw new Error(
+            ("message" in result && result.message) || "Calendly booking failed",
+          );
         }
       } catch (err) {
         console.warn(

@@ -397,7 +397,7 @@ export async function executeIntegrationAction(input: {
   params: Record<string, unknown>;
   contactId?: string | null;
   actorUserId?: string | null;
-  source?: "human" | "ai" | "automation" | "api";
+  source?: "human" | "ai" | "automation" | "api" | "voice";
   role?: string | null;
   approvalId?: string | null;
   payloadHash?: string | null;
