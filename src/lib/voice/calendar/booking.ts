@@ -771,14 +771,23 @@ export async function findExistingBookingForCaller(input: {
   const prisma = getPrisma();
   const windowStart = new Date(input.startsAt.getTime() - 60_000);
   const windowEnd = new Date(input.startsAt.getTime() + 60_000);
-  const rows = await prisma.voiceAppointment.findMany({
+  const rows = (await prisma.voiceAppointment.findMany({
     where: {
       workspaceId: input.workspaceId,
       startsAt: { gte: windowStart, lte: windowEnd },
       status: { notIn: ["cancelled", "canceled"] },
     },
     take: 30,
-  });
+  })) as Array<{
+    id: string;
+    serviceName: string | null;
+    staffName: string | null;
+    startsAt: Date;
+    endsAt: Date | null;
+    contactId: string | null;
+    metadata: unknown;
+    status: string;
+  }>;
   const serviceWant = input.serviceName.trim().toLowerCase();
   return (
     rows.find((r) => {
@@ -793,6 +802,18 @@ export async function findExistingBookingForCaller(input: {
   );
 }
 
+type AppointmentRow = {
+  id: string;
+  serviceName: string | null;
+  staffName: string | null;
+  startsAt: Date;
+  endsAt: Date | null;
+  timezone: string | null;
+  status: string;
+  contactId: string | null;
+  metadata: unknown;
+};
+
 /** Upcoming appointments for a caller (by contactId and/or phone). */
 export async function findAppointmentsForCaller(input: {
   workspaceId: string;
@@ -800,7 +821,7 @@ export async function findAppointmentsForCaller(input: {
   contactId?: string;
   includePast?: boolean;
   limit?: number;
-}) {
+}): Promise<AppointmentRow[]> {
   const prisma = getPrisma();
   const limit = Math.min(10, Math.max(1, Number(input.limit) || 5));
   const phone = input.phone ? normalizeE164(String(input.phone)) : "";
@@ -815,7 +836,7 @@ export async function findAppointmentsForCaller(input: {
     contactId = contact?.id || "";
   }
 
-  const upcoming = await prisma.voiceAppointment.findMany({
+  const upcoming = (await prisma.voiceAppointment.findMany({
     where: {
       workspaceId: input.workspaceId,
       status: { notIn: ["cancelled", "canceled", "completed"] },
@@ -824,7 +845,7 @@ export async function findAppointmentsForCaller(input: {
     },
     orderBy: { startsAt: "asc" },
     take: contactId ? limit : 40,
-  });
+  })) as AppointmentRow[];
 
   const matched = contactId
     ? upcoming
@@ -832,7 +853,7 @@ export async function findAppointmentsForCaller(input: {
 
   // Also scan recent metadata-only rows when contactId path found nothing.
   if (!matched.length && digits) {
-    const recent = await prisma.voiceAppointment.findMany({
+    const recent = (await prisma.voiceAppointment.findMany({
       where: {
         workspaceId: input.workspaceId,
         status: { notIn: ["cancelled", "canceled", "completed"] },
@@ -840,7 +861,7 @@ export async function findAppointmentsForCaller(input: {
       },
       orderBy: { startsAt: "asc" },
       take: 50,
-    });
+    })) as AppointmentRow[];
     return recent
       .filter((a) => appointmentBelongsToCaller(a, phone || digits, undefined))
       .slice(0, limit);
