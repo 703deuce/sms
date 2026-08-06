@@ -26,6 +26,7 @@ import { CallHandlingStep } from "./steps/call-handling-step";
 import { VoiceStep } from "./steps/voice-step";
 import { TestStep } from "./steps/test-step";
 import { ActivateStep } from "./steps/activate-step";
+import { wizardPatchFromCompanyBrain } from "@/lib/solutions/appointment-receptionist/hydrate-from-brain";
 
 const STORAGE_KEY = "transovo.appointment-receptionist.wizard.v1";
 
@@ -140,6 +141,28 @@ export function AppointmentReceptionistWizard() {
       cancelled = true;
     };
   }, [preset, searchParams, hireMode]);
+
+  // Hire path skips Information — pull Company Brain into wizard state for activation checks.
+  useEffect(() => {
+    if (!hydrated || !hireMode) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/company-brain", { cache: "no-store" });
+        if (!res.ok || cancelled) return;
+        const json = await res.json();
+        const patch = wizardPatchFromCompanyBrain(json?.data);
+        if (Object.keys(patch).length) {
+          setState((prev) => ({ ...prev, ...patch }));
+        }
+      } catch {
+        /* optional */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [hydrated, hireMode]);
 
   useEffect(() => {
     if (!hydrated) return;

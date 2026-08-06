@@ -5,7 +5,7 @@
 import type { AppointmentReceptionistWizardState } from "@/lib/solutions/appointment-receptionist/types";
 import {
   buildBusinessKnowledgePromptSection,
-  buildSystemPrompt as buildLegacySystemPrompt,
+  buildSystemPromptLegacy,
 } from "@/lib/solutions/appointment-receptionist/build-agent-config";
 import {
   normalizeWizardCollectFields,
@@ -59,7 +59,7 @@ export function buildCallerAmyPromptFromModules(
   });
 
   // Append legacy detailed sections (date/time tools, goals, privacy) for parity
-  const legacy = buildLegacySystemPrompt(state);
+  const legacy = buildSystemPromptLegacy(state);
   const legacyTail = legacy.split("Goals:").slice(1).join("Goals:");
   if (legacyTail) {
     return `${modulePrompt}\n\nGoals:${legacyTail}`;

@@ -50,6 +50,8 @@ export async function POST(request: Request) {
       name?: string;
       businessName?: string;
       cloneCalendly?: boolean;
+      provisionNumber?: boolean;
+      areaCode?: string;
     };
 
     const stamp = Date.now().toString(36);
@@ -58,6 +60,8 @@ export async function POST(request: Request) {
     const name = (body.name || "Calendly Smoke Tester").trim();
     const businessName = (body.businessName || `Cal Smoke ${stamp}`).trim();
     const cloneCalendly = body.cloneCalendly !== false;
+    const provisionNumber = body.provisionNumber === true;
+    const areaCode = body.areaCode || "415";
 
     const prisma = getPrisma();
     let user = await prisma.user.findUnique({ where: { email } });
@@ -166,6 +170,31 @@ export async function POST(request: Request) {
       }
     }
 
+    let phoneProvisioned: { e164?: string; phoneNumberId?: string } | null = null;
+    if (provisionNumber && workspaceId) {
+      try {
+        const { messagingOnboarding } = await import("@/lib/messaging/service");
+        const available = await messagingOnboarding.searchNumbers(workspaceId, areaCode, {
+          locality: "San Francisco",
+        });
+        const e164 = available[0]?.phoneNumber;
+        if (e164) {
+          await messagingOnboarding.purchaseNumber(workspaceId, e164);
+          const row = await prisma.phoneNumber.findFirst({
+            where: { workspaceId, e164 },
+            select: { id: true, e164: true },
+            orderBy: { purchasedAt: "desc" },
+          });
+          phoneProvisioned = {
+            e164: row?.e164 || e164,
+            phoneNumberId: row?.id,
+          };
+        }
+      } catch (provisionErr) {
+        console.error("[smoke-signup] provisionNumber failed", provisionErr);
+      }
+    }
+
     const session = {
       userId: user.id,
       email: user.email,
@@ -180,6 +209,7 @@ export async function POST(request: Request) {
       workspaceName: membership?.workspace?.name || businessName,
       calendlyCloned,
       calendlySourceWorkspaceId,
+      phoneProvisioned,
     });
     res.cookies.set(SESSION_COOKIE, encodeSession(session), {
       httpOnly: true,
