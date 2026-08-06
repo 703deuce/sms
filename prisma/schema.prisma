@@ -3078,7 +3078,7 @@ model IntegrationActionLog {
   workspaceId       String
   provider          String
   connectionId      String?
-  /// human | ai | automation | api
+  /// human | ai | automation | api | voice
   source            String
   actorUserId       String?
   automationFlowId  String?

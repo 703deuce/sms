@@ -4,7 +4,7 @@ export async function createIntegrationActionLog(input: {
   workspaceId: string;
   provider: string;
   connectionId?: string | null;
-  source: "human" | "ai" | "automation" | "api";
+  source: "human" | "ai" | "automation" | "api" | "voice";
   actorUserId?: string | null;
   automationFlowId?: string | null;
   actionId: string;
