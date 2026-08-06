@@ -23,10 +23,16 @@ const COMMANDS = new Set<AgentControlCommand>([
   "create_workflow_draft",
   "validate_workflow_draft",
   "list_workflow_drafts",
+  "promote_workflow_draft",
   "run_agent_test_snapshot",
+  "run_agent_test_suite",
   "activate_agent_version",
   "rollback_agent_version",
   "duplicate_agent",
+  "save_business_brain",
+  "approve_knowledge_facts",
+  "attach_missed_call_text_back",
+  "get_missed_call_handoff",
 ]);
 
 export async function POST(

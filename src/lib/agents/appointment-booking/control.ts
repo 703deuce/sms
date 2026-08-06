@@ -2,7 +2,6 @@
  * Typed Agent Control API — owner actions never write tables ad hoc.
  */
 
-import { getPrisma } from "@/lib/db";
 import { loadAppointmentBookingAgent } from "@/lib/agents/appointment-booking/load-agent";
 import {
   buildExecutionTrace,
@@ -21,14 +20,28 @@ import {
   listWorkflowDrafts,
   validateStoredWorkflowDraft,
 } from "@/lib/agents/appointment-booking/workflow-architect";
+import { promoteWorkflowDraft } from "@/lib/agents/appointment-booking/workflow-promote";
 import {
   activateAgentVersion,
   duplicateAppointmentAgent,
+  pauseAppointmentAgent,
+  resumeAppointmentAgent,
   rollbackAgentVersion,
   snapshotAgentForTest,
 } from "@/lib/agents/appointment-booking/lifecycle";
+import { runAgentTestSnapshotSuite } from "@/lib/agents/appointment-booking/test-suite";
+import {
+  attachMissedCallTextBackForAgent,
+  getMissedCallHandoff,
+} from "@/lib/agents/appointment-booking/missed-call-handoff";
+import {
+  approveKnowledgeFacts,
+  saveBusinessBrainPartial,
+} from "@/lib/agents/appointment-booking/business-brain";
+import { getPrisma } from "@/lib/db";
 import type { AgentControlCommand } from "@/lib/agents/appointment-booking/types";
-import type { BookingPolicy } from "@/lib/agents/appointment-booking/types";
+import type { BookingPolicy, BusinessBrain } from "@/lib/agents/appointment-booking/types";
+import type { AgentExecutionTrace } from "@/lib/agents/appointment-booking/types";
 
 export async function runAgentControlCommand(input: {
   workspaceId: string;
@@ -70,8 +83,9 @@ export async function runAgentControlCommand(input: {
           locations: agent.businessBrain.locations,
           services: agent.businessBrain.services,
           transferDestinations: agent.businessBrain.transferDestinations,
-          knowledgeFacts: agent.businessBrain.knowledgeFacts.slice(0, 20),
+          knowledgeFacts: agent.businessBrain.knowledgeFacts.slice(0, 40),
           prohibitedClaims: agent.businessBrain.prohibitedClaims,
+          approvedPolicies: agent.businessBrain.approvedPolicies,
         },
         resources: agent.resources,
       };
@@ -123,35 +137,19 @@ export async function runAgentControlCommand(input: {
     case "list_versions":
       return { versions: agent.versions, currentVersionId: agent.currentVersionId };
 
-    case "pause_agent": {
-      await prisma.voiceAgent.update({
-        where: { id: input.agentId },
-        data: { status: "PAUSED" },
+    case "pause_agent":
+      return pauseAppointmentAgent({
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+        userId: input.userId,
       });
-      await prisma.auditLog.create({
-        data: {
-          workspaceId: input.workspaceId,
-          event: "agent.pause",
-          detail: `agent=${input.agentId} by=${input.userId}`,
-        },
-      });
-      return { ok: true, status: "paused" };
-    }
 
-    case "resume_agent": {
-      await prisma.voiceAgent.update({
-        where: { id: input.agentId },
-        data: { status: "ACTIVE" },
+    case "resume_agent":
+      return resumeAppointmentAgent({
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+        userId: input.userId,
       });
-      await prisma.auditLog.create({
-        data: {
-          workspaceId: input.workspaceId,
-          event: "agent.resume",
-          detail: `agent=${input.agentId} by=${input.userId}`,
-        },
-      });
-      return { ok: true, status: "active" };
-    }
 
     case "owner_ask": {
       const question = String(input.payload?.question || "").trim();
@@ -228,11 +226,32 @@ export async function runAgentControlCommand(input: {
       return { drafts: listWorkflowDrafts(row?.draftConfig) };
     }
 
+    case "promote_workflow_draft":
+      return promoteWorkflowDraft({
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+        userId: input.userId,
+        draftId: String(input.payload?.draftId || ""),
+        confirm: Boolean(input.payload?.confirm),
+        activateTriggers: Boolean(input.payload?.activateTriggers ?? true),
+        attachMissedCallTextBack: Boolean(input.payload?.attachMissedCallTextBack),
+      });
+
     case "run_agent_test_snapshot":
       return snapshotAgentForTest({
         workspaceId: input.workspaceId,
         agentId: input.agentId,
         userId: input.userId,
+      });
+
+    case "run_agent_test_suite":
+      return runAgentTestSnapshotSuite({
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+        userId: input.userId,
+        tracesByScenario: input.payload?.tracesByScenario as
+          | Record<string, AgentExecutionTrace>
+          | undefined,
       });
 
     case "activate_agent_version":
@@ -263,6 +282,52 @@ export async function runAgentControlCommand(input: {
         name: input.payload?.name ? String(input.payload.name) : undefined,
         confirm: Boolean(input.payload?.confirm),
       });
+
+    case "save_business_brain":
+      return saveBusinessBrainPartial(
+        input.workspaceId,
+        (input.payload?.brain || input.payload || {}) as Partial<BusinessBrain>,
+      );
+
+    case "approve_knowledge_facts":
+      return approveKnowledgeFacts({
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+        userId: input.userId,
+        labels: Array.isArray(input.payload?.labels)
+          ? input.payload!.labels!.map(String)
+          : undefined,
+        approveAllPending: Boolean(input.payload?.approveAllPending),
+      });
+
+    case "attach_missed_call_text_back": {
+      const phoneNumberId =
+        String(input.payload?.phoneNumberId || "") ||
+        agent.phoneNumberIds[0] ||
+        "";
+      if (!phoneNumberId) throw new Error("phoneNumberId required");
+      return attachMissedCallTextBackForAgent({
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+        phoneNumberId,
+        activate: Boolean(input.payload?.activate ?? true),
+        userId: input.userId,
+        firstMessage: input.payload?.firstMessage
+          ? String(input.payload.firstMessage)
+          : undefined,
+        initialDelaySeconds:
+          input.payload?.initialDelaySeconds != null
+            ? Number(input.payload.initialDelaySeconds)
+            : 20,
+      });
+    }
+
+    case "get_missed_call_handoff": {
+      const row = await prisma.voiceAgent.findFirst({
+        where: { id: input.agentId, workspaceId: input.workspaceId },
+      });
+      return { handoff: getMissedCallHandoff(row?.draftConfig) };
+    }
 
     default:
       throw new Error(`Unsupported command: ${input.command}`);

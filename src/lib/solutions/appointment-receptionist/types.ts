@@ -47,7 +47,12 @@ export type KnowledgeSource =
   | "upload_docs"
   | "connect_data";
 
-export type KnowledgeItemStatus = "complete" | "warning" | "missing" | "optional";
+export type KnowledgeItemStatus =
+  | "complete"
+  | "warning"
+  | "missing"
+  | "optional"
+  | "pending_review";
 
 export type BookingPermission =
   | "book_directly"

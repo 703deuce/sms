@@ -30,6 +30,8 @@ type ServiceConfig = {
   minimumBookingNoticeMinutes?: number;
   maxDaysAhead?: number | string | null;
   maximumBookingDaysAhead?: number | null;
+  /** HH:mm local — stop offering/booking same-day starts at or after this time. */
+  sameDayCutoff?: string | null;
   bookingHours?: string | null;
   bookingPermission?: string | null;
   requiredFields?: string[];
@@ -81,6 +83,46 @@ async function resolveCalendarConnection(
 function slotPassesNotice(start: Date, noticeMinutes: number, now: Date) {
   if (!noticeMinutes) return true;
   return start.getTime() >= now.getTime() + noticeMinutes * 60_000;
+}
+
+/** Parse HH:mm → minutes from midnight; null if unset/invalid. */
+export function parseSameDayCutoffMinutes(cutoff?: string | null): number | null {
+  if (!cutoff) return null;
+  const m = String(cutoff).trim().match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return null;
+  const hour = Number(m[1]);
+  const minute = Number(m[2]);
+  if (hour > 23 || minute > 59) return null;
+  return hour * 60 + minute;
+}
+
+/**
+ * Same-day cutoff: if the appointment is on the same local calendar day as
+ * `now`, reject starts at or after the cutoff (in the service timezone).
+ */
+export function assertSameDayCutoff(input: {
+  startsAt: Date;
+  sameDayCutoff?: string | null;
+  timezone?: string | null;
+  now?: Date;
+}) {
+  const cutoffMins = parseSameDayCutoffMinutes(input.sameDayCutoff);
+  if (cutoffMins == null) return;
+  const tz = input.timezone || "America/New_York";
+  const now = input.now || new Date();
+  const startParts = zonedDateParts(input.startsAt, tz);
+  const nowParts = zonedDateParts(now, tz);
+  const sameDay =
+    startParts.year === nowParts.year &&
+    startParts.month === nowParts.month &&
+    startParts.day === nowParts.day;
+  if (!sameDay) return;
+  const startMins = startParts.hour * 60 + startParts.minute;
+  if (startMins >= cutoffMins) {
+    throw new Error(
+      `Same-day bookings are not accepted at or after ${input.sameDayCutoff}`,
+    );
+  }
 }
 
 export function assertBookingPermission(svcCfg: ServiceConfig) {
@@ -157,6 +199,8 @@ export function assertBookingTimingGates(input: {
   startsAt: Date;
   noticeMinutes: number;
   maxDaysAhead: number;
+  sameDayCutoff?: string | null;
+  timezone?: string | null;
   now?: Date;
 }) {
   const now = input.now || new Date();
@@ -169,6 +213,12 @@ export function assertBookingTimingGates(input: {
       throw new Error(`Booking is too far ahead — max ${input.maxDaysAhead} days`);
     }
   }
+  assertSameDayCutoff({
+    startsAt: input.startsAt,
+    sameDayCutoff: input.sameDayCutoff,
+    timezone: input.timezone,
+    now,
+  });
 }
 
 export function filterSlotsByNoticeAndMaxDays(
@@ -176,6 +226,7 @@ export function filterSlotsByNoticeAndMaxDays(
   noticeMinutes: number,
   maxDaysAhead: number,
   now = new Date(),
+  opts?: { sameDayCutoff?: string | null; timezone?: string | null },
 ) {
   const latest =
     maxDaysAhead > 0 ? new Date(now.getTime() + maxDaysAhead * 86_400_000) : null;
@@ -184,6 +235,16 @@ export function filterSlotsByNoticeAndMaxDays(
     if (Number.isNaN(start.getTime())) return false;
     if (!slotPassesNotice(start, noticeMinutes, now)) return false;
     if (latest && start.getTime() > latest.getTime()) return false;
+    try {
+      assertSameDayCutoff({
+        startsAt: start,
+        sameDayCutoff: opts?.sameDayCutoff,
+        timezone: opts?.timezone,
+        now,
+      });
+    } catch {
+      return false;
+    }
     return true;
   });
 }
@@ -267,14 +328,22 @@ async function internalAvailabilitySlots(input: {
           ...(input.staffName ? { staffName: input.staffName } : {}),
         },
       });
-      if (!conflict) {
-        slots.push({
-          startsAt: start.toISOString(),
-          endsAt: end.toISOString(),
-          staffName: input.staffName || undefined,
-          location: input.location || undefined,
-        });
-      }
+      if (conflict) continue;
+
+      const { findActiveHoldConflict } = await import("./slot-holds");
+      const holdClash = await findActiveHoldConflict({
+        workspaceId: input.workspaceId,
+        startsAt: start,
+        endsAt: end,
+      });
+      if (holdClash) continue;
+
+      slots.push({
+        startsAt: start.toISOString(),
+        endsAt: end.toISOString(),
+        staffName: input.staffName || undefined,
+        location: input.location || undefined,
+      });
     }
   }
   return slots.slice(0, 20);
@@ -458,6 +527,10 @@ export async function getAvailability(
         noticeMinutes,
         maxDaysAhead,
         new Date(),
+        {
+          sameDayCutoff: svcCfg.sameDayCutoff,
+          timezone: String(input.timezone || svcCfg.timezone || "America/New_York"),
+        },
       ).filter((s) => {
         const start = new Date(s.startsAt);
         if (windowStart && start < windowStart) return false;
@@ -541,7 +614,14 @@ export async function bookAppointment(
   const noticeMinutes = Number(svcCfg.minimumBookingNoticeMinutes || 0);
   const now = new Date();
   const maxDaysAhead = serviceMaxDaysAhead(svcCfg);
-  assertBookingTimingGates({ startsAt, noticeMinutes, maxDaysAhead, now });
+  assertBookingTimingGates({
+    startsAt,
+    noticeMinutes,
+    maxDaysAhead,
+    sameDayCutoff: svcCfg.sameDayCutoff,
+    timezone: String(args.timezone || svcCfg.timezone || "America/New_York"),
+    now,
+  });
 
   const endsAt = new Date(startsAt.getTime() + durationMinutes * 60_000);
   const phone = args.phone ? normalizeE164(String(args.phone)) : "";
@@ -582,6 +662,20 @@ export async function bookAppointment(
       message:
         "Appointment was already confirmed. You may tell the caller their booking is confirmed.",
     };
+  }
+
+  const { findActiveHoldConflict, convertHoldToAppointment } = await import(
+    "./slot-holds"
+  );
+  const holdClash = await findActiveHoldConflict({
+    workspaceId,
+    startsAt,
+    endsAt,
+    excludeCallId: callId,
+    excludePhone: phone || undefined,
+  });
+  if (holdClash) {
+    throw new Error("That time is temporarily held for another caller");
   }
 
   const conflict = await prisma.voiceAppointment.findFirst({
@@ -706,6 +800,14 @@ export async function bookAppointment(
       metadata: { ...args, location } as object,
     },
   });
+
+  await convertHoldToAppointment({
+    workspaceId,
+    appointmentId: appointment.id,
+    callId,
+    phone: phone || undefined,
+    startsAt,
+  }).catch(() => undefined);
 
   if (callId) {
     await prisma.voiceCall.update({

@@ -121,6 +121,10 @@ export function extractBookingPolicyFromConfig(
     requireFinalConfirmation: behavior.requireFinalConfirmation !== false,
     sendSmsConfirmation:
       messaging.smsConfirmations === true || tools.includes("send_sms"),
+    sendEmailConfirmation:
+      messaging.emailConfirmations === true ||
+      tools.includes("send_email") ||
+      tools.includes("send_confirmation_email"),
     bookingMode,
     sameDayCutoff:
       typeof behavior.sameDayCutoff === "string" ? behavior.sameDayCutoff : null,

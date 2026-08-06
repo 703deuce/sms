@@ -9,7 +9,40 @@ import {
   rollbackVoiceAgent,
   buildVoiceAgentForTest,
 } from "@/lib/voice/agent-service";
+import {
+  activateFlowTriggers,
+  pauseFlowTriggers,
+} from "@/lib/automations/trigger-deployments";
 import { listWorkflowDrafts } from "@/lib/agents/appointment-booking/workflow-architect";
+
+async function activatePrimaryFlowTriggers(
+  workspaceId: string,
+  agentId: string,
+) {
+  const prisma = getPrisma();
+  const agent = await prisma.voiceAgent.findFirst({
+    where: { id: agentId, workspaceId },
+  });
+  if (!agent?.primaryFlowId) {
+    return { activated: false, reason: "no_primary_flow" as const };
+  }
+  const flow = await prisma.automationFlow.findFirst({
+    where: { id: agent.primaryFlowId, workspaceId },
+  });
+  if (!flow) return { activated: false, reason: "flow_missing" as const };
+
+  const result = await activateFlowTriggers(
+    workspaceId,
+    flow.id,
+    flow.definition,
+    { forceTakeover: true },
+  );
+  await prisma.automationFlow.update({
+    where: { id: flow.id },
+    data: { status: "ACTIVE" },
+  });
+  return { activated: true, result };
+}
 
 export async function activateAgentVersion(input: {
   workspaceId: string;
@@ -26,15 +59,98 @@ export async function activateAgentVersion(input: {
     input.agentId,
     input.changeLog || "agent_control_activate",
   );
+  const triggers = await activatePrimaryFlowTriggers(
+    input.workspaceId,
+    input.agentId,
+  ).catch((err) => ({
+    activated: false as const,
+    reason: "trigger_error" as const,
+    error: err instanceof Error ? err.message : String(err),
+  }));
+
   await getPrisma().auditLog.create({
     data: {
       workspaceId: input.workspaceId,
       userId: input.userId,
       event: "agent.version_activated",
+      detail: `agent=${input.agentId} triggers=${JSON.stringify(triggers).slice(0, 300)}`,
+    },
+  });
+  return { ok: true, agent: published, triggers };
+}
+
+export async function pauseAppointmentAgent(input: {
+  workspaceId: string;
+  agentId: string;
+  userId: string;
+}) {
+  const prisma = getPrisma();
+  const agent = await prisma.voiceAgent.findFirst({
+    where: { id: input.agentId, workspaceId: input.workspaceId },
+  });
+  if (!agent) throw new Error("Agent not found");
+
+  let pauseResult = null;
+  if (agent.primaryFlowId) {
+    pauseResult = await pauseFlowTriggers(
+      input.workspaceId,
+      agent.primaryFlowId,
+    );
+    await prisma.automationFlow.update({
+      where: { id: agent.primaryFlowId },
+      data: { status: "PAUSED" },
+    }).catch(() => undefined);
+  }
+
+  await prisma.voiceAgent.update({
+    where: { id: input.agentId },
+    data: { status: "PAUSED" },
+  });
+  await prisma.auditLog.create({
+    data: {
+      workspaceId: input.workspaceId,
+      userId: input.userId,
+      event: "agent.pause",
       detail: `agent=${input.agentId}`,
     },
   });
-  return { ok: true, agent: published };
+  return { ok: true, status: "paused", pauseResult };
+}
+
+export async function resumeAppointmentAgent(input: {
+  workspaceId: string;
+  agentId: string;
+  userId: string;
+}) {
+  const prisma = getPrisma();
+  const agent = await prisma.voiceAgent.findFirst({
+    where: { id: input.agentId, workspaceId: input.workspaceId },
+  });
+  if (!agent) throw new Error("Agent not found");
+
+  await prisma.voiceAgent.update({
+    where: { id: input.agentId },
+    data: { status: "ACTIVE" },
+  });
+
+  const triggers = await activatePrimaryFlowTriggers(
+    input.workspaceId,
+    input.agentId,
+  ).catch((err) => ({
+    activated: false as const,
+    reason: "trigger_error" as const,
+    error: err instanceof Error ? err.message : String(err),
+  }));
+
+  await prisma.auditLog.create({
+    data: {
+      workspaceId: input.workspaceId,
+      userId: input.userId,
+      event: "agent.resume",
+      detail: `agent=${input.agentId}`,
+    },
+  });
+  return { ok: true, status: "active", triggers };
 }
 
 export async function rollbackAgentVersion(input: {
@@ -52,6 +168,14 @@ export async function rollbackAgentVersion(input: {
     input.agentId,
     input.versionId,
   );
+  const triggers = await activatePrimaryFlowTriggers(
+    input.workspaceId,
+    input.agentId,
+  ).catch((err) => ({
+    activated: false as const,
+    reason: "trigger_error" as const,
+    error: err instanceof Error ? err.message : String(err),
+  }));
   await getPrisma().auditLog.create({
     data: {
       workspaceId: input.workspaceId,
@@ -60,7 +184,7 @@ export async function rollbackAgentVersion(input: {
       detail: `agent=${input.agentId} version=${input.versionId}`,
     },
   });
-  return { ok: true, agent: rolled };
+  return { ok: true, agent: rolled, triggers };
 }
 
 export async function snapshotAgentForTest(input: {

@@ -29,8 +29,8 @@ export function buildBusinessKnowledgePromptSection(
   const facts = (state.knowledgeItems || []).filter((item) => {
     const summary = (item.summary || "").trim();
     if (!summary) return false;
-    // Skip unused defaults still marked missing.
-    if (item.status === "missing") return false;
+    // Skip unused defaults and unapproved website imports.
+    if (item.status === "missing" || item.status === "pending_review") return false;
     return true;
   });
 

@@ -49,6 +49,7 @@ export type BookingPolicy = {
   allowedLocations: string[];
   requireFinalConfirmation: boolean;
   sendSmsConfirmation: boolean;
+  sendEmailConfirmation: boolean;
   bookingMode: BookingMode;
   sameDayCutoff?: string | null;
 };
@@ -131,11 +132,15 @@ export type AgentMetrics = {
   callsAnswered: number;
   bookingConversationsStarted: number;
   appointmentsBooked: number;
+  appointmentsRescheduled: number;
+  appointmentsCancelled: number;
   bookingConversionRate: number;
   transfers: number;
   messagesTaken: number;
   bookingFailures: number;
   calendarFailures: number;
+  confirmationSmsSent: number;
+  confirmationEmailsSent: number;
   windowDays: number;
 };
 
@@ -234,10 +239,16 @@ export type AgentControlCommand =
   | "create_workflow_draft"
   | "validate_workflow_draft"
   | "list_workflow_drafts"
+  | "promote_workflow_draft"
   | "run_agent_test_snapshot"
+  | "run_agent_test_suite"
   | "activate_agent_version"
   | "rollback_agent_version"
-  | "duplicate_agent";
+  | "duplicate_agent"
+  | "save_business_brain"
+  | "approve_knowledge_facts"
+  | "attach_missed_call_text_back"
+  | "get_missed_call_handoff";
 
 export const DEFAULT_RANDY_NAME = "Randy";
 export const DEFAULT_RANDY_DISPLAY = "Randy — Appointment Booking Agent";

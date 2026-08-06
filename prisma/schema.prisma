@@ -195,6 +195,7 @@ model Workspace {
   voiceConversationInsights VoiceConversationInsight[]
   voiceToolExecutions VoiceToolExecution[]
   voiceAppointments VoiceAppointment[]
+  appointmentSlotHolds AppointmentSlotHold[]
   voiceTestRuns VoiceTestRun[]
   voiceComplianceProfile VoiceComplianceProfile?
   voiceUsageRecords VoiceUsageRecord[]
@@ -1946,6 +1947,33 @@ model VoiceAppointment {
 
   @@index([workspaceId, startsAt])
   @@map("voice_appointments")
+}
+
+/** Soft hold on a calendar slot while the caller confirms booking details. */
+model AppointmentSlotHold {
+  id            String   @id @default(cuid())
+  workspaceId   String
+  agentId       String?
+  callId        String?
+  contactId     String?
+  phone         String?
+  serviceName   String?
+  staffName     String?
+  startsAt      DateTime
+  endsAt        DateTime
+  timezone      String?
+  status        String   @default("held") // held | released | converted | expired
+  expiresAt     DateTime
+  convertedAppointmentId String?
+  metadata      Json?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, startsAt])
+  @@index([workspaceId, status, expiresAt])
+  @@index([callId])
+  @@map("appointment_slot_holds")
 }
 
 model VoiceTestRun {

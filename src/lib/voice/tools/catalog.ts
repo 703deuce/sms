@@ -301,6 +301,29 @@ export const TOOL_CATALOG: CatalogToolDef[] = [
     requiresIntegration: "calendar",
   },
   {
+    key: "hold_appointment_slot",
+    name: "Hold appointment slot",
+    description:
+      "Temporarily reserve a slot (default 3 minutes) while collecting final confirmation details.",
+    category: "scheduling",
+    provider: "transovo_builtin",
+    toolType: "hold_appointment_slot",
+    access: "write",
+    risk: "medium",
+    requiresIntegration: "calendar",
+  },
+  {
+    key: "release_appointment_hold",
+    name: "Release appointment hold",
+    description: "Release a temporary slot hold if the caller declines or booking fails.",
+    category: "scheduling",
+    provider: "transovo_builtin",
+    toolType: "release_appointment_hold",
+    access: "write",
+    risk: "low",
+    requiresIntegration: "calendar",
+  },
+  {
     key: "find_appointments",
     name: "Find appointments",
     description:
@@ -386,6 +409,8 @@ export const FULL_RECEPTIONIST_TOOLS = [
   "resolve_datetime",
   "calendar_availability",
   "book_appointment",
+  "hold_appointment_slot",
+  "release_appointment_hold",
   "find_appointments",
   "reschedule_appointment",
 ] as const;
@@ -679,6 +704,37 @@ export const BUILTIN_WEBHOOK_BODIES: Record<
         location: { type: "string" },
       },
       required: ["startAt", "customerPhone"],
+    },
+  },
+  hold_appointment_slot: {
+    name: "hold_appointment_slot",
+    toolType: "hold_appointment_slot",
+    description:
+      "Temporarily reserve a calendar slot (default 180s) while collecting final confirmation. Call before book_appointment when the caller is confirming details. Never invent a time — use startsAt from calendar_availability.",
+    body: {
+      type: "object",
+      properties: {
+        startsAt: { type: "string" },
+        startAt: { type: "string" },
+        serviceName: { type: "string" },
+        phone: { type: "string" },
+        durationMinutes: { type: "number" },
+        expiresInSeconds: { type: "number" },
+      },
+      required: ["startsAt"],
+    },
+  },
+  release_appointment_hold: {
+    name: "release_appointment_hold",
+    toolType: "release_appointment_hold",
+    description: "Release a temporary slot hold if the caller declines or booking cannot complete.",
+    body: {
+      type: "object",
+      properties: {
+        holdId: { type: "string" },
+        startsAt: { type: "string" },
+      },
+      required: [],
     },
   },
   find_appointments: {

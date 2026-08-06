@@ -41,6 +41,7 @@ function buildBusinessProfileText(state: AppointmentReceptionistWizardState): st
   lines.push("Business knowledge:");
   for (const item of state.knowledgeItems) {
     if (!item.summary?.trim() && item.status === "missing") continue;
+    if (item.status === "pending_review") continue;
     lines.push(`- ${item.label}: ${item.summary || item.statusLabel}`);
   }
   if (state.websiteUrl?.trim()) {

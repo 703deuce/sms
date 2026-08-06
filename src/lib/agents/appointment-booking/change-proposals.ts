@@ -284,6 +284,8 @@ function applyBookingPolicyToConfig(
     ensure("book_appointment", patch.canBook);
     ensure("calendar_availability", patch.canBook);
     ensure("resolve_datetime", patch.canBook);
+    ensure("hold_appointment_slot", patch.canBook);
+    ensure("release_appointment_hold", patch.canBook);
   }
   if (patch.canReschedule != null) ensure("reschedule_appointment", patch.canReschedule);
   if (patch.canCancel != null) ensure("cancel_appointment", patch.canCancel);
@@ -297,6 +299,9 @@ function applyBookingPolicyToConfig(
       ...(config.messaging || {}),
       ...(patch.sendSmsConfirmation != null
         ? { smsConfirmations: patch.sendSmsConfirmation }
+        : {}),
+      ...(patch.sendEmailConfirmation != null
+        ? { emailConfirmations: patch.sendEmailConfirmation }
         : {}),
     },
   };
@@ -402,6 +407,17 @@ export async function confirmChangeProposal(input: {
       ? { description: proposal.patch.identity.description }
       : {}),
   });
+
+  if (proposal.patch.bookingPolicy) {
+    const { syncBookingPolicyToVoiceServices } = await import(
+      "@/lib/agents/appointment-booking/sync-policy"
+    );
+    await syncBookingPolicyToVoiceServices({
+      workspaceId: input.workspaceId,
+      policy: proposal.patch.bookingPolicy,
+      serviceNames: proposal.patch.bookingPolicy.allowedServices,
+    });
+  }
 
   let published = null;
   if (input.publish) {

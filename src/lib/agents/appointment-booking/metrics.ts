@@ -37,14 +37,28 @@ export async function buildAgentMetrics(input: {
   ).length;
 
   const appointments = callIds.length
-    ? await prisma.voiceAppointment.count({
+    ? await prisma.voiceAppointment.findMany({
         where: {
           workspaceId: input.workspaceId,
           createdAt: { gte: since },
           callId: { in: callIds },
         },
+        select: { status: true, callId: true },
+        take: 500,
       })
-    : 0;
+    : [];
+
+  const allRecentAppts = appointments;
+  const appointmentsBooked = Math.max(
+    bookedCalls,
+    appointments.filter((a: { status: string }) => a.status !== "cancelled").length,
+  );
+  const appointmentsRescheduled = allRecentAppts.filter((a: { status: string }) =>
+    /reschedul/i.test(String(a.status)),
+  ).length;
+  const appointmentsCancelled = allRecentAppts.filter(
+    (a: { status: string }) => String(a.status).toLowerCase() === "cancelled",
+  ).length;
 
   const toolFails = callIds.length
     ? await prisma.voiceToolExecution.count({
@@ -56,7 +70,66 @@ export async function buildAgentMetrics(input: {
       })
     : 0;
 
-  const appointmentsBooked = Math.max(bookedCalls, appointments);
+  const toolRows = callIds.length
+    ? await prisma.voiceToolExecution.findMany({
+        where: {
+          workspaceId: input.workspaceId,
+          callId: { in: callIds },
+          status: { in: ["succeeded", "success", "ok", "COMPLETED", "completed"] },
+        },
+        select: { toolId: true, input: true, output: true },
+        take: 500,
+      })
+    : [];
+
+  // Resolve tool types when available
+  const toolIds = [
+    ...new Set(
+      toolRows
+        .map((t: { toolId?: string | null }) => t.toolId)
+        .filter(Boolean) as string[],
+    ),
+  ];
+  const tools =
+    toolIds.length > 0
+      ? await prisma.voiceTool.findMany({
+          where: { id: { in: toolIds } },
+          select: { id: true, toolType: true, name: true },
+        })
+      : [];
+  const typeById = new Map(
+    tools.map((t: { id: string; toolType: string; name: string }) => [
+      t.id,
+      String(t.toolType || t.name || ""),
+    ]),
+  );
+
+  let confirmationSmsSent = 0;
+  let confirmationEmailsSent = 0;
+  let calendarFailures = 0;
+  for (const row of toolRows) {
+    const type = String(typeById.get(String(row.toolId || "")) || "");
+    if (/send_sms/i.test(type)) confirmationSmsSent += 1;
+    if (/send_email|confirmation_email/i.test(type)) confirmationEmailsSent += 1;
+  }
+  const failRows = callIds.length
+    ? await prisma.voiceToolExecution.findMany({
+        where: {
+          workspaceId: input.workspaceId,
+          callId: { in: callIds },
+          status: { in: ["failed", "error", "FAILED"] },
+        },
+        select: { toolId: true },
+        take: 200,
+      })
+    : [];
+  for (const row of failRows) {
+    const type = String(typeById.get(String(row.toolId || "")) || "");
+    if (/calendar|book_appointment|availability/i.test(type)) {
+      calendarFailures += 1;
+    }
+  }
+
   const bookingConversationsStarted = calls.length;
   const bookingConversionRate =
     bookingConversationsStarted > 0
@@ -67,11 +140,15 @@ export async function buildAgentMetrics(input: {
     callsAnswered: calls.length,
     bookingConversationsStarted,
     appointmentsBooked,
+    appointmentsRescheduled,
+    appointmentsCancelled,
     bookingConversionRate,
     transfers,
     messagesTaken,
     bookingFailures: toolFails,
-    calendarFailures: toolFails,
+    calendarFailures: calendarFailures || toolFails,
+    confirmationSmsSent,
+    confirmationEmailsSent,
     windowDays,
   };
 }

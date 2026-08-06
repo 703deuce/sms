@@ -75,6 +75,19 @@ export function AppointmentAgentDetail({ agentId }: { agentId: string }) {
   const [question, setQuestion] = useState("");
   const [busy, setBusy] = useState(false);
   const [pendingProposalId, setPendingProposalId] = useState<string | null>(null);
+  const [testSuite, setTestSuite] = useState<{
+    results?: Array<{
+      scenarioId: string;
+      name: string;
+      status: string;
+      expectedTools?: string[];
+      callerScript?: string[];
+      note?: string;
+      failureReason?: string | null;
+    }>;
+    summary?: { total: number; passed: number; pending: number; failed: number };
+  } | null>(null);
+  const [mctbHandoff, setMctbHandoff] = useState<Record<string, unknown> | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -122,10 +135,10 @@ export function AppointmentAgentDetail({ agentId }: { agentId: string }) {
   }, [tab, agent, runCommand]);
 
   useEffect(() => {
-    if ((tab !== "versions" && tab !== "workflows") || !agent) return;
+    if ((tab !== "versions" && tab !== "workflows" && tab !== "setup" && tab !== "test") || !agent) return;
     void (async () => {
       try {
-        if (tab === "versions") {
+        if (tab === "versions" || tab === "workflows") {
           const data = await runCommand("list_change_proposals");
           setProposals(data.proposals || []);
         }
@@ -133,8 +146,16 @@ export function AppointmentAgentDetail({ agentId }: { agentId: string }) {
           const data = await runCommand("list_workflow_drafts");
           setWorkflowDrafts(data.drafts || []);
         }
+        if (tab === "setup") {
+          const data = await runCommand("get_missed_call_handoff");
+          setMctbHandoff((data.handoff as Record<string, unknown>) || null);
+        }
+        if (tab === "test") {
+          const data = await runCommand("run_agent_test_suite");
+          setTestSuite(data);
+        }
       } catch {
-        /* ignore */
+        /* ignore load errors for optional panels */
       }
     })();
   }, [tab, agent, runCommand]);
@@ -427,6 +448,67 @@ export function AppointmentAgentDetail({ agentId }: { agentId: string }) {
               title="Permissions"
               body={`Book ${agent.bookingPolicy.canBook ? "yes" : "no"} · Reschedule ${agent.bookingPolicy.canReschedule ? "yes" : "no"} · Cancel ${agent.bookingPolicy.canCancel ? "yes" : "no"}`}
             />
+            <div className="md:col-span-2 space-y-3 rounded-xl border border-slate-100 px-4 py-3">
+              <p className="text-sm font-semibold text-slate-900">Shared business brain</p>
+              <p className="text-[12px] text-slate-600">
+                {agent.businessBrain.knowledgeFacts.length} approved fact(s). Website imports
+                stay pending until you approve them.
+              </p>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() =>
+                  void (async () => {
+                    setBusy(true);
+                    try {
+                      await runCommand("approve_knowledge_facts", {
+                        approveAllPending: true,
+                      });
+                      await load();
+                    } catch (err) {
+                      setError(err instanceof Error ? err.message : String(err));
+                    } finally {
+                      setBusy(false);
+                    }
+                  })()
+                }
+                className="rounded-lg border border-slate-200 px-3 py-1.5 text-[12px] font-semibold text-slate-700"
+              >
+                Approve pending website imports
+              </button>
+            </div>
+            <div className="md:col-span-2 space-y-3 rounded-xl border border-slate-100 px-4 py-3">
+              <p className="text-sm font-semibold text-slate-900">Missed-call text-back handoff</p>
+              <p className="text-[12px] text-slate-600">
+                {mctbHandoff
+                  ? `Attached · flow ${String((mctbHandoff as { flowId?: string }).flowId || "—")}`
+                  : "Not attached — missed calls will not get an SMS follow-up yet."}
+              </p>
+              <button
+                type="button"
+                disabled={busy || !agent.phoneNumberIds[0]}
+                onClick={() =>
+                  void (async () => {
+                    setBusy(true);
+                    try {
+                      const data = await runCommand("attach_missed_call_text_back", {
+                        activate: true,
+                        phoneNumberId: agent.phoneNumberIds[0],
+                      });
+                      setMctbHandoff(data);
+                      await load();
+                    } catch (err) {
+                      setError(err instanceof Error ? err.message : String(err));
+                    } finally {
+                      setBusy(false);
+                    }
+                  })()
+                }
+                className="rounded-lg bg-slate-900 px-3 py-1.5 text-[12px] font-semibold text-white disabled:opacity-50"
+              >
+                Attach missed-call text-back
+              </button>
+            </div>
             <div className="md:col-span-2">
               <Link
                 href={
@@ -497,6 +579,60 @@ export function AppointmentAgentDetail({ agentId }: { agentId: string }) {
                     ) : (
                       <p className="mt-1 text-[12px] text-emerald-700">Validation passed</p>
                     )}
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() =>
+                          void (async () => {
+                            setBusy(true);
+                            try {
+                              await runCommand("validate_workflow_draft", {
+                                draftId: d.id,
+                              });
+                              const data = await runCommand("list_workflow_drafts");
+                              setWorkflowDrafts(data.drafts || []);
+                            } catch (err) {
+                              setError(err instanceof Error ? err.message : String(err));
+                            } finally {
+                              setBusy(false);
+                            }
+                          })()
+                        }
+                        className="rounded-lg border border-slate-200 px-3 py-1.5 text-[12px] font-semibold text-slate-700"
+                      >
+                        Re-validate
+                      </button>
+                      {d.status !== "activated" ? (
+                        <button
+                          type="button"
+                          disabled={busy || d.validationStatus !== "valid"}
+                          onClick={() =>
+                            void (async () => {
+                              setBusy(true);
+                              try {
+                                await runCommand("promote_workflow_draft", {
+                                  draftId: d.id,
+                                  confirm: true,
+                                  activateTriggers: true,
+                                  attachMissedCallTextBack: true,
+                                });
+                                await load();
+                                const data = await runCommand("list_workflow_drafts");
+                                setWorkflowDrafts(data.drafts || []);
+                              } catch (err) {
+                                setError(err instanceof Error ? err.message : String(err));
+                              } finally {
+                                setBusy(false);
+                              }
+                            })()
+                          }
+                          className="rounded-lg bg-emerald-600 px-3 py-1.5 text-[12px] font-semibold text-white disabled:opacity-50"
+                        >
+                          Promote to live workflow
+                        </button>
+                      ) : null}
+                    </div>
                   </div>
                 ))
               )}
@@ -505,19 +641,63 @@ export function AppointmentAgentDetail({ agentId }: { agentId: string }) {
         ) : null}
 
         {tab === "test" ? (
-          <div className="space-y-3 text-sm">
+          <div className="space-y-4 text-sm">
             <p>
-              Use a live WebRTC test against the Telnyx assistant. Tests must prove tool
-              outcomes — completing a call alone is not a pass.
+              Tests must prove tool outcomes — completing a call alone is not a pass.
+              Build a Telnyx test snapshot, then run live WebRTC scenarios and score traces.
             </p>
-            <ul className="list-disc space-y-1 pl-5 text-slate-600">
-              <li>New caller books an available appointment</li>
-              <li>Caller says “tomorrow at five”</li>
-              <li>Requested slot unavailable</li>
-              <li>Calendar failure / booking timeout</li>
-              <li>Transfer requested and transfer failure</li>
-            </ul>
+            {testSuite?.summary ? (
+              <p className="text-[12px] text-slate-600">
+                Suite: {testSuite.summary.passed} passed · {testSuite.summary.failed} failed ·{" "}
+                {testSuite.summary.pending} pending / {testSuite.summary.total}
+              </p>
+            ) : null}
+            <div className="space-y-2">
+              {(testSuite?.results || []).map((r) => (
+                <div key={r.scenarioId} className="rounded-xl border border-slate-100 px-4 py-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="font-medium text-slate-900">{r.name}</p>
+                    <span className="text-[11px] capitalize text-slate-500">{r.status}</span>
+                  </div>
+                  <p className="mt-1 text-[12px] text-slate-500">
+                    Tools: {(r.expectedTools || []).join(", ")}
+                  </p>
+                  {r.callerScript?.length ? (
+                    <p className="mt-1 text-[12px] text-slate-500">
+                      Script: {r.callerScript.join(" → ")}
+                    </p>
+                  ) : null}
+                  {r.note ? (
+                    <p className="mt-1 text-[12px] text-amber-700">{r.note}</p>
+                  ) : null}
+                  {r.failureReason ? (
+                    <p className="mt-1 text-[12px] text-rose-600">{r.failureReason}</p>
+                  ) : null}
+                </div>
+              ))}
+            </div>
             <div className="flex flex-wrap gap-2 pt-2">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() =>
+                  void (async () => {
+                    setBusy(true);
+                    try {
+                      await runCommand("run_agent_test_snapshot");
+                      const data = await runCommand("run_agent_test_suite");
+                      setTestSuite(data);
+                    } catch (err) {
+                      setError(err instanceof Error ? err.message : String(err));
+                    } finally {
+                      setBusy(false);
+                    }
+                  })()
+                }
+                className="rounded-lg bg-slate-900 px-3 py-2 text-[12px] font-semibold text-white"
+              >
+                Build test snapshot + refresh suite
+              </button>
               <Link
                 href={`/voice/agents/${agent.voiceAgentId}`}
                 className="rounded-lg bg-blue-600 px-3 py-2 text-[12px] font-semibold text-white"
@@ -568,11 +748,15 @@ export function AppointmentAgentDetail({ agentId }: { agentId: string }) {
               ["Calls answered", agent.metrics.callsAnswered],
               ["Booking conversations", agent.metrics.bookingConversationsStarted],
               ["Appointments booked", agent.metrics.appointmentsBooked],
+              ["Rescheduled", agent.metrics.appointmentsRescheduled],
+              ["Cancelled", agent.metrics.appointmentsCancelled],
               ["Conversion", `${agent.metrics.bookingConversionRate}%`],
               ["Transfers", agent.metrics.transfers],
               ["Messages taken", agent.metrics.messagesTaken],
               ["Booking failures", agent.metrics.bookingFailures],
               ["Calendar failures", agent.metrics.calendarFailures],
+              ["Confirmation SMS", agent.metrics.confirmationSmsSent],
+              ["Confirmation email", agent.metrics.confirmationEmailsSent],
             ].map(([label, value]) => (
               <div key={String(label)} className="rounded-xl bg-slate-50 p-4">
                 <p className="text-[11px] uppercase tracking-wide text-slate-400">{label}</p>

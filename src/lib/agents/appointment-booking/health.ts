@@ -52,7 +52,7 @@ export async function buildAgentHealth(input: {
     ...(input.linkedPhoneNumberIds || []),
   ].filter(Boolean);
 
-  const [phone, calendars, flow, deployment, reg] = await Promise.all([
+  const [phone, calendars, flow, deployment, reg, transfers] = await Promise.all([
     phoneIds[0]
       ? prisma.phoneNumber.findFirst({
           where: { id: phoneIds[0], workspaceId: input.workspaceId },
@@ -84,6 +84,10 @@ export async function buildAgentHealth(input: {
         })
       : Promise.resolve(null),
     getRegistrationByWorkspace(input.workspaceId).catch(() => null),
+    prisma.voiceTransferDestination.findMany({
+      where: { workspaceId: input.workspaceId, agentId: input.agentId },
+      take: 20,
+    }),
   ]);
 
   const messagingReady = isMessagingReady(reg);
@@ -117,11 +121,18 @@ export async function buildAgentHealth(input: {
         true,
       );
 
-  const transferTargets = check(
-    "healthy",
-    "Transfer targets follow agent call-handling settings",
-    false,
-  );
+  const transferTargets =
+    (transfers || []).length > 0
+      ? check(
+          "healthy",
+          `${transfers.length} transfer destination(s) configured`,
+          false,
+        )
+      : check(
+          "warning",
+          "No transfer destinations configured for this agent",
+          false,
+        );
 
   const smsConfirmation = input.sendSmsConfirmation
     ? messagingReady

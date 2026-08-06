@@ -11,4 +11,8 @@ export * from "@/lib/agents/appointment-booking/owner-chat";
 export * from "@/lib/agents/appointment-booking/change-proposals";
 export * from "@/lib/agents/appointment-booking/workflow-validator";
 export * from "@/lib/agents/appointment-booking/workflow-architect";
+export * from "@/lib/agents/appointment-booking/workflow-promote";
 export * from "@/lib/agents/appointment-booking/lifecycle";
+export * from "@/lib/agents/appointment-booking/missed-call-handoff";
+export * from "@/lib/agents/appointment-booking/sync-policy";
+export * from "@/lib/agents/appointment-booking/test-suite";

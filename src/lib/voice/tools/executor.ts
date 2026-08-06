@@ -101,7 +101,12 @@ async function runToolByType(
     case "cold_transfer":
       return await runTransferTool(input.workspaceId, config, input.callId, tool.toolType, input.input || {});
     case "book_appointment":
-    case "calendar_availability": {
+    case "calendar_availability":
+    case "hold_appointment_slot":
+    case "release_appointment_hold":
+    case "find_appointments":
+    case "reschedule_appointment":
+    case "cancel_appointment": {
       // Same Calendly-preferring path as builtin tools.
       const { executeBuiltinVoiceAction } = await import("./builtin-actions");
       return await executeBuiltinVoiceAction({

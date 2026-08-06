@@ -78,11 +78,13 @@ export async function loadBusinessBrain(
     const label = String(row.label || "").trim();
     const summary = String(row.summary || "").trim();
     if (!label || !summary) continue;
-    if (String(row.status || "") === "missing") continue;
+    const status = String(row.status || "complete");
+    // Website imports start as pending_review — only approved facts enter the shared brain.
+    if (status === "missing" || status === "pending_review") continue;
     knowledgeFacts.push({
       label,
       summary,
-      status: String(row.status || "complete"),
+      status,
     });
   }
   for (const src of sources) {
@@ -184,4 +186,88 @@ export async function saveBusinessBrainPartial(
     },
   });
   return loadBusinessBrain(workspaceId);
+}
+
+/**
+ * Approve website-imported / pending knowledge facts into the shared brain
+ * and mark matching wizard knowledgeItems as complete.
+ */
+export async function approveKnowledgeFacts(input: {
+  workspaceId: string;
+  agentId: string;
+  userId: string;
+  labels?: string[];
+  approveAllPending?: boolean;
+}): Promise<{
+  approved: Array<{ label: string; summary: string }>;
+  brain: BusinessBrain;
+}> {
+  const prisma = getPrisma();
+  const agent = await prisma.voiceAgent.findFirst({
+    where: { id: input.agentId, workspaceId: input.workspaceId },
+  });
+  if (!agent) throw new Error("Agent not found");
+
+  const draft = asRecord(agent.draftConfig);
+  const items = Array.isArray(draft.knowledgeItems) ? [...draft.knowledgeItems] : [];
+  const approved: Array<{ label: string; summary: string }> = [];
+
+  const nextItems = items.map((raw) => {
+    const row = asRecord(raw);
+    const label = String(row.label || "").trim();
+    const summary = String(row.summary || "").trim();
+    const status = String(row.status || "");
+    const pending = status === "pending_review" || status === "warning";
+    const labelMatch =
+      !input.labels?.length ||
+      input.labels.some((l) => l.toLowerCase() === label.toLowerCase());
+    if (!summary || !labelMatch) return raw;
+    if (!(input.approveAllPending ? pending || status === "complete" : pending)) {
+      return raw;
+    }
+    if (!pending && status !== "complete") return raw;
+    if (pending) {
+      approved.push({ label, summary });
+      return {
+        ...row,
+        status: "complete",
+        statusLabel: "Approved",
+        approvedAt: new Date().toISOString(),
+        approvedBy: input.userId,
+      };
+    }
+    if (status === "complete" && input.approveAllPending) {
+      approved.push({ label, summary });
+    }
+    return raw;
+  });
+
+  const { updateVoiceAgentDraft } = await import("@/lib/voice/agent-service");
+  const { parseVoiceAgentConfig } = await import("@/lib/voice/types");
+  const parsed = parseVoiceAgentConfig(agent.draftConfig);
+  await updateVoiceAgentDraft(input.workspaceId, input.agentId, {
+    draftConfig: {
+      ...parsed,
+      knowledgeItems: nextItems,
+    } as typeof parsed & { knowledgeItems: unknown[] },
+  });
+
+  const brain = await saveBusinessBrainPartial(input.workspaceId, {
+    knowledgeFacts: approved.map((a) => ({
+      label: a.label,
+      summary: a.summary,
+      status: "complete",
+    })),
+  });
+
+  await prisma.auditLog.create({
+    data: {
+      workspaceId: input.workspaceId,
+      userId: input.userId,
+      event: "agent.knowledge_facts_approved",
+      detail: `agent=${input.agentId} count=${approved.length}`,
+    },
+  });
+
+  return { approved, brain };
 }
