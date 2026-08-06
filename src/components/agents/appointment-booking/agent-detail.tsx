@@ -485,6 +485,14 @@ export function AppointmentAgentDetail({ agentId }: { agentId: string }) {
                 <p className="text-sm text-slate-500">No recommended actions right now.</p>
               )}
             </div>
+            <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+              <p className="font-semibold text-slate-900">How {agent.identity.name} runs after activation</p>
+              <p className="mt-1 text-[12px] text-slate-600">
+                Caller dials her number → Telnyx answers with the published assistant → booking
+                tools hit your calendar (with slot holds) → outcomes and traces show here.
+                Tell her what to change in Talk → confirm → she republishes to the live line.
+              </p>
+            </div>
             <div>
               <h2 className="text-sm font-semibold text-slate-900">Last deployment</h2>
               <p className="mt-1 text-sm text-slate-600">
@@ -560,6 +568,49 @@ export function AppointmentAgentDetail({ agentId }: { agentId: string }) {
               <p className="rounded-lg bg-blue-50 px-3 py-2 text-[12px] text-blue-800">
                 {chatStatus}
               </p>
+            ) : null}
+            {pendingProposalId ? (
+              <div className="rounded-xl border border-amber-200 bg-amber-50/50 px-4 py-3">
+                <p className="text-sm font-semibold text-slate-900">
+                  Draft change waiting — not on the phone line yet
+                </p>
+                <p className="mt-1 text-[12px] text-slate-600">
+                  Proposal {pendingProposalId.slice(0, 10)}… Confirm to publish to callers, or say
+                  “yes, put it live” in chat.
+                </p>
+                <button
+                  type="button"
+                  disabled={busy}
+                  className="mt-3 rounded-lg bg-emerald-600 px-3 py-2 text-[12px] font-semibold text-white"
+                  onClick={() =>
+                    void (async () => {
+                      setBusy(true);
+                      try {
+                        await runCommand("confirm_change_proposal", {
+                          proposalId: pendingProposalId,
+                          confirm: true,
+                          publish: true,
+                        });
+                        setPendingProposalId(null);
+                        setChat((prev) => [
+                          ...prev,
+                          {
+                            role: "agent",
+                            text: "Change is live on the phone line now.",
+                          },
+                        ]);
+                        await load();
+                      } catch (err) {
+                        setError(err instanceof Error ? err.message : String(err));
+                      } finally {
+                        setBusy(false);
+                      }
+                    })()
+                  }
+                >
+                  Put change live
+                </button>
+              </div>
             ) : null}
             <div className="flex flex-wrap gap-2">
               {SUGGESTED.map((s) => (
@@ -752,9 +803,10 @@ export function AppointmentAgentDetail({ agentId }: { agentId: string }) {
               <span className="font-semibold">{agent.resources.workflowLabel}</span>
             </p>
             <p className="text-slate-600">
-              Live audio stays on Telnyx. The Workflow Architect can draft approved
-              node graphs only — never arbitrary code. Drafts stay inactive until
-              you confirm after tests.
+              Live phone conversations run on Telnyx with Amy’s booking tools (availability,
+              hold, book, verify). Automation workflows own inbound routing, post-call SMS,
+              and around-the-call steps — they do not replace turn-by-turn speech.
+              The Workflow Architect drafts approved node graphs only; promote after tests.
             </p>
             {agent.primaryFlowId ? (
               <Link
@@ -1313,6 +1365,33 @@ export function AppointmentAgentDetail({ agentId }: { agentId: string }) {
                                 await runCommand("confirm_change_proposal", {
                                   proposalId: p.id,
                                   confirm: true,
+                                  publish: true,
+                                });
+                                await load();
+                                const data = await runCommand("list_change_proposals");
+                                setProposals(data.proposals || []);
+                                setPendingProposalId(null);
+                              } catch (err) {
+                                setError(err instanceof Error ? err.message : String(err));
+                              } finally {
+                                setBusy(false);
+                              }
+                            })()
+                          }
+                          className="rounded-lg bg-emerald-600 px-3 py-1.5 text-[12px] font-semibold text-white"
+                        >
+                          Put change live
+                        </button>
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() =>
+                            void (async () => {
+                              setBusy(true);
+                              try {
+                                await runCommand("confirm_change_proposal", {
+                                  proposalId: p.id,
+                                  confirm: true,
                                   publish: false,
                                 });
                                 await load();
@@ -1326,35 +1405,9 @@ export function AppointmentAgentDetail({ agentId }: { agentId: string }) {
                               }
                             })()
                           }
-                          className="rounded-lg bg-slate-900 px-3 py-1.5 text-[12px] font-semibold text-white"
+                          className="rounded-lg border border-slate-200 px-3 py-1.5 text-[12px] font-semibold text-slate-700"
                         >
-                          Apply to draft
-                        </button>
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={() =>
-                            void (async () => {
-                              setBusy(true);
-                              try {
-                                await runCommand("confirm_change_proposal", {
-                                  proposalId: p.id,
-                                  confirm: true,
-                                  publish: true,
-                                });
-                                await load();
-                                const data = await runCommand("list_change_proposals");
-                                setProposals(data.proposals || []);
-                              } catch (err) {
-                                setError(err instanceof Error ? err.message : String(err));
-                              } finally {
-                                setBusy(false);
-                              }
-                            })()
-                          }
-                          className="rounded-lg bg-blue-600 px-3 py-1.5 text-[12px] font-semibold text-white"
-                        >
-                          Apply + publish
+                          Save draft only
                         </button>
                         <button
                           type="button"

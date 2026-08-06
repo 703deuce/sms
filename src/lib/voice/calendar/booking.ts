@@ -487,17 +487,27 @@ export async function getAvailability(
               weekdaysOnly: hours?.weekdaysOnly,
             },
           );
-          const slots = raw
+          const windowed = raw
             .filter((s) => {
               const start = new Date(s.startsAt);
               if (windowStart && start < windowStart) return false;
               if (windowEnd && start >= windowEnd) return false;
-              return slotPassesNotice(start, noticeMinutes, new Date());
+              return true;
             })
             .map((s) => ({
               ...s,
               location: locationFilter || locations[0] || undefined,
             }));
+          const slots = filterSlotsByNoticeAndMaxDays(
+            windowed,
+            noticeMinutes,
+            maxDaysAhead,
+            new Date(),
+            {
+              sameDayCutoff: svcCfg.sameDayCutoff,
+              timezone,
+            },
+          ) as Slot[];
           return { slots: slots.slice(0, maxSlots) };
         }
       } catch (err) {
@@ -579,14 +589,34 @@ export async function getAvailability(
       allSlots.push(...memberSlots);
       if (allSlots.length >= maxSlots) break;
     }
-    return { slots: allSlots.slice(0, maxSlots) };
+    const filtered = filterSlotsByNoticeAndMaxDays(
+      allSlots,
+      noticeMinutes,
+      maxDaysAhead,
+      new Date(),
+      {
+        sameDayCutoff: svcCfg.sameDayCutoff,
+        timezone,
+      },
+    ) as Slot[];
+    return { slots: filtered.slice(0, maxSlots) };
   }
 
   const slots = await internalAvailabilitySlots({
     ...slotOpts,
     location: locationFilter || locations[0],
   });
-  return { slots: slots.slice(0, maxSlots) };
+  const filtered = filterSlotsByNoticeAndMaxDays(
+    slots,
+    noticeMinutes,
+    maxDaysAhead,
+    new Date(),
+    {
+      sameDayCutoff: svcCfg.sameDayCutoff,
+      timezone,
+    },
+  ) as Slot[];
+  return { slots: filtered.slice(0, maxSlots) };
 }
 export async function bookAppointment(
   workspaceId: string,

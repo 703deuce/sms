@@ -3,7 +3,19 @@
 **Rule:** wrap live systems (`VoiceAgent`); do not create a parallel Agent table.  
 **Upgrade rule:** extend the existing operating layer — no second agent/workflow/booking system.
 
-## Hire & train journey (customer-facing)
+## After train — what is actually live
+
+| Path | Status |
+|---|---|
+| Wizard Activate → Telnyx publish + TeXML DID + primary AutomationFlow ACTIVE | **FULLY** (fail-closed on publish error) |
+| Live turns = Telnyx assistant + booking tools (not AutomationFlow nodes) | **FULLY** |
+| AutomationFlow = inbound enroll + post-call / around-call | **FULLY** |
+| Slot holds + book gates (incl. same-day cutoff) | **FULLY** |
+| Availability offers respect same-day cutoff (Google/MS/internal) | **FULLY** |
+| Owner NL change → proposal → “yes / Put change live” → VoiceService sync + Telnyx republish | **FULLY** (live agents publish by default) |
+| Workflow Architect drafts → promote to primary flow | **FULLY** (optional; first hire uses compiled template) |
+
+**How to change Amy after go-live:** Talk → she drafts a proposal → confirm with **Put change live** or say “yes, put it live”. That updates booking policy, syncs calendar service gates, and republishes the Telnyx assistant.
 
 | Step | Route / surface | Status |
 |---|---|---|

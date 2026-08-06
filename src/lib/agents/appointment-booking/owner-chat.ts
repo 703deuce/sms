@@ -59,6 +59,60 @@ export async function answerOwnerQuestion(input: {
     "Test yourself",
   ];
 
+  // Confirm pending proposal from conversation ("yes", "put it live", "activate this")
+  if (
+    input.userId &&
+    /^(yes|yep|yeah|confirm|approve|go ahead|do it|activate|put (it|this) live|publish)\b/.test(
+      q,
+    )
+  ) {
+    const { listChangeProposals, confirmChangeProposal } = await import(
+      "@/lib/agents/appointment-booking/change-proposals"
+    );
+    const { getPrisma } = await import("@/lib/db");
+    const row = await getPrisma().voiceAgent.findFirst({
+      where: { id: input.agentId, workspaceId: input.workspaceId },
+      select: { draftConfig: true },
+    });
+    const pending = listChangeProposals(row?.draftConfig).find(
+      (p) => p.status === "pending",
+    );
+    if (pending) {
+      const result = await confirmChangeProposal({
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+        userId: input.userId,
+        proposalId: pending.id,
+        confirm: true,
+        publish: true,
+      });
+      return {
+        answer: result.live
+          ? `Done. “${pending.summary}” is live on the phone line now (published to Telnyx). Callers will get the new behavior on the next call.`
+          : `Applied “${pending.summary}” to draft. Publishing did not complete — check Health and try Put change live again.`,
+        sources: ["confirm_change_proposal", "publishVoiceAgent"],
+        suggestedFollowUps: [
+          "What is your health status?",
+          "Explain your setup",
+          "Test yourself",
+        ],
+        evidence: [
+          {
+            label: "Open Health",
+            kind: "health",
+            href: `/agents/${agent.identity.id}?tab=health`,
+          },
+          {
+            label: "Versions",
+            kind: "versions",
+            href: `/agents/${agent.identity.id}?tab=versions`,
+          },
+        ],
+        data: result,
+      };
+    }
+  }
+
   const { buildAgentResponsibility } = await import(
     "@/lib/agents/appointment-booking/responsibility"
   );
@@ -241,19 +295,27 @@ export async function answerOwnerQuestion(input: {
       .join("\n");
     return {
       answer: [
-        `I created a ${proposal.riskLevel}-risk draft proposal (not applied yet).`,
+        `I drafted this change (not live yet):`,
         proposal.summary,
         diffLines,
+        `Reply “yes, put it live” or confirm in Versions to publish to the phone line.`,
         `Proposal id: ${proposal.id}.`,
-        "Confirm in the Versions tab or call confirm_change_proposal with confirm:true (optionally publish:true).",
       ].join("\n"),
       sources: ["create_change_proposal"],
       suggestedFollowUps: [
+        "Yes, put it live",
         "Explain your setup",
         "How many appointments did you book this week?",
       ],
       requiresConfirmation: true,
       proposalId: proposal.id,
+      evidence: [
+        {
+          label: "Confirm & put live",
+          kind: "versions",
+          href: `/agents/${agent.identity.id}?tab=versions`,
+        },
+      ],
       data: proposal,
     };
   }

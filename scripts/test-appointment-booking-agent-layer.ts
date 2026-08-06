@@ -374,4 +374,21 @@ assert(
     .key === "x",
 );
 
+import { filterSlotsByNoticeAndMaxDays } from "../src/lib/voice/calendar/booking";
+
+const afterCutoff = filterSlotsByNoticeAndMaxDays(
+  [
+    { startsAt: "2026-08-06T20:00:00.000Z" }, // late afternoon ET
+    { startsAt: "2026-08-07T15:00:00.000Z" }, // next day
+  ],
+  0,
+  30,
+  new Date("2026-08-06T12:00:00.000Z"),
+  { sameDayCutoff: "14:00", timezone: "America/New_York" },
+);
+assert(
+  "availability filters same-day cutoff",
+  afterCutoff.length === 1 && afterCutoff[0].startsAt.startsWith("2026-08-07"),
+);
+
 console.log("\nDone.");

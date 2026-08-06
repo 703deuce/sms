@@ -466,13 +466,24 @@ export async function confirmChangeProposal(input: {
   );
 
   let published = null;
-  if (input.publish) {
+  // Live agents: publish by default so conversational changes actually reach Telnyx.
+  // Pass publish:false explicitly to apply draft-only.
+  const agentIsLive = ["ACTIVE", "LIVE", "PUBLISHED"].includes(
+    String(agent.status || "").toUpperCase(),
+  );
+  const shouldPublish =
+    input.publish === true || (input.publish !== false && agentIsLive);
+  if (shouldPublish) {
     const { publishVoiceAgent } = await import("@/lib/voice/agent-service");
     published = await publishVoiceAgent(
       input.workspaceId,
       input.agentId,
       `proposal:${proposal.id}`,
     );
+    await prisma.voiceAgentVersion.update({
+      where: { id: versionRow.id },
+      data: { deploymentStatus: "published" },
+    });
   }
 
   await prisma.auditLog.create({
@@ -480,13 +491,16 @@ export async function confirmChangeProposal(input: {
       workspaceId: input.workspaceId,
       userId: input.userId,
       event: "agent.change_proposal_applied",
-      detail: `agent=${input.agentId} proposal=${proposal.id} publish=${Boolean(input.publish)}`,
+      detail: `agent=${input.agentId} proposal=${proposal.id} publish=${Boolean(shouldPublish)}`,
     },
   });
 
   return {
     proposal,
+    versionId: versionRow.id,
     published: Boolean(published),
+    publishedToTelnyx: Boolean(published),
+    live: shouldPublish,
     bookingPolicy: extractBookingPolicyFromConfig(config),
   };
 }
