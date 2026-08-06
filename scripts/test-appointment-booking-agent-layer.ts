@@ -587,4 +587,9 @@ const custom = createCustomCollectionField({
 assert("custom field has question", Boolean(custom.question?.includes("vehicle")));
 assert("custom field saveTo", (custom.saveTo || []).includes("appointment"));
 
+import { buildSystemPrompt } from "../src/lib/solutions/appointment-receptionist/build-agent-config";
+import { createDefaultWizardState } from "../src/lib/solutions/appointment-receptionist/defaults";
+const prompt = buildSystemPrompt(createDefaultWizardState());
+assert("buildSystemPrompt no recursion", prompt.length > 500 && prompt.length < 50000);
+
 console.log("\nDone.");
