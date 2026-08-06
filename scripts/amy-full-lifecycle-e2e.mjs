@@ -345,10 +345,20 @@ async function runWizard(page) {
   }
 }
 
+async function waitForAmyWorkspace(page, agentId) {
+  const url = `${BASE}/agents/${agentId}`;
+  await page.goto(url, { waitUntil: "domcontentloaded" });
+  for (let i = 0; i < 45; i++) {
+    const text = await page.locator("body").innerText();
+    if (!/Loading Amy/i.test(text) && /Talk to/i.test(text)) return;
+    await page.waitForTimeout(1000);
+  }
+  throw new Error("Amy workspace did not finish loading");
+}
+
 async function testAmyWorkspace(page) {
   if (!report.agentId) return;
-  await page.goto(`${BASE}/agents/${report.agentId}`, { waitUntil: "domcontentloaded" });
-  await page.waitForTimeout(2000);
+  await waitForAmyWorkspace(page, report.agentId);
   await shot(page, "11-workspace-home");
 
   const body = await page.locator("body").innerText();
@@ -441,7 +451,7 @@ async function testTalk(page) {
   await ask("What do you do?");
   await shot(page, "16-talk-responsibility");
 
-  await ask("Change my minimum booking notice back to two hours.");
+  await ask("Change my minimum booking notice to four hours.");
   await shot(page, "17-talk-notice-change");
 
   await ask("For drain-cleaning appointments, require the caller to describe the problem.");

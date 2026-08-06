@@ -51,6 +51,11 @@ const COMMANDS = new Set<AgentControlCommand>([
   "get_missed_call_handoff",
   "get_booking_verification",
   "propose_setup_change",
+  "get_setup_readiness",
+  "get_deployment_drift",
+  "get_runtime_registry",
+  "get_intelligence_summary",
+  "get_field_ownership_report",
 ]);
 
 export async function POST(
