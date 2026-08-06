@@ -140,6 +140,11 @@ function inferOutcomeSlugForOrphanAgent(agent: AgentRow): string | null {
   });
 }
 
+function agentDetailHref(solutionSlug: string, agentId: string) {
+  if (solutionSlug === "appointment-booking") return `/agents/${agentId}`;
+  return `/voice/agents/${agentId}`;
+}
+
 function instanceChildren(
   solutionSlug: string,
   instanceId: string,
@@ -153,7 +158,7 @@ function instanceChildren(
         label: "Open",
         href:
           kind === "agent"
-            ? `/voice/agents/${instanceId}`
+            ? agentDetailHref(solutionSlug, instanceId)
             : outcomeHref(solutionSlug, "setup"),
       },
       { label: "Results", href: outcomeHref(solutionSlug, "results") },
@@ -256,7 +261,7 @@ export async function loadOutcomeInstances(
             id: agent.id,
             label,
             status: statusLabel(String(agent.status)),
-            href: `/voice/agents/${agent.id}`,
+            href: agentDetailHref(ownedSlug, agent.id),
             children: instanceChildren(ownedSlug, agent.id, "agent"),
           });
         }
@@ -289,7 +294,7 @@ export async function loadOutcomeInstances(
         id: agent.id,
         label,
         status: statusLabel(String(agent.status)),
-        href: `/voice/agents/${agent.id}`,
+        href: agentDetailHref(outcomeSlug, agent.id),
         children: instanceChildren(outcomeSlug, agent.id, "agent"),
       });
     }
@@ -309,7 +314,10 @@ export async function loadOutcomeInstances(
         umbrella.push({
           ...inst,
           children: [
-            { label: "Open agent", href: `/voice/agents/${inst.id}` },
+            {
+              label: "Open agent",
+              href: agentDetailHref(slug, inst.id),
+            },
             { label: "Inbound routing", href: "/voice/inbound-routing" },
           ],
         });

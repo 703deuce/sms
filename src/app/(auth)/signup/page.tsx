@@ -41,7 +41,7 @@ export default function SignupPage() {
       setError(json.error || "Unable to create account.");
       return;
     }
-    router.push("/getting-started");
+    router.push("/hire");
     router.refresh();
   }
 
@@ -51,9 +51,9 @@ export default function SignupPage() {
         <p className="font-display text-3xl font-semibold tracking-tight text-primary">
           Transovo AI
         </p>
-        <h1 className="mt-3 font-display text-xl font-semibold">Start texting compliantly</h1>
+        <h1 className="mt-3 font-display text-xl font-semibold">Hire your first agent</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Register, verify your phone, get a number, and send your first campaign.
+          Create your workspace, then put Amy or Tom to work.
         </p>
       </div>
       <form className="space-y-4" onSubmit={onSubmit}>

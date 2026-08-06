@@ -261,8 +261,8 @@ export function defaultSolutionNameForPreset(
       return "Inquiry Capture Agent";
     case "service_intake":
       return "Service Intake Agent";
-    default:
-      return "Appointment Receptionist";
+      default:
+      return "Amy — Appointment Booking Agent";
   }
 }
 
@@ -505,9 +505,9 @@ export function createDefaultWizardState(): AppointmentReceptionistWizardState {
     warmTransfer: false,
     detectVoicemailOnTransfer: false,
 
-    agentName: "Astra",
+    agentName: "Amy",
     businessName: "",
-    role: "Front-desk receptionist",
+    role: "Appointment booking agent",
     tone: "Warm and professional",
     speakingStyle: "Brief and conversational",
     language: "English",

@@ -72,6 +72,7 @@ const MODEL_TO_TABLE: Record<string, string> = {
   voiceConversationInsight: "voice_conversation_insights",
   voiceToolExecution: "voice_tool_executions",
   voiceAppointment: "voice_appointments",
+  appointmentSlotHold: "appointment_slot_holds",
   voiceTestRun: "voice_test_runs",
   voiceComplianceProfile: "voice_compliance_profiles",
   voiceUsageRecord: "voice_usage_records",

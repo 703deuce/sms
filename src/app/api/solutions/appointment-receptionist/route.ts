@@ -120,6 +120,18 @@ export async function POST(request: Request) {
       mode: effectiveAction === "activate" ? "activate" : "save_draft",
     });
 
+    // Company-scoped answers → Company Brain (canonical). Amy retrieves; does not own a second copy.
+    try {
+      const { syncCompanyBrainFromWizard } = await import(
+        "@/lib/agents/appointment-booking/sync-company-brain-from-wizard"
+      );
+      await syncCompanyBrainFromWizard(auth.workspaceId, state);
+    } catch (err) {
+      warnings.push(
+        `Company Brain sync: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+
     const shouldPublish =
       effectiveAction === "activate" &&
       (activationMode === "activate_now" || activationMode === "duplicate_location");

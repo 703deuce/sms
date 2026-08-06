@@ -4,6 +4,7 @@ import {
   answerWhenOptionsForPreset,
   capabilityOptionsForPreset,
   goalsSidePanelCopy,
+  AMY_FIXED_CAPABILITIES,
 } from "@/lib/solutions/appointment-receptionist/wizard-presets";
 import type {
   AnswerWhen,
@@ -21,6 +22,7 @@ import {
   Sparkles,
   UserCheck,
 } from "lucide-react";
+import { useEffect } from "react";
 import { InfoCallout, RadioRow, SelectableCard, SidePanel } from "../ui";
 import { Input, Label } from "@/components/ui/input";
 
@@ -35,27 +37,208 @@ const ICONS = {
   MessageSquare,
 } as const;
 
+const OPERATING_MODES: Array<{
+  id: AnswerWhen;
+  label: string;
+  description: string;
+}> = [
+  {
+    id: "every_call",
+    label: "Main receptionist",
+    description: "Amy answers every call on her assigned number.",
+  },
+  {
+    id: "nobody_answers",
+    label: "Overflow receptionist",
+    description: "Ring your team first; Amy picks up when nobody answers.",
+  },
+  {
+    id: "after_hours",
+    label: "After-hours receptionist",
+    description: "Amy covers nights, weekends, and holidays.",
+  },
+];
+
 export function GoalsStep({
   state,
   patch,
+  hireMode = false,
 }: {
   state: AppointmentReceptionistWizardState;
   patch: (p: Partial<AppointmentReceptionistWizardState>) => void;
+  hireMode?: boolean;
 }) {
   const options = capabilityOptionsForPreset(state.preset);
   const answerOptions = answerWhenOptionsForPreset(state.preset);
   const panel = goalsSidePanelCopy(state.preset);
 
+  useEffect(() => {
+    if (!hireMode) return;
+    // Lock Amy's job — never ask the customer to redefine booking.
+    const locked = new Set<CapabilityId>([
+      ...AMY_FIXED_CAPABILITIES,
+      ...(state.capabilities.includes("reschedule") ? (["reschedule"] as const) : []),
+      ...(state.capabilities.includes("cancel") ? (["cancel"] as const) : []),
+    ]);
+    const next = [...locked];
+    const same =
+      next.length === state.capabilities.length &&
+      next.every((c) => state.capabilities.includes(c));
+    if (!same) {
+      patch({
+        capabilities: next,
+        agentName: state.agentName || "Amy",
+        solutionName:
+          state.solutionName?.includes("Appointment") || !state.solutionName
+            ? "Amy — Appointment Booking Agent"
+            : state.solutionName,
+        role: "Appointment booking agent",
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hireMode]);
+
   function toggleCap(id: CapabilityId) {
+    if (hireMode && (id === "book_appointments" || id === "answer_questions")) {
+      return;
+    }
     const has = state.capabilities.includes(id);
     const next = has
       ? state.capabilities.filter((c) => c !== id)
       : [...state.capabilities, id];
-    // Keep only options allowed for this agent type.
     const allowed = new Set(options.map((o) => o.id));
     patch({
       capabilities: next.filter((c) => allowed.has(c)),
     });
+  }
+
+  if (hireMode) {
+    return (
+      <div className="flex flex-col gap-6 lg:flex-row">
+        <div className="min-w-0 flex-1 space-y-8">
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50/50 p-5">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-800">
+              Fixed by agent type
+            </p>
+            <h2 className="mt-1 font-display text-xl font-semibold text-slate-900">
+              Amy books appointments over the phone
+            </h2>
+            <p className="mt-2 text-sm text-slate-600">
+              You are not building her profession. You are assigning this Amy to your business —
+              number, calendar, services, and rules.
+            </p>
+            <ul className="mt-3 grid gap-1 text-[12px] text-slate-600 sm:grid-cols-2">
+              {[
+                "Checks real availability",
+                "Offers valid times",
+                "Confirms details before booking",
+                "Creates and verifies appointments",
+                "Sends confirmations when enabled",
+                "Falls back when booking fails",
+              ].map((item) => (
+                <li key={item}>• {item}</li>
+              ))}
+            </ul>
+          </div>
+
+          <div>
+            <Label htmlFor="solution-name">What should we call this Amy?</Label>
+            <Input
+              id="solution-name"
+              className="mt-1.5 max-w-lg"
+              value={state.solutionName}
+              onChange={(e) => {
+                const solutionName = e.target.value;
+                patch({
+                  solutionName,
+                  agentName:
+                    !state.agentName ||
+                    state.agentName === "Amy" ||
+                    state.agentName === state.solutionName
+                      ? solutionName.split("—")[0].trim().slice(0, 40) || "Amy"
+                      : state.agentName,
+                });
+              }}
+              placeholder="Amy — Fredericksburg Main Office"
+            />
+            <p className="mt-1.5 text-xs text-muted-foreground">
+              Dashboard name can differ from the name spoken to callers (set in Voice).
+            </p>
+          </div>
+
+          <div>
+            <h3 className="text-sm font-semibold text-foreground">
+              How should Amy cover the phone?
+            </h3>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Booking is always on. Choose only the coverage mode for this instance.
+            </p>
+            <div className="mt-3 grid gap-2">
+              {OPERATING_MODES.map((opt) => (
+                <RadioRow
+                  key={opt.id}
+                  selected={state.answerWhen === opt.id}
+                  onClick={() => {
+                    const answerWhen = opt.id;
+                    const ringBehavior =
+                      answerWhen === "nobody_answers"
+                        ? "ring_team_first"
+                        : answerWhen === "after_hours"
+                          ? "after_hours"
+                          : "ai_immediate";
+                    patch({ answerWhen, ringBehavior });
+                  }}
+                  label={opt.label}
+                  description={opt.description}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <h3 className="text-sm font-semibold text-foreground">Optional permissions</h3>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Reschedule and cancel are off by default — enable only if you want Amy to do them.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {(
+                [
+                  ["reschedule", "May reschedule"],
+                  ["cancel", "May cancel"],
+                ] as const
+              ).map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => toggleCap(id)}
+                  className={`rounded-lg border px-3 py-2 text-[12px] font-semibold ${
+                    state.capabilities.includes(id)
+                      ? "border-slate-900 bg-slate-900 text-white"
+                      : "border-slate-200 text-slate-700"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <SidePanel title="What you will configure next">
+          <ul className="space-y-2 text-xs text-muted-foreground">
+            <li>• Phone number and routing</li>
+            <li>• Calendar and bookable services</li>
+            <li>• What Amy must collect from callers</li>
+            <li>• Notice, cutoffs, and transfer rules</li>
+            <li>• Voice, test, then put Amy to work</li>
+          </ul>
+          <InfoCallout>
+            Company Brain facts were collected first. Amy retrieves approved company knowledge
+            plus her appointment-specific rules.
+          </InfoCallout>
+        </SidePanel>
+      </div>
+    );
   }
 
   return (
@@ -71,7 +254,6 @@ export function GoalsStep({
               const solutionName = e.target.value;
               patch({
                 solutionName,
-                // Keep spoken persona name in sync until user customizes Voice step.
                 agentName:
                   !state.agentName ||
                   state.agentName === "Astra" ||
@@ -83,7 +265,7 @@ export function GoalsStep({
             placeholder="e.g. Front Desk — Main Office"
           />
           <p className="mt-1.5 text-xs text-muted-foreground">
-            This name shows in My Agents and Automations so you can tell agents apart.
+            This name shows in Your Team and Automations so you can tell agents apart.
           </p>
         </div>
 

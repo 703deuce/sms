@@ -78,7 +78,7 @@ export async function createCreditsCheckoutSession(
         quantity: 1,
       },
     ],
-    success_url: successUrl || `${base}/settings/billing?credits=success`,
+    success_url: successUrl || `${base}/hire?credits=success`,
     cancel_url: cancelUrl || `${base}/settings/billing?credits=canceled`,
     metadata: {
       type: "credits",
@@ -122,7 +122,7 @@ export async function createSubscriptionCheckoutSession(
     mode: "subscription",
     customer: customerId,
     line_items: [{ price: priceId, quantity: 1 }],
-    success_url: successUrl || `${base}/settings/billing?subscription=success`,
+    success_url: successUrl || `${base}/hire?subscription=success`,
     cancel_url: cancelUrl || `${base}/settings/billing?subscription=canceled`,
     metadata: {
       type: "subscription",

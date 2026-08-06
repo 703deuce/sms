@@ -751,6 +751,13 @@ export async function executeBuiltinVoiceAction(input: {
               normalized.filter((s) => s.startsAt),
               gates.noticeMinutes,
               gates.maxDaysAhead,
+              new Date(),
+              {
+                sameDayCutoff: gates.config.sameDayCutoff,
+                timezone: String(
+                  args.timezone || gates.config.timezone || "America/New_York",
+                ),
+              },
             );
             return {
               provider: "calendly",
@@ -873,6 +880,10 @@ export async function executeBuiltinVoiceAction(input: {
               startsAt,
               noticeMinutes: gates.noticeMinutes,
               maxDaysAhead: gates.maxDaysAhead,
+              sameDayCutoff: gates.config.sameDayCutoff,
+              timezone: String(
+                args.timezone || gates.config.timezone || "America/New_York",
+              ),
             });
           }
 
@@ -1010,6 +1021,68 @@ export async function executeBuiltinVoiceAction(input: {
         ),
       }).catch(() => undefined);
       return booked;
+    }
+    case "hold_appointment_slot": {
+      const startsAt = new Date(String(args.startsAt || args.startAt || args.startTime || ""));
+      if (Number.isNaN(startsAt.getTime())) throw new Error("startsAt required");
+      const serviceName = String(args.serviceName || args.service || "Appointment");
+      const {
+        loadServiceBookingConfig,
+        assertBookingTimingGates,
+      } = await import("../calendar/booking");
+      const gates = await loadServiceBookingConfig(input.workspaceId, serviceName);
+      const durationMinutes = Number(
+        args.durationMinutes || gates.service?.durationMinutes || 30,
+      );
+      const endsAt = new Date(
+        startsAt.getTime() + durationMinutes * 60_000,
+      );
+      assertBookingTimingGates({
+        startsAt,
+        noticeMinutes: gates.noticeMinutes,
+        maxDaysAhead: gates.maxDaysAhead,
+        sameDayCutoff: gates.config.sameDayCutoff,
+        timezone: String(args.timezone || gates.config.timezone || "America/New_York"),
+      });
+      const { holdAppointmentSlot } = await import("../calendar/slot-holds");
+      const hold = await holdAppointmentSlot({
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+        callId: input.callId,
+        contactId: args.contactId ? String(args.contactId) : undefined,
+        phone: args.phone ? String(args.phone) : undefined,
+        serviceName,
+        staffName: args.staffName ? String(args.staffName) : undefined,
+        startsAt,
+        endsAt,
+        timezone: args.timezone ? String(args.timezone) : undefined,
+        expiresInSeconds: Number(args.expiresInSeconds || 180),
+      });
+      return {
+        ok: true,
+        holdId: hold.id,
+        startsAt: hold.startsAt,
+        endsAt: hold.endsAt,
+        expiresAt: hold.expiresAt,
+        speak: "I've reserved that time while we finish the details.",
+      };
+    }
+    case "release_appointment_hold": {
+      const { releaseAppointmentHold } = await import("../calendar/slot-holds");
+      const result = await releaseAppointmentHold({
+        workspaceId: input.workspaceId,
+        holdId: args.holdId ? String(args.holdId) : undefined,
+        callId: input.callId || (args.callId ? String(args.callId) : undefined),
+        startsAt: args.startsAt ? new Date(String(args.startsAt)) : undefined,
+      });
+      return {
+        ok: true,
+        ...result,
+        speak:
+          result.released > 0
+            ? "I've released the reserved time."
+            : "There was no active hold to release.",
+      };
     }
     case "reschedule_appointment": {
       const appointmentId = String(args.appointmentId || "");
@@ -1318,25 +1391,49 @@ async function afterAppointmentBooked(input: {
     kind: "appointment_booked",
   }).catch(() => undefined);
 
-  if (input.smsAlreadySent) return;
-  const phone = input.phone ? normalizeE164(input.phone) : "";
-  if (!phone) return;
-  const smsOn = await agentSmsConfirmationsEnabled(input.workspaceId, input.agentId);
-  if (!smsOn) return;
-
-  const smsBody = `Your ${input.serviceName} appointment is confirmed for ${when}.`;
-  try {
-    const { sendQuickSms } = await import("@/lib/sms/send-quick");
-    await sendQuickSms({
-      workspaceId: input.workspaceId,
-      to: phone,
-      body: smsBody,
-    });
-  } catch (err) {
-    console.warn(
-      "[voice] appointment SMS confirmation failed",
-      err instanceof Error ? err.message : err,
+  if (input.smsAlreadySent) {
+    const { verifyAppointmentBooking } = await import(
+      "@/lib/agents/appointment-booking/verify-booking"
     );
+    await verifyAppointmentBooking({
+      workspaceId: input.workspaceId,
+      appointmentId: input.appointmentId,
+      callId: input.callId,
+      smsAlreadySent: true,
+    }).catch(() => undefined);
+    return;
   }
+  const phone = input.phone ? normalizeE164(input.phone) : "";
+  let smsSent = false;
+  if (phone) {
+    const smsOn = await agentSmsConfirmationsEnabled(input.workspaceId, input.agentId);
+    if (smsOn) {
+      const smsBody = `Your ${input.serviceName} appointment is confirmed for ${when}.`;
+      try {
+        const { sendQuickSms } = await import("@/lib/sms/send-quick");
+        await sendQuickSms({
+          workspaceId: input.workspaceId,
+          to: phone,
+          body: smsBody,
+        });
+        smsSent = true;
+      } catch (err) {
+        console.warn(
+          "[voice] appointment SMS confirmation failed",
+          err instanceof Error ? err.message : err,
+        );
+      }
+    }
+  }
+
+  const { verifyAppointmentBooking } = await import(
+    "@/lib/agents/appointment-booking/verify-booking"
+  );
+  await verifyAppointmentBooking({
+    workspaceId: input.workspaceId,
+    appointmentId: input.appointmentId,
+    callId: input.callId,
+    smsAlreadySent: smsSent || Boolean(input.smsAlreadySent),
+  }).catch(() => undefined);
 }
 

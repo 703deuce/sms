@@ -204,7 +204,7 @@ function staticSectionItems(
 
 /**
  * Single product sidebar (no Platform/Solutions switch).
- * Catalog creates agents · My Agents inventories them · Automations edits flows.
+ * Catalog creates agents · Your Team inventories them · Automations edits flows.
  */
 export function buildSolutionsNav(options: SolutionsNavOptions = {}): NavItem[] {
   const instances = options.instancesBySolution ?? {};
@@ -217,9 +217,14 @@ export function buildSolutionsNav(options: SolutionsNavOptions = {}): NavItem[] 
       icon: LayoutDashboard,
     },
     {
-      label: "My Agents",
-      href: "/systems",
+      label: "Your Team",
+      href: "/agents",
       icon: Bot,
+      children: [
+        { label: "All agents", href: "/agents" },
+        { label: "Hire an agent", href: "/hire" },
+        { label: "Company Brain", href: "/company-brain" },
+      ],
     },
     {
       label: "Automations",

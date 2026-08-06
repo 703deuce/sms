@@ -346,7 +346,10 @@ export async function loadMySystems(
           agent.healthStatus && agent.healthStatus !== "ok"
             ? agent.healthMessage || "Needs attention"
             : null,
-        href: `/voice/agents/${agent.id}`,
+        href:
+          agentTypeFromOutcomeSlug(outcomeSlugForLabel) === "appointment_booking"
+            ? `/agents/${agent.id}`
+            : `/voice/agents/${agent.id}`,
       });
     }
 
@@ -602,6 +605,9 @@ export async function loadMySystems(
             ? (() => {
                 const outcomeSlug = cfgJson?.outcomeSlug || "appointment-booking";
                 const agentId = (setup.linkedAgentIds || [])[0];
+                if (agentId && outcomeSlug === "appointment-booking") {
+                  return `/agents/${agentId}`;
+                }
                 const params = new URLSearchParams({ setupId: setup.id });
                 if (agentId) params.set("agentId", agentId);
                 const presetBySlug: Record<string, string> = {
@@ -682,7 +688,10 @@ export async function loadMySystems(
           fallbackAutomationId: agent.fallbackAutomationId,
         }),
       ),
-      href: `/voice/agents/${agent.id}`,
+      href:
+        typeId === "appointment_booking"
+          ? `/agents/${agent.id}`
+          : `/voice/agents/${agent.id}`,
     });
   }
 

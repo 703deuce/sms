@@ -105,11 +105,23 @@ export function hasBookingCapability(
 /** Steps shown for this wizard run — hide Appointments / booking-only UI. */
 export function visibleWizardSteps(
   state: Pick<AppointmentReceptionistWizardState, "capabilities" | "preset">,
-): Array<(typeof WIZARD_STEPS)[number]> {
+  opts?: { hireMode?: boolean; brainAlreadyDone?: boolean },
+): Array<{ id: (typeof WIZARD_STEPS)[number]["id"]; label: string }> {
   const booking = hasBookingCapability(state.capabilities);
+  const hire = Boolean(opts?.hireMode);
   return WIZARD_STEPS.filter((s) => {
     if (s.id === "appointments") return booking;
+    // Hire Amy: Company Brain already collected — skip Information, keep a short Assignment step.
+    if (hire && opts?.brainAlreadyDone && s.id === "information") return false;
     return true;
+  }).map((s) => {
+    if (hire && s.id === "goals") {
+      return { id: s.id, label: "Assignment" };
+    }
+    if (hire && s.id === "appointments") {
+      return { id: s.id, label: "Booking rules" };
+    }
+    return { id: s.id, label: s.label };
   });
 }
 
@@ -198,6 +210,28 @@ export function wizardHeadline(preset: string | null | undefined): {
       };
   }
 }
+
+/** Hire-mode headlines — train an instance, do not redefine the job. */
+export function hireWizardHeadline(agentName = "Amy"): {
+  title: string;
+  subtitle: string;
+} {
+  return {
+    title: `Train ${agentName}`,
+    subtitle:
+      "Her job is booking appointments. Tell her which number, calendar, services, and rules to use for your business.",
+  };
+}
+
+/** Capabilities locked by the Appointment Booking Agent type. */
+export const AMY_FIXED_CAPABILITIES: CapabilityId[] = [
+  "answer_questions",
+  "book_appointments",
+  "take_messages",
+  "transfer_calls",
+  "send_sms_confirmations",
+];
+
 
 export function goalsSidePanelCopy(preset: string | null | undefined): {
   outcome: string;
