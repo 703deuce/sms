@@ -20,7 +20,42 @@ import {
   pickCampaignStatus,
 } from "./status-map";
 
-type TelnyxList<T> = { data?: T[]; meta?: { total_pages?: number; page_number?: number } };
+type TelnyxList<T> = {
+  data?: T[];
+  records?: T[];
+  page?: number;
+  totalRecords?: number;
+  meta?: { total_pages?: number; page_number?: number };
+};
+
+function extractRecords<T>(res: TelnyxList<T> | null | undefined): T[] {
+  if (!res) return [];
+  if (Array.isArray(res.records)) return res.records;
+  if (Array.isArray(res.data)) return res.data;
+  return [];
+}
+
+/** 10DLC brand/campaign listing uses page + recordsPerPage + `records` (not page[number]/data). */
+async function listTenDlcPages<T>(
+  path: string,
+  query: Record<string, string | number | undefined> = {},
+  maxPages = 10,
+): Promise<T[]> {
+  const out: T[] = [];
+  for (let page = 1; page <= maxPages; page += 1) {
+    const res = await telnyxRequest<TelnyxList<T>>(path, {
+      method: "GET",
+      query: { ...query, page, recordsPerPage: 100 },
+    });
+    const rows = extractRecords(res);
+    out.push(...rows);
+    const total = Number(res?.totalRecords || 0);
+    if (rows.length === 0) break;
+    if (total > 0 && out.length >= total) break;
+    if (rows.length < 100) break;
+  }
+  return out;
+}
 
 async function listAllPages<T>(
   path: string,
@@ -33,7 +68,7 @@ async function listAllPages<T>(
       method: "GET",
       query: { ...query, "page[number]": page, "page[size]": 50 },
     });
-    const rows = Array.isArray(res?.data) ? res.data : [];
+    const rows = extractRecords(res);
     out.push(...rows);
     const totalPages = Number(res?.meta?.total_pages || 1);
     if (page >= totalPages || rows.length === 0) break;
@@ -42,7 +77,7 @@ async function listAllPages<T>(
 }
 
 export async function listTelnyxBrands() {
-  const rows = await listAllPages<Record<string, unknown>>("/10dlc/brand");
+  const rows = await listTenDlcPages<Record<string, unknown>>("/10dlc/brand");
   return rows.map((b) => ({
     id: String(b.brandId || b.id || ""),
     name: String(b.displayName || b.companyName || b.entityType || ""),
@@ -51,27 +86,66 @@ export async function listTelnyxBrands() {
   }));
 }
 
-export async function listTelnyxCampaigns() {
-  // Prefer campaignBuilder; fall back to /10dlc/campaign.
-  let rows: Record<string, unknown>[] = [];
-  try {
-    rows = await listAllPages<Record<string, unknown>>("/10dlc/campaignBuilder");
-  } catch {
-    rows = await listAllPages<Record<string, unknown>>("/10dlc/campaign");
+export async function listTelnyxCampaigns(brandId?: string) {
+  // Campaign list requires brandId. If omitted, list per known brand.
+  const brandIds = brandId
+    ? [brandId]
+    : (await listTelnyxBrands()).map((b) => b.id).filter(Boolean);
+
+  const out: Array<{
+    id: string;
+    brandId: string | null;
+    name: string;
+    status: string;
+    approved: boolean;
+  }> = [];
+
+  for (const bid of brandIds) {
+    try {
+      const rows = await listTenDlcPages<Record<string, unknown>>("/10dlc/campaign", {
+        brandId: bid,
+      });
+      for (const c of rows) {
+        const status = pickCampaignStatus({
+          status: c.status != null ? String(c.status) : null,
+          campaignStatus: c.campaignStatus != null ? String(c.campaignStatus) : null,
+        });
+        out.push({
+          id: String(c.campaignId || c.id || ""),
+          brandId: bid,
+          name: String(c.usecase || c.useCase || c.description || c.campaignId || c.id || ""),
+          status,
+          approved: isApprovedCampaignStatus(status),
+        });
+      }
+    } catch (err) {
+      console.warn("[10dlc] list campaigns for brand failed", bid, err);
+    }
   }
-  return rows.map((c) => {
-    const status = pickCampaignStatus({
-      status: c.status != null ? String(c.status) : null,
-      campaignStatus: c.campaignStatus != null ? String(c.campaignStatus) : null,
-    });
-    return {
-      id: String(c.campaignId || c.id || ""),
-      brandId: c.brandId != null ? String(c.brandId) : null,
-      name: String(c.usecase || c.useCase || c.description || c.campaignId || c.id || ""),
-      status,
-      approved: isApprovedCampaignStatus(status),
-    };
-  });
+
+  // Also try campaignBuilder without brand filter when brand list empty.
+  if (!out.length) {
+    try {
+      const rows = await listTenDlcPages<Record<string, unknown>>("/10dlc/campaignBuilder");
+      for (const c of rows) {
+        const status = pickCampaignStatus({
+          status: c.status != null ? String(c.status) : null,
+          campaignStatus: c.campaignStatus != null ? String(c.campaignStatus) : null,
+        });
+        out.push({
+          id: String(c.campaignId || c.id || ""),
+          brandId: c.brandId != null ? String(c.brandId) : null,
+          name: String(c.usecase || c.useCase || c.description || c.campaignId || c.id || ""),
+          status,
+          approved: isApprovedCampaignStatus(status),
+        });
+      }
+    } catch (err) {
+      console.warn("[10dlc] campaignBuilder list failed", err);
+    }
+  }
+
+  return out;
 }
 
 export async function listTelnyxPhoneNumbers() {
@@ -86,7 +160,7 @@ export async function listTelnyxPhoneNumbers() {
 }
 
 export async function listPhoneNumberCampaignAssignments() {
-  const rows = await listAllPages<Record<string, unknown>>("/10dlc/phoneNumberCampaign");
+  const rows = await listTenDlcPages<Record<string, unknown>>("/10dlc/phoneNumberCampaign");
   return rows.map((r) => ({
     phoneNumber: String(r.phoneNumber || r.phone_number || ""),
     campaignId: String(r.campaignId || r.campaign_id || ""),
@@ -95,22 +169,22 @@ export async function listPhoneNumberCampaignAssignments() {
 }
 
 export async function inventoryTenDlc() {
-  const [brands, campaigns, phoneNumbers, assignments] = await Promise.all([
-    listTelnyxBrands().catch((err) => {
-      console.warn("[10dlc] list brands failed", err);
-      return [];
-    }),
+  const brands = await listTelnyxBrands().catch((err) => {
+    console.warn("[10dlc] list brands failed", err);
+    return [] as Awaited<ReturnType<typeof listTelnyxBrands>>;
+  });
+  const [campaigns, phoneNumbers, assignments] = await Promise.all([
     listTelnyxCampaigns().catch((err) => {
       console.warn("[10dlc] list campaigns failed", err);
-      return [];
+      return [] as Awaited<ReturnType<typeof listTelnyxCampaigns>>;
     }),
     listTelnyxPhoneNumbers().catch((err) => {
       console.warn("[10dlc] list numbers failed", err);
-      return [];
+      return [] as Awaited<ReturnType<typeof listTelnyxPhoneNumbers>>;
     }),
     listPhoneNumberCampaignAssignments().catch((err) => {
       console.warn("[10dlc] list assignments failed", err);
-      return [];
+      return [] as Awaited<ReturnType<typeof listPhoneNumberCampaignAssignments>>;
     }),
   ]);
   return { brands, campaigns, phoneNumbers, assignments };
