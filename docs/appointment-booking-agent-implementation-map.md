@@ -1,67 +1,55 @@
 # Appointment Booking Agent — Implementation Map
 
-Internal map for the agent operating layer.
-**Rule:** wrap live systems; do not rebuild booking, Telnyx, or calendar.
+**Rule:** wrap live systems (`VoiceAgent`); do not create a parallel Agent table.
 
-## Context layers (locked)
+## DB migrate / fresh install
 
-| Layer | Answers | Storage | Status |
-|---|---|---|---|
-| Shared company brain | What is true about this business? | `workspace.customFieldsConfig.businessBrain` + approved knowledge | **FULLY** |
-| Appointment agent profile | How is Randy allowed to book? | Derived from `VoiceAgent.draftConfig` / wizard | **FULLY** |
-| Active agent version | What is deployed right now? | `VoiceAgentVersion` + Telnyx assistant + trigger deployments | **FULLY** |
-| Runtime call context | What is true for this call? | `runtime-clock` + dynvars — never stored as knowledge | **FULLY** |
-| Tools | What can actually be performed? | Builtin voice tools + slot holds | **FULLY** |
-| Execution trace | What did Randy do? | VoiceCall + ToolExecution + AutomationExecution | **FULLY** |
-| Owner conversation | How can the owner understand/change Randy? | Agent Control API + owner chat | **FULLY** |
+| Artifact | Status |
+|---|---|
+| `prisma/schema.prisma` includes `AppointmentSlotHold` + `VoiceAppointment` | **FULLY** |
+| `supabase/schema.sql` regenerated from Prisma | **FULLY** |
+| `supabase/bootstrap.sql` / `fresh-install.sql` include slot holds | **FULLY** |
+| Additive migration `20260806_appointment_slot_holds.sql` | **FULLY** |
+| `MODEL_TO_TABLE.appointmentSlotHold` | **FULLY** |
 
-## Existing component → Agent ownership
+Apply path for existing DBs: run additive migration **or** `npm run db:push`. Fresh installs: `bootstrap.sql` / `fresh-install.sql`.
 
-| Existing component | Status | Action |
-|---|---|---|
-| `VoiceAgent` | **FULLY** | Reuse as Agent parent |
-| `VoiceAgentVersion` | **FULLY** | Versions / rollback |
-| Telnyx assistant-sync | **FULLY** | Voice deployment |
-| TeXML DID routing | **FULLY** | Inbound answer |
-| Appointment wizard | **FULLY** | Create Randy onboarding |
-| `SolutionSetup` | **FULLY** | Inventory / wizard config |
-| `AutomationFlow` + TriggerDeployment | **FULLY** | Primary workflow + pause/activate |
-| Calendar + booking.ts | **FULLY** | Availability / appointments / same-day cutoff |
-| AppointmentSlotHold | **FULLY** | Soft holds during confirmation |
-| Missed Call Text-Back | **FULLY** | Structured companion handoff |
-| WebRTC test + assertions | **FULLY** | Test suite + trace assertions |
-| My Agents `/systems` | **FULLY** | Deep-link `/agents/[id]` |
-| Separate `Agent` DB table | None | **Do not create** |
-
-## Capability completion checklist
+## Capability checklist (all FULLY)
 
 | Capability | Status |
 |---|---|
 | Agent ownership view-model wrapping VoiceAgent | **FULLY** |
-| Shared brain load + persist + approve website imports | **FULLY** |
-| Appointment profile + booking policy extraction | **FULLY** |
+| Structured responsibility (objective / allowed / prohibited / success) | **FULLY** |
+| Shared brain load + persist + website approve (`extracted`→`owner_approved`) | **FULLY** |
+| Appointment profile + booking policy | **FULLY** |
 | Agent detail UI (all tabs) | **FULLY** |
 | Execution-trace builder | **FULLY** |
+| Booking conversation state on call metadata | **FULLY** |
 | Control API (read + mutate with confirm) | **FULLY** |
-| Owner chat (read + draft proposals/workflows) | **FULLY** |
-| Change proposals → confirm → VoiceService sync | **FULLY** |
-| Workflow Architect (NL → validated draft) | **FULLY** |
-| Promote architect draft → live AutomationFlow | **FULLY** |
-| Activate / rollback with trigger deployments | **FULLY** |
-| Pause / resume with pauseFlowTriggers | **FULLY** |
-| Duplicate agent draft | **FULLY** |
-| Slot holds (model + tools + conflict checks) | **FULLY** |
+| Owner chat (responsibility, metrics, recommendations, simulation) | **FULLY** |
+| Change proposals with affectedAgents / tests / rollback + version snapshot | **FULLY** |
+| Workflow Architect + promote to AutomationFlow | **FULLY** |
+| Activate gated by critical simulations + trigger deployments | **FULLY** |
+| Pause / resume with flow triggers | **FULLY** |
+| Partial capability pause (SMS) + autonomy budget + safe auto-repair | **FULLY** |
+| Duplicate clones calendars + primary workflow draft | **FULLY** |
+| Slot holds (DB + tools + wizard defaults + Telnyx catalog) | **FULLY** |
 | Same-day cutoff enforcement | **FULLY** |
-| Assertion-complete test suite | **FULLY** |
-| Website-import review/approve gate | **FULLY** |
-| Structured Randy → MCTB handoff | **FULLY** |
-| Health (including transfer destinations) | **FULLY** |
-| Results metrics (book/reschedule/cancel/SMS/email) | **FULLY** |
+| Post-book verification | **FULLY** |
+| Simulation fixtures + assertion suite | **FULLY** |
+| Structured agent handoffs | **FULLY** |
+| Daily report + exception alerts | **FULLY** |
+| Metrics (abandoned, avg time-to-book, top services, WoW) | **FULLY** |
+| Health (transfer destinations + calendar token expiry) | **FULLY** |
+| MCTB structured handoff | **FULLY** |
 
-## Default identity
+## Architecture note
 
-- Name: **Randy**
-- Display: **Randy — Appointment Booking Agent**
-- Role: `appointment_booking`
-- Channel: `voice`
-- Execution: `conversational_with_deterministic_tools`
+Shared company brain → `workspace.customFieldsConfig.businessBrain`  
+Agent profile → derived from `VoiceAgent.draftConfig`  
+Active version → `VoiceAgentVersion`  
+Runtime → dynvars / `runtime-clock`  
+Operating extras → `draftConfig.advanced.agentOperating`  
+Tools → builtin voice tools including holds  
+Trace → VoiceCall + ToolExecution aggregation  
+Owner chat → control API (never direct table writes)

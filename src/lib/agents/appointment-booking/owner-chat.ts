@@ -38,12 +38,161 @@ export async function answerOwnerQuestion(input: {
   const q = input.question.toLowerCase().trim();
   const agent = input.agent;
   const followUps = [
+    "What exactly are you responsible for?",
+    "What are you not allowed to do?",
+    "What does success look like for you?",
+    "How are you doing?",
     "Explain your setup",
     "How many appointments did you book this week?",
     "Show recent failures",
     "Change the minimum notice to four hours",
     "Create an after-hours emergency workflow draft",
+    "Test yourself",
   ];
+
+  const { buildAgentResponsibility } = await import(
+    "@/lib/agents/appointment-booking/responsibility"
+  );
+  const responsibility = buildAgentResponsibility(agent);
+
+  if (
+    includesAny(q, [
+      "what exactly are you responsible",
+      "what are you responsible",
+      "your responsibility",
+      "your job",
+      "what do you do",
+      "who are you",
+      "explain your setup",
+    ]) &&
+    !includesAny(q, ["not allowed", "cannot", "can't", "prohibited"])
+  ) {
+    return {
+      answer: [
+        responsibility.mainObjective,
+        `I serve: ${responsibility.serves.locations.join(", ") || "assigned locations"}; numbers: ${responsibility.serves.phoneNumbers.join(", ") || "none yet"}; calendar: ${responsibility.serves.calendars.join(", ") || "none"}; services: ${responsibility.serves.services.join(", ") || "none"}.`,
+        `Allowed actions include: ${responsibility.allowedActions.slice(0, 5).join("; ")}.`,
+        `Autonomy budget: ${responsibility.autonomyBudget}.`,
+      ].join(" "),
+      sources: ["responsibility", "identity", "bookingPolicy"],
+      suggestedFollowUps: followUps,
+      data: responsibility,
+    };
+  }
+
+  if (
+    includesAny(q, [
+      "not allowed",
+      "cannot do",
+      "can't do",
+      "prohibited",
+      "must not",
+    ])
+  ) {
+    return {
+      answer: `I am not allowed to: ${responsibility.prohibitedActions.join("; ")}.`,
+      sources: ["responsibility.prohibitedActions"],
+      suggestedFollowUps: followUps,
+      data: responsibility.prohibitedActions,
+    };
+  }
+
+  if (includesAny(q, ["success look like", "what counts as success", "success criteria"])) {
+    return {
+      answer: `Success means: ${responsibility.successCriteria.join("; ")}.`,
+      sources: ["responsibility.successCriteria"],
+      suggestedFollowUps: followUps,
+      data: responsibility.successCriteria,
+    };
+  }
+
+  if (
+    includesAny(q, [
+      "how are you doing",
+      "how are you",
+      "performance",
+      "compare this week",
+      "versus last",
+      "vs last",
+    ])
+  ) {
+    const { buildAgentMetrics } = await import(
+      "@/lib/agents/appointment-booking/metrics"
+    );
+    const m = await buildAgentMetrics({
+      workspaceId: input.workspaceId,
+      agentId: input.agentId,
+      windowDays: 7,
+      includePreviousWindow: true,
+    });
+    const prev = m.previousWindow;
+    const delta =
+      prev != null
+        ? ` Prior ${m.windowDays} days: ${prev.appointmentsBooked} booked (${prev.bookingConversionRate}% conversion) on ${prev.callsAnswered} calls.`
+        : "";
+    const recs: string[] = [];
+    if (m.abandonedBookingConversations > 0) {
+      recs.push(
+        `${m.abandonedBookingConversations} booking conversations started but did not book.`,
+      );
+    }
+    if (m.mostRequestedServices[0]) {
+      recs.push(
+        `Top service: ${m.mostRequestedServices[0].service} (${m.mostRequestedServices[0].count}).`,
+      );
+    }
+    return {
+      answer: [
+        `This week: ${m.callsAnswered} calls, ${m.appointmentsBooked} booked (${m.bookingConversionRate}% conversion), ${m.transfers} transfers, ${m.bookingFailures} failures.`,
+        m.averageTimeToBookingSeconds != null
+          ? `Average time to booking: ${m.averageTimeToBookingSeconds}s.`
+          : "",
+        delta,
+        recs.join(" "),
+      ]
+        .filter(Boolean)
+        .join(" "),
+      sources: ["metrics"],
+      suggestedFollowUps: followUps,
+      data: m,
+    };
+  }
+
+  if (includesAny(q, ["recommend", "improve", "opportunity", "what should i fix"])) {
+    const { buildAgentDailyReport } = await import(
+      "@/lib/agents/appointment-booking/reports"
+    );
+    const report = await buildAgentDailyReport({
+      workspaceId: input.workspaceId,
+      agentId: input.agentId,
+    });
+    return {
+      answer:
+        report.recommendations.length > 0
+          ? report.recommendations.join(" ")
+          : "No improvement recommendations from the latest window — keep monitoring conversion and calendar health.",
+      sources: ["reports", "metrics", "health"],
+      suggestedFollowUps: followUps,
+      data: report,
+    };
+  }
+
+  if (includesAny(q, ["test yourself", "run a test", "run tests", "simulate"])) {
+    const { runSimulationSuite } = await import(
+      "@/lib/agents/appointment-booking/simulation"
+    );
+    const sim = runSimulationSuite();
+    return {
+      answer: `Simulation suite: ${sim.summary.passed}/${sim.summary.total} passed, ${sim.summary.failed} failed, ${sim.summary.pending} pending.${
+        sim.criticalFailures.length
+          ? ` Critical failures: ${sim.criticalFailures.join(", ")}.`
+          : " Critical scenarios passed."
+      }`,
+      sources: ["simulation"],
+      suggestedFollowUps: followUps,
+      data: sim,
+    };
+  }
 
   // Change proposal (draft only)
   const policyPatch = parseBookingPolicyRequest(input.question);
@@ -165,29 +314,17 @@ export async function answerOwnerQuestion(input: {
   }
 
   if (includesAny(q, ["what do you do", "who are you", "explain your setup", "your job"])) {
+    // Handled above via responsibility — keep fallback for older phrasing
     return {
       answer: [
         `I'm ${agent.identity.displayName}.`,
-        agent.identity.description,
+        responsibility.mainObjective,
         `Status: ${agent.identity.status}. Health: ${agent.health.overall}.`,
-        `Number: ${agent.resources.numberLabel}.`,
-        `Calendar: ${agent.resources.calendarLabel}.`,
-        `Location: ${agent.resources.locationLabel}.`,
-        `Booking: ${agent.bookingPolicy.canBook ? "enabled" : "disabled"}; reschedule ${agent.bookingPolicy.canReschedule ? "on" : "off"}; cancel ${agent.bookingPolicy.canCancel ? "on" : "off"}.`,
-        `Minimum notice: ${agent.bookingPolicy.minimumNoticeMinutes} minutes. Duration: ${agent.bookingPolicy.appointmentDurationMinutes} minutes.`,
-        agent.bookingPolicy.sameDayCutoff
-          ? `Same-day cutoff: ${agent.bookingPolicy.sameDayCutoff}.`
-          : "",
-      ]
-        .filter(Boolean)
-        .join(" "),
-      sources: ["identity", "bookingPolicy", "resources", "health"],
+        `Number: ${agent.resources.numberLabel}. Calendar: ${agent.resources.calendarLabel}.`,
+      ].join(" "),
+      sources: ["identity", "responsibility"],
       suggestedFollowUps: followUps,
-      data: {
-        identity: agent.identity,
-        resources: agent.resources,
-        bookingPolicy: agent.bookingPolicy,
-      },
+      data: responsibility,
     };
   }
 

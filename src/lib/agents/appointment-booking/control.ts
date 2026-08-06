@@ -30,6 +30,7 @@ import {
   snapshotAgentForTest,
 } from "@/lib/agents/appointment-booking/lifecycle";
 import { runAgentTestSnapshotSuite } from "@/lib/agents/appointment-booking/test-suite";
+import { runSimulationSuite } from "@/lib/agents/appointment-booking/simulation";
 import {
   attachMissedCallTextBackForAgent,
   getMissedCallHandoff,
@@ -38,10 +39,23 @@ import {
   approveKnowledgeFacts,
   saveBusinessBrainPartial,
 } from "@/lib/agents/appointment-booking/business-brain";
+import {
+  pauseAgentCapability,
+  resumeAgentCapability,
+  runSafeAutoRepair,
+  setAutonomyBudget,
+} from "@/lib/agents/appointment-booking/autonomy";
+import {
+  buildAgentDailyReport,
+  buildAgentExceptionAlerts,
+} from "@/lib/agents/appointment-booking/reports";
+import { buildAgentResponsibility } from "@/lib/agents/appointment-booking/responsibility";
+import { createAgentHandoff, listAgentHandoffs } from "@/lib/agents/appointment-booking/handoffs";
 import { getPrisma } from "@/lib/db";
 import type { AgentControlCommand } from "@/lib/agents/appointment-booking/types";
 import type { BookingPolicy, BusinessBrain } from "@/lib/agents/appointment-booking/types";
 import type { AgentExecutionTrace } from "@/lib/agents/appointment-booking/types";
+import type { AutonomyBudget, AgentCapabilityPause } from "@/lib/agents/appointment-booking/responsibility";
 
 export async function runAgentControlCommand(input: {
   workspaceId: string;
@@ -254,6 +268,88 @@ export async function runAgentControlCommand(input: {
           | undefined,
       });
 
+    case "run_agent_simulation":
+      return runSimulationSuite();
+
+    case "get_agent_responsibility":
+      return { responsibility: buildAgentResponsibility(agent) };
+
+    case "get_daily_report":
+      return buildAgentDailyReport({
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+      });
+
+    case "get_exception_alerts":
+      return buildAgentExceptionAlerts({
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+      });
+
+    case "set_autonomy_budget":
+      return setAutonomyBudget({
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+        userId: input.userId,
+        budget: String(input.payload?.budget || "standard") as AutonomyBudget,
+        confirm: Boolean(input.payload?.confirm),
+      });
+
+    case "pause_capability":
+      return pauseAgentCapability({
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+        userId: input.userId,
+        capability: String(
+          input.payload?.capability || "confirmationSms",
+        ) as keyof AgentCapabilityPause,
+        reason: String(input.payload?.reason || "Owner requested"),
+      });
+
+    case "resume_capability":
+      return resumeAgentCapability({
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+        userId: input.userId,
+        capability: String(
+          input.payload?.capability || "confirmationSms",
+        ) as keyof AgentCapabilityPause,
+      });
+
+    case "run_safe_auto_repair":
+      return runSafeAutoRepair({
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+      });
+
+    case "create_agent_handoff":
+      return createAgentHandoff({
+        workspaceId: input.workspaceId,
+        fromAgentId: String(input.payload?.fromAgentId || input.agentId),
+        toAgentId: String(input.payload?.toAgentId || input.agentId),
+        source: String(input.payload?.source || "owner"),
+        intent: String(input.payload?.intent || "book"),
+        requestedNextAction: String(
+          input.payload?.requestedNextAction || "book_appointment",
+        ),
+        collectedFields: (input.payload?.collectedFields || {}) as Record<
+          string,
+          unknown
+        >,
+        contactId: input.payload?.contactId
+          ? String(input.payload.contactId)
+          : undefined,
+        callId: input.payload?.callId ? String(input.payload.callId) : undefined,
+        urgency: (input.payload?.urgency as "low" | "normal" | "high") || "normal",
+      });
+
+    case "list_agent_handoffs": {
+      const row = await prisma.voiceAgent.findFirst({
+        where: { id: input.agentId, workspaceId: input.workspaceId },
+      });
+      return { handoffs: listAgentHandoffs(row?.draftConfig) };
+    }
+
     case "activate_agent_version":
       return activateAgentVersion({
         workspaceId: input.workspaceId,
@@ -263,6 +359,7 @@ export async function runAgentControlCommand(input: {
         changeLog: input.payload?.changeLog
           ? String(input.payload.changeLog)
           : undefined,
+        skipSimulationGate: Boolean(input.payload?.skipSimulationGate),
       });
 
     case "rollback_agent_version":

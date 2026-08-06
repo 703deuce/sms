@@ -52,7 +52,11 @@ export type KnowledgeItemStatus =
   | "warning"
   | "missing"
   | "optional"
-  | "pending_review";
+  | "pending_review"
+  | "extracted"
+  | "owner_approved"
+  | "rejected"
+  | "outdated";
 
 export type BookingPermission =
   | "book_directly"

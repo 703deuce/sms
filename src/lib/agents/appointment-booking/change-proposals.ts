@@ -29,6 +29,9 @@ export type AgentChangeProposal = {
   createdByUserId?: string;
   appliedAt?: string;
   appliedVersionHint?: string;
+  affectedAgents: string[];
+  testsRequired: string[];
+  rollbackPlan: string;
   patch: {
     bookingPolicy?: Partial<BookingPolicy>;
     identity?: { name?: string; displayName?: string; description?: string };
@@ -126,6 +129,15 @@ export function buildBookingPolicyProposal(input: {
     status: "pending",
     createdAt: new Date().toISOString(),
     createdByUserId: input.userId,
+    affectedAgents: [input.agentId],
+    testsRequired: [
+      "new_caller_books",
+      "tomorrow_at_five",
+      "slot_unavailable",
+      "hold_then_book",
+    ],
+    rollbackPlan:
+      "Reject this proposal, or activate a prior VoiceAgentVersion via rollback_agent_version.",
     patch: { bookingPolicy: input.patch },
   };
 }
@@ -408,6 +420,27 @@ export async function confirmChangeProposal(input: {
       : {}),
   });
 
+  // Always snapshot a draft AgentVersion so apply is auditable even without publish.
+  const lastVersion = await prisma.voiceAgentVersion.findFirst({
+    where: { agentId: input.agentId },
+    orderBy: { version: "desc" },
+  });
+  const nextVersion = (lastVersion?.version ?? 0) + 1;
+  const versionRow = await prisma.voiceAgentVersion.create({
+    data: {
+      workspaceId: input.workspaceId,
+      agentId: input.agentId,
+      version: nextVersion,
+      config: config as object,
+      changeLog: `proposal:${proposal.id} ${proposal.summary}`.slice(0, 500),
+      publishedBy: input.userId,
+      testStatus: "ready_for_test",
+      deploymentStatus: "draft",
+      isMain: false,
+    },
+  });
+  proposal.appliedVersionHint = versionRow.id;
+
   if (proposal.patch.bookingPolicy) {
     const { syncBookingPolicyToVoiceServices } = await import(
       "@/lib/agents/appointment-booking/sync-policy"
@@ -418,6 +451,19 @@ export async function confirmChangeProposal(input: {
       serviceNames: proposal.patch.bookingPolicy.allowedServices,
     });
   }
+
+  // Re-persist proposal with appliedVersionHint
+  await persistChangeProposals(
+    input.workspaceId,
+    input.agentId,
+    listChangeProposals(
+      (
+        await prisma.voiceAgent.findFirst({
+          where: { id: input.agentId },
+        })
+      )?.draftConfig,
+    ).map((p) => (p.id === proposal.id ? proposal : p)),
+  );
 
   let published = null;
   if (input.publish) {

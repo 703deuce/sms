@@ -28,7 +28,7 @@ export type SlotHoldRow = {
 export async function expireStaleHolds(workspaceId: string) {
   const prisma = getPrisma();
   const now = new Date();
-  await prisma.appointmentSlotHold.updateMany({
+  const result = await prisma.appointmentSlotHold.updateMany({
     where: {
       workspaceId,
       status: "held",
@@ -36,6 +36,7 @@ export async function expireStaleHolds(workspaceId: string) {
     },
     data: { status: "expired", updatedAt: now },
   });
+  return { expired: Number(result.count || 0) };
 }
 
 export async function findActiveHoldConflict(input: {

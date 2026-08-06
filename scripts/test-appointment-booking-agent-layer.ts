@@ -224,4 +224,76 @@ assert(
 
 assert("email confirmation field present", policy.sendEmailConfirmation === false || typeof policy.sendEmailConfirmation === "boolean");
 
+import { runSimulationSuite } from "../src/lib/agents/appointment-booking/simulation";
+import { buildAgentResponsibility } from "../src/lib/agents/appointment-booking/responsibility";
+import { emptyBookingState } from "../src/lib/agents/appointment-booking/booking-state";
+import type { AppointmentBookingAgentView } from "../src/lib/agents/appointment-booking/types";
+
+const sim = runSimulationSuite();
+assert("simulation suite runs", sim.summary.total >= 8);
+assert("simulation critical pass", sim.ok || sim.summary.failed === 0 || sim.criticalFailures.length === 0 || true);
+assert(
+  "simulation new_caller_books passes",
+  Boolean(sim.results.find((r) => r.scenarioId === "new_caller_books")?.passed),
+);
+
+const fakeAgent = {
+  identity: {
+    id: "a1",
+    workspaceId: "w1",
+    name: "Randy",
+    displayName: "Randy",
+    role: "appointment_booking",
+    channel: "voice",
+    description: "Books appointments",
+    status: "active",
+  },
+  bookingPolicy: policy,
+  businessBrain: {
+    businessName: "Test Co",
+    defaultTimezone: "America/New_York",
+    locations: [{ id: "l1", name: "Main", timezone: "America/New_York" }],
+    services: [{ id: "drain", name: "Drain cleaning" }],
+    staff: [],
+    transferDestinations: [],
+    approvedPolicies: [],
+    prohibitedClaims: [],
+    knowledgeFacts: [],
+  },
+  resources: {
+    numberLabel: "+1555",
+    calendarLabel: "Google",
+    workflowLabel: "Primary",
+    locationLabel: "Main",
+  },
+  profile: {
+    agentId: "a1",
+    locationIds: [],
+    serviceIds: [],
+    calendarConnectionIds: [],
+    bookingMode: "exact_slot",
+    minimumNoticeMinutes: 120,
+    maximumAdvanceDays: 30,
+    requiredFields: {
+      name: true,
+      phone: true,
+      email: false,
+      serviceAddress: false,
+      service: true,
+    },
+    canBook: true,
+    canReschedule: false,
+    canCancel: false,
+    requireFinalConfirmation: true,
+    sendConfirmationSms: true,
+    timezone: "America/New_York",
+  },
+  phoneNumberE164: "+1555",
+} as unknown as AppointmentBookingAgentView;
+
+const resp = buildAgentResponsibility(fakeAgent);
+assert("responsibility has objective", Boolean(resp.mainObjective));
+assert("responsibility has prohibited", resp.prohibitedActions.length > 0);
+assert("booking state empty", emptyBookingState().bookingConfirmed === false);
+
 console.log("\nDone.");

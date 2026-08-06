@@ -134,6 +134,9 @@ export type AgentMetrics = {
   appointmentsBooked: number;
   appointmentsRescheduled: number;
   appointmentsCancelled: number;
+  abandonedBookingConversations: number;
+  averageTimeToBookingSeconds: number | null;
+  mostRequestedServices: Array<{ service: string; count: number }>;
   bookingConversionRate: number;
   transfers: number;
   messagesTaken: number;
@@ -142,6 +145,11 @@ export type AgentMetrics = {
   confirmationSmsSent: number;
   confirmationEmailsSent: number;
   windowDays: number;
+  previousWindow?: {
+    callsAnswered: number;
+    appointmentsBooked: number;
+    bookingConversionRate: number;
+  };
 };
 
 export type AgentExecutionStep = {
@@ -242,6 +250,16 @@ export type AgentControlCommand =
   | "promote_workflow_draft"
   | "run_agent_test_snapshot"
   | "run_agent_test_suite"
+  | "run_agent_simulation"
+  | "get_agent_responsibility"
+  | "get_daily_report"
+  | "get_exception_alerts"
+  | "set_autonomy_budget"
+  | "pause_capability"
+  | "resume_capability"
+  | "run_safe_auto_repair"
+  | "create_agent_handoff"
+  | "list_agent_handoffs"
   | "activate_agent_version"
   | "rollback_agent_version"
   | "duplicate_agent"

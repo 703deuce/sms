@@ -31,6 +31,8 @@ export function buildBusinessKnowledgePromptSection(
     if (!summary) return false;
     // Skip unused defaults and unapproved website imports.
     if (item.status === "missing" || item.status === "pending_review") return false;
+    if (item.status === "extracted" || item.status === "rejected" || item.status === "outdated")
+      return false;
     return true;
   });
 
@@ -186,6 +188,8 @@ export function buildSystemPrompt(state: AppointmentReceptionistWizardState): st
       "- resolve_datetime: resolve relative dates/times to a concrete local datetime before checking availability.",
     );
     lines.push("- calendar_availability / book_appointment: check live availability and book only after confirmation.");
+    lines.push("- hold_appointment_slot: temporarily reserve a slot while collecting final confirmation (default ~3 minutes).");
+    lines.push("- release_appointment_hold: release a hold if the caller declines or booking cannot complete.");
     lines.push(
       "- find_appointments: when the caller asks about an existing booking, look it up by phone before reschedule/cancel.",
     );
@@ -341,6 +345,8 @@ export function buildWizardAgentConfig(
   if (state.capabilities.includes("book_appointments")) {
     enabledTools.add("resolve_datetime");
     enabledTools.add("calendar_availability");
+    enabledTools.add("hold_appointment_slot");
+    enabledTools.add("release_appointment_hold");
     enabledTools.add("book_appointment");
     enabledTools.add("find_appointments");
   }

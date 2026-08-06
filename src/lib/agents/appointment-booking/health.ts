@@ -107,11 +107,34 @@ export async function buildAgentHealth(input: {
   const liveCal = (calendars || []).find(
     (c: { status: string }) => String(c.status).toLowerCase() === "connected",
   );
-  const calendar = liveCal
-    ? check("healthy", `${liveCal.name} · ${liveCal.provider}`, true)
-    : (calendars || []).length
-      ? check("warning", "Calendar present but not connected", true)
-      : check("failed", "No calendar connection", true);
+  let calendar: HealthCheck;
+  if (liveCal) {
+    const cfg =
+      liveCal.config && typeof liveCal.config === "object"
+        ? (liveCal.config as Record<string, unknown>)
+        : {};
+    const expiresAt = Number(cfg.expiresAt || cfg.tokenExpiresAt || 0);
+    const hasRefresh = Boolean(cfg.refreshToken || cfg.refresh_token);
+    if (expiresAt && expiresAt < Date.now() && !hasRefresh) {
+      calendar = check(
+        "failed",
+        `${liveCal.name}: calendar authorization expired — reconnect OAuth`,
+        true,
+      );
+    } else if (expiresAt && expiresAt < Date.now() + 5 * 60_000 && !hasRefresh) {
+      calendar = check(
+        "warning",
+        `${liveCal.name}: access token near expiry`,
+        true,
+      );
+    } else {
+      calendar = check("healthy", `${liveCal.name} · ${liveCal.provider}`, true);
+    }
+  } else if ((calendars || []).length) {
+    calendar = check("warning", "Calendar present but not connected", true);
+  } else {
+    calendar = check("failed", "No calendar connection", true);
+  }
 
   const bookingTools = input.telnyxAssistantId
     ? check("healthy", "Booking tools deploy with the Telnyx assistant", true)

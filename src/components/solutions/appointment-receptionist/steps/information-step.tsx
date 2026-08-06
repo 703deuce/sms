@@ -150,8 +150,8 @@ function itemsForScanResult(input: {
       summary: input.businessName
         ? `${input.businessName} · ${input.url}`
         : input.url,
-      status: ok ? "pending_review" : "warning",
-      statusLabel: ok ? "Review imported details" : "Partial import — needs review",
+      status: ok ? "extracted" : "warning",
+      statusLabel: ok ? "Extracted — approve to use" : "Partial import — needs review",
     },
     {
       id: "hours",
@@ -159,8 +159,8 @@ function itemsForScanResult(input: {
       summary: preview
         ? preview.slice(0, 160)
         : "Review hours on your site or edit this item",
-      status: ok ? "pending_review" : "warning",
-      statusLabel: ok ? "Imported — approve to use" : "Needs review",
+      status: ok ? "extracted" : "warning",
+      statusLabel: ok ? "Extracted — approve to use" : "Needs review",
     },
     {
       id: "services",
@@ -168,8 +168,8 @@ function itemsForScanResult(input: {
       summary: ok
         ? "Services and offerings from your website"
         : input.errorMessage || "Scan incomplete",
-      status: ok ? "pending_review" : "warning",
-      statusLabel: ok ? "Imported — approve to use" : "Needs review",
+      status: ok ? "extracted" : "warning",
+      statusLabel: ok ? "Extracted — approve to use" : "Needs review",
     },
     {
       id: "pricing",
@@ -708,7 +708,7 @@ export function InformationStep({
                 ) : null}
                 {item.statusLabel}
               </StatusPill>
-              {item.status === "pending_review" ? (
+              {item.status === "pending_review" || item.status === "extracted" ? (
                 <button
                   type="button"
                   onClick={() =>
@@ -717,7 +717,7 @@ export function InformationStep({
                         i.id === item.id
                           ? {
                               ...i,
-                              status: "complete",
+                              status: "owner_approved",
                               statusLabel: "Approved",
                             }
                           : i,
@@ -741,14 +741,16 @@ export function InformationStep({
           ))}
         </div>
 
-        {state.knowledgeItems.some((i) => i.status === "pending_review") ? (
+        {state.knowledgeItems.some(
+          (i) => i.status === "pending_review" || i.status === "extracted",
+        ) ? (
           <button
             type="button"
             onClick={() =>
               patch({
                 knowledgeItems: state.knowledgeItems.map((i) =>
-                  i.status === "pending_review"
-                    ? { ...i, status: "complete", statusLabel: "Approved" }
+                  i.status === "pending_review" || i.status === "extracted"
+                    ? { ...i, status: "owner_approved", statusLabel: "Approved" }
                     : i,
                 ),
               })

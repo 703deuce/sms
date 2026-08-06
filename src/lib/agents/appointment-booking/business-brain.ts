@@ -79,8 +79,16 @@ export async function loadBusinessBrain(
     const summary = String(row.summary || "").trim();
     if (!label || !summary) continue;
     const status = String(row.status || "complete");
-    // Website imports start as pending_review — only approved facts enter the shared brain.
-    if (status === "missing" || status === "pending_review") continue;
+    // Website imports start as extracted/pending_review — only approved facts enter the shared brain.
+    if (
+      status === "missing" ||
+      status === "pending_review" ||
+      status === "extracted" ||
+      status === "rejected" ||
+      status === "outdated"
+    ) {
+      continue;
+    }
     knowledgeFacts.push({
       label,
       summary,
@@ -217,26 +225,29 @@ export async function approveKnowledgeFacts(input: {
     const label = String(row.label || "").trim();
     const summary = String(row.summary || "").trim();
     const status = String(row.status || "");
-    const pending = status === "pending_review" || status === "warning";
+    const pending =
+      status === "pending_review" ||
+      status === "warning" ||
+      status === "extracted";
     const labelMatch =
       !input.labels?.length ||
       input.labels.some((l) => l.toLowerCase() === label.toLowerCase());
     if (!summary || !labelMatch) return raw;
-    if (!(input.approveAllPending ? pending || status === "complete" : pending)) {
+    if (!(input.approveAllPending ? pending || status === "complete" || status === "owner_approved" : pending)) {
       return raw;
     }
-    if (!pending && status !== "complete") return raw;
+    if (!pending && status !== "complete" && status !== "owner_approved") return raw;
     if (pending) {
       approved.push({ label, summary });
       return {
         ...row,
-        status: "complete",
+        status: "owner_approved",
         statusLabel: "Approved",
         approvedAt: new Date().toISOString(),
         approvedBy: input.userId,
       };
     }
-    if (status === "complete" && input.approveAllPending) {
+    if ((status === "complete" || status === "owner_approved") && input.approveAllPending) {
       approved.push({ label, summary });
     }
     return raw;

@@ -133,6 +133,7 @@ export async function loadAppointmentBookingAgent(
     workspaceId,
     agentId: agent.id,
     windowDays: 7,
+    includePreviousWindow: true,
   });
 
   const name =

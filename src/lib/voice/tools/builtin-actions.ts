@@ -1391,25 +1391,49 @@ async function afterAppointmentBooked(input: {
     kind: "appointment_booked",
   }).catch(() => undefined);
 
-  if (input.smsAlreadySent) return;
-  const phone = input.phone ? normalizeE164(input.phone) : "";
-  if (!phone) return;
-  const smsOn = await agentSmsConfirmationsEnabled(input.workspaceId, input.agentId);
-  if (!smsOn) return;
-
-  const smsBody = `Your ${input.serviceName} appointment is confirmed for ${when}.`;
-  try {
-    const { sendQuickSms } = await import("@/lib/sms/send-quick");
-    await sendQuickSms({
-      workspaceId: input.workspaceId,
-      to: phone,
-      body: smsBody,
-    });
-  } catch (err) {
-    console.warn(
-      "[voice] appointment SMS confirmation failed",
-      err instanceof Error ? err.message : err,
+  if (input.smsAlreadySent) {
+    const { verifyAppointmentBooking } = await import(
+      "@/lib/agents/appointment-booking/verify-booking"
     );
+    await verifyAppointmentBooking({
+      workspaceId: input.workspaceId,
+      appointmentId: input.appointmentId,
+      callId: input.callId,
+      smsAlreadySent: true,
+    }).catch(() => undefined);
+    return;
   }
+  const phone = input.phone ? normalizeE164(input.phone) : "";
+  let smsSent = false;
+  if (phone) {
+    const smsOn = await agentSmsConfirmationsEnabled(input.workspaceId, input.agentId);
+    if (smsOn) {
+      const smsBody = `Your ${input.serviceName} appointment is confirmed for ${when}.`;
+      try {
+        const { sendQuickSms } = await import("@/lib/sms/send-quick");
+        await sendQuickSms({
+          workspaceId: input.workspaceId,
+          to: phone,
+          body: smsBody,
+        });
+        smsSent = true;
+      } catch (err) {
+        console.warn(
+          "[voice] appointment SMS confirmation failed",
+          err instanceof Error ? err.message : err,
+        );
+      }
+    }
+  }
+
+  const { verifyAppointmentBooking } = await import(
+    "@/lib/agents/appointment-booking/verify-booking"
+  );
+  await verifyAppointmentBooking({
+    workspaceId: input.workspaceId,
+    appointmentId: input.appointmentId,
+    callId: input.callId,
+    smsAlreadySent: smsSent || Boolean(input.smsAlreadySent),
+  }).catch(() => undefined);
 }
 

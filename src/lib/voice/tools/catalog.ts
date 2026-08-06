@@ -459,6 +459,8 @@ const TEMPLATE_DEFAULTS: Record<string, readonly string[]> = {
     "mark_disposition",
     "resolve_datetime",
     "calendar_availability",
+    "hold_appointment_slot",
+    "release_appointment_hold",
     "book_appointment",
     "find_appointments",
     "reschedule_appointment",

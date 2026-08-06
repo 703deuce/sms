@@ -748,9 +748,16 @@ export function AppointmentAgentDetail({ agentId }: { agentId: string }) {
               ["Calls answered", agent.metrics.callsAnswered],
               ["Booking conversations", agent.metrics.bookingConversationsStarted],
               ["Appointments booked", agent.metrics.appointmentsBooked],
+              ["Abandoned bookings", agent.metrics.abandonedBookingConversations],
               ["Rescheduled", agent.metrics.appointmentsRescheduled],
               ["Cancelled", agent.metrics.appointmentsCancelled],
               ["Conversion", `${agent.metrics.bookingConversionRate}%`],
+              [
+                "Avg time to book",
+                agent.metrics.averageTimeToBookingSeconds != null
+                  ? `${agent.metrics.averageTimeToBookingSeconds}s`
+                  : "—",
+              ],
               ["Transfers", agent.metrics.transfers],
               ["Messages taken", agent.metrics.messagesTaken],
               ["Booking failures", agent.metrics.bookingFailures],
