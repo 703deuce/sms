@@ -391,4 +391,166 @@ assert(
   afterCutoff.length === 1 && afterCutoff[0].startsAt.startsWith("2026-08-07"),
 );
 
+import { fieldsForOwner, migrationReport } from "../src/lib/agents/appointment-booking/field-ownership";
+assert("brain owns businessName", fieldsForOwner("company_brain").includes("businessName"));
+assert("amy owns collectFields", fieldsForOwner("amy_profile").includes("collectFields"));
+assert(
+  "deploy owns telnyxAssistantId",
+  fieldsForOwner("deployment_runtime").includes("telnyxAssistantId"),
+);
+const report = migrationReport();
+assert("migration report has rows", report.rows.length >= 40);
+assert("dual-read phase noted", report.dualReadCount > 0);
+assert("deploy path documented", report.deployPath.includes("appointment-receptionist"));
+
+import {
+  computeSetupReadiness,
+  setupInterviewOpening,
+  setupCommandToProposalInput,
+} from "../src/lib/agents/appointment-booking/setup-commands";
+import { runtimeRegistrySummary } from "../src/lib/agents/appointment-booking/runtime-registry";
+
+const stubAgent = {
+  identity: {
+    id: "a1",
+    workspaceId: "w1",
+    name: "Amy",
+    displayName: "Amy",
+    role: "appointment_booking" as const,
+    roleLabel: "Appointment Booking Agent",
+    channel: "voice" as const,
+    description: "",
+    status: "configuring" as const,
+  },
+  voiceAgentId: "a1",
+  phoneNumberIds: [],
+  calendarConnectionIds: [],
+  automationFlowIds: [],
+  executionMode: "conversational_with_deterministic_tools" as const,
+  profile: {
+    agentId: "a1",
+    locationIds: [],
+    serviceIds: [],
+    calendarConnectionIds: [],
+    bookingMode: "exact_slot" as const,
+    minimumNoticeMinutes: 120,
+    maximumAdvanceDays: 30,
+    requiredFields: {
+      name: true,
+      phone: true,
+      email: false,
+      serviceAddress: false,
+      service: true,
+    },
+    canBook: true,
+    canReschedule: true,
+    canCancel: true,
+    requireFinalConfirmation: true,
+    sendConfirmationSms: true,
+    timezone: "America/New_York",
+  },
+  bookingPolicy: {
+    canBook: true,
+    canReschedule: true,
+    canCancel: true,
+    requireCallerName: true,
+    requirePhoneNumber: true,
+    requireEmail: false,
+    requireServiceAddress: false,
+    appointmentDurationMinutes: 60,
+    minimumNoticeMinutes: 120,
+    maximumAdvanceDays: 30,
+    allowedServices: [],
+    allowedLocations: [],
+    requireFinalConfirmation: true,
+    sendSmsConfirmation: true,
+    sendEmailConfirmation: false,
+    bookingMode: "exact_slot" as const,
+  },
+  businessBrain: {
+    businessName: "Acme Plumbing",
+    defaultTimezone: "America/New_York",
+    locations: [],
+    services: [{ id: "drain", name: "Drain cleaning" }],
+    staff: [],
+    transferDestinations: [],
+    approvedPolicies: [],
+    prohibitedClaims: [],
+    knowledgeFacts: [],
+  },
+  health: {
+    overall: "warning" as const,
+    telnyxAssistant: { status: "failed" as const, message: "n", required: true, checkedAt: "" },
+    assignedNumber: { status: "failed" as const, message: "n", required: true, checkedAt: "" },
+    calendar: { status: "failed" as const, message: "n", required: true, checkedAt: "" },
+    bookingTools: { status: "warning" as const, message: "n", required: true, checkedAt: "" },
+    transferTargets: { status: "warning" as const, message: "n", required: false, checkedAt: "" },
+    smsConfirmation: { status: "healthy" as const, message: "n", required: false, checkedAt: "" },
+    webhookEndpoint: { status: "healthy" as const, message: "n", required: true, checkedAt: "" },
+    latestDeployment: { status: "failed" as const, message: "n", required: true, checkedAt: "" },
+    primaryWorkflow: { status: "failed" as const, message: "n", required: true, checkedAt: "" },
+    slotHolds: { status: "healthy" as const, message: "n", required: true, checkedAt: "" },
+    deploymentDrift: { status: "unknown" as const, message: "n", required: true, checkedAt: "" },
+    lastCheckedAt: "",
+  },
+  metrics: {
+    callsAnswered: 0,
+    bookingConversationsStarted: 0,
+    appointmentsBooked: 0,
+    appointmentsRescheduled: 0,
+    appointmentsCancelled: 0,
+    abandonedBookingConversations: 0,
+    averageTimeToBookingSeconds: null,
+    mostRequestedServices: [],
+    bookingConversionRate: 0,
+    transfers: 0,
+    messagesTaken: 0,
+    bookingFailures: 0,
+    calendarFailures: 0,
+    confirmationSmsSent: 0,
+    confirmationEmailsSent: 0,
+    windowDays: 7,
+  },
+  versions: [],
+  resources: {
+    numberLabel: "None",
+    calendarLabel: "None",
+    workflowLabel: "None",
+    locationLabel: "None",
+  },
+  createdAt: "",
+  updatedAt: "",
+};
+
+const readiness = computeSetupReadiness(stubAgent as never);
+assert("setup asks for phone", readiness.missingAmySpecific.some((q) => /phone/i.test(q)));
+assert(
+  "interview mentions job",
+  /book appointments/i.test(setupInterviewOpening(stubAgent as never)),
+);
+const voiceCmd = setupCommandToProposalInput({
+  type: "set_voice_configuration",
+  openingGreeting: "Hi, this is Amy.",
+});
+assert("voice setup maps to proposal", Boolean(voiceCmd?.voice?.openingGreeting));
+
+const runtimes = runtimeRegistrySummary();
+assert("four runtimes registered", runtimes.length === 4);
+assert(
+  "caller has live tools",
+  runtimes.find((r) => r.id === "caller_amy")?.writePermission === "live_tools",
+);
+assert(
+  "owner is proposal_only",
+  runtimes.find((r) => r.id === "owner_amy")?.writePermission === "proposal_only",
+);
+
+const custom = createCustomCollectionField({
+  label: "Vehicle year make model",
+  required: true,
+  question: "What is the year, make, and model of your vehicle?",
+});
+assert("custom field has question", Boolean(custom.question?.includes("vehicle")));
+assert("custom field saveTo", (custom.saveTo || []).includes("appointment"));
+
 console.log("\nDone.");

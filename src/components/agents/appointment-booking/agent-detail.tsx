@@ -1,72 +1,61 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import type { AppointmentBookingAgentView } from "@/lib/agents/appointment-booking/types";
 import { cn } from "@/lib/utils";
 
-type TabId =
-  | "home"
-  | "overview"
-  | "talk"
-  | "setup"
-  | "workflows"
-  | "test"
-  | "activity"
-  | "results"
+type PrimarySection = "home" | "talk" | "work" | "build" | "settings";
+type WorkSub = "activity" | "results" | "attention";
+type BuildSub = "workflow" | "tests" | "versions";
+type SettingsSub =
+  | "general"
+  | "booking"
+  | "fields"
+  | "knowledge"
+  | "connections"
+  | "voice"
   | "health"
-  | "memory"
-  | "attention"
-  | "autonomy"
-  | "versions";
+  | "autonomy";
 
-const TABS: Array<{ id: TabId; label: string }> = [
+const PRIMARY: Array<{ id: PrimarySection; label: string }> = [
   { id: "home", label: "Home" },
-  { id: "overview", label: "Overview" },
-  { id: "talk", label: "Talk" },
-  { id: "setup", label: "Setup" },
-  { id: "workflows", label: "Workflows" },
-  { id: "test", label: "Test" },
-  { id: "activity", label: "Activity" },
-  { id: "results", label: "Results" },
-  { id: "health", label: "Health" },
-  { id: "memory", label: "Memory" },
-  { id: "attention", label: "Attention" },
-  { id: "autonomy", label: "Autonomy" },
-  { id: "versions", label: "Versions" },
+  { id: "talk", label: "Talk to Amy" },
+  { id: "work", label: "Work" },
+  { id: "build", label: "Build & Test" },
+  { id: "settings", label: "Settings" },
 ];
 
 const SUGGESTED = [
-  "Explain your setup",
-  "Which number are you assigned to?",
-  "Which calendar do you use?",
-  "How many appointments did you book this week?",
-  "Show recent failures",
+  "How did today go?",
+  "Why didn’t the last caller book?",
+  "Add a required question",
   "Change the minimum notice to four hours",
-  "Create an after-hours emergency workflow draft",
-  "What is your health status?",
+  "Stop offering same-day appointments after 3 PM",
+  "Test yourself",
+  "Create another Amy",
 ];
 
-function HealthBadge({ overall }: { overall: string }) {
-  const tone =
-    overall === "healthy"
+function Pill({
+  children,
+  tone = "neutral",
+}: {
+  children: ReactNode;
+  tone?: "ok" | "warn" | "bad" | "neutral" | "brand";
+}) {
+  const cls =
+    tone === "ok"
       ? "bg-emerald-50 text-emerald-700"
-      : overall === "degraded" || overall === "warning"
+      : tone === "warn"
         ? "bg-amber-50 text-amber-800"
-        : overall === "failed"
+        : tone === "bad"
           ? "bg-rose-50 text-rose-700"
-          : "bg-slate-100 text-slate-600";
+          : tone === "brand"
+            ? "bg-violet-600 text-white"
+            : "bg-slate-100 text-slate-700";
   return (
-    <span className={cn("inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold capitalize", tone)}>
-      {overall.replaceAll("_", " ")}
-    </span>
-  );
-}
-
-function StatusBadge({ status }: { status: string }) {
-  return (
-    <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold capitalize text-slate-700">
-      {status.replaceAll("_", " ")}
+    <span className={cn("inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold", cls)}>
+      {children}
     </span>
   );
 }
@@ -75,40 +64,54 @@ export function AppointmentAgentDetail({ agentId }: { agentId: string }) {
   const [agent, setAgent] = useState<AppointmentBookingAgentView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<TabId>("home");
+  const [section, setSection] = useState<PrimarySection>("talk");
+  const [workSub, setWorkSub] = useState<WorkSub>("activity");
+  const [buildSub, setBuildSub] = useState<BuildSub>("versions");
+  const [settingsSub, setSettingsSub] = useState<SettingsSub>("booking");
   const [activity, setActivity] = useState<unknown[]>([]);
   const [proposals, setProposals] = useState<unknown[]>([]);
   const [workflowDrafts, setWorkflowDrafts] = useState<unknown[]>([]);
+  const [attention, setAttention] = useState<{ items?: unknown[]; openCount?: number } | null>(
+    null,
+  );
+  const [memory, setMemory] = useState<Record<string, unknown> | null>(null);
+  const [autonomy, setAutonomy] = useState<Record<string, unknown> | null>(null);
+  const [testSuite, setTestSuite] = useState<{
+    results?: Array<{ scenarioId: string; name: string; status: string; failureReason?: string | null }>;
+    summary?: { total: number; passed: number; pending: number; failed: number };
+  } | null>(null);
+  const [timeline, setTimeline] = useState<unknown[] | null>(null);
+  const [selectedCallId, setSelectedCallId] = useState<string | null>(null);
   const [chat, setChat] = useState<
     Array<{
       role: "user" | "agent";
       text: string;
-      evidence?: Array<{ label: string; href?: string; kind: string }>;
-      workingStatus?: string;
+      evidence?: Array<{ label: string; href?: string }>;
+      proposalId?: string;
     }>
   >([]);
   const [question, setQuestion] = useState("");
   const [busy, setBusy] = useState(false);
   const [chatStatus, setChatStatus] = useState<string | null>(null);
   const [pendingProposalId, setPendingProposalId] = useState<string | null>(null);
-  const [attention, setAttention] = useState<{ items?: unknown[]; openCount?: number } | null>(null);
-  const [memory, setMemory] = useState<Record<string, unknown> | null>(null);
-  const [autonomy, setAutonomy] = useState<Record<string, unknown> | null>(null);
-  const [timeline, setTimeline] = useState<unknown[] | null>(null);
-  const [selectedCallId, setSelectedCallId] = useState<string | null>(null);
-  const [testSuite, setTestSuite] = useState<{
-    results?: Array<{
-      scenarioId: string;
-      name: string;
-      status: string;
-      expectedTools?: string[];
-      callerScript?: string[];
-      note?: string;
-      failureReason?: string | null;
-    }>;
-    summary?: { total: number; passed: number; pending: number; failed: number };
+
+  // Settings draft editors (proposal pipeline — never direct Telnyx mutate)
+  const [noticeHours, setNoticeHours] = useState("2");
+  const [sameDayCutoff, setSameDayCutoff] = useState("15:00");
+  const [requireAddress, setRequireAddress] = useState(false);
+  const [greetingDraft, setGreetingDraft] = useState("");
+  const [setupReadiness, setSetupReadiness] = useState<{
+    completeCount?: number;
+    totalCount?: number;
+    interviewOpening?: string;
+    sections?: Array<{ id: string; label: string; status: string; detail: string }>;
   } | null>(null);
-  const [mctbHandoff, setMctbHandoff] = useState<Record<string, unknown> | null>(null);
+  const [drift, setDrift] = useState<{
+    message?: string;
+    drifted?: boolean;
+    expectedVersionNumber?: number | null;
+  } | null>(null);
+  const [talkSeeded, setTalkSeeded] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -117,7 +120,14 @@ export function AppointmentAgentDetail({ agentId }: { agentId: string }) {
       const res = await fetch(`/api/agents/${agentId}`, { cache: "no-store" });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.error || `Failed (${res.status})`);
-      setAgent(json.data);
+      const data = json.data as AppointmentBookingAgentView;
+      setAgent(data);
+      setNoticeHours(String(Math.round((data.bookingPolicy.minimumNoticeMinutes || 120) / 60)));
+      setSameDayCutoff(data.bookingPolicy.sameDayCutoff || "15:00");
+      setRequireAddress(Boolean(data.bookingPolicy.requireServiceAddress));
+      setGreetingDraft(
+        `Thank you for calling ${data.businessBrain.businessName || "us"}. This is ${data.identity.displayName} — how can I help you today?`,
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -144,77 +154,71 @@ export function AppointmentAgentDetail({ agentId }: { agentId: string }) {
   );
 
   useEffect(() => {
-    if (tab !== "activity" || !agent) return;
-    void (async () => {
-      try {
-        const data = await runCommand("search_agent_activity", { limit: 20 });
-        setActivity(data.traces || []);
-      } catch {
-        setActivity([]);
-      }
-    })();
-  }, [tab, agent, runCommand]);
-
-  useEffect(() => {
-    if (
-      tab !== "versions" &&
-      tab !== "workflows" &&
-      tab !== "setup" &&
-      tab !== "test" &&
-      tab !== "attention" &&
-      tab !== "memory" &&
-      tab !== "autonomy" &&
-      tab !== "home" &&
-      tab !== "activity"
-    ) {
-      return;
-    }
     if (!agent) return;
     void (async () => {
       try {
-        if (tab === "versions" || tab === "workflows" || tab === "home") {
-          const data = await runCommand("list_change_proposals");
-          setProposals(data.proposals || []);
+        if (section === "home" || section === "talk" || (section === "work" && workSub === "attention")) {
+          setAttention(await runCommand("get_attention_inbox"));
         }
-        if (tab === "workflows") {
-          const data = await runCommand("list_workflow_drafts");
-          setWorkflowDrafts(data.drafts || []);
+        if (section === "talk" || section === "home") {
+          const readiness = await runCommand("get_setup_readiness");
+          setSetupReadiness(readiness);
+          if (
+            section === "talk" &&
+            !talkSeeded &&
+            readiness?.interviewOpening
+          ) {
+            setChat([
+              {
+                role: "agent",
+                text: String(readiness.interviewOpening),
+              },
+            ]);
+            setTalkSeeded(true);
+          }
         }
-        if (tab === "setup") {
-          const data = await runCommand("get_missed_call_handoff");
-          setMctbHandoff((data.handoff as Record<string, unknown>) || null);
-        }
-        if (tab === "test") {
-          const data = await runCommand("run_agent_test_suite");
-          setTestSuite(data);
-        }
-        if (tab === "attention" || tab === "home") {
-          const data = await runCommand("get_attention_inbox");
-          setAttention(data);
-        }
-        if (tab === "memory") {
-          const data = await runCommand("get_memory_view");
-          setMemory(data);
-        }
-        if (tab === "autonomy") {
-          const data = await runCommand("get_autonomy_policy");
-          setAutonomy(data);
-        }
-        if (tab === "activity") {
+        if (section === "work" && workSub === "activity") {
           const data = await runCommand("search_agent_activity", { limit: 20 });
           setActivity(data.traces || []);
         }
+        if (section === "build") {
+          const props = await runCommand("list_change_proposals");
+          setProposals(props.proposals || []);
+          if (buildSub === "workflow") {
+            const drafts = await runCommand("list_workflow_drafts");
+            setWorkflowDrafts(drafts.drafts || []);
+          }
+          if (buildSub === "tests") {
+            setTestSuite(await runCommand("run_agent_test_suite"));
+          }
+        }
+        if (section === "settings") {
+          if (settingsSub === "knowledge") setMemory(await runCommand("get_memory_view"));
+          if (settingsSub === "autonomy") setAutonomy(await runCommand("get_autonomy_policy"));
+          if (settingsSub === "health") {
+            setDrift(await runCommand("get_deployment_drift"));
+          }
+          if (
+            settingsSub === "general" ||
+            settingsSub === "booking" ||
+            settingsSub === "fields" ||
+            settingsSub === "voice"
+          ) {
+            const props = await runCommand("list_change_proposals");
+            setProposals(props.proposals || []);
+          }
+        }
       } catch {
-        /* ignore load errors for optional panels */
+        /* optional panels */
       }
     })();
-  }, [tab, agent, runCommand]);
+  }, [agent, section, workSub, buildSub, settingsSub, runCommand, talkSeeded]);
 
   const ask = async (text: string) => {
     const q = text.trim();
     if (!q) return;
     setBusy(true);
-    setChatStatus("Searching configuration, activity, and tools…");
+    setChatStatus("Working…");
     setChat((prev) => [...prev, { role: "user", text: q }]);
     setQuestion("");
     try {
@@ -225,21 +229,64 @@ export function AppointmentAgentDetail({ agentId }: { agentId: string }) {
           role: "agent",
           text: String(data.answer || "No answer returned."),
           evidence: Array.isArray(data.evidence) ? data.evidence : undefined,
-          workingStatus: data.workingStatus ? String(data.workingStatus) : undefined,
+          proposalId: data.proposalId ? String(data.proposalId) : undefined,
         },
       ]);
       if (data.proposalId) setPendingProposalId(String(data.proposalId));
-      if (data.requiresConfirmation) setTab("versions");
     } catch (err) {
+      setChat((prev) => [
+        ...prev,
+        { role: "agent", text: err instanceof Error ? err.message : "Request failed" },
+      ]);
+    } finally {
+      setChatStatus(null);
+      setBusy(false);
+    }
+  };
+
+  const putLive = async (proposalId: string) => {
+    setBusy(true);
+    try {
+      await runCommand("confirm_change_proposal", {
+        proposalId,
+        confirm: true,
+        publish: true,
+      });
+      setPendingProposalId(null);
+      setChat((prev) => [
+        ...prev,
+        { role: "agent", text: "Change is live on the phone line now." },
+      ]);
+      await load();
+      const props = await runCommand("list_change_proposals");
+      setProposals(props.proposals || []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const proposeBookingPatch = async (summary: string, patch: Record<string, unknown>) => {
+    setBusy(true);
+    try {
+      const proposal = await runCommand("propose_setup_change", {
+        summary,
+        bookingPolicy: patch,
+      });
+      setPendingProposalId(String(proposal.id));
+      setSection("talk");
       setChat((prev) => [
         ...prev,
         {
           role: "agent",
-          text: err instanceof Error ? err.message : "Request failed",
+          text: `I drafted: ${summary}. Confirm to put it live on the phone line.`,
+          proposalId: String(proposal.id),
         },
       ]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
     } finally {
-      setChatStatus(null);
       setBusy(false);
     }
   };
@@ -248,9 +295,7 @@ export function AppointmentAgentDetail({ agentId }: { agentId: string }) {
     if (!agent) return;
     setBusy(true);
     try {
-      const command =
-        agent.identity.status === "paused" ? "resume_agent" : "pause_agent";
-      await runCommand(command);
+      await runCommand(agent.identity.status === "paused" ? "resume_agent" : "pause_agent");
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -259,1313 +304,943 @@ export function AppointmentAgentDetail({ agentId }: { agentId: string }) {
     }
   };
 
-  const displayName = useMemo(
-    () => agent?.identity.displayName || "Appointment Booking Agent",
-    [agent],
-  );
+  const name = agent?.identity.name || "Amy";
+  const versionLabel = useMemo(() => {
+    if (!agent?.currentVersionId) return "—";
+    const v = agent.versions.find((x) => x.id === agent.currentVersionId);
+    return v ? `v${v.version}` : "active";
+  }, [agent]);
 
   if (loading) {
-    return <div className="p-6 text-sm text-slate-500">Loading agent…</div>;
+    return <div className="p-6 text-sm text-slate-500">Loading {name}…</div>;
   }
   if (error || !agent) {
     return (
       <div className="space-y-3 p-6">
         <p className="text-sm text-rose-600">{error || "Agent not found"}</p>
-        <Link href="/agents" className="text-sm font-medium text-blue-600">
+        <Link href="/agents" className="text-sm font-medium text-violet-600">
           Back to Your Team
         </Link>
       </div>
     );
   }
 
+  const guidedHref = agent.solutionSetupId
+    ? `/solutions/ai-call-handling/appointment-assistant/setup?setupId=${agent.solutionSetupId}&hire=amy`
+    : `/solutions/ai-call-handling/appointment-assistant/setup?agentId=${agent.voiceAgentId}&hire=amy`;
+
   return (
-    <div className="mx-auto max-w-6xl space-y-6 p-4 sm:p-6">
-      <header className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <p className="text-[12px] font-semibold uppercase tracking-wide text-slate-400">
-              {agent.identity.roleLabel || "Appointment Booking Agent"}
-            </p>
-            <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">
-              {agent.identity.name}
-            </h1>
-            <p className="mt-0.5 text-sm text-slate-500">{displayName}</p>
-            <p className="mt-2 max-w-2xl text-sm text-slate-600">
-              {agent.identity.description}
-            </p>
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <StatusBadge status={agent.identity.status} />
-              <HealthBadge overall={agent.health.overall} />
-              <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-700">
-                {agent.readiness?.label || agent.health.overall}
-              </span>
-              <span className="text-[12px] text-slate-500">
-                Main number: {agent.resources.numberLabel}
-              </span>
-              <span className="text-[12px] text-slate-500">
-                Location: {agent.resources.locationLabel}
-              </span>
-              <span className="text-[12px] text-slate-500">
-                Calendar: {agent.resources.calendarLabel}
-              </span>
-              {agent.currentVersionId ? (
-                <span className="text-[12px] text-slate-500">
-                  Current version: v
-                  {agent.versions.find((v) => v.id === agent.currentVersionId)?.version ??
-                    "—"}
-                </span>
-              ) : null}
-              <span className="text-[12px] text-slate-500 capitalize">
-                Autonomy: {agent.autonomyMode || "balanced"}
-              </span>
+    <div className="min-h-[calc(100vh-4rem)] bg-slate-50">
+      {/* Header */}
+      <header className="border-b border-slate-200 bg-white px-4 py-4 sm:px-6">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-start justify-between gap-4">
+          <div className="flex min-w-0 items-start gap-3">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-violet-100 text-lg font-bold text-violet-700">
+              {name.slice(0, 1)}
+            </div>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-xl font-semibold tracking-tight text-slate-900">{name}</h1>
+                <Pill tone="ok">
+                  {agent.identity.status === "active" ? "Active" : agent.identity.status}
+                </Pill>
+                <Pill tone={agent.health.overall === "healthy" ? "ok" : "warn"}>
+                  {agent.readiness?.label || agent.health.overall}
+                </Pill>
+              </div>
+              <p className="mt-0.5 text-sm text-slate-500">
+                {agent.identity.roleLabel || "Appointment Booking Agent"}
+              </p>
+              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[12px] text-slate-500">
+                <span>Main line: {agent.resources.numberLabel}</span>
+                <span>Calendar: {agent.resources.calendarLabel}</span>
+                <span>Location: {agent.resources.locationLabel}</span>
+                <span>Version: {versionLabel}</span>
+              </div>
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
+              onClick={() => setSection("talk")}
+              className="min-h-10 rounded-lg bg-violet-600 px-3 py-2 text-[12px] font-semibold text-white"
+            >
+              Talk to {name}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setSection("build");
+                setBuildSub("tests");
+              }}
+              className="min-h-10 rounded-lg border border-slate-200 bg-white px-3 py-2 text-[12px] font-semibold text-slate-700"
+            >
+              Test
+            </button>
+            <button
+              type="button"
               disabled={busy}
               onClick={() => void pauseOrResume()}
-              className="rounded-lg border border-slate-200 px-3 py-2 text-[12px] font-semibold text-slate-700 hover:bg-slate-50"
+              className="min-h-10 rounded-lg border border-slate-200 bg-white px-3 py-2 text-[12px] font-semibold text-slate-700"
             >
               {agent.identity.status === "paused" ? "Resume" : "Pause"}
             </button>
-            <Link
-              href={`/voice/agents/${agent.voiceAgentId}`}
-              className="rounded-lg border border-slate-200 px-3 py-2 text-[12px] font-semibold text-slate-700 hover:bg-slate-50"
-            >
-              Open builder
-            </Link>
-            <button
-              type="button"
-              onClick={() => setTab("talk")}
-              className="min-h-10 rounded-lg bg-slate-900 px-3 py-2 text-[12px] font-semibold text-white hover:bg-slate-800"
-            >
-              Talk to {agent.identity.name}
-            </button>
-            <button
-              type="button"
-              onClick={() => setTab("test")}
-              className="min-h-10 rounded-lg bg-blue-600 px-3 py-2 text-[12px] font-semibold text-white hover:bg-blue-500"
-            >
-              Test {agent.identity.name}
-            </button>
-            <button
-              type="button"
-              onClick={() => setTab("setup")}
-              className="min-h-10 rounded-lg border border-slate-200 px-3 py-2 text-[12px] font-semibold text-slate-700 hover:bg-slate-50"
-            >
-              Edit setup
-            </button>
-            <button
-              type="button"
-              onClick={() => setTab("workflows")}
-              className="min-h-10 rounded-lg border border-slate-200 px-3 py-2 text-[12px] font-semibold text-slate-700 hover:bg-slate-50"
-            >
-              View current workflow
-            </button>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() =>
-                void (async () => {
-                  setBusy(true);
-                  try {
-                    const result = await runCommand("duplicate_agent", {
-                      confirm: true,
-                      name: `${agent.identity.name} — copy`,
-                    });
-                    if (result?.href) window.location.href = String(result.href);
-                  } catch (err) {
-                    setError(err instanceof Error ? err.message : String(err));
-                  } finally {
-                    setBusy(false);
-                  }
-                })()
-              }
-              className="min-h-10 rounded-lg border border-slate-200 px-3 py-2 text-[12px] font-semibold text-slate-700 hover:bg-slate-50"
-            >
-              Create another {agent.identity.name}
-            </button>
           </div>
         </div>
+
+        <nav className="mx-auto mt-4 flex max-w-7xl gap-1 overflow-x-auto">
+          {PRIMARY.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setSection(t.id)}
+              className={cn(
+                "shrink-0 border-b-2 px-3 py-2 text-sm font-semibold",
+                section === t.id
+                  ? "border-violet-600 text-violet-700"
+                  : "border-transparent text-slate-500 hover:text-slate-800",
+              )}
+            >
+              {t.id === "talk" ? `Talk to ${name}` : t.label}
+            </button>
+          ))}
+        </nav>
       </header>
 
-      <nav className="-mx-1 flex gap-1 overflow-x-auto border-b border-slate-200 pb-px px-1">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            onClick={() => setTab(t.id)}
-            className={cn(
-              "shrink-0 rounded-t-lg px-3 py-2 text-[12px] font-semibold",
-              tab === t.id
-                ? "bg-white text-slate-900 ring-1 ring-slate-200"
-                : "text-slate-500 hover:text-slate-800",
-            )}
-          >
-            {t.label}
-          </button>
-        ))}
-      </nav>
-
-      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
-        {tab === "home" ? (
-          <div className="space-y-6">
-            <div>
-              <h2 className="text-sm font-semibold text-slate-900">Operational summary</h2>
-              <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-                {[
-                  ["Calls answered today", agent.metrics.callsAnswered],
-                  ["Booking conversations", agent.metrics.bookingConversationsStarted],
-                  ["Appointments booked", agent.metrics.appointmentsBooked],
-                  ["Booking conversion", `${agent.metrics.bookingConversionRate}%`],
-                  ["Transfers", agent.metrics.transfers],
-                  ["Unresolved failures", agent.metrics.bookingFailures + agent.metrics.calendarFailures],
-                  ["Pending approvals", attention?.openCount ?? "—"],
-                  ["Health warnings", (agent.readiness?.blockers || []).length],
-                ].map(([label, value]) => (
-                  <div key={String(label)} className="rounded-xl bg-slate-50 p-3">
-                    <p className="text-[11px] uppercase tracking-wide text-slate-400">{label}</p>
-                    <p className="mt-1 text-xl font-semibold text-slate-900">{value}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-            {(agent.readiness?.blockers || []).length > 0 ? (
-              <div className="space-y-2">
-                <h2 className="text-sm font-semibold text-slate-900">Needs attention</h2>
-                {(agent.readiness?.blockers || []).map((b) => (
-                  <div
-                    key={b.code}
-                    className="rounded-xl border border-amber-200 bg-amber-50/50 px-4 py-3 text-sm"
-                  >
-                    <p className="font-medium text-slate-900">{b.message}</p>
-                    <p className="mt-1 text-[12px] text-slate-600">
-                      {b.affectedFunctionality}. {b.recommendedAction}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-                No readiness blockers — {agent.readiness?.label || "status unknown"}.
-              </p>
-            )}
-            <div className="space-y-2">
-              <h2 className="text-sm font-semibold text-slate-900">Recommended actions</h2>
-              {(attention?.items as Array<{ id: string; title: string; recommendedAction: string; href?: string; askAmyPrompt?: string }> | undefined)?.length ? (
-                (attention!.items as Array<{ id: string; title: string; recommendedAction: string; href?: string; askAmyPrompt?: string }>).slice(0, 6).map((item) => (
-                  <div key={item.id} className="flex flex-col gap-2 rounded-xl border border-slate-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-slate-900">{item.title}</p>
-                      <p className="text-[12px] text-slate-600">{item.recommendedAction}</p>
+      <div className="mx-auto grid max-w-7xl gap-4 p-4 lg:grid-cols-[1fr_300px] sm:p-6">
+        <main className="min-w-0 rounded-2xl border border-slate-200 bg-white shadow-sm">
+          {section === "home" ? (
+            <div className="space-y-6 p-5">
+              <div>
+                <h2 className="text-sm font-semibold text-slate-900">Today</h2>
+                <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  {[
+                    ["Calls answered", agent.metrics.callsAnswered],
+                    ["Appointments booked", agent.metrics.appointmentsBooked],
+                    ["Conversion", `${agent.metrics.bookingConversionRate}%`],
+                    ["Needs attention", attention?.openCount ?? 0],
+                  ].map(([l, v]) => (
+                    <div key={String(l)} className="rounded-xl bg-slate-50 p-3">
+                      <p className="text-[11px] uppercase tracking-wide text-slate-400">{l}</p>
+                      <p className="mt-1 text-xl font-semibold text-slate-900">{v}</p>
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                      {item.href ? (
-                        <Link href={item.href} className="text-[12px] font-semibold text-blue-600">
-                          Open
-                        </Link>
-                      ) : null}
-                      {item.askAmyPrompt ? (
-                        <button
-                          type="button"
-                          className="text-[12px] font-semibold text-slate-700"
-                          onClick={() => {
-                            setTab("talk");
-                            void ask(item.askAmyPrompt!);
-                          }}
-                        >
-                          Ask {agent.identity.name}
-                        </button>
-                      ) : null}
+                  ))}
+                </div>
+              </div>
+              {(agent.readiness?.blockers || []).length ? (
+                <div className="space-y-2">
+                  <h2 className="text-sm font-semibold text-slate-900">Needs attention</h2>
+                  {(agent.readiness?.blockers || []).slice(0, 5).map((b) => (
+                    <div key={b.code} className="rounded-xl border border-amber-200 bg-amber-50/50 px-4 py-3 text-sm">
+                      <p className="font-medium">{b.message}</p>
+                      <p className="mt-1 text-[12px] text-slate-600">{b.recommendedAction}</p>
                     </div>
-                  </div>
-                ))
+                  ))}
+                </div>
               ) : (
-                <p className="text-sm text-slate-500">No recommended actions right now.</p>
+                <p className="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                  {name} is ready — no readiness blockers.
+                </p>
               )}
-            </div>
-            <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-              <p className="font-semibold text-slate-900">How {agent.identity.name} runs after activation</p>
-              <p className="mt-1 text-[12px] text-slate-600">
-                Caller dials her number → Telnyx answers with the published assistant → booking
-                tools hit your calendar (with slot holds) → outcomes and traces show here.
-                Tell her what to change in Talk → confirm → she republishes to the live line.
+              <p className="text-[12px] text-slate-500">
+                Callers talk to the published Telnyx assistant. You manage {name} here — Talk,
+                Settings, and Build & Test all use the same proposal → test → publish pipeline.
+                Guided setup reuses the proven wizard engine without a second source of truth.
               </p>
             </div>
-            <div>
-              <h2 className="text-sm font-semibold text-slate-900">Last deployment</h2>
-              <p className="mt-1 text-sm text-slate-600">
-                {agent.versions.find((v) => v.id === agent.currentVersionId)
-                  ? `v${agent.versions.find((v) => v.id === agent.currentVersionId)!.version} · ${new Date(agent.versions.find((v) => v.id === agent.currentVersionId)!.publishedAt).toLocaleString()}`
-                  : "No published version yet"}
-              </p>
-            </div>
-          </div>
-        ) : null}
+          ) : null}
 
-        {tab === "overview" ? (
-          <div className="grid gap-6 md:grid-cols-2">
-            <div>
-              <h2 className="text-sm font-semibold text-slate-900">What {agent.identity.name} does</h2>
-              <p className="mt-2 text-sm text-slate-600">
-                Answers calls, collects booking details, checks real availability, confirms
-                with the caller, creates the appointment, and can send confirmation texts.
-              </p>
-              <dl className="mt-4 space-y-2 text-sm">
-                <div className="flex justify-between gap-3">
-                  <dt className="text-slate-500">Readiness</dt>
-                  <dd className="font-medium capitalize">{agent.health.overall}</dd>
-                </div>
-                <div className="flex justify-between gap-3">
-                  <dt className="text-slate-500">Number</dt>
-                  <dd className="font-medium">{agent.resources.numberLabel}</dd>
-                </div>
-                <div className="flex justify-between gap-3">
-                  <dt className="text-slate-500">Calendar</dt>
-                  <dd className="font-medium">{agent.resources.calendarLabel}</dd>
-                </div>
-                <div className="flex justify-between gap-3">
-                  <dt className="text-slate-500">Workflow</dt>
-                  <dd className="font-medium">{agent.resources.workflowLabel}</dd>
-                </div>
-              </dl>
-            </div>
-            <div>
-              <h2 className="text-sm font-semibold text-slate-900">This week</h2>
-              <div className="mt-3 grid grid-cols-2 gap-3">
-                {[
-                  ["Calls answered", agent.metrics.callsAnswered],
-                  ["Appointments booked", agent.metrics.appointmentsBooked],
-                  ["Conversion", `${agent.metrics.bookingConversionRate}%`],
-                  ["Transfers", agent.metrics.transfers],
-                ].map(([label, value]) => (
-                  <div key={String(label)} className="rounded-xl bg-slate-50 p-3">
-                    <p className="text-[11px] uppercase tracking-wide text-slate-400">
-                      {label}
+          {section === "talk" ? (
+            <div className="flex min-h-[28rem] flex-col">
+              <div className="flex-1 space-y-4 overflow-y-auto p-5">
+                {chat.length === 0 ? (
+                  <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                    <p className="font-medium">{name}</p>
+                    <p className="mt-1">
+                      I book appointments for {agent.businessBrain.businessName || "your business"}.
+                      Ask how today went, why a call failed, or tell me what to change — I’ll draft
+                      it and ask before it goes live.
                     </p>
-                    <p className="mt-1 text-xl font-semibold text-slate-900">{value}</p>
                   </div>
-                ))}
-              </div>
-              {agent.health.overall !== "healthy" ? (
-                <p className="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
-                  Warning: {agent.health.calendar.message}. Open the Health tab for full
-                  dependency status.
-                </p>
-              ) : null}
-            </div>
-          </div>
-        ) : null}
-
-        {tab === "talk" ? (
-          <div className="space-y-4">
-            <p className="text-sm text-slate-600">
-              Ask {agent.identity.name} about live setup, logs, health, and metrics. Answers use
-              tools — {agent.identity.pronouns?.subject || "she"} will not invent missing data.
-            </p>
-            {chatStatus ? (
-              <p className="rounded-lg bg-blue-50 px-3 py-2 text-[12px] text-blue-800">
-                {chatStatus}
-              </p>
-            ) : null}
-            {pendingProposalId ? (
-              <div className="rounded-xl border border-amber-200 bg-amber-50/50 px-4 py-3">
-                <p className="text-sm font-semibold text-slate-900">
-                  Draft change waiting — not on the phone line yet
-                </p>
-                <p className="mt-1 text-[12px] text-slate-600">
-                  Proposal {pendingProposalId.slice(0, 10)}… Confirm to publish to callers, or say
-                  “yes, put it live” in chat.
-                </p>
-                <button
-                  type="button"
-                  disabled={busy}
-                  className="mt-3 rounded-lg bg-emerald-600 px-3 py-2 text-[12px] font-semibold text-white"
-                  onClick={() =>
-                    void (async () => {
-                      setBusy(true);
-                      try {
-                        await runCommand("confirm_change_proposal", {
-                          proposalId: pendingProposalId,
-                          confirm: true,
-                          publish: true,
-                        });
-                        setPendingProposalId(null);
-                        setChat((prev) => [
-                          ...prev,
-                          {
-                            role: "agent",
-                            text: "Change is live on the phone line now.",
-                          },
-                        ]);
-                        await load();
-                      } catch (err) {
-                        setError(err instanceof Error ? err.message : String(err));
-                      } finally {
-                        setBusy(false);
-                      }
-                    })()
-                  }
-                >
-                  Put change live
-                </button>
-              </div>
-            ) : null}
-            <div className="flex flex-wrap gap-2">
-              {SUGGESTED.map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void ask(s)}
-                  className="rounded-full border border-slate-200 px-3 py-1.5 text-[12px] text-slate-700 hover:bg-slate-50"
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
-            <div className="max-h-80 space-y-3 overflow-y-auto rounded-xl bg-slate-50 p-4">
-              {chat.length === 0 ? (
-                <p className="text-sm text-slate-500">No messages yet.</p>
-              ) : (
-                chat.map((m, i) => (
+                ) : null}
+                {chat.map((m, i) => (
                   <div
                     key={`${m.role}-${i}`}
                     className={cn(
-                      "max-w-[90%] rounded-xl px-3 py-2 text-sm",
+                      "max-w-[92%] rounded-2xl px-4 py-3 text-sm",
                       m.role === "user"
-                        ? "ml-auto bg-slate-900 text-white"
-                        : "bg-white text-slate-800 ring-1 ring-slate-200",
+                        ? "ml-auto bg-violet-600 text-white"
+                        : "bg-slate-50 text-slate-800",
                     )}
                   >
-                    <p>{m.text}</p>
+                    <p className="whitespace-pre-wrap">{m.text}</p>
+                    {m.proposalId ? (
+                      <div className="mt-3 rounded-xl border border-violet-200 bg-white p-3 text-slate-800">
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-violet-700">
+                          Proposed change
+                        </p>
+                        <p className="mt-1 text-[12px]">Requires your approval before callers see it.</p>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => void putLive(m.proposalId!)}
+                            className="rounded-lg bg-violet-600 px-3 py-1.5 text-[12px] font-semibold text-white"
+                          >
+                            Put change live
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSection("build");
+                              setBuildSub("versions");
+                            }}
+                            className="rounded-lg border border-slate-200 px-3 py-1.5 text-[12px] font-semibold"
+                          >
+                            Review draft
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
                     {m.evidence?.length ? (
                       <div className="mt-2 flex flex-wrap gap-2">
                         {m.evidence.map((ev) =>
                           ev.href ? (
                             <Link
-                              key={`${ev.label}-${ev.href}`}
+                              key={ev.label}
                               href={ev.href}
-                              className="rounded-md bg-slate-100 px-2 py-1 text-[11px] font-semibold text-blue-700"
+                              className="rounded-md bg-white px-2 py-1 text-[11px] font-semibold text-violet-700 ring-1 ring-slate-200"
                             >
                               {ev.label}
                             </Link>
-                          ) : (
-                            <span
-                              key={ev.label}
-                              className="rounded-md bg-slate-100 px-2 py-1 text-[11px] text-slate-600"
-                            >
-                              {ev.label}
-                            </span>
-                          ),
+                          ) : null,
                         )}
                       </div>
                     ) : null}
                   </div>
-                ))
-              )}
+                ))}
+                {chatStatus ? (
+                  <p className="text-[12px] text-violet-700">{chatStatus}</p>
+                ) : null}
+                {pendingProposalId ? (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-3 text-sm">
+                    Draft waiting — not on the phone yet.
+                    <button
+                      type="button"
+                      disabled={busy}
+                      className="ml-3 font-semibold text-violet-700"
+                      onClick={() => void putLive(pendingProposalId)}
+                    >
+                      Put change live
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+              <div className="border-t border-slate-100 p-4">
+                <div className="mb-3 flex flex-wrap gap-2">
+                  {SUGGESTED.map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      disabled={busy}
+                      onClick={() => void ask(s)}
+                      className="rounded-full border border-slate-200 px-3 py-1.5 text-[12px] text-slate-700 hover:bg-slate-50"
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+                <form
+                  className="flex gap-2"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    void ask(question);
+                  }}
+                >
+                  <input
+                    value={question}
+                    onChange={(e) => setQuestion(e.target.value)}
+                    placeholder={`Message ${name}…`}
+                    className="h-11 flex-1 rounded-xl border border-slate-200 px-3 text-sm"
+                  />
+                  <button
+                    type="submit"
+                    disabled={busy}
+                    className="rounded-xl bg-violet-600 px-4 text-sm font-semibold text-white disabled:opacity-50"
+                  >
+                    Send
+                  </button>
+                </form>
+              </div>
             </div>
-            <form
-              className="flex gap-2"
-              onSubmit={(e) => {
-                e.preventDefault();
-                void ask(question);
-              }}
-            >
-              <input
-                value={question}
-                onChange={(e) => setQuestion(e.target.value)}
-                placeholder={`Ask ${agent.identity.name}…`}
-                className="h-10 flex-1 rounded-lg border border-slate-200 px-3 text-sm"
+          ) : null}
+
+          {section === "work" ? (
+            <div className="p-5">
+              <SubNav
+                items={[
+                  ["activity", "Activity"],
+                  ["results", "Results"],
+                  ["attention", "Attention"],
+                ]}
+                current={workSub}
+                onChange={(id) => setWorkSub(id as WorkSub)}
               />
-              <button
-                type="submit"
-                disabled={busy}
-                className="rounded-lg bg-slate-900 px-4 text-sm font-semibold text-white disabled:opacity-50"
-              >
-                Send
-              </button>
-            </form>
-          </div>
-        ) : null}
-
-        {tab === "setup" ? (
-          <div className="grid gap-6 md:grid-cols-2">
-            <SetupBlock title="Business" body={agent.businessBrain.businessName} />
-            <SetupBlock title="Number" body={agent.resources.numberLabel} />
-            <SetupBlock title="Voice" body={agent.profile.voiceSummary || "Configured in builder"} />
-            <SetupBlock
-              title="Hours / timezone"
-              body={`${agent.profile.timezone}${agent.businessBrain.businessHoursSummary ? ` · ${agent.businessBrain.businessHoursSummary}` : ""}`}
-            />
-            <SetupBlock
-              title="Services"
-              body={
-                agent.bookingPolicy.allowedServices.join(", ") ||
-                agent.businessBrain.services.map((s) => s.name).join(", ") ||
-                "None configured"
-              }
-            />
-            <SetupBlock
-              title="Booking rules"
-              body={`Min notice ${agent.bookingPolicy.minimumNoticeMinutes}m · Duration ${agent.bookingPolicy.appointmentDurationMinutes}m · Mode ${agent.bookingPolicy.bookingMode} · Confirm ${agent.bookingPolicy.requireFinalConfirmation ? "required" : "optional"} · SMS ${agent.bookingPolicy.sendSmsConfirmation ? "on" : "off"}`}
-            />
-            <SetupBlock title="Calendar" body={agent.resources.calendarLabel} />
-            <SetupBlock
-              title="Transfers"
-              body={agent.profile.transferPolicySummary || "Not configured"}
-            />
-            <SetupBlock
-              title="Permissions"
-              body={`Book ${agent.bookingPolicy.canBook ? "yes" : "no"} · Reschedule ${agent.bookingPolicy.canReschedule ? "yes" : "no"} · Cancel ${agent.bookingPolicy.canCancel ? "yes" : "no"}`}
-            />
-            <div className="md:col-span-2 space-y-3 rounded-xl border border-slate-100 px-4 py-3">
-              <p className="text-sm font-semibold text-slate-900">Shared business brain</p>
-              <p className="text-[12px] text-slate-600">
-                {agent.businessBrain.knowledgeFacts.length} approved fact(s). Website imports
-                stay pending until you approve them.
-              </p>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() =>
-                  void (async () => {
-                    setBusy(true);
-                    try {
-                      await runCommand("approve_knowledge_facts", {
-                        approveAllPending: true,
-                      });
-                      await load();
-                    } catch (err) {
-                      setError(err instanceof Error ? err.message : String(err));
-                    } finally {
-                      setBusy(false);
-                    }
-                  })()
-                }
-                className="rounded-lg border border-slate-200 px-3 py-1.5 text-[12px] font-semibold text-slate-700"
-              >
-                Approve pending website imports
-              </button>
-            </div>
-            <div className="md:col-span-2 space-y-3 rounded-xl border border-slate-100 px-4 py-3">
-              <p className="text-sm font-semibold text-slate-900">Missed-call text-back handoff</p>
-              <p className="text-[12px] text-slate-600">
-                {mctbHandoff
-                  ? `Attached · flow ${String((mctbHandoff as { flowId?: string }).flowId || "—")}`
-                  : "Not attached — missed calls will not get an SMS follow-up yet."}
-              </p>
-              <button
-                type="button"
-                disabled={busy || !agent.phoneNumberIds[0]}
-                onClick={() =>
-                  void (async () => {
-                    setBusy(true);
-                    try {
-                      const data = await runCommand("attach_missed_call_text_back", {
-                        activate: true,
-                        phoneNumberId: agent.phoneNumberIds[0],
-                      });
-                      setMctbHandoff(data);
-                      await load();
-                    } catch (err) {
-                      setError(err instanceof Error ? err.message : String(err));
-                    } finally {
-                      setBusy(false);
-                    }
-                  })()
-                }
-                className="rounded-lg bg-slate-900 px-3 py-1.5 text-[12px] font-semibold text-white disabled:opacity-50"
-              >
-                Attach missed-call text-back
-              </button>
-            </div>
-            <div className="md:col-span-2">
-              <Link
-                href={
-                  agent.solutionSetupId
-                    ? `/solutions/ai-call-handling/appointment-assistant/setup?setupId=${agent.solutionSetupId}`
-                    : `/voice/agents/${agent.voiceAgentId}`
-                }
-                className="text-sm font-semibold text-blue-600"
-              >
-                Edit in wizard / builder →
-              </Link>
-            </div>
-          </div>
-        ) : null}
-
-        {tab === "workflows" ? (
-          <div className="space-y-4 text-sm">
-            <p>
-              Primary workflow:{" "}
-              <span className="font-semibold">{agent.resources.workflowLabel}</span>
-            </p>
-            <p className="text-slate-600">
-              Live phone conversations run on Telnyx with Amy’s booking tools (availability,
-              hold, book, verify). Automation workflows own inbound routing, post-call SMS,
-              and around-the-call steps — they do not replace turn-by-turn speech.
-              The Workflow Architect drafts approved node graphs only; promote after tests.
-            </p>
-            {agent.primaryFlowId ? (
-              <Link
-                href={`/automations/${agent.primaryFlowId}/edit`}
-                className="inline-flex font-semibold text-blue-600"
-              >
-                Open live workflow builder →
-              </Link>
-            ) : (
-              <p className="text-amber-700">No primary workflow linked.</p>
-            )}
-            <div className="space-y-2 pt-2">
-              <h3 className="text-sm font-semibold text-slate-900">Architect drafts</h3>
-              {workflowDrafts.length === 0 ? (
-                <p className="text-slate-500">
-                  No drafts yet. Ask {agent.identity.name}: “Create an after-hours emergency workflow draft”.
-                </p>
-              ) : (
-                (
-                  workflowDrafts as Array<{
-                    id: string;
-                    name: string;
-                    validationStatus: string;
-                    status: string;
-                    validationErrors: Array<{ message: string }>;
-                    nodes: unknown[];
-                  }>
-                ).map((d) => (
-                  <div key={d.id} className="rounded-xl border border-slate-100 px-4 py-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="font-medium text-slate-900">{d.name}</p>
-                      <span className="text-[11px] capitalize text-slate-500">
-                        {d.validationStatus} · {d.status}
-                      </span>
-                    </div>
-                    <p className="mt-1 text-[12px] text-slate-500">
-                      {d.nodes?.length || 0} nodes · id {d.id.slice(0, 10)}…
-                    </p>
-                    {d.validationErrors?.length ? (
-                      <p className="mt-1 text-[12px] text-rose-600">
-                        {d.validationErrors.map((e) => e.message).join("; ")}
-                      </p>
-                    ) : (
-                      <p className="mt-1 text-[12px] text-emerald-700">Validation passed</p>
-                    )}
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() =>
-                          void (async () => {
-                            setBusy(true);
-                            try {
-                              await runCommand("validate_workflow_draft", {
-                                draftId: d.id,
-                              });
-                              const data = await runCommand("list_workflow_drafts");
-                              setWorkflowDrafts(data.drafts || []);
-                            } catch (err) {
-                              setError(err instanceof Error ? err.message : String(err));
-                            } finally {
-                              setBusy(false);
+              {workSub === "activity" ? (
+                <div className="mt-4 space-y-3">
+                  {activity.length === 0 ? (
+                    <p className="text-sm text-slate-500">No recent call activity yet.</p>
+                  ) : (
+                    (
+                      activity as Array<{
+                        callId: string;
+                        summary: string;
+                        outcome: string;
+                        startedAt: string;
+                      }>
+                    ).map((t) => (
+                      <div key={t.callId} className="rounded-xl border border-slate-100 px-4 py-3">
+                        <div className="flex flex-wrap justify-between gap-2">
+                          <p className="text-sm font-medium">{t.summary}</p>
+                          <span className="text-[11px] capitalize text-slate-500">
+                            {t.outcome.replaceAll("_", " ")}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-[12px] text-slate-500">
+                          {new Date(t.startedAt).toLocaleString()}
+                        </p>
+                        <div className="mt-2 flex gap-3 text-[12px] font-semibold">
+                          <Link href={`/voice/calls/${t.callId}`} className="text-violet-700">
+                            Open call
+                          </Link>
+                          <button
+                            type="button"
+                            className="text-slate-700"
+                            onClick={() =>
+                              void (async () => {
+                                setSelectedCallId(t.callId);
+                                try {
+                                  const data = await runCommand("get_employee_timeline", {
+                                    callId: t.callId,
+                                  });
+                                  setTimeline(data.timeline || []);
+                                } catch {
+                                  setTimeline([]);
+                                }
+                              })()
                             }
-                          })()
-                        }
-                        className="rounded-lg border border-slate-200 px-3 py-1.5 text-[12px] font-semibold text-slate-700"
-                      >
-                        Re-validate
-                      </button>
-                      {d.status !== "activated" ? (
-                        <button
-                          type="button"
-                          disabled={busy || d.validationStatus !== "valid"}
-                          onClick={() =>
-                            void (async () => {
-                              setBusy(true);
-                              try {
-                                await runCommand("promote_workflow_draft", {
-                                  draftId: d.id,
-                                  confirm: true,
-                                  activateTriggers: true,
-                                  attachMissedCallTextBack: true,
-                                });
-                                await load();
-                                const data = await runCommand("list_workflow_drafts");
-                                setWorkflowDrafts(data.drafts || []);
-                              } catch (err) {
-                                setError(err instanceof Error ? err.message : String(err));
-                              } finally {
-                                setBusy(false);
-                              }
-                            })()
-                          }
-                          className="rounded-lg bg-emerald-600 px-3 py-1.5 text-[12px] font-semibold text-white disabled:opacity-50"
-                        >
-                          Promote to live workflow
-                        </button>
+                          >
+                            Why this happened
+                          </button>
+                        </div>
+                        {selectedCallId === t.callId && timeline ? (
+                          <ol className="mt-3 space-y-1 border-t border-slate-100 pt-3 text-sm">
+                            {(
+                              timeline as Array<{
+                                timeLabel: string;
+                                headline: string;
+                                detail?: string;
+                              }>
+                            ).map((item, idx) => (
+                              <li key={`${item.timeLabel}-${idx}`}>
+                                <span className="font-semibold">{item.timeLabel}</span> —{" "}
+                                {item.headline}
+                                {item.detail ? (
+                                  <span className="block text-[12px] text-slate-500">
+                                    {item.detail}
+                                  </span>
+                                ) : null}
+                              </li>
+                            ))}
+                          </ol>
+                        ) : null}
+                      </div>
+                    ))
+                  )}
+                </div>
+              ) : null}
+              {workSub === "results" ? (
+                <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  {[
+                    ["Calls", agent.metrics.callsAnswered],
+                    ["Booked", agent.metrics.appointmentsBooked],
+                    ["Conversion", `${agent.metrics.bookingConversionRate}%`],
+                    ["Transfers", agent.metrics.transfers],
+                    ["Failures", agent.metrics.bookingFailures],
+                    ["SMS confirmations", agent.metrics.confirmationSmsSent],
+                  ].map(([l, v]) => (
+                    <div key={String(l)} className="rounded-xl bg-slate-50 p-3">
+                      <p className="text-[11px] uppercase text-slate-400">{l}</p>
+                      <p className="mt-1 text-xl font-semibold">{v}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+              {workSub === "attention" ? (
+                <div className="mt-4 space-y-3">
+                  {(attention?.items as Array<{
+                    id: string;
+                    title: string;
+                    summary: string;
+                    recommendedAction: string;
+                    askAmyPrompt?: string;
+                  }> | undefined)?.length ? (
+                    (attention!.items as Array<{
+                      id: string;
+                      title: string;
+                      summary: string;
+                      recommendedAction: string;
+                      askAmyPrompt?: string;
+                    }>).map((item) => (
+                      <div key={item.id} className="rounded-xl border border-slate-100 px-4 py-3">
+                        <p className="text-sm font-medium">{item.title}</p>
+                        <p className="mt-1 text-[12px] text-slate-600">{item.summary}</p>
+                        <p className="mt-1 text-[12px] text-slate-500">{item.recommendedAction}</p>
+                        {item.askAmyPrompt ? (
+                          <button
+                            type="button"
+                            className="mt-2 text-[12px] font-semibold text-violet-700"
+                            onClick={() => {
+                              setSection("talk");
+                              void ask(item.askAmyPrompt!);
+                            }}
+                          >
+                            Ask {name}
+                          </button>
+                        ) : null}
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-slate-500">Inbox clear.</p>
+                  )}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          {section === "build" ? (
+            <div className="p-5">
+              <SubNav
+                items={[
+                  ["workflow", "Workflow"],
+                  ["tests", "Tests"],
+                  ["versions", "Versions"],
+                ]}
+                current={buildSub}
+                onChange={(id) => setBuildSub(id as BuildSub)}
+              />
+              {buildSub === "workflow" ? (
+                <div className="mt-4 space-y-3 text-sm">
+                  <p>
+                    Live workflow:{" "}
+                    <span className="font-semibold">{agent.resources.workflowLabel}</span>
+                  </p>
+                  <p className="text-slate-600">
+                    Speech stays on Telnyx with booking tools. This workflow owns routing and
+                    post-call steps. Architect drafts use approved blocks only.
+                  </p>
+                  {agent.primaryFlowId ? (
+                    <Link
+                      href={`/automations/${agent.primaryFlowId}/edit`}
+                      className="inline-flex font-semibold text-violet-700"
+                    >
+                      Open workflow →
+                    </Link>
+                  ) : null}
+                  {(workflowDrafts as Array<{ id: string; name: string; validationStatus: string }>).map(
+                    (d) => (
+                      <div key={d.id} className="rounded-xl border border-slate-100 px-4 py-3">
+                        {d.name} · {d.validationStatus}
+                      </div>
+                    ),
+                  )}
+                </div>
+              ) : null}
+              {buildSub === "tests" ? (
+                <div className="mt-4 space-y-3 text-sm">
+                  {testSuite?.summary ? (
+                    <p>
+                      {testSuite.summary.passed} passed · {testSuite.summary.failed} failed ·{" "}
+                      {testSuite.summary.pending} pending
+                    </p>
+                  ) : null}
+                  {(testSuite?.results || []).map((r) => (
+                    <div key={r.scenarioId} className="rounded-xl border border-slate-100 px-4 py-3">
+                      <div className="flex justify-between gap-2">
+                        <p className="font-medium">{r.name}</p>
+                        <span className="text-[11px] capitalize">{r.status}</span>
+                      </div>
+                      {r.failureReason ? (
+                        <p className="mt-1 text-[12px] text-rose-600">{r.failureReason}</p>
                       ) : null}
                     </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        ) : null}
-
-        {tab === "test" ? (
-          <div className="space-y-4 text-sm">
-            <p>
-              Tests must prove tool outcomes — completing a call alone is not a pass.
-              Build a Telnyx test snapshot, then run live WebRTC scenarios and score traces.
-            </p>
-            {testSuite?.summary ? (
-              <p className="text-[12px] text-slate-600">
-                Suite: {testSuite.summary.passed} passed · {testSuite.summary.failed} failed ·{" "}
-                {testSuite.summary.pending} pending / {testSuite.summary.total}
-              </p>
-            ) : null}
-            <div className="space-y-2">
-              {(testSuite?.results || []).map((r) => (
-                <div key={r.scenarioId} className="rounded-xl border border-slate-100 px-4 py-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="font-medium text-slate-900">{r.name}</p>
-                    <span className="text-[11px] capitalize text-slate-500">{r.status}</span>
-                  </div>
-                  <p className="mt-1 text-[12px] text-slate-500">
-                    Tools: {(r.expectedTools || []).join(", ")}
-                  </p>
-                  {r.callerScript?.length ? (
-                    <p className="mt-1 text-[12px] text-slate-500">
-                      Script: {r.callerScript.join(" → ")}
-                    </p>
-                  ) : null}
-                  {r.note ? (
-                    <p className="mt-1 text-[12px] text-amber-700">{r.note}</p>
-                  ) : null}
-                  {r.failureReason ? (
-                    <p className="mt-1 text-[12px] text-rose-600">{r.failureReason}</p>
-                  ) : null}
+                  ))}
+                  <Link
+                    href={`/voice/agents/${agent.voiceAgentId}`}
+                    className="inline-flex font-semibold text-violet-700"
+                  >
+                    Open live voice test →
+                  </Link>
                 </div>
-              ))}
-            </div>
-            <div className="flex flex-wrap gap-2 pt-2">
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() =>
-                  void (async () => {
-                    setBusy(true);
-                    try {
-                      await runCommand("run_agent_test_snapshot");
-                      const data = await runCommand("run_agent_test_suite");
-                      setTestSuite(data);
-                    } catch (err) {
-                      setError(err instanceof Error ? err.message : String(err));
-                    } finally {
-                      setBusy(false);
-                    }
-                  })()
-                }
-                className="rounded-lg bg-slate-900 px-3 py-2 text-[12px] font-semibold text-white"
-              >
-                Build test snapshot + refresh suite
-              </button>
-              <Link
-                href={`/voice/agents/${agent.voiceAgentId}`}
-                className="rounded-lg bg-blue-600 px-3 py-2 text-[12px] font-semibold text-white"
-              >
-                Open live test in builder
-              </Link>
-              <Link
-                href="/voice/testing"
-                className="rounded-lg border border-slate-200 px-3 py-2 text-[12px] font-semibold text-slate-700"
-              >
-                Voice testing lab
-              </Link>
-            </div>
-          </div>
-        ) : null}
-
-        {tab === "activity" ? (
-          <div className="space-y-4">
-            <p className="text-sm text-slate-600">
-              Employee-style timeline from real call events — not model chain-of-thought.
-            </p>
-            {activity.length === 0 ? (
-              <p className="text-sm text-slate-500">No recent call activity yet.</p>
-            ) : (
-              (activity as Array<{ callId: string; summary: string; outcome: string; startedAt: string }>).map(
-                (t) => (
-                  <div key={t.callId} className="rounded-xl border border-slate-100 px-4 py-3">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <p className="text-sm font-medium text-slate-900">{t.summary}</p>
-                      <span className="text-[11px] capitalize text-slate-500">
-                        {t.outcome.replaceAll("_", " ")}
-                      </span>
-                    </div>
-                    <p className="mt-1 text-[12px] text-slate-500">
-                      {new Date(t.startedAt).toLocaleString()}
-                    </p>
-                    <div className="mt-2 flex flex-wrap gap-3">
-                      <Link
-                        href={`/voice/calls/${t.callId}`}
-                        className="text-[12px] font-semibold text-blue-600"
-                      >
-                        Open call
-                      </Link>
-                      <button
-                        type="button"
-                        className="text-[12px] font-semibold text-slate-700"
-                        onClick={() =>
-                          void (async () => {
-                            setSelectedCallId(t.callId);
-                            try {
-                              const data = await runCommand("get_employee_timeline", {
-                                callId: t.callId,
-                              });
-                              setTimeline(data.timeline || []);
-                            } catch {
-                              setTimeline([]);
-                            }
-                          })()
-                        }
-                      >
-                        Why this happened
-                      </button>
-                    </div>
-                    {selectedCallId === t.callId && timeline ? (
-                      <ol className="mt-3 space-y-2 border-t border-slate-100 pt-3">
-                        {(timeline as Array<{ timeLabel: string; headline: string; detail?: string; status: string }>).map((item, idx) => (
-                          <li key={`${item.timeLabel}-${idx}`} className="text-sm">
-                            <span className="font-semibold text-slate-700">{item.timeLabel}</span>
-                            {" — "}
-                            <span className="text-slate-800">{item.headline}</span>
-                            {item.detail ? (
-                              <span className="mt-0.5 block text-[12px] text-slate-500">{item.detail}</span>
-                            ) : null}
-                          </li>
-                        ))}
-                      </ol>
-                    ) : null}
-                  </div>
-                ),
-              )
-            )}
-          </div>
-        ) : null}
-
-        {tab === "results" ? (
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-            {[
-              ["Calls answered", agent.metrics.callsAnswered],
-              ["Booking conversations", agent.metrics.bookingConversationsStarted],
-              ["Appointments booked", agent.metrics.appointmentsBooked],
-              ["Abandoned bookings", agent.metrics.abandonedBookingConversations],
-              ["Rescheduled", agent.metrics.appointmentsRescheduled],
-              ["Cancelled", agent.metrics.appointmentsCancelled],
-              ["Conversion", `${agent.metrics.bookingConversionRate}%`],
-              [
-                "Avg time to book",
-                agent.metrics.averageTimeToBookingSeconds != null
-                  ? `${agent.metrics.averageTimeToBookingSeconds}s`
-                  : "—",
-              ],
-              ["Transfers", agent.metrics.transfers],
-              ["Messages taken", agent.metrics.messagesTaken],
-              ["Booking failures", agent.metrics.bookingFailures],
-              ["Calendar failures", agent.metrics.calendarFailures],
-              ["Confirmation SMS", agent.metrics.confirmationSmsSent],
-              ["Confirmation email", agent.metrics.confirmationEmailsSent],
-            ].map(([label, value]) => (
-              <div key={String(label)} className="rounded-xl bg-slate-50 p-4">
-                <p className="text-[11px] uppercase tracking-wide text-slate-400">{label}</p>
-                <p className="mt-1 text-2xl font-semibold text-slate-900">{value}</p>
-              </div>
-            ))}
-          </div>
-        ) : null}
-
-        {tab === "health" ? (
-          <div className="space-y-3">
-            {(
-              [
-                ["Telnyx assistant", agent.health.telnyxAssistant],
-                ["Assigned number", agent.health.assignedNumber],
-                ["Calendar", agent.health.calendar],
-                ["Booking tools", agent.health.bookingTools],
-                ["SMS confirmation", agent.health.smsConfirmation],
-                ["Webhook", agent.health.webhookEndpoint],
-                ["Latest deployment", agent.health.latestDeployment],
-                ["Primary workflow", agent.health.primaryWorkflow],
-                ["Slot holds", agent.health.slotHolds],
-                ["Transfer targets", agent.health.transferTargets],
-              ] as const
-            ).map(([label, check]) => (
-              <div
-                key={label}
-                className="flex items-start justify-between gap-3 rounded-xl border border-slate-100 px-4 py-3"
-              >
-                <div>
-                  <p className="text-sm font-medium text-slate-900">{label}</p>
-                  <p className="mt-1 text-[12px] text-slate-600">{check.message}</p>
-                </div>
-                <HealthBadge overall={check.status} />
-              </div>
-            ))}
-            {(agent.readiness?.blockers || []).length > 0 ? (
-              <div className="mt-4 space-y-2">
-                <h3 className="text-sm font-semibold text-slate-900">Exact readiness blockers</h3>
-                {(agent.readiness?.blockers || []).map((b) => (
-                  <div key={b.code} className="rounded-xl border border-rose-100 bg-rose-50/40 px-4 py-3">
-                    <p className="text-sm font-medium text-slate-900">{b.message}</p>
-                    <p className="mt-1 text-[12px] text-slate-600">
-                      Affects: {b.affectedFunctionality}
-                    </p>
-                    <p className="mt-1 text-[12px] text-slate-600">Do this: {b.recommendedAction}</p>
-                  </div>
-                ))}
-              </div>
-            ) : null}
-            <p className="text-[11px] text-slate-400">
-              Last checked {new Date(agent.health.lastCheckedAt).toLocaleString()}
-            </p>
-          </div>
-        ) : null}
-
-        {tab === "memory" ? (
-          <div className="space-y-6 text-sm">
-            <div>
-              <h2 className="font-semibold text-slate-900">Shared company facts</h2>
-              <div className="mt-2 space-y-2">
-                {((memory?.sharedFacts as Array<{ id: string; summary: string; approvalState: string }> | undefined) || []).length === 0 ? (
-                  <p className="text-slate-500">No shared facts yet.</p>
-                ) : (
-                  ((memory!.sharedFacts as Array<{ id: string; summary: string; approvalState: string }>)).map((f) => (
-                    <div key={f.id} className="rounded-xl border border-slate-100 px-4 py-3">
-                      <p className="text-slate-800">{f.summary}</p>
-                      <p className="mt-1 text-[11px] capitalize text-slate-500">{f.approvalState}</p>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-            <div>
-              <h2 className="font-semibold text-slate-900">Agent-specific booking rules</h2>
-              <div className="mt-2 space-y-2">
-                {((memory?.agentFacts as Array<{ id: string; summary: string }> | undefined) || []).map((f) => (
-                  <div key={f.id} className="rounded-xl bg-slate-50 px-4 py-3 text-slate-800">
-                    {f.summary}
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div>
-              <h2 className="font-semibold text-slate-900">Learning suggestions</h2>
-              <div className="mt-2 space-y-2">
-                {((memory?.learning as Array<{ id: string; pattern: string; suggestedAddition: string; sampleSize: number; confidence: string }> | undefined) || []).length === 0 ? (
-                  <p className="text-slate-500">
-                    No learning items yet. {agent.identity.name} will queue repeated unknowns for your review — never silent permanent teaching.
-                  </p>
-                ) : (
-                  ((memory!.learning as Array<{ id: string; pattern: string; suggestedAddition: string; sampleSize: number; confidence: string }>)).map((l) => (
-                    <div key={l.id} className="rounded-xl border border-slate-100 px-4 py-3">
-                      <p className="font-medium text-slate-900">{l.pattern}</p>
-                      <p className="mt-1 text-[12px] text-slate-600">{l.suggestedAddition}</p>
-                      <p className="mt-1 text-[11px] text-slate-400">
-                        Sample {l.sampleSize} · confidence {l.confidence}
+              ) : null}
+              {buildSub === "versions" ? (
+                <div className="mt-4 space-y-4">
+                  <div className="space-y-3">
+                    <h3 className="text-sm font-semibold">Pending proposals</h3>
+                    {proposals.filter((p) => (p as { status?: string }).status === "pending")
+                      .length === 0 ? (
+                      <p className="text-sm text-slate-500">
+                        No pending proposals. Change Settings or Talk to {name}.
                       </p>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-            <div className="rounded-xl border border-slate-100 px-4 py-3">
-              <p className="font-semibold text-slate-900">Teach {agent.identity.name}</p>
-              <p className="mt-1 text-[12px] text-slate-600">
-                Example: “Always transfer sewer backups” or “Stop offering same-day appointments after 3 PM.”
-              </p>
-              <button
-                type="button"
-                className="mt-3 rounded-lg bg-slate-900 px-3 py-2 text-[12px] font-semibold text-white"
-                onClick={() => {
-                  setTab("talk");
-                  setQuestion("Always transfer sewer backups");
-                }}
-              >
-                Open Talk with a teach example
-              </button>
-            </div>
-          </div>
-        ) : null}
-
-        {tab === "attention" ? (
-          <div className="space-y-3 text-sm">
-            {(attention?.items as Array<{ id: string; title: string; summary: string; severity: string; recommendedAction: string; href?: string; askAmyPrompt?: string }> | undefined)?.length ? (
-              (attention!.items as Array<{ id: string; title: string; summary: string; severity: string; recommendedAction: string; href?: string; askAmyPrompt?: string }>).map((item) => (
-                <div key={item.id} className="rounded-xl border border-slate-100 px-4 py-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="font-medium text-slate-900">{item.title}</p>
-                    <span className="text-[11px] uppercase tracking-wide text-slate-500">{item.severity}</span>
+                    ) : (
+                      (
+                        proposals as Array<{
+                          id: string;
+                          summary: string;
+                          status: string;
+                          changes: Array<{ path: string; before: unknown; after: unknown }>;
+                        }>
+                      )
+                        .filter((p) => p.status === "pending")
+                        .map((p) => (
+                          <div
+                            key={p.id}
+                            className="rounded-xl border border-amber-200 bg-amber-50/40 px-4 py-3"
+                          >
+                            <p className="text-sm font-semibold">{p.summary}</p>
+                            <ul className="mt-2 space-y-1 text-[12px]">
+                              {p.changes.map((c) => (
+                                <li key={c.path}>
+                                  {c.path}: {JSON.stringify(c.before)} → {JSON.stringify(c.after)}
+                                </li>
+                              ))}
+                            </ul>
+                            <button
+                              type="button"
+                              disabled={busy}
+                              className="mt-3 rounded-lg bg-violet-600 px-3 py-1.5 text-[12px] font-semibold text-white"
+                              onClick={() => void putLive(p.id)}
+                            >
+                              Put change live
+                            </button>
+                          </div>
+                        ))
+                    )}
                   </div>
-                  <p className="mt-1 text-[12px] text-slate-600">{item.summary}</p>
-                  <p className="mt-1 text-[12px] text-slate-500">{item.recommendedAction}</p>
-                  <div className="mt-2 flex flex-wrap gap-3">
-                    {item.href ? (
-                      <Link href={item.href} className="text-[12px] font-semibold text-blue-600">
-                        Resolve / open
-                      </Link>
-                    ) : null}
-                    {item.askAmyPrompt ? (
-                      <button
-                        type="button"
-                        className="text-[12px] font-semibold text-slate-700"
-                        onClick={() => {
-                          setTab("talk");
-                          void ask(item.askAmyPrompt!);
-                        }}
+                  <div className="space-y-2">
+                    <h3 className="text-sm font-semibold">Published versions</h3>
+                    {agent.versions.map((v) => (
+                      <div
+                        key={v.id}
+                        className={cn(
+                          "rounded-xl border px-4 py-3 text-sm",
+                          v.id === agent.currentVersionId
+                            ? "border-emerald-200 bg-emerald-50/40"
+                            : "border-slate-100",
+                        )}
                       >
-                        Ask {agent.identity.name}
-                      </button>
-                    ) : null}
+                        v{v.version}
+                        {v.id === agent.currentVersionId ? " · Current" : ""} —{" "}
+                        {v.changeLog || "No changelog"}
+                      </div>
+                    ))}
                   </div>
                 </div>
-              ))
-            ) : (
-              <p className="text-slate-500">Inbox is clear — nothing needs attention.</p>
-            )}
-          </div>
-        ) : null}
+              ) : null}
+            </div>
+          ) : null}
 
-        {tab === "autonomy" ? (
-          <div className="space-y-4 text-sm">
-            <div>
-              <h2 className="font-semibold text-slate-900">
-                Mode: {String(autonomy?.label || agent.autonomyMode || "Balanced")}
-              </h2>
-              <p className="mt-1 text-[12px] text-slate-600">
-                Stored budget: {String(autonomy?.storedBudget || "standard")}. Default for new agents is Balanced.
-              </p>
-            </div>
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="rounded-xl bg-slate-50 p-4">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Allowed</p>
-                <ul className="mt-2 list-disc space-y-1 pl-4 text-slate-700">
-                  {((autonomy?.allowed as string[] | undefined) || []).map((a) => (
-                    <li key={a}>{a}</li>
+          {section === "settings" ? (
+            <div className="p-5">
+              <SubNav
+                items={[
+                  ["general", "General"],
+                  ["booking", "Booking rules"],
+                  ["fields", "Information collected"],
+                  ["knowledge", "Knowledge"],
+                  ["connections", "Connections"],
+                  ["voice", "Voice"],
+                  ["health", "Health"],
+                  ["autonomy", "Permissions"],
+                ]}
+                current={settingsSub}
+                onChange={(id) => setSettingsSub(id as SettingsSub)}
+              />
+
+              {settingsSub === "general" ? (
+                <div className="mt-4 space-y-3 text-sm">
+                  <p>
+                    <span className="text-slate-500">Name:</span> {agent.identity.displayName}
+                  </p>
+                  <p>
+                    <span className="text-slate-500">Role:</span>{" "}
+                    {agent.identity.roleLabel} (fixed — books appointments)
+                  </p>
+                  <p>
+                    <span className="text-slate-500">Autonomy:</span>{" "}
+                    {agent.autonomyMode || "balanced"}
+                  </p>
+                  <Link href={guidedHref} className="inline-flex font-semibold text-violet-700">
+                    Open guided setup →
+                  </Link>
+                  <p className="text-[12px] text-slate-500">
+                    Guided setup is the same wizard engine writing Company Brain + Amy draft — not
+                    a second configuration.
+                  </p>
+                </div>
+              ) : null}
+
+              {settingsSub === "booking" ? (
+                <div className="mt-4 max-w-lg space-y-4">
+                  <label className="block text-sm">
+                    Minimum notice (hours)
+                    <input
+                      className="mt-1 h-10 w-full rounded-lg border border-slate-200 px-3"
+                      value={noticeHours}
+                      onChange={(e) => setNoticeHours(e.target.value)}
+                    />
+                  </label>
+                  <label className="block text-sm">
+                    Same-day cutoff (HH:MM local)
+                    <input
+                      className="mt-1 h-10 w-full rounded-lg border border-slate-200 px-3"
+                      value={sameDayCutoff}
+                      onChange={(e) => setSameDayCutoff(e.target.value)}
+                    />
+                  </label>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={requireAddress}
+                      onChange={(e) => setRequireAddress(e.target.checked)}
+                    />
+                    Require service address
+                  </label>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white"
+                    onClick={() =>
+                      void proposeBookingPatch("Update booking rules from Settings", {
+                        minimumNoticeMinutes: Math.max(0, Number(noticeHours) || 0) * 60,
+                        sameDayCutoff,
+                        requireServiceAddress: requireAddress,
+                      })
+                    }
+                  >
+                    Propose change
+                  </button>
+                  <p className="text-[12px] text-slate-500">
+                    Creates a draft proposal. You confirm in Talk or Versions before Telnyx updates.
+                  </p>
+                </div>
+              ) : null}
+
+              {settingsSub === "fields" ? (
+                <div className="mt-4 space-y-3 text-sm">
+                  <p className="text-slate-600">
+                    Custom fields use the same definition for live calls, appointments, tests, and
+                    Talk proposals.
+                  </p>
+                  <ul className="space-y-2">
+                    {(
+                      [
+                        ["Name", agent.bookingPolicy.requireCallerName],
+                        ["Phone", agent.bookingPolicy.requirePhoneNumber],
+                        ["Email", agent.bookingPolicy.requireEmail],
+                        ["Service address", agent.bookingPolicy.requireServiceAddress],
+                      ] as const
+                    ).map(([label, on]) => (
+                      <li
+                        key={label}
+                        className="flex items-center justify-between rounded-xl border border-slate-100 px-3 py-2"
+                      >
+                        <span>{label}</span>
+                        <Pill tone={on ? "ok" : "neutral"}>{on ? "Required" : "Optional"}</Pill>
+                      </li>
+                    ))}
+                  </ul>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    className="rounded-lg bg-violet-600 px-4 py-2 text-[12px] font-semibold text-white"
+                    onClick={() =>
+                      void proposeBookingPatch("Require email on bookings", {
+                        requireEmail: true,
+                      })
+                    }
+                  >
+                    Require email (propose)
+                  </button>
+                  <button
+                    type="button"
+                    className="ml-2 rounded-lg border border-slate-200 px-3 py-2 text-[12px] font-semibold"
+                    onClick={() => {
+                      setSection("talk");
+                      void ask("Add vehicle year, make, and model for detailing appointments");
+                    }}
+                  >
+                    Ask {name} to add a custom field
+                  </button>
+                  <Link href={guidedHref} className="block font-semibold text-violet-700">
+                    Guided setup (same draft) →
+                  </Link>
+                </div>
+              ) : null}
+
+              {settingsSub === "knowledge" ? (
+                <div className="mt-4 space-y-3 text-sm">
+                  <p>
+                    Shared Company Brain facts:{" "}
+                    {(memory?.sharedFacts as unknown[] | undefined)?.length ??
+                      agent.businessBrain.knowledgeFacts.length}
+                  </p>
+                  <Link href="/company-brain" className="font-semibold text-violet-700">
+                    Open Company Brain →
+                  </Link>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    className="block rounded-lg border border-slate-200 px-3 py-2 text-[12px] font-semibold"
+                    onClick={() =>
+                      void (async () => {
+                        setBusy(true);
+                        try {
+                          await runCommand("approve_knowledge_facts", {
+                            approveAllPending: true,
+                          });
+                          await load();
+                        } catch (err) {
+                          setError(err instanceof Error ? err.message : String(err));
+                        } finally {
+                          setBusy(false);
+                        }
+                      })()
+                    }
+                  >
+                    Approve pending website facts
+                  </button>
+                </div>
+              ) : null}
+
+              {settingsSub === "connections" ? (
+                <div className="mt-4 space-y-2 text-sm">
+                  <p>Number: {agent.resources.numberLabel}</p>
+                  <p>Calendar: {agent.resources.calendarLabel}</p>
+                  <p>Workflow: {agent.resources.workflowLabel}</p>
+                  <Link href={guidedHref} className="font-semibold text-violet-700">
+                    Change connections in guided setup →
+                  </Link>
+                </div>
+              ) : null}
+
+              {settingsSub === "voice" ? (
+                <div className="mt-4 max-w-lg space-y-4 text-sm">
+                  <p className="text-slate-600">
+                    {agent.profile.voiceSummary || "Voice configured in guided setup"}
+                  </p>
+                  <label className="block">
+                    Opening greeting
+                    <textarea
+                      className="mt-1 min-h-[88px] w-full rounded-lg border border-slate-200 px-3 py-2"
+                      value={greetingDraft}
+                      onChange={(e) => setGreetingDraft(e.target.value)}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    disabled={busy || !greetingDraft.trim()}
+                    className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white"
+                    onClick={() =>
+                      void (async () => {
+                        setBusy(true);
+                        try {
+                          const proposal = await runCommand("propose_setup_change", {
+                            summary: "Update opening greeting from Settings",
+                            voice: { openingGreeting: greetingDraft.trim() },
+                          });
+                          setPendingProposalId(String(proposal.id));
+                          setSection("talk");
+                          setChat((prev) => [
+                            ...prev,
+                            {
+                              role: "agent",
+                              text: `Proposed greeting update. Review and Put change live when ready.`,
+                              proposalId: String(proposal.id),
+                            },
+                          ]);
+                          await load();
+                        } catch (err) {
+                          setError(err instanceof Error ? err.message : String(err));
+                        } finally {
+                          setBusy(false);
+                        }
+                      })()
+                    }
+                  >
+                    Propose greeting change
+                  </button>
+                  <Link href={guidedHref} className="block font-semibold text-violet-700">
+                    Guided voice setup →
+                  </Link>
+                </div>
+              ) : null}
+
+              {settingsSub === "health" ? (
+                <div className="mt-4 space-y-2">
+                  {(
+                    [
+                      ["Telnyx", agent.health.telnyxAssistant],
+                      ["Number", agent.health.assignedNumber],
+                      ["Calendar", agent.health.calendar],
+                      ["Booking tools", agent.health.bookingTools],
+                      ["Slot holds", agent.health.slotHolds],
+                      ["Workflow", agent.health.primaryWorkflow],
+                      ["SMS", agent.health.smsConfirmation],
+                      ["Deployment drift", agent.health.deploymentDrift],
+                    ] as const
+                  ).map(([label, check]) => (
+                    <div
+                      key={label}
+                      className="flex items-start justify-between gap-3 rounded-xl border border-slate-100 px-4 py-3"
+                    >
+                      <div>
+                        <p className="text-sm font-medium">{label}</p>
+                        <p className="text-[12px] text-slate-600">{check?.message}</p>
+                      </div>
+                      <Pill tone={check?.status === "healthy" ? "ok" : "warn"}>
+                        {check?.status || "unknown"}
+                      </Pill>
+                    </div>
                   ))}
-                </ul>
-              </div>
-              <div className="rounded-xl bg-slate-50 p-4">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Never automatic</p>
-                <ul className="mt-2 list-disc space-y-1 pl-4 text-slate-700">
-                  {((autonomy?.forbidden as string[] | undefined) || []).map((a) => (
-                    <li key={a}>{a}</li>
-                  ))}
-                </ul>
-              </div>
+                  {drift ? (
+                    <p className="pt-2 text-[12px] text-slate-600">
+                      {drift.message}
+                      {drift.drifted
+                        ? " — redeploy expected version, import external change, or pause Amy."
+                        : ""}
+                    </p>
+                  ) : null}
+                  {setupReadiness ? (
+                    <p className="text-[12px] text-slate-500">
+                      Setup checklist: {setupReadiness.completeCount}/{setupReadiness.totalCount}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {settingsSub === "autonomy" ? (
+                <div className="mt-4 space-y-3 text-sm">
+                  <p className="font-semibold">
+                    Mode: {String(autonomy?.label || agent.autonomyMode || "Balanced")}
+                  </p>
+                  <ul className="list-disc space-y-1 pl-4 text-slate-700">
+                    {((autonomy?.allowed as string[] | undefined) || []).slice(0, 6).map((a) => (
+                      <li key={a}>{a}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
             </div>
-            <div className="flex flex-wrap gap-2">
-              {(["conservative", "balanced", "autonomous"] as const).map((mode) => (
+          ) : null}
+        </main>
+
+        {/* Right rail — matches mockup */}
+        <aside className="space-y-4">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <h2 className="text-sm font-semibold text-slate-900">Today</h2>
+            <dl className="mt-3 space-y-2 text-sm">
+              <div className="flex justify-between gap-2">
+                <dt className="text-slate-500">Calls answered</dt>
+                <dd className="font-semibold">{agent.metrics.callsAnswered}</dd>
+              </div>
+              <div className="flex justify-between gap-2">
+                <dt className="text-slate-500">Appointments booked</dt>
+                <dd className="font-semibold">{agent.metrics.appointmentsBooked}</dd>
+              </div>
+              <div className="flex justify-between gap-2">
+                <dt className="text-slate-500">Booking conversion</dt>
+                <dd className="font-semibold">{agent.metrics.bookingConversionRate}%</dd>
+              </div>
+              <div className="flex justify-between gap-2">
+                <dt className="text-slate-500">Transfers</dt>
+                <dd className="font-semibold">{agent.metrics.transfers}</dd>
+              </div>
+            </dl>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-slate-900">Needs attention</h2>
+              <Pill tone="warn">{attention?.openCount ?? 0}</Pill>
+            </div>
+            <ul className="mt-3 space-y-2 text-[12px] text-slate-600">
+              {(attention?.items as Array<{ id: string; title: string }> | undefined)
+                ?.slice(0, 4)
+                .map((item) => (
+                  <li key={item.id} className="rounded-lg bg-slate-50 px-3 py-2">
+                    {item.title}
+                  </li>
+                )) || <li className="text-slate-500">Nothing urgent</li>}
+            </ul>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <h2 className="text-sm font-semibold text-slate-900">Quick actions</h2>
+            <div className="mt-3 flex flex-col gap-2">
+              {[
+                ["Review failed bookings", () => { setSection("work"); setWorkSub("activity"); void ask("Show recent failures"); }],
+                ["Add bookable service", () => { window.location.href = guidedHref; }],
+                ["Change booking hours", () => { setSection("settings"); setSettingsSub("booking"); }],
+                [
+                  `Duplicate ${name}`,
+                  () => {
+                    setSection("talk");
+                    void ask("Create another Amy for a new location");
+                  },
+                ],
+              ].map(([label, fn]) => (
                 <button
-                  key={mode}
+                  key={String(label)}
                   type="button"
-                  disabled={busy}
-                  onClick={() =>
-                    void (async () => {
-                      setBusy(true);
-                      try {
-                        const budget =
-                          mode === "conservative"
-                            ? "conservative"
-                            : mode === "autonomous"
-                              ? "high"
-                              : "standard";
-                        await runCommand("set_autonomy_budget", {
-                          budget,
-                          confirm: true,
-                        });
-                        const data = await runCommand("get_autonomy_policy");
-                        setAutonomy(data);
-                        await load();
-                      } catch (err) {
-                        setError(err instanceof Error ? err.message : String(err));
-                      } finally {
-                        setBusy(false);
-                      }
-                    })()
-                  }
-                  className={cn(
-                    "min-h-10 rounded-lg border px-3 py-2 text-[12px] font-semibold capitalize",
-                    (agent.autonomyMode || "balanced") === mode
-                      ? "border-slate-900 bg-slate-900 text-white"
-                      : "border-slate-200 text-slate-700",
-                  )}
+                  onClick={() => (fn as () => void)()}
+                  className="rounded-lg px-2 py-2 text-left text-[12px] font-semibold text-violet-700 hover:bg-violet-50"
                 >
-                  {mode}
+                  {label as string}
                 </button>
               ))}
             </div>
-            <div>
-              <h3 className="font-semibold text-slate-900">Emergency policies</h3>
-              <div className="mt-2 space-y-2">
-                {((autonomy?.emergencyPolicies as Array<{ trigger: string; action: string }> | undefined) || []).map((p) => (
-                  <div key={p.trigger} className="rounded-xl border border-slate-100 px-4 py-3">
-                    <p className="font-medium text-slate-900">{p.trigger}</p>
-                    <p className="mt-1 text-[12px] text-slate-600">{p.action}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
           </div>
-        ) : null}
-
-        {tab === "versions" ? (
-          <div className="space-y-6">
-            <div className="space-y-3">
-              <h3 className="text-sm font-semibold text-slate-900">Pending change proposals</h3>
-              {proposals.filter(
-                (p) => (p as { status?: string }).status === "pending",
-              ).length === 0 ? (
-                <p className="text-sm text-slate-500">
-                  No pending proposals. Ask {agent.identity.name} to change a booking rule, then confirm here.
-                </p>
-              ) : (
-                (
-                  proposals as Array<{
-                    id: string;
-                    summary: string;
-                    status: string;
-                    riskLevel: string;
-                    changes: Array<{ path: string; before: unknown; after: unknown }>;
-                  }>
-                )
-                  .filter((p) => p.status === "pending")
-                  .map((p) => (
-                    <div key={p.id} className="rounded-xl border border-amber-200 bg-amber-50/40 px-4 py-3">
-                      <p className="text-sm font-semibold text-slate-900">{p.summary}</p>
-                      <p className="mt-1 text-[11px] uppercase tracking-wide text-amber-800">
-                        {p.riskLevel} risk · requires confirmation
-                      </p>
-                      <ul className="mt-2 space-y-1 text-[12px] text-slate-700">
-                        {p.changes.map((c) => (
-                          <li key={c.path}>
-                            {c.path}: {JSON.stringify(c.before)} → {JSON.stringify(c.after)}
-                          </li>
-                        ))}
-                      </ul>
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={() =>
-                            void (async () => {
-                              setBusy(true);
-                              try {
-                                await runCommand("confirm_change_proposal", {
-                                  proposalId: p.id,
-                                  confirm: true,
-                                  publish: true,
-                                });
-                                await load();
-                                const data = await runCommand("list_change_proposals");
-                                setProposals(data.proposals || []);
-                                setPendingProposalId(null);
-                              } catch (err) {
-                                setError(err instanceof Error ? err.message : String(err));
-                              } finally {
-                                setBusy(false);
-                              }
-                            })()
-                          }
-                          className="rounded-lg bg-emerald-600 px-3 py-1.5 text-[12px] font-semibold text-white"
-                        >
-                          Put change live
-                        </button>
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={() =>
-                            void (async () => {
-                              setBusy(true);
-                              try {
-                                await runCommand("confirm_change_proposal", {
-                                  proposalId: p.id,
-                                  confirm: true,
-                                  publish: false,
-                                });
-                                await load();
-                                const data = await runCommand("list_change_proposals");
-                                setProposals(data.proposals || []);
-                                setPendingProposalId(null);
-                              } catch (err) {
-                                setError(err instanceof Error ? err.message : String(err));
-                              } finally {
-                                setBusy(false);
-                              }
-                            })()
-                          }
-                          className="rounded-lg border border-slate-200 px-3 py-1.5 text-[12px] font-semibold text-slate-700"
-                        >
-                          Save draft only
-                        </button>
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={() =>
-                            void (async () => {
-                              setBusy(true);
-                              try {
-                                await runCommand("reject_change_proposal", {
-                                  proposalId: p.id,
-                                });
-                                const data = await runCommand("list_change_proposals");
-                                setProposals(data.proposals || []);
-                              } catch (err) {
-                                setError(err instanceof Error ? err.message : String(err));
-                              } finally {
-                                setBusy(false);
-                              }
-                            })()
-                          }
-                          className="rounded-lg border border-slate-200 px-3 py-1.5 text-[12px] font-semibold text-slate-700"
-                        >
-                          Reject
-                        </button>
-                      </div>
-                    </div>
-                  ))
-              )}
-              {pendingProposalId ? (
-                <p className="text-[12px] text-slate-500">
-                  Latest chat proposal: {pendingProposalId}
-                </p>
-              ) : null}
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() =>
-                  void (async () => {
-                    setBusy(true);
-                    try {
-                      await runCommand("activate_agent_version", {
-                        confirm: true,
-                        changeLog: "Activated from agent detail",
-                      });
-                      await load();
-                    } catch (err) {
-                      setError(err instanceof Error ? err.message : String(err));
-                    } finally {
-                      setBusy(false);
-                    }
-                  })()
-                }
-                className="rounded-lg bg-emerald-600 px-3 py-2 text-[12px] font-semibold text-white"
-              >
-                Activate current draft
-              </button>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() =>
-                  void (async () => {
-                    setBusy(true);
-                    try {
-                      const result = await runCommand("duplicate_agent", {
-                        confirm: true,
-                        name: `${agent.identity.name} — copy`,
-                      });
-                      if (result?.href) window.location.href = String(result.href);
-                    } catch (err) {
-                      setError(err instanceof Error ? err.message : String(err));
-                    } finally {
-                      setBusy(false);
-                    }
-                  })()
-                }
-                className="rounded-lg border border-slate-200 px-3 py-2 text-[12px] font-semibold text-slate-700"
-              >
-                Duplicate agent
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              <h3 className="text-sm font-semibold text-slate-900">Published versions</h3>
-              {agent.versions.length === 0 ? (
-                <p className="text-sm text-slate-500">No published versions yet.</p>
-              ) : (
-                agent.versions.map((v) => (
-                  <div
-                    key={v.id}
-                    className={cn(
-                      "rounded-xl border px-4 py-3",
-                      v.id === agent.currentVersionId
-                        ? "border-emerald-200 bg-emerald-50/40"
-                        : "border-slate-100",
-                    )}
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-sm font-semibold text-slate-900">
-                        v{v.version}
-                        {v.id === agent.currentVersionId ? " · Current" : ""}
-                        {v.isMain ? " · Main" : ""}
-                      </p>
-                      <span className="text-[11px] text-slate-500">
-                        {new Date(v.publishedAt).toLocaleString()}
-                      </span>
-                    </div>
-                    <p className="mt-1 text-[12px] text-slate-600">
-                      {v.changeLog || "No changelog"}
-                    </p>
-                    <p className="mt-1 text-[11px] text-slate-400">
-                      Deploy: {v.deploymentStatus || "—"} · Test: {v.testStatus || "—"}
-                    </p>
-                    {v.id !== agent.currentVersionId ? (
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() =>
-                          void (async () => {
-                            setBusy(true);
-                            try {
-                              await runCommand("rollback_agent_version", {
-                                versionId: v.id,
-                                confirm: true,
-                              });
-                              await load();
-                            } catch (err) {
-                              setError(err instanceof Error ? err.message : String(err));
-                            } finally {
-                              setBusy(false);
-                            }
-                          })()
-                        }
-                        className="mt-2 rounded-lg border border-slate-200 px-3 py-1.5 text-[12px] font-semibold text-slate-700"
-                      >
-                        Rollback to this version
-                      </button>
-                    ) : null}
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        ) : null}
-      </section>
+        </aside>
+      </div>
     </div>
   );
 }
 
-function SetupBlock({ title, body }: { title: string; body: string }) {
+function SubNav({
+  items,
+  current,
+  onChange,
+}: {
+  items: Array<[string, string]>;
+  current: string;
+  onChange: (id: string) => void;
+}) {
   return (
-    <div className="rounded-xl bg-slate-50 p-4">
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-        {title}
-      </p>
-      <p className="mt-1 text-sm text-slate-800">{body}</p>
+    <div className="flex flex-wrap gap-1 border-b border-slate-100 pb-2">
+      {items.map(([id, label]) => (
+        <button
+          key={id}
+          type="button"
+          onClick={() => onChange(id)}
+          className={cn(
+            "rounded-lg px-3 py-1.5 text-[12px] font-semibold",
+            current === id ? "bg-violet-50 text-violet-700" : "text-slate-500 hover:bg-slate-50",
+          )}
+        >
+          {label}
+        </button>
+      ))}
     </div>
   );
 }

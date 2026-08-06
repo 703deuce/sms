@@ -19,7 +19,12 @@ export type ChangeDiff = {
 export type AgentChangeProposal = {
   id: string;
   agentId: string;
-  type: "update_booking_policy" | "update_identity" | "custom";
+  type:
+    | "update_booking_policy"
+    | "update_identity"
+    | "update_voice"
+    | "add_collection_field"
+    | "custom";
   summary: string;
   changes: ChangeDiff[];
   riskLevel: "read" | "low" | "medium" | "high";
@@ -35,6 +40,24 @@ export type AgentChangeProposal = {
   patch: {
     bookingPolicy?: Partial<BookingPolicy>;
     identity?: { name?: string; displayName?: string; description?: string };
+    voice?: {
+      voiceId?: string;
+      voiceLabel?: string;
+      openingGreeting?: string;
+      speakingSpeed?: number;
+    };
+    collectionField?: {
+      id: string;
+      key: string;
+      label: string;
+      question?: string;
+      type?: string;
+      required?: boolean;
+      enabled?: boolean;
+      confirmationRequired?: boolean;
+      appliesToServiceIds?: string[];
+      saveTo?: string[];
+    };
   };
 };
 
@@ -319,6 +342,102 @@ function applyBookingPolicyToConfig(
   };
 }
 
+function applyVoicePatchToConfig(
+  config: VoiceAgentConfig,
+  voice: NonNullable<AgentChangeProposal["patch"]["voice"]>,
+): VoiceAgentConfig {
+  const sections = [...(config.conversationFlow?.sections || [])];
+  const gIdx = sections.findIndex((s) => s.type === "greeting" || s.id === "greeting");
+  if (voice.openingGreeting != null) {
+    const existing = gIdx >= 0 ? sections[gIdx] : null;
+    const greeting = {
+      id: "greeting",
+      type: "greeting" as const,
+      label: existing?.label || "Greeting",
+      enabled: existing?.enabled !== false,
+      config: {
+        ...asRecord(existing?.config),
+        text: voice.openingGreeting,
+        openingGreeting: voice.openingGreeting,
+      },
+    };
+    if (gIdx >= 0) sections[gIdx] = greeting;
+    else sections.unshift(greeting);
+  }
+  return {
+    ...config,
+    conversationFlow: { sections },
+    voiceLanguage: {
+      ...(config.voiceLanguage || {}),
+      ...(voice.voiceId ? { voiceId: voice.voiceId } : {}),
+      ...(voice.speakingSpeed != null ? { speed: voice.speakingSpeed } : {}),
+    },
+    callHandling: {
+      ...(config.callHandling || {}),
+      ...(voice.openingGreeting
+        ? { greeting: voice.openingGreeting }
+        : {}),
+    },
+  };
+}
+
+function applyCollectionFieldToConfig(
+  config: VoiceAgentConfig,
+  field: NonNullable<AgentChangeProposal["patch"]["collectionField"]>,
+): VoiceAgentConfig {
+  const sections = [...(config.conversationFlow?.sections || [])];
+  const idx = sections.findIndex((s) => s.type === "booking" || s.id === "booking");
+  const existing = idx >= 0 ? sections[idx] : null;
+  const cfg = asRecord(existing?.config);
+  const list = Array.isArray(cfg.collectFieldsList)
+    ? [...(cfg.collectFieldsList as unknown[])]
+    : [];
+  list.push({
+    id: field.id,
+    key: field.key,
+    label: field.label,
+    question: field.question,
+    type: field.type || "text",
+    required: Boolean(field.required),
+    enabled: field.enabled !== false,
+    confirmationRequired: Boolean(field.confirmationRequired ?? field.required),
+    appliesToServiceIds: field.appliesToServiceIds,
+    saveTo: field.saveTo || ["contact", "appointment"],
+  });
+  const types = Array.isArray(cfg.appointmentTypes)
+    ? (cfg.appointmentTypes as Array<Record<string, unknown>>).map((t) => {
+        const next = { ...t };
+        const required = Array.isArray(next.requiredFields)
+          ? next.requiredFields.map(String)
+          : [];
+        if (field.required && !required.includes(field.id) && !required.includes(field.key)) {
+          required.push(field.key || field.id);
+          next.requiredFields = required;
+        }
+        return next;
+      })
+    : cfg.appointmentTypes;
+
+  const bookingSection = {
+    id: "booking",
+    type: "booking" as const,
+    label: existing?.label || "Book appointment",
+    enabled: existing?.enabled !== false,
+    config: {
+      ...cfg,
+      appointmentTypes: types,
+      collectFieldsList: list,
+      collectFields: {
+        ...asRecord(cfg.collectFields),
+        [field.key]: true,
+      },
+    },
+  };
+  if (idx >= 0) sections[idx] = bookingSection;
+  else sections.push(bookingSection);
+  return { ...config, conversationFlow: { sections } };
+}
+
 export async function createChangeProposal(input: {
   workspaceId: string;
   agentId: string;
@@ -326,27 +445,110 @@ export async function createChangeProposal(input: {
   patch?: Partial<BookingPolicy>;
   summary?: string;
   naturalLanguage?: string;
+  voice?: AgentChangeProposal["patch"]["voice"];
+  collectionField?: AgentChangeProposal["patch"]["collectionField"];
 }) {
   const prisma = getPrisma();
   const agent = await prisma.voiceAgent.findFirst({
     where: { id: input.agentId, workspaceId: input.workspaceId },
   });
   if (!agent) throw new Error("Agent not found");
-  const current = extractBookingPolicyFromConfig(agent.draftConfig);
-  const patch =
-    input.patch ||
-    (input.naturalLanguage
-      ? parseBookingPolicyRequest(input.naturalLanguage)
-      : null);
-  if (!patch) throw new Error("Could not understand a booking-policy change");
 
-  const proposal = buildBookingPolicyProposal({
-    agentId: input.agentId,
-    current,
-    patch,
-    summary: input.summary,
-    userId: input.userId,
-  });
+  let proposal: AgentChangeProposal;
+
+  if (input.collectionField) {
+    const field = input.collectionField;
+    proposal = {
+      id: createId(),
+      agentId: input.agentId,
+      type: "add_collection_field",
+      summary: input.summary || `Add collection field: ${field.label}`,
+      changes: [
+        {
+          path: `collectionFields.${field.key}`,
+          before: null,
+          after: field,
+        },
+      ],
+      riskLevel: "medium",
+      requiresConfirmation: true,
+      status: "pending",
+      createdAt: new Date().toISOString(),
+      createdByUserId: input.userId,
+      affectedAgents: [input.agentId],
+      testsRequired: ["new_caller_books", "required_fields_complete"],
+      rollbackPlan:
+        "Reject this proposal, or activate a prior VoiceAgentVersion via rollback_agent_version.",
+      patch: { collectionField: field },
+    };
+  } else if (input.voice) {
+    const config = parseVoiceAgentConfig(agent.draftConfig);
+    const beforeVoice = config.voiceLanguage?.voiceId;
+    const beforeGreeting =
+      (config.conversationFlow?.sections || []).find((s) => s.type === "greeting")
+        ?.config &&
+      asRecord(
+        (config.conversationFlow?.sections || []).find((s) => s.type === "greeting")
+          ?.config,
+      ).text;
+    const changes: ChangeDiff[] = [];
+    if (input.voice.voiceId != null) {
+      changes.push({
+        path: "voice.voiceId",
+        before: beforeVoice,
+        after: input.voice.voiceId,
+      });
+    }
+    if (input.voice.openingGreeting != null) {
+      changes.push({
+        path: "voice.openingGreeting",
+        before: beforeGreeting ?? null,
+        after: input.voice.openingGreeting,
+      });
+    }
+    if (input.voice.speakingSpeed != null) {
+      changes.push({
+        path: "voice.speakingSpeed",
+        before: config.voiceLanguage?.speed ?? null,
+        after: input.voice.speakingSpeed,
+      });
+    }
+    if (!changes.length) throw new Error("No voice changes detected");
+    proposal = {
+      id: createId(),
+      agentId: input.agentId,
+      type: "update_voice",
+      summary: input.summary || "Update voice and greeting",
+      changes,
+      riskLevel: "low",
+      requiresConfirmation: true,
+      status: "pending",
+      createdAt: new Date().toISOString(),
+      createdByUserId: input.userId,
+      affectedAgents: [input.agentId],
+      testsRequired: ["greeting_plays", "new_caller_books"],
+      rollbackPlan:
+        "Reject this proposal, or activate a prior VoiceAgentVersion via rollback_agent_version.",
+      patch: { voice: input.voice },
+    };
+  } else {
+    const current = extractBookingPolicyFromConfig(agent.draftConfig);
+    const patch =
+      input.patch ||
+      (input.naturalLanguage
+        ? parseBookingPolicyRequest(input.naturalLanguage)
+        : null);
+    if (!patch) throw new Error("Could not understand a booking-policy change");
+
+    proposal = buildBookingPolicyProposal({
+      agentId: input.agentId,
+      current,
+      patch,
+      summary: input.summary,
+      userId: input.userId,
+    });
+  }
+
   const existing = listChangeProposals(agent.draftConfig).filter(
     (p) => p.status === "pending",
   );
@@ -392,6 +594,12 @@ export async function confirmChangeProposal(input: {
   let config = parseVoiceAgentConfig(agent.draftConfig);
   if (proposal.patch.bookingPolicy) {
     config = applyBookingPolicyToConfig(config, proposal.patch.bookingPolicy);
+  }
+  if (proposal.patch.voice) {
+    config = applyVoicePatchToConfig(config, proposal.patch.voice);
+  }
+  if (proposal.patch.collectionField) {
+    config = applyCollectionFieldToConfig(config, proposal.patch.collectionField);
   }
   if (proposal.patch.identity?.name || proposal.patch.identity?.displayName) {
     // identity applied via updateVoiceAgentDraft fields below

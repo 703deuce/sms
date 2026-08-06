@@ -201,6 +201,27 @@ export async function buildAgentHealth(input: {
     true,
   );
 
+  let deploymentDrift: HealthCheck = check(
+    "unknown",
+    "Deployment drift not checked",
+    true,
+  );
+  try {
+    const { buildDeploymentDriftHealthCheck } = await import(
+      "@/lib/agents/appointment-booking/deployment-drift"
+    );
+    deploymentDrift = await buildDeploymentDriftHealthCheck({
+      workspaceId: input.workspaceId,
+      agentId: input.agentId,
+    });
+  } catch {
+    deploymentDrift = check(
+      "warning",
+      "Could not compare live Telnyx to expected AgentVersion",
+      true,
+    );
+  }
+
   const agentSelf =
     input.agentHealthStatus && input.agentHealthStatus !== "ok"
       ? check(
@@ -225,6 +246,12 @@ export async function buildAgentHealth(input: {
   if (overall === "healthy" && smsConfirmation.status === "degraded") {
     overall = "degraded";
   }
+  if (overall === "healthy" && deploymentDrift.status === "degraded") {
+    overall = "degraded";
+  }
+  if (overall === "healthy" && deploymentDrift.status === "warning") {
+    overall = "warning";
+  }
 
   return {
     overall,
@@ -238,6 +265,7 @@ export async function buildAgentHealth(input: {
     latestDeployment,
     primaryWorkflow,
     slotHolds,
+    deploymentDrift,
     lastCheckedAt: now,
   };
 }

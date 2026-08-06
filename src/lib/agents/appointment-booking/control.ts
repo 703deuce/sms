@@ -574,8 +574,21 @@ export async function runAgentControlCommand(input: {
       const bookingPolicy = input.payload?.bookingPolicy as
         | Partial<BookingPolicy>
         | undefined;
-      if (!bookingPolicy || typeof bookingPolicy !== "object") {
-        throw new Error("bookingPolicy patch required — Setup edits must version");
+      const voice = input.payload?.voice as
+        | {
+            voiceId?: string;
+            voiceLabel?: string;
+            openingGreeting?: string;
+            speakingSpeed?: number;
+          }
+        | undefined;
+      const collectionField = input.payload?.collectionField as
+        | Record<string, unknown>
+        | undefined;
+      if (!bookingPolicy && !voice && !collectionField) {
+        throw new Error(
+          "Setup edits require bookingPolicy, voice, or collectionField — must version",
+        );
       }
       return createChangeProposal({
         workspaceId: input.workspaceId,
@@ -583,7 +596,100 @@ export async function runAgentControlCommand(input: {
         userId: input.userId,
         summary,
         patch: bookingPolicy,
+        voice,
+        collectionField: collectionField
+          ? (collectionField as {
+              id: string;
+              key: string;
+              label: string;
+              question?: string;
+              type?: string;
+              required?: boolean;
+              enabled?: boolean;
+              confirmationRequired?: boolean;
+              appliesToServiceIds?: string[];
+              saveTo?: string[];
+            })
+          : undefined,
       });
+    }
+
+    case "get_setup_readiness": {
+      const { computeSetupReadiness, setupInterviewOpening } = await import(
+        "@/lib/agents/appointment-booking/setup-commands"
+      );
+      const readiness = computeSetupReadiness(agent);
+      return {
+        ...readiness,
+        interviewOpening: setupInterviewOpening(agent),
+      };
+    }
+
+    case "run_setup_command": {
+      const { setupCommandToProposalInput } = await import(
+        "@/lib/agents/appointment-booking/setup-commands"
+      );
+      const command = input.payload?.command as
+        | import("@/lib/agents/appointment-booking/setup-commands").SetupCommand
+        | undefined;
+      if (!command || typeof command !== "object" || !("type" in command)) {
+        throw new Error("command required");
+      }
+      if (command.type === "get_setup_readiness") {
+        const { computeSetupReadiness } = await import(
+          "@/lib/agents/appointment-booking/setup-commands"
+        );
+        return computeSetupReadiness(agent);
+      }
+      const mapped = setupCommandToProposalInput(command);
+      if (!mapped) throw new Error("Unsupported setup command");
+      return createChangeProposal({
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+        userId: input.userId,
+        summary: mapped.summary,
+        patch: mapped.bookingPolicy,
+        voice: mapped.voice,
+        collectionField: mapped.collectionField
+          ? {
+              id: mapped.collectionField.id,
+              key: mapped.collectionField.key,
+              label: mapped.collectionField.label,
+              question: mapped.collectionField.question,
+              type: mapped.collectionField.type,
+              required: mapped.collectionField.required,
+              enabled: mapped.collectionField.enabled,
+              confirmationRequired: mapped.collectionField.confirmationRequired,
+              appliesToServiceIds: mapped.collectionField.appliesToServiceIds,
+              saveTo: mapped.collectionField.saveTo,
+            }
+          : undefined,
+      });
+    }
+
+    case "get_deployment_drift": {
+      const { detectDeploymentDrift } = await import(
+        "@/lib/agents/appointment-booking/deployment-drift"
+      );
+      return detectDeploymentDrift({
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+        fetchRemote: input.payload?.fetchRemote !== false,
+      });
+    }
+
+    case "get_runtime_registry": {
+      const { runtimeRegistrySummary } = await import(
+        "@/lib/agents/appointment-booking/runtime-registry"
+      );
+      return { runtimes: runtimeRegistrySummary() };
+    }
+
+    case "get_field_ownership_report": {
+      const { migrationReport } = await import(
+        "@/lib/agents/appointment-booking/field-ownership"
+      );
+      return migrationReport();
     }
 
     default:

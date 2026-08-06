@@ -118,6 +118,241 @@ export async function answerOwnerQuestion(input: {
   );
   const responsibility = buildAgentResponsibility(agent);
 
+  // Pre-live / incomplete setup — Amy interviews the owner
+  if (
+    includesAny(q, [
+      "help me set up",
+      "finish setup",
+      "what do you need",
+      "what's missing",
+      "whats missing",
+      "train yourself",
+      "continue setup",
+      "get ready",
+    ]) ||
+    (agent.identity.status !== "active" &&
+      includesAny(q, ["start", "let's begin", "lets begin", "hello amy", "hi amy"]))
+  ) {
+    const { computeSetupReadiness, setupInterviewOpening } = await import(
+      "@/lib/agents/appointment-booking/setup-commands"
+    );
+    const readiness = computeSetupReadiness(agent);
+    return {
+      answer: [
+        setupInterviewOpening(agent),
+        `Progress: ${readiness.completeCount} of ${readiness.totalCount} sections.`,
+        readiness.missingAmySpecific.length
+          ? `Still needed: ${readiness.missingAmySpecific.join(" · ")}`
+          : "Amy-specific setup looks complete — we can generate workflow, test, and activate.",
+      ].join("\n\n"),
+      sources: ["get_setup_readiness", "company_brain"],
+      suggestedFollowUps: [
+        readiness.nextQuestion || "Explain your setup",
+        "Change the minimum notice to four hours",
+        "Add a required email for appointments",
+        "Test yourself",
+      ].filter(Boolean),
+      evidence: [
+        {
+          label: "Guided setup",
+          kind: "setup",
+          href: `/solutions/appointment-receptionist?agentId=${agent.voiceAgentId}&hire=amy`,
+        },
+        {
+          label: "Company Brain",
+          kind: "knowledge",
+          href: "/company-brain",
+        },
+      ],
+      data: readiness,
+    };
+  }
+
+  // Custom collection fields from conversation
+  if (
+    input.userId &&
+    includesAny(q, ["add", "require", "collect", "ask for", "ask callers"]) &&
+    includesAny(q, [
+      "field",
+      "question",
+      "email",
+      "address",
+      "vehicle",
+      "year",
+      "make",
+      "model",
+      "information",
+    ])
+  ) {
+    const { createCustomCollectionField } = await import(
+      "@/lib/agents/appointment-booking/collection-fields"
+    );
+    const { createChangeProposal } = await import(
+      "@/lib/agents/appointment-booking/change-proposals"
+    );
+    let label = "Custom field";
+    let type: "text" | "email" | "address" | "number" = "text";
+    if (/\bemail\b/.test(q)) {
+      label = "Email address";
+      type = "email";
+    } else if (/\baddress\b/.test(q)) {
+      label = "Service address";
+      type = "address";
+    } else if (/vehicle|year.*make|make.*model/.test(q)) {
+      label = "Vehicle year, make, and model";
+      type = "text";
+    } else {
+      const m = input.question.match(
+        /(?:add|require|collect|ask for)\s+(?:a\s+|an\s+|the\s+)?(.+?)(?:\s+for\s+|\s*$)/i,
+      );
+      if (m?.[1]) label = m[1].replace(/[?.!]+$/, "").trim().slice(0, 80);
+    }
+    const required = !/\boptional\b/.test(q);
+    const field = createCustomCollectionField({
+      label,
+      type,
+      required,
+      question:
+        type === "email"
+          ? "What's your email address?"
+          : type === "address"
+            ? "What address should the technician come to?"
+            : `Could you tell me your ${label.toLowerCase()}?`,
+      saveTo: ["contact", "appointment"],
+    });
+    const serviceMatch = input.question.match(
+      /for\s+([a-z0-9][a-z0-9\s_-]{1,40}?)\s+appointments?/i,
+    );
+    if (serviceMatch) {
+      field.appliesToServiceIds = [
+        serviceMatch[1].trim().toLowerCase().replace(/\s+/g, "_"),
+      ];
+    }
+    const proposal = await createChangeProposal({
+      workspaceId: input.workspaceId,
+      agentId: input.agentId,
+      userId: input.userId,
+      summary: `Add required information: ${label}`,
+      collectionField: {
+        id: field.id,
+        key: field.key,
+        label: field.label,
+        question: field.question,
+        type: field.type,
+        required: field.required,
+        enabled: true,
+        confirmationRequired: field.confirmationRequired,
+        appliesToServiceIds: field.appliesToServiceIds,
+        saveTo: field.saveTo,
+      },
+    });
+    return {
+      answer: [
+        `Proposed change:`,
+        `• Add required information: ${label}`,
+        field.appliesToServiceIds?.length
+          ? `• For: ${field.appliesToServiceIds.join(", ")} appointments`
+          : `• For: all bookable appointments`,
+        `• Save to: ${(field.saveTo || []).join(" and ")}`,
+        `• Required tests: ${proposal.testsRequired.length}`,
+        ``,
+        `Say “yes, put it live” or open Versions → Put change live after you review.`,
+      ].join("\n"),
+      sources: ["collection_fields", "change_proposal"],
+      suggestedFollowUps: ["Yes, put it live", "Test yourself", "Explain your setup"],
+      requiresConfirmation: true,
+      proposalId: proposal.id,
+      evidence: [
+        {
+          label: "Review draft",
+          kind: "versions",
+          href: `/agents/${agent.identity.id}?section=build`,
+        },
+      ],
+      data: { proposal, field },
+    };
+  }
+
+  // Greeting / voice updates
+  if (
+    input.userId &&
+    includesAny(q, ["greeting", "say hello", "opening line", "introduce yourself as"])
+  ) {
+    const { createChangeProposal } = await import(
+      "@/lib/agents/appointment-booking/change-proposals"
+    );
+    const quoted =
+      input.question.match(/["“](.+?)["”]/)?.[1] ||
+      input.question.match(/greeting(?:\s+to)?\s*[:\-]\s*(.+)$/i)?.[1];
+    if (quoted?.trim()) {
+      const proposal = await createChangeProposal({
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+        userId: input.userId,
+        summary: "Update opening greeting",
+        voice: { openingGreeting: quoted.trim() },
+      });
+      return {
+        answer: `I'll update my greeting to: “${quoted.trim()}”. Confirm to publish to Telnyx.`,
+        sources: ["voice", "change_proposal"],
+        suggestedFollowUps: ["Yes, put it live", "Test yourself"],
+        requiresConfirmation: true,
+        proposalId: proposal.id,
+        evidence: [
+          {
+            label: "Review proposal",
+            kind: "versions",
+            href: `/agents/${agent.identity.id}?section=build`,
+          },
+        ],
+        data: proposal,
+      };
+    }
+  }
+
+  // Live version vs Telnyx
+  if (
+    includesAny(q, [
+      "what version",
+      "which version",
+      "callers currently",
+      "currently using",
+      "deployed version",
+      "live version",
+      "drift",
+    ])
+  ) {
+    const { detectDeploymentDrift } = await import(
+      "@/lib/agents/appointment-booking/deployment-drift"
+    );
+    const drift = await detectDeploymentDrift({
+      workspaceId: input.workspaceId,
+      agentId: input.agentId,
+    });
+    const current = agent.versions.find((v) => v.id === agent.currentVersionId);
+    return {
+      answer: [
+        current
+          ? `Database current version: v${current.version}${current.changeLog ? ` — ${current.changeLog}` : ""}.`
+          : "No published AgentVersion marked current in the database.",
+        drift.message,
+        drift.drifted
+          ? `Differences: ${drift.differences.join(", ") || "see Health"}. You can redeploy the expected version, import the external change, or pause me.`
+          : "Live Telnyx configuration matches the expected version hash.",
+      ].join(" "),
+      sources: ["versions", "deployment_drift", "telnyx"],
+      suggestedFollowUps: ["What is your health status?", "Test yourself"],
+      evidence: [
+        {
+          label: "Health / drift",
+          kind: "health",
+          href: `/agents/${agent.identity.id}?section=settings`,
+        },
+      ],
+      data: drift,
+    };
+  }
+
   if (
     includesAny(q, [
       "what exactly are you responsible",

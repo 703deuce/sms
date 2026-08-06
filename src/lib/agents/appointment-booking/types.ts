@@ -129,6 +129,7 @@ export type AgentHealth = {
   latestDeployment: HealthCheck;
   primaryWorkflow: HealthCheck;
   slotHolds: HealthCheck;
+  deploymentDrift: HealthCheck;
   lastCheckedAt: string;
 };
 
@@ -292,7 +293,12 @@ export type AgentControlCommand =
   | "attach_missed_call_text_back"
   | "get_missed_call_handoff"
   | "get_booking_verification"
-  | "propose_setup_change";
+  | "propose_setup_change"
+  | "get_setup_readiness"
+  | "run_setup_command"
+  | "get_deployment_drift"
+  | "get_runtime_registry"
+  | "get_field_ownership_report";
 
 export {
   DEFAULT_APPOINTMENT_AGENT_NAME,

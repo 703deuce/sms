@@ -3,7 +3,23 @@
 **Rule:** wrap live systems (`VoiceAgent`); do not create a parallel Agent table.  
 **Upgrade rule:** extend the existing operating layer — no second agent/workflow/booking system.
 
-## After train — what is actually live
+## Unify lifecycle (wizard = Amy’s deployment engine)
+
+| Change | Status |
+|---|---|
+| Field ownership map + migration report (Brain / Amy / deploy / temp) | **FULLY** (`field-ownership.ts` + `migrationReport()`) |
+| Wizard save syncs company facts → Company Brain (no Amy duration copy) | **FULLY** |
+| Single deploy path remains appointment-receptionist activate | **FULLY** (`deploy.ts`) |
+| Typed setup commands (`get_setup_readiness`, voice/fields proposals) | **FULLY** (`setup-commands.ts`) |
+| Runtime registry (Caller / Owner / Architect / Diagnostic) | **FULLY** (`runtime-registry.ts`) |
+| Telnyx deployment drift vs expected AgentVersion | **FULLY** (`deployment-drift.ts` + Health) |
+| Amy page: Home / Talk / Work / Build & Test / Settings | **FULLY** (mockup IA) |
+| Settings: booking + greeting + fields → proposal → Put change live | **FULLY** |
+| Talk completes setup interview + custom fields conversationally | **FULLY** |
+| Guided setup = same wizard, labeled as Amy’s engine | **FULLY** (linked from Settings) |
+| Company Brain permanent nav | **FULLY** (Your Team → Company Brain) |
+
+**Rule:** Keep wizard machinery. Company Brain owns company facts. Amy AgentVersion owns appointment behavior. Deployed Telnyx stays the live caller path — confirm/publish after every change. Dual-read Phase 3: new writes prefer Brain + Amy draft; old wizard fields remain read fallback until verified.
 
 | Path | Status |
 |---|---|
@@ -12,10 +28,11 @@
 | AutomationFlow = inbound enroll + post-call / around-call | **FULLY** |
 | Slot holds + book gates (incl. same-day cutoff) | **FULLY** |
 | Availability offers respect same-day cutoff (Google/MS/internal) | **FULLY** |
-| Owner NL change → proposal → “yes / Put change live” → VoiceService sync + Telnyx republish | **FULLY** (live agents publish by default) |
+| Owner NL change → proposal → “yes / Put change live” → VoiceService sync + Telnyx republish | **FULLY** (live agents publish by default; voice + collection fields too) |
 | Workflow Architect drafts → promote to primary flow | **FULLY** (optional; first hire uses compiled template) |
+| Health compares expected version hash vs live Telnyx instructions | **FULLY** |
 
-**How to change Amy after go-live:** Talk → she drafts a proposal → confirm with **Put change live** or say “yes, put it live”. That updates booking policy, syncs calendar service gates, and republishes the Telnyx assistant.
+**How to change Amy after go-live:** Talk or Settings → typed proposal → confirm with **Put change live** or say “yes, put it live”. That updates booking policy / voice / fields, syncs calendar service gates, and republishes the Telnyx assistant.
 
 | Step | Route / surface | Status |
 |---|---|---|
