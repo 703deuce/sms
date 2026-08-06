@@ -1,5 +1,5 @@
 /**
- * Structured agent-to-agent handoffs (e.g. MCTB → Randy).
+ * Structured agent-to-agent handoffs (e.g. MCTB → Amy).
  */
 
 import { createId } from "@/lib/supabase/id";

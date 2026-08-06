@@ -13,6 +13,7 @@ import {
   confirmChangeProposal,
   createChangeProposal,
   listChangeProposals,
+  parseBookingPolicyRequest,
   rejectChangeProposal,
 } from "@/lib/agents/appointment-booking/change-proposals";
 import {
@@ -424,6 +425,165 @@ export async function runAgentControlCommand(input: {
         where: { id: input.agentId, workspaceId: input.workspaceId },
       });
       return { handoff: getMissedCallHandoff(row?.draftConfig) };
+    }
+
+    case "get_employee_timeline": {
+      const callId = String(input.payload?.callId || "");
+      if (!callId) throw new Error("callId required");
+      const trace = await buildExecutionTrace({
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+        callId,
+      });
+      if (!trace) throw new Error("Call trace not found");
+      const {
+        buildEmployeeTimeline,
+        buildOperationalReasoningPath,
+      } = await import("@/lib/agents/appointment-booking/employee-timeline");
+      return {
+        timeline: buildEmployeeTimeline(trace, { agentId: input.agentId }),
+        reasoningPath: buildOperationalReasoningPath(trace),
+        trace,
+      };
+    }
+
+    case "get_attention_inbox": {
+      const { buildAttentionInbox } = await import(
+        "@/lib/agents/appointment-booking/attention"
+      );
+      return buildAttentionInbox({
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+      });
+    }
+
+    case "get_memory_view": {
+      const { buildTypedMemoryView } = await import(
+        "@/lib/agents/appointment-booking/attention"
+      );
+      return buildTypedMemoryView({
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+      });
+    }
+
+    case "get_live_readiness": {
+      const { buildLiveReadiness } = await import(
+        "@/lib/agents/appointment-booking/readiness"
+      );
+      return buildLiveReadiness({
+        workspaceId: input.workspaceId,
+        agentStatus: agent.identity.status,
+        health: agent.health,
+        telnyxAssistantId: agent.telnyxAssistantId,
+        phoneNumberE164: agent.phoneNumberE164,
+        calendarConnectionIds: agent.calendarConnectionIds,
+        primaryFlowId: agent.primaryFlowId,
+        currentVersionId: agent.currentVersionId,
+        runSlotHoldProbe: Boolean(input.payload?.runSlotHoldProbe),
+      });
+    }
+
+    case "get_autonomy_policy": {
+      const {
+        budgetToMode,
+        describeAutonomyMode,
+        EMERGENCY_POLICIES,
+      } = await import("@/lib/agents/appointment-booking/autonomy-policy");
+      const responsibility = buildAgentResponsibility(agent);
+      const mode = budgetToMode(responsibility.autonomyBudget);
+      return {
+        ...describeAutonomyMode(mode),
+        storedBudget: responsibility.autonomyBudget,
+        emergencyPolicies: EMERGENCY_POLICIES,
+        capabilityPauses: responsibility.capabilityPauses,
+      };
+    }
+
+    case "teach_agent": {
+      const instruction = String(input.payload?.instruction || "").trim();
+      if (!instruction) throw new Error("instruction required");
+      const { classifyTeachInstruction } = await import(
+        "@/lib/agents/appointment-booking/attention"
+      );
+      const classified = classifyTeachInstruction(instruction);
+      if (classified.proposalKind === "reject") {
+        return {
+          ...classified,
+          answer: classified.summary,
+          requiresConfirmation: false,
+        };
+      }
+      if (classified.proposalKind === "booking_policy") {
+        const parsed = parseBookingPolicyRequest(instruction);
+        if (parsed) {
+          const proposal = await createChangeProposal({
+            workspaceId: input.workspaceId,
+            agentId: input.agentId,
+            userId: input.userId,
+            summary: `Teach: ${instruction}`,
+            patch: parsed,
+          });
+          return {
+            ...classified,
+            answer: `Classified as booking policy. Created proposal ${proposal.id}. Confirm to validate, test, and deploy.`,
+            proposalId: proposal.id,
+            requiresConfirmation: true,
+            data: proposal,
+          };
+        }
+      }
+      if (classified.proposalKind === "workflow") {
+        const draft = await createWorkflowDraft({
+          workspaceId: input.workspaceId,
+          agentId: input.agentId,
+          userId: input.userId,
+          userRequest: instruction,
+        });
+        return {
+          ...classified,
+          answer: `Classified as workflow change. Draft “${draft.name}” created (${draft.validationStatus}). Not live until you confirm after tests.`,
+          workflowDraftId: draft.id,
+          requiresConfirmation: true,
+          data: draft,
+        };
+      }
+      return {
+        ...classified,
+        answer: `${classified.summary} I will not silently store this as permanent knowledge. Review it in Memory / Attention, or confirm a formal proposal.`,
+        requiresConfirmation: true,
+        data: { instruction, classification: classified.classification },
+      };
+    }
+
+    case "get_booking_verification": {
+      const { verifyAppointmentBooking } = await import(
+        "@/lib/agents/appointment-booking/verify-booking"
+      );
+      return verifyAppointmentBooking({
+        workspaceId: input.workspaceId,
+        appointmentId: input.payload?.appointmentId
+          ? String(input.payload.appointmentId)
+          : null,
+        callId: input.payload?.callId ? String(input.payload.callId) : null,
+      });
+    }
+
+    case "propose_setup_change": {
+      const summary = String(input.payload?.summary || "Setup change").trim();
+      const bookingPolicy = input.payload?.bookingPolicy as
+        | Partial<BookingPolicy>
+        | undefined;
+      if (!bookingPolicy || typeof bookingPolicy !== "object") {
+        throw new Error("bookingPolicy patch required — Setup edits must version");
+      }
+      return createChangeProposal({
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+        userId: input.userId,
+        summary,
+        patch: bookingPolicy,
+      });
     }
 
     default:

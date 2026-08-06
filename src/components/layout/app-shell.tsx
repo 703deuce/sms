@@ -32,7 +32,10 @@ export function AppShell({
   const [menuOpen, setMenuOpen] = useState(false);
   // Page hero owns the Solutions Dashboard title — avoid a duplicate chrome h1.
   const title =
-    pathname === "/outcomes" || pathname === "/systems"
+    pathname === "/outcomes" ||
+      pathname === "/systems" ||
+      pathname === "/agents" ||
+      pathname.startsWith("/agents/")
       ? ""
       : getPageTitle(pathname);
 

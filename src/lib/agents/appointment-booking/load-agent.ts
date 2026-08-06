@@ -11,11 +11,12 @@ import {
 } from "@/lib/agents/appointment-booking/profile";
 import { buildAgentHealth } from "@/lib/agents/appointment-booking/health";
 import { buildAgentMetrics } from "@/lib/agents/appointment-booking/metrics";
+import { buildLiveReadiness } from "@/lib/agents/appointment-booking/readiness";
+import { resolveAgentIdentity } from "@/lib/agents/appointment-booking/identity";
+import { budgetToMode } from "@/lib/agents/appointment-booking/autonomy-policy";
+import { parseVoiceAgentConfig } from "@/lib/voice/types";
 import {
   APPOINTMENT_BOOKING_ROLE,
-  DEFAULT_RANDY_DESCRIPTION,
-  DEFAULT_RANDY_DISPLAY,
-  DEFAULT_RANDY_NAME,
   type AgentIdentity,
   type AgentProductStatus,
   type AppointmentBookingAgentView,
@@ -47,6 +48,12 @@ function mapProductStatus(
     default:
       return "draft";
   }
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
 }
 
 export function isAppointmentBookingAgent(agent: {
@@ -136,27 +143,52 @@ export async function loadAppointmentBookingAgent(
     includePreviousWindow: true,
   });
 
-  const name =
-    String(agent.name || "").trim() ||
-    DEFAULT_RANDY_NAME;
-  const displayName =
-    String(agent.displayName || "").trim() ||
-    (name.toLowerCase() === "randy"
-      ? DEFAULT_RANDY_DISPLAY
-      : `${name} — Appointment Booking Agent`);
+  const config = parseVoiceAgentConfig(agent.draftConfig);
+  const op = asRecord(asRecord(config.advanced).agentOperating);
+  const identityFields = asRecord(op.identity);
+  const resolved = resolveAgentIdentity({
+    name: agent.name,
+    displayName: agent.displayName,
+    description: agent.description,
+    purpose: agent.purpose,
+    customerFacingName: identityFields.customerFacingName as string | undefined,
+    pronouns: identityFields.pronouns as
+      | { subject?: string; object?: string; possessive?: string }
+      | undefined,
+    avatarId: (identityFields.avatarId as string) || undefined,
+    roleLabel: (identityFields.roleLabel as string) || undefined,
+  });
 
+  const productStatus = mapProductStatus(String(agent.status), health.overall);
   const identity: AgentIdentity = {
     id: agent.id,
     workspaceId,
-    name,
-    displayName,
+    name: resolved.name,
+    displayName: resolved.displayName,
     role: APPOINTMENT_BOOKING_ROLE,
+    roleLabel: resolved.roleLabel,
     channel: "voice",
-    description:
-      String(agent.description || agent.purpose || "").trim() ||
-      DEFAULT_RANDY_DESCRIPTION,
-    status: mapProductStatus(String(agent.status), health.overall),
+    description: resolved.description,
+    customerFacingName: resolved.customerFacingName,
+    pronouns: resolved.pronouns,
+    avatarId: resolved.avatarId,
+    status: productStatus,
   };
+
+  const autonomyMode = budgetToMode(
+    String(op.autonomyBudget || "standard") as "conservative" | "standard" | "high",
+  );
+
+  const readiness = await buildLiveReadiness({
+    workspaceId,
+    agentStatus: productStatus,
+    health,
+    telnyxAssistantId: agent.telnyxAssistantId,
+    phoneNumberE164: phone?.e164 || null,
+    calendarConnectionIds: (calendars || []).map((c: { id: string }) => c.id),
+    primaryFlowId: agent.primaryFlowId,
+    currentVersionId: agent.publishedVersionId,
+  });
 
   const automationFlowIds = [
     ...(agent.primaryFlowId ? [agent.primaryFlowId] : []),
@@ -179,6 +211,8 @@ export async function loadAppointmentBookingAgent(
     businessBrain,
     health,
     metrics,
+    readiness,
+    autonomyMode,
     currentVersionId: agent.publishedVersionId,
     versions: versions.map(
       (v: {

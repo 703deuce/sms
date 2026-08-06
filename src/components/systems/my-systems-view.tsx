@@ -225,7 +225,7 @@ export function MySystemsView({ systems }: { systems: SystemResource[] }) {
     <div className="space-y-5">
       <div>
         <h1 className="text-[28px] font-bold tracking-tight text-[#111827]">
-          My Agents
+          Your Team
         </h1>
         <p className="mt-1.5 max-w-2xl text-[14px] text-[#6B7280]">
           Every agent you create — voice, SMS, and more. Wizards generate the

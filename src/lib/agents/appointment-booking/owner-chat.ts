@@ -22,6 +22,15 @@ export type OwnerChatReply = {
   requiresConfirmation?: boolean;
   proposalId?: string;
   workflowDraftId?: string;
+  /** Visible evidence for trust UI */
+  evidence?: Array<{
+    label: string;
+    kind: string;
+    href?: string;
+    refId?: string;
+  }>;
+  /** Status while long work runs */
+  workingStatus?: string;
 };
 
 function includesAny(q: string, words: string[]) {
@@ -295,20 +304,106 @@ export async function answerOwnerQuestion(input: {
     };
   }
 
-  if (includesAny(q, ["duplicate", "make another", "copy this agent", "another randy"])) {
+  if (
+    includesAny(q, [
+      "always transfer",
+      "never quote",
+      "teach",
+      "stop offering",
+      "require a service address",
+      "sewer backup",
+      "do not offer same-day",
+      "don't offer same-day",
+    ])
+  ) {
+    const { classifyTeachInstruction } = await import(
+      "@/lib/agents/appointment-booking/attention"
+    );
+    const classified = classifyTeachInstruction(input.question);
+    if (classified.proposalKind === "reject") {
+      return {
+        answer: classified.summary,
+        sources: ["teach_agent", "safety"],
+        suggestedFollowUps: followUps,
+        data: classified,
+      };
+    }
+    if (classified.proposalKind === "booking_policy" && input.userId) {
+      const { createChangeProposal, parseBookingPolicyRequest } = await import(
+        "@/lib/agents/appointment-booking/change-proposals"
+      );
+      const patch = parseBookingPolicyRequest(input.question);
+      if (patch) {
+        const proposal = await createChangeProposal({
+          workspaceId: input.workspaceId,
+          agentId: input.agentId,
+          userId: input.userId,
+          summary: `Teach: ${input.question}`,
+          patch,
+        });
+        return {
+          answer: `Classified as ${classified.classification}. I created a change proposal — review the exact diff, run tests, then confirm before it goes live.`,
+          sources: ["teach_agent", "change_proposal"],
+          suggestedFollowUps: followUps,
+          requiresConfirmation: true,
+          proposalId: proposal.id,
+          evidence: [
+            {
+              label: "Review proposal",
+              kind: "versions",
+              href: `/agents/${agent.identity.id}?tab=versions`,
+            },
+          ],
+          workingStatus: "Created draft proposal — not deployed",
+          data: { classified, proposal },
+        };
+      }
+    }
+    return {
+      answer: `${classified.summary} Open Memory or Attention to approve learning items, or confirm a formal proposal in Versions.`,
+      sources: ["teach_agent"],
+      suggestedFollowUps: [
+        "Change the minimum notice to four hours",
+        "Create an after-hours emergency workflow draft",
+      ],
+      evidence: [
+        {
+          label: "Memory",
+          kind: "memory",
+          href: `/agents/${agent.identity.id}?tab=memory`,
+        },
+      ],
+      data: classified,
+    };
+  }
+
+  if (includesAny(q, ["duplicate", "make another", "copy this agent", "another amy", "for richmond"])) {
+    const suggested = `${agent.identity.name} — Richmond`;
     return {
       answer: [
-        "I can duplicate this agent into a new DRAFT (no phone attached).",
-        "That requires an explicit confirm_change via the duplicate_agent control command with confirm:true.",
-        "Suggested name example: “Randy — Richmond After Hours”.",
-        "I will not create the copy until you confirm in the UI or API.",
+        `I can duplicate myself into a new draft named like “${suggested}”.`,
+        "The copy will not reuse this production number or calendar — those must be selected.",
+        "Confirm with the duplicate_agent command (confirm:true) from the UI.",
+        "The original agent stays unchanged.",
       ].join(" "),
       sources: ["duplicate_agent"],
-      suggestedFollowUps: ["Explain your setup", "Create an after-hours emergency workflow draft"],
+      suggestedFollowUps: [
+        "Explain your setup",
+        "Create an after-hours emergency workflow draft",
+      ],
       requiresConfirmation: true,
+      evidence: [
+        {
+          label: "Open Versions",
+          kind: "versions",
+          href: `/agents/${agent.identity.id}?tab=versions`,
+        },
+      ],
       data: {
         command: "duplicate_agent",
-        suggestedName: "Randy — copy",
+        suggestedName: suggested,
+        mustReplace: ["phone number", "calendar", "location", "timezone"],
+        safeToInherit: ["voice", "personality", "general knowledge", "booking structure"],
       },
     };
   }
@@ -400,7 +495,7 @@ export async function answerOwnerQuestion(input: {
     };
   }
 
-  if (includesAny(q, ["health", "ready", "dependency", "warning"])) {
+  if (includesAny(q, ["health", "ready", "dependency", "warning", "degraded"])) {
     const checks = [
       agent.health.telnyxAssistant,
       agent.health.assignedNumber,
@@ -408,17 +503,35 @@ export async function answerOwnerQuestion(input: {
       agent.health.primaryWorkflow,
       agent.health.latestDeployment,
       agent.health.smsConfirmation,
+      agent.health.slotHolds,
     ]
-      .filter((c) => c.status !== "healthy")
+      .filter((c) => c && c.status !== "healthy")
       .map((c) => `${c.status}: ${c.message}`);
+    const blockers = agent.readiness?.blockers || [];
     return {
       answer:
         checks.length === 0
-          ? `Overall health is ${agent.health.overall}. All required dependencies look healthy.`
-          : `Overall health is ${agent.health.overall}. Issues: ${checks.join(" | ")}`,
-      sources: ["health"],
+          ? `Overall health is ${agent.health.overall}. Readiness: ${agent.readiness?.label || "unknown"}. All required dependencies look healthy.`
+          : `Overall health is ${agent.health.overall}. Readiness: ${agent.readiness?.label || "unknown"}. Issues: ${checks.join(" | ")}${blockers.length ? `. Blockers: ${blockers.map((b) => b.message).join("; ")}` : ""}`,
+      sources: ["health", "readiness"],
       suggestedFollowUps: followUps,
-      data: agent.health,
+      evidence: [
+        {
+          label: "Open Health",
+          kind: "health",
+          href: `/agents/${agent.identity.id}?tab=health`,
+        },
+        ...(agent.health.calendar.status === "failed"
+          ? [
+              {
+                label: "Reconnect calendar",
+                kind: "calendar",
+                href: "/integrations",
+              },
+            ]
+          : []),
+      ],
+      data: { health: agent.health, readiness: agent.readiness },
     };
   }
 
@@ -461,6 +574,25 @@ export async function answerOwnerQuestion(input: {
       suggestedFollowUps: [
         "Show recent failures",
         "How many appointments did you book this week?",
+      ],
+      evidence: [
+        {
+          label: "Open call",
+          kind: "call",
+          href: `/voice/calls/${recent.callId}`,
+          refId: recent.callId,
+        },
+        {
+          label: "View timeline",
+          kind: "timeline",
+          href: `/agents/${agent.identity.id}?tab=activity&callId=${recent.callId}`,
+          refId: recent.callId,
+        },
+        {
+          label: "View calendar health",
+          kind: "health",
+          href: `/agents/${agent.identity.id}?tab=health`,
+        },
       ],
       data: recent,
     };

@@ -189,6 +189,18 @@ export async function buildAgentHealth(input: {
       : check("warning", `${flow.name} · ${flow.status}`, true)
     : check("failed", "No primary workflow linked", true);
 
+  const { checkSlotHoldSchema } = await import(
+    "@/lib/agents/appointment-booking/readiness"
+  );
+  const slotSchema = await checkSlotHoldSchema({
+    workspaceId: input.workspaceId,
+  });
+  const slotHolds = check(
+    slotSchema.status,
+    slotSchema.message,
+    true,
+  );
+
   const agentSelf =
     input.agentHealthStatus && input.agentHealthStatus !== "ok"
       ? check(
@@ -205,6 +217,7 @@ export async function buildAgentHealth(input: {
     bookingTools.status,
     latestDeployment.status,
     primaryWorkflow.status,
+    slotHolds.status,
     ...(agentSelf ? [agentSelf.status] : []),
   ];
 
@@ -224,6 +237,7 @@ export async function buildAgentHealth(input: {
     webhookEndpoint,
     latestDeployment,
     primaryWorkflow,
+    slotHolds,
     lastCheckedAt: now,
   };
 }

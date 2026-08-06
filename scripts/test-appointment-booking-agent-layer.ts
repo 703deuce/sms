@@ -241,11 +241,14 @@ const fakeAgent = {
   identity: {
     id: "a1",
     workspaceId: "w1",
-    name: "Randy",
-    displayName: "Randy",
+    name: "Amy",
+    displayName: "Amy — Appointment Booking Agent",
     role: "appointment_booking",
+    roleLabel: "Appointment Booking Agent",
     channel: "voice",
     description: "Books appointments",
+    customerFacingName: "Amy",
+    pronouns: { subject: "she", object: "her", possessive: "her" },
     status: "active",
   },
   bookingPolicy: policy,
@@ -295,5 +298,53 @@ const resp = buildAgentResponsibility(fakeAgent);
 assert("responsibility has objective", Boolean(resp.mainObjective));
 assert("responsibility has prohibited", resp.prohibitedActions.length > 0);
 assert("booking state empty", emptyBookingState().bookingConfirmed === false);
+
+import {
+  resolveAgentIdentity,
+  DEFAULT_APPOINTMENT_AGENT_NAME,
+  stripHardcodedIdentityCopy,
+} from "../src/lib/agents/appointment-booking/identity";
+import { buildEmployeeTimeline } from "../src/lib/agents/appointment-booking/employee-timeline";
+import { classifyTeachInstruction } from "../src/lib/agents/appointment-booking/attention";
+import {
+  budgetToMode,
+  modeToBudget,
+  permissionsForMode,
+  describeAutonomyMode,
+} from "../src/lib/agents/appointment-booking/autonomy-policy";
+
+const id = resolveAgentIdentity({ name: null });
+assert("default identity is Amy", id.name === DEFAULT_APPOINTMENT_AGENT_NAME);
+assert("no Randy in stripped copy", !stripHardcodedIdentityCopy("Ask Randy").includes("Randy"));
+assert(
+  "employee timeline from failTrace",
+  buildEmployeeTimeline(failTrace).length >= 1,
+);
+assert(
+  "teach sewer → routing",
+  classifyTeachInstruction("Always transfer sewer backups").classification ===
+    "routing_rule",
+);
+assert(
+  "teach same-day → booking_policy",
+  classifyTeachInstruction("Stop offering same-day appointments after 3 PM")
+    .classification === "booking_policy",
+);
+assert(
+  "same-day cutoff parse",
+  parseBookingPolicyRequest("Stop offering same-day appointments after 3 PM")
+    ?.sameDayCutoff === "15:00",
+);
+assert("balanced is default mode", budgetToMode("standard") === "balanced");
+assert("mode maps to budget", modeToBudget("autonomous") === "high");
+assert(
+  "conservative cannot deploy envelope",
+  !permissionsForMode("conservative").includes("deploy_within_policy_envelope"),
+);
+assert(
+  "balanced can release holds",
+  permissionsForMode("balanced").includes("release_expired_holds"),
+);
+assert("autonomy describe has label", describeAutonomyMode("balanced").label === "Balanced");
 
 console.log("\nDone.");

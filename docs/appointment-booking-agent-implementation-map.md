@@ -1,55 +1,98 @@
-# Appointment Booking Agent — Implementation Map
+# Appointment Booking Agent (Amy) — Implementation Map
 
-**Rule:** wrap live systems (`VoiceAgent`); do not create a parallel Agent table.
+**Rule:** wrap live systems (`VoiceAgent`); do not create a parallel Agent table.  
+**Upgrade rule:** extend the existing operating layer — no second agent/workflow/booking system.
+
+## Identity
+
+| Artifact | Status |
+|---|---|
+| Data-driven `AgentIdentity` (name, pronouns, roleLabel, customerFacingName) | **FULLY** |
+| Default name Amy (no hard-coded Randy / he / him / his in product copy) | **FULLY** |
+| Wizard defaults + spoken prompt use configurable `agentName` | **FULLY** |
+
+## Navigation / home
+
+| Artifact | Status |
+|---|---|
+| Primary inventory `/agents` (“Your Team”) | **FULLY** |
+| `/systems` compatibility redirect → `/agents` | **FULLY** |
+| Agent home dashboard (ops cards, blockers, recommendations) | **FULLY** |
+| Tabs: Memory, Attention, Autonomy (+ existing) | **FULLY** |
+| Employee-style activity timeline from structured events | **FULLY** |
+
+## Readiness / safety
+
+| Artifact | Status |
+|---|---|
+| Live readiness gate with exact blockers | **FULLY** |
+| Slot-hold schema health check (table/columns/probe) | **FULLY** |
+| Slot holds in AgentHealth | **FULLY** |
+| Enforceable autonomy modes (Conservative / Balanced / Autonomous) | **FULLY** |
+| Emergency policy catalog (pause smallest capability) | **FULLY** |
+| Setup edits via `propose_setup_change` (versioned proposals) | **FULLY** |
+| Teach classification → proposal / workflow draft | **FULLY** |
+
+## Memory / Attention
+
+| Artifact | Status |
+|---|---|
+| Typed memory view (shared + agent-specific + learning queue) | **FULLY** |
+| Attention inbox from readiness + proposals + failures + drafts | **FULLY** |
+| Learning queue storage on `agentOperating.learningQueue` | **PARTIAL** (read/UI; auto-populate from patterns still thin) |
+
+## Owner chat trust
+
+| Artifact | Status |
+|---|---|
+| Evidence links on failure / health / teach answers | **FULLY** |
+| Visible working status while searching | **FULLY** |
+| Teach + same-day cutoff natural language | **FULLY** |
 
 ## DB migrate / fresh install
 
 | Artifact | Status |
 |---|---|
 | `prisma/schema.prisma` includes `AppointmentSlotHold` + `VoiceAppointment` | **FULLY** |
-| `supabase/schema.sql` regenerated from Prisma | **FULLY** |
-| `supabase/bootstrap.sql` / `fresh-install.sql` include slot holds | **FULLY** |
+| `supabase/schema.sql` / bootstrap / fresh-install | **FULLY** |
 | Additive migration `20260806_appointment_slot_holds.sql` | **FULLY** |
-| `MODEL_TO_TABLE.appointmentSlotHold` | **FULLY** |
+| Runtime schema verification in health/readiness | **FULLY** |
 
-Apply path for existing DBs: run additive migration **or** `npm run db:push`. Fresh installs: `bootstrap.sql` / `fresh-install.sql`.
-
-## Capability checklist (all FULLY)
+## Core operating layer (reused, not rebuilt)
 
 | Capability | Status |
 |---|---|
 | Agent ownership view-model wrapping VoiceAgent | **FULLY** |
-| Structured responsibility (objective / allowed / prohibited / success) | **FULLY** |
-| Shared brain load + persist + website approve (`extracted`→`owner_approved`) | **FULLY** |
+| Shared brain + website fact approval | **FULLY** |
 | Appointment profile + booking policy | **FULLY** |
-| Agent detail UI (all tabs) | **FULLY** |
 | Execution-trace builder | **FULLY** |
-| Booking conversation state on call metadata | **FULLY** |
-| Control API (read + mutate with confirm) | **FULLY** |
-| Owner chat (responsibility, metrics, recommendations, simulation) | **FULLY** |
-| Change proposals with affectedAgents / tests / rollback + version snapshot | **FULLY** |
-| Workflow Architect + promote to AutomationFlow | **FULLY** |
-| Activate gated by critical simulations + trigger deployments | **FULLY** |
-| Pause / resume with flow triggers | **FULLY** |
-| Partial capability pause (SMS) + autonomy budget + safe auto-repair | **FULLY** |
-| Duplicate clones calendars + primary workflow draft | **FULLY** |
-| Slot holds (DB + tools + wizard defaults + Telnyx catalog) | **FULLY** |
-| Same-day cutoff enforcement | **FULLY** |
-| Post-book verification | **FULLY** |
-| Simulation fixtures + assertion suite | **FULLY** |
-| Structured agent handoffs | **FULLY** |
-| Daily report + exception alerts | **FULLY** |
-| Metrics (abandoned, avg time-to-book, top services, WoW) | **FULLY** |
-| Health (transfer destinations + calendar token expiry) | **FULLY** |
-| MCTB structured handoff | **FULLY** |
+| Control API + owner chat | **FULLY** |
+| Change proposals + version snapshots | **FULLY** |
+| Workflow Architect + promote | **FULLY** |
+| Activate gated by simulations | **FULLY** |
+| Pause / resume / rollback / duplicate | **FULLY** |
+| Slot holds + same-day cutoff + post-book verify | **FULLY** |
+| MCTB structured handoff (separate from Amy identity) | **FULLY** |
+| Daily report + exception alerts | **FULLY** (generation; delivery channel config still workspace-dependent) |
+
+## Still hardening toward 100% Amy V2
+
+| Gap | Notes |
+|---|---|
+| Shadow mode | Spec’d; not yet a first-class runtime mode |
+| Full 20-scenario live regression on every activate | Suite exists; live phone/WebRTC console still uses builder links |
+| Cost / usage meters UI | Not yet surfaced on agent home |
+| Mobile polish | Tabs scroll + stacked cards; workflow canvas still advanced |
+| Auto learning-queue population from call patterns | Storage + UI ready; detectors partial |
+| Version performance comparison charts | Versions show metadata; comparative metrics pending |
 
 ## Architecture note
 
 Shared company brain → `workspace.customFieldsConfig.businessBrain`  
-Agent profile → derived from `VoiceAgent.draftConfig`  
+Agent profile → `VoiceAgent.draftConfig`  
 Active version → `VoiceAgentVersion`  
-Runtime → dynvars / `runtime-clock`  
 Operating extras → `draftConfig.advanced.agentOperating`  
+Identity extras → `agentOperating.identity`  
+Primary customer URL → `/agents/[id]`  
 Tools → builtin voice tools including holds  
-Trace → VoiceCall + ToolExecution aggregation  
 Owner chat → control API (never direct table writes)

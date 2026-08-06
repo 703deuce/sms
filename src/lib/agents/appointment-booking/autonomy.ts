@@ -48,24 +48,31 @@ export async function setAutonomyBudget(input: {
   workspaceId: string;
   agentId: string;
   userId: string;
-  budget: AutonomyBudget;
+  budget: AutonomyBudget | string;
   confirm: boolean;
 }) {
   if (!input.confirm) {
     throw new Error("confirm:true required to change autonomy budget");
   }
+  const raw = String(input.budget || "standard").toLowerCase();
+  const budget: AutonomyBudget =
+    raw === "conservative"
+      ? "conservative"
+      : raw === "high" || raw === "autonomous"
+        ? "high"
+        : "standard";
   await patchOperating(input.workspaceId, input.agentId, {
-    autonomyBudget: input.budget,
+    autonomyBudget: budget,
   });
   await getPrisma().auditLog.create({
     data: {
       workspaceId: input.workspaceId,
       userId: input.userId,
       event: "agent.autonomy_budget_set",
-      detail: `agent=${input.agentId} budget=${input.budget}`,
+      detail: `agent=${input.agentId} budget=${budget}`,
     },
   });
-  return { ok: true, budget: input.budget };
+  return { ok: true, budget };
 }
 
 export async function pauseAgentCapability(input: {

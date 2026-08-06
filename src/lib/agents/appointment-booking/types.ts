@@ -22,8 +22,11 @@ export type AgentIdentity = {
   name: string;
   displayName: string;
   role: typeof APPOINTMENT_BOOKING_ROLE;
+  roleLabel: string;
   channel: "voice";
   description: string;
+  customerFacingName?: string;
+  pronouns?: import("@/lib/agents/appointment-booking/identity").AgentPronouns;
   avatarId?: string;
   status: AgentProductStatus;
 };
@@ -125,6 +128,7 @@ export type AgentHealth = {
   webhookEndpoint: HealthCheck;
   latestDeployment: HealthCheck;
   primaryWorkflow: HealthCheck;
+  slotHolds: HealthCheck;
   lastCheckedAt: string;
 };
 
@@ -207,6 +211,20 @@ export type AppointmentBookingAgentView = {
   businessBrain: BusinessBrain;
   health: AgentHealth;
   metrics: AgentMetrics;
+  readiness?: {
+    ready: boolean;
+    label: string;
+    blockers: Array<{
+      code: string;
+      severity: string;
+      message: string;
+      affectedFunctionality: string;
+      recommendedAction: string;
+    }>;
+    slotHoldSchema?: unknown;
+    checkedAt: string;
+  };
+  autonomyMode?: "conservative" | "balanced" | "autonomous";
   currentVersionId?: string | null;
   versions: Array<{
     id: string;
@@ -236,6 +254,7 @@ export type AgentControlCommand =
   | "get_call_details"
   | "explain_call_failure"
   | "get_execution_trace"
+  | "get_employee_timeline"
   | "list_versions"
   | "pause_agent"
   | "resume_agent"
@@ -254,6 +273,11 @@ export type AgentControlCommand =
   | "get_agent_responsibility"
   | "get_daily_report"
   | "get_exception_alerts"
+  | "get_attention_inbox"
+  | "get_memory_view"
+  | "get_live_readiness"
+  | "get_autonomy_policy"
+  | "teach_agent"
   | "set_autonomy_budget"
   | "pause_capability"
   | "resume_capability"
@@ -266,9 +290,15 @@ export type AgentControlCommand =
   | "save_business_brain"
   | "approve_knowledge_facts"
   | "attach_missed_call_text_back"
-  | "get_missed_call_handoff";
+  | "get_missed_call_handoff"
+  | "get_booking_verification"
+  | "propose_setup_change";
 
-export const DEFAULT_RANDY_NAME = "Randy";
-export const DEFAULT_RANDY_DISPLAY = "Randy — Appointment Booking Agent";
-export const DEFAULT_RANDY_DESCRIPTION =
-  "Answers calls, checks real availability, and books appointments using your calendar.";
+export {
+  DEFAULT_APPOINTMENT_AGENT_NAME,
+  DEFAULT_APPOINTMENT_AGENT_DESCRIPTION,
+  DEFAULT_APPOINTMENT_ROLE_LABEL,
+  DEFAULT_RANDY_NAME,
+  DEFAULT_RANDY_DISPLAY,
+  DEFAULT_RANDY_DESCRIPTION,
+} from "@/lib/agents/appointment-booking/identity";

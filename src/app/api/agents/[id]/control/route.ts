@@ -12,6 +12,7 @@ const COMMANDS = new Set<AgentControlCommand>([
   "get_call_details",
   "explain_call_failure",
   "get_execution_trace",
+  "get_employee_timeline",
   "list_versions",
   "pause_agent",
   "resume_agent",
@@ -30,6 +31,11 @@ const COMMANDS = new Set<AgentControlCommand>([
   "get_agent_responsibility",
   "get_daily_report",
   "get_exception_alerts",
+  "get_attention_inbox",
+  "get_memory_view",
+  "get_live_readiness",
+  "get_autonomy_policy",
+  "teach_agent",
   "set_autonomy_budget",
   "pause_capability",
   "resume_capability",
@@ -43,6 +49,8 @@ const COMMANDS = new Set<AgentControlCommand>([
   "approve_knowledge_facts",
   "attach_missed_call_text_back",
   "get_missed_call_handoff",
+  "get_booking_verification",
+  "propose_setup_change",
 ]);
 
 export async function POST(

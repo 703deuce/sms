@@ -1,6 +1,6 @@
 /**
  * Shared workspace business brain — facts many agents may use.
- * Distinct from appointment-agent profile (how Randy may book).
+ * Distinct from appointment-agent profile (how the booking agent may book).
  */
 
 import { getPrisma } from "@/lib/db";

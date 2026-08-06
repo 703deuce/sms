@@ -123,7 +123,7 @@ export function buildSystemPrompt(state: AppointmentReceptionistWizardState): st
   const transferPhone = normalizeWizardTransferPhone(state.transferDestinationPhone);
   const lines: string[] = [];
   lines.push(
-    `You are ${state.agentName || "Randy"}, a ${state.role || "appointment booking agent"} for ${state.businessName || "the business"}.`,
+    `You are ${state.agentName || "Amy"}, a ${state.role || "appointment booking agent"} for ${state.businessName || "the business"}.`,
   );
   lines.push(`Tone: ${state.tone}. Speaking style: ${state.speakingStyle}.`);
   lines.push(`Primary language: ${state.language}.`);
@@ -546,7 +546,7 @@ export function buildWizardAgentConfig(
     knowledgeBaseIds: base.knowledgeBaseIds || [],
     dynamicVariables: {
       business_name: state.businessName || state.solutionName,
-      agent_name: state.agentName || "Randy",
+      agent_name: state.agentName || "Amy",
       agent_role: state.role || "front-desk receptionist",
       solution_name: state.solutionName,
       timezone: state.timezone || "America/New_York",
