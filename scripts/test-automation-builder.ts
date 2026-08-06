@@ -53,7 +53,8 @@ assert(
 );
 
 // Wait duration
-assert("waitDurationMs minimum 1 min", waitDurationMs({ minutes: 0 }) >= 60_000);
+assert("waitDurationMs minimum 20s", waitDurationMs({ minutes: 0 }) >= 20_000);
+assert("waitDurationMs seconds", waitDurationMs({ seconds: 20 }) === 20_000);
 assert("waitDurationMs 3 days", waitDurationMs({ days: 3 }) === 3 * 24 * 60 * 60_000);
 assert("waitDurationMs weeks", waitDurationMs({ weeks: 1 }) === 7 * 24 * 60 * 60_000);
 
@@ -190,7 +191,7 @@ if (waitNode) {
 
 // waitUntilMs future
 const untilMs = waitUntilMs({ runAt: new Date(Date.now() + 3600_000).toISOString() });
-assert("waitUntilMs future date", untilMs >= 60_000);
+assert("waitUntilMs future date", untilMs >= 20_000);
 
 // SMS body required
 const smsDef: AutomationDefinition = {

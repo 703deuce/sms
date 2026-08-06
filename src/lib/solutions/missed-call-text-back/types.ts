@@ -3,6 +3,11 @@ export type MissedCallTextBackConfig = {
   phoneNumberId: string | null;
   /** Minutes to wait after missed call before first SMS */
   initialDelayMinutes: number;
+  /**
+   * Optional seconds delay (preferred for short test waits).
+   * When > 0, overrides initialDelayMinutes for the first wait node.
+   */
+  initialDelaySeconds?: number;
   firstMessage: string;
   /** Minutes to wait for a reply before follow-up */
   replyWindowMinutes: number;
@@ -17,6 +22,7 @@ export const DEFAULT_MISSED_CALL_TEXT_BACK_CONFIG: MissedCallTextBackConfig = {
   name: "Missed Call Text Back",
   phoneNumberId: null,
   initialDelayMinutes: 2,
+  initialDelaySeconds: 0,
   firstMessage:
     "Hi {{customer.firstName}}, sorry we missed your call! How can we help you today?",
   replyWindowMinutes: 60,

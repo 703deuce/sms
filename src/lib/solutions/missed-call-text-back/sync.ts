@@ -11,11 +11,22 @@ import {
   type MissedCallTextBackConfig,
 } from "@/lib/solutions/missed-call-text-back/types";
 
-function waitConfig(totalMinutes: number) {
+function waitConfig(totalMinutes: number, totalSeconds = 0) {
+  const seconds = Math.max(0, Math.floor(totalSeconds));
+  if (seconds > 0) {
+    return {
+      days: 0,
+      hours: 0,
+      minutes: 0,
+      seconds,
+      weeks: 0,
+      respectBusinessHours: false,
+    };
+  }
   const minutes = Math.max(0, Math.floor(totalMinutes));
   const hours = Math.floor(minutes / 60);
   const rem = minutes % 60;
-  return { days: 0, hours, minutes: rem, weeks: 0, respectBusinessHours: false };
+  return { days: 0, hours, minutes: rem, seconds: 0, weeks: 0, respectBusinessHours: false };
 }
 
 function totalMinutesFromWait(cfg: Record<string, unknown>): number {
@@ -25,6 +36,10 @@ function totalMinutesFromWait(cfg: Record<string, unknown>): number {
     Number(cfg.hours || 0) * 60 +
     Number(cfg.minutes || 0)
   );
+}
+
+function totalSecondsFromWait(cfg: Record<string, unknown>): number {
+  return Math.max(0, Number(cfg.seconds || 0));
 }
 
 function edgeKey(source: string, target: string, handle?: string | null) {
@@ -152,7 +167,13 @@ export function applyWizardConfigToDefinition(
     node.data.config = patch({ ...(node.data.config || {}) });
   };
 
-  patchNode(MCTB_NODES.WAIT_INITIAL, () => waitConfig(config.initialDelayMinutes));
+  patchNode(MCTB_NODES.TRIGGER, (cfg) => ({
+    ...cfg,
+    phoneNumberId: config.phoneNumberId || cfg.phoneNumberId || "",
+  }));
+  patchNode(MCTB_NODES.WAIT_INITIAL, () =>
+    waitConfig(config.initialDelayMinutes, Number(config.initialDelaySeconds || 0)),
+  );
   patchNode(MCTB_NODES.SEND_INITIAL_SMS, (cfg) => ({
     ...cfg,
     body: config.firstMessage,
@@ -237,13 +258,21 @@ export function configFromDefinition(
     return totalMinutesFromWait(cfg);
   };
 
+  const initialSeconds = Boolean(byId.get(MCTB_NODES.WAIT_INITIAL))
+    ? totalSecondsFromWait(waitInitial)
+    : Number(fallback.initialDelaySeconds || 0);
+
   return {
     ...fallback,
-    initialDelayMinutes: readMinutes(
-      waitInitial,
-      fallback.initialDelayMinutes,
-      Boolean(byId.get(MCTB_NODES.WAIT_INITIAL)),
-    ),
+    initialDelayMinutes:
+      initialSeconds > 0
+        ? 0
+        : readMinutes(
+            waitInitial,
+            fallback.initialDelayMinutes,
+            Boolean(byId.get(MCTB_NODES.WAIT_INITIAL)),
+          ),
+    initialDelaySeconds: initialSeconds,
     firstMessage: String(sendInitial.body || fallback.firstMessage),
     replyWindowMinutes: readMinutes(
       waitReply,

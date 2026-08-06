@@ -32,6 +32,56 @@ async function hangupControlLeg(controlId: string | null | undefined) {
   await telnyxAction(controlId, "hangup").catch(() => undefined);
 }
 
+/** Ensure caller contact + fire call.missed automations (MCTB, etc.). */
+async function emitMissedCallAutomations(input: {
+  workspaceId: string;
+  humanCallId: string;
+  from: string;
+  to: string;
+  direction: string;
+  disposition?: string | null;
+  cause?: string;
+}) {
+  const customerPhone =
+    input.direction === "inbound" ? input.from : input.to;
+  const dialedNumber =
+    input.direction === "inbound" ? input.to : input.from;
+  if (!customerPhone) return;
+
+  const { ensureInboundCallerContact } = await import(
+    "@/lib/automations/inbound-trigger-enroll"
+  );
+  const contact = await ensureInboundCallerContact({
+    workspaceId: input.workspaceId,
+    fromE164: customerPhone,
+  });
+
+  const prisma = getPrisma();
+  await prisma.humanCall
+    .update({
+      where: { id: input.humanCallId },
+      data: { contactId: contact.id },
+    })
+    .catch(() => undefined);
+
+  const pn = dialedNumber
+    ? await prisma.phoneNumber.findFirst({
+        where: { workspaceId: input.workspaceId, e164: dialedNumber },
+        select: { id: true },
+      })
+    : null;
+
+  const { emitAutomationEvent } = await import("@/lib/automations/events");
+  await emitAutomationEvent(input.workspaceId, "call.missed", contact.id, {
+    callId: input.humanCallId,
+    humanCallId: input.humanCallId,
+    phoneNumberId: pn?.id,
+    direction: input.direction,
+    disposition: input.disposition || undefined,
+    cause: input.cause,
+  }).catch(() => undefined);
+}
+
 async function assertNotDnd(workspaceId: string, agentUserId: string) {
   const prisma = getPrisma();
   const { getSoftphonePermissions } = await import("./softphone-permissions");
@@ -369,8 +419,14 @@ export async function handleInboundHumanCall(input: {
 
   let contactId: string | null = null;
   try {
-    const { resolveContactIdForPhone } = await import("@/lib/contacts/activity-timeline");
-    contactId = await resolveContactIdForPhone(input.workspaceId, from);
+    const { ensureInboundCallerContact } = await import(
+      "@/lib/automations/inbound-trigger-enroll"
+    );
+    const contact = await ensureInboundCallerContact({
+      workspaceId: input.workspaceId,
+      fromE164: from,
+    });
+    contactId = contact.id;
   } catch {
     // best-effort contact attach
   }
@@ -514,19 +570,15 @@ export async function hangupHumanCall(
   await clearAgentPresence(updated);
 
   if (nextDisposition && /missed|no[_ -]?answer|voicemail|declined/i.test(nextDisposition)) {
-    const customerPhone = updated.direction === "inbound" ? updated.from : updated.to;
     try {
-      const contact = await prisma.contact.findFirst({
-        where: { workspaceId, phone: customerPhone },
+      await emitMissedCallAutomations({
+        workspaceId,
+        humanCallId: updated.id,
+        from: updated.from,
+        to: updated.to,
+        direction: updated.direction,
+        disposition: nextDisposition,
       });
-      if (contact) {
-        const { emitAutomationEvent } = await import("@/lib/automations/events");
-        await emitAutomationEvent(workspaceId, "call.missed", contact.id, {
-          humanCallId: updated.id,
-          direction: updated.direction,
-          disposition: nextDisposition,
-        }).catch(() => undefined);
-      }
     } catch (err) {
       console.warn("[human-call] hangup missed-call event failed", callId, err);
     }
@@ -1418,21 +1470,20 @@ export async function updateHumanCall(
   if (patch.disposition) {
     const customerPhone = updated.direction === "inbound" ? updated.from : updated.to;
     try {
-      const contact = await prisma.contact.findFirst({
-        where: { workspaceId, phone: customerPhone },
-      });
-      if (
-        contact &&
-        /missed|no[_ -]?answer|voicemail/i.test(patch.disposition)
-      ) {
-        const { emitAutomationEvent } = await import("@/lib/automations/events");
-        await emitAutomationEvent(workspaceId, "call.missed", contact.id, {
+      if (/missed|no[_ -]?answer|voicemail/i.test(patch.disposition)) {
+        await emitMissedCallAutomations({
+          workspaceId,
           humanCallId: updated.id,
+          from: updated.from,
+          to: updated.to,
           direction: updated.direction,
           disposition: patch.disposition,
-        }).catch(() => undefined);
+        });
       }
       if (/callback/i.test(patch.disposition)) {
+        const contact = await prisma.contact.findFirst({
+          where: { workspaceId, phone: customerPhone },
+        });
         const { publishCallbackScheduled } = await import("@/lib/crm/events");
         await publishCallbackScheduled({
           workspaceId,
@@ -1865,19 +1916,22 @@ export async function processHumanCallWebhookEvent(input: {
   }
 
   if (isMissed) {
-    const customerPhone = call.direction === "inbound" ? call.from : call.to;
     try {
-      const contact = await prisma.contact.findFirst({
-        where: { workspaceId: call.workspaceId, phone: customerPhone },
+      await emitMissedCallAutomations({
+        workspaceId: call.workspaceId,
+        humanCallId: call.id,
+        from: call.from,
+        to: call.to,
+        direction: call.direction,
+        disposition: String(patch.disposition || call.disposition || ""),
+        cause,
       });
-      if (contact) {
-        const { emitAutomationEvent } = await import("@/lib/automations/events");
-        await emitAutomationEvent(call.workspaceId, "call.missed", contact.id, {
-          humanCallId: call.id,
-          direction: call.direction,
-          cause,
-        }).catch(() => undefined);
-      }
+      const contact = await prisma.contact.findFirst({
+        where: {
+          workspaceId: call.workspaceId,
+          phone: call.direction === "inbound" ? call.from : call.to,
+        },
+      });
       const { publishCallCompleted } = await import("@/lib/crm/events");
       await publishCallCompleted({
         workspaceId: call.workspaceId,

@@ -164,25 +164,58 @@ async function fetchTelnyxNumber(
     features.map((f) => String(f.name || "").toLowerCase()),
   );
 
-  const voice =
+  let voice =
     capsRaw.voice === true ||
     featureNames.has("voice") ||
     capsRaw.VOICE === true;
   // Do not invent SMS capability — only trust Telnyx-reported features.
-  const sms =
+  let sms =
     capsRaw.sms === true ||
     featureNames.has("sms") ||
     capsRaw.SMS === true;
   const mms =
     capsRaw.mms === true || featureNames.has("mms") || capsRaw.MMS === true;
 
+  // Telnyx often omits `capabilities` on GET /phone_numbers/{id} even when the
+  // DID is a normal local voice+SMS number. Infer from type + messaging features.
+  const phoneNumberType = data.phone_number_type
+    ? String(data.phone_number_type)
+    : null;
+  if (!voice && !sms) {
+    const type = (phoneNumberType || "").toLowerCase();
+    if (type === "local" || type === "national" || type === "mobile" || type === "toll_free") {
+      try {
+        const msgRes = await telnyxRequest<{
+          data?: { features?: { sms?: unknown; mms?: unknown } };
+        }>(`/phone_numbers/${encodeURIComponent(providerNumberId)}/messaging`, {
+          method: "GET",
+        });
+        const msgFeatures = msgRes?.data?.features;
+        if (msgFeatures?.sms) sms = true;
+        if (msgFeatures?.mms) {
+          // mms implies sms-capable messaging product
+          sms = true;
+        }
+      } catch {
+        // ignore — fall through to type heuristic
+      }
+      // Local/national/mobile DIDs are voice-routable; attach Call Control and let
+      // Telnyx reject if truly unsupported.
+      if (type === "local" || type === "national" || type === "mobile") {
+        voice = true;
+      }
+      if (type === "toll_free") {
+        voice = true;
+        sms = true;
+      }
+    }
+  }
+
   return {
     providerNumberId: String(data.id || providerNumberId),
     e164: String(data.phone_number || ""),
     status: data.status ? String(data.status) : null,
-    phoneNumberType: data.phone_number_type
-      ? String(data.phone_number_type)
-      : null,
+    phoneNumberType,
     connectionId: data.connection_id ? String(data.connection_id) : null,
     connectionName: data.connection_name ? String(data.connection_name) : null,
     messagingProfileId: data.messaging_profile_id
