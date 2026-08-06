@@ -190,6 +190,114 @@ export async function inventoryTenDlc() {
   return { brands, campaigns, phoneNumbers, assignments };
 }
 
+/** Pull local DB + Telnyx provider status for a sent message. */
+export async function diagnoseOutboundMessage(input: {
+  workspaceId: string;
+  messageId?: string;
+  providerMessageId?: string;
+  to?: string;
+}) {
+  const prisma = getPrisma();
+  const to = input.to ? normalizeE164(input.to) : "";
+
+  const local =
+    (input.messageId
+      ? await prisma.message.findFirst({
+          where: { id: input.messageId, workspaceId: input.workspaceId },
+        })
+      : null) ||
+    (input.providerMessageId
+      ? await prisma.message.findFirst({
+          where: {
+            workspaceId: input.workspaceId,
+            providerId: input.providerMessageId,
+          },
+        })
+      : null) ||
+    (to
+      ? await prisma.message.findFirst({
+          where: { workspaceId: input.workspaceId, to },
+          orderBy: { createdAt: "desc" },
+        })
+      : null);
+
+  const recent = await prisma.message.findMany({
+    where: { workspaceId: input.workspaceId },
+    orderBy: { createdAt: "desc" },
+    take: 10,
+    select: {
+      id: true,
+      to: true,
+      from: true,
+      body: true,
+      status: true,
+      providerId: true,
+      createdAt: true,
+    },
+  });
+
+  const providerId = input.providerMessageId || local?.providerId || "";
+  let telnyx: unknown = null;
+  let telnyxError: string | null = null;
+  if (providerId && !providerId.startsWith("idem:") && !providerId.startsWith("pending:")) {
+    try {
+      telnyx = await telnyxRequest(`/messages/${encodeURIComponent(providerId)}`, {
+        method: "GET",
+      });
+    } catch (err) {
+      telnyxError = err instanceof Error ? err.message : String(err);
+    }
+  }
+
+  let fromMessaging: unknown = null;
+  const from = local?.from && local.from.startsWith("+") ? local.from : "+15714073615";
+  try {
+    const nums = await listTelnyxPhoneNumbers();
+    const match = nums.find((n) => n.phoneNumber === from);
+    if (match?.id) {
+      const [detail, messaging] = await Promise.all([
+        telnyxRequest(`/phone_numbers/${encodeURIComponent(match.id)}`, {
+          method: "GET",
+        }).catch((e) => ({ error: String(e) })),
+        telnyxRequest(`/phone_numbers/${encodeURIComponent(match.id)}/messaging`, {
+          method: "GET",
+        }).catch((e) => ({ error: String(e) })),
+      ]);
+      fromMessaging = { phoneNumberId: match.id, e164: from, detail, messaging };
+    }
+  } catch (err) {
+    fromMessaging = { error: err instanceof Error ? err.message : String(err) };
+  }
+
+  const assignment =
+    (await listPhoneNumberCampaignAssignments().catch(() => [])).find(
+      (a) => a.phoneNumber === from,
+    ) || null;
+
+  // Campaign details for use-case mismatch clues (e.g. 2FA rejecting free text).
+  let campaignDetail: unknown = null;
+  if (assignment?.campaignId) {
+    try {
+      campaignDetail = await telnyxRequest(
+        `/10dlc/campaign/${encodeURIComponent(assignment.campaignId)}`,
+        { method: "GET" },
+      );
+    } catch (err) {
+      campaignDetail = { error: err instanceof Error ? err.message : String(err) };
+    }
+  }
+
+  return {
+    local,
+    recent,
+    telnyx,
+    telnyxError,
+    fromMessaging,
+    assignment,
+    campaignDetail,
+  };
+}
+
 /**
  * Attach number → messaging profile (if needed), assign to 10DLC campaign,
  * and mark MessagingRegistration ready so sendQuickSms can fire.

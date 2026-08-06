@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireSession, resolveWorkspaceId, jsonError } from "@/lib/api-auth";
 import {
   assignNumberToCampaignAndReady,
+  diagnoseOutboundMessage,
   inventoryTenDlc,
   sendTenDlcTestSms,
 } from "@/lib/messaging/telnyx/ten-dlc-ops";
@@ -13,6 +14,7 @@ import {
  * POST { action: "inventory" }
  * POST { action: "assign", phoneE164, campaignId?, brandId?, messagingProfileId? }
  * POST { action: "send_test", to, body?, from? }
+ * POST { action: "diagnose_message", messageId? | providerMessageId? | to? }
  */
 export async function GET(request: Request) {
   try {
@@ -81,8 +83,23 @@ export async function POST(request: Request) {
       return NextResponse.json({ data });
     }
 
+    if (action === "diagnose_message") {
+      const data = await diagnoseOutboundMessage({
+        workspaceId,
+        messageId: typeof body.messageId === "string" ? body.messageId : undefined,
+        providerMessageId:
+          typeof body.providerMessageId === "string"
+            ? body.providerMessageId
+            : typeof body.sid === "string"
+              ? body.sid
+              : undefined,
+        to: typeof body.to === "string" ? body.to : undefined,
+      });
+      return NextResponse.json({ data });
+    }
+
     return NextResponse.json(
-      { error: "action must be inventory | assign | send_test" },
+      { error: "action must be inventory | assign | send_test | diagnose_message" },
       { status: 400 },
     );
   } catch (err) {
