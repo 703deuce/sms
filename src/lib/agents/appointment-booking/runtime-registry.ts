@@ -26,6 +26,9 @@ export type AgentRuntimeDefinition = {
   tools: string[];
   writePermission: RuntimeWritePermission;
   fallback: string;
+  mayAlways: string[];
+  mustRequestApproval: string[];
+  neverAllowed: string[];
 };
 
 export const AMY_RUNTIME_REGISTRY: AgentRuntimeDefinition[] = [
@@ -34,9 +37,9 @@ export const AMY_RUNTIME_REGISTRY: AgentRuntimeDefinition[] = [
     label: "Caller Amy",
     purpose: "Handles live phone conversations with callers.",
     promptSource:
-      "src/lib/solutions/appointment-receptionist/build-agent-config.ts → VoiceAgentConfig.instructions → Telnyx assistant.instructions",
+      "src/lib/agents/appointment-booking/prompts/caller-amy.ts + build-agent-config.ts → Telnyx assistant.instructions",
     contextLoaders: [
-      "Company Brain (approved facts only)",
+      "Company Brain (approved facts at publish time)",
       "Amy profile + active AgentVersion booking policy",
       "Current call context (ANI, DID, hold state)",
       "Approved booking tools",
@@ -44,8 +47,8 @@ export const AMY_RUNTIME_REGISTRY: AgentRuntimeDefinition[] = [
     ],
     modelSettings: {
       provider: "telnyx",
-      modelHint: "Telnyx AI Assistant (voice)",
-      temperatureHint: 0.3,
+      modelHint: "anthropic/claude-haiku-4-5 (default) with moonshotai/Kimi-K2.6 fallback",
+      temperatureHint: 0.4,
     },
     tools: [
       "resolve_datetime",
@@ -53,25 +56,42 @@ export const AMY_RUNTIME_REGISTRY: AgentRuntimeDefinition[] = [
       "hold_appointment_slot",
       "release_appointment_hold",
       "book_appointment",
+      "find_appointments",
       "reschedule_appointment",
       "cancel_appointment",
       "send_sms",
-      "transfer_call",
+      "transfer",
+      "escalate_human",
+      "take_structured_message",
+      "save_caller_info",
     ],
     writePermission: "live_tools",
     fallback:
       "If tools fail: take a message / transfer per AgentVersion.fallbackPolicy — never invent availability.",
+    mayAlways: [
+      "Answer approved calls on the assigned number",
+      "Use approved booking tools",
+      "Take structured messages when booking is unsafe",
+    ],
+    mustRequestApproval: [],
+    neverAllowed: [
+      "Invent availability or pricing",
+      "Promise a booking after calendar failure",
+      "Bypass required fields or compliance gates",
+    ],
   },
   {
     id: "owner_amy",
     label: "Owner Amy",
     purpose: "Manages and explains Amy inside Transovo (Talk to Amy).",
-    promptSource: "src/lib/agents/appointment-booking/owner-chat.ts",
+    promptSource:
+      "src/lib/agents/appointment-booking/prompts/owner-amy.ts → owner-chat.ts",
     contextLoaders: [
-      "Control API tools only (no raw DB writes)",
+      "Control API tools only (no ad-hoc DB writes)",
       "Agent summary, health, metrics, attention, readiness",
       "Evidence links (call, appointment, proposal, health)",
       "Setup readiness when not yet live",
+      "Daily report + recommendations",
     ],
     modelSettings: {
       provider: "internal",
@@ -85,19 +105,43 @@ export const AMY_RUNTIME_REGISTRY: AgentRuntimeDefinition[] = [
       "search_agent_activity",
       "get_attention_inbox",
       "get_setup_readiness",
+      "get_daily_report",
       "create_change_proposal",
       "confirm_change_proposal",
       "run_agent_test_suite",
+      "run_agent_simulation",
       "get_deployment_drift",
+      "duplicate_agent",
+      "run_safe_auto_repair",
+      "rollback_agent_version",
     ],
-    writePermission: "proposal_only",
+    writePermission: "publish_with_approval",
     fallback: "If unsure, ask a clarifying question or open Settings — never mute production silently.",
+    mayAlways: [
+      "Retrieve configuration, logs, health, metrics",
+      "Create drafts and proposals",
+      "Run simulations and test suites",
+      "Explain failures from traces",
+    ],
+    mustRequestApproval: [
+      "Live booking-rule / voice / field changes",
+      "Activate version or promote workflow",
+      "Duplicate into a new agent",
+      "Assign calendar or number",
+    ],
+    neverAllowed: [
+      "Write arbitrary code or change schema",
+      "Reveal credentials",
+      "Access unrelated workspaces",
+      "Silently broaden permissions",
+    ],
   },
   {
     id: "appointment_workflow_architect",
     label: "Appointment Workflow Architect",
     purpose: "Builds approved AutomationFlow node graphs (around-call / post-call).",
-    promptSource: "src/lib/agents/appointment-booking/workflow-architect.ts",
+    promptSource:
+      "src/lib/agents/appointment-booking/prompts/workflow-architect.ts → workflow-architect.ts",
     contextLoaders: [
       "Allowed appointment workflow blocks",
       "Current primary flow",
@@ -113,14 +157,19 @@ export const AMY_RUNTIME_REGISTRY: AgentRuntimeDefinition[] = [
       "validate_workflow_draft",
       "promote_workflow_draft",
     ],
-    writePermission: "draft_only",
+    // Drafts are free; promote is publish_with_approval (confirm required).
+    writePermission: "publish_with_approval",
     fallback: "Invalid graphs stay draft; promote requires validation + owner confirm.",
+    mayAlways: ["Create and validate workflow drafts from approved blocks"],
+    mustRequestApproval: ["Promote / activate a workflow draft"],
+    neverAllowed: ["Write application code", "Bypass graph validation", "Activate without confirm"],
   },
   {
     id: "diagnostic_specialist",
     label: "Diagnostic specialist",
     purpose: "Reads execution traces and explains failures.",
-    promptSource: "src/lib/agents/appointment-booking/execution-trace.ts",
+    promptSource:
+      "src/lib/agents/appointment-booking/prompts/diagnostic-specialist.ts → execution-trace.ts",
     contextLoaders: [
       "Call execution trace",
       "Tool call results",
@@ -138,9 +187,13 @@ export const AMY_RUNTIME_REGISTRY: AgentRuntimeDefinition[] = [
       "get_booking_verification",
       "get_agent_health",
       "get_deployment_drift",
+      "get_employee_timeline",
     ],
     writePermission: "none",
     fallback: "Return Not verified when evidence is incomplete — never invent root cause.",
+    mayAlways: ["Read traces, health, verification, drift", "Explain grounded failures"],
+    mustRequestApproval: [],
+    neverAllowed: ["Mutate configuration", "Invent root cause without evidence"],
   },
 ];
 
@@ -154,10 +207,16 @@ export function runtimeRegistrySummary() {
   return AMY_RUNTIME_REGISTRY.map((r) => ({
     id: r.id,
     label: r.label,
+    purpose: r.purpose,
     promptSource: r.promptSource,
     model: `${r.modelSettings.provider}:${r.modelSettings.modelHint}`,
+    temperatureHint: r.modelSettings.temperatureHint,
     tools: r.tools,
     writePermission: r.writePermission,
     fallback: r.fallback,
+    mayAlways: r.mayAlways,
+    mustRequestApproval: r.mustRequestApproval,
+    neverAllowed: r.neverAllowed,
+    contextLoaders: r.contextLoaders,
   }));
 }

@@ -25,29 +25,29 @@ import {
 function mapProductStatus(
   status: string,
   healthOverall: string,
+  readinessReady?: boolean,
 ): AgentProductStatus {
+  const upper = String(status).toUpperCase();
+  if (upper === "PAUSED") return "paused";
+  if (upper === "ARCHIVED") return "archived";
+  if (upper === "TESTING") return "testing";
+  if (upper === "CONFIGURATION_ERROR" || upper === "FAILED") return "failed";
+
   if (healthOverall === "failed") return "needs_attention";
-  if (healthOverall === "warning" || healthOverall === "degraded") {
-    if (String(status).toUpperCase() === "ACTIVE") return "needs_attention";
+  if (healthOverall === "degraded" || healthOverall === "warning") {
+    if (upper === "ACTIVE" || upper === "LIVE" || upper === "PUBLISHED") {
+      return "degraded";
+    }
   }
-  switch (String(status).toUpperCase()) {
-    case "ACTIVE":
-    case "LIVE":
-    case "PUBLISHED":
-      return "active";
-    case "PAUSED":
-      return "paused";
-    case "TESTING":
-      return "testing";
-    case "ARCHIVED":
-      return "archived";
-    case "CONFIGURATION_ERROR":
-    case "FAILED":
-      return "failed";
-    case "DRAFT":
-    default:
-      return "draft";
+
+  if (upper === "ACTIVE" || upper === "LIVE" || upper === "PUBLISHED") {
+    return "active";
   }
+
+  // Draft / configuring agents that pass readiness checks surface as Ready.
+  if (readinessReady && (upper === "DRAFT" || !upper)) return "ready";
+  if (upper === "DRAFT" || !upper) return "draft";
+  return "configuring";
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -136,12 +136,19 @@ export async function loadAppointmentBookingAgent(
     agentHealthMessage: agent.healthMessage,
     sendSmsConfirmation: bookingPolicy.sendSmsConfirmation,
   });
-  const metrics = await buildAgentMetrics({
-    workspaceId,
-    agentId: agent.id,
-    windowDays: 7,
-    includePreviousWindow: true,
-  });
+  const [metrics, metricsToday] = await Promise.all([
+    buildAgentMetrics({
+      workspaceId,
+      agentId: agent.id,
+      windowDays: 7,
+      includePreviousWindow: true,
+    }),
+    buildAgentMetrics({
+      workspaceId,
+      agentId: agent.id,
+      windowDays: 1,
+    }),
+  ]);
 
   const config = parseVoiceAgentConfig(agent.draftConfig);
   const op = asRecord(asRecord(config.advanced).agentOperating);
@@ -159,7 +166,8 @@ export async function loadAppointmentBookingAgent(
     roleLabel: (identityFields.roleLabel as string) || undefined,
   });
 
-  const productStatus = mapProductStatus(String(agent.status), health.overall);
+  // Provisional status for readiness; refined after readiness build.
+  let productStatus = mapProductStatus(String(agent.status), health.overall);
   const identity: AgentIdentity = {
     id: agent.id,
     workspaceId,
@@ -190,6 +198,13 @@ export async function loadAppointmentBookingAgent(
     currentVersionId: agent.publishedVersionId,
   });
 
+  productStatus = mapProductStatus(
+    String(agent.status),
+    health.overall,
+    readiness.ready,
+  );
+  identity.status = productStatus;
+
   const automationFlowIds = [
     ...(agent.primaryFlowId ? [agent.primaryFlowId] : []),
     ...((agent.linkedAutomationIds as string[]) || []),
@@ -210,7 +225,19 @@ export async function loadAppointmentBookingAgent(
     bookingPolicy,
     businessBrain,
     health,
-    metrics,
+    metrics: {
+      ...metrics,
+      today: {
+        callsAnswered: metricsToday.callsAnswered,
+        bookingConversationsStarted: metricsToday.bookingConversationsStarted,
+        appointmentsBooked: metricsToday.appointmentsBooked,
+        bookingConversionRate: metricsToday.bookingConversionRate,
+        transfers: metricsToday.transfers,
+        messagesTaken: metricsToday.messagesTaken,
+        abandonedBookingConversations: metricsToday.abandonedBookingConversations,
+        bookingFailures: metricsToday.bookingFailures,
+      },
+    },
     readiness,
     autonomyMode,
     currentVersionId: agent.publishedVersionId,

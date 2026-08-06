@@ -1,6 +1,7 @@
 /**
  * Owner conversation — retrieval + structured proposals.
  * Never mutates production without a separate confirm command.
+ * Instruction contract: prompts/owner-amy.ts
  */
 
 import type { AppointmentBookingAgentView } from "@/lib/agents/appointment-booking/types";
@@ -13,6 +14,7 @@ import {
   parseBookingPolicyRequest,
 } from "@/lib/agents/appointment-booking/change-proposals";
 import { createWorkflowDraft } from "@/lib/agents/appointment-booking/workflow-architect";
+import { OWNER_AMY_SYSTEM_CONTRACT } from "@/lib/agents/appointment-booking/prompts/owner-amy";
 
 export type OwnerChatReply = {
   answer: string;
@@ -44,27 +46,68 @@ export async function answerOwnerQuestion(input: {
   question: string;
   agent: AppointmentBookingAgentView;
 }): Promise<OwnerChatReply> {
+  void OWNER_AMY_SYSTEM_CONTRACT; // contract documented + imported for runtime registry parity
   const q = input.question.toLowerCase().trim();
   const agent = input.agent;
   const followUps = [
-    "What exactly are you responsible for?",
-    "What are you not allowed to do?",
-    "What does success look like for you?",
-    "How are you doing?",
-    "Explain your setup",
-    "How many appointments did you book this week?",
-    "Show recent failures",
+    "What happened on the last call?",
+    "What exactly do you do?",
+    "Which number and calendar do you use?",
+    "How did today go?",
     "Change the minimum notice to four hours",
+    "Require an email for this service",
     "Create an after-hours emergency workflow draft",
     "Test yourself",
+    "Fix what you can safely fix",
+    "Create another Amy for Richmond",
   ];
+
+  // Confirm duplicate from conversation
+  if (
+    input.userId &&
+    /^(yes[, ]*)?(duplicate|copy|create)\b/.test(q) &&
+    includesAny(q, ["duplicate", "copy", "another amy", "richmond", "confirm"])
+  ) {
+    const { duplicateAppointmentAgent } = await import(
+      "@/lib/agents/appointment-booking/lifecycle"
+    );
+    const nameMatch = input.question.match(/named?\s+[“"]?([^”"]+)[”"]?/i);
+    const name =
+      nameMatch?.[1]?.trim() ||
+      `${agent.identity.name} — Richmond`;
+    const result = await duplicateAppointmentAgent({
+      workspaceId: input.workspaceId,
+      agentId: input.agentId,
+      userId: input.userId,
+      name,
+      confirm: true,
+    });
+    return {
+      answer: `Created draft duplicate “${name}”. It does not reuse this production number or calendar — assign those before activation. New agent id: ${
+        (result as { id?: string; agentId?: string })?.id ||
+        (result as { agentId?: string })?.agentId ||
+        "see Your Team"
+      }.`,
+      sources: ["duplicate_agent"],
+      suggestedFollowUps: followUps,
+      evidence: [
+        {
+          label: "Your Team",
+          kind: "agents",
+          href: "/agents",
+        },
+      ],
+      data: result,
+    };
+  }
 
   // Confirm pending proposal from conversation ("yes", "put it live", "activate this")
   if (
     input.userId &&
     /^(yes|yep|yeah|confirm|approve|go ahead|do it|activate|put (it|this) live|publish)\b/.test(
       q,
-    )
+    ) &&
+    !includesAny(q, ["duplicate", "copy", "another amy"])
   ) {
     const { listChangeProposals, confirmChangeProposal } = await import(
       "@/lib/agents/appointment-booking/change-proposals"
@@ -482,20 +525,192 @@ export async function answerOwnerQuestion(input: {
     };
   }
 
-  if (includesAny(q, ["test yourself", "run a test", "run tests", "simulate"])) {
+  if (includesAny(q, ["test yourself", "run a test", "run tests", "simulate", "regression"])) {
     const { runSimulationSuite } = await import(
       "@/lib/agents/appointment-booking/simulation"
     );
+    const { runAgentTestSnapshotSuite } = await import(
+      "@/lib/agents/appointment-booking/test-suite"
+    );
     const sim = runSimulationSuite();
+    const suite = input.userId
+      ? await runAgentTestSnapshotSuite({
+          workspaceId: input.workspaceId,
+          agentId: input.agentId,
+          userId: input.userId,
+        })
+      : null;
     return {
-      answer: `Simulation suite: ${sim.summary.passed}/${sim.summary.total} passed, ${sim.summary.failed} failed, ${sim.summary.pending} pending.${
+      answer: [
+        `Simulation suite: ${sim.summary.passed}/${sim.summary.total} passed, ${sim.summary.failed} failed, ${sim.summary.pending} pending.`,
         sim.criticalFailures.length
-          ? ` Critical failures: ${sim.criticalFailures.join(", ")}.`
-          : " Critical scenarios passed."
-      }`,
-      sources: ["simulation"],
+          ? `Critical simulation failures: ${sim.criticalFailures.join(", ")}.`
+          : "Critical simulation scenarios passed.",
+        suite
+          ? `Agent test suite: ${suite.summary.passed}/${suite.summary.total} passed, ${suite.summary.failed} failed, ${suite.summary.pending} pending.`
+          : "Sign in required to run the full agent test suite snapshot.",
+        "Open Build & Test → Tests for per-scenario detail. Live phone/calendar assertions still require a real call.",
+      ].join(" "),
+      sources: ["simulation", "run_agent_test_suite"],
       suggestedFollowUps: followUps,
-      data: sim,
+      evidence: [
+        {
+          label: "Open Tests",
+          kind: "tests",
+          href: `/agents/${agent.identity.id}?tab=build&sub=tests`,
+        },
+      ],
+      data: { simulation: sim, testSuite: suite },
+    };
+  }
+
+  if (
+    includesAny(q, [
+      "what happened on the last call",
+      "last call",
+      "most recent call",
+      "explain the last",
+    ])
+  ) {
+    const traces = await searchAgentActivity({
+      workspaceId: input.workspaceId,
+      agentId: input.agentId,
+      limit: 1,
+    });
+    const last = traces[0];
+    if (!last) {
+      return {
+        answer: "I do not have a recorded call yet for this agent.",
+        sources: ["search_agent_activity"],
+        suggestedFollowUps: followUps,
+      };
+    }
+    const explanation = explainTraceFailure(last);
+    return {
+      answer: [
+        `Last call ${last.callId}: ${last.summary}`,
+        `Outcome: ${last.outcome.replaceAll("_", " ")}.`,
+        explanation,
+      ].join(" "),
+      sources: ["search_agent_activity", "explain_call_failure", "get_employee_timeline"],
+      suggestedFollowUps: [
+        "Why didn’t the last caller book?",
+        "Require an email for this service",
+        "Test yourself",
+      ],
+      evidence: [
+        {
+          label: "Open call",
+          kind: "call",
+          href: `/voice/calls/${last.callId}`,
+          refId: last.callId,
+        },
+        {
+          label: "Activity",
+          kind: "activity",
+          href: `/agents/${agent.identity.id}?tab=work&sub=activity`,
+        },
+      ],
+      data: last,
+    };
+  }
+
+  if (
+    includesAny(q, [
+      "how did today go",
+      "how are you doing today",
+      "today's results",
+      "today go",
+    ])
+  ) {
+    const { buildAgentDailyReport } = await import(
+      "@/lib/agents/appointment-booking/reports"
+    );
+    const report = await buildAgentDailyReport({
+      workspaceId: input.workspaceId,
+      agentId: input.agentId,
+    });
+    const today = agent.metrics.today;
+    return {
+      answer: [
+        `Today (last 24h): ${today?.callsAnswered ?? report.workCompleted.callsAnswered} calls, ${today?.appointmentsBooked ?? report.workCompleted.appointmentsBooked} bookings, ${today?.transfers ?? report.workCompleted.transfers} transfers.`,
+        report.recommendations.length
+          ? `Recommendations: ${report.recommendations.join(" ")}`
+          : "No urgent recommendations from today’s window.",
+        `Health: ${agent.health.overall}. Autonomy: ${agent.autonomyMode || "balanced"}.`,
+      ].join(" "),
+      sources: ["get_daily_report", "metrics.today", "health"],
+      suggestedFollowUps: followUps,
+      data: { report, today },
+    };
+  }
+
+  if (
+    includesAny(q, [
+      "fix what you can",
+      "safe auto repair",
+      "repair yourself",
+      "auto repair",
+    ])
+  ) {
+    const { runSafeAutoRepair } = await import(
+      "@/lib/agents/appointment-booking/autonomy"
+    );
+    const result = await runSafeAutoRepair({
+      workspaceId: input.workspaceId,
+      agentId: input.agentId,
+    });
+    return {
+      answer: `I ran safe auto-repair under ${agent.autonomyMode || "balanced"} autonomy. ${
+        typeof result === "object" && result && "summary" in result
+          ? String((result as { summary?: string }).summary)
+          : JSON.stringify(result).slice(0, 400)
+      } Consequential changes still need your approval.`,
+      sources: ["run_safe_auto_repair", "autonomy"],
+      suggestedFollowUps: followUps,
+      data: result,
+    };
+  }
+
+  if (includesAny(q, ["reconnect the calendar", "reconnect calendar", "calendar reconnect"])) {
+    return {
+      answer:
+        "I cannot complete OAuth myself. Open Integrations, reconnect Calendly, then ask me to re-check health. While disconnected I should answer in degraded/request-only mode and create booking requests instead of promising bookings.",
+      sources: ["health.calendar"],
+      suggestedFollowUps: ["How is your health?", "Fix what you can safely fix"],
+      evidence: [
+        { label: "Integrations", kind: "integrations", href: "/integrations" },
+        {
+          label: "Health",
+          kind: "health",
+          href: `/agents/${agent.identity.id}?tab=health`,
+        },
+      ],
+    };
+  }
+
+  if (includesAny(q, ["roll back", "rollback", "undo yesterday"])) {
+    const previous = agent.versions.find((v) => v.id !== agent.currentVersionId);
+    if (!previous) {
+      return {
+        answer: "I do not have a previous published version to roll back to.",
+        sources: ["versions"],
+        suggestedFollowUps: followUps,
+      };
+    }
+    return {
+      answer: `I can roll back to v${previous.version} (${previous.changeLog || "prior version"}). Reply “yes, roll back to ${previous.id}” is not enough — confirm from Build & Test → Versions (confirm:true) so we use the existing activation engine.`,
+      sources: ["rollback_agent_version"],
+      suggestedFollowUps: ["Open Versions", "What happened on the last call?"],
+      requiresConfirmation: true,
+      evidence: [
+        {
+          label: "Versions",
+          kind: "versions",
+          href: `/agents/${agent.identity.id}?tab=build&sub=versions`,
+        },
+      ],
+      data: { versionId: previous.id, version: previous.version },
     };
   }
 
@@ -687,20 +902,20 @@ export async function answerOwnerQuestion(input: {
       answer: [
         `I can duplicate myself into a new draft named like “${suggested}”.`,
         "The copy will not reuse this production number or calendar — those must be selected.",
-        "Confirm with the duplicate_agent command (confirm:true) from the UI.",
+        `Reply “yes, duplicate ${suggested}” to create the draft now, or use Duplicate on Home.`,
         "The original agent stays unchanged.",
       ].join(" "),
       sources: ["duplicate_agent"],
       suggestedFollowUps: [
+        `Yes, duplicate ${suggested}`,
         "Explain your setup",
-        "Create an after-hours emergency workflow draft",
       ],
       requiresConfirmation: true,
       evidence: [
         {
-          label: "Open Versions",
-          kind: "versions",
-          href: `/agents/${agent.identity.id}?tab=versions`,
+          label: "Your Team",
+          kind: "agents",
+          href: "/agents",
         },
       ],
       data: {

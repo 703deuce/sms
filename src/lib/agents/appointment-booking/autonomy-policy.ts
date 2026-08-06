@@ -64,56 +64,98 @@ export function permissionsForMode(mode: AutonomyMode): AutonomyPermission[] {
   ];
 }
 
+function permissionLabel(p: AutonomyPermission): string {
+  switch (p) {
+    case "read_explain":
+      return "Read logs, health, and explain behavior";
+    case "create_drafts":
+      return "Create configuration and workflow drafts";
+    case "run_simulations":
+      return "Run simulations and regression suites";
+    case "safe_retries":
+      return "Retry temporary idempotent tool failures";
+    case "release_expired_holds":
+      return "Release expired slot holds";
+    case "create_manual_booking_requests":
+      return "Create manual booking requests when calendar is down";
+    case "pause_optional_capabilities":
+      return "Pause broken optional capabilities (e.g. confirmation SMS)";
+    case "switch_preapproved_fallback":
+      return "Switch to a preapproved fallback transfer target";
+    case "apply_preapproved_repairs":
+      return "Apply explicitly preapproved low-risk repairs";
+    case "emergency_rollback_under_policy":
+      return "Emergency rollback only under approved thresholds";
+    case "deploy_within_policy_envelope":
+      return "Deploy only changes within a written policy envelope";
+    default:
+      return p;
+  }
+}
+
+/** Four-bucket matrix for Permissions UI + Owner Amy explanations. */
+export function autonomyPermissionBuckets(mode: AutonomyMode): {
+  mayAlways: string[];
+  mayAutoRepair: string[];
+  mustRequestApproval: string[];
+  neverAllowed: string[];
+} {
+  const perms = new Set(permissionsForMode(mode));
+  const mayAlways = [
+    "Answer approved calls",
+    "Retrieve own configuration, logs, and results",
+    "Run simulations",
+    "Create drafts and proposals",
+    "Explain failures from traces",
+  ];
+  const mayAutoRepair = (
+    [
+      "safe_retries",
+      "release_expired_holds",
+      "create_manual_booking_requests",
+      "pause_optional_capabilities",
+      "switch_preapproved_fallback",
+      "apply_preapproved_repairs",
+    ] as AutonomyPermission[]
+  )
+    .filter((p) => perms.has(p))
+    .map(permissionLabel);
+  const mustRequestApproval = [
+    "Change live booking rules, voice, or greeting",
+    "Assign a new calendar or number",
+    "Modify workflow behavior / promote drafts",
+    "Activate a version or duplicate into production",
+  ];
+  if (!perms.has("deploy_within_policy_envelope")) {
+    mustRequestApproval.push("Any production deploy");
+  }
+  const neverAllowed = [
+    "Write arbitrary code or change database schema",
+    "Bypass compliance, SMS opt-out, or quiet hours",
+    "Reveal credentials or access unrelated workspaces",
+    "Silently broaden permissions",
+    "Reconnect OAuth without the owner",
+  ];
+  return { mayAlways, mayAutoRepair, mustRequestApproval, neverAllowed };
+}
+
 export function describeAutonomyMode(mode: AutonomyMode): {
   mode: AutonomyMode;
   label: string;
   allowed: string[];
   forbidden: string[];
+  buckets: ReturnType<typeof autonomyPermissionBuckets>;
 } {
   const perms = permissionsForMode(mode);
-  const allowed = perms.map((p) => {
-    switch (p) {
-      case "read_explain":
-        return "Read logs, health, and explain behavior";
-      case "create_drafts":
-        return "Create configuration and workflow drafts";
-      case "run_simulations":
-        return "Run simulations and regression suites";
-      case "safe_retries":
-        return "Retry temporary idempotent tool failures";
-      case "release_expired_holds":
-        return "Release expired slot holds";
-      case "create_manual_booking_requests":
-        return "Create manual booking requests when calendar is down";
-      case "pause_optional_capabilities":
-        return "Pause broken optional capabilities (e.g. confirmation SMS)";
-      case "switch_preapproved_fallback":
-        return "Switch to a preapproved fallback transfer target";
-      case "apply_preapproved_repairs":
-        return "Apply explicitly preapproved low-risk repairs";
-      case "emergency_rollback_under_policy":
-        return "Emergency rollback only under approved thresholds";
-      case "deploy_within_policy_envelope":
-        return "Deploy only changes within a written policy envelope";
-      default:
-        return p;
-    }
-  });
-
-  const forbidden = [
-    "Reconnect OAuth without the owner",
-    "Change production calendar or phone number",
-    "Broaden permissions or alter compliance",
-    "Launch campaigns or delete agents",
-    "Activate major workflow changes without confirmation (unless policy envelope + Autonomous)",
-    "Bypass SMS opt-out, quiet hours, or platform safety gates",
-  ];
+  const allowed = perms.map(permissionLabel);
+  const buckets = autonomyPermissionBuckets(mode);
 
   return {
     mode,
     label: AUTONOMY_MODE_LABELS[mode],
     allowed,
-    forbidden,
+    forbidden: buckets.neverAllowed,
+    buckets,
   };
 }
 

@@ -456,6 +456,11 @@ export async function getAvailability(
   const calendarId =
     (args.calendarId as string | undefined) || service?.calendarId || undefined;
   const cal = await resolveCalendarConnection(workspaceId, calendarId);
+  // Calendly is handled by the voice builtin Calendly path. Never invent
+  // open-hours "internal" slots for a Calendly-linked service.
+  if (cal?.provider === "calendly") {
+    return { slots: [] };
+  }
   if (cal && (cal.provider === "google" || cal.provider === "microsoft")) {
     const config = (cal.config || {}) as CalendarConfig;
 
@@ -759,6 +764,11 @@ export async function bookAppointment(
   const calendarId =
     (args.calendarId as string | undefined) || service?.calendarId || undefined;
   const cal = await resolveCalendarConnection(workspaceId, calendarId);
+  if (cal?.provider === "calendly") {
+    throw new Error(
+      "This service is linked to Calendly — book via Calendly (email required), not the internal calendar",
+    );
+  }
   if (cal && (cal.provider === "google" || cal.provider === "microsoft")) {
     const config = (cal.config || {}) as CalendarConfig;
     if (hasOAuthTokens(config)) {

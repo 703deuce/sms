@@ -4,10 +4,11 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react
 import Link from "next/link";
 import type { AppointmentBookingAgentView } from "@/lib/agents/appointment-booking/types";
 import { cn } from "@/lib/utils";
+import { AmyHomePanel } from "@/components/agents/appointment-booking/amy-home-panel";
 
 type PrimarySection = "home" | "talk" | "work" | "build" | "settings";
-type WorkSub = "activity" | "results" | "attention";
-type BuildSub = "workflow" | "tests" | "versions";
+type WorkSub = "activity" | "calls" | "appointments" | "attention" | "results";
+type BuildSub = "workflow" | "tests" | "drafts" | "versions" | "deployments";
 type SettingsSub =
   | "general"
   | "booking"
@@ -27,13 +28,14 @@ const PRIMARY: Array<{ id: PrimarySection; label: string }> = [
 ];
 
 const SUGGESTED = [
+  "What happened on the last call?",
   "How did today go?",
-  "Why didn’t the last caller book?",
-  "Add a required question",
+  "What exactly do you do?",
   "Change the minimum notice to four hours",
-  "Stop offering same-day appointments after 3 PM",
+  "Require an email for this service",
   "Test yourself",
-  "Create another Amy",
+  "Fix what you can safely fix",
+  "Create another Amy for Richmond",
 ];
 
 function Pill({
@@ -63,12 +65,14 @@ function Pill({
 export function AppointmentAgentDetail({ agentId }: { agentId: string }) {
   const [agent, setAgent] = useState<AppointmentBookingAgentView | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [panelError, setPanelError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [section, setSection] = useState<PrimarySection>("talk");
+  const [section, setSection] = useState<PrimarySection>("home");
   const [workSub, setWorkSub] = useState<WorkSub>("activity");
   const [buildSub, setBuildSub] = useState<BuildSub>("versions");
   const [settingsSub, setSettingsSub] = useState<SettingsSub>("booking");
   const [activity, setActivity] = useState<unknown[]>([]);
+  const [appointments, setAppointments] = useState<unknown[]>([]);
   const [proposals, setProposals] = useState<unknown[]>([]);
   const [workflowDrafts, setWorkflowDrafts] = useState<unknown[]>([]);
   const [attention, setAttention] = useState<{ items?: unknown[]; openCount?: number } | null>(
@@ -76,6 +80,8 @@ export function AppointmentAgentDetail({ agentId }: { agentId: string }) {
   );
   const [memory, setMemory] = useState<Record<string, unknown> | null>(null);
   const [autonomy, setAutonomy] = useState<Record<string, unknown> | null>(null);
+  const [recommendations, setRecommendations] = useState<string[]>([]);
+  const [runtimes, setRuntimes] = useState<unknown[]>([]);
   const [testSuite, setTestSuite] = useState<{
     results?: Array<{ scenarioId: string; name: string; status: string; failureReason?: string | null }>;
     summary?: { total: number; passed: number; pending: number; failed: number };
@@ -139,6 +145,51 @@ export function AppointmentAgentDetail({ agentId }: { agentId: string }) {
     void load();
   }, [load]);
 
+  // Deep links: ?tab=work&sub=calls | memory→settings/knowledge | health→settings/health
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const tab = String(params.get("tab") || "").toLowerCase();
+    const sub = String(params.get("sub") || "").toLowerCase();
+    if (tab === "talk" || tab === "home" || tab === "work" || tab === "build" || tab === "settings") {
+      setSection(tab as PrimarySection);
+    }
+    if (tab === "memory" || tab === "knowledge") {
+      setSection("settings");
+      setSettingsSub("knowledge");
+    }
+    if (tab === "health") {
+      setSection("settings");
+      setSettingsSub("health");
+    }
+    if (tab === "versions") {
+      setSection("build");
+      setBuildSub("versions");
+    }
+    if (tab === "activity") {
+      setSection("work");
+      setWorkSub("activity");
+    }
+    if (sub === "calls" || sub === "appointments" || sub === "attention" || sub === "results" || sub === "activity") {
+      setWorkSub(sub as WorkSub);
+    }
+    if (sub === "tests" || sub === "workflow" || sub === "versions" || sub === "drafts" || sub === "deployments") {
+      setBuildSub(sub as BuildSub);
+    }
+    if (
+      sub === "booking" ||
+      sub === "fields" ||
+      sub === "knowledge" ||
+      sub === "autonomy" ||
+      sub === "health" ||
+      sub === "voice" ||
+      sub === "connections" ||
+      sub === "general"
+    ) {
+      setSettingsSub(sub as SettingsSub);
+    }
+  }, []);
+
   const runCommand = useCallback(
     async (command: string, payload?: Record<string, unknown>) => {
       const res = await fetch(`/api/agents/${agentId}/control`, {
@@ -156,45 +207,64 @@ export function AppointmentAgentDetail({ agentId }: { agentId: string }) {
   useEffect(() => {
     if (!agent) return;
     void (async () => {
+      setPanelError(null);
       try {
         if (section === "home" || section === "talk" || (section === "work" && workSub === "attention")) {
           setAttention(await runCommand("get_attention_inbox"));
         }
+        if (section === "home") {
+          const [act, props, report] = await Promise.all([
+            runCommand("search_agent_activity", { limit: 8 }),
+            runCommand("list_change_proposals"),
+            runCommand("get_daily_report"),
+          ]);
+          setActivity(act.traces || []);
+          setProposals(props.proposals || []);
+          setRecommendations(
+            Array.isArray(report?.recommendations) ? report.recommendations.map(String) : [],
+          );
+        }
         if (section === "talk" || section === "home") {
           const readiness = await runCommand("get_setup_readiness");
           setSetupReadiness(readiness);
-          if (
-            section === "talk" &&
-            !talkSeeded &&
-            readiness?.interviewOpening
-          ) {
-            setChat([
-              {
-                role: "agent",
-                text: String(readiness.interviewOpening),
-              },
-            ]);
+          if (section === "talk" && !talkSeeded && readiness?.interviewOpening) {
+            setChat([{ role: "agent", text: String(readiness.interviewOpening) }]);
             setTalkSeeded(true);
           }
         }
-        if (section === "work" && workSub === "activity") {
-          const data = await runCommand("search_agent_activity", { limit: 20 });
-          setActivity(data.traces || []);
+        if (section === "work") {
+          if (workSub === "activity" || workSub === "calls") {
+            const data = await runCommand("search_agent_activity", { limit: 25 });
+            setActivity(data.traces || []);
+          }
+          if (workSub === "appointments") {
+            const data = await runCommand("list_agent_appointments", { limit: 30 });
+            setAppointments(data.appointments || []);
+          }
         }
         if (section === "build") {
           const props = await runCommand("list_change_proposals");
           setProposals(props.proposals || []);
-          if (buildSub === "workflow") {
+          if (buildSub === "workflow" || buildSub === "drafts") {
             const drafts = await runCommand("list_workflow_drafts");
             setWorkflowDrafts(drafts.drafts || []);
           }
           if (buildSub === "tests") {
             setTestSuite(await runCommand("run_agent_test_suite"));
           }
+          if (buildSub === "deployments") {
+            setDrift(await runCommand("get_deployment_drift"));
+            const reg = await runCommand("get_runtime_registry");
+            setRuntimes(reg.runtimes || []);
+          }
         }
         if (section === "settings") {
           if (settingsSub === "knowledge") setMemory(await runCommand("get_memory_view"));
-          if (settingsSub === "autonomy") setAutonomy(await runCommand("get_autonomy_policy"));
+          if (settingsSub === "autonomy") {
+            setAutonomy(await runCommand("get_autonomy_policy"));
+            const reg = await runCommand("get_runtime_registry");
+            setRuntimes(reg.runtimes || []);
+          }
           if (settingsSub === "health") {
             setDrift(await runCommand("get_deployment_drift"));
           }
@@ -208,8 +278,8 @@ export function AppointmentAgentDetail({ agentId }: { agentId: string }) {
             setProposals(props.proposals || []);
           }
         }
-      } catch {
-        /* optional panels */
+      } catch (err) {
+        setPanelError(err instanceof Error ? err.message : String(err));
       }
     })();
   }, [agent, section, workSub, buildSub, settingsSub, runCommand, talkSeeded]);
@@ -385,6 +455,23 @@ export function AppointmentAgentDetail({ agentId }: { agentId: string }) {
             >
               {agent.identity.status === "paused" ? "Resume" : "Pause"}
             </button>
+            <Link
+              href={guidedHref}
+              className="inline-flex min-h-10 items-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-[12px] font-semibold text-slate-700"
+            >
+              Edit setup
+            </Link>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                setSection("talk");
+                void ask("Create another Amy for Richmond");
+              }}
+              className="min-h-10 rounded-lg border border-slate-200 bg-white px-3 py-2 text-[12px] font-semibold text-slate-700"
+            >
+              Duplicate
+            </button>
           </div>
         </div>
 
@@ -409,45 +496,51 @@ export function AppointmentAgentDetail({ agentId }: { agentId: string }) {
 
       <div className="mx-auto grid max-w-7xl gap-4 p-4 lg:grid-cols-[1fr_300px] sm:p-6">
         <main className="min-w-0 rounded-2xl border border-slate-200 bg-white shadow-sm">
-          {section === "home" ? (
-            <div className="space-y-6 p-5">
-              <div>
-                <h2 className="text-sm font-semibold text-slate-900">Today</h2>
-                <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                  {[
-                    ["Calls answered", agent.metrics.callsAnswered],
-                    ["Appointments booked", agent.metrics.appointmentsBooked],
-                    ["Conversion", `${agent.metrics.bookingConversionRate}%`],
-                    ["Needs attention", attention?.openCount ?? 0],
-                  ].map(([l, v]) => (
-                    <div key={String(l)} className="rounded-xl bg-slate-50 p-3">
-                      <p className="text-[11px] uppercase tracking-wide text-slate-400">{l}</p>
-                      <p className="mt-1 text-xl font-semibold text-slate-900">{v}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              {(agent.readiness?.blockers || []).length ? (
-                <div className="space-y-2">
-                  <h2 className="text-sm font-semibold text-slate-900">Needs attention</h2>
-                  {(agent.readiness?.blockers || []).slice(0, 5).map((b) => (
-                    <div key={b.code} className="rounded-xl border border-amber-200 bg-amber-50/50 px-4 py-3 text-sm">
-                      <p className="font-medium">{b.message}</p>
-                      <p className="mt-1 text-[12px] text-slate-600">{b.recommendedAction}</p>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-                  {name} is ready — no readiness blockers.
-                </p>
-              )}
-              <p className="text-[12px] text-slate-500">
-                Callers talk to the published Telnyx assistant. You manage {name} here — Talk,
-                Settings, and Build & Test all use the same proposal → test → publish pipeline.
-                Guided setup reuses the proven wizard engine without a second source of truth.
-              </p>
+          {panelError ? (
+            <div className="border-b border-amber-200 bg-amber-50 px-5 py-2 text-[12px] text-amber-900">
+              Panel load issue: {panelError}
             </div>
+          ) : null}
+          {section === "home" ? (
+            <AmyHomePanel
+              agent={agent}
+              attentionOpenCount={attention?.openCount ?? 0}
+              recommendations={recommendations}
+              latestActivity={
+                activity as Array<{
+                  callId: string;
+                  summary: string;
+                  outcome: string;
+                  startedAt: string;
+                }>
+              }
+              pendingProposalCount={
+                (proposals as Array<{ status?: string }>).filter(
+                  (p) => !p.status || /pending|draft|proposed/i.test(String(p.status)),
+                ).length
+              }
+              onTalk={() => setSection("talk")}
+              onTest={() => {
+                setSection("build");
+                setBuildSub("tests");
+              }}
+              onPauseResume={() => void pauseOrResume()}
+              onEditSetup={() => {
+                window.location.href = guidedHref;
+              }}
+              onDuplicate={() => {
+                setSection("talk");
+                void ask("Create another Amy for Richmond");
+              }}
+              onOpenWork={() => {
+                setSection("work");
+                setWorkSub("activity");
+              }}
+              onOpenAttention={() => {
+                setSection("work");
+                setWorkSub("attention");
+              }}
+            />
           ) : null}
 
           {section === "talk" ? (
@@ -580,13 +673,15 @@ export function AppointmentAgentDetail({ agentId }: { agentId: string }) {
               <SubNav
                 items={[
                   ["activity", "Activity"],
-                  ["results", "Results"],
+                  ["calls", "Calls"],
+                  ["appointments", "Appointments"],
                   ["attention", "Attention"],
+                  ["results", "Results"],
                 ]}
                 current={workSub}
                 onChange={(id) => setWorkSub(id as WorkSub)}
               />
-              {workSub === "activity" ? (
+              {workSub === "activity" || workSub === "calls" ? (
                 <div className="mt-4 space-y-3">
                   {activity.length === 0 ? (
                     <p className="text-sm text-slate-500">No recent call activity yet.</p>
@@ -597,6 +692,7 @@ export function AppointmentAgentDetail({ agentId }: { agentId: string }) {
                         summary: string;
                         outcome: string;
                         startedAt: string;
+                        agentVersionId?: string | null;
                       }>
                     ).map((t) => (
                       <div key={t.callId} className="rounded-xl border border-slate-100 px-4 py-3">
@@ -608,10 +704,13 @@ export function AppointmentAgentDetail({ agentId }: { agentId: string }) {
                         </div>
                         <p className="mt-1 text-[12px] text-slate-500">
                           {new Date(t.startedAt).toLocaleString()}
+                          {t.agentVersionId ? ` · version ${t.agentVersionId.slice(0, 8)}…` : ""}
                         </p>
-                        <div className="mt-2 flex gap-3 text-[12px] font-semibold">
+                        <div className="mt-2 flex flex-wrap gap-3 text-[12px] font-semibold">
                           <Link href={`/voice/calls/${t.callId}`} className="text-violet-700">
-                            Open call
+                            {workSub === "calls"
+                              ? "Recording / transcript / tools"
+                              : "Open call evidence"}
                           </Link>
                           <button
                             type="button"
@@ -630,7 +729,17 @@ export function AppointmentAgentDetail({ agentId }: { agentId: string }) {
                               })()
                             }
                           >
-                            Why this happened
+                            Employee timeline
+                          </button>
+                          <button
+                            type="button"
+                            className="text-slate-700"
+                            onClick={() => {
+                              setSection("talk");
+                              void ask(`What happened on the last call?`);
+                            }}
+                          >
+                            Ask {name}
                           </button>
                         </div>
                         {selectedCallId === t.callId && timeline ? (
@@ -640,11 +749,18 @@ export function AppointmentAgentDetail({ agentId }: { agentId: string }) {
                                 timeLabel: string;
                                 headline: string;
                                 detail?: string;
+                                href?: string;
                               }>
                             ).map((item, idx) => (
                               <li key={`${item.timeLabel}-${idx}`}>
                                 <span className="font-semibold">{item.timeLabel}</span> —{" "}
-                                {item.headline}
+                                {item.href ? (
+                                  <Link href={item.href} className="text-violet-700">
+                                    {item.headline}
+                                  </Link>
+                                ) : (
+                                  item.headline
+                                )}
                                 {item.detail ? (
                                   <span className="block text-[12px] text-slate-500">
                                     {item.detail}
@@ -659,21 +775,88 @@ export function AppointmentAgentDetail({ agentId }: { agentId: string }) {
                   )}
                 </div>
               ) : null}
+              {workSub === "appointments" ? (
+                <div className="mt-4 space-y-3">
+                  {appointments.length === 0 ? (
+                    <p className="text-sm text-slate-500">
+                      No appointments linked to {name}&apos;s calls yet.
+                    </p>
+                  ) : (
+                    (
+                      appointments as Array<{
+                        id: string;
+                        serviceName?: string | null;
+                        startsAt: string;
+                        status: string;
+                        callerPhone?: string | null;
+                        externalId?: string | null;
+                        href?: string | null;
+                      }>
+                    ).map((a) => (
+                      <div
+                        key={a.id}
+                        className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-100 px-4 py-3 text-sm"
+                      >
+                        <div>
+                          <p className="font-medium">
+                            {a.serviceName || "Appointment"} · {a.status}
+                          </p>
+                          <p className="text-[12px] text-slate-500">
+                            {new Date(a.startsAt).toLocaleString()}
+                            {a.callerPhone ? ` · ${a.callerPhone}` : ""}
+                            {a.externalId ? " · calendar verified id present" : " · internal record"}
+                          </p>
+                        </div>
+                        {a.href ? (
+                          <Link href={a.href} className="font-semibold text-violet-700">
+                            Evidence
+                          </Link>
+                        ) : null}
+                      </div>
+                    ))
+                  )}
+                </div>
+              ) : null}
               {workSub === "results" ? (
-                <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
-                  {[
-                    ["Calls", agent.metrics.callsAnswered],
-                    ["Booked", agent.metrics.appointmentsBooked],
-                    ["Conversion", `${agent.metrics.bookingConversionRate}%`],
-                    ["Transfers", agent.metrics.transfers],
-                    ["Failures", agent.metrics.bookingFailures],
-                    ["SMS confirmations", agent.metrics.confirmationSmsSent],
-                  ].map(([l, v]) => (
-                    <div key={String(l)} className="rounded-xl bg-slate-50 p-3">
-                      <p className="text-[11px] uppercase text-slate-400">{l}</p>
-                      <p className="mt-1 text-xl font-semibold">{v}</p>
+                <div className="mt-4 space-y-4">
+                  <p className="text-[12px] text-slate-500">
+                    Window: last {agent.metrics.windowDays} days
+                    {agent.metrics.previousWindow
+                      ? ` · prior window conversion ${agent.metrics.previousWindow.bookingConversionRate}%`
+                      : ""}
+                    . Definitions: booked = appointmentBooked or non-cancelled VoiceAppointment;
+                    conversion = booked / calls answered.
+                  </p>
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                    {[
+                      ["Calls", agent.metrics.callsAnswered],
+                      ["Booking conversations", agent.metrics.bookingConversationsStarted],
+                      ["Booked", agent.metrics.appointmentsBooked],
+                      ["Conversion", `${agent.metrics.bookingConversionRate}%`],
+                      ["Transfers", agent.metrics.transfers],
+                      ["Abandoned booking", agent.metrics.abandonedBookingConversations],
+                      ["Failures", agent.metrics.bookingFailures],
+                      ["Calendar failures", agent.metrics.calendarFailures],
+                      ["SMS confirmations", agent.metrics.confirmationSmsSent],
+                    ].map(([l, v]) => (
+                      <div key={String(l)} className="rounded-xl bg-slate-50 p-3">
+                        <p className="text-[11px] uppercase text-slate-400">{l}</p>
+                        <p className="mt-1 text-xl font-semibold">{v}</p>
+                      </div>
+                    ))}
+                  </div>
+                  {agent.metrics.mostRequestedServices.length ? (
+                    <div>
+                      <h3 className="text-sm font-semibold">Most requested services</h3>
+                      <ul className="mt-2 space-y-1 text-sm text-slate-700">
+                        {agent.metrics.mostRequestedServices.map((s) => (
+                          <li key={s.service}>
+                            {s.service}: {s.count}
+                          </li>
+                        ))}
+                      </ul>
                     </div>
-                  ))}
+                  ) : null}
                 </div>
               ) : null}
               {workSub === "attention" ? (
@@ -724,7 +907,9 @@ export function AppointmentAgentDetail({ agentId }: { agentId: string }) {
                 items={[
                   ["workflow", "Workflow"],
                   ["tests", "Tests"],
+                  ["drafts", "Drafts"],
                   ["versions", "Versions"],
+                  ["deployments", "Deployments"],
                 ]}
                 current={buildSub}
                 onChange={(id) => setBuildSub(id as BuildSub)}
@@ -839,11 +1024,118 @@ export function AppointmentAgentDetail({ agentId }: { agentId: string }) {
                             : "border-slate-100",
                         )}
                       >
-                        v{v.version}
-                        {v.id === agent.currentVersionId ? " · Current" : ""} —{" "}
-                        {v.changeLog || "No changelog"}
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span>
+                            v{v.version}
+                            {v.id === agent.currentVersionId ? " · Current" : ""} —{" "}
+                            {v.changeLog || "No changelog"}
+                          </span>
+                          <span className="text-[11px] text-slate-500">
+                            deploy: {v.deploymentStatus || "—"} · tests: {v.testStatus || "—"}
+                          </span>
+                        </div>
+                        {v.id !== agent.currentVersionId ? (
+                          <button
+                            type="button"
+                            disabled={busy}
+                            className="mt-2 text-[12px] font-semibold text-violet-700"
+                            onClick={() =>
+                              void (async () => {
+                                setBusy(true);
+                                try {
+                                  await runCommand("rollback_agent_version", {
+                                    versionId: v.id,
+                                    confirm: true,
+                                  });
+                                  await load();
+                                } catch (err) {
+                                  setError(err instanceof Error ? err.message : String(err));
+                                } finally {
+                                  setBusy(false);
+                                }
+                              })()
+                            }
+                          >
+                            Roll back to this version
+                          </button>
+                        ) : null}
                       </div>
                     ))}
+                  </div>
+                </div>
+              ) : null}
+              {buildSub === "drafts" ? (
+                <div className="mt-4 space-y-3 text-sm">
+                  <h3 className="font-semibold">Change proposals</h3>
+                  {(proposals as Array<{ id: string; summary: string; status: string }>).length ===
+                  0 ? (
+                    <p className="text-slate-500">No proposals yet.</p>
+                  ) : (
+                    (proposals as Array<{ id: string; summary: string; status: string }>).map(
+                      (p) => (
+                        <div key={p.id} className="rounded-xl border border-slate-100 px-4 py-3">
+                          {p.summary} · {p.status}
+                        </div>
+                      ),
+                    )
+                  )}
+                  <h3 className="pt-2 font-semibold">Workflow drafts</h3>
+                  {(workflowDrafts as Array<{ id: string; name: string; validationStatus: string }>)
+                    .length === 0 ? (
+                    <p className="text-slate-500">
+                      No workflow drafts. Ask {name} to create an after-hours flow.
+                    </p>
+                  ) : (
+                    (
+                      workflowDrafts as Array<{
+                        id: string;
+                        name: string;
+                        validationStatus: string;
+                      }>
+                    ).map((d) => (
+                      <div key={d.id} className="rounded-xl border border-slate-100 px-4 py-3">
+                        {d.name} · {d.validationStatus}
+                      </div>
+                    ))
+                  )}
+                </div>
+              ) : null}
+              {buildSub === "deployments" ? (
+                <div className="mt-4 space-y-4 text-sm">
+                  <div className="rounded-xl border border-slate-100 px-4 py-3">
+                    <p className="font-semibold">Telnyx / drift</p>
+                    <p className="mt-1 text-slate-600">
+                      {drift?.message || agent.health.deploymentDrift.message}
+                    </p>
+                    <p className="mt-2 text-[12px] text-slate-500">
+                      Assistant: {agent.telnyxAssistantId || "—"} · Expected version:{" "}
+                      {drift?.expectedVersionNumber ?? "—"} · Drifted:{" "}
+                      {String(drift?.drifted ?? agent.health.deploymentDrift.status !== "healthy")}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-slate-100 px-4 py-3">
+                    <p className="font-semibold">Routing</p>
+                    <p className="mt-1 text-slate-600">
+                      Number {agent.resources.numberLabel} · {agent.health.assignedNumber.message}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="font-semibold">Runtime registry</p>
+                    <ul className="mt-2 space-y-2">
+                      {(
+                        runtimes as Array<{
+                          id: string;
+                          label: string;
+                          writePermission: string;
+                          promptSource: string;
+                        }>
+                      ).map((r) => (
+                        <li key={r.id} className="rounded-xl bg-slate-50 px-3 py-2 text-[12px]">
+                          <span className="font-semibold">{r.label}</span> · {r.writePermission}
+                          <span className="block text-slate-500">{r.promptSource}</span>
+                        </li>
+                      ))}
+                    </ul>
                   </div>
                 </div>
               ) : null}
@@ -989,37 +1281,96 @@ export function AppointmentAgentDetail({ agentId }: { agentId: string }) {
               ) : null}
 
               {settingsSub === "knowledge" ? (
-                <div className="mt-4 space-y-3 text-sm">
-                  <p>
-                    Shared Company Brain facts:{" "}
-                    {(memory?.sharedFacts as unknown[] | undefined)?.length ??
-                      agent.businessBrain.knowledgeFacts.length}
-                  </p>
-                  <Link href="/company-brain" className="font-semibold text-violet-700">
-                    Open Company Brain →
-                  </Link>
-                  <button
-                    type="button"
-                    disabled={busy}
-                    className="block rounded-lg border border-slate-200 px-3 py-2 text-[12px] font-semibold"
-                    onClick={() =>
-                      void (async () => {
-                        setBusy(true);
-                        try {
-                          await runCommand("approve_knowledge_facts", {
-                            approveAllPending: true,
-                          });
-                          await load();
-                        } catch (err) {
-                          setError(err instanceof Error ? err.message : String(err));
-                        } finally {
-                          setBusy(false);
-                        }
-                      })()
-                    }
-                  >
-                    Approve pending website facts
-                  </button>
+                <div className="mt-4 space-y-5 text-sm">
+                  <div>
+                    <h3 className="font-semibold">Shared Company Brain</h3>
+                    <p className="mt-1 text-[12px] text-slate-500">
+                      Company facts, hours, services — owned by the workspace, not only Amy.
+                    </p>
+                    <ul className="mt-2 space-y-2">
+                      {(
+                        (memory?.sharedFacts as Array<{
+                          id: string;
+                          summary: string;
+                          source?: string;
+                          approvalState?: string;
+                        }> | undefined) ||
+                        agent.businessBrain.knowledgeFacts.map((f, i) => ({
+                          id: `f${i}`,
+                          summary: `${f.label}: ${f.summary}`,
+                          source: "business_brain",
+                          approvalState: f.status || "approved",
+                        }))
+                      )
+                        .slice(0, 12)
+                        .map((f) => (
+                          <li key={f.id} className="rounded-xl border border-slate-100 px-3 py-2">
+                            <p>{f.summary}</p>
+                            <p className="text-[11px] text-slate-500">
+                              source: {f.source || "—"} · {f.approvalState || "—"}
+                            </p>
+                          </li>
+                        ))}
+                    </ul>
+                    <Link href="/company-brain" className="mt-2 inline-flex font-semibold text-violet-700">
+                      Open Company Brain →
+                    </Link>
+                  </div>
+                  <div>
+                    <h3 className="font-semibold">Amy-specific knowledge</h3>
+                    <ul className="mt-2 space-y-2">
+                      {(
+                        (memory?.agentFacts as Array<{
+                          id: string;
+                          summary: string;
+                          source?: string;
+                        }> | undefined) || []
+                      ).map((f) => (
+                        <li key={f.id} className="rounded-xl bg-slate-50 px-3 py-2">
+                          {f.summary}
+                          <span className="block text-[11px] text-slate-500">{f.source}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div>
+                    <h3 className="font-semibold">Review queue</h3>
+                    {(memory?.learning as Array<{ id: string; summary?: string; title?: string }> | undefined)
+                      ?.length ? (
+                      (memory!.learning as Array<{ id: string; summary?: string; title?: string }>).map(
+                        (item) => (
+                          <div key={item.id} className="mt-2 rounded-xl border border-amber-100 px-3 py-2">
+                            {item.title || item.summary}
+                          </div>
+                        ),
+                      )
+                    ) : (
+                      <p className="mt-1 text-slate-500">No pending learning items.</p>
+                    )}
+                    <button
+                      type="button"
+                      disabled={busy}
+                      className="mt-3 rounded-lg border border-slate-200 px-3 py-2 text-[12px] font-semibold"
+                      onClick={() =>
+                        void (async () => {
+                          setBusy(true);
+                          try {
+                            await runCommand("approve_knowledge_facts", {
+                              approveAllPending: true,
+                            });
+                            setMemory(await runCommand("get_memory_view"));
+                            await load();
+                          } catch (err) {
+                            setError(err instanceof Error ? err.message : String(err));
+                          } finally {
+                            setBusy(false);
+                          }
+                        })()
+                      }
+                    >
+                      Approve pending website facts
+                    </button>
+                  </div>
                 </div>
               ) : null}
 
@@ -1090,14 +1441,17 @@ export function AppointmentAgentDetail({ agentId }: { agentId: string }) {
                 <div className="mt-4 space-y-2">
                   {(
                     [
-                      ["Telnyx", agent.health.telnyxAssistant],
-                      ["Number", agent.health.assignedNumber],
-                      ["Calendar", agent.health.calendar],
+                      ["Telnyx assistant", agent.health.telnyxAssistant],
+                      ["Assigned number / routing", agent.health.assignedNumber],
+                      ["Calendar authorization", agent.health.calendar],
                       ["Booking tools", agent.health.bookingTools],
                       ["Slot holds", agent.health.slotHolds],
-                      ["Workflow", agent.health.primaryWorkflow],
-                      ["SMS", agent.health.smsConfirmation],
-                      ["Deployment drift", agent.health.deploymentDrift],
+                      ["Workflow service", agent.health.primaryWorkflow],
+                      ["Confirmation SMS", agent.health.smsConfirmation],
+                      ["Webhook endpoint", agent.health.webhookEndpoint],
+                      ["Latest deployment", agent.health.latestDeployment],
+                      ["Prompt drift", agent.health.deploymentDrift],
+                      ["Transfer destinations", agent.health.transferTargets],
                     ] as const
                   ).map(([label, check]) => (
                     <div
@@ -1107,12 +1461,42 @@ export function AppointmentAgentDetail({ agentId }: { agentId: string }) {
                       <div>
                         <p className="text-sm font-medium">{label}</p>
                         <p className="text-[12px] text-slate-600">{check?.message}</p>
+                        {check?.required ? (
+                          <p className="text-[11px] text-slate-400">Required dependency</p>
+                        ) : null}
                       </div>
-                      <Pill tone={check?.status === "healthy" ? "ok" : "warn"}>
+                      <Pill
+                        tone={
+                          check?.status === "healthy"
+                            ? "ok"
+                            : check?.status === "failed"
+                              ? "bad"
+                              : "warn"
+                        }
+                      >
                         {check?.status || "unknown"}
                       </Pill>
                     </div>
                   ))}
+                  {(agent.readiness?.blockers || []).length ? (
+                    <div className="space-y-2 pt-2">
+                      <h3 className="text-sm font-semibold">Impact & recommended actions</h3>
+                      {(agent.readiness?.blockers || []).map((b) => (
+                        <div
+                          key={b.code}
+                          className="rounded-xl border border-amber-200 bg-amber-50/40 px-4 py-3 text-[12px]"
+                        >
+                          <p className="font-medium text-sm">{b.message}</p>
+                          <p className="mt-1 text-slate-600">Still can: review readiness · {b.affectedFunctionality}</p>
+                          <p className="mt-1 text-slate-700">{b.recommendedAction}</p>
+                          <p className="mt-1 text-slate-500">
+                            Degraded mode:{" "}
+                            {agent.identity.status === "degraded" ? "yes — answering with reduced booking" : "no"}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
                   {drift ? (
                     <p className="pt-2 text-[12px] text-slate-600">
                       {drift.message}
@@ -1130,15 +1514,90 @@ export function AppointmentAgentDetail({ agentId }: { agentId: string }) {
               ) : null}
 
               {settingsSub === "autonomy" ? (
-                <div className="mt-4 space-y-3 text-sm">
-                  <p className="font-semibold">
-                    Mode: {String(autonomy?.label || agent.autonomyMode || "Balanced")}
-                  </p>
-                  <ul className="list-disc space-y-1 pl-4 text-slate-700">
-                    {((autonomy?.allowed as string[] | undefined) || []).slice(0, 6).map((a) => (
-                      <li key={a}>{a}</li>
+                <div className="mt-4 space-y-4 text-sm">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="font-semibold">
+                      Mode: {String(autonomy?.label || agent.autonomyMode || "Balanced")}
+                    </p>
+                    {(["conservative", "balanced", "autonomous"] as const).map((mode) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        disabled={busy}
+                        className={cn(
+                          "rounded-lg border px-3 py-1.5 text-[12px] font-semibold capitalize",
+                          (agent.autonomyMode || "balanced") === mode
+                            ? "border-violet-300 bg-violet-50 text-violet-800"
+                            : "border-slate-200",
+                        )}
+                        onClick={() =>
+                          void (async () => {
+                            setBusy(true);
+                            try {
+                              await runCommand("set_autonomy_budget", {
+                                budget: mode,
+                                confirm: true,
+                              });
+                              setAutonomy(await runCommand("get_autonomy_policy"));
+                              await load();
+                            } catch (err) {
+                              setError(err instanceof Error ? err.message : String(err));
+                            } finally {
+                              setBusy(false);
+                            }
+                          })()
+                        }
+                      >
+                        {mode}
+                      </button>
                     ))}
-                  </ul>
+                  </div>
+                  {(
+                    [
+                      ["May always", (autonomy?.buckets as { mayAlways?: string[] } | undefined)?.mayAlways],
+                      [
+                        "May auto-repair",
+                        (autonomy?.buckets as { mayAutoRepair?: string[] } | undefined)?.mayAutoRepair,
+                      ],
+                      [
+                        "Must request approval",
+                        (autonomy?.buckets as { mustRequestApproval?: string[] } | undefined)
+                          ?.mustRequestApproval,
+                      ],
+                      [
+                        "Never allowed",
+                        (autonomy?.buckets as { neverAllowed?: string[] } | undefined)?.neverAllowed ||
+                          (autonomy?.forbidden as string[] | undefined),
+                      ],
+                    ] as const
+                  ).map(([title, items]) => (
+                    <div key={title}>
+                      <h3 className="font-semibold">{title}</h3>
+                      <ul className="mt-1 list-disc space-y-1 pl-4 text-slate-700">
+                        {(items || []).map((a) => (
+                          <li key={a}>{a}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+                  {(runtimes as Array<{ id: string; label: string; writePermission: string }>).length ? (
+                    <div>
+                      <h3 className="font-semibold">Four runtimes</h3>
+                      <ul className="mt-2 space-y-1 text-[12px] text-slate-600">
+                        {(
+                          runtimes as Array<{
+                            id: string;
+                            label: string;
+                            writePermission: string;
+                          }>
+                        ).map((r) => (
+                          <li key={r.id}>
+                            {r.label} — write: {r.writePermission}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
             </div>
@@ -1148,23 +1607,23 @@ export function AppointmentAgentDetail({ agentId }: { agentId: string }) {
         {/* Right rail — matches mockup */}
         <aside className="space-y-4">
           <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <h2 className="text-sm font-semibold text-slate-900">Today</h2>
+            <h2 className="text-sm font-semibold text-slate-900">Today (24h)</h2>
             <dl className="mt-3 space-y-2 text-sm">
               <div className="flex justify-between gap-2">
                 <dt className="text-slate-500">Calls answered</dt>
-                <dd className="font-semibold">{agent.metrics.callsAnswered}</dd>
+                <dd className="font-semibold">{agent.metrics.today?.callsAnswered ?? 0}</dd>
               </div>
               <div className="flex justify-between gap-2">
                 <dt className="text-slate-500">Appointments booked</dt>
-                <dd className="font-semibold">{agent.metrics.appointmentsBooked}</dd>
+                <dd className="font-semibold">{agent.metrics.today?.appointmentsBooked ?? 0}</dd>
               </div>
               <div className="flex justify-between gap-2">
                 <dt className="text-slate-500">Booking conversion</dt>
-                <dd className="font-semibold">{agent.metrics.bookingConversionRate}%</dd>
+                <dd className="font-semibold">{agent.metrics.today?.bookingConversionRate ?? 0}%</dd>
               </div>
               <div className="flex justify-between gap-2">
                 <dt className="text-slate-500">Transfers</dt>
-                <dd className="font-semibold">{agent.metrics.transfers}</dd>
+                <dd className="font-semibold">{agent.metrics.today?.transfers ?? 0}</dd>
               </div>
             </dl>
           </div>
