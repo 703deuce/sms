@@ -480,6 +480,41 @@ export async function bookAppointment(
   const callId = args.callId as string | undefined;
   const location = args.location ? String(args.location) : null;
 
+  // Idempotent retry: if this caller already holds this slot (timeout → retry),
+  // return success instead of "Slot no longer available".
+  const existingSame = await findExistingBookingForCaller({
+    workspaceId,
+    startsAt,
+    serviceName,
+    phone,
+    contactId,
+  });
+  if (existingSame) {
+    if (callId) {
+      await prisma.voiceCall
+        .update({
+          where: { id: callId },
+          data: { appointmentBooked: true },
+        })
+        .catch(() => undefined);
+    }
+    return {
+      ok: true,
+      success: true,
+      alreadyBooked: true,
+      appointmentId: existingSame.id,
+      startsAt: existingSame.startsAt,
+      staffName: existingSame.staffName,
+      location:
+        ((existingSame.metadata as { location?: string } | null)?.location as
+          | string
+          | undefined) || location,
+      smsSent: false,
+      message:
+        "Appointment was already confirmed. You may tell the caller their booking is confirmed.",
+    };
+  }
+
   const conflict = await prisma.voiceAppointment.findFirst({
     where: {
       workspaceId,
@@ -488,7 +523,35 @@ export async function bookAppointment(
       status: { not: "cancelled" },
     },
   });
-  if (conflict) throw new Error("Slot no longer available");
+  if (conflict) {
+    // Same-caller overlap (different service name string, etc.) — still idempotent.
+    if (appointmentBelongsToCaller(conflict, phone, contactId)) {
+      if (callId) {
+        await prisma.voiceCall
+          .update({
+            where: { id: callId },
+            data: { appointmentBooked: true },
+          })
+          .catch(() => undefined);
+      }
+      return {
+        ok: true,
+        success: true,
+        alreadyBooked: true,
+        appointmentId: conflict.id,
+        startsAt: conflict.startsAt,
+        staffName: conflict.staffName,
+        location:
+          ((conflict.metadata as { location?: string } | null)?.location as
+            | string
+            | undefined) || location,
+        smsSent: false,
+        message:
+          "Appointment was already confirmed. You may tell the caller their booking is confirmed.",
+      };
+    }
+    throw new Error("Slot no longer available");
+  }
 
   // Re-check provider busy right before insert (availability can go stale).
   let staffName = String(args.staffName || "") || null;
@@ -670,6 +733,120 @@ export async function bookAppointment(
     message:
       "Appointment confirmed in the system. You may tell the caller their booking is confirmed.",
   };
+}
+
+/** Digits-only phone for fuzzy metadata match (handles 571-477-6175 vs +1555…). */
+function phoneDigits(raw: string | null | undefined): string {
+  const d = String(raw || "").replace(/\D/g, "");
+  if (d.length === 11 && d.startsWith("1")) return d.slice(1);
+  return d;
+}
+
+function appointmentBelongsToCaller(
+  appt: { contactId?: string | null; metadata?: unknown },
+  phone: string,
+  contactId?: string,
+): boolean {
+  if (contactId && appt.contactId && appt.contactId === contactId) return true;
+  const want = phoneDigits(phone);
+  if (!want) return false;
+  const meta = (appt.metadata || {}) as Record<string, unknown>;
+  const candidates = [
+    meta.phone,
+    meta.customerPhone,
+    meta.customer_phone,
+    meta.inviteePhone,
+  ].map((v) => phoneDigits(v == null ? "" : String(v)));
+  return candidates.some((c) => c && (c === want || c.endsWith(want) || want.endsWith(c)));
+}
+
+/** Find an existing non-cancelled booking for this caller at startsAt (+ service). */
+export async function findExistingBookingForCaller(input: {
+  workspaceId: string;
+  startsAt: Date;
+  serviceName: string;
+  phone?: string;
+  contactId?: string;
+}) {
+  const prisma = getPrisma();
+  const windowStart = new Date(input.startsAt.getTime() - 60_000);
+  const windowEnd = new Date(input.startsAt.getTime() + 60_000);
+  const rows = await prisma.voiceAppointment.findMany({
+    where: {
+      workspaceId: input.workspaceId,
+      startsAt: { gte: windowStart, lte: windowEnd },
+      status: { notIn: ["cancelled", "canceled"] },
+    },
+    take: 30,
+  });
+  const serviceWant = input.serviceName.trim().toLowerCase();
+  return (
+    rows.find((r) => {
+      if (
+        serviceWant &&
+        String(r.serviceName || "").trim().toLowerCase() !== serviceWant
+      ) {
+        return false;
+      }
+      return appointmentBelongsToCaller(r, input.phone || "", input.contactId);
+    }) || null
+  );
+}
+
+/** Upcoming appointments for a caller (by contactId and/or phone). */
+export async function findAppointmentsForCaller(input: {
+  workspaceId: string;
+  phone?: string;
+  contactId?: string;
+  includePast?: boolean;
+  limit?: number;
+}) {
+  const prisma = getPrisma();
+  const limit = Math.min(10, Math.max(1, Number(input.limit) || 5));
+  const phone = input.phone ? normalizeE164(String(input.phone)) : "";
+  const digits = phoneDigits(phone);
+
+  let contactId = input.contactId || "";
+  if (!contactId && phone) {
+    const contact = await prisma.contact.findUnique({
+      where: { workspaceId_phone: { workspaceId: input.workspaceId, phone } },
+      select: { id: true },
+    });
+    contactId = contact?.id || "";
+  }
+
+  const upcoming = await prisma.voiceAppointment.findMany({
+    where: {
+      workspaceId: input.workspaceId,
+      status: { notIn: ["cancelled", "canceled", "completed"] },
+      ...(input.includePast ? {} : { startsAt: { gte: new Date() } }),
+      ...(contactId ? { contactId } : {}),
+    },
+    orderBy: { startsAt: "asc" },
+    take: contactId ? limit : 40,
+  });
+
+  const matched = contactId
+    ? upcoming
+    : upcoming.filter((a) => appointmentBelongsToCaller(a, phone || digits, undefined));
+
+  // Also scan recent metadata-only rows when contactId path found nothing.
+  if (!matched.length && digits) {
+    const recent = await prisma.voiceAppointment.findMany({
+      where: {
+        workspaceId: input.workspaceId,
+        status: { notIn: ["cancelled", "canceled", "completed"] },
+        ...(input.includePast ? {} : { startsAt: { gte: new Date() } }),
+      },
+      orderBy: { startsAt: "asc" },
+      take: 50,
+    });
+    return recent
+      .filter((a) => appointmentBelongsToCaller(a, phone || digits, undefined))
+      .slice(0, limit);
+  }
+
+  return matched.slice(0, limit);
 }
 
 /** The next upcoming (non-cancelled) appointment for a contact, if any. */

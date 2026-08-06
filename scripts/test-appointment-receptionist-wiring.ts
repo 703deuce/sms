@@ -514,6 +514,12 @@ assert(
     Array.isArray(cfg.enabledBuiltinTools) &&
       cfg.enabledBuiltinTools.includes("resolve_datetime"),
   );
+  assert(
+    "booking enables find_appointments + reschedule",
+    Array.isArray(cfg.enabledBuiltinTools) &&
+      cfg.enabledBuiltinTools.includes("find_appointments") &&
+      cfg.enabledBuiltinTools.includes("reschedule_appointment"),
+  );
 }
 
 {

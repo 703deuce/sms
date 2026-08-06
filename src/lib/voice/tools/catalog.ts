@@ -301,6 +301,18 @@ export const TOOL_CATALOG: CatalogToolDef[] = [
     requiresIntegration: "calendar",
   },
   {
+    key: "find_appointments",
+    name: "Find appointments",
+    description:
+      "Look up the caller's upcoming appointments by phone. Use before reschedule/cancel when the caller asks what they have booked.",
+    category: "scheduling",
+    provider: "transovo_builtin",
+    toolType: "find_appointments",
+    access: "read",
+    risk: "low",
+    requiresIntegration: "calendar",
+  },
+  {
     key: "reschedule_appointment",
     name: "Reschedule appointment",
     description: "Reschedule an existing appointment.",
@@ -374,6 +386,8 @@ export const FULL_RECEPTIONIST_TOOLS = [
   "resolve_datetime",
   "calendar_availability",
   "book_appointment",
+  "find_appointments",
+  "reschedule_appointment",
 ] as const;
 
 export const SAFE_DEFAULT_BUILTIN_TOOLS = [
@@ -421,6 +435,7 @@ const TEMPLATE_DEFAULTS: Record<string, readonly string[]> = {
     "resolve_datetime",
     "calendar_availability",
     "book_appointment",
+    "find_appointments",
     "reschedule_appointment",
     "cancel_appointment",
     "end_call",
@@ -639,7 +654,7 @@ export const BUILTIN_WEBHOOK_BODIES: Record<
     name: "book_appointment",
     toolType: "book_appointment",
     description:
-      "Book an appointment using a startsAt value from the latest calendar_availability slots only. NEVER invent a time. NEVER tell the caller they are booked until this returns success. If a required field is missing (e.g. address), ask for it and include it on the next call.",
+      "Book an appointment using a startsAt value from the latest calendar_availability slots only. NEVER invent a time. NEVER tell the caller they are booked until this returns success (ok=true or alreadyBooked=true). If a required field is missing (e.g. address), ask for it and include it on the next call. Safe to retry the same startsAt after a timeout — do not apologize as failed if it returns alreadyBooked.",
     body: {
       type: "object",
       properties: {
@@ -666,15 +681,36 @@ export const BUILTIN_WEBHOOK_BODIES: Record<
       required: ["startAt", "customerPhone"],
     },
   },
+  find_appointments: {
+    name: "find_appointments",
+    toolType: "find_appointments",
+    description:
+      "Find the caller's upcoming appointments by phone. Call this when they ask what they have booked, or before reschedule/cancel. Returns appointmentId values to pass to reschedule_appointment or cancel_appointment.",
+    body: {
+      type: "object",
+      properties: {
+        phone: { type: "string", description: "Caller phone (E.164 preferred)" },
+        customerPhone: { type: "string" },
+        contactId: { type: "string" },
+        includePast: { type: "boolean" },
+      },
+      required: [],
+    },
+  },
   reschedule_appointment: {
     name: "reschedule_appointment",
     toolType: "reschedule_appointment",
-    description: "Reschedule an existing appointment.",
+    description:
+      "Reschedule an existing appointment. Pass appointmentId from find_appointments and newStartAt from calendar_availability.slots[].startsAt.",
     body: {
       type: "object",
       properties: {
         appointmentId: { type: "string" },
-        newStartAt: { type: "string" },
+        newStartAt: {
+          type: "string",
+          description: "ISO start from calendar_availability.slots[].startsAt",
+        },
+        startsAt: { type: "string" },
       },
       required: ["appointmentId", "newStartAt"],
     },
