@@ -274,6 +274,16 @@ export async function diagnoseOutboundMessage(input: {
       (a) => a.phoneNumber === from,
     ) || null;
 
+  let assignmentDetail: unknown = null;
+  try {
+    assignmentDetail = await telnyxRequest(
+      `/10dlc/phone_number_campaigns/${encodeURIComponent(from)}`,
+      { method: "GET" },
+    );
+  } catch (err) {
+    assignmentDetail = { error: err instanceof Error ? err.message : String(err) };
+  }
+
   // Campaign details for use-case mismatch clues (e.g. 2FA rejecting free text).
   let campaignDetail: unknown = null;
   if (assignment?.campaignId) {
@@ -294,6 +304,7 @@ export async function diagnoseOutboundMessage(input: {
     telnyxError,
     fromMessaging,
     assignment,
+    assignmentDetail,
     campaignDetail,
   };
 }
@@ -522,6 +533,7 @@ export async function assignNumberToCampaignAndReady(input: {
     campaignId,
     brandId,
     messagingProfileId: resolvedProfileId,
+    messagingCampaignId,
     brandStatusRaw,
     campaignStatusRaw,
     registration: updated,
