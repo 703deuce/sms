@@ -778,6 +778,10 @@ export async function executeBuiltinVoiceAction(input: {
       const availability = await getAvailability(input.workspaceId, {
         ...args,
         daysAhead: window.daysAhead,
+        startTime: window.startTime,
+        endTime: window.endTime,
+        preferredStartMinute: window.preferredStartMinute,
+        preferredEndMinute: window.preferredEndMinute,
         maxSlots: 5,
       });
       return {

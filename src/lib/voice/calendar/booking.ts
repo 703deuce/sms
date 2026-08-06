@@ -198,6 +198,11 @@ async function internalAvailabilitySlots(input: {
   staffName?: string;
   timezone?: string;
   bookingHours?: string | null;
+  /** Absolute search window (honors resolve_datetime / model from-to). */
+  windowStart?: Date;
+  windowEnd?: Date;
+  preferredStartMinute?: number | null;
+  preferredEndMinute?: number | null;
 }) {
   const prisma = getPrisma();
   const slots: Slot[] = [];
@@ -209,10 +214,34 @@ async function internalAvailabilitySlots(input: {
     endHour: 17,
     weekdaysOnly: true,
   };
-  const today = zonedDateParts(now, tz);
+  const windowStart =
+    input.windowStart && !Number.isNaN(input.windowStart.getTime())
+      ? input.windowStart
+      : now;
+  const windowEnd =
+    input.windowEnd && !Number.isNaN(input.windowEnd.getTime())
+      ? input.windowEnd
+      : new Date(now.getTime() + Math.max(1, input.days) * 86_400_000);
 
-  for (let d = 0; d < input.days; d += 1) {
-    const day = addCalendarDays(today.year, today.month, today.day, d);
+  // Scan the requested calendar days (e.g. next Monday), not "from tonight for N days".
+  const rangeStart = zonedDateParts(windowStart, tz);
+  const rangeEnd = zonedDateParts(windowEnd, tz);
+  const endUtcNoon = Date.UTC(rangeEnd.year, rangeEnd.month - 1, rangeEnd.day);
+  const startUtcNoon = Date.UTC(rangeStart.year, rangeStart.month - 1, rangeStart.day);
+  const inclusiveDays = Math.max(
+    1,
+    Math.floor((endUtcNoon - startUtcNoon) / 86_400_000) + 1,
+  );
+  // Mid-call timeout budget — still allow a far-out single day (Monday) via windowStart.
+  const dayCount = Math.min(inclusiveDays, 7);
+
+  const prefStart =
+    typeof input.preferredStartMinute === "number" ? input.preferredStartMinute : null;
+  const prefEnd =
+    typeof input.preferredEndMinute === "number" ? input.preferredEndMinute : null;
+
+  for (let d = 0; d < dayCount; d += 1) {
+    const day = addCalendarDays(rangeStart.year, rangeStart.month, rangeStart.day, d);
     // Peek weekday via noon UTC-ish wall time
     const noon = wallTimeInZoneToUtc(tz, day.year, day.month, day.day, 12, 0);
     const weekday = zonedDateParts(noon, tz).weekday;
@@ -221,6 +250,12 @@ async function internalAvailabilitySlots(input: {
     for (let hour = hours.startHour; hour < hours.endHour; hour += 1) {
       const start = wallTimeInZoneToUtc(tz, day.year, day.month, day.day, hour, 0);
       const end = new Date(start.getTime() + input.durationMinutes * 60_000);
+      if (start < windowStart || start >= windowEnd) continue;
+      if (prefStart != null || prefEnd != null) {
+        const minuteOfDay = hour * 60;
+        if (prefStart != null && minuteOfDay < prefStart) continue;
+        if (prefEnd != null && minuteOfDay >= prefEnd) continue;
+      }
       if (!slotPassesNotice(start, input.noticeMinutes, now)) continue;
 
       const conflict = await prisma.voiceAppointment.findFirst({
@@ -325,10 +360,25 @@ export async function getAvailability(
   const effectiveDays =
     maxDaysAhead > 0 ? Math.min(Math.max(1, days), maxDaysAhead) : Math.max(1, days);
   // Mid-call voice webhooks must stay under Telnyx tool timeouts (~5–10s).
-  const scanDays = Math.min(effectiveDays, 3);
+  const scanDays = Math.min(effectiveDays, 7);
   const timezone =
     String(args.timezone || svcCfg.timezone || "America/New_York").trim() ||
     "America/New_York";
+
+  const parsedWindowStart = args.startTime ? new Date(String(args.startTime)) : null;
+  const parsedWindowEnd = args.endTime ? new Date(String(args.endTime)) : null;
+  const windowStart =
+    parsedWindowStart && !Number.isNaN(parsedWindowStart.getTime())
+      ? parsedWindowStart
+      : null;
+  const windowEnd =
+    parsedWindowEnd && !Number.isNaN(parsedWindowEnd.getTime())
+      ? parsedWindowEnd
+      : null;
+  const preferredStartMinute =
+    typeof args.preferredStartMinute === "number" ? args.preferredStartMinute : null;
+  const preferredEndMinute =
+    typeof args.preferredEndMinute === "number" ? args.preferredEndMinute : null;
 
   if (locationFilter && locations.length && !locations.includes(locationFilter)) {
     return { slots: [] };
@@ -344,13 +394,17 @@ export async function getAvailability(
       try {
         const token = await getValidAccessToken(cal.id, cal.provider, config);
         if (token) {
-          const timeMin = new Date();
-          const timeMax = new Date(timeMin.getTime() + scanDays * 86_400_000);
+          const timeMin = windowStart || new Date();
+          const timeMax =
+            windowEnd ||
+            new Date(timeMin.getTime() + scanDays * 86_400_000);
           const busy =
             cal.provider === "google"
               ? await getGoogleBusy(token, config.calendarId || "primary", timeMin, timeMax)
               : await getMicrosoftBusy(token, timeMin, timeMax);
           const hours = parseBookingHours(svcCfg.bookingHours || undefined);
+          // Anchor free-slot generation on the requested window start (not "now"),
+          // so "next Monday 8am" does not scan only tonight.
           const raw = computeFreeSlots(
             busy,
             durationMinutes,
@@ -365,7 +419,12 @@ export async function getAvailability(
             },
           );
           const slots = raw
-            .filter((s) => slotPassesNotice(new Date(s.startsAt), noticeMinutes, timeMin))
+            .filter((s) => {
+              const start = new Date(s.startsAt);
+              if (windowStart && start < windowStart) return false;
+              if (windowEnd && start >= windowEnd) return false;
+              return slotPassesNotice(start, noticeMinutes, new Date());
+            })
             .map((s) => ({
               ...s,
               location: locationFilter || locations[0] || undefined,
@@ -388,17 +447,25 @@ export async function getAvailability(
           serviceName,
           days: scanDays,
           location: locationFilter,
+          startTime: windowStart?.toISOString(),
+          endTime: windowEnd?.toISOString(),
         }),
       });
       const json = await res.json();
       const rawSlots = ((json.slots as Slot[]) || []) as Slot[];
+      const filtered = filterSlotsByNoticeAndMaxDays(
+        rawSlots,
+        noticeMinutes,
+        maxDaysAhead,
+        new Date(),
+      ).filter((s) => {
+        const start = new Date(s.startsAt);
+        if (windowStart && start < windowStart) return false;
+        if (windowEnd && start >= windowEnd) return false;
+        return true;
+      });
       return {
-        slots: filterSlotsByNoticeAndMaxDays(
-          rawSlots,
-          noticeMinutes,
-          maxDaysAhead,
-          new Date(),
-        ).slice(0, maxSlots) as Slot[],
+        slots: filtered.slice(0, maxSlots) as Slot[],
       };
     }
   }
@@ -409,6 +476,20 @@ export async function getAvailability(
     take: 5,
   });
 
+  const slotOpts = {
+    workspaceId,
+    durationMinutes,
+    bufferMinutes,
+    days: scanDays,
+    noticeMinutes,
+    timezone,
+    bookingHours: svcCfg.bookingHours,
+    windowStart: windowStart || undefined,
+    windowEnd: windowEnd || undefined,
+    preferredStartMinute,
+    preferredEndMinute,
+  };
+
   if (staffMembers.length) {
     const allSlots: Slot[] = [];
     for (const member of staffMembers) {
@@ -418,15 +499,9 @@ export async function getAvailability(
         continue;
       }
       const memberSlots = await internalAvailabilitySlots({
-        workspaceId,
-        durationMinutes,
-        bufferMinutes,
-        days: scanDays,
-        noticeMinutes,
+        ...slotOpts,
         location: locationFilter || memberLocations[0],
         staffName: member.name,
-        timezone,
-        bookingHours: svcCfg.bookingHours,
       });
       allSlots.push(...memberSlots);
       if (allSlots.length >= maxSlots) break;
@@ -435,14 +510,8 @@ export async function getAvailability(
   }
 
   const slots = await internalAvailabilitySlots({
-    workspaceId,
-    durationMinutes,
-    bufferMinutes,
-    days: scanDays,
-    noticeMinutes,
+    ...slotOpts,
     location: locationFilter || locations[0],
-    timezone,
-    bookingHours: svcCfg.bookingHours,
   });
   return { slots: slots.slice(0, maxSlots) };
 }

@@ -556,6 +556,24 @@ assert(
   );
   assert("ISO window keeps Tuesday", iso.startTime.startsWith("2026-08-11"));
   assert("ISO window daysAhead 1", iso.daysAhead === 1);
+  assert("ISO window end preserved", iso.endTime.startsWith("2026-08-11T16:00"));
+  // Same-morning window must not collapse into "from tonight" — absolute dates stay.
+  const morning = resolveAvailabilityTimeWindow(
+    {
+      from: "2026-08-06T12:00:00.000Z",
+      to: "2026-08-06T16:00:00.000Z",
+      daysAhead: 1,
+    },
+    { now: new Date("2026-08-06T00:36:00.000Z"), maxDays: 3 },
+  );
+  assert(
+    "Thu morning window start is Thu 8am ET",
+    morning.startTime === "2026-08-06T12:00:00.000Z",
+  );
+  assert(
+    "Thu morning window end is Thu noon ET",
+    morning.endTime === "2026-08-06T16:00:00.000Z",
+  );
 }
 
 console.log("");

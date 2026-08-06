@@ -91,14 +91,14 @@ export function resolveAvailabilityTimeWindow(
   if (startIsIso && endIsIso) {
     const start = new Date(rawStart);
     const end = new Date(rawEnd);
-    const spanDays = Math.max(
-      1,
-      Math.ceil(Math.abs(end.getTime() - start.getTime()) / 86_400_000),
-    );
+    // Inclusive calendar-day span (same morning window = 1 day, not "from tonight").
+    const spanMs = Math.max(0, end.getTime() - start.getTime());
+    const spanDays = Math.max(1, Math.ceil(spanMs / 86_400_000) || 1);
     return {
       startTime: start.toISOString(),
       endTime: end.toISOString(),
-      daysAhead: Math.min(spanDays, maxDays),
+      // Keep the real window dates; daysAhead is only a scan budget hint.
+      daysAhead: Math.min(Math.max(spanDays, requestedDays > 0 ? requestedDays : spanDays), maxDays),
       preferredStartMinute: null,
       preferredEndMinute: null,
     };
