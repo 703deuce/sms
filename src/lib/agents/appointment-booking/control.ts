@@ -10,7 +10,25 @@ import {
   searchAgentActivity,
 } from "@/lib/agents/appointment-booking/execution-trace";
 import { answerOwnerQuestion } from "@/lib/agents/appointment-booking/owner-chat";
+import {
+  confirmChangeProposal,
+  createChangeProposal,
+  listChangeProposals,
+  rejectChangeProposal,
+} from "@/lib/agents/appointment-booking/change-proposals";
+import {
+  createWorkflowDraft,
+  listWorkflowDrafts,
+  validateStoredWorkflowDraft,
+} from "@/lib/agents/appointment-booking/workflow-architect";
+import {
+  activateAgentVersion,
+  duplicateAppointmentAgent,
+  rollbackAgentVersion,
+  snapshotAgentForTest,
+} from "@/lib/agents/appointment-booking/lifecycle";
 import type { AgentControlCommand } from "@/lib/agents/appointment-booking/types";
+import type { BookingPolicy } from "@/lib/agents/appointment-booking/types";
 
 export async function runAgentControlCommand(input: {
   workspaceId: string;
@@ -141,10 +159,110 @@ export async function runAgentControlCommand(input: {
       return answerOwnerQuestion({
         workspaceId: input.workspaceId,
         agentId: input.agentId,
+        userId: input.userId,
         question,
         agent,
       });
     }
+
+    case "create_change_proposal":
+      return createChangeProposal({
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+        userId: input.userId,
+        patch: (input.payload?.patch || undefined) as Partial<BookingPolicy> | undefined,
+        summary: input.payload?.summary
+          ? String(input.payload.summary)
+          : undefined,
+        naturalLanguage: input.payload?.naturalLanguage
+          ? String(input.payload.naturalLanguage)
+          : undefined,
+      });
+
+    case "list_change_proposals": {
+      const row = await prisma.voiceAgent.findFirst({
+        where: { id: input.agentId, workspaceId: input.workspaceId },
+      });
+      return { proposals: listChangeProposals(row?.draftConfig) };
+    }
+
+    case "confirm_change_proposal":
+      return confirmChangeProposal({
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+        userId: input.userId,
+        proposalId: String(input.payload?.proposalId || ""),
+        confirm: Boolean(input.payload?.confirm),
+        publish: Boolean(input.payload?.publish),
+      });
+
+    case "reject_change_proposal":
+      return rejectChangeProposal({
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+        userId: input.userId,
+        proposalId: String(input.payload?.proposalId || ""),
+      });
+
+    case "create_workflow_draft":
+      return createWorkflowDraft({
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+        userId: input.userId,
+        userRequest: String(input.payload?.userRequest || input.payload?.question || ""),
+        phoneNumberId: agent.phoneNumberIds[0] || null,
+        timezone: agent.profile.timezone,
+      });
+
+    case "validate_workflow_draft":
+      return validateStoredWorkflowDraft({
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+        draftId: String(input.payload?.draftId || ""),
+      });
+
+    case "list_workflow_drafts": {
+      const row = await prisma.voiceAgent.findFirst({
+        where: { id: input.agentId, workspaceId: input.workspaceId },
+      });
+      return { drafts: listWorkflowDrafts(row?.draftConfig) };
+    }
+
+    case "run_agent_test_snapshot":
+      return snapshotAgentForTest({
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+        userId: input.userId,
+      });
+
+    case "activate_agent_version":
+      return activateAgentVersion({
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+        userId: input.userId,
+        confirm: Boolean(input.payload?.confirm),
+        changeLog: input.payload?.changeLog
+          ? String(input.payload.changeLog)
+          : undefined,
+      });
+
+    case "rollback_agent_version":
+      return rollbackAgentVersion({
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+        userId: input.userId,
+        versionId: String(input.payload?.versionId || ""),
+        confirm: Boolean(input.payload?.confirm),
+      });
+
+    case "duplicate_agent":
+      return duplicateAppointmentAgent({
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+        userId: input.userId,
+        name: input.payload?.name ? String(input.payload.name) : undefined,
+        confirm: Boolean(input.payload?.confirm),
+      });
 
     default:
       throw new Error(`Unsupported command: ${input.command}`);

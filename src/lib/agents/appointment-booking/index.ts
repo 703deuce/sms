@@ -8,3 +8,7 @@ export * from "@/lib/agents/appointment-booking/execution-trace";
 export * from "@/lib/agents/appointment-booking/load-agent";
 export * from "@/lib/agents/appointment-booking/control";
 export * from "@/lib/agents/appointment-booking/owner-chat";
+export * from "@/lib/agents/appointment-booking/change-proposals";
+export * from "@/lib/agents/appointment-booking/workflow-validator";
+export * from "@/lib/agents/appointment-booking/workflow-architect";
+export * from "@/lib/agents/appointment-booking/lifecycle";

@@ -34,6 +34,8 @@ const SUGGESTED = [
   "Which calendar do you use?",
   "How many appointments did you book this week?",
   "Show recent failures",
+  "Change the minimum notice to four hours",
+  "Create an after-hours emergency workflow draft",
   "What is your health status?",
 ];
 
@@ -67,9 +69,12 @@ export function AppointmentAgentDetail({ agentId }: { agentId: string }) {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<TabId>("overview");
   const [activity, setActivity] = useState<unknown[]>([]);
+  const [proposals, setProposals] = useState<unknown[]>([]);
+  const [workflowDrafts, setWorkflowDrafts] = useState<unknown[]>([]);
   const [chat, setChat] = useState<Array<{ role: "user" | "agent"; text: string }>>([]);
   const [question, setQuestion] = useState("");
   const [busy, setBusy] = useState(false);
+  const [pendingProposalId, setPendingProposalId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -116,6 +121,24 @@ export function AppointmentAgentDetail({ agentId }: { agentId: string }) {
     })();
   }, [tab, agent, runCommand]);
 
+  useEffect(() => {
+    if ((tab !== "versions" && tab !== "workflows") || !agent) return;
+    void (async () => {
+      try {
+        if (tab === "versions") {
+          const data = await runCommand("list_change_proposals");
+          setProposals(data.proposals || []);
+        }
+        if (tab === "workflows") {
+          const data = await runCommand("list_workflow_drafts");
+          setWorkflowDrafts(data.drafts || []);
+        }
+      } catch {
+        /* ignore */
+      }
+    })();
+  }, [tab, agent, runCommand]);
+
   const ask = async (text: string) => {
     const q = text.trim();
     if (!q) return;
@@ -128,6 +151,8 @@ export function AppointmentAgentDetail({ agentId }: { agentId: string }) {
         ...prev,
         { role: "agent", text: String(data.answer || "No answer returned.") },
       ]);
+      if (data.proposalId) setPendingProposalId(String(data.proposalId));
+      if (data.requiresConfirmation) setTab("versions");
     } catch (err) {
       setChat((prev) => [
         ...prev,
@@ -418,26 +443,64 @@ export function AppointmentAgentDetail({ agentId }: { agentId: string }) {
         ) : null}
 
         {tab === "workflows" ? (
-          <div className="space-y-3 text-sm">
+          <div className="space-y-4 text-sm">
             <p>
               Primary workflow:{" "}
               <span className="font-semibold">{agent.resources.workflowLabel}</span>
             </p>
             <p className="text-slate-600">
-              Live audio stays on Telnyx. The workflow owns triggers, outcomes, and
-              post-call nodes. Workflow Architect drafts are not activated from chat yet —
-              edits go through the builder with versioning.
+              Live audio stays on Telnyx. The Workflow Architect can draft approved
+              node graphs only — never arbitrary code. Drafts stay inactive until
+              you confirm after tests.
             </p>
             {agent.primaryFlowId ? (
               <Link
                 href={`/automations/${agent.primaryFlowId}/edit`}
                 className="inline-flex font-semibold text-blue-600"
               >
-                Open workflow builder →
+                Open live workflow builder →
               </Link>
             ) : (
               <p className="text-amber-700">No primary workflow linked.</p>
             )}
+            <div className="space-y-2 pt-2">
+              <h3 className="text-sm font-semibold text-slate-900">Architect drafts</h3>
+              {workflowDrafts.length === 0 ? (
+                <p className="text-slate-500">
+                  No drafts yet. Ask Randy: “Create an after-hours emergency workflow draft”.
+                </p>
+              ) : (
+                (
+                  workflowDrafts as Array<{
+                    id: string;
+                    name: string;
+                    validationStatus: string;
+                    status: string;
+                    validationErrors: Array<{ message: string }>;
+                    nodes: unknown[];
+                  }>
+                ).map((d) => (
+                  <div key={d.id} className="rounded-xl border border-slate-100 px-4 py-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="font-medium text-slate-900">{d.name}</p>
+                      <span className="text-[11px] capitalize text-slate-500">
+                        {d.validationStatus} · {d.status}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-[12px] text-slate-500">
+                      {d.nodes?.length || 0} nodes · id {d.id.slice(0, 10)}…
+                    </p>
+                    {d.validationErrors?.length ? (
+                      <p className="mt-1 text-[12px] text-rose-600">
+                        {d.validationErrors.map((e) => e.message).join("; ")}
+                      </p>
+                    ) : (
+                      <p className="mt-1 text-[12px] text-emerald-700">Validation passed</p>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         ) : null}
 
@@ -551,43 +614,236 @@ export function AppointmentAgentDetail({ agentId }: { agentId: string }) {
         ) : null}
 
         {tab === "versions" ? (
-          <div className="space-y-3">
-            {agent.versions.length === 0 ? (
-              <p className="text-sm text-slate-500">No published versions yet.</p>
-            ) : (
-              agent.versions.map((v) => (
-                <div
-                  key={v.id}
-                  className={cn(
-                    "rounded-xl border px-4 py-3",
-                    v.id === agent.currentVersionId
-                      ? "border-emerald-200 bg-emerald-50/40"
-                      : "border-slate-100",
-                  )}
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm font-semibold text-slate-900">
-                      v{v.version}
-                      {v.id === agent.currentVersionId ? " · Current" : ""}
-                      {v.isMain ? " · Main" : ""}
+          <div className="space-y-6">
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold text-slate-900">Pending change proposals</h3>
+              {proposals.filter(
+                (p) => (p as { status?: string }).status === "pending",
+              ).length === 0 ? (
+                <p className="text-sm text-slate-500">
+                  No pending proposals. Ask Randy to change a booking rule, then confirm here.
+                </p>
+              ) : (
+                (
+                  proposals as Array<{
+                    id: string;
+                    summary: string;
+                    status: string;
+                    riskLevel: string;
+                    changes: Array<{ path: string; before: unknown; after: unknown }>;
+                  }>
+                )
+                  .filter((p) => p.status === "pending")
+                  .map((p) => (
+                    <div key={p.id} className="rounded-xl border border-amber-200 bg-amber-50/40 px-4 py-3">
+                      <p className="text-sm font-semibold text-slate-900">{p.summary}</p>
+                      <p className="mt-1 text-[11px] uppercase tracking-wide text-amber-800">
+                        {p.riskLevel} risk · requires confirmation
+                      </p>
+                      <ul className="mt-2 space-y-1 text-[12px] text-slate-700">
+                        {p.changes.map((c) => (
+                          <li key={c.path}>
+                            {c.path}: {JSON.stringify(c.before)} → {JSON.stringify(c.after)}
+                          </li>
+                        ))}
+                      </ul>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() =>
+                            void (async () => {
+                              setBusy(true);
+                              try {
+                                await runCommand("confirm_change_proposal", {
+                                  proposalId: p.id,
+                                  confirm: true,
+                                  publish: false,
+                                });
+                                await load();
+                                const data = await runCommand("list_change_proposals");
+                                setProposals(data.proposals || []);
+                                setPendingProposalId(null);
+                              } catch (err) {
+                                setError(err instanceof Error ? err.message : String(err));
+                              } finally {
+                                setBusy(false);
+                              }
+                            })()
+                          }
+                          className="rounded-lg bg-slate-900 px-3 py-1.5 text-[12px] font-semibold text-white"
+                        >
+                          Apply to draft
+                        </button>
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() =>
+                            void (async () => {
+                              setBusy(true);
+                              try {
+                                await runCommand("confirm_change_proposal", {
+                                  proposalId: p.id,
+                                  confirm: true,
+                                  publish: true,
+                                });
+                                await load();
+                                const data = await runCommand("list_change_proposals");
+                                setProposals(data.proposals || []);
+                              } catch (err) {
+                                setError(err instanceof Error ? err.message : String(err));
+                              } finally {
+                                setBusy(false);
+                              }
+                            })()
+                          }
+                          className="rounded-lg bg-blue-600 px-3 py-1.5 text-[12px] font-semibold text-white"
+                        >
+                          Apply + publish
+                        </button>
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() =>
+                            void (async () => {
+                              setBusy(true);
+                              try {
+                                await runCommand("reject_change_proposal", {
+                                  proposalId: p.id,
+                                });
+                                const data = await runCommand("list_change_proposals");
+                                setProposals(data.proposals || []);
+                              } catch (err) {
+                                setError(err instanceof Error ? err.message : String(err));
+                              } finally {
+                                setBusy(false);
+                              }
+                            })()
+                          }
+                          className="rounded-lg border border-slate-200 px-3 py-1.5 text-[12px] font-semibold text-slate-700"
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    </div>
+                  ))
+              )}
+              {pendingProposalId ? (
+                <p className="text-[12px] text-slate-500">
+                  Latest chat proposal: {pendingProposalId}
+                </p>
+              ) : null}
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() =>
+                  void (async () => {
+                    setBusy(true);
+                    try {
+                      await runCommand("activate_agent_version", {
+                        confirm: true,
+                        changeLog: "Activated from agent detail",
+                      });
+                      await load();
+                    } catch (err) {
+                      setError(err instanceof Error ? err.message : String(err));
+                    } finally {
+                      setBusy(false);
+                    }
+                  })()
+                }
+                className="rounded-lg bg-emerald-600 px-3 py-2 text-[12px] font-semibold text-white"
+              >
+                Activate current draft
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() =>
+                  void (async () => {
+                    setBusy(true);
+                    try {
+                      const result = await runCommand("duplicate_agent", {
+                        confirm: true,
+                        name: `${agent.identity.name} — copy`,
+                      });
+                      if (result?.href) window.location.href = String(result.href);
+                    } catch (err) {
+                      setError(err instanceof Error ? err.message : String(err));
+                    } finally {
+                      setBusy(false);
+                    }
+                  })()
+                }
+                className="rounded-lg border border-slate-200 px-3 py-2 text-[12px] font-semibold text-slate-700"
+              >
+                Duplicate agent
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold text-slate-900">Published versions</h3>
+              {agent.versions.length === 0 ? (
+                <p className="text-sm text-slate-500">No published versions yet.</p>
+              ) : (
+                agent.versions.map((v) => (
+                  <div
+                    key={v.id}
+                    className={cn(
+                      "rounded-xl border px-4 py-3",
+                      v.id === agent.currentVersionId
+                        ? "border-emerald-200 bg-emerald-50/40"
+                        : "border-slate-100",
+                    )}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-semibold text-slate-900">
+                        v{v.version}
+                        {v.id === agent.currentVersionId ? " · Current" : ""}
+                        {v.isMain ? " · Main" : ""}
+                      </p>
+                      <span className="text-[11px] text-slate-500">
+                        {new Date(v.publishedAt).toLocaleString()}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-[12px] text-slate-600">
+                      {v.changeLog || "No changelog"}
                     </p>
-                    <span className="text-[11px] text-slate-500">
-                      {new Date(v.publishedAt).toLocaleString()}
-                    </span>
+                    <p className="mt-1 text-[11px] text-slate-400">
+                      Deploy: {v.deploymentStatus || "—"} · Test: {v.testStatus || "—"}
+                    </p>
+                    {v.id !== agent.currentVersionId ? (
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() =>
+                          void (async () => {
+                            setBusy(true);
+                            try {
+                              await runCommand("rollback_agent_version", {
+                                versionId: v.id,
+                                confirm: true,
+                              });
+                              await load();
+                            } catch (err) {
+                              setError(err instanceof Error ? err.message : String(err));
+                            } finally {
+                              setBusy(false);
+                            }
+                          })()
+                        }
+                        className="mt-2 rounded-lg border border-slate-200 px-3 py-1.5 text-[12px] font-semibold text-slate-700"
+                      >
+                        Rollback to this version
+                      </button>
+                    ) : null}
                   </div>
-                  <p className="mt-1 text-[12px] text-slate-600">
-                    {v.changeLog || "No changelog"}
-                  </p>
-                  <p className="mt-1 text-[11px] text-slate-400">
-                    Deploy: {v.deploymentStatus || "—"} · Test: {v.testStatus || "—"}
-                  </p>
-                </div>
-              ))
-            )}
-            <p className="text-[12px] text-slate-500">
-              Conversational change proposals and rollback activation ship in the next
-              phase. Publish from the builder today; versions above are the live history.
-            </p>
+                ))
+              )}
+            </div>
           </div>
         ) : null}
       </section>

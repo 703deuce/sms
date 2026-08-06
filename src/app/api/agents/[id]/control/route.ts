@@ -16,6 +16,17 @@ const COMMANDS = new Set<AgentControlCommand>([
   "pause_agent",
   "resume_agent",
   "owner_ask",
+  "create_change_proposal",
+  "list_change_proposals",
+  "confirm_change_proposal",
+  "reject_change_proposal",
+  "create_workflow_draft",
+  "validate_workflow_draft",
+  "list_workflow_drafts",
+  "run_agent_test_snapshot",
+  "activate_agent_version",
+  "rollback_agent_version",
+  "duplicate_agent",
 ]);
 
 export async function POST(

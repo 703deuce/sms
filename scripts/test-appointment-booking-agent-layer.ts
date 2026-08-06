@@ -12,6 +12,12 @@ import {
   APPOINTMENT_WORKFLOW_BLOCKS,
 } from "../src/lib/agents/appointment-booking/workflow-blocks";
 import { assertTraceExpectations } from "../src/lib/agents/appointment-booking/execution-trace";
+import {
+  parseBookingPolicyRequest,
+  buildBookingPolicyProposal,
+} from "../src/lib/agents/appointment-booking/change-proposals";
+import { architectWorkflowFromRequest } from "../src/lib/agents/appointment-booking/workflow-architect";
+import { validateWorkflowDraft } from "../src/lib/agents/appointment-booking/workflow-validator";
 import type { AgentExecutionTrace } from "../src/lib/agents/appointment-booking/types";
 
 function assert(name: string, cond: boolean) {
@@ -122,6 +128,65 @@ const failTrace: AgentExecutionTrace = {
 assert(
   "assertion fails without tools",
   !assertTraceExpectations(failTrace, ["book_appointment"]).passed,
+);
+
+const noticePatch = parseBookingPolicyRequest(
+  "Change the minimum notice to four hours",
+);
+assert("parse notice hours", noticePatch?.minimumNoticeMinutes === 240);
+
+const cutoffPatch = parseBookingPolicyRequest(
+  "Stop booking same-day appointments after 2pm",
+);
+assert("parse same-day cutoff", cutoffPatch?.sameDayCutoff === "14:00");
+
+const proposal = buildBookingPolicyProposal({
+  agentId: "a1",
+  current: policy,
+  patch: { minimumNoticeMinutes: 240 },
+});
+assert("proposal pending", proposal.status === "pending");
+assert("proposal requires confirm", proposal.requiresConfirmation === true);
+assert("proposal has diff", proposal.changes.length === 1);
+
+const afterHoursDraft = architectWorkflowFromRequest({
+  agentId: "a1",
+  userRequest:
+    "Create an after-hours emergency workflow that only books emergencies and transfers everything else",
+  phoneNumberId: "phone_1",
+  timezone: "America/New_York",
+});
+assert("after-hours draft valid", afterHoursDraft.validationStatus === "valid");
+assert(
+  "after-hours has branch",
+  afterHoursDraft.nodes.some((n) => n.type === "branch"),
+);
+assert(
+  "rejects arbitrary block",
+  validateWorkflowDraft({
+    ...afterHoursDraft,
+    id: "bad",
+    nodes: [
+      ...afterHoursDraft.nodes,
+      { id: "evil", type: "eval_javascript", config: {} },
+    ],
+    edges: [
+      ...afterHoursDraft.edges,
+      { fromNodeId: "booked", toNodeId: "evil" },
+    ],
+  }).validationStatus === "invalid",
+);
+
+const standardDraft = architectWorkflowFromRequest({
+  agentId: "a1",
+  userRequest: "Create a standard appointment booking flow",
+  phoneNumberId: "phone_1",
+  timezone: "America/New_York",
+});
+assert("standard draft valid", standardDraft.validationStatus === "valid");
+assert(
+  "standard has hold slot",
+  standardDraft.nodes.some((n) => n.type === "hold_appointment_slot"),
 );
 
 console.log("\nDone.");
