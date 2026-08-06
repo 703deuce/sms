@@ -379,7 +379,59 @@ export async function assignNumberToCampaignAndReady(input: {
     await provider.assignCampaignToNumber(phoneE164, campaignId);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    if (!/already|exist/i.test(msg)) throw err;
+    // Already assigned → overwrite via PUT so messaging_campaign_id sticks.
+    if (/already|exist/i.test(msg)) {
+      try {
+        await telnyxRequest(
+          `/10dlc/phone_number_campaigns/${encodeURIComponent(phoneE164)}`,
+          {
+            method: "PUT",
+            body: { phoneNumber: phoneE164, campaignId },
+          },
+        );
+      } catch (putErr) {
+        const putMsg = putErr instanceof Error ? putErr.message : String(putErr);
+        if (!/already|exist/i.test(putMsg)) throw putErr;
+      }
+    } else {
+      throw err;
+    }
+  }
+
+  // Verify Telnyx now shows the campaign on the number (carriers check this).
+  let messagingCampaignId: string | null = null;
+  try {
+    const detail = await telnyxRequest<{
+      data?: { messaging_campaign_id?: string | null };
+    }>(`/phone_numbers/${encodeURIComponent(providerNumberId)}`, { method: "GET" });
+    messagingCampaignId = detail?.data?.messaging_campaign_id
+      ? String(detail.data.messaging_campaign_id)
+      : null;
+  } catch {
+    // non-fatal
+  }
+  if (!messagingCampaignId) {
+    // Force PUT even when POST appeared to succeed but DID still has null campaign.
+    try {
+      await telnyxRequest(
+        `/10dlc/phone_number_campaigns/${encodeURIComponent(phoneE164)}`,
+        {
+          method: "PUT",
+          body: { phoneNumber: phoneE164, campaignId },
+        },
+      );
+      const detail2 = await telnyxRequest<{
+        data?: { messaging_campaign_id?: string | null };
+      }>(`/phone_numbers/${encodeURIComponent(providerNumberId)}`, { method: "GET" });
+      messagingCampaignId = detail2?.data?.messaging_campaign_id
+        ? String(detail2.data.messaging_campaign_id)
+        : null;
+    } catch (err) {
+      console.warn(
+        "[10dlc] campaign PUT/verify warning",
+        err instanceof Error ? err.message : err,
+      );
+    }
   }
 
   // Brand/campaign status from Telnyx when available
@@ -484,17 +536,48 @@ export async function sendTenDlcTestSms(input: {
 }) {
   const to = normalizeE164(input.to);
   if (!to) throw new Error("to is required");
+  // Keep test bodies campaign-safe: no tracking/review links appended.
+  // (2FA campaigns often set embeddedLink=false and reject free-form marketing text.)
   const body = (input.body || "This is a test.").trim() || "This is a test.";
   const reg = await getRegistrationByWorkspace(input.workspaceId);
   if (!reg?.phoneE164 || !reg.messagingEnabled) {
     throw new Error("Messaging registration is not ready — assign campaign first");
   }
-  const { sendQuickSms } = await import("@/lib/sms/send-quick");
-  return sendQuickSms({
-    workspaceId: input.workspaceId,
-    to,
-    body,
-    from: input.from || reg.phoneE164 || undefined,
-    idempotencyKey: `ten-dlc-test:${to}:${Date.now()}`,
+
+  // Bypass sendQuickSms template/tracking so we can send a clean compliance test.
+  const { sendViaRegistration } = await import("@/lib/messaging/registration-processor");
+  const { getPrisma } = await import("@/lib/db");
+  const prisma = getPrisma();
+  const from = input.from || reg.phoneE164;
+  const pending = await prisma.message.create({
+    data: {
+      workspaceId: input.workspaceId,
+      to,
+      from,
+      body,
+      status: "sending",
+      providerId: `pending:ten-dlc-test:${Date.now()}`,
+      idempotencyKey: `ten-dlc-test-clean:${to}:${Date.now()}`,
+    },
   });
+  try {
+    const result = await sendViaRegistration(input.workspaceId, to, body, undefined, from);
+    await prisma.message.update({
+      where: { id: pending.id },
+      data: { status: result.status || "sent", providerId: result.sid },
+    });
+    return {
+      sid: result.sid,
+      status: result.status,
+      to,
+      messagingServiceSid: result.messagingServiceSid,
+      messageId: pending.id,
+    };
+  } catch (err) {
+    await prisma.message.update({
+      where: { id: pending.id },
+      data: { status: "failed" },
+    });
+    throw err;
+  }
 }
