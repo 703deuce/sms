@@ -174,9 +174,12 @@ export function waitDurationMs(config: Record<string, unknown> | undefined): num
   const days = Number(config?.days || 0);
   const hours = Number(config?.hours || 0);
   const minutes = Number(config?.minutes || 0);
+  const seconds = Number(config?.seconds || 0);
   const totalDays = weeks * 7 + days;
-  const ms = ((totalDays * 24 + hours) * 60 + minutes) * 60_000;
-  return Math.max(ms, 60_000);
+  const ms =
+    ((totalDays * 24 + hours) * 60 + minutes) * 60_000 + Math.max(0, seconds) * 1000;
+  // Floor at 20s so short missed-call test delays work; still avoid zero-wait busy loops.
+  return Math.max(ms, 20_000);
 }
 
 /** Milliseconds until a configured datetime (or next time-of-day). */
@@ -185,7 +188,7 @@ export function waitUntilMs(config: Record<string, unknown> | undefined): number
   if (runAt) {
     const target = new Date(runAt);
     if (!Number.isNaN(target.getTime())) {
-      return Math.max(target.getTime() - Date.now(), 60_000);
+      return Math.max(target.getTime() - Date.now(), 20_000);
     }
   }
   const timeOfDay = String(config?.timeOfDay || "09:00");
@@ -198,7 +201,7 @@ export function waitUntilMs(config: Record<string, unknown> | undefined): number
     if (day === 0) next.setDate(next.getDate() + 1);
     if (day === 6) next.setDate(next.getDate() + 2);
   }
-  return Math.max(next.getTime() - Date.now(), 60_000);
+  return Math.max(next.getTime() - Date.now(), 20_000);
 }
 
 export function hasCycle(def: AutomationDefinition): boolean {

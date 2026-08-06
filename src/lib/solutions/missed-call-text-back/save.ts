@@ -46,6 +46,14 @@ function mergeConfig(
       0,
       Number(partial.initialDelayMinutes ?? base.initialDelayMinutes),
     ),
+    initialDelaySeconds: Math.max(
+      0,
+      Number(
+        partial.initialDelaySeconds ??
+          (base as MissedCallTextBackConfig).initialDelaySeconds ??
+          0,
+      ),
+    ),
     replyWindowMinutes: Math.max(
       1,
       Number(partial.replyWindowMinutes ?? base.replyWindowMinutes),

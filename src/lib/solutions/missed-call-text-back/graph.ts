@@ -5,11 +5,22 @@ import {
   type MissedCallTextBackConfig,
 } from "@/lib/solutions/missed-call-text-back/types";
 
-function waitConfig(totalMinutes: number) {
+function waitConfig(totalMinutes: number, totalSeconds = 0) {
+  const seconds = Math.max(0, Math.floor(totalSeconds));
+  if (seconds > 0) {
+    return {
+      days: 0,
+      hours: 0,
+      minutes: 0,
+      seconds,
+      weeks: 0,
+      respectBusinessHours: false,
+    };
+  }
   const minutes = Math.max(0, Math.floor(totalMinutes));
   const hours = Math.floor(minutes / 60);
   const rem = minutes % 60;
-  return { days: 0, hours, minutes: rem, weeks: 0, respectBusinessHours: false };
+  return { days: 0, hours, minutes: rem, seconds: 0, weeks: 0, respectBusinessHours: false };
 }
 
 /** nodeId → templateNodeKey for managed-node wizard sync. */
@@ -38,7 +49,9 @@ export function buildMissedCallTextBackDefinition(
       data: {
         blockType: "call_missed",
         label: "Missed call",
-        config: {},
+        config: {
+          phoneNumberId: config.phoneNumberId || "",
+        },
       },
     },
     {
@@ -48,7 +61,10 @@ export function buildMissedCallTextBackDefinition(
       data: {
         blockType: "wait",
         label: "Wait before texting",
-        config: waitConfig(config.initialDelayMinutes),
+        config: waitConfig(
+          config.initialDelayMinutes,
+          Number(config.initialDelaySeconds || 0),
+        ),
       },
     },
     {
