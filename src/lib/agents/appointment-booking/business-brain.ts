@@ -73,6 +73,22 @@ export async function loadBusinessBrain(
       : [];
 
   const knowledgeFacts: BusinessBrain["knowledgeFacts"] = [];
+
+  // Canonical: persisted Company Brain facts (manual / approved imports)
+  if (Array.isArray(stored.knowledgeFacts)) {
+    for (const raw of stored.knowledgeFacts) {
+      const row = asRecord(raw);
+      const label = String(row.label || "").trim();
+      const summary = String(row.summary || "").trim();
+      if (!label || !summary) continue;
+      knowledgeFacts.push({
+        label,
+        summary,
+        status: String(row.status || "owner_approved"),
+      });
+    }
+  }
+
   for (const item of wizardKnowledge) {
     const row = asRecord(item);
     const label = String(row.label || "").trim();
@@ -89,6 +105,9 @@ export async function loadBusinessBrain(
     ) {
       continue;
     }
+    if (knowledgeFacts.some((f) => f.label.toLowerCase() === label.toLowerCase())) {
+      continue;
+    }
     knowledgeFacts.push({
       label,
       summary,
@@ -98,8 +117,12 @@ export async function loadBusinessBrain(
   for (const src of sources) {
     const preview = String(src.extractedPreview || src.contentText || "").trim();
     if (!preview) continue;
+    const label = String(src.name || "Knowledge");
+    if (knowledgeFacts.some((f) => f.label.toLowerCase() === label.toLowerCase())) {
+      continue;
+    }
     knowledgeFacts.push({
-      label: String(src.name || "Knowledge"),
+      label,
       summary: preview.slice(0, 400),
       status: String(src.status || "extracted"),
     });
