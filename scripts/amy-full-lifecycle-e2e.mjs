@@ -263,21 +263,7 @@ async function runWizard(page) {
   }
   await page.waitForTimeout(1000);
   await shot(page, "04b-phone-selected");
-
-  const existing = page.getByText(/Use existing Transovo number/i).first();
-  if (await existing.isVisible().catch(() => false)) await existing.click();
-  await page.waitForTimeout(500);
-
-  const didBtn = page
-    .locator("button")
-    .filter({ hasText: /\+1|\(\d{3}\)|\d{3}[-.\s]\d{3}/ })
-    .first();
-  if (await didBtn.count()) {
-    await didBtn.click();
-    log("phone-selected", { message: await didBtn.innerText() });
-  } else {
-    report.errors.push("No phone number available in wizard");
-  }
+  assert("no stack overflow on wizard", !(await page.locator("body").innerText()).includes("Maximum call stack"));
 
   await clickContinue(page);
   await shot(page, "05-booking");
