@@ -398,7 +398,7 @@ export const telnyxProvider: MessagingProvider = {
 
   async assignCampaignToNumber(phoneNumber, campaignId) {
     assertTelnyxConfigured();
-    await telnyxRequest("/10dlc/phoneNumberCampaign", {
+    await telnyxRequest("/10dlc/phone_number_campaigns", {
       method: "POST",
       body: { phoneNumber, campaignId },
     });

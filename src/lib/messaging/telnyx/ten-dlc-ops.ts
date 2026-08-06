@@ -160,7 +160,7 @@ export async function listTelnyxPhoneNumbers() {
 }
 
 export async function listPhoneNumberCampaignAssignments() {
-  const rows = await listTenDlcPages<Record<string, unknown>>("/10dlc/phoneNumberCampaign");
+  const rows = await listTenDlcPages<Record<string, unknown>>("/10dlc/phone_number_campaigns");
   return rows.map((r) => ({
     phoneNumber: String(r.phoneNumber || r.phone_number || ""),
     campaignId: String(r.campaignId || r.campaign_id || ""),
