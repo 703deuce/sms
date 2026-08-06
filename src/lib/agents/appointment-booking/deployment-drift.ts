@@ -142,15 +142,26 @@ export async function detectDeploymentDrift(input: {
     ),
   );
 
+  // Soften prompt_hash_mismatch: Telnyx stores compiled instructions which often
+  // differ from draftConfig.instructions.raw even after a successful publish.
+  // Treat hash mismatch as warning (inspect) rather than degraded unless remote empty.
+  const hardDrift = differences.some((d) =>
+    ["remote_instructions_empty", "no_telnyx_assistant"].includes(d),
+  );
+  const softMismatch = differences.includes("prompt_hash_mismatch") && !hardDrift;
+
   const versionLabel = mainVersion ? `version ${mainVersion.version}` : "expected draft";
   let status: HealthLevel = "healthy";
   let message = `Live Telnyx matches ${versionLabel}`;
   if (differences.includes("telnyx_fetch_failed") || differences.includes("telnyx_client_unavailable")) {
     status = "warning";
     message = `Could not verify Telnyx against ${versionLabel}`;
-  } else if (drifted) {
+  } else if (hardDrift) {
     status = "degraded";
     message = `Amy’s live configuration does not match ${versionLabel}`;
+  } else if (softMismatch) {
+    status = "warning";
+    message = `Telnyx instructions hash differs from ${versionLabel} (compiled prompt — inspect if behavior looks wrong)`;
   }
 
   return {

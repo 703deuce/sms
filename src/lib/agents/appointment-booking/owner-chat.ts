@@ -171,7 +171,7 @@ export async function answerOwnerQuestion(input: {
   // Custom collection fields from conversation
   if (
     input.userId &&
-    includesAny(q, ["add", "require", "collect", "ask for", "ask callers"]) &&
+    includesAny(q, ["add", "require", "collect", "ask for", "ask callers", "must collect"]) &&
     includesAny(q, [
       "field",
       "question",
@@ -182,6 +182,10 @@ export async function answerOwnerQuestion(input: {
       "make",
       "model",
       "information",
+      "describe",
+      "problem",
+      "notes",
+      "caller to",
     ])
   ) {
     const { createCustomCollectionField } = await import(
@@ -200,6 +204,9 @@ export async function answerOwnerQuestion(input: {
       type = "address";
     } else if (/vehicle|year.*make|make.*model/.test(q)) {
       label = "Vehicle year, make, and model";
+      type = "text";
+    } else if (/describe|problem|issue|notes/.test(q)) {
+      label = "Problem description";
       type = "text";
     } else {
       const m = input.question.match(
