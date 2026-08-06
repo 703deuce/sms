@@ -786,7 +786,64 @@ export async function executeBuiltinVoiceAction(input: {
         provider: "internal",
         window: { startTime: window.startTime, endTime: window.endTime },
       };
-    }    case "book_appointment": {
+    }    case "find_appointments": {
+      const { findAppointmentsForCaller } = await import("../calendar/booking");
+      const phone = normalizeE164(
+        String(args.phone || args.customerPhone || args.customer_phone || ""),
+      );
+      const contactId = args.contactId ? String(args.contactId) : "";
+      if (!phone && !contactId) {
+        return {
+          ok: false,
+          error: "phone required",
+          speak: "What phone number should I look up the appointment under?",
+          appointments: [],
+        };
+      }
+      const rows = await findAppointmentsForCaller({
+        workspaceId: input.workspaceId,
+        phone: phone || undefined,
+        contactId: contactId || undefined,
+        includePast: args.includePast === true,
+        limit: Number(args.limit) || 5,
+      });
+      const appointments = rows.map((a) => ({
+        appointmentId: a.id,
+        serviceName: a.serviceName,
+        startsAt: a.startsAt,
+        endsAt: a.endsAt,
+        timezone: a.timezone,
+        status: a.status,
+        staffName: a.staffName,
+      }));
+      if (!appointments.length) {
+        return {
+          ok: true,
+          found: false,
+          appointments: [],
+          speak: "I don't see an upcoming appointment on that number. Would you like to book one?",
+        };
+      }
+      const first = appointments[0];
+      const when = new Date(first.startsAt).toLocaleString("en-US", {
+        timeZone: first.timezone || "America/New_York",
+        weekday: "long",
+        month: "long",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      });
+      return {
+        ok: true,
+        found: true,
+        appointments,
+        speak:
+          appointments.length === 1
+            ? `I found your ${first.serviceName || "appointment"} on ${when}.`
+            : `I found ${appointments.length} upcoming appointments. The next is ${first.serviceName || "an appointment"} on ${when}.`,
+      };
+    }
+    case "book_appointment": {
       const { normalizeBookingToolArgs } = await import("../calendar/booking-args");
       args = normalizeBookingToolArgs(args);
       // Prefer Calendly POST /invitees when connected so bookings land on the
@@ -801,6 +858,7 @@ export async function executeBuiltinVoiceAction(input: {
             assertRequiredFields,
             assertBookingTimingGates,
             loadServiceBookingConfig,
+            findExistingBookingForCaller,
           } = await import("../calendar/booking");
           const gates = await loadServiceBookingConfig(input.workspaceId, serviceName);
           assertBookingPermission(gates.config);
@@ -817,6 +875,27 @@ export async function executeBuiltinVoiceAction(input: {
           let email = String(args.email || "").trim();
           let name = String(args.name || args.inviteeName || "").trim();
           const phone = args.phone ? normalizeE164(String(args.phone)) : "";
+          if (!Number.isNaN(startsAt.getTime()) && phone) {
+            const existing = await findExistingBookingForCaller({
+              workspaceId: input.workspaceId,
+              startsAt,
+              serviceName,
+              phone,
+              contactId: args.contactId ? String(args.contactId) : undefined,
+            });
+            if (existing) {
+              return {
+                ok: true,
+                success: true,
+                alreadyBooked: true,
+                provider: "internal",
+                appointmentId: existing.id,
+                startsAt: existing.startsAt,
+                message:
+                  "Appointment was already confirmed. You may tell the caller their booking is confirmed.",
+              };
+            }
+          }
           if ((!email || !name) && phone) {
             const contact = await prisma.contact.findUnique({
               where: {
@@ -930,18 +1009,36 @@ export async function executeBuiltinVoiceAction(input: {
     }
     case "reschedule_appointment": {
       const appointmentId = String(args.appointmentId || "");
-      const newStartAt = String(args.newStartAt || "");
+      const newStartAt = String(args.newStartAt || args.startsAt || "");
       if (!appointmentId || !newStartAt) throw new Error("appointmentId and newStartAt required");
       const appt = await prisma.voiceAppointment.findFirst({
         where: { id: appointmentId, workspaceId: input.workspaceId },
       });
       if (!appt) throw new Error("Appointment not found");
+      const startsAt = new Date(newStartAt);
+      if (Number.isNaN(startsAt.getTime())) throw new Error("newStartAt must be a valid ISO time");
+      // Idempotent: already moved to this time.
+      if (
+        appt.startsAt &&
+        Math.abs(appt.startsAt.getTime() - startsAt.getTime()) < 60_000 &&
+        appt.status !== "cancelled"
+      ) {
+        return {
+          ok: true,
+          alreadyRescheduled: true,
+          appointmentId: appt.id,
+          startsAt: appt.startsAt,
+          endsAt: appt.endsAt,
+          serviceName: appt.serviceName,
+          speak: "That appointment is already at the requested time.",
+        };
+      }
       if (appt.contactId) {
         const clash = await prisma.voiceAppointment.findFirst({
           where: {
             workspaceId: input.workspaceId,
             contactId: appt.contactId,
-            startsAt: new Date(newStartAt),
+            startsAt,
             status: { not: "cancelled" },
             id: { not: appointmentId },
           },
@@ -952,8 +1049,7 @@ export async function executeBuiltinVoiceAction(input: {
         appt.endsAt && appt.startsAt
           ? appt.endsAt.getTime() - appt.startsAt.getTime()
           : 30 * 60 * 1000;
-      const startsAt = new Date(newStartAt);
-      return await prisma.voiceAppointment.update({
+      const updated = await prisma.voiceAppointment.update({
         where: { id: appointmentId },
         data: {
           startsAt,
@@ -961,6 +1057,15 @@ export async function executeBuiltinVoiceAction(input: {
           status: "rescheduled",
         },
       });
+      return {
+        ok: true,
+        appointmentId: updated.id,
+        startsAt: updated.startsAt,
+        endsAt: updated.endsAt,
+        serviceName: updated.serviceName,
+        status: updated.status,
+        speak: "I've moved that appointment. Confirm the new date and time with the caller.",
+      };
     }
     case "cancel_appointment": {
       const appointmentId = String(args.appointmentId || "");

@@ -113,9 +113,82 @@ export async function POST(request: Request) {
     if (callControlId) {
       const call = await prisma.voiceCall.findFirst({
         where: { workspaceId, telnyxCallControlId: callControlId },
-        select: { id: true },
+        select: { id: true, telnyxConversationId: true },
       });
       callId = call?.id;
+      // Attach conversation id as soon as tools see it (TeXML hangup often arrives late).
+      if (call?.id && conversationId && !call.telnyxConversationId) {
+        await prisma.voiceCall
+          .update({
+            where: { id: call.id },
+            data: { telnyxConversationId: conversationId },
+          })
+          .catch(() => undefined);
+      }
+    }
+    // Mid-call tools often arrive before TeXML hangup creates the VoiceCall.
+    // Create a live call row from tool headers so executions / bookings correlate.
+    if (!callId && callControlId && agentId) {
+      const agent = await prisma.voiceAgent.findFirst({
+        where: { id: agentId, workspaceId },
+        select: {
+          id: true,
+          phoneNumberId: true,
+          publishedVersionId: true,
+          telnyxAssistantId: true,
+        },
+      });
+      if (agent) {
+        let toE164 = body.to
+          ? String(body.to)
+          : body.called
+            ? String(body.called)
+            : "";
+        if (!toE164 && agent.phoneNumberId) {
+          const pn = await prisma.phoneNumber.findFirst({
+            where: { id: agent.phoneNumberId },
+            select: { e164: true },
+          });
+          toE164 = pn?.e164 || "";
+        }
+        const fromE164 = body.from
+          ? String(body.from)
+          : body.caller
+            ? String(body.caller)
+            : "unknown";
+        const created = await prisma.voiceCall
+          .create({
+            data: {
+              workspaceId,
+              agentId: agent.id,
+              agentVersionId: agent.publishedVersionId || null,
+              phoneNumberId: agent.phoneNumberId || null,
+              direction: "INBOUND",
+              status: "IN_PROGRESS",
+              fromE164: fromE164 || "unknown",
+              toE164: toE164 || "unknown",
+              telnyxCallControlId: callControlId,
+              telnyxConversationId: conversationId || null,
+              startedAt: new Date(),
+              answeredAt: new Date(),
+              metadata: {
+                source: "telnyx_tool_webhook",
+                assistantId: agent.telnyxAssistantId,
+              } as object,
+            },
+          })
+          .catch(() => null);
+        // Race: another webhook may have created it first.
+        if (created?.id) {
+          callId = created.id;
+        } else {
+          const again = await prisma.voiceCall.findFirst({
+            where: { workspaceId, telnyxCallControlId: callControlId },
+            select: { id: true },
+          });
+          callId = again?.id;
+        }
+      }
     }
     if (!callId && conversationId) {
       const call = await prisma.voiceCall.findFirst({
@@ -138,9 +211,34 @@ export async function POST(request: Request) {
           endedAt: null,
         },
         orderBy: { startedAt: "desc" },
-        select: { id: true },
+        select: { id: true, telnyxConversationId: true },
       });
       callId = call?.id;
+      if (call?.id && conversationId && !call.telnyxConversationId) {
+        await prisma.voiceCall
+          .update({
+            where: { id: call.id },
+            data: { telnyxConversationId: conversationId },
+          })
+          .catch(() => undefined);
+      }
+    }
+    // Best-effort: keep VoiceAiConversation.callId linked for observability.
+    if (callId && conversationId) {
+      const aiConv = await prisma.voiceAiConversation
+        .findFirst({
+          where: { workspaceId, telnyxConversationId: conversationId },
+          select: { id: true, callId: true },
+        })
+        .catch(() => null);
+      if (aiConv && aiConv.callId !== callId) {
+        await prisma.voiceAiConversation
+          .update({
+            where: { id: aiConv.id },
+            data: { callId, ...(agentId ? { agentId } : {}) },
+          })
+          .catch(() => undefined);
+      }
     }
 
     if (toolId) {

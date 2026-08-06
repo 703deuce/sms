@@ -15,7 +15,7 @@ import {
 } from "@/lib/voice/tools/catalog";
 import {
   ASYNC_TOOL_TYPES,
-  SYNC_TOOL_FILLERS,
+  buildSyncToolFillerMessages,
   SYNC_TOOL_TYPES,
 } from "@/lib/voice/latency-profiles";
 
@@ -36,7 +36,7 @@ const HANGUP_DESCRIPTION =
 /**
  * Classify webhook tools for latency-optimized profiles:
  * - async:true for background work (logging, tags, SMS) so speech is not blocked
- * - filler_messages request_start for sync tools that callers must wait on
+ * - progressive filler_messages for sync tools (start + delayed keep-alives)
  */
 function applyLatencyWebhookDecorations(
   toolType: string,
@@ -47,11 +47,11 @@ function applyLatencyWebhookDecorations(
   if (ASYNC_TOOL_TYPES.has(toolType)) {
     return { ...webhook, async: true };
   }
-  const filler = SYNC_TOOL_FILLERS[toolType];
-  if (filler && (SYNC_TOOL_TYPES.has(toolType) || Boolean(filler))) {
+  const fillers = buildSyncToolFillerMessages(toolType);
+  if (fillers && (SYNC_TOOL_TYPES.has(toolType) || fillers.length > 0)) {
     return {
       ...webhook,
-      filler_messages: [{ type: "request_start", content: filler }],
+      filler_messages: fillers,
     };
   }
   return webhook;
@@ -200,11 +200,15 @@ export function buildAssistantTools(input: {
       key === "search_crm_contacts" ||
       key === "send_sms" ||
       key === "book_appointment" ||
-      key === "calendar_availability";
+      key === "calendar_availability" ||
+      key === "find_appointments" ||
+      key === "reschedule_appointment";
     const escalateSolePath = key === "escalate_human" && useCallControlTransfer;
     const description = escalateSolePath
       ? "Transfer the caller to a named human phone destination (e.g. Agent Handoff / Front Desk). This is the ONLY human phone transfer tool. Call it once when they ask for a person. If it returns ok=true, say you are connecting them and stay silent — never say the transfer failed while they are being connected. If it returns ok=false, then apologize and take a message. Never invent a phone number. Never hang up to transfer."
       : `${builtin.description} If this tool fails, do NOT hang up — apologize and offer to take a message.`;
+    // Slow booking tools: 30s so progressive delayed fillers can play before Telnyx cuts off.
+    const timeoutMs = escalateSolePath ? 12000 : slow ? 30000 : 8000;
     const webhook = applyLatencyWebhookDecorations(
       builtin.toolType || key,
       {
@@ -212,7 +216,7 @@ export function buildAssistantTools(input: {
         description,
         url: webhookUrl,
         method: "POST",
-        timeout_ms: escalateSolePath ? 12000 : slow ? 20000 : 8000,
+        timeout_ms: timeoutMs,
         headers: [
           { name: "X-Transovo-Workspace-Id", value: input.workspaceId },
           { name: "X-Transovo-Agent-Id", value: input.agentId },

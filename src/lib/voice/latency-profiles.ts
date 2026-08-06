@@ -361,6 +361,10 @@ export const LATENCY_PROFILES: Record<LatencyProfileId, LatencyProfileDefinition
 export const SYNC_TOOL_TYPES = new Set([
   "calendar_availability",
   "book_appointment",
+  "resolve_datetime",
+  "find_appointments",
+  "reschedule_appointment",
+  "cancel_appointment",
   "lookup_customer",
   "search_crm_contacts",
   "escalate_human",
@@ -382,13 +386,56 @@ export const ASYNC_TOOL_TYPES = new Set([
   "send_sms",
 ]);
 
+/** Immediate request_start line for sync tools. */
 export const SYNC_TOOL_FILLERS: Record<string, string> = {
-  calendar_availability: "Let me check.",
-  book_appointment: "One moment while I book that.",
-  lookup_customer: "One moment while I pull that up.",
-  search_crm_contacts: "One moment while I pull that up.",
+  calendar_availability: "Okay, hold on — let me check that.",
+  book_appointment: "Okay, hold on — let me book that.",
+  resolve_datetime: "One moment.",
+  find_appointments: "Okay, hold on — let me look that up.",
+  reschedule_appointment: "Okay, hold on — let me move that.",
+  cancel_appointment: "Okay, hold on — let me cancel that.",
+  lookup_customer: "Okay, hold on — let me pull that up.",
+  search_crm_contacts: "Okay, hold on — let me pull that up.",
   escalate_human: "Sure, I'll connect you.",
 };
+
+/**
+ * Progressive Telnyx filler_messages for sync webhook tools.
+ * request_start plays immediately; request_response_delayed only if still waiting.
+ */
+export function buildSyncToolFillerMessages(
+  toolType: string,
+): Array<{ type: string; content: string; timing_ms?: number }> | null {
+  const start = SYNC_TOOL_FILLERS[toolType];
+  if (!start) return null;
+  // Short tools: start filler only.
+  if (toolType === "resolve_datetime" || toolType === "escalate_human") {
+    return [{ type: "request_start", content: start }];
+  }
+  return [
+    { type: "request_start", content: start },
+    {
+      type: "request_response_delayed",
+      content: "Alright, almost there.",
+      timing_ms: 4000,
+    },
+    {
+      type: "request_response_delayed",
+      content: "Still working on it right now.",
+      timing_ms: 10000,
+    },
+    {
+      type: "request_response_delayed",
+      content: "Thanks for waiting — still finishing that up.",
+      timing_ms: 15000,
+    },
+    {
+      type: "request_response_delayed",
+      content: "Hang tight, I'm still on it.",
+      timing_ms: 20000,
+    },
+  ];
+}
 
 export function isLatencyProfileId(value: unknown): value is LatencyProfileId {
   return (

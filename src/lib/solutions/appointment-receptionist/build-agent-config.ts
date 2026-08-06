@@ -187,7 +187,16 @@ export function buildSystemPrompt(state: AppointmentReceptionistWizardState): st
     );
     lines.push("- calendar_availability / book_appointment: check live availability and book only after confirmation.");
     lines.push(
+      "- find_appointments: when the caller asks about an existing booking, look it up by phone before reschedule/cancel.",
+    );
+    lines.push(
+      "- reschedule_appointment: move an existing booking using appointmentId from find_appointments and a new startsAt from calendar_availability.",
+    );
+    lines.push(
       "- Never offer, confirm, or book a day/time unless that exact startsAt came from the latest calendar_availability slots. If the caller asks for a time that is not in the returned slots, say it is unavailable and offer 2–3 of the returned label times instead.",
+    );
+    lines.push(
+      "- If book_appointment times out, you may retry the same startsAt once. If it returns alreadyBooked=true or ok=true, tell the caller they are confirmed — do not say it failed.",
     );
   }
   if (caps.includes("transfer_calls") && transferPhone) {
@@ -333,12 +342,18 @@ export function buildWizardAgentConfig(
     enabledTools.add("resolve_datetime");
     enabledTools.add("calendar_availability");
     enabledTools.add("book_appointment");
+    enabledTools.add("find_appointments");
   }
-  if (state.capabilities.includes("reschedule")) {
+  if (
+    state.capabilities.includes("reschedule") ||
+    state.capabilities.includes("book_appointments")
+  ) {
     enabledTools.add("reschedule_appointment");
+    enabledTools.add("find_appointments");
   }
   if (state.capabilities.includes("cancel")) {
     enabledTools.add("cancel_appointment");
+    enabledTools.add("find_appointments");
   }
   if (
     state.capabilities.includes("send_sms_confirmations") ||

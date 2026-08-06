@@ -259,9 +259,52 @@ section("Async tools + sync fillers when optimizeToolLatency");
   assert.equal(byName.get("create_crm_note")?.async, true);
   assert.equal(byName.get("send_sms")?.async, true);
   const calFillers = byName.get("calendar_availability")?.filler_messages as
-    | Array<{ type: string; content: string }>
+    | Array<{ type: string; content: string; timing_ms?: number }>
     | undefined;
-  assert.equal(calFillers?.[0]?.content, "Let me check.");
+  assert.equal(calFillers?.[0]?.type, "request_start");
+  assert.match(String(calFillers?.[0]?.content || ""), /hold on|check/i);
+  assert.equal(calFillers?.[1]?.type, "request_response_delayed");
+  assert.equal(calFillers?.[1]?.timing_ms, 4000);
+  assert.equal(calFillers?.[2]?.timing_ms, 10000);
+  assert.equal(calFillers?.[3]?.timing_ms, 15000);
+  assert.equal(calFillers?.[4]?.timing_ms, 20000);
+  const bookWh = byName.get("book_appointment") as
+    | { timeout_ms?: number; filler_messages?: unknown[] }
+    | undefined;
+  // book may be absent in this enabled set — add below if needed
+  void bookWh;
+}
+
+section("Book/calendar progressive fillers + 30s timeout");
+{
+  const tools = buildAssistantTools({
+    workspaceId: "ws",
+    agentId: "ag",
+    bucketIds: [],
+    tools: [],
+    enabledBuiltinTools: ["book_appointment", "calendar_availability", "resolve_datetime"],
+    optimizeToolLatency: true,
+  });
+  const byName = new Map(
+    tools
+      .filter((t) => (t as { type?: string }).type === "webhook")
+      .map((t) => {
+        const w = (t as { webhook: Record<string, unknown> }).webhook;
+        return [String(w.name), w] as const;
+      }),
+  );
+  assert.equal(byName.get("book_appointment")?.timeout_ms, 30000);
+  assert.equal(byName.get("calendar_availability")?.timeout_ms, 30000);
+  const bookFillers = byName.get("book_appointment")?.filler_messages as
+    | Array<{ type: string; timing_ms?: number }>
+    | undefined;
+  assert.ok((bookFillers?.length || 0) >= 4);
+  assert.equal(bookFillers?.[0]?.type, "request_start");
+  const resolveFillers = byName.get("resolve_datetime")?.filler_messages as
+    | Array<{ type: string }>
+    | undefined;
+  assert.equal(resolveFillers?.length, 1);
+  assert.equal(resolveFillers?.[0]?.type, "request_start");
 }
 
 section("Apply Flux profile sets TeXML direct + disables startup mask");
