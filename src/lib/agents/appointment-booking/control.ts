@@ -692,6 +692,66 @@ export async function runAgentControlCommand(input: {
       return migrationReport();
     }
 
+    case "list_agent_appointments": {
+      const prisma = getPrisma();
+      const limit = Math.min(50, Math.max(1, Number(input.payload?.limit || 25)));
+      const rows = await prisma.voiceAppointment.findMany({
+        where: {
+          workspaceId: input.workspaceId,
+          call: { agentId: input.agentId },
+        },
+        orderBy: { startsAt: "desc" },
+        take: limit,
+        select: {
+          id: true,
+          serviceName: true,
+          startsAt: true,
+          endsAt: true,
+          status: true,
+          timezone: true,
+          callId: true,
+          contactId: true,
+          staffName: true,
+          createdAt: true,
+          externalId: true,
+          call: { select: { agentId: true, fromE164: true, appointmentBooked: true } },
+        },
+      });
+      return {
+        appointments: rows.map(
+          (a: {
+            id: string;
+            serviceName: string | null;
+            startsAt: Date;
+            endsAt: Date | null;
+            status: string;
+            timezone: string | null;
+            callId: string | null;
+            contactId: string | null;
+            staffName: string | null;
+            createdAt: Date;
+            externalId: string | null;
+            call?: { fromE164?: string | null; appointmentBooked?: boolean } | null;
+          }) => ({
+            id: a.id,
+            serviceName: a.serviceName,
+            startsAt: a.startsAt.toISOString(),
+            endsAt: a.endsAt?.toISOString() || null,
+            status: a.status,
+            timezone: a.timezone,
+            callId: a.callId,
+            contactId: a.contactId,
+            staffName: a.staffName,
+            externalId: a.externalId,
+            callerPhone: a.call?.fromE164 || null,
+            appointmentBookedFlag: a.call?.appointmentBooked ?? null,
+            createdAt: a.createdAt.toISOString(),
+            href: a.callId ? `/voice/calls/${a.callId}` : null,
+          }),
+        ),
+      };
+    }
+
     default:
       throw new Error(`Unsupported command: ${input.command}`);
   }

@@ -12,6 +12,7 @@ export type AgentProductStatus =
   | "ready"
   | "active"
   | "paused"
+  | "degraded"
   | "needs_attention"
   | "failed"
   | "archived";
@@ -150,6 +151,17 @@ export type AgentMetrics = {
   confirmationSmsSent: number;
   confirmationEmailsSent: number;
   windowDays: number;
+  /** Last 24 hours — Home “Today” widgets. */
+  today?: {
+    callsAnswered: number;
+    bookingConversationsStarted: number;
+    appointmentsBooked: number;
+    bookingConversionRate: number;
+    transfers: number;
+    messagesTaken: number;
+    abandonedBookingConversations: number;
+    bookingFailures: number;
+  };
   previousWindow?: {
     callsAnswered: number;
     appointmentsBooked: number;
@@ -298,7 +310,8 @@ export type AgentControlCommand =
   | "run_setup_command"
   | "get_deployment_drift"
   | "get_runtime_registry"
-  | "get_field_ownership_report";
+  | "get_field_ownership_report"
+  | "list_agent_appointments";
 
 export {
   DEFAULT_APPOINTMENT_AGENT_NAME,
