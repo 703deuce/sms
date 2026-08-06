@@ -2,13 +2,12 @@
 
 import { cn } from "@/lib/utils";
 import { Check } from "lucide-react";
-import type { WIZARD_STEPS } from "@/lib/solutions/appointment-receptionist/types";
 
 export function WizardStepper({
   steps,
   currentIndex,
 }: {
-  steps: Array<(typeof WIZARD_STEPS)[number]>;
+  steps: Array<{ id: string; label: string }>;
   currentIndex: number;
 }) {
   return (

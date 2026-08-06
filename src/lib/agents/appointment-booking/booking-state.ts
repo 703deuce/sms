@@ -30,6 +30,8 @@ export type BookingConversationState = {
   bookingConfirmed: boolean;
   appointmentId?: string;
   missingFields: string[];
+  /** Custom + standard fields keyed by collection field key */
+  collectedFields: Record<string, string | number | boolean | null>;
   correctionHistory: Array<{
     field: string;
     from: unknown;
@@ -46,6 +48,7 @@ export function emptyBookingState(): BookingConversationState {
     offeredSlotIds: [],
     bookingConfirmed: false,
     missingFields: [],
+    collectedFields: {},
     correctionHistory: [],
     transferRequested: false,
     updatedAt: new Date().toISOString(),

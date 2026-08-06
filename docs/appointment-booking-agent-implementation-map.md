@@ -3,7 +3,19 @@
 **Rule:** wrap live systems (`VoiceAgent`); do not create a parallel Agent table.  
 **Upgrade rule:** extend the existing operating layer — no second agent/workflow/booking system.
 
-## Identity
+## Hire & train journey (customer-facing)
+
+| Step | Route / surface | Status |
+|---|---|---|
+| Post-payment / signup → Build your team | `/hire` (Stripe success + signup) | **FULLY** |
+| Chooser: Amy (recommended) + Tom only | `HIREABLE_AGENTS` catalog | **FULLY** |
+| Company Brain first (website / conversation / manual) | `/hire/brain`, `/company-brain`, `/api/company-brain` | **FULLY** |
+| Amy hire locks booking job (no “do you book?”) | Wizard `?hire=amy` Assignment step | **FULLY** |
+| Custom collection fields UI | Appointments / Booking rules step | **FULLY** |
+| Activate → Amy home `/agents/[id]` | Hire-mode wizard redirect | **FULLY** |
+| Agent type vs instance (catalog) | `src/lib/agents/catalog.ts` | **FULLY** |
+
+**Rule:** Never ask the customer to redefine what a specialized agent fundamentally is. Ask only for business resources, services, collection fields, policies, voice, then test and activate.
 
 | Artifact | Status |
 |---|---|

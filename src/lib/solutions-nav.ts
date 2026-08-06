@@ -220,6 +220,11 @@ export function buildSolutionsNav(options: SolutionsNavOptions = {}): NavItem[] 
       label: "Your Team",
       href: "/agents",
       icon: Bot,
+      children: [
+        { label: "All agents", href: "/agents" },
+        { label: "Hire an agent", href: "/hire" },
+        { label: "Company Brain", href: "/company-brain" },
+      ],
     },
     {
       label: "Automations",

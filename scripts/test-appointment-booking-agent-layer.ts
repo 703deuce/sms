@@ -298,6 +298,10 @@ const resp = buildAgentResponsibility(fakeAgent);
 assert("responsibility has objective", Boolean(resp.mainObjective));
 assert("responsibility has prohibited", resp.prohibitedActions.length > 0);
 assert("booking state empty", emptyBookingState().bookingConfirmed === false);
+assert(
+  "booking state has collectedFields",
+  typeof emptyBookingState().collectedFields === "object",
+);
 
 import {
   resolveAgentIdentity,
@@ -312,6 +316,13 @@ import {
   permissionsForMode,
   describeAutonomyMode,
 } from "../src/lib/agents/appointment-booking/autonomy-policy";
+import {
+  DEFAULT_COLLECTION_FIELDS,
+  createCustomCollectionField,
+  normalizeWizardCollectFields,
+} from "../src/lib/agents/appointment-booking/collection-fields";
+import { HIREABLE_AGENTS } from "../src/lib/agents/catalog";
+import { AMY_FIXED_CAPABILITIES } from "../src/lib/solutions/appointment-receptionist/wizard-presets";
 
 const id = resolveAgentIdentity({ name: null });
 assert("default identity is Amy", id.name === DEFAULT_APPOINTMENT_AGENT_NAME);
@@ -346,5 +357,21 @@ assert(
   permissionsForMode("balanced").includes("release_expired_holds"),
 );
 assert("autonomy describe has label", describeAutonomyMode("balanced").label === "Balanced");
+assert("hire catalog has Amy + Tom", HIREABLE_AGENTS.length === 2);
+assert(
+  "Amy recommended first",
+  Boolean(HIREABLE_AGENTS.find((a) => a.typeId === "appointment_booking")?.recommendedFirst),
+);
+assert("Amy fixed caps include booking", AMY_FIXED_CAPABILITIES.includes("book_appointments"));
+assert("default collection fields", DEFAULT_COLLECTION_FIELDS.length >= 4);
+assert(
+  "custom field key",
+  createCustomCollectionField({ label: "Gate code" }).key.includes("gate"),
+);
+assert(
+  "normalize collect fields",
+  normalizeWizardCollectFields([{ id: "x", label: "X", required: true, enabled: true }])[0]
+    .key === "x",
+);
 
 console.log("\nDone.");

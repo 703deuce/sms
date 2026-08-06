@@ -45,21 +45,36 @@ export default async function GettingStartedPage() {
     <div>
       <PageHeader
         title="Getting started"
-        description="Complete these steps to verify your account, register for A2P, and send your first campaign."
+        description="Hire your communications team, then finish messaging readiness when you need SMS campaigns."
         actions={
           <>
+            <Link href="/hire">
+              <Button>Build your team</Button>
+            </Link>
             <Link href="/dashboard">
-              <Button variant="outline">Back to dashboard</Button>
+              <Button variant="outline">Dashboard</Button>
             </Link>
             {nextStep?.href ? (
               <Link href={nextStep.href}>
-                <Button>Continue setup</Button>
+                <Button variant="outline">Continue checklist</Button>
               </Link>
             ) : null}
           </>
         }
       />
 
+      <Card className="mb-6 border-emerald-200 bg-emerald-50/40">
+        <CardTitle>Hire Amy or Tom</CardTitle>
+        <p className="mt-2 text-sm text-muted-foreground">
+          After payment or signup, start with your communications team — not a blank dashboard.
+          Amy books appointments. Tom recovers missed calls.
+        </p>
+        <div className="mt-4">
+          <Link href="/hire">
+            <Button>Build your communications team</Button>
+          </Link>
+        </div>
+      </Card>
       <Card className="mb-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>

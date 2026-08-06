@@ -434,34 +434,112 @@ export function AppointmentsStep({
             <div className="mt-6 grid gap-6 lg:grid-cols-2">
               <div>
                 <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Required caller information
+                  What Amy must collect
+                </p>
+                <p className="mb-3 text-[12px] text-muted-foreground">
+                  Defaults cover name, callback number, and service. Add business-specific fields
+                  (address, vehicle, gate code, etc.).
                 </p>
                 <div className="space-y-2">
-                  {[
-                    ["full_name", "Full name"],
-                    ["phone", "Phone number"],
-                    ["email", "Email"],
-                    ["service", "Service requested"],
-                    ["address", "Address"],
-                  ].map(([id, label]) => {
-                    const checked = selected.requiredFields.includes(id);
-                    return (
-                      <label key={id} className="flex items-center gap-2 text-sm">
+                  {state.collectFields.map((field, index) => (
+                    <div
+                      key={field.id}
+                      className="flex flex-wrap items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={field.enabled !== false}
+                        onChange={() => {
+                          const next = state.collectFields.map((f, i) =>
+                            i === index ? { ...f, enabled: !f.enabled } : f,
+                          );
+                          patch({ collectFields: next });
+                        }}
+                        className="h-4 w-4 rounded border-border text-primary"
+                      />
+                      <span className="min-w-0 flex-1 font-medium">{field.label}</span>
+                      <label className="flex items-center gap-1 text-[11px] text-muted-foreground">
                         <input
                           type="checkbox"
-                          checked={checked}
+                          checked={Boolean(field.required)}
                           onChange={() => {
-                            const next = checked
-                              ? selected.requiredFields.filter((f) => f !== id)
-                              : [...selected.requiredFields, id];
-                            updateSelected({ requiredFields: next });
+                            const next = state.collectFields.map((f, i) =>
+                              i === index ? { ...f, required: !f.required } : f,
+                            );
+                            patch({ collectFields: next });
+                            const ids = next
+                              .filter((f) => f.enabled !== false && f.required)
+                              .map((f) => f.id);
+                            if (selected) updateSelected({ requiredFields: ids });
                           }}
-                          className="h-4 w-4 rounded border-border text-primary"
+                          className="h-3.5 w-3.5 rounded border-border"
                         />
-                        {label}
+                        Required
                       </label>
-                    );
-                  })}
+                      {!["full_name", "phone", "service"].includes(field.id) ? (
+                        <button
+                          type="button"
+                          className="text-[11px] font-semibold text-rose-600"
+                          onClick={() => {
+                            patch({
+                              collectFields: state.collectFields.filter((_, i) => i !== index),
+                            });
+                          }}
+                        >
+                          Remove
+                        </button>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <input
+                    id="new-collect-field"
+                    className="h-9 min-w-[10rem] flex-1 rounded-lg border border-border px-2 text-sm"
+                    placeholder="New field label"
+                    onKeyDown={(e) => {
+                      if (e.key !== "Enter") return;
+                      e.preventDefault();
+                      const input = e.currentTarget;
+                      const label = input.value.trim();
+                      if (!label) return;
+                      const id = `custom_${label.toLowerCase().replace(/[^a-z0-9]+/g, "_")}`;
+                      patch({
+                        collectFields: [
+                          ...state.collectFields,
+                          {
+                            id,
+                            label,
+                            required: true,
+                            enabled: true,
+                          },
+                        ],
+                      });
+                      input.value = "";
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="inline-flex h-9 items-center gap-1 rounded-lg border border-border px-3 text-[12px] font-semibold"
+                    onClick={() => {
+                      const input = document.getElementById(
+                        "new-collect-field",
+                      ) as HTMLInputElement | null;
+                      const label = input?.value.trim();
+                      if (!label || !input) return;
+                      const id = `custom_${label.toLowerCase().replace(/[^a-z0-9]+/g, "_")}`;
+                      patch({
+                        collectFields: [
+                          ...state.collectFields,
+                          { id, label, required: true, enabled: true },
+                        ],
+                      });
+                      input.value = "";
+                    }}
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    Add field
+                  </button>
                 </div>
               </div>
               <div>

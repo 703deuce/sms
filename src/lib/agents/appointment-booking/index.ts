@@ -27,4 +27,4 @@ export * from "@/lib/agents/appointment-booking/handoffs";
 export * from "@/lib/agents/appointment-booking/autonomy";
 export * from "@/lib/agents/appointment-booking/verify-booking";
 export * from "@/lib/agents/appointment-booking/simulation";
-export * from "@/lib/agents/appointment-booking/reports";
+export * from "@/lib/agents/appointment-booking/collection-fields";

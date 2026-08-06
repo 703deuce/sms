@@ -8,6 +8,8 @@ import {
 import {
   visibleWizardSteps,
   wizardHeadline,
+  hireWizardHeadline,
+  AMY_FIXED_CAPABILITIES,
 } from "@/lib/solutions/appointment-receptionist/wizard-presets";
 import {
   type AppointmentReceptionistWizardState,
@@ -31,10 +33,25 @@ export function AppointmentReceptionistWizard() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const preset = searchParams?.get("preset");
+  const hireMode = searchParams?.get("hire") === "amy";
   const [stepIndex, setStepIndex] = useState(0);
-  const [state, setState] = useState<AppointmentReceptionistWizardState>(() =>
-    applyWizardPreset(createDefaultWizardState(), preset),
-  );
+  const [state, setState] = useState<AppointmentReceptionistWizardState>(() => {
+    const base = applyWizardPreset(createDefaultWizardState(), preset);
+    if (hireMode) {
+      return {
+        ...base,
+        capabilities: [
+          ...AMY_FIXED_CAPABILITIES,
+          ...(base.capabilities.includes("reschedule") ? (["reschedule"] as const) : []),
+          ...(base.capabilities.includes("cancel") ? (["cancel"] as const) : []),
+        ],
+        agentName: "Amy",
+        solutionName: "Amy — Appointment Booking Agent",
+        role: "Appointment booking agent",
+      };
+    }
+    return base;
+  });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [hydrated, setHydrated] = useState(false);
@@ -122,7 +139,7 @@ export function AppointmentReceptionistWizard() {
     return () => {
       cancelled = true;
     };
-  }, [preset, searchParams]);
+  }, [preset, searchParams, hireMode]);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -137,10 +154,20 @@ export function AppointmentReceptionistWizard() {
     setState((prev) => ({ ...prev, ...p }));
   }, []);
 
-  const steps = useMemo(() => visibleWizardSteps(state), [state]);
+  const steps = useMemo(
+    () =>
+      visibleWizardSteps(state, {
+        hireMode,
+        brainAlreadyDone: hireMode,
+      }),
+    [state, hireMode],
+  );
   const headline = useMemo(
-    () => wizardHeadline(state.preset || preset),
-    [state.preset, preset],
+    () =>
+      hireMode
+        ? hireWizardHeadline(state.agentName || "Amy")
+        : wizardHeadline(state.preset || preset),
+    [hireMode, state.agentName, state.preset, preset],
   );
 
   useEffect(() => {
@@ -203,11 +230,11 @@ export function AppointmentReceptionistWizard() {
         // Schedule / draft-style activate keeps the agent and may show a warning.
         if (!json.data.published && payload.activationMode === "schedule") {
           localStorage.removeItem(STORAGE_KEY);
-          router.push(`/voice/agents/${agentId}`);
+          router.push(hireMode ? `/agents/${agentId}` : `/voice/agents/${agentId}`);
           return { agentId, telnyxAssistantId, clonedAgentId };
         }
         localStorage.removeItem(STORAGE_KEY);
-        router.push(`/voice/agents/${agentId}`);
+        router.push(hireMode ? `/agents/${agentId}` : `/voice/agents/${agentId}`);
         return { agentId, telnyxAssistantId, clonedAgentId };
       }
       return { agentId, telnyxAssistantId, clonedAgentId };
@@ -246,7 +273,7 @@ export function AppointmentReceptionistWizard() {
       const saved = await persist("save_draft");
       if (saved?.agentId) {
         localStorage.removeItem(STORAGE_KEY);
-        router.push(`/voice/agents/${saved.agentId}`);
+        router.push(hireMode ? `/agents/${saved.agentId}` : `/voice/agents/${saved.agentId}`);
       }
       return;
     }
@@ -257,7 +284,7 @@ export function AppointmentReceptionistWizard() {
       const saved = await persist("save_draft");
       if (saved?.agentId) {
         localStorage.removeItem(STORAGE_KEY);
-        router.push(`/voice/agents/${saved.agentId}`);
+        router.push(hireMode ? `/agents/${saved.agentId}` : `/voice/agents/${saved.agentId}`);
       }
       return;
     }
@@ -286,7 +313,9 @@ export function AppointmentReceptionistWizard() {
       </div>
 
       <div className="flex-1">
-        {step?.id === "goals" ? <GoalsStep state={state} patch={patch} /> : null}
+        {step?.id === "goals" ? (
+          <GoalsStep state={state} patch={patch} hireMode={hireMode} />
+        ) : null}
         {step?.id === "phone" ? <PhoneStep state={state} patch={patch} /> : null}
         {step?.id === "information" ? (
           <InformationStep state={state} patch={patch} />
@@ -347,7 +376,9 @@ export function AppointmentReceptionistWizard() {
                         ? "Schedule activation"
                         : state.activationMode === "duplicate_location"
                           ? "Activate & duplicate"
-                          : "Activate now"
+                          : hireMode
+                            ? "Put Amy to work"
+                            : "Activate now"
                     : "Continue"}
               </Button>
             </div>
