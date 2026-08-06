@@ -34,3 +34,4 @@ export * from "@/lib/agents/appointment-booking/setup-commands";
 export * from "@/lib/agents/appointment-booking/runtime-registry";
 export * from "@/lib/agents/appointment-booking/deployment-drift";
 export * from "@/lib/agents/appointment-booking/collection-fields";
+export * from "@/lib/agents/appointment-booking/intelligence";

@@ -7,12 +7,17 @@ import type { AppointmentBookingAgentView } from "@/lib/agents/appointment-booki
 import {
   explainTraceFailure,
   searchAgentActivity,
+  diagnoseCallFailure,
 } from "@/lib/agents/appointment-booking/execution-trace";
 import {
   createChangeProposal,
   parseBookingPolicyRequest,
 } from "@/lib/agents/appointment-booking/change-proposals";
 import { createWorkflowDraft } from "@/lib/agents/appointment-booking/workflow-architect";
+import {
+  preflightOwnerRequest,
+  enrichOwnerReply,
+} from "@/lib/agents/appointment-booking/intelligence/owner-runtime";
 
 export type OwnerChatReply = {
   answer: string;
@@ -44,6 +49,22 @@ export async function answerOwnerQuestion(input: {
   question: string;
   agent: AppointmentBookingAgentView;
 }): Promise<OwnerChatReply> {
+  const preflight = preflightOwnerRequest(input.question, input.agent);
+  if (preflight.blocked) {
+    return enrichOwnerReply(
+      {
+        answer: preflight.blocked,
+        sources: ["capability_boundary"],
+        suggestedFollowUps: [
+          "What exactly are you responsible for?",
+          "Explain your setup",
+          "Test yourself",
+        ],
+      },
+      preflight.state,
+    );
+  }
+
   const q = input.question.toLowerCase().trim();
   const agent = input.agent;
   const followUps = [
@@ -872,9 +893,11 @@ export async function answerOwnerQuestion(input: {
         suggestedFollowUps: followUps,
       };
     }
-    return {
-      answer: `${recent.summary}. ${explainTraceFailure(recent)}`,
-      sources: ["execution_trace", recent.callId],
+    const diagnosis = diagnoseCallFailure(recent);
+    return enrichOwnerReply(
+      {
+      answer: `${recent.summary}. ${diagnosis.ownerExplanation} ${diagnosis.recommendedNextAction}`,
+      sources: ["execution_trace", "diagnostic_specialist", recent.callId],
       suggestedFollowUps: [
         "Show recent failures",
         "How many appointments did you book this week?",
@@ -898,8 +921,10 @@ export async function answerOwnerQuestion(input: {
           href: `/agents/${agent.identity.id}?tab=health`,
         },
       ],
-      data: recent,
-    };
+      data: { trace: recent, diagnosis },
+    },
+    preflight.state,
+    );
   }
 
   if (includesAny(q, ["workflow", "version"])) {
@@ -912,13 +937,21 @@ export async function answerOwnerQuestion(input: {
     };
   }
 
-  return {
-    answer: [
-      `I can answer from my live configuration, health, metrics, and call traces.`,
-      `I can also draft booking-policy changes and workflow graphs — but I will not activate them without confirmation.`,
-      `I did not match a specific tool query for: “${input.question}”.`,
-    ].join(" "),
-    sources: ["identity"],
-    suggestedFollowUps: followUps,
-  };
+  return enrichOwnerReply(
+    {
+      answer: [
+        `I can answer from my live configuration, health, metrics, and call traces.`,
+        `I can also draft booking-policy changes and workflow graphs — but I will not activate them without confirmation.`,
+        `I did not match a specific tool query for: “${input.question}”.`,
+        preflight.delegation.delegate
+          ? `Routing note: ${preflight.delegation.reason}`
+          : "",
+      ]
+        .filter(Boolean)
+        .join(" "),
+      sources: ["identity", `intent:${preflight.state.route.intent}`],
+      suggestedFollowUps: followUps,
+    },
+    preflight.state,
+  );
 }

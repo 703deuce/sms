@@ -298,6 +298,7 @@ export type AgentControlCommand =
   | "run_setup_command"
   | "get_deployment_drift"
   | "get_runtime_registry"
+  | "get_intelligence_summary"
   | "get_field_ownership_report";
 
 export {

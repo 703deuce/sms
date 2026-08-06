@@ -8,6 +8,7 @@ import {
   WIZARD_HANDOFF_NAME,
 } from "./transfer-utils";
 import { resolveWizardRoutingMode } from "./routing-mode";
+import { buildCallerAmyPromptFromModules } from "@/lib/agents/appointment-booking/intelligence/caller-prompt";
 
 const KNOWLEDGE_FALLBACK_PHRASE =
   "If a caller asks about something that is not covered in the Business knowledge section below (and not returned by an attached knowledge tool), say you don't have that information and offer to take a message or connect someone who can help. Never invent business facts.";
@@ -118,6 +119,11 @@ function buildTranscriptionKeyterms(state: AppointmentReceptionistWizardState): 
 }
 
 export function buildSystemPrompt(state: AppointmentReceptionistWizardState): string {
+  return buildCallerAmyPromptFromModules(state);
+}
+
+/** Legacy monolithic prompt — retained for reference and tests. */
+export function buildSystemPromptLegacy(state: AppointmentReceptionistWizardState): string {
   const caps = state.capabilities;
   const transferName = wizardTransferDestinationName(state.transferDestinationName);
   const transferPhone = normalizeWizardTransferPhone(state.transferDestinationPhone);

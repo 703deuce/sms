@@ -538,12 +538,46 @@ const runtimes = runtimeRegistrySummary();
 assert("four runtimes registered", runtimes.length === 4);
 assert(
   "caller has live tools",
-  runtimes.find((r) => r.id === "caller_amy")?.writePermission === "live_tools",
+  (runtimes.find((r) => r.runtimeId === "caller_amy")?.allowedWrites || []).includes(
+    "live_tools",
+  ),
 );
 assert(
   "owner is proposal_only",
-  runtimes.find((r) => r.id === "owner_amy")?.writePermission === "proposal_only",
+  (runtimes.find((r) => r.runtimeId === "owner_amy")?.allowedWrites || []).includes(
+    "proposal_only",
+  ),
 );
+
+import { runAcceptanceSuite } from "../src/lib/agents/appointment-booking/intelligence/acceptance-tests";
+import { buildRuntimeAuditTable } from "../src/lib/agents/appointment-booking/runtime-registry";
+import { routeOwnerRequest } from "../src/lib/agents/appointment-booking/intelligence/request-router";
+import { buildWorkflowArchitectFromRequest } from "../src/lib/agents/appointment-booking/intelligence/workflow-architect-runtime";
+
+const acceptance = runAcceptanceSuite();
+assert("acceptance tests pass", acceptance.failed === 0);
+assert("acceptance has owner tests", acceptance.results.some((r) => r.runtime === "owner_amy"));
+
+const audit = buildRuntimeAuditTable();
+assert("audit table has 4 rows", audit.length === 4);
+
+const route = routeOwnerRequest("Why didn't the last call book?");
+assert("routes diagnose_failure", route.intent === "diagnose_failure");
+assert("delegates diagnostic", route.delegateTo === "diagnostic_specialist");
+
+const architect = buildWorkflowArchitectFromRequest({
+  agentId: "a1",
+  userRequest: "Create after-hours emergency flow",
+  phoneNumberId: "pn_1",
+});
+assert("architect creates draft", architect.status === "draft_created");
+assert("architect assigns tests", architect.requiredTests.length >= 2);
+
+const rejected = buildWorkflowArchitectFromRequest({
+  agentId: "a1",
+  userRequest: "Write JavaScript to book",
+});
+assert("architect rejects code", rejected.status === "unsupported");
 
 const custom = createCustomCollectionField({
   label: "Vehicle year make model",

@@ -685,6 +685,29 @@ export async function runAgentControlCommand(input: {
       return { runtimes: runtimeRegistrySummary() };
     }
 
+    case "get_intelligence_summary": {
+      const { buildRuntimeAuditTable } = await import(
+        "@/lib/agents/appointment-booking/runtime-registry"
+      );
+      const {
+        OWNER_AMY_CAPABILITIES,
+        AMY_CAPABILITY_SHORTCUTS,
+      } = await import("@/lib/agents/appointment-booking/intelligence/capability-catalog");
+      const { getAllPromptVersions } = await import(
+        "@/lib/agents/appointment-booking/intelligence/prompt-versioning"
+      );
+      const { runAcceptanceSuite } = await import(
+        "@/lib/agents/appointment-booking/intelligence/acceptance-tests"
+      );
+      return {
+        audit: buildRuntimeAuditTable(),
+        capabilities: OWNER_AMY_CAPABILITIES,
+        shortcuts: AMY_CAPABILITY_SHORTCUTS,
+        promptVersions: getAllPromptVersions(),
+        acceptanceTests: runAcceptanceSuite(),
+      };
+    }
+
     case "get_field_ownership_report": {
       const { migrationReport } = await import(
         "@/lib/agents/appointment-booking/field-ownership"

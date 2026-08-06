@@ -3,6 +3,8 @@
  */
 
 import { getPrisma } from "@/lib/db";
+import { diagnoseTrace } from "@/lib/agents/appointment-booking/intelligence/diagnostic-runtime";
+import type { DiagnosticResult } from "@/lib/agents/appointment-booking/intelligence/types";
 import type {
   AgentExecutionOutcome,
   AgentExecutionStep,
@@ -251,12 +253,11 @@ export async function searchAgentActivity(input: {
 }
 
 export function explainTraceFailure(trace: AgentExecutionTrace): string {
-  const failed = [...trace.steps].reverse().find((s) => s.status === "failed");
-  if (!failed) {
-    return `No failed step was recorded for this call. Final outcome: ${trace.outcome.replaceAll("_", " ")}.`;
-  }
-  const detail = failed.errorMessage || failed.errorCode || "unknown error";
-  return `The call failed at ${failed.blockType}. ${detail}`;
+  return diagnoseCallFailure(trace).ownerExplanation;
+}
+
+export function diagnoseCallFailure(trace: AgentExecutionTrace): DiagnosticResult {
+  return diagnoseTrace(trace);
 }
 
 export function listToolNamesFromTrace(trace: AgentExecutionTrace): string[] {

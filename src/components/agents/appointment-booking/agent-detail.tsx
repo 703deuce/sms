@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import type { AppointmentBookingAgentView } from "@/lib/agents/appointment-booking/types";
+import { AMY_CAPABILITY_SHORTCUTS } from "@/lib/agents/appointment-booking/intelligence/capability-catalog";
 import { cn } from "@/lib/utils";
 
 type PrimarySection = "home" | "talk" | "work" | "build" | "settings";
@@ -537,6 +538,23 @@ export function AppointmentAgentDetail({ agentId }: { agentId: string }) {
                 ) : null}
               </div>
               <div className="border-t border-slate-100 p-4">
+                <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                  What {name} can do
+                </p>
+                <div className="mb-3 flex flex-wrap gap-2">
+                  {AMY_CAPABILITY_SHORTCUTS.map((shortcut) => (
+                    <button
+                      key={shortcut.id}
+                      type="button"
+                      disabled={busy}
+                      onClick={() => void ask(shortcut.prompt)}
+                      className="rounded-full border border-violet-200 bg-violet-50/50 px-3 py-1.5 text-[12px] font-medium text-violet-800 hover:bg-violet-100"
+                      title={shortcut.capabilityId}
+                    >
+                      {shortcut.label}
+                    </button>
+                  ))}
+                </div>
                 <div className="mb-3 flex flex-wrap gap-2">
                   {SUGGESTED.map((s) => (
                     <button
