@@ -109,7 +109,8 @@ export const CALLER_AMY_TOOL_PLAYBOOK: CallerToolPlaybookEntry[] = [
   },
   {
     toolId: "book_appointment",
-    summary: "Book after caller confirms; startsAt must match a slot from calendar_availability.",
+    summary:
+      "Book after caller confirms; startsAt must match a slot from calendar_availability. Confirms locally — tell caller they are booked when status=confirmed.",
     whenToCall:
       "Only after calendar_availability returned slots AND caller confirmed name, phone, email, and time.",
     parameters: [
@@ -160,8 +161,9 @@ export const CALLER_AMY_TOOL_PLAYBOOK: CallerToolPlaybookEntry[] = [
     never: [
       "Invent or convert startsAt — only use slots[].startsAt",
       "Retry without customerName and customerEmail",
-      "Tell caller they are booked before ok=true",
+      "Tell caller they are booked before success=true and status=confirmed (or already_completed)",
       "Book a time the caller wanted if it was not in slots — offer available slots instead",
+      "Worry about sync_status=pending — calendar sync happens in the background after you confirm",
     ],
   },
   {

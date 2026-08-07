@@ -190,6 +190,28 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       }
       return { ok: true };
     }
+    case "voice_appointment_provider_sync": {
+      const { syncAppointmentToProvider, markAppointmentSyncFailed } = await import(
+        "@/lib/voice/agent-tool-gateway/provider-sync"
+      );
+      const workspaceId = String(payload.workspaceId || "");
+      const appointmentId = String(payload.appointmentId || "");
+      if (!workspaceId || !appointmentId) {
+        throw new Error("workspaceId and appointmentId required");
+      }
+      try {
+        return await syncAppointmentToProvider({
+          workspaceId,
+          appointmentId,
+          agentId: payload.agentId ? String(payload.agentId) : null,
+          callId: payload.callId ? String(payload.callId) : null,
+          operationId: payload.operationId ? String(payload.operationId) : null,
+        });
+      } catch (err) {
+        await markAppointmentSyncFailed(appointmentId, workspaceId, err).catch(() => undefined);
+        throw err;
+      }
+    }
     case "voice_tool_execute": {
       const { executeVoiceTool } = await import("@/lib/voice/tools/executor");
       const result = await executeVoiceTool(
