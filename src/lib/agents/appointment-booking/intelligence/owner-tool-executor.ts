@@ -16,6 +16,10 @@ import {
 } from "./tool-result";
 import { diagnoseExecution } from "./diagnostic-runtime";
 import { consumeActionConfirmation } from "./owner-confirmation";
+import { assertOwnerToolAllowed } from "@/lib/platform/owner-runtime/guard";
+import { canonicalOwnerTool, inferOwnerTaskFromIntent } from "@/lib/platform/owner-runtime/states";
+import { defaultOwnerPermissions } from "@/lib/platform/owner-runtime/session";
+import { isPlatformBlockedTool } from "@/lib/platform/agent-runtime/gateway";
 
 export type OwnerToolSpec = {
   command?: AgentControlCommand;
@@ -422,8 +426,20 @@ export async function executeOwnerLlmTool(input: {
   if (!spec) {
     return toolFailed("unknown_tool", `Unknown tool: ${input.toolName}`, false);
   }
-  if (spec.blocked) {
+  if (spec.blocked || isPlatformBlockedTool(input.toolName) || isPlatformBlockedTool(canonicalOwnerTool(input.toolName))) {
     return toolFailed("blocked_tool", `Tool ${input.toolName} is not callable from the owner agent loop`, false);
+  }
+
+  const ownerIntent = String(input.args.intent || input.args.ownerMessage || input.toolName || "");
+  const ownerState = inferOwnerTaskFromIntent(ownerIntent);
+  const guard = assertOwnerToolAllowed({
+    tool: input.toolName,
+    state: ownerState,
+    permissions: defaultOwnerPermissions(),
+    tests_passed: Boolean(input.args.testsPassed),
+  });
+  if (!guard.allowed) {
+    return toolBlocked(guard.error_code || "tool_not_allowed", guard.user_message || "Action not allowed in current state");
   }
 
   if (spec.requiresConfirmation) {
