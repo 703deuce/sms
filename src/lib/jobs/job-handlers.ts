@@ -212,6 +212,12 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
         throw err;
       }
     }
+    case "voice_send_sms":
+    case "voice_appointment_provider_cancel":
+    case "voice_appointment_provider_reschedule": {
+      const { processVoiceOutboxJob } = await import("@/lib/voice/outbox/voice-outbox");
+      return processVoiceOutboxJob(jobType, payload as Record<string, unknown>);
+    }
     case "voice_tool_execute": {
       const { executeVoiceTool } = await import("@/lib/voice/tools/executor");
       const result = await executeVoiceTool(

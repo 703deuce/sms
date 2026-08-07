@@ -4,10 +4,7 @@
 
 import type { OwnerRuntimeContext, PromptModuleId } from "./types";
 import { capabilitySummaryForPrompt } from "./capability-catalog";
-import {
-  compileCallerToolPlaybookForPrompt,
-  callerAmyRuntimeToolIds,
-} from "./caller-tool-playbook";
+import { compileCallerConstitution } from "./caller-constitution";
 
 export type PromptCompileInput = {
   modules: PromptModuleId[];
@@ -154,12 +151,7 @@ When an owner action is required, state exactly what they must do.`,
 
   proposal_policy: () => MODULES.configuration_change_policy({}),
 
-  base_receptionist: (ctx) =>
-    interpolate(
-      `You are {{agent_name}}, the live phone appointment booking agent for {{business_name}}.
-Your fixed responsibility is greeting callers, identifying booking intent, collecting required information, checking availability, confirming details, booking appointments, and following transfer/fallback rules.`,
-      ctx,
-    ),
+  base_receptionist: (ctx) => compileCallerConstitution(ctx.businessName || "the business"),
 
   booking_policy: (ctx) =>
     `BOOKING POLICY
@@ -183,7 +175,12 @@ PREFERRED: record_current_field({ value }) when collecting the active field — 
 ALTERNATIVE: save_collected_fields({ fields: [{ field_id, value }] }) for multiple fields.
 Use only tools listed in allowed_tools for the current workflow state.`,
 
-  tool_policy: () => compileCallerToolPlaybookForPrompt(callerAmyRuntimeToolIds()),
+  tool_policy: () =>
+    `TOOL POLICY (runtime-driven)
+Tool schemas and descriptions are provided by Telnyx webhooks and runtime context — not in this prompt.
+On each turn call get_runtime_context when unsure of state or permitted actions.
+Only use tools listed in allowed_tools_json or get_runtime_context.allowed_tools.
+Never claim booking, SMS, transfer, or cancellation succeeded until the tool returns status=confirmed.`,
 
   transfer_policy: (ctx) =>
     `TRANSFER POLICY

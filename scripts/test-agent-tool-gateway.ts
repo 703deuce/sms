@@ -28,7 +28,9 @@ function check(name: string, cond: boolean, detail?: string) {
 
 check("routes book + availability aliases", isGatewayRoutedTool("book_appointment"));
 check("routes check_availability alias", isGatewayRoutedTool("check_availability"));
-check("does not route unrelated tools", !isGatewayRoutedTool("send_sms"));
+check("routes hold + cancel", isGatewayRoutedTool("hold_appointment_slot") && isGatewayRoutedTool("cancel_appointment"));
+check("routes send_sms", isGatewayRoutedTool("send_sms"));
+check("does not route unrelated tools", !isGatewayRoutedTool("resolve_datetime"));
 
 const book = normalizeBookInput(
   {

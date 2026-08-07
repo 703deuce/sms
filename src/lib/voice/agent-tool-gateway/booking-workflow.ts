@@ -95,28 +95,42 @@ export async function executeBookAppointmentWorkflow(
     );
   }
 
-  {
-    const { ensureAgentRuntime, saveAgentRuntime, appendOperationReceipt } = await import(
-      "@/lib/voice/workflow-engine/runtime-state"
+  const { acquireWriteLock, releaseWriteLock } = await import("@/lib/voice/workflow-engine/write-lock");
+  const lock = await acquireWriteLock({
+    callId: ctx.callId,
+    operationId: normalized.operation_id,
+    tool: "book_appointment",
+  });
+  if (!lock.acquired) {
+    throw new AgentToolError(
+      "INTERNAL_ERROR",
+      "Another write operation is in progress",
+      true,
+      "I'm still finishing another step. One moment please.",
     );
-    let runtime = await ensureAgentRuntime({
-      callId: ctx.callId,
-      workflowId: "book_appointment",
-      serviceName: normalized.service_name,
-    });
-    runtime = {
-      ...runtime,
-      pending_operations: [...new Set([...runtime.pending_operations, normalized.operation_id])],
-    };
-    runtime = appendOperationReceipt(runtime, {
-      operation_id: normalized.operation_id,
-      type: "BOOK_APPOINTMENT",
-      status: "pending",
-      created_at: new Date().toISOString(),
-    });
-    await saveAgentRuntime(ctx.callId, runtime);
   }
 
+  const { ensureAgentRuntime, saveAgentRuntime, appendOperationReceipt } = await import(
+    "@/lib/voice/workflow-engine/runtime-state"
+  );
+  let runtime = await ensureAgentRuntime({
+    callId: ctx.callId,
+    workflowId: "book_appointment",
+    serviceName: normalized.service_name,
+  });
+  runtime = {
+    ...runtime,
+    pending_operations: [...new Set([...runtime.pending_operations, normalized.operation_id])],
+  };
+  runtime = appendOperationReceipt(runtime, {
+    operation_id: normalized.operation_id,
+    type: "BOOK_APPOINTMENT",
+    status: "pending",
+    created_at: new Date().toISOString(),
+  });
+  await saveAgentRuntime(ctx.callId, runtime);
+
+  try {
   const { getWorkflowRequirements, ensureWorkflowFieldSession } = await import(
     "@/lib/voice/field-runtime"
   );
@@ -348,21 +362,23 @@ export async function executeBookAppointmentWorkflow(
     minute: "2-digit",
   });
 
-  return toolSuccess({
-    status: "confirmed",
-    operation_id: normalized.operation_id,
-    user_message: `Appointment confirmed for ${whenLabel}.`,
-    data: {
-      appointment_id: appointment.id,
-      start_time: appointment.startsAt.toISOString(),
-      end_time: appointment.endsAt?.toISOString() || null,
-      service_name: normalized.service_name,
-      sync_status: syncStatus,
-      provider,
-      // Amy may tell caller they're booked — only when status is confirmed.
-      may_confirm_to_caller: true,
-    },
-  });
+    return toolSuccess({
+      status: "confirmed",
+      operation_id: normalized.operation_id,
+      user_message: `Appointment confirmed for ${whenLabel}.`,
+      data: {
+        appointment_id: appointment.id,
+        start_time: appointment.startsAt.toISOString(),
+        end_time: appointment.endsAt?.toISOString() || null,
+        service_name: normalized.service_name,
+        sync_status: syncStatus,
+        provider,
+        may_confirm_to_caller: true,
+      },
+    });
+  } finally {
+    await releaseWriteLock(ctx.callId, normalized.operation_id).catch(() => undefined);
+  }
 }
 
 export function appointmentSyncStatus(metadata: unknown): string {

@@ -22,6 +22,10 @@ import {
   callerToolWebhookBody,
   callerToolWebhookDescription,
 } from "@/lib/agents/appointment-booking/intelligence/caller-tool-playbook";
+import {
+  filterToolsForCallerAmyPublish,
+} from "@/lib/voice/workflow-engine/tool-publish";
+import { strictWebhookBodyParameters } from "@/lib/voice/schema/strict-tool-schema";
 
 type ToolRow = {
   id: string;
@@ -75,10 +79,12 @@ export function buildAssistantTools(input: {
   /** Version B/C: async nonessential tools + sync request_start fillers. */
   optimizeToolLatency?: boolean;
 }) {
-  const enabled = resolveEnabledBuiltinTools({
-    enabledBuiltinTools: input.enabledBuiltinTools,
-    agentType: input.agentType,
-  });
+  const enabled = filterToolsForCallerAmyPublish(
+    resolveEnabledBuiltinTools({
+      enabledBuiltinTools: input.enabledBuiltinTools,
+      agentType: input.agentType,
+    }),
+  );
   const optimize = Boolean(input.optimizeToolLatency);
 
   const tools: Record<string, unknown>[] = [];
@@ -216,7 +222,9 @@ export function buildAssistantTools(input: {
         : `${builtin.description} If this tool fails, do NOT hang up — apologize and offer to take a message.`;
     // Slow booking tools: 30s so progressive delayed fillers can play before Telnyx cuts off.
     const timeoutMs = escalateSolePath ? 12000 : slow ? 30000 : 8000;
-    const bodyParameters = callerToolWebhookBody(key) || builtin.body;
+    const bodyParameters = strictWebhookBodyParameters(
+      (callerToolWebhookBody(key) || builtin.body) as Record<string, unknown>,
+    );
     const webhook = applyLatencyWebhookDecorations(
       builtin.toolType || key,
       {

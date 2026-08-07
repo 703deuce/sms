@@ -445,7 +445,6 @@ export const FULL_RECEPTIONIST_TOOLS = [
   "record_current_field",
   "get_workflow_requirements",
   "get_runtime_context",
-  "save_caller_info",
   "update_contact_tags",
   "lookup_customer",
   "search_crm_contacts",

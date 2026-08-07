@@ -332,6 +332,7 @@ export async function POST(request: Request) {
 
         if (callId) {
           const { refreshRuntimeAfterTool } = await import("@/lib/voice/workflow-engine/engine");
+          const { appendTraceEvent } = await import("@/lib/voice/workflow-engine/trace");
           await refreshRuntimeAfterTool({
             callId,
             workspaceId,
@@ -340,6 +341,12 @@ export async function POST(request: Request) {
             toolResult: result,
             workflow: workflow as import("@/lib/voice/field-runtime/types").WorkflowAction,
             serviceName,
+          }).catch(() => undefined);
+          await appendTraceEvent(callId, {
+            kind: ok ? "tool_success" : "tool_failure",
+            tool: toolType,
+            operation_id: result.operation_id ? String(result.operation_id) : undefined,
+            detail: { error_code: result.error_code, workflow_state: result.workflow_state },
           }).catch(() => undefined);
         }
         if (execution) {

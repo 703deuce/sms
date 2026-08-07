@@ -1,5 +1,5 @@
 import { computeWorkflowState } from "./engine";
-import { canonicalToolType, isToolAllowedForState, IRREVERSIBLE_TOOLS } from "./states";
+import { canonicalToolType, isToolAllowedForState, IRREVERSIBLE_TOOLS, toolsForState } from "./states";
 import type { ToolGuardResult } from "./types";
 import type { WorkflowAction } from "@/lib/voice/field-runtime/types";
 
@@ -33,8 +33,8 @@ export async function assertToolAllowed(input: {
       workflow: input.workflow,
       serviceName: input.serviceName,
     });
-    const { toolsForState } = await import("./states");
-    return { allowed: true, state, allowed_tools: toolsForState(state) };
+    const { toolsForState: _tfs } = await import("./states");
+    return { allowed: true, state, allowed_tools: _tfs(state) };
   }
 
   const { state, runtime } = await computeWorkflowState({
@@ -45,7 +45,24 @@ export async function assertToolAllowed(input: {
     serviceName: input.serviceName,
   });
 
-  const { toolsForState } = await import("./states");
+  const { getActiveWriteLock } = await import("./write-lock");
+  const writeLock = await getActiveWriteLock(input.callId);
+  if (
+    writeLock &&
+    writeLock.tool !== canonical &&
+    !["book_appointment", "get_runtime_context"].includes(canonical)
+  ) {
+    return {
+      allowed: false,
+      state,
+      allowed_tools: toolsForState(state),
+      error_code: "WRITE_IN_PROGRESS",
+      speak: "I'm still finishing another action. One moment please.",
+      retryable: true,
+      next_action: `Wait for ${writeLock.tool} to complete.`,
+    };
+  }
+
   const allowed_tools = toolsForState(state);
 
   if (state === "BOOKING_IN_PROGRESS" && !["book_appointment", "get_runtime_context"].includes(canonical)) {
