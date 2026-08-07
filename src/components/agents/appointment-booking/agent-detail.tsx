@@ -91,13 +91,15 @@ export function AppointmentAgentDetail({ agentId }: { agentId: string }) {
       text: string;
       evidence?: Array<{ label: string; href?: string }>;
       proposalId?: string;
+      workflowDraftId?: string;
+      requiresConfirmation?: boolean;
+      confirmationDismissed?: boolean;
     }>
   >([]);
   const [question, setQuestion] = useState("");
   const [busy, setBusy] = useState(false);
   const [chatStatus, setChatStatus] = useState<string | null>(null);
   const [runtimeIndicator, setRuntimeIndicator] = useState<string | null>(null);
-  const [pendingProposalId, setPendingProposalId] = useState<string | null>(null);
 
   // Settings draft editors (proposal pipeline — never direct Telnyx mutate)
   const [noticeHours, setNoticeHours] = useState("2");
@@ -256,9 +258,10 @@ export function AppointmentAgentDetail({ agentId }: { agentId: string }) {
           text: String(data.answer || "No answer returned."),
           evidence: Array.isArray(data.evidence) ? data.evidence : undefined,
           proposalId: data.proposalId ? String(data.proposalId) : undefined,
+          workflowDraftId: data.workflowDraftId ? String(data.workflowDraftId) : undefined,
+          requiresConfirmation: Boolean(data.requiresConfirmation),
         },
       ]);
-      if (data.proposalId) setPendingProposalId(String(data.proposalId));
       if (data.runtimeIndicator) setRuntimeIndicator(String(data.runtimeIndicator));
     } catch (err) {
       setChat((prev) => [
@@ -271,27 +274,17 @@ export function AppointmentAgentDetail({ agentId }: { agentId: string }) {
     }
   };
 
-  const putLive = async (proposalId: string) => {
-    setBusy(true);
-    try {
-      await runCommand("confirm_change_proposal", {
-        proposalId,
-        confirm: true,
-        publish: true,
-      });
-      setPendingProposalId(null);
-      setChat((prev) => [
-        ...prev,
-        { role: "agent", text: "Change is live on the phone line now." },
-      ]);
-      await load();
-      const props = await runCommand("list_change_proposals");
-      setProposals(props.proposals || []);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setBusy(false);
-    }
+  const confirmInChat = async (messageIndex: number) => {
+    setChat((prev) =>
+      prev.map((m, i) => (i === messageIndex ? { ...m, confirmationDismissed: true } : m)),
+    );
+    await ask("Yes, put it live");
+  };
+
+  const dismissConfirmation = (messageIndex: number) => {
+    setChat((prev) =>
+      prev.map((m, i) => (i === messageIndex ? { ...m, confirmationDismissed: true } : m)),
+    );
   };
 
   const proposeBookingPatch = async (summary: string, patch: Record<string, unknown>) => {
@@ -301,14 +294,14 @@ export function AppointmentAgentDetail({ agentId }: { agentId: string }) {
         summary,
         bookingPolicy: patch,
       });
-      setPendingProposalId(String(proposal.id));
       setSection("talk");
       setChat((prev) => [
         ...prev,
         {
           role: "agent",
-          text: `I drafted: ${summary}. Confirm to put it live on the phone line.`,
+          text: `I drafted: ${summary}. Want me to put this live on the phone line?`,
           proposalId: String(proposal.id),
+          requiresConfirmation: true,
         },
       ]);
     } catch (err) {
@@ -506,31 +499,42 @@ export function AppointmentAgentDetail({ agentId }: { agentId: string }) {
                     )}
                   >
                     <p className="whitespace-pre-wrap">{m.text}</p>
-                    {m.proposalId ? (
+                    {m.requiresConfirmation && !m.confirmationDismissed ? (
                       <div className="mt-3 rounded-xl border border-violet-200 bg-white p-3 text-slate-800">
-                        <p className="text-[11px] font-semibold uppercase tracking-wide text-violet-700">
-                          Proposed change
+                        <p className="text-[12px] text-slate-600">
+                          {m.workflowDraftId
+                            ? "Want me to promote this workflow draft and activate it?"
+                            : "Want me to put this change live on the phone line?"}
                         </p>
-                        <p className="mt-1 text-[12px]">Requires your approval before callers see it.</p>
                         <div className="mt-3 flex flex-wrap gap-2">
                           <button
                             type="button"
                             disabled={busy}
-                            onClick={() => void putLive(m.proposalId!)}
+                            onClick={() => void confirmInChat(i)}
                             className="rounded-lg bg-violet-600 px-3 py-1.5 text-[12px] font-semibold text-white"
                           >
-                            Put change live
+                            Yes, put it live
                           </button>
                           <button
                             type="button"
-                            onClick={() => {
-                              setSection("build");
-                              setBuildSub("versions");
-                            }}
-                            className="rounded-lg border border-slate-200 px-3 py-1.5 text-[12px] font-semibold"
+                            disabled={busy}
+                            onClick={() => dismissConfirmation(i)}
+                            className="rounded-lg border border-slate-200 px-3 py-1.5 text-[12px] font-semibold text-slate-700"
                           >
-                            Review draft
+                            Not now
                           </button>
+                          {m.proposalId || m.workflowDraftId ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSection("build");
+                                setBuildSub(m.workflowDraftId ? "workflow" : "versions");
+                              }}
+                              className="rounded-lg border border-slate-200 px-3 py-1.5 text-[12px] font-semibold"
+                            >
+                              Review first
+                            </button>
+                          ) : null}
                         </div>
                       </div>
                     ) : null}
@@ -553,19 +557,6 @@ export function AppointmentAgentDetail({ agentId }: { agentId: string }) {
                 ))}
                 {chatStatus ? (
                   <p className="text-[12px] text-violet-700">{chatStatus}</p>
-                ) : null}
-                {pendingProposalId ? (
-                  <div className="rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-3 text-sm">
-                    Draft waiting — not on the phone yet.
-                    <button
-                      type="button"
-                      disabled={busy}
-                      className="ml-3 font-semibold text-violet-700"
-                      onClick={() => void putLive(pendingProposalId)}
-                    >
-                      Put change live
-                    </button>
-                  </div>
                 ) : null}
               </div>
               <div className="border-t border-slate-100 p-4">
@@ -871,10 +862,13 @@ export function AppointmentAgentDetail({ agentId }: { agentId: string }) {
                             <button
                               type="button"
                               disabled={busy}
-                              className="mt-3 rounded-lg bg-violet-600 px-3 py-1.5 text-[12px] font-semibold text-white"
-                              onClick={() => void putLive(p.id)}
+                              className="mt-3 rounded-lg border border-violet-300 bg-violet-50 px-3 py-1.5 text-[12px] font-semibold text-violet-800"
+                              onClick={() => {
+                                setSection("talk");
+                                void ask("Yes, put it live");
+                              }}
                             >
-                              Put change live
+                              Confirm in Talk
                             </button>
                           </div>
                         ))
@@ -1112,14 +1106,14 @@ export function AppointmentAgentDetail({ agentId }: { agentId: string }) {
                             summary: "Update opening greeting from Settings",
                             voice: { openingGreeting: greetingDraft.trim() },
                           });
-                          setPendingProposalId(String(proposal.id));
                           setSection("talk");
                           setChat((prev) => [
                             ...prev,
                             {
                               role: "agent",
-                              text: `Proposed greeting update. Review and Put change live when ready.`,
+                              text: `I updated the greeting draft. Want me to put this live on the phone line?`,
                               proposalId: String(proposal.id),
+                              requiresConfirmation: true,
                             },
                           ]);
                           await load();

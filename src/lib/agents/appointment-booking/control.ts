@@ -591,7 +591,7 @@ export async function runAgentControlCommand(input: {
           "Setup edits require bookingPolicy, voice, or collectionField — must version",
         );
       }
-      return createChangeProposal({
+      const proposal = await createChangeProposal({
         workspaceId: input.workspaceId,
         agentId: input.agentId,
         userId: input.userId,
@@ -613,6 +613,19 @@ export async function runAgentControlCommand(input: {
             })
           : undefined,
       });
+      if (input.userId) {
+        const { createActionConfirmation } = await import(
+          "@/lib/agents/appointment-booking/intelligence/owner-confirmation"
+        );
+        await createActionConfirmation({
+          workspaceId: input.workspaceId,
+          agentId: input.agentId,
+          userId: input.userId,
+          actionType: "confirm_change_proposal",
+          targetId: proposal.id,
+        });
+      }
+      return proposal;
     }
 
     case "get_setup_readiness": {

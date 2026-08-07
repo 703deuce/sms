@@ -48,6 +48,25 @@ function includesAny(q: string, words: string[]) {
   return words.some((w) => q.includes(w));
 }
 
+async function registerProposalConfirmation(input: {
+  workspaceId: string;
+  agentId: string;
+  userId?: string;
+  proposalId: string;
+}) {
+  if (!input.userId) return;
+  const { createActionConfirmation } = await import(
+    "@/lib/agents/appointment-booking/intelligence/owner-confirmation"
+  );
+  await createActionConfirmation({
+    workspaceId: input.workspaceId,
+    agentId: input.agentId,
+    userId: input.userId,
+    actionType: "confirm_change_proposal",
+    targetId: input.proposalId,
+  });
+}
+
 export async function answerOwnerQuestion(input: {
   workspaceId: string;
   agentId: string;
@@ -125,7 +144,7 @@ export async function answerOwnerQuestion(input: {
             return {
               answer: result.live
                 ? "Done. The change is live on the phone line now (published to Telnyx)."
-                : "Applied to draft. Publishing did not complete — check Health and try Put change live again.",
+                : "Applied to draft. Publishing did not complete — check Health and try again in chat.",
               sources: ["confirm_change_proposal", "action_confirmation"],
               suggestedFollowUps: ["What is your health status?", "Test yourself"],
               runtimeMode: hasOwnerAmyLlmConfigured() ? "llm_agent" : "limited_fallback",
@@ -344,6 +363,12 @@ export async function answerOwnerQuestion(input: {
         saveTo: field.saveTo,
       },
     });
+    await registerProposalConfirmation({
+      workspaceId: input.workspaceId,
+      agentId: input.agentId,
+      userId: input.userId,
+      proposalId: proposal.id,
+    });
     return {
       answer: [
         `Proposed change:`,
@@ -354,7 +379,7 @@ export async function answerOwnerQuestion(input: {
         `• Save to: ${(field.saveTo || []).join(" and ")}`,
         `• Required tests: ${proposal.testsRequired.length}`,
         ``,
-        `Say “yes, put it live” or open Versions → Put change live after you review.`,
+        `Say “yes, put it live” when you’re ready — I’ll ask in chat before anything goes live.`,
       ].join("\n"),
       sources: ["collection_fields", "change_proposal"],
       suggestedFollowUps: ["Yes, put it live", "Test yourself", "Explain your setup"],
@@ -390,8 +415,14 @@ export async function answerOwnerQuestion(input: {
         summary: "Update opening greeting",
         voice: { openingGreeting: quoted.trim() },
       });
+      await registerProposalConfirmation({
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+        userId: input.userId,
+        proposalId: proposal.id,
+      });
       return {
-        answer: `I'll update my greeting to: “${quoted.trim()}”. Confirm to publish to Telnyx.`,
+        answer: `I'll update my greeting to: “${quoted.trim()}”. Want me to put this live on the phone line?`,
         sources: ["voice", "change_proposal"],
         suggestedFollowUps: ["Yes, put it live", "Test yourself"],
         requiresConfirmation: true,
@@ -623,6 +654,12 @@ export async function answerOwnerQuestion(input: {
       patch: policyPatch,
       naturalLanguage: input.question,
     });
+    await registerProposalConfirmation({
+      workspaceId: input.workspaceId,
+      agentId: input.agentId,
+      userId: input.userId,
+      proposalId: proposal.id,
+    });
     const diffLines = proposal.changes
       .map((c) => `• ${c.path}: ${JSON.stringify(c.before)} → ${JSON.stringify(c.after)}`)
       .join("\n");
@@ -631,7 +668,7 @@ export async function answerOwnerQuestion(input: {
         `I drafted this change (not live yet):`,
         proposal.summary,
         diffLines,
-        `Reply “yes, put it live” or confirm in Versions to publish to the phone line.`,
+        `Reply “yes, put it live” in chat when you’re ready.`,
         `Proposal id: ${proposal.id}.`,
       ].join("\n"),
       sources: ["create_change_proposal"],
@@ -644,7 +681,7 @@ export async function answerOwnerQuestion(input: {
       proposalId: proposal.id,
       evidence: [
         {
-          label: "Confirm & put live",
+          label: "Review proposal",
           kind: "versions",
           href: `/agents/${agent.identity.id}?tab=versions`,
         },
@@ -708,7 +745,7 @@ export async function answerOwnerQuestion(input: {
               ? `Errors: ${draft.validationErrors.map((e) => e.message).join("; ")}`
               : "No validation errors.",
             `Draft id: ${draft.id}.`,
-            "This draft is not live. Review it in Workflows, run tests, then say “yes, put it live” or promote from the UI.",
+            "This draft is not live. Review it in Workflows, run tests, then say “yes, put it live” in chat.",
           ].join(" ")
         : [
             `Could not create a valid workflow draft for this request.`,
@@ -760,8 +797,14 @@ export async function answerOwnerQuestion(input: {
           summary: `Teach: ${input.question}`,
           patch,
         });
+        await registerProposalConfirmation({
+          workspaceId: input.workspaceId,
+          agentId: input.agentId,
+          userId: input.userId,
+          proposalId: proposal.id,
+        });
         return {
-          answer: `Classified as ${classified.classification}. I created a change proposal — review the exact diff, run tests, then confirm before it goes live.`,
+          answer: `Classified as ${classified.classification}. I created a change proposal — want me to put it live after you review the diff?`,
           sources: ["teach_agent", "change_proposal"],
           suggestedFollowUps: followUps,
           requiresConfirmation: true,
