@@ -49,6 +49,8 @@ export function buildTexmlHangupFormPayload(input: {
   startTime: string;
   endTime: string;
   durationSeconds: number;
+  /** When true, include AnsweredTime (live answered call). Omit for ring-outs. */
+  answered?: boolean;
 }): string {
   const params = new URLSearchParams({
     CallStatus: "completed",
@@ -57,10 +59,12 @@ export function buildTexmlHangupFormPayload(input: {
     To: input.toE164,
     StartTime: input.startTime,
     EndTime: input.endTime,
-    AnsweredTime: input.startTime,
     CallDuration: String(input.durationSeconds),
     Direction: "inbound",
   });
+  if (input.answered) {
+    params.set("AnsweredTime", input.startTime);
+  }
   return params.toString();
 }
 

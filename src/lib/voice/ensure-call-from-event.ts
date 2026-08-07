@@ -17,35 +17,22 @@ function pickString(...vals: unknown[]): string {
   return "";
 }
 
-function parseEventTimes(
-  p: Record<string, unknown>,
-  eventType: string,
-): {
+function parseEventTimes(p: Record<string, unknown>): {
   startedAt?: Date;
-  answeredAt?: Date;
   endedAt?: Date;
   durationSeconds?: number;
 } {
   const startRaw = pickString(p.StartTime, p.start_time, p.started_at);
-  const answeredRaw = pickString(p.AnsweredTime, p.answered_at);
   const endRaw = pickString(p.EndTime, p.OccurredAt, p.Timestamp, p.ended_at);
   const durationRaw = pickString(p.CallDuration, p.call_duration, p.Duration);
-  const texmlStatus = pickString(p.CallStatus, p.texml_call_status, p.call_status)
-    .toLowerCase()
-    .replace(/_/g, "-");
   const durationSeconds = durationRaw ? Number(durationRaw) || undefined : undefined;
 
   let startedAt: Date | undefined;
-  let answeredAt: Date | undefined;
   let endedAt: Date | undefined;
 
   if (startRaw) {
     const d = new Date(startRaw);
     if (!Number.isNaN(d.getTime())) startedAt = d;
-  }
-  if (answeredRaw) {
-    const d = new Date(answeredRaw);
-    if (!Number.isNaN(d.getTime())) answeredAt = d;
   }
   if (endRaw) {
     const d = new Date(endRaw);
@@ -54,17 +41,9 @@ function parseEventTimes(
   if (!startedAt && endedAt && durationSeconds) {
     startedAt = new Date(endedAt.getTime() - durationSeconds * 1000);
   }
-  // Only infer answered from completed calls with meaningful duration — never from StartTime alone.
-  if (
-    !answeredAt &&
-    (texmlStatus === "completed" || texmlStatus === "answered" || texmlStatus === "in-progress") &&
-    durationSeconds != null &&
-    durationSeconds > 1
-  ) {
-    answeredAt = startedAt;
-  }
 
-  return { startedAt, answeredAt, endedAt, durationSeconds };
+  // Do not parse AnsweredTime here — Telnyx TeXML echoes StartTime on ring-outs.
+  return { startedAt, endedAt, durationSeconds };
 }
 
 async function backfillCallTiming(
@@ -75,7 +54,7 @@ async function backfillCallTiming(
   const prisma = getPrisma();
   const existing = await prisma.voiceCall.findUnique({
     where: { id: callId },
-    select: { startedAt: true, answeredAt: true, endedAt: true, durationSeconds: true },
+    select: { startedAt: true, endedAt: true, durationSeconds: true },
   });
   if (!existing) return;
 
@@ -85,10 +64,6 @@ async function backfillCallTiming(
       ...(times.startedAt &&
       (!existing.startedAt || times.startedAt < existing.startedAt)
         ? { startedAt: times.startedAt }
-        : {}),
-      ...(times.answeredAt &&
-      (!existing.answeredAt || times.answeredAt < existing.answeredAt)
-        ? { answeredAt: times.answeredAt }
         : {}),
       ...(times.endedAt ? { endedAt: times.endedAt } : {}),
       ...(times.durationSeconds != null ? { durationSeconds: times.durationSeconds } : {}),
@@ -100,15 +75,37 @@ function isTerminalEventType(eventType: string): boolean {
   return /ended|hangup|completed/i.test(eventType);
 }
 
-function isStartEventType(eventType: string): boolean {
+function isAnsweredEventType(eventType: string): boolean {
   return (
-    eventType === "call.initiated" ||
-    eventType === "call.ringing" ||
     eventType === "call.answered" ||
     eventType === "call.conversation.created" ||
     eventType === "conversation.created" ||
     eventType === "conversation.started"
   );
+}
+
+function initialCallStatus(input: {
+  eventType: string;
+  terminal: boolean;
+  texmlStatus: string;
+}): string {
+  const texml = input.texmlStatus.toLowerCase().replace(/_/g, "-");
+  if (input.terminal) {
+    if (texml.includes("busy")) return "BUSY";
+    if (texml === "failed") return "FAILED";
+    if (texml === "canceled" || texml === "cancelled") return "CANCELLED";
+    if (texml === "no-answer" || texml === "noanswer") return "NO_ANSWER";
+    return "COMPLETED";
+  }
+  if (
+    isAnsweredEventType(input.eventType) ||
+    texml === "answered" ||
+    texml === "in-progress" ||
+    texml === "inprogress"
+  ) {
+    return "IN_PROGRESS";
+  }
+  return "RINGING";
 }
 
 export async function ensureVoiceCallForTelnyxEvent(input: {
@@ -128,7 +125,7 @@ export async function ensureVoiceCallForTelnyxEvent(input: {
   const fromRaw = pickString(p.from, p.start_from, p.caller_id_number, p.caller);
   const to = toRaw ? normalizeE164(toRaw) || toRaw : "";
   const from = fromRaw ? normalizeE164(fromRaw) || fromRaw : "";
-  const times = parseEventTimes(p, input.eventType);
+  const times = parseEventTimes(p);
 
   if (controlId) {
     const byControl = await prisma.voiceCall.findFirst({
@@ -260,13 +257,7 @@ export async function ensureVoiceCallForTelnyxEvent(input: {
   const texmlStatus = pickString(p.CallStatus, p.texml_call_status, p.call_status)
     .toLowerCase()
     .replace(/_/g, "-");
-  const missedTerminal =
-    texmlStatus === "no-answer" ||
-    texmlStatus === "noanswer" ||
-    texmlStatus === "busy" ||
-    texmlStatus === "canceled" ||
-    texmlStatus === "cancelled" ||
-    texmlStatus === "failed";
+  const answeredOnCreate = isAnsweredEventType(input.eventType);
   const call = await prisma.voiceCall.create({
     data: {
       workspaceId,
@@ -274,26 +265,18 @@ export async function ensureVoiceCallForTelnyxEvent(input: {
       agentVersionId,
       contactId,
       direction: "INBOUND",
-      status: terminal
-        ? missedTerminal
-          ? texmlStatus.includes("busy")
-            ? "BUSY"
-            : texmlStatus === "failed"
-              ? "FAILED"
-              : texmlStatus === "canceled" || texmlStatus === "cancelled"
-                ? "CANCELLED"
-                : "NO_ANSWER"
-          : "COMPLETED"
-        : isStartEventType(input.eventType)
-          ? "IN_PROGRESS"
-          : "RINGING",
+      status: initialCallStatus({
+        eventType: input.eventType,
+        terminal,
+        texmlStatus,
+      }),
       fromE164,
       toE164,
       phoneNumberId,
       telnyxCallControlId: controlId || null,
       telnyxConversationId: conversationId || null,
       startedAt: times.startedAt || (terminal ? undefined : now),
-      answeredAt: times.answeredAt ?? null,
+      answeredAt: answeredOnCreate ? now : null,
       endedAt: times.endedAt || (terminal ? now : undefined),
       durationSeconds: times.durationSeconds ?? undefined,
       metadata: {

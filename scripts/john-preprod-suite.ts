@@ -33,7 +33,6 @@ import { JOHN_RUNTIME_REGISTRY } from "../src/lib/agents/missed-call-text-back/i
 import { buildJohnSystemPrompt } from "../src/lib/agents/missed-call-text-back/intelligence/john-prompt";
 import {
   isMissedInboundVoiceCall,
-  wasCallGenuinelyAnswered,
 } from "../src/lib/agents/missed-call-text-back/voice-missed-trigger";
 
 const prisma = new PrismaClient();
@@ -168,28 +167,46 @@ async function main() {
   );
   const ringStart = new Date("2026-08-07T17:52:00.000Z");
   check(
-    "false answeredAt at ring is not genuine",
-    !wasCallGenuinelyAnswered({
-      answeredAt: ringStart,
-      startedAt: ringStart,
-      endedAt: new Date(ringStart.getTime() + 32_000),
-      agentId: null,
+    "NO_ANSWER status is missed",
+    isMissedInboundVoiceCall({
+      status: "NO_ANSWER",
+      direction: "INBOUND",
+      answeredAt: null,
+      voicemailDetected: false,
+      appointmentBooked: false,
     }),
     "CALL_DETECTION",
   );
   check(
-    "32s ring-out detected as missed",
+    "COMPLETED without answeredAt is missed (ring-out)",
     isMissedInboundVoiceCall({
       status: "COMPLETED",
       direction: "INBOUND",
-      answeredAt: ringStart,
-      startedAt: ringStart,
-      endedAt: new Date(ringStart.getTime() + 32_000),
-      durationSeconds: 32,
+      answeredAt: null,
       voicemailDetected: false,
       appointmentBooked: false,
-      outcome: null,
-      agentId: null,
+    }),
+    "CALL_DETECTION",
+  );
+  check(
+    "COMPLETED with answeredAt is not missed",
+    !isMissedInboundVoiceCall({
+      status: "COMPLETED",
+      direction: "INBOUND",
+      answeredAt: new Date(ringStart.getTime() + 10_000),
+      voicemailDetected: false,
+      appointmentBooked: false,
+    }),
+    "CALL_DETECTION",
+  );
+  check(
+    "RINGING without answeredAt is not missed yet (not terminal)",
+    !isMissedInboundVoiceCall({
+      status: "RINGING",
+      direction: "INBOUND",
+      answeredAt: null,
+      voicemailDetected: false,
+      appointmentBooked: false,
     }),
     "CALL_DETECTION",
   );

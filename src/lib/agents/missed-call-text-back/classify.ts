@@ -24,9 +24,8 @@ export function classifyInboundCallOutcome(
 
   const answered =
     Boolean(input.answeredAt) ||
-    status === "IN_PROGRESS" ||
-    status === "COMPLETED" && disposition.includes("answered") ||
-    /answered|in_progress|bridged/.test(disposition);
+    (status === "COMPLETED" && disposition.includes("answered")) ||
+    /answered|bridged/.test(disposition);
 
   if (answered && !/missed|no.?answer|busy|rejected|timeout|declined/.test(disposition)) {
     return "answered";

@@ -1,57 +1,32 @@
 /**
  * Shared missed-call detection + John MCTB trigger for voice calls.
+ *
+ * Answered = we received an explicit provider answer signal (call.answered /
+ * TeXML answered|in-progress), stored as VoiceCall.answeredAt.
+ * We never infer "answered" from TeXML AnsweredTime — Telnyx echoes StartTime
+ * on ring-outs.
  */
 import type { VoiceCall } from "@prisma/client";
 import { classifyInboundCallOutcome, classificationTriggersMctb } from "@/lib/agents/missed-call-text-back/classify";
 import { loadMissedCallTextConfig } from "@/lib/agents/missed-call-text-back/config";
 
-export function wasCallGenuinelyAnswered(call: {
-  answeredAt: Date | null;
-  startedAt?: Date | null;
-  endedAt?: Date | null;
-  durationSeconds?: number | null;
-  voicemailDetected?: boolean | null;
-  appointmentBooked?: boolean | null;
-  outcome?: string | null;
-  agentId?: string | null;
-}): boolean {
-  if (call.voicemailDetected || call.appointmentBooked) return true;
-  const outcome = String(call.outcome || "").toLowerCase();
-  if (
-    outcome &&
-    /booked|message_taken|transferred|answered|completed_booking/.test(outcome)
-  ) {
-    return true;
-  }
-  if (!call.answeredAt) return false;
-  if (call.startedAt) {
-    const answeredOffsetMs = call.answeredAt.getTime() - call.startedAt.getTime();
-    // False positive: answeredAt stamped at ring/start without a live session (TeXML / ensure-call bug).
-    if (answeredOffsetMs < 5_000 && !call.agentId) {
-      return false;
-    }
-  }
-  return true;
-}
+const MISSED_STATUSES = new Set(["NO_ANSWER", "BUSY", "CANCELLED", "FAILED"]);
 
 export function isMissedInboundVoiceCall(call: Pick<
   VoiceCall,
   | "status"
   | "answeredAt"
-  | "startedAt"
-  | "endedAt"
-  | "durationSeconds"
   | "voicemailDetected"
   | "appointmentBooked"
-  | "outcome"
-  | "agentId"
   | "direction"
 >): boolean {
-  const missedStatuses = ["NO_ANSWER", "BUSY", "CANCELLED", "FAILED"];
-  if (missedStatuses.includes(call.status)) return true;
-  if (String(call.direction || "").toLowerCase() === "outbound") return false;
-  if (wasCallGenuinelyAnswered(call)) return false;
-  return true;
+  const status = String(call.status || "").toUpperCase();
+  if (MISSED_STATUSES.has(status)) return true;
+  if (String(call.direction || "").toUpperCase() === "OUTBOUND") return false;
+  if (call.voicemailDetected || call.appointmentBooked) return false;
+  // Terminal without a real answer event (answeredAt only set on call.answered).
+  if (!call.answeredAt && status === "COMPLETED") return true;
+  return false;
 }
 
 export async function triggerJohnMctbForVoiceCall(call: Pick<
@@ -81,7 +56,7 @@ export async function triggerJohnMctbForVoiceCall(call: Pick<
     direction: call.direction,
     status: call.status,
     disposition: call.outcome,
-    answeredAt: wasCallGenuinelyAnswered(call) ? call.answeredAt : null,
+    answeredAt: call.answeredAt,
     voicemailDetected: call.voicemailDetected,
   });
   if (!classificationTriggersMctb(classification, config)) {
@@ -103,7 +78,7 @@ export async function triggerJohnMctbForVoiceCall(call: Pick<
       direction: call.direction,
       status: call.status,
       disposition: call.outcome,
-      answeredAt: wasCallGenuinelyAnswered(call) ? call.answeredAt : null,
+      answeredAt: call.answeredAt,
       voicemailDetected: call.voicemailDetected,
     },
   });

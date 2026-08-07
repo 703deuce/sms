@@ -237,7 +237,6 @@ export async function handleTexmlStatusCallback(request: Request) {
       const endedAt = endRaw ? new Date(endRaw) : new Date();
       const startRaw = pick(
         eventPayload.StartTime,
-        eventPayload.AnsweredTime,
         eventPayload.start_time,
       );
       let startedAt: Date | undefined;
@@ -266,17 +265,12 @@ export async function handleTexmlStatusCallback(request: Request) {
         where: { id: callId },
       });
       if (call) {
-        // TeXML often reports ring-outs as "completed" — refine before post-call / MCTB.
-        if (internalStatus === "COMPLETED") {
-          const { wasCallGenuinelyAnswered } = await import(
-            "@/lib/agents/missed-call-text-back/voice-missed-trigger"
-          );
-          if (!wasCallGenuinelyAnswered(call)) {
-            call = await prisma.voiceCall.update({
-              where: { id: callId },
-              data: { status: "NO_ANSWER", answeredAt: null },
-            });
-          }
+        // TeXML "completed" without a prior call.answered event = ring-out (no answer).
+        if (internalStatus === "COMPLETED" && !call.answeredAt) {
+          call = await prisma.voiceCall.update({
+            where: { id: callId },
+            data: { status: "NO_ANSWER", answeredAt: null },
+          });
         }
 
         await enqueueJob({

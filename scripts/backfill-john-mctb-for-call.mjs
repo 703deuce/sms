@@ -14,7 +14,7 @@ async function main() {
   if (!CALL_ID) throw new Error("Set CALL_ID");
 
   const prisma = new PrismaClient();
-  const { wasCallGenuinelyAnswered, triggerJohnMctbForVoiceCall } = await import(
+  const { isMissedInboundVoiceCall, triggerJohnMctbForVoiceCall } = await import(
     "../src/lib/agents/missed-call-text-back/voice-missed-trigger.ts"
   );
   const { executeMissedCallTextSend } = await import(
@@ -32,10 +32,26 @@ async function main() {
     endedAt: call.endedAt,
     durationSeconds: call.durationSeconds,
     agentId: call.agentId,
-    genuinelyAnswered: wasCallGenuinelyAnswered(call),
+    isMissed: isMissedInboundVoiceCall(call),
   });
 
-  if (!wasCallGenuinelyAnswered(call) && call.status === "COMPLETED") {
+  const answerEvents = await prisma.voiceCallEvent.count({
+    where: { callId: call.id, eventType: { in: ["call.answered", "call.bridged"] } },
+  });
+  const legacyFalseAnswer = Boolean(call.answeredAt) && answerEvents === 0;
+
+  if (legacyFalseAnswer) {
+    console.log("Legacy false answer — no call.answered event; clearing answeredAt");
+    if (!DRY_RUN) {
+      call = await prisma.voiceCall.update({
+        where: { id: call.id },
+        data: {
+          answeredAt: null,
+          status: call.status === "COMPLETED" ? "NO_ANSWER" : call.status,
+        },
+      });
+    }
+  } else if (isMissedInboundVoiceCall(call) && call.status === "COMPLETED") {
     console.log("Patching COMPLETED ring-out → NO_ANSWER");
     if (!DRY_RUN) {
       call = await prisma.voiceCall.update({
@@ -43,14 +59,8 @@ async function main() {
         data: { status: "NO_ANSWER", answeredAt: null },
       });
     }
-  } else if (!wasCallGenuinelyAnswered(call) && call.answeredAt) {
-    console.log("Clearing false answeredAt");
-    if (!DRY_RUN) {
-      call = await prisma.voiceCall.update({
-        where: { id: call.id },
-        data: { answeredAt: null },
-      });
-    }
+  } else if (legacyFalseAnswer && DRY_RUN) {
+    // handled above
   }
 
   if (DRY_RUN) {
