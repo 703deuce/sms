@@ -94,6 +94,12 @@ async function main() {
     "publish filter includes record_current_field",
     filterToolsForCallerAmyPublish([...FULL_RECEPTIONIST_TOOLS]).includes("record_current_field"),
   );
+  check(
+    "legacy save_caller_info config still publishes runtime tools",
+    filterToolsForCallerAmyPublish(["save_caller_info", "book_appointment", "calendar_availability"]).includes(
+      "record_current_field",
+    ),
+  );
 
   await dbIntegration();
 
