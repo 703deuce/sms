@@ -19,6 +19,7 @@ import {
   normalizeCallerAni,
 } from "../src/lib/voice/call-identity";
 import { compileCallerToolPlaybookForPrompt } from "../src/lib/agents/appointment-booking/intelligence/caller-tool-playbook";
+import { buildSyncToolFillerMessages, SYNC_TOOL_FILLERS } from "../src/lib/voice/latency-profiles";
 import { assertToolAllowed } from "../src/lib/voice/workflow-engine/guard";
 import { isToolAllowedForState } from "../src/lib/voice/workflow-engine/states";
 
@@ -37,6 +38,7 @@ const telnyxTools = buildAssistantTools({
   tools: [],
   enabledBuiltinTools: enabled,
   agentType: "appointment_booking",
+  optimizeToolLatency: true,
 });
 
 const telnyxNames = telnyxTools
@@ -63,6 +65,26 @@ check(
 );
 check("Telnyx build excludes book_appointment", !telnyxNames.includes("book_appointment"));
 check("Telnyx build includes continue_workflow", telnyxNames.includes("continue_workflow"));
+const cwTool = telnyxTools.find(
+  (t) => (t as { webhook?: { name?: string } }).webhook?.name === "continue_workflow",
+) as { webhook?: { timeout_ms?: number; filler_messages?: unknown[] } } | undefined;
+check(
+  "continue_workflow has 30s Telnyx timeout",
+  cwTool?.webhook?.timeout_ms === 30000,
+  `got ${cwTool?.webhook?.timeout_ms}`,
+);
+check(
+  "continue_workflow has progressive fillers",
+  (cwTool?.webhook?.filler_messages?.length || 0) >= 2,
+);
+check(
+  "continue_workflow filler text configured",
+  SYNC_TOOL_FILLERS.continue_workflow?.includes("check"),
+);
+check(
+  "continue_workflow sync fillers build",
+  (buildSyncToolFillerMessages("continue_workflow")?.length || 0) >= 2,
+);
 check(
   "Telnyx tool count is small (<=10)",
   telnyxNames.length <= 10,

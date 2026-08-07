@@ -211,6 +211,7 @@ export function buildAssistantTools(input: {
       key === "send_sms" ||
       key === "book_appointment" ||
       key === "calendar_availability" ||
+      key === "continue_workflow" ||
       key === "find_appointments" ||
       key === "reschedule_appointment";
     const escalateSolePath = key === "escalate_human" && useCallControlTransfer;
