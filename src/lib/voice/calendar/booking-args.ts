@@ -7,15 +7,34 @@ export function normalizeBookingToolArgs(
 ): Record<string, unknown> {
   const out: Record<string, unknown> = { ...args };
 
+  // resolve_datetime returns resolvedIso — models often pass it straight to availability.
+  const resolvedIso = args.resolvedIso || args.resolved_iso || null;
+  if (resolvedIso && !args.from && !args.startTime && !args.startsAt) {
+    out.from = String(resolvedIso);
+    if (!args.to && !args.endTime) {
+      out.to = String(resolvedIso);
+    }
+  }
+
   const startsAt =
-    args.startsAt || args.startAt || args.startTime || args.from || null;
+    args.startsAt ||
+    args.startAt ||
+    args.startTime ||
+    args.from ||
+    resolvedIso ||
+    null;
   if (startsAt) out.startsAt = String(startsAt);
 
   const phone = args.phone || args.customerPhone || args.caller_phone || null;
   if (phone) out.phone = String(phone);
 
   const name =
-    args.name || args.customerName || args.full_name || args.caller_name || null;
+    args.name ||
+    args.customerName ||
+    args.full_name ||
+    args.caller_name ||
+    args.inviteeName ||
+    null;
   if (name) out.name = String(name);
 
   const email = args.email || args.customerEmail || null;
@@ -35,6 +54,13 @@ export function normalizeBookingToolArgs(
 
   if (args.to && !out.endTime) out.endTime = args.to;
   if (args.from && !out.startTime) out.startTime = args.from;
+  // Point-in-time slot checks: startsAt without explicit window bounds.
+  if (out.startsAt && !out.startTime && !out.from) {
+    out.startTime = out.startsAt;
+    if (!out.endTime && !out.to) {
+      out.endTime = out.startsAt;
+    }
+  }
 
   return out;
 }
@@ -79,8 +105,12 @@ export function resolveAvailabilityTimeWindow(
 ): AvailabilityTimeWindow {
   const maxDays = Math.max(1, Math.min(14, opts?.maxDays ?? 3));
   const now = opts?.now ? new Date(opts.now) : new Date();
-  const rawStart = String(args.startTime || args.from || "").trim();
-  const rawEnd = String(args.endTime || args.to || "").trim();
+  const rawStart = String(
+    args.startTime || args.from || args.startsAt || args.startAt || args.resolvedIso || "",
+  ).trim();
+  const rawEnd = String(
+    args.endTime || args.to || args.startsAt || args.startAt || args.resolvedIso || "",
+  ).trim();
   const requestedDays = Number(args.daysAhead || 0);
 
   const startIsIso = rawStart ? isIsoDateTime(rawStart) : false;
@@ -147,6 +177,53 @@ const REQUIRED_FIELD_ALIASES: Record<string, string[]> = {
   address: ["address", "location"],
   location: ["location", "address"],
 };
+
+/** Params for Calendly appointment.list_available_times — single normalization path. */
+export function buildCalendlyListAvailableTimesParams(
+  args: Record<string, unknown>,
+  opts?: { maxDays?: number; now?: Date },
+): {
+  eventTypeUri?: string;
+  startTime: string;
+  endTime: string;
+  window: AvailabilityTimeWindow;
+  normalized: Record<string, unknown>;
+} {
+  const normalized = normalizeBookingToolArgs(args);
+  const window = resolveAvailabilityTimeWindow(normalized, opts);
+  const eventTypeUri = normalized.eventTypeUri || normalized.eventTypeId;
+  return {
+    eventTypeUri: eventTypeUri ? String(eventTypeUri) : undefined,
+    startTime: window.startTime,
+    endTime: window.endTime,
+    window,
+    normalized,
+  };
+}
+
+/** Params for Calendly appointment.book — single normalization path. */
+export function buildCalendlyBookParams(args: Record<string, unknown>): {
+  name: string;
+  email: string;
+  phone: string | null;
+  startTime: string | undefined;
+  timezone: string;
+  eventTypeUri?: string;
+  normalized: Record<string, unknown>;
+} {
+  const normalized = normalizeBookingToolArgs(args);
+  const startTime = normalized.startsAt ? String(normalized.startsAt) : undefined;
+  const eventTypeUri = normalized.eventTypeUri || normalized.eventTypeId;
+  return {
+    name: String(normalized.name || "Caller").trim(),
+    email: String(normalized.email || "").trim(),
+    phone: normalized.phone ? String(normalized.phone) : null,
+    startTime,
+    timezone: String(normalized.timezone || "America/New_York"),
+    eventTypeUri: eventTypeUri ? String(eventTypeUri) : undefined,
+    normalized,
+  };
+}
 
 export function fieldSatisfied(
   field: string,

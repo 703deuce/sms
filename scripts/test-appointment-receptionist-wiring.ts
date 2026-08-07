@@ -586,6 +586,22 @@ assert(
     pointInTime.startTime === "2026-08-07T18:00:00.000Z" &&
       pointInTime.endTime === "2026-08-08T18:00:00.000Z",
   );
+  const startsAtOnly = resolveAvailabilityTimeWindow(
+    { startsAt: "2026-08-07T18:00:00.000Z" },
+    { now: new Date("2026-08-07T02:16:00.000Z"), maxDays: 3 },
+  );
+  assert(
+    "startsAt-only expands end for Calendly",
+    startsAtOnly.endTime === "2026-08-08T18:00:00.000Z",
+  );
+  const resolvedIsoOnly = normalizeBookingToolArgs({
+    resolvedIso: "2026-08-07T18:00:00.000Z",
+  });
+  assert(
+    "resolvedIso maps to from/to window",
+    resolvedIsoOnly.from === "2026-08-07T18:00:00.000Z" &&
+      resolvedIsoOnly.to === "2026-08-07T18:00:00.000Z",
+  );
 }
 
 console.log("");
