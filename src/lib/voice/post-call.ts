@@ -131,6 +131,30 @@ export async function processPostCall(callId: string) {
       payload: { status: call.status, outcome: call.outcome },
       idempotencyKey: `call-missed:${call.id}`,
     }).catch(() => undefined);
+
+    try {
+      const { processMissedInboundCall } = await import(
+        "@/lib/agents/missed-call-text-back/process"
+      );
+      await processMissedInboundCall({
+        workspaceId: call.workspaceId,
+        callerE164: call.fromE164,
+        businessE164: call.toE164,
+        phoneNumberId: call.phoneNumberId,
+        voiceCallId: call.id,
+        contactId: call.contactId,
+        providerCallId: call.telnyxCallControlId,
+        call: {
+          direction: call.direction,
+          status: call.status,
+          disposition: call.outcome,
+          answeredAt: call.answeredAt,
+          voicemailDetected: call.voicemailDetected,
+        },
+      });
+    } catch (err) {
+      console.warn("[post-call] John MCTB process failed", call.id, err);
+    }
   }
   await emitPlatformEvent({
     workspaceId: call.workspaceId,

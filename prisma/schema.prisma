@@ -267,6 +267,10 @@ model Workspace {
   voiceTransferDestinations VoiceTransferDestination[]
   voiceWidgetConfigs VoiceWidgetConfig[]
   voiceRemoteVersions VoiceRemoteAssistantVersion[]
+  missedCallTextConfig MissedCallTextConfig?
+  missedCallEvents MissedCallEvent[]
+  missedCallTextTraces MissedCallTextTrace[]
+  agentConfigurationChanges AgentConfigurationChange[]
 }
 
 model SenderPool {
@@ -3248,4 +3252,109 @@ model WorkspaceAiIntegrationPolicy {
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@map("workspace_ai_integration_policies")
+}
+
+/// Canonical Missed Call Text Back configuration (John runtime).
+model MissedCallTextConfig {
+  id                      String   @id @default(cuid())
+  workspaceId             String   @unique
+  agentId                 String?
+  enabled                 Boolean  @default(true)
+  delaySeconds            Int      @default(0)
+  messageTemplate         String   @default("Hi, sorry we missed your call. How can we help?")
+  sendAfterNoAnswer       Boolean  @default(true)
+  sendAfterBusy           Boolean  @default(true)
+  sendAfterRejected       Boolean  @default(true)
+  sendAfterTimeout        Boolean  @default(true)
+  sendAfterVoicemail      Boolean  @default(false)
+  businessHoursOnly       Boolean  @default(false)
+  allowedStartTime        String?
+  allowedEndTime          String?
+  timezone                String   @default("America/New_York")
+  quietHoursEnabled       Boolean  @default(false)
+  quietHoursStart         String?
+  quietHoursEnd           String?
+  maxMessagesPerCaller    Int      @default(1)
+  cooldownMinutes         Int      @default(60)
+  suppressKnownSpam       Boolean  @default(true)
+  suppressBlockedNumbers  Boolean  @default(true)
+  suppressOptedOutNumbers Boolean  @default(true)
+  conversationEnabled     Boolean  @default(true)
+  phoneNumberId           String?
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+  workspace               Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("missed_call_text_configs")
+}
+
+/// One row per qualifying missed-call attempt (idempotent per call leg).
+model MissedCallEvent {
+  id                String    @id @default(cuid())
+  workspaceId       String
+  voiceCallId       String?
+  humanCallId       String?
+  contactId         String?
+  callerE164        String
+  businessE164      String
+  phoneNumberId     String?
+  reason            String
+  disposition       String?
+  detectedAt        DateTime  @default(now())
+  eligible          Boolean   @default(false)
+  suppressionReason String?
+  scheduledSmsAt    DateTime?
+  smsSentAt         DateTime?
+  smsMessageId      String?
+  status            String    @default("DETECTED")
+  traceId           String
+  idempotencyKey    String    @unique
+  metadata          Json?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  workspace         Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, detectedAt])
+  @@index([workspaceId, callerE164, detectedAt])
+  @@index([voiceCallId])
+  @@index([humanCallId])
+  @@map("missed_call_events")
+}
+
+/// Machine-readable trace for John MCTB runs.
+model MissedCallTextTrace {
+  id                String   @id @default(cuid())
+  workspaceId       String
+  traceId           String
+  missedCallEventId String?
+  voiceCallId       String?
+  humanCallId       String?
+  conversationId    String?
+  kind              String
+  detail            Json?
+  createdAt         DateTime @default(now())
+  workspace         Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([traceId, createdAt])
+  @@index([missedCallEventId])
+  @@map("missed_call_text_traces")
+}
+
+/// Audit log for owner-driven John configuration changes.
+model AgentConfigurationChange {
+  id                       String   @id @default(cuid())
+  workspaceId              String
+  agentId                  String?
+  source                   String   @default("owner_john")
+  actor                    String?
+  field                    String
+  oldValue                 Json?
+  newValue                 Json?
+  requestedNaturalLanguage String?
+  toolCallId               String?
+  createdAt                DateTime @default(now())
+  workspace                Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
+  @@map("agent_configuration_changes")
 }

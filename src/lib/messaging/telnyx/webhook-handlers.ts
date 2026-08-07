@@ -105,6 +105,24 @@ export async function handleTelnyxInbound(payload: unknown) {
     }
   }
 
+  if (!replySent && parsed.body?.trim()) {
+    try {
+      const { handleJohnCustomerSmsReply } = await import(
+        "@/lib/agents/missed-call-text-back/customer-sms"
+      );
+      const john = await handleJohnCustomerSmsReply({
+        workspaceId: ctx.workspaceId,
+        fromE164: parsed.from,
+        toE164: parsed.to,
+        body: parsed.body,
+        conversationId: result.conversationId || null,
+      });
+      if (john.handled && john.action === "replied") replySent = true;
+    } catch (err) {
+      console.warn("[telnyx/inbound] John customer SMS failed", err);
+    }
+  }
+
   return {
     ok: true as const,
     kind: result.kind,

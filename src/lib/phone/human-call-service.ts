@@ -80,6 +80,27 @@ async function emitMissedCallAutomations(input: {
     disposition: input.disposition || undefined,
     cause: input.cause,
   }).catch(() => undefined);
+
+  try {
+    const { processMissedInboundCall } = await import(
+      "@/lib/agents/missed-call-text-back/process"
+    );
+    await processMissedInboundCall({
+      workspaceId: input.workspaceId,
+      callerE164: customerPhone,
+      businessE164: dialedNumber,
+      phoneNumberId: pn?.id,
+      humanCallId: input.humanCallId,
+      contactId: contact.id,
+      call: {
+        direction: input.direction,
+        disposition: input.disposition,
+        hangupCause: input.cause,
+      },
+    });
+  } catch (err) {
+    console.warn("[human-call] John MCTB process failed", input.humanCallId, err);
+  }
 }
 
 async function assertNotDnd(workspaceId: string, agentUserId: string) {

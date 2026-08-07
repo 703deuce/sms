@@ -1,0 +1,120 @@
+export type InboundCallClassification =
+  | "answered"
+  | "missed_no_answer"
+  | "missed_busy"
+  | "missed_rejected"
+  | "missed_timeout"
+  | "missed_failed"
+  | "voicemail"
+  | "abandoned"
+  | "outbound"
+  | "unknown";
+
+export type MissedCallEventStatus =
+  | "DETECTED"
+  | "ELIGIBILITY_CHECK"
+  | "SUPPRESSED"
+  | "SCHEDULED"
+  | "SENDING"
+  | "SENT"
+  | "FAILED"
+  | "WAITING_FOR_REPLY"
+  | "CUSTOMER_REPLIED";
+
+export type MctbSuppressionReason =
+  | "FEATURE_DISABLED"
+  | "CALL_ANSWERED"
+  | "OUTBOUND_CALL"
+  | "NOT_MISSED"
+  | "UNKNOWN_CALLER"
+  | "INVALID_PHONE"
+  | "OPTED_OUT"
+  | "BLOCKED_NUMBER"
+  | "SPAM"
+  | "COOLDOWN_ACTIVE"
+  | "ALREADY_SENT"
+  | "OUTSIDE_SEND_WINDOW"
+  | "NOT_SMS_CAPABLE"
+  | "PROVIDER_ERROR"
+  | "TRIGGER_DISABLED";
+
+export type MissedCallTextConfigRecord = {
+  id: string;
+  workspaceId: string;
+  agentId: string | null;
+  enabled: boolean;
+  delaySeconds: number;
+  messageTemplate: string;
+  sendAfterNoAnswer: boolean;
+  sendAfterBusy: boolean;
+  sendAfterRejected: boolean;
+  sendAfterTimeout: boolean;
+  sendAfterVoicemail: boolean;
+  businessHoursOnly: boolean;
+  allowedStartTime: string | null;
+  allowedEndTime: string | null;
+  timezone: string;
+  quietHoursEnabled: boolean;
+  quietHoursStart: string | null;
+  quietHoursEnd: string | null;
+  maxMessagesPerCaller: number;
+  cooldownMinutes: number;
+  suppressKnownSpam: boolean;
+  suppressBlockedNumbers: boolean;
+  suppressOptedOutNumbers: boolean;
+  conversationEnabled: boolean;
+  phoneNumberId: string | null;
+};
+
+export type MissedCallTextSettingsUpdate = {
+  enabled?: boolean;
+  delay_seconds?: number;
+  initial_message?: string;
+  trigger_rules?: {
+    no_answer?: boolean;
+    busy?: boolean;
+    rejected?: boolean;
+    timeout?: boolean;
+    voicemail?: boolean;
+  };
+  quiet_hours?: {
+    enabled: boolean;
+    start?: string;
+    end?: string;
+  };
+  cooldown_minutes?: number;
+  max_messages_per_caller?: number;
+  phone_number_id?: string | null;
+};
+
+export const DEFAULT_MCTB_MESSAGE =
+  "Hi, sorry we missed your call. How can we help?";
+
+export const DEFAULT_MCTB_CONFIG: Omit<
+  MissedCallTextConfigRecord,
+  "id" | "workspaceId"
+> = {
+  agentId: null,
+  enabled: true,
+  delaySeconds: 0,
+  messageTemplate: DEFAULT_MCTB_MESSAGE,
+  sendAfterNoAnswer: true,
+  sendAfterBusy: true,
+  sendAfterRejected: true,
+  sendAfterTimeout: true,
+  sendAfterVoicemail: false,
+  businessHoursOnly: false,
+  allowedStartTime: null,
+  allowedEndTime: null,
+  timezone: "America/New_York",
+  quietHoursEnabled: false,
+  quietHoursStart: null,
+  quietHoursEnd: null,
+  maxMessagesPerCaller: 1,
+  cooldownMinutes: 60,
+  suppressKnownSpam: true,
+  suppressBlockedNumbers: true,
+  suppressOptedOutNumbers: true,
+  conversationEnabled: true,
+  phoneNumberId: null,
+};

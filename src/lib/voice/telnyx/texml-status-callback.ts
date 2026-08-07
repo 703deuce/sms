@@ -255,7 +255,6 @@ export async function handleTexmlStatusCallback(request: Request) {
           status: hangupStatusFromTexml(texmlStatus || "completed"),
           ...(durationSeconds != null ? { durationSeconds } : {}),
           ...(startedAt ? { startedAt } : {}),
-          ...(startedAt ? { answeredAt: startedAt } : {}),
         },
       });
 

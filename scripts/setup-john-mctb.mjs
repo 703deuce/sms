@@ -1,0 +1,99 @@
+#!/usr/bin/env node
+/**
+ * Switch a workspace DID from Amy to John (MCTB) for live testing.
+ *
+ *   BASE_URL=https://your-app \
+ *   OWNER_EMAIL=you@example.com \
+ *   AMY_AGENT_ID=cmshz2lc25c622c4i58303501 \
+ *   PHONE_NUMBER_ID=cmsc3numa1j17084g391t2z5l \
+ *   node scripts/setup-john-mctb.mjs
+ */
+import { PrismaClient } from "@prisma/client";
+
+const BASE = (process.env.BASE_URL || process.env.APP_URL || "").replace(/\/$/, "");
+const EMAIL = (process.env.OWNER_EMAIL || "").trim().toLowerCase();
+const BOOTSTRAP = process.env.SMOKE_BOOTSTRAP || "transovo-smoke-bootstrap-b56f-aug2026";
+const AMY_AGENT_ID = (process.env.AMY_AGENT_ID || "cmshz2lc25c622c4i58303501").trim();
+const PHONE_NUMBER_ID = (process.env.PHONE_NUMBER_ID || "cmsc3numa1j17084g391t2z5l").trim();
+const DELAY_SECONDS = Number(process.env.DELAY_SECONDS || 0);
+
+async function smokeLogin() {
+  const login = await fetch(`${BASE}/api/auth/smoke-login`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-smoke-bootstrap": BOOTSTRAP,
+    },
+    body: JSON.stringify({ email: EMAIL }),
+  });
+  if (!login.ok) throw new Error(`smoke-login ${login.status}: ${await login.text()}`);
+  const cookie = login.headers
+    .getSetCookie()
+    .map((c) => String(c).split(";")[0])
+    .join("; ");
+  return { cookie, h: { cookie, accept: "application/json", "content-type": "application/json" } };
+}
+
+async function main() {
+  if (!BASE) throw new Error("Set BASE_URL");
+  if (!EMAIL) throw new Error("Set OWNER_EMAIL");
+
+  const prisma = new PrismaClient();
+  const { detachVoiceAgentFromNumber, activateJohnOnPhoneNumber } = await import(
+    "../src/lib/agents/missed-call-text-back/phone-switch.ts"
+  );
+
+  const pn = await prisma.phoneNumber.findUnique({ where: { id: PHONE_NUMBER_ID } });
+  if (!pn) throw new Error(`Phone ${PHONE_NUMBER_ID} not found`);
+
+  console.log("\n=== Detach Amy from", pn.e164, "===");
+  const detached = await detachVoiceAgentFromNumber({
+    workspaceId: pn.workspaceId,
+    agentId: AMY_AGENT_ID,
+    phoneNumberId: PHONE_NUMBER_ID,
+  });
+  console.log(detached);
+
+  console.log("\n=== Activate John MCTB (delay", DELAY_SECONDS, "s) ===");
+  const activated = await activateJohnOnPhoneNumber({
+    workspaceId: pn.workspaceId,
+    phoneNumberId: PHONE_NUMBER_ID,
+    delaySeconds: DELAY_SECONDS,
+  });
+  console.log(activated);
+
+  await prisma.$disconnect();
+
+  try {
+    const { h } = await smokeLogin();
+    const diag = await fetch(`${BASE}/api/numbers/${PHONE_NUMBER_ID}/provision`, {
+      method: "POST",
+      headers: h,
+      body: JSON.stringify({ action: "diagnose" }),
+    });
+    console.log("\n=== Number diagnose ===", diag.status, await diag.text());
+  } catch (e) {
+    console.warn("Smoke login diagnose skipped:", e.message);
+  }
+
+  console.log("\n=== READY ===");
+  console.log(
+    JSON.stringify(
+      {
+        call: pn.e164,
+        expectSmsAfterMissedCall: true,
+        delaySeconds: DELAY_SECONDS,
+        amyDetached: true,
+        instructions:
+          "Call the number, let it ring without answering, hang up. You should receive the MCTB text.",
+      },
+      null,
+      2,
+    ),
+  );
+}
+
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

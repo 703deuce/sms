@@ -51,12 +51,12 @@ export const HIREABLE_AGENTS: CatalogAgent[] = [
   },
   {
     typeId: "missed_call_text_back",
-    productName: "Tom",
-    roleLabel: "Missed Call Recovery Agent",
-    defaultInstanceName: "Tom",
-    tagline: "Texts missed callers back and can hand booking requests to Amy.",
+    productName: "John",
+    roleLabel: "Missed Call Text Back Agent",
+    defaultInstanceName: "John",
+    tagline: "Texts missed callers back automatically and handles SMS follow-up.",
     description:
-      "Detects missed calls, texts callers back, routes replies, and hands booking requests to Amy.",
+      "Detects missed calls, sends a recovery text after your configured delay, and continues the conversation over SMS.",
     fixedCapabilities: [
       "Detect missed calls",
       "Send recovery SMS",
@@ -66,7 +66,7 @@ export const HIREABLE_AGENTS: CatalogAgent[] = [
     notConfigurableAsJob: [
       "Whether he recovers missed calls (always — that is his job)",
     ],
-    setupHref: "/solutions/missed-call-text-back/setup?hire=tom",
+    setupHref: "/solutions/missed-call-text-back/setup?hire=john",
     status: "available",
   },
 ];

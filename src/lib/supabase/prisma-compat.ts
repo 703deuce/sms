@@ -159,6 +159,10 @@ const MODEL_TO_TABLE: Record<string, string> = {
   integrationTask: "integration_tasks",
   integrationOrder: "integration_orders",
   workspaceAiIntegrationPolicy: "workspace_ai_integration_policies",
+  missedCallTextConfig: "missed_call_text_configs",
+  missedCallEvent: "missed_call_events",
+  missedCallTextTrace: "missed_call_text_traces",
+  agentConfigurationChange: "agent_configuration_changes",
 };
 
 /** Relation name on a model → { table, fk on this model, pk on related }. */

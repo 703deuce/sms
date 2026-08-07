@@ -64,6 +64,18 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       if (!callId) throw new Error("callId required");
       return processPostCall(callId);
     }
+    case "john_mctb_send": {
+      const { executeMissedCallTextSend } = await import(
+        "@/lib/agents/missed-call-text-back/send"
+      );
+      const workspaceId = String(payload.workspaceId || "");
+      const missedCallEventId = String(payload.missedCallEventId || "");
+      const traceId = String(payload.traceId || "");
+      if (!workspaceId || !missedCallEventId) {
+        throw new Error("workspaceId and missedCallEventId required");
+      }
+      return executeMissedCallTextSend({ workspaceId, missedCallEventId, traceId });
+    }
     case "voice_outbound_ai_call": {
       const workspaceId = String(payload.workspaceId || "");
       const agentId = String(payload.agentId || "");
