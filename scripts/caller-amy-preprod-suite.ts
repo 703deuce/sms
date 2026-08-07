@@ -748,13 +748,13 @@ async function testTenantIsolation(ctx: PreprodContext) {
     });
     if (callId) ctx.callIds.push(callId);
 
-    const cross = await executeBuiltinVoiceAction({
+    const cross = (await executeBuiltinVoiceAction({
       workspaceId: other.workspaceId,
       agentId: other.agentId,
       callId: callId!,
       toolType: "get_runtime_context",
       input: {},
-    }).catch((e) => ({ ok: false, error: String(e) }));
+    }).catch((e) => ({ ok: false, error: String(e) }))) as { ok?: boolean; error?: string };
 
     check(
       "cross-tenant get_runtime_context fails safely",

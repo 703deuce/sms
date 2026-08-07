@@ -4,7 +4,6 @@
 import { getPrisma } from "@/lib/db";
 import { POST as toolWebhookPost } from "@/app/api/telnyx/voice/tools/route";
 import { buildTelnyxToolWebhookRequest } from "./telnyx-fixtures";
-import type { VoiceAgent } from "@/lib/domain";
 
 export const EXPECTED_MODEL_WEBHOOK_TOOLS = [
   "lookup_customer",
@@ -266,7 +265,7 @@ export async function invokeToolWebhook(input: {
   return { status: response.status, json, callId: call?.id };
 }
 
-export function telnyxToolNamesFromBuild(agent: VoiceAgent | null, tools: Record<string, unknown>[]): string[] {
+export function telnyxToolNamesFromBuild(_agent: unknown, tools: Record<string, unknown>[]): string[] {
   return tools
     .map((t) => {
       const w = (t as { webhook?: { name?: string } }).webhook;

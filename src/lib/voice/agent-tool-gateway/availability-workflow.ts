@@ -166,7 +166,7 @@ export async function runCheckAvailability(
   const offered = (availability.slots || []).slice(0, 5);
   const slotTimes = offered
     .map((s) => {
-      const raw = s.startsAt;
+      const raw = s.startsAt as unknown;
       if (raw instanceof Date) return raw.toISOString();
       const str = String(raw || "");
       const d = new Date(str);
