@@ -174,9 +174,12 @@ Repeat full date, day, time, and timezone before booking.`,
       ctx,
     ),
 
-  custom_fields: (ctx) =>
-    `CUSTOM COLLECTION FIELDS
-${ctx.customFieldsSummary || "Collect required fields from the active AgentVersion before booking."}`,
+  custom_fields: () =>
+    `FIELD COLLECTION (runtime-driven)
+Do NOT rely on static field lists in this prompt.
+On each call: get_workflow_requirements returns fields_to_collect and missing_fields for this business/workflow.
+Save incrementally with save_collected_fields: { fields: [{ field_id, value }] }.
+Use active_field from the response to know which field you just asked about.`,
 
   tool_policy: () => compileCallerToolPlaybookForPrompt(callerAmyRuntimeToolIds()),
 

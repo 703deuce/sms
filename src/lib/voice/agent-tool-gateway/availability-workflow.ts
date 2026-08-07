@@ -8,6 +8,32 @@ import {
   validateAvailabilityInput,
 } from "./normalize";
 
+async function attachWorkflowRequirements(
+  ctx: AgentToolContext,
+  serviceName: string,
+  result: ReturnType<typeof toolSuccess>,
+) {
+  if (!ctx.callId) return result;
+  const { getWorkflowRequirements, requirementsToToolResponse } = await import(
+    "@/lib/voice/field-runtime/requirements"
+  );
+  const req = await getWorkflowRequirements({
+    workspaceId: ctx.workspaceId,
+    agentId: ctx.agentId,
+    callId: ctx.callId,
+    workflow: "book_appointment",
+    serviceName,
+  });
+  return toolSuccess({
+    status: result.status,
+    user_message: result.user_message || "",
+    data: {
+      ...result.data,
+      workflow_requirements: requirementsToToolResponse(req),
+    },
+  });
+}
+
 async function persistAvailabilitySlotsOnCall(input: {
   workspaceId: string;
   callId?: string;
@@ -113,7 +139,7 @@ export async function runCheckAvailability(
       ? `Found ${offered.length} available slot(s). Offer these start_time values exactly: ${slotTimes.join(", ")}`
       : "No openings in that window. Widen the day or ask for another day — never invent times.";
 
-    return toolSuccess({
+    return attachWorkflowRequirements(ctx, serviceName, toolSuccess({
       status: offered.length ? "available" : "unavailable",
       user_message: userMessage,
       data: {
@@ -124,7 +150,7 @@ export async function runCheckAvailability(
         })),
         window: { start_time: window.startTime, end_time: window.endTime },
       },
-    });
+    }));
   }
 
   const { getAvailability } = await import("@/lib/voice/calendar/booking");
@@ -147,7 +173,7 @@ export async function runCheckAvailability(
     window: { startTime: window.startTime, endTime: window.endTime },
   });
 
-  return toolSuccess({
+  return attachWorkflowRequirements(ctx, normalized.service_name, toolSuccess({
     status: offered.length ? "available" : "unavailable",
     user_message: offered.length
       ? `Found ${offered.length} available slot(s): ${slotTimes.join(", ")}`
@@ -160,7 +186,7 @@ export async function runCheckAvailability(
       })),
       window: { start_time: window.startTime, end_time: window.endTime },
     },
-  });
+  }));
 }
 
 export async function runCheckAvailabilityTool(

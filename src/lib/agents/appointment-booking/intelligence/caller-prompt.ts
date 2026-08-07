@@ -51,7 +51,10 @@ export function buildCallerAmyPromptFromModules(
       businessName: state.businessName || "the business",
       timezone: state.timezone || "America/New_York",
       bookingPolicySummary: bookingSummary,
-      customFieldsSummary: formatCustomFieldsForPrompt(fields),
+      customFieldsSummary:
+        "Field requirements are NOT listed here — they are provided at runtime. " +
+        "On each call use get_workflow_requirements (or workflow_field_manifest_json) for fields_to_collect and missing_fields. " +
+        "Save each answer incrementally with save_collected_fields using field_id — never use hardcoded parameter names.",
       transferPolicySummary: transferSummary,
       fallbackPolicySummary: `On transfer failure: ${state.transferFallback.replaceAll("_", " ")}.`,
       businessKnowledge,

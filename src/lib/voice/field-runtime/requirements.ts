@@ -38,6 +38,7 @@ export async function buildRuntimeFieldManifest(input: {
   const session = await ensureWorkflowFieldSession({
     callId: input.callId,
     workspaceId: input.workspaceId,
+    agentId: input.agentId,
     workflow: input.workflow,
     serviceName: input.serviceName,
   });
@@ -66,6 +67,7 @@ export async function getWorkflowRequirements(input: {
     ? await ensureWorkflowFieldSession({
         callId: input.callId,
         workspaceId: input.workspaceId,
+        agentId: input.agentId,
         workflow: input.workflow,
         serviceName: input.serviceName,
       })

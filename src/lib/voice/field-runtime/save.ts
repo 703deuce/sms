@@ -14,7 +14,9 @@ import type { WorkflowAction } from "./types";
 export type SaveCollectedFieldsInput = {
   workspaceId: string;
   agentId?: string;
+  /** Voice call id — same as workflow session_id unless overridden */
   callId: string;
+  session_id?: string;
   fields: Array<{ field_id: string; value: unknown }>;
   active_field?: string | null;
   workflow?: WorkflowAction;
@@ -24,11 +26,13 @@ export type SaveCollectedFieldsInput = {
 export async function saveCollectedFields(
   input: SaveCollectedFieldsInput,
 ): Promise<Record<string, unknown>> {
-  if (!input.callId) throw new Error("callId required");
+  const callId = input.session_id || input.callId;
+  if (!callId) throw new Error("callId or session_id required");
   const workflow = input.workflow || "general";
   let session = await ensureWorkflowFieldSession({
-    callId: input.callId,
+    callId,
     workspaceId: input.workspaceId,
+    agentId: input.agentId,
     workflow,
     serviceName: input.serviceName,
   });
@@ -79,17 +83,17 @@ export async function saveCollectedFields(
   session.workflow = workflow;
   if (input.serviceName) session.service_name = input.serviceName;
 
-  await saveWorkflowFieldSession(input.callId, session);
+  await saveWorkflowFieldSession(callId, session);
   await syncSystemFieldsToContact({
     workspaceId: input.workspaceId,
-    callId: input.callId,
+    callId,
     session,
   }).catch(() => undefined);
 
   const requirements = await getWorkflowRequirements({
     workspaceId: input.workspaceId,
     agentId: input.agentId,
-    callId: input.callId,
+    callId,
     workflow,
     serviceName: input.serviceName,
   });

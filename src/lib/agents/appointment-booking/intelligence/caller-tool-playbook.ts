@@ -224,6 +224,12 @@ export const CALLER_AMY_TOOL_PLAYBOOK: CallerToolPlaybookEntry[] = [
       "Immediately after the caller answers ANY field from fields_to_collect or missing_fields. Save incrementally — one field per answer is fine.",
     parameters: [
       {
+        name: "session_id",
+        required: false,
+        type: "string",
+        instruction: "Workflow session id — defaults to call id from get_workflow_requirements.",
+      },
+      {
         name: "fields",
         required: true,
         type: "array",

@@ -876,6 +876,7 @@ export const BUILTIN_WEBHOOK_BODIES: Record<
     body: {
       type: "object",
       properties: {
+        session_id: { type: "string", description: "Workflow session id (defaults to call id)" },
         fields: {
           type: "array",
           description: "Array of {field_id, value} objects from fields_to_collect / missing_fields",

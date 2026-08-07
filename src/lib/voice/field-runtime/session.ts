@@ -78,6 +78,7 @@ export async function saveWorkflowFieldSession(
 export async function ensureWorkflowFieldSession(input: {
   callId: string;
   workspaceId: string;
+  agentId?: string;
   workflow?: WorkflowAction;
   serviceName?: string | null;
 }): Promise<WorkflowFieldSession> {
@@ -93,8 +94,22 @@ export async function ensureWorkflowFieldSession(input: {
   const prisma = getPrisma();
   const call = await prisma.voiceCall.findUnique({
     where: { id: input.callId },
-    select: { fromE164: true, contactId: true },
+    select: { fromE164: true, contactId: true, createdAt: true },
   });
+
+  const now = new Date().toISOString();
+  session.derived.call_id = { value: input.callId, source: "derived", updated_at: now };
+  session.derived.workspace_id = { value: input.workspaceId, source: "derived", updated_at: now };
+  if (input.agentId) {
+    session.derived.agent_id = { value: input.agentId, source: "derived", updated_at: now };
+  }
+  if (call?.createdAt) {
+    session.derived.call_time = {
+      value: call.createdAt.toISOString(),
+      source: "derived",
+      updated_at: now,
+    };
+  }
 
   if (call?.fromE164 && call.fromE164 !== "unknown") {
     try {
@@ -109,6 +124,7 @@ export async function ensureWorkflowFieldSession(input: {
       session = setSessionField(session, "sys_phone", call.fromE164, "caller_id", "Phone");
     }
     session.derived.caller_phone = session.fields.sys_phone;
+    session.derived.source_number = session.fields.sys_phone;
   }
 
   if (call?.contactId) {

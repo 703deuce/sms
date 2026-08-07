@@ -347,13 +347,15 @@ export async function executeBuiltinVoiceAction(input: {
       return { ok: true, disposition };
     }
     case "save_collected_fields": {
-      if (!input.callId) throw new Error("callId required");
+      const callId = String(args.session_id || input.callId || "");
+      if (!callId) throw new Error("callId or session_id required");
       const { saveCollectedFields } = await import("@/lib/voice/field-runtime/save");
       const fields = Array.isArray(args.fields) ? args.fields : [];
       return saveCollectedFields({
         workspaceId: input.workspaceId,
         agentId: input.agentId,
-        callId: input.callId,
+        callId,
+        session_id: args.session_id ? String(args.session_id) : undefined,
         fields: fields as Array<{ field_id: string; value: unknown }>,
         active_field: args.active_field ? String(args.active_field) : undefined,
         workflow: (args.workflow ? String(args.workflow) : "book_appointment") as import("@/lib/voice/field-runtime/types").WorkflowAction,
