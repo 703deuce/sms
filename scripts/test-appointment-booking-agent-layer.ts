@@ -696,6 +696,8 @@ import {
 } from "../src/lib/integrations/framework/execution-source";
 import { classifyActionRisk } from "../src/lib/integrations/framework/ai-policy";
 import { LIVE_AGENT_CALENDLY_POLICY_REGRESSION } from "../src/lib/integrations/framework/fixtures/live-agent-calendly-policy-regression";
+import { LIVE_AGENT_CALENDLY_WINDOW_REGRESSION } from "../src/lib/integrations/framework/fixtures/live-agent-calendly-window-regression";
+import { resolveAvailabilityTimeWindow } from "../src/lib/voice/calendar/booking-args";
 
 assert(
   "live_agent allows calendly list_available_times",
@@ -725,6 +727,19 @@ assert(
   "live agent appointment whitelist includes book + availability",
   LIVE_AGENT_APPOINTMENT_ACTIONS.has("appointment.list_available_times") &&
     LIVE_AGENT_APPOINTMENT_ACTIONS.has("appointment.book"),
+);
+
+const windowFix = resolveAvailabilityTimeWindow(
+  {
+    from: LIVE_AGENT_CALENDLY_WINDOW_REGRESSION.calendarInput.from,
+    to: LIVE_AGENT_CALENDLY_WINDOW_REGRESSION.calendarInput.to,
+  },
+  { now: new Date("2026-08-07T02:16:00.000Z"), maxDays: 3 },
+);
+assert(
+  "calendly window regression expands point-in-time from=to",
+  windowFix.startTime === LIVE_AGENT_CALENDLY_WINDOW_REGRESSION.expectedWindow.startTime &&
+    windowFix.endTime === LIVE_AGENT_CALENDLY_WINDOW_REGRESSION.expectedWindow.endTime,
 );
 
 console.log("\nDone.");

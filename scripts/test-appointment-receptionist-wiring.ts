@@ -574,6 +574,18 @@ assert(
     "Thu morning window end is Thu noon ET",
     morning.endTime === "2026-08-06T16:00:00.000Z",
   );
+  const pointInTime = resolveAvailabilityTimeWindow(
+    {
+      from: "2026-08-07T18:00:00.000Z",
+      to: "2026-08-07T18:00:00.000Z",
+    },
+    { now: new Date("2026-08-07T02:16:00.000Z"), maxDays: 3 },
+  );
+  assert(
+    "point-in-time from=to expands end for Calendly",
+    pointInTime.startTime === "2026-08-07T18:00:00.000Z" &&
+      pointInTime.endTime === "2026-08-08T18:00:00.000Z",
+  );
 }
 
 console.log("");

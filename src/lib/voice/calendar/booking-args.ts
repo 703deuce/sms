@@ -90,7 +90,11 @@ export function resolveAvailabilityTimeWindow(
 
   if (startIsIso && endIsIso) {
     const start = new Date(rawStart);
-    const end = new Date(rawEnd);
+    let end = new Date(rawEnd);
+    // Voice tools often pass from=to=resolved slot (point-in-time). Calendly requires end > start.
+    if (end.getTime() <= start.getTime()) {
+      end = new Date(start.getTime() + 86_400_000);
+    }
     // Inclusive calendar-day span (same morning window = 1 day, not "from tonight").
     const spanMs = Math.max(0, end.getTime() - start.getTime());
     const spanDays = Math.max(1, Math.ceil(spanMs / 86_400_000) || 1);

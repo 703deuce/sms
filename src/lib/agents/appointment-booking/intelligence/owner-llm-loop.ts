@@ -118,11 +118,17 @@ export async function runOwnerAmyLlmLoop(input: {
   const promptVersion = getPromptVersionRecord("owner_amy");
   const messages: LlmChatMessage[] = [{ role: "system", content: system }];
 
-  for (const turn of conversation.messages.slice(-20)) {
-    messages.push({
-      role: turn.role === "user" ? "user" : "assistant",
-      content: turn.text,
-    });
+  const requiresFreshCallData =
+    preflight.state.route.intent === "diagnose_failure" ||
+    preflight.state.route.intent === "explain_activity";
+
+  if (!requiresFreshCallData) {
+    for (const turn of conversation.messages.slice(-20)) {
+      messages.push({
+        role: turn.role === "user" ? "user" : "assistant",
+        content: turn.text,
+      });
+    }
   }
   for (const turn of input.history || []) {
     messages.push({
