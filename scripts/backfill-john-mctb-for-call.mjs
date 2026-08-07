@@ -59,8 +59,6 @@ async function main() {
         data: { status: "NO_ANSWER", answeredAt: null },
       });
     }
-  } else if (legacyFalseAnswer && DRY_RUN) {
-    // handled above
   }
 
   if (DRY_RUN) {
