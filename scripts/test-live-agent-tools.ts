@@ -14,6 +14,7 @@ import {
   buildCalendlyListAvailableTimesParams,
   buildCalendlyBookParams,
   fieldSatisfied,
+  assertStartsAtMatchesAvailabilitySlots,
 } from "../src/lib/voice/calendar/booking-args";
 import { resolveSpokenDatetime } from "../src/lib/voice/calendar/resolve-datetime";
 import { LIVE_AGENT_CALENDLY_WINDOW_REGRESSION } from "../src/lib/integrations/framework/fixtures/live-agent-calendly-window-regression";
@@ -21,6 +22,7 @@ import {
   liveAgentAllowsAction,
   LIVE_AGENT_APPOINTMENT_ACTIONS,
 } from "../src/lib/integrations/framework/execution-source";
+import { compileCallerToolPlaybookForPrompt } from "../src/lib/agents/appointment-booking/intelligence/caller-tool-playbook";
 import { classifyActionRisk } from "../src/lib/integrations/framework/ai-policy";
 
 const failures: string[] = [];
@@ -357,6 +359,39 @@ console.log("\n== live_agent Calendly integration policy ==");
     "list_available_times risk 1",
     classifyActionRisk("appointment.list_available_times") === 1,
   );
+}
+
+console.log("\n== book_appointment slot guard (call cmsicfq1 regression) ==");
+{
+  const validSlots = [
+    "2026-08-07T13:00:00.000Z",
+    "2026-08-07T13:30:00.000Z",
+    "2026-08-07T14:00:00.000Z",
+  ];
+  try {
+    assertStartsAtMatchesAvailabilitySlots("2026-08-07T17:00:00.000Z", validSlots);
+    check("rejects invented startsAt", false, "should have thrown");
+  } catch (err) {
+    check(
+      "rejects invented startsAt (cmsicfq1 used 17:00 not from slots)",
+      err instanceof Error && err.message.includes("copied EXACTLY"),
+    );
+  }
+  check(
+    "accepts exact slot startsAt",
+    (() => {
+      assertStartsAtMatchesAvailabilitySlots("2026-08-07T13:00:00.000Z", validSlots);
+      return true;
+    })(),
+  );
+}
+
+console.log("\n== caller tool playbook injected in prompt ==");
+{
+  const prompt = compileCallerToolPlaybookForPrompt(["book_appointment", "calendar_availability"]);
+  check("playbook mentions slots[].startsAt", prompt.includes("slots[].startsAt"));
+  check("playbook mentions customerEmail required", prompt.includes("customerEmail"));
+  check("playbook mentions resolve_datetime chain", prompt.includes("resolve_datetime"));
 }
 
 console.log("\n== Calendly API param contract ==");

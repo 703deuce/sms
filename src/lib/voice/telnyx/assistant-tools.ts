@@ -18,6 +18,10 @@ import {
   buildSyncToolFillerMessages,
   SYNC_TOOL_TYPES,
 } from "@/lib/voice/latency-profiles";
+import {
+  callerToolWebhookBody,
+  callerToolWebhookDescription,
+} from "@/lib/agents/appointment-booking/intelligence/caller-tool-playbook";
 
 type ToolRow = {
   id: string;
@@ -204,11 +208,15 @@ export function buildAssistantTools(input: {
       key === "find_appointments" ||
       key === "reschedule_appointment";
     const escalateSolePath = key === "escalate_human" && useCallControlTransfer;
+    const playbookDesc = callerToolWebhookDescription(key);
     const description = escalateSolePath
       ? "Transfer the caller to a named human phone destination (e.g. Agent Handoff / Front Desk). This is the ONLY human phone transfer tool. Call it once when they ask for a person. If it returns ok=true, say you are connecting them and stay silent — never say the transfer failed while they are being connected. If it returns ok=false, then apologize and take a message. Never invent a phone number. Never hang up to transfer."
-      : `${builtin.description} If this tool fails, do NOT hang up — apologize and offer to take a message.`;
+      : playbookDesc
+        ? `${playbookDesc} If this tool fails, do NOT hang up — apologize and offer to take a message.`
+        : `${builtin.description} If this tool fails, do NOT hang up — apologize and offer to take a message.`;
     // Slow booking tools: 30s so progressive delayed fillers can play before Telnyx cuts off.
     const timeoutMs = escalateSolePath ? 12000 : slow ? 30000 : 8000;
+    const bodyParameters = callerToolWebhookBody(key) || builtin.body;
     const webhook = applyLatencyWebhookDecorations(
       builtin.toolType || key,
       {
@@ -222,7 +230,7 @@ export function buildAssistantTools(input: {
           { name: "X-Transovo-Agent-Id", value: input.agentId },
           { name: "X-Transovo-Tool-Type", value: builtin.toolType },
         ],
-        body_parameters: builtin.body,
+        body_parameters: bodyParameters,
       },
       optimize,
     );

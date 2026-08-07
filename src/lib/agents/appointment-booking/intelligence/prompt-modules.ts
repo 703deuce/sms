@@ -4,6 +4,10 @@
 
 import type { OwnerRuntimeContext, PromptModuleId } from "./types";
 import { capabilitySummaryForPrompt } from "./capability-catalog";
+import {
+  compileCallerToolPlaybookForPrompt,
+  callerAmyRuntimeToolIds,
+} from "./caller-tool-playbook";
 
 export type PromptCompileInput = {
   modules: PromptModuleId[];
@@ -174,12 +178,7 @@ Repeat full date, day, time, and timezone before booking.`,
     `CUSTOM COLLECTION FIELDS
 ${ctx.customFieldsSummary || "Collect required fields from the active AgentVersion before booking."}`,
 
-  tool_policy: () =>
-    `TOOL POLICY
-Use calendar_availability before offering slots.
-Use hold_appointment_slot while confirming details.
-Use book_appointment only after required fields and confirmation.
-Never claim a booking succeeded without verified tool result.`,
+  tool_policy: () => compileCallerToolPlaybookForPrompt(callerAmyRuntimeToolIds()),
 
   transfer_policy: (ctx) =>
     `TRANSFER POLICY

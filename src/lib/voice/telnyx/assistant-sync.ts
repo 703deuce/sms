@@ -22,6 +22,11 @@ import {
   shouldSkipDynamicVariablesWebhook,
 } from "../latency-profiles";
 import { getAppBaseUrl } from "@/lib/messaging/telnyx/config";
+import {
+  compileCallerToolPlaybookForPrompt,
+  shouldInjectCallerPlaybook,
+} from "@/lib/agents/appointment-booking/intelligence/caller-tool-playbook";
+import { resolveEnabledBuiltinTools } from "../tools/catalog";
 
 function unwrapTelnyxId(res: unknown): string | null {
   if (!res || typeof res !== "object") return null;
@@ -320,6 +325,20 @@ export async function syncTelnyxAssistant(
     "Never tell a caller an appointment is booked until book_appointment returns success with ok=true.",
     "If book_appointment fails or returns an error, explain the issue and offer alternatives.",
     "CRITICAL TOOL RULES: When the caller asks for a human/person/agent, use Transfer (not hangup, not AI handoff). When they ask to look up a contact, use search_crm_contacts or crm_lookup, then speak the result. Never call hangup after a tool. Tool failures must stay on the call.",
+    shouldInjectCallerPlaybook(
+      "caller_amy",
+      resolveEnabledBuiltinTools({
+        enabledBuiltinTools: config.enabledBuiltinTools,
+        agentType: agent.agentType,
+      }),
+    )
+      ? compileCallerToolPlaybookForPrompt(
+          resolveEnabledBuiltinTools({
+            enabledBuiltinTools: config.enabledBuiltinTools,
+            agentType: agent.agentType,
+          }),
+        )
+      : "",
   ]
     .filter(Boolean)
     .join("\n\n");

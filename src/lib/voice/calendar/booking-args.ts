@@ -225,6 +225,36 @@ export function buildCalendlyBookParams(args: Record<string, unknown>): {
   };
 }
 
+/**
+ * Voice agents must book only slots returned by the latest calendar_availability on this call.
+ * Rejects invented or converted times before Calendly returns a vague "invalid parameters" error.
+ */
+export function assertStartsAtMatchesAvailabilitySlots(
+  startsAt: string,
+  slots: string[],
+): void {
+  if (!slots.length) {
+    throw new Error(
+      "Call calendar_availability first, then pass startsAt copied exactly from slots[].startsAt.",
+    );
+  }
+  const requested = new Date(startsAt).getTime();
+  if (!Number.isFinite(requested)) {
+    throw new Error(
+      "startsAt must be a valid ISO datetime copied from calendar_availability.slots[].startsAt.",
+    );
+  }
+  const match = slots.some(
+    (s) => Math.abs(new Date(s).getTime() - requested) < 60_000,
+  );
+  if (!match) {
+    const preview = slots.slice(0, 5).join(", ");
+    throw new Error(
+      `startsAt must be copied EXACTLY from the latest calendar_availability.slots[].startsAt — do not convert spoken times yourself. You passed ${startsAt}. Valid slots: ${preview}`,
+    );
+  }
+}
+
 export function fieldSatisfied(
   field: string,
   input: Record<string, unknown>,
