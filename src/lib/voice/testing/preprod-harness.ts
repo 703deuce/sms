@@ -33,8 +33,13 @@ export type PreprodContext = {
   toE164: string;
   slug: string;
   callIds: string[];
-  /** Canonical call used for CALL DATA five-gate checks */
+  /** Canonical call used for CALL DATA five-gate checks (transcript path) */
   gateCallId?: string;
+  /** Call used for TeXML timestamp/duration assertions */
+  texmlGateCallId?: string;
+  /** Call that completed the full booking commit path */
+  bookingCallId?: string;
+  appointmentIds: string[];
 };
 
 export async function createPreprodTenant(): Promise<PreprodContext> {
@@ -127,6 +132,31 @@ export async function createPreprodTenant(): Promise<PreprodContext> {
     },
   });
 
+  await prisma.voiceService.create({
+    data: {
+      workspaceId: ws.id,
+      name: "Appointment",
+      durationMinutes: 30,
+      bufferMinutes: 0,
+      config: {
+        enabled: true,
+        bookingHours: "9-17",
+        timezone: "America/New_York",
+        minimumBookingNoticeMinutes: 0,
+        maxDaysAhead: 30,
+        bookingPermission: "anyone",
+      },
+    },
+  });
+
+  await prisma.workspaceMessagingSettings
+    .upsert({
+      where: { workspaceId: ws.id },
+      create: { workspaceId: ws.id, timezone: "America/New_York" },
+      update: { timezone: "America/New_York" },
+    })
+    .catch(() => undefined);
+
   return {
     workspaceId: ws.id,
     agentId: agent.id,
@@ -134,13 +164,20 @@ export async function createPreprodTenant(): Promise<PreprodContext> {
     toE164,
     slug,
     callIds: [],
+    appointmentIds: [],
   };
 }
 
 export async function cleanupPreprodTenant(ctx: PreprodContext): Promise<void> {
   const prisma = getPrisma();
   const ws = ctx.workspaceId;
+  if (ctx.appointmentIds.length) {
+    await prisma.voiceAppointment
+      .deleteMany({ where: { id: { in: ctx.appointmentIds }, workspaceId: ws } })
+      .catch(() => undefined);
+  }
   for (const callId of ctx.callIds) {
+    await prisma.voiceAppointment.deleteMany({ where: { callId, workspaceId: ws } }).catch(() => undefined);
     await prisma.voiceToolExecution.deleteMany({ where: { callId } }).catch(() => undefined);
     await prisma.voiceTranscriptSegment.deleteMany({ where: { workspaceId: ws } }).catch(() => undefined);
     await prisma.voiceTranscript.deleteMany({ where: { callId } }).catch(() => undefined);
@@ -151,6 +188,7 @@ export async function cleanupPreprodTenant(ctx: PreprodContext): Promise<void> {
     where: { workspaceId: ws, eventType: "voice.tool_webhook.ingress" },
   }).catch(() => undefined);
   await prisma.voiceAgent.deleteMany({ where: { workspaceId: ws } }).catch(() => undefined);
+  await prisma.voiceService.deleteMany({ where: { workspaceId: ws } }).catch(() => undefined);
   await prisma.phoneNumber.delete({ where: { id: ctx.phoneNumberId } }).catch(() => undefined);
   await prisma.workspace.delete({ where: { id: ws } }).catch(() => undefined);
 }

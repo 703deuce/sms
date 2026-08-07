@@ -18,6 +18,14 @@ function asRecord(value: unknown): Record<string, unknown> {
     : {};
 }
 
+function normalizeSlotIso(value: unknown): string {
+  if (value instanceof Date) return value.toISOString();
+  const str = String(value ?? "").trim();
+  if (!str) return "";
+  const d = new Date(str);
+  return Number.isNaN(d.getTime()) ? str : d.toISOString();
+}
+
 /** Derive workflow state from persisted call + field session data. */
 export async function computeWorkflowState(input: {
   callId: string;
@@ -45,9 +53,15 @@ export async function computeWorkflowState(input: {
     throw new Error("Call not found for workspace");
   }
   const meta = asRecord(call?.metadata);
-  const lastSlots = Array.isArray(meta.lastAvailabilitySlots)
-    ? (meta.lastAvailabilitySlots as string[])
+  const metaSlots = Array.isArray(meta.lastAvailabilitySlots)
+    ? (meta.lastAvailabilitySlots as unknown[]).map(normalizeSlotIso).filter(Boolean)
     : [];
+  const lastSlots =
+    metaSlots.length > 0
+      ? metaSlots
+      : Array.isArray(runtime.proposed_slots)
+        ? runtime.proposed_slots.map(normalizeSlotIso).filter(Boolean)
+        : [];
 
   if (runtime.pending_operations.length > 0) {
     const next = transitionState(runtime, "BOOKING_IN_PROGRESS", "pending_operation");
@@ -143,9 +157,11 @@ export async function refreshRuntimeAfterTool(input: {
 
   if (input.toolType === "calendar_availability" || input.toolType === "check_availability") {
     const slots = Array.isArray(result.slots)
-      ? (result.slots as Array<{ startsAt?: string }>).map((s) => String(s.startsAt || "")).filter(Boolean)
+      ? (result.slots as Array<{ startsAt?: unknown }>)
+          .map((s) => normalizeSlotIso(s.startsAt))
+          .filter(Boolean)
       : Array.isArray(result.lastAvailabilitySlots)
-        ? (result.lastAvailabilitySlots as string[])
+        ? (result.lastAvailabilitySlots as unknown[]).map(normalizeSlotIso).filter(Boolean)
         : [];
     if (slots.length) {
       runtime = { ...runtime, proposed_slots: slots };

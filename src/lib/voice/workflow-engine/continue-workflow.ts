@@ -8,6 +8,14 @@ import { resolveSpokenDatetime } from "@/lib/voice/calendar/resolve-datetime";
 import { executeAgentTool } from "@/lib/voice/agent-tool-gateway/gateway";
 import type { WorkflowAction } from "@/lib/voice/field-runtime/types";
 import { buildRuntimeContext, computeWorkflowState, refreshRuntimeAfterTool } from "./engine";
+
+function normalizeSlotIso(value: unknown): string {
+  if (value instanceof Date) return value.toISOString();
+  const str = String(value ?? "").trim();
+  if (!str) return "";
+  const d = new Date(str);
+  return Number.isNaN(d.getTime()) ? str : d.toISOString();
+}
 import { deriveNextAction } from "./next-action";
 import { loadAgentRuntime, saveAgentRuntime } from "./runtime-state";
 import type { WorkflowState } from "./types";
@@ -296,7 +304,7 @@ export async function executeContinueWorkflow(
   }
 
   if (state === "SELECTING_SLOT") {
-    const slots =
+    const rawSlots =
       runtime.proposed_slots?.length > 0
         ? runtime.proposed_slots
         : await (async () => {
@@ -310,9 +318,11 @@ export async function executeContinueWorkflow(
               ? (meta.lastAvailabilitySlots as string[])
               : [];
           })();
+    const slots = rawSlots.map(normalizeSlotIso).filter(Boolean);
 
+    const startsAtNorm = input.startsAt ? normalizeSlotIso(input.startsAt) : null;
     const picked =
-      (input.startsAt && slots.includes(input.startsAt) ? input.startsAt : null) ||
+      (startsAtNorm && slots.includes(startsAtNorm) ? startsAtNorm : null) ||
       (userInput ? matchSlotFromInput(userInput, slots) : null);
 
     if (!picked) {

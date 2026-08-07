@@ -164,7 +164,15 @@ export async function runCheckAvailability(
     maxSlots: 5,
   });
   const offered = (availability.slots || []).slice(0, 5);
-  const slotTimes = offered.map((s) => String(s.startsAt || ""));
+  const slotTimes = offered
+    .map((s) => {
+      const raw = s.startsAt;
+      if (raw instanceof Date) return raw.toISOString();
+      const str = String(raw || "");
+      const d = new Date(str);
+      return Number.isNaN(d.getTime()) ? str : d.toISOString();
+    })
+    .filter(Boolean);
   await persistAvailabilitySlotsOnCall({
     workspaceId: ctx.workspaceId,
     callId: ctx.callId,
