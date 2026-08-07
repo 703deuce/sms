@@ -14,13 +14,14 @@ import { translateError } from "../src/lib/voice/agent-tool-gateway/errors";
 import { toCustomFieldId } from "../src/lib/voice/field-runtime/system-fields";
 
 type Level = "TOOL_CONTRACT" | "AGENT_DECISION" | "VOICE_E2E";
-type Result = { test: string; level: Level; pass: boolean; detail?: string };
+type Result = { test: string; level: Level; pass: boolean; skipped?: boolean; detail?: string };
 
 const results: Result[] = [];
 
-function record(level: Level, test: string, pass: boolean, detail?: string) {
-  results.push({ level, test, pass, detail });
-  console.log(pass ? "✓" : "✗", `[${level}]`, test, detail || "");
+function record(level: Level, test: string, pass: boolean, detail?: string, skipped = false) {
+  results.push({ level, test, pass, detail, skipped });
+  const mark = skipped ? "○" : pass ? "✓" : "✗";
+  console.log(mark, `[${level}]`, test, detail || "");
 }
 
 async function toolContractTests() {
@@ -38,16 +39,20 @@ async function agentDecisionTests() {
   record("AGENT_DECISION", "BOOKING blocks transfer", !isToolAllowedForState("BOOKING_IN_PROGRESS", "transfer"));
 
   const guard = await assertToolAllowed({
-    callId: "call_test",
     workspaceId: "ws_test",
     toolType: "book_appointment",
   });
-  record("AGENT_DECISION", "guard allows without call context edge", guard.allowed || guard.state === "GENERAL");
+  record(
+    "AGENT_DECISION",
+    "guard allows without call context edge",
+    guard.allowed && guard.state === "GENERAL",
+    `allowed=${guard.allowed} state=${guard.state}`,
+  );
 }
 
 async function voiceE2eTests() {
   if (!process.env.DATABASE_URL) {
-    record("VOICE_E2E", "DB persistence path", false, "DATABASE_URL not set — skipped");
+    record("VOICE_E2E", "DB persistence path", true, "DATABASE_URL not set — skipped", true);
     return;
   }
 
@@ -101,7 +106,12 @@ async function voiceE2eTests() {
   });
 
   const runtime = await loadAgentRuntime(call.id);
-  record("VOICE_E2E", "state survives session reload", Boolean(runtime?.session_id || session?.session_id));
+  record(
+    "VOICE_E2E",
+    "state survives session reload",
+    Boolean(runtime?.workflow_id && session?.session_id),
+    `runtime=${runtime?.workflow_id ?? "none"} session=${session?.session_id ?? "none"}`,
+  );
 
   const tenantB = await prisma.workspace.create({ data: { name: "Tenant B", slug: `tb-${Date.now()}` } });
   const callB = await prisma.voiceCall.create({
@@ -137,8 +147,10 @@ async function main() {
   const byLevel = (l: Level) => results.filter((r) => r.level === l);
   const summary = (l: Level) => {
     const rows = byLevel(l);
-    const passed = rows.filter((r) => r.pass).length;
-    return `${passed}/${rows.length}`;
+    const passed = rows.filter((r) => r.pass && !r.skipped).length;
+    const skipped = rows.filter((r) => r.skipped).length;
+    const total = rows.filter((r) => !r.skipped).length;
+    return skipped ? `${passed}/${total} (${skipped} skipped)` : `${passed}/${total}`;
   };
 
   console.log("\n--- Summary ---");
@@ -146,7 +158,7 @@ async function main() {
   console.log("AGENT DECISION:", summary("AGENT_DECISION"));
   console.log("VOICE E2E:", summary("VOICE_E2E"));
 
-  const failed = results.filter((r) => !r.pass);
+  const failed = results.filter((r) => !r.pass && !r.skipped);
   if (failed.length) {
     console.error(`\n${failed.length} gauntlet failure(s)`);
     process.exit(1);

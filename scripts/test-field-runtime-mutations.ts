@@ -74,8 +74,15 @@ console.log(`Generating ${TARGET} random field permutations...\n`);
 while (permutations < TARGET) {
   const fieldCount = 1 + Math.floor(Math.random() * 6);
   const fields: WorkflowFieldDefinition[] = [];
+  const usedSlugs = new Set<string>();
   for (let i = 0; i < fieldCount; i++) {
-    const label = randomLabel();
+    let label = randomLabel();
+    let slug = label.toLowerCase().replace(/[^a-z0-9]+/g, "_").slice(0, 40);
+    while (usedSlugs.has(slug)) {
+      label = randomLabel();
+      slug = label.toLowerCase().replace(/[^a-z0-9]+/g, "_").slice(0, 40);
+    }
+    usedSlugs.add(slug);
     const type = FIELD_TYPES[Math.floor(Math.random() * FIELD_TYPES.length)];
     const required = Math.random() > 0.3;
     fields.push(makeField(label, type, required));
