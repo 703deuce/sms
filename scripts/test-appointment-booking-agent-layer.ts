@@ -565,6 +565,41 @@ const route = routeOwnerRequest("Why didn't the last call book?");
 assert("routes diagnose_failure", route.intent === "diagnose_failure");
 assert("delegates diagnostic", route.delegateTo === "diagnostic_specialist");
 
+const lastCallRoute = routeOwnerRequest("What happened on the last call?");
+assert("routes last call recall", lastCallRoute.intent === "diagnose_failure");
+
+import { summarizeCallTraceForOwner } from "../src/lib/agents/appointment-booking/execution-trace";
+const recap = summarizeCallTraceForOwner({
+  executionId: "trace:test",
+  agentId: "a1",
+  agentVersionId: null,
+  callId: "call_1",
+  startedAt: "2026-08-06T23:42:17.975Z",
+  completedAt: "2026-08-06T23:44:01.448Z",
+  steps: [
+    {
+      sequence: 1,
+      blockType: "tool:book_appointment",
+      startedAt: "2026-08-06T23:43:32.535Z",
+      status: "succeeded",
+      sanitizedInput: { toolType: "book_appointment" },
+      sanitizedOutput: {
+        startsAt: "2026-08-07T14:00:00.000Z",
+        smsSent: true,
+        provider: "calendly",
+        appointmentId: "appt_1",
+      },
+    },
+  ],
+  outcome: "appointment_booked",
+  failureCode: null,
+  callerPhone: "+15551234567",
+  calledNumber: "+18663464256",
+  summary: "Call test · appointment booked",
+});
+assert("recap mentions booking", /appointment booked/i.test(recap));
+assert("recap mentions sms", /sms/i.test(recap));
+
 const architect = buildWorkflowArchitectFromRequest({
   agentId: "a1",
   userRequest: "Create after-hours emergency flow",

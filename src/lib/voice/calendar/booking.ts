@@ -988,6 +988,7 @@ export async function findExistingBookingForCaller(input: {
     contactId: string | null;
     metadata: unknown;
     status: string;
+    externalId: string | null;
   }>;
   const serviceWant = input.serviceName.trim().toLowerCase();
   return (

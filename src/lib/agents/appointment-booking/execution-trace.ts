@@ -218,12 +218,147 @@ export async function buildExecutionTrace(input: {
   };
 }
 
+export type AgentActivitySummary = {
+  callId: string;
+  summary: string;
+  outcome: AgentExecutionOutcome;
+  startedAt: string;
+  completedAt?: string | null;
+  callerPhone?: string | null;
+  calledNumber?: string | null;
+};
+
+function buildCallSummary(call: {
+  id: string;
+  appointmentBooked?: boolean | null;
+  transferred?: boolean | null;
+  voicemailDetected?: boolean | null;
+  outcome?: string | null;
+  status?: string | null;
+  fromE164?: string | null;
+  toE164?: string | null;
+}): string {
+  const shortId = call.id.slice(0, 8);
+  const outcome = outcomeFromCall(call);
+  const parts = [`Call ${shortId}`, outcome.replaceAll("_", " ")];
+  if (call.appointmentBooked) parts.push("appointment booked");
+  return parts.join(" · ");
+}
+
+/** Fast list for Activity tab — no per-call tool/event hydration. */
+export async function listAgentActivitySummaries(input: {
+  workspaceId: string;
+  agentId: string;
+  limit?: number;
+  failuresOnly?: boolean;
+}): Promise<AgentActivitySummary[]> {
+  const prisma = getPrisma();
+  const limit = Math.min(50, Math.max(1, Number(input.limit || 20)));
+  const calls = await prisma.voiceCall.findMany({
+    where: {
+      workspaceId: input.workspaceId,
+      agentId: input.agentId,
+      ...(input.failuresOnly
+        ? {
+            OR: [{ status: "FAILED" }, { outcome: { contains: "fail" } }],
+          }
+        : {}),
+    },
+    orderBy: { startedAt: "desc" },
+    take: limit,
+    select: {
+      id: true,
+      startedAt: true,
+      endedAt: true,
+      appointmentBooked: true,
+      transferred: true,
+      voicemailDetected: true,
+      outcome: true,
+      status: true,
+      fromE164: true,
+      toE164: true,
+    },
+  });
+
+  return calls.map((call: (typeof calls)[number]) => ({
+    callId: call.id,
+    summary: buildCallSummary(call),
+    outcome: outcomeFromCall(call),
+    startedAt: new Date(call.startedAt).toISOString(),
+    completedAt: call.endedAt ? new Date(call.endedAt).toISOString() : null,
+    callerPhone: call.fromE164,
+    calledNumber: call.toE164,
+  }));
+}
+
+export function summarizeCallTraceForOwner(trace: AgentExecutionTrace): string {
+  const when = new Date(trace.startedAt).toLocaleString();
+  const parts = [
+    `On ${when}, ${trace.summary.replace(/^Call \S+ · /, "")}.`,
+    `Final outcome: ${trace.outcome.replaceAll("_", " ")}.`,
+  ];
+
+  const toolSteps = trace.steps.filter((s) => s.blockType.startsWith("tool:"));
+  const bookStep = [...toolSteps]
+    .reverse()
+    .find((s) => {
+      const input = s.sanitizedInput as { toolType?: string } | undefined;
+      return input?.toolType === "book_appointment";
+    });
+  if (bookStep?.sanitizedOutput) {
+    const out = bookStep.sanitizedOutput as Record<string, unknown>;
+    if (out.startsAt) parts.push(`Booked slot: ${String(out.startsAt)}.`);
+    if (out.appointmentId) parts.push(`Appointment id ${String(out.appointmentId)}.`);
+    if (out.smsSent === true) parts.push("Confirmation SMS was sent.");
+    if (out.alreadyBooked) parts.push("A duplicate book attempt was ignored (already confirmed).");
+    if (out.provider) parts.push(`Calendar provider: ${String(out.provider)}.`);
+  }
+
+  const availStep = toolSteps.find((s) => {
+    const input = s.sanitizedInput as { toolType?: string } | undefined;
+    return input?.toolType === "calendar_availability";
+  });
+  if (availStep?.sanitizedOutput) {
+    const out = availStep.sanitizedOutput as { provider?: string; slots?: unknown[] };
+    if (out.provider) {
+      parts.push(
+        `Availability was checked via ${out.provider} (${Array.isArray(out.slots) ? out.slots.length : 0} slot(s) returned).`,
+      );
+    }
+  }
+
+  if (trace.callerPhone && trace.callerPhone !== "unknown") {
+    parts.push(`Caller: ${trace.callerPhone}.`);
+  }
+
+  return parts.join(" ");
+}
+
 export async function searchAgentActivity(input: {
   workspaceId: string;
   agentId: string;
   limit?: number;
   failuresOnly?: boolean;
+  summariesOnly?: boolean;
 }): Promise<AgentExecutionTrace[]> {
+  if (input.summariesOnly) {
+    const summaries = await listAgentActivitySummaries(input);
+    return summaries.map((s) => ({
+      executionId: `trace:${s.callId}`,
+      agentId: input.agentId,
+      agentVersionId: null,
+      callId: s.callId,
+      startedAt: s.startedAt,
+      completedAt: s.completedAt,
+      steps: [],
+      outcome: s.outcome,
+      failureCode: null,
+      callerPhone: s.callerPhone,
+      calledNumber: s.calledNumber,
+      summary: s.summary,
+    }));
+  }
+
   const prisma = getPrisma();
   const limit = Math.min(50, Math.max(1, Number(input.limit || 20)));
   const calls = await prisma.voiceCall.findMany({

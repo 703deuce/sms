@@ -123,7 +123,7 @@ export async function buildAgentMetrics(input: {
           callId: { in: callIds },
           status: { in: ["succeeded", "success", "ok", "COMPLETED", "completed"] },
         },
-        select: { toolId: true },
+        select: { toolId: true, output: true },
         take: 500,
       })
     : [];
@@ -153,7 +153,9 @@ export async function buildAgentMetrics(input: {
   let confirmationEmailsSent = 0;
   for (const row of toolRows) {
     const type = String(typeById.get(String(row.toolId || "")) || "");
+    const output = (row as { output?: unknown }).output as Record<string, unknown> | null;
     if (/send_sms/i.test(type)) confirmationSmsSent += 1;
+    if (/book_appointment/i.test(type) && output?.smsSent === true) confirmationSmsSent += 1;
     if (/send_email|confirmation_email/i.test(type)) confirmationEmailsSent += 1;
   }
 

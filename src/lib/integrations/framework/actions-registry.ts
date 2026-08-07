@@ -848,6 +848,7 @@ export async function executeIntegrationAction(input: {
             workspaceId: input.workspaceId,
             provider: "calendly",
             contactId: input.contactId || null,
+            callId: (p.callId as string) || null,
             appointment: {
               id: booked.eventUri,
               title: "Calendly booking",

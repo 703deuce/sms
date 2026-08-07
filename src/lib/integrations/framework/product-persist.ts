@@ -16,6 +16,7 @@ export async function persistAppointmentFromIntegration(input: {
   workspaceId: string;
   provider: string;
   contactId?: string | null;
+  callId?: string | null;
   appointment: NormalizedAppointment;
 }) {
   const prisma = getPrisma();
@@ -34,6 +35,7 @@ export async function persistAppointmentFromIntegration(input: {
       : input.appointment.status || "confirmed";
 
   const data = {
+    callId: input.callId || undefined,
     contactId: input.contactId || null,
     serviceName: input.appointment.title || "Appointment",
     startsAt,

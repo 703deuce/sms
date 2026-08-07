@@ -708,10 +708,12 @@ export async function executeBuiltinVoiceAction(input: {
       };
 
       // Prefer Calendly Scheduling API when the workspace has Calendly connected.
-      try {
-        const { getConnection } = await import("@/lib/integrations/connections");
-        const conn = await getConnection(input.workspaceId, "calendly");
-        if (conn?.status === "connected") {
+      const { getConnectedCalendly, requireCalendlyIntegrationOk } = await import(
+        "../calendar/calendly-voice"
+      );
+      const calendlyConn = await getConnectedCalendly(input.workspaceId);
+      if (calendlyConn) {
+        try {
           const serviceName = String(args.serviceName || args.service || "Appointment");
           const {
             assertBookingPermission,
@@ -737,48 +739,49 @@ export async function executeBuiltinVoiceAction(input: {
             actorUserId: null,
             source: "ai",
           });
-          if (result.ok) {
-            const raw =
-              (result.data as { slots?: Array<{ startsAt?: string; startTime?: string }> })
-                ?.slots ||
-              (Array.isArray(result.data) ? result.data : []);
-            const normalized = (raw as Array<{ startsAt?: string; startTime?: string }>).map(
-              (s) => ({
-                startsAt: String(s.startsAt || s.startTime || ""),
-              }),
-            );
-            let slots = filterSlotsByNoticeAndMaxDays(
-              normalized.filter((s) => s.startsAt),
-              gates.noticeMinutes,
-              gates.maxDaysAhead,
-              new Date(),
-              {
-                sameDayCutoff: gates.config.sameDayCutoff,
-                timezone: String(
-                  args.timezone || gates.config.timezone || "America/New_York",
-                ),
-              },
-            );
-            return {
-              provider: "calendly",
-              slots: slots.slice(0, 5),
-              window: { startTime: window.startTime, endTime: window.endTime },
-            };
+          const okResult = requireCalendlyIntegrationOk(result, "list available times");
+          const calendlyData = okResult.data || {};
+          const raw =
+            (calendlyData as { slots?: Array<{ startsAt?: string; startTime?: string }> })
+              .slots || (Array.isArray(calendlyData) ? calendlyData : []);
+          const normalized = (raw as Array<{ startsAt?: string; startTime?: string }>).map(
+            (s) => ({
+              startsAt: String(s.startsAt || s.startTime || ""),
+            }),
+          );
+          let slots = filterSlotsByNoticeAndMaxDays(
+            normalized.filter((s) => s.startsAt),
+            gates.noticeMinutes,
+            gates.maxDaysAhead,
+            new Date(),
+            {
+              sameDayCutoff: gates.config.sameDayCutoff,
+              timezone: String(
+                args.timezone || gates.config.timezone || "America/New_York",
+              ),
+            },
+          );
+          return {
+            provider: "calendly",
+            slots: slots.slice(0, 5),
+            window: { startTime: window.startTime, endTime: window.endTime },
+          };
+        } catch (err) {
+          console.warn(
+            "[voice] calendly availability error",
+            err instanceof Error ? err.message : err,
+          );
+          if (
+            err instanceof Error &&
+            /does not allow direct booking|minimum notice|too far ahead|Missing required/i.test(
+              err.message,
+            )
+          ) {
+            throw err;
           }
-        }
-      } catch (err) {
-        console.warn(
-          "[voice] calendly availability fallback",
-          err instanceof Error ? err.message : err,
-        );
-        // Permission / gate errors should surface to the model.
-        if (
-          err instanceof Error &&
-          /does not allow direct booking|minimum notice|too far ahead|Missing required/i.test(
-            err.message,
-          )
-        ) {
-          throw err;
+          throw err instanceof Error
+            ? err
+            : new Error("Calendly availability check failed");
         }
       }
       const { getAvailability } = await import("../calendar/booking");
@@ -857,12 +860,40 @@ export async function executeBuiltinVoiceAction(input: {
     case "book_appointment": {
       const { normalizeBookingToolArgs } = await import("../calendar/booking-args");
       args = normalizeBookingToolArgs(args);
+
+      if (input.callId) {
+        const existingForCall = await prisma.voiceAppointment.findFirst({
+          where: {
+            workspaceId: input.workspaceId,
+            callId: input.callId,
+            status: { notIn: ["cancelled", "canceled"] },
+          },
+          orderBy: { createdAt: "desc" },
+        });
+        if (existingForCall) {
+          return {
+            ok: true,
+            success: true,
+            alreadyBooked: true,
+            provider: existingForCall.externalId?.startsWith("calendly:")
+              ? "calendly"
+              : "internal",
+            appointmentId: existingForCall.id,
+            startsAt: existingForCall.startsAt,
+            message:
+              "Appointment was already confirmed on this call. You may tell the caller their booking is confirmed.",
+          };
+        }
+      }
+
       // Prefer Calendly POST /invitees when connected so bookings land on the
       // host calendar and fire invitee webhooks (same path as automations).
-      try {
-        const { getConnection } = await import("@/lib/integrations/connections");
-        const conn = await getConnection(input.workspaceId, "calendly");
-        if (conn?.status === "connected") {
+      const { getConnectedCalendly, requireCalendlyIntegrationOk } = await import(
+        "../calendar/calendly-voice"
+      );
+      const calendlyConn = await getConnectedCalendly(input.workspaceId);
+      if (calendlyConn) {
+        try {
           const serviceName = String(args.serviceName || args.service || "Appointment");
           const {
             assertBookingPermission,
@@ -903,7 +934,9 @@ export async function executeBuiltinVoiceAction(input: {
                 ok: true,
                 success: true,
                 alreadyBooked: true,
-                provider: "internal",
+                provider: existing.externalId?.startsWith("calendly:")
+                  ? "calendly"
+                  : "internal",
                 appointmentId: existing.id,
                 startsAt: existing.startsAt,
                 message:
@@ -945,49 +978,59 @@ export async function executeBuiltinVoiceAction(input: {
               startTime: args.startsAt || args.startTime || undefined,
               timezone: args.timezone || "America/New_York",
               eventTypeUri: args.eventTypeUri || args.eventTypeId || undefined,
+              callId: input.callId || null,
             },
             contactId: (args.contactId as string) || null,
             actorUserId: null,
             source: "ai",
           });
-          if (result.ok) {
-            const booked = { provider: "calendly", ok: true, ...(result.data as object) };
-            await afterAppointmentBooked({
+          const okResult = requireCalendlyIntegrationOk(result, "book appointment");
+          const resultData = okResult.data || {};
+          const booked = {
+            provider: "calendly",
+            ok: true,
+            ...(resultData as object),
+          };
+          const appointmentRow = await prisma.voiceAppointment.findFirst({
+            where: {
               workspaceId: input.workspaceId,
-              agentId: input.agentId,
-              callId: input.callId,
-              phone: phone || (args.phone ? String(args.phone) : ""),
-              name,
-              email,
-              startsAt: String(args.startsAt || args.startTime || ""),
-              serviceName,
-              appointmentId:
-                (result.data as { appointmentId?: string; id?: string })?.appointmentId ||
-                (result.data as { id?: string })?.id ||
-                undefined,
-            }).catch(() => undefined);
-            return booked;
+              callId: input.callId || undefined,
+              externalId: { startsWith: "calendly:" },
+            },
+            orderBy: { createdAt: "desc" },
+          });
+          await afterAppointmentBooked({
+            workspaceId: input.workspaceId,
+            agentId: input.agentId,
+            callId: input.callId,
+            phone: phone || (args.phone ? String(args.phone) : ""),
+            name,
+            email,
+            startsAt: String(args.startsAt || args.startTime || ""),
+            serviceName,
+            appointmentId:
+              appointmentRow?.id ||
+              (resultData as { appointmentId?: string; id?: string })?.appointmentId ||
+              (resultData as { id?: string })?.id ||
+              undefined,
+          }).catch(() => undefined);
+          return { ...booked, smsSent: true, appointmentId: appointmentRow?.id };
+        } catch (err) {
+          console.warn(
+            "[voice] calendly book error",
+            err instanceof Error ? err.message : err,
+          );
+          if (
+            err instanceof Error &&
+            /does not allow direct booking|minimum notice|too far ahead|Missing required|requires invitee email/i.test(
+              err.message,
+            )
+          ) {
+            throw err;
           }
-        }
-      } catch (err) {
-        console.warn(
-          "[voice] calendly book fallback",
-          err instanceof Error ? err.message : err,
-        );
-        if (
-          err instanceof Error &&
-          /does not allow direct booking|minimum notice|too far ahead|Missing required|requires invitee email/i.test(
-            err.message,
-          )
-        ) {
-          throw err;
-        }
-        // If Calendly is connected but booking failed for another reason, surface it
-        // rather than silently booking only into the internal calendar.
-        const { getConnection } = await import("@/lib/integrations/connections");
-        const conn = await getConnection(input.workspaceId, "calendly").catch(() => null);
-        if (conn?.status === "connected") {
-          throw err instanceof Error ? err : new Error(String(err));
+          throw err instanceof Error
+            ? err
+            : new Error("Calendly booking failed");
         }
       }
       const { bookAppointment } = await import("../calendar/booking");
@@ -1376,6 +1419,15 @@ async function afterAppointmentBooked(input: {
       }),
     )
     .catch(() => undefined);
+
+  if (input.callId) {
+    await getPrisma()
+      .voiceCall.update({
+        where: { id: input.callId },
+        data: { appointmentBooked: true },
+      })
+      .catch(() => undefined);
+  }
 
   await notifyStaffByEmail({
     workspaceId: input.workspaceId,

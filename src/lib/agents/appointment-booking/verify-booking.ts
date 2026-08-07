@@ -87,10 +87,32 @@ export async function verifyAppointmentBooking(input: {
     if (outcomeStored) details.push("Call outcome appointmentBooked=true");
   }
 
-  const smsAttempted = Boolean(input.smsAlreadySent);
-  const smsStatus: BookingVerificationStatus = smsAttempted
-    ? "attempted"
-    : "unknown";
+  let smsAttempted = Boolean(input.smsAlreadySent);
+  let smsStatus: BookingVerificationStatus = smsAttempted ? "attempted" : "unknown";
+  if (!smsAttempted && input.callId) {
+    const bookExecs = await prisma.voiceToolExecution.findMany({
+      where: {
+        workspaceId: input.workspaceId,
+        callId: input.callId,
+        status: { in: ["succeeded", "success", "ok", "COMPLETED", "completed"] },
+      },
+      orderBy: { createdAt: "asc" },
+      select: { output: true, tool: { select: { toolType: true, name: true } } },
+      take: 30,
+    });
+    for (const bookExec of bookExecs) {
+      const toolType = String(
+        bookExec.tool?.toolType || bookExec.tool?.name || "",
+      ).toLowerCase();
+      const output = (bookExec.output || {}) as Record<string, unknown>;
+      if (/book_appointment/.test(toolType) && output.smsSent === true) {
+        smsAttempted = true;
+        smsStatus = "delivered";
+        details.push("Confirmation SMS recorded on book_appointment tool");
+        break;
+      }
+    }
+  }
 
   let overall: BookingVerificationStatus = "completed";
   if (!appointment.id) overall = "failed";

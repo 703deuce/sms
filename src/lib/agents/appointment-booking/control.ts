@@ -117,6 +117,7 @@ export async function runAgentControlCommand(input: {
         agentId: input.agentId,
         limit: Number(input.payload?.limit || 20),
         failuresOnly: Boolean(input.payload?.failuresOnly),
+        summariesOnly: input.payload?.summariesOnly !== false,
       });
       return { traces };
     }

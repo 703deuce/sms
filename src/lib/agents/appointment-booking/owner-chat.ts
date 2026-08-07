@@ -8,7 +8,9 @@ import {
   explainTraceFailure,
   searchAgentActivity,
   diagnoseCallFailure,
+  summarizeCallTraceForOwner,
 } from "@/lib/agents/appointment-booking/execution-trace";
+import { formatDiagnosticForOwner } from "@/lib/agents/appointment-booking/intelligence/diagnostic-runtime";
 import {
   createChangeProposal,
   parseBookingPolicyRequest,
@@ -79,6 +81,81 @@ export async function answerOwnerQuestion(input: {
     "Create an after-hours emergency workflow draft",
     "Test yourself",
   ];
+
+  const wantsCallHistory =
+    preflight.state.route.intent === "diagnose_failure" ||
+    includesAny(q, [
+      "what happened",
+      "last call",
+      "most recent call",
+      "recent call",
+      "explain the last",
+      "tell me about the call",
+      "who called",
+    ]);
+
+  if (wantsCallHistory) {
+    const summaries = await searchAgentActivity({
+      workspaceId: input.workspaceId,
+      agentId: input.agentId,
+      limit: 1,
+      summariesOnly: false,
+    });
+    const recent =
+      summaries[0] ||
+      (
+        await searchAgentActivity({
+          workspaceId: input.workspaceId,
+          agentId: input.agentId,
+          limit: 1,
+          summariesOnly: true,
+        })
+      )[0];
+    if (!recent) {
+      return enrichOwnerReply(
+        {
+          answer:
+            "I do not have call activity for this agent yet, so I cannot explain a recent call from records.",
+          sources: ["activity"],
+          suggestedFollowUps: followUps,
+        },
+        preflight.state,
+      );
+    }
+    const narrative = summarizeCallTraceForOwner(recent);
+    const diagnosis = diagnoseCallFailure(recent);
+    const detail =
+      recent.outcome === "failed"
+        ? formatDiagnosticForOwner(diagnosis)
+        : diagnosis.ownerExplanation;
+    return enrichOwnerReply(
+      {
+        answer: `${narrative} ${detail}`,
+        sources: ["execution_trace", "diagnostic_specialist", recent.callId],
+        suggestedFollowUps: [
+          "Why didn’t the last caller book?",
+          "How many appointments did you book this week?",
+          "Show recent failures",
+        ],
+        evidence: [
+          {
+            label: "Open call",
+            kind: "call",
+            href: `/voice/calls/${recent.callId}`,
+            refId: recent.callId,
+          },
+          {
+            label: "View timeline",
+            kind: "timeline",
+            href: `/agents/${agent.identity.id}?section=work&callId=${recent.callId}`,
+            refId: recent.callId,
+          },
+        ],
+        data: { trace: recent, diagnosis },
+      },
+      preflight.state,
+    );
+  }
 
   // Confirm pending proposal from conversation ("yes", "put it live", "activate this")
   if (

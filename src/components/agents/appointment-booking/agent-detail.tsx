@@ -70,6 +70,8 @@ export function AppointmentAgentDetail({ agentId }: { agentId: string }) {
   const [buildSub, setBuildSub] = useState<BuildSub>("versions");
   const [settingsSub, setSettingsSub] = useState<SettingsSub>("booking");
   const [activity, setActivity] = useState<unknown[]>([]);
+  const [activityLoading, setActivityLoading] = useState(false);
+  const [activityError, setActivityError] = useState<string | null>(null);
   const [proposals, setProposals] = useState<unknown[]>([]);
   const [workflowDrafts, setWorkflowDrafts] = useState<unknown[]>([]);
   const [attention, setAttention] = useState<{ items?: unknown[]; openCount?: number } | null>(
@@ -155,6 +157,32 @@ export function AppointmentAgentDetail({ agentId }: { agentId: string }) {
   );
 
   useEffect(() => {
+    if (!agent || section !== "work" || workSub !== "activity") return;
+    let cancelled = false;
+    setActivityLoading(true);
+    setActivityError(null);
+    void (async () => {
+      try {
+        const data = await runCommand("search_agent_activity", {
+          limit: 15,
+          summariesOnly: true,
+        });
+        if (!cancelled) setActivity(data.traces || []);
+      } catch (err) {
+        if (!cancelled) {
+          setActivity([]);
+          setActivityError(err instanceof Error ? err.message : "Failed to load activity");
+        }
+      } finally {
+        if (!cancelled) setActivityLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [agent, section, workSub, runCommand]);
+
+  useEffect(() => {
     if (!agent) return;
     void (async () => {
       try {
@@ -177,10 +205,6 @@ export function AppointmentAgentDetail({ agentId }: { agentId: string }) {
             ]);
             setTalkSeeded(true);
           }
-        }
-        if (section === "work" && workSub === "activity") {
-          const data = await runCommand("search_agent_activity", { limit: 20 });
-          setActivity(data.traces || []);
         }
         if (section === "build") {
           const props = await runCommand("list_change_proposals");
@@ -606,7 +630,11 @@ export function AppointmentAgentDetail({ agentId }: { agentId: string }) {
               />
               {workSub === "activity" ? (
                 <div className="mt-4 space-y-3">
-                  {activity.length === 0 ? (
+                  {activityLoading ? (
+                    <p className="text-sm text-slate-500">Loading activity…</p>
+                  ) : activityError ? (
+                    <p className="text-sm text-rose-600">{activityError}</p>
+                  ) : activity.length === 0 ? (
                     <p className="text-sm text-slate-500">No recent call activity yet.</p>
                   ) : (
                     (
