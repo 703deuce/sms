@@ -275,6 +275,49 @@ export async function POST(request: Request) {
         })
         .catch(() => null);
       try {
+        const workflow = body.workflow ? String(body.workflow) : "book_appointment";
+        const serviceName = body.serviceName ? String(body.serviceName) : null;
+
+        if (callId) {
+          const { assertToolAllowed } = await import("@/lib/voice/workflow-engine/guard");
+          const guard = await assertToolAllowed({
+            callId,
+            workspaceId,
+            agentId,
+            toolType,
+            workflow: workflow as import("@/lib/voice/field-runtime/types").WorkflowAction,
+            serviceName,
+          });
+          if (!guard.allowed) {
+            const blocked = {
+              ok: false,
+              success: false,
+              error: guard.error_code || "TOOL_NOT_ALLOWED",
+              error_code: guard.error_code,
+              speak: guard.speak,
+              retryable: guard.retryable ?? false,
+              next_action: guard.next_action,
+              workflow_state: guard.state,
+              allowed_tools: guard.allowed_tools,
+            };
+            if (execution) {
+              await prisma.voiceToolExecution
+                .update({
+                  where: { id: execution.id },
+                  data: {
+                    status: "failed",
+                    output: blocked as object,
+                    errorMessage: guard.error_code || "tool not allowed",
+                    latencyMs: Date.now() - start,
+                    completedAt: new Date(),
+                  },
+                })
+                .catch(() => undefined);
+            }
+            return NextResponse.json(blocked);
+          }
+        }
+
         const result = (await executeBuiltinVoiceAction({
           workspaceId,
           agentId,
@@ -286,6 +329,19 @@ export async function POST(request: Request) {
           },
         })) as Record<string, unknown>;
         const ok = result.ok !== false;
+
+        if (callId) {
+          const { refreshRuntimeAfterTool } = await import("@/lib/voice/workflow-engine/engine");
+          await refreshRuntimeAfterTool({
+            callId,
+            workspaceId,
+            agentId,
+            toolType,
+            toolResult: result,
+            workflow: workflow as import("@/lib/voice/field-runtime/types").WorkflowAction,
+            serviceName,
+          }).catch(() => undefined);
+        }
         if (execution) {
           await prisma.voiceToolExecution
             .update({

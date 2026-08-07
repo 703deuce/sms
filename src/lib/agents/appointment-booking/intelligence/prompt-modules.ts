@@ -177,9 +177,11 @@ Repeat full date, day, time, and timezone before booking.`,
   custom_fields: () =>
     `FIELD COLLECTION (runtime-driven)
 Do NOT rely on static field lists in this prompt.
-On each call: get_workflow_requirements returns fields_to_collect and missing_fields for this business/workflow.
-Save incrementally with save_collected_fields: { fields: [{ field_id, value }] }.
-Use active_field from the response to know which field you just asked about.`,
+Runtime context is injected each turn: workflow_state, current_required_field_json, allowed_tools_json.
+On each call: get_workflow_requirements or get_runtime_context returns fields_to_collect, missing_fields, and allowed tools.
+PREFERRED: record_current_field({ value }) when collecting the active field — backend knows field_id.
+ALTERNATIVE: save_collected_fields({ fields: [{ field_id, value }] }) for multiple fields.
+Use only tools listed in allowed_tools for the current workflow state.`,
 
   tool_policy: () => compileCallerToolPlaybookForPrompt(callerAmyRuntimeToolIds()),
 

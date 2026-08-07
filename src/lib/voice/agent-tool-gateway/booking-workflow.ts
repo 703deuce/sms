@@ -95,6 +95,28 @@ export async function executeBookAppointmentWorkflow(
     );
   }
 
+  {
+    const { ensureAgentRuntime, saveAgentRuntime, appendOperationReceipt } = await import(
+      "@/lib/voice/workflow-engine/runtime-state"
+    );
+    let runtime = await ensureAgentRuntime({
+      callId: ctx.callId,
+      workflowId: "book_appointment",
+      serviceName: normalized.service_name,
+    });
+    runtime = {
+      ...runtime,
+      pending_operations: [...new Set([...runtime.pending_operations, normalized.operation_id])],
+    };
+    runtime = appendOperationReceipt(runtime, {
+      operation_id: normalized.operation_id,
+      type: "BOOK_APPOINTMENT",
+      status: "pending",
+      created_at: new Date().toISOString(),
+    });
+    await saveAgentRuntime(ctx.callId, runtime);
+  }
+
   const { getWorkflowRequirements, ensureWorkflowFieldSession } = await import(
     "@/lib/voice/field-runtime"
   );
@@ -263,6 +285,33 @@ export async function executeBookAppointmentWorkflow(
         data: { appointmentBooked: true, contactId: contactId || undefined },
       })
       .catch(() => undefined);
+
+    const { loadAgentRuntime, saveAgentRuntime, appendOperationReceipt } = await import(
+      "@/lib/voice/workflow-engine/runtime-state"
+    );
+    const runtime = await loadAgentRuntime(ctx.callId);
+    if (runtime) {
+      const next = appendOperationReceipt(
+        {
+          ...runtime,
+          booking_id: appointment.id,
+          selected_slot: appointment.startsAt.toISOString(),
+          pending_operations: runtime.pending_operations.filter(
+            (id) => id !== normalized.operation_id,
+          ),
+        },
+        {
+          operation_id: normalized.operation_id,
+          type: "BOOK_APPOINTMENT",
+          status: "confirmed",
+          provider,
+          provider_reference: appointment.id,
+          created_at: new Date().toISOString(),
+          completed_at: new Date().toISOString(),
+        },
+      );
+      await saveAgentRuntime(ctx.callId, next);
+    }
   }
 
   const { convertHoldToAppointment } = await import("@/lib/voice/calendar/slot-holds");

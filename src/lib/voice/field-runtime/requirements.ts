@@ -116,7 +116,7 @@ export function requirementsToToolResponse(
       : result.speak || "Some required fields are still missing.",
     next_action: result.complete
       ? null
-      : `Call save_collected_fields with fields:[{field_id:"${result.missing_fields[0]?.field_id}", value:"<caller answer>"}]`,
+      : `Call record_current_field(value:"<caller answer>") or save_collected_fields with field_id "${result.missing_fields[0]?.field_id}"`,
   };
 }
 

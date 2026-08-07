@@ -22,7 +22,10 @@ import {
   liveAgentAllowsAction,
   LIVE_AGENT_APPOINTMENT_ACTIONS,
 } from "../src/lib/integrations/framework/execution-source";
-import { compileCallerToolPlaybookForPrompt } from "../src/lib/agents/appointment-booking/intelligence/caller-tool-playbook";
+import {
+  compileCallerToolPlaybookForPrompt,
+  callerAmyRuntimeToolIds,
+} from "../src/lib/agents/appointment-booking/intelligence/caller-tool-playbook";
 import { classifyActionRisk } from "../src/lib/integrations/framework/ai-policy";
 
 const failures: string[] = [];
@@ -50,7 +53,9 @@ const RUNTIME_TO_BUILTIN: Record<string, string | "telnyx_native"> = {
   transfer: "telnyx_native",
   escalate_human: "escalate_human",
   save_collected_fields: "save_collected_fields",
+  record_current_field: "record_current_field",
   get_workflow_requirements: "get_workflow_requirements",
+  get_runtime_context: "get_runtime_context",
   save_caller_info: "save_caller_info",
   take_structured_message: "take_structured_message",
   lookup_customer: "lookup_customer",
@@ -390,10 +395,12 @@ console.log("\n== book_appointment slot guard (call cmsicfq1 regression) ==");
 
 console.log("\n== caller tool playbook injected in prompt ==");
 {
-  const prompt = compileCallerToolPlaybookForPrompt(["book_appointment", "calendar_availability"]);
+  const prompt = compileCallerToolPlaybookForPrompt(callerAmyRuntimeToolIds());
   check("playbook mentions slots[].startsAt", prompt.includes("slots[].startsAt"));
   check("playbook mentions save_collected_fields", prompt.includes("save_collected_fields"));
+  check("playbook mentions record_current_field", prompt.includes("record_current_field"));
   check("playbook mentions get_workflow_requirements", prompt.includes("get_workflow_requirements"));
+  check("playbook mentions get_runtime_context", prompt.includes("get_runtime_context"));
   check("playbook mentions resolve_datetime chain", prompt.includes("resolve_datetime"));
 }
 

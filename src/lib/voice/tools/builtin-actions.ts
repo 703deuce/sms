@@ -362,6 +362,37 @@ export async function executeBuiltinVoiceAction(input: {
         serviceName: args.serviceName ? String(args.serviceName) : null,
       });
     }
+    case "record_current_field": {
+      if (!input.callId) throw new Error("callId required");
+      const { recordCurrentField } = await import("@/lib/voice/field-runtime/save");
+      return recordCurrentField({
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+        callId: input.callId,
+        value: args.value,
+        workflow: (args.workflow ? String(args.workflow) : "book_appointment") as import("@/lib/voice/field-runtime/types").WorkflowAction,
+        serviceName: args.serviceName ? String(args.serviceName) : null,
+      });
+    }
+    case "get_runtime_context": {
+      if (!input.callId) throw new Error("callId required");
+      const { buildRuntimeContext } = await import("@/lib/voice/workflow-engine/engine");
+      const workflow = (args.workflow ? String(args.workflow) : "book_appointment") as import("@/lib/voice/field-runtime/types").WorkflowAction;
+      const ctx = await buildRuntimeContext({
+        callId: input.callId,
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+        workflow,
+        serviceName: args.serviceName ? String(args.serviceName) : null,
+      });
+      return {
+        ok: true,
+        success: true,
+        ...ctx,
+        speak: ctx.speak,
+        message: `Workflow state: ${ctx.state}. ${ctx.complete ? "All fields collected." : `Collecting: ${ctx.current_field?.label || "next field"}.`}`,
+      };
+    }
     case "get_workflow_requirements": {
       const { getWorkflowRequirements, requirementsToToolResponse } = await import(
         "@/lib/voice/field-runtime/requirements"

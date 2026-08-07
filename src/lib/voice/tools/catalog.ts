@@ -189,12 +189,34 @@ export const TOOL_CATALOG: CatalogToolDef[] = [
     risk: "medium",
   },
   {
+    key: "record_current_field",
+    name: "Record current field",
+    description:
+      "Save the caller's answer for the field the runtime is currently collecting. Only pass value — field_id is determined by workflow state.",
+    category: "communications",
+    provider: "transovo_builtin",
+    toolType: "record_current_field",
+    access: "write",
+    risk: "medium",
+  },
+  {
     key: "get_workflow_requirements",
     name: "Get workflow requirements",
     description: "Returns fields_to_collect and missing_fields for the current workflow.",
     category: "communications",
     provider: "transovo_builtin",
     toolType: "get_workflow_requirements",
+    access: "read",
+    risk: "low",
+  },
+  {
+    key: "get_runtime_context",
+    name: "Get runtime context",
+    description:
+      "Returns current workflow state, allowed tools, active field, and collected information. Call when unsure what to do next.",
+    category: "communications",
+    provider: "transovo_builtin",
+    toolType: "get_runtime_context",
     access: "read",
     risk: "low",
   },
@@ -420,7 +442,9 @@ export const FULL_RECEPTIONIST_TOOLS = [
   "take_structured_message",
   "mark_disposition",
   "save_collected_fields",
+  "record_current_field",
   "get_workflow_requirements",
+  "get_runtime_context",
   "save_caller_info",
   "update_contact_tags",
   "lookup_customer",
@@ -896,6 +920,24 @@ export const BUILTIN_WEBHOOK_BODIES: Record<
       required: ["fields"],
     },
   },
+  record_current_field: {
+    name: "record_current_field",
+    toolType: "record_current_field",
+    description:
+      "Save the caller's answer for the CURRENT required field. The runtime already knows which field is active — only pass value. USE when workflow state is COLLECTING_FIELDS and current_field is set. DO NOT USE when no active field or when saving multiple fields at once.",
+    body: {
+      type: "object",
+      properties: {
+        value: {
+          type: "string",
+          description: "The caller's answer for the current required field.",
+        },
+        workflow: { type: "string", description: "book_appointment | general | etc." },
+        serviceName: { type: "string" },
+      },
+      required: ["value"],
+    },
+  },
   get_workflow_requirements: {
     name: "get_workflow_requirements",
     toolType: "get_workflow_requirements",
@@ -908,6 +950,19 @@ export const BUILTIN_WEBHOOK_BODIES: Record<
         serviceName: { type: "string" },
       },
       required: ["workflow"],
+    },
+  },
+  get_runtime_context: {
+    name: "get_runtime_context",
+    toolType: "get_runtime_context",
+    description:
+      "Returns current workflow state, allowed tools, active field, known information, and next steps. USE when unsure what action is permitted. DO NOT invent state — trust this response.",
+    body: {
+      type: "object",
+      properties: {
+        workflow: { type: "string", description: "book_appointment | general | etc." },
+        serviceName: { type: "string" },
+      },
     },
   },
   save_caller_info: {

@@ -27,7 +27,8 @@ export const BOOKING_TOOL_CHAIN = [
   "2. calendar_availability — pass resolvedIso as from/to OR a day window; read slots[].startsAt.",
   "3. Offer ONLY times from slots[].startsAt — never convert clock times yourself.",
   "4. get_workflow_requirements — see fields_to_collect + missing_fields for this business (runtime manifest).",
-  "5. save_collected_fields — after each answer, save ONE OR MORE fields by field_id (incremental).",
+  "5. record_current_field — preferred: pass only value for the active field the runtime is collecting.",
+  "5b. save_collected_fields — alternative: pass fields:[{field_id, value}] when saving multiple fields.",
   "6. hold_appointment_slot (optional) — while confirming; startsAt from slots.",
   "7. book_appointment — startsAt + serviceName only; customer data comes from workflow session.",
 ].join("\n");
@@ -219,9 +220,9 @@ export const CALLER_AMY_TOOL_PLAYBOOK: CallerToolPlaybookEntry[] = [
   },
   {
     toolId: "save_collected_fields",
-    summary: "THE generic field save tool — submit values by field_id from the runtime manifest.",
+    summary: "Generic field save — submit values by field_id from the runtime manifest.",
     whenToCall:
-      "Immediately after the caller answers ANY field from fields_to_collect or missing_fields. Save incrementally — one field per answer is fine.",
+      "When saving multiple fields at once or when record_current_field is not available. Prefer record_current_field during COLLECTING_FIELDS.",
     parameters: [
       {
         name: "session_id",
@@ -266,6 +267,40 @@ export const CALLER_AMY_TOOL_PLAYBOOK: CallerToolPlaybookEntry[] = [
     ],
   },
   {
+    toolId: "record_current_field",
+    summary: "Preferred field save — submit ONLY the caller's answer; runtime knows which field is active.",
+    whenToCall:
+      "Immediately after the caller answers the CURRENT required field during COLLECTING_FIELDS. Use when current_required_field_json or active_field is set.",
+    parameters: [
+      {
+        name: "value",
+        required: true,
+        type: "string",
+        instruction: "The caller's exact answer for the field the runtime is collecting right now.",
+        example: "2022 Honda Accord",
+      },
+      {
+        name: "workflow",
+        required: false,
+        type: "string",
+        instruction: "book_appointment | general — defaults to book_appointment.",
+      },
+      {
+        name: "serviceName",
+        required: false,
+        type: "string",
+        instruction: "Appointment type when workflow=book_appointment.",
+      },
+    ],
+    workflow:
+      "Response includes next_field with label/instruction for the following question. Never pass field_id — the backend resolves it from workflow state.",
+    never: [
+      "Pass field_id — the runtime already knows the active field",
+      "Use when no active field is set — call get_workflow_requirements first",
+      "Use for multiple fields at once — use save_collected_fields instead",
+    ],
+  },
+  {
     toolId: "get_workflow_requirements",
     summary: "Get current field manifest + what is still missing for this workflow.",
     whenToCall:
@@ -287,6 +322,32 @@ export const CALLER_AMY_TOOL_PLAYBOOK: CallerToolPlaybookEntry[] = [
     ],
     workflow:
       "Read fields_to_collect for labels/instructions. Ask only for missing_fields. When complete=true, proceed to book_appointment.",
+  },
+  {
+    toolId: "get_runtime_context",
+    summary: "Full runtime snapshot — state, allowed tools, active field, known info.",
+    whenToCall:
+      "When unsure what step you are on, which tools are permitted, or what field to collect next. Trust this over conversation memory.",
+    parameters: [
+      {
+        name: "workflow",
+        required: false,
+        type: "string",
+        instruction: "book_appointment | general — defaults to book_appointment.",
+      },
+      {
+        name: "serviceName",
+        required: false,
+        type: "string",
+        instruction: "Appointment type.",
+      },
+    ],
+    workflow:
+      "Response.state tells the current phase. Response.allowed_tools lists permitted actions. Response.current_field has the active collection target.",
+    never: [
+      "Guess workflow state from conversation history",
+      "Call tools not listed in allowed_tools",
+    ],
   },
   {
     toolId: "save_caller_info",

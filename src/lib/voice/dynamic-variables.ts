@@ -174,6 +174,7 @@ export async function resolveCallDynamicVariables(input: {
   if (input.callId && input.agentId) {
     try {
       const { buildRuntimeFieldManifest } = await import("@/lib/voice/field-runtime/requirements");
+      const { buildRuntimeContext } = await import("@/lib/voice/workflow-engine/engine");
       const manifest = await buildRuntimeFieldManifest({
         workspaceId: input.workspaceId,
         agentId: input.agentId,
@@ -187,6 +188,35 @@ export async function resolveCallDynamicVariables(input: {
           workflow: manifest.workflow,
           session_id: manifest.session_id,
           fields_to_collect: manifest.fields_to_collect,
+        }).slice(0, 3500),
+      );
+
+      const runtimeCtx = await buildRuntimeContext({
+        callId: input.callId,
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+        workflow: "book_appointment",
+      });
+      set("workflow_state", runtimeCtx.state);
+      set(
+        "allowed_tools_json",
+        JSON.stringify(runtimeCtx.allowed_tools).slice(0, 1500),
+      );
+      if (runtimeCtx.current_field) {
+        set(
+          "current_required_field_json",
+          JSON.stringify(runtimeCtx.current_field).slice(0, 800),
+        );
+      }
+      set(
+        "runtime_context_json",
+        JSON.stringify({
+          state: runtimeCtx.state,
+          workflow_id: runtimeCtx.workflow_id,
+          allowed_tools: runtimeCtx.allowed_tools,
+          current_field: runtimeCtx.current_field,
+          missing_count: runtimeCtx.missing_fields.length,
+          complete: runtimeCtx.complete,
         }).slice(0, 3500),
       );
     } catch {
