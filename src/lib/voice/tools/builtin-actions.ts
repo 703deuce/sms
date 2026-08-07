@@ -1,5 +1,34 @@
 import { getPrisma } from "@/lib/db";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
+import { resolveLiveAgentExecutionContext } from "./live-agent-context";
+
+async function executeLiveAgentCalendlyAction(input: {
+  workspaceId: string;
+  agentId?: string;
+  callId?: string;
+  actionId: "appointment.list_available_times" | "appointment.book";
+  params: Record<string, unknown>;
+  contactId?: string | null;
+}) {
+  const liveAgent = await resolveLiveAgentExecutionContext({
+    workspaceId: input.workspaceId,
+    agentId: input.agentId,
+    callId: input.callId,
+  });
+  const { executeIntegrationAction } = await import(
+    "@/lib/integrations/framework/actions-registry"
+  );
+  return executeIntegrationAction({
+    workspaceId: input.workspaceId,
+    provider: "calendly",
+    actionId: input.actionId,
+    params: input.params,
+    contactId: input.contactId || null,
+    actorUserId: null,
+    source: "live_agent",
+    liveAgent,
+  });
+}
 
 export async function executeBuiltinVoiceAction(input: {
   workspaceId: string;
@@ -723,12 +752,10 @@ export async function executeBuiltinVoiceAction(input: {
           const gates = await loadServiceBookingConfig(input.workspaceId, serviceName);
           assertBookingPermission(gates.config);
 
-          const { executeIntegrationAction } = await import(
-            "@/lib/integrations/framework/actions-registry"
-          );
-          const result = await executeIntegrationAction({
+          const result = await executeLiveAgentCalendlyAction({
             workspaceId: input.workspaceId,
-            provider: "calendly",
+            agentId: input.agentId,
+            callId: input.callId,
             actionId: "appointment.list_available_times",
             params: {
               eventTypeUri: args.eventTypeUri || args.eventTypeId,
@@ -736,8 +763,6 @@ export async function executeBuiltinVoiceAction(input: {
               endTime: window.endTime,
             },
             contactId: (args.contactId as string) || null,
-            actorUserId: null,
-            source: "ai",
           });
           const okResult = requireCalendlyIntegrationOk(result, "list available times");
           const calendlyData = okResult.data || {};
@@ -964,12 +989,10 @@ export async function executeBuiltinVoiceAction(input: {
             );
           }
           if (!name) name = "Caller";
-          const { executeIntegrationAction } = await import(
-            "@/lib/integrations/framework/actions-registry"
-          );
-          const result = await executeIntegrationAction({
+          const result = await executeLiveAgentCalendlyAction({
             workspaceId: input.workspaceId,
-            provider: "calendly",
+            agentId: input.agentId,
+            callId: input.callId,
             actionId: "appointment.book",
             params: {
               name,
@@ -981,8 +1004,6 @@ export async function executeBuiltinVoiceAction(input: {
               callId: input.callId || null,
             },
             contactId: (args.contactId as string) || null,
-            actorUserId: null,
-            source: "ai",
           });
           const okResult = requireCalendlyIntegrationOk(result, "book appointment");
           const resultData = okResult.data || {};

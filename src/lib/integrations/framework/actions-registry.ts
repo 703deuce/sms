@@ -15,6 +15,8 @@ import {
   completeIntegrationActionLog,
   createIntegrationActionLog,
 } from "./action-log";
+import type { IntegrationActionSource, LiveAgentExecutionContext } from "./execution-source";
+import { summarizeLiveAgentContext } from "./execution-source";
 import { raiseIntegrationAlert } from "./alerts";
 import { checkCommunicationConsent } from "./consent-gate";
 import { persistTaskFromIntegration } from "./product-persist";
@@ -397,7 +399,7 @@ export async function executeIntegrationAction(input: {
   params: Record<string, unknown>;
   contactId?: string | null;
   actorUserId?: string | null;
-  source?: "human" | "ai" | "automation" | "api";
+  source?: IntegrationActionSource;
   role?: string | null;
   approvalId?: string | null;
   payloadHash?: string | null;
@@ -405,6 +407,7 @@ export async function executeIntegrationAction(input: {
   idempotencyKey?: string | null;
   connectionId?: string | null;
   recordCount?: number;
+  liveAgent?: LiveAgentExecutionContext | null;
 }): Promise<
   | {
       ok: true;
@@ -473,6 +476,7 @@ export async function executeIntegrationAction(input: {
     recordCount: input.recordCount || 1,
     approvalId: input.approvalId,
     payloadHash,
+    liveAgent: input.liveAgent,
   });
   if (!policy.allowed) {
     const log = await createIntegrationActionLog({
@@ -484,7 +488,10 @@ export async function executeIntegrationAction(input: {
       automationFlowId: input.automationFlowId,
       actionId: input.actionId,
       riskLevel,
-      inputSummary: input.params,
+      inputSummary: {
+        ...input.params,
+        ...(input.liveAgent ? { liveAgent: summarizeLiveAgentContext(input.liveAgent) } : {}),
+      },
       contactId: input.contactId,
       approvalId: input.approvalId,
       idempotencyKey: input.idempotencyKey || `reject-${payloadHash.slice(0, 24)}`,

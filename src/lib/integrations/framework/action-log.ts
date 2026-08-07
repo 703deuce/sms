@@ -1,10 +1,11 @@
 import { getPrisma } from "@/lib/db";
+import type { IntegrationActionSource } from "./execution-source";
 
 export async function createIntegrationActionLog(input: {
   workspaceId: string;
   provider: string;
   connectionId?: string | null;
-  source: "human" | "ai" | "automation" | "api";
+  source: IntegrationActionSource;
   actorUserId?: string | null;
   automationFlowId?: string | null;
   actionId: string;

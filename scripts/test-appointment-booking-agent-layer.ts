@@ -690,4 +690,41 @@ const invalidWorkflow = extractPendingActionConfirmation("request_workflow_draft
 });
 assert("invalid workflow draft skips confirmation", invalidWorkflow === null);
 
+import {
+  liveAgentAllowsAction,
+  LIVE_AGENT_APPOINTMENT_ACTIONS,
+} from "../src/lib/integrations/framework/execution-source";
+import { classifyActionRisk } from "../src/lib/integrations/framework/ai-policy";
+import { LIVE_AGENT_CALENDLY_POLICY_REGRESSION } from "../src/lib/integrations/framework/fixtures/live-agent-calendly-policy-regression";
+
+assert(
+  "live_agent allows calendly list_available_times",
+  liveAgentAllowsAction("appointment.list_available_times", 1),
+);
+assert(
+  "live_agent allows calendly book",
+  liveAgentAllowsAction("appointment.book", 3),
+);
+assert(
+  "live_agent blocks arbitrary CRM writes",
+  !liveAgentAllowsAction("contact.upsert", 3),
+);
+assert(
+  "regression fixture action is list_available_times",
+  LIVE_AGENT_CALENDLY_POLICY_REGRESSION.actionId === "appointment.list_available_times",
+);
+assert(
+  "regression fixture expects live_agent source",
+  LIVE_AGENT_CALENDLY_POLICY_REGRESSION.expectedSourceAfterFix === "live_agent",
+);
+assert(
+  "appointment.list_available_times is risk level 1",
+  classifyActionRisk("appointment.list_available_times") === 1,
+);
+assert(
+  "live agent appointment whitelist includes book + availability",
+  LIVE_AGENT_APPOINTMENT_ACTIONS.has("appointment.list_available_times") &&
+    LIVE_AGENT_APPOINTMENT_ACTIONS.has("appointment.book"),
+);
+
 console.log("\nDone.");

@@ -2,6 +2,13 @@ import { createHash } from "crypto";
 import { getPrisma } from "@/lib/db";
 import type { IntegrationActionId } from "./actions-registry";
 import type { ExternalProviderId } from "./types";
+import {
+  liveAgentAllowsAction,
+  type IntegrationActionSource,
+  type LiveAgentExecutionContext,
+} from "./execution-source";
+
+export type { IntegrationActionSource, LiveAgentExecutionContext };
 
 export type ActionRiskLevel = 1 | 2 | 3 | 4;
 
@@ -211,11 +218,12 @@ export async function evaluateActionPolicy(input: {
   workspaceId: string;
   provider: ExternalProviderId | string;
   actionId: IntegrationActionId | string;
-  source: "human" | "ai" | "automation" | "api";
+  source: IntegrationActionSource;
   role?: string | null;
   recordCount?: number;
   approvalId?: string | null;
   payloadHash?: string | null;
+  liveAgent?: LiveAgentExecutionContext | null;
 }): Promise<
   | { allowed: true; riskLevel: ActionRiskLevel; mode: PolicyMode; requiresApproval: boolean }
   | { allowed: false; riskLevel: ActionRiskLevel; code: string; message: string }
@@ -224,6 +232,28 @@ export async function evaluateActionPolicy(input: {
     recordCount: input.recordCount,
   });
   const policy = await getWorkspaceAiPolicy(input.workspaceId);
+
+  // Live Caller Amy — pre-authorized booking workflow under published AgentVersion.
+  // Owner approval gates config changes, not each availability lookup during a call.
+  if (input.source === "live_agent") {
+    if (!input.liveAgent?.agentId) {
+      return {
+        allowed: false,
+        riskLevel,
+        code: "LIVE_AGENT_CONTEXT_REQUIRED",
+        message: "Live agent execution requires agentId (and preferably callId)",
+      };
+    }
+    if (!liveAgentAllowsAction(input.actionId, riskLevel)) {
+      return {
+        allowed: false,
+        riskLevel,
+        code: "LIVE_AGENT_ACTION_FORBIDDEN",
+        message: `Action ${input.actionId} is not permitted during live agent execution`,
+      };
+    }
+    return { allowed: true, riskLevel, mode: "allowed", requiresApproval: false };
+  }
 
   if (policy.allowedProviders.length && !policy.allowedProviders.includes(input.provider)) {
     return {
