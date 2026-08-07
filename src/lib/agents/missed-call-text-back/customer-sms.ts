@@ -1,13 +1,13 @@
 /**
  * Customer-facing John — intelligent SMS replies after MCTB initial message.
- * LLM handles language; runtime owns STOP/opt-out and persistence.
+ * Full LLM agent with deterministic runtime gateway (john_runtime_turn).
  */
 
 import { getPrisma } from "@/lib/db";
-import { openAiChatCompletion, getOpenAiApiKey } from "@/lib/ai/openai";
 import { sendQuickSms } from "@/lib/sms/send-quick";
-import { loadMissedCallTextConfig } from "../config";
-import { appendMctbTrace } from "../trace";
+import { loadMissedCallTextConfig } from "./config";
+import { appendMctbTrace } from "./trace";
+import { runJohnCustomerLlmLoop } from "./intelligence/customer-llm-loop";
 
 const STOP_RE = /^(stop|unsubscribe|cancel|end|quit)\b/i;
 
@@ -61,30 +61,23 @@ export async function handleJohnCustomerSmsReply(input: {
     select: { id: true },
   });
 
-  const history = contact
-    ? await prisma.conversationMessage.findMany({
-        where: {
-          conversation: { workspaceId: input.workspaceId, contactId: contact.id },
-        },
-        orderBy: { createdAt: "desc" },
-        take: 12,
-      })
-    : [];
+  const workspace = await prisma.workspace.findUnique({
+    where: { id: input.workspaceId },
+    select: { name: true },
+  });
 
-  const transcript = history
-    .reverse()
-    .map((m) => `${m.direction === "inbound" ? "Customer" : "John"}: ${m.body}`)
-    .join("\n");
-
-  let reply =
-    "Thanks for your message — someone from our team will follow up shortly. Is there anything else I can note for them?";
-
-  if (getOpenAiApiKey()) {
-    const system = `You are John, a helpful SMS assistant for a local service business. Be concise (under 320 chars). Collect useful details. Do not promise exact appointment times. If they need urgent help, acknowledge urgency.`;
-    const user = `Conversation so far:\n${transcript}\n\nCustomer just said: ${input.body}`;
-    const llm = await openAiChatCompletion(system, user, { temperature: 0.4, maxTokens: 200 });
-    if (llm?.trim()) reply = llm.trim().slice(0, 480);
-  }
+  const llmResult = await runJohnCustomerLlmLoop({
+    workspaceId: input.workspaceId,
+    traceId: recentEvent.traceId,
+    missedCallEventId: recentEvent.id,
+    missedAt: recentEvent.detectedAt,
+    conversationId: input.conversationId,
+    contactId: contact?.id,
+    customerPhone: input.fromE164,
+    inboundBody: input.body,
+    businessName: workspace?.name,
+    timezone: config.timezone,
+  });
 
   const pn = config.phoneNumberId
     ? await prisma.phoneNumber.findFirst({
@@ -96,7 +89,7 @@ export async function handleJohnCustomerSmsReply(input: {
   await sendQuickSms({
     workspaceId: input.workspaceId,
     to: input.fromE164,
-    body: reply,
+    body: llmResult.reply,
     from: pn?.e164 || input.toE164,
     idempotencyKey: `john-reply:${recentEvent.id}:${Date.now()}`,
   }).catch(() => undefined);
@@ -112,8 +105,19 @@ export async function handleJohnCustomerSmsReply(input: {
     missedCallEventId: recentEvent.id,
     conversationId: input.conversationId || null,
     kind: "john.response.sent",
-    detail: { inbound: input.body.slice(0, 200) },
+    detail: {
+      inbound: input.body.slice(0, 200),
+      model_invoked: llmResult.modelInvoked,
+      model_request_id: llmResult.modelRequestId,
+      runtime_turn: llmResult.runtimeTurn,
+    },
   });
 
-  return { handled: true, action: "replied", reply };
+  return {
+    handled: true,
+    action: "replied",
+    reply: llmResult.reply,
+    modelInvoked: llmResult.modelInvoked,
+    modelRequestId: llmResult.modelRequestId,
+  };
 }

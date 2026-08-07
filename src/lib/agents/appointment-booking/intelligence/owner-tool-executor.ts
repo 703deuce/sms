@@ -120,6 +120,11 @@ export const OWNER_LLM_TOOL_SPECS: Record<string, OwnerToolSpec> = {
   diagnose_execution: { specialist: "diagnostic_specialist", riskLevel: "read" },
   get_daily_report: { command: "get_daily_report", riskLevel: "read" },
   owner_ask: { command: "owner_ask", blocked: true },
+  get_john_mctb_settings: { riskLevel: "read" },
+  update_john_mctb_settings: { riskLevel: "medium" },
+  search_missed_calls: { riskLevel: "read" },
+  get_missed_call_details: { riskLevel: "read" },
+  request_john_workflow_draft: { riskLevel: "low" },
 };
 
 const OBJECT = (props: Record<string, unknown>, required: string[] = []) => ({
@@ -488,6 +493,55 @@ export async function executeOwnerLlmTool(input: {
   if (spec.requiresConfirmation) {
     const gate = await validateConfirmationGate(input);
     if (gate) return gate;
+  }
+
+  // John MCTB tools — routed to John intelligence layer (not Amy control API)
+  if (
+    input.toolName === "get_john_mctb_settings" ||
+    input.toolName === "update_john_mctb_settings" ||
+    input.toolName === "search_missed_calls" ||
+    input.toolName === "get_missed_call_details" ||
+    input.toolName === "request_john_workflow_draft"
+  ) {
+    const { executeJohnAdminTool } = await import(
+      "@/lib/agents/missed-call-text-back/intelligence/owner-tools"
+    );
+    const { architectMctbWorkflowFromRequest } = await import(
+      "@/lib/agents/missed-call-text-back/intelligence/workflow-architect-mctb"
+    );
+
+    if (input.toolName === "request_john_workflow_draft") {
+      const userRequest = String(input.args.userRequest || input.args.natural_language || "");
+      const result = await architectMctbWorkflowFromRequest(userRequest);
+      return toolCompleted({
+        draft: result.draft,
+        validation: result.validation,
+        workflowArchitectInvoked: result.modelInvoked,
+      });
+    }
+
+    const toolMap: Record<string, import("@/lib/agents/missed-call-text-back/intelligence/owner-tools").JohnAdminToolName> = {
+      get_john_mctb_settings: "get_missed_call_text_settings",
+      update_john_mctb_settings: "update_john_settings_via_llm",
+      search_missed_calls: "search_missed_calls",
+      get_missed_call_details: "get_missed_call_details",
+    };
+
+    const johnTool = toolMap[input.toolName];
+    const naturalLanguage =
+      input.toolName === "update_john_mctb_settings"
+        ? String(input.args.natural_language || input.args.userRequest || input.args.request || "")
+        : undefined;
+
+    const raw = await executeJohnAdminTool({
+      workspaceId: input.workspaceId,
+      tool: johnTool,
+      args: input.args,
+      actor: input.userId,
+      naturalLanguage,
+      toolCallId: String(input.args.toolCallId || ""),
+    });
+    return toolCompleted(raw);
   }
 
   if (spec.specialist === "diagnostic_specialist") {

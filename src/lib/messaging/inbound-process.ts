@@ -64,6 +64,7 @@ export type InboundProcessResult = {
   kind: "stop" | "start" | "help" | "keyword" | "contest" | "message" | "empty" | "away";
   replyText?: string;
   mediaUrls?: string[];
+  conversationId?: string;
 };
 
 /**
@@ -547,5 +548,5 @@ export async function processInboundMessage(input: {
     }
   }
 
-  return { kind: body ? "message" : "empty" };
+  return { kind: body ? "message" : "empty", conversationId: conversation.id };
 }

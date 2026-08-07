@@ -1,10 +1,12 @@
 import { getPrisma } from "@/lib/db";
 import { loadMissedCallTextConfig, updateMissedCallTextConfig } from "../config";
 import type { MissedCallTextSettingsUpdate } from "../types";
+import { applyOwnerJohnSettingChange } from "./owner-settings-llm";
 
 export const JOHN_ADMIN_TOOLS = [
   "get_missed_call_text_settings",
   "update_missed_call_text_settings",
+  "update_john_settings_via_llm",
   "get_missed_call_text_status",
   "search_missed_calls",
   "get_missed_call_details",
@@ -34,6 +36,21 @@ export async function executeJohnAdminTool(input: {
         patch,
         actor: input.actor,
         requestedNaturalLanguage: input.naturalLanguage,
+        toolCallId: input.toolCallId,
+      });
+      return result;
+    }
+    case "update_john_settings_via_llm": {
+      const text =
+        input.naturalLanguage ||
+        String(input.args.natural_language || input.args.request || "");
+      if (!text.trim()) {
+        return { ok: false, error: "natural_language_required" };
+      }
+      const result = await applyOwnerJohnSettingChange({
+        workspaceId: input.workspaceId,
+        naturalLanguage: text,
+        actor: input.actor,
         toolCallId: input.toolCallId,
       });
       return result;

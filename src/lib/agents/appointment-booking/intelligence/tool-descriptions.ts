@@ -314,6 +314,60 @@ export const OWNER_AMY_TOOL_DESCRIPTIONS: ToolDescription[] = [
     returns: ["status"],
     sideEffects: "production_write",
   },
+  {
+    id: "get_john_mctb_settings",
+    purpose: "Read John missed-call text-back configuration (delay, message, triggers).",
+    useWhen: ["Owner asks about John settings.", "Before changing MCTB config."],
+    doNotUseWhen: [],
+    requiredInputs: [],
+    returns: ["settings"],
+    sideEffects: "none",
+  },
+  {
+    id: "update_john_mctb_settings",
+    purpose:
+      "Update John MCTB settings from owner natural language via LLM (delay, message, enable/disable).",
+    useWhen: [
+      "Wait five minutes before texting.",
+      "Text missed callers immediately.",
+      "Change John's first message.",
+    ],
+    doNotUseWhen: ["Workflow logic changes — use request_john_workflow_draft instead."],
+    requiredInputs: ["natural_language"],
+    returns: ["receipt", "delay_seconds"],
+    sideEffects: "production_write",
+  },
+  {
+    id: "search_missed_calls",
+    purpose: "Search missed call events and MCTB traces for this workspace.",
+    useWhen: ["What happened with that missed call?", "Show recent missed calls."],
+    doNotUseWhen: [],
+    requiredInputs: ["phone?", "limit?"],
+    returns: ["results[]"],
+    sideEffects: "none",
+  },
+  {
+    id: "get_missed_call_details",
+    purpose: "Get full details for one missed call including SMS and customer reply.",
+    useWhen: ["Investigate a specific missed call."],
+    doNotUseWhen: [],
+    requiredInputs: ["missed_call_event_id"],
+    returns: ["event", "traces"],
+    sideEffects: "none",
+  },
+  {
+    id: "request_john_workflow_draft",
+    purpose:
+      "Delegate to MCTB Workflow Architect to build/modify John's missed-call flow.",
+    useWhen: [
+      "After hours emergency flow.",
+      "Collect name and callback reason on reply.",
+    ],
+    doNotUseWhen: ["Simple delay or message changes — use update_john_mctb_settings."],
+    requiredInputs: ["userRequest"],
+    returns: ["draft", "validation"],
+    sideEffects: "draft",
+  },
 ];
 
 export const WORKFLOW_ARCHITECT_TOOL_DESCRIPTIONS: ToolDescription[] = [

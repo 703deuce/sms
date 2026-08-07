@@ -1,5 +1,4 @@
 import { getPrisma } from "@/lib/db";
-import type { Prisma } from "@/lib/domain";
 import {
   DEFAULT_MCTB_CONFIG,
   DEFAULT_MCTB_MESSAGE,
@@ -69,7 +68,7 @@ export async function updateMissedCallTextConfig(input: {
 }> {
   const prisma = getPrisma();
   const before = await loadMissedCallTextConfig(input.workspaceId);
-  const data: Prisma.MissedCallTextConfigUpdateInput = {};
+  const data: Record<string, unknown> = {};
   const changed: Record<string, { before: unknown; after: unknown }> = {};
 
   const mark = (field: string, afterVal: unknown, beforeVal: unknown) => {
@@ -147,8 +146,8 @@ export async function updateMissedCallTextConfig(input: {
 
   const row = await prisma.missedCallTextConfig.upsert({
     where: { workspaceId: input.workspaceId },
-    create: { workspaceId: input.workspaceId, ...DEFAULT_MCTB_CONFIG, ...data },
-    update: data,
+    create: { workspaceId: input.workspaceId, ...DEFAULT_MCTB_CONFIG, ...data } as never,
+    update: data as never,
   });
 
   for (const [field, delta] of Object.entries(changed)) {
@@ -159,8 +158,8 @@ export async function updateMissedCallTextConfig(input: {
         source: input.source || "owner_john",
         actor: input.actor || null,
         field,
-        oldValue: delta.before as Prisma.InputJsonValue,
-        newValue: delta.after as Prisma.InputJsonValue,
+        oldValue: delta.before as object,
+        newValue: delta.after as object,
         requestedNaturalLanguage: input.requestedNaturalLanguage || null,
         toolCallId: input.toolCallId || null,
       },
