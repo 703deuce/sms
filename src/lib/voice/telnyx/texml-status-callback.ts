@@ -233,30 +233,31 @@ export async function handleTexmlStatusCallback(request: Request) {
     if (terminalEvent) {
       const durationRaw = pick(eventPayload.call_duration, eventPayload.CallDuration);
       const durationSeconds = durationRaw ? Number(durationRaw) || null : null;
+      const endRaw = pick(eventPayload.EndTime, eventPayload.OccurredAt, eventPayload.Timestamp);
+      const endedAt = endRaw ? new Date(endRaw) : new Date();
+      const startRaw = pick(
+        eventPayload.StartTime,
+        eventPayload.AnsweredTime,
+        eventPayload.start_time,
+      );
+      let startedAt: Date | undefined;
+      if (startRaw) {
+        const d = new Date(startRaw);
+        if (!Number.isNaN(d.getTime())) startedAt = d;
+      }
+      if (!startedAt && !Number.isNaN(endedAt.getTime()) && durationSeconds) {
+        startedAt = new Date(endedAt.getTime() - durationSeconds * 1000);
+      }
       await prisma.voiceCall.update({
         where: { id: callId },
         data: {
-          endedAt: new Date(),
+          endedAt: Number.isNaN(endedAt.getTime()) ? new Date() : endedAt,
           status: hangupStatusFromTexml(texmlStatus || "completed"),
           ...(durationSeconds != null ? { durationSeconds } : {}),
+          ...(startedAt ? { startedAt } : {}),
+          ...(startedAt ? { answeredAt: startedAt } : {}),
         },
       });
-      if (
-        hangupStatusFromTexml(texmlStatus || "completed") === "COMPLETED" &&
-        durationSeconds &&
-        durationSeconds > 0
-      ) {
-        const row = await prisma.voiceCall.findUnique({
-          where: { id: callId },
-          select: { answeredAt: true },
-        });
-        if (!row?.answeredAt) {
-          await prisma.voiceCall.update({
-            where: { id: callId },
-            data: { answeredAt: new Date(Date.now() - durationSeconds * 1000) },
-          });
-        }
-      }
 
       const call = await prisma.voiceCall.findUnique({
         where: { id: callId },

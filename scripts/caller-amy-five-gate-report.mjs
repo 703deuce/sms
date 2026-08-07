@@ -121,7 +121,7 @@ async function main() {
     traceTools: tools,
     note:
       toolExecutions.length === 0
-        ? "zero server-side tool executions — check providerWebhookEvent voice.tool_webhook.ingress rows and Telnyx assistant tool URLs"
+        ? "zero server-side tool executions — run scripts/audit-telnyx-call-tool-transport.mjs; check providerWebhookEvent voice.tool_webhook.ingress and Telnyx conversation tool messages (callId required = call row missing mid-call)"
         : undefined,
   });
 

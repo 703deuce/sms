@@ -307,3 +307,70 @@ export async function ensureVoiceCallForTelnyxEvent(input: {
 
   return { callId: call.id, created: true, enrolled };
 }
+
+/**
+ * Ensure a VoiceCall exists before any Telnyx webhook tool runs.
+ *
+ * TeXML-direct inbound often delivers only a terminal status_callback, so the
+ * first tool invocation may arrive minutes before hangup. Without a call row,
+ * get_runtime_context / record_current_field / continue_workflow all fail.
+ */
+export async function ensureVoiceCallForToolWebhook(input: {
+  workspaceId: string;
+  agentId: string;
+  callControlId?: string | null;
+  conversationId?: string | null;
+  fromE164?: string | null;
+  toE164?: string | null;
+}): Promise<string | null> {
+  const { findVoiceCallByTelnyxIds } = await import("@/lib/voice/call-identity");
+  const existing = await findVoiceCallByTelnyxIds({
+    workspaceId: input.workspaceId,
+    callControlId: input.callControlId || null,
+    conversationId: input.conversationId || null,
+    agentId: input.agentId,
+  });
+  if (existing?.id) {
+    const prisma = getPrisma();
+    if (input.conversationId && !existing.telnyxConversationId) {
+      await prisma.voiceCall
+        .updateMany({
+          where: { id: existing.id, telnyxConversationId: null },
+          data: { telnyxConversationId: input.conversationId },
+        })
+        .catch(() => undefined);
+    }
+    if (input.fromE164) {
+      const { backfillCallAni } = await import("@/lib/voice/call-identity");
+      await backfillCallAni({
+        callId: existing.id,
+        workspaceId: input.workspaceId,
+        fromE164: input.fromE164,
+        agentId: input.agentId,
+      }).catch(() => undefined);
+    }
+    return existing.id;
+  }
+
+  const controlId = input.callControlId?.trim() || "";
+  const conversationId = input.conversationId?.trim() || "";
+  if (!controlId && !conversationId) return null;
+
+  const from = input.fromE164?.trim() || "";
+  const to = input.toE164?.trim() || "";
+
+  const ensured = await ensureVoiceCallForTelnyxEvent({
+    eventType: "call.answered",
+    eventPayload: {
+      call_control_id: controlId || undefined,
+      conversation_id: conversationId || undefined,
+      telnyx_conversation_id: conversationId || undefined,
+      from: from || undefined,
+      to: to || undefined,
+      direction: "incoming",
+      source: "telnyx_tool_webhook_ensure",
+    },
+  }).catch(() => null);
+
+  return ensured?.callId || null;
+}

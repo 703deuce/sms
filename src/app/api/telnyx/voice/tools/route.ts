@@ -135,15 +135,38 @@ export async function POST(request: Request) {
       request.headers.get("x-telnyx-conversation-id") ||
       String(body.telnyx_conversation_id || body.conversation_id || "");
     const inboundAni = resolveInboundAni(request, body);
+    const toE164FromBody = body.to
+      ? String(body.to)
+      : body.called
+        ? String(body.called)
+        : "";
 
     let callId: string | undefined;
+
+    // TeXML-direct calls may not have a VoiceCall row until hangup — create early
+    // so the first get_runtime_context / record_current_field has a callId.
+    if (workspaceId && agentId && (callControlId || conversationId)) {
+      const { ensureVoiceCallForToolWebhook } = await import(
+        "@/lib/voice/ensure-call-from-event"
+      );
+      const ensuredId = await ensureVoiceCallForToolWebhook({
+        workspaceId,
+        agentId,
+        callControlId: callControlId || null,
+        conversationId: conversationId || null,
+        fromE164: inboundAni || null,
+        toE164: toE164FromBody || null,
+      }).catch(() => null);
+      if (ensuredId) callId = ensuredId;
+    }
+
     const resolved = await findVoiceCallByTelnyxIds({
       workspaceId,
       callControlId: callControlId || null,
       conversationId: conversationId || null,
       agentId: agentId || null,
     });
-    callId = resolved?.id;
+    callId = callId || resolved?.id;
 
     if (callId && inboundAni) {
       await backfillCallAni({
@@ -163,8 +186,8 @@ export async function POST(request: Request) {
         .catch(() => undefined);
     }
 
-    // Create a live call row only when we have caller ANI — never seed fromE164=unknown.
-    if (!callId && callControlId && agentId && inboundAni) {
+    // Last-resort create when ensureVoiceCallForToolWebhook could not resolve workspace phone.
+    if (!callId && callControlId && agentId) {
       const agent = await prisma.voiceAgent.findFirst({
         where: { id: agentId, workspaceId },
         select: {
@@ -175,11 +198,7 @@ export async function POST(request: Request) {
         },
       });
       if (agent) {
-        let toE164 = body.to
-          ? String(body.to)
-          : body.called
-            ? String(body.called)
-            : "";
+        let toE164 = toE164FromBody;
         if (!toE164 && agent.phoneNumberId) {
           const pn = await prisma.phoneNumber.findFirst({
             where: { id: agent.phoneNumberId },
@@ -187,7 +206,7 @@ export async function POST(request: Request) {
           });
           toE164 = pn?.e164 || "";
         }
-        const fromE164 = normalizeCallerAni(inboundAni) || inboundAni;
+        const fromE164 = normalizeCallerAni(inboundAni) || inboundAni || "unknown";
         const created = await prisma.voiceCall
           .create({
             data: {
