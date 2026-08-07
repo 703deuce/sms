@@ -8,7 +8,7 @@
 
 import { getPrisma } from "@/lib/db";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
-import { backfillCallAni, findVoiceCallByTelnyxIds, normalizeCallerAni } from "@/lib/voice/call-identity";
+import { backfillCallAni } from "@/lib/voice/call-identity";
 
 function pickString(...vals: unknown[]): string {
   for (const v of vals) {
@@ -29,6 +29,11 @@ export async function ensureVoiceCallForTelnyxEvent(input: {
     p.conversation_id,
     p.telnyx_conversation_id,
   );
+
+  const toRaw = pickString(p.to, p.destination_number, p.called);
+  const fromRaw = pickString(p.from, p.start_from, p.caller_id_number, p.caller);
+  const to = toRaw ? normalizeE164(toRaw) || toRaw : "";
+  const from = fromRaw ? normalizeE164(fromRaw) || fromRaw : "";
 
   if (controlId) {
     const byControl = await prisma.voiceCall.findFirst({
@@ -63,10 +68,6 @@ export async function ensureVoiceCallForTelnyxEvent(input: {
     }
   }
 
-  const toRaw = pickString(p.to, p.destination_number, p.called);
-  const fromRaw = pickString(p.from, p.start_from, p.caller_id_number, p.caller);
-  const to = toRaw ? normalizeE164(toRaw) || toRaw : "";
-  const from = fromRaw ? normalizeE164(fromRaw) || fromRaw : "";
   const assistantId = pickString(
     p.assistant_id,
     p.ai_assistant_id,
