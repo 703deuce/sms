@@ -3,6 +3,7 @@ import { sendQuickSms } from "@/lib/sms/send-quick";
 import { evaluateMissedCallTextEligibility } from "./eligibility";
 import { loadMissedCallTextConfig } from "./config";
 import { appendMctbTrace } from "./trace";
+import { resolveMctbSmsSender } from "./sms-sender";
 
 function renderTemplate(template: string, vars: Record<string, string>): string {
   let out = template;
@@ -84,41 +85,33 @@ export async function executeMissedCallTextSend(input: {
     where: { id: event.id },
     data: { status: "SENDING" },
   });
+
+  const sender = await resolveMctbSmsSender({
+    workspaceId: input.workspaceId,
+    config,
+  });
+  if (!sender?.e164) {
+    await prisma.missedCallEvent.update({
+      where: { id: event.id },
+      data: { status: "FAILED", suppressionReason: "NOT_SMS_CAPABLE" },
+    });
+    return { ok: false, reason: "NOT_SMS_CAPABLE" };
+  }
+
   await appendMctbTrace({
     workspaceId: input.workspaceId,
     traceId: input.traceId,
     missedCallEventId: event.id,
     kind: "sms.send.started",
-    detail: { to: event.callerE164, from: event.businessE164 },
+    detail: { to: event.callerE164, from: sender.e164, senderSource: sender.source },
   });
-
-  const phoneNumberId = config.phoneNumberId || event.phoneNumberId;
-  if (!phoneNumberId) {
-    await prisma.missedCallEvent.update({
-      where: { id: event.id },
-      data: { status: "FAILED", suppressionReason: "NOT_SMS_CAPABLE" },
-    });
-    return { ok: false, reason: "NOT_SMS_CAPABLE" };
-  }
-
-  const pn = await prisma.phoneNumber.findFirst({
-    where: { id: phoneNumberId, workspaceId: input.workspaceId },
-    select: { e164: true },
-  });
-  if (!pn?.e164) {
-    await prisma.missedCallEvent.update({
-      where: { id: event.id },
-      data: { status: "FAILED", suppressionReason: "NOT_SMS_CAPABLE" },
-    });
-    return { ok: false, reason: "NOT_SMS_CAPABLE" };
-  }
 
   try {
     const result = await sendQuickSms({
       workspaceId: input.workspaceId,
       to: event.callerE164,
       body,
-      from: pn.e164,
+      from: sender.e164,
       customerName: contact?.firstName || undefined,
       idempotencyKey: `mctb:${event.idempotencyKey}`,
     });

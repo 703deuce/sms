@@ -64,6 +64,7 @@ export type MissedCallTextConfigRecord = {
   suppressOptedOutNumbers: boolean;
   conversationEnabled: boolean;
   phoneNumberId: string | null;
+  smsPhoneNumberId: string | null;
 };
 
 export type MissedCallTextSettingsUpdate = {
@@ -85,6 +86,7 @@ export type MissedCallTextSettingsUpdate = {
   cooldown_minutes?: number;
   max_messages_per_caller?: number;
   phone_number_id?: string | null;
+  sms_phone_number_id?: string | null;
 };
 
 export const DEFAULT_MCTB_MESSAGE =
@@ -117,4 +119,5 @@ export const DEFAULT_MCTB_CONFIG: Omit<
   suppressOptedOutNumbers: true,
   conversationEnabled: true,
   phoneNumberId: null,
+  smsPhoneNumberId: null,
 };

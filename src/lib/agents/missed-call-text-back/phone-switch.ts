@@ -39,6 +39,8 @@ export async function detachVoiceAgentFromNumber(input: {
 export async function activateJohnOnPhoneNumber(input: {
   workspaceId: string;
   phoneNumberId: string;
+  /** SMS-capable DID for outbound texts (defaults to messaging registration number). */
+  smsPhoneNumberId?: string | null;
   delaySeconds?: number;
   messageTemplate?: string;
 }) {
@@ -63,6 +65,7 @@ export async function activateJohnOnPhoneNumber(input: {
       delay_seconds: delaySeconds,
       initial_message: message,
       phone_number_id: input.phoneNumberId,
+      sms_phone_number_id: input.smsPhoneNumberId ?? undefined,
     },
     source: "john_activation",
   });

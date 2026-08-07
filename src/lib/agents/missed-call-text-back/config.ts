@@ -32,8 +32,9 @@ export function configToRecord(row: {
   suppressOptedOutNumbers: boolean;
   conversationEnabled: boolean;
   phoneNumberId: string | null;
+  smsPhoneNumberId?: string | null;
 }): MissedCallTextConfigRecord {
-  return { ...row };
+  return { smsPhoneNumberId: null, ...row };
 }
 
 export async function loadMissedCallTextConfig(
@@ -104,6 +105,10 @@ export async function updateMissedCallTextConfig(input: {
   if (input.patch.phone_number_id !== undefined) {
     data.phoneNumberId = input.patch.phone_number_id;
     mark("phoneNumberId", input.patch.phone_number_id, before.phoneNumberId);
+  }
+  if (input.patch.sms_phone_number_id !== undefined) {
+    data.smsPhoneNumberId = input.patch.sms_phone_number_id;
+    mark("smsPhoneNumberId", input.patch.sms_phone_number_id, before.smsPhoneNumberId);
   }
   const rules = input.patch.trigger_rules;
   if (rules) {

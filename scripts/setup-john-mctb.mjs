@@ -15,6 +15,7 @@ const EMAIL = (process.env.OWNER_EMAIL || "").trim().toLowerCase();
 const BOOTSTRAP = process.env.SMOKE_BOOTSTRAP || "transovo-smoke-bootstrap-b56f-aug2026";
 const AMY_AGENT_ID = (process.env.AMY_AGENT_ID || "cmshz2lc25c622c4i58303501").trim();
 const PHONE_NUMBER_ID = (process.env.PHONE_NUMBER_ID || "cmsc3numa1j17084g391t2z5l").trim();
+const SMS_PHONE_NUMBER_ID = (process.env.SMS_PHONE_NUMBER_ID || "cmsgtjms84g6l2h0o255w1e3v").trim();
 const DELAY_SECONDS = Number(process.env.DELAY_SECONDS || 0);
 
 async function smokeLogin() {
@@ -58,6 +59,7 @@ async function main() {
   const activated = await activateJohnOnPhoneNumber({
     workspaceId: pn.workspaceId,
     phoneNumberId: PHONE_NUMBER_ID,
+    smsPhoneNumberId: SMS_PHONE_NUMBER_ID,
     delaySeconds: DELAY_SECONDS,
   });
   console.log(activated);
@@ -81,6 +83,7 @@ async function main() {
     JSON.stringify(
       {
         call: pn.e164,
+        smsFrom: SMS_PHONE_NUMBER_ID,
         expectSmsAfterMissedCall: true,
         delaySeconds: DELAY_SECONDS,
         amyDetached: true,

@@ -8,6 +8,7 @@ import { sendQuickSms } from "@/lib/sms/send-quick";
 import { loadMissedCallTextConfig } from "./config";
 import { appendMctbTrace } from "./trace";
 import { runJohnCustomerLlmLoop } from "./intelligence/customer-llm-loop";
+import { resolveMctbSmsSender } from "./sms-sender";
 
 const STOP_RE = /^(stop|unsubscribe|cancel|end|quit)\b/i;
 
@@ -79,18 +80,17 @@ export async function handleJohnCustomerSmsReply(input: {
     timezone: config.timezone,
   });
 
-  const pn = config.phoneNumberId
-    ? await prisma.phoneNumber.findFirst({
-        where: { id: config.phoneNumberId, workspaceId: input.workspaceId },
-        select: { e164: true },
-      })
-    : null;
+  const sender = await resolveMctbSmsSender({
+    workspaceId: input.workspaceId,
+    config,
+  });
+  const fromE164 = sender?.e164 || input.toE164;
 
   await sendQuickSms({
     workspaceId: input.workspaceId,
     to: input.fromE164,
     body: llmResult.reply,
-    from: pn?.e164 || input.toE164,
+    from: fromE164,
     idempotencyKey: `john-reply:${recentEvent.id}:${Date.now()}`,
   }).catch(() => undefined);
 

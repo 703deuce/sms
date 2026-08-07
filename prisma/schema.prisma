@@ -3281,6 +3281,8 @@ model MissedCallTextConfig {
   suppressOptedOutNumbers Boolean  @default(true)
   conversationEnabled     Boolean  @default(true)
   phoneNumberId           String?
+  /** Outbound SMS sender DID (may differ from voice trigger DID). */
+  smsPhoneNumberId        String?
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
   workspace               Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
