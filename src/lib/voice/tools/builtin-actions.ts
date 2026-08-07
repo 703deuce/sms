@@ -784,10 +784,21 @@ export async function executeBuiltinVoiceAction(input: {
               ),
             },
           );
+          const offered = slots.slice(0, 5);
+          await persistAvailabilitySlotsOnCall({
+            workspaceId: input.workspaceId,
+            callId: input.callId,
+            serviceName,
+            slots: offered.map((s) => s.startsAt),
+            window: { startTime: window.startTime, endTime: window.endTime },
+          });
           return {
             provider: "calendly",
-            slots: slots.slice(0, 5),
+            slots: offered,
             window: { startTime: window.startTime, endTime: window.endTime },
+            speak: offered.length
+              ? `Offer only these exact slot times (use slots[].startsAt verbatim for book_appointment): ${offered.map((s) => s.startsAt).join(", ")}`
+              : "No slots in that window. Widen the search or offer a different day — never invent a time.",
           };
         } catch (err) {
           console.warn(
@@ -817,13 +828,23 @@ export async function executeBuiltinVoiceAction(input: {
         preferredEndMinute: window.preferredEndMinute,
         maxSlots: 5,
       });
+      const offered = (availability.slots || []).slice(0, 5);
+      const serviceName = String(args.serviceName || args.service || "Appointment");
+      await persistAvailabilitySlotsOnCall({
+        workspaceId: input.workspaceId,
+        callId: input.callId,
+        serviceName,
+        slots: offered.map((s: { startsAt?: string }) => String(s.startsAt || "")),
+        window: { startTime: window.startTime, endTime: window.endTime },
+      });
       return {
         ...availability,
-        slots: (availability.slots || []).slice(0, 5),
+        slots: offered,
         provider: "internal",
         window: { startTime: window.startTime, endTime: window.endTime },
       };
-    }    case "find_appointments": {
+    }
+    case "find_appointments": {
       const { findAppointmentsForCaller } = await import("../calendar/booking");
       const phone = normalizeE164(
         String(args.phone || args.customerPhone || args.customer_phone || ""),
@@ -881,10 +902,25 @@ export async function executeBuiltinVoiceAction(input: {
       };
     }
     case "book_appointment": {
-      const { normalizeBookingToolArgs, buildCalendlyBookParams } = await import(
-        "../calendar/booking-args"
-      );
+      const {
+        normalizeBookingToolArgs,
+        buildCalendlyBookParams,
+        assertStartsAtMatchesAvailabilitySlots,
+      } = await import("../calendar/booking-args");
       args = normalizeBookingToolArgs(args);
+
+      const startsAtRaw = String(args.startsAt || args.startTime || "").trim();
+      if (input.callId && startsAtRaw) {
+        const callRow = await prisma.voiceCall.findFirst({
+          where: { id: input.callId, workspaceId: input.workspaceId },
+          select: { metadata: true },
+        });
+        const meta = (callRow?.metadata || {}) as Record<string, unknown>;
+        const lastSlots = Array.isArray(meta.lastAvailabilitySlots)
+          ? (meta.lastAvailabilitySlots as string[])
+          : [];
+        assertStartsAtMatchesAvailabilitySlots(startsAtRaw, lastSlots);
+      }
 
       if (input.callId) {
         const existingForCall = await prisma.voiceAppointment.findFirst({
@@ -1347,6 +1383,36 @@ export async function executeBuiltinVoiceAction(input: {
     default:
       throw new Error(`Unsupported builtin tool: ${input.toolType}`);
   }
+}
+
+async function persistAvailabilitySlotsOnCall(input: {
+  workspaceId: string;
+  callId?: string;
+  serviceName: string;
+  slots: string[];
+  window: { startTime: string; endTime: string };
+}) {
+  if (!input.callId) return;
+  const prisma = getPrisma();
+  const existing = await prisma.voiceCall.findFirst({
+    where: { id: input.callId, workspaceId: input.workspaceId },
+    select: { metadata: true },
+  });
+  const prevMeta = (existing?.metadata || {}) as Record<string, unknown>;
+  await prisma.voiceCall
+    .update({
+      where: { id: input.callId },
+      data: {
+        metadata: {
+          ...prevMeta,
+          lastAvailabilitySlots: input.slots.filter(Boolean),
+          lastAvailabilityAt: new Date().toISOString(),
+          lastAvailabilityService: input.serviceName,
+          lastAvailabilityWindow: input.window,
+        } as object,
+      },
+    })
+    .catch(() => undefined);
 }
 
 async function agentSmsConfirmationsEnabled(
