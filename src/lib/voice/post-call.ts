@@ -111,10 +111,10 @@ export async function processPostCall(callId: string) {
     });
   }
 
-  const missedStatuses = ["NO_ANSWER", "BUSY", "CANCELLED"];
-  const isMissed =
-    missedStatuses.includes(call.status) ||
-    (!call.answeredAt && !call.voicemailDetected && !call.appointmentBooked);
+  const { isMissedInboundVoiceCall, triggerJohnMctbForVoiceCall } = await import(
+    "@/lib/agents/missed-call-text-back/voice-missed-trigger"
+  );
+  const isMissed = isMissedInboundVoiceCall(call);
 
   // Always emit completion events so wait_for_call_result can resume by callId
   // even when the caller contact was never created.
@@ -133,25 +133,7 @@ export async function processPostCall(callId: string) {
     }).catch(() => undefined);
 
     try {
-      const { processMissedInboundCall } = await import(
-        "@/lib/agents/missed-call-text-back/process"
-      );
-      await processMissedInboundCall({
-        workspaceId: call.workspaceId,
-        callerE164: call.fromE164,
-        businessE164: call.toE164,
-        phoneNumberId: call.phoneNumberId,
-        voiceCallId: call.id,
-        contactId: call.contactId,
-        providerCallId: call.telnyxCallControlId,
-        call: {
-          direction: call.direction,
-          status: call.status,
-          disposition: call.outcome,
-          answeredAt: call.answeredAt,
-          voicemailDetected: call.voicemailDetected,
-        },
-      });
+      await triggerJohnMctbForVoiceCall(call);
     } catch (err) {
       console.warn("[post-call] John MCTB process failed", call.id, err);
     }

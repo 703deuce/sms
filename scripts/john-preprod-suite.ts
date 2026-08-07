@@ -31,6 +31,10 @@ import {
 } from "../src/lib/agents/missed-call-text-back/intelligence/workflow-architect-mctb";
 import { JOHN_RUNTIME_REGISTRY } from "../src/lib/agents/missed-call-text-back/intelligence/runtime-registry";
 import { buildJohnSystemPrompt } from "../src/lib/agents/missed-call-text-back/intelligence/john-prompt";
+import {
+  isMissedInboundVoiceCall,
+  wasCallGenuinelyAnswered,
+} from "../src/lib/agents/missed-call-text-back/voice-missed-trigger";
 
 const prisma = new PrismaClient();
 let passed = 0;
@@ -159,6 +163,33 @@ async function main() {
       sendAfterRejected: true,
       sendAfterTimeout: true,
       sendAfterVoicemail: false,
+    }),
+    "CALL_DETECTION",
+  );
+  const ringStart = new Date("2026-08-07T17:52:00.000Z");
+  check(
+    "false answeredAt at ring is not genuine",
+    !wasCallGenuinelyAnswered({
+      answeredAt: ringStart,
+      startedAt: ringStart,
+      endedAt: new Date(ringStart.getTime() + 32_000),
+      agentId: null,
+    }),
+    "CALL_DETECTION",
+  );
+  check(
+    "32s ring-out detected as missed",
+    isMissedInboundVoiceCall({
+      status: "COMPLETED",
+      direction: "INBOUND",
+      answeredAt: ringStart,
+      startedAt: ringStart,
+      endedAt: new Date(ringStart.getTime() + 32_000),
+      durationSeconds: 32,
+      voicemailDetected: false,
+      appointmentBooked: false,
+      outcome: null,
+      agentId: null,
     }),
     "CALL_DETECTION",
   );

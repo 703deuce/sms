@@ -26,9 +26,13 @@ function parseEventTimes(
   endedAt?: Date;
   durationSeconds?: number;
 } {
-  const startRaw = pickString(p.StartTime, p.AnsweredTime, p.start_time, p.started_at);
+  const startRaw = pickString(p.StartTime, p.start_time, p.started_at);
+  const answeredRaw = pickString(p.AnsweredTime, p.answered_at);
   const endRaw = pickString(p.EndTime, p.OccurredAt, p.Timestamp, p.ended_at);
   const durationRaw = pickString(p.CallDuration, p.call_duration, p.Duration);
+  const texmlStatus = pickString(p.CallStatus, p.texml_call_status, p.call_status)
+    .toLowerCase()
+    .replace(/_/g, "-");
   const durationSeconds = durationRaw ? Number(durationRaw) || undefined : undefined;
 
   let startedAt: Date | undefined;
@@ -37,10 +41,11 @@ function parseEventTimes(
 
   if (startRaw) {
     const d = new Date(startRaw);
-    if (!Number.isNaN(d.getTime())) {
-      startedAt = d;
-      answeredAt = d;
-    }
+    if (!Number.isNaN(d.getTime())) startedAt = d;
+  }
+  if (answeredRaw) {
+    const d = new Date(answeredRaw);
+    if (!Number.isNaN(d.getTime())) answeredAt = d;
   }
   if (endRaw) {
     const d = new Date(endRaw);
@@ -48,11 +53,15 @@ function parseEventTimes(
   }
   if (!startedAt && endedAt && durationSeconds) {
     startedAt = new Date(endedAt.getTime() - durationSeconds * 1000);
-    answeredAt = answeredAt || startedAt;
   }
-  if (/ended|hangup|completed/i.test(eventType) && endedAt && !startedAt && durationSeconds) {
-    startedAt = new Date(endedAt.getTime() - durationSeconds * 1000);
-    answeredAt = answeredAt || startedAt;
+  // Only infer answered from completed calls with meaningful duration — never from StartTime alone.
+  if (
+    !answeredAt &&
+    (texmlStatus === "completed" || texmlStatus === "answered" || texmlStatus === "in-progress") &&
+    durationSeconds != null &&
+    durationSeconds > 1
+  ) {
+    answeredAt = startedAt;
   }
 
   return { startedAt, answeredAt, endedAt, durationSeconds };
@@ -248,6 +257,16 @@ export async function ensureVoiceCallForTelnyxEvent(input: {
 
   const now = new Date();
   const terminal = isTerminalEventType(input.eventType);
+  const texmlStatus = pickString(p.CallStatus, p.texml_call_status, p.call_status)
+    .toLowerCase()
+    .replace(/_/g, "-");
+  const missedTerminal =
+    texmlStatus === "no-answer" ||
+    texmlStatus === "noanswer" ||
+    texmlStatus === "busy" ||
+    texmlStatus === "canceled" ||
+    texmlStatus === "cancelled" ||
+    texmlStatus === "failed";
   const call = await prisma.voiceCall.create({
     data: {
       workspaceId,
@@ -255,14 +274,26 @@ export async function ensureVoiceCallForTelnyxEvent(input: {
       agentVersionId,
       contactId,
       direction: "INBOUND",
-      status: terminal ? "COMPLETED" : isStartEventType(input.eventType) ? "IN_PROGRESS" : "RINGING",
+      status: terminal
+        ? missedTerminal
+          ? texmlStatus.includes("busy")
+            ? "BUSY"
+            : texmlStatus === "failed"
+              ? "FAILED"
+              : texmlStatus === "canceled" || texmlStatus === "cancelled"
+                ? "CANCELLED"
+                : "NO_ANSWER"
+          : "COMPLETED"
+        : isStartEventType(input.eventType)
+          ? "IN_PROGRESS"
+          : "RINGING",
       fromE164,
       toE164,
       phoneNumberId,
       telnyxCallControlId: controlId || null,
       telnyxConversationId: conversationId || null,
       startedAt: times.startedAt || (terminal ? undefined : now),
-      answeredAt: times.answeredAt || (terminal ? times.startedAt : now),
+      answeredAt: times.answeredAt ?? null,
       endedAt: times.endedAt || (terminal ? now : undefined),
       durationSeconds: times.durationSeconds ?? undefined,
       metadata: {

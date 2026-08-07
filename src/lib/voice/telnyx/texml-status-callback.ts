@@ -248,27 +248,52 @@ export async function handleTexmlStatusCallback(request: Request) {
       if (!startedAt && !Number.isNaN(endedAt.getTime()) && durationSeconds) {
         startedAt = new Date(endedAt.getTime() - durationSeconds * 1000);
       }
+      const internalStatus = hangupStatusFromTexml(texmlStatus || "completed");
       await prisma.voiceCall.update({
         where: { id: callId },
         data: {
           endedAt: Number.isNaN(endedAt.getTime()) ? new Date() : endedAt,
-          status: hangupStatusFromTexml(texmlStatus || "completed"),
+          status: internalStatus,
           ...(durationSeconds != null ? { durationSeconds } : {}),
           ...(startedAt ? { startedAt } : {}),
+          ...(["NO_ANSWER", "BUSY", "CANCELLED", "FAILED"].includes(internalStatus)
+            ? { answeredAt: null }
+            : {}),
         },
       });
 
-      const call = await prisma.voiceCall.findUnique({
+      let call = await prisma.voiceCall.findUnique({
         where: { id: callId },
-        select: { workspaceId: true },
       });
       if (call) {
+        // TeXML often reports ring-outs as "completed" — refine before post-call / MCTB.
+        if (internalStatus === "COMPLETED") {
+          const { wasCallGenuinelyAnswered } = await import(
+            "@/lib/agents/missed-call-text-back/voice-missed-trigger"
+          );
+          if (!wasCallGenuinelyAnswered(call)) {
+            call = await prisma.voiceCall.update({
+              where: { id: callId },
+              data: { status: "NO_ANSWER", answeredAt: null },
+            });
+          }
+        }
+
         await enqueueJob({
           jobType: "voice_post_call",
           queueName: "voice-calls",
           payload: { callId, workspaceId: call.workspaceId },
           idempotencyKey: `voice-post-call:${callId}`,
         }).catch(() => undefined);
+
+        const { isMissedInboundVoiceCall, triggerJohnMctbForVoiceCall } = await import(
+          "@/lib/agents/missed-call-text-back/voice-missed-trigger"
+        );
+        if (isMissedInboundVoiceCall(call)) {
+          await triggerJohnMctbForVoiceCall(call).catch((err) => {
+            console.warn("[texml-status] John MCTB trigger failed", callId, err);
+          });
+        }
       }
     } else if (eventType === "call.answered") {
       await prisma.voiceCall
