@@ -1,4 +1,5 @@
 import { computeWorkflowState } from "./engine";
+import { isSchedulingGatedTool } from "./scheduling-tools";
 import { canonicalToolType, isToolAllowedForState, IRREVERSIBLE_TOOLS, toolsForState } from "./states";
 import type { ToolGuardResult } from "./types";
 import type { WorkflowAction } from "@/lib/voice/field-runtime/types";
@@ -22,7 +23,28 @@ export async function assertToolAllowed(input: {
   const canonical = canonicalToolType(input.toolType);
 
   if (!input.callId) {
-    return { allowed: true, state: "GENERAL", allowed_tools: [] };
+    if (isSchedulingGatedTool(canonical) || isSchedulingGatedTool(input.toolType)) {
+      return {
+        allowed: false,
+        state: "COLLECTING_FIELDS",
+        allowed_tools: toolsForState("COLLECTING_FIELDS"),
+        error_code: "TOOL_NOT_ALLOWED_FOR_STATE",
+        speak: "I need a few details from you before I can check the calendar.",
+        retryable: false,
+        next_action: "Collect required fields with record_current_field first.",
+      };
+    }
+    if (!GUARD_EXEMPT.has(canonical) && !GUARD_EXEMPT.has(input.toolType)) {
+      return {
+        allowed: false,
+        state: "COLLECTING_FIELDS",
+        allowed_tools: toolsForState("COLLECTING_FIELDS"),
+        error_code: "CALL_CONTEXT_REQUIRED",
+        speak: "I'm still connecting your call. One moment please.",
+        retryable: true,
+      };
+    }
+    return { allowed: true, state: "COLLECTING_FIELDS", allowed_tools: toolsForState("COLLECTING_FIELDS") };
   }
 
   if (GUARD_EXEMPT.has(canonical) || GUARD_EXEMPT.has(input.toolType)) {

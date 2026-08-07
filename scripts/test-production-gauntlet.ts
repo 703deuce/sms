@@ -40,13 +40,13 @@ async function agentDecisionTests() {
 
   const guard = await assertToolAllowed({
     workspaceId: "ws_test",
-    toolType: "book_appointment",
+    toolType: "calendar_availability",
   });
   record(
     "AGENT_DECISION",
-    "guard allows without call context edge",
-    guard.allowed && guard.state === "GENERAL",
-    `allowed=${guard.allowed} state=${guard.state}`,
+    "guard blocks scheduling without call context",
+    !guard.allowed && guard.state === "COLLECTING_FIELDS",
+    `allowed=${guard.allowed} state=${guard.state} code=${guard.error_code}`,
   );
 }
 

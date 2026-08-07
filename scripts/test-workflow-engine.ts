@@ -9,6 +9,7 @@ import {
   STATE_ALLOWED_TOOLS,
 } from "../src/lib/voice/workflow-engine/states";
 import { emptyAgentRuntime, appendFieldReceipt, transitionState } from "../src/lib/voice/workflow-engine/runtime-state";
+import { assertToolAllowed } from "../src/lib/voice/workflow-engine/guard";
 
 const failures: string[] = [];
 
@@ -37,6 +38,14 @@ check(
   !isToolAllowedForState("COLLECTING_FIELDS", "book_appointment"),
 );
 check(
+  "COLLECTING blocks calendar_availability",
+  !isToolAllowedForState("COLLECTING_FIELDS", "calendar_availability"),
+);
+check(
+  "INTENT_DISCOVERY blocks calendar_availability",
+  !isToolAllowedForState("INTENT_DISCOVERY", "calendar_availability"),
+);
+check(
   "BOOKING_IN_PROGRESS blocks transfer",
   !isToolAllowedForState("BOOKING_IN_PROGRESS", "transfer"),
 );
@@ -44,7 +53,6 @@ check(
   "BOOKING_IN_PROGRESS allows book_appointment",
   isToolAllowedForState("BOOKING_IN_PROGRESS", "book_appointment"),
 );
-
 check(
   "escape hatches in COLLECTING",
   toolsForState("COLLECTING_FIELDS").includes("transfer"),
@@ -65,8 +73,26 @@ check("transition history", transitioned.state_history.length === 2);
 const withReceipt = appendFieldReceipt(transitioned, "fld_test", "hello");
 check("field receipt", withReceipt.field_receipts.some((r) => r.field_id === "fld_test"));
 
-if (failures.length) {
-  console.error(`\n${failures.length} failure(s)`);
-  process.exit(1);
+async function runAsyncChecks() {
+  const blockedNoCall = await assertToolAllowed({
+    workspaceId: "ws_test",
+    toolType: "calendar_availability",
+  });
+  check(
+    "no callId blocks calendar_availability",
+    blockedNoCall.allowed === false && blockedNoCall.error_code === "TOOL_NOT_ALLOWED_FOR_STATE",
+  );
 }
-console.log("\nWorkflow engine unit checks passed.");
+
+runAsyncChecks()
+  .then(() => {
+    if (failures.length) {
+      console.error(`\n${failures.length} failure(s)`);
+      process.exit(1);
+    }
+    console.log("\nWorkflow engine unit checks passed.");
+  })
+  .catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });

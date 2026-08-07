@@ -340,6 +340,8 @@ export async function searchAgentActivity(input: {
   limit?: number;
   failuresOnly?: boolean;
   summariesOnly?: boolean;
+  /** Semantic filter — matches call summary, outcome, caller phone, and tool steps. */
+  query?: string;
 }): Promise<AgentExecutionTrace[]> {
   if (input.summariesOnly) {
     const summaries = await listAgentActivitySummaries(input);
@@ -361,6 +363,11 @@ export async function searchAgentActivity(input: {
 
   const prisma = getPrisma();
   const limit = Math.min(50, Math.max(1, Number(input.limit || 20)));
+  const queryTokens = String(input.query || "")
+    .toLowerCase()
+    .split(/\s+/)
+    .map((t) => t.trim())
+    .filter((t) => t.length > 2);
   const calls = await prisma.voiceCall.findMany({
     where: {
       workspaceId: input.workspaceId,
@@ -372,7 +379,7 @@ export async function searchAgentActivity(input: {
         : {}),
     },
     orderBy: { startedAt: "desc" },
-    take: limit,
+    take: Math.min(100, limit * (queryTokens.length ? 6 : 1)),
   });
 
   const traces: AgentExecutionTrace[] = [];
@@ -382,7 +389,22 @@ export async function searchAgentActivity(input: {
       agentId: input.agentId,
       callId: call.id,
     });
-    if (trace) traces.push(trace);
+    if (!trace) continue;
+    if (queryTokens.length) {
+      const haystack = [
+        trace.summary,
+        trace.outcome,
+        trace.callerPhone,
+        trace.failureCode,
+        ...trace.steps.map((s) => `${s.blockType} ${JSON.stringify(s.sanitizedOutput || "")}`),
+      ]
+        .join(" ")
+        .toLowerCase();
+      const matched = queryTokens.some((token) => haystack.includes(token));
+      if (!matched) continue;
+    }
+    traces.push(trace);
+    if (traces.length >= limit) break;
   }
   return traces;
 }

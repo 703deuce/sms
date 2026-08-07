@@ -93,6 +93,36 @@ check("candidate version immutable", (() => {
   return c.version === 3 && c.status === "validated" && c.spec.metadata?.candidate === true;
 })());
 
+import {
+  buildFieldAdditionCandidate,
+  parseFieldAdditionRequest,
+} from "../src/lib/platform/architect-runtime/field-candidate";
+
+check("parse property type field request", (() => {
+  const parsed = parseFieldAdditionRequest(
+    "Add a required Property Type field with House, Apartment, or Commercial",
+  );
+  return (
+    parsed?.field_id === "fld_property_type" &&
+    parsed.type === "single_select" &&
+    parsed.options?.length === 3 &&
+    parsed.required === true
+  );
+})());
+check("field addition candidate ready", (() => {
+  const built = buildFieldAdditionCandidate({
+    tenant_id: "ws_1",
+    user_id: "user_1",
+    agent_id: "agent_1",
+    userRequest: "Add a required Property Type field with House, Apartment, or Commercial",
+  });
+  return (
+    built?.candidateResponse.status === "candidate_ready" &&
+    built.field.field_id === "fld_property_type" &&
+    built.draft.validationStatus === "valid"
+  );
+})());
+
 // Randomized mutation — unknown field in collect
 for (let i = 0; i < 20; i++) {
   const fieldId = `fld_${Math.floor(Math.random() * 10000)}`;
