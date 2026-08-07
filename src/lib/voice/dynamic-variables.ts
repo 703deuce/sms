@@ -198,6 +198,11 @@ export async function resolveCallDynamicVariables(input: {
         workflow: "book_appointment",
       });
       set("workflow_state", runtimeCtx.state);
+      set("workflow_complete", runtimeCtx.workflow_complete ? "true" : "false");
+      set("next_action", runtimeCtx.next_action || "");
+      if (runtimeCtx.do_not_advance) {
+        set("do_not_advance", runtimeCtx.do_not_advance);
+      }
       set(
         "allowed_tools_json",
         JSON.stringify(runtimeCtx.allowed_tools).slice(0, 1500),
@@ -207,14 +212,18 @@ export async function resolveCallDynamicVariables(input: {
           "current_required_field_json",
           JSON.stringify(runtimeCtx.current_field).slice(0, 800),
         );
+        set("current_field_label", runtimeCtx.current_field.label || "");
       }
       set(
         "runtime_context_json",
         JSON.stringify({
           state: runtimeCtx.state,
           workflow_id: runtimeCtx.workflow_id,
+          workflow_complete: runtimeCtx.workflow_complete,
           allowed_tools: runtimeCtx.allowed_tools,
           current_field: runtimeCtx.current_field,
+          next_action: runtimeCtx.next_action,
+          do_not_advance: runtimeCtx.do_not_advance,
           missing_count: runtimeCtx.missing_fields.length,
           complete: runtimeCtx.complete,
         }).slice(0, 3500),

@@ -1,3 +1,5 @@
+import { deriveNextAction } from "@/lib/voice/workflow-engine/next-action";
+import type { WorkflowState } from "@/lib/voice/workflow-engine/types";
 import { loadWorkflowFieldDefinitions, toManifestEntries } from "./loader";
 import {
   ensureWorkflowFieldSession,
@@ -99,24 +101,45 @@ export async function getWorkflowRequirements(input: {
 
 export function requirementsToToolResponse(
   result: WorkflowRequirementsResult,
+  options?: {
+    /** True when the tool operation itself succeeded (save/read). */
+    operationSucceeded?: boolean;
+    workflowState?: WorkflowState;
+  },
 ): Record<string, unknown> {
+  const operationOk = options?.operationSucceeded ?? true;
+  const state =
+    options?.workflowState ||
+    (result.complete ? "CHECKING_AVAILABILITY" : "COLLECTING_FIELDS");
+  const currentField =
+    result.fields_to_collect.find((f) => f.field_id === result.active_field) ||
+    result.missing_fields[0] ||
+    null;
+
   return {
-    ok: result.complete,
-    success: result.complete,
+    ok: operationOk,
+    success: operationOk,
+    workflow_complete: result.complete,
     complete: result.complete,
     workflow: result.workflow,
     session_id: result.session_id,
     missing_fields: result.missing_fields,
     collected_field_ids: result.collected_field_ids,
     active_field: result.active_field,
+    current_field: currentField,
     fields_to_collect: result.fields_to_collect,
     speak: result.speak,
     message: result.complete
       ? "All required fields are collected."
-      : result.speak || "Some required fields are still missing.",
-    next_action: result.complete
-      ? null
-      : `Call record_current_field(value:"<caller answer>") or save_collected_fields with field_id "${result.missing_fields[0]?.field_id}"`,
+      : operationOk
+        ? result.speak || "More required fields remain."
+        : result.speak || "Some required fields are still missing.",
+    next_action: deriveNextAction({
+      state,
+      complete: result.complete,
+      currentField,
+      missingFields: result.missing_fields,
+    }),
   };
 }
 

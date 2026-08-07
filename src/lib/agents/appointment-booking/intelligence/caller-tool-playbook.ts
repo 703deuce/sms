@@ -4,6 +4,7 @@
  */
 
 import type { AgentRuntimeId } from "./types";
+import { stateAwareToolQualifier } from "@/lib/voice/workflow-engine/next-action";
 
 export type CallerToolPlaybookEntry = {
   toolId: string;
@@ -21,16 +22,19 @@ export type CallerToolPlaybookEntry = {
   never?: string[];
 };
 
-/** Booking chain every caller agent must follow for appointments. */
+/** @deprecated Not injected into prompts — runtime state machine determines sequence. */
 export const BOOKING_TOOL_CHAIN = [
-  "1. resolve_datetime — when caller uses relative timing (tomorrow, Friday, in 3 hours).",
-  "2. calendar_availability — pass resolvedIso as from/to OR a day window; read slots[].startsAt.",
-  "3. Offer ONLY times from slots[].startsAt — never convert clock times yourself.",
-  "4. get_workflow_requirements — see fields_to_collect + missing_fields for this business (runtime manifest).",
-  "5. record_current_field — preferred: pass only value for the active field the runtime is collecting.",
-  "5b. save_collected_fields — alternative: pass fields:[{field_id, value}] when saving multiple fields.",
-  "6. hold_appointment_slot (optional) — while confirming; startsAt from slots.",
-  "7. book_appointment — startsAt + serviceName only; customer data comes from workflow session.",
+  "DEPRECATED — workflow sequence is determined by runtime state, not a fixed tool chain.",
+].join("\n");
+
+/** Permanent workflow authority — injected instead of BOOKING_TOOL_CHAIN. */
+export const RUNTIME_WORKFLOW_AUTHORITY = [
+  "WORKFLOW ORCHESTRATION (runtime is authoritative):",
+  "Never determine the sequence of operational steps yourself.",
+  "The Transovo runtime determines workflow_state, required information, and next permitted action.",
+  "Follow WORKFLOW_STATE, CURRENT_FIELD, NEXT_ACTION, ALLOWED_TOOLS from get_runtime_context / dynamic variables.",
+  "Do not advance to scheduling or booking until workflow_complete=true and the runtime permits it.",
+  "During COLLECTING_FIELDS: use record_current_field or save_collected_fields only — do not call calendar or booking tools.",
 ].join("\n");
 
 export const CALLER_AMY_TOOL_PLAYBOOK: CallerToolPlaybookEntry[] = [
@@ -38,7 +42,7 @@ export const CALLER_AMY_TOOL_PLAYBOOK: CallerToolPlaybookEntry[] = [
     toolId: "resolve_datetime",
     summary: "Resolve spoken relative dates to concrete ISO datetimes.",
     whenToCall:
-      "Caller says today, tomorrow, this Friday, in three hours, next week, etc. Never guess today's date.",
+      "USE ONLY when workflow_state is CHECKING_AVAILABILITY or SELECTING_SLOT and this tool is in allowed_tools. Caller uses relative timing (today, tomorrow, Friday). Never guess today's date.",
     parameters: [
       {
         name: "spoken",
@@ -56,13 +60,14 @@ export const CALLER_AMY_TOOL_PLAYBOOK: CallerToolPlaybookEntry[] = [
       },
     ],
     workflow:
-      "Use resolvedIso from the response as calendar_availability from/to (point-in-time is OK).",
+      "Pass resolvedIso to calendar_availability only when runtime permits scheduling tools.",
     never: ["Invent today's date or weekday", "Skip this for absolute dates the caller already gave in full"],
   },
   {
     toolId: "calendar_availability",
     summary: "Check live Calendly availability; returns slots[].startsAt ISO values.",
-    whenToCall: "Before offering or booking any appointment time.",
+    whenToCall:
+      "USE ONLY when workflow_state is CHECKING_AVAILABILITY or SELECTING_SLOT and this tool is in allowed_tools. DO NOT USE while required fields remain incomplete. Do not infer readiness from conversation alone.",
     parameters: [
       {
         name: "serviceName",
@@ -114,7 +119,7 @@ export const CALLER_AMY_TOOL_PLAYBOOK: CallerToolPlaybookEntry[] = [
     summary:
       "Book after caller confirms time. Customer fields are already on the workflow session — do NOT pass name/phone/email here.",
     whenToCall:
-      "Only after get_workflow_requirements shows complete=true and calendar_availability returned slots.",
+      "USE ONLY when workflow_state is READY_TO_BOOK and this tool is in allowed_tools. Requires workflow_complete=true and a selected slot. Do not infer readiness from conversation alone.",
     parameters: [
       {
         name: "startsAt",
@@ -138,7 +143,8 @@ export const CALLER_AMY_TOOL_PLAYBOOK: CallerToolPlaybookEntry[] = [
         instruction: "Optional — defaults to call session_id from get_workflow_requirements.",
       },
     ],
-    workflow: BOOKING_TOOL_CHAIN,
+    workflow:
+      "Copy startsAt exactly from calendar_availability.slots[].startsAt. Wait for runtime confirmation before telling caller they are booked.",
     never: [
       "Invent or convert startsAt — only use slots[].startsAt",
       "Pass customerName/customerPhone/customerEmail — use save_collected_fields instead",
@@ -149,7 +155,8 @@ export const CALLER_AMY_TOOL_PLAYBOOK: CallerToolPlaybookEntry[] = [
   {
     toolId: "hold_appointment_slot",
     summary: "Temporarily reserve a slot while confirming details.",
-    whenToCall: "Caller picked a slot from calendar_availability and you are collecting final confirmation.",
+    whenToCall:
+      "USE ONLY when workflow_state is SELECTING_SLOT or READY_TO_BOOK and this tool is in allowed_tools.",
     parameters: [
       {
         name: "startsAt",
@@ -175,7 +182,8 @@ export const CALLER_AMY_TOOL_PLAYBOOK: CallerToolPlaybookEntry[] = [
   {
     toolId: "release_appointment_hold",
     summary: "Release a temporary hold.",
-    whenToCall: "Caller declines or booking cannot complete.",
+    whenToCall:
+      "USE ONLY when workflow_state is SELECTING_SLOT or READY_TO_BOOK and this tool is in allowed_tools. Caller declines or booking cannot complete.",
     parameters: [
       { name: "holdId", required: false, type: "string", instruction: "From hold_appointment_slot response." },
       { name: "startsAt", required: false, type: "string", instruction: "Slot to release if no holdId." },
@@ -184,7 +192,8 @@ export const CALLER_AMY_TOOL_PLAYBOOK: CallerToolPlaybookEntry[] = [
   {
     toolId: "find_appointments",
     summary: "Look up caller's existing appointments.",
-    whenToCall: "Before reschedule or cancel; when caller asks what they have booked.",
+    whenToCall:
+      "USE ONLY when workflow_state is COMPLETE or GENERAL and this tool is in allowed_tools. Caller asks about an existing booking.",
     parameters: [
       {
         name: "customerPhone",
@@ -198,7 +207,8 @@ export const CALLER_AMY_TOOL_PLAYBOOK: CallerToolPlaybookEntry[] = [
   {
     toolId: "reschedule_appointment",
     summary: "Move an existing appointment.",
-    whenToCall: "After find_appointments and new slot from calendar_availability.",
+    whenToCall:
+      "USE ONLY when workflow_state is COMPLETE and this tool is in allowed_tools. After find_appointments returns an appointmentId.",
     parameters: [
       { name: "appointmentId", required: true, type: "string", instruction: "From find_appointments." },
       {
@@ -212,7 +222,8 @@ export const CALLER_AMY_TOOL_PLAYBOOK: CallerToolPlaybookEntry[] = [
   {
     toolId: "cancel_appointment",
     summary: "Cancel an existing appointment.",
-    whenToCall: "Caller confirms they want to cancel.",
+    whenToCall:
+      "USE ONLY when workflow_state is COMPLETE and this tool is in allowed_tools. Caller confirms they want to cancel.",
     parameters: [
       { name: "appointmentId", required: true, type: "string", instruction: "From find_appointments." },
       { name: "reason", required: false, type: "string", instruction: "Optional cancellation reason." },
@@ -446,9 +457,9 @@ function formatParameterBlock(entry: CallerToolPlaybookEntry): string {
 /** Full playbook section for system prompt (enabled tools only). */
 export function compileCallerToolPlaybookForPrompt(enabledToolIds: string[]): string {
   const lines = [
-    "TOOL PARAMETER PLAYBOOK — follow exactly; these are the only tools you may use:",
+    "TOOL PARAMETER PLAYBOOK — follow exactly:",
     "",
-    BOOKING_TOOL_CHAIN,
+    RUNTIME_WORKFLOW_AUTHORITY,
     "",
   ];
   for (const id of enabledToolIds) {
@@ -470,7 +481,9 @@ export function callerToolWebhookDescription(toolId: string): string | null {
     .map((p) => p.name)
     .join(", ");
   const never = entry.never?.length ? ` NEVER: ${entry.never.join("; ")}.` : "";
-  return `${entry.summary} WHEN: ${entry.whenToCall} REQUIRED FIELDS: ${params}.${never}`;
+  const stateGate = stateAwareToolQualifier(toolId);
+  const gateSuffix = stateGate ? ` ${stateGate}` : "";
+  return `${entry.summary} WHEN: ${entry.whenToCall} REQUIRED FIELDS: ${params}.${never}${gateSuffix}`;
 }
 
 /** Build JSON-schema body for Telnyx from playbook (required fields enforced). */

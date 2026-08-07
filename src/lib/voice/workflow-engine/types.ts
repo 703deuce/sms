@@ -71,6 +71,9 @@ export type RuntimeContextPayload = {
   booking_id: string | null;
   pending_operations: string[];
   speak: string | null;
+  next_action: string | null;
+  workflow_complete: boolean;
+  do_not_advance?: string | null;
 };
 
 export type ToolGuardResult = {
@@ -81,4 +84,6 @@ export type ToolGuardResult = {
   speak?: string;
   retryable?: boolean;
   next_action?: string;
+  current_field?: RuntimeFieldManifestEntry | null;
+  workflow_complete?: boolean;
 };

@@ -156,8 +156,9 @@ export function completenessToToolResponse(
       ? `Call save_caller_info with ${JSON.stringify(hints[0].example_payload)} then retry.`
       : null;
   return {
-    ok: result.complete,
-    success: result.complete,
+    ok: true,
+    success: true,
+    workflow_complete: result.complete,
     complete: result.complete,
     workflow: result.workflow,
     missing_required_fields: result.missing_required_fields,

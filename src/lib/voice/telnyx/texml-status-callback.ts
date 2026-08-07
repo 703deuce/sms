@@ -183,6 +183,23 @@ export async function handleTexmlStatusCallback(request: Request) {
   });
 
   let callId = ensured?.callId || null;
+
+  const fromRaw = pick(eventPayload.from, eventPayload.From, eventPayload.Caller);
+  if (callId && fromRaw) {
+    const call = await prisma.voiceCall.findUnique({
+      where: { id: callId },
+      select: { workspaceId: true, agentId: true },
+    });
+    if (call) {
+      const { backfillCallAni } = await import("@/lib/voice/call-identity");
+      await backfillCallAni({
+        callId,
+        workspaceId: call.workspaceId,
+        fromE164: fromRaw,
+        agentId: call.agentId || undefined,
+      }).catch(() => undefined);
+    }
+  }
   if (!callId) {
     const controlId = pick(
       eventPayload.call_control_id,

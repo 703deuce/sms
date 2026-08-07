@@ -8,6 +8,7 @@
 
 import { getPrisma } from "@/lib/db";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
+import { backfillCallAni, findVoiceCallByTelnyxIds, normalizeCallerAni } from "@/lib/voice/call-identity";
 
 function pickString(...vals: unknown[]): string {
   for (const v of vals) {
@@ -32,16 +33,34 @@ export async function ensureVoiceCallForTelnyxEvent(input: {
   if (controlId) {
     const byControl = await prisma.voiceCall.findFirst({
       where: { telnyxCallControlId: controlId },
-      select: { id: true },
+      select: { id: true, workspaceId: true, fromE164: true },
     });
-    if (byControl) return { callId: byControl.id, created: false, enrolled: false };
+    if (byControl) {
+      if (from) {
+        await backfillCallAni({
+          callId: byControl.id,
+          workspaceId: byControl.workspaceId,
+          fromE164: from,
+        }).catch(() => undefined);
+      }
+      return { callId: byControl.id, created: false, enrolled: false };
+    }
   }
   if (conversationId) {
     const byConv = await prisma.voiceCall.findFirst({
       where: { telnyxConversationId: conversationId },
-      select: { id: true },
+      select: { id: true, workspaceId: true, fromE164: true },
     });
-    if (byConv) return { callId: byConv.id, created: false, enrolled: false };
+    if (byConv) {
+      if (from) {
+        await backfillCallAni({
+          callId: byConv.id,
+          workspaceId: byConv.workspaceId,
+          fromE164: from,
+        }).catch(() => undefined);
+      }
+      return { callId: byConv.id, created: false, enrolled: false };
+    }
   }
 
   const toRaw = pickString(p.to, p.destination_number, p.called);
@@ -120,8 +139,6 @@ export async function ensureVoiceCallForTelnyxEvent(input: {
   if (!toE164) return null;
 
   const fromE164 = from || "unknown";
-
-  // Create contact + call, then enroll (same as Call Control inbound path).
   let contactId: string | null = null;
   if (fromE164 && fromE164 !== "unknown") {
     const {

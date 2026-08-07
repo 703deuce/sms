@@ -11,6 +11,15 @@ export async function processPostCall(callId: string) {
   const call = await prisma.voiceCall.findUnique({ where: { id: callId } });
   if (!call) return { ok: false };
 
+  if (call.telnyxConversationId) {
+    const { syncTranscriptFromTelnyxConversation } = await import("@/lib/voice/transcript-sync");
+    await syncTranscriptFromTelnyxConversation({
+      workspaceId: call.workspaceId,
+      callId: call.id,
+      telnyxConversationId: call.telnyxConversationId,
+    }).catch(() => undefined);
+  }
+
   const agent = call.agentId
     ? await prisma.voiceAgent.findUnique({ where: { id: call.agentId } })
     : null;

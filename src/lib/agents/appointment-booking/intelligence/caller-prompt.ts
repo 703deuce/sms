@@ -62,12 +62,6 @@ export function buildCallerAmyPromptFromModules(
     },
   });
 
-  // Append legacy detailed sections (date/time tools, goals, privacy) for parity
-  const legacy = buildSystemPromptLegacy(state);
-  const legacyTail = legacy.split("Goals:").slice(1).join("Goals:");
-  if (legacyTail) {
-    return `${modulePrompt}\n\nGoals:${legacyTail}`;
-  }
   return modulePrompt;
 }
 

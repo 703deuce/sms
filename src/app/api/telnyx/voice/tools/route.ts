@@ -1,12 +1,16 @@
 import { NextResponse } from "next/server";
 import { getPrisma } from "@/lib/db";
-import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import { executeVoiceTool } from "@/lib/voice/tools/executor";
 import { executeBuiltinVoiceAction } from "@/lib/voice/tools/builtin-actions";
 import {
   isBuiltinToolEnabled,
   resolveEnabledBuiltinTools,
 } from "@/lib/voice/tools/catalog";
+import {
+  backfillCallAni,
+  findVoiceCallByTelnyxIds,
+  normalizeCallerAni,
+} from "@/lib/voice/call-identity";
 
 function resolveInboundAni(request: Request, body: Record<string, unknown>): string {
   const headerKeys = [
@@ -14,6 +18,8 @@ function resolveInboundAni(request: Request, body: Record<string, unknown>): str
     "x-telnyx-caller-id",
     "x-telnyx-end-user-target",
     "x-telnyx-calling-number",
+    "from",
+    "caller",
   ];
   for (const key of headerKeys) {
     const value = request.headers.get(key);
@@ -22,47 +28,6 @@ function resolveInboundAni(request: Request, body: Record<string, unknown>): str
   const fromBody = body.from || body.caller || body.caller_id || body.from_number;
   if (fromBody && String(fromBody) !== "unknown") return String(fromBody);
   return "";
-}
-
-async function wireCallerAniToCall(input: {
-  callId: string;
-  workspaceId: string;
-  agentId?: string;
-  fromE164: string;
-}) {
-  if (!input.fromE164 || input.fromE164 === "unknown") return;
-  let normalized = input.fromE164;
-  try {
-    normalized = normalizeE164(input.fromE164);
-  } catch {
-    normalized = input.fromE164;
-  }
-
-  const prisma = getPrisma();
-  const call = await prisma.voiceCall.findFirst({
-    where: { id: input.callId, workspaceId: input.workspaceId },
-    select: { fromE164: true },
-  });
-  if (!call) return;
-
-  if (!call.fromE164 || call.fromE164 === "unknown") {
-    await prisma.voiceCall
-      .update({
-        where: { id: input.callId },
-        data: { fromE164: normalized },
-      })
-      .catch(() => undefined);
-  }
-
-  if (input.agentId) {
-    const { ensureWorkflowFieldSession } = await import("@/lib/voice/field-runtime/session");
-    await ensureWorkflowFieldSession({
-      callId: input.callId,
-      workspaceId: input.workspaceId,
-      agentId: input.agentId,
-      workflow: "book_appointment",
-    }).catch(() => undefined);
-  }
 }
 
 /**
@@ -169,33 +134,34 @@ export async function POST(request: Request) {
     const inboundAni = resolveInboundAni(request, body);
 
     let callId: string | undefined;
-    if (callControlId) {
-      const call = await prisma.voiceCall.findFirst({
-        where: { workspaceId, telnyxCallControlId: callControlId },
-        select: { id: true, telnyxConversationId: true },
-      });
-      callId = call?.id;
-      if (call?.id && inboundAni) {
-        await wireCallerAniToCall({
-          callId: call.id,
-          workspaceId,
-          agentId: agentId || undefined,
-          fromE164: inboundAni,
-        });
-      }
-      // Attach conversation id as soon as tools see it (TeXML hangup often arrives late).
-      if (call?.id && conversationId && !call.telnyxConversationId) {
-        await prisma.voiceCall
-          .update({
-            where: { id: call.id },
-            data: { telnyxConversationId: conversationId },
-          })
-          .catch(() => undefined);
-      }
+    const resolved = await findVoiceCallByTelnyxIds({
+      workspaceId,
+      callControlId: callControlId || null,
+      conversationId: conversationId || null,
+      agentId: agentId || null,
+    });
+    callId = resolved?.id;
+
+    if (callId && inboundAni) {
+      await backfillCallAni({
+        callId,
+        workspaceId,
+        fromE164: inboundAni,
+        agentId: agentId || undefined,
+      }).catch(() => undefined);
     }
-    // Mid-call tools often arrive before TeXML hangup creates the VoiceCall.
-    // Create a live call row from tool headers so executions / bookings correlate.
-    if (!callId && callControlId && agentId) {
+
+    if (callId && conversationId) {
+      await prisma.voiceCall
+        .updateMany({
+          where: { id: callId, telnyxConversationId: null },
+          data: { telnyxConversationId: conversationId },
+        })
+        .catch(() => undefined);
+    }
+
+    // Create a live call row only when we have caller ANI — never seed fromE164=unknown.
+    if (!callId && callControlId && agentId && inboundAni) {
       const agent = await prisma.voiceAgent.findFirst({
         where: { id: agentId, workspaceId },
         select: {
@@ -218,13 +184,7 @@ export async function POST(request: Request) {
           });
           toE164 = pn?.e164 || "";
         }
-        const fromE164 = inboundAni
-          ? inboundAni
-          : body.from
-            ? String(body.from)
-            : body.caller
-              ? String(body.caller)
-              : "unknown";
+        const fromE164 = normalizeCallerAni(inboundAni) || inboundAni;
         const created = await prisma.voiceCall
           .create({
             data: {
@@ -234,7 +194,7 @@ export async function POST(request: Request) {
               phoneNumberId: agent.phoneNumberId || null,
               direction: "INBOUND",
               status: "IN_PROGRESS",
-              fromE164: fromE164 || "unknown",
+              fromE164,
               toE164: toE164 || "unknown",
               telnyxCallControlId: callControlId,
               telnyxConversationId: conversationId || null,
@@ -247,57 +207,23 @@ export async function POST(request: Request) {
             },
           })
           .catch(() => null);
-        // Race: another webhook may have created it first.
         if (created?.id) {
           callId = created.id;
-          if (inboundAni) {
-            await wireCallerAniToCall({
-              callId: created.id,
-              workspaceId,
-              agentId: agent.id,
-              fromE164: inboundAni,
-            });
-          }
+          await backfillCallAni({
+            callId: created.id,
+            workspaceId,
+            fromE164,
+            agentId: agent.id,
+          }).catch(() => undefined);
         } else {
-          const again = await prisma.voiceCall.findFirst({
-            where: { workspaceId, telnyxCallControlId: callControlId },
-            select: { id: true },
+          const again = await findVoiceCallByTelnyxIds({
+            workspaceId,
+            callControlId,
+            conversationId,
+            agentId,
           });
           callId = again?.id;
         }
-      }
-    }
-    if (!callId && conversationId) {
-      const call = await prisma.voiceCall.findFirst({
-        where: { workspaceId, telnyxConversationId: conversationId },
-        orderBy: { startedAt: "desc" },
-        select: { id: true },
-      });
-      callId = call?.id;
-    }
-    // Only fall back to a very recent live call — never a stale row that already
-    // ended (that produced Telnyx "Call has already ended" and felt like a drop).
-    if (!callId && agentId) {
-      const since = new Date(Date.now() - 10 * 60 * 1000);
-      const call = await prisma.voiceCall.findFirst({
-        where: {
-          workspaceId,
-          agentId,
-          status: { in: ["IN_PROGRESS", "ANSWERED", "RINGING"] },
-          startedAt: { gte: since },
-          endedAt: null,
-        },
-        orderBy: { startedAt: "desc" },
-        select: { id: true, telnyxConversationId: true },
-      });
-      callId = call?.id;
-      if (call?.id && conversationId && !call.telnyxConversationId) {
-        await prisma.voiceCall
-          .update({
-            where: { id: call.id },
-            data: { telnyxConversationId: conversationId },
-          })
-          .catch(() => undefined);
       }
     }
     // Best-effort: keep VoiceAiConversation.callId linked for observability.
@@ -375,6 +301,8 @@ export async function POST(request: Request) {
             next_action: guard.next_action,
             workflow_state: guard.state,
             allowed_tools: guard.allowed_tools,
+            current_field: guard.current_field || null,
+            workflow_complete: guard.workflow_complete ?? false,
           };
           if (execution) {
             await prisma.voiceToolExecution
@@ -394,7 +322,7 @@ export async function POST(request: Request) {
         }
 
         if (callId && inboundAni) {
-          await wireCallerAniToCall({
+          await backfillCallAni({
             callId,
             workspaceId,
             agentId,
@@ -412,7 +340,11 @@ export async function POST(request: Request) {
             call_control_id: callControlId || body.call_control_id,
           },
         })) as Record<string, unknown>;
-        const ok = result.ok !== false;
+        const hasFieldSave =
+          Array.isArray(result.saved_field_ids) && (result.saved_field_ids as string[]).length > 0;
+        const opSucceeded =
+          result.ok !== false || hasFieldSave || result.field_complete === true || result.saved === true;
+        const executionStatus = opSucceeded ? "completed" : "failed";
 
         if (callId) {
           const { refreshRuntimeAfterTool } = await import("@/lib/voice/workflow-engine/engine");
@@ -427,7 +359,7 @@ export async function POST(request: Request) {
             serviceName,
           }).catch(() => undefined);
           await appendTraceEvent(callId, {
-            kind: ok ? "tool_success" : "tool_failure",
+            kind: opSucceeded ? "tool_success" : "tool_failure",
             tool: toolType,
             operation_id: result.operation_id ? String(result.operation_id) : undefined,
             detail: { error_code: result.error_code, workflow_state: result.workflow_state },
@@ -438,9 +370,9 @@ export async function POST(request: Request) {
             .update({
               where: { id: execution.id },
               data: {
-                status: ok ? "completed" : "failed",
+                status: executionStatus,
                 output: result as object,
-                errorMessage: ok ? null : String(result.error || "tool failed"),
+                errorMessage: executionStatus === "failed" ? String(result.error || "tool failed") : null,
                 latencyMs: Date.now() - start,
                 completedAt: new Date(),
               },
@@ -449,13 +381,13 @@ export async function POST(request: Request) {
         }
         return NextResponse.json({
           ...result,
-          ok,
+          ok: result.ok !== false,
           agentId,
           executionId: execution?.id,
           speak:
             typeof result.speak === "string"
               ? result.speak
-              : ok
+              : opSucceeded
                 ? undefined
                 : "I wasn't able to complete that just now. I can take a message or try something else.",
         });

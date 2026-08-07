@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { readTelnyxWebhook } from "@/lib/messaging/telnyx/webhook-auth";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import { getPrisma } from "@/lib/db";
+import { backfillCallAni } from "@/lib/voice/call-identity";
 import { resolveCallDynamicVariables } from "@/lib/voice/dynamic-variables";
 
 /**
@@ -51,12 +52,12 @@ export async function POST(request: Request) {
         callId = call.id;
         contactId = call.contactId;
         if (normalizedFrom && normalizedFrom !== "unknown" && (!call.fromE164 || call.fromE164 === "unknown")) {
-          await prisma.voiceCall
-            .update({
-              where: { id: call.id },
-              data: { fromE164: normalizedFrom },
-            })
-            .catch(() => undefined);
+          await backfillCallAni({
+            callId: call.id,
+            workspaceId: call.workspaceId,
+            fromE164: normalizedFrom,
+            agentId: call.agentId || undefined,
+          }).catch(() => undefined);
         }
       }
     }

@@ -1,4 +1,5 @@
-import { computeWorkflowState } from "./engine";
+import { buildRuntimeContext, computeWorkflowState } from "./engine";
+import { deriveNextAction } from "./next-action";
 import { isSchedulingGatedTool } from "./scheduling-tools";
 import { canonicalToolType, isToolAllowedForState, IRREVERSIBLE_TOOLS, toolsForState } from "./states";
 import type { ToolGuardResult } from "./types";
@@ -101,14 +102,50 @@ export async function assertToolAllowed(input: {
   }
 
   if (!isToolAllowedForState(state, input.toolType)) {
+    let current_field = null;
+    let workflow_complete = false;
+    let next_action = `Use one of: ${allowed_tools.slice(0, 6).join(", ")}`;
+
+    if (input.callId) {
+      try {
+        const ctx = await buildRuntimeContext({
+          callId: input.callId,
+          workspaceId: input.workspaceId,
+          agentId: input.agentId,
+          workflow: input.workflow,
+          serviceName: input.serviceName,
+        });
+        current_field = ctx.current_field;
+        workflow_complete = ctx.workflow_complete;
+        next_action =
+          ctx.next_action ||
+          deriveNextAction({
+            state,
+            complete: ctx.workflow_complete,
+            currentField: ctx.current_field,
+            missingFields: ctx.missing_fields,
+          }) ||
+          next_action;
+      } catch {
+        // fall back to generic recovery
+      }
+    }
+
+    const isSchedulingBlocked =
+      isSchedulingGatedTool(canonical) && (state === "COLLECTING_FIELDS" || state === "INTENT_DISCOVERY");
+
     return {
       allowed: false,
       state,
       allowed_tools,
       error_code: "TOOL_NOT_ALLOWED_FOR_STATE",
-      speak: `I can't do that step right now. Current phase: ${state.replace(/_/g, " ").toLowerCase()}.`,
+      speak: isSchedulingBlocked
+        ? "I still need a few details before I can check the calendar."
+        : `I can't do that step right now. Current phase: ${state.replace(/_/g, " ").toLowerCase()}.`,
       retryable: false,
-      next_action: `Use one of: ${allowed_tools.slice(0, 6).join(", ")}`,
+      next_action,
+      current_field,
+      workflow_complete,
     };
   }
 

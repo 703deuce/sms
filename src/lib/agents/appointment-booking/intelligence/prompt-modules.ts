@@ -169,10 +169,11 @@ Repeat full date, day, time, and timezone before booking.`,
   custom_fields: () =>
     `FIELD COLLECTION (runtime-driven)
 Do NOT rely on static field lists in this prompt.
-Runtime context is injected each turn: workflow_state, current_required_field_json, allowed_tools_json.
-On each call: get_workflow_requirements or get_runtime_context returns fields_to_collect, missing_fields, and allowed tools.
+Runtime context is injected each turn: workflow_state, workflow_complete, current_required_field_json, next_action, allowed_tools_json.
+On each call: get_runtime_context returns fields_to_collect, missing_fields, allowed tools, and next_action.
 PREFERRED: record_current_field({ value }) when collecting the active field — backend knows field_id.
 ALTERNATIVE: save_collected_fields({ fields: [{ field_id, value }] }) for multiple fields.
+During COLLECTING_FIELDS: do NOT call calendar_availability, book_appointment, or other scheduling tools.
 Use only tools listed in allowed_tools for the current workflow state.`,
 
   tool_policy: () =>
@@ -180,6 +181,7 @@ Use only tools listed in allowed_tools for the current workflow state.`,
 Tool schemas and descriptions are provided by Telnyx webhooks and runtime context — not in this prompt.
 On each turn call get_runtime_context when unsure of state or permitted actions.
 Only use tools listed in allowed_tools_json or get_runtime_context.allowed_tools.
+The runtime determines workflow sequence — never advance to scheduling before workflow_complete=true.
 Never claim booking, SMS, transfer, or cancellation succeeded until the tool returns status=confirmed.`,
 
   transfer_policy: (ctx) =>

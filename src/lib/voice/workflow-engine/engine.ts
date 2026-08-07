@@ -8,6 +8,7 @@ import {
   saveAgentRuntime,
   transitionState,
 } from "./runtime-state";
+import { deriveNextAction, schedulingDoNotAdvanceHint } from "./next-action";
 import { toolsForState } from "./states";
 import type { AgentRuntimeRecord, RuntimeContextPayload, WorkflowState } from "./types";
 
@@ -252,11 +253,19 @@ export async function buildRuntimeContext(input: {
     missing_fields: requirements.missing_fields,
     fields_to_collect: requirements.fields_to_collect,
     complete: requirements.complete,
+    workflow_complete: requirements.complete,
     known_fields: known,
     selected_slot: runtime.selected_slot ?? null,
     held_slot: runtime.held_slot ?? null,
     booking_id: runtime.booking_id ?? null,
     pending_operations: runtime.pending_operations,
     speak: requirements.speak,
+    next_action: deriveNextAction({
+      state,
+      complete: requirements.complete,
+      currentField,
+      missingFields: requirements.missing_fields,
+    }),
+    do_not_advance: schedulingDoNotAdvanceHint(state),
   };
 }

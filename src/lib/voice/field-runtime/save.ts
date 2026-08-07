@@ -14,6 +14,8 @@ import {
   loadAgentRuntime,
   saveAgentRuntime,
 } from "@/lib/voice/workflow-engine/runtime-state";
+import { computeWorkflowState } from "@/lib/voice/workflow-engine/engine";
+import { deriveNextAction } from "@/lib/voice/workflow-engine/next-action";
 import { getWorkflowRequirements, requirementsToToolResponse } from "./requirements";
 import type { WorkflowAction } from "./types";
 
@@ -104,13 +106,26 @@ export async function saveCollectedFields(
     serviceName: input.serviceName,
   });
 
+  const { state } = await computeWorkflowState({
+    callId,
+    workspaceId: input.workspaceId,
+    agentId: input.agentId,
+    workflow,
+    serviceName: input.serviceName,
+  });
+
+  const reqPayload = requirementsToToolResponse(requirements, {
+    operationSucceeded: saved.length > 0,
+    workflowState: state,
+  });
+
   return {
-    ok: true,
-    success: true,
+    saved: saved.length > 0,
     session_id: session.session_id,
     saved_field_ids: saved,
     active_field: session.active_field,
-    ...requirementsToToolResponse(requirements),
+    workflow_complete: requirements.complete,
+    ...reqPayload,
   };
 }
 
@@ -140,15 +155,25 @@ export async function recordCurrentField(
 
   const fieldId = requirements.active_field;
   if (!fieldId) {
+    const { state } = await computeWorkflowState({
+      callId: input.callId,
+      workspaceId: input.workspaceId,
+      agentId: input.agentId,
+      workflow,
+      serviceName: input.serviceName,
+    });
     return {
-      ok: false,
-      success: false,
-      error_code: "NO_ACTIVE_FIELD",
+      ok: true,
+      success: true,
+      workflow_complete: requirements.complete,
+      error_code: requirements.complete ? undefined : "NO_ACTIVE_FIELD",
       speak: requirements.complete
         ? "All required information is already collected."
-        : "Call get_workflow_requirements to see what to collect next.",
-      complete: requirements.complete,
-      ...requirementsToToolResponse(requirements),
+        : "Call get_runtime_context to see what to collect next.",
+      ...requirementsToToolResponse(requirements, {
+        operationSucceeded: true,
+        workflowState: state,
+      }),
     };
   }
 
@@ -161,7 +186,7 @@ export async function recordCurrentField(
     serviceName: input.serviceName,
   });
 
-  if (result.success === false || result.ok === false) {
+  if (result.error || result.error_code === "VALIDATION_FAILED") {
     return result;
   }
 
@@ -182,7 +207,19 @@ export async function recordCurrentField(
     serviceName: input.serviceName,
   });
 
+  const { state } = await computeWorkflowState({
+    callId: input.callId,
+    workspaceId: input.workspaceId,
+    agentId: input.agentId,
+    workflow,
+    serviceName: input.serviceName,
+  });
+
   const receipt = runtime.field_receipts.find((r) => r.field_id === fieldId);
+  const currentField =
+    updatedRequirements.fields_to_collect.find((f) => f.field_id === updatedRequirements.active_field) ||
+    updatedRequirements.missing_fields[0] ||
+    null;
 
   return {
     ...result,
@@ -192,13 +229,17 @@ export async function recordCurrentField(
     workflow_complete: updatedRequirements.complete,
     next_field: updatedRequirements.missing_fields[0] || null,
     active_field: updatedRequirements.active_field,
+    current_field: currentField,
     speak: updatedRequirements.complete
       ? "Got it. All required information is collected."
       : updatedRequirements.missing_fields[0]?.collection_instruction ||
         updatedRequirements.speak,
-    next_action: updatedRequirements.complete
-      ? "Proceed to calendar_availability or book_appointment as appropriate."
-      : `Ask for: ${updatedRequirements.missing_fields[0]?.label || "next field"}, then call record_current_field again.`,
+    next_action: deriveNextAction({
+      state,
+      complete: updatedRequirements.complete,
+      currentField,
+      missingFields: updatedRequirements.missing_fields,
+    }),
   };
 }
 

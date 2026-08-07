@@ -153,7 +153,7 @@ export function buildSystemPromptLegacy(state: AppointmentReceptionistWizardStat
     );
   }
   if (caps.includes("book_appointments")) {
-    lines.push("- Help callers book appointments using live calendar tools.");
+    lines.push("- Help callers book appointments when the runtime permits scheduling tools.");
   }
   if (caps.includes("reschedule")) lines.push("- Help callers reschedule existing appointments.");
   if (caps.includes("cancel")) lines.push("- Help callers cancel appointments when allowed.");
@@ -179,34 +179,31 @@ export function buildSystemPromptLegacy(state: AppointmentReceptionistWizardStat
     lines.push("- Send SMS confirmations after a successful booking when configured.");
   }
   lines.push("");
-  lines.push("Tools — you MUST use these; never claim you cannot save or transfer:");
+  lines.push("Tools — use runtime context for which tools are permitted each turn:");
   lines.push(
-    "- save_caller_info: when the caller gives name, phone, email, or company — call this tool to store it. Confirm after the tool succeeds.",
+    "- record_current_field: preferred when collecting the active field — pass only { value }.",
   );
   lines.push(
-    "- take_structured_message: when taking a message or callback — call this tool with caller_name, phone, reason, and urgency. Confirm after it succeeds.",
+    "- save_collected_fields: when saving multiple fields by field_id from get_runtime_context.",
   );
   lines.push(
-    "- lookup_customer: look up an existing contact by phone before booking when helpful.",
+    "- get_runtime_context / get_workflow_requirements: check workflow_state, allowed_tools, and missing fields.",
+  );
+  lines.push(
+    "- take_structured_message: when taking a message or callback — call with caller_name, phone, reason, and urgency.",
+  );
+  lines.push(
+    "- lookup_customer: look up an existing contact by phone when helpful.",
   );
   if (caps.includes("book_appointments")) {
     lines.push(
-      "- resolve_datetime: resolve relative dates/times to a concrete local datetime before checking availability.",
-    );
-    lines.push("- calendar_availability / book_appointment: check live availability and book only after confirmation.");
-    lines.push("- hold_appointment_slot: temporarily reserve a slot while collecting final confirmation (default ~3 minutes).");
-    lines.push("- release_appointment_hold: release a hold if the caller declines or booking cannot complete.");
-    lines.push(
-      "- find_appointments: when the caller asks about an existing booking, look it up by phone before reschedule/cancel.",
+      "- Scheduling tools (resolve_datetime, calendar_availability, hold_appointment_slot, book_appointment): USE ONLY when workflow_state and allowed_tools permit them. Never call during COLLECTING_FIELDS.",
     );
     lines.push(
-      "- reschedule_appointment: move an existing booking using appointmentId from find_appointments and a new startsAt from calendar_availability.",
+      "- Never offer, confirm, or book a time unless startsAt came from calendar_availability slots returned while runtime permitted scheduling.",
     );
     lines.push(
-      "- Never offer, confirm, or book a day/time unless that exact startsAt came from the latest calendar_availability slots. If the caller asks for a time that is not in the returned slots, say it is unavailable and offer 2–3 of the returned label times instead.",
-    );
-    lines.push(
-      "- If book_appointment times out, you may retry the same startsAt once. If it returns alreadyBooked=true or ok=true, tell the caller they are confirmed — do not say it failed.",
+      "- If book_appointment times out, you may retry the same startsAt once. If it returns alreadyBooked=true or ok=true, tell the caller they are confirmed.",
     );
   }
   if (caps.includes("transfer_calls") && transferPhone) {
@@ -216,9 +213,9 @@ export function buildSystemPromptLegacy(state: AppointmentReceptionistWizardStat
   }
   lines.push("- hangup / end_call: only after a clear goodbye when the conversation is finished.");
   lines.push("");
-  lines.push("Booking conversation rules:");
+  lines.push("Booking conversation rules (runtime determines when each step is allowed):");
   if (state.bookingBehavior.askServiceFirst) {
-    lines.push("- Ask what service the caller needs before checking the calendar.");
+    lines.push("- Ask what service the caller needs when collecting fields.");
   }
   if (state.bookingBehavior.askPreferredDayFirst) {
     lines.push("- Ask for a preferred day or general time window before offering slots.");
@@ -237,15 +234,14 @@ export function buildSystemPromptLegacy(state: AppointmentReceptionistWizardStat
   lines.push("- Never claim an appointment is booked until the booking tool succeeds.");
   lines.push("- Never invent availability or pricing.");
   lines.push(
-    "- When booking, pass book_appointment startsAt exactly as returned by calendar_availability (ISO). Speak the matching label. Do not convert spoken clock times yourself.",
+    "- When booking is permitted, pass book_appointment startsAt exactly as returned by calendar_availability (ISO).",
   );
   lines.push("");
-  lines.push("Collect caller information in this order when needed:");
-  for (const field of state.collectFields.filter((f) => f.enabled)) {
-    lines.push(`- ${field.label}${field.required ? " (required)" : " (optional)"}`);
-  }
   lines.push(
-    "- As soon as you have a phone number (or the caller confirms the caller ID), call save_caller_info. Do not say you have no way to save information.",
+    "Field collection is runtime-driven — use get_runtime_context for fields_to_collect and missing_fields. Do not use a fixed field order from this prompt.",
+  );
+  lines.push(
+    "- Prefer record_current_field({ value }) for the active field. Use save_collected_fields for multiple fields.",
   );
   lines.push("");
   if (caps.includes("transfer_calls") && transferPhone) {
@@ -268,7 +264,7 @@ export function buildSystemPromptLegacy(state: AppointmentReceptionistWizardStat
   if (b.neverInventPricing) lines.push("- Never invent pricing.");
   if (b.neverInventAvailability) lines.push("- Never invent availability.");
   lines.push("- Use the Business knowledge section for hours, pricing, services, policies, and FAQs.");
-  lines.push("- Use calendar tools for availability.");
+  lines.push("- Use scheduling tools only when workflow_state and allowed_tools permit them.");
   lines.push(`- ${KNOWLEDGE_FALLBACK_PHRASE}`);
   lines.push("");
   lines.push("Guardrails:");

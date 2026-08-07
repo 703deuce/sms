@@ -397,6 +397,7 @@ export async function executeBuiltinVoiceAction(input: {
       const { getWorkflowRequirements, requirementsToToolResponse } = await import(
         "@/lib/voice/field-runtime/requirements"
       );
+      const { computeWorkflowState } = await import("@/lib/voice/workflow-engine/engine");
       const workflow = String(
         args.workflow || "book_appointment",
       ) as import("@/lib/voice/field-runtime/types").WorkflowAction;
@@ -407,7 +408,21 @@ export async function executeBuiltinVoiceAction(input: {
         workflow,
         serviceName: args.serviceName ? String(args.serviceName) : null,
       });
-      return requirementsToToolResponse(result);
+      let workflowState: import("@/lib/voice/workflow-engine/types").WorkflowState | undefined;
+      if (input.callId) {
+        const computed = await computeWorkflowState({
+          callId: input.callId,
+          workspaceId: input.workspaceId,
+          agentId: input.agentId,
+          workflow,
+          serviceName: args.serviceName ? String(args.serviceName) : null,
+        });
+        workflowState = computed.state;
+      }
+      return requirementsToToolResponse(result, {
+        operationSucceeded: true,
+        workflowState,
+      });
     }
     case "save_caller_info":
     case "save_customer_info": {
@@ -434,6 +449,7 @@ export async function executeBuiltinVoiceAction(input: {
       const { getWorkflowRequirements, requirementsToToolResponse } = await import(
         "@/lib/voice/field-runtime/requirements"
       );
+      const { computeWorkflowState } = await import("@/lib/voice/workflow-engine/engine");
       const workflow = String(
         args.workflow || args.action || "book_appointment",
       ) as import("@/lib/voice/field-runtime/types").WorkflowAction;
@@ -444,7 +460,21 @@ export async function executeBuiltinVoiceAction(input: {
         workflow,
         serviceName: args.serviceName ? String(args.serviceName) : null,
       });
-      return requirementsToToolResponse(result);
+      let workflowState: import("@/lib/voice/workflow-engine/types").WorkflowState | undefined;
+      if (input.callId) {
+        const computed = await computeWorkflowState({
+          callId: input.callId,
+          workspaceId: input.workspaceId,
+          agentId: input.agentId,
+          workflow,
+          serviceName: args.serviceName ? String(args.serviceName) : null,
+        });
+        workflowState = computed.state;
+      }
+      return requirementsToToolResponse(result, {
+        operationSucceeded: true,
+        workflowState,
+      });
     }
     case "create_crm_note": {
       const { createCrmNoteForVoice } = await import("./crm-writes");
