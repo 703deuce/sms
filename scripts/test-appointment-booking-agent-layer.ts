@@ -565,10 +565,15 @@ const route = routeOwnerRequest("Why didn't the last call book?");
 assert("routes diagnose_failure", route.intent === "diagnose_failure");
 assert("delegates diagnostic", route.delegateTo === "diagnostic_specialist");
 
+import { summarizeCallTraceForOwner } from "../src/lib/agents/appointment-booking/execution-trace";
+import { OWNER_LLM_TOOL_SPECS } from "../src/lib/agents/appointment-booking/intelligence/owner-tool-executor";
+
+assert("owner LLM tools registered", Object.keys(OWNER_LLM_TOOL_SPECS).length >= 15);
+assert("owner LLM tool blocks recursion", Boolean(OWNER_LLM_TOOL_SPECS.owner_ask?.blocked));
+
 const lastCallRoute = routeOwnerRequest("What happened on the last call?");
 assert("routes last call recall", lastCallRoute.intent === "diagnose_failure");
 
-import { summarizeCallTraceForOwner } from "../src/lib/agents/appointment-booking/execution-trace";
 const recap = summarizeCallTraceForOwner({
   executionId: "trace:test",
   agentId: "a1",

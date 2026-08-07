@@ -71,8 +71,11 @@ export const AMY_RUNTIME_REGISTRY: AgentRuntimeDefinition[] = [
     promptSource:
       "src/lib/agents/appointment-booking/intelligence/owner-runtime.ts → buildOwnerAmySystemPrompt",
     promptVersion: getPromptVersionRecord("owner_amy").promptVersion,
-    modelProvider: "internal",
-    modelName: "deterministic_bounded_loop",
+    modelProvider: "llm",
+    modelName: process.env.OPENAI_MODEL?.trim() ||
+      process.env.DEEPSEEK_MODEL?.trim() ||
+      process.env.LLM_MODEL?.trim() ||
+      "gpt-4o-mini",
     toolIds: OWNER_AMY_TOOL_DESCRIPTIONS.map((t) => t.id),
     contextSources: [
       "agent_identity",
@@ -211,8 +214,8 @@ export function buildRuntimeAuditTable() {
   return AMY_RUNTIME_REGISTRY.map((r) => {
     const prompt = getPromptVersionRecord(r.runtimeId);
     const gaps: string[] = [];
-    if (r.agentRole === "owner_controller" && r.modelProvider === "internal") {
-      gaps.push("Deterministic handlers — LLM optional for complex NL");
+    if (r.agentRole === "owner_controller" && r.modelProvider === "llm") {
+      gaps.push("LLM tool loop — requires OPENAI_API_KEY or DEEPSEEK_API_KEY");
     }
     if (r.agentRole === "caller_booking") {
       gaps.push("Live path via Telnyx — backend controls tool execution");
