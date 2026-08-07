@@ -486,7 +486,15 @@ export async function executeOwnerLlmTool(input: {
       const wrapped = wrapToolOutput(raw);
       const data =
         wrapped.status === "completed" ? (wrapped.data as Record<string, unknown>) : { raw };
-      return toolCompleted({ ...data, workflowArchitectInvoked: true });
+      const architectResult = (data as { architectResult?: { creationMode?: string; architectInvocation?: unknown } }).architectResult;
+      const llmRan =
+        architectResult?.creationMode === "llm_architect" &&
+        Boolean(architectResult?.architectInvocation);
+      return toolCompleted({
+        ...data,
+        workflowArchitectInvoked: llmRan,
+        creationMode: architectResult?.creationMode || "unknown",
+      });
     }
 
     const wrapped = wrapToolOutput(raw);

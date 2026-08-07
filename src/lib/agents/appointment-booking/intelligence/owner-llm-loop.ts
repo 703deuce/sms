@@ -263,7 +263,12 @@ export async function runOwnerAmyLlmLoop(input: {
           preflight.state.specialistsExecuted.push(spec.specialist);
         }
         if (toolName === "request_workflow_draft") {
-          preflight.state.specialistsExecuted.push("appointment_workflow_architect");
+          const data = unwrapToolData(toolResult) as Record<string, unknown> | null;
+          const architectResult = data?.architectResult as { creationMode?: string } | undefined;
+          if (architectResult?.creationMode === "llm_architect") {
+            preflight.state.specialistsExecuted.push("appointment_workflow_architect");
+            preflight.state.specialistCalls += 1;
+          }
         }
 
         const meta = extractProposalMeta(toolResult);

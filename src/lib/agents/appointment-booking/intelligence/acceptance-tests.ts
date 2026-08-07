@@ -6,6 +6,10 @@ import type { AgentExecutionTrace } from "@/lib/agents/appointment-booking/types
 import { routeOwnerRequest } from "./request-router";
 import { capabilitiesForIntent } from "./capability-catalog";
 import { buildWorkflowArchitectFromRequest } from "./workflow-architect-runtime";
+import { buildAfterHoursEmergencyTransferDraft } from "@/lib/agents/appointment-booking/workflow-architect";
+import { generateWorkflowTestPlan } from "./workflow-test-plan";
+import { validateWorkflowSemantics } from "./workflow-semantic-validator";
+import { getAvailableWorkflowBlocks } from "./workflow-block-catalog";
 import { diagnoseTrace } from "./diagnostic-runtime";
 import { assertTraceExpectations } from "@/lib/agents/appointment-booking/execution-trace";
 
@@ -227,11 +231,11 @@ export const WORKFLOW_ARCHITECT_ACCEPTANCE_TESTS: AcceptanceTestCase[] = [
   {
     id: "passes_validation",
     runtime: "workflow_architect",
-    prompt: "Standard booking flow.",
+    prompt: "Create an after-hours emergency workflow draft.",
     assert: () => {
       const result = buildWorkflowArchitectFromRequest({
         agentId: "test_agent",
-        userRequest: "Standard booking flow.",
+        userRequest: "Create an after-hours emergency workflow draft.",
         phoneNumberId: "pn_1",
         timezone: "America/New_York",
       });
@@ -242,6 +246,85 @@ export const WORKFLOW_ARCHITECT_ACCEPTANCE_TESTS: AcceptanceTestCase[] = [
       };
     },
   },
+  {
+    id: "sewer_backup_marcus_acceptance",
+    runtime: "workflow_architect",
+    prompt:
+      "If someone calls after hours about a sewer backup, transfer them to Marcus. If Marcus does not answer, collect their address and problem description, text the on-call number, and create a callback request for 7 AM.",
+    assert: () => {
+      const draft = buildAfterHoursEmergencyTransferDraft({
+        agentId: "test_agent",
+        userRequest:
+          "If someone calls after hours about a sewer backup, transfer them to Marcus.",
+        phoneNumberId: "pn_1",
+      });
+      const types = draft.nodes.map((n) => n.type);
+      const tests = generateWorkflowTestPlan({ userRequest: draft.sourceRequest || "", nodeTypes: types });
+      const semantic = validateWorkflowSemantics(draft);
+      return {
+        passed:
+          types.includes("after_hours_call") &&
+          types.includes("transfer_call") &&
+          types.includes("use_fallback_transfer") &&
+          types.includes("create_callback_task") &&
+          types.includes("collect_field") &&
+          tests.includes("transfer_no_answer") &&
+          !semantic.some((e) => e.level === "error"),
+        reason: `types=${types.join(",")}`,
+      };
+    },
+  },
+  {
+    id: "block_catalog_available",
+    runtime: "workflow_architect",
+    prompt: "catalog",
+    assert: () => ({
+      passed: getAvailableWorkflowBlocks().length >= 40,
+    }),
+  },
+  ...[
+    "Send emergency calls to Marcus after closing.",
+    "When we're closed, sewer backups should go to Marcus.",
+    "Route urgent plumbing calls to the on-call person at night.",
+  ].map((prompt, i) => ({
+    id: `after_hours_nl_${i}`,
+    runtime: "workflow_architect" as const,
+    prompt,
+    assert: () => {
+      const result = buildWorkflowArchitectFromRequest({
+        agentId: "test_agent",
+        userRequest: prompt,
+        phoneNumberId: "pn_1",
+      });
+      return {
+        passed:
+          result.status === "draft_created" &&
+          result.nodes.some((n) => n.type === "transfer_call" || n.type === "after_hours_call"),
+      };
+    },
+  })),
+  ...[
+    "Text people a link if they don't schedule.",
+    "Ten minutes after a failed booking, send the booking page.",
+    "Follow up by SMS when the caller leaves without an appointment.",
+  ].map((prompt, i) => ({
+    id: `followup_sms_nl_${i}`,
+    runtime: "workflow_architect" as const,
+    prompt,
+    assert: () => {
+      const result = buildWorkflowArchitectFromRequest({
+        agentId: "test_agent",
+        userRequest: prompt,
+        phoneNumberId: "pn_1",
+      });
+      return {
+        passed:
+          result.status === "draft_created" &&
+          (result.nodes.some((n) => n.type === "send_booking_link") ||
+            result.nodes.some((n) => n.type === "delay")),
+      };
+    },
+  })),
 ];
 
 export const CALLER_AMY_ACCEPTANCE_TESTS: AcceptanceTestCase[] = [

@@ -152,6 +152,39 @@ export function validateWorkflowDraft(draft: WorkflowDraft): WorkflowDraft {
           });
         }
       }
+      if (rule === "requires_delay_minutes") {
+        const minutes = Number(node.config.delayMinutes ?? node.config.delay_minutes);
+        if (!Number.isFinite(minutes) || minutes < 1) {
+          errors.push({
+            nodeId: node.id,
+            code: rule,
+            message: "delay requires delayMinutes >= 1",
+          });
+        }
+      }
+      if (rule === "requires_transfer_destination") {
+        const dest =
+          node.config.destinationId ||
+          node.config.transferDestinationId ||
+          node.config.staffName;
+        if (!dest) {
+          errors.push({
+            nodeId: node.id,
+            code: rule,
+            message: `${node.type} requires transfer destination config`,
+          });
+        }
+      }
+      if (rule === "requires_callback_schedule") {
+        const at = node.config.scheduledAt || node.config.scheduled_at;
+        if (!at) {
+          errors.push({
+            nodeId: node.id,
+            code: rule,
+            message: "create_callback_task requires scheduledAt",
+          });
+        }
+      }
     }
   }
 

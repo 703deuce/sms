@@ -231,7 +231,15 @@ export const APPOINTMENT_WORKFLOW_BLOCKS: WorkflowBlockDefinition[] = [
     riskLevel: "low",
     validationRules: [],
   },
-  // Tools
+  {
+    type: "delay",
+    category: "logic",
+    version: 1,
+    label: "Delay",
+    allowedAgentRoles: ["appointment_booking"],
+    riskLevel: "low",
+    validationRules: ["requires_delay_minutes"],
+  },
   {
     type: "lookup_contact",
     category: "tool",
@@ -309,10 +317,28 @@ export const APPOINTMENT_WORKFLOW_BLOCKS: WorkflowBlockDefinition[] = [
     validationRules: ["requires_booking_success_first"],
   },
   {
+    type: "send_booking_link",
+    category: "tool",
+    version: 1,
+    label: "Send booking link SMS",
+    allowedAgentRoles: ["appointment_booking"],
+    riskLevel: "medium",
+    validationRules: ["requires_messaging_policy_gate"],
+  },
+  {
     type: "transfer_call",
     category: "tool",
     version: 1,
     label: "Transfer call",
+    allowedAgentRoles: ["appointment_booking"],
+    riskLevel: "medium",
+    validationRules: ["requires_transfer_destination"],
+  },
+  {
+    type: "use_fallback_transfer",
+    category: "tool",
+    version: 1,
+    label: "Fallback transfer",
     allowedAgentRoles: ["appointment_booking"],
     riskLevel: "medium",
     validationRules: ["requires_transfer_destination"],
@@ -334,6 +360,15 @@ export const APPOINTMENT_WORKFLOW_BLOCKS: WorkflowBlockDefinition[] = [
     allowedAgentRoles: ["appointment_booking"],
     riskLevel: "low",
     validationRules: [],
+  },
+  {
+    type: "create_callback_task",
+    category: "tool",
+    version: 1,
+    label: "Create callback task",
+    allowedAgentRoles: ["appointment_booking"],
+    riskLevel: "medium",
+    validationRules: ["requires_callback_schedule"],
   },
   // Outcomes
   {

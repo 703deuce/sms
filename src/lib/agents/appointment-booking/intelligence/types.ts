@@ -107,20 +107,40 @@ export type ToolDescription = {
 export type WorkflowArchitectResult = {
   status: "draft_created" | "needs_information" | "unsupported";
   summary: string;
+  interpretation?: string;
   requiredResources: string[];
   missingInformation: string[];
   nodes: WorkflowDraftNode[];
   edges: WorkflowDraftEdge[];
   changedNodes: string[];
   removedNodes: string[];
+  addedNodeIds?: string[];
+  updatedNodeIds?: string[];
+  unchangedNodeIds?: string[];
   invariantsChecked: string[];
   risks: Array<{
     code: string;
     level: "low" | "medium" | "high";
-    description: string;
+    explanation?: string;
+    description?: string;
   }>;
   requiredTests: string[];
+  assumptions?: string[];
   draftId?: string;
+  nearestSupportedAlternative?: string;
+  unsupportedRequirements?: string[];
+  /** How the draft was produced — never claim llm_architect unless invocation record exists */
+  creationMode?: "llm_architect" | "validated_template" | "manual_editor";
+  architectInvocation?: {
+    requestId: string;
+    runtimeId: string;
+    creationMode: string;
+    model: string;
+    toolCalls: string[];
+    latencyMs: number;
+    draftId?: string;
+  };
+  graphDiff?: unknown;
 };
 
 export type DiagnosticResult = {

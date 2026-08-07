@@ -1,40 +1,33 @@
 /**
- * Workflow Architect runtime — schema-constrained draft results.
+ * Workflow Architect runtime — LLM primary, validated template fallback.
  */
 
 import {
   architectWorkflowFromRequest,
+  buildAfterHoursEmergencyTransferDraft,
+  buildUnsuccessfulBookingFollowupDraft,
+  getTemplateRecipeType,
+  isExactTemplateRecipe,
 } from "@/lib/agents/appointment-booking/workflow-architect";
 import { validateWorkflowDraft, type WorkflowDraft } from "@/lib/agents/appointment-booking/workflow-validator";
 import { APPOINTMENT_WORKFLOW_BLOCKS } from "@/lib/agents/appointment-booking/workflow-blocks";
 import type { WorkflowArchitectResult } from "./types";
 import { compilePromptModules, WORKFLOW_ARCHITECT_DEFAULT_MODULES } from "./prompt-modules";
+import {
+  runWorkflowArchitectLlmLoop,
+  hasWorkflowArchitectLlmConfigured,
+} from "./workflow-architect-llm-loop";
+import {
+  validateWorkflowSemantics,
+  semanticErrorsBlockDraft,
+} from "./workflow-semantic-validator";
+import { generateWorkflowTestPlan } from "./workflow-test-plan";
+import { graphDiff } from "./workflow-patch";
+import { WORKFLOW_INVARIANTS } from "./workflow-architect-invariants";
+import type { AppointmentBookingAgentView } from "@/lib/agents/appointment-booking/types";
+import { getRuntimeModelConfig } from "./owner-model-config";
 
-const WORKFLOW_INVARIANTS = [
-  "block_exists",
-  "block_allowed_for_appointment_agent",
-  "schema_valid",
-  "resource_ownership_valid",
-  "no_unreachable_node",
-  "every_path_ends",
-  "required_fields_before_booking",
-  "confirmation_before_booking",
-  "hold_before_booking",
-  "booking_verification_after_creation",
-  "sms_after_booking_permitted",
-  "fallback_for_calendar_failure",
-  "fallback_for_transfer_failure",
-  "no_duplicate_action_path",
-  "risk_gates_present",
-  "tests_assigned",
-] as const;
-
-const REQUIRED_TESTS_BY_PATTERN: Array<{ pattern: RegExp; tests: string[] }> = [
-  { pattern: /after[- ]hours/i, tests: ["after_hours_inbound", "transfer_fallback"] },
-  { pattern: /emergency/i, tests: ["emergency_branch", "booking_verification"] },
-  { pattern: /transfer/i, tests: ["transfer_failure_fallback"] },
-  { pattern: /sms|text/i, tests: ["sms_after_booking"] },
-];
+export { WORKFLOW_INVARIANTS };
 
 function detectUnsupportedRequest(request: string): string | null {
   if (/\b(javascript|python|sql|shell|code|script)\b/i.test(request)) {
@@ -43,41 +36,18 @@ function detectUnsupportedRequest(request: string): string | null {
   if (/\bnew block\b/i.test(request)) {
     return "Inventing new block types is not supported.";
   }
+  if (/\banother website\b/i.test(request)) {
+    return "External website checks are not supported in workflow blocks.";
+  }
   return null;
-}
-
-function detectMissingInformation(request: string, phoneNumberId?: string | null): string[] {
-  const missing: string[] = [];
-  if (!phoneNumberId && /inbound|after[- ]hours|phone/i.test(request)) {
-    missing.push("assigned phone number (phoneNumberId)");
-  }
-  if (/transfer to (\w+)/i.test(request)) {
-    const m = request.match(/transfer to (\w+)/i);
-    if (m && !/marcus|on-call|staff/i.test(m[1])) {
-      missing.push(`transfer destination resource for "${m[1]}"`);
-    }
-  }
-  if (/on-call|text the/i.test(request) && !/number|phone/i.test(request)) {
-    missing.push("on-call notification number or SMS resource");
-  }
-  return missing;
-}
-
-function assignRequiredTests(request: string): string[] {
-  const tests = new Set<string>(["workflow_validation", "caller_confirmation_before_booking"]);
-  for (const rule of REQUIRED_TESTS_BY_PATTERN) {
-    if (rule.pattern.test(request)) {
-      for (const t of rule.tests) tests.add(t);
-    }
-  }
-  return [...tests];
 }
 
 function assessRisks(draft: WorkflowDraft): WorkflowArchitectResult["risks"] {
   const risks: WorkflowArchitectResult["risks"] = [];
   const hasTransfer = draft.nodes.some((n) => n.type.includes("transfer"));
   const hasBooking = draft.nodes.some((n) => n.type.includes("create_appointment"));
-  const hasSms = draft.nodes.some((n) => n.type.includes("sms") || n.type.includes("confirmation"));
+  const hasSms =
+    draft.nodes.some((n) => n.type.includes("sms") || n.type.includes("booking_link"));
 
   if (hasBooking && !draft.nodes.some((n) => n.type.includes("confirm"))) {
     risks.push({
@@ -93,11 +63,11 @@ function assessRisks(draft: WorkflowDraft): WorkflowArchitectResult["risks"] {
       description: "Transfer branch present — ensure fallback if destination unavailable.",
     });
   }
-  if (hasSms && !hasBooking) {
+  if (hasSms && !hasBooking && !draft.nodes.some((n) => n.type === "send_booking_link")) {
     risks.push({
       code: "sms_without_booking",
       level: "high",
-      description: "SMS node without verified booking path.",
+      description: "SMS node without verified booking or booking-link policy path.",
     });
   }
   if (draft.validationErrors.length) {
@@ -110,6 +80,46 @@ function assessRisks(draft: WorkflowDraft): WorkflowArchitectResult["risks"] {
   return risks;
 }
 
+function resultFromTemplateDraft(input: {
+  draft: WorkflowDraft;
+  userRequest: string;
+  phoneNumberId?: string | null;
+  baseDraft?: WorkflowDraft;
+}): WorkflowArchitectResult {
+  const diff = graphDiff(
+    input.baseDraft ||
+      architectWorkflowFromRequest({
+        agentId: input.draft.agentId,
+        userRequest: input.userRequest,
+        phoneNumberId: input.phoneNumberId,
+      }),
+    input.draft,
+  );
+  return {
+    status: input.draft.validationStatus === "valid" ? "draft_created" : "needs_information",
+    summary: `Draft "${input.draft.name}" via validated template. Validation: ${input.draft.validationStatus}.`,
+    interpretation: input.userRequest,
+    requiredResources: input.phoneNumberId ? [`phone:${input.phoneNumberId}`] : [],
+    missingInformation: input.draft.validationErrors.map((e) => e.message),
+    nodes: input.draft.nodes,
+    edges: input.draft.edges,
+    changedNodes: diff.addedNodeIds.concat(diff.updatedNodeIds),
+    removedNodes: diff.removedNodeIds,
+    addedNodeIds: diff.addedNodeIds,
+    updatedNodeIds: diff.updatedNodeIds,
+    unchangedNodeIds: diff.unchangedNodeIds,
+    invariantsChecked: [...WORKFLOW_INVARIANTS],
+    risks: assessRisks(input.draft),
+    requiredTests: generateWorkflowTestPlan({
+      userRequest: input.userRequest,
+      nodeTypes: input.draft.nodes.map((n) => n.type),
+    }),
+    draftId: input.draft.id,
+    creationMode: "validated_template",
+  };
+}
+
+/** Synchronous template path — exact known recipes only. */
 export function buildWorkflowArchitectFromRequest(input: {
   agentId: string;
   userRequest: string;
@@ -122,6 +132,7 @@ export function buildWorkflowArchitectFromRequest(input: {
     return {
       status: "unsupported",
       summary: unsupported,
+      interpretation: input.userRequest,
       requiredResources: [],
       missingInformation: [],
       nodes: [],
@@ -131,50 +142,180 @@ export function buildWorkflowArchitectFromRequest(input: {
       invariantsChecked: [],
       risks: [{ code: "unsupported_request", level: "high", description: unsupported }],
       requiredTests: [],
+      creationMode: "validated_template",
     };
   }
 
-  const missing = detectMissingInformation(input.userRequest, input.phoneNumberId);
-  if (missing.length > 0 && /sewer|on-call|transfer to/i.test(input.userRequest)) {
+  if (!isExactTemplateRecipe(input.userRequest)) {
     return {
       status: "needs_information",
-      summary: "Additional resources are required before this workflow can be drafted.",
-      requiredResources: missing,
-      missingInformation: missing,
+      summary:
+        "Workflow drafting requires the LLM Architect for this request. Configure WORKFLOW_ARCHITECT_PROVIDER or use an exact template phrase.",
+      interpretation: input.userRequest,
+      requiredResources: [],
+      missingInformation: ["LLM Workflow Architect not available for arbitrary natural language"],
       nodes: [],
       edges: [],
       changedNodes: [],
       removedNodes: [],
-      invariantsChecked: WORKFLOW_INVARIANTS.slice(0, 4),
+      invariantsChecked: [],
       risks: [],
-      requiredTests: assignRequiredTests(input.userRequest),
+      requiredTests: [],
+      creationMode: "validated_template",
     };
   }
 
-  const draft = architectWorkflowFromRequest({
-    agentId: input.agentId,
+  let draft: WorkflowDraft;
+  const recipe = getTemplateRecipeType(input.userRequest);
+  if (recipe === "emergency_transfer") {
+    draft = buildAfterHoursEmergencyTransferDraft({
+      agentId: input.agentId,
+      userRequest: input.userRequest,
+      phoneNumberId: input.phoneNumberId,
+      timezone: input.timezone,
+    });
+  } else if (recipe === "followup_sms") {
+    draft = buildUnsuccessfulBookingFollowupDraft({
+      agentId: input.agentId,
+      userRequest: input.userRequest,
+      phoneNumberId: input.phoneNumberId,
+    });
+  } else {
+    draft = architectWorkflowFromRequest({
+      agentId: input.agentId,
+      userRequest: input.userRequest,
+      phoneNumberId: input.phoneNumberId,
+      timezone: input.timezone,
+    });
+  }
+
+  const semantic = validateWorkflowSemantics(draft);
+  if (semanticErrorsBlockDraft(semantic)) {
+    draft = {
+      ...draft,
+      validationStatus: "invalid",
+      validationErrors: [
+        ...draft.validationErrors,
+        ...semantic
+          .filter((e) => e.level === "error")
+          .map((e) => ({ nodeId: e.nodeId, code: e.code, message: e.message })),
+      ],
+    };
+  }
+
+  return resultFromTemplateDraft({
+    draft,
     userRequest: input.userRequest,
     phoneNumberId: input.phoneNumberId,
-    timezone: input.timezone,
   });
+}
 
-  const validated = validateWorkflowDraft(draft);
-  const changedNodes = validated.nodes.map((n) => n.id);
-  const risks = assessRisks(validated);
+/** Primary async entry — LLM Architect with template fallback. */
+export async function runWorkflowArchitect(input: {
+  workspaceId: string;
+  agentId: string;
+  userId: string;
+  userRequest: string;
+  agent: AppointmentBookingAgentView;
+  draftConfig?: unknown;
+  phoneNumberId?: string | null;
+  timezone?: string;
+}): Promise<{ result: WorkflowArchitectResult; draft?: WorkflowDraft }> {
+  const unsupported = detectUnsupportedRequest(input.userRequest);
+  if (unsupported) {
+    return {
+      result: {
+        status: "unsupported",
+        summary: unsupported,
+        interpretation: input.userRequest,
+        requiredResources: [],
+        missingInformation: [],
+        nodes: [],
+        edges: [],
+        changedNodes: [],
+        removedNodes: [],
+        invariantsChecked: [],
+        risks: [{ code: "unsupported_request", level: "high", description: unsupported }],
+        requiredTests: [],
+      },
+    };
+  }
+
+  if (hasWorkflowArchitectLlmConfigured()) {
+    try {
+      const { result, draft } = await runWorkflowArchitectLlmLoop({
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+        userId: input.userId,
+        userRequest: input.userRequest,
+        agent: input.agent,
+        draftConfig: input.draftConfig,
+        phoneNumberId: input.phoneNumberId,
+        timezone: input.timezone,
+      });
+      if (draft) return { result, draft };
+      if (result.status !== "needs_information" || result.architectInvocation) {
+        return { result };
+      }
+    } catch (err) {
+      console.warn(
+        "[workflow-architect] LLM failed, falling back to template",
+        err instanceof Error ? err.message : err,
+      );
+    }
+  }
+
+  if (isExactTemplateRecipe(input.userRequest)) {
+    let draft: WorkflowDraft;
+    const recipe = getTemplateRecipeType(input.userRequest);
+    if (recipe === "emergency_transfer") {
+      draft = buildAfterHoursEmergencyTransferDraft({
+        agentId: input.agentId,
+        userRequest: input.userRequest,
+        phoneNumberId: input.phoneNumberId,
+        timezone: input.timezone,
+      });
+    } else if (recipe === "followup_sms") {
+      draft = buildUnsuccessfulBookingFollowupDraft({
+        agentId: input.agentId,
+        userRequest: input.userRequest,
+        phoneNumberId: input.phoneNumberId,
+      });
+    } else {
+      draft = architectWorkflowFromRequest({
+        agentId: input.agentId,
+        userRequest: input.userRequest,
+        phoneNumberId: input.phoneNumberId,
+        timezone: input.timezone,
+      });
+    }
+    return {
+      result: resultFromTemplateDraft({
+        draft,
+        userRequest: input.userRequest,
+        phoneNumberId: input.phoneNumberId,
+      }),
+      draft,
+    };
+  }
 
   return {
-    status: validated.validationStatus === "valid" ? "draft_created" : "needs_information",
-    summary: `Draft "${validated.name}" with ${validated.nodes.length} nodes. Validation: ${validated.validationStatus}.`,
-    requiredResources: input.phoneNumberId ? [`phone:${input.phoneNumberId}`] : [],
-    missingInformation: validated.validationErrors.map((e) => e.message),
-    nodes: validated.nodes,
-    edges: validated.edges,
-    changedNodes,
-    removedNodes: input.currentNodeIds?.filter((id) => !changedNodes.includes(id)) || [],
-    invariantsChecked: [...WORKFLOW_INVARIANTS],
-    risks,
-    requiredTests: assignRequiredTests(input.userRequest),
-    draftId: validated.id,
+    result: {
+      status: "needs_information",
+      summary:
+        "Workflow drafting is temporarily unavailable for this request. The LLM Workflow Architect is not configured and this request does not match a validated template recipe.",
+      interpretation: input.userRequest,
+      requiredResources: [],
+      missingInformation: ["Configure WORKFLOW_ARCHITECT_PROVIDER and WORKFLOW_ARCHITECT_MODEL"],
+      nodes: [],
+      edges: [],
+      changedNodes: [],
+      removedNodes: [],
+      invariantsChecked: [],
+      risks: [],
+      requiredTests: [],
+      creationMode: "validated_template",
+    },
   };
 }
 
@@ -189,4 +330,15 @@ APPROVED BLOCK REGISTRY (${APPOINTMENT_WORKFLOW_BLOCKS.length} blocks):
 ${blockList}`;
 }
 
-export { WORKFLOW_INVARIANTS };
+export function getWorkflowArchitectRuntimeMode():
+  | { mode: "llm_architect"; provider: string; model: string }
+  | { mode: "template_fallback"; reason: string } {
+  if (hasWorkflowArchitectLlmConfigured()) {
+    const cfg = getRuntimeModelConfig("workflow_architect");
+    return { mode: "llm_architect", provider: cfg.provider, model: cfg.model };
+  }
+  return {
+    mode: "template_fallback",
+    reason: "No LLM provider configured — exact template recipes only",
+  };
+}
