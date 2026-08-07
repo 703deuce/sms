@@ -361,6 +361,7 @@ export const LATENCY_PROFILES: Record<LatencyProfileId, LatencyProfileDefinition
 export const SYNC_TOOL_TYPES = new Set([
   "calendar_availability",
   "book_appointment",
+  "continue_workflow",
   "resolve_datetime",
   "find_appointments",
   "reschedule_appointment",
@@ -390,6 +391,7 @@ export const ASYNC_TOOL_TYPES = new Set([
 export const SYNC_TOOL_FILLERS: Record<string, string> = {
   calendar_availability: "Okay, hold on — let me check that.",
   book_appointment: "Okay, hold on — let me book that.",
+  continue_workflow: "Okay, hold on — let me check that.",
   resolve_datetime: "One moment.",
   find_appointments: "Okay, hold on — let me look that up.",
   reschedule_appointment: "Okay, hold on — let me move that.",
