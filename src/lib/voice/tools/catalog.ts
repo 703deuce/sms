@@ -200,6 +200,17 @@ export const TOOL_CATALOG: CatalogToolDef[] = [
     risk: "medium",
   },
   {
+    key: "runtime_turn",
+    name: "Runtime turn",
+    description:
+      "Submit caller meaning to the Transovo runtime — the only model-facing business interface.",
+    category: "communications",
+    provider: "transovo_builtin",
+    toolType: "runtime_turn",
+    access: "write",
+    risk: "medium",
+  },
+  {
     key: "continue_workflow",
     name: "Continue workflow",
     description:
@@ -504,16 +515,7 @@ const TEMPLATE_DEFAULTS: Record<string, readonly string[]> = {
     "end_call",
   ],
   appointment_booking: [
-    "hangup",
-    "transfer",
-    "escalate_human",
-    "send_sms",
-    "lookup_customer",
-    "take_structured_message",
-    "record_current_field",
-    "save_collected_fields",
-    "get_workflow_requirements",
-    "get_runtime_context",
+    "runtime_turn",
     "create_task",
     "resolve_datetime",
     "calendar_availability",
@@ -523,6 +525,12 @@ const TEMPLATE_DEFAULTS: Record<string, readonly string[]> = {
     "find_appointments",
     "reschedule_appointment",
     "cancel_appointment",
+    "save_collected_fields",
+    "get_workflow_requirements",
+    "lookup_customer",
+    "take_structured_message",
+    "escalate_human",
+    "send_sms",
     "end_call",
   ],
   customer_support: [
@@ -610,6 +618,36 @@ export const BUILTIN_WEBHOOK_BODIES: Record<
     body: Record<string, unknown>;
   }
 > = {
+  runtime_turn: {
+    name: "runtime_turn",
+    toolType: "runtime_turn",
+    description:
+      "Submit the caller's meaning to the Transovo runtime. The runtime is authoritative for workflow state, field collection, scheduling, transfers, and ending the call. Always call this after understanding what the caller said.",
+    body: {
+      type: "object",
+      properties: {
+        utterance: {
+          type: "string",
+          description: "What the caller said, in natural language.",
+        },
+        interpreted_intent: {
+          type: "string",
+          description:
+            "Your interpretation: book_appointment, take_message, transfer, end_call, provide_information, etc.",
+        },
+        extracted_information: {
+          type: "object",
+          description: "Structured facts extracted from the caller's words.",
+          additionalProperties: true,
+        },
+        confirm: {
+          type: "boolean",
+          description: "True only when the caller explicitly confirmed a booking.",
+        },
+      },
+      required: ["utterance"],
+    },
+  },
   lookup_customer: {
     name: "lookup_customer",
     toolType: "lookup_customer",

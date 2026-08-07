@@ -30,13 +30,12 @@ export const BOOKING_TOOL_CHAIN = [
 /** Permanent workflow authority — injected instead of BOOKING_TOOL_CHAIN. */
 export const RUNTIME_WORKFLOW_AUTHORITY = [
   "WORKFLOW ORCHESTRATION (runtime is authoritative):",
-  "Never determine the sequence of operational steps yourself.",
-  "The Transovo runtime determines workflow_state, required information, and next permitted action.",
-  "Follow WORKFLOW_STATE, CURRENT_FIELD, NEXT_ACTION, ALLOWED_TOOLS from get_runtime_context / dynamic variables.",
-  "During COLLECTING_FIELDS: use record_current_field({ value }) for each required field.",
-  "After fields are complete: use continue_workflow({ user_input }) for preferred times and slot selection.",
-  "Only call continue_workflow({ confirm: true }) after the caller explicitly confirms booking.",
-  "Never call calendar, booking, or hold tools — they are not available; the runtime handles scheduling internally.",
+  "You interpret what the caller means in natural language.",
+  "After every caller turn, call runtime_turn with utterance, interpreted_intent, and extracted_information.",
+  "The Transovo runtime decides workflow state, required fields, scheduling, transfers, and hangup.",
+  "Never call calendar, booking, field, transfer, or hangup tools — they are not available.",
+  "Only say an action completed after runtime_turn returns success.",
+  "If runtime_turn returns end_call: true, give a brief closing line and end the conversation.",
 ].join("\n");
 
 export const CALLER_AMY_TOOL_PLAYBOOK: CallerToolPlaybookEntry[] = [

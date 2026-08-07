@@ -66,7 +66,7 @@ export const HIREABLE_AGENTS: CatalogAgent[] = [
     notConfigurableAsJob: [
       "Whether he recovers missed calls (always — that is his job)",
     ],
-    setupHref: "/solutions/missed-call-text-back/setup?hire=john",
+    setupHref: "/agents/john",
     status: "available",
   },
 ];

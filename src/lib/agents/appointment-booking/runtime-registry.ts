@@ -29,16 +29,7 @@ export const AMY_RUNTIME_REGISTRY: AgentRuntimeDefinition[] = [
     promptVersion: getPromptVersionRecord("caller_amy").promptVersion,
     modelProvider: "telnyx",
     modelName: "anthropic/claude-haiku-4-5",
-    toolIds: [
-      "record_current_field",
-      "continue_workflow",
-      "get_runtime_context",
-      "lookup_customer",
-      "take_structured_message",
-      "transfer",
-      "escalate_human",
-      "hangup",
-    ],
+    toolIds: ["runtime_turn"],
     contextSources: [
       "agent_identity",
       "booking_profile",

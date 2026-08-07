@@ -362,6 +362,42 @@ export async function executeBuiltinVoiceAction(input: {
         serviceName: args.serviceName ? String(args.serviceName) : null,
       });
     }
+    case "runtime_turn": {
+      if (!input.callId) throw new Error("callId required");
+      const { executeAmyRuntimeTurn } = await import(
+        "@/lib/voice/workflow-engine/runtime-turn"
+      );
+      const result = await executeAmyRuntimeTurn({
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+        callId: input.callId,
+        utterance:
+          args.utterance != null
+            ? String(args.utterance)
+            : args.user_input != null
+              ? String(args.user_input)
+              : args.caller_message != null
+                ? String(args.caller_message)
+                : null,
+        interpreted_intent: args.interpreted_intent
+          ? String(args.interpreted_intent)
+          : args.intent
+            ? String(args.intent)
+            : null,
+        extracted_information:
+          args.extracted_information && typeof args.extracted_information === "object"
+            ? (args.extracted_information as Record<string, unknown>)
+            : args.extracted_entities && typeof args.extracted_entities === "object"
+              ? (args.extracted_entities as Record<string, unknown>)
+              : undefined,
+        confirm: args.confirm === true || args.confirm === "true",
+        workflow: (args.workflow
+          ? String(args.workflow)
+          : "book_appointment") as import("@/lib/voice/field-runtime/types").WorkflowAction,
+        serviceName: args.serviceName ? String(args.serviceName) : null,
+      });
+      return result;
+    }
     case "record_current_field": {
       if (!input.callId) throw new Error("callId required");
       const { recordCurrentField } = await import("@/lib/voice/field-runtime/save");

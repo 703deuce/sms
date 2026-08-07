@@ -36,10 +36,7 @@ export const CALLER_AMY_INTERNAL_ONLY_TOOLS = new Set([
   "send_sms",
   "confirm_booking",
   "check_availability",
-]);
-
-/** Small stable model-facing surface for Caller Amy on Telnyx. */
-export const CALLER_AMY_MODEL_TOOLS = [
+  // Model-facing tools moved behind runtime_turn
   "record_current_field",
   "continue_workflow",
   "get_runtime_context",
@@ -48,7 +45,10 @@ export const CALLER_AMY_MODEL_TOOLS = [
   "escalate_human",
   "transfer",
   "hangup",
-] as const;
+]);
+
+/** Small stable model-facing surface for Caller Amy on Telnyx. */
+export const CALLER_AMY_MODEL_TOOLS = ["runtime_turn"] as const;
 
 /** @deprecated Use CALLER_AMY_MODEL_TOOLS */
 export const CALLER_AMY_PUBLISH_EXCLUDED = CALLER_AMY_INTERNAL_ONLY_TOOLS;

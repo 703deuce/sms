@@ -600,7 +600,7 @@ export async function loadMySystems(
       workflowHref: workflowEditHref(primaryFlowId),
       href:
         setup.solutionType === "missed-call-text-back"
-          ? `/solutions/missed-call-text-back/setup?setupId=${setup.id}`
+          ? `/agents/john`
           : setup.solutionType === "appointment-receptionist"
             ? (() => {
                 const outcomeSlug = cfgJson?.outcomeSlug || "appointment-booking";
