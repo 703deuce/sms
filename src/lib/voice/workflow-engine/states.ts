@@ -10,7 +10,7 @@ export const ESCAPE_HATCH_TOOLS = [
   "get_runtime_context",
 ] as const;
 
-/** Irreversible write tools — must complete once started. */
+/** Irreversible write tools — must complete once started (internal runtime ops). */
 export const IRREVERSIBLE_TOOLS = new Set([
   "book_appointment",
   "cancel_appointment",
@@ -18,77 +18,50 @@ export const IRREVERSIBLE_TOOLS = new Set([
   "send_sms",
 ]);
 
-/** Allowed builtin tool types per workflow state. */
+/** Model-facing tools allowed per workflow state. Scheduling runs via continue_workflow internally. */
 export const STATE_ALLOWED_TOOLS: Record<WorkflowState, readonly string[]> = {
   INTENT_DISCOVERY: [
-    "lookup_customer",
-    "get_runtime_context",
-    "get_workflow_requirements",
     "record_current_field",
-    "save_collected_fields",
+    "continue_workflow",
+    "get_runtime_context",
     ...ESCAPE_HATCH_TOOLS,
   ],
   COLLECTING_FIELDS: [
     "record_current_field",
-    "save_collected_fields",
-    "get_workflow_requirements",
+    "continue_workflow",
     "get_runtime_context",
     ...ESCAPE_HATCH_TOOLS,
   ],
   CHECKING_AVAILABILITY: [
-    "resolve_datetime",
-    "calendar_availability",
-    "check_availability",
-    "get_workflow_requirements",
+    "continue_workflow",
     "get_runtime_context",
-    "record_current_field",
-    "save_collected_fields",
     ...ESCAPE_HATCH_TOOLS,
   ],
   SELECTING_SLOT: [
-    "resolve_datetime",
-    "calendar_availability",
-    "check_availability",
-    "hold_appointment_slot",
-    "release_appointment_hold",
-    "get_workflow_requirements",
+    "continue_workflow",
     "get_runtime_context",
-    "record_current_field",
-    "save_collected_fields",
     ...ESCAPE_HATCH_TOOLS,
   ],
   READY_TO_BOOK: [
-    "hold_appointment_slot",
-    "release_appointment_hold",
-    "book_appointment",
-    "get_workflow_requirements",
+    "continue_workflow",
     "get_runtime_context",
     ...ESCAPE_HATCH_TOOLS,
   ],
   BOOKING_IN_PROGRESS: [
-    "book_appointment",
+    "continue_workflow",
     "get_runtime_context",
   ],
   COMPLETE: [
-    "send_sms",
-    "find_appointments",
-    "reschedule_appointment",
-    "cancel_appointment",
+    "continue_workflow",
     "get_runtime_context",
-    "get_workflow_requirements",
     ...ESCAPE_HATCH_TOOLS,
   ],
   GENERAL: [
     "record_current_field",
-    "save_collected_fields",
-    "get_workflow_requirements",
+    "continue_workflow",
     "get_runtime_context",
-    "resolve_datetime",
-    "calendar_availability",
-    "check_availability",
     "lookup_customer",
     "take_structured_message",
-    "send_sms",
     "transfer",
     "escalate_human",
     "hangup",

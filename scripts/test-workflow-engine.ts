@@ -30,8 +30,8 @@ check(
   isToolAllowedForState("COLLECTING_FIELDS", "record_current_field"),
 );
 check(
-  "READY_TO_BOOK allows book_appointment",
-  isToolAllowedForState("READY_TO_BOOK", "book_appointment"),
+  "READY_TO_BOOK allows continue_workflow",
+  isToolAllowedForState("READY_TO_BOOK", "continue_workflow"),
 );
 check(
   "COLLECTING blocks book_appointment",
@@ -42,6 +42,10 @@ check(
   !isToolAllowedForState("COLLECTING_FIELDS", "calendar_availability"),
 );
 check(
+  "CHECKING_AVAILABILITY allows continue_workflow",
+  isToolAllowedForState("CHECKING_AVAILABILITY", "continue_workflow"),
+);
+check(
   "INTENT_DISCOVERY blocks calendar_availability",
   !isToolAllowedForState("INTENT_DISCOVERY", "calendar_availability"),
 );
@@ -50,8 +54,8 @@ check(
   !isToolAllowedForState("BOOKING_IN_PROGRESS", "transfer"),
 );
 check(
-  "BOOKING_IN_PROGRESS allows book_appointment",
-  isToolAllowedForState("BOOKING_IN_PROGRESS", "book_appointment"),
+  "BOOKING_IN_PROGRESS allows continue_workflow",
+  isToolAllowedForState("BOOKING_IN_PROGRESS", "continue_workflow"),
 );
 check(
   "escape hatches in COLLECTING",
@@ -79,8 +83,10 @@ async function runAsyncChecks() {
     toolType: "calendar_availability",
   });
   check(
-    "no callId blocks calendar_availability",
-    blockedNoCall.allowed === false && blockedNoCall.error_code === "TOOL_NOT_ALLOWED_FOR_STATE",
+    "calendar blocked without call context",
+    blockedNoCall.allowed === false &&
+      (blockedNoCall.error_code === "TOOL_INTERNAL_ONLY" ||
+        blockedNoCall.error_code === "TOOL_NOT_ALLOWED_FOR_STATE"),
   );
 }
 

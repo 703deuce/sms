@@ -200,6 +200,17 @@ export const TOOL_CATALOG: CatalogToolDef[] = [
     risk: "medium",
   },
   {
+    key: "continue_workflow",
+    name: "Continue workflow",
+    description:
+      "Single orchestration entry point — pass the caller's semantic input; the runtime performs the legal next booking action internally.",
+    category: "communications",
+    provider: "transovo_builtin",
+    toolType: "continue_workflow",
+    access: "write",
+    risk: "medium",
+  },
+  {
     key: "get_workflow_requirements",
     name: "Get workflow requirements",
     description: "Returns fields_to_collect and missing_fields for the current workflow.",
@@ -937,6 +948,31 @@ export const BUILTIN_WEBHOOK_BODIES: Record<
         serviceName: { type: "string" },
       },
       required: ["value"],
+    },
+  },
+  continue_workflow: {
+    name: "continue_workflow",
+    toolType: "continue_workflow",
+    description:
+      "Pass the caller's semantic input; the runtime decides and performs the legal booking action. USE for preferred times, slot selection, and booking confirmation — never call calendar or booking tools directly.",
+    body: {
+      type: "object",
+      properties: {
+        user_input: {
+          type: "string",
+          description: "Caller's words: preferred time, chosen slot, or other booking-related input.",
+        },
+        confirm: {
+          type: "boolean",
+          description: "Set true only after the caller explicitly confirms booking.",
+        },
+        serviceName: { type: "string", description: "Appointment type if known." },
+        startsAt: {
+          type: "string",
+          description: "Optional exact ISO slot when caller picked a specific offered time.",
+        },
+        workflow: { type: "string", description: "book_appointment | general" },
+      },
     },
   },
   get_workflow_requirements: {

@@ -132,7 +132,8 @@ export async function refreshRuntimeAfterTool(input: {
   if (
     input.toolType === "get_workflow_requirements" ||
     input.toolType === "record_current_field" ||
-    input.toolType === "save_collected_fields"
+    input.toolType === "save_collected_fields" ||
+    input.toolType === "continue_workflow"
   ) {
     runtime = { ...runtime, intent: workflow };
   }

@@ -33,8 +33,10 @@ export const RUNTIME_WORKFLOW_AUTHORITY = [
   "Never determine the sequence of operational steps yourself.",
   "The Transovo runtime determines workflow_state, required information, and next permitted action.",
   "Follow WORKFLOW_STATE, CURRENT_FIELD, NEXT_ACTION, ALLOWED_TOOLS from get_runtime_context / dynamic variables.",
-  "Do not advance to scheduling or booking until workflow_complete=true and the runtime permits it.",
-  "During COLLECTING_FIELDS: use record_current_field or save_collected_fields only — do not call calendar or booking tools.",
+  "During COLLECTING_FIELDS: use record_current_field({ value }) for each required field.",
+  "After fields are complete: use continue_workflow({ user_input }) for preferred times and slot selection.",
+  "Only call continue_workflow({ confirm: true }) after the caller explicitly confirms booking.",
+  "Never call calendar, booking, or hold tools — they are not available; the runtime handles scheduling internally.",
 ].join("\n");
 
 export const CALLER_AMY_TOOL_PLAYBOOK: CallerToolPlaybookEntry[] = [
@@ -307,8 +309,50 @@ export const CALLER_AMY_TOOL_PLAYBOOK: CallerToolPlaybookEntry[] = [
       "Response includes next_field with label/instruction for the following question. Never pass field_id — the backend resolves it from workflow state.",
     never: [
       "Pass field_id — the runtime already knows the active field",
-      "Use when no active field is set — call get_workflow_requirements first",
-      "Use for multiple fields at once — use save_collected_fields instead",
+      "Use when no active field is set — call get_runtime_context first",
+      "Use for multiple fields at once — use continue_workflow only after collection is complete",
+    ],
+  },
+  {
+    toolId: "continue_workflow",
+    summary:
+      "Single orchestration entry — pass what the caller said; runtime performs scheduling/booking internally.",
+    whenToCall:
+      "After workflow_complete=true: pass preferred time (CHECKING_AVAILABILITY), chosen slot (SELECTING_SLOT), or confirm:true after explicit booking confirmation (READY_TO_BOOK). During COLLECTING_FIELDS use record_current_field instead.",
+    parameters: [
+      {
+        name: "user_input",
+        required: false,
+        type: "string",
+        instruction: "Caller's words: preferred day/time, or chosen slot from offered times.",
+        example: "tomorrow afternoon",
+      },
+      {
+        name: "confirm",
+        required: false,
+        type: "boolean",
+        instruction: "true only after caller explicitly confirms booking.",
+        example: "true",
+      },
+      {
+        name: "startsAt",
+        required: false,
+        type: "string",
+        instruction: "Exact ISO slot if caller picked a specific offered time.",
+      },
+      {
+        name: "serviceName",
+        required: false,
+        type: "string",
+        instruction: "Appointment type when known.",
+      },
+    ],
+    workflow:
+      "Response includes workflow_state, next_action, speak, and data (e.g. slots). Trust next_action — do not call calendar or book tools directly.",
+    never: [
+      "Use during COLLECTING_FIELDS — use record_current_field",
+      "Set confirm=true without explicit caller confirmation",
+      "Invent slot times not returned in data.slots",
     ],
   },
   {

@@ -1,5 +1,6 @@
 import { buildRuntimeContext, computeWorkflowState } from "./engine";
 import { deriveNextAction } from "./next-action";
+import { isInternalOnlyTool } from "./tool-publish";
 import { isSchedulingGatedTool } from "./scheduling-tools";
 import { canonicalToolType, isToolAllowedForState, IRREVERSIBLE_TOOLS, toolsForState } from "./states";
 import type { ToolGuardResult } from "./types";
@@ -22,6 +23,19 @@ export async function assertToolAllowed(input: {
   serviceName?: string | null;
 }): Promise<ToolGuardResult> {
   const canonical = canonicalToolType(input.toolType);
+
+  if (isInternalOnlyTool(canonical) || isInternalOnlyTool(input.toolType)) {
+    const blockedState = input.callId ? "COLLECTING_FIELDS" : "INTENT_DISCOVERY";
+    return {
+      allowed: false,
+      state: blockedState,
+      allowed_tools: toolsForState(blockedState),
+      error_code: "TOOL_INTERNAL_ONLY",
+      speak: "I'll handle that step through the workflow. Use continue_workflow with what the caller said.",
+      retryable: false,
+      next_action: "Call continue_workflow({ user_input: \"<caller words>\" }) or record_current_field during field collection.",
+    };
+  }
 
   if (!input.callId) {
     if (isSchedulingGatedTool(canonical) || isSchedulingGatedTool(input.toolType)) {
@@ -88,7 +102,7 @@ export async function assertToolAllowed(input: {
 
   const allowed_tools = toolsForState(state);
 
-  if (state === "BOOKING_IN_PROGRESS" && !["book_appointment", "get_runtime_context"].includes(canonical)) {
+  if (state === "BOOKING_IN_PROGRESS" && !["continue_workflow", "get_runtime_context"].includes(canonical)) {
     return {
       allowed: false,
       state,
@@ -97,7 +111,7 @@ export async function assertToolAllowed(input: {
       speak:
         "I'm still confirming your appointment. One moment please.",
       retryable: true,
-      next_action: "Wait for book_appointment to complete, then respond to the caller.",
+      next_action: "Wait for continue_workflow to complete, then respond to the caller.",
     };
   }
 

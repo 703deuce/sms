@@ -1,9 +1,6 @@
 import type { RuntimeFieldManifestEntry } from "@/lib/voice/field-runtime/types";
 import type { WorkflowState } from "./types";
 
-const STATE_AWARE_PREFIX =
-  "The Transovo runtime determines workflow sequence. Do not advance stages yourself. ";
-
 export function deriveNextAction(input: {
   state: WorkflowState;
   complete: boolean;
@@ -22,15 +19,15 @@ export function deriveNextAction(input: {
       if (!input.complete) {
         return "COLLECT_CURRENT_FIELD: call get_runtime_context, then record_current_field for each missing required field.";
       }
-      return "CHECK_AVAILABILITY: required fields are complete — call get_runtime_context before scheduling tools.";
+      return "ASK_CALLER_FOR_PREFERRED_TIME: call continue_workflow({ user_input: \"<caller preferred time>\" }).";
     case "CHECKING_AVAILABILITY":
-      return "CHECK_AVAILABILITY: resolve_datetime if needed, then calendar_availability when runtime permits.";
+      return "ASK_CALLER_FOR_PREFERRED_TIME: call continue_workflow({ user_input: \"<caller preferred time>\" }).";
     case "SELECTING_SLOT":
-      return "SELECT_SLOT: offer slots from calendar_availability; hold_appointment_slot when caller picks a time.";
+      return "ASK_CALLER_TO_SELECT_SLOT: call continue_workflow({ user_input: \"<chosen slot>\" }).";
     case "READY_TO_BOOK":
-      return "CONFIRM_BOOKING: call book_appointment with startsAt from the selected slot.";
+      return "ASK_CALLER_TO_CONFIRM_BOOKING: call continue_workflow({ confirm: true }) only after explicit caller confirmation.";
     case "BOOKING_IN_PROGRESS":
-      return "WAIT_FOR_BOOKING: wait for book_appointment to finish.";
+      return "WAIT_FOR_BOOKING: wait for continue_workflow to finish.";
     case "COMPLETE":
       return null;
     case "GENERAL":
@@ -42,32 +39,12 @@ export function deriveNextAction(input: {
 
 export function schedulingDoNotAdvanceHint(state: WorkflowState): string | null {
   if (state === "INTENT_DISCOVERY" || state === "COLLECTING_FIELDS") {
-    return "DO NOT ADVANCE TO SCHEDULING until workflow_complete=true.";
+    return "DO NOT ADVANCE TO SCHEDULING until workflow_complete=true. Use record_current_field, not continue_workflow.";
   }
   return null;
 }
 
-/** Shared qualifier appended to state-gated tool descriptions. */
-export function stateAwareToolQualifier(toolId: string): string {
-  const gates: Record<string, string> = {
-    resolve_datetime:
-      "USE ONLY when workflow_state is CHECKING_AVAILABILITY or SELECTING_SLOT and this tool is in allowed_tools.",
-    calendar_availability:
-      "USE ONLY when workflow_state is CHECKING_AVAILABILITY or SELECTING_SLOT and this tool is in allowed_tools. DO NOT USE while required fields remain incomplete.",
-    hold_appointment_slot:
-      "USE ONLY when workflow_state is SELECTING_SLOT or READY_TO_BOOK and this tool is in allowed_tools.",
-    release_appointment_hold:
-      "USE ONLY when workflow_state is SELECTING_SLOT or READY_TO_BOOK and this tool is in allowed_tools.",
-    book_appointment:
-      "USE ONLY when workflow_state is READY_TO_BOOK and this tool is in allowed_tools. DO NOT infer readiness from conversation alone.",
-    find_appointments:
-      "USE ONLY when workflow_state is COMPLETE or GENERAL and this tool is in allowed_tools.",
-    reschedule_appointment:
-      "USE ONLY when workflow_state is COMPLETE and this tool is in allowed_tools.",
-    cancel_appointment:
-      "USE ONLY when workflow_state is COMPLETE and this tool is in allowed_tools.",
-  };
-  const gate = gates[toolId];
-  if (!gate) return "";
-  return `${STATE_AWARE_PREFIX}${gate}`;
+/** No longer used for model-facing tools — scheduling is internal. */
+export function stateAwareToolQualifier(_toolId: string): string {
+  return "";
 }

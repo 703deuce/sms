@@ -374,6 +374,29 @@ export async function executeBuiltinVoiceAction(input: {
         serviceName: args.serviceName ? String(args.serviceName) : null,
       });
     }
+    case "continue_workflow": {
+      if (!input.callId) throw new Error("callId required");
+      const { executeContinueWorkflow } = await import(
+        "@/lib/voice/workflow-engine/continue-workflow"
+      );
+      return executeContinueWorkflow({
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+        callId: input.callId,
+        userInput:
+          args.user_input != null
+            ? String(args.user_input)
+            : args.userInput != null
+              ? String(args.userInput)
+              : args.spoken != null
+                ? String(args.spoken)
+                : null,
+        confirm: args.confirm === true || args.confirm === "true",
+        serviceName: args.serviceName ? String(args.serviceName) : null,
+        startsAt: args.startsAt ? String(args.startsAt) : args.startAt ? String(args.startAt) : null,
+        workflow: (args.workflow ? String(args.workflow) : "book_appointment") as import("@/lib/voice/field-runtime/types").WorkflowAction,
+      });
+    }
     case "get_runtime_context": {
       if (!input.callId) throw new Error("callId required");
       const { buildRuntimeContext } = await import("@/lib/voice/workflow-engine/engine");
