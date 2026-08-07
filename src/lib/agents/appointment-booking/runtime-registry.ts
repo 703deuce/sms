@@ -41,6 +41,8 @@ export const AMY_RUNTIME_REGISTRY: AgentRuntimeDefinition[] = [
       "send_sms",
       "transfer",
       "escalate_human",
+      "save_collected_fields",
+      "get_workflow_requirements",
       "save_caller_info",
       "take_structured_message",
       "lookup_customer",

@@ -86,64 +86,60 @@ export async function executeBookAppointmentWorkflow(
     assertStartsAtMatchesAvailabilitySlots(normalized.start_time, lastSlots);
   }
 
-  const legacyArgs = bookInputToLegacyArgs(normalized, {
-    callId: ctx.callId,
-    agentId: ctx.agentId,
-    ...raw,
-  });
-
-  const { checkCustomerFieldsForCall } = await import(
-    "@/lib/voice/field-requirements"
-  );
-  const { flattenCollectedForBookingArgs, seedCollectedStateFromCall } = await import(
-    "@/lib/voice/field-requirements/collected-state"
-  );
-  let collectedArgs: Record<string, unknown> = {};
-  if (ctx.callId) {
-    const seeded = await seedCollectedStateFromCall({
-      callId: ctx.callId,
-      workspaceId: ctx.workspaceId,
-    });
-    collectedArgs = flattenCollectedForBookingArgs(seeded);
+  if (!ctx.callId) {
+    throw new AgentToolError(
+      "INVALID_INPUT",
+      "callId required for booking — collected fields are stored on the call session",
+      false,
+      "I need an active call session to complete this booking.",
+    );
   }
-  const mergedCustomerArgs = { ...collectedArgs, ...legacyArgs };
-  const completeness = await checkCustomerFieldsForCall({
+
+  const { getWorkflowRequirements, ensureWorkflowFieldSession } = await import(
+    "@/lib/voice/field-runtime"
+  );
+  const { systemFieldValueForBooking } = await import("@/lib/voice/field-runtime/system-fields");
+
+  const requirements = await getWorkflowRequirements({
     workspaceId: ctx.workspaceId,
     agentId: ctx.agentId,
     callId: ctx.callId,
     workflow: "book_appointment",
     serviceName: normalized.service_name,
-    incomingArgs: mergedCustomerArgs,
   });
-  if (!completeness.complete) {
+
+  if (!requirements.complete) {
+    const missing = requirements.missing_fields.map((f) => f.field_id);
     throw new AgentToolError(
       "MISSING_REQUIRED_FIELD",
-      `Missing required fields: ${completeness.missing_required_fields.join(", ")}`,
+      `Missing required fields: ${missing.join(", ")}`,
       false,
-      completeness.speak || "I still need a few details before I can book.",
+      requirements.speak || "I still need a few details before I can book.",
       {
-        missing_required_fields: completeness.missing_required_fields,
-        field_submission_hints: completeness.field_submission_hints || [],
-        next_action:
-          completeness.field_submission_hints?.[0]?.example_payload
-            ? `Call save_caller_info with ${JSON.stringify(completeness.field_submission_hints[0].example_payload)} then retry book_appointment.`
-            : "Call save_caller_info with the missing fields, then retry book_appointment.",
+        session_id: requirements.session_id,
+        missing_fields: requirements.missing_fields,
+        active_field: requirements.active_field,
+        next_action: requirements.missing_fields[0]
+          ? `Call save_collected_fields with fields:[{field_id:"${requirements.missing_fields[0].field_id}", value:"<caller answer>"}] then retry book_appointment.`
+          : "Call get_workflow_requirements to see what is still needed.",
       },
     );
   }
 
-  // Backfill normalized customer fields from merged collected + tool args.
-  normalized.customer_name =
-    normalized.customer_name ||
-    String(mergedCustomerArgs.customerName || mergedCustomerArgs.name || "");
-  normalized.customer_phone =
-    normalized.customer_phone ||
-    String(mergedCustomerArgs.customerPhone || mergedCustomerArgs.phone || "");
-  normalized.customer_email =
-    normalized.customer_email ||
-    String(mergedCustomerArgs.customerEmail || mergedCustomerArgs.email || "");
-  normalized.address =
-    normalized.address || String(mergedCustomerArgs.address || "") || null;
+  const session = await ensureWorkflowFieldSession({
+    callId: ctx.callId,
+    workspaceId: ctx.workspaceId,
+    workflow: "book_appointment",
+    serviceName: normalized.service_name,
+  });
+  const bookingFields = systemFieldValueForBooking(session.fields);
+  normalized.customer_name = normalized.customer_name || bookingFields.name;
+  normalized.customer_phone = normalized.customer_phone || bookingFields.phone;
+  normalized.customer_email = normalized.customer_email || bookingFields.email;
+  normalized.address = normalized.address || bookingFields.address || null;
+  if (!normalized.service_name && bookingFields.serviceName) {
+    normalized.service_name = bookingFields.serviceName;
+  }
 
   const gates = await loadServiceBookingConfig(ctx.workspaceId, normalized.service_name);
   assertBookingPermission(gates.config);
@@ -254,6 +250,8 @@ export async function executeBookAppointmentWorkflow(
         inviteePhone: normalized.customer_phone,
         address: normalized.address,
         bookedVia: "agent_tool_gateway",
+        workflowSessionId: session.session_id,
+        collectedFields: session.fields,
       } as object,
     },
   });

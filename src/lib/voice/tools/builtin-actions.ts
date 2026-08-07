@@ -346,141 +346,72 @@ export async function executeBuiltinVoiceAction(input: {
       });
       return { ok: true, disposition };
     }
-    case "save_caller_info":
-    case "save_customer_info": {
-      const {
-        normalizeCustomerToolPayload,
-        applyCustomerPayloadToState,
-        loadCustomerCollectedState,
-        saveCustomerCollectedState,
-        seedCollectedStateFromCall,
-      } = await import("@/lib/voice/field-requirements/collected-state");
-      const {
-        checkCustomerFieldsForCall,
-        completenessToToolResponse,
-      } = await import("@/lib/voice/field-requirements/service");
-      const payload = normalizeCustomerToolPayload(args);
-      const workflow =
-        payload.workflow ||
-        (args.workflow ? String(args.workflow) : "general");
-
-      let phone = payload.phone || "";
-      if (!phone && input.callId) {
-        const callRow = await prisma.voiceCall.findFirst({
-          where: { id: input.callId, workspaceId: input.workspaceId },
-          select: { fromE164: true },
-        });
-        if (callRow?.fromE164 && callRow.fromE164 !== "unknown") {
-          phone = callRow.fromE164;
-          payload.phone = phone;
-        }
-      }
-      if (!phone) throw new Error("phone required when caller ID is unavailable");
-
-      const normalizedPhone = normalizeE164(phone);
-      const firstName =
-        payload.first_name ||
-        (payload.name ? String(payload.name).split(/\s+/)[0] : null);
-      const lastName =
-        payload.last_name ||
-        (payload.name && String(payload.name).split(/\s+/).length > 1
-          ? String(payload.name).split(/\s+/).slice(1).join(" ")
-          : null);
-      const email = payload.email || null;
-      const company = payload.company || null;
-
-      const contact = await prisma.contact.upsert({
-        where: {
-          workspaceId_phone: { workspaceId: input.workspaceId, phone: normalizedPhone },
-        },
-        create: {
-          workspaceId: input.workspaceId,
-          phone: normalizedPhone,
-          firstName,
-          lastName,
-          email,
-          company,
-        },
-        update: {
-          ...(firstName ? { firstName } : {}),
-          ...(lastName ? { lastName } : {}),
-          ...(email ? { email } : {}),
-          ...(company ? { company } : {}),
-        },
-      });
-
-      if (input.callId) {
-        let state = await loadCustomerCollectedState(input.callId).catch(() =>
-          seedCollectedStateFromCall({
-            callId: input.callId!,
-            workspaceId: input.workspaceId,
-          }),
-        );
-        state = applyCustomerPayloadToState(
-          state,
-          { ...payload, phone: normalizedPhone, workflow: workflow as typeof payload.workflow },
-          "tool",
-        );
-        await saveCustomerCollectedState(input.callId, state);
-        await prisma.voiceCall
-          .update({
-            where: { id: input.callId },
-            data: { contactId: contact.id },
-          })
-          .catch(() => undefined);
-      }
-
-      const { upsertCrmContactForVoice } = await import("./crm-writes");
-      const crm = await upsertCrmContactForVoice({
-        workspaceId: input.workspaceId,
-        firstName: firstName || undefined,
-        lastName: lastName || undefined,
-        phone: normalizedPhone,
-        email: email || undefined,
-        company: company || undefined,
-      }).catch((err) => ({
-        ok: false as const,
-        error: err instanceof Error ? err.message : String(err),
-      }));
-
-      const completeness = await checkCustomerFieldsForCall({
+    case "save_collected_fields": {
+      if (!input.callId) throw new Error("callId required");
+      const { saveCollectedFields } = await import("@/lib/voice/field-runtime/save");
+      const fields = Array.isArray(args.fields) ? args.fields : [];
+      return saveCollectedFields({
         workspaceId: input.workspaceId,
         agentId: input.agentId,
         callId: input.callId,
-        workflow: workflow as import("@/lib/voice/field-requirements/types").WorkflowAction,
-        serviceName: payload.service_name || undefined,
-        incomingArgs: {
-          ...args,
-          phone: normalizedPhone,
-          name: payload.name,
-          email,
-        },
+        fields: fields as Array<{ field_id: string; value: unknown }>,
+        active_field: args.active_field ? String(args.active_field) : undefined,
+        workflow: (args.workflow ? String(args.workflow) : "book_appointment") as import("@/lib/voice/field-runtime/types").WorkflowAction,
+        serviceName: args.serviceName ? String(args.serviceName) : null,
       });
-
-      return {
-        ok: true,
-        contactId: contact.id,
-        crm,
-        ...completenessToToolResponse(completeness),
-      };
     }
-    case "check_customer_fields":
-    case "check_field_requirements": {
-      const { checkCustomerFieldsForCall, completenessToToolResponse } = await import(
-        "@/lib/voice/field-requirements/service"
+    case "get_workflow_requirements": {
+      const { getWorkflowRequirements, requirementsToToolResponse } = await import(
+        "@/lib/voice/field-runtime/requirements"
       );
       const workflow = String(
-        args.workflow || args.action || "book_appointment",
-      ) as import("@/lib/voice/field-requirements/types").WorkflowAction;
-      const completeness = await checkCustomerFieldsForCall({
+        args.workflow || "book_appointment",
+      ) as import("@/lib/voice/field-runtime/types").WorkflowAction;
+      const result = await getWorkflowRequirements({
         workspaceId: input.workspaceId,
         agentId: input.agentId,
         callId: input.callId,
         workflow,
-        serviceName: args.serviceName ? String(args.serviceName) : undefined,
-        incomingArgs: args,
+        serviceName: args.serviceName ? String(args.serviceName) : null,
       });
-      return completenessToToolResponse(completeness);
+      return requirementsToToolResponse(result);
+    }
+    case "save_caller_info":
+    case "save_customer_info": {
+      if (!input.callId) throw new Error("callId required");
+      const { saveCollectedFields } = await import("@/lib/voice/field-runtime/save");
+      const { legacyFlatArgsToFieldEntries } = await import("@/lib/voice/field-runtime/legacy-map");
+      const fields = legacyFlatArgsToFieldEntries(args);
+      if (!fields.length) {
+        throw new Error(
+          "No fields to save — use save_collected_fields with fields:[{field_id, value}]",
+        );
+      }
+      return saveCollectedFields({
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+        callId: input.callId,
+        fields,
+        workflow: (args.workflow ? String(args.workflow) : "general") as import("@/lib/voice/field-runtime/types").WorkflowAction,
+        serviceName: args.serviceName ? String(args.serviceName) : null,
+      });
+    }
+    case "check_customer_fields":
+    case "check_field_requirements": {
+      const { getWorkflowRequirements, requirementsToToolResponse } = await import(
+        "@/lib/voice/field-runtime/requirements"
+      );
+      const workflow = String(
+        args.workflow || args.action || "book_appointment",
+      ) as import("@/lib/voice/field-runtime/types").WorkflowAction;
+      const result = await getWorkflowRequirements({
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+        callId: input.callId,
+        workflow,
+        serviceName: args.serviceName ? String(args.serviceName) : null,
+      });
+      return requirementsToToolResponse(result);
     }
     case "create_crm_note": {
       const { createCrmNoteForVoice } = await import("./crm-writes");

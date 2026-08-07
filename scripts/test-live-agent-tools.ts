@@ -49,6 +49,8 @@ const RUNTIME_TO_BUILTIN: Record<string, string | "telnyx_native"> = {
   send_sms: "send_sms",
   transfer: "telnyx_native",
   escalate_human: "escalate_human",
+  save_collected_fields: "save_collected_fields",
+  get_workflow_requirements: "get_workflow_requirements",
   save_caller_info: "save_caller_info",
   take_structured_message: "take_structured_message",
   lookup_customer: "lookup_customer",
@@ -390,7 +392,8 @@ console.log("\n== caller tool playbook injected in prompt ==");
 {
   const prompt = compileCallerToolPlaybookForPrompt(["book_appointment", "calendar_availability"]);
   check("playbook mentions slots[].startsAt", prompt.includes("slots[].startsAt"));
-  check("playbook mentions missing_required_fields", prompt.includes("missing_required_fields"));
+  check("playbook mentions save_collected_fields", prompt.includes("save_collected_fields"));
+  check("playbook mentions get_workflow_requirements", prompt.includes("get_workflow_requirements"));
   check("playbook mentions resolve_datetime chain", prompt.includes("resolve_datetime"));
 }
 

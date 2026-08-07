@@ -26,10 +26,10 @@ export const BOOKING_TOOL_CHAIN = [
   "1. resolve_datetime — when caller uses relative timing (tomorrow, Friday, in 3 hours).",
   "2. calendar_availability — pass resolvedIso as from/to OR a day window; read slots[].startsAt.",
   "3. Offer ONLY times from slots[].startsAt — never convert clock times yourself.",
-  "4. save_caller_info (or save_customer_info) — pass any customer details you learn; backend returns complete + missing_required_fields.",
-  "5. check_customer_fields with workflow=book_appointment before booking if unsure what is still needed.",
+  "4. get_workflow_requirements — see fields_to_collect + missing_fields for this business (runtime manifest).",
+  "5. save_collected_fields — after each answer, save ONE OR MORE fields by field_id (incremental).",
   "6. hold_appointment_slot (optional) — while confirming; startsAt from slots.",
-  "7. book_appointment — startsAt copied EXACTLY from slots; include any customer fields you have (backend merges call state).",
+  "7. book_appointment — startsAt + serviceName only; customer data comes from workflow session.",
 ].join("\n");
 
 export const CALLER_AMY_TOOL_PLAYBOOK: CallerToolPlaybookEntry[] = [
@@ -111,9 +111,9 @@ export const CALLER_AMY_TOOL_PLAYBOOK: CallerToolPlaybookEntry[] = [
   {
     toolId: "book_appointment",
     summary:
-      "Book after caller confirms; startsAt must match a slot from calendar_availability. Required customer fields come from business config — use check_customer_fields / save_caller_info responses.",
+      "Book after caller confirms time. Customer fields are already on the workflow session — do NOT pass name/phone/email here.",
     whenToCall:
-      "Only after calendar_availability returned slots AND caller confirmed the time. Customer field requirements are evaluated by the backend.",
+      "Only after get_workflow_requirements shows complete=true and calendar_availability returned slots.",
     parameters: [
       {
         name: "startsAt",
@@ -131,41 +131,18 @@ export const CALLER_AMY_TOOL_PLAYBOOK: CallerToolPlaybookEntry[] = [
         example: "Service Visit",
       },
       {
-        name: "customerName",
+        name: "workflow_session_id",
         required: false,
         type: "string",
-        instruction: "Caller full name when known — may already be on file from save_caller_info or caller ID.",
-        example: "Anthony Johnson",
-      },
-      {
-        name: "customerPhone",
-        required: false,
-        type: "string",
-        instruction: "Caller phone when known — omit if caller ID already captured.",
-        example: "+15714776175",
-      },
-      {
-        name: "customerEmail",
-        required: false,
-        type: "string",
-        instruction: "Caller email when collected — only required if business config says so.",
-        example: "caller@example.com",
-      },
-      {
-        name: "address",
-        required: false,
-        type: "string",
-        instruction: "Only when the business requires address for this workflow.",
+        instruction: "Optional — defaults to call session_id from get_workflow_requirements.",
       },
     ],
     workflow: BOOKING_TOOL_CHAIN,
     never: [
       "Invent or convert startsAt — only use slots[].startsAt",
-      "Assume email is always required — check missing_required_fields from the backend",
-      "Ask for phone when caller ID is already known unless verification is needed",
-      "Tell caller they are booked before success=true and status=confirmed (or already_completed)",
-      "Book a time the caller wanted if it was not in slots — offer available slots instead",
-      "Worry about sync_status=pending — calendar sync happens in the background after you confirm",
+      "Pass customerName/customerPhone/customerEmail — use save_collected_fields instead",
+      "Book before get_workflow_requirements complete=true",
+      "Tell caller they are booked before success=true and status=confirmed",
     ],
   },
   {
@@ -241,104 +218,52 @@ export const CALLER_AMY_TOOL_PLAYBOOK: CallerToolPlaybookEntry[] = [
     ],
   },
   {
-    toolId: "save_caller_info",
-    summary: "Save caller contact details — flexible customer object; backend tracks completeness.",
+    toolId: "save_collected_fields",
+    summary: "THE generic field save tool — submit values by field_id from the runtime manifest.",
     whenToCall:
-      "Whenever you learn name, phone, email, address, or custom details. Do not re-ask for fields already on file.",
+      "Immediately after the caller answers ANY field from fields_to_collect or missing_fields. Save incrementally — one field per answer is fine.",
     parameters: [
       {
-        name: "name",
-        required: false,
-        type: "string",
-        instruction: "Caller full name (or use first_name + last_name).",
-      },
-      {
-        name: "first_name",
-        required: false,
-        type: "string",
-        instruction: "Caller first name.",
-      },
-      {
-        name: "last_name",
-        required: false,
-        type: "string",
-        instruction: "Caller last name.",
-      },
-      {
-        name: "phone",
-        required: false,
-        type: "string",
-        instruction: "Caller phone — omit when caller ID is already known.",
-      },
-      {
-        name: "email",
-        required: false,
-        type: "string",
-        instruction: "Caller email when collected.",
-      },
-      {
-        name: "address",
-        required: false,
-        type: "string",
-        instruction: "Service or mailing address when collected.",
-      },
-      {
-        name: "company",
-        required: false,
-        type: "string",
-        instruction: "Company name when relevant.",
-      },
-      {
-        name: "problem_description",
-        required: false,
-        type: "string",
+        name: "fields",
+        required: true,
+        type: "array",
         instruction:
-          "Describe the caller's problem/issue. Also accepted as notes, problem, issue, or inside custom_fields.problem_description.",
+          'Array of {field_id, value}. Example: [{field_id:"fld_car", value:"2021 Toyota Camry"}]. Use field_id from get_workflow_requirements / workflow_field_manifest_json.',
+        example: '[{"field_id":"sys_name","value":"John Smith"}]',
       },
       {
-        name: "notes",
+        name: "active_field",
         required: false,
         type: "string",
-        instruction: "Alias for problem_description / additional notes about the issue.",
-      },
-      {
-        name: "custom_fields",
-        required: false,
-        type: "object",
-        instruction: "Additional business-specific fields as key-value pairs, e.g. { problem_description: 'leaking sink' }.",
+        instruction: "field_id you just asked about — helps backend associate the answer.",
       },
       {
         name: "workflow",
         required: false,
         type: "string",
-        instruction: "book_appointment | request_quote | leave_message | general — for completeness check.",
+        instruction: "book_appointment | request_quote | leave_message | general",
+        example: "book_appointment",
+      },
+      {
+        name: "serviceName",
+        required: false,
+        type: "string",
+        instruction: "Appointment type when workflow=book_appointment.",
       },
     ],
     workflow:
-      "Response includes complete, missing_required_fields, field_submission_hints, and next_action. Use field_submission_hints[].example_payload exactly when calling this tool again.",
+      "After save, response includes missing_fields and active_field for the next question. Never invent field_ids — only use ids from the runtime manifest.",
     never: [
-      "Ask for phone when caller ID is already captured unless verification is needed",
-      "Assume all businesses require email",
-      "Ask for a field without then passing it via the pass_as keys in field_submission_hints",
+      "Use name/phone/email top-level parameters — always use fields[] with field_id",
+      "Wait until end of call to save — save each answer as you get it",
+      "Invent field_ids not in fields_to_collect",
     ],
   },
   {
-    toolId: "save_customer_info",
-    summary: "Alias for save_caller_info — same flexible customer payload.",
-    whenToCall: "Same as save_caller_info.",
-    parameters: [
-      { name: "name", required: false, type: "string", instruction: "Caller full name." },
-      { name: "phone", required: false, type: "string", instruction: "Caller phone." },
-      { name: "email", required: false, type: "string", instruction: "Caller email." },
-      { name: "address", required: false, type: "string", instruction: "Address when collected." },
-      { name: "custom_fields", required: false, type: "object", instruction: "Custom key-value fields." },
-      { name: "workflow", required: false, type: "string", instruction: "Workflow for completeness check." },
-    ],
-  },
-  {
-    toolId: "check_customer_fields",
-    summary: "Ask the backend what customer fields are still required for the current workflow.",
-    whenToCall: "Before book_appointment or when unsure what to collect next.",
+    toolId: "get_workflow_requirements",
+    summary: "Get current field manifest + what is still missing for this workflow.",
+    whenToCall:
+      "At start of booking flow, after each save_collected_fields, or before book_appointment.",
     parameters: [
       {
         name: "workflow",
@@ -351,11 +276,36 @@ export const CALLER_AMY_TOOL_PLAYBOOK: CallerToolPlaybookEntry[] = [
         name: "serviceName",
         required: false,
         type: "string",
-        instruction: "Appointment type — refines book_appointment requirements.",
+        instruction: "Refines required fields for this appointment type.",
       },
     ],
     workflow:
-      "Use missing_required_fields, field_submission_hints, and next_action from the response — pass fields exactly as shown in example_payload.",
+      "Read fields_to_collect for labels/instructions. Ask only for missing_fields. When complete=true, proceed to book_appointment.",
+  },
+  {
+    toolId: "save_caller_info",
+    summary: "DEPRECATED — use save_collected_fields with field_id. Legacy shim only.",
+    whenToCall: "Avoid — prefer save_collected_fields.",
+    parameters: [
+      { name: "fields", required: false, type: "array", instruction: "Preferred: [{field_id, value}]" },
+    ],
+  },
+  {
+    toolId: "save_customer_info",
+    summary: "DEPRECATED — alias for save_collected_fields.",
+    whenToCall: "Avoid — prefer save_collected_fields.",
+    parameters: [
+      { name: "fields", required: true, type: "array", instruction: "[{field_id, value}]" },
+    ],
+  },
+  {
+    toolId: "check_customer_fields",
+    summary: "Alias for get_workflow_requirements.",
+    whenToCall: "Same as get_workflow_requirements.",
+    parameters: [
+      { name: "workflow", required: true, type: "string", instruction: "book_appointment etc." },
+      { name: "serviceName", required: false, type: "string", instruction: "Service name." },
+    ],
   },
   {
     toolId: "take_structured_message",

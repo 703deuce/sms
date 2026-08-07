@@ -179,6 +179,26 @@ export const TOOL_CATALOG: CatalogToolDef[] = [
     risk: "low",
   },
   {
+    key: "save_collected_fields",
+    name: "Save collected fields",
+    description: "Save caller answers by field_id from the runtime manifest.",
+    category: "communications",
+    provider: "transovo_builtin",
+    toolType: "save_collected_fields",
+    access: "write",
+    risk: "medium",
+  },
+  {
+    key: "get_workflow_requirements",
+    name: "Get workflow requirements",
+    description: "Returns fields_to_collect and missing_fields for the current workflow.",
+    category: "communications",
+    provider: "transovo_builtin",
+    toolType: "get_workflow_requirements",
+    access: "read",
+    risk: "low",
+  },
+  {
     key: "save_caller_info",
     name: "Save caller information",
     description: "Save collected name, phone, email, and company for the caller.",
@@ -399,6 +419,8 @@ export const FULL_RECEPTIONIST_TOOLS = [
   "create_task",
   "take_structured_message",
   "mark_disposition",
+  "save_collected_fields",
+  "get_workflow_requirements",
   "save_caller_info",
   "update_contact_tags",
   "lookup_customer",
@@ -678,7 +700,7 @@ export const BUILTIN_WEBHOOK_BODIES: Record<
     name: "book_appointment",
     toolType: "book_appointment",
     description:
-      "Book ONLY after calendar_availability returned slots. Copy startsAt EXACTLY from slots[].startsAt. Customer fields are optional on the tool — backend enforces business-specific requirements.",
+      "Book ONLY after calendar_availability returned slots and get_workflow_requirements complete=true. Copy startsAt EXACTLY from slots. Customer data is on the workflow session — do not pass customer fields here.",
     body: {
       type: "object",
       properties: {
@@ -688,15 +710,8 @@ export const BUILTIN_WEBHOOK_BODIES: Record<
         },
         startAt: { type: "string", description: "Alias for startsAt" },
         serviceName: { type: "string", description: "Appointment type name" },
-        customerName: { type: "string", description: "Caller full name when known" },
-        name: { type: "string", description: "Alias for customerName" },
-        full_name: { type: "string", description: "Alias for customerName" },
-        customerPhone: { type: "string", description: "Caller phone when known" },
-        phone: { type: "string", description: "Alias for customerPhone" },
-        customerEmail: { type: "string", description: "Caller email when collected" },
-        email: { type: "string", description: "Alias for customerEmail" },
-        address: { type: "string", description: "When service requires address" },
-        custom_fields: { type: "object", description: "Business-specific custom fields" },
+        workflow_session_id: { type: "string", description: "Optional session id (defaults to call)" },
+        timezone: { type: "string", description: "IANA timezone" },
       },
       required: ["startsAt", "serviceName"],
     },
@@ -853,20 +868,62 @@ export const BUILTIN_WEBHOOK_BODIES: Record<
       required: ["disposition"],
     },
   },
-  save_caller_info: {
-    name: "save_caller_info",
-    toolType: "save_caller_info",
-    description: "Save the caller’s name, phone, email, and company locally and in CRM when connected.",
+  save_collected_fields: {
+    name: "save_collected_fields",
+    toolType: "save_collected_fields",
+    description:
+      "Save caller answers by field_id from the runtime manifest. Pass fields:[{field_id, value}]. Save incrementally after each answer.",
     body: {
       type: "object",
       properties: {
-        first_name: { type: "string" },
-        last_name: { type: "string" },
-        phone: { type: "string" },
-        email: { type: "string" },
-        company: { type: "string" },
+        fields: {
+          type: "array",
+          description: "Array of {field_id, value} objects from fields_to_collect / missing_fields",
+          items: {
+            type: "object",
+            properties: {
+              field_id: { type: "string" },
+              value: { type: "string" },
+            },
+            required: ["field_id", "value"],
+          },
+        },
+        active_field: { type: "string", description: "field_id just collected" },
+        workflow: { type: "string", description: "book_appointment | general | etc." },
+        serviceName: { type: "string" },
       },
-      required: ["phone"],
+      required: ["fields"],
+    },
+  },
+  get_workflow_requirements: {
+    name: "get_workflow_requirements",
+    toolType: "get_workflow_requirements",
+    description:
+      "Returns fields_to_collect and missing_fields for the current workflow. Ask only for missing fields.",
+    body: {
+      type: "object",
+      properties: {
+        workflow: { type: "string", description: "book_appointment | request_quote | leave_message | general" },
+        serviceName: { type: "string" },
+      },
+      required: ["workflow"],
+    },
+  },
+  save_caller_info: {
+    name: "save_caller_info",
+    toolType: "save_caller_info",
+    description: "Deprecated — prefer save_collected_fields with fields:[{field_id,value}].",
+    body: {
+      type: "object",
+      properties: {
+        fields: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: { field_id: { type: "string" }, value: { type: "string" } },
+          },
+        },
+      },
     },
   },
   create_crm_note: {

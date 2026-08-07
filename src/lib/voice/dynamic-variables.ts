@@ -169,5 +169,30 @@ export async function resolveCallDynamicVariables(input: {
     }
   }
 
+  if (input.callId) set("workflow_session_id", input.callId);
+
+  if (input.callId && input.agentId) {
+    try {
+      const { buildRuntimeFieldManifest } = await import("@/lib/voice/field-runtime/requirements");
+      const manifest = await buildRuntimeFieldManifest({
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+        callId: input.callId,
+        workflow: "book_appointment",
+      });
+      set("workflow_session_id", manifest.session_id);
+      set(
+        "workflow_field_manifest_json",
+        JSON.stringify({
+          workflow: manifest.workflow,
+          session_id: manifest.session_id,
+          fields_to_collect: manifest.fields_to_collect,
+        }).slice(0, 3500),
+      );
+    } catch {
+      // manifest is best-effort at call start
+    }
+  }
+
   return out;
 }
