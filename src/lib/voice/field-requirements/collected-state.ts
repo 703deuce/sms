@@ -81,13 +81,35 @@ function setField(
   };
 }
 
+function pickString(...vals: unknown[]): string {
+  for (const v of vals) {
+    if (v != null && String(v).trim() !== "") return String(v).trim();
+  }
+  return "";
+}
+
 export function normalizeCustomerToolPayload(
   raw: Record<string, unknown>,
 ): NormalizedCustomerPayload {
   const custom =
     raw.custom_fields && typeof raw.custom_fields === "object"
-      ? (raw.custom_fields as Record<string, unknown>)
+      ? { ...(raw.custom_fields as Record<string, unknown>) }
       : {};
+  const problem = pickString(
+    raw.problem_description,
+    raw.problem,
+    raw.issue,
+    raw.notes,
+    raw.description,
+    raw.additional_notes,
+    custom.problem_description,
+    custom.notes,
+    custom.problem,
+  );
+  if (problem) {
+    custom.problem_description = problem;
+    custom.notes = problem;
+  }
   const name = String(
     raw.name || raw.customerName || raw.customer_name || raw.full_name || "",
   ).trim();
@@ -109,6 +131,8 @@ export function normalizeCustomerToolPayload(
       : null,
     company: raw.company ? String(raw.company) : null,
     message: raw.message || raw.reason ? String(raw.message || raw.reason) : null,
+    problem_description: problem || null,
+    notes: problem || null,
     service_name: raw.serviceName || raw.service || raw.service_name
       ? String(raw.serviceName || raw.service || raw.service_name)
       : null,
@@ -140,6 +164,11 @@ export function applyCustomerPayloadToState(
   if (payload.email) setField(next, "email", payload.email, source);
   if (payload.address) setField(next, "address", payload.address, source);
   if (payload.message) setField(next, "message", payload.message, source);
+  const problem = payload.problem_description || payload.notes;
+  if (problem) {
+    setField(next, "problem_description", problem, source);
+    setField(next, "notes", problem, source);
+  }
   if (payload.service_name) setField(next, "service", payload.service_name, source);
   if (payload.company) setField(next, "company", payload.company, source);
   for (const [key, val] of Object.entries(payload.custom_fields || {})) {
@@ -225,6 +254,15 @@ export function flattenCollectedForBookingArgs(
   if (service != null) {
     out.serviceName = String(service);
     out.service = String(service);
+  }
+  const problem =
+    state.fields.problem_description?.value ||
+    state.fields.notes?.value ||
+    state.custom_fields.problem_description?.value;
+  if (problem != null) {
+    out.problem_description = String(problem);
+    out.notes = String(problem);
+    out.problem = String(problem);
   }
   for (const [key, entry] of Object.entries(state.custom_fields)) {
     if (entry?.value != null) out[key] = entry.value;

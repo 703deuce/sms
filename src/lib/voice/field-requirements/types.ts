@@ -58,6 +58,7 @@ export type CustomerCompletenessResult = {
   satisfied_fields: string[];
   collected: Record<string, CollectedFieldEntry | null>;
   speak: string | null;
+  field_submission_hints?: import("./field-hints").FieldSubmissionHint[];
 };
 
 export type NormalizedCustomerPayload = {
@@ -69,6 +70,8 @@ export type NormalizedCustomerPayload = {
   address?: string | null;
   company?: string | null;
   message?: string | null;
+  problem_description?: string | null;
+  notes?: string | null;
   service_name?: string | null;
   custom_fields?: Record<string, unknown>;
   workflow?: WorkflowAction;

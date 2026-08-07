@@ -289,10 +289,23 @@ export const CALLER_AMY_TOOL_PLAYBOOK: CallerToolPlaybookEntry[] = [
         instruction: "Company name when relevant.",
       },
       {
+        name: "problem_description",
+        required: false,
+        type: "string",
+        instruction:
+          "Describe the caller's problem/issue. Also accepted as notes, problem, issue, or inside custom_fields.problem_description.",
+      },
+      {
+        name: "notes",
+        required: false,
+        type: "string",
+        instruction: "Alias for problem_description / additional notes about the issue.",
+      },
+      {
         name: "custom_fields",
         required: false,
         type: "object",
-        instruction: "Additional business-specific fields as key-value pairs.",
+        instruction: "Additional business-specific fields as key-value pairs, e.g. { problem_description: 'leaking sink' }.",
       },
       {
         name: "workflow",
@@ -302,10 +315,11 @@ export const CALLER_AMY_TOOL_PLAYBOOK: CallerToolPlaybookEntry[] = [
       },
     ],
     workflow:
-      "Response includes complete, missing_required_fields, and speak. Ask only for missing required fields.",
+      "Response includes complete, missing_required_fields, field_submission_hints, and next_action. Use field_submission_hints[].example_payload exactly when calling this tool again.",
     never: [
       "Ask for phone when caller ID is already captured unless verification is needed",
       "Assume all businesses require email",
+      "Ask for a field without then passing it via the pass_as keys in field_submission_hints",
     ],
   },
   {
@@ -341,7 +355,7 @@ export const CALLER_AMY_TOOL_PLAYBOOK: CallerToolPlaybookEntry[] = [
       },
     ],
     workflow:
-      "Use missing_required_fields and speak from the response — only ask for what is missing.",
+      "Use missing_required_fields, field_submission_hints, and next_action from the response — pass fields exactly as shown in example_payload.",
   },
   {
     toolId: "take_structured_message",

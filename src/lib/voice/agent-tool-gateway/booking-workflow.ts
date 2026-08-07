@@ -121,6 +121,14 @@ export async function executeBookAppointmentWorkflow(
       `Missing required fields: ${completeness.missing_required_fields.join(", ")}`,
       false,
       completeness.speak || "I still need a few details before I can book.",
+      {
+        missing_required_fields: completeness.missing_required_fields,
+        field_submission_hints: completeness.field_submission_hints || [],
+        next_action:
+          completeness.field_submission_hints?.[0]?.example_payload
+            ? `Call save_caller_info with ${JSON.stringify(completeness.field_submission_hints[0].example_payload)} then retry book_appointment.`
+            : "Call save_caller_info with the missing fields, then retry book_appointment.",
+      },
     );
   }
 

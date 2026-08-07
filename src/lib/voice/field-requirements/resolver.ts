@@ -10,6 +10,7 @@ import {
   STANDARD_FIELD_CATALOG,
   WORKFLOW_DEFAULT_REQUIRED,
 } from "./definitions";
+import { canonicalFieldId } from "./field-hints";
 import type { FieldCollectionMode, FieldRequirement, WorkflowAction } from "./types";
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -71,18 +72,18 @@ function requirementsFromCollectionFields(
   const reqs: FieldRequirement[] = [];
   for (const field of fields) {
     if (!field.enabled) continue;
-    const fieldId = field.id;
-    const mode = modeForField(fieldId, requiredSet, field);
+    const fieldId = canonicalFieldId(field.id);
+    const mode = modeForField(field.id, requiredSet, field);
     if (mode === "dont_ask") continue;
-    const catalog = STANDARD_FIELD_CATALOG[fieldId];
+    const catalog = STANDARD_FIELD_CATALOG[fieldId] || STANDARD_FIELD_CATALOG[field.id];
     reqs.push(
       catalogField(fieldId, mode, {
         label: field.label,
         ask_prompt: field.question || catalog?.ask_prompt,
         type: mapCollectionFieldType(field.type),
         aliases: catalog
-          ? [...catalog.aliases, field.key]
-          : [field.key, fieldId],
+          ? [...catalog.aliases, field.key, field.id]
+          : [field.key, fieldId, field.id],
         custom: !catalog,
       }),
     );
@@ -95,25 +96,21 @@ function requirementsFromIdList(
   collectFields: AgentCollectionField[],
 ): FieldRequirement[] {
   const byId = new Map(collectFields.map((f) => [f.id, f]));
-  const requiredSet = new Set(ids);
   const reqs: FieldRequirement[] = [];
-  for (const fieldId of ids) {
-    const field = byId.get(fieldId);
-    const mode = modeForField(fieldId, requiredSet, field);
-    if (mode === "dont_ask") continue;
+  for (const rawId of ids) {
+    const fieldId = canonicalFieldId(rawId);
+    const field = byId.get(rawId) || byId.get(fieldId);
+    if (field && field.enabled === false) continue;
+    const catalog = STANDARD_FIELD_CATALOG[fieldId] || STANDARD_FIELD_CATALOG[rawId];
     reqs.push(
       catalogField(fieldId, "required", {
-        label: field?.label,
-        ask_prompt: field?.question,
+        label: field?.label || catalog?.label,
+        ask_prompt: field?.question || catalog?.ask_prompt,
+        aliases: catalog
+          ? [...catalog.aliases, field?.key, rawId].filter(Boolean) as string[]
+          : [field?.key || fieldId, rawId],
       }),
     );
-  }
-  for (const field of collectFields) {
-    if (requiredSet.has(field.id)) continue;
-    if (!field.enabled) continue;
-    if (field.required) {
-      reqs.push(catalogField(field.id, "required", { label: field.label, ask_prompt: field.question }));
-    }
   }
   return dedupeRequirements(reqs);
 }

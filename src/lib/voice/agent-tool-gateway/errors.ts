@@ -6,6 +6,7 @@ export class AgentToolError extends Error {
     message: string,
     public readonly retryable = false,
     public readonly userMessage?: string,
+    public readonly data: Record<string, unknown> = {},
   ) {
     super(message);
     this.name = "AgentToolError";
@@ -82,7 +83,7 @@ export function failResult(
     success: false,
     ok: false,
     status: "failed",
-    data: {},
+    data: err.data,
     user_message: err.userMessage || err.message,
     speak: err.userMessage || err.message,
     retryable: err.retryable,

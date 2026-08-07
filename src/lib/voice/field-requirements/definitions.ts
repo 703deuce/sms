@@ -56,10 +56,32 @@ export const STANDARD_FIELD_CATALOG: Record<
   },
   problem_description: {
     field_id: "problem_description",
-    label: "Issue description",
+    label: "Issue or problem description",
     type: "text",
-    ask_prompt: "Can you describe the issue?",
-    aliases: ["problem_description", "issue", "notes", "description"],
+    ask_prompt: "Can you describe the problem or issue?",
+    aliases: [
+      "problem_description",
+      "problem",
+      "issue",
+      "notes",
+      "description",
+      "additional_notes",
+    ],
+  },
+  /** Wizard collectFields id for notes — same canonical meaning as problem_description */
+  notes: {
+    field_id: "notes",
+    label: "Additional notes",
+    type: "text",
+    ask_prompt: "Is there anything else I should note about the problem?",
+    aliases: [
+      "notes",
+      "problem_description",
+      "problem",
+      "issue",
+      "description",
+      "additional_notes",
+    ],
   },
 };
 

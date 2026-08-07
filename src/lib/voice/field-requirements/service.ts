@@ -6,6 +6,7 @@ import {
   seedCollectedStateFromCall,
 } from "./collected-state";
 import { resolveWorkflowFieldRequirements } from "./resolver";
+import { buildFieldSubmissionHints } from "./field-hints";
 
 function valueFromAliases(
   field: FieldRequirement,
@@ -69,8 +70,9 @@ export function evaluateCustomerCompleteness(input: {
   }
 
   const complete = missingRequired.length === 0;
+  const hints = buildFieldSubmissionHints(input.requirements, missingRequired);
   const speak = !complete
-    ? buildMissingFieldsSpeak(input.requirements, missingRequired)
+    ? buildMissingFieldsSpeak(input.requirements, missingRequired, hints)
     : null;
 
   return {
@@ -81,17 +83,21 @@ export function evaluateCustomerCompleteness(input: {
     satisfied_fields: satisfied,
     collected,
     speak,
+    field_submission_hints: hints,
   };
 }
 
 function buildMissingFieldsSpeak(
   requirements: FieldRequirement[],
   missingIds: string[],
+  hints: ReturnType<typeof buildFieldSubmissionHints>,
 ): string {
   const prompts: string[] = [];
   for (const id of missingIds) {
+    const hint = hints.find((h) => h.field_id === id || h.field_id === requirements.find((r) => r.field_id === id)?.field_id);
     const req = requirements.find((r) => r.field_id === id);
-    if (req?.ask_prompt) prompts.push(req.ask_prompt);
+    if (hint?.ask_prompt) prompts.push(hint.ask_prompt);
+    else if (req?.ask_prompt) prompts.push(req.ask_prompt);
     else if (req?.label) prompts.push(`I still need your ${req.label.toLowerCase()}.`);
   }
   if (prompts.length === 1) return prompts[0];
@@ -140,8 +146,15 @@ export async function checkCustomerFieldsForCall(input: {
 }
 
 export function completenessToToolResponse(
-  result: CustomerCompletenessResult,
+  result: CustomerCompletenessResult & {
+    field_submission_hints?: ReturnType<typeof buildFieldSubmissionHints>;
+  },
 ): Record<string, unknown> {
+  const hints = result.field_submission_hints || [];
+  const nextAction =
+    hints.length > 0
+      ? `Call save_caller_info with ${JSON.stringify(hints[0].example_payload)} then retry.`
+      : null;
   return {
     ok: result.complete,
     success: result.complete,
@@ -151,6 +164,8 @@ export function completenessToToolResponse(
     missing_preferred_fields: result.missing_preferred_fields,
     satisfied_fields: result.satisfied_fields,
     collected: result.collected,
+    field_submission_hints: hints,
+    next_action: nextAction,
     speak: result.speak,
     message: result.complete
       ? "All required information is collected."

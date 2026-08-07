@@ -8,6 +8,7 @@ import {
   emptyCustomerCollectedState,
   applyCustomerPayloadToState,
   catalogField,
+  buildFieldSubmissionHints,
 } from "../src/lib/voice/field-requirements";
 
 const failures: string[] = [];
@@ -77,7 +78,26 @@ const prefResult = evaluateCustomerCompleteness({
 check("Preferred email does not block", prefResult.complete);
 check("Preferred email listed separately", prefResult.missing_preferred_fields.includes("email"));
 
-// Custom field
+// Problem / notes field round-trip
+const notesState = applyCustomerPayloadToState(emptyCustomerCollectedState(), {
+  problem_description: "Kitchen sink leaking",
+}, "caller");
+const notesReq = [catalogField("problem_description", "required")];
+const notesOk = evaluateCustomerCompleteness({
+  requirements: notesReq,
+  state: notesState,
+  workflow: "book_appointment",
+  incomingArgs: { notes: "Kitchen sink leaking" },
+});
+check("notes alias satisfies problem_description", notesOk.complete);
+
+const hints = buildFieldSubmissionHints(
+  [catalogField("problem_description", "required")],
+  ["problem_description"],
+);
+check("problem hint includes pass_as", hints[0].pass_as.includes("problem_description"));
+check("problem hint example payload", Boolean(hints[0].example_payload.problem_description));
+
 const withCustom = [
   catalogField("full_name", "required"),
   catalogField("vehicle_year", "required", {
