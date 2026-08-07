@@ -550,7 +550,7 @@ assert(
 );
 
 import { runAcceptanceSuite } from "../src/lib/agents/appointment-booking/intelligence/acceptance-tests";
-import { buildRuntimeAuditTable } from "../src/lib/agents/appointment-booking/runtime-registry";
+import { buildOwnerAmyAuditTable, buildRuntimeAuditTable } from "../src/lib/agents/appointment-booking/runtime-registry";
 import { routeOwnerRequest } from "../src/lib/agents/appointment-booking/intelligence/request-router";
 import { buildWorkflowArchitectFromRequest } from "../src/lib/agents/appointment-booking/intelligence/workflow-architect-runtime";
 
@@ -560,6 +560,22 @@ assert("acceptance has owner tests", acceptance.results.some((r) => r.runtime ==
 
 const audit = buildRuntimeAuditTable();
 assert("audit table has 4 rows", audit.length === 4);
+
+const ownerAudit = buildOwnerAmyAuditTable();
+assert("owner amy audit table has 12 rows", ownerAudit.length === 12);
+
+import { hasOwnerAmyLlmConfigured, checkOwnerAmyReadiness } from "../src/lib/agents/appointment-booking/intelligence/owner-runtime";
+import { getRuntimeModelConfig } from "../src/lib/agents/appointment-booking/intelligence/owner-model-config";
+import { wrapToolOutput, toolBlocked } from "../src/lib/agents/appointment-booking/intelligence/tool-result";
+
+const ownerCfg = getRuntimeModelConfig("owner_amy");
+assert("owner amy defaults to deepseek", ownerCfg.provider === "deepseek");
+assert("owner amy model configured", Boolean(ownerCfg.model));
+assert("tool result wraps completed", wrapToolOutput({ ok: true }).status === "completed");
+assert("tool result wraps blocked", toolBlocked("x", "y").status === "blocked");
+
+const ownerReadiness = checkOwnerAmyReadiness();
+assert("readiness has checks", ownerReadiness.checks.length >= 4);
 
 const route = routeOwnerRequest("Why didn't the last call book?");
 assert("routes diagnose_failure", route.intent === "diagnose_failure");

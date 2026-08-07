@@ -96,6 +96,7 @@ export function AppointmentAgentDetail({ agentId }: { agentId: string }) {
   const [question, setQuestion] = useState("");
   const [busy, setBusy] = useState(false);
   const [chatStatus, setChatStatus] = useState<string | null>(null);
+  const [runtimeIndicator, setRuntimeIndicator] = useState<string | null>(null);
   const [pendingProposalId, setPendingProposalId] = useState<string | null>(null);
 
   // Settings draft editors (proposal pipeline — never direct Telnyx mutate)
@@ -258,6 +259,7 @@ export function AppointmentAgentDetail({ agentId }: { agentId: string }) {
         },
       ]);
       if (data.proposalId) setPendingProposalId(String(data.proposalId));
+      if (data.runtimeIndicator) setRuntimeIndicator(String(data.runtimeIndicator));
     } catch (err) {
       setChat((prev) => [
         ...prev,
@@ -477,6 +479,11 @@ export function AppointmentAgentDetail({ agentId }: { agentId: string }) {
 
           {section === "talk" ? (
             <div className="flex min-h-[28rem] flex-col">
+              {runtimeIndicator ? (
+                <p className="border-b border-slate-100 px-5 py-2 text-[11px] text-slate-500">
+                  {runtimeIndicator}
+                </p>
+              ) : null}
               <div className="flex-1 space-y-4 overflow-y-auto p-5">
                 {chat.length === 0 ? (
                   <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-700">

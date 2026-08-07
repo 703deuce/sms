@@ -5,11 +5,11 @@
 
 import type { AppointmentBookingAgentView } from "@/lib/agents/appointment-booking/types";
 import type { OwnerChatReply } from "@/lib/agents/appointment-booking/owner-chat";
-import { hasLlmConfigured, primaryLlmModelLabel } from "@/lib/ai/llm-providers";
 import { llmChatWithTools, type LlmChatMessage } from "@/lib/ai/llm-tools";
 import {
   buildOwnerRuntimeContext,
   buildOwnerAmySystemPrompt,
+  buildOwnerAmyRuntimeDebug,
   enrichOwnerReply,
   preflightOwnerRequest,
   assertLoopLimits,
@@ -18,38 +18,45 @@ import { DEFAULT_OWNER_LOOP_LIMITS } from "@/lib/agents/appointment-booking/inte
 import {
   executeOwnerLlmTool,
   OWNER_LLM_TOOL_DEFINITIONS,
-  stringifyToolResult,
 } from "@/lib/agents/appointment-booking/intelligence/owner-tool-executor";
-import { OWNER_AMY_TOOL_DESCRIPTIONS } from "@/lib/agents/appointment-booking/intelligence/tool-descriptions";
+import { stringifyToolResult } from "@/lib/agents/appointment-booking/intelligence/tool-result";
+import {
+  resolveLlmProvidersForRuntime,
+  getRuntimeModelConfig,
+} from "@/lib/agents/appointment-booking/intelligence/owner-model-config";
+import { getPromptVersionRecord } from "@/lib/agents/appointment-booking/intelligence/prompt-versioning";
+import {
+  loadOrCreateOwnerConversation,
+  persistOwnerConversation,
+  appendConversationTurn,
+  trackToolReferences,
+} from "@/lib/agents/appointment-booking/intelligence/owner-conversation";
+import { createActionConfirmation } from "@/lib/agents/appointment-booking/intelligence/owner-confirmation";
 
-function buildOwnerLlmSystemPrompt(agent: AppointmentBookingAgentView, workspaceId: string, userId?: string): string {
-  const ctx = buildOwnerRuntimeContext({ agent, workspaceId, userId });
+const TOOL_SELECTION_EXAMPLES = `
+TOOL SELECTION EXAMPLES
+- "Did the last caller get booked?" → search_calls(limit=1) → get_call_trace(callId) → get_booking_record if appointmentId present. Do not call metrics.
+- "Make customers book at least four hours ahead." → get_agent_settings(section=booking_policy) → create_booking_policy_proposal → wait for approval.
+- "Ask drain-cleaning customers what problem they are having." → get_agent_settings(section=collection_fields) → create_collection_field_proposal → wait for approval.
+- "If they don't book, text a booking link ten minutes later." → get current workflow → request_workflow_draft → validate_workflow_draft → run tests → wait for approval.
+- "Write custom JavaScript into the workflow." → refuse; use approved blocks only.`;
+
+function buildOwnerLlmSystemPrompt(
+  agent: AppointmentBookingAgentView,
+  workspaceId: string,
+  userId?: string,
+  draftConfig?: unknown,
+): string {
+  const ctx = buildOwnerRuntimeContext({ agent, workspaceId, userId, draftConfig });
   const base = buildOwnerAmySystemPrompt(ctx);
-  const toolSummary = OWNER_AMY_TOOL_DESCRIPTIONS.map(
-    (t) => `- ${t.id}: ${t.purpose}`,
-  ).join("\n");
-
+  const cfg = getRuntimeModelConfig("owner_amy");
   return `${base}
 
-YOU ARE AN LLM AGENT WITH TOOLS
-You must answer the owner using real data from tools — never invent call logs, metrics, or booking outcomes.
-When the owner asks about calls, bookings, health, or configuration:
-1. Choose the right tool(s).
-2. Read the tool results.
-3. Reply in clear plain language with evidence.
+${TOOL_SELECTION_EXAMPLES}
 
-For "what happened on the last call" or similar:
-- Call search_calls (limit 1) to get the latest callId
-- Then get_call_trace or get_execution_trace for that callId
-- Summarize who called, what they wanted, tools used, outcome, SMS/calendar status
-
-For configuration changes:
-- Create a proposal tool first — never claim a change is live until confirm_change_proposal succeeds.
-
-Available tools (also exposed as functions):
-${toolSummary}
-
-Model runtime: ${primaryLlmModelLabel()}`;
+Model runtime (explicit): ${cfg.provider}/${cfg.model}${
+    cfg.fallbackProvider ? ` (fallback: ${cfg.fallbackProvider}/${cfg.fallbackModel})` : ""
+  }`;
 }
 
 function extractProposalMeta(data: unknown): {
@@ -58,10 +65,26 @@ function extractProposalMeta(data: unknown): {
 } {
   if (!data || typeof data !== "object") return {};
   const d = data as Record<string, unknown>;
+  const inner =
+    d.status === "completed" && d.data && typeof d.data === "object"
+      ? (d.data as Record<string, unknown>)
+      : d;
   return {
-    proposalId: d.proposalId ? String(d.proposalId) : d.id ? String(d.id) : undefined,
-    requiresConfirmation: Boolean(d.requiresConfirmation),
+    proposalId: inner.proposalId
+      ? String(inner.proposalId)
+      : inner.id
+        ? String(inner.id)
+        : undefined,
+    requiresConfirmation: Boolean(inner.requiresConfirmation || inner.confirmationRequired),
   };
+}
+
+function unwrapToolData(result: unknown): unknown {
+  if (result && typeof result === "object" && "status" in (result as object)) {
+    const r = result as { status: string; data?: unknown };
+    if (r.status === "completed") return r.data;
+  }
+  return result;
 }
 
 export async function runOwnerAmyLlmLoop(input: {
@@ -71,9 +94,14 @@ export async function runOwnerAmyLlmLoop(input: {
   question: string;
   agent: AppointmentBookingAgentView;
   history?: Array<{ role: "user" | "agent"; text: string }>;
+  draftConfig?: unknown;
 }): Promise<OwnerChatReply> {
-  if (!hasLlmConfigured()) {
+  const providerChain = resolveLlmProvidersForRuntime("owner_amy");
+  if (!providerChain.length) {
     throw new Error("No LLM provider configured for Owner Amy");
+  }
+  if (!input.userId) {
+    throw new Error("Sign in required for Owner Amy LLM agent");
   }
 
   const preflight = preflightOwnerRequest(input.question, input.agent);
@@ -85,16 +113,34 @@ export async function runOwnerAmyLlmLoop(input: {
         suggestedFollowUps: ["Explain your setup", "What can you do?"],
       },
       preflight.state,
+      buildOwnerAmyRuntimeDebug({
+        loopState: preflight.state,
+        promptText: "",
+      }),
     );
   }
+
+  let conversation = await loadOrCreateOwnerConversation({
+    workspaceId: input.workspaceId,
+    agentId: input.agentId,
+    userId: input.userId,
+  });
 
   const system = buildOwnerLlmSystemPrompt(
     input.agent,
     input.workspaceId,
     input.userId,
+    input.draftConfig,
   );
+  const promptVersion = getPromptVersionRecord("owner_amy");
   const messages: LlmChatMessage[] = [{ role: "system", content: system }];
 
+  for (const turn of conversation.messages.slice(-20)) {
+    messages.push({
+      role: turn.role === "user" ? "user" : "assistant",
+      content: turn.text,
+    });
+  }
   for (const turn of input.history || []) {
     messages.push({
       role: turn.role === "user" ? "user" : "assistant",
@@ -103,12 +149,21 @@ export async function runOwnerAmyLlmLoop(input: {
   }
   messages.push({ role: "user", content: input.question });
 
+  conversation = appendConversationTurn(conversation, {
+    role: "user",
+    text: input.question,
+    at: new Date().toISOString(),
+  });
+  conversation.lastIntent = preflight.state.route.intent;
+
   const toolsUsed: string[] = [];
   let lastToolData: unknown = null;
   let proposalId: string | undefined;
   let requiresConfirmation = false;
+  let pendingConfirmationId: string | undefined;
   const startedAt = Date.now();
   let iterations = 0;
+  let lastModel = "";
 
   while (iterations < DEFAULT_OWNER_LOOP_LIMITS.maxPlanningIterations) {
     iterations += 1;
@@ -122,9 +177,11 @@ export async function runOwnerAmyLlmLoop(input: {
     const result = await llmChatWithTools(messages, OWNER_LLM_TOOL_DEFINITIONS, {
       temperature: 0.2,
       maxTokens: 2000,
+      providerChain,
     });
     if (!result) throw new Error("LLM returned no response");
 
+    lastModel = `${result.provider}:${result.model}`;
     const assistantMsg = result.message;
     messages.push({
       role: "assistant",
@@ -135,10 +192,23 @@ export async function runOwnerAmyLlmLoop(input: {
     if (!assistantMsg.tool_calls?.length) {
       const answer =
         assistantMsg.content?.trim() ||
-        "I could not produce an answer. Try rephrasing or ask me to check a specific call.";
-      const evidence = lastToolData
-        ? buildEvidenceFromToolData(lastToolData, input.agentId)
-        : undefined;
+        "I could not complete this request safely within the current operation. I created no production changes.";
+      const evidence = buildEvidenceFromToolData(lastToolData, input.agentId);
+      conversation = appendConversationTurn(conversation, {
+        role: "assistant",
+        text: answer,
+        at: new Date().toISOString(),
+        model: lastModel,
+        promptVersion: promptVersion.promptVersion,
+        toolCalls: toolsUsed.map((name) => ({ name })),
+      });
+      if (pendingConfirmationId) {
+        conversation.pendingConfirmationId = pendingConfirmationId;
+      }
+      if (proposalId) conversation.activeProposalId = proposalId;
+      await persistOwnerConversation(input.workspaceId, input.agentId, conversation);
+
+      const debug = buildOwnerAmyRuntimeDebug({ loopState: preflight.state, promptText: system });
       return enrichOwnerReply(
         {
           answer,
@@ -152,18 +222,22 @@ export async function runOwnerAmyLlmLoop(input: {
           proposalId,
           requiresConfirmation: requiresConfirmation || Boolean(proposalId),
           data: {
-            model: `${result.provider}:${result.model}`,
+            model: lastModel,
             toolsUsed,
             iterations,
+            runtimeMode: "llm_agent",
+            confirmationId: pendingConfirmationId,
           },
         },
         preflight.state,
+        debug,
       );
     }
 
     for (const call of assistantMsg.tool_calls) {
       const toolName = call.function.name;
       toolsUsed.push(toolName);
+      preflight.state.lastToolCalls.push(toolName);
       let args: Record<string, unknown> = {};
       try {
         args = JSON.parse(call.function.arguments || "{}") as Record<string, unknown>;
@@ -173,9 +247,6 @@ export async function runOwnerAmyLlmLoop(input: {
 
       let toolResult: unknown;
       try {
-        if (!input.userId) {
-          throw new Error("Sign in required to run owner tools");
-        }
         toolResult = await executeOwnerLlmTool({
           workspaceId: input.workspaceId,
           agentId: input.agentId,
@@ -183,14 +254,37 @@ export async function runOwnerAmyLlmLoop(input: {
           toolName,
           args,
         });
-        lastToolData = toolResult;
+        lastToolData = unwrapToolData(toolResult);
+        conversation = trackToolReferences(conversation, toolName, toolResult);
+
+        const spec = (await import("./owner-tool-executor")).OWNER_LLM_TOOL_SPECS[toolName];
+        if (spec?.specialist) {
+          preflight.state.specialistCalls += 1;
+          preflight.state.specialistsExecuted.push(spec.specialist);
+        }
+        if (toolName === "request_workflow_draft") {
+          preflight.state.specialistsExecuted.push("appointment_workflow_architect");
+        }
+
         const meta = extractProposalMeta(toolResult);
-        if (meta.proposalId) proposalId = meta.proposalId;
+        if (meta.proposalId) {
+          proposalId = meta.proposalId;
+          const confirmation = await createActionConfirmation({
+            workspaceId: input.workspaceId,
+            agentId: input.agentId,
+            userId: input.userId,
+            actionType: "confirm_change_proposal",
+            targetId: meta.proposalId,
+          });
+          pendingConfirmationId = confirmation.id;
+        }
         if (meta.requiresConfirmation) requiresConfirmation = true;
       } catch (err) {
         toolResult = {
-          ok: false,
-          error: err instanceof Error ? err.message : String(err),
+          status: "failed",
+          code: "execution_error",
+          retryable: true,
+          message: err instanceof Error ? err.message : String(err),
         };
       }
 
@@ -202,15 +296,21 @@ export async function runOwnerAmyLlmLoop(input: {
     }
   }
 
+  const debug = buildOwnerAmyRuntimeDebug({
+    loopState: preflight.state,
+    promptText: system,
+    failureReason: "iteration_limit",
+  });
   return enrichOwnerReply(
     {
       answer:
-        "I reached my planning step limit while gathering data. Ask a more specific question or try again.",
+        "I could not complete this request safely within the current operation. I created no production changes.",
       sources: ["owner_llm", ...toolsUsed],
       suggestedFollowUps: ["What happened on the last call?", "Explain your setup"],
-      data: { toolsUsed, iterations },
+      data: { toolsUsed, iterations, runtimeMode: "llm_agent" },
     },
     preflight.state,
+    debug,
   );
 }
 
@@ -243,7 +343,7 @@ function buildEvidenceFromToolData(
   }
   if (d.proposalId || d.id) {
     out.push({
-      label: "Confirm & put live",
+      label: "Review proposal",
       kind: "versions",
       href: `/agents/${agentId}?section=build`,
     });

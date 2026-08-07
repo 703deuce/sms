@@ -26,8 +26,14 @@ export type AgentRuntimeDefinition = {
   purpose: string;
   promptSource: string;
   promptVersion: string;
+  promptHash?: string;
+  promptModules?: string[];
   modelProvider: string;
   modelName: string;
+  temperature?: number;
+  maxOutputTokens?: number;
+  maxToolIterations?: number;
+  maxSpecialistCalls?: number;
   toolIds: string[];
   contextSources: string[];
   allowedWrites: string[];
@@ -71,6 +77,22 @@ export type OwnerRequestIntent =
   | "duplicate_agent"
   | "manage_knowledge"
   | "restricted_or_unsupported";
+
+export type AgentToolDefinition = {
+  id: string;
+  name: string;
+  purpose: string;
+  useWhen: string[];
+  doNotUseWhen: string[];
+  inputSchema: Record<string, unknown>;
+  outputSchema: Record<string, unknown>;
+  sideEffect: "none" | "draft_only" | "test" | "production_change";
+  riskLevel: "read" | "low" | "medium" | "high";
+  requiresConfirmation: boolean;
+  possibleStatuses: Array<
+    "completed" | "queued" | "blocked" | "failed" | "not_found"
+  >;
+};
 
 export type ToolDescription = {
   id: string;
@@ -136,17 +158,83 @@ export const DEFAULT_OWNER_LOOP_LIMITS: OwnerDecisionLoopLimits = {
 };
 
 export type OwnerRuntimeContext = {
-  agentName: string;
-  businessName: string;
   workspaceId: string;
   agentId: string;
-  agentVersionId?: string | null;
-  userPermissionLevel: "owner" | "admin" | "member" | "anonymous";
-  localDateTime: string;
+  agentName: string;
+  businessName: string;
+  currentAgentVersionId?: string | null;
+  currentAgentStatus: string;
+  currentLocalTime: string;
   timezone: string;
+  authenticatedUserId: string;
+  authenticatedUserRole: string;
+  autonomyMode: string;
+  pendingProposalCount: number;
+  openAttentionCount: number;
+  /** @deprecated use currentLocalTime */
+  localDateTime?: string;
+  /** @deprecated use authenticatedUserRole */
+  userPermissionLevel?: "owner" | "admin" | "member" | "anonymous";
+};
+
+export type OwnerAmyRuntimeDebug = {
+  model: string;
+  promptVersion: string;
+  promptHash: string;
+  enabledTools: string[];
+  lastToolCalls: string[];
+  providerFallback?: string;
+  contextSize: number;
+  loopCount: number;
+  failureReason?: string;
+  runtimeMode: "llm_agent" | "limited_fallback";
+  specialistsExecuted: string[];
+};
+
+export type AgentResponseReference = {
+  type:
+    | "call"
+    | "appointment"
+    | "health"
+    | "proposal"
+    | "workflow"
+    | "test"
+    | "version"
+    | "deployment";
+  id: string;
+  label: string;
+  route: string;
+};
+
+export type DiagnosticExecutionResult = {
+  diagnosis: string;
+  firstMeaningfulFailure?: {
+    layer: string;
+    code: string;
+    recordId?: string;
+  };
+  affectedCapabilities: string[];
+  retrySafe: boolean;
+  recommendedAction: string;
+  confidence: "high" | "medium" | "low";
+  evidenceInsufficient: boolean;
+  specialistRuntime: "diagnostic_specialist";
 };
 
 export type PromptModuleId =
+  | "identity"
+  | "responsibility"
+  | "capabilities"
+  | "tool_use_policy"
+  | "evidence_policy"
+  | "configuration_change_policy"
+  | "workflow_delegation_policy"
+  | "testing_policy"
+  | "deployment_policy"
+  | "approval_policy"
+  | "security_policy"
+  | "async_job_policy"
+  | "response_style"
   | "base_identity"
   | "safety_and_permissions"
   | "capability_catalog"

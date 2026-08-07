@@ -3,7 +3,7 @@
  * Uses the same provider chain as llm.ts.
  */
 
-import { providers } from "@/lib/ai/llm-providers";
+import { providers, type LlmProvider } from "@/lib/ai/llm-providers";
 
 export type LlmToolDefinition = {
   type: "function";
@@ -39,9 +39,14 @@ export type LlmToolChatResult = {
 export async function llmChatWithTools(
   messages: LlmChatMessage[],
   tools: LlmToolDefinition[],
-  options?: { temperature?: number; maxTokens?: number; toolChoice?: "auto" | "none" },
+  options?: {
+    temperature?: number;
+    maxTokens?: number;
+    toolChoice?: "auto" | "none";
+    providerChain?: LlmProvider[];
+  },
 ): Promise<LlmToolChatResult | null> {
-  const list = providers();
+  const list = options?.providerChain?.length ? options.providerChain : providers();
   if (!list.length) return null;
 
   let lastError: Error | null = null;

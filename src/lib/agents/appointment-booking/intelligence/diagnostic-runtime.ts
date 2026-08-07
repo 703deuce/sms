@@ -3,7 +3,7 @@
  */
 
 import type { AgentExecutionTrace } from "@/lib/agents/appointment-booking/types";
-import type { DiagnosticResult } from "./types";
+import type { DiagnosticExecutionResult, DiagnosticResult } from "./types";
 import { compilePromptModules, DIAGNOSTIC_DEFAULT_MODULES } from "./prompt-modules";
 
 function classifyFailureLayer(
@@ -114,4 +114,52 @@ export function buildDiagnosticSystemPrompt(): string {
     modules: DIAGNOSTIC_DEFAULT_MODULES,
     context: {},
   });
+}
+
+/** Real Diagnostic specialist execution — only label "specialist" when this runs. */
+export function diagnoseExecution(input: {
+  trace?: AgentExecutionTrace | null;
+  healthSummary?: string;
+  deploymentState?: string;
+}): DiagnosticExecutionResult {
+  const trace = input.trace;
+  const diagnosis = trace ? diagnoseTrace(trace) : null;
+
+  if (!trace || !diagnosis) {
+    return {
+      diagnosis:
+        "Insufficient execution trace data to diagnose. Retrieve get_call_trace or get_execution_trace first.",
+      affectedCapabilities: [],
+      retrySafe: false,
+      recommendedAction: "Search recent calls and retrieve the full trace for the relevant callId.",
+      confidence: "low",
+      evidenceInsufficient: true,
+      specialistRuntime: "diagnostic_specialist",
+    };
+  }
+
+  const confidence: DiagnosticExecutionResult["confidence"] = diagnosis.evidenceSufficient
+    ? diagnosis.firstFailure
+      ? "high"
+      : "medium"
+    : "low";
+
+  return {
+    diagnosis: formatDiagnosticForOwner(diagnosis),
+    firstMeaningfulFailure: diagnosis.firstFailure
+      ? {
+          layer: diagnosis.failureLayer,
+          code: diagnosis.firstFailure.errorCode || diagnosis.firstFailure.step,
+          recordId: trace.callId,
+        }
+      : undefined,
+    affectedCapabilities: diagnosis.affectedNodeOrTool
+      ? [diagnosis.affectedNodeOrTool]
+      : [],
+    retrySafe: diagnosis.retrySafe,
+    recommendedAction: diagnosis.recommendedNextAction,
+    confidence,
+    evidenceInsufficient: !diagnosis.evidenceSufficient,
+    specialistRuntime: "diagnostic_specialist",
+  };
 }

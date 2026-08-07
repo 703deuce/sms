@@ -17,8 +17,9 @@ import { createWorkflowDraft } from "@/lib/agents/appointment-booking/workflow-a
 import {
   preflightOwnerRequest,
   enrichOwnerReply,
+  hasOwnerAmyLlmConfigured,
+  formatOwnerAmyRuntimeIndicator,
 } from "@/lib/agents/appointment-booking/intelligence/owner-runtime";
-import { hasLlmConfigured } from "@/lib/ai/llm-providers";
 import { runOwnerAmyLlmLoop } from "@/lib/agents/appointment-booking/intelligence/owner-llm-loop";
 
 export type OwnerChatReply = {
@@ -38,6 +39,9 @@ export type OwnerChatReply = {
   }>;
   /** Status while long work runs */
   workingStatus?: string;
+  /** Runtime mode for admin diagnostics */
+  runtimeMode?: "llm_agent" | "limited_fallback";
+  runtimeIndicator?: string;
 };
 
 function includesAny(q: string, words: string[]) {
@@ -82,70 +86,86 @@ export async function answerOwnerQuestion(input: {
     "Test yourself",
   ];
 
-  // Confirm pending proposal from conversation ("yes", "put it live", "activate this")
-  if (
-    input.userId &&
-    /^(yes|yep|yeah|confirm|approve|go ahead|do it|activate|put (it|this) live|publish)\b/.test(
-      q,
-    )
-  ) {
-    const { listChangeProposals, confirmChangeProposal } = await import(
-      "@/lib/agents/appointment-booking/change-proposals"
-    );
+  // Confirm pending proposal via backend confirmation record (not regex self-confirm in LLM).
+  if (input.userId) {
+    const { isExplicitOwnerApproval, listActionConfirmations, consumeActionConfirmation } =
+      await import("@/lib/agents/appointment-booking/intelligence/owner-confirmation");
     const { getPrisma } = await import("@/lib/db");
-    const row = await getPrisma().voiceAgent.findFirst({
-      where: { id: input.agentId, workspaceId: input.workspaceId },
-      select: { draftConfig: true },
-    });
-    const pending = listChangeProposals(row?.draftConfig).find(
-      (p) => p.status === "pending",
-    );
-    if (pending) {
-      const result = await confirmChangeProposal({
-        workspaceId: input.workspaceId,
-        agentId: input.agentId,
-        userId: input.userId,
-        proposalId: pending.id,
-        confirm: true,
-        publish: true,
+
+    if (isExplicitOwnerApproval(q)) {
+      const row = await getPrisma().voiceAgent.findFirst({
+        where: { id: input.agentId, workspaceId: input.workspaceId },
+        select: { draftConfig: true },
       });
-      return {
-        answer: result.live
-          ? `Done. “${pending.summary}” is live on the phone line now (published to Telnyx). Callers will get the new behavior on the next call.`
-          : `Applied “${pending.summary}” to draft. Publishing did not complete — check Health and try Put change live again.`,
-        sources: ["confirm_change_proposal", "publishVoiceAgent"],
-        suggestedFollowUps: [
-          "What is your health status?",
-          "Explain your setup",
-          "Test yourself",
-        ],
-        evidence: [
-          {
-            label: "Open Health",
-            kind: "health",
-            href: `/agents/${agent.identity.id}?tab=health`,
-          },
-          {
-            label: "Versions",
-            kind: "versions",
-            href: `/agents/${agent.identity.id}?tab=versions`,
-          },
-        ],
-        data: result,
-      };
+      const pendingConfirmation = listActionConfirmations(row?.draftConfig).find(
+        (c) => c.userId === input.userId && !c.confirmedAt && new Date(c.expiresAt) > new Date(),
+      );
+      if (pendingConfirmation) {
+        try {
+          await consumeActionConfirmation({
+            workspaceId: input.workspaceId,
+            agentId: input.agentId,
+            userId: input.userId,
+            confirmationId: pendingConfirmation.id,
+            actionType: pendingConfirmation.actionType,
+            targetId: pendingConfirmation.targetId,
+          });
+          if (pendingConfirmation.actionType === "confirm_change_proposal") {
+            const { confirmChangeProposal } = await import(
+              "@/lib/agents/appointment-booking/change-proposals"
+            );
+            const result = await confirmChangeProposal({
+              workspaceId: input.workspaceId,
+              agentId: input.agentId,
+              userId: input.userId,
+              proposalId: pendingConfirmation.targetId,
+              confirm: true,
+              publish: true,
+            });
+            return {
+              answer: result.live
+                ? "Done. The change is live on the phone line now (published to Telnyx)."
+                : "Applied to draft. Publishing did not complete — check Health and try Put change live again.",
+              sources: ["confirm_change_proposal", "action_confirmation"],
+              suggestedFollowUps: ["What is your health status?", "Test yourself"],
+              runtimeMode: hasOwnerAmyLlmConfigured() ? "llm_agent" : "limited_fallback",
+              runtimeIndicator: formatOwnerAmyRuntimeIndicator(),
+              data: result,
+            };
+          }
+        } catch (err) {
+          return {
+            answer: err instanceof Error ? err.message : "Confirmation failed",
+            sources: ["action_confirmation"],
+            suggestedFollowUps: followUps,
+            runtimeMode: hasOwnerAmyLlmConfigured() ? "llm_agent" : "limited_fallback",
+            runtimeIndicator: formatOwnerAmyRuntimeIndicator(),
+          };
+        }
+      }
     }
   }
 
+  const runtimeMode = hasOwnerAmyLlmConfigured() ? "llm_agent" : "limited_fallback";
+  const runtimeIndicator = formatOwnerAmyRuntimeIndicator();
+
   // Primary path: LLM agent with tool calling (Owner Amy).
-  if (hasLlmConfigured()) {
+  if (hasOwnerAmyLlmConfigured()) {
     try {
-      return await runOwnerAmyLlmLoop({
+      const { getPrisma } = await import("@/lib/db");
+      const row = await getPrisma().voiceAgent.findFirst({
+        where: { id: input.agentId, workspaceId: input.workspaceId },
+        select: { draftConfig: true },
+      });
+      const reply = await runOwnerAmyLlmLoop({
         workspaceId: input.workspaceId,
         agentId: input.agentId,
         userId: input.userId,
         question: input.question,
         agent: input.agent,
+        draftConfig: row?.draftConfig,
       });
+      return { ...reply, runtimeMode: "llm_agent", runtimeIndicator };
     } catch (err) {
       console.warn(
         "[owner-amy] LLM loop failed, using deterministic fallback",
@@ -917,7 +937,7 @@ export async function answerOwnerQuestion(input: {
     return enrichOwnerReply(
       {
       answer: `${recent.summary}. ${diagnosis.ownerExplanation} ${diagnosis.recommendedNextAction}`,
-      sources: ["execution_trace", "diagnostic_specialist", recent.callId],
+      sources: ["execution_trace", recent.callId],
       suggestedFollowUps: [
         "Show recent failures",
         "How many appointments did you book this week?",
@@ -960,17 +980,19 @@ export async function answerOwnerQuestion(input: {
   return enrichOwnerReply(
     {
       answer: [
+        runtimeMode === "limited_fallback"
+          ? "Owner Amy is running in limited fallback mode — deterministic routing without full LLM tool selection."
+          : "",
         `I can answer from my live configuration, health, metrics, and call traces.`,
         `I can also draft booking-policy changes and workflow graphs — but I will not activate them without confirmation.`,
-        `I did not match a specific tool query for: “${input.question}”.`,
-        preflight.delegation.delegate
-          ? `Routing note: ${preflight.delegation.reason}`
-          : "",
+        `I did not match a specific tool query for: "${input.question}".`,
       ]
         .filter(Boolean)
         .join(" "),
-      sources: ["identity", `intent:${preflight.state.route.intent}`],
+      sources: ["identity", `intent:${preflight.state.route.intent}`, "limited_fallback"],
       suggestedFollowUps: followUps,
+      runtimeMode,
+      runtimeIndicator,
     },
     preflight.state,
   );

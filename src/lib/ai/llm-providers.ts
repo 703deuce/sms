@@ -50,6 +50,7 @@ export function hasLlmConfigured() {
   return providers().length > 0;
 }
 
+/** @deprecated Use ownerAmyModelLabel() for Owner Amy runtime. */
 export function primaryLlmModelLabel(): string {
   const p = providers()[0];
   return p ? `${p.id}:${p.model}` : "unconfigured";

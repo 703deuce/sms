@@ -7,6 +7,13 @@ import {
   WORKFLOW_ARCHITECT_TOOL_DESCRIPTIONS,
 } from "@/lib/agents/appointment-booking/intelligence/tool-descriptions";
 import { getPromptVersionRecord } from "@/lib/agents/appointment-booking/intelligence/prompt-versioning";
+import { getRuntimeModelConfig } from "@/lib/agents/appointment-booking/intelligence/owner-model-config";
+import { OWNER_AMY_DEFAULT_MODULES } from "@/lib/agents/appointment-booking/intelligence/prompt-modules";
+import {
+  checkOwnerAmyReadiness,
+  hasOwnerAmyLlmConfigured,
+} from "@/lib/agents/appointment-booking/intelligence/owner-runtime";
+import { OWNER_LLM_TOOL_SPECS } from "@/lib/agents/appointment-booking/intelligence/owner-tool-executor";
 import type { AgentRuntimeDefinition, AgentRuntimeId } from "@/lib/agents/appointment-booking/intelligence/types";
 
 export type { AgentRuntimeDefinition, AgentRuntimeId };
@@ -69,13 +76,15 @@ export const AMY_RUNTIME_REGISTRY: AgentRuntimeDefinition[] = [
     label: "Owner Amy",
     purpose: "Owner-facing control agent inside Transovo (Talk to Amy).",
     promptSource:
-      "src/lib/agents/appointment-booking/intelligence/owner-runtime.ts → buildOwnerAmySystemPrompt",
+      "src/lib/agents/appointment-booking/intelligence/prompt-modules.ts → OWNER_AMY_DEFAULT_MODULES",
     promptVersion: getPromptVersionRecord("owner_amy").promptVersion,
-    modelProvider: "llm",
-    modelName: process.env.OPENAI_MODEL?.trim() ||
-      process.env.DEEPSEEK_MODEL?.trim() ||
-      process.env.LLM_MODEL?.trim() ||
-      "gpt-4o-mini",
+    promptModules: [...OWNER_AMY_DEFAULT_MODULES],
+    modelProvider: getRuntimeModelConfig("owner_amy").provider,
+    modelName: getRuntimeModelConfig("owner_amy").model,
+    temperature: 0.2,
+    maxOutputTokens: 2000,
+    maxToolIterations: 8,
+    maxSpecialistCalls: 2,
     toolIds: OWNER_AMY_TOOL_DESCRIPTIONS.map((t) => t.id),
     contextSources: [
       "agent_identity",
@@ -83,18 +92,10 @@ export const AMY_RUNTIME_REGISTRY: AgentRuntimeDefinition[] = [
       "workspace_id",
       "agent_version_id",
       "user_permission_level",
-      "capability_summary",
-      "safety_policy",
       "local_datetime",
-      "full_settings",
-      "workflow_graph",
-      "calls",
-      "execution_traces",
-      "metrics",
-      "health_details",
-      "knowledge_records",
-      "test_results",
-      "version_history",
+      "pending_proposal_count",
+      "open_attention_count",
+      "autonomy_mode",
     ],
     allowedWrites: ["proposal_only", "draft_only", "queued_jobs"],
     prohibitedActions: [
@@ -103,11 +104,12 @@ export const AMY_RUNTIME_REGISTRY: AgentRuntimeDefinition[] = [
       "arbitrary_code_execution",
       "cross_workspace_access",
       "invent_metrics_or_logs",
+      "self_confirmation",
     ],
     timeoutMs: 45_000,
     fallbackRuntimeId: undefined,
     maxContextBudget: 12_000,
-    retrievalPolicy: "selective_on_demand",
+    retrievalPolicy: "selective_on_demand_via_tools",
   },
   {
     runtimeId: "appointment_workflow_architect",
@@ -207,6 +209,101 @@ export function runtimeRegistrySummary() {
       lastDeployment: prompt.deployedAt,
     };
   });
+}
+
+/** Audit table for Owner Amy production readiness gap analysis. */
+export function buildOwnerAmyAuditTable() {
+  const readiness = checkOwnerAmyReadiness();
+  const toolCount = Object.keys(OWNER_LLM_TOOL_SPECS).filter(
+    (k) => !OWNER_LLM_TOOL_SPECS[k]?.blocked,
+  ).length;
+
+  return [
+    {
+      component: "Owner Amy LLM loop",
+      currentImplementation: "runOwnerAmyLlmLoop — bounded 8-iteration tool loop",
+      filePath: "intelligence/owner-llm-loop.ts",
+      productionReady: hasOwnerAmyLlmConfigured(),
+      gap: hasOwnerAmyLlmConfigured() ? "Monitor iteration limits in production" : "Configure OWNER_AMY_PROVIDER",
+    },
+    {
+      component: "System prompt",
+      currentImplementation: "Modular prompt (13 modules) compiled per request",
+      filePath: "intelligence/prompt-modules.ts",
+      productionReady: true,
+      gap: "None — versioned via prompt-versioning.ts",
+    },
+    {
+      component: "Tool registry",
+      currentImplementation: `${toolCount} tools with risk levels and confirmation gates`,
+      filePath: "intelligence/owner-tool-executor.ts",
+      productionReady: toolCount >= 20,
+      gap: toolCount >= 20 ? "None" : "Expand tool coverage",
+    },
+    {
+      component: "Tool schemas",
+      currentImplementation: "AgentToolDefinition + LlmToolDefinition per tool",
+      filePath: "intelligence/owner-tool-executor.ts",
+      productionReady: true,
+      gap: "Section filters on get_agent_settings",
+    },
+    {
+      component: "Tool executor",
+      currentImplementation: "ToolResult wrapper + Control API mapping",
+      filePath: "intelligence/owner-tool-executor.ts",
+      productionReady: true,
+      gap: "None",
+    },
+    {
+      component: "Conversation persistence",
+      currentImplementation: "agentOperating.ownerAmy.conversations",
+      filePath: "intelligence/owner-conversation.ts",
+      productionReady: true,
+      gap: "Consider dedicated table for multi-agent scale",
+    },
+    {
+      component: "Context loader",
+      currentImplementation: "OwnerRuntimeContext envelope only — no bulk injection",
+      filePath: "intelligence/owner-runtime.ts",
+      productionReady: true,
+      gap: "None",
+    },
+    {
+      component: "Confirmation handling",
+      currentImplementation: "ActionConfirmation records — LLM cannot self-confirm",
+      filePath: "intelligence/owner-confirmation.ts",
+      productionReady: true,
+      gap: "UI button should pass confirmationId",
+    },
+    {
+      component: "Specialist delegation",
+      currentImplementation: "diagnose_execution + request_workflow_draft invoke real runtimes",
+      filePath: "intelligence/diagnostic-runtime.ts",
+      productionReady: true,
+      gap: "Workflow Architect still template-based",
+    },
+    {
+      component: "Async job handling",
+      currentImplementation: "ToolResult queued status + async_job_policy module",
+      filePath: "intelligence/tool-result.ts",
+      productionReady: true,
+      gap: "Dedicated get_job_status command",
+    },
+    {
+      component: "Provider fallback",
+      currentImplementation: "Explicit OWNER_AMY_PROVIDER/MODEL + fallback chain",
+      filePath: "intelligence/owner-model-config.ts",
+      productionReady: hasOwnerAmyLlmConfigured(),
+      gap: readiness.checks.find((c) => !c.ok)?.message || "None",
+    },
+    {
+      component: "Agent tests",
+      currentImplementation: "acceptance-tests.ts + test-appointment-booking-agent-layer.ts",
+      filePath: "intelligence/acceptance-tests.ts",
+      productionReady: true,
+      gap: "Add live LLM integration tests behind flag",
+    },
+  ];
 }
 
 /** Audit table for intelligence layer gap analysis. */

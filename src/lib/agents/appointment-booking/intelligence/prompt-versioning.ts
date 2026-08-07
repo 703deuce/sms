@@ -13,8 +13,9 @@ import {
 } from "./prompt-modules";
 import { buildWorkflowArchitectSystemPrompt } from "./workflow-architect-runtime";
 import { buildDiagnosticSystemPrompt } from "./diagnostic-runtime";
+import { getRuntimeModelConfig } from "./owner-model-config";
 
-const PROMPT_VERSION = "2026.08.06.1";
+const PROMPT_VERSION = "2026.08.07.1";
 const TOOL_SCHEMA_VERSION = "1.0.0";
 
 function hashPrompt(text: string): string {
@@ -58,7 +59,9 @@ export function getPromptVersionRecord(runtimeId: AgentRuntimeId): PromptVersion
     model:
       runtimeId === "caller_amy"
         ? "telnyx:anthropic/claude-haiku-4-5"
-        : "internal:deterministic",
+        : runtimeId === "owner_amy"
+          ? `${getRuntimeModelConfig("owner_amy").provider}:${getRuntimeModelConfig("owner_amy").model}`
+          : "internal:deterministic",
     toolSchemaVersion: TOOL_SCHEMA_VERSION,
     regressionSuiteResult: "pending",
   };
