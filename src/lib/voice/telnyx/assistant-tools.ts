@@ -212,7 +212,10 @@ export function buildAssistantTools(input: {
       key === "book_appointment" ||
       key === "calendar_availability" ||
       key === "find_appointments" ||
-      key === "reschedule_appointment";
+      key === "reschedule_appointment" ||
+      key === "continue_workflow" ||
+      key === "record_current_field" ||
+      key === "get_runtime_context";
     const escalateSolePath = key === "escalate_human" && useCallControlTransfer;
     const playbookDesc = callerToolWebhookDescription(key);
     const description = escalateSolePath

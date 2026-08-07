@@ -17,6 +17,91 @@ function pickString(...vals: unknown[]): string {
   return "";
 }
 
+function parseEventTimes(
+  p: Record<string, unknown>,
+  eventType: string,
+): {
+  startedAt?: Date;
+  answeredAt?: Date;
+  endedAt?: Date;
+  durationSeconds?: number;
+} {
+  const startRaw = pickString(p.StartTime, p.AnsweredTime, p.start_time, p.started_at);
+  const endRaw = pickString(p.EndTime, p.OccurredAt, p.Timestamp, p.ended_at);
+  const durationRaw = pickString(p.CallDuration, p.call_duration, p.Duration);
+  const durationSeconds = durationRaw ? Number(durationRaw) || undefined : undefined;
+
+  let startedAt: Date | undefined;
+  let answeredAt: Date | undefined;
+  let endedAt: Date | undefined;
+
+  if (startRaw) {
+    const d = new Date(startRaw);
+    if (!Number.isNaN(d.getTime())) {
+      startedAt = d;
+      answeredAt = d;
+    }
+  }
+  if (endRaw) {
+    const d = new Date(endRaw);
+    if (!Number.isNaN(d.getTime())) endedAt = d;
+  }
+  if (!startedAt && endedAt && durationSeconds) {
+    startedAt = new Date(endedAt.getTime() - durationSeconds * 1000);
+    answeredAt = answeredAt || startedAt;
+  }
+  if (/ended|hangup|completed/i.test(eventType) && endedAt && !startedAt && durationSeconds) {
+    startedAt = new Date(endedAt.getTime() - durationSeconds * 1000);
+    answeredAt = answeredAt || startedAt;
+  }
+
+  return { startedAt, answeredAt, endedAt, durationSeconds };
+}
+
+async function backfillCallTiming(
+  callId: string,
+  times: ReturnType<typeof parseEventTimes>,
+): Promise<void> {
+  if (!times.startedAt && !times.endedAt && times.durationSeconds == null) return;
+  const prisma = getPrisma();
+  const existing = await prisma.voiceCall.findUnique({
+    where: { id: callId },
+    select: { startedAt: true, answeredAt: true, endedAt: true, durationSeconds: true },
+  });
+  if (!existing) return;
+
+  await prisma.voiceCall.update({
+    where: { id: callId },
+    data: {
+      ...(times.startedAt &&
+      (!existing.startedAt || times.startedAt < existing.startedAt)
+        ? { startedAt: times.startedAt }
+        : {}),
+      ...(times.answeredAt &&
+      (!existing.answeredAt || times.answeredAt < existing.answeredAt)
+        ? { answeredAt: times.answeredAt }
+        : {}),
+      ...(times.endedAt ? { endedAt: times.endedAt } : {}),
+      ...(times.durationSeconds != null ? { durationSeconds: times.durationSeconds } : {}),
+    },
+  });
+}
+
+function isTerminalEventType(eventType: string): boolean {
+  return /ended|hangup|completed/i.test(eventType);
+}
+
+function isStartEventType(eventType: string): boolean {
+  return (
+    eventType === "call.initiated" ||
+    eventType === "call.ringing" ||
+    eventType === "call.answered" ||
+    eventType === "call.conversation.created" ||
+    eventType === "conversation.created" ||
+    eventType === "conversation.started"
+  );
+}
+
 export async function ensureVoiceCallForTelnyxEvent(input: {
   eventType: string;
   eventPayload: Record<string, unknown>;
@@ -34,6 +119,7 @@ export async function ensureVoiceCallForTelnyxEvent(input: {
   const fromRaw = pickString(p.from, p.start_from, p.caller_id_number, p.caller);
   const to = toRaw ? normalizeE164(toRaw) || toRaw : "";
   const from = fromRaw ? normalizeE164(fromRaw) || fromRaw : "";
+  const times = parseEventTimes(p, input.eventType);
 
   if (controlId) {
     const byControl = await prisma.voiceCall.findFirst({
@@ -48,6 +134,7 @@ export async function ensureVoiceCallForTelnyxEvent(input: {
           fromE164: from,
         }).catch(() => undefined);
       }
+      await backfillCallTiming(byControl.id, times).catch(() => undefined);
       return { callId: byControl.id, created: false, enrolled: false };
     }
   }
@@ -64,6 +151,7 @@ export async function ensureVoiceCallForTelnyxEvent(input: {
           fromE164: from,
         }).catch(() => undefined);
       }
+      await backfillCallTiming(byConv.id, times).catch(() => undefined);
       return { callId: byConv.id, created: false, enrolled: false };
     }
   }
@@ -158,6 +246,8 @@ export async function ensureVoiceCallForTelnyxEvent(input: {
     contactId = ensured?.id || null;
   }
 
+  const now = new Date();
+  const terminal = isTerminalEventType(input.eventType);
   const call = await prisma.voiceCall.create({
     data: {
       workspaceId,
@@ -165,18 +255,20 @@ export async function ensureVoiceCallForTelnyxEvent(input: {
       agentVersionId,
       contactId,
       direction: "INBOUND",
-      status: /ended|hangup|completed/i.test(input.eventType)
-        ? "COMPLETED"
-        : "IN_PROGRESS",
+      status: terminal ? "COMPLETED" : isStartEventType(input.eventType) ? "IN_PROGRESS" : "RINGING",
       fromE164,
       toE164,
       phoneNumberId,
       telnyxCallControlId: controlId || null,
       telnyxConversationId: conversationId || null,
-      answeredAt: new Date(),
+      startedAt: times.startedAt || (terminal ? undefined : now),
+      answeredAt: times.answeredAt || (terminal ? times.startedAt : now),
+      endedAt: times.endedAt || (terminal ? now : undefined),
+      durationSeconds: times.durationSeconds ?? undefined,
       metadata: {
         source: "texml_or_assistant_event",
         eventType: input.eventType,
+        firstEventTerminal: terminal,
         payload: p,
       } as object,
     },

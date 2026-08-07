@@ -225,16 +225,17 @@ export async function processVoiceWebhookEvent(input: {
     });
   }
 
-  // TeXML / AI assistant path: conversation events may arrive without a prior
-  // Call Control call.initiated. Create VoiceCall + enroll execution so the
-  // workflow engine still correlates post-call outcomes.
+  // TeXML / AI assistant path: conversation START events may arrive without a prior
+  // Call Control call.initiated. Create VoiceCall + enroll execution early so tools,
+  // transcripts, and traces bind to one canonical call id for the whole conversation.
+  // Do NOT create on conversation.ended — that caused hangup-only rows with no tool trace.
   if (
     !call &&
     (eventType === "call.conversation.created" ||
       eventType === "conversation.created" ||
-      eventType === "call.conversation.ended" ||
-      eventType === "assistant.conversation.ended" ||
-      eventType === "call.answered")
+      eventType === "conversation.started" ||
+      eventType === "call.answered" ||
+      eventType === "call.initiated")
   ) {
     const { ensureVoiceCallForTelnyxEvent } = await import(
       "@/lib/voice/ensure-call-from-event"

@@ -372,6 +372,9 @@ export const SYNC_TOOL_TYPES = new Set([
   "hangup",
   "end_call",
   "send_dtmf",
+  "continue_workflow",
+  "record_current_field",
+  "get_runtime_context",
 ]);
 
 /** Tools that should run async (do not block spoken turn). */
@@ -397,6 +400,9 @@ export const SYNC_TOOL_FILLERS: Record<string, string> = {
   lookup_customer: "Okay, hold on — let me pull that up.",
   search_crm_contacts: "Okay, hold on — let me pull that up.",
   escalate_human: "Sure, I'll connect you.",
+  continue_workflow: "Okay, hold on — let me check on that.",
+  record_current_field: "Got it, one moment.",
+  get_runtime_context: "One moment.",
 };
 
 /**

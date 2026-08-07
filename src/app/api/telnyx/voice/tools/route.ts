@@ -11,6 +11,7 @@ import {
   findVoiceCallByTelnyxIds,
   normalizeCallerAni,
 } from "@/lib/voice/call-identity";
+import { recordToolWebhookIngress } from "@/lib/voice/telnyx/tool-webhook-ingress";
 
 function resolveInboundAni(request: Request, body: Record<string, unknown>): string {
   const headerKeys = [
@@ -35,12 +36,14 @@ function resolveInboundAni(request: Request, body: Record<string, unknown>): str
  * Never hang up from this route — tool failures return speakable errors.
  */
 export async function POST(request: Request) {
+  const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+  const ingress = await recordToolWebhookIngress({ request, body });
+
   try {
     const workspaceId = request.headers.get("x-transovo-workspace-id") || "";
     const agentId = request.headers.get("x-transovo-agent-id") || "";
     const toolId = request.headers.get("x-transovo-tool-id") || "";
     const toolType = request.headers.get("x-transovo-tool-type") || "";
-    const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
 
     if (!workspaceId) {
       return NextResponse.json(
@@ -252,11 +255,12 @@ export async function POST(request: Request) {
         input: body,
         asyncAllowed: true,
       });
-      return NextResponse.json({
-        ...result,
-        ok: result.ok !== false,
-        agentId,
-        speak:
+        return NextResponse.json({
+          ...result,
+          ok: result.ok !== false,
+          agentId,
+          ingressId: ingress.ingressId,
+          speak:
           result.ok === false
             ? "I wasn't able to complete that. Would you like me to take a message?"
             : undefined,
