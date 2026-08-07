@@ -5,8 +5,12 @@
  *   BASE_URL=https://your-app \
  *   OWNER_EMAIL=you@example.com \
  *   AMY_AGENT_ID=cmshz2lc25c622c4i58303501 \
- *   PHONE_NUMBER_ID=cmsc3numa1j17084g391t2z5l \
+ *   PHONE_NUMBER_ID=cmsgtjms84g6l2h0o255w1e3v \  # +15714073615 (571 — call AND text from this)
+ *   SMS_PHONE_NUMBER_ID=cmsgtjms84g6l2h0o255w1e3v \
  *   node scripts/setup-john-mctb.mjs
+ *
+ * Test flow: call +15714073615 from +15714776175, let ring, hang up.
+ * John texts back TO your caller ID (+15714776175) FROM the 571 DID.
  */
 import { PrismaClient } from "@prisma/client";
 
@@ -14,8 +18,8 @@ const BASE = (process.env.BASE_URL || process.env.APP_URL || "").replace(/\/$/, 
 const EMAIL = (process.env.OWNER_EMAIL || "").trim().toLowerCase();
 const BOOTSTRAP = process.env.SMOKE_BOOTSTRAP || "transovo-smoke-bootstrap-b56f-aug2026";
 const AMY_AGENT_ID = (process.env.AMY_AGENT_ID || "cmshz2lc25c622c4i58303501").trim();
-const PHONE_NUMBER_ID = (process.env.PHONE_NUMBER_ID || "cmsc3numa1j17084g391t2z5l").trim();
-const SMS_PHONE_NUMBER_ID = (process.env.SMS_PHONE_NUMBER_ID || "cmsgtjms84g6l2h0o255w1e3v").trim();
+const PHONE_NUMBER_ID = (process.env.PHONE_NUMBER_ID || "cmsgtjms84g6l2h0o255w1e3v").trim();
+const SMS_PHONE_NUMBER_ID = (process.env.SMS_PHONE_NUMBER_ID || PHONE_NUMBER_ID).trim();
 const DELAY_SECONDS = Number(process.env.DELAY_SECONDS || 0);
 
 async function smokeLogin() {
@@ -78,17 +82,19 @@ async function main() {
     console.warn("Smoke login diagnose skipped:", e.message);
   }
 
+  const smsPn = await prisma.phoneNumber.findUnique({ where: { id: SMS_PHONE_NUMBER_ID } });
+
   console.log("\n=== READY ===");
   console.log(
     JSON.stringify(
       {
-        call: pn.e164,
-        smsFrom: SMS_PHONE_NUMBER_ID,
-        expectSmsAfterMissedCall: true,
+        callThisNumber: pn.e164,
+        smsFrom: smsPn?.e164 || SMS_PHONE_NUMBER_ID,
+        expectSmsTo: "your caller ID (e.g. +15714776175 — the phone you call FROM)",
         delaySeconds: DELAY_SECONDS,
         amyDetached: true,
         instructions:
-          "Call the number, let it ring without answering, hang up. You should receive the MCTB text.",
+          "Call the 571 number from 571-477-6175, let it ring without answering, hang up. You should receive the MCTB text on the phone you called from.",
       },
       null,
       2,
