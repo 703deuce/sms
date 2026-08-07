@@ -120,6 +120,21 @@ function formatSlotsForSpeech(slots: Array<{ startsAt?: string; start_time?: str
   return `I have ${labels.join(", ")}, and ${last} available.`;
 }
 
+const FLEXIBLE_AVAILABILITY_RE =
+  /\b(next\s+available|any\s+time|don'?t\s+care|soonest|first\s+open|whatever\s+works|asap|earliest|next\s+day\s+you\s+have)\b/i;
+
+function defaultAvailabilityDaysAhead(spoken: string): number {
+  if (FLEXIBLE_AVAILABILITY_RE.test(spoken)) return 7;
+  return 7;
+}
+
+function callerFacingNoSlotsMessage(spoken: string): string {
+  if (FLEXIBLE_AVAILABILITY_RE.test(spoken)) {
+    return "I'm not seeing any openings in the next week. Would you like me to check further out, or take a message for a callback?";
+  }
+  return "I don't see anything open for that day. Would another day or time work?";
+}
+
 async function internalAvailability(input: {
   workspaceId: string;
   agentId?: string;
@@ -144,7 +159,7 @@ async function internalAvailability(input: {
     raw.from = resolvedIso;
     raw.to = resolvedIso;
   } else {
-    raw.daysAhead = 1;
+    raw.daysAhead = defaultAvailabilityDaysAhead(input.spoken);
   }
 
   return executeAgentTool({
@@ -223,7 +238,9 @@ export async function executeContinueWorkflow(
   const serviceName =
     input.serviceName ||
     runtime.service_name ||
-    "Appointment";
+    null;
+
+  const resolvedServiceName = serviceName || "Service Visit";
 
   if (state === "INTENT_DISCOVERY" || state === "COLLECTING_FIELDS") {
     const ctx = await buildRuntimeContext({
@@ -231,7 +248,7 @@ export async function executeContinueWorkflow(
       workspaceId: input.workspaceId,
       agentId: input.agentId,
       workflow,
-      serviceName,
+      serviceName: resolvedServiceName,
     });
     return normalizeResponse({
       success: true,
@@ -264,7 +281,7 @@ export async function executeContinueWorkflow(
       workspaceId: input.workspaceId,
       agentId: input.agentId,
       callId: input.callId,
-      serviceName,
+      serviceName: resolvedServiceName,
       spoken: userInput,
       timezone,
     });
@@ -276,7 +293,7 @@ export async function executeContinueWorkflow(
       toolType: "calendar_availability",
       toolResult: availResult,
       workflow,
-      serviceName,
+      serviceName: resolvedServiceName,
     });
 
     const { state: nextState } = await computeWorkflowState({
@@ -284,7 +301,7 @@ export async function executeContinueWorkflow(
       workspaceId: input.workspaceId,
       agentId: input.agentId,
       workflow,
-      serviceName,
+      serviceName: resolvedServiceName,
     });
 
     const slots = Array.isArray(availResult.slots)
@@ -295,11 +312,10 @@ export async function executeContinueWorkflow(
       success: availResult.ok !== false,
       workflowState: nextState,
       nextAction: slots.length ? "ASK_CALLER_TO_SELECT_SLOT" : "ASK_CALLER_FOR_DIFFERENT_TIME",
-      speak:
-        typeof availResult.speak === "string" && availResult.speak
-          ? availResult.speak
-          : formatSlotsForSpeech(slots),
-      data: { slots, service_name: serviceName },
+      speak: slots.length
+        ? formatSlotsForSpeech(slots)
+        : callerFacingNoSlotsMessage(userInput),
+      data: { slots, service_name: resolvedServiceName },
     });
   }
 
@@ -342,7 +358,7 @@ export async function executeContinueWorkflow(
       workspaceId: input.workspaceId,
       agentId: input.agentId,
       callId: input.callId,
-      serviceName,
+      serviceName: resolvedServiceName,
       startsAt: picked,
     });
 
@@ -353,7 +369,7 @@ export async function executeContinueWorkflow(
       toolType: "hold_appointment_slot",
       toolResult: holdResult,
       workflow,
-      serviceName,
+      serviceName: resolvedServiceName,
     });
 
     let updated = await loadAgentRuntime(input.callId);
@@ -372,7 +388,7 @@ export async function executeContinueWorkflow(
       workspaceId: input.workspaceId,
       agentId: input.agentId,
       workflow,
-      serviceName,
+      serviceName: resolvedServiceName,
     });
 
     return normalizeResponse({
@@ -418,7 +434,7 @@ export async function executeContinueWorkflow(
       workspaceId: input.workspaceId,
       agentId: input.agentId,
       callId: input.callId,
-      serviceName,
+      serviceName: resolvedServiceName,
       startsAt,
       timezone,
     });
@@ -430,7 +446,7 @@ export async function executeContinueWorkflow(
       toolType: "book_appointment",
       toolResult: bookResult,
       workflow,
-      serviceName,
+      serviceName: resolvedServiceName,
     });
 
     const { state: nextState } = await computeWorkflowState({
@@ -438,7 +454,7 @@ export async function executeContinueWorkflow(
       workspaceId: input.workspaceId,
       agentId: input.agentId,
       workflow,
-      serviceName,
+      serviceName: resolvedServiceName,
     });
 
     const booked = bookResult.ok !== false && bookResult.status === "confirmed";
@@ -475,7 +491,7 @@ export async function executeContinueWorkflow(
     workspaceId: input.workspaceId,
     agentId: input.agentId,
     workflow,
-    serviceName,
+    serviceName: resolvedServiceName,
   });
 
   return normalizeResponse({

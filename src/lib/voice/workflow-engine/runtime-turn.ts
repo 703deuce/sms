@@ -37,6 +37,18 @@ function pickFieldValue(
   return utterance.trim();
 }
 
+function pickServiceName(
+  extracted: Record<string, unknown>,
+  explicit?: string | null,
+): string | null {
+  if (explicit?.trim()) return explicit.trim();
+  for (const key of ["service", "serviceName", "service_name", "appointmentType"]) {
+    const v = extracted[key];
+    if (v != null && String(v).trim()) return String(v).trim();
+  }
+  return null;
+}
+
 export async function executeAmyRuntimeTurn(
   input: RuntimeTurnInput,
 ): Promise<Record<string, unknown>> {
@@ -44,6 +56,7 @@ export async function executeAmyRuntimeTurn(
   const intent = String(input.interpreted_intent || "").toLowerCase();
   const extracted = input.extracted_information || {};
   const workflow = input.workflow || "book_appointment";
+  const serviceName = pickServiceName(extracted, input.serviceName);
 
   if (!input.callId) throw new Error("callId required");
 
@@ -52,7 +65,7 @@ export async function executeAmyRuntimeTurn(
     workspaceId: input.workspaceId,
     agentId: input.agentId,
     workflow,
-    serviceName: input.serviceName,
+    serviceName,
   });
 
   // Runtime-owned end call
@@ -119,7 +132,7 @@ export async function executeAmyRuntimeTurn(
       workspaceId: input.workspaceId,
       agentId: input.agentId,
       workflow,
-      serviceName: input.serviceName,
+      serviceName,
     });
     const activeField = ctx.current_field?.field_id;
     if (activeField && utterance) {
@@ -130,7 +143,7 @@ export async function executeAmyRuntimeTurn(
         callId: input.callId,
         value: pickFieldValue(extracted, utterance),
         workflow,
-        serviceName: input.serviceName,
+        serviceName,
       });
       if (recorded && (recorded as { ok?: boolean }).ok !== false) {
         return recorded as Record<string, unknown>;
@@ -155,7 +168,7 @@ export async function executeAmyRuntimeTurn(
       userInput: utterance || null,
       confirm: input.confirm === true,
       workflow,
-      serviceName: input.serviceName,
+      serviceName,
       startsAt:
         typeof extracted.starts_at === "string"
           ? extracted.starts_at
@@ -171,7 +184,7 @@ export async function executeAmyRuntimeTurn(
     workspaceId: input.workspaceId,
     agentId: input.agentId,
     workflow,
-    serviceName: input.serviceName,
+    serviceName,
   });
 
   return {

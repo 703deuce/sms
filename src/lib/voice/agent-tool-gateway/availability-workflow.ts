@@ -70,9 +70,9 @@ export async function runCheckAvailability(
   normalized: CanonicalAvailabilityInput,
 ) {
   validateAvailabilityInput(normalized);
-  const legacyArgs = availabilityInputToLegacyArgs(normalized);
-  const calParams = buildCalendlyListAvailableTimesParams(legacyArgs, { maxDays: 3 });
-  const window = calParams.window;
+  let legacyArgs = availabilityInputToLegacyArgs(normalized);
+  let calParams = buildCalendlyListAvailableTimesParams(legacyArgs, { maxDays: 7 });
+  let window = calParams.window;
 
   const { getConnectedCalendly, requireCalendlyIntegrationOk } = await import(
     "@/lib/voice/calendar/calendly-voice"
@@ -92,39 +92,67 @@ export async function runCheckAvailability(
     const { executeLiveAgentCalendlyAction } = await import(
       "@/lib/voice/tools/builtin-actions-calendly"
     );
-    const result = await executeLiveAgentCalendlyAction({
-      workspaceId: ctx.workspaceId,
-      agentId: ctx.agentId,
-      callId: ctx.callId,
-      actionId: "appointment.list_available_times",
-      params: {
+
+    const fetchCalendlySlots = async (params: {
+      startTime: string;
+      endTime: string;
+      eventTypeUri?: string;
+    }) => {
+      const result = await executeLiveAgentCalendlyAction({
+        workspaceId: ctx.workspaceId,
+        agentId: ctx.agentId,
+        callId: ctx.callId,
+        actionId: "appointment.list_available_times",
+        params,
+      });
+      const okResult = requireCalendlyIntegrationOk(result, "list available times");
+      const calendlyData = okResult.data || {};
+      const rawSlots =
+        (calendlyData as { slots?: Array<{ startsAt?: string; startTime?: string }> })
+          .slots || (Array.isArray(calendlyData) ? calendlyData : []);
+      const normalizedSlots = (
+        rawSlots as Array<{ startsAt?: string; startTime?: string }>
+      ).map((s) => ({
+        startsAt: String(s.startsAt || s.startTime || ""),
+      }));
+      return filterSlotsByNoticeAndMaxDays(
+        normalizedSlots.filter((s) => s.startsAt),
+        gates.noticeMinutes,
+        gates.maxDaysAhead,
+        new Date(),
+        {
+          sameDayCutoff: gates.config.sameDayCutoff,
+          timezone: String(
+            normalized.timezone || gates.config.timezone || "America/New_York",
+          ),
+        },
+      );
+    };
+
+    let slots = await fetchCalendlySlots({
+      eventTypeUri: calParams.eventTypeUri,
+      startTime: calParams.startTime,
+      endTime: calParams.endTime,
+    });
+
+    const windowSpanMs =
+      new Date(window.endTime).getTime() - new Date(window.startTime).getTime();
+    if (!slots.length && windowSpanMs < 6 * 86_400_000) {
+      legacyArgs = { ...legacyArgs, daysAhead: 7 };
+      delete legacyArgs.from;
+      delete legacyArgs.to;
+      delete legacyArgs.startTime;
+      delete legacyArgs.endTime;
+      delete legacyArgs.resolvedIso;
+      calParams = buildCalendlyListAvailableTimesParams(legacyArgs, { maxDays: 7 });
+      window = calParams.window;
+      slots = await fetchCalendlySlots({
         eventTypeUri: calParams.eventTypeUri,
         startTime: calParams.startTime,
         endTime: calParams.endTime,
-      },
-    });
-    const okResult = requireCalendlyIntegrationOk(result, "list available times");
-    const calendlyData = okResult.data || {};
-    const rawSlots =
-      (calendlyData as { slots?: Array<{ startsAt?: string; startTime?: string }> })
-        .slots || (Array.isArray(calendlyData) ? calendlyData : []);
-    const normalizedSlots = (
-      rawSlots as Array<{ startsAt?: string; startTime?: string }>
-    ).map((s) => ({
-      startsAt: String(s.startsAt || s.startTime || ""),
-    }));
-    const slots = filterSlotsByNoticeAndMaxDays(
-      normalizedSlots.filter((s) => s.startsAt),
-      gates.noticeMinutes,
-      gates.maxDaysAhead,
-      new Date(),
-      {
-        sameDayCutoff: gates.config.sameDayCutoff,
-        timezone: String(
-          normalized.timezone || gates.config.timezone || "America/New_York",
-        ),
-      },
-    );
+      });
+    }
+
     const offered = slots.slice(0, 5);
     const slotTimes = offered.map((s) => s.startsAt);
     await persistAvailabilitySlotsOnCall({
