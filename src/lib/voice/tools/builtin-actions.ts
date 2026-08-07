@@ -722,19 +722,17 @@ export async function executeBuiltinVoiceAction(input: {
       });
     }
     case "calendar_availability": {
-      const { normalizeBookingToolArgs, resolveAvailabilityTimeWindow } = await import(
+      const { buildCalendlyListAvailableTimesParams } = await import(
         "../calendar/booking-args"
       );
-      args = normalizeBookingToolArgs(args);
-      // Voice webhook tools must finish well under Telnyx's effective timeout
-      // (live calls timed out around 5s even when timeout_ms=10000).
-      const window = resolveAvailabilityTimeWindow(args, { maxDays: 3 });
+      const calParams = buildCalendlyListAvailableTimesParams(args, { maxDays: 3 });
       args = {
-        ...args,
-        startTime: window.startTime,
-        endTime: window.endTime,
-        daysAhead: window.daysAhead,
+        ...calParams.normalized,
+        startTime: calParams.window.startTime,
+        endTime: calParams.window.endTime,
+        daysAhead: calParams.window.daysAhead,
       };
+      const window = calParams.window;
 
       // Prefer Calendly Scheduling API when the workspace has Calendly connected.
       const { getConnectedCalendly, requireCalendlyIntegrationOk } = await import(
@@ -758,9 +756,9 @@ export async function executeBuiltinVoiceAction(input: {
             callId: input.callId,
             actionId: "appointment.list_available_times",
             params: {
-              eventTypeUri: args.eventTypeUri || args.eventTypeId,
-              startTime: window.startTime,
-              endTime: window.endTime,
+              eventTypeUri: calParams.eventTypeUri,
+              startTime: calParams.startTime,
+              endTime: calParams.endTime,
             },
             contactId: (args.contactId as string) || null,
           });
@@ -883,7 +881,9 @@ export async function executeBuiltinVoiceAction(input: {
       };
     }
     case "book_appointment": {
-      const { normalizeBookingToolArgs } = await import("../calendar/booking-args");
+      const { normalizeBookingToolArgs, buildCalendlyBookParams } = await import(
+        "../calendar/booking-args"
+      );
       args = normalizeBookingToolArgs(args);
 
       if (input.callId) {
@@ -989,18 +989,24 @@ export async function executeBuiltinVoiceAction(input: {
             );
           }
           if (!name) name = "Caller";
+          const bookParams = buildCalendlyBookParams({
+            ...args,
+            name,
+            email,
+            phone: phone || args.phone,
+          });
           const result = await executeLiveAgentCalendlyAction({
             workspaceId: input.workspaceId,
             agentId: input.agentId,
             callId: input.callId,
             actionId: "appointment.book",
             params: {
-              name,
-              email,
-              phone: phone || args.phone || null,
-              startTime: args.startsAt || args.startTime || undefined,
-              timezone: args.timezone || "America/New_York",
-              eventTypeUri: args.eventTypeUri || args.eventTypeId || undefined,
+              name: bookParams.name,
+              email: bookParams.email,
+              phone: bookParams.phone,
+              startTime: bookParams.startTime,
+              timezone: bookParams.timezone,
+              eventTypeUri: bookParams.eventTypeUri,
               callId: input.callId || null,
             },
             contactId: (args.contactId as string) || null,
@@ -1087,7 +1093,9 @@ export async function executeBuiltinVoiceAction(input: {
       return booked;
     }
     case "hold_appointment_slot": {
-      const startsAt = new Date(String(args.startsAt || args.startAt || args.startTime || ""));
+      const { normalizeBookingToolArgs } = await import("../calendar/booking-args");
+      args = normalizeBookingToolArgs(args);
+      const startsAt = new Date(String(args.startsAt || ""));
       if (Number.isNaN(startsAt.getTime())) throw new Error("startsAt required");
       const serviceName = String(args.serviceName || args.service || "Appointment");
       const {
