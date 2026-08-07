@@ -221,6 +221,27 @@ export async function runWorkflowArchitect(input: {
   phoneNumberId?: string | null;
   timezone?: string;
 }): Promise<{ result: WorkflowArchitectResult; draft?: WorkflowDraft }> {
+  const { buildFieldAdditionCandidate } = await import(
+    "@/lib/platform/architect-runtime/field-candidate"
+  );
+  const fieldCandidate = buildFieldAdditionCandidate({
+    tenant_id: input.workspaceId,
+    user_id: input.userId,
+    agent_id: input.agentId,
+    userRequest: input.userRequest,
+    phoneNumberId: input.phoneNumberId,
+    timezone: input.timezone,
+  });
+  if (fieldCandidate) {
+    return {
+      result: {
+        ...fieldCandidate.architectResult,
+        graphDiff: undefined,
+      },
+      draft: fieldCandidate.draft,
+    };
+  }
+
   const unsupported = detectUnsupportedRequest(input.userRequest);
   if (unsupported) {
     return {

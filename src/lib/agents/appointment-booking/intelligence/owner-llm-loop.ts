@@ -38,11 +38,24 @@ import {
 
 const TOOL_SELECTION_EXAMPLES = `
 TOOL SELECTION EXAMPLES
-- "Did the last caller get booked?" → search_calls(limit=1) → get_call_trace(callId) → get_booking_record if appointmentId present. Do not call metrics.
+- Investigative booking questions (use semantic search — never guess):
+  • "Did the person who called about the leaking kitchen sink get booked?"
+  • "Did that lady who called earlier ever get taken care of?"
+  • "What happened with the person talking about their sink?"
+  → search_calls(query="leaking kitchen sink", limit=10) OR search_agent_activity with the same query
+  → get_call_trace(callId) for the best match
+  → get_booking_verification(callId) or explain_call_failure(callId) if not booked
+  → answer ONLY from retrieved traces — owner does not need to know call IDs.
+- "Did the last caller get booked?" → search_calls(limit=5) → get_call_trace(callId) → get_booking_verification(callId).
 - "Make customers book at least four hours ahead." → get_agent_settings(section=booking_policy) → create_booking_policy_proposal → wait for approval.
-- "Ask drain-cleaning customers what problem they are having." → get_agent_settings(section=collection_fields) → create_collection_field_proposal → wait for approval.
+- "Add a required Property Type field with House, Apartment, Commercial" → request_workflow_draft(userRequest=exact owner text) → validate_workflow_draft → wait for approval. Do NOT use create_collection_field_proposal for workflow fields.
+- "Ask drain-cleaning customers what problem they are having." → request_workflow_draft → validate_workflow_draft → wait for approval.
 - "If they don't book, text a booking link ten minutes later." → get current workflow → request_workflow_draft → validate_workflow_draft → run tests → wait for approval.
 - "Write custom JavaScript into the workflow." → refuse; use approved blocks only.`;
+
+function isInvestigativeQuestion(question: string): boolean {
+  return /\?/.test(question) && /\b(did|what happened|get booked|taken care|ever book|schedule|call about)\b/i.test(question);
+}
 
 function buildOwnerLlmSystemPrompt(
   agent: AppointmentBookingAgentView,
@@ -120,7 +133,8 @@ export async function runOwnerAmyLlmLoop(input: {
 
   const requiresFreshCallData =
     preflight.state.route.intent === "diagnose_failure" ||
-    preflight.state.route.intent === "explain_activity";
+    preflight.state.route.intent === "explain_activity" ||
+    isInvestigativeQuestion(input.question);
 
   if (!requiresFreshCallData) {
     for (const turn of conversation.messages.slice(-20)) {
@@ -180,6 +194,19 @@ export async function runOwnerAmyLlmLoop(input: {
     });
 
     if (!assistantMsg.tool_calls?.length) {
+      const needsToolRetry =
+        iterations === 1 &&
+        toolsUsed.length === 0 &&
+        (requiresFreshCallData || isInvestigativeQuestion(input.question));
+      if (needsToolRetry) {
+        messages.push({
+          role: "user",
+          content:
+            "Use the read/search tools now. Start with search_calls or search_agent_activity using semantic query terms from my question, then get_call_trace / get_booking_verification / explain_call_failure before answering.",
+        });
+        continue;
+      }
+
       const answer =
         assistantMsg.content?.trim() ||
         "I could not complete this request safely within the current operation. I created no production changes.";

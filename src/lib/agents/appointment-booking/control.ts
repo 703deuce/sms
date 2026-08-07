@@ -118,8 +118,92 @@ export async function runAgentControlCommand(input: {
         limit: Number(input.payload?.limit || 20),
         failuresOnly: Boolean(input.payload?.failuresOnly),
         summariesOnly: input.payload?.summariesOnly !== false,
+        query: input.payload?.query ? String(input.payload.query) : undefined,
       });
       return { traces };
+    }
+
+    case "search_customers": {
+      const prisma = getPrisma();
+      const query = String(input.payload?.query || "").trim();
+      const limit = Math.min(20, Number(input.payload?.limit || 10));
+      const contacts = await prisma.contact.findMany({
+        where: {
+          workspaceId: input.workspaceId,
+          ...(query
+            ? {
+                OR: [
+                  { phone: { contains: query } },
+                  { email: { contains: query, mode: "insensitive" } },
+                  { firstName: { contains: query, mode: "insensitive" } },
+                  { lastName: { contains: query, mode: "insensitive" } },
+                  { company: { contains: query, mode: "insensitive" } },
+                ],
+              }
+            : {}),
+        },
+        orderBy: { updatedAt: "desc" },
+        take: limit,
+      });
+      return {
+        customers: contacts.map((c: {
+          id: string;
+          firstName: string | null;
+          lastName: string | null;
+          phone: string | null;
+          email: string | null;
+          company: string | null;
+        }) => ({
+          id: c.id,
+          name: [c.firstName, c.lastName].filter(Boolean).join(" "),
+          phone: c.phone,
+          email: c.email,
+          company: c.company,
+        })),
+      };
+    }
+
+    case "search_appointments": {
+      const prisma = getPrisma();
+      const query = String(input.payload?.query || "").trim();
+      const callId = input.payload?.callId ? String(input.payload.callId) : undefined;
+      const limit = Math.min(20, Number(input.payload?.limit || 10));
+      const appointments = await prisma.voiceAppointment.findMany({
+        where: {
+          workspaceId: input.workspaceId,
+          ...(callId ? { callId } : {}),
+          ...(query
+            ? {
+                OR: [
+                  { serviceName: { contains: query, mode: "insensitive" } },
+                  { staffName: { contains: query, mode: "insensitive" } },
+                  { status: { contains: query, mode: "insensitive" } },
+                ],
+              }
+            : {}),
+        },
+        orderBy: { startsAt: "desc" },
+        take: limit,
+      });
+      return {
+        appointments: appointments.map((a: {
+          id: string;
+          callId: string | null;
+          serviceName: string | null;
+          staffName: string | null;
+          startsAt: Date;
+          status: string;
+          externalId: string | null;
+        }) => ({
+          id: a.id,
+          callId: a.callId,
+          serviceName: a.serviceName,
+          staffName: a.staffName,
+          startAt: a.startsAt,
+          status: a.status,
+          externalId: a.externalId,
+        })),
+      };
     }
 
     case "get_call_details":

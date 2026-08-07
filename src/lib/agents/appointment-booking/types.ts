@@ -252,6 +252,8 @@ export type AgentControlCommand =
   | "get_agent_health"
   | "get_agent_metrics"
   | "search_agent_activity"
+  | "search_customers"
+  | "search_appointments"
   | "get_call_details"
   | "explain_call_failure"
   | "get_execution_trace"

@@ -40,12 +40,15 @@ export const OWNER_LLM_TOOL_SPECS: Record<string, OwnerToolSpec> = {
   get_agent_metrics: { command: "get_agent_metrics", riskLevel: "read" },
   get_agent_responsibility: { command: "get_agent_responsibility", riskLevel: "read" },
   search_calls: { command: "search_agent_activity", riskLevel: "read" },
-  get_call_trace: { command: "get_employee_timeline", riskLevel: "read" },
+  search_agent_activity: { command: "search_agent_activity", riskLevel: "read" },
+  get_call_trace: { command: "get_execution_trace", riskLevel: "read" },
   get_execution_trace: { command: "get_execution_trace", riskLevel: "read" },
   explain_call_failure: { command: "explain_call_failure", riskLevel: "read" },
   get_booking_record: { command: "get_booking_verification", riskLevel: "read" },
   get_booking_verification: { command: "get_booking_verification", riskLevel: "read" },
   search_failures: { command: "search_agent_activity", riskLevel: "read" },
+  search_customers: { command: "search_customers", riskLevel: "read" },
+  search_appointments: { command: "search_appointments", riskLevel: "read" },
   get_test_results: { command: "run_agent_simulation", riskLevel: "read" },
   get_pending_attention: { command: "get_attention_inbox", riskLevel: "read" },
   get_attention_items: { command: "get_attention_inbox", riskLevel: "read" },
@@ -167,6 +170,24 @@ const LLM_PARAMETER_OVERRIDES: Record<string, Record<string, unknown>> = {
   search_calls: OBJECT({
     limit: { type: "number", description: "Max calls (default 5)" },
     failuresOnly: { type: "boolean", description: "Only failed or unbooked calls" },
+    query: {
+      type: "string",
+      description: "Natural-language search terms (e.g. leaking kitchen sink, caller phone fragment)",
+    },
+  }),
+  search_agent_activity: OBJECT({
+    limit: { type: "number", description: "Max calls (default 5)" },
+    failuresOnly: { type: "boolean" },
+    query: { type: "string", description: "Semantic search across call summaries and traces" },
+  }),
+  search_customers: OBJECT({
+    query: { type: "string", description: "Name, phone, or email fragment" },
+    limit: { type: "number" },
+  }),
+  search_appointments: OBJECT({
+    query: { type: "string", description: "Service, customer, or notes fragment" },
+    callId: { type: "string", description: "Optional call id to scope search" },
+    limit: { type: "number" },
   }),
   search_failures: OBJECT({
     limit: { type: "number", description: "Max failures (default 10)" },
@@ -271,11 +292,24 @@ export function normalizeOwnerToolPayload(
 ): Record<string, unknown> {
   switch (toolName) {
     case "search_calls":
+    case "search_agent_activity":
     case "search_failures":
       return {
         limit: args.limit ?? (toolName === "search_failures" ? 10 : 5),
         failuresOnly: args.failuresOnly ?? toolName === "search_failures",
         summariesOnly: false,
+        query: args.query ? String(args.query) : undefined,
+      };
+    case "search_customers":
+      return {
+        query: args.query ? String(args.query) : undefined,
+        limit: args.limit ?? 10,
+      };
+    case "search_appointments":
+      return {
+        query: args.query ? String(args.query) : undefined,
+        callId: args.callId ? String(args.callId) : undefined,
+        limit: args.limit ?? 10,
       };
     case "get_agent_metrics":
       return { windowDays: args.windowDays ?? 7 };
@@ -288,18 +322,27 @@ export function normalizeOwnerToolPayload(
             ? { minimumNoticeMinutes: args.minimumNoticeMinutes }
             : undefined,
       };
-    case "create_collection_field_proposal":
+    case "create_collection_field_proposal": {
+      const label = String(args.label || "Custom field").trim();
+      const options = Array.isArray(args.options)
+        ? (args.options as string[]).map(String)
+        : typeof args.options === "string"
+          ? args.options.split(/,|\s+or\s+/i).map((s) => s.trim()).filter(Boolean)
+          : undefined;
+      const type =
+        args.type === "single_select" || (options && options.length >= 2)
+          ? "single_select"
+          : (args.type as string) || "text";
+      const userRequest = options?.length
+        ? `Add a required ${label} field with ${options.join(", ")}`
+        : `Add a required ${label} field`;
       return {
-        summary: `Add field: ${args.label}`,
-        collectionField: {
-          label: args.label,
-          question: args.question,
-          type: args.type || "text",
-          required: args.required !== false,
-          confirmationRequired: args.confirmationRequired ?? true,
-          saveTo: ["contact", "appointment"],
-        },
+        userRequest,
+        summary: userRequest,
+        route: "workflow_architect_field_candidate",
+        collectionFieldHint: { label, type, options, required: args.required !== false },
       };
+    }
     case "create_voice_proposal":
       return {
         summary: "Update voice/greeting",
@@ -488,17 +531,27 @@ export async function executeOwnerLlmTool(input: {
   const { runAgentControlCommand } = await import(
     "@/lib/agents/appointment-booking/control"
   );
-  const payload = normalizeOwnerToolPayload(input.toolName, input.args);
+  let payload = normalizeOwnerToolPayload(input.toolName, input.args);
+  let effectiveToolName = input.toolName;
+  if (
+    input.toolName === "create_collection_field_proposal" &&
+    payload.route === "workflow_architect_field_candidate"
+  ) {
+    effectiveToolName = "request_workflow_draft";
+    payload = { userRequest: payload.userRequest };
+  }
+  const command = OWNER_LLM_TOOL_SPECS[effectiveToolName]?.command || spec.command;
+
   try {
     const raw = await runAgentControlCommand({
       workspaceId: input.workspaceId,
       agentId: input.agentId,
       userId: input.userId,
-      command: spec.command,
+      command,
       payload,
     });
 
-    if (input.toolName === "request_workflow_draft") {
+    if (effectiveToolName === "request_workflow_draft") {
       const wrapped = wrapToolOutput(raw);
       const data =
         wrapped.status === "completed" ? (wrapped.data as Record<string, unknown>) : { raw };

@@ -26,8 +26,6 @@ export const STATE_ALLOWED_TOOLS: Record<WorkflowState, readonly string[]> = {
     "get_workflow_requirements",
     "record_current_field",
     "save_collected_fields",
-    "resolve_datetime",
-    "calendar_availability",
     ...ESCAPE_HATCH_TOOLS,
   ],
   COLLECTING_FIELDS: [
@@ -35,8 +33,6 @@ export const STATE_ALLOWED_TOOLS: Record<WorkflowState, readonly string[]> = {
     "save_collected_fields",
     "get_workflow_requirements",
     "get_runtime_context",
-    "resolve_datetime",
-    "calendar_availability",
     ...ESCAPE_HATCH_TOOLS,
   ],
   CHECKING_AVAILABILITY: [
