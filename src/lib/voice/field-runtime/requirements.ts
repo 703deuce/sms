@@ -30,6 +30,18 @@ function buildSpeak(missing: RuntimeFieldManifestEntry[]): string | null {
   return first.collection_instruction || `I still need ${first.label.toLowerCase()}.`;
 }
 
+/** Active field must still be missing; stale pointers advance to the next required field. */
+export function resolveActiveField(
+  session: WorkflowFieldSession | null,
+  missing: RuntimeFieldManifestEntry[],
+): string | null {
+  const active = session?.active_field;
+  if (active && missing.some((m) => m.field_id === active)) {
+    return active;
+  }
+  return missing[0]?.field_id || null;
+}
+
 export async function buildRuntimeFieldManifest(input: {
   workspaceId: string;
   agentId?: string;
@@ -93,7 +105,7 @@ export async function getWorkflowRequirements(input: {
     complete: missing.length === 0,
     missing_fields: missing,
     collected_field_ids: collected,
-    active_field: session?.active_field || missing[0]?.field_id || null,
+    active_field: resolveActiveField(session, missing),
     fields_to_collect: entries,
     speak: buildSpeak(missing),
   };

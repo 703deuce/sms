@@ -13,7 +13,8 @@ import {
   deriveNextAction,
   schedulingDoNotAdvanceHint,
 } from "../src/lib/voice/workflow-engine/next-action";
-import { requirementsToToolResponse } from "../src/lib/voice/field-runtime/requirements";
+import { requirementsToToolResponse, resolveActiveField } from "../src/lib/voice/field-runtime/requirements";
+import { isStubInboundContactName } from "../src/lib/voice/field-runtime/session";
 import {
   isUnknownCallerId,
   normalizeCallerAni,
@@ -63,6 +64,30 @@ check(
 );
 check("Telnyx build excludes book_appointment", !telnyxNames.includes("book_appointment"));
 check("Telnyx build includes continue_workflow", telnyxNames.includes("continue_workflow"));
+
+const EXPECTED_EXACT = [
+  "lookup_customer",
+  "take_structured_message",
+  "record_current_field",
+  "continue_workflow",
+  "get_runtime_context",
+  "escalate_human",
+  "hangup",
+];
+for (const name of EXPECTED_EXACT) {
+  check(`exact catalog includes ${name}`, telnyxNames.includes(name));
+}
+for (const forbidden of [
+  "calendar_availability",
+  "book_appointment",
+  "resolve_datetime",
+  "hold_appointment_slot",
+  "save_collected_fields",
+  "get_workflow_requirements",
+]) {
+  check(`exact catalog excludes ${forbidden}`, !telnyxNames.includes(forbidden));
+}
+
 check(
   "Telnyx tool count is small (<=10)",
   telnyxNames.length <= 10,
@@ -147,6 +172,16 @@ check("partial save workflow_complete:false", partial.workflow_complete === fals
 check("normalizeCallerAni E.164", normalizeCallerAni("+15714776175") === "+15714776175");
 check("unknown ANI rejected", normalizeCallerAni("unknown") === null);
 check("isUnknownCallerId", isUnknownCallerId("unknown") && !isUnknownCallerId("+15551234567"));
+
+check("stub inbound contact name detected", isStubInboundContactName("Caller", "9555"));
+check("real contact name not stub", !isStubInboundContactName("Anthony", "Johnson"));
+check(
+  "active_field advances when stale",
+  resolveActiveField(
+    { session_id: "s", fields: {}, derived: {}, active_field: "sys_name", workflow: "book_appointment", updated_at: "" },
+    [{ field_id: "sys_email", label: "Email", type: "email", required: true, collection_instruction: "" }],
+  ) === "sys_email",
+);
 
 check(
   "COLLECTING allows continue_workflow",

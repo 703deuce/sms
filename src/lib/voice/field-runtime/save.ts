@@ -84,8 +84,6 @@ export async function saveCollectedFields(
 
   if (input.active_field) {
     session.active_field = String(input.active_field);
-  } else if (saved.length === 1) {
-    session.active_field = saved[0];
   }
 
   session.workflow = workflow;
@@ -98,7 +96,17 @@ export async function saveCollectedFields(
     session,
   }).catch(() => undefined);
 
-  const requirements = await getWorkflowRequirements({
+  let requirements = await getWorkflowRequirements({
+    workspaceId: input.workspaceId,
+    agentId: input.agentId,
+    callId,
+    workflow,
+    serviceName: input.serviceName,
+  });
+
+  session.active_field = requirements.missing_fields[0]?.field_id || null;
+  await saveWorkflowFieldSession(callId, session);
+  requirements = await getWorkflowRequirements({
     workspaceId: input.workspaceId,
     agentId: input.agentId,
     callId,

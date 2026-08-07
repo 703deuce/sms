@@ -41,6 +41,9 @@ export async function computeWorkflowState(input: {
       metadata: true,
     },
   });
+  if (!call) {
+    throw new Error("Call not found for workspace");
+  }
   const meta = asRecord(call?.metadata);
   const lastSlots = Array.isArray(meta.lastAvailabilitySlots)
     ? (meta.lastAvailabilitySlots as string[])

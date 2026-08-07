@@ -60,7 +60,7 @@ function fromCollectFields(fields: AgentCollectionField[]): WorkflowFieldDefinit
     .filter((f) => f.enabled !== false)
     .map((f) =>
       legacyIdToFieldDefinition({
-        id: f.id,
+        id: String(f.id || (f as { field_id?: string }).field_id || "").trim(),
         label: f.label,
         type: f.type,
         required: f.required,
@@ -69,7 +69,8 @@ function fromCollectFields(fields: AgentCollectionField[]): WorkflowFieldDefinit
         options: f.options,
         askOrder: f.askOrder,
       }),
-    );
+    )
+    .filter((d) => d.field_id);
 }
 
 function applyRequiredModes(

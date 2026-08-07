@@ -31,6 +31,16 @@ export function emptyWorkflowFieldSession(input: {
 
 const SESSION_META_KEY = "workflowFieldSession";
 
+/** Auto-created inbound stub — must not satisfy the real name collection requirement. */
+export function isStubInboundContactName(
+  firstName: string | null | undefined,
+  lastName: string | null | undefined,
+): boolean {
+  if ((firstName || "").trim() !== "Caller") return false;
+  const last = (lastName || "").trim();
+  return /^\d{4}$/.test(last);
+}
+
 export async function loadWorkflowFieldSession(
   callId: string,
 ): Promise<WorkflowFieldSession | null> {
@@ -133,7 +143,9 @@ export async function ensureWorkflowFieldSession(input: {
     });
     if (contact) {
       const name = [contact.firstName, contact.lastName].filter(Boolean).join(" ");
-      if (name) session = setSessionField(session, "sys_name", name, "contact", "Name");
+      if (name && !isStubInboundContactName(contact.firstName, contact.lastName)) {
+        session = setSessionField(session, "sys_name", name, "contact", "Name");
+      }
       if (contact.phone) {
         try {
           session = setSessionField(
