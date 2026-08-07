@@ -133,6 +133,36 @@ export async function answerOwnerQuestion(input: {
               data: result,
             };
           }
+          if (pendingConfirmation.actionType === "promote_workflow_draft") {
+            const { promoteWorkflowDraft } = await import(
+              "@/lib/agents/appointment-booking/workflow-promote"
+            );
+            const result = await promoteWorkflowDraft({
+              workspaceId: input.workspaceId,
+              agentId: input.agentId,
+              userId: input.userId,
+              draftId: pendingConfirmation.targetId,
+              confirm: true,
+              activateTriggers: true,
+            });
+            return {
+              answer: [
+                `Workflow draft "${result.draft.name}" is promoted.`,
+                result.triggersActivated
+                  ? "Automation triggers are active."
+                  : "Review Health if triggers did not activate.",
+                result.href ? `Open workflow: ${result.href}` : "",
+              ]
+                .filter(Boolean)
+                .join(" "),
+              sources: ["promote_workflow_draft", "action_confirmation"],
+              suggestedFollowUps: ["What is your health status?", "Test yourself"],
+              runtimeMode: hasOwnerAmyLlmConfigured() ? "llm_agent" : "limited_fallback",
+              runtimeIndicator: formatOwnerAmyRuntimeIndicator(),
+              workflowDraftId: result.draft.id,
+              data: result,
+            };
+          }
         } catch (err) {
           return {
             answer: err instanceof Error ? err.message : "Confirmation failed",
@@ -651,21 +681,45 @@ export async function answerOwnerQuestion(input: {
       phoneNumberId: agent.phoneNumberIds[0] || null,
       timezone: agent.profile.timezone,
     });
+    const draftReady =
+      draft.validationStatus === "valid" &&
+      Boolean(draft.id) &&
+      (!draft.architectResult || draft.architectResult.status === "draft_created");
+    let confirmationId: string | undefined;
+    if (draftReady && input.userId && draft.id) {
+      const { createActionConfirmation } = await import(
+        "@/lib/agents/appointment-booking/intelligence/owner-confirmation"
+      );
+      const confirmation = await createActionConfirmation({
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+        userId: input.userId,
+        actionType: "promote_workflow_draft",
+        targetId: draft.id,
+      });
+      confirmationId = confirmation.id;
+    }
     return {
-      answer: [
-        `Created workflow draft “${draft.name}”.`,
-        `Validation: ${draft.validationStatus}.`,
-        draft.validationErrors.length
-          ? `Errors: ${draft.validationErrors.map((e) => e.message).join("; ")}`
-          : "No validation errors.",
-        `Draft id: ${draft.id}.`,
-        "This draft is not live. Review it in Workflows, then activate only after tests and confirmation.",
-      ].join(" "),
+      answer: draftReady
+        ? [
+            `Created workflow draft "${draft.name}".`,
+            `Validation: ${draft.validationStatus}.`,
+            draft.validationErrors.length
+              ? `Errors: ${draft.validationErrors.map((e) => e.message).join("; ")}`
+              : "No validation errors.",
+            `Draft id: ${draft.id}.`,
+            "This draft is not live. Review it in Workflows, run tests, then say “yes, put it live” or promote from the UI.",
+          ].join(" ")
+        : [
+            `Could not create a valid workflow draft for this request.`,
+            draft.architectResult?.summary || draft.validationErrors.map((e) => e.message).join("; "),
+            "Try a more specific request or configure the Workflow Architect LLM.",
+          ].join(" "),
       sources: ["create_workflow_draft"],
       suggestedFollowUps: followUps,
-      requiresConfirmation: true,
+      requiresConfirmation: draftReady,
       workflowDraftId: draft.id,
-      data: draft,
+      data: { draft, confirmationId },
     };
   }
 

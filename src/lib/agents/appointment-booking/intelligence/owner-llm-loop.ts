@@ -31,7 +31,10 @@ import {
   appendConversationTurn,
   trackToolReferences,
 } from "@/lib/agents/appointment-booking/intelligence/owner-conversation";
-import { createActionConfirmation } from "@/lib/agents/appointment-booking/intelligence/owner-confirmation";
+import {
+  createActionConfirmation,
+  extractPendingActionConfirmation,
+} from "@/lib/agents/appointment-booking/intelligence/owner-confirmation";
 
 const TOOL_SELECTION_EXAMPLES = `
 TOOL SELECTION EXAMPLES
@@ -57,26 +60,6 @@ ${TOOL_SELECTION_EXAMPLES}
 Model runtime (explicit): ${cfg.provider}/${cfg.model}${
     cfg.fallbackProvider ? ` (fallback: ${cfg.fallbackProvider}/${cfg.fallbackModel})` : ""
   }`;
-}
-
-function extractProposalMeta(data: unknown): {
-  proposalId?: string;
-  requiresConfirmation?: boolean;
-} {
-  if (!data || typeof data !== "object") return {};
-  const d = data as Record<string, unknown>;
-  const inner =
-    d.status === "completed" && d.data && typeof d.data === "object"
-      ? (d.data as Record<string, unknown>)
-      : d;
-  return {
-    proposalId: inner.proposalId
-      ? String(inner.proposalId)
-      : inner.id
-        ? String(inner.id)
-        : undefined,
-    requiresConfirmation: Boolean(inner.requiresConfirmation || inner.confirmationRequired),
-  };
 }
 
 function unwrapToolData(result: unknown): unknown {
@@ -159,6 +142,7 @@ export async function runOwnerAmyLlmLoop(input: {
   const toolsUsed: string[] = [];
   let lastToolData: unknown = null;
   let proposalId: string | undefined;
+  let workflowDraftId: string | undefined;
   let requiresConfirmation = false;
   let pendingConfirmationId: string | undefined;
   const startedAt = Date.now();
@@ -220,7 +204,9 @@ export async function runOwnerAmyLlmLoop(input: {
           ],
           evidence,
           proposalId,
-          requiresConfirmation: requiresConfirmation || Boolean(proposalId),
+          workflowDraftId,
+          requiresConfirmation:
+            requiresConfirmation || Boolean(proposalId) || Boolean(workflowDraftId),
           data: {
             model: lastModel,
             toolsUsed,
@@ -271,19 +257,23 @@ export async function runOwnerAmyLlmLoop(input: {
           }
         }
 
-        const meta = extractProposalMeta(toolResult);
-        if (meta.proposalId) {
-          proposalId = meta.proposalId;
+        const pending = extractPendingActionConfirmation(toolName, toolResult);
+        if (pending) {
+          if (pending.actionType === "confirm_change_proposal") {
+            proposalId = pending.targetId;
+          } else if (pending.actionType === "promote_workflow_draft") {
+            workflowDraftId = pending.targetId;
+          }
           const confirmation = await createActionConfirmation({
             workspaceId: input.workspaceId,
             agentId: input.agentId,
             userId: input.userId,
-            actionType: "confirm_change_proposal",
-            targetId: meta.proposalId,
+            actionType: pending.actionType,
+            targetId: pending.targetId,
           });
           pendingConfirmationId = confirmation.id;
+          requiresConfirmation = true;
         }
-        if (meta.requiresConfirmation) requiresConfirmation = true;
       } catch (err) {
         toolResult = {
           status: "failed",

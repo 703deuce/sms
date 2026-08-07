@@ -648,4 +648,46 @@ import { createDefaultWizardState } from "../src/lib/solutions/appointment-recep
 const prompt = buildSystemPrompt(createDefaultWizardState());
 assert("buildSystemPrompt no recursion", prompt.length > 500 && prompt.length < 50000);
 
+import { extractPendingActionConfirmation } from "../src/lib/agents/appointment-booking/intelligence/owner-confirmation";
+
+const proposalConfirm = extractPendingActionConfirmation("create_booking_policy_proposal", {
+  status: "completed",
+  data: { id: "prop_1", requiresConfirmation: true },
+});
+assert(
+  "proposal confirmation maps change proposal",
+  proposalConfirm?.actionType === "confirm_change_proposal" &&
+    proposalConfirm.targetId === "prop_1",
+);
+
+const workflowConfirm = extractPendingActionConfirmation("request_workflow_draft", {
+  status: "completed",
+  data: {
+    id: "draft_1",
+    validationStatus: "valid",
+    architectResult: { status: "draft_created" },
+  },
+});
+assert(
+  "workflow confirmation maps promote draft",
+  workflowConfirm?.actionType === "promote_workflow_draft" &&
+    workflowConfirm.targetId === "draft_1",
+);
+
+const searchNoConfirm = extractPendingActionConfirmation("search_calls", {
+  status: "completed",
+  data: { id: "call_1", traces: [{ callId: "call_1" }] },
+});
+assert("search calls do not create confirmation", searchNoConfirm === null);
+
+const invalidWorkflow = extractPendingActionConfirmation("request_workflow_draft", {
+  status: "completed",
+  data: {
+    id: "draft_bad",
+    validationStatus: "invalid",
+    architectResult: { status: "needs_information" },
+  },
+});
+assert("invalid workflow draft skips confirmation", invalidWorkflow === null);
+
 console.log("\nDone.");

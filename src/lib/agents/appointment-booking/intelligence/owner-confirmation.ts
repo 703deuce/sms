@@ -142,3 +142,60 @@ export function isExplicitOwnerApproval(text: string): boolean {
     text.trim(),
   );
 }
+
+const CHANGE_PROPOSAL_TOOLS = new Set([
+  "create_booking_policy_proposal",
+  "create_collection_field_proposal",
+  "create_service_proposal",
+  "create_transfer_rule_proposal",
+  "create_voice_proposal",
+  "create_resource_assignment_proposal",
+  "create_knowledge_proposal",
+  "propose_setup_change",
+]);
+
+function unwrapToolPayload(data: unknown): Record<string, unknown> | null {
+  if (!data || typeof data !== "object") return null;
+  const d = data as Record<string, unknown>;
+  if (d.status === "completed" && d.data && typeof d.data === "object") {
+    return d.data as Record<string, unknown>;
+  }
+  return d;
+}
+
+function workflowDraftReady(d: Record<string, unknown>): boolean {
+  const architect = d.architectResult as { status?: string } | undefined;
+  if (architect?.status && architect.status !== "draft_created") return false;
+  if (d.validationStatus === "invalid") return false;
+  if (d.validationStatus === "valid") return true;
+  return architect?.status === "draft_created";
+}
+
+/**
+ * Derive backend confirmation records from tool results.
+ * Workflow drafts must NOT be mapped to confirm_change_proposal.
+ */
+export function extractPendingActionConfirmation(
+  toolName: string,
+  toolResult: unknown,
+): { actionType: string; targetId: string } | null {
+  const d = unwrapToolPayload(toolResult);
+  if (!d) return null;
+
+  if (toolName === "request_workflow_draft") {
+    const draftId = d.id || (d.architectResult as { draftId?: string } | undefined)?.draftId;
+    if (!draftId || !workflowDraftReady(d)) return null;
+    return { actionType: "promote_workflow_draft", targetId: String(draftId) };
+  }
+
+  if (!CHANGE_PROPOSAL_TOOLS.has(toolName)) return null;
+
+  const targetId = d.proposalId || d.id;
+  if (!targetId) return null;
+  const requiresConfirmation = Boolean(
+    d.requiresConfirmation || d.confirmationRequired || CHANGE_PROPOSAL_TOOLS.has(toolName),
+  );
+  if (!requiresConfirmation) return null;
+
+  return { actionType: "confirm_change_proposal", targetId: String(targetId) };
+}
