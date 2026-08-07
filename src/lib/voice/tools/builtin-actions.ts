@@ -10,7 +10,7 @@ export async function executeBuiltinVoiceAction(input: {
   input: Record<string, unknown>;
 }) {
   const prisma = getPrisma();
-  let args = input.input || {};
+  const args = input.input || {};
 
   switch (input.toolType) {
     case "lookup_customer":

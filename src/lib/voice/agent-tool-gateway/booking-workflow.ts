@@ -1,5 +1,4 @@
 import { getPrisma } from "@/lib/db";
-import { enqueueJob } from "@/lib/messaging/enqueue-advance";
 import {
   assertBookingPermission,
   assertBookingTimingGates,
@@ -276,7 +275,8 @@ export async function executeBookAppointmentWorkflow(
       startsAt,
       endsAt,
       timezone: normalized.timezone,
-      status: "confirmed",
+      // Provider-authoritative: pending until external calendar commits on live path.
+      status: calendlyConnected ? "pending_provider" : "confirmed",
       metadata: {
         operationId: normalized.operation_id,
         syncStatus,
@@ -292,7 +292,48 @@ export async function executeBookAppointmentWorkflow(
     },
   });
 
-  if (ctx.callId) {
+  let finalSyncStatus = syncStatus;
+  let mayConfirm = !calendlyConnected;
+
+  if (calendlyConnected) {
+    if (!normalized.customer_email) {
+      await prisma.voiceAppointment.delete({ where: { id: appointment.id } }).catch(() => undefined);
+      throw new AgentToolError(
+        "MISSING_REQUIRED_FIELD",
+        "Email required for Calendly booking",
+        false,
+        "I need an email address to confirm this appointment on the calendar.",
+      );
+    }
+    try {
+      const { syncAppointmentToProvider } = await import("./provider-sync");
+      await syncAppointmentToProvider({
+        workspaceId: ctx.workspaceId,
+        appointmentId: appointment.id,
+        agentId: ctx.agentId,
+        callId: ctx.callId,
+        operationId: normalized.operation_id,
+      });
+      await prisma.voiceAppointment.update({
+        where: { id: appointment.id },
+        data: { status: "confirmed" },
+      });
+      finalSyncStatus = "synced";
+      mayConfirm = true;
+    } catch (err) {
+      const { markAppointmentSyncFailed } = await import("./provider-sync");
+      await markAppointmentSyncFailed(appointment.id, ctx.workspaceId, err);
+      await prisma.voiceAppointment
+        .update({
+          where: { id: appointment.id },
+          data: { status: "failed" },
+        })
+        .catch(() => undefined);
+      throw translateError(err);
+    }
+  }
+
+  if (ctx.callId && mayConfirm) {
     await prisma.voiceCall
       .update({
         where: { id: ctx.callId },
@@ -337,21 +378,7 @@ export async function executeBookAppointmentWorkflow(
     startsAt,
   }).catch(() => undefined);
 
-  if (syncStatus === "pending") {
-    await enqueueJob({
-      jobType: "voice_appointment_provider_sync",
-      queueName: "voice-calls",
-      workspaceId: ctx.workspaceId,
-      payload: {
-        workspaceId: ctx.workspaceId,
-        appointmentId: appointment.id,
-        agentId: ctx.agentId || null,
-        callId: ctx.callId || null,
-        operationId: normalized.operation_id,
-      },
-      idempotencyKey: `appt-sync-${normalized.operation_id}`,
-    });
-  }
+  // Secondary CRM/analytics sync remains async — authoritative Calendly commit is synchronous above.
 
   const whenLabel = startsAt.toLocaleString("en-US", {
     timeZone: normalized.timezone,
@@ -371,9 +398,9 @@ export async function executeBookAppointmentWorkflow(
         start_time: appointment.startsAt.toISOString(),
         end_time: appointment.endsAt?.toISOString() || null,
         service_name: normalized.service_name,
-        sync_status: syncStatus,
+        sync_status: finalSyncStatus,
         provider,
-        may_confirm_to_caller: true,
+        may_confirm_to_caller: mayConfirm,
       },
     });
   } finally {
