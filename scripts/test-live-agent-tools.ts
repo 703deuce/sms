@@ -390,7 +390,7 @@ console.log("\n== caller tool playbook injected in prompt ==");
 {
   const prompt = compileCallerToolPlaybookForPrompt(["book_appointment", "calendar_availability"]);
   check("playbook mentions slots[].startsAt", prompt.includes("slots[].startsAt"));
-  check("playbook mentions customerEmail required", prompt.includes("customerEmail"));
+  check("playbook mentions missing_required_fields", prompt.includes("missing_required_fields"));
   check("playbook mentions resolve_datetime chain", prompt.includes("resolve_datetime"));
 }
 

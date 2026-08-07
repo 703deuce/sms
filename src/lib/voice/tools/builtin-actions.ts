@@ -346,20 +346,56 @@ export async function executeBuiltinVoiceAction(input: {
       });
       return { ok: true, disposition };
     }
-    case "save_caller_info": {
-      const phone = normalizeE164(String(args.phone || ""));
-      if (!phone) throw new Error("phone required");
-      const firstName = args.first_name ? String(args.first_name) : null;
-      const lastName = args.last_name ? String(args.last_name) : null;
-      const email = args.email ? String(args.email) : null;
-      const company = args.company ? String(args.company) : null;
+    case "save_caller_info":
+    case "save_customer_info": {
+      const {
+        normalizeCustomerToolPayload,
+        applyCustomerPayloadToState,
+        loadCustomerCollectedState,
+        saveCustomerCollectedState,
+        seedCollectedStateFromCall,
+      } = await import("@/lib/voice/field-requirements/collected-state");
+      const {
+        checkCustomerFieldsForCall,
+        completenessToToolResponse,
+      } = await import("@/lib/voice/field-requirements/service");
+      const payload = normalizeCustomerToolPayload(args);
+      const workflow =
+        payload.workflow ||
+        (args.workflow ? String(args.workflow) : "general");
+
+      let phone = payload.phone || "";
+      if (!phone && input.callId) {
+        const callRow = await prisma.voiceCall.findFirst({
+          where: { id: input.callId, workspaceId: input.workspaceId },
+          select: { fromE164: true },
+        });
+        if (callRow?.fromE164 && callRow.fromE164 !== "unknown") {
+          phone = callRow.fromE164;
+          payload.phone = phone;
+        }
+      }
+      if (!phone) throw new Error("phone required when caller ID is unavailable");
+
+      const normalizedPhone = normalizeE164(phone);
+      const firstName =
+        payload.first_name ||
+        (payload.name ? String(payload.name).split(/\s+/)[0] : null);
+      const lastName =
+        payload.last_name ||
+        (payload.name && String(payload.name).split(/\s+/).length > 1
+          ? String(payload.name).split(/\s+/).slice(1).join(" ")
+          : null);
+      const email = payload.email || null;
+      const company = payload.company || null;
+
       const contact = await prisma.contact.upsert({
         where: {
-          workspaceId_phone: { workspaceId: input.workspaceId, phone },
+          workspaceId_phone: { workspaceId: input.workspaceId, phone: normalizedPhone },
         },
         create: {
           workspaceId: input.workspaceId,
-          phone,
+          phone: normalizedPhone,
           firstName,
           lastName,
           email,
@@ -372,7 +408,20 @@ export async function executeBuiltinVoiceAction(input: {
           ...(company ? { company } : {}),
         },
       });
+
       if (input.callId) {
+        let state = await loadCustomerCollectedState(input.callId).catch(() =>
+          seedCollectedStateFromCall({
+            callId: input.callId!,
+            workspaceId: input.workspaceId,
+          }),
+        );
+        state = applyCustomerPayloadToState(
+          state,
+          { ...payload, phone: normalizedPhone, workflow: workflow as typeof payload.workflow },
+          "tool",
+        );
+        await saveCustomerCollectedState(input.callId, state);
         await prisma.voiceCall
           .update({
             where: { id: input.callId },
@@ -380,19 +429,58 @@ export async function executeBuiltinVoiceAction(input: {
           })
           .catch(() => undefined);
       }
+
       const { upsertCrmContactForVoice } = await import("./crm-writes");
       const crm = await upsertCrmContactForVoice({
         workspaceId: input.workspaceId,
         firstName: firstName || undefined,
         lastName: lastName || undefined,
-        phone,
+        phone: normalizedPhone,
         email: email || undefined,
         company: company || undefined,
       }).catch((err) => ({
         ok: false as const,
         error: err instanceof Error ? err.message : String(err),
       }));
-      return { ok: true, contactId: contact.id, crm };
+
+      const completeness = await checkCustomerFieldsForCall({
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+        callId: input.callId,
+        workflow: workflow as import("@/lib/voice/field-requirements/types").WorkflowAction,
+        serviceName: payload.service_name || undefined,
+        incomingArgs: {
+          ...args,
+          phone: normalizedPhone,
+          name: payload.name,
+          email,
+        },
+      });
+
+      return {
+        ok: true,
+        contactId: contact.id,
+        crm,
+        ...completenessToToolResponse(completeness),
+      };
+    }
+    case "check_customer_fields":
+    case "check_field_requirements": {
+      const { checkCustomerFieldsForCall, completenessToToolResponse } = await import(
+        "@/lib/voice/field-requirements/service"
+      );
+      const workflow = String(
+        args.workflow || args.action || "book_appointment",
+      ) as import("@/lib/voice/field-requirements/types").WorkflowAction;
+      const completeness = await checkCustomerFieldsForCall({
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+        callId: input.callId,
+        workflow,
+        serviceName: args.serviceName ? String(args.serviceName) : undefined,
+        incomingArgs: args,
+      });
+      return completenessToToolResponse(completeness);
     }
     case "create_crm_note": {
       const { createCrmNoteForVoice } = await import("./crm-writes");

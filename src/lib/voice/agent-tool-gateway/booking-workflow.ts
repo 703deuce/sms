@@ -3,7 +3,6 @@ import { enqueueJob } from "@/lib/messaging/enqueue-advance";
 import {
   assertBookingPermission,
   assertBookingTimingGates,
-  assertRequiredFields,
   findExistingBookingForCaller,
   loadServiceBookingConfig,
 } from "@/lib/voice/calendar/booking";
@@ -93,9 +92,53 @@ export async function executeBookAppointmentWorkflow(
     ...raw,
   });
 
+  const { checkCustomerFieldsForCall } = await import(
+    "@/lib/voice/field-requirements"
+  );
+  const { flattenCollectedForBookingArgs, seedCollectedStateFromCall } = await import(
+    "@/lib/voice/field-requirements/collected-state"
+  );
+  let collectedArgs: Record<string, unknown> = {};
+  if (ctx.callId) {
+    const seeded = await seedCollectedStateFromCall({
+      callId: ctx.callId,
+      workspaceId: ctx.workspaceId,
+    });
+    collectedArgs = flattenCollectedForBookingArgs(seeded);
+  }
+  const mergedCustomerArgs = { ...collectedArgs, ...legacyArgs };
+  const completeness = await checkCustomerFieldsForCall({
+    workspaceId: ctx.workspaceId,
+    agentId: ctx.agentId,
+    callId: ctx.callId,
+    workflow: "book_appointment",
+    serviceName: normalized.service_name,
+    incomingArgs: mergedCustomerArgs,
+  });
+  if (!completeness.complete) {
+    throw new AgentToolError(
+      "MISSING_REQUIRED_FIELD",
+      `Missing required fields: ${completeness.missing_required_fields.join(", ")}`,
+      false,
+      completeness.speak || "I still need a few details before I can book.",
+    );
+  }
+
+  // Backfill normalized customer fields from merged collected + tool args.
+  normalized.customer_name =
+    normalized.customer_name ||
+    String(mergedCustomerArgs.customerName || mergedCustomerArgs.name || "");
+  normalized.customer_phone =
+    normalized.customer_phone ||
+    String(mergedCustomerArgs.customerPhone || mergedCustomerArgs.phone || "");
+  normalized.customer_email =
+    normalized.customer_email ||
+    String(mergedCustomerArgs.customerEmail || mergedCustomerArgs.email || "");
+  normalized.address =
+    normalized.address || String(mergedCustomerArgs.address || "") || null;
+
   const gates = await loadServiceBookingConfig(ctx.workspaceId, normalized.service_name);
   assertBookingPermission(gates.config);
-  assertRequiredFields(gates.config, legacyArgs);
 
   const startsAt = new Date(normalized.start_time);
   assertBookingTimingGates({
@@ -290,9 +333,9 @@ export async function runBookAppointment(
         agentId: ctx.agentId,
         callId: ctx.callId,
         appointmentId,
-        name: normalized.customer_name,
-        phone: normalized.customer_phone,
-        email: normalized.customer_email,
+        name: normalized.customer_name || "Caller",
+        phone: normalized.customer_phone || "",
+        email: normalized.customer_email || "",
         startsAt: normalized.start_time,
         serviceName: normalized.service_name,
       }).catch(() => undefined);

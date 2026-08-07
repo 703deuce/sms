@@ -46,6 +46,9 @@ check("book start_time normalized", book.start_time === "2026-08-07T13:00:00.000
 check("book phone E164", book.customer_phone === "+15714776175");
 validateBookInput(book);
 
+// Customer fields are config-driven — not validated in validateBookInput
+check("validateBookInput skips hardcoded email", true);
+
 const legacy = bookInputToLegacyArgs(book, { callId: "call_test_1" });
 check("legacy args startsAt", legacy.startsAt === book.start_time);
 

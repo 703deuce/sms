@@ -678,7 +678,7 @@ export const BUILTIN_WEBHOOK_BODIES: Record<
     name: "book_appointment",
     toolType: "book_appointment",
     description:
-      "Book ONLY after calendar_availability returned slots. Copy startsAt EXACTLY from slots[].startsAt. Include customerName, customerPhone, customerEmail on every attempt. NEVER invent or convert times.",
+      "Book ONLY after calendar_availability returned slots. Copy startsAt EXACTLY from slots[].startsAt. Customer fields are optional on the tool — backend enforces business-specific requirements.",
     body: {
       type: "object",
       properties: {
@@ -688,16 +688,17 @@ export const BUILTIN_WEBHOOK_BODIES: Record<
         },
         startAt: { type: "string", description: "Alias for startsAt" },
         serviceName: { type: "string", description: "Appointment type name" },
-        customerName: { type: "string", description: "Caller full name" },
+        customerName: { type: "string", description: "Caller full name when known" },
         name: { type: "string", description: "Alias for customerName" },
         full_name: { type: "string", description: "Alias for customerName" },
-        customerPhone: { type: "string", description: "Caller phone" },
+        customerPhone: { type: "string", description: "Caller phone when known" },
         phone: { type: "string", description: "Alias for customerPhone" },
-        customerEmail: { type: "string", description: "Caller email (required for Calendly)" },
+        customerEmail: { type: "string", description: "Caller email when collected" },
         email: { type: "string", description: "Alias for customerEmail" },
         address: { type: "string", description: "When service requires address" },
+        custom_fields: { type: "object", description: "Business-specific custom fields" },
       },
-      required: ["startsAt", "serviceName", "customerName", "customerPhone", "customerEmail"],
+      required: ["startsAt", "serviceName"],
     },
   },
   hold_appointment_slot: {

@@ -67,30 +67,6 @@ export function validateBookInput(input: CanonicalBookInput): void {
   if (Number.isNaN(Date.parse(input.start_time))) {
     throw new AgentToolError("INVALID_INPUT", "start_time must be valid ISO-8601");
   }
-  if (!input.customer_name) {
-    throw new AgentToolError(
-      "MISSING_REQUIRED_FIELD",
-      "customer_name is required",
-      false,
-      "What name should I put the appointment under?",
-    );
-  }
-  if (!input.customer_phone) {
-    throw new AgentToolError(
-      "MISSING_REQUIRED_FIELD",
-      "customer_phone is required",
-      false,
-      "What phone number should I use for this booking?",
-    );
-  }
-  if (!input.customer_email) {
-    throw new AgentToolError(
-      "MISSING_REQUIRED_FIELD",
-      "customer_email is required",
-      false,
-      "What email should I send the confirmation to?",
-    );
-  }
   if (!input.service_name) {
     throw new AgentToolError("MISSING_REQUIRED_FIELD", "service_name is required");
   }

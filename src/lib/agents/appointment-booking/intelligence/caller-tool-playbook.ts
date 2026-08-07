@@ -26,9 +26,10 @@ export const BOOKING_TOOL_CHAIN = [
   "1. resolve_datetime — when caller uses relative timing (tomorrow, Friday, in 3 hours).",
   "2. calendar_availability — pass resolvedIso as from/to OR a day window; read slots[].startsAt.",
   "3. Offer ONLY times from slots[].startsAt — never convert clock times yourself.",
-  "4. save_caller_info — when you have name + phone (before booking).",
-  "5. hold_appointment_slot (optional) — while confirming; startsAt from slots.",
-  "6. book_appointment — startsAt copied EXACTLY from slots; include customerName, customerPhone, customerEmail, serviceName.",
+  "4. save_caller_info (or save_customer_info) — pass any customer details you learn; backend returns complete + missing_required_fields.",
+  "5. check_customer_fields with workflow=book_appointment before booking if unsure what is still needed.",
+  "6. hold_appointment_slot (optional) — while confirming; startsAt from slots.",
+  "7. book_appointment — startsAt copied EXACTLY from slots; include any customer fields you have (backend merges call state).",
 ].join("\n");
 
 export const CALLER_AMY_TOOL_PLAYBOOK: CallerToolPlaybookEntry[] = [
@@ -110,9 +111,9 @@ export const CALLER_AMY_TOOL_PLAYBOOK: CallerToolPlaybookEntry[] = [
   {
     toolId: "book_appointment",
     summary:
-      "Book after caller confirms; startsAt must match a slot from calendar_availability. Confirms locally — tell caller they are booked when status=confirmed.",
+      "Book after caller confirms; startsAt must match a slot from calendar_availability. Required customer fields come from business config — use check_customer_fields / save_caller_info responses.",
     whenToCall:
-      "Only after calendar_availability returned slots AND caller confirmed name, phone, email, and time.",
+      "Only after calendar_availability returned slots AND caller confirmed the time. Customer field requirements are evaluated by the backend.",
     parameters: [
       {
         name: "startsAt",
@@ -131,36 +132,37 @@ export const CALLER_AMY_TOOL_PLAYBOOK: CallerToolPlaybookEntry[] = [
       },
       {
         name: "customerName",
-        required: true,
+        required: false,
         type: "string",
-        instruction: "Caller full name. Always include on every book attempt.",
+        instruction: "Caller full name when known — may already be on file from save_caller_info or caller ID.",
         example: "Anthony Johnson",
       },
       {
         name: "customerPhone",
-        required: true,
+        required: false,
         type: "string",
-        instruction: "Caller phone with country code when possible.",
+        instruction: "Caller phone when known — omit if caller ID already captured.",
         example: "+15714776175",
       },
       {
         name: "customerEmail",
-        required: true,
+        required: false,
         type: "string",
-        instruction: "Caller email. Required for Calendly. Always include on every book attempt.",
+        instruction: "Caller email when collected — only required if business config says so.",
         example: "caller@example.com",
       },
       {
         name: "address",
         required: false,
         type: "string",
-        instruction: "Only when the service requires address in booking policy.",
+        instruction: "Only when the business requires address for this workflow.",
       },
     ],
     workflow: BOOKING_TOOL_CHAIN,
     never: [
       "Invent or convert startsAt — only use slots[].startsAt",
-      "Retry without customerName and customerEmail",
+      "Assume email is always required — check missing_required_fields from the backend",
+      "Ask for phone when caller ID is already known unless verification is needed",
       "Tell caller they are booked before success=true and status=confirmed (or already_completed)",
       "Book a time the caller wanted if it was not in slots — offer available slots instead",
       "Worry about sync_status=pending — calendar sync happens in the background after you confirm",
@@ -240,14 +242,106 @@ export const CALLER_AMY_TOOL_PLAYBOOK: CallerToolPlaybookEntry[] = [
   },
   {
     toolId: "save_caller_info",
-    summary: "Save caller contact details to CRM.",
-    whenToCall: "As soon as you have phone and name — before booking.",
+    summary: "Save caller contact details — flexible customer object; backend tracks completeness.",
+    whenToCall:
+      "Whenever you learn name, phone, email, address, or custom details. Do not re-ask for fields already on file.",
     parameters: [
-      { name: "phone", required: true, type: "string", instruction: "Caller phone." },
-      { name: "first_name", required: true, type: "string", instruction: "Caller first name." },
-      { name: "last_name", required: false, type: "string", instruction: "Caller last name." },
-      { name: "email", required: false, type: "string", instruction: "Caller email when collected." },
+      {
+        name: "name",
+        required: false,
+        type: "string",
+        instruction: "Caller full name (or use first_name + last_name).",
+      },
+      {
+        name: "first_name",
+        required: false,
+        type: "string",
+        instruction: "Caller first name.",
+      },
+      {
+        name: "last_name",
+        required: false,
+        type: "string",
+        instruction: "Caller last name.",
+      },
+      {
+        name: "phone",
+        required: false,
+        type: "string",
+        instruction: "Caller phone — omit when caller ID is already known.",
+      },
+      {
+        name: "email",
+        required: false,
+        type: "string",
+        instruction: "Caller email when collected.",
+      },
+      {
+        name: "address",
+        required: false,
+        type: "string",
+        instruction: "Service or mailing address when collected.",
+      },
+      {
+        name: "company",
+        required: false,
+        type: "string",
+        instruction: "Company name when relevant.",
+      },
+      {
+        name: "custom_fields",
+        required: false,
+        type: "object",
+        instruction: "Additional business-specific fields as key-value pairs.",
+      },
+      {
+        name: "workflow",
+        required: false,
+        type: "string",
+        instruction: "book_appointment | request_quote | leave_message | general — for completeness check.",
+      },
     ],
+    workflow:
+      "Response includes complete, missing_required_fields, and speak. Ask only for missing required fields.",
+    never: [
+      "Ask for phone when caller ID is already captured unless verification is needed",
+      "Assume all businesses require email",
+    ],
+  },
+  {
+    toolId: "save_customer_info",
+    summary: "Alias for save_caller_info — same flexible customer payload.",
+    whenToCall: "Same as save_caller_info.",
+    parameters: [
+      { name: "name", required: false, type: "string", instruction: "Caller full name." },
+      { name: "phone", required: false, type: "string", instruction: "Caller phone." },
+      { name: "email", required: false, type: "string", instruction: "Caller email." },
+      { name: "address", required: false, type: "string", instruction: "Address when collected." },
+      { name: "custom_fields", required: false, type: "object", instruction: "Custom key-value fields." },
+      { name: "workflow", required: false, type: "string", instruction: "Workflow for completeness check." },
+    ],
+  },
+  {
+    toolId: "check_customer_fields",
+    summary: "Ask the backend what customer fields are still required for the current workflow.",
+    whenToCall: "Before book_appointment or when unsure what to collect next.",
+    parameters: [
+      {
+        name: "workflow",
+        required: true,
+        type: "string",
+        instruction: "book_appointment | request_quote | leave_message | emergency_service | general",
+        example: "book_appointment",
+      },
+      {
+        name: "serviceName",
+        required: false,
+        type: "string",
+        instruction: "Appointment type — refines book_appointment requirements.",
+      },
+    ],
+    workflow:
+      "Use missing_required_fields and speak from the response — only ask for what is missing.",
   },
   {
     toolId: "take_structured_message",

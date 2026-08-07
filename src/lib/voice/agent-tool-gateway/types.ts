@@ -44,9 +44,9 @@ export type CanonicalBookInput = {
   service_name: string;
   start_time: string;
   timezone: string;
-  customer_name: string;
-  customer_phone: string;
-  customer_email: string;
+  customer_name?: string;
+  customer_phone?: string;
+  customer_email?: string;
   contact_id?: string | null;
   address?: string | null;
 };
