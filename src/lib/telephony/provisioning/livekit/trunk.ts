@@ -42,8 +42,7 @@ export async function ensureSharedInboundTrunk(input?: {
     return { trunk, created: false, actions: ["reuse_named_trunk"] };
   }
 
-  const numbers = input?.initialNumbers?.length ? input.initialNumbers : [];
-  trunk = await client.createSipInboundTrunk(TRANSOVO_LIVEKIT_TRUNK_NAME, numbers, {
+  trunk = await client.createSipInboundTrunk(TRANSOVO_LIVEKIT_TRUNK_NAME, [], {
     metadata: JSON.stringify({ owner: "transovo", kind: "shared_telnyx_inbound" }),
   });
   actions.push("created_inbound_trunk");
@@ -88,4 +87,46 @@ export async function removeNumberFromInboundTrunk(
     numbers: new ListUpdate({ set: numbers }),
   });
   return { trunk: updated, removed: true };
+}
+
+function isTransovoInboundTrunk(trunk: SIPInboundTrunkInfo): boolean {
+  if ((trunk.name || "").includes("transovo")) return true;
+  try {
+    const meta = trunk.metadata ? JSON.parse(trunk.metadata) : {};
+    return meta?.owner === "transovo";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * LiveKit rejects duplicate numbers across inbound trunks. Remove the DID from
+ * every trunk except the canonical shared Transovo trunk before adding it there.
+ */
+export async function dedupeInboundTrunkNumber(
+  e164: string,
+  keepTrunkId: string,
+): Promise<{ actions: string[] }> {
+  const client = getLiveKitSipClient();
+  const actions: string[] = [];
+  const trunks = await client.listSipInboundTrunk({ numbers: [e164] });
+
+  for (const trunk of trunks) {
+    const trunkId = trunk.sipTrunkId || "";
+    if (!trunkId || trunkId === keepTrunkId) continue;
+
+    const removed = await removeNumberFromInboundTrunk(trunkId, e164);
+    if (removed.removed) {
+      actions.push(`livekit_removed_number_from_${trunk.name || trunkId}`);
+    }
+
+    const listed = await client.listSipInboundTrunk({ trunkIds: [trunkId] });
+    const remaining = listed[0]?.numbers || [];
+    if (remaining.length === 0 && !isTransovoInboundTrunk(trunk)) {
+      await client.deleteSipTrunk(trunkId);
+      actions.push(`livekit_deleted_empty_trunk_${trunk.name || trunkId}`);
+    }
+  }
+
+  return { actions };
 }

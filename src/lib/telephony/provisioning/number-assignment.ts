@@ -4,6 +4,7 @@ import { syncVoiceAgentPhoneAssignment } from "@/lib/voice/agent-phone";
 import { ensureSharedDispatchRule } from "./livekit/dispatch";
 import {
   addNumberToInboundTrunk,
+  dedupeInboundTrunkNumber,
   ensureSharedInboundTrunk,
   findInboundTrunkContainingNumber,
 } from "./livekit/trunk";
@@ -138,13 +139,14 @@ export async function ensureNumberProvisioned(
       actions.push("telnyx_route_ok");
     }
 
-    const { trunk, actions: trunkActions } = await ensureSharedInboundTrunk({
-      initialNumbers: [phone.e164],
-    });
+    const { trunk, actions: trunkActions } = await ensureSharedInboundTrunk();
     actions.push(...trunkActions);
 
     const trunkId = trunk.sipTrunkId || "";
     if (!trunkId) throw new Error("LiveKit inbound trunk id missing after ensure");
+
+    const dedupe = await dedupeInboundTrunkNumber(phone.e164, trunkId);
+    actions.push(...dedupe.actions);
 
     const add = await addNumberToInboundTrunk(trunkId, phone.e164);
     if (add.added) actions.push("livekit_trunk_added_number");
