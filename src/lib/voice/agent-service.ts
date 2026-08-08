@@ -182,6 +182,14 @@ async function syncAssistantToTelnyx(
   agent: { id: string; telnyxAssistantId: string | null },
   config: VoiceAgentConfig,
 ) {
+  const { getVoiceRuntimeProvider, isLiveKitVoiceRuntime } = await import(
+    "./runtime-provider"
+  );
+  if (isLiveKitVoiceRuntime()) {
+    await getVoiceRuntimeProvider().syncAgentConfig?.({ workspaceId, agentId });
+    return { skipped: true, reason: "livekit_runtime" };
+  }
+
   const { syncTelnyxAssistant } = await import("./telnyx/assistant-sync");
   const sync = await syncTelnyxAssistant(workspaceId, agent as never, config);
   const assistantId =

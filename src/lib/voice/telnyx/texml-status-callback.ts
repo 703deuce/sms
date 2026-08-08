@@ -261,6 +261,9 @@ export async function handleTexmlStatusCallback(request: Request) {
         },
       });
 
+      const { destroyRealtimeSession } = await import("@/lib/voice/realtime-session/init");
+      await destroyRealtimeSession(callId).catch(() => undefined);
+
       let call = await prisma.voiceCall.findUnique({
         where: { id: callId },
       });

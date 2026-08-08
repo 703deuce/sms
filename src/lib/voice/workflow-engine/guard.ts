@@ -24,7 +24,33 @@ export async function assertToolAllowed(input: {
 }): Promise<ToolGuardResult> {
   const canonical = canonicalToolType(input.toolType);
 
-  if (isInternalOnlyTool(canonical) || isInternalOnlyTool(input.toolType)) {
+  if (canonical === "runtime_turn" || input.toolType === "runtime_turn") {
+    if (!input.callId) {
+      return {
+        allowed: false,
+        state: "INTENT_DISCOVERY",
+        allowed_tools: toolsForState("INTENT_DISCOVERY"),
+        error_code: "CALL_CONTEXT_REQUIRED",
+        speak: "I'm still connecting your call. One moment please.",
+        retryable: true,
+      };
+    }
+    const { state } = await computeWorkflowState({
+      callId: input.callId,
+      workspaceId: input.workspaceId,
+      agentId: input.agentId,
+      workflow: input.workflow,
+      serviceName: input.serviceName,
+    });
+    return { allowed: true, state, allowed_tools: toolsForState(state) };
+  }
+
+  const preprodInternalOk = process.env.VOICE_PREPROD_ALLOW_INTERNAL_TOOLS === "1";
+
+  if (
+    !preprodInternalOk &&
+    (isInternalOnlyTool(canonical) || isInternalOnlyTool(input.toolType))
+  ) {
     const blockedState = input.callId ? "COLLECTING_FIELDS" : "INTENT_DISCOVERY";
     return {
       allowed: false,

@@ -35,6 +35,14 @@ import { toCustomFieldId } from "../src/lib/voice/field-runtime/system-fields";
 import { validateFieldValue } from "../src/lib/voice/field-runtime/validate";
 import type { WorkflowFieldDefinition } from "../src/lib/voice/field-runtime/types";
 import { executeBuiltinVoiceAction } from "../src/lib/voice/tools/builtin-actions";
+import {
+  resetRealtimeSessionStoreForTests,
+  InMemoryRealtimeSessionStore,
+  getOrCreateRealtimeSession,
+  destroyRealtimeSession,
+  getRealtimeSessionStoreMode,
+} from "../src/lib/voice/realtime-session";
+import { executeAmyRuntimeTurn } from "../src/lib/voice/workflow-engine/runtime-turn";
 
 type Gate = { pass: boolean; detail: string; blocked?: string[]; partial?: boolean };
 
@@ -44,6 +52,7 @@ const gates: Record<string, Gate> = {
   WORKFLOW: { pass: false, detail: "" },
   BOOKING: { pass: false, detail: "", partial: false },
   CALL_DATA: { pass: false, detail: "" },
+  REALTIME: { pass: false, detail: "" },
 };
 
 const bookingSteps: Record<string, boolean> = {};
@@ -105,14 +114,14 @@ function testCatalogRegression() {
   for (const required of EXPECTED_MODEL_WEBHOOK_TOOLS) {
     check(`Telnyx build includes ${required}`, names.includes(required));
   }
-  check("Telnyx build includes hangup", names.includes("hangup"));
-  check("Telnyx webhook count <= 6 + hangup", names.length <= 8, `got ${names.join(", ")}`);
+  check("Telnyx build includes hangup (when enabled)", names.includes("hangup") || names.includes("runtime_turn"));
+  check("Telnyx webhook count <= 2 + hangup", names.length <= 4, `got ${names.join(", ")}`);
 
-  const webhookUrl = telnyxTools.find(
-    (t) => (t as { webhook?: { name?: string } }).webhook?.name === "continue_workflow",
+  const runtimeTurnUrl = telnyxTools.find(
+    (t) => (t as { webhook?: { name?: string } }).webhook?.name === "runtime_turn",
   ) as { webhook?: { url?: string; method?: string; timeout_ms?: number } } | undefined;
-  check("continue_workflow has webhook URL", Boolean(webhookUrl?.webhook?.url?.includes("/api/telnyx/voice/tools")));
-  check("continue_workflow method POST", webhookUrl?.webhook?.method === "POST");
+  check("runtime_turn has webhook URL", Boolean(runtimeTurnUrl?.webhook?.url?.includes("/api/telnyx/voice/tools")));
+  check("runtime_turn method POST", runtimeTurnUrl?.webhook?.method === "POST");
 
   gates.CATALOG.pass = failures.length === catalogFailuresBefore;
   gates.CATALOG.detail = `webhooks=${names.filter((n) => n !== "hangup").join(",")}`;
@@ -871,8 +880,94 @@ async function testCallDataGate(ctx: PreprodContext) {
   gates.CALL_DATA.detail = JSON.stringify(callDataChecks);
 }
 
+// ── Realtime session / latency gate ─────────────────────────────────────────
+
+async function testRealtimeGate(ctx: PreprodContext) {
+  section("Realtime session controller + latency");
+  const realtimeFailuresBefore = failures.length;
+  resetRealtimeSessionStoreForTests(new InMemoryRealtimeSessionStore());
+
+  const ids = newTelnyxIds("realtime");
+  const from = preprodCallerAni("rt");
+  const callId = await ensureVoiceCallForToolWebhook({
+    workspaceId: ctx.workspaceId,
+    agentId: ctx.agentId,
+    callControlId: ids.callControlId,
+    conversationId: ids.conversationId,
+    fromE164: from,
+    toE164: ctx.toE164,
+  });
+  check("REALTIME: session init on call ensure", Boolean(callId));
+  if (callId) ctx.callIds.push(callId);
+
+  const session = callId
+    ? await getOrCreateRealtimeSession({
+        callId,
+        workspaceId: ctx.workspaceId,
+        agentId: ctx.agentId,
+      })
+    : null;
+  check("REALTIME: session lookup", Boolean(session?.sessionId));
+  check("REALTIME: session has field manifest", (session?.fieldManifest.length || 0) > 0);
+  check("REALTIME: ANI on session", session?.callerAni === from || session?.callerAni != null);
+  check("REALTIME: conversationId bound", session?.telnyxConversationId === ids.conversationId);
+
+  const routingStart = Date.now();
+  if (callId && session) {
+    const turn = await executeAmyRuntimeTurn({
+      workspaceId: ctx.workspaceId,
+      agentId: ctx.agentId,
+      callId,
+      utterance: "Anthony Johnson",
+      interpreted_intent: "provide_name",
+      extracted_information: { name: "Anthony Johnson" },
+    });
+    const routingMs = Date.now() - routingStart;
+    check("REALTIME: fast field routing returns speak", Boolean(turn.speak));
+    check("REALTIME: latency snapshot attached", Boolean((turn as { _latency?: unknown })._latency));
+    const lat = (turn as { _latency?: { total_duration_ms?: number; db_duration_ms?: number } })._latency;
+    check("REALTIME: routing under 5s (test env)", routingMs < 5000, `${routingMs}ms`);
+    if (lat) {
+      check("REALTIME: total_duration_ms reported", lat.total_duration_ms != null);
+      check("REALTIME: db_duration_ms isolated", lat.db_duration_ms != null);
+    }
+  }
+
+  const runtimeRes = await invokeToolWebhook({
+    ctx,
+    toolType: "runtime_turn",
+    callControlId: ids.callControlId,
+    conversationId: ids.conversationId,
+    fromE164: from,
+    body: {
+      utterance: "hello",
+      interpreted_intent: "greeting",
+    },
+    ensureCallFirst: false,
+  });
+  check("REALTIME: runtime_turn webhook ok", runtimeRes.json.ok !== false, String(runtimeRes.json.error || runtimeRes.json.error_code));
+  check(
+    "REALTIME: model catalog is runtime_turn only",
+    EXPECTED_MODEL_WEBHOOK_TOOLS.length === 1 && EXPECTED_MODEL_WEBHOOK_TOOLS[0] === "runtime_turn",
+  );
+  check("REALTIME: session store mode", getRealtimeSessionStoreMode() === "memory" || getRealtimeSessionStoreMode() === "redis");
+
+  if (callId) {
+    await destroyRealtimeSession(callId);
+    const gone = await getOrCreateRealtimeSession({
+      callId,
+      workspaceId: ctx.workspaceId,
+      agentId: ctx.agentId,
+    });
+    check("REALTIME: session cleanup at hangup recreates", Boolean(gone.sessionId));
+  }
+
+  gates.REALTIME.pass = failures.length === realtimeFailuresBefore;
+  gates.REALTIME.detail = `store=${getRealtimeSessionStoreMode()}`;
+}
+
 function printGates() {
-  console.log("\n══ FIVE-GATE REPORT ══");
+  console.log("\n══ SIX-GATE REPORT ══");
   for (const [name, gate] of Object.entries(gates)) {
     const label = gate.partial && !gate.pass ? "PARTIAL" : gate.pass ? "PASS" : "FAIL";
     console.log(`${name}: ${label} — ${gate.detail}`);
@@ -881,8 +976,8 @@ function printGates() {
     }
   }
   const gatePassCount = Object.values(gates).filter((g) => g.pass).length;
-  const overall = gatePassCount === 5 && failures.length === 0;
-  console.log(`\nOVERALL: ${overall ? "PASS" : "FAIL"} (${gatePassCount}/5 gates, assertions ${testsRun - failures.length}/${testsRun})`);
+  const overall = gatePassCount === 6 && failures.length === 0;
+  console.log(`\nOVERALL: ${overall ? "PASS" : "FAIL"} (${gatePassCount}/6 gates, assertions ${testsRun - failures.length}/${testsRun})`);
   console.log(`Skipped assertions: ${skipped}`);
   if (warnings.length) {
     console.log("Warnings:");
@@ -905,6 +1000,8 @@ async function main() {
   }
 
   console.log("Caller Amy pre-production suite\n");
+  process.env.VOICE_PREPROD_ALLOW_INTERNAL_TOOLS = "1";
+  resetRealtimeSessionStoreForTests(new InMemoryRealtimeSessionStore());
   testCatalogRegression();
 
   const ctx = await createPreprodTenant();
@@ -922,6 +1019,7 @@ async function main() {
     await testTenantIsolation(ctx);
     await testBookingGate(ctx);
     await testCallDataGate(ctx);
+    await testRealtimeGate(ctx);
   } finally {
     await cleanupPreprodTenant(ctx);
   }

@@ -40,8 +40,27 @@ export function toolsForState(state: WorkflowState): string[] {
   return [...STATE_ALLOWED_TOOLS[state]];
 }
 
+/** Direct tool access for preprod integration tests (production uses runtime_turn only). */
+const PREPROD_LEGACY_TOOLS = new Set([
+  "get_runtime_context",
+  "get_workflow_requirements",
+  "record_current_field",
+  "save_collected_fields",
+  "continue_workflow",
+  "lookup_customer",
+  "take_structured_message",
+  "escalate_human",
+  "calendar_availability",
+  "book_appointment",
+  "hold_appointment_slot",
+]);
+
 export function isToolAllowedForState(state: WorkflowState, toolType: string): boolean {
   const canonical = canonicalToolType(toolType);
+  if (process.env.VOICE_PREPROD_ALLOW_INTERNAL_TOOLS === "1") {
+    if (canonical === "runtime_turn" || toolType === "runtime_turn") return true;
+    if (PREPROD_LEGACY_TOOLS.has(canonical) || PREPROD_LEGACY_TOOLS.has(toolType)) return true;
+  }
   const allowed = STATE_ALLOWED_TOOLS[state];
   return allowed.includes(canonical) || allowed.includes(toolType);
 }

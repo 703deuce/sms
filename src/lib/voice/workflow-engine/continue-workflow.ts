@@ -19,6 +19,8 @@ function normalizeSlotIso(value: unknown): string {
 import { deriveNextAction } from "./next-action";
 import { loadAgentRuntime, saveAgentRuntime } from "./runtime-state";
 import type { WorkflowState } from "./types";
+import type { AmyRealtimeSession } from "@/lib/voice/realtime-session/types";
+import { computeWorkflowStateFromSession } from "@/lib/voice/realtime-session/init";
 
 export type ContinueWorkflowInput = {
   workspaceId: string;
@@ -29,6 +31,8 @@ export type ContinueWorkflowInput = {
   serviceName?: string | null;
   startsAt?: string | null;
   workflow?: WorkflowAction;
+  /** Cached realtime session — skips redundant DB state reconstruction */
+  sessionContext?: AmyRealtimeSession;
 };
 
 function normalizeResponse(input: {
@@ -249,16 +253,26 @@ export async function executeContinueWorkflow(
   input: ContinueWorkflowInput,
 ): Promise<Record<string, unknown>> {
   const workflow = input.workflow || "book_appointment";
-  const timezone = await businessTimezone(input.workspaceId);
+  const timezone = input.sessionContext?.timezone ?? (await businessTimezone(input.workspaceId));
   const userInput = String(input.userInput || input.startsAt || "").trim();
 
-  const { state, runtime } = await computeWorkflowState({
-    callId: input.callId,
-    workspaceId: input.workspaceId,
-    agentId: input.agentId,
-    workflow,
-    serviceName: input.serviceName,
-  });
+  let state: WorkflowState;
+  let runtime: Awaited<ReturnType<typeof loadAgentRuntime>>;
+
+  if (input.sessionContext) {
+    state = computeWorkflowStateFromSession(input.sessionContext);
+    runtime = input.sessionContext.runtime;
+  } else {
+    const computed = await computeWorkflowState({
+      callId: input.callId,
+      workspaceId: input.workspaceId,
+      agentId: input.agentId,
+      workflow,
+      serviceName: input.serviceName,
+    });
+    state = computed.state;
+    runtime = computed.runtime;
+  }
 
   const serviceName =
     input.serviceName ||
@@ -346,9 +360,11 @@ export async function executeContinueWorkflow(
 
   if (state === "SELECTING_SLOT") {
     const rawSlots =
-      runtime.proposed_slots?.length > 0
-        ? runtime.proposed_slots
-        : await (async () => {
+      input.sessionContext?.availableSlots?.length
+        ? input.sessionContext.availableSlots
+        : runtime.proposed_slots?.length > 0
+          ? runtime.proposed_slots
+          : await (async () => {
             const prisma = getPrisma();
             const call = await prisma.voiceCall.findFirst({
               where: { id: input.callId, workspaceId: input.workspaceId },

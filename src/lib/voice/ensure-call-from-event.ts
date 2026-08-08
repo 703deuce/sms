@@ -363,6 +363,17 @@ export async function ensureVoiceCallForToolWebhook(input: {
         agentId: input.agentId,
       }).catch(() => undefined);
     }
+    const { initializeRealtimeSessionForCall } = await import(
+      "@/lib/voice/realtime-session/init"
+    );
+    await initializeRealtimeSessionForCall({
+      callId: existing.id,
+      workspaceId: input.workspaceId,
+      agentId: input.agentId,
+      telnyxConversationId: input.conversationId,
+      telnyxControlId: input.callControlId,
+      fromE164: input.fromE164,
+    }).catch(() => undefined);
     return existing.id;
   }
 
@@ -386,5 +397,20 @@ export async function ensureVoiceCallForToolWebhook(input: {
     },
   }).catch(() => null);
 
-  return ensured?.callId || null;
+  const callId = ensured?.callId || null;
+  if (callId) {
+    const { initializeRealtimeSessionForCall } = await import(
+      "@/lib/voice/realtime-session/init"
+    );
+    await initializeRealtimeSessionForCall({
+      callId,
+      workspaceId: input.workspaceId,
+      agentId: input.agentId,
+      telnyxConversationId: conversationId || null,
+      telnyxControlId: controlId || null,
+      fromE164: from || null,
+    }).catch(() => undefined);
+  }
+
+  return callId;
 }

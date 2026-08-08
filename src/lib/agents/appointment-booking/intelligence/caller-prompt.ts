@@ -52,10 +52,8 @@ export function buildCallerAmyPromptFromModules(
       timezone: state.timezone || "America/New_York",
       bookingPolicySummary: bookingSummary,
       customFieldsSummary:
-        "Field requirements are NOT listed here — they are provided at runtime. " +
-        "On each call use get_workflow_requirements or get_runtime_context for fields_to_collect, missing_fields, and allowed_tools. " +
-        "Prefer record_current_field(value) when collecting a single active field. " +
-        "Alternatively use save_collected_fields with field_id. Never use hardcoded parameter names.",
+        "Field requirements are provided by runtime_turn responses (current_field, missing_fields). " +
+        "Report extracted facts via runtime_turn extracted_information — never call field or scheduling tools directly.",
       transferPolicySummary: transferSummary,
       fallbackPolicySummary: `On transfer failure: ${state.transferFallback.replaceAll("_", " ")}.`,
       businessKnowledge,
