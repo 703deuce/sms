@@ -6,7 +6,7 @@
  *   AMY_LIVEKIT_SIP_HOST=amy-4hde63ww.sip.livekit.cloud node scripts/fix-amy-livekit-sip-host.mjs
  */
 const AMY_SIP_HOST = (
-  process.env.AMY_LIVEKIT_SIP_HOST || "amy-4hde63ww.sip.livekit.cloud"
+  process.env.AMY_LIVEKIT_SIP_HOST || "sms-6w01zoya.sip.livekit.cloud"
 ).trim();
 const LIVEKIT_CONN_ID =
   process.env.TELNYX_LIVEKIT_FQDN_CONNECTION_ID || "3022029259041408870";
@@ -62,7 +62,11 @@ async function main() {
   await tx(`/fqdn_connections/${LIVEKIT_CONN_ID}`, {
     method: "PATCH",
     body: {
-      inbound: { default_primary_fqdn_id: String(fqdn.id) },
+      inbound: {
+        default_primary_fqdn_id: String(fqdn.id),
+        default_secondary_fqdn_id: null,
+        default_tertiary_fqdn_id: null,
+      },
     },
   });
   console.log("set primary fqdn", fqdn.id, AMY_SIP_HOST);
@@ -74,9 +78,9 @@ async function main() {
   const phone = await tx(`/phone_numbers/${PHONE_ID}`);
   console.log("phone routed:", phone.data?.connection_name, E164);
 
-  console.log("\nNext: set Coolify LIVEKIT_URL=wss://amy-4hde63ww.livekit.cloud");
-  console.log("      LIVEKIT_SIP_URI=amy-4hde63ww.sip.livekit.cloud");
-  console.log("      LIVEKIT_API_KEY + LIVEKIT_API_SECRET from amy project, redeploy, Publish Amy");
+  console.log("\nNext: set Coolify LIVEKIT_URL=wss://" + AMY_SIP_HOST.replace(/\.sip\.livekit\.cloud$/, ".livekit.cloud"));
+  console.log("      LIVEKIT_SIP_URI=" + AMY_SIP_HOST);
+  console.log("      LIVEKIT_API_KEY + LIVEKIT_API_SECRET from the same LiveKit project, redeploy, Publish Amy");
 }
 
 main().catch((err) => {

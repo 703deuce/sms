@@ -1,25 +1,24 @@
-# Coolify env for LiveKit Amy (+18663464256)
+# Coolify env for LiveKit voice (+18663464256)
 
-## Amy LiveKit project (from LiveKit Cloud dashboard)
+## LiveKit Cloud project: **Sms** (Settings → General)
 
 | Field | Value |
 |-------|--------|
-| Project name | `amy` |
-| Project ID | `p-4hde63ww` |
-| Project URL | `amy-4hde63ww.livekit.cloud` |
-| **SIP URI** | `sip:amy-4hde63ww.sip.livekit.cloud` |
+| Project name | `Sms` |
+| Project URL | `wss://sms-6w01zoya.livekit.cloud` |
+| **SIP URI** | `sms-6w01zoya.sip.livekit.cloud` |
 
-Telnyx must send PSTN to **`amy-4hde63ww.sip.livekit.cloud`** — not a different `sms-*.sip.livekit.cloud` host.
+Telnyx must send PSTN to **`sms-6w01zoya.sip.livekit.cloud`**.
 
 ## Required in Coolify (main app)
 
 | Variable | What to put |
 |----------|-------------|
 | `VOICE_RUNTIME_PROVIDER` | `livekit` |
-| `LIVEKIT_URL` | `wss://amy-4hde63ww.livekit.cloud` |
-| `LIVEKIT_SIP_URI` | `amy-4hde63ww.sip.livekit.cloud` (from Project Settings → SIP URI) |
-| `LIVEKIT_API_KEY` | API key from **amy** project (Settings → Keys) |
-| `LIVEKIT_API_SECRET` | API secret from **amy** project |
+| `LIVEKIT_URL` | `wss://sms-6w01zoya.livekit.cloud` |
+| `LIVEKIT_SIP_URI` | `sms-6w01zoya.sip.livekit.cloud` |
+| `LIVEKIT_API_KEY` | API key from **Sms** project (Settings → API keys) |
+| `LIVEKIT_API_SECRET` | API secret from **Sms** project |
 | `OPENAI_API_KEY` | OpenAI key (Amy LLM) |
 | `TELNYX_API_KEY` | Telnyx (number routing) |
 | `DATABASE_URL` | Postgres |
