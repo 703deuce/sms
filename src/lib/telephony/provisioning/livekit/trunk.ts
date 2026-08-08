@@ -24,9 +24,15 @@ export async function findInboundTrunkContainingNumber(
 
 export async function ensureSharedInboundTrunk(input?: {
   initialNumbers?: string[];
+  e164?: string;
 }): Promise<{ trunk: SIPInboundTrunkInfo; created: boolean; actions: string[] }> {
   const client = getLiveKitSipClient();
   const actions: string[] = [];
+  const seedNumbers = input?.initialNumbers?.length
+    ? input.initialNumbers
+    : input?.e164
+      ? [input.e164]
+      : [];
 
   const storedId = getStoredLiveKitTrunkId();
   if (storedId) {
@@ -42,11 +48,69 @@ export async function ensureSharedInboundTrunk(input?: {
     return { trunk, created: false, actions: ["reuse_named_trunk"] };
   }
 
-  trunk = await client.createSipInboundTrunk(TRANSOVO_LIVEKIT_TRUNK_NAME, [], {
+  if (!seedNumbers.length) {
+    throw new Error(
+      "Cannot create LiveKit inbound trunk without at least one phone number",
+    );
+  }
+
+  trunk = await client.createSipInboundTrunk(TRANSOVO_LIVEKIT_TRUNK_NAME, seedNumbers, {
     metadata: JSON.stringify({ owner: "transovo", kind: "shared_telnyx_inbound" }),
   });
   actions.push("created_inbound_trunk");
   return { trunk, created: true, actions };
+}
+
+/**
+ * Ensure one canonical Transovo inbound trunk owns the DID. Deletes stale trunks
+ * that still claim the same number instead of zeroing their number list.
+ */
+export async function ensureInboundTrunkForNumber(e164: string): Promise<{
+  trunk: SIPInboundTrunkInfo;
+  created: boolean;
+  actions: string[];
+}> {
+  const client = getLiveKitSipClient();
+  const actions: string[] = [];
+
+  const allTrunks = await client.listSipInboundTrunk();
+  const trunksWithNumber = allTrunks.filter((t) => (t.numbers || []).includes(e164));
+
+  let canonical =
+    allTrunks.find((t) => t.name === TRANSOVO_LIVEKIT_TRUNK_NAME) ||
+    (getStoredLiveKitTrunkId()
+      ? allTrunks.find((t) => t.sipTrunkId === getStoredLiveKitTrunkId())
+      : null) ||
+    trunksWithNumber.find((t) => (t.name || "").includes("transovo")) ||
+    null;
+
+  for (const trunk of trunksWithNumber) {
+    const trunkId = trunk.sipTrunkId || "";
+    if (!trunkId) continue;
+    if (canonical?.sipTrunkId && trunkId === canonical.sipTrunkId) continue;
+    await client.deleteSipTrunk(trunkId);
+    actions.push(`livekit_deleted_conflicting_trunk_${trunk.name || trunkId}`);
+    if (canonical?.sipTrunkId === trunkId) canonical = null;
+  }
+
+  if (!canonical) {
+    const created = await ensureSharedInboundTrunk({ e164 });
+    actions.push(...created.actions);
+    return created;
+  }
+
+  const trunkId = canonical.sipTrunkId || "";
+  if (!trunkId) throw new Error("LiveKit inbound trunk id missing");
+
+  if (!(canonical.numbers || []).includes(e164)) {
+    const added = await addNumberToInboundTrunk(trunkId, e164);
+    canonical = added.trunk;
+    if (added.added) actions.push("livekit_trunk_added_number");
+  } else {
+    actions.push("livekit_trunk_number_ok");
+  }
+
+  return { trunk: canonical, created: false, actions };
 }
 
 export async function addNumberToInboundTrunk(
