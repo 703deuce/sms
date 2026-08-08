@@ -563,5 +563,9 @@ export async function restoreTexmlInboundRoute(input: {
   };
 }
 
-export { resolveAgentByCalledNumber, resolveAgentRoutingForCall } from "./agent-routing";
+export {
+  resolveAgentByCalledNumber,
+  resolveAgentRoutingForCall,
+  resolveFallbackInboundCalledNumber,
+} from "./agent-routing";
 export { patchInboundTrunkE164Formats } from "./livekit/patch-trunk-e164";

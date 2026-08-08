@@ -39,6 +39,7 @@ export {
   restoreTexmlInboundRoute,
   resolveAgentByCalledNumber,
   resolveAgentRoutingForCall,
+  resolveFallbackInboundCalledNumber,
   verifyNumberRouting,
 } from "./number-assignment";
 

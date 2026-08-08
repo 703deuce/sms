@@ -1,7 +1,72 @@
 import { getPrisma } from "@/lib/db";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import { resolveInboundAiAgent } from "@/lib/voice/agent-phone";
+import { getLiveKitSipClient } from "./livekit/client";
 import type { AgentRoutingResolution } from "./types";
+
+function safeNormalizeE164(phone: string | undefined | null): string | null {
+  if (!phone?.trim()) return null;
+  try {
+    return normalizeE164(phone.trim());
+  } catch {
+    return null;
+  }
+}
+
+/** Resolve called DID when SIP attrs are not populated yet (single-DID or trunk lookup). */
+export async function resolveFallbackInboundCalledNumber(input: {
+  trunkId?: string | null;
+  ruleId?: string | null;
+}): Promise<string | null> {
+  const fromEnv = safeNormalizeE164(
+    process.env.DEFAULT_INBOUND_E164 ||
+      process.env.AMY_INBOUND_E164 ||
+      process.env.PHONE_E164,
+  );
+  if (fromEnv) return fromEnv;
+
+  if (input.trunkId?.trim()) {
+    try {
+      const trunks = await getLiveKitSipClient().listSipInboundTrunk({
+        trunkIds: [input.trunkId.trim()],
+      });
+      const numbers = trunks.flatMap((t) => t.numbers || []).filter(Boolean);
+      if (numbers.length === 1) {
+        return safeNormalizeE164(numbers[0]!) || numbers[0]!;
+      }
+      if (numbers.length > 1) {
+        const preferred =
+          numbers.find((n) => n.replace(/\D/g, "").endsWith("8663464256")) || numbers[0];
+        return safeNormalizeE164(preferred!) || preferred!;
+      }
+    } catch {
+      // fall through to database lookup
+    }
+  }
+
+  const prisma = getPrisma();
+  const phones = await prisma.phoneNumber.findMany({
+    where: { status: "ACTIVE" },
+    select: { e164: true, settingsJson: true },
+    take: 100,
+  });
+  const livekitPhones = phones.filter((p: { e164: string; settingsJson: unknown }) => {
+    const settings =
+      p.settingsJson && typeof p.settingsJson === "object"
+        ? (p.settingsJson as {
+            telephony?: { routingMode?: string };
+            provisioning?: { routingMode?: string };
+          })
+        : {};
+    const telephony = settings.telephony || settings.provisioning;
+    return telephony?.routingMode === "livekit_sip";
+  });
+  if (livekitPhones.length === 1) {
+    return livekitPhones[0]!.e164;
+  }
+
+  return null;
+}
 
 /**
  * Authoritative Transovo lookup: called number → workspace → active agent.

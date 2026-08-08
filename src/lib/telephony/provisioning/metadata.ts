@@ -23,7 +23,11 @@ export function parseRoomMetadata(raw: string | undefined): RoomMetadata | null 
 }
 
 export function parseDispatchAttributes(attrs: Record<string, string>): RoomMetadata | null {
-  const toE164 = attrs.toE164 || attrs.calledNumber || attrs["sip.trunkPhoneNumber"];
+  const toE164 =
+    attrs.toE164 ||
+    attrs.calledNumber ||
+    attrs["sip.trunkPhoneNumber"] ||
+    attrs["sip.trunkNumber"];
   const fromE164 = attrs.fromE164 || attrs.callerNumber || attrs["sip.phoneNumber"];
   if (!attrs.workspaceId && !attrs.agentId && !toE164) return null;
   return roomMetadataSchema.parse({

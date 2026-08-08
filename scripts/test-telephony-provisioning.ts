@@ -65,6 +65,14 @@ assert.equal(
   "+18663464256",
 );
 
+assert.equal(
+  parseDispatchAttributes({
+    "sip.trunkNumber": "+18663464256",
+    "sip.phoneNumber": "+14155550100",
+  })?.toE164,
+  "+18663464256",
+);
+
 const partial = roomMetadataSchema.safeParse({ toE164: "+15715551234" });
 assert.equal(partial.success, true);
 

@@ -5,7 +5,8 @@ import { liveKitRuntimeProvider } from "@/lib/voice/runtime-provider/livekit";
 import { bootstrapLiveKitCallContext } from "@/lib/voice/domain-actions";
 import { resolveAgentRoutingForCall } from "@/lib/telephony/provisioning";
 import { createAmyAgent } from "./amy-tools";
-import { parseDispatchAttributes, parseRoomMetadata, type AmyProcessUserData } from "./metadata";
+import { resolveInboundSipCallIdentity } from "./call-identity";
+import type { AmyProcessUserData } from "./metadata";
 import { buildAmyVoicePipeline, describePipelineConfig } from "./pipeline";
 import { attachLatencyInstrumentation } from "./latency-instrumentation";
 
@@ -20,56 +21,48 @@ const AGENT_NAME = process.env.LIVEKIT_AGENT_NAME || "transovo-voice-runtime";
 
 export default defineAgent<AmyProcessUserData>({
   entry: async (ctx) => {
-    const fromParticipant = [...ctx.room.remoteParticipants.values()][0];
-    const participantAttrs = Object.fromEntries(
-      [...ctx.room.remoteParticipants.values()].flatMap((p) =>
-        Object.entries(p.attributes || {}),
-      ),
+    const identity = await resolveInboundSipCallIdentity(ctx);
+
+    console.log(
+      JSON.stringify({
+        source: "transovo-voice-runtime",
+        event: "inbound_call_identity",
+        room: ctx.room.name,
+        toE164: identity.toE164 || null,
+        toE164Source: identity.toE164Source,
+        fromE164: identity.fromE164 || null,
+        sipAttrKeys: Object.keys(identity.sipAttributes).filter((k) => k.startsWith("sip.")),
+      }),
     );
 
-    const parsedMeta =
-      parseRoomMetadata(ctx.room.metadata) || parseDispatchAttributes(participantAttrs);
-
-    const fromE164 =
-      parsedMeta?.fromE164 ||
-      participantAttrs["sip.phoneNumber"] ||
-      fromParticipant?.attributes?.["sip.phoneNumber"] ||
-      fromParticipant?.identity;
-
-    const toE164 =
-      parsedMeta?.toE164 ||
-      participantAttrs["sip.trunkPhoneNumber"] ||
-      participantAttrs["sip.calledNumber"] ||
-      participantAttrs.calledNumber;
-
     const routing = await resolveAgentRoutingForCall({
-      workspaceId: parsedMeta?.workspaceId,
-      agentId: parsedMeta?.agentId,
-      toE164,
+      workspaceId: identity.parsedMeta?.workspaceId,
+      agentId: identity.parsedMeta?.agentId,
+      toE164: identity.toE164,
     });
 
     if (!routing) {
       throw new Error(
-        `No Transovo agent routing for called number ${toE164 || "(unknown)"} — assign the DID to an active agent`,
+        `No Transovo agent routing for called number ${identity.toE164 || "(unknown)"} — assign the DID to an active agent`,
       );
     }
 
     const { callId } = await liveKitRuntimeProvider.bootstrapSession({
       workspaceId: routing.workspaceId,
       agentId: routing.agentId,
-      callId: parsedMeta?.callId,
-      fromE164,
-      toE164: toE164 || routing.e164,
+      callId: identity.parsedMeta?.callId,
+      fromE164: identity.fromE164,
+      toE164: identity.toE164 || routing.e164,
       livekitRoomName: ctx.room.name,
-      livekitParticipantId: fromParticipant?.identity,
+      livekitParticipantId: identity.participant.identity,
     });
 
     const callContext = await bootstrapLiveKitCallContext({
       callId,
       workspaceId: routing.workspaceId,
       agentId: routing.agentId,
-      fromE164,
-      toE164: toE164 || routing.e164,
+      fromE164: identity.fromE164,
+      toE164: identity.toE164 || routing.e164,
     });
 
     ctx.proc.userData = { callContext } satisfies AmyProcessUserData;
@@ -105,8 +98,6 @@ export default defineAgent<AmyProcessUserData>({
       agent,
       room: ctx.room,
     });
-
-    await ctx.connect();
 
     await session.generateReply({
       instructions:
