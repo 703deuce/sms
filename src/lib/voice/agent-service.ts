@@ -171,6 +171,28 @@ export async function updateVoiceAgentDraft(
       phoneNumberId: patch.phoneNumberId,
       exclusive,
     });
+
+    // LiveKit: provision Telnyx FQDN + shared trunk when an ACTIVE agent gets a DID.
+    // No separate script — matches Coolify LIVEKIT_URL / LIVEKIT_* env as-is.
+    if (patch.phoneNumberId && nextStatus === "ACTIVE") {
+      const { isLiveKitVoiceRuntime } = await import("./runtime-provider");
+      if (isLiveKitVoiceRuntime()) {
+        const { ensureNumberProvisioned } = await import(
+          "@/lib/telephony/provisioning"
+        );
+        await ensureNumberProvisioned({
+          workspaceId,
+          phoneNumberId: patch.phoneNumberId,
+          agentId,
+          routingMode: "livekit_sip",
+        }).catch((err) =>
+          console.error(
+            "[voice] LiveKit number provision failed",
+            err instanceof Error ? err.message : err,
+          ),
+        );
+      }
+    }
   }
 
   return updated;
