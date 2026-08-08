@@ -79,3 +79,21 @@ export async function ensureSharedDispatchRule(input: {
   actions.push("created_dispatch_rule");
   return { rule, created: true, actions };
 }
+
+/** Remove dispatch rules that are not the canonical Transovo shared rule. */
+export async function pruneStaleDispatchRules(keepRuleId?: string): Promise<{ actions: string[] }> {
+  const client = getLiveKitSipClient();
+  const actions: string[] = [];
+  const rules = await client.listSipDispatchRule();
+
+  for (const rule of rules) {
+    const ruleId = rule.sipDispatchRuleId || "";
+    if (!ruleId) continue;
+    if (keepRuleId && ruleId === keepRuleId) continue;
+    if (rule.name === TRANSOVO_LIVEKIT_DISPATCH_RULE_NAME) continue;
+    await client.deleteSipDispatchRule(ruleId);
+    actions.push(`livekit_deleted_dispatch_rule_${rule.name || ruleId}`);
+  }
+
+  return { actions };
+}

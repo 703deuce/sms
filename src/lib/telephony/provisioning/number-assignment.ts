@@ -1,7 +1,7 @@
 import { getPrisma } from "@/lib/db";
 import { isLiveKitVoiceRuntime } from "@/lib/voice/runtime-provider/config";
 import { syncVoiceAgentPhoneAssignment } from "@/lib/voice/agent-phone";
-import { ensureSharedDispatchRule } from "./livekit/dispatch";
+import { ensureSharedDispatchRule, pruneStaleDispatchRules } from "./livekit/dispatch";
 import {
   ensureInboundTrunkForNumber,
   rebuildInboundTrunkForNumber,
@@ -11,6 +11,7 @@ import {
   inspectLiveKitSipRouting,
   type LiveKitSipInspectResult,
 } from "./livekit/inspect";
+import { trunkNumbersIncludeDid } from "./livekit/did";
 import {
   ensureTelnyxLiveKitFqdnConnection,
   routeTelnyxNumberToConnection,
@@ -275,7 +276,7 @@ export async function verifyNumberRouting(input: {
     try {
       const inspect = await inspectLiveKitSipRouting(phone.e164);
       const trunk = inspect.trunkContainingDid;
-      livekitTrunkHasNumber = Boolean(trunk?.numbers.includes(phone.e164));
+      livekitTrunkHasNumber = Boolean(trunk && trunkNumbersIncludeDid(trunk.numbers, phone.e164));
       if (trunk) {
         livekitDetails.livekitTrunkId = trunk.id;
         livekitDetails.livekitTrunkNumbers = trunk.numbers;
@@ -376,6 +377,9 @@ export async function repairLiveKitSipRouting(input: {
 
   const { rule, actions: dispatchActions } = await ensureSharedDispatchRule({ trunkId });
   actions.push(...dispatchActions);
+
+  const pruned = await pruneStaleDispatchRules(rule.sipDispatchRuleId);
+  actions.push(...pruned.actions);
 
   await writeProvision(phone.id, {
     routingMode: "livekit_sip",

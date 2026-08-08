@@ -1,5 +1,6 @@
 import type { SIPDispatchRuleInfo, SIPInboundTrunkInfo } from "livekit-server-sdk";
 import { getLiveKitSipHost, getLiveKitSipHostSource } from "../config";
+import { trunkNumbersIncludeDid } from "./did";
 import { getLiveKitSipClient } from "./client";
 
 export type LiveKitTrunkSnapshot = {
@@ -55,7 +56,7 @@ export async function inspectLiveKitSipRouting(e164: string): Promise<LiveKitSip
   const trunks = (await client.listSipInboundTrunk()).map(snapshotTrunk);
   const dispatchRules = (await client.listSipDispatchRule()).map(snapshotDispatch);
 
-  const trunkContainingDid = trunks.find((t) => t.numbers.includes(e164)) || null;
+  const trunkContainingDid = trunks.find((t) => trunkNumbersIncludeDid(t.numbers, e164)) || null;
 
   const dispatchRulesForTrunk = trunkContainingDid
     ? dispatchRules.filter((r) => (r.trunkIds || []).includes(trunkContainingDid.id))
@@ -81,7 +82,7 @@ export function diagnoseLiveKitSipIssues(
     issues.push("no_trunk_for_did");
     return issues;
   }
-  if (!inspect.trunkContainingDid.numbers.includes(e164)) {
+  if (!trunkNumbersIncludeDid(inspect.trunkContainingDid.numbers, e164)) {
     issues.push("trunk_missing_explicit_did");
   }
   if (inspect.trunkContainingDid.allowedAddresses.length > 0) {
@@ -90,7 +91,7 @@ export function diagnoseLiveKitSipIssues(
   if (inspect.dispatchRulesForTrunk.length === 0) {
     issues.push("no_dispatch_rule_for_trunk");
   }
-  const duplicateOwners = inspect.trunks.filter((t) => t.numbers.includes(e164));
+  const duplicateOwners = inspect.trunks.filter((t) => trunkNumbersIncludeDid(t.numbers, e164));
   if (duplicateOwners.length > 1) issues.push("duplicate_trunk_for_did");
   return issues;
 }

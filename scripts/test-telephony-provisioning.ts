@@ -8,6 +8,10 @@ import {
   resolveLiveKitSipHost,
 } from "../src/lib/telephony/provisioning/config";
 import {
+  toLiveKitInboundDid,
+  trunkNumbersIncludeDid,
+} from "../src/lib/telephony/provisioning/livekit/did";
+import {
   getVoicePipelineConfig,
 } from "../src/lib/voice/runtime-provider/config";
 import {
@@ -33,6 +37,10 @@ process.env.LIVEKIT_URL = "wss://sms-project.livekit.cloud";
 assert.equal(resolveLiveKitSipHost().source, "LIVEKIT_URL(derived)");
 assert.equal(resolveLiveKitSipHost().host, "sms-project.sip.livekit.cloud");
 process.env.LIVEKIT_URL = prevUrl;
+
+assert.equal(toLiveKitInboundDid("+18663464256"), "18663464256");
+assert.equal(trunkNumbersIncludeDid(["18663464256"], "+18663464256"), true);
+assert.equal(trunkNumbersIncludeDid(["+18663464256"], "+18663464256"), true);
 
 assert.equal(
   parseRoomMetadata(JSON.stringify({ toE164: "+18663464256" }))?.toE164,
