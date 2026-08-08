@@ -6,4 +6,8 @@ export async function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
   const { startInProcessWorker } = await import("@/lib/jobs/inprocess-worker");
   await startInProcessWorker();
+  const { startInProcessVoiceRuntime } = await import(
+    "@/lib/voice/inprocess-voice-runtime"
+  );
+  await startInProcessVoiceRuntime();
 }

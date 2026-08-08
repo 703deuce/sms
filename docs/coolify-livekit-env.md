@@ -8,7 +8,7 @@
 | Project URL | `wss://sms-6w01zoya.livekit.cloud` |
 | **SIP URI** | `sms-6w01zoya.sip.livekit.cloud` |
 
-Telnyx must send PSTN to **`sms-6w01zoya.sip.livekit.cloud`**.
+Telnyx must send PSTN to your LiveKit **SIP URI** (may differ from project URL, e.g. `2tzwfcliuex.sip.livekit.cloud`).
 
 ## Required in Coolify (main app)
 
@@ -36,12 +36,68 @@ Telnyx must send PSTN to **`sms-6w01zoya.sip.livekit.cloud`**.
 | `VOICE_LLM_PROVIDER` | `openai` |
 | `VOICE_LLM_MODEL` | `gpt-4.1-mini` |
 
-## LiveKit agent worker (separate deploy)
+## LiveKit agent worker (required for Amy to answer calls)
 
-Deploy `transovo-voice-runtime` on LiveKit Cloud **Sms** project with the same `LIVEKIT_*` values plus `OPENAI_API_KEY` and `DATABASE_URL`.
+The main Coolify app provisions trunks and publishes Amy. A **worker** must also run to join LiveKit rooms and speak.
+
+### Default: in-process (no second Coolify service)
+
+When `VOICE_RUNTIME_PROVIDER=livekit`, the main Next.js app **automatically spawns** `transovo-voice-runtime` on boot (same pattern as the in-process job worker). You only need to **redeploy the existing Coolify app** — no second service, no manual start command.
+
+Requirements (same env as above):
+
+| Variable | Required |
+|----------|----------|
+| `LIVEKIT_URL` | yes |
+| `LIVEKIT_API_KEY` | yes |
+| `LIVEKIT_API_SECRET` | yes |
+| `DATABASE_URL` | yes |
+| `OPENAI_API_KEY` | yes |
+
+Optional: `LIVEKIT_AGENT_NAME=transovo-voice-runtime` (default), `ELEVENLABS_KEY`, voice pipeline vars.
+
+After deploy, logs should show:
+
+```
+[voice-runtime] spawning transovo-voice-runtime via tsx (wss://...)
+```
+
+Disable in-process auto-start (if you run the worker elsewhere):
+
+```
+DISABLE_INPROCESS_VOICE_RUNTIME=1
+```
+
+### Alternative: second Coolify service
+
+Only if you want voice isolated from the web container:
+
+| Coolify field | Value |
+|---------------|-------|
+| Repository | `703deuce/sms` |
+| Branch | `master` |
+| Build command | `npm ci && npx prisma generate` |
+| **Start command** | `npm run voice-runtime:start` |
+| Port | none (worker, not HTTP) |
+
+Set `DISABLE_INPROCESS_VOICE_RUNTIME=1` on the **main** app to avoid two workers registering.
+
+### Alternative: LiveKit Cloud Agents (`lk agent deploy`)
+
+```bash
+lk cloud auth          # pick Sms project
+lk agent create        # first time, from repo root
+lk agent update-secrets --secrets "DATABASE_URL=..."
+lk agent update-secrets --secrets "OPENAI_API_KEY=..."
+lk agent deploy
+```
+
+Set `DISABLE_INPROCESS_VOICE_RUNTIME=1` on Coolify when using LiveKit Cloud agents.
+
+---
 
 ## After updating Coolify
 
-1. Redeploy the main app
+1. Redeploy the main app (in-process worker starts automatically)
 2. **Publish Amy** once (or run `node scripts/fix-amy-livekit-sip-host.mjs` then full reset via API)
 3. Call +18663464256
