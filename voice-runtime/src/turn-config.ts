@@ -1,15 +1,41 @@
 import { inference } from "@livekit/agents";
 
-export const VOICE_TURN_PRESETS = ["receptionist", "low_latency", "aggressive"] as const;
+/**
+ * Endpointing benchmarks — tune fast → natural, not slow → fast.
+ *
+ * TEST A (default): 150 / 800 ms dynamic
+ * TEST B:            200 / 1000 ms dynamic
+ * TEST C:            250 / 1200 ms dynamic
+ * receptionist_legacy: old 300 / 2500 ms fixed ceiling (rollback)
+ */
+export const VOICE_TURN_PRESETS = [
+  "test_a",
+  "test_b",
+  "test_c",
+  "receptionist_legacy",
+  // backward-compatible aliases
+  "receptionist",
+  "low_latency",
+  "aggressive",
+] as const;
+
 export type VoiceTurnPreset = (typeof VOICE_TURN_PRESETS)[number];
 
-const PRESET_DEFAULTS: Record<VoiceTurnPreset, { minDelay: number; maxDelay: number }> = {
-  /** LiveKit streaming TurnDetector defaults — balanced for PSTN receptionist. */
-  receptionist: { minDelay: 300, maxDelay: 2500 },
-  /** Tighter without going to VAD-only. Opt-in via VOICE_TURN_PRESET=low_latency. */
-  low_latency: { minDelay: 250, maxDelay: 2000 },
-  /** Benchmark only — may clip thoughtful pauses. Requires explicit preset. */
-  aggressive: { minDelay: 200, maxDelay: 1800 },
+type EndpointingPreset = {
+  minDelay: number;
+  maxDelay: number;
+  mode: "fixed" | "dynamic";
+};
+
+const PRESET_DEFAULTS: Record<string, EndpointingPreset> = {
+  test_a: { minDelay: 150, maxDelay: 800, mode: "dynamic" },
+  test_b: { minDelay: 200, maxDelay: 1000, mode: "dynamic" },
+  test_c: { minDelay: 250, maxDelay: 1200, mode: "dynamic" },
+  receptionist_legacy: { minDelay: 300, maxDelay: 2500, mode: "fixed" },
+  // aliases
+  receptionist: { minDelay: 300, maxDelay: 2500, mode: "fixed" },
+  low_latency: { minDelay: 200, maxDelay: 1000, mode: "dynamic" },
+  aggressive: { minDelay: 150, maxDelay: 800, mode: "dynamic" },
 };
 
 function readIntEnv(name: string): number | undefined {
@@ -25,29 +51,26 @@ function readBoolEnv(name: string, fallback: boolean): boolean {
   return raw === "1" || raw === "true" || raw === "yes" || raw === "on";
 }
 
-function resolvePreset(): VoiceTurnPreset {
-  const raw = (process.env.VOICE_TURN_PRESET || "receptionist").trim().toLowerCase();
-  if ((VOICE_TURN_PRESETS as readonly string[]).includes(raw)) {
-    return raw as VoiceTurnPreset;
-  }
-  return "receptionist";
+function resolvePreset(): string {
+  const raw = (process.env.VOICE_TURN_PRESET || "test_a").trim().toLowerCase();
+  if (raw in PRESET_DEFAULTS) return raw;
+  return "test_a";
 }
 
-/**
- * Turn handling tuned for telephone receptionist conversation.
- * Uses LiveKit semantic TurnDetector; endpointing overrides are env-tunable.
- */
 export function buildAmyTurnHandling() {
   const preset = resolvePreset();
-  const defaults = PRESET_DEFAULTS[preset];
+  const defaults = PRESET_DEFAULTS[preset] ?? PRESET_DEFAULTS.test_a;
   const minDelay = readIntEnv("VOICE_ENDPOINTING_MIN_MS") ?? defaults.minDelay;
   const maxDelay = readIntEnv("VOICE_ENDPOINTING_MAX_MS") ?? defaults.maxDelay;
   const preemptiveTts = readBoolEnv("VOICE_PREEMPTIVE_TTS", true);
+  const mode =
+    (process.env.VOICE_ENDPOINTING_MODE?.trim().toLowerCase() as "fixed" | "dynamic") ||
+    defaults.mode;
 
   return {
     turnDetection: new inference.TurnDetector(),
     endpointing: {
-      mode: "fixed" as const,
+      mode: mode === "dynamic" ? ("dynamic" as const) : ("fixed" as const),
       minDelay,
       maxDelay,
     },
@@ -70,7 +93,7 @@ export function describeTurnHandlingConfig(): Record<string, unknown> {
     preemptiveGeneration: handling.preemptiveGeneration,
     turnDetector: "inference.TurnDetector",
     notes:
-      "receptionist=300/2500ms (default). Set VOICE_TURN_PRESET=low_latency or aggressive to benchmark.",
+      "Default test_a: 150/800ms dynamic. Raise max (test_b/test_c) if Amy clips mid-sentence pauses.",
   };
 }
 

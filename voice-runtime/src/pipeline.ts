@@ -6,6 +6,15 @@ import {
   type VoicePipelineConfig,
 } from "@/lib/voice/runtime-provider/config";
 
+const INFERENCE_TTS_PROVIDERS = new Set([
+  "inference",
+  "cartesia",
+  "rime",
+  "inworld",
+  "elevenlabs",
+  "deepgram",
+]);
+
 function normalizeInferenceModel(
   provider: string,
   model: string,
@@ -16,7 +25,38 @@ function normalizeInferenceModel(
   if (provider === "deepgram") return `deepgram/${trimmed}`;
   if (provider === "inworld") return `inworld/${trimmed}`;
   if (provider === "elevenlabs") return `elevenlabs/${trimmed}`;
+  if (provider === "cartesia") return `cartesia/${trimmed}`;
+  if (provider === "rime") return `rime/${trimmed}`;
   return `${prefix}/${trimmed}`;
+}
+
+function resolveInferenceTtsModel(cfg: VoicePipelineConfig): string {
+  if (cfg.ttsModel.includes("/")) return cfg.ttsModel;
+  return normalizeInferenceModel(cfg.ttsProvider, cfg.ttsModel, "inworld");
+}
+
+export function buildAmyTts(cfg: VoicePipelineConfig): tts.TTS {
+  if (cfg.ttsProvider === "elevenlabs-plugin") {
+    return new elevenlabs.TTS({
+      model: cfg.ttsModel as elevenlabs.TTSModels,
+      voiceId: cfg.ttsVoice || process.env.VOICE_TTS_VOICE_ID || "21m00Tcm4TlvDq8ikWAM",
+    });
+  }
+
+  if (INFERENCE_TTS_PROVIDERS.has(cfg.ttsProvider)) {
+    const model = resolveInferenceTtsModel(cfg);
+    return new inference.TTS({
+      model,
+      voice: cfg.ttsVoice,
+      language: cfg.ttsLanguage,
+    });
+  }
+
+  return new inference.TTS({
+    model: "inworld/inworld-tts-1.5-mini",
+    voice: cfg.ttsVoice || "Ashley",
+    language: cfg.ttsLanguage,
+  });
 }
 
 export function buildAmyVoicePipeline() {
@@ -39,29 +79,7 @@ export function buildAmyVoicePipeline() {
     llm = new inference.LLM({ model: cfg.llmModel });
   }
 
-  let ttsInstance: tts.TTS;
-  if (cfg.ttsProvider === "elevenlabs-plugin") {
-    ttsInstance = new elevenlabs.TTS({
-      model: cfg.ttsModel as elevenlabs.TTSModels,
-      voiceId: cfg.ttsVoice || process.env.VOICE_TTS_VOICE_ID || "21m00Tcm4TlvDq8ikWAM",
-    });
-  } else if (cfg.ttsProvider === "inference" || cfg.ttsProvider === "inworld" || cfg.ttsProvider === "elevenlabs") {
-    const ttsModel =
-      cfg.ttsProvider === "inference"
-        ? cfg.ttsModel
-        : normalizeInferenceModel(cfg.ttsProvider, cfg.ttsModel, "inworld");
-    ttsInstance = new inference.TTS({
-      model: ttsModel,
-      voice: cfg.ttsVoice || "Ashley",
-      language: cfg.ttsLanguage,
-    });
-  } else {
-    ttsInstance = new inference.TTS({
-      model: "inworld/inworld-tts-1.5-mini",
-      voice: cfg.ttsVoice || "Ashley",
-      language: cfg.ttsLanguage,
-    });
-  }
+  const ttsInstance = buildAmyTts(cfg);
 
   return { stt, llm, tts: ttsInstance, config: cfg };
 }
@@ -71,6 +89,7 @@ export function describePipelineConfig(cfg: VoicePipelineConfig) {
     stt: { provider: cfg.sttProvider, model: cfg.sttModel, language: cfg.sttLanguage },
     llm: { provider: cfg.llmProvider, model: cfg.llmModel },
     tts: {
+      preset: cfg.ttsPreset || null,
       provider: cfg.ttsProvider,
       model: cfg.ttsModel,
       voice: cfg.ttsVoice,

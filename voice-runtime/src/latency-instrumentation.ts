@@ -15,6 +15,12 @@ export type TurnLatencyBreakdown = {
   transcript?: string;
   hadToolCall: boolean;
   preemptiveObserved: boolean;
+  ttsConfig?: {
+    preset?: string | null;
+    provider?: string;
+    model?: string;
+    voice?: string;
+  };
   components: {
     transcriptionDelayMs?: number;
     endOfUtteranceDelayMs?: number;
@@ -79,6 +85,7 @@ function buildBreakdown(
   input: {
     callId?: string;
     preemptiveConfig: TurnLatencyBreakdown["preemptiveConfig"];
+    ttsConfig?: TurnLatencyBreakdown["ttsConfig"];
   },
 ): TurnLatencyBreakdown {
   const speechAnchor =
@@ -125,6 +132,7 @@ function buildBreakdown(
     transcript: state.sttTranscript,
     hadToolCall: state.hadToolCall,
     preemptiveObserved: state.preemptiveObserved,
+    ttsConfig: input.ttsConfig,
     components,
     flags: {
       ordinaryTurnOver2s: ordinary && e2e > 2000,
@@ -140,6 +148,7 @@ function emitTurnBreakdown(
   input: {
     callId?: string;
     preemptiveConfig: TurnLatencyBreakdown["preemptiveConfig"];
+    ttsConfig?: TurnLatencyBreakdown["ttsConfig"];
   },
 ) {
   if (state.breakdownEmitted) return;
@@ -173,6 +182,7 @@ function recordMetrics(
   input: {
     callId?: string;
     preemptiveConfig: TurnLatencyBreakdown["preemptiveConfig"];
+    ttsConfig?: TurnLatencyBreakdown["ttsConfig"];
   },
 ) {
   const now = Date.now();
@@ -240,6 +250,7 @@ export function attachLatencyInstrumentation(
   input?: {
     callId?: string;
     preemptiveConfig?: TurnLatencyBreakdown["preemptiveConfig"];
+    ttsConfig?: TurnLatencyBreakdown["ttsConfig"];
   },
 ) {
   const callId = input?.callId;
@@ -247,6 +258,7 @@ export function attachLatencyInstrumentation(
     enabled: true,
     preemptiveTts: false,
   };
+  const ttsConfig = input?.ttsConfig;
   const state: TurnState = {
     turn: 0,
     preemptiveObserved: false,
@@ -254,7 +266,7 @@ export function attachLatencyInstrumentation(
     breakdownEmitted: false,
   };
 
-  const ctx = { callId, preemptiveConfig };
+  const ctx = { callId, preemptiveConfig, ttsConfig };
 
   session.on(
     AgentSessionEventTypes.UserStateChanged,

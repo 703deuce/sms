@@ -1,4 +1,9 @@
 import type { VoiceRuntimeProviderId } from "./types";
+import {
+  resolveVoiceTtsPreset,
+  type VoiceTtsPresetId,
+  isVoiceTtsPresetId,
+} from "./tts-presets";
 
 /** Default to LiveKit for new development; production Amy stays on Telnyx until cutover. */
 export function getVoiceRuntimeProviderId(): VoiceRuntimeProviderId {
@@ -55,20 +60,62 @@ export type VoicePipelineConfig = {
   ttsModel: string;
   ttsLanguage: string;
   ttsVoice?: string;
+  ttsPreset?: VoiceTtsPresetId;
 };
 
-/** First PSTN test defaults: LiveKit Inference STT/TTS (no separate Deepgram/Inworld keys). */
+function resolveTtsFromEnv(): Pick<
+  VoicePipelineConfig,
+  "ttsProvider" | "ttsModel" | "ttsVoice" | "ttsLanguage" | "ttsPreset"
+> {
+  const presetRaw = process.env.VOICE_TTS_PRESET?.trim().toLowerCase();
+  const preset = isVoiceTtsPresetId(presetRaw) ? resolveVoiceTtsPreset(presetRaw) : null;
+
+  const explicitModel = process.env.VOICE_TTS_MODEL?.trim();
+  const explicitProvider = process.env.VOICE_TTS_PROVIDER?.trim();
+  const explicitVoice = process.env.VOICE_TTS_VOICE?.trim();
+
+  if (explicitModel || explicitProvider) {
+    return {
+      ttsProvider: explicitProvider || preset?.provider || "inference",
+      ttsModel: explicitModel || preset?.model || "inworld/inworld-tts-1.5-mini",
+      ttsVoice: explicitVoice || preset?.voice,
+      ttsLanguage: process.env.VOICE_TTS_LANGUAGE || preset?.language || "en",
+      ttsPreset: preset?.id,
+    };
+  }
+
+  if (preset) {
+    return {
+      ttsProvider: preset.provider,
+      ttsModel: preset.model,
+      ttsVoice: explicitVoice || preset.voice,
+      ttsLanguage: process.env.VOICE_TTS_LANGUAGE || preset.language,
+      ttsPreset: preset.id,
+    };
+  }
+
+  return {
+    ttsProvider: process.env.VOICE_TTS_PROVIDER || "inference",
+    ttsModel: process.env.VOICE_TTS_MODEL || "inworld/inworld-tts-1.5-mini",
+    ttsLanguage: process.env.VOICE_TTS_LANGUAGE || "en",
+    ttsVoice: explicitVoice || process.env.VOICE_TTS_VOICE || "Ashley",
+  };
+}
+
+/** LiveKit Inference STT/TTS — provider keys optional when using inference. */
 export function getVoicePipelineConfig(): VoicePipelineConfig {
+  const tts = resolveTtsFromEnv();
   return {
     sttProvider: process.env.VOICE_STT_PROVIDER || "inference",
     sttModel: process.env.VOICE_STT_MODEL || "deepgram/nova-3",
     sttLanguage: process.env.VOICE_STT_LANGUAGE || "en",
     llmProvider: process.env.VOICE_LLM_PROVIDER || "openai",
     llmModel: process.env.VOICE_LLM_MODEL || "gpt-4.1-mini",
-    ttsProvider: process.env.VOICE_TTS_PROVIDER || "inference",
-    ttsModel: process.env.VOICE_TTS_MODEL || "inworld/inworld-tts-1.5-mini",
-    ttsLanguage: process.env.VOICE_TTS_LANGUAGE || "en",
-    ttsVoice: process.env.VOICE_TTS_VOICE || undefined,
+    ttsProvider: tts.ttsProvider,
+    ttsModel: tts.ttsModel,
+    ttsLanguage: tts.ttsLanguage,
+    ttsVoice: tts.ttsVoice,
+    ttsPreset: tts.ttsPreset,
   };
 }
 

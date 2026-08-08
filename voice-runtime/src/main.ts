@@ -103,6 +103,12 @@ export default defineAgent<AmyProcessUserData>({
     attachLatencyInstrumentation(session, {
       callId,
       preemptiveConfig: getPreemptiveConfigForInstrumentation(),
+      ttsConfig: {
+        preset: config.ttsPreset || null,
+        provider: config.ttsProvider,
+        model: config.ttsModel,
+        voice: config.ttsVoice,
+      },
     });
 
     ctx.addShutdownCallback(async () => {

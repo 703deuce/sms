@@ -38,15 +38,33 @@ Telnyx must send PSTN to your LiveKit **SIP URI** (may differ from project URL, 
 
 ## Latency and audio (LiveKit)
 
+### Endpointing (tune fast → natural)
+
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `VOICE_TURN_PRESET` | `receptionist` | `receptionist` (300/2500ms), `low_latency` (250/2000), `aggressive` (200/1800) |
+| `VOICE_TURN_PRESET` | `test_a` | `test_a` (150/800ms dynamic), `test_b` (200/1000), `test_c` (250/1200), `receptionist_legacy` (300/2500 fixed) |
 | `VOICE_ENDPOINTING_MIN_MS` | preset default | Override min endpointing delay (ms) |
 | `VOICE_ENDPOINTING_MAX_MS` | preset default | Override max endpointing delay (ms) |
+| `VOICE_ENDPOINTING_MODE` | preset default | `dynamic` (adaptive) or `fixed` |
 | `VOICE_PREEMPTIVE_TTS` | `true` | Speculative TTS before turn confirmed |
-| `VOICE_AGENT_OUTPUT_GAIN_DB` | `-4` | Agent playback gain (−4 dB if unset; also reads agent `outputGainDb`) |
+| `VOICE_AGENT_OUTPUT_GAIN_DB` | `-4` | Agent playback gain |
 
-Faster LLM (optional): `VOICE_LLM_MODEL=gpt-4.1-nano`
+If Amy clips mid-sentence pauses, raise preset to `test_b` or `test_c`.
+
+### TTS A/B comparison (LiveKit Inference only)
+
+| Variable | Example | Purpose |
+|----------|---------|---------|
+| `VOICE_TTS_PRESET` | `cartesia` | `baseline`, `cartesia`, `rime`, `inworld2`, `elevenlabs` |
+| `VOICE_TTS_PROVIDER` | `cartesia` | Override provider (optional if preset set) |
+| `VOICE_TTS_MODEL` | `cartesia/sonic-3.5` | Override model |
+| `VOICE_TTS_VOICE` | `9626c31c-...` | Voice ID / speaker name |
+
+**First Cartesia test:**
+```
+VOICE_TTS_PRESET=cartesia
+VOICE_TURN_PRESET=test_a
+```
 
 ## LiveKit agent worker (required for Amy to answer calls)
 
