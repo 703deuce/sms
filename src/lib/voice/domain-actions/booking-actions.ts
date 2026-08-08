@@ -60,12 +60,12 @@ export async function domainRecordField(input: {
   input.ctx.session = session;
   input.ctx.workflowState = session.currentState;
 
+  timer.finish(true);
   return {
     ok: true,
     speak: String((recorded as { speak?: string }).speak || "Got it, thank you."),
     workflow_state: session.currentState,
     data: { field_id: fieldId, missing_fields: session.missingFieldIds },
-    ...timer.finish(true),
   };
 }
 
@@ -97,13 +97,14 @@ export async function domainCheckAvailability(input: {
   input.ctx.session = refreshed;
   input.ctx.workflowState = refreshed.currentState;
 
+  const ok = result.ok !== false;
+  timer.finish(ok);
   return {
-    ok: result.ok !== false,
+    ok,
     speak: String(result.speak || "Let me know what time works."),
     workflow_state: String(result.workflow_state || refreshed.currentState),
     data: (result.data as Record<string, unknown>) || {},
     error_code: result.error_code ? String(result.error_code) : undefined,
-    ...timer.finish(result.ok !== false),
   };
 }
 
@@ -137,13 +138,14 @@ export async function domainSelectSlot(input: {
   input.ctx.session = refreshed;
   input.ctx.workflowState = refreshed.currentState;
 
+  const ok = result.ok !== false;
+  timer.finish(ok);
   return {
-    ok: result.ok !== false,
+    ok,
     speak: String(result.speak || "Which time would you prefer?"),
     workflow_state: String(result.workflow_state || refreshed.currentState),
     data: (result.data as Record<string, unknown>) || {},
     error_code: result.error_code ? String(result.error_code) : undefined,
-    ...timer.finish(result.ok !== false),
   };
 }
 
@@ -176,12 +178,13 @@ export async function domainConfirmBooking(input: {
   input.ctx.session = refreshed;
   input.ctx.workflowState = refreshed.currentState;
 
+  const ok = result.ok !== false;
+  timer.finish(ok);
   return {
-    ok: result.ok !== false,
+    ok,
     speak: String(result.speak || "Should I go ahead and book that?"),
     workflow_state: String(result.workflow_state || refreshed.currentState),
     data: (result.data as Record<string, unknown>) || {},
     error_code: result.error_code ? String(result.error_code) : undefined,
-    ...timer.finish(result.ok !== false),
   };
 }

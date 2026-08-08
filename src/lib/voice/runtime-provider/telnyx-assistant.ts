@@ -28,10 +28,19 @@ export const telnyxAssistantRuntimeProvider: VoiceRuntimeProvider = {
   },
 
   async syncAgentConfig(input: { workspaceId: string; agentId: string }): Promise<void> {
+    const { getPrisma } = await import("@/lib/db");
+    const { parseVoiceAgentConfig } = await import("@/lib/voice/types");
     const { syncTelnyxAssistant } = await import("@/lib/voice/telnyx/assistant-sync");
-    await syncTelnyxAssistant({
-      workspaceId: input.workspaceId,
-      agentId: input.agentId,
+
+    const agent = await getPrisma().voiceAgent.findFirst({
+      where: { id: input.agentId, workspaceId: input.workspaceId },
     });
+    if (!agent) return;
+
+    await syncTelnyxAssistant(
+      input.workspaceId,
+      agent as never,
+      parseVoiceAgentConfig(agent.draftConfig),
+    );
   },
 };

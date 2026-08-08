@@ -62,6 +62,10 @@ export const liveKitRuntimeProvider: VoiceRuntimeProvider = {
       callId = created.id;
     }
 
+    if (!callId) {
+      throw new Error("Failed to resolve call ID for LiveKit session");
+    }
+
     const { initializeRealtimeSessionForCall } = await import(
       "@/lib/voice/realtime-session/init"
     );

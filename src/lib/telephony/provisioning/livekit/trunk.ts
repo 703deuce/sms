@@ -1,3 +1,4 @@
+import { ListUpdate } from "@livekit/protocol";
 import type { SIPInboundTrunkInfo } from "livekit-server-sdk";
 import {
   getStoredLiveKitTrunkId,
@@ -64,7 +65,7 @@ export async function addNumberToInboundTrunk(
   }
 
   const updated = await client.updateSipInboundTrunkFields(trunkId, {
-    numbers: { set: [...numbers, e164] },
+    numbers: new ListUpdate({ set: [...numbers, e164] }),
   });
   return { trunk: updated, added: true };
 }
@@ -84,7 +85,7 @@ export async function removeNumberFromInboundTrunk(
   }
 
   const updated = await client.updateSipInboundTrunkFields(trunkId, {
-    numbers: { set: numbers },
+    numbers: new ListUpdate({ set: numbers }),
   });
   return { trunk: updated, removed: true };
 }

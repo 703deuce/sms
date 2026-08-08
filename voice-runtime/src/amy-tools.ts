@@ -45,11 +45,12 @@ function formatToolResult(result: {
 export function buildAmyToolList(callContext: LiveKitCallContext) {
   const taskId = taskForWorkflowState(callContext.session.currentState);
   const allowed = new Set(toolsForTask(taskId));
-  const tools: llm.FunctionTool[] = [];
+  const tools: llm.ToolContextEntry[] = [];
 
   if (allowed.has("record_field")) {
     tools.push(
       llm.tool({
+        name: "record_field",
         description: "Save the caller's answer for the currently active required field.",
         parameters: z.object({
           value: z.string().describe("The caller's answer for the active field"),
@@ -67,6 +68,7 @@ export function buildAmyToolList(callContext: LiveKitCallContext) {
   if (allowed.has("check_availability")) {
     tools.push(
       llm.tool({
+        name: "check_availability",
         description: "Check real calendar availability for the caller's preferred time window.",
         parameters: z.object({
           spoken: z.string().describe("Caller time preference, e.g. tomorrow afternoon"),
@@ -84,6 +86,7 @@ export function buildAmyToolList(callContext: LiveKitCallContext) {
   if (allowed.has("select_slot")) {
     tools.push(
       llm.tool({
+        name: "select_slot",
         description: "Select one of the offered appointment slots and place a hold.",
         parameters: z.object({
           utterance: z.string().describe("Caller slot choice, e.g. 2 PM or the second one"),
@@ -106,6 +109,7 @@ export function buildAmyToolList(callContext: LiveKitCallContext) {
   if (allowed.has("confirm_booking")) {
     tools.push(
       llm.tool({
+        name: "confirm_booking",
         description: "Confirm or decline booking the held appointment slot.",
         parameters: z.object({
           confirmed: z.boolean().describe("True when caller explicitly confirms booking"),
@@ -123,6 +127,7 @@ export function buildAmyToolList(callContext: LiveKitCallContext) {
   if (allowed.has("request_human")) {
     tools.push(
       llm.tool({
+        name: "request_human",
         description: "Transfer or escalate to a human when the caller requests it.",
         parameters: z.object({
           reason: z.string().optional(),

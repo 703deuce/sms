@@ -1,5 +1,5 @@
 import { SipClient } from "livekit-server-sdk";
-import { assertLiveKitProvisioningEnv } from "./config";
+import { assertLiveKitProvisioningEnv } from "../config";
 
 let sipClient: SipClient | null = null;
 

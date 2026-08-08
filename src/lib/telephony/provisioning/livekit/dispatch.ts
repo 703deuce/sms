@@ -1,4 +1,4 @@
-import { RoomAgentDispatch, RoomConfiguration } from "@livekit/protocol";
+import { ListUpdate, RoomAgentDispatch, RoomConfiguration } from "@livekit/protocol";
 import type { SIPDispatchRuleInfo } from "livekit-server-sdk";
 import {
   getStoredLiveKitDispatchRuleId,
@@ -37,7 +37,7 @@ export async function ensureSharedDispatchRule(input: {
     if (!trunkIds.has(input.trunkId)) {
       trunkIds.add(input.trunkId);
       rule = await client.updateSipDispatchRuleFields(rule.sipDispatchRuleId!, {
-        trunkIds: { set: [...trunkIds] },
+        trunkIds: new ListUpdate({ set: [...trunkIds] }),
       });
       actions.push("attached_trunk_to_existing_dispatch_rule");
     }

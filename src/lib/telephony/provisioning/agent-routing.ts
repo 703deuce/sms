@@ -1,7 +1,7 @@
 import { getPrisma } from "@/lib/db";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import { resolveInboundAiAgent } from "@/lib/voice/agent-phone";
-import type { AgentRoutingResolution } from "../types";
+import type { AgentRoutingResolution } from "./types";
 
 /**
  * Authoritative Transovo lookup: called number → workspace → active agent.
