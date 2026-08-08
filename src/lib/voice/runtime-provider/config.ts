@@ -48,21 +48,26 @@ export function normalizeLiveKitApiUrl(raw: string): string {
 export type VoicePipelineConfig = {
   sttProvider: string;
   sttModel: string;
+  sttLanguage: string;
   llmProvider: string;
   llmModel: string;
   ttsProvider: string;
   ttsModel: string;
+  ttsLanguage: string;
   ttsVoice?: string;
 };
 
+/** First PSTN test defaults: LiveKit Inference STT/TTS (no separate Deepgram/Inworld keys). */
 export function getVoicePipelineConfig(): VoicePipelineConfig {
   return {
-    sttProvider: process.env.VOICE_STT_PROVIDER || "deepgram",
-    sttModel: process.env.VOICE_STT_MODEL || "nova-3",
+    sttProvider: process.env.VOICE_STT_PROVIDER || "inference",
+    sttModel: process.env.VOICE_STT_MODEL || "deepgram/nova-3",
+    sttLanguage: process.env.VOICE_STT_LANGUAGE || "en",
     llmProvider: process.env.VOICE_LLM_PROVIDER || "openai",
     llmModel: process.env.VOICE_LLM_MODEL || "gpt-4.1-mini",
-    ttsProvider: process.env.VOICE_TTS_PROVIDER || "elevenlabs",
-    ttsModel: process.env.VOICE_TTS_MODEL || "eleven_flash_v2_5",
+    ttsProvider: process.env.VOICE_TTS_PROVIDER || "inference",
+    ttsModel: process.env.VOICE_TTS_MODEL || "inworld/inworld-tts-1.5-mini",
+    ttsLanguage: process.env.VOICE_TTS_LANGUAGE || "en",
     ttsVoice: process.env.VOICE_TTS_VOICE || undefined,
   };
 }

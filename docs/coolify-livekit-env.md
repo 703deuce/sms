@@ -10,10 +10,28 @@ The code reads your **existing** Coolify variables. No separate `LIVEKIT_SIP_HOS
 | `LIVEKIT_URL` | Your `sms-xxxxx.sip.livekit.cloud` value **or** `wss://sms-xxxxx.livekit.cloud` |
 | `LIVEKIT_API_KEY` | LiveKit project API key |
 | `LIVEKIT_API_SECRET` | LiveKit project API secret |
-| `OPENAI_API_KEY` | OpenAI key (LiveKit LLM) |
-| `ELEVENLABS_KEY` | ElevenLabs TTS (already used elsewhere) |
+| `OPENAI_API_KEY` | OpenAI key (Amy LLM — unchanged for first PSTN test) |
+| `ELEVENLABS_KEY` | Only if `VOICE_TTS_PROVIDER=elevenlabs-plugin` (BYO plugin path) |
 | `TELNYX_API_KEY` | Telnyx (number routing) |
 | `DATABASE_URL` | Postgres |
+
+## Voice pipeline (first PSTN test — LiveKit Inference)
+
+No separate `DEEPGRAM_API_KEY` or `INWORLD_API_KEY` required. LiveKit Cloud bills inference via your project.
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `VOICE_STT_PROVIDER` | `inference` | LiveKit Inference STT |
+| `VOICE_STT_MODEL` | `deepgram/nova-3` | Deepgram Nova-3 via inference |
+| `VOICE_STT_LANGUAGE` | `en` | STT language |
+| `VOICE_LLM_PROVIDER` | `openai` | Amy LLM (not changed for voice test) |
+| `VOICE_LLM_MODEL` | `gpt-4.1-mini` | Amy LLM model |
+| `VOICE_TTS_PROVIDER` | `inference` | LiveKit Inference TTS |
+| `VOICE_TTS_MODEL` | `inworld/inworld-tts-1.5-mini` | Inworld Mini via inference |
+| `VOICE_TTS_LANGUAGE` | `en` | TTS language |
+| `VOICE_TTS_VOICE` | `Ashley` | Inworld voice name |
+
+TTS A/B after first successful call: set `VOICE_TTS_MODEL=elevenlabs/eleven_flash_v2_5` (still `inference` provider).
 
 ## Not required (auto-handled)
 

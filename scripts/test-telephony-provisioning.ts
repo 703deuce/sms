@@ -8,6 +8,9 @@ import {
   resolveLiveKitSipHost,
 } from "../src/lib/telephony/provisioning/config";
 import {
+  getVoicePipelineConfig,
+} from "../src/lib/voice/runtime-provider/config";
+import {
   parseDispatchAttributes,
   parseRoomMetadata,
   roomMetadataSchema,
@@ -46,5 +49,17 @@ assert.equal(
 
 const partial = roomMetadataSchema.safeParse({ toE164: "+15715551234" });
 assert.equal(partial.success, true);
+
+const prevStt = process.env.VOICE_STT_PROVIDER;
+const prevTts = process.env.VOICE_TTS_PROVIDER;
+delete process.env.VOICE_STT_PROVIDER;
+delete process.env.VOICE_TTS_PROVIDER;
+const pipeline = getVoicePipelineConfig();
+assert.equal(pipeline.sttProvider, "inference");
+assert.equal(pipeline.sttModel, "deepgram/nova-3");
+assert.equal(pipeline.ttsProvider, "inference");
+assert.equal(pipeline.ttsModel, "inworld/inworld-tts-1.5-mini");
+if (prevStt) process.env.VOICE_STT_PROVIDER = prevStt;
+if (prevTts) process.env.VOICE_TTS_PROVIDER = prevTts;
 
 console.log("telephony provisioning unit tests: PASS");

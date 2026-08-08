@@ -6,7 +6,8 @@ import { bootstrapLiveKitCallContext } from "@/lib/voice/domain-actions";
 import { resolveAgentRoutingForCall } from "@/lib/telephony/provisioning";
 import { createAmyAgent } from "./amy-tools";
 import { parseDispatchAttributes, parseRoomMetadata, type AmyProcessUserData } from "./metadata";
-import { buildAmyVoicePipeline } from "./pipeline";
+import { buildAmyVoicePipeline, describePipelineConfig } from "./pipeline";
+import { attachLatencyInstrumentation } from "./latency-instrumentation";
 
 dotenv.config();
 
@@ -73,7 +74,15 @@ export default defineAgent<AmyProcessUserData>({
 
     ctx.proc.userData = { callContext } satisfies AmyProcessUserData;
 
-    const { stt, llm, tts } = buildAmyVoicePipeline();
+    const { stt, llm, tts, config } = buildAmyVoicePipeline();
+    console.log(
+      JSON.stringify({
+        source: "transovo-voice-runtime",
+        event: "pipeline_config",
+        callId,
+        pipeline: describePipelineConfig(config),
+      }),
+    );
     const agent = createAmyAgent(callContext);
 
     const session = new voice.AgentSession<AmyProcessUserData>({
@@ -85,6 +94,8 @@ export default defineAgent<AmyProcessUserData>({
       },
       userData: { callContext },
     });
+
+    attachLatencyInstrumentation(session, { callId });
 
     ctx.addShutdownCallback(async () => {
       await liveKitRuntimeProvider.endSession(callId);
