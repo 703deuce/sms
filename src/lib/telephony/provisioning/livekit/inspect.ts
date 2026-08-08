@@ -98,7 +98,10 @@ export function diagnoseLiveKitSipIssues(
   ) {
     issues.push("trunk_missing_explicit_did");
   }
-  if (inspect.trunkContainingDid.allowedAddresses.length > 0) {
+  if (
+    inspect.trunkContainingDid.allowedAddresses.length > 0 &&
+    !isWildcardTelnyxTrunk(inspect.trunkContainingDid)
+  ) {
     issues.push("trunk_has_ip_allowlist");
   }
   if (inspect.dispatchRulesForTrunk.length === 0) {
