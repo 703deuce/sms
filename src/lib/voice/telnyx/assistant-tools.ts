@@ -214,6 +214,7 @@ export function buildAssistantTools(input: {
       key === "find_appointments" ||
       key === "reschedule_appointment" ||
       key === "continue_workflow" ||
+      key === "runtime_turn" ||
       key === "record_current_field" ||
       key === "get_runtime_context";
     const escalateSolePath = key === "escalate_human" && useCallControlTransfer;

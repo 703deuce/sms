@@ -373,6 +373,7 @@ export const SYNC_TOOL_TYPES = new Set([
   "end_call",
   "send_dtmf",
   "continue_workflow",
+  "runtime_turn",
   "record_current_field",
   "get_runtime_context",
 ]);
@@ -401,6 +402,7 @@ export const SYNC_TOOL_FILLERS: Record<string, string> = {
   search_crm_contacts: "Okay, hold on — let me pull that up.",
   escalate_human: "Sure, I'll connect you.",
   continue_workflow: "Okay, hold on — let me check on that.",
+  runtime_turn: "Okay, hold on — let me check on that.",
   record_current_field: "Got it, one moment.",
   get_runtime_context: "One moment.",
 };
