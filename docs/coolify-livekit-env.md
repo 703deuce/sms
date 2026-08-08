@@ -1,55 +1,48 @@
 # Coolify env for LiveKit Amy (+18663464256)
 
-The code reads your **existing** Coolify variables. No separate `LIVEKIT_SIP_HOST` is required if `LIVEKIT_URL` is already your `sms-*.sip.livekit.cloud` endpoint.
+## Amy LiveKit project (from LiveKit Cloud dashboard)
+
+| Field | Value |
+|-------|--------|
+| Project name | `amy` |
+| Project ID | `p-4hde63ww` |
+| Project URL | `amy-4hde63ww.livekit.cloud` |
+| **SIP URI** | `sip:amy-4hde63ww.sip.livekit.cloud` |
+
+Telnyx must send PSTN to **`amy-4hde63ww.sip.livekit.cloud`** — not a different `sms-*.sip.livekit.cloud` host.
 
 ## Required in Coolify (main app)
 
 | Variable | What to put |
 |----------|-------------|
 | `VOICE_RUNTIME_PROVIDER` | `livekit` |
-| `LIVEKIT_URL` | Your `sms-xxxxx.sip.livekit.cloud` value **or** `wss://sms-xxxxx.livekit.cloud` |
-| `LIVEKIT_API_KEY` | LiveKit project API key |
-| `LIVEKIT_API_SECRET` | LiveKit project API secret |
-| `OPENAI_API_KEY` | OpenAI key (Amy LLM — unchanged for first PSTN test) |
-| `ELEVENLABS_KEY` | Only if `VOICE_TTS_PROVIDER=elevenlabs-plugin` (BYO plugin path) |
+| `LIVEKIT_URL` | `wss://amy-4hde63ww.livekit.cloud` |
+| `LIVEKIT_SIP_URI` | `amy-4hde63ww.sip.livekit.cloud` (from Project Settings → SIP URI) |
+| `LIVEKIT_API_KEY` | API key from **amy** project (Settings → Keys) |
+| `LIVEKIT_API_SECRET` | API secret from **amy** project |
+| `OPENAI_API_KEY` | OpenAI key (Amy LLM) |
 | `TELNYX_API_KEY` | Telnyx (number routing) |
 | `DATABASE_URL` | Postgres |
 
-## Voice pipeline (first PSTN test — LiveKit Inference)
+`LIVEKIT_URL` and `LIVEKIT_SIP_URI` must be from the **same** LiveKit project. Using a derived `sms-*` host while keys are for `amy` causes SIP 404 (“not in service”) even when provisioning reports success.
 
-No separate `DEEPGRAM_API_KEY` or `INWORLD_API_KEY` required. LiveKit Cloud bills inference via your project.
+## Voice pipeline (LiveKit Inference)
 
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `VOICE_STT_PROVIDER` | `inference` | LiveKit Inference STT |
-| `VOICE_STT_MODEL` | `deepgram/nova-3` | Deepgram Nova-3 via inference |
-| `VOICE_STT_LANGUAGE` | `en` | STT language |
-| `VOICE_LLM_PROVIDER` | `openai` | Amy LLM (not changed for voice test) |
-| `VOICE_LLM_MODEL` | `gpt-4.1-mini` | Amy LLM model |
-| `VOICE_TTS_PROVIDER` | `inference` | LiveKit Inference TTS |
-| `VOICE_TTS_MODEL` | `inworld/inworld-tts-1.5-mini` | Inworld Mini via inference |
-| `VOICE_TTS_LANGUAGE` | `en` | TTS language |
-| `VOICE_TTS_VOICE` | `Ashley` | Inworld voice name |
-
-TTS A/B after first successful call: set `VOICE_TTS_MODEL=elevenlabs/eleven_flash_v2_5` (still `inference` provider).
-
-## Not required (auto-handled)
-
-- `LIVEKIT_SIP_HOST` — only if you want a duplicate; code reads SIP from `LIVEKIT_URL`
-- `LIVEKIT_INBOUND_TRUNK_ID` / `LIVEKIT_DISPATCH_RULE_ID` — created via API on publish
-- Running `scripts/provision-amy-866-livekit.mjs` — **Publish Amy** in the app does the same thing
-
-## What happens when you Publish Amy
-
-1. Saves number → agent in DB
-2. Telnyx API: routes +18663464256 to shared FQDN → LiveKit SIP
-3. LiveKit API: adds number to shared inbound trunk + dispatch rule
-4. Runtime resolves `toE164` → Amy (no per-agent LiveKit objects)
+| Variable | Default |
+|----------|---------|
+| `VOICE_STT_PROVIDER` | `inference` |
+| `VOICE_STT_MODEL` | `deepgram/nova-3` |
+| `VOICE_TTS_PROVIDER` | `inference` |
+| `VOICE_TTS_MODEL` | `inworld/inworld-tts-1.5-mini` |
+| `VOICE_LLM_PROVIDER` | `openai` |
+| `VOICE_LLM_MODEL` | `gpt-4.1-mini` |
 
 ## LiveKit agent worker (separate deploy)
 
-The `transovo-voice-runtime` worker needs the same `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, plus `OPENAI_API_KEY` and `ELEVENLABS_KEY`.
+Deploy `transovo-voice-runtime` on LiveKit Cloud **amy** project with the same `LIVEKIT_*` values plus `OPENAI_API_KEY` and `DATABASE_URL`.
 
-## Only change in Coolify if calls still hit old Telnyx assistant
+## After updating Coolify
 
-Set `VOICE_RUNTIME_PROVIDER=livekit` on the **main Transovo app** and redeploy, then **Publish** Amy once from the dashboard.
+1. Redeploy the main app
+2. **Publish Amy** once (or run `node scripts/fix-amy-livekit-sip-host.mjs` then full reset via API)
+3. Call +18663464256

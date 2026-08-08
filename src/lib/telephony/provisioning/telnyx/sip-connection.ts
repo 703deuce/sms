@@ -109,22 +109,47 @@ async function ensureFqdnRecord(
   const listed = await telnyxRequest<{ data?: TelnyxRecord[] }>("/fqdns", {
     query: { "filter[connection_id]": connectionId },
   });
-  const existing = (listed.data || []).find(
+  const rows = listed.data || [];
+  let target = rows.find(
     (r) => String(r.fqdn || "").toLowerCase() === sipHost.toLowerCase(),
   );
-  if (existing?.id) return String(existing.id);
 
-  const created = await telnyxRequest<{ data?: TelnyxRecord }>("/fqdns", {
-    method: "POST",
-    body: {
-      connection_id: connectionId,
-      fqdn: sipHost,
-      port: 5060,
-      dns_record_type: "a",
-    },
-  });
-  actions.push("created_fqdn_record");
-  return String(created.data?.id || "");
+  if (!target?.id) {
+    const created = await telnyxRequest<{ data?: TelnyxRecord }>("/fqdns", {
+      method: "POST",
+      body: {
+        connection_id: connectionId,
+        fqdn: sipHost,
+        port: 5060,
+        dns_record_type: "a",
+      },
+    });
+    target = asRecord(created.data) || undefined;
+    actions.push("created_fqdn_record");
+  }
+
+  const fqdnId = String(target?.id || "");
+  if (!fqdnId) throw new Error(`Telnyx FQDN record missing for ${sipHost}`);
+
+  const conn = await telnyxRequest<{ data?: TelnyxRecord }>(
+    `/fqdn_connections/${encodeURIComponent(connectionId)}`,
+  );
+  const primaryId = String(
+    (conn.data?.inbound as TelnyxRecord | undefined)?.default_primary_fqdn_id || "",
+  );
+  if (primaryId !== fqdnId) {
+    await telnyxRequest(`/fqdn_connections/${encodeURIComponent(connectionId)}`, {
+      method: "PATCH",
+      body: {
+        inbound: {
+          default_primary_fqdn_id: fqdnId,
+        },
+      },
+    });
+    actions.push(`set_primary_fqdn_${sipHost}`);
+  }
+
+  return fqdnId;
 }
 
 export async function routeTelnyxNumberToConnection(input: {
