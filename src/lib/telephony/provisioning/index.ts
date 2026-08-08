@@ -18,6 +18,8 @@ export {
   TRANSOVO_TELNYX_FQDN_CONNECTION_NAME,
   assertLiveKitProvisioningEnv,
   getLiveKitSipHost,
+  getLiveKitSipHostSource,
+  resolveLiveKitSipHost,
 } from "./config";
 
 export {

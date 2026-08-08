@@ -31,7 +31,9 @@ export async function ensureTelnyxLiveKitFqdnConnection(): Promise<{
   const actions: string[] = [];
   const sipHost = getLiveKitSipHost();
   if (!sipHost) {
-    throw new Error("LIVEKIT_SIP_HOST is required to create Telnyx FQDN connection");
+    throw new Error(
+      "LiveKit SIP host not found — set LIVEKIT_SIP_HOST, LIVEKIT_SIP_URI, or LIVEKIT_URL to your *.sip.livekit.cloud endpoint",
+    );
   }
 
   const storedId = getStoredTelnyxFqdnConnectionId();

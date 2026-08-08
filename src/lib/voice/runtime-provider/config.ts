@@ -15,6 +15,36 @@ export function isTelnyxAssistantVoiceRuntime(): boolean {
   return getVoiceRuntimeProviderId() === "telnyx";
 }
 
+/** Normalize LIVEKIT_URL when Coolify stores the SIP host instead of wss:// */
+export function normalizeLiveKitApiUrl(raw: string): string {
+  let value = raw.trim();
+  if (!value) return "";
+
+  if (value.startsWith("sip:")) {
+    value = value.slice(4);
+  }
+
+  if (!value.includes("://")) {
+    if (value.includes(".sip.livekit.cloud")) {
+      return `wss://${value.replace(/\.sip\.livekit\.cloud$/, ".livekit.cloud")}`;
+    }
+    return `wss://${value}`;
+  }
+
+  try {
+    const parsed = new URL(value);
+    if (parsed.hostname.includes(".sip.livekit.cloud")) {
+      parsed.hostname = parsed.hostname.replace(/\.sip\.livekit\.cloud$/, ".livekit.cloud");
+      if (parsed.protocol === "sip:") parsed.protocol = "wss:";
+      return parsed.toString().replace(/\/$/, "");
+    }
+  } catch {
+    // fall through
+  }
+
+  return value;
+}
+
 export type VoicePipelineConfig = {
   sttProvider: string;
   sttModel: string;
@@ -42,9 +72,10 @@ export function requireLiveKitEnv(): {
   apiKey: string;
   apiSecret: string;
 } {
-  const url = process.env.LIVEKIT_URL?.trim();
+  const rawUrl = process.env.LIVEKIT_URL?.trim();
   const apiKey = process.env.LIVEKIT_API_KEY?.trim();
   const apiSecret = process.env.LIVEKIT_API_SECRET?.trim();
+  const url = rawUrl ? normalizeLiveKitApiUrl(rawUrl) : "";
   if (!url || !apiKey || !apiSecret) {
     throw new Error("LIVEKIT_URL, LIVEKIT_API_KEY, and LIVEKIT_API_SECRET are required");
   }

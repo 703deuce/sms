@@ -7,6 +7,7 @@ import {
   getVoiceRuntimeProviderId,
   requireLiveKitEnv,
 } from "../src/lib/voice/runtime-provider/config";
+import { resolveLiveKitSipHost } from "../src/lib/telephony/provisioning/config";
 
 const AMY_AGENT_ID = (process.env.AMY_AGENT_ID || "cmshz2lc25c622c4i58303501").trim();
 const PHONE_866_ID = (process.env.PHONE_866_ID || "cmsc3numa1j17084g391t2z5l").trim();
@@ -156,6 +157,9 @@ async function main() {
     "LIVEKIT_API_KEY",
     "LIVEKIT_API_SECRET",
     "LIVEKIT_AGENT_NAME",
+    "LIVEKIT_SIP_HOST",
+    "LIVEKIT_SIP_URI",
+    "LIVEKIT_SIP_ENDPOINT",
     "OPENAI_API_KEY",
     "ELEVENLABS_API_KEY",
     "ELEVENLABS_KEY",
@@ -165,6 +169,17 @@ async function main() {
     console.log(`  ${k}: ${presence(k)}`);
   }
   console.log(`  ELEVENLABS (API_KEY or KEY): ${elevenLabsPresent() ? "SET" : "MISSING"}`);
+
+  const sip = resolveLiveKitSipHost();
+  if (sip.host) {
+    const masked =
+      sip.host.length > 12
+        ? `${sip.host.slice(0, 8)}…${sip.host.slice(-18)}`
+        : sip.host;
+    console.log(`  LiveKit SIP host: SET via ${sip.source} (${masked})`);
+  } else {
+    console.log("  LiveKit SIP host: MISSING (need *.sip.livekit.cloud on LIVEKIT_URL or LIVEKIT_SIP_*)");
+  }
 
   console.log("\n--- Connectivity ---");
   const db = await checkDatabase();

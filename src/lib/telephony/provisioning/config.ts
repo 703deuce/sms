@@ -16,21 +16,85 @@ export const TRANSOVO_TELNYX_FQDN_CONNECTION_NAME =
   process.env.TELNYX_LIVEKIT_FQDN_CONNECTION_NAME?.trim() ||
   "Transovo LiveKit Inbound";
 
-/** LiveKit SIP ingress host, e.g. vjnxecm0tjk.sip.livekit.cloud */
-export function getLiveKitSipHost(): string {
-  const raw = process.env.LIVEKIT_SIP_HOST?.trim();
-  if (raw) return raw.replace(/^sip:/i, "");
-  const url = process.env.LIVEKIT_URL?.trim();
-  if (!url) return "";
-  try {
-    const host = new URL(url).hostname;
-    if (host.endsWith(".livekit.cloud")) {
-      return host.replace(/\.livekit\.cloud$/, ".sip.livekit.cloud");
-    }
-  } catch {
-    // ignore
+/** Normalize any LiveKit SIP host / URI env value to bare hostname. */
+export function normalizeLiveKitSipHost(raw: string): string {
+  let value = raw.trim();
+  if (!value) return "";
+
+  if (value.startsWith("sip:")) {
+    value = value.slice(4);
   }
-  return "";
+  if (value.includes("://")) {
+    try {
+      value = new URL(value).hostname;
+    } catch {
+      // fall through with original
+    }
+  }
+  value = value.replace(/\/+$/, "").split("/")[0] || value;
+  return value.replace(/^sip:/i, "");
+}
+
+const SIP_HOST_ENV_KEYS = [
+  "LIVEKIT_SIP_HOST",
+  "LIVEKIT_SIP_URI",
+  "LIVEKIT_SIP_ENDPOINT",
+  "LIVEKIT_SIP_FQDN",
+  "SIP_HOST",
+] as const;
+
+export type LiveKitSipHostResolution = {
+  host: string;
+  source: string | null;
+};
+
+/**
+ * Resolve LiveKit SIP ingress host from env.
+ * Coolify setups often store the `*.sip.livekit.cloud` value on LIVEKIT_URL
+ * (or LIVEKIT_SIP_URI) rather than a separate LIVEKIT_SIP_HOST key.
+ */
+export function resolveLiveKitSipHost(): LiveKitSipHostResolution {
+  for (const key of SIP_HOST_ENV_KEYS) {
+    const raw = process.env[key]?.trim();
+    if (!raw) continue;
+    const host = normalizeLiveKitSipHost(raw);
+    if (host) return { host, source: key };
+  }
+
+  const livekitUrl = process.env.LIVEKIT_URL?.trim();
+  if (livekitUrl) {
+    const direct = normalizeLiveKitSipHost(livekitUrl);
+    if (direct.includes(".sip.livekit.cloud")) {
+      return { host: direct, source: "LIVEKIT_URL(sip)" };
+    }
+
+    try {
+      const withProto = livekitUrl.includes("://") ? livekitUrl : `wss://${livekitUrl}`;
+      const host = new URL(withProto).hostname;
+      if (host.endsWith(".livekit.cloud") && !host.includes(".sip.")) {
+        return {
+          host: host.replace(/\.livekit\.cloud$/, ".sip.livekit.cloud"),
+          source: "LIVEKIT_URL(derived)",
+        };
+      }
+      if (host.includes(".sip.livekit.cloud")) {
+        return { host, source: "LIVEKIT_URL(sip)" };
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  return { host: "", source: null };
+}
+
+/** LiveKit SIP ingress host, e.g. sms-xxxxx.sip.livekit.cloud */
+export function getLiveKitSipHost(): string {
+  return resolveLiveKitSipHost().host;
+}
+
+export function getLiveKitSipHostSource(): string | null {
+  return resolveLiveKitSipHost().source;
 }
 
 export function getStoredLiveKitTrunkId(): string | null {
@@ -50,7 +114,7 @@ export function assertLiveKitProvisioningEnv() {
   const sipHost = getLiveKitSipHost();
   if (!sipHost) {
     throw new Error(
-      "LIVEKIT_SIP_HOST is required for Telnyx→LiveKit provisioning (or set LIVEKIT_URL to a *.livekit.cloud host)",
+      "LiveKit SIP host not found. Set LIVEKIT_SIP_HOST, LIVEKIT_SIP_URI, or LIVEKIT_URL to your *.sip.livekit.cloud endpoint",
     );
   }
   return { url, apiKey, apiSecret, sipHost };
