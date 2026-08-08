@@ -440,61 +440,86 @@ export async function publishVoiceAgent(
   }
 
   let telnyxSync: unknown = null;
+  let livekitProvision: unknown = null;
+  const { isLiveKitVoiceRuntime } = await import("./runtime-provider");
+
   try {
     telnyxSync = await syncAssistantToTelnyx(workspaceId, agentId, updated, config);
   } catch (err) {
     const telnyxSyncError = err instanceof Error ? err.message : String(err);
     console.error("[voice] Telnyx assistant sync failed", err);
-    await rollbackPublish(
-      `Telnyx assistant sync failed — deploy rolled back: ${telnyxSyncError}`,
-    );
+    if (!isLiveKitVoiceRuntime()) {
+      await rollbackPublish(
+        `Telnyx assistant sync failed — deploy rolled back: ${telnyxSyncError}`,
+      );
+    }
   }
 
   const refreshedAfterSync =
     (await prisma.voiceAgent.findUnique({ where: { id: agentId } })) || updated;
-  if (!refreshedAfterSync.telnyxAssistantId) {
+
+  if (!isLiveKitVoiceRuntime() && !refreshedAfterSync.telnyxAssistantId) {
     await rollbackPublish(
       "Telnyx assistant id missing after sync — deploy rolled back",
     );
   }
 
-  // Product default: point the DID at TeXML → assistant (no Call Control mask).
+  // Product default (Telnyx): point the DID at TeXML → assistant.
+  // LiveKit: provision shared SIP trunk + Telnyx FQDN route via API.
   let texmlRoute: {
     matched?: boolean;
     path?: string;
     texmlAppId?: string;
   } | null = null;
-  const {
-    usesTexmlDirectInbound,
-    routePhoneToTexmlAssistant,
-  } = await import("./telnyx/texml-direct-route");
-  if (usesTexmlDirectInbound(config) && updated.phoneNumberId) {
-    const phone = await prisma.phoneNumber.findFirst({
-      where: { id: updated.phoneNumberId, workspaceId },
-      select: { e164: true, providerNumberId: true },
+
+  if (isLiveKitVoiceRuntime() && updated.phoneNumberId) {
+    const { ensureNumberProvisioned } = await import(
+      "@/lib/telephony/provisioning"
+    );
+    livekitProvision = await ensureNumberProvisioned({
+      workspaceId,
+      phoneNumberId: updated.phoneNumberId,
+      agentId,
+      routingMode: "livekit_sip",
     });
-    if (!phone?.e164) {
-      await rollbackPublish(
-        "Phone number missing for TeXML direct route — deploy rolled back",
-      );
+    if (!(livekitProvision as { ok?: boolean }).ok) {
+      const detail =
+        (livekitProvision as { error?: string }).error || "LiveKit provisioning failed";
+      await rollbackPublish(`LiveKit provisioning failed — deploy rolled back: ${detail}`);
     }
-    try {
-      texmlRoute = await routePhoneToTexmlAssistant({
-        e164: phone!.e164,
-        assistantId: refreshedAfterSync.telnyxAssistantId!,
-        providerNumberId: phone!.providerNumberId,
+  } else {
+    const {
+      usesTexmlDirectInbound,
+      routePhoneToTexmlAssistant,
+    } = await import("./telnyx/texml-direct-route");
+    if (usesTexmlDirectInbound(config) && updated.phoneNumberId) {
+      const phone = await prisma.phoneNumber.findFirst({
+        where: { id: updated.phoneNumberId, workspaceId },
+        select: { e164: true, providerNumberId: true },
       });
-    } catch (err) {
-      const detail = err instanceof Error ? err.message : String(err);
-      console.error("[voice] TeXML direct route failed", err);
-      await rollbackPublish(
-        `TeXML direct routing failed — deploy rolled back: ${detail}`,
-      );
-    }
-    if (!texmlRoute?.matched) {
-      await rollbackPublish(
-        `TeXML route did not match live connection — deploy rolled back (${texmlRoute?.path || "no path"})`,
-      );
+      if (!phone?.e164) {
+        await rollbackPublish(
+          "Phone number missing for TeXML direct route — deploy rolled back",
+        );
+      }
+      try {
+        texmlRoute = await routePhoneToTexmlAssistant({
+          e164: phone!.e164,
+          assistantId: refreshedAfterSync.telnyxAssistantId!,
+          providerNumberId: phone!.providerNumberId,
+        });
+      } catch (err) {
+        const detail = err instanceof Error ? err.message : String(err);
+        console.error("[voice] TeXML direct route failed", err);
+        await rollbackPublish(
+          `TeXML direct routing failed — deploy rolled back: ${detail}`,
+        );
+      }
+      if (!texmlRoute?.matched) {
+        await rollbackPublish(
+          `TeXML route did not match live connection — deploy rolled back (${texmlRoute?.path || "no path"})`,
+        );
+      }
     }
   }
 
@@ -504,6 +529,7 @@ export async function publishVoiceAgent(
     telnyxSync,
     telnyxSyncError: null as string | null,
     texmlRoute,
+    livekitProvision,
   };
 }
 

@@ -72,7 +72,32 @@ lk agent deploy   # production
 
 Backend guard: `src/lib/voice/domain-actions/task-guard.ts`
 
-## Telnyx SIP → LiveKit (manual steps — YOU must complete)
+## Telnyx SIP → LiveKit (automated via Transovo API)
+
+Manual dashboard steps are only needed for bootstrap. Production uses:
+
+```ts
+import { assignNumberToAgent, ensureNumberProvisioned } from "@/lib/telephony/provisioning";
+
+await assignNumberToAgent({ workspaceId, phoneNumberId, agentId });
+// or publishVoiceAgent() when VOICE_RUNTIME_PROVIDER=livekit
+```
+
+**Shared infrastructure (one per LiveKit project):**
+- Telnyx FQDN connection → LiveKit SIP host
+- LiveKit inbound trunk (array of DIDs, updated via API)
+- LiveKit dispatch rule → `transovo-voice-runtime` (individual rooms)
+
+**Tenant routing:** Transovo DB resolves `toE164` → workspace → agent at runtime.
+No per-customer dispatch rules.
+
+Script for Amy +18663464256:
+
+```bash
+VOICE_RUNTIME_PROVIDER=livekit npx tsx scripts/provision-amy-866-livekit.mjs
+```
+
+## Telnyx SIP → LiveKit (manual bootstrap — deprecated for SaaS)
 
 ### Telnyx Dashboard
 1. Create **FQDN SIP Connection** (not TeXML assistant route for test number).

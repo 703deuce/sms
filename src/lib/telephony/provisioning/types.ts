@@ -1,0 +1,73 @@
+export type VoiceRoutingMode = "telnyx_assistant" | "livekit_sip";
+
+export type ProvisionState =
+  | "pending"
+  | "provisioning"
+  | "active"
+  | "error"
+  | "removed";
+
+export type TelephonyProvisionRecord = {
+  routingMode?: VoiceRoutingMode;
+  state?: ProvisionState;
+  telnyxFqdnConnectionId?: string;
+  telnyxFqdnId?: string;
+  livekitInboundTrunkId?: string;
+  livekitDispatchRuleId?: string;
+  lastProvisionedAt?: string;
+  lastVerifiedAt?: string;
+  lastError?: string | null;
+};
+
+export type EnsureNumberProvisionedInput = {
+  workspaceId: string;
+  phoneNumberId: string;
+  agentId?: string | null;
+  /** Force LiveKit even when global provider is telnyx */
+  routingMode?: VoiceRoutingMode;
+};
+
+export type EnsureNumberProvisionedResult = {
+  ok: boolean;
+  phoneNumberId: string;
+  e164: string;
+  routingMode: VoiceRoutingMode;
+  provision: TelephonyProvisionRecord;
+  actions: string[];
+  error?: string;
+};
+
+export type AssignNumberToAgentInput = {
+  workspaceId: string;
+  phoneNumberId: string;
+  agentId: string;
+  exclusive?: boolean;
+};
+
+export type AssignNumberToAgentResult = {
+  ok: boolean;
+  phoneNumberId: string;
+  agentId: string;
+  e164: string;
+  provision?: EnsureNumberProvisionedResult;
+};
+
+export type AgentRoutingResolution = {
+  workspaceId: string;
+  agentId: string;
+  phoneNumberId: string;
+  e164: string;
+  agentStatus: string;
+  agentName: string;
+};
+
+export type VerifyRoutingResult = {
+  ok: boolean;
+  e164: string;
+  routingMode: VoiceRoutingMode | "unknown";
+  telnyxConnectionId?: string;
+  telnyxConnectionName?: string;
+  livekitTrunkHasNumber?: boolean;
+  dbAgentId?: string | null;
+  issues: string[];
+};
