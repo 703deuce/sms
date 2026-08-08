@@ -4,8 +4,11 @@ import { getPrisma } from "@/lib/db";
 import { isLiveKitVoiceRuntime } from "@/lib/voice/runtime-provider/config";
 import {
   ensureNumberProvisioned,
+  fullResetLiveKitSipRouting,
+  getLiveKitProjectAlignment,
   inspectLiveKitSipRouting,
   repairLiveKitSipRouting,
+  restoreTexmlInboundRoute,
   resolveLiveKitSipHost,
   verifyNumberRouting,
 } from "@/lib/telephony/provisioning";
@@ -26,11 +29,19 @@ export async function POST(request: Request) {
       agentId?: string;
       provision?: boolean;
       repair?: boolean;
+      fullReset?: boolean;
+      restoreTexml?: boolean;
       inspect?: boolean;
     };
 
     const sip = resolveLiveKitSipHost();
     const provider = isLiveKitVoiceRuntime() ? "livekit" : "telnyx";
+    let projectAlignment: ReturnType<typeof getLiveKitProjectAlignment> | null = null;
+    try {
+      projectAlignment = getLiveKitProjectAlignment();
+    } catch {
+      projectAlignment = null;
+    }
 
     let livekitApi: { ok: boolean; detail: string } = { ok: false, detail: "skipped" };
     try {
@@ -49,8 +60,27 @@ export async function POST(request: Request) {
     let verifyResult = null;
     let inspectResult = null;
     let repairResult = null;
+    let texmlRestore = null;
 
-    if (body.repair && body.phoneNumberId) {
+    if (body.restoreTexml && body.phoneNumberId && body.agentId) {
+      texmlRestore = await restoreTexmlInboundRoute({
+        workspaceId: auth.workspaceId,
+        phoneNumberId: body.phoneNumberId,
+        agentId: body.agentId,
+      });
+    } else if (body.fullReset && body.phoneNumberId) {
+      repairResult = await fullResetLiveKitSipRouting({
+        workspaceId: auth.workspaceId,
+        phoneNumberId: body.phoneNumberId,
+        agentId: body.agentId,
+      });
+      provisionResult = repairResult.provision;
+      verifyResult = await verifyNumberRouting({
+        workspaceId: auth.workspaceId,
+        phoneNumberId: body.phoneNumberId,
+      });
+      inspectResult = repairResult.after;
+    } else if (body.repair && body.phoneNumberId) {
       repairResult = await repairLiveKitSipRouting({
         workspaceId: auth.workspaceId,
         phoneNumberId: body.phoneNumberId,
@@ -92,7 +122,8 @@ export async function POST(request: Request) {
     return NextResponse.json({
       data: {
         provider,
-        sipHost: sip.host ? { source: sip.source, configured: true } : { configured: false },
+        sipHost: sip.host ? { source: sip.source, configured: true, host: sip.host } : { configured: false },
+        projectAlignment,
         livekitApi,
         inspect: inspectResult,
         repair: repairResult
@@ -105,6 +136,7 @@ export async function POST(request: Request) {
           : null,
         provision: provisionResult,
         verify: verifyResult,
+        texmlRestore,
       },
     });
   } catch (err) {

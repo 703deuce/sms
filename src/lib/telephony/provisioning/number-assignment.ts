@@ -2,6 +2,7 @@ import { getPrisma } from "@/lib/db";
 import { isLiveKitVoiceRuntime } from "@/lib/voice/runtime-provider/config";
 import { syncVoiceAgentPhoneAssignment } from "@/lib/voice/agent-phone";
 import { ensureSharedDispatchRule, pruneStaleDispatchRules } from "./livekit/dispatch";
+import { fullResetLiveKitSipIngress } from "./livekit/full-reset";
 import {
   ensureInboundTrunkForNumber,
   rebuildInboundTrunkForNumber,
@@ -9,6 +10,7 @@ import {
 import {
   diagnoseLiveKitSipIssues,
   inspectLiveKitSipRouting,
+  isWildcardTelnyxTrunk,
   type LiveKitSipInspectResult,
 } from "./livekit/inspect";
 import { trunkNumbersIncludeDid } from "./livekit/did";
@@ -276,7 +278,11 @@ export async function verifyNumberRouting(input: {
     try {
       const inspect = await inspectLiveKitSipRouting(phone.e164);
       const trunk = inspect.trunkContainingDid;
-      livekitTrunkHasNumber = Boolean(trunk && trunkNumbersIncludeDid(trunk.numbers, phone.e164));
+      livekitTrunkHasNumber = Boolean(
+        trunk &&
+          (trunkNumbersIncludeDid(trunk.numbers, phone.e164) ||
+            isWildcardTelnyxTrunk(trunk)),
+      );
       if (trunk) {
         livekitDetails.livekitTrunkId = trunk.id;
         livekitDetails.livekitTrunkNumbers = trunk.numbers;
@@ -289,13 +295,16 @@ export async function verifyNumberRouting(input: {
         );
         if (rule) {
           livekitDetails.livekitDispatchTrunkIds = rule.trunkIds;
-          if (trunk && !rule.trunkIds.includes(trunk.id)) {
+          if (trunk && (rule.trunkIds || []).length > 0 && !rule.trunkIds.includes(trunk.id)) {
             issues.push("dispatch_rule_missing_trunk");
           }
         } else {
           issues.push("dispatch_rule_not_found");
         }
-      } else if (inspect.dispatchRulesForTrunk.length === 0) {
+      } else if (
+        inspect.dispatchRulesForTrunk.length === 0 &&
+        !inspect.dispatchRules.some((r) => (r.trunkIds || []).length === 0)
+      ) {
         issues.push("dispatch_rule_missing_trunk");
       }
       issues.push(...diagnoseLiveKitSipIssues(inspect, phone.e164));
@@ -381,13 +390,98 @@ export async function repairLiveKitSipRouting(input: {
   const pruned = await pruneStaleDispatchRules(rule.sipDispatchRuleId);
   actions.push(...pruned.actions);
 
+  return runRepairFinish(
+    input,
+    phone,
+    actions,
+    connectionId,
+    fqdnId,
+    trunkId,
+    rule.sipDispatchRuleId,
+    before,
+  );
+}
+
+/**
+ * Nuclear ingress reset: wildcard Telnyx trunk + global dispatch (no trunkIds).
+ * Use when numbered trunks verify OK but PSTN still gets SIP 404.
+ */
+export async function fullResetLiveKitSipRouting(input: {
+  workspaceId: string;
+  phoneNumberId: string;
+  agentId?: string | null;
+}): Promise<{
+  ok: boolean;
+  before: LiveKitSipInspectResult;
+  after: LiveKitSipInspectResult;
+  provision: EnsureNumberProvisionedResult;
+  actions: string[];
+}> {
+  const prisma = getPrisma();
+  const phone = await prisma.phoneNumber.findFirst({
+    where: { id: input.phoneNumberId, workspaceId: input.workspaceId },
+  });
+  if (!phone?.e164) throw new Error("Phone number not found");
+
+  const before = await inspectLiveKitSipRouting(phone.e164);
+  const actions: string[] = [];
+
+  const { connectionId, fqdnId, actions: telnyxActions } =
+    await ensureTelnyxLiveKitFqdnConnection();
+  actions.push(...telnyxActions);
+
+  const route = await routeTelnyxNumberToConnection({
+    e164: phone.e164,
+    providerNumberId: phone.providerNumberId,
+    connectionId,
+  });
+  actions.push(
+    route.previousConnectionId && route.previousConnectionId !== connectionId
+      ? `telnyx_rerouted:${route.previousConnectionId}->${connectionId}`
+      : "telnyx_route_ok",
+  );
+
+  const reset = await fullResetLiveKitSipIngress(phone.e164);
+  actions.push(...reset.actions);
+
+  return runRepairFinish(
+    input,
+    phone,
+    actions,
+    connectionId,
+    fqdnId,
+    reset.trunkId,
+    reset.dispatchRuleId,
+    before,
+  );
+}
+
+async function runRepairFinish(
+  input: { workspaceId: string; phoneNumberId: string },
+  phone: { id: string; e164: string; settingsJson: unknown },
+  actions: string[],
+  connectionId: string,
+  fqdnId: string,
+  trunkId: string,
+  dispatchRuleId: string | undefined,
+  before?: LiveKitSipInspectResult,
+): Promise<{
+  ok: boolean;
+  before: LiveKitSipInspectResult;
+  after: LiveKitSipInspectResult;
+  provision: EnsureNumberProvisionedResult;
+  actions: string[];
+}> {
+  const prisma = getPrisma();
+  const beforeInspect = before ?? (await inspectLiveKitSipRouting(phone.e164));
+
   await writeProvision(phone.id, {
     routingMode: "livekit_sip",
     state: "active",
     telnyxFqdnConnectionId: connectionId,
     telnyxFqdnId: fqdnId,
     livekitInboundTrunkId: trunkId,
-    livekitDispatchRuleId: rule.sipDispatchRuleId,
+    livekitDispatchRuleId: dispatchRuleId,
     lastError: null,
   });
 
@@ -416,10 +510,55 @@ export async function repairLiveKitSipRouting(input: {
 
   return {
     ok: verify.ok,
-    before,
+    before: beforeInspect,
     after,
     provision,
     actions,
+  };
+}
+
+/** Emergency: route DID back to Telnyx TeXML assistant so PSTN works while debugging LiveKit SIP. */
+export async function restoreTexmlInboundRoute(input: {
+  workspaceId: string;
+  phoneNumberId: string;
+  agentId: string;
+}): Promise<{
+  ok: boolean;
+  e164: string;
+  texmlRoute: Record<string, unknown>;
+}> {
+  const prisma = getPrisma();
+  const phone = await prisma.phoneNumber.findFirst({
+    where: { id: input.phoneNumberId, workspaceId: input.workspaceId },
+  });
+  if (!phone?.e164) throw new Error("Phone number not found");
+
+  const agent = await prisma.voiceAgent.findFirst({
+    where: { id: input.agentId, workspaceId: input.workspaceId },
+  });
+  if (!agent?.telnyxAssistantId) {
+    throw new Error("Agent has no Telnyx assistant id — cannot restore TeXML route");
+  }
+
+  const { routePhoneToTexmlAssistant } = await import(
+    "@/lib/voice/telnyx/texml-direct-route"
+  );
+  const texmlRoute = await routePhoneToTexmlAssistant({
+    e164: phone.e164,
+    assistantId: agent.telnyxAssistantId,
+    providerNumberId: phone.providerNumberId,
+  });
+
+  await writeProvision(phone.id, {
+    routingMode: "telnyx_assistant",
+    state: "active",
+    lastError: null,
+  });
+
+  return {
+    ok: Boolean(texmlRoute.matched),
+    e164: phone.e164,
+    texmlRoute: texmlRoute as unknown as Record<string, unknown>,
   };
 }
 

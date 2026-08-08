@@ -109,6 +109,36 @@ export function getStoredTelnyxFqdnConnectionId(): string | null {
   return process.env.TELNYX_LIVEKIT_FQDN_CONNECTION_ID?.trim() || null;
 }
 
+export function getLiveKitProjectAlignment(): {
+  apiHostname: string;
+  sipHost: string;
+  sipHostSource: string | null;
+  derivedSipFromApi: string;
+  sipMatchesDerivedFromApi: boolean;
+  usingExplicitSipEnv: boolean;
+} {
+  const { url } = requireLiveKitEnv();
+  const apiHostname = new URL(url).hostname;
+  const sip = resolveLiveKitSipHost();
+  const derivedSipFromApi = apiHostname.replace(/\.livekit\.cloud$/i, ".sip.livekit.cloud");
+  const explicitKeys = [
+    "LIVEKIT_SIP_HOST",
+    "LIVEKIT_SIP_URI",
+    "LIVEKIT_SIP_ENDPOINT",
+    "LIVEKIT_SIP_FQDN",
+    "SIP_HOST",
+  ] as const;
+  const usingExplicitSipEnv = explicitKeys.some((k) => Boolean(process.env[k]?.trim()));
+  return {
+    apiHostname,
+    sipHost: sip.host,
+    sipHostSource: sip.source,
+    derivedSipFromApi,
+    sipMatchesDerivedFromApi: sip.host === derivedSipFromApi,
+    usingExplicitSipEnv,
+  };
+}
+
 export function assertLiveKitProvisioningEnv() {
   const { url, apiKey, apiSecret } = requireLiveKitEnv();
   const sipHost = getLiveKitSipHost();

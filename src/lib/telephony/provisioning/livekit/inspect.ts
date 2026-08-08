@@ -2,6 +2,7 @@ import type { SIPDispatchRuleInfo, SIPInboundTrunkInfo } from "livekit-server-sd
 import { getLiveKitSipHost, getLiveKitSipHostSource } from "../config";
 import { trunkNumbersIncludeDid } from "./did";
 import { getLiveKitSipClient } from "./client";
+import { TELNYX_US_SIGNALING_IPS } from "./telnyx-ips";
 
 export type LiveKitTrunkSnapshot = {
   id: string;
@@ -51,12 +52,21 @@ function snapshotDispatch(rule: SIPDispatchRuleInfo): LiveKitDispatchSnapshot {
   };
 }
 
+export function isWildcardTelnyxTrunk(trunk: LiveKitTrunkSnapshot): boolean {
+  if ((trunk.numbers || []).length > 0) return false;
+  const allowed = new Set(trunk.allowedAddresses || []);
+  return TELNYX_US_SIGNALING_IPS.every((ip) => allowed.has(ip));
+}
+
 export async function inspectLiveKitSipRouting(e164: string): Promise<LiveKitSipInspectResult> {
   const client = getLiveKitSipClient();
   const trunks = (await client.listSipInboundTrunk()).map(snapshotTrunk);
   const dispatchRules = (await client.listSipDispatchRule()).map(snapshotDispatch);
 
-  const trunkContainingDid = trunks.find((t) => trunkNumbersIncludeDid(t.numbers, e164)) || null;
+  const trunkContainingDid =
+    trunks.find((t) => trunkNumbersIncludeDid(t.numbers, e164)) ||
+    trunks.find((t) => isWildcardTelnyxTrunk(t)) ||
+    null;
 
   const dispatchRulesForTrunk = trunkContainingDid
     ? dispatchRules.filter((r) => (r.trunkIds || []).includes(trunkContainingDid.id))
@@ -82,14 +92,18 @@ export function diagnoseLiveKitSipIssues(
     issues.push("no_trunk_for_did");
     return issues;
   }
-  if (!trunkNumbersIncludeDid(inspect.trunkContainingDid.numbers, e164)) {
+  if (
+    !trunkNumbersIncludeDid(inspect.trunkContainingDid.numbers, e164) &&
+    !isWildcardTelnyxTrunk(inspect.trunkContainingDid)
+  ) {
     issues.push("trunk_missing_explicit_did");
   }
   if (inspect.trunkContainingDid.allowedAddresses.length > 0) {
     issues.push("trunk_has_ip_allowlist");
   }
   if (inspect.dispatchRulesForTrunk.length === 0) {
-    issues.push("no_dispatch_rule_for_trunk");
+    const hasGlobalRule = inspect.dispatchRules.some((r) => (r.trunkIds || []).length === 0);
+    if (!hasGlobalRule) issues.push("no_dispatch_rule_for_trunk");
   }
   const duplicateOwners = inspect.trunks.filter((t) => trunkNumbersIncludeDid(t.numbers, e164));
   if (duplicateOwners.length > 1) issues.push("duplicate_trunk_for_did");

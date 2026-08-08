@@ -19,6 +19,7 @@ export {
   assertLiveKitProvisioningEnv,
   getLiveKitSipHost,
   getLiveKitSipHostSource,
+  getLiveKitProjectAlignment,
   resolveLiveKitSipHost,
 } from "./config";
 
@@ -32,7 +33,9 @@ export {
 export {
   assignNumberToAgent,
   ensureNumberProvisioned,
+  fullResetLiveKitSipRouting,
   repairLiveKitSipRouting,
+  restoreTexmlInboundRoute,
   resolveAgentByCalledNumber,
   resolveAgentRoutingForCall,
   verifyNumberRouting,
