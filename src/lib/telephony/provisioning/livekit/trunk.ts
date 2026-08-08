@@ -83,20 +83,15 @@ export async function removeNumberFromInboundTrunk(
     return { trunk, removed: false };
   }
 
+  if (numbers.length === 0) {
+    await client.deleteSipTrunk(trunkId);
+    return { trunk, removed: true };
+  }
+
   const updated = await client.updateSipInboundTrunkFields(trunkId, {
     numbers: new ListUpdate({ set: numbers }),
   });
   return { trunk: updated, removed: true };
-}
-
-function isTransovoInboundTrunk(trunk: SIPInboundTrunkInfo): boolean {
-  if ((trunk.name || "").includes("transovo")) return true;
-  try {
-    const meta = trunk.metadata ? JSON.parse(trunk.metadata) : {};
-    return meta?.owner === "transovo";
-  } catch {
-    return false;
-  }
 }
 
 /**
@@ -115,17 +110,21 @@ export async function dedupeInboundTrunkNumber(
     const trunkId = trunk.sipTrunkId || "";
     if (!trunkId || trunkId === keepTrunkId) continue;
 
-    const removed = await removeNumberFromInboundTrunk(trunkId, e164);
-    if (removed.removed) {
-      actions.push(`livekit_removed_number_from_${trunk.name || trunkId}`);
+    const currentNumbers = trunk.numbers || [];
+    const nextNumbers = currentNumbers.filter((n) => n !== e164);
+    if (nextNumbers.length === currentNumbers.length) continue;
+
+    // LiveKit rejects trunks with zero numbers — delete stale single-DID trunks outright.
+    if (nextNumbers.length === 0) {
+      await client.deleteSipTrunk(trunkId);
+      actions.push(`livekit_deleted_trunk_${trunk.name || trunkId}`);
+      continue;
     }
 
-    const listed = await client.listSipInboundTrunk({ trunkIds: [trunkId] });
-    const remaining = listed[0]?.numbers || [];
-    if (remaining.length === 0 && !isTransovoInboundTrunk(trunk)) {
-      await client.deleteSipTrunk(trunkId);
-      actions.push(`livekit_deleted_empty_trunk_${trunk.name || trunkId}`);
-    }
+    await client.updateSipInboundTrunkFields(trunkId, {
+      numbers: new ListUpdate({ set: nextNumbers }),
+    });
+    actions.push(`livekit_removed_number_from_${trunk.name || trunkId}`);
   }
 
   return { actions };
