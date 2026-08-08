@@ -34,6 +34,7 @@ export {
   assignNumberToAgent,
   ensureNumberProvisioned,
   fullResetLiveKitSipRouting,
+  patchInboundTrunkE164Formats,
   repairLiveKitSipRouting,
   restoreTexmlInboundRoute,
   resolveAgentByCalledNumber,
@@ -42,7 +43,6 @@ export {
 } from "./number-assignment";
 
 export { inspectLiveKitSipRouting, diagnoseLiveKitSipIssues } from "./livekit/inspect";
-export { rebuildInboundTrunkForNumber } from "./livekit/trunk";
 
 export { ensureSharedDispatchRule } from "./livekit/dispatch";
 export { ensureSharedInboundTrunk } from "./livekit/trunk";

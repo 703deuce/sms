@@ -7,6 +7,7 @@ import {
   fullResetLiveKitSipRouting,
   getLiveKitProjectAlignment,
   inspectLiveKitSipRouting,
+  patchInboundTrunkE164Formats,
   repairLiveKitSipRouting,
   restoreTexmlInboundRoute,
   resolveLiveKitSipHost,
@@ -31,6 +32,7 @@ export async function POST(request: Request) {
       repair?: boolean;
       fullReset?: boolean;
       restoreTexml?: boolean;
+      patchTrunk?: boolean;
       inspect?: boolean;
     };
 
@@ -62,11 +64,27 @@ export async function POST(request: Request) {
     let repairResult = null;
     let texmlRestore = null;
 
+    let patchTrunkResult = null;
+
     if (body.restoreTexml && body.phoneNumberId && body.agentId) {
       texmlRestore = await restoreTexmlInboundRoute({
         workspaceId: auth.workspaceId,
         phoneNumberId: body.phoneNumberId,
         agentId: body.agentId,
+      });
+    } else if (body.patchTrunk && body.phoneNumberId) {
+      const phone = await getPrisma().phoneNumber.findFirst({
+        where: { id: body.phoneNumberId, workspaceId: auth.workspaceId },
+        select: { e164: true },
+      });
+      if (!phone?.e164) {
+        return jsonError(new Error("Phone number not found"), 404);
+      }
+      patchTrunkResult = await patchInboundTrunkE164Formats(phone.e164);
+      inspectResult = await inspectLiveKitSipRouting(phone.e164);
+      verifyResult = await verifyNumberRouting({
+        workspaceId: auth.workspaceId,
+        phoneNumberId: body.phoneNumberId,
       });
     } else if (body.fullReset && body.phoneNumberId) {
       repairResult = await fullResetLiveKitSipRouting({
@@ -136,6 +154,7 @@ export async function POST(request: Request) {
           : null,
         provision: provisionResult,
         verify: verifyResult,
+        patchTrunk: patchTrunkResult,
         texmlRestore,
       },
     });

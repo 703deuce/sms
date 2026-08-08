@@ -3,6 +3,7 @@ import { isLiveKitVoiceRuntime } from "@/lib/voice/runtime-provider/config";
 import { syncVoiceAgentPhoneAssignment } from "@/lib/voice/agent-phone";
 import { ensureSharedDispatchRule, pruneStaleDispatchRules } from "./livekit/dispatch";
 import { fullResetLiveKitSipIngress } from "./livekit/full-reset";
+import { patchInboundTrunkE164Formats } from "./livekit/patch-trunk-e164";
 import {
   ensureInboundTrunkForNumber,
   rebuildInboundTrunkForNumber,
@@ -563,3 +564,4 @@ export async function restoreTexmlInboundRoute(input: {
 }
 
 export { resolveAgentByCalledNumber, resolveAgentRoutingForCall } from "./agent-routing";
+export { patchInboundTrunkE164Formats } from "./livekit/patch-trunk-e164";
