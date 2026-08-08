@@ -73,6 +73,10 @@ function matchSlotFromInput(
   const trimmed = userInput.trim();
   if (!trimmed) return null;
 
+  // Phone numbers and long digit strings are not slot picks.
+  const digitsOnly = trimmed.replace(/\D/g, "");
+  if (digitsOnly.length >= 7) return null;
+
   // Exact ISO match
   const exact = slots.find((s) => s === trimmed || trimmed.includes(s));
   if (exact) return exact;
@@ -83,15 +87,36 @@ function matchSlotFromInput(
     if (Number.isNaN(d.getTime())) continue;
     const hour12 = d.getUTCHours() % 12 || 12;
     const ampm = d.getUTCHours() >= 12 ? "pm" : "am";
+    const minute = String(d.getUTCMinutes()).padStart(2, "0");
     const patterns = [
-      `${hour12}`,
-      `${hour12}:${String(d.getUTCMinutes()).padStart(2, "0")}`,
+      `${hour12}:${minute}`,
+      `${hour12}:${minute}${ampm}`,
+      `${hour12}:${minute} ${ampm}`,
       `${hour12}${ampm}`,
       `${hour12} ${ampm}`,
     ];
-    if (patterns.some((p) => lower.includes(p))) return slot;
+    if (patterns.some((p) => new RegExp(`\\b${p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(lower))) {
+      return slot;
+    }
   }
   return null;
+}
+
+function formatSlotLabel(iso: string, timezone = "America/New_York"): string {
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return iso;
+    return d.toLocaleString("en-US", {
+      timeZone: timezone,
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  } catch {
+    return iso;
+  }
 }
 
 function formatSlotsForSpeech(slots: Array<{ startsAt?: string; start_time?: string }>): string {
@@ -407,19 +432,20 @@ export async function executeContinueWorkflow(
 
   if (state === "READY_TO_BOOK" || state === "BOOKING_IN_PROGRESS") {
     if (!input.confirm) {
-      const slot = runtime.selected_slot || runtime.held_slot;
+      const slot = normalizeSlotIso(runtime.selected_slot || runtime.held_slot || "");
+      const slotLabel = slot ? formatSlotLabel(slot, timezone) : "";
       return normalizeResponse({
         success: true,
         workflowState: state,
         nextAction: "ASK_CALLER_TO_CONFIRM_BOOKING",
-        speak: slot
-          ? "Should I go ahead and book that appointment for you?"
+        speak: slotLabel
+          ? `I have ${slotLabel} held for you. Should I go ahead and book that appointment?`
           : "Please confirm you'd like me to book this appointment.",
-        data: { selected_slot: slot, requires_confirm: true },
+        data: { selected_slot: slot || null, requires_confirm: true },
       });
     }
 
-    const startsAt = runtime.selected_slot || runtime.held_slot;
+    const startsAt = normalizeSlotIso(runtime.selected_slot || runtime.held_slot || "");
     if (!startsAt) {
       return normalizeResponse({
         success: false,

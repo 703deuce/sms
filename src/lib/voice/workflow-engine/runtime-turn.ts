@@ -42,11 +42,32 @@ function pickServiceName(
   explicit?: string | null,
 ): string | null {
   if (explicit?.trim()) return explicit.trim();
-  for (const key of ["service", "serviceName", "service_name", "appointmentType"]) {
+  for (const key of [
+    "service",
+    "serviceName",
+    "service_name",
+    "service_requested",
+    "appointmentType",
+  ]) {
     const v = extracted[key];
     if (v != null && String(v).trim()) return String(v).trim();
   }
   return null;
+}
+
+const CONFIRM_RE =
+  /\b(yes|yeah|yep|sure|correct|right|go ahead|book it|please do|sounds good|that works|confirm|do it|okay|ok)\b/i;
+
+function inferConfirm(
+  utterance: string,
+  extracted: Record<string, unknown>,
+  state: string,
+): boolean {
+  if (state !== "READY_TO_BOOK" && state !== "BOOKING_IN_PROGRESS") return false;
+  if (extracted.confirm === true || extracted.confirmed === true) return true;
+  const intent = String(extracted.intent || extracted.interpreted_intent || "").toLowerCase();
+  if (intent === "confirm" || intent === "confirm_booking") return true;
+  return CONFIRM_RE.test(utterance.trim());
 }
 
 export async function executeAmyRuntimeTurn(
@@ -166,7 +187,7 @@ export async function executeAmyRuntimeTurn(
       agentId: input.agentId,
       callId: input.callId,
       userInput: utterance || null,
-      confirm: input.confirm === true,
+      confirm: input.confirm === true || inferConfirm(utterance, extracted, state),
       workflow,
       serviceName,
       startsAt:
