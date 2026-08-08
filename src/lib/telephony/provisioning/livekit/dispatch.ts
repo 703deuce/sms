@@ -26,20 +26,33 @@ export async function ensureSharedDispatchRule(input: {
   if (storedId) {
     const listed = await client.listSipDispatchRule({ dispatchRuleIds: [storedId] });
     if (listed[0]) {
-      return { rule: listed[0], created: false, actions: ["reuse_env_dispatch_rule_id"] };
+      let rule = listed[0];
+      const current = rule.trunkIds || [];
+      if (!current.includes(input.trunkId) || current.some((id) => id !== input.trunkId)) {
+        rule = await client.updateSipDispatchRuleFields(rule.sipDispatchRuleId!, {
+          trunkIds: new ListUpdate({ set: [input.trunkId] }),
+        });
+        actions.push("replaced_stale_dispatch_trunk_ids");
+      }
+      return { rule, created: false, actions: [...actions, "reuse_env_dispatch_rule_id"] };
     }
     actions.push("env_dispatch_rule_id_stale");
   }
 
   let rule = await findDispatchRuleByName(TRANSOVO_LIVEKIT_DISPATCH_RULE_NAME);
   if (rule) {
-    const trunkIds = new Set(rule.trunkIds || []);
-    if (!trunkIds.has(input.trunkId)) {
-      trunkIds.add(input.trunkId);
+    const current = rule.trunkIds || [];
+    const next = current.includes(input.trunkId) ? current : [...current, input.trunkId];
+    const staleIds = next.filter((id) => id !== input.trunkId);
+    if (staleIds.length > 0 || next.length !== current.length) {
       rule = await client.updateSipDispatchRuleFields(rule.sipDispatchRuleId!, {
-        trunkIds: new ListUpdate({ set: [...trunkIds] }),
+        trunkIds: new ListUpdate({ set: [input.trunkId] }),
       });
-      actions.push("attached_trunk_to_existing_dispatch_rule");
+      actions.push(
+        staleIds.length > 0
+          ? "replaced_stale_dispatch_trunk_ids"
+          : "attached_trunk_to_existing_dispatch_rule",
+      );
     }
     return { rule, created: false, actions: [...actions, "reuse_named_dispatch_rule"] };
   }

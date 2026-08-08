@@ -4,8 +4,13 @@ import { syncVoiceAgentPhoneAssignment } from "@/lib/voice/agent-phone";
 import { ensureSharedDispatchRule } from "./livekit/dispatch";
 import {
   ensureInboundTrunkForNumber,
-  findInboundTrunkContainingNumber,
+  rebuildInboundTrunkForNumber,
 } from "./livekit/trunk";
+import {
+  diagnoseLiveKitSipIssues,
+  inspectLiveKitSipRouting,
+  type LiveKitSipInspectResult,
+} from "./livekit/inspect";
 import {
   ensureTelnyxLiveKitFqdnConnection,
   routeTelnyxNumberToConnection,
@@ -247,6 +252,7 @@ export async function verifyNumberRouting(input: {
   let telnyxConnectionId: string | undefined;
   let telnyxConnectionName: string | undefined;
   let livekitTrunkHasNumber = false;
+  const livekitDetails: Partial<VerifyRoutingResult> = {};
 
   if (phone.providerNumberId) {
     try {
@@ -267,11 +273,37 @@ export async function verifyNumberRouting(input: {
 
   if (routingMode === "livekit_sip") {
     try {
-      const trunk = await findInboundTrunkContainingNumber(phone.e164);
-      livekitTrunkHasNumber = Boolean(trunk);
+      const inspect = await inspectLiveKitSipRouting(phone.e164);
+      const trunk = inspect.trunkContainingDid;
+      livekitTrunkHasNumber = Boolean(trunk?.numbers.includes(phone.e164));
+      if (trunk) {
+        livekitDetails.livekitTrunkId = trunk.id;
+        livekitDetails.livekitTrunkNumbers = trunk.numbers;
+      }
+      livekitDetails.livekitSipHost = inspect.sipHost;
+      if (provision.livekitDispatchRuleId) {
+        livekitDetails.livekitDispatchRuleId = provision.livekitDispatchRuleId;
+        const rule = inspect.dispatchRules.find(
+          (r) => r.id === provision.livekitDispatchRuleId,
+        );
+        if (rule) {
+          livekitDetails.livekitDispatchTrunkIds = rule.trunkIds;
+          if (trunk && !rule.trunkIds.includes(trunk.id)) {
+            issues.push("dispatch_rule_missing_trunk");
+          }
+        } else {
+          issues.push("dispatch_rule_not_found");
+        }
+      } else if (inspect.dispatchRulesForTrunk.length === 0) {
+        issues.push("dispatch_rule_missing_trunk");
+      }
+      issues.push(...diagnoseLiveKitSipIssues(inspect, phone.e164));
       if (!livekitTrunkHasNumber) issues.push("livekit_trunk_missing_number");
       if (provision.telnyxFqdnConnectionId && telnyxConnectionId !== provision.telnyxFqdnConnectionId) {
         issues.push("telnyx_connection_mismatch");
+      }
+      if (inspect.sipHost && provision.telnyxFqdnId) {
+        // FQDN host is validated during provision; surface mismatch in issues only when empty.
       }
     } catch {
       issues.push("livekit_trunk_lookup_failed");
@@ -281,15 +313,109 @@ export async function verifyNumberRouting(input: {
   const routing = await resolveAgentByCalledNumber(phone.e164);
   if (!routing) issues.push("no_active_agent_for_number");
 
+  const uniqueIssues = [...new Set(issues)];
+
   return {
-    ok: issues.length === 0,
+    ok: uniqueIssues.length === 0,
     e164: phone.e164,
     routingMode,
     telnyxConnectionId,
     telnyxConnectionName,
     livekitTrunkHasNumber,
     dbAgentId: routing?.agentId || null,
-    issues,
+    issues: uniqueIssues,
+    ...livekitDetails,
+  };
+}
+
+/**
+ * Hard repair for SIP 404: rebuild LiveKit inbound trunk + resync dispatch + Telnyx FQDN.
+ */
+export async function repairLiveKitSipRouting(input: {
+  workspaceId: string;
+  phoneNumberId: string;
+  agentId?: string | null;
+}): Promise<{
+  ok: boolean;
+  before: LiveKitSipInspectResult;
+  after: LiveKitSipInspectResult;
+  provision: EnsureNumberProvisionedResult;
+  actions: string[];
+}> {
+  const prisma = getPrisma();
+  const phone = await prisma.phoneNumber.findFirst({
+    where: { id: input.phoneNumberId, workspaceId: input.workspaceId },
+  });
+  if (!phone?.e164) {
+    throw new Error("Phone number not found");
+  }
+
+  const before = await inspectLiveKitSipRouting(phone.e164);
+  const actions: string[] = [];
+
+  const { connectionId, fqdnId, actions: telnyxActions } =
+    await ensureTelnyxLiveKitFqdnConnection();
+  actions.push(...telnyxActions);
+
+  const route = await routeTelnyxNumberToConnection({
+    e164: phone.e164,
+    providerNumberId: phone.providerNumberId,
+    connectionId,
+  });
+  actions.push(
+    route.previousConnectionId && route.previousConnectionId !== connectionId
+      ? `telnyx_rerouted:${route.previousConnectionId}->${connectionId}`
+      : "telnyx_route_ok",
+  );
+
+  const { trunk, actions: rebuildActions } = await rebuildInboundTrunkForNumber(phone.e164);
+  actions.push(...rebuildActions);
+
+  const trunkId = trunk.sipTrunkId || "";
+  if (!trunkId) throw new Error("LiveKit inbound trunk id missing after rebuild");
+
+  const { rule, actions: dispatchActions } = await ensureSharedDispatchRule({ trunkId });
+  actions.push(...dispatchActions);
+
+  await writeProvision(phone.id, {
+    routingMode: "livekit_sip",
+    state: "active",
+    telnyxFqdnConnectionId: connectionId,
+    telnyxFqdnId: fqdnId,
+    livekitInboundTrunkId: trunkId,
+    livekitDispatchRuleId: rule.sipDispatchRuleId,
+    lastError: null,
+  });
+
+  const after = await inspectLiveKitSipRouting(phone.e164);
+  const verify = await verifyNumberRouting({
+    workspaceId: input.workspaceId,
+    phoneNumberId: input.phoneNumberId,
+  });
+
+  const provision: EnsureNumberProvisionedResult = {
+    ok: verify.ok,
+    phoneNumberId: phone.id,
+    e164: phone.e164,
+    routingMode: "livekit_sip",
+    provision: readProvision(
+      (
+        await prisma.phoneNumber.findUnique({
+          where: { id: phone.id },
+          select: { settingsJson: true },
+        })
+      )?.settingsJson,
+    ),
+    actions,
+    error: verify.ok ? undefined : verify.issues.join(", "),
+  };
+
+  return {
+    ok: verify.ok,
+    before,
+    after,
+    provision,
+    actions,
   };
 }
 

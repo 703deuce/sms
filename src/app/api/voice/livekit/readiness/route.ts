@@ -4,6 +4,8 @@ import { getPrisma } from "@/lib/db";
 import { isLiveKitVoiceRuntime } from "@/lib/voice/runtime-provider/config";
 import {
   ensureNumberProvisioned,
+  inspectLiveKitSipRouting,
+  repairLiveKitSipRouting,
   resolveLiveKitSipHost,
   verifyNumberRouting,
 } from "@/lib/telephony/provisioning";
@@ -23,6 +25,8 @@ export async function POST(request: Request) {
       phoneNumberId?: string;
       agentId?: string;
       provision?: boolean;
+      repair?: boolean;
+      inspect?: boolean;
     };
 
     const sip = resolveLiveKitSipHost();
@@ -43,8 +47,22 @@ export async function POST(request: Request) {
 
     let provisionResult = null;
     let verifyResult = null;
+    let inspectResult = null;
+    let repairResult = null;
 
-    if (body.provision && body.phoneNumberId) {
+    if (body.repair && body.phoneNumberId) {
+      repairResult = await repairLiveKitSipRouting({
+        workspaceId: auth.workspaceId,
+        phoneNumberId: body.phoneNumberId,
+        agentId: body.agentId,
+      });
+      provisionResult = repairResult.provision;
+      verifyResult = await verifyNumberRouting({
+        workspaceId: auth.workspaceId,
+        phoneNumberId: body.phoneNumberId,
+      });
+      inspectResult = repairResult.after;
+    } else if (body.provision && body.phoneNumberId) {
       provisionResult = await ensureNumberProvisioned({
         workspaceId: auth.workspaceId,
         phoneNumberId: body.phoneNumberId,
@@ -56,6 +74,15 @@ export async function POST(request: Request) {
         phoneNumberId: body.phoneNumberId,
       });
     } else if (body.phoneNumberId) {
+      if (body.inspect) {
+        const phone = await getPrisma().phoneNumber.findFirst({
+          where: { id: body.phoneNumberId, workspaceId: auth.workspaceId },
+          select: { e164: true },
+        });
+        if (phone?.e164) {
+          inspectResult = await inspectLiveKitSipRouting(phone.e164);
+        }
+      }
       verifyResult = await verifyNumberRouting({
         workspaceId: auth.workspaceId,
         phoneNumberId: body.phoneNumberId,
@@ -67,6 +94,15 @@ export async function POST(request: Request) {
         provider,
         sipHost: sip.host ? { source: sip.source, configured: true } : { configured: false },
         livekitApi,
+        inspect: inspectResult,
+        repair: repairResult
+          ? {
+              ok: repairResult.ok,
+              actions: repairResult.actions,
+              before: repairResult.before,
+              after: repairResult.after,
+            }
+          : null,
         provision: provisionResult,
         verify: verifyResult,
       },

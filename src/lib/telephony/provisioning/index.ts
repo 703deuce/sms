@@ -32,10 +32,14 @@ export {
 export {
   assignNumberToAgent,
   ensureNumberProvisioned,
+  repairLiveKitSipRouting,
   resolveAgentByCalledNumber,
   resolveAgentRoutingForCall,
   verifyNumberRouting,
 } from "./number-assignment";
+
+export { inspectLiveKitSipRouting, diagnoseLiveKitSipIssues } from "./livekit/inspect";
+export { rebuildInboundTrunkForNumber } from "./livekit/trunk";
 
 export { ensureSharedDispatchRule } from "./livekit/dispatch";
 export { ensureSharedInboundTrunk } from "./livekit/trunk";

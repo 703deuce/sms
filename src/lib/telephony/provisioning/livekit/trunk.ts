@@ -6,6 +6,22 @@ import {
 } from "../config";
 import { getLiveKitSipClient } from "./client";
 
+async function assertTrunkHasNumber(
+  trunkId: string,
+  e164: string,
+): Promise<SIPInboundTrunkInfo> {
+  const client = getLiveKitSipClient();
+  const listed = await client.listSipInboundTrunk({ trunkIds: [trunkId] });
+  const trunk = listed[0];
+  if (!trunk) throw new Error(`LiveKit inbound trunk ${trunkId} not found after update`);
+  if (!(trunk.numbers || []).includes(e164)) {
+    throw new Error(
+      `LiveKit inbound trunk ${trunkId} missing ${e164} after update (numbers=${(trunk.numbers || []).join(",") || "none"})`,
+    );
+  }
+  return trunk;
+}
+
 export async function findInboundTrunkByName(
   name: string,
 ): Promise<SIPInboundTrunkInfo | null> {
@@ -74,9 +90,10 @@ export async function ensureInboundTrunkForNumber(e164: string): Promise<{
   const actions: string[] = [];
 
   const allTrunks = await client.listSipInboundTrunk();
+  // Prefer a trunk that already owns the DID — a named empty trunk must not win over it.
   let keeper =
-    allTrunks.find((t) => t.name === TRANSOVO_LIVEKIT_TRUNK_NAME) ||
     allTrunks.find((t) => (t.numbers || []).includes(e164)) ||
+    allTrunks.find((t) => t.name === TRANSOVO_LIVEKIT_TRUNK_NAME) ||
     (getStoredLiveKitTrunkId()
       ? allTrunks.find((t) => t.sipTrunkId === getStoredLiveKitTrunkId())
       : null) ||
@@ -118,13 +135,43 @@ export async function ensureInboundTrunkForNumber(e164: string): Promise<{
 
   if (!(keeper.numbers || []).includes(e164)) {
     const added = await addNumberToInboundTrunk(trunkId, e164);
-    keeper = added.trunk;
+    keeper = await assertTrunkHasNumber(trunkId, e164);
     if (added.added) actions.push("livekit_trunk_added_number");
   } else {
+    keeper = await assertTrunkHasNumber(trunkId, e164);
     actions.push("livekit_trunk_number_ok");
   }
 
   return { trunk: keeper, created: false, actions };
+}
+
+/**
+ * Nuclear repair: delete every inbound trunk and recreate the canonical trunk with the DID.
+ * Use when LiveKit API reports the number but PSTN still receives SIP 404.
+ */
+export async function rebuildInboundTrunkForNumber(e164: string): Promise<{
+  trunk: SIPInboundTrunkInfo;
+  actions: string[];
+}> {
+  const client = getLiveKitSipClient();
+  const actions: string[] = [];
+  const allTrunks = await client.listSipInboundTrunk();
+
+  for (const trunk of allTrunks) {
+    const trunkId = trunk.sipTrunkId || "";
+    if (!trunkId) continue;
+    await client.deleteSipTrunk(trunkId);
+    actions.push(`livekit_deleted_trunk_${trunk.name || trunkId}`);
+  }
+
+  const created = await client.createSipInboundTrunk(TRANSOVO_LIVEKIT_TRUNK_NAME, [e164], {
+    metadata: JSON.stringify({ owner: "transovo", kind: "shared_telnyx_inbound" }),
+  });
+  actions.push("livekit_rebuilt_inbound_trunk");
+  const trunkId = created.sipTrunkId || "";
+  if (!trunkId) throw new Error("LiveKit inbound trunk id missing after rebuild");
+  const trunk = await assertTrunkHasNumber(trunkId, e164);
+  return { trunk, actions };
 }
 
 export async function addNumberToInboundTrunk(

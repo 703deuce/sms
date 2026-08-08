@@ -119,6 +119,33 @@ async function main() {
       console.error("✗ livekit provision API", prov.status, prov.json);
       report.ok = false;
     }
+
+    const verifyIssues = prov.json?.data?.verify?.issues || [];
+    const needsRepair =
+      verifyIssues.includes("dispatch_rule_missing_trunk") ||
+      verifyIssues.includes("no_trunk_for_did") ||
+      verifyIssues.includes("duplicate_trunk_for_did");
+
+    if (needsRepair || process.env.LIVEKIT_FORCE_REPAIR === "1") {
+      const repair = await api(jar, BASE, "POST", "/api/voice/livekit/readiness", {
+        phoneNumberId: PHONE_866_ID,
+        agentId: AMY_AGENT_ID,
+        repair: true,
+      });
+      report.steps.push({
+        step: "livekit_repair_api",
+        ok: repair.status === 200 && repair.json?.data?.repair?.ok !== false,
+        status: repair.status,
+        data: repair.json?.data,
+      });
+      if (repair.status === 200) {
+        console.log("✓ livekit SIP repair API");
+        console.log(" ", JSON.stringify(repair.json?.data?.repair, null, 2));
+      } else {
+        console.error("✗ livekit SIP repair API", repair.status, repair.json);
+        report.ok = false;
+      }
+    }
   }
 
   // 7) Telnyx routing check (local API key)

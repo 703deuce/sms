@@ -68,6 +68,11 @@ export type VerifyRoutingResult = {
   telnyxConnectionId?: string;
   telnyxConnectionName?: string;
   livekitTrunkHasNumber?: boolean;
+  livekitTrunkId?: string;
+  livekitTrunkNumbers?: string[];
+  livekitDispatchRuleId?: string;
+  livekitDispatchTrunkIds?: string[];
+  livekitSipHost?: string;
   dbAgentId?: string | null;
   issues: string[];
 };
