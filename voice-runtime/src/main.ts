@@ -12,7 +12,7 @@ import type { AmyProcessUserData } from "./metadata";
 import { buildAmyVoicePipeline, describePipelineConfig } from "./pipeline";
 import { attachLatencyInstrumentation } from "./latency-instrumentation";
 import { attachOutputGain, resolveLiveKitOutputGainDb } from "./output-gain";
-import { buildAmyTurnHandling, describeTurnHandlingConfig } from "./turn-config";
+import { buildAmyTurnHandling, describeTurnHandlingConfig, getPreemptiveConfigForInstrumentation } from "./turn-config";
 
 dotenv.config();
 
@@ -100,7 +100,10 @@ export default defineAgent<AmyProcessUserData>({
       userData: { callContext },
     });
 
-    attachLatencyInstrumentation(session, { callId });
+    attachLatencyInstrumentation(session, {
+      callId,
+      preemptiveConfig: getPreemptiveConfigForInstrumentation(),
+    });
 
     ctx.addShutdownCallback(async () => {
       await liveKitRuntimeProvider.endSession(callId);

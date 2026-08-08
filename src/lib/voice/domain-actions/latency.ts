@@ -10,6 +10,7 @@ export type DomainActionTiming = {
   totalMs: number;
   ok: boolean;
   errorCode?: string;
+  phases?: Record<string, number | Record<string, number>>;
 };
 
 export function startDomainActionTimer(action: string, callId: string, taskId?: string) {
@@ -23,7 +24,11 @@ export function startDomainActionTimer(action: string, callId: string, taskId?: 
     markProviderEnd() {
       providerEnd = Date.now();
     },
-    finish(ok: boolean, errorCode?: string): DomainActionTiming {
+    finish(
+      ok: boolean,
+      errorCode?: string,
+      extra?: { phases?: Record<string, number | Record<string, number>> },
+    ): DomainActionTiming {
       const ended = Date.now();
       const timing: DomainActionTiming = {
         action,
@@ -37,6 +42,7 @@ export function startDomainActionTimer(action: string, callId: string, taskId?: 
         totalMs: ended - started,
         ok,
         errorCode,
+        phases: extra?.phases,
       };
       console.info("[amy.domain_action]", JSON.stringify(timing));
       return timing;

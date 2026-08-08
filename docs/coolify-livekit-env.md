@@ -40,9 +40,10 @@ Telnyx must send PSTN to your LiveKit **SIP URI** (may differ from project URL, 
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `VOICE_ENDPOINTING_MIN_MS` | `200` | Min silence before Amy responds (ms) |
-| `VOICE_ENDPOINTING_MAX_MS` | `2000` | Max wait before ending caller turn (ms) |
-| `VOICE_PREEMPTIVE_TTS` | `true` | Start TTS before turn is fully confirmed |
+| `VOICE_TURN_PRESET` | `receptionist` | `receptionist` (300/2500ms), `low_latency` (250/2000), `aggressive` (200/1800) |
+| `VOICE_ENDPOINTING_MIN_MS` | preset default | Override min endpointing delay (ms) |
+| `VOICE_ENDPOINTING_MAX_MS` | preset default | Override max endpointing delay (ms) |
+| `VOICE_PREEMPTIVE_TTS` | `true` | Speculative TTS before turn confirmed |
 | `VOICE_AGENT_OUTPUT_GAIN_DB` | `-4` | Agent playback gain (−4 dB if unset; also reads agent `outputGainDb`) |
 
 Faster LLM (optional): `VOICE_LLM_MODEL=gpt-4.1-nano`

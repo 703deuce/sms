@@ -1,9 +1,5 @@
-import { recordCurrentField } from "@/lib/voice/field-runtime/save";
-import {
-  getOrCreateRealtimeSession,
-  setSessionFieldFast,
-  updateSessionAfterRuntimeChange,
-} from "@/lib/voice/realtime-session/init";
+import { recordFieldForLiveKitVoice } from "@/lib/voice/field-runtime/save-voice-fast";
+import { getOrCreateRealtimeSession } from "@/lib/voice/realtime-session/init";
 import { executeContinueWorkflow } from "@/lib/voice/workflow-engine/continue-workflow";
 import { startDomainActionTimer } from "./latency";
 import { assertTaskToolAllowed, taskForWorkflowState } from "./task-guard";
@@ -36,36 +32,35 @@ export async function domainRecordField(input: {
     };
   }
 
-  const recorded = await recordCurrentField({
-    workspaceId: input.ctx.workspaceId,
-    agentId: input.ctx.agentId,
-    callId: input.ctx.callId,
+  const recorded = await recordFieldForLiveKitVoice({
+    amySession: input.ctx.session,
     value: input.value,
-    workflow: "book_appointment",
-    serviceName: input.ctx.session.serviceName,
+    fieldId,
   });
   timer.markProviderEnd();
 
-  if ((recorded as { ok?: boolean }).ok === false) {
-    timer.finish(false, "VALIDATION_FAILED");
+  if (!recorded.ok) {
+    timer.finish(false, recorded.error_code);
     return {
       ok: false,
-      speak: String((recorded as { speak?: string }).speak || "That value didn't look right."),
-      error_code: "VALIDATION_FAILED",
+      speak: recorded.speak,
+      error_code: recorded.error_code,
     };
   }
 
-  let session = setSessionFieldFast(input.ctx.session, fieldId, input.value);
-  session = await updateSessionAfterRuntimeChange(session, {});
-  input.ctx.session = session;
-  input.ctx.workflowState = session.currentState;
+  input.ctx.session = recorded.amySession;
+  input.ctx.workflowState = recorded.workflowState;
 
-  timer.finish(true);
+  timer.finish(true, undefined, { phases: { voiceFieldTiming: recorded.timing } });
   return {
     ok: true,
-    speak: String((recorded as { speak?: string }).speak || "Got it, thank you."),
-    workflow_state: session.currentState,
-    data: { field_id: fieldId, missing_fields: session.missingFieldIds },
+    speak: recorded.speak,
+    workflow_state: recorded.workflowState,
+    data: {
+      field_id: fieldId,
+      missing_fields: recorded.amySession.missingFieldIds,
+      voice_field_timing: recorded.timing,
+    },
   };
 }
 

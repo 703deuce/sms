@@ -1,5 +1,6 @@
 import { getPrisma } from "@/lib/db";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
+import { setCachedWorkflowFieldSession } from "./session-cache";
 import type {
   CollectedFieldValue,
   FieldValueSource,
@@ -93,7 +94,10 @@ export async function ensureWorkflowFieldSession(input: {
   serviceName?: string | null;
 }): Promise<WorkflowFieldSession> {
   const existing = await loadWorkflowFieldSession(input.callId);
-  if (existing) return existing;
+  if (existing) {
+    setCachedWorkflowFieldSession(input.callId, existing);
+    return existing;
+  }
 
   let session = emptyWorkflowFieldSession({
     sessionId: input.callId,
@@ -166,6 +170,7 @@ export async function ensureWorkflowFieldSession(input: {
   }
 
   await saveWorkflowFieldSession(input.callId, session);
+  setCachedWorkflowFieldSession(input.callId, session);
   return session;
 }
 

@@ -1,6 +1,7 @@
 import {
   AgentSessionEventTypes,
   type AgentMetrics,
+  type AgentStateChangedEvent,
   type FunctionToolsExecutedEvent,
   type MetricsCollectedEvent,
   type UserInputTranscribedEvent,
@@ -8,24 +9,53 @@ import {
   voice,
 } from "@livekit/agents";
 
-export type TurnLatencySnapshot = {
+export type TurnLatencyBreakdown = {
   callId?: string;
   turn: number;
-  userSpeechEndMs?: number;
-  sttFinalMs?: number;
-  llmFirstTokenMs?: number;
-  ttsFirstAudioMs?: number;
-  toolMs?: number;
-  speechEndToFirstAudioMs?: number;
+  transcript?: string;
+  hadToolCall: boolean;
+  preemptiveObserved: boolean;
+  components: {
+    transcriptionDelayMs?: number;
+    endOfUtteranceDelayMs?: number;
+    onUserTurnCompletedDelayMs?: number;
+    sttFinalAfterSpeechEndMs?: number;
+    llmTtftMs?: number;
+    ttsTtfbMs?: number;
+    playbackEstimateMs?: number;
+    e2eFirstAudioMs?: number;
+    toolMs?: number;
+  };
+  flags: {
+    ordinaryTurnOver2s: boolean;
+    toolOver3s: boolean;
+    preemptiveTtsConfigured: boolean;
+  };
+  preemptiveConfig: {
+    enabled: boolean;
+    preemptiveTts: boolean;
+  };
 };
 
 type TurnState = {
   turn: number;
   userSpeechEndMs?: number;
   sttFinalMs?: number;
-  llmFirstTokenMs?: number;
+  sttTranscript?: string;
+  preemptiveObserved: boolean;
+  eou?: {
+    transcriptionDelayMs: number;
+    endOfUtteranceDelayMs: number;
+    onUserTurnCompletedDelayMs: number;
+    lastSpeakingTimeMs: number;
+  };
+  llmTtftMs?: number;
+  ttsTtfbMs?: number;
   ttsFirstAudioMs?: number;
+  agentSpeakingMs?: number;
   toolMs?: number;
+  hadToolCall: boolean;
+  breakdownEmitted: boolean;
 };
 
 function logLatency(event: string, payload: Record<string, unknown>) {
@@ -39,27 +69,121 @@ function logLatency(event: string, payload: Record<string, unknown>) {
   );
 }
 
-function snapshotTurn(state: TurnState, callId?: string): TurnLatencySnapshot {
-  const speechEndToFirstAudioMs =
-    state.userSpeechEndMs != null && state.ttsFirstAudioMs != null
-      ? state.ttsFirstAudioMs - state.userSpeechEndMs
+function roundMs(value: number | undefined): number | undefined {
+  if (value == null || !Number.isFinite(value)) return undefined;
+  return Math.round(value);
+}
+
+function buildBreakdown(
+  state: TurnState,
+  input: {
+    callId?: string;
+    preemptiveConfig: TurnLatencyBreakdown["preemptiveConfig"];
+  },
+): TurnLatencyBreakdown {
+  const speechAnchor =
+    state.eou?.lastSpeakingTimeMs && state.eou.lastSpeakingTimeMs > 0
+      ? state.eou.lastSpeakingTimeMs
+      : state.userSpeechEndMs;
+
+  const e2eFirstAudioMs =
+    speechAnchor != null && state.ttsFirstAudioMs != null
+      ? state.ttsFirstAudioMs - speechAnchor
       : undefined;
 
+  const accounted =
+    (state.eou?.transcriptionDelayMs ?? 0) +
+    (state.eou?.endOfUtteranceDelayMs ?? 0) +
+    (state.eou?.onUserTurnCompletedDelayMs ?? 0) +
+    (state.llmTtftMs ?? 0) +
+    (state.ttsTtfbMs ?? 0);
+
+  const playbackEstimateMs =
+    e2eFirstAudioMs != null ? Math.max(0, e2eFirstAudioMs - accounted) : undefined;
+
+  const components = {
+    transcriptionDelayMs: roundMs(state.eou?.transcriptionDelayMs),
+    endOfUtteranceDelayMs: roundMs(state.eou?.endOfUtteranceDelayMs),
+    onUserTurnCompletedDelayMs: roundMs(state.eou?.onUserTurnCompletedDelayMs),
+    sttFinalAfterSpeechEndMs:
+      speechAnchor != null && state.sttFinalMs != null
+        ? roundMs(state.sttFinalMs - speechAnchor)
+        : undefined,
+    llmTtftMs: roundMs(state.llmTtftMs),
+    ttsTtfbMs: roundMs(state.ttsTtfbMs),
+    playbackEstimateMs: roundMs(playbackEstimateMs),
+    e2eFirstAudioMs: roundMs(e2eFirstAudioMs),
+    toolMs: roundMs(state.toolMs),
+  };
+
+  const ordinary = !state.hadToolCall;
+  const e2e = components.e2eFirstAudioMs ?? 0;
+
   return {
-    callId,
+    callId: input.callId,
     turn: state.turn,
-    userSpeechEndMs: state.userSpeechEndMs,
-    sttFinalMs: state.sttFinalMs,
-    llmFirstTokenMs: state.llmFirstTokenMs,
-    ttsFirstAudioMs: state.ttsFirstAudioMs,
-    toolMs: state.toolMs,
-    speechEndToFirstAudioMs,
+    transcript: state.sttTranscript,
+    hadToolCall: state.hadToolCall,
+    preemptiveObserved: state.preemptiveObserved,
+    components,
+    flags: {
+      ordinaryTurnOver2s: ordinary && e2e > 2000,
+      toolOver3s: state.hadToolCall && (state.toolMs ?? 0) > 3000,
+      preemptiveTtsConfigured: input.preemptiveConfig.preemptiveTts,
+    },
+    preemptiveConfig: input.preemptiveConfig,
   };
 }
 
-function recordMetrics(metrics: AgentMetrics, state: TurnState) {
+function emitTurnBreakdown(
+  state: TurnState,
+  input: {
+    callId?: string;
+    preemptiveConfig: TurnLatencyBreakdown["preemptiveConfig"];
+  },
+) {
+  if (state.breakdownEmitted) return;
+  state.breakdownEmitted = true;
+  const breakdown = buildBreakdown(state, input);
+  logLatency("turn_latency_breakdown", breakdown);
+
+  if (breakdown.flags.ordinaryTurnOver2s) {
+    logLatency("turn_latency_alert", {
+      turn: breakdown.turn,
+      callId: breakdown.callId,
+      reason: "ordinary_turn_over_2s",
+      e2eFirstAudioMs: breakdown.components.e2eFirstAudioMs,
+      components: breakdown.components,
+    });
+  }
+  if (breakdown.flags.toolOver3s) {
+    logLatency("turn_latency_alert", {
+      turn: breakdown.turn,
+      callId: breakdown.callId,
+      reason: "tool_over_3s",
+      toolMs: breakdown.components.toolMs,
+      tools: "see tool_executed",
+    });
+  }
+}
+
+function recordMetrics(
+  metrics: AgentMetrics,
+  state: TurnState,
+  input: {
+    callId?: string;
+    preemptiveConfig: TurnLatencyBreakdown["preemptiveConfig"];
+  },
+) {
   const now = Date.now();
+
   if (metrics.type === "eou_metrics") {
+    state.eou = {
+      transcriptionDelayMs: metrics.transcriptionDelayMs,
+      endOfUtteranceDelayMs: metrics.endOfUtteranceDelayMs,
+      onUserTurnCompletedDelayMs: metrics.onUserTurnCompletedDelayMs,
+      lastSpeakingTimeMs: metrics.lastSpeakingTimeMs,
+    };
     if (metrics.lastSpeakingTimeMs > 0) {
       state.userSpeechEndMs = metrics.lastSpeakingTimeMs;
     }
@@ -67,6 +191,7 @@ function recordMetrics(metrics: AgentMetrics, state: TurnState) {
       turn: state.turn,
       endOfUtteranceDelayMs: metrics.endOfUtteranceDelayMs,
       transcriptionDelayMs: metrics.transcriptionDelayMs,
+      onUserTurnCompletedDelayMs: metrics.onUserTurnCompletedDelayMs,
       lastSpeakingTimeMs: metrics.lastSpeakingTimeMs,
     });
   }
@@ -84,17 +209,19 @@ function recordMetrics(metrics: AgentMetrics, state: TurnState) {
   }
 
   if (metrics.type === "llm_metrics") {
-    state.llmFirstTokenMs = now;
+    state.llmTtftMs = metrics.ttftMs;
     logLatency("llm_first_token", {
       turn: state.turn,
       ttftMs: metrics.ttftMs,
       durationMs: metrics.durationMs,
       provider: metrics.metadata?.modelProvider,
       model: metrics.metadata?.modelName,
+      speechId: metrics.speechId,
     });
   }
 
   if (metrics.type === "tts_metrics") {
+    state.ttsTtfbMs = metrics.ttfbMs;
     state.ttsFirstAudioMs = now;
     logLatency("tts_first_audio", {
       turn: state.turn,
@@ -102,17 +229,32 @@ function recordMetrics(metrics: AgentMetrics, state: TurnState) {
       durationMs: metrics.durationMs,
       provider: metrics.metadata?.modelProvider,
       model: metrics.metadata?.modelName,
+      speechId: metrics.speechId,
     });
-    logLatency("turn_latency_summary", snapshotTurn(state));
+    emitTurnBreakdown(state, input);
   }
 }
 
 export function attachLatencyInstrumentation(
   session: voice.AgentSession,
-  input?: { callId?: string },
+  input?: {
+    callId?: string;
+    preemptiveConfig?: TurnLatencyBreakdown["preemptiveConfig"];
+  },
 ) {
   const callId = input?.callId;
-  const state: TurnState = { turn: 0 };
+  const preemptiveConfig = input?.preemptiveConfig ?? {
+    enabled: true,
+    preemptiveTts: false,
+  };
+  const state: TurnState = {
+    turn: 0,
+    preemptiveObserved: false,
+    hadToolCall: false,
+    breakdownEmitted: false,
+  };
+
+  const ctx = { callId, preemptiveConfig };
 
   session.on(
     AgentSessionEventTypes.UserStateChanged,
@@ -121,9 +263,16 @@ export function attachLatencyInstrumentation(
         state.turn += 1;
         state.userSpeechEndMs = Date.now();
         state.sttFinalMs = undefined;
-        state.llmFirstTokenMs = undefined;
+        state.sttTranscript = undefined;
+        state.eou = undefined;
+        state.llmTtftMs = undefined;
+        state.ttsTtfbMs = undefined;
         state.ttsFirstAudioMs = undefined;
+        state.agentSpeakingMs = undefined;
         state.toolMs = undefined;
+        state.hadToolCall = false;
+        state.preemptiveObserved = false;
+        state.breakdownEmitted = false;
         logLatency("user_speech_end", { turn: state.turn, callId });
       }
     },
@@ -133,24 +282,43 @@ export function attachLatencyInstrumentation(
     AgentSessionEventTypes.UserInputTranscribed,
     (ev: UserInputTranscribedEvent) => {
       if (!ev.isFinal) return;
-      state.sttFinalMs = Date.now();
+      const now = Date.now();
+      if (session.userState === "speaking" && !state.preemptiveObserved) {
+        state.preemptiveObserved = true;
+        logLatency("preemptive_generation_observed", {
+          turn: state.turn,
+          callId,
+          transcript: ev.transcript,
+          userState: session.userState,
+        });
+      }
+      state.sttFinalMs = now;
+      state.sttTranscript = ev.transcript;
       logLatency("stt_transcript_final", {
         turn: state.turn,
         callId,
         transcript: ev.transcript,
         language: ev.language,
         latencyMs:
-          state.userSpeechEndMs != null
-            ? state.sttFinalMs - state.userSpeechEndMs
-            : undefined,
+          state.userSpeechEndMs != null ? now - state.userSpeechEndMs : undefined,
+        preemptiveObserved: state.preemptiveObserved,
       });
+    },
+  );
+
+  session.on(
+    AgentSessionEventTypes.AgentStateChanged,
+    (ev: AgentStateChangedEvent) => {
+      if (ev.newState === "speaking" && state.ttsFirstAudioMs != null) {
+        state.agentSpeakingMs = Date.now();
+      }
     },
   );
 
   session.on(
     AgentSessionEventTypes.MetricsCollected,
     (ev: MetricsCollectedEvent) => {
-      recordMetrics(ev.metrics, state);
+      recordMetrics(ev.metrics, state, ctx);
     },
   );
 
@@ -159,6 +327,7 @@ export function attachLatencyInstrumentation(
     (ev: FunctionToolsExecutedEvent) => {
       const started = ev.createdAt || Date.now();
       const finished = Date.now();
+      state.hadToolCall = true;
       state.toolMs = finished - started;
       logLatency("tool_executed", {
         turn: state.turn,
@@ -166,6 +335,9 @@ export function attachLatencyInstrumentation(
         toolMs: state.toolMs,
         tools: ev.functionCalls.map((call) => call.name),
       });
+      if (!state.breakdownEmitted && state.ttsFirstAudioMs != null) {
+        emitTurnBreakdown(state, ctx);
+      }
     },
   );
 }
