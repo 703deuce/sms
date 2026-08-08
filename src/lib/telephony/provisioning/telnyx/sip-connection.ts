@@ -1,8 +1,8 @@
 import { telnyxRequest } from "@/lib/messaging/telnyx/client";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import {
+  getAuthoritativeLiveKitSipHost,
   getStoredTelnyxFqdnConnectionId,
-  getLiveKitSipHost,
   TRANSOVO_TELNYX_FQDN_CONNECTION_NAME,
 } from "../config";
 
@@ -29,7 +29,7 @@ export async function ensureTelnyxLiveKitFqdnConnection(): Promise<{
   actions: string[];
 }> {
   const actions: string[] = [];
-  const sipHost = getLiveKitSipHost();
+  const { host: sipHost } = getAuthoritativeLiveKitSipHost();
   if (!sipHost) {
     throw new Error(
       "LiveKit SIP host not found — set LIVEKIT_SIP_HOST, LIVEKIT_SIP_URI, or LIVEKIT_URL to your *.sip.livekit.cloud endpoint",
@@ -143,6 +143,8 @@ async function ensureFqdnRecord(
       body: {
         inbound: {
           default_primary_fqdn_id: fqdnId,
+          default_secondary_fqdn_id: null,
+          default_tertiary_fqdn_id: null,
         },
       },
     });

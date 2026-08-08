@@ -23,7 +23,7 @@ Telnyx must send PSTN to **`sms-6w01zoya.sip.livekit.cloud`**.
 | `TELNYX_API_KEY` | Telnyx (number routing) |
 | `DATABASE_URL` | Postgres |
 
-`LIVEKIT_URL` and `LIVEKIT_SIP_URI` must be from the **same** LiveKit project. Using a derived `sms-*` host while keys are for `amy` causes SIP 404 (“not in service”) even when provisioning reports success.
+`LIVEKIT_URL`, `LIVEKIT_SIP_URI`, and API keys must all be from the **same** LiveKit project (your **Sms** project).
 
 ## Voice pipeline (LiveKit Inference)
 
@@ -38,7 +38,7 @@ Telnyx must send PSTN to **`sms-6w01zoya.sip.livekit.cloud`**.
 
 ## LiveKit agent worker (separate deploy)
 
-Deploy `transovo-voice-runtime` on LiveKit Cloud **amy** project with the same `LIVEKIT_*` values plus `OPENAI_API_KEY` and `DATABASE_URL`.
+Deploy `transovo-voice-runtime` on LiveKit Cloud **Sms** project with the same `LIVEKIT_*` values plus `OPENAI_API_KEY` and `DATABASE_URL`.
 
 ## After updating Coolify
 

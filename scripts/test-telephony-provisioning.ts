@@ -4,6 +4,7 @@
  */
 import assert from "node:assert/strict";
 import {
+  getAuthoritativeLiveKitSipHost,
   normalizeLiveKitSipHost,
   resolveLiveKitSipHost,
 } from "../src/lib/telephony/provisioning/config";
@@ -37,6 +38,15 @@ process.env.LIVEKIT_URL = "wss://sms-project.livekit.cloud";
 assert.equal(resolveLiveKitSipHost().source, "LIVEKIT_URL(derived)");
 assert.equal(resolveLiveKitSipHost().host, "sms-project.sip.livekit.cloud");
 process.env.LIVEKIT_URL = prevUrl;
+
+const prevSipUri = process.env.LIVEKIT_SIP_URI;
+process.env.LIVEKIT_URL = "wss://sms-project.livekit.cloud";
+process.env.LIVEKIT_SIP_URI = "stale-other.sip.livekit.cloud";
+assert.equal(
+  getAuthoritativeLiveKitSipHost().host,
+  "sms-project.sip.livekit.cloud",
+);
+process.env.LIVEKIT_SIP_URI = prevSipUri;
 
 assert.equal(toLiveKitInboundDid("+18663464256"), "18663464256");
 assert.equal(trunkNumbersIncludeDid(["18663464256"], "+18663464256"), true);
