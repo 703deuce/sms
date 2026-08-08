@@ -42,6 +42,18 @@ function formatToolResult(result: {
   });
 }
 
+async function withSlowToolFiller<T>(
+  opts: llm.ToolOptions,
+  startMessage: string,
+  fn: () => Promise<T>,
+): Promise<T> {
+  return opts.ctx.filler(
+    (step) => (step === 0 ? startMessage : "Still working on that."),
+    { delay: 0, interval: 4000, maxSteps: 2 },
+    fn,
+  );
+}
+
 export function buildAmyToolList(callContext: LiveKitCallContext) {
   const taskId = taskForWorkflowState(callContext.session.currentState);
   const allowed = new Set(toolsForTask(taskId));
@@ -57,7 +69,9 @@ export function buildAmyToolList(callContext: LiveKitCallContext) {
         }),
         execute: async ({ value }, opts) => {
           const ctx = requireCallContext(opts);
-          const result = await domainRecordField({ ctx, value });
+          const result = await withSlowToolFiller(opts, "Got it, one moment.", async () =>
+            domainRecordField({ ctx, value }),
+          );
           stashContext(opts, ctx);
           return formatToolResult(result);
         },
@@ -75,7 +89,9 @@ export function buildAmyToolList(callContext: LiveKitCallContext) {
         }),
         execute: async ({ spoken }, opts) => {
           const ctx = requireCallContext(opts);
-          const result = await domainCheckAvailability({ ctx, spoken });
+          const result = await withSlowToolFiller(opts, "Sure, let me check.", async () =>
+            domainCheckAvailability({ ctx, spoken }),
+          );
           stashContext(opts, ctx);
           return formatToolResult(result);
         },
@@ -94,11 +110,13 @@ export function buildAmyToolList(callContext: LiveKitCallContext) {
         }),
         execute: async ({ utterance, slot_iso }, opts) => {
           const ctx = requireCallContext(opts);
-          const result = await domainSelectSlot({
-            ctx,
-            utterance,
-            slotIso: slot_iso,
-          });
+          const result = await withSlowToolFiller(opts, "One moment.", async () =>
+            domainSelectSlot({
+              ctx,
+              utterance,
+              slotIso: slot_iso,
+            }),
+          );
           stashContext(opts, ctx);
           return formatToolResult(result);
         },
@@ -116,7 +134,9 @@ export function buildAmyToolList(callContext: LiveKitCallContext) {
         }),
         execute: async ({ confirmed }, opts) => {
           const ctx = requireCallContext(opts);
-          const result = await domainConfirmBooking({ ctx, confirmed });
+          const result = await withSlowToolFiller(opts, "One moment.", async () =>
+            domainConfirmBooking({ ctx, confirmed }),
+          );
           stashContext(opts, ctx);
           return formatToolResult(result);
         },

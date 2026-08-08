@@ -36,6 +36,17 @@ Telnyx must send PSTN to your LiveKit **SIP URI** (may differ from project URL, 
 | `VOICE_LLM_PROVIDER` | `openai` |
 | `VOICE_LLM_MODEL` | `gpt-4.1-mini` |
 
+## Latency and audio (LiveKit)
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `VOICE_ENDPOINTING_MIN_MS` | `200` | Min silence before Amy responds (ms) |
+| `VOICE_ENDPOINTING_MAX_MS` | `2000` | Max wait before ending caller turn (ms) |
+| `VOICE_PREEMPTIVE_TTS` | `true` | Start TTS before turn is fully confirmed |
+| `VOICE_AGENT_OUTPUT_GAIN_DB` | `-4` | Agent playback gain (−4 dB if unset; also reads agent `outputGainDb`) |
+
+Faster LLM (optional): `VOICE_LLM_MODEL=gpt-4.1-nano`
+
 ## LiveKit agent worker (required for Amy to answer calls)
 
 The main Coolify app provisions trunks and publishes Amy. A **worker** must also run to join LiveKit rooms and speak.

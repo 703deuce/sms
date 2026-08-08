@@ -1,5 +1,7 @@
 import dotenv from "dotenv";
-import { cli, defineAgent, inference, ServerOptions, voice } from "@livekit/agents";
+import { cli, defineAgent, ServerOptions, voice } from "@livekit/agents";
+import { getPrisma } from "@/lib/db";
+import { parseVoiceAgentConfig } from "@/lib/voice/types";
 import { fileURLToPath } from "node:url";
 import { liveKitRuntimeProvider } from "@/lib/voice/runtime-provider/livekit";
 import { bootstrapLiveKitCallContext } from "@/lib/voice/domain-actions";
@@ -9,6 +11,8 @@ import { resolveInboundSipCallIdentity } from "./call-identity";
 import type { AmyProcessUserData } from "./metadata";
 import { buildAmyVoicePipeline, describePipelineConfig } from "./pipeline";
 import { attachLatencyInstrumentation } from "./latency-instrumentation";
+import { attachOutputGain, resolveLiveKitOutputGainDb } from "./output-gain";
+import { buildAmyTurnHandling, describeTurnHandlingConfig } from "./turn-config";
 
 dotenv.config();
 
@@ -67,6 +71,14 @@ export default defineAgent<AmyProcessUserData>({
 
     ctx.proc.userData = { callContext } satisfies AmyProcessUserData;
 
+    const prisma = getPrisma();
+    const agentRow = await prisma.voiceAgent.findFirst({
+      where: { id: routing.agentId, workspaceId: routing.workspaceId },
+      select: { draftConfig: true },
+    });
+    const agentConfig = parseVoiceAgentConfig(agentRow?.draftConfig);
+    const outputGainDb = resolveLiveKitOutputGainDb(agentConfig.voiceLanguage?.outputGainDb);
+
     const { stt, llm, tts, config } = buildAmyVoicePipeline();
     console.log(
       JSON.stringify({
@@ -74,6 +86,8 @@ export default defineAgent<AmyProcessUserData>({
         event: "pipeline_config",
         callId,
         pipeline: describePipelineConfig(config),
+        turnHandling: describeTurnHandlingConfig(),
+        outputGainDb,
       }),
     );
     const agent = createAmyAgent(callContext);
@@ -82,9 +96,7 @@ export default defineAgent<AmyProcessUserData>({
       stt,
       llm,
       tts,
-      turnHandling: {
-        turnDetection: new inference.TurnDetector(),
-      },
+      turnHandling: buildAmyTurnHandling(),
       userData: { callContext },
     });
 
@@ -99,9 +111,13 @@ export default defineAgent<AmyProcessUserData>({
       room: ctx.room,
     });
 
+    if (session.output.audio) {
+      session.output.audio = attachOutputGain(session.output.audio, outputGainDb) ?? session.output.audio;
+    }
+
     await session.generateReply({
       instructions:
-        "Greet the caller warmly as Amy. If you already know their phone number, acknowledge it naturally. Ask how you can help today.",
+        "Greet the caller briefly as Amy in one short sentence. If you already know their phone number, acknowledge it naturally. Ask how you can help today.",
     });
   },
 });
