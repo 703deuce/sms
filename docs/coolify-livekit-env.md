@@ -15,8 +15,8 @@ Telnyx must send PSTN to **`sms-6w01zoya.sip.livekit.cloud`**.
 | Variable | What to put |
 |----------|-------------|
 | `VOICE_RUNTIME_PROVIDER` | `livekit` |
-| `LIVEKIT_URL` | `wss://sms-6w01zoya.livekit.cloud` |
-| `LIVEKIT_SIP_URI` | `sms-6w01zoya.sip.livekit.cloud` |
+| `LIVEKIT_URL` | `wss://sms-6w01zoya.livekit.cloud` (project URL — for API) |
+| `LIVEKIT_SIP_URI` | Your **SIP URI** from LiveKit Settings (may differ from project URL, e.g. `2tzwfcliuex.sip.livekit.cloud`) |
 | `LIVEKIT_API_KEY` | API key from **Sms** project (Settings → API keys) |
 | `LIVEKIT_API_SECRET` | API secret from **Sms** project |
 | `OPENAI_API_KEY` | OpenAI key (Amy LLM) |

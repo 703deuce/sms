@@ -187,7 +187,8 @@ export async function rebuildInboundTrunkForNumber(e164: string): Promise<{
   }
 
   const trunkDid = toLiveKitInboundDid(e164);
-  const created = await client.createSipInboundTrunk(TRANSOVO_LIVEKIT_TRUNK_NAME, [trunkDid], {
+  const trunkNumbers = liveKitDidLookupVariants(e164);
+  const created = await client.createSipInboundTrunk(TRANSOVO_LIVEKIT_TRUNK_NAME, trunkNumbers, {
     metadata: JSON.stringify({ owner: "transovo", kind: "shared_telnyx_inbound" }),
   });
   actions.push("livekit_rebuilt_inbound_trunk");

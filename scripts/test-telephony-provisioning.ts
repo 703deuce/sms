@@ -44,13 +44,13 @@ process.env.LIVEKIT_URL = "wss://sms-project.livekit.cloud";
 process.env.LIVEKIT_SIP_URI = "stale-other.sip.livekit.cloud";
 assert.equal(
   getAuthoritativeLiveKitSipHost().host,
-  "sms-project.sip.livekit.cloud",
+  "stale-other.sip.livekit.cloud",
 );
 process.env.LIVEKIT_SIP_URI = prevSipUri;
 
-assert.equal(toLiveKitInboundDid("+18663464256"), "18663464256");
-assert.equal(trunkNumbersIncludeDid(["18663464256"], "+18663464256"), true);
+assert.equal(toLiveKitInboundDid("+18663464256"), "+18663464256");
 assert.equal(trunkNumbersIncludeDid(["+18663464256"], "+18663464256"), true);
+assert.equal(trunkNumbersIncludeDid(["18663464256"], "+18663464256"), true);
 
 assert.equal(
   parseRoomMetadata(JSON.stringify({ toE164: "+18663464256" }))?.toE164,

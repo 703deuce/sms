@@ -94,25 +94,11 @@ export function getLiveKitSipHost(): string {
 }
 
 /**
- * SIP host used for Telnyx FQDN routing. When LIVEKIT_SIP_URI is stale but
- * LIVEKIT_URL matches the API project, prefer the URL-derived SIP host.
+ * SIP host for Telnyx FQDN routing. Prefer explicit LIVEKIT_SIP_URI when set —
+ * LiveKit Cloud often uses a different SIP subdomain than the project URL.
  */
 export function getAuthoritativeLiveKitSipHost(): LiveKitSipHostResolution {
-  const configured = resolveLiveKitSipHost();
-  try {
-    const { url } = requireLiveKitEnv();
-    const apiHostname = new URL(url).hostname;
-    const derived = apiHostname.replace(/\.livekit\.cloud$/i, ".sip.livekit.cloud");
-    if (derived && configured.host && configured.host !== derived) {
-      return { host: derived, source: "LIVEKIT_URL(derived_override)" };
-    }
-    if (derived && !configured.host) {
-      return { host: derived, source: "LIVEKIT_URL(derived)" };
-    }
-  } catch {
-    // fall through to configured value
-  }
-  return configured;
+  return resolveLiveKitSipHost();
 }
 
 export function getLiveKitSipHostSource(): string | null {

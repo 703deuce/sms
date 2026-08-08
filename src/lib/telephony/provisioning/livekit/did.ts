@@ -1,18 +1,17 @@
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 
 /**
- * LiveKit inbound trunk DID for Telnyx FQDN.
- * Telnyx CDR `dest_number` arrives without '+' (e.g. 18663464256) even when
- * `cld` is +E.164 — register the bare form to avoid SIP 404 UNALLOCATED_NUMBER.
+ * LiveKit inbound trunk DID for Telnyx FQDN (+E.164).
+ * Telnyx inbound is configured for +E.164; LiveKit trunk numbers must include the leading +.
  */
 export function toLiveKitInboundDid(e164: string): string {
-  return normalizeE164(e164).replace(/^\+/, "");
+  return normalizeE164(e164);
 }
 
 export function liveKitDidLookupVariants(e164: string): string[] {
   const normalized = normalizeE164(e164);
-  const bare = toLiveKitInboundDid(normalized);
-  return [...new Set([bare, normalized])];
+  const bare = normalized.replace(/^\+/, "");
+  return [...new Set([normalized, bare])];
 }
 
 export function trunkNumbersIncludeDid(numbers: string[], e164: string): boolean {
