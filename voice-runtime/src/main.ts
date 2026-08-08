@@ -9,6 +9,11 @@ import { buildAmyVoicePipeline } from "./pipeline";
 
 dotenv.config();
 
+// Accept ELEVENLABS_KEY (Coolify/Telnyx convention) for LiveKit TTS plugin.
+if (!process.env.ELEVENLABS_API_KEY?.trim() && process.env.ELEVENLABS_KEY?.trim()) {
+  process.env.ELEVENLABS_API_KEY = process.env.ELEVENLABS_KEY.trim();
+}
+
 const AGENT_NAME = process.env.LIVEKIT_AGENT_NAME || "transovo-voice-runtime";
 
 export default defineAgent<AmyProcessUserData>({
