@@ -5,3 +5,8 @@ export * from "./compile-turn-envelope";
 export * from "./capability-guard";
 export * from "./definitions";
 export * from "./compile-for-call";
+export * from "./persistence";
+export * from "./node-transitions";
+export * from "./hydrate";
+export * from "./architect-to-workflow";
+export * from "./livekit-task-adapter";

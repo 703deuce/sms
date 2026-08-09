@@ -43,6 +43,11 @@ export type AgentRuntimeRecord = {
   state: WorkflowState;
   intent?: WorkflowAction | null;
   service_name?: string | null;
+  /** Declarative voice workflow (Transovo workflow-runtime) */
+  voice_workflow_id?: string | null;
+  voice_workflow_version?: number | null;
+  current_node_id?: string | null;
+  confirmation_received?: boolean;
   field_receipts: FieldReceipt[];
   operation_receipts: OperationReceipt[];
   proposed_slots: string[];

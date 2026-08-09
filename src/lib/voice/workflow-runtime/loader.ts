@@ -66,6 +66,27 @@ export function getActiveWorkflowForAgent(agentId: string): {
   return { definition, ref };
 }
 
+/** Apply DB-backed store — registers definitions and sets per-agent active refs. */
+export function applyVoiceWorkflowStore(store: {
+  definitions: Record<string, Record<number, WorkflowDefinition>>;
+  activeByAgent: Record<string, ActiveWorkflowRef>;
+}): void {
+  for (const versions of Object.values(store.definitions)) {
+    for (const def of Object.values(versions)) {
+      try {
+        registerWorkflowDefinition(def);
+      } catch {
+        // skip invalid stored definitions
+      }
+    }
+  }
+  for (const [agentId, ref] of Object.entries(store.activeByAgent)) {
+    if (getWorkflowDefinition(ref.workflowId, ref.version)) {
+      AGENT_ACTIVE_WORKFLOW[agentId] = ref;
+    }
+  }
+}
+
 /** Env override for message-taking proof without code deploy. */
 export function resolveActiveWorkflowForAgent(agentId: string): {
   definition: WorkflowDefinition;

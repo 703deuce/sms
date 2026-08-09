@@ -19,6 +19,8 @@ import {
   type WorkflowDraft,
 } from "@/lib/agents/appointment-booking/workflow-validator";
 import { attachMissedCallTextBackForAgent } from "@/lib/agents/appointment-booking/missed-call-handoff";
+import { compileArchitectDraftToWorkflowDefinition } from "@/lib/voice/workflow-runtime/architect-to-workflow";
+import { persistVoiceWorkflowDefinition } from "@/lib/voice/workflow-runtime/persistence";
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -141,6 +143,14 @@ export async function promoteWorkflowDraft(input: {
     draftConfig: config,
   });
 
+  const voiceWorkflow = compileArchitectDraftToWorkflowDefinition(draft);
+  const voiceWorkflowRef = await persistVoiceWorkflowDefinition({
+    workspaceId: input.workspaceId,
+    agentId: input.agentId,
+    definition: voiceWorkflow,
+    setActive: true,
+  });
+
   const phone = agent.phoneNumberId
     ? await prisma.phoneNumber.findFirst({
         where: { id: agent.phoneNumberId, workspaceId: input.workspaceId },
@@ -245,6 +255,9 @@ export async function promoteWorkflowDraft(input: {
     ok: true,
     draft,
     flowId: ensured.flowId,
+    voiceWorkflowRef,
+    voiceWorkflowId: voiceWorkflow.id,
+    voiceWorkflowVersion: voiceWorkflow.version,
     triggersActivated: Boolean(triggerResult?.telnyxPublished || input.activateTriggers),
     triggerResult,
     missedCall,

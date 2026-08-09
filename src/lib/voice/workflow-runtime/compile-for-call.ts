@@ -14,14 +14,22 @@ export function compileToolsForCallContext(callContext: LiveKitCallContext): {
   envelope: TurnToolEnvelope;
   allowedToolNames: Set<string>;
 } {
-  const { definition: workflow, ref } = resolveActiveWorkflowForAgent(callContext.agentId);
+  const resolved = resolveActiveWorkflowForAgent(callContext.agentId);
+  const workflow = callContext.workflowDefinition || resolved.definition;
+  const ref = callContext.workflowRef || resolved.ref;
 
   const snapshot = buildRuntimeSnapshotFromSession({
     workflow,
     workflowVersion: ref.version,
     legacyState: callContext.session.currentState,
+    currentNodeId:
+      callContext.session.currentNodeId ||
+      callContext.session.runtime.current_node_id ||
+      null,
     collectedFields: callContext.session.collectedFields || {},
-    confirmationReceived: callContext.session.confirmationState === "confirmed",
+    confirmationReceived:
+      callContext.session.confirmationState === "confirmed" ||
+      Boolean(callContext.session.runtime.confirmation_received),
     flags: {
       ...(callContext.workflowRuntime?.flags || {}),
       missingFieldCount: callContext.session.missingFieldIds?.length ?? 0,

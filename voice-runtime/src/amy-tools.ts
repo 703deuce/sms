@@ -11,6 +11,7 @@ import {
   domainEndCall,
   domainGetBookingRequirements,
   domainRecordField,
+  domainRecordFields,
   domainSelectSlot,
   domainTakeMessage,
   formatModelToolResult,
@@ -19,7 +20,11 @@ import {
   type DomainActionResult,
   type LiveKitCallContext,
 } from "@/lib/voice/domain-actions";
-import { compileToolsForCallContext } from "@/lib/voice/workflow-runtime";
+import {
+  applyWorkflowNodeTransition,
+  compileToolsForCallContext,
+  resolveActiveWorkflowForAgent,
+} from "@/lib/voice/workflow-runtime";
 import type { WorkflowState } from "@/lib/voice/workflow-engine/types";
 import type { AmyProcessUserData } from "./metadata";
 
@@ -138,6 +143,17 @@ function wrapToolExecute(
 
   const run = async () => {
     const result = await execute(ctx);
+
+    const { definition: workflow } =
+      ctx.workflowDefinition || resolveActiveWorkflowForAgent(ctx.agentId);
+    await applyWorkflowNodeTransition({
+      workflow,
+      callId: ctx.callId,
+      session: ctx.session,
+      toolName,
+      result,
+    });
+
     if (options?.refresh !== false) {
       await refreshAmyAgentAfterTool(opts, ctx);
     } else {
@@ -208,6 +224,28 @@ export function buildAmyToolList(callContext: LiveKitCallContext) {
             "record_current_field",
             opts,
             async (ctx) => domainRecordField({ ctx, value }),
+            { fillerMessage: "Got it, one moment." },
+          ),
+      }),
+    );
+  }
+
+  if (allowed.has("record_fields")) {
+    tools.push(
+      llm.tool({
+        name: "record_fields",
+        description:
+          "Record multiple field values at once when the caller provides several answers together. Keys must match workflow field ids.",
+        parameters: z.object({
+          fields: z
+            .record(z.string())
+            .describe("Map of field_id to caller-provided value"),
+        }),
+        execute: async ({ fields }, opts: AmyToolOptions) =>
+          wrapToolExecute(
+            "record_fields",
+            opts,
+            async (ctx) => domainRecordFields({ ctx, fields }),
             { fillerMessage: "Got it, one moment." },
           ),
       }),

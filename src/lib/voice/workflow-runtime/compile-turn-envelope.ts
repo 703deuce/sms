@@ -112,8 +112,14 @@ export function compileTurnCapabilityEnvelope(input: {
     if (visitedNodeIds.includes(node.id)) break;
     visitedNodeIds.push(node.id);
 
-    for (const cap of nodeCapabilities(node)) {
-      capabilityIds.add(cap);
+    const missing =
+      node.type === "collect_fields" ? missingRequiredFields(node, state) : [];
+    const fieldsComplete = missing.length === 0;
+
+    if (!(node.type === "collect_fields" && fieldsComplete)) {
+      for (const cap of nodeCapabilities(node)) {
+        capabilityIds.add(cap);
+      }
     }
 
     if (isHardUserBoundary(node, state)) {
@@ -122,12 +128,10 @@ export function compileTurnCapabilityEnvelope(input: {
       break;
     }
 
-    const missing =
-      node.type === "collect_fields" ? missingRequiredFields(node, state) : [];
     const optimisticChain = node.type === "collect_fields" && missing.length <= 1;
 
     const edge = pickTransition(node, state, {
-      fieldsComplete: missing.length === 0,
+      fieldsComplete,
       optimisticChain,
     });
     if (!edge) break;
@@ -177,6 +181,49 @@ export function compileTurnCapabilityEnvelope(input: {
   };
 }
 
+function resolveSnapshotNodeId(input: {
+  workflow: WorkflowDefinition;
+  legacyState: string;
+  currentNodeId?: string | null;
+  flags?: Record<string, unknown>;
+}): string {
+  const nodeIds = new Set(input.workflow.nodes.map((n) => n.id));
+  let nodeId =
+    input.currentNodeId && nodeIds.has(input.currentNodeId)
+      ? input.currentNodeId
+      : legacyStateToNodeId(input.workflow, input.legacyState);
+
+  const missingCount = Number(input.flags?.missingFieldCount ?? 0);
+  if (
+    nodeId === "collect_fields" &&
+    !["INTENT_DISCOVERY", "COLLECTING_FIELDS"].includes(input.legacyState)
+  ) {
+    const collectNode = input.workflow.nodes.find((n) => n.id === "collect_fields");
+    const edge = collectNode?.transitions.find((t) => t.when === "fields_complete");
+    if (edge?.to) nodeId = edge.to;
+  } else if (
+    nodeId === "collect_fields" &&
+    input.legacyState === "COLLECTING_FIELDS" &&
+    missingCount === 0
+  ) {
+    const collectNode = input.workflow.nodes.find((n) => n.id === "collect_fields");
+    const edge = collectNode?.transitions.find((t) => t.when === "fields_complete");
+    if (edge?.to) nodeId = edge.to;
+  }
+
+  if (input.legacyState === "SELECTING_SLOT" && nodeIds.has("select_slot")) {
+    nodeId = "select_slot";
+  }
+  if (
+    (input.legacyState === "READY_TO_BOOK" || input.legacyState === "BOOKING_IN_PROGRESS") &&
+    nodeIds.has("confirm_booking")
+  ) {
+    nodeId = "confirm_booking";
+  }
+
+  return nodeId;
+}
+
 export function legacyStateToNodeId(
   workflow: WorkflowDefinition,
   legacyState: string,
@@ -202,14 +249,22 @@ export function buildRuntimeSnapshotFromSession(input: {
   workflow: WorkflowDefinition;
   workflowVersion: number;
   legacyState: string;
+  currentNodeId?: string | null;
   collectedFields: Record<string, string>;
   confirmationReceived?: boolean;
-  flags?: Record<string, boolean>;
+  flags?: Record<string, unknown>;
 }): WorkflowRuntimeSnapshot {
+  const authoritative = resolveSnapshotNodeId({
+    workflow: input.workflow,
+    legacyState: input.legacyState,
+    currentNodeId: input.currentNodeId,
+    flags: input.flags,
+  });
+
   return {
     workflowId: input.workflow.id,
     workflowVersion: input.workflowVersion,
-    currentNodeId: legacyStateToNodeId(input.workflow, input.legacyState),
+    currentNodeId: authoritative,
     collectedFields: input.collectedFields,
     confirmationReceived: input.confirmationReceived ?? false,
     flags: input.flags ?? {},

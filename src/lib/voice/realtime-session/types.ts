@@ -31,6 +31,10 @@ export type AmyRealtimeSession = {
   callerAni: string | null;
   serviceName: string | null;
   bookingId: string | null;
+  /** Declarative workflow-runtime position (authoritative over legacy state mapping) */
+  voiceWorkflowId: string | null;
+  voiceWorkflowVersion: number | null;
+  currentNodeId: string | null;
   /** Mirrors voiceCall.metadata.agentRuntime for fast access */
   runtime: AgentRuntimeRecord;
   /** Cached field manifest entries (static per agent version) */
@@ -115,6 +119,9 @@ export type SessionPatch = Partial<
     | "callerAni"
     | "serviceName"
     | "bookingId"
+    | "voiceWorkflowId"
+    | "voiceWorkflowVersion"
+    | "currentNodeId"
     | "runtime"
     | "telnyxConversationId"
     | "telnyxControlId"
