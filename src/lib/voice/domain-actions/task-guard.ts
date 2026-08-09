@@ -51,3 +51,29 @@ export function assertTaskToolAllowed(taskId: string, toolName: string): void {
 export function toolsForTask(taskId: string): readonly string[] {
   return TASK_TOOLS[taskId] || [];
 }
+
+/** Next task in the booking workflow — used to pre-register tools for same-turn chains. */
+const TASK_TRANSITION_CHAIN: Record<string, string | null> = {
+  DiscoverIntentTask: "CollectBookingFieldsTask",
+  CollectBookingFieldsTask: "CheckAvailabilityTask",
+  CheckAvailabilityTask: "SelectSlotTask",
+  SelectSlotTask: "ConfirmBookingTask",
+  ConfirmBookingTask: "CompleteCallTask",
+  CompleteCallTask: null,
+};
+
+/**
+ * Tools exposed to the LiveKit agent for the active task plus the next task.
+ *
+ * LiveKit reuses the tool context captured at the start of a speech turn when
+ * chaining tool calls (e.g. record_current_field → check_availability). Pre-registering
+ * the next-phase tool avoids "unknown AI function" when the model calls it in the same turn.
+ * Domain actions still enforce task allowlists via assertTaskToolAllowed.
+ */
+export function toolsForTaskWithChain(taskId: string): readonly string[] {
+  const current = toolsForTask(taskId);
+  const nextTaskId = TASK_TRANSITION_CHAIN[taskId];
+  if (!nextTaskId) return current;
+  const next = toolsForTask(nextTaskId);
+  return [...new Set([...current, ...next])];
+}

@@ -18,6 +18,7 @@ export {
   assertTaskToolAllowed,
   taskForWorkflowState,
   toolsForTask,
+  toolsForTaskWithChain,
   workflowStateForTask,
 } from "./task-guard";
 export { startDomainActionTimer, type DomainActionTiming } from "./latency";

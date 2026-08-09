@@ -23,6 +23,7 @@ import {
   domainConfirmBooking,
   taskForWorkflowState,
   toolsForTask,
+  toolsForTaskWithChain,
   assertTaskToolAllowed,
   buildRequirementsPayload,
 } from "../src/lib/voice/domain-actions";
@@ -149,6 +150,14 @@ async function main() {
     check(
       "post-collect removes record_current_field when complete",
       !postCollectTools.tools.some((tool) => tool.id === "record_current_field"),
+    );
+
+    const midCollectTask = taskForWorkflowState("COLLECTING_FIELDS");
+    const midCollectTools = new Set(toolsForTaskWithChain(midCollectTask));
+    check(
+      "collect task chain pre-registers check_availability for same-turn tool chains",
+      midCollectTools.has("record_current_field") && midCollectTools.has("check_availability"),
+      [...midCollectTools].join(", "),
     );
 
     const instructions = buildAmyAgentInstructions(callContext);

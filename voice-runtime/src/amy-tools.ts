@@ -17,6 +17,7 @@ import {
   taskContextPayload,
   taskForWorkflowState,
   toolsForTask,
+  toolsForTaskWithChain,
   type DomainActionResult,
   type LiveKitCallContext,
 } from "@/lib/voice/domain-actions";
@@ -173,7 +174,7 @@ function wrapToolExecute(
 
 export function buildAmyToolList(callContext: LiveKitCallContext) {
   const taskId = taskForWorkflowState(callContext.session.currentState);
-  const allowed = new Set(toolsForTask(taskId));
+  const allowed = new Set(toolsForTaskWithChain(taskId));
   const tools: llm.ToolContextEntry[] = [];
 
   if (allowed.has("get_booking_requirements")) {
