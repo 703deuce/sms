@@ -13,6 +13,9 @@ import { compileToolsForCallContext } from "./compile-for-call";
 import { hasAvailableSlots, hasHeldSlot } from "./completion-guards";
 import { resolveActiveWorkflowForAgent } from "./loader";
 import { buildHeldSlotPayload } from "@/lib/voice/domain-actions/scheduling-session";
+import { domainSubmitCallerInformation } from "@/lib/voice/domain-actions";
+import { inferFieldsFromUtterance } from "./field-extraction";
+import { prepareFieldsForPersistence } from "./field-persist";
 
 export type AutoWorkflowAction = {
   toolName: string;
@@ -41,6 +44,12 @@ export function utteranceIndicatesExplicitConfirmation(userText: string): boolea
   return /^(yes|yeah|yep|correct|that's right|that is right|please|go ahead|book it|reschedule it|cancel it)/.test(
     lower,
   ) || /\b(yes|please (book|reschedule|cancel)|that's correct|that is correct)\b/.test(lower);
+}
+
+function utteranceContainsStreetAddress(userText: string): boolean {
+  return /\d{1,5}\s+[\w\s.]+(?:street|st|road|rd|avenue|ave|boulevard|blvd|drive|dr|lane|ln|way)/i.test(
+    userText,
+  );
 }
 
 function selectionUtteranceForAutoApply(userText: string, ctx: LiveKitCallContext): string {
@@ -95,8 +104,40 @@ export async function autoApplyWorkflowActionsFromUtterance(input: {
   const callerIntent = ctx.session.runtime.session_runtime?.callerIntent;
 
   if (
+    !called.has("submit_caller_information") &&
+    allowedToolNames.has("submit_caller_information") &&
+    utteranceContainsStreetAddress(input.userText)
+  ) {
+    const inferred = inferFieldsFromUtterance({
+      session: ctx.session,
+      utterance: input.userText,
+    });
+    const prepared = prepareFieldsForPersistence({
+      session: ctx.session,
+      extracted: inferred,
+      utterance: input.userText,
+    });
+    if (Object.keys(prepared.fields).length > 0) {
+      const result = await domainSubmitCallerInformation({
+        ctx,
+        extractedFields: prepared.fields,
+        utterance: input.userText,
+      });
+      ctx = await applyToolResult({ ctx, toolName: "submit_caller_information", result });
+      actions.push({
+        toolName: "submit_caller_information",
+        ok: result.ok,
+        speak: result.speak,
+      });
+    }
+  }
+
+  const { allowedToolNames: allowedAfterSubmit } = compileToolsForCallContext(ctx);
+
+  if (
     !called.has("validate_eligibility") &&
-    allowedToolNames.has("validate_eligibility") &&
+    !actions.some((a) => a.toolName === "validate_eligibility") &&
+    (allowedAfterSubmit.has("validate_eligibility") || utteranceContainsStreetAddress(input.userText)) &&
     utteranceContainsStreetAddress(input.userText)
   ) {
     const result = await domainValidateEligibility({

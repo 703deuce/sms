@@ -248,7 +248,12 @@ export async function evaluateScenarioOutcome(input: {
       const eligibility = callContext.session.runtime?.session_runtime?.eligibility;
       const outOfArea =
         eligibility?.status === "out_of_area" ||
-        toolLog.some((t) => t.toolName === "validate_eligibility" && !t.ok);
+        toolLog.some((t) => t.toolName === "validate_eligibility" && !t.ok) ||
+        toolLog.some(
+          (t) =>
+            t.toolName === "validate_eligibility" &&
+            t.ok === false,
+        );
       if (!outOfArea) {
         failures.push("expected out-of-area eligibility rejection");
       }
