@@ -23,6 +23,11 @@ export function authorizeCapabilityInvocation(input: {
     };
   }
 
+  const alwaysAllow = input.workflow.globalPolicies?.alwaysAllow || [];
+  if (alwaysAllow.includes(cap.id)) {
+    return { ok: true };
+  }
+
   const node = input.workflow.nodes.find((n) => n.id === input.state.currentNodeId);
   if (!node) {
     return { ok: false, speak: "I'm not sure what to do next.", error_code: "NO_ACTIVE_NODE" };

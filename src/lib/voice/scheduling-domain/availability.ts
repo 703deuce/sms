@@ -24,9 +24,9 @@ function parseJsonArray(value: unknown): string[] {
 function staffToResource(row: {
   id: string;
   name: string;
-  configJson?: unknown;
+  config?: unknown;
 }): SchedulingResource {
-  const config = (row.configJson || {}) as Record<string, unknown>;
+  const config = (row.config || {}) as Record<string, unknown>;
   return {
     id: row.id,
     name: row.name,
@@ -43,9 +43,9 @@ function serviceToSchedulingService(row: {
   name: string;
   durationMinutes: number;
   bufferMinutes?: number | null;
-  configJson?: unknown;
+  config?: unknown;
 }): SchedulingService {
-  const config = (row.configJson || {}) as Record<string, unknown>;
+  const config = (row.config || {}) as Record<string, unknown>;
   const staffIds = parseJsonArray(config.staffIds);
   return {
     id: row.id,

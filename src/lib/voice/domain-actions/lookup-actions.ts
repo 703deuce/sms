@@ -1,5 +1,6 @@
 import { searchCrmContactsForVoice } from "@/lib/voice/tools/crm-contact-search";
 import { getPrisma } from "@/lib/db";
+import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import { patchSessionRuntimeExt } from "@/lib/voice/session-runtime/state";
 import { structuredFailure, structuredSuccess } from "@/lib/voice/tool-policy/structured-result";
 import type { LiveKitCallContext } from "./session-bootstrap";
@@ -26,14 +27,15 @@ export async function domainLookupCustomer(input: {
 
   const phone = input.phone || input.ctx.session.callerAni;
   if (phone) {
-    const local = await prisma.contact.findFirst({
-      where: { workspaceId: input.ctx.workspaceId, phoneE164: phone },
+    const normalized = normalizeE164(phone);
+    const local = await prisma.contact.findUnique({
+      where: { workspaceId_phone: { workspaceId: input.ctx.workspaceId, phone: normalized } },
     });
     if (local) {
       candidates.push({
         id: local.id,
-        name: local.name,
-        phone: local.phoneE164,
+        name: [local.firstName, local.lastName].filter(Boolean).join(" ") || null,
+        phone: local.phone,
         email: local.email,
         source: "local",
       });

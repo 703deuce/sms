@@ -1,6 +1,12 @@
 import { getPrisma } from "@/lib/db";
 import type { AmyRealtimeSession } from "@/lib/voice/realtime-session/types";
 
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
 export async function writebackBookingToCrm(input: {
   workspaceId: string;
   callId: string;
@@ -24,12 +30,22 @@ export async function writebackBookingToCrm(input: {
       ? `Urgency: ${input.session.runtime.session_runtime.classifications.urgency}`
       : null,
   ].filter(Boolean);
+  const noteText = noteParts.join("\n");
 
   if (appt.contactId) {
+    const contact = await prisma.contact.findFirst({
+      where: { id: appt.contactId, workspaceId: input.workspaceId },
+      select: { customFields: true },
+    });
+    const customFields = asRecord(contact?.customFields);
     await prisma.contact.updateMany({
       where: { id: appt.contactId, workspaceId: input.workspaceId },
       data: {
-        notes: noteParts.join("\n"),
+        customFields: {
+          ...customFields,
+          voiceNotes: noteText,
+          lastVoiceCallId: input.callId,
+        },
         updatedAt: new Date(),
       },
     });
