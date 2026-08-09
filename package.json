@@ -40,6 +40,7 @@
     "test:workflow-runtime-authority": "tsx scripts/test-workflow-runtime-authority.ts",
     "test:runtime-truth-guards": "tsx scripts/test-runtime-truth-guards.ts",
     "simulate:amy-conversation": "tsx scripts/amy-text-conversation-simulator.ts",
+    "simulate:amy-e2e": "tsx scripts/amy-text-conversation-simulator.ts -- --e2e",
     "audit:livekit-booking-steps": "tsx scripts/audit-livekit-booking-steps.ts",
     "test:amy-livekit-readiness": "tsx scripts/amy-livekit-readiness.ts",
     "test:telephony-provisioning": "tsx scripts/test-telephony-provisioning.ts",

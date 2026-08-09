@@ -8,9 +8,9 @@
  * Usage:
  *   npm run simulate:amy-conversation -- --scenario toilet-leak
  *   npm run simulate:amy-conversation -- --interactive
- *   npm run simulate:amy-conversation -- --scenario simple-hvac --json
+ *   npm run simulate:amy-conversation -- --e2e
  *
- * Requires: DATABASE_URL, OPENAI_API_KEY
+ * Requires: DATABASE_URL, and OPENAI_API_KEY or DEEPSEEK_API_KEY for LLM modes
  * Optional: VOICE_LLM_PRESET=gpt-5-nano (defaults to gpt-4o-mini)
  */
 import * as readline from "node:readline/promises";
@@ -50,19 +50,23 @@ import {
   deterministicAssistantReply,
   planDeterministicToolCalls,
 } from "../src/lib/voice/testing/deterministic-caller-brain";
-import { executeWorkflowTool } from "../src/lib/voice/testing/workflow-tool-executor";
 import {
   getScenario,
   listScenarioIds,
   type ConversationScenario,
 } from "../src/lib/voice/testing/conversation-scenarios";
-import { getOpenAiApiKey } from "../src/lib/ai/openai";
+import { generateCallerUtterance } from "../src/lib/voice/testing/llm-caller-brain";
+import { executeWorkflowTool } from "../src/lib/voice/testing/workflow-tool-executor";
+import { hasLlmConfigured, providers } from "../src/lib/ai/llm-providers";
 
 type CliOptions = {
   scenario?: string;
   interactive: boolean;
   deterministic: boolean;
+  e2e: boolean;
+  llmCaller: boolean;
   requireBooking: boolean;
+  maxTurns: number;
   json: boolean;
   help: boolean;
   callerPhone?: string;
@@ -72,7 +76,10 @@ function parseArgs(argv: string[]): CliOptions {
   const opts: CliOptions = {
     interactive: false,
     deterministic: false,
+    e2e: false,
+    llmCaller: false,
     requireBooking: false,
+    maxTurns: 20,
     json: false,
     help: false,
   };
@@ -80,11 +87,17 @@ function parseArgs(argv: string[]): CliOptions {
     const arg = argv[i];
     if (arg === "--interactive" || arg === "-i") opts.interactive = true;
     else if (arg === "--deterministic" || arg === "-d") opts.deterministic = true;
+    else if (arg === "--e2e") {
+      opts.e2e = true;
+      opts.requireBooking = true;
+      opts.llmCaller = true;
+    } else if (arg === "--llm-caller") opts.llmCaller = true;
     else if (arg === "--require-booking") opts.requireBooking = true;
     else if (arg === "--json") opts.json = true;
     else if (arg === "--help" || arg === "-h") opts.help = true;
     else if (arg === "--scenario" || arg === "-s") opts.scenario = argv[++i];
     else if (arg === "--phone") opts.callerPhone = argv[++i];
+    else if (arg === "--max-turns") opts.maxTurns = Number(argv[++i]) || 20;
   }
   if (!opts.scenario && !opts.interactive) {
     opts.scenario = "toilet-leak";
@@ -100,8 +113,11 @@ Runs full multi-turn conversations against the real workflow backend without pho
 Options:
   --scenario, -s <id>   Run a scripted caller scenario (default: toilet-leak)
   --interactive, -i     Type caller lines manually (type 'quit' to exit)
-  --deterministic, -d   Rule-based tool planner (no OPENAI_API_KEY; good for CI)
-  --require-booking     Fail unless confirm_booking returns a real bookingId (needs calendar)
+  --deterministic, -d   Rule-based tool planner (no LLM API key; good for CI)
+  --e2e                 Full E2E: real Amy LLM + LLM caller until booking receipt
+  --llm-caller            Use LLM to generate caller lines (pairs with real Amy LLM)
+  --require-booking     Fail unless confirm_booking returns a real bookingId
+  --max-turns <n>       Max conversation turns (default 20)
   --json                Emit machine-readable summary at end
   --phone <e164>        Caller phone for lookup/bootstrap
   --help, -h            Show this help
@@ -201,9 +217,17 @@ async function seedDispatcherTenant(ctx: PreprodContext, callerPhone: string) {
   return { callerPhone, service, tech };
 }
 
+function applySimulatorServiceContext(
+  callContext: LiveKitCallContext,
+  serviceName: string,
+) {
+  callContext.session.serviceName = serviceName;
+}
+
 async function bootstrapSimulatorCall(
   ctx: PreprodContext,
   callerPhone: string,
+  serviceName = "Plumbing Repair",
 ): Promise<LiveKitCallContext> {
   const { callId } = await liveKitRuntimeProvider.bootstrapSession({
     workspaceId: ctx.workspaceId,
@@ -243,6 +267,7 @@ async function bootstrapSimulatorCall(
   }
 
   compileToolsForCallContext(callContext);
+  applySimulatorServiceContext(callContext, serviceName);
   return callContext;
 }
 
@@ -315,29 +340,60 @@ async function runScenario(input: {
   scenario: ConversationScenario;
   ctx: PreprodContext;
   callerPhone: string;
+  serviceName: string;
   json: boolean;
   deterministic: boolean;
+  llmCaller: boolean;
   requireBooking: boolean;
+  maxTurns: number;
 }): Promise<SimulationReport> {
-  let callContext = await bootstrapSimulatorCall(input.ctx, input.callerPhone);
+  let callContext = await bootstrapSimulatorCall(input.ctx, input.callerPhone, input.serviceName);
   let messages = buildConversationMessages(callContext);
   const failures: string[] = [];
   let confirmBookingEverExposed = false;
   let confirmBookingAttempted = false;
   let turn = 0;
+  const transcript: Array<{ role: "caller" | "amy"; text: string }> = [];
+
+  const llm = providers()[0];
+  const modelLabel = input.deterministic
+    ? "deterministic-rules"
+    : llm
+      ? `${llm.id}:${llm.model}`
+      : "unconfigured";
 
   console.log(`\nScenario: ${input.scenario.id}`);
   console.log(input.scenario.description);
-  console.log(`Model: ${input.deterministic ? "deterministic-rules" : process.env.VOICE_LLM_PRESET || process.env.OPENAI_MODEL || "gpt-4o-mini"}`);
+  console.log(`Amy model: ${modelLabel}`);
+  console.log(`Caller: ${input.llmCaller ? `llm (${modelLabel})` : "scripted"}`);
   console.log(`Call: ${callContext.callId}\n`);
 
-  for (const userText of input.scenario.callerLines) {
+  const scriptedLines = [...input.scenario.callerLines];
+  let scriptedIndex = 0;
+
+  while (turn < input.maxTurns) {
+    let userText: string;
+    if (input.llmCaller) {
+      userText = await generateCallerUtterance({
+        transcript,
+        openingLine: scriptedLines[0],
+        goal: "Book a plumbing appointment for a toilet leak.",
+      });
+    } else {
+      if (scriptedIndex >= scriptedLines.length) break;
+      userText = scriptedLines[scriptedIndex]!;
+      scriptedIndex++;
+    }
+
     turn++;
     const result = input.deterministic
       ? await processDeterministicTurn({ ctx: callContext, userText, messages })
       : await processCallerTurn({ ctx: callContext, userText, messages });
     callContext = result.ctx;
     messages = result.messages;
+
+    transcript.push({ role: "caller", text: userText });
+    if (result.assistantText) transcript.push({ role: "amy", text: result.assistantText });
 
     for (const tool of result.toolExecutions) {
       if (tool.toolName === "confirm_booking") confirmBookingAttempted = true;
@@ -388,9 +444,10 @@ async function runScenario(input: {
 async function runInteractive(input: {
   ctx: PreprodContext;
   callerPhone: string;
+  serviceName: string;
 }) {
   const rl = readline.createInterface({ input, output });
-  let callContext = await bootstrapSimulatorCall(input.ctx, input.callerPhone);
+  let callContext = await bootstrapSimulatorCall(input.ctx, input.callerPhone, input.serviceName);
   let messages = buildConversationMessages(callContext);
   let turn = 0;
 
@@ -432,9 +489,18 @@ async function main() {
     console.error("DATABASE_URL is required");
     process.exit(1);
   }
-  if (!getOpenAiApiKey() && !opts.deterministic) {
-    console.warn("OPENAI_API_KEY not set — falling back to --deterministic mode");
+  if (!hasLlmConfigured() && !opts.deterministic) {
+    if (opts.e2e) {
+      console.error("--e2e requires OPENAI_API_KEY or DEEPSEEK_API_KEY");
+      process.exit(1);
+    }
+    console.warn("No LLM API key — falling back to --deterministic mode");
     opts.deterministic = true;
+  }
+  if (opts.e2e) {
+    opts.deterministic = false;
+    opts.requireBooking = true;
+    opts.llmCaller = true;
   }
 
   process.env.VOICE_RUNTIME_PROVIDER = "livekit";
@@ -444,21 +510,26 @@ async function main() {
   const callerPhone = opts.callerPhone || `+1415559${String(Date.now()).slice(-4)}`;
 
   try {
-    await seedDispatcherTenant(ctx, callerPhone);
+    const seeded = await seedDispatcherTenant(ctx, callerPhone);
 
     if (opts.interactive) {
-      await runInteractive({ ctx, callerPhone });
+      await runInteractive({ ctx, callerPhone, serviceName: seeded.service.name });
       return;
     }
 
-    const scenario = getScenario(opts.scenario!);
+    const scenario = opts.e2e
+      ? getScenario("toilet-leak")
+      : getScenario(opts.scenario!);
     const report = await runScenario({
       scenario,
       ctx,
       callerPhone,
+      serviceName: seeded.service.name,
       json: opts.json,
       deterministic: opts.deterministic,
+      llmCaller: opts.llmCaller,
       requireBooking: opts.requireBooking,
+      maxTurns: opts.maxTurns,
     });
 
     if (opts.json) {

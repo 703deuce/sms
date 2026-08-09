@@ -34,6 +34,7 @@ export type SchedulingSlot = {
 export type AvailabilityQuery = {
   workspaceId: string;
   agentId?: string;
+  callId?: string;
   serviceName: string;
   serviceId?: string | null;
   zone?: string | null;

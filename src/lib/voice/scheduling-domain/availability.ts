@@ -182,7 +182,7 @@ export async function findMultiResourceAvailability(
     context: {
       workspaceId: query.workspaceId,
       agentId: query.agentId,
-      callId: undefined,
+      callId: query.callId,
     },
     raw,
   });

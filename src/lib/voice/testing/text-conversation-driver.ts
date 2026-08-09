@@ -205,20 +205,35 @@ function buildAmyAgentInstructions(ctx: LiveKitCallContext): string {
     .join("\n\n");
 }
 
+export function buildAmySystemMessage(ctx: LiveKitCallContext): OpenAiChatMessage {
+  return {
+    role: "system",
+    content: [
+      buildAmyAgentInstructions(ctx),
+      "",
+      "TEXT SIMULATOR MODE",
+      "You are being tested via text instead of voice. Respond as Amy would on a phone call.",
+      "Keep replies short. Use tools whenever the runtime requires an action.",
+      "When the caller provides name, email, phone, address, or problem details you MUST call submit_caller_information in the same turn before replying.",
+      "When offering appointment times, only use times returned by check_availability.",
+      "When the caller picks a time, call select_slot with their exact choice.",
+      "After they confirm, call confirm_booking({ confirmed: true }).",
+    ].join("\n"),
+  };
+}
+
 export function buildConversationMessages(ctx: LiveKitCallContext): OpenAiChatMessage[] {
-  return [
-    {
-      role: "system",
-      content: [
-        buildAmyAgentInstructions(ctx),
-        "",
-        "TEXT SIMULATOR MODE",
-        "You are being tested via text instead of voice. Respond as Amy would on a phone call.",
-        "Keep replies short. Use tools whenever the runtime requires an action.",
-        "Never claim a booking succeeded unless confirm_booking returns success.",
-      ].join("\n"),
-    },
-  ];
+  return [buildAmySystemMessage(ctx)];
+}
+
+export function refreshAmySystemMessage(
+  messages: OpenAiChatMessage[],
+  ctx: LiveKitCallContext,
+): OpenAiChatMessage[] {
+  const system = buildAmySystemMessage(ctx);
+  if (!messages.length) return [system];
+  if (messages[0]?.role === "system") return [system, ...messages.slice(1)];
+  return [system, ...messages];
 }
 
 export function snapshotState(ctx: LiveKitCallContext): Record<string, unknown> {
@@ -247,11 +262,13 @@ export async function processCallerTurn(input: {
   const messages = [...input.messages, { role: "user" as const, content: input.userText }];
   let ctx = input.ctx;
   const toolExecutions: ConversationTurnResult["toolExecutions"] = [];
-  const maxRounds = input.maxToolRounds ?? 6;
+  const maxRounds = input.maxToolRounds ?? 10;
   let assistantText = "";
 
   for (let round = 0; round < maxRounds; round++) {
     const tools = toolsForContext(ctx);
+    const syncedMessages = refreshAmySystemMessage(messages, ctx);
+    messages.splice(0, messages.length, ...syncedMessages);
     const { message } = await openAiChatWithTools({ messages, tools });
 
     if ("tool_calls" in message && message.tool_calls?.length) {

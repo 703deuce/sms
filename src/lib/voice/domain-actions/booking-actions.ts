@@ -183,6 +183,7 @@ export async function domainCheckAvailability(input: {
   const multiResult = await findMultiResourceAvailability({
     workspaceId: input.ctx.workspaceId,
     agentId: input.ctx.agentId,
+    callId: input.ctx.callId,
     serviceName: input.ctx.session.serviceName || "Service Visit",
     zone,
     urgency,

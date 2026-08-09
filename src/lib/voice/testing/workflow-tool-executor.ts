@@ -221,7 +221,16 @@ export async function executeWorkflowTool(input: {
     };
   }
 
-  const result = await dispatchDomainAction(input.ctx, input.toolName, input.args || {});
+  const result = await dispatchDomainAction(input.ctx, input.toolName, input.args || {}).catch(
+    (err: unknown) => {
+      const message = err instanceof Error ? err.message : String(err);
+      return {
+        ok: false,
+        speak: message,
+        error_code: "TOOL_EXECUTION_FAILED",
+      } satisfies DomainActionResult;
+    },
+  );
 
   const workflow =
     input.ctx.workflowDefinition ?? resolveActiveWorkflowForAgent(input.ctx.agentId).definition;
