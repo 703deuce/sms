@@ -8,6 +8,7 @@ import { resolveSpokenDatetime } from "@/lib/voice/calendar/resolve-datetime";
 import { executeAgentTool } from "@/lib/voice/agent-tool-gateway/gateway";
 import type { WorkflowAction } from "@/lib/voice/field-runtime/types";
 import { buildRuntimeContext, computeWorkflowState, refreshRuntimeAfterTool } from "./engine";
+import { matchSlotFromInput } from "./slot-matching";
 
 function normalizeSlotIso(value: unknown): string {
   if (value instanceof Date) return value.toISOString();
@@ -68,42 +69,6 @@ async function businessTimezone(workspaceId: string): Promise<string> {
   } catch {
     return "America/New_York";
   }
-}
-
-function matchSlotFromInput(
-  userInput: string,
-  slots: string[],
-): string | null {
-  const trimmed = userInput.trim();
-  if (!trimmed) return null;
-
-  // Phone numbers and long digit strings are not slot picks.
-  const digitsOnly = trimmed.replace(/\D/g, "");
-  if (digitsOnly.length >= 7) return null;
-
-  // Exact ISO match
-  const exact = slots.find((s) => s === trimmed || trimmed.includes(s));
-  if (exact) return exact;
-
-  const lower = trimmed.toLowerCase();
-  for (const slot of slots) {
-    const d = new Date(slot);
-    if (Number.isNaN(d.getTime())) continue;
-    const hour12 = d.getUTCHours() % 12 || 12;
-    const ampm = d.getUTCHours() >= 12 ? "pm" : "am";
-    const minute = String(d.getUTCMinutes()).padStart(2, "0");
-    const patterns = [
-      `${hour12}:${minute}`,
-      `${hour12}:${minute}${ampm}`,
-      `${hour12}:${minute} ${ampm}`,
-      `${hour12}${ampm}`,
-      `${hour12} ${ampm}`,
-    ];
-    if (patterns.some((p) => new RegExp(`\\b${p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(lower))) {
-      return slot;
-    }
-  }
-  return null;
 }
 
 function formatSlotLabel(iso: string, timezone = "America/New_York"): string {
@@ -380,7 +345,7 @@ export async function executeContinueWorkflow(
     const startsAtNorm = input.startsAt ? normalizeSlotIso(input.startsAt) : null;
     const picked =
       (startsAtNorm && slots.includes(startsAtNorm) ? startsAtNorm : null) ||
-      (userInput ? matchSlotFromInput(userInput, slots) : null);
+      (userInput ? matchSlotFromInput(userInput, slots, timezone) : null);
 
     if (!picked) {
       return normalizeResponse({

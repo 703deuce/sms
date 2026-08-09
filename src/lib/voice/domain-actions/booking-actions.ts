@@ -1,5 +1,4 @@
 import { recordFieldForLiveKitVoice } from "@/lib/voice/field-runtime/save-voice-fast";
-import { getOrCreateRealtimeSession } from "@/lib/voice/realtime-session/init";
 import { executeContinueWorkflow } from "@/lib/voice/workflow-engine/continue-workflow";
 import { startDomainActionTimer } from "./latency";
 import { assertTaskToolAllowed, taskForWorkflowState } from "./task-guard";
@@ -8,8 +7,12 @@ import {
   buildHeldSlotPayload,
   buildRecordFieldPayload,
   buildRequirementsPayload,
-  buildSlotsPayload,
 } from "./tool-results";
+import {
+  reloadLiveKitSchedulingSession,
+  slotsForToolResult,
+  traceLiveKitDomainAction,
+} from "./scheduling-session";
 
 export type DomainActionResult = {
   ok: boolean;
@@ -99,6 +102,13 @@ export async function domainRecordField(input: {
     recordedFieldId: fieldId,
   });
 
+  await traceLiveKitDomainAction(input.ctx, "record_current_field", {
+    ok: true,
+    speak: recorded.speak,
+    workflow_state: recorded.workflowState,
+    data: fieldPayload,
+  });
+
   timer.finish(true, undefined, { phases: { voiceFieldTiming: recorded.timing } });
   return {
     ok: true,
@@ -131,22 +141,15 @@ export async function domainCheckAvailability(input: {
   });
   timer.markProviderEnd();
 
-  const refreshed = await getOrCreateRealtimeSession({
-    callId: input.ctx.callId,
-    workspaceId: input.ctx.workspaceId,
-    agentId: input.ctx.agentId,
-  });
-  input.ctx.session = refreshed;
-  input.ctx.workflowState = refreshed.currentState;
-
+  const refreshed = await reloadLiveKitSchedulingSession(input.ctx, result);
   const ok = result.ok !== false;
-  const slots = buildSlotsPayload(refreshed);
+  const slots = slotsForToolResult(refreshed, result);
   timer.finish(ok, result.error_code ? String(result.error_code) : undefined, {
     phases: {
       slotCount: slots.length,
     },
   });
-  return {
+  const response: DomainActionResult = {
     ok,
     speak: String(
       result.speak ||
@@ -167,6 +170,8 @@ export async function domainCheckAvailability(input: {
         ? undefined
         : "CALENDAR_UNAVAILABLE",
   };
+  await traceLiveKitDomainAction(input.ctx, "check_availability", response);
+  return response;
 }
 
 export async function domainSelectSlot(input: {
@@ -191,14 +196,7 @@ export async function domainSelectSlot(input: {
   });
   timer.markProviderEnd();
 
-  const refreshed = await getOrCreateRealtimeSession({
-    callId: input.ctx.callId,
-    workspaceId: input.ctx.workspaceId,
-    agentId: input.ctx.agentId,
-  });
-  input.ctx.session = refreshed;
-  input.ctx.workflowState = refreshed.currentState;
-
+  const refreshed = await reloadLiveKitSchedulingSession(input.ctx, result);
   const ok = result.ok !== false;
   const heldSlot = buildHeldSlotPayload(refreshed);
   const ambiguous =
@@ -206,19 +204,21 @@ export async function domainSelectSlot(input: {
     (result.error_code === "AMBIGUOUS_SELECTION" ||
       String(result.speak || "").toLowerCase().includes("which"));
   timer.finish(ok, result.error_code ? String(result.error_code) : undefined);
-  return {
+  const response: DomainActionResult = {
     ok,
     speak: String(result.speak || "Which time would you prefer?"),
     workflow_state: String(result.workflow_state || refreshed.currentState),
     data: {
       heldSlot,
       nextAction: ok ? "confirm_booking" : ambiguous ? "clarify_slot" : "select_slot",
-      matchingSlots: ambiguous ? buildSlotsPayload(refreshed) : undefined,
+      matchingSlots: ambiguous ? slotsForToolResult(refreshed, result) : undefined,
       reason: ambiguous ? "AMBIGUOUS_SELECTION" : undefined,
       ...(typeof result.data === "object" && result.data ? (result.data as Record<string, unknown>) : {}),
     },
     error_code: result.error_code ? String(result.error_code) : undefined,
   };
+  await traceLiveKitDomainAction(input.ctx, "select_slot", response);
+  return response;
 }
 
 export async function domainConfirmBooking(input: {
@@ -242,18 +242,11 @@ export async function domainConfirmBooking(input: {
   });
   timer.markProviderEnd();
 
-  const refreshed = await getOrCreateRealtimeSession({
-    callId: input.ctx.callId,
-    workspaceId: input.ctx.workspaceId,
-    agentId: input.ctx.agentId,
-  });
-  input.ctx.session = refreshed;
-  input.ctx.workflowState = refreshed.currentState;
-
+  const refreshed = await reloadLiveKitSchedulingSession(input.ctx, result);
   const ok = result.ok !== false && input.confirmed;
   const heldSlot = buildHeldSlotPayload(refreshed);
   timer.finish(ok, result.error_code ? String(result.error_code) : undefined);
-  return {
+  const response: DomainActionResult = {
     ok,
     speak: String(
       result.speak ||
@@ -278,6 +271,8 @@ export async function domainConfirmBooking(input: {
     },
     error_code: result.error_code ? String(result.error_code) : undefined,
   };
+  await traceLiveKitDomainAction(input.ctx, "confirm_booking", response);
+  return response;
 }
 
 export async function domainTakeMessage(input: {
