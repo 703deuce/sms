@@ -40,6 +40,40 @@ Telnyx must send PSTN to your LiveKit **SIP URI** (may differ from project URL, 
 
 ## Latency and audio (LiveKit)
 
+### Bring your own keys (no LiveKit Inference credits)
+
+Use your own OpenAI, Deepgram, and ElevenLabs accounts — no LiveKit Inference billing required:
+
+```bash
+# LLM — OpenAI direct
+VOICE_LLM_PRESET=gpt-5-nano
+OPENAI_API_KEY=sk-...
+
+# STT — Deepgram direct (keep flux_eager for Flux turn-taking)
+VOICE_STT_PROVIDER=deepgram-plugin
+VOICE_STT_MODEL=deepgram/flux-general-en
+DEEPGRAM_API_KEY=...
+
+# TTS — ElevenLabs direct
+VOICE_TTS_PROVIDER=elevenlabs-plugin
+VOICE_TTS_MODEL=eleven_flash_v2_5
+VOICE_TTS_VOICE=cgSgspJ2msm6clMCkdW9
+ELEVENLABS_API_KEY=...
+
+# Turn handling (required with BYO Deepgram Flux — avoids inference TurnDetector)
+VOICE_TURN_PRESET=flux_eager
+VOICE_PREEMPTIVE_TTS=true
+```
+
+Unset inference-only LLM presets (`VOICE_LLM_PRESET=gemma-4-31b`, etc.).
+
+After deploy, `pipeline_config` in call logs should show:
+```json
+"stt": { "via": "deepgram_plugin" }
+"llm": { "via": "openai_plugin" }
+"tts": { "via": "elevenlabs_plugin" }
+```
+
 ### Endpointing (tune fast → natural)
 
 | Variable | Default | Purpose |
