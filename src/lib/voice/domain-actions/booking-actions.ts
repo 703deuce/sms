@@ -22,6 +22,7 @@ import {
   slotsForToolResult,
   traceLiveKitDomainAction,
 } from "./scheduling-session";
+import type { LiveKitCallContext } from "./session-bootstrap";
 
 export type DomainActionResult = {
   ok: boolean;
