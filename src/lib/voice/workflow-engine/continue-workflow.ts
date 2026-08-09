@@ -399,10 +399,24 @@ export async function executeContinueWorkflow(
 
     let updated = await loadAgentRuntime(input.callId);
     if (updated) {
+      const holdId =
+        typeof (holdResult as { holdId?: string }).holdId === "string"
+          ? (holdResult as { holdId: string }).holdId
+          : `${input.callId}-hold-${picked}`;
       updated = {
         ...updated,
         selected_slot: picked,
         held_slot: picked,
+        session_runtime: {
+          ...(updated.session_runtime || {}),
+          heldReservation: {
+            holdId,
+            serviceName: resolvedServiceName,
+            start: picked,
+            status: "held",
+            idempotencyKey: `${input.callId}-hold-${picked}`,
+          },
+        },
         updated_at: new Date().toISOString(),
       };
       await saveAgentRuntime(input.callId, updated);

@@ -212,6 +212,29 @@ async function main() {
     envelope.toolNames.includes("record_fields") || envelope.toolNames.includes("record_current_field"),
   );
 
+  const { resolveNextNodeId } = await import("../src/lib/voice/workflow-runtime/node-transitions");
+  const session = mockSession({ missingFieldIds: [] });
+  const afterLookup = resolveNextNodeId({
+    workflow: HOME_SERVICE_DISPATCHER_WORKFLOW_V1,
+    currentNodeId: "lookup_customer",
+    toolName: "lookup_customer",
+    result: { ok: true },
+    session,
+  });
+  check("lookup_customer advances to collect_fields", afterLookup === "collect_fields");
+
+  const afterClassifyEmergency = resolveNextNodeId({
+    workflow: HOME_SERVICE_DISPATCHER_WORKFLOW_V1,
+    currentNodeId: "classify",
+    toolName: "classify_intent",
+    result: {
+      ok: true,
+      data: { classifications: { urgency: "emergency", safety: "gas_smell" } },
+    },
+    session,
+  });
+  check("classify emergency routes to handoff", afterClassifyEmergency === "emergency_handoff");
+
   console.log(`\n${testsRun} tests, ${failures.length} failures`);
   if (failures.length) {
     console.error(failures.join("\n"));

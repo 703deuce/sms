@@ -43,8 +43,15 @@ export function authorizeCapabilityInvocation(input: {
   }
 
   if (cap.confirmationPolicy === "required_before_execute" && !input.state.confirmationReceived) {
-    if (input.toolName === "confirm_booking" || cap.id === "calendar.create_booking") {
-      // confirm_booking tool carries confirmed flag — checked in domain layer
+    if (
+      input.toolName === "confirm_booking" ||
+      input.toolName === "reschedule_appointment" ||
+      input.toolName === "cancel_appointment" ||
+      cap.id === "calendar.create_booking" ||
+      cap.id === "calendar.reschedule" ||
+      cap.id === "calendar.cancel"
+    ) {
+      // Confirmation tools carry confirmed flag — checked in domain layer
       return { ok: true };
     }
     return {
@@ -85,6 +92,7 @@ export function authorizeCapabilityInvocation(input: {
 function nodeAllowsCapability(node: WorkflowNode, capabilityId: string): boolean {
   if (node.capability === capabilityId) return true;
   if (node.type === "collect_fields" && capabilityId.startsWith("data.")) return true;
+  if (node.type === "condition" && node.capability === capabilityId) return true;
   if (node.type === "handoff" && capabilityId === "call.transfer") return true;
   if (node.type === "completion" && capabilityId === "call.end") return true;
   if (node.type === "choice" && capabilityId === "calendar.select_slot") return true;

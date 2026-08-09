@@ -15,10 +15,18 @@ function getNode(def: WorkflowDefinition, nodeId: string): WorkflowNode | undefi
 
 function legacyStateForNode(nodeId: string, workflowId: string): WorkflowState {
   const map: Record<string, WorkflowState> = {
+    lookup_customer: "INTENT_DISCOVERY",
     collect_fields: "COLLECTING_FIELDS",
+    classify: "COLLECTING_FIELDS",
+    validate_eligibility: "COLLECTING_FIELDS",
     check_availability: "CHECKING_AVAILABILITY",
     select_slot: "SELECTING_SLOT",
     confirm_booking: "READY_TO_BOOK",
+    reschedule_lookup: "GENERAL",
+    cancel_lookup: "GENERAL",
+    cancel_confirm: "READY_TO_BOOK",
+    emergency_handoff: "GENERAL",
+    transfer_fallback: "GENERAL",
     save_message: "GENERAL",
     complete: "COMPLETE",
   };
@@ -59,6 +67,44 @@ export function resolveNextNodeId(input: {
 
   if (node.type === "action") {
     if (
+      node.capability === "customer.lookup" &&
+      input.toolName === "lookup_customer" &&
+      input.result.ok
+    ) {
+      return node.transitions[0]?.to || "collect_fields";
+    }
+    if (
+      node.capability === "rules.classify" &&
+      input.toolName === "classify_intent" &&
+      input.result.ok
+    ) {
+      const emergency = Boolean(
+        input.result.data?.classifications &&
+          ((input.result.data.classifications as Record<string, string>).urgency === "emergency" ||
+            (input.result.data.classifications as Record<string, string>).safety === "gas_smell"),
+      );
+      if (emergency) {
+        const edge = node.transitions.find((t) => t.when === "emergency");
+        return edge?.to || "emergency_handoff";
+      }
+      const edge = node.transitions.find((t) => t.when === "normal");
+      return edge?.to || node.transitions[0]?.to || input.currentNodeId;
+    }
+    if (
+      node.capability === "eligibility.validate" &&
+      input.toolName === "validate_eligibility" &&
+      input.result.ok
+    ) {
+      return node.transitions[0]?.to || "check_availability";
+    }
+    if (
+      node.capability === "calendar.find_appointments" &&
+      input.toolName === "find_appointments" &&
+      input.result.ok
+    ) {
+      return node.transitions[0]?.to || input.currentNodeId;
+    }
+    if (
       node.capability === "calendar.check_availability" &&
       input.toolName === "check_availability" &&
       input.result.ok
@@ -71,6 +117,21 @@ export function resolveNextNodeId(input: {
       input.result.ok
     ) {
       return node.transitions[0]?.to || "complete";
+    }
+    return input.currentNodeId;
+  }
+
+  if (node.type === "condition") {
+    if (input.toolName === "classify_intent" && input.result.ok) {
+      const classifications = (input.result.data?.classifications || {}) as Record<string, string>;
+      const emergency =
+        classifications.urgency === "emergency" || classifications.safety === "gas_smell";
+      if (emergency) {
+        const edge = node.transitions.find((t) => t.when === "emergency");
+        return edge?.to || "emergency_handoff";
+      }
+      const edge = node.transitions.find((t) => t.when === "normal");
+      return edge?.to || node.transitions[0]?.to || input.currentNodeId;
     }
     return input.currentNodeId;
   }
@@ -103,6 +164,16 @@ export function resolveNextNodeId(input: {
     if (needsMoreFields) {
       return "collect_fields";
     }
+  }
+
+  if (node.type === "confirmation" && input.toolName === "cancel_appointment" && input.result.ok) {
+    const edge = node.transitions.find((t) => t.when === "confirmation_received");
+    return edge?.to || "complete";
+  }
+
+  if (node.type === "confirmation" && input.toolName === "reschedule_appointment" && input.result.ok) {
+    const edge = node.transitions.find((t) => t.when === "confirmation_received");
+    return edge?.to || "complete";
   }
 
   return input.currentNodeId;

@@ -24,6 +24,10 @@ export function guardToolInvocation(
     flags: {
       ...(ctx.workflowRuntime?.flags || {}),
       _envelopeCapabilities: ctx.lastToolEnvelope?.capabilityIds,
+      missingFieldCount: ctx.session.missingFieldIds?.length ?? 0,
+      emergency:
+        ctx.session.runtime.session_runtime?.classifications?.urgency === "emergency" ||
+        ctx.session.runtime.session_runtime?.classifications?.safety === "gas_smell",
     },
   });
   const guard = authorizeCapabilityInvocation({ workflow, state: snapshot, toolName });

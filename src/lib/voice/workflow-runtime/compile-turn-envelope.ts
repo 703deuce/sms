@@ -237,7 +237,7 @@ export function legacyStateToNodeId(
   legacyState: string,
 ): string {
   const map: Record<string, string> = {
-    INTENT_DISCOVERY: "collect_fields",
+    INTENT_DISCOVERY: "lookup_customer",
     COLLECTING_FIELDS: "collect_fields",
     CHECKING_AVAILABILITY: "check_availability",
     SELECTING_SLOT: "select_slot",

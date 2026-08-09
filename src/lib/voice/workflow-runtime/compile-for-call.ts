@@ -9,6 +9,15 @@ import type { TurnToolEnvelope, WorkflowDefinition } from "./schema";
 import { resolveActiveWorkflowForAgent } from "./loader";
 import type { LiveKitCallContext } from "@/lib/voice/domain-actions/session-bootstrap";
 
+function isEmergencyClassification(
+  classifications?: Record<string, string> | null,
+): boolean {
+  if (!classifications) return false;
+  return (
+    classifications.urgency === "emergency" || classifications.safety === "gas_smell"
+  );
+}
+
 export function compileToolsForCallContext(callContext: LiveKitCallContext): {
   workflow: WorkflowDefinition;
   envelope: TurnToolEnvelope;
@@ -33,6 +42,9 @@ export function compileToolsForCallContext(callContext: LiveKitCallContext): {
     flags: {
       ...(callContext.workflowRuntime?.flags || {}),
       missingFieldCount: callContext.session.missingFieldIds?.length ?? 0,
+      emergency: isEmergencyClassification(
+        callContext.session.runtime.session_runtime?.classifications,
+      ),
     },
   });
 

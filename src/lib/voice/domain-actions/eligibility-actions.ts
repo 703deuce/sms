@@ -80,6 +80,16 @@ export async function domainClassifyIntent(input: {
     { classifications, collectedFields: input.ctx.session.collectedFields },
   );
 
+  if (
+    classifications.urgency === "emergency" ||
+    classifications.safety === "gas_smell"
+  ) {
+    input.ctx.session = patchSessionRuntimeExt(input.ctx.session, {
+      classifications,
+      currentTask: "TransferTask",
+    });
+  }
+
   if (evaluation.primaryAction?.action === "transfer") {
     return structuredSuccess({
       speak: evaluation.primaryAction.message || "This sounds urgent. Let me connect you right away.",
