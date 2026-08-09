@@ -41,6 +41,7 @@
     "test:runtime-truth-guards": "tsx scripts/test-runtime-truth-guards.ts",
     "simulate:amy-conversation": "tsx scripts/amy-text-conversation-simulator.ts",
     "simulate:amy-e2e": "tsx scripts/amy-text-conversation-simulator.ts -- --e2e",
+    "simulate:amy-e2e-alt-fields": "tsx scripts/amy-text-conversation-simulator.ts -- --e2e --scenario garbage-disposal-phone-first",
     "audit:livekit-booking-steps": "tsx scripts/audit-livekit-booking-steps.ts",
     "test:amy-livekit-readiness": "tsx scripts/amy-livekit-readiness.ts",
     "test:telephony-provisioning": "tsx scripts/test-telephony-provisioning.ts",

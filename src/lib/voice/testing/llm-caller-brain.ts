@@ -20,6 +20,7 @@ export async function generateCallerUtterance(input: {
   transcript: Array<{ role: "caller" | "amy"; text: string }>;
   goal?: string;
   openingLine?: string;
+  persona?: string;
 }): Promise<string> {
   if (!input.transcript.length && input.openingLine) {
     return input.openingLine;
@@ -29,11 +30,13 @@ export async function generateCallerUtterance(input: {
     .map((line) => `${line.role === "caller" ? "Caller" : "Amy"}: ${line.text}`)
     .join("\n");
 
+  const persona = input.persona?.trim() || DEFAULT_CALLER_PERSONA;
+
   const messages: OpenAiChatMessage[] = [
     {
       role: "system",
       content: [
-        DEFAULT_CALLER_PERSONA,
+        persona,
         input.goal ? `Goal: ${input.goal}` : "",
         "Continue the phone call. Output only the caller's next line.",
       ]

@@ -55,6 +55,7 @@ import {
   listScenarioIds,
   type ConversationScenario,
 } from "../src/lib/voice/testing/conversation-scenarios";
+import { resolveFieldProfileForScenario } from "../src/lib/voice/testing/conversation-field-profiles";
 import { generateCallerUtterance } from "../src/lib/voice/testing/llm-caller-brain";
 import { executeWorkflowTool } from "../src/lib/voice/testing/workflow-tool-executor";
 import { hasLlmConfigured, providers } from "../src/lib/ai/llm-providers";
@@ -115,6 +116,7 @@ Options:
   --interactive, -i     Type caller lines manually (type 'quit' to exit)
   --deterministic, -d   Rule-based tool planner (no LLM API key; good for CI)
   --e2e                 Full E2E: real Amy LLM + LLM caller until booking receipt
+  --e2e --scenario <id> Run E2E against a specific scenario (e.g. garbage-disposal-phone-first)
   --llm-caller            Use LLM to generate caller lines (pairs with real Amy LLM)
   --require-booking     Fail unless confirm_booking returns a real bookingId
   --max-turns <n>       Max conversation turns (default 20)
@@ -134,8 +136,13 @@ Examples:
 `);
 }
 
-async function seedDispatcherTenant(ctx: PreprodContext, callerPhone: string) {
+async function seedDispatcherTenant(
+  ctx: PreprodContext,
+  callerPhone: string,
+  scenario: ConversationScenario,
+) {
   const prisma = getPrisma();
+  const fieldProfile = resolveFieldProfileForScenario(scenario.id, scenario.fieldProfileId);
 
   await persistVoiceWorkflowDefinition({
     workspaceId: ctx.workspaceId,
@@ -163,13 +170,7 @@ async function seedDispatcherTenant(ctx: PreprodContext, callerPhone: string) {
               id: "booking",
               type: "booking",
               config: {
-                collectFields: [
-                  { id: "name", label: "Name", type: "text", required: true, question: "Your name?", enabled: true, askOrder: 1 },
-                  { id: "phone", label: "Phone", type: "phone", required: true, question: "Phone?", enabled: true, askOrder: 2 },
-                  { id: "email", label: "Email", type: "email", required: true, question: "Email?", enabled: true, askOrder: 3 },
-                  { id: "fld_problem", label: "Problem", type: "long_text", required: true, question: "What's the issue?", enabled: true, askOrder: 4 },
-                  { id: "fld_service_address", label: "Address", type: "text", required: true, question: "Service address?", enabled: true, askOrder: 5 },
-                ],
+                collectFields: fieldProfile.collectFields,
               },
             },
           ],
@@ -364,6 +365,13 @@ async function runScenario(input: {
 
   console.log(`\nScenario: ${input.scenario.id}`);
   console.log(input.scenario.description);
+  const fieldProfile = resolveFieldProfileForScenario(
+    input.scenario.id,
+    input.scenario.fieldProfileId,
+  );
+  console.log(
+    `Fields: ${fieldProfile.collectFields.map((f) => f.label).join(" → ")}`,
+  );
   console.log(`Amy model: ${modelLabel}`);
   console.log(`Caller: ${input.llmCaller ? `llm (${modelLabel})` : "scripted"}`);
   console.log(`Call: ${callContext.callId}\n`);
@@ -377,7 +385,8 @@ async function runScenario(input: {
       userText = await generateCallerUtterance({
         transcript,
         openingLine: scriptedLines[0],
-        goal: "Book a plumbing appointment for a toilet leak.",
+        goal: input.scenario.callerGoal || "Book a plumbing appointment.",
+        persona: input.scenario.callerPersona,
       });
     } else {
       if (scriptedIndex >= scriptedLines.length) break;
@@ -508,18 +517,16 @@ async function main() {
 
   const ctx = await createPreprodTenant();
   const callerPhone = opts.callerPhone || `+1415559${String(Date.now()).slice(-4)}`;
+  const scenario = getScenario(opts.scenario || "toilet-leak");
 
   try {
-    const seeded = await seedDispatcherTenant(ctx, callerPhone);
+    const seeded = await seedDispatcherTenant(ctx, callerPhone, scenario);
 
     if (opts.interactive) {
       await runInteractive({ ctx, callerPhone, serviceName: seeded.service.name });
       return;
     }
 
-    const scenario = opts.e2e
-      ? getScenario("toilet-leak")
-      : getScenario(opts.scenario!);
     const report = await runScenario({
       scenario,
       ctx,
