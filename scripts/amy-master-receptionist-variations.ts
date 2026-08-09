@@ -90,7 +90,9 @@ async function main() {
 
   const useLlmCaller = process.argv.includes("--llm-caller");
   const variations = buildRunList();
-  const stopOnFail = !process.argv.includes("--continue-on-fail");
+  const stopOnFail =
+    process.argv.includes("--stop-on-fail") ||
+    (variations.length === 1 && !process.argv.includes("--continue-on-fail"));
 
   console.log("Amy master receptionist variation harness");
   console.log(`Variations: ${variations.length}`);
