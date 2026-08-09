@@ -6,11 +6,8 @@ import {
 import type { PreprodContext } from "./preprod-harness";
 import { seedAgentViaFrontendWizard } from "./frontend-agent-seed";
 import { seedConfirmedAppointment } from "./appointment-fixtures";
-import { runConversationScenario, type SimulationReport } from "./conversation-runner";
-import {
-  lifecycleResultToSuiteRows,
-  runBookRescheduleCancelLifecycle,
-} from "./master-receptionist-journey";
+import { runConversationScenario } from "./conversation-runner";
+import { runBookRescheduleCancelLifecycle } from "./master-receptionist-journey";
 
 export type VariationCategory =
   | "booking"
