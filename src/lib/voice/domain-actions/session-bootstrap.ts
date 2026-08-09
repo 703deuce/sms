@@ -4,12 +4,18 @@ import { searchCrmContactsForVoice } from "@/lib/voice/tools/crm-contact-search"
 import { getOrCreateRealtimeSession } from "@/lib/voice/realtime-session/init";
 import type { AmyRealtimeSession } from "@/lib/voice/realtime-session/types";
 import type { WorkflowState } from "@/lib/voice/workflow-engine/types";
+import type {
+  TurnToolEnvelope,
+  WorkflowRuntimeSnapshot,
+} from "@/lib/voice/workflow-runtime/schema";
+import type { ActiveWorkflowRef } from "@/lib/voice/workflow-runtime/loader";
 import { buildHeldSlotPayload, buildRequirementsPayload } from "./tool-results";
 
 export type LiveKitAgentSyncSnapshot = {
   workflowState: WorkflowState;
   taskId: string;
   toolNames: string[];
+  envelope?: TurnToolEnvelope;
 };
 
 export type LiveKitCallContext = {
@@ -20,6 +26,9 @@ export type LiveKitCallContext = {
   businessName: string;
   contactId: string | null;
   workflowState: WorkflowState;
+  workflowRef?: ActiveWorkflowRef;
+  workflowRuntime?: WorkflowRuntimeSnapshot;
+  lastToolEnvelope?: TurnToolEnvelope;
   lastAgentSync?: LiveKitAgentSyncSnapshot;
 };
 
