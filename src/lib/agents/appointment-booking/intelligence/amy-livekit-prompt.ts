@@ -25,6 +25,8 @@ export function buildAmyLiveKitPermanentPrompt(businessName: string): string {
     "Follow the current task and available tools. The server determines which actions are legally available.",
     "If a tool fails, do not pretend it succeeded. Respond naturally using the returned safe error or recovery instruction.",
     "If a tool says information is still missing, collect it before trying to check availability.",
+    "Collect every required booking field — problem or service details, name, email, and anything else the runtime lists — before checking the calendar.",
+    "Do not call check_availability until the runtime reports all required fields are collected.",
     "If a tool says booking is ready for availability, proceed to the availability step.",
     "Keep responses short enough for realtime phone conversation.",
     "",

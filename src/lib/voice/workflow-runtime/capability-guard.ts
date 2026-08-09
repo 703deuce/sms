@@ -55,6 +55,15 @@ export function authorizeCapabilityInvocation(input: {
   }
 
   if (cap.id === "calendar.check_availability") {
+    const missingCount = Number(input.state.flags.missingFieldCount ?? 0);
+    if (missingCount > 0) {
+      return {
+        ok: false,
+        speak: "I still need a bit more information before I can check availability.",
+        error_code: "MISSING_REQUIRED_DATA",
+      };
+    }
+
     const collectNode = input.workflow.nodes.find((n) => n.type === "collect_fields");
     if (collectNode?.fields?.length) {
       const missing = collectNode.fields

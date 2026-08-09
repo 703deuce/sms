@@ -52,18 +52,35 @@ check("appointment workflow validates", validateWorkflowDefinition(APPOINTMENT_B
 check("message workflow validates", validateWorkflowDefinition(MESSAGE_TAKING_WORKFLOW_V1).length === 0);
 check("message v2 validates", validateWorkflowDefinition(MESSAGE_TAKING_WORKFLOW_V2).length === 0);
 
-const collecting = envelopeTools(APPOINTMENT_BOOKING_WORKFLOW_V1, "COLLECTING_FIELDS", {}, {
-  missingFieldCount: 1,
+const collectingIncomplete = envelopeTools(APPOINTMENT_BOOKING_WORKFLOW_V1, "COLLECTING_FIELDS", {}, {
+  missingFieldCount: 2,
 });
 check(
-  "collecting exposes record + check_availability for same-turn chain",
-  collecting.toolNames.includes("record_current_field") &&
-    collecting.toolNames.includes("check_availability"),
-  collecting.toolNames.join(", "),
+  "collecting with missing fields exposes record only (no availability)",
+  collectingIncomplete.toolNames.includes("record_current_field") &&
+    !collectingIncomplete.toolNames.includes("check_availability"),
+  collectingIncomplete.toolNames.join(", "),
+);
+
+const collectingComplete = envelopeTools(
+  APPOINTMENT_BOOKING_WORKFLOW_V1,
+  "COLLECTING_FIELDS",
+  {
+    fld_problem: "clogged drain",
+    sys_name: "Anthony",
+    sys_email: "anthony@example.com",
+    sys_phone: "+15714776175",
+  },
+  { missingFieldCount: 0 },
+);
+check(
+  "collecting complete exposes check_availability for same-turn chain",
+  collectingComplete.toolNames.includes("check_availability"),
+  collectingComplete.toolNames.join(", "),
 );
 check(
   "collecting does NOT expose confirm_booking",
-  !collecting.toolNames.includes("confirm_booking"),
+  !collectingComplete.toolNames.includes("confirm_booking"),
 );
 
 const selecting = envelopeTools(APPOINTMENT_BOOKING_WORKFLOW_V1, "SELECTING_SLOT", {

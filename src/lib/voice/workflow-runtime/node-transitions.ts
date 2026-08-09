@@ -41,7 +41,7 @@ export function resolveNextNodeId(input: {
   const missing = input.session.missingFieldIds.length;
 
   if (node.type === "collect_fields") {
-    if (missing === 0 || input.result.data?.readyForAvailability) {
+    if (missing === 0) {
       const hasHeldSlot = Boolean(
         input.session.heldSlot ||
           input.session.selectedSlot ||

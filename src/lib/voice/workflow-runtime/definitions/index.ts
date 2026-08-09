@@ -18,7 +18,7 @@ export const APPOINTMENT_BOOKING_WORKFLOW_V1: WorkflowDefinition = {
       type: "collect_fields",
       description: "Collect required booking information",
       instructions:
-        "Collect the active field from the caller. When they provide it, call record_current_field. Do not check availability until all required fields are complete.",
+        "Collect the active field from the caller. When they provide it, call record_current_field. Ask one field at a time in order: service or problem details first, then name and email. Do not call check_availability until every required field is collected.",
       fields: [], // Hydrated at runtime from agent field manifest (manifestDriven)
       metadata: { manifestDriven: true },
       requiresUserInput: true,

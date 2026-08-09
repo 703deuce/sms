@@ -146,10 +146,34 @@ function ensureSystemFieldDefs(
       kind: "system",
       system_key: field_id.replace("sys_", ""),
       enabled: true,
-      ask_order: field_id === SYSTEM_FIELD_IDS.name ? 0 : field_id === SYSTEM_FIELD_IDS.phone ? 1 : 98,
+      ask_order:
+        field_id === SYSTEM_FIELD_IDS.name
+          ? 10
+          : field_id === SYSTEM_FIELD_IDS.email
+            ? 20
+            : field_id === SYSTEM_FIELD_IDS.phone
+              ? 30
+              : 50,
     });
   }
   return dedupeByFieldId(Array.from(byId.values()));
+}
+
+/** Service/problem context first, then identity fields needed for booking. */
+function orderBookingCollectionFields(
+  defs: WorkflowFieldDefinition[],
+): WorkflowFieldDefinition[] {
+  const rank = (field: WorkflowFieldDefinition): number => {
+    if (field.field_id.startsWith("fld_") || field.kind === "custom") {
+      return field.ask_order ?? 1;
+    }
+    if (field.field_id === SYSTEM_FIELD_IDS.service) return 2;
+    if (field.field_id === SYSTEM_FIELD_IDS.name) return 10;
+    if (field.field_id === SYSTEM_FIELD_IDS.email) return 20;
+    if (field.field_id === SYSTEM_FIELD_IDS.phone) return 30;
+    return field.ask_order ?? 50;
+  };
+  return [...defs].sort((a, b) => rank(a) - rank(b));
 }
 
 export async function loadWorkflowFieldDefinitions(input: {
@@ -240,6 +264,7 @@ export async function loadWorkflowFieldDefinitions(input: {
     const { getConnectedCalendly } = await import("@/lib/voice/calendar/calendly-voice");
     const calendlyConnected = Boolean(await getConnectedCalendly(input.workspaceId));
     defs = ensureSystemFieldDefs(defs, bookingSystemFieldIds(calendlyConnected));
+    defs = orderBookingCollectionFields(defs);
   }
 
   return defs;

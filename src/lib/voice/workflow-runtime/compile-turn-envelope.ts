@@ -32,13 +32,11 @@ function missingRequiredFields(
 function pickTransition(
   node: WorkflowNode,
   state: WorkflowRuntimeSnapshot,
-  context: { fieldsComplete?: boolean; optimisticChain?: boolean },
+  context: { fieldsComplete?: boolean },
 ): WorkflowTransition | null {
   if (!node.transitions.length) return null;
 
-  const fieldsComplete =
-    context.fieldsComplete ||
-    (context.optimisticChain && node.type === "collect_fields");
+  const fieldsComplete = context.fieldsComplete === true;
 
   for (const edge of node.transitions) {
     if (edge.when === "fields_complete" && fieldsComplete) return edge;
@@ -124,7 +122,10 @@ export function compileTurnCapabilityEnvelope(input: {
 
     const missing =
       node.type === "collect_fields" ? missingRequiredFields(node, state) : [];
-    const fieldsComplete = missing.length === 0;
+    const fieldsComplete =
+      node.type === "collect_fields"
+        ? Number(state.flags.missingFieldCount ?? 0) === 0 && missing.length === 0
+        : missing.length === 0;
 
     if (!(node.type === "collect_fields" && fieldsComplete)) {
       for (const cap of nodeCapabilities(node)) {
@@ -138,18 +139,15 @@ export function compileTurnCapabilityEnvelope(input: {
       break;
     }
 
-    const optimisticChain = node.type === "collect_fields" && missing.length <= 1;
-
     const edge = pickTransition(node, state, {
       fieldsComplete,
-      optimisticChain,
     });
     if (!edge) break;
 
     const next = getNode(workflow, edge.to);
 
-    // Pre-register next-node capabilities when chaining from final field record
-    if (optimisticChain || !isHardUserBoundary(next, state)) {
+    // Pre-register next-node capabilities only after all required fields are collected.
+    if (fieldsComplete || !isHardUserBoundary(next, state)) {
       for (const cap of nodeCapabilities(next)) {
         capabilityIds.add(cap);
       }

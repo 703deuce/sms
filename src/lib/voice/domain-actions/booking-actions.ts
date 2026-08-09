@@ -177,6 +177,23 @@ export async function domainCheckAvailability(input: {
   const blocked = guardToolInvocation(input.ctx, "check_availability");
   if (blocked) return blocked;
 
+  if (input.ctx.session.missingFieldIds.length > 0) {
+    const payload = buildRequirementsPayload(input.ctx.session);
+    return {
+      ok: false,
+      speak: String(
+        (payload.activeField as { instruction?: string } | null)?.instruction ||
+          "I still need a few details before I can check the calendar.",
+      ),
+      error_code: "MISSING_REQUIRED_DATA",
+      workflow_state: "COLLECTING_FIELDS",
+      data: {
+        ...payload,
+        nextAction: "record_current_field",
+      },
+    };
+  }
+
   const taskId = taskForWorkflowState(input.ctx.session.currentState);
   const timer = startDomainActionTimer("check_availability", input.ctx.callId, taskId);
   timer.markProviderStart();
