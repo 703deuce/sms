@@ -164,14 +164,9 @@ function wrapToolExecute(
       result,
     });
 
-    if (options?.refresh !== false) {
-      await refreshAmyAgentAfterTool(opts, ctx);
-    } else {
-      stashContext(opts, ctx);
-    }
+    stashContext(opts, ctx);
 
     const workflowStateAfter = ctx.session.currentState;
-    const taskAfter = taskForWorkflowState(workflowStateAfter);
     const { allowedToolNames: toolSetAfter } = compileToolsForCallContext(ctx);
     const toolSetAfterList = [...toolSetAfter];
     const payload = formatModelToolResult(result, {
@@ -191,7 +186,25 @@ function wrapToolExecute(
       toolSetAfter: toolSetAfterList,
     });
 
-    return serializeToolResult(result, { toolName, session: ctx.session });
+    const serialized = serializeToolResult(result, { toolName, session: ctx.session });
+
+    // Return tool output to the LLM immediately; sync instructions/tools in the
+    // background so updateTools() does not stall or invalidate in-flight speech.
+    if (options?.refresh !== false) {
+      void refreshAmyAgentAfterTool(opts, ctx).catch((err) => {
+        console.error(
+          JSON.stringify({
+            source: "transovo-voice-runtime",
+            event: "amy_agent_sync_error",
+            callId: ctx.callId,
+            toolName,
+            error: err instanceof Error ? err.message : String(err),
+          }),
+        );
+      });
+    }
+
+    return serialized;
   };
 
   if (options?.fillerMessage) {
@@ -234,7 +247,6 @@ export function buildAmyToolList(callContext: LiveKitCallContext) {
             "record_current_field",
             opts,
             async (ctx) => domainRecordField({ ctx, value }),
-            { fillerMessage: "Got it, one moment." },
           ),
       }),
     );
@@ -613,8 +625,14 @@ export async function syncAmyAgentFromContext(
   };
   callContext.workflowState = newState;
 
+  const toolsChanged =
+    previousTools.length !== newTools.length ||
+    previousTools.some((name) => !newTools.includes(name));
+
   await agent.updateInstructions(instructions);
-  await agent.updateTools(llm.toToolContext(tools));
+  if (toolsChanged || taskId !== previousTask) {
+    await agent.updateTools(llm.toToolContext(tools));
+  }
 }
 
 export function createAmyAgent(callContext: LiveKitCallContext) {
