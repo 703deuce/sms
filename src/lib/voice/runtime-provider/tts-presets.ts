@@ -63,10 +63,10 @@ export const VOICE_TTS_PRESETS: Record<VoiceTtsPresetId, VoiceTtsPreset> = {
   },
   elevenlabs: {
     id: "elevenlabs",
-    label: "E — ElevenLabs Flash v2.5 (Rachel)",
+    label: "E — ElevenLabs Flash v2.5 (Jessica)",
     provider: "elevenlabs",
     model: "elevenlabs/eleven_flash_v2_5",
-    voice: "21m00Tcm4TlvDq8ikWAM",
+    voice: "cgSgspJ2msm6clMCkdW9",
     language: "en",
     notes: "Quality ceiling via LiveKit Inference — no separate ElevenLabs API key.",
   },

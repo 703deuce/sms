@@ -41,7 +41,7 @@ export function buildAmyTts(cfg: VoicePipelineConfig): tts.TTS {
   if (cfg.ttsProvider === "elevenlabs-plugin") {
     return new elevenlabs.TTS({
       model: cfg.ttsModel as elevenlabs.TTSModels,
-      voiceId: cfg.ttsVoice || process.env.VOICE_TTS_VOICE_ID || "21m00Tcm4TlvDq8ikWAM",
+      voiceId: cfg.ttsVoice || process.env.VOICE_TTS_VOICE_ID || "cgSgspJ2msm6clMCkdW9",
     });
   }
 
@@ -56,7 +56,7 @@ export function buildAmyTts(cfg: VoicePipelineConfig): tts.TTS {
 
   return new inference.TTS({
     model: "elevenlabs/eleven_flash_v2_5",
-    voice: cfg.ttsVoice || "21m00Tcm4TlvDq8ikWAM",
+    voice: cfg.ttsVoice || "cgSgspJ2msm6clMCkdW9",
     language: cfg.ttsLanguage,
   });
 }
