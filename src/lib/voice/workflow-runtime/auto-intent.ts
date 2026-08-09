@@ -31,7 +31,10 @@ export async function autoApplyCallerIntentFromUtterance(input: {
   if (nodeId === "reschedule_lookup" || nodeId === "cancel_lookup" || nodeId === "emergency_handoff") {
     return { ctx: input.ctx, applied: false };
   }
-  const existingIntent = input.ctx.session.runtime?.session_runtime?.callerIntent;
+  const existingIntent = input.ctx.session.runtime?.session_runtime?.callerIntent as
+    | CallerIntent
+    | null
+    | undefined;
   if (
     existingIntent &&
     MODIFY_INTENTS.has(existingIntent) &&

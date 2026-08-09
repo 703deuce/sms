@@ -121,7 +121,7 @@ export async function domainFindAppointments(input: {
   if (!appointments.length) {
     return structuredFailure({
       speak: "I don't see an upcoming appointment on that number.",
-      code: "APPOINTMENT_NOT_FOUND",
+      code: "NOT_FOUND",
       workflowState: input.ctx.session.currentState,
       nextAllowedActions: ["lookup_customer", "take_message"],
       data: { appointments: [], found: false },
