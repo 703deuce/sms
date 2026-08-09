@@ -4,6 +4,7 @@ import {
   domainConfirmBooking,
   domainRescheduleAppointment,
   domainSelectSlot,
+  domainValidateEligibility,
   type LiveKitCallContext,
 } from "@/lib/voice/domain-actions";
 import { applyWorkflowNodeTransition } from "./node-transitions";
@@ -92,6 +93,23 @@ export async function autoApplyWorkflowActionsFromUtterance(input: {
   const { canonical, allowedToolNames } = compileToolsForCallContext(ctx);
   const expected = canonical?.expectedNextAction;
   const callerIntent = ctx.session.runtime.session_runtime?.callerIntent;
+
+  if (
+    !called.has("validate_eligibility") &&
+    allowedToolNames.has("validate_eligibility") &&
+    utteranceContainsStreetAddress(input.userText)
+  ) {
+    const result = await domainValidateEligibility({
+      ctx,
+      address: input.userText.trim(),
+    });
+    ctx = await applyToolResult({ ctx, toolName: "validate_eligibility", result });
+    actions.push({
+      toolName: "validate_eligibility",
+      ok: result.ok,
+      speak: result.speak,
+    });
+  }
 
   if (
     !called.has("check_availability") &&

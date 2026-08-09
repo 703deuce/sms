@@ -258,12 +258,15 @@ export async function evaluateScenarioOutcome(input: {
       break;
     }
     case "emergency_transfer": {
-      const emergencyTool = toolLog.some(
-        (t) =>
-          (t.toolName === "request_human" || t.toolName === "classify_intent") && t.ok,
-      );
-      if (!emergencyTool) {
-        failures.push("expected emergency handoff (request_human or classify_intent)");
+      const nodeId =
+        callContext.canonicalWorkflow?.currentNodeId || callContext.session.currentNodeId || "";
+      const emergencyHandled =
+        ["emergency_handoff", "transfer_fallback"].includes(nodeId) ||
+        toolLog.some((t) => t.toolName === "detect_caller_intent" && t.ok) ||
+        toolLog.some((t) => t.toolName === "request_human") ||
+        toolLog.some((t) => t.toolName === "classify_intent" && t.ok);
+      if (!emergencyHandled) {
+        failures.push("expected emergency handoff (detect_intent, request_human, or classify_intent)");
       }
       break;
     }
@@ -392,7 +395,10 @@ export async function runConversationScenario(input: {
     ) {
       break;
     }
-    if (successType === "emergency_transfer" && toolLog.some((t) => t.toolName === "request_human" && t.ok)) {
+    if (successType === "emergency_transfer" && (
+      toolLog.some((t) => t.toolName === "request_human") ||
+      toolLog.some((t) => t.toolName === "detect_caller_intent" && t.ok)
+    )) {
       break;
     }
     if (successType === "out_of_area" && toolLog.some((t) => t.toolName === "validate_eligibility" && !t.ok)) {

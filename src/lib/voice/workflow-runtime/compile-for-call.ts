@@ -87,6 +87,8 @@ export function compileToolsForCallContext(callContext: LiveKitCallContext): {
     "select_slot",
     "confirm_booking",
     "cancel_confirm",
+    "emergency_handoff",
+    "transfer_fallback",
   ]);
   if (modifyFlow && schedulingNodes.has(canonical.currentNodeId)) {
     envelope = {
