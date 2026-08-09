@@ -10,21 +10,13 @@ import { createAmyAgent } from "./amy-tools";
 import { resolveInboundSipCallIdentity } from "./call-identity";
 import type { AmyProcessUserData } from "./metadata";
 import { buildAmyVoicePipeline, describePipelineConfig } from "./pipeline";
+import { applyVoiceRuntimeEnvAliases } from "./env-aliases";
 import { attachLatencyInstrumentation } from "./latency-instrumentation";
 import { attachOutputGain, resolveLiveKitOutputGainDb } from "./output-gain";
 import { buildAmyTurnHandling, describeTurnHandlingConfig, getPreemptiveConfigForInstrumentation } from "./turn-config";
 
 dotenv.config();
-
-// Accept ELEVENLABS_KEY (Coolify/Telnyx convention) for LiveKit TTS plugin.
-if (!process.env.ELEVENLABS_API_KEY?.trim() && process.env.ELEVENLABS_KEY?.trim()) {
-  process.env.ELEVENLABS_API_KEY = process.env.ELEVENLABS_KEY.trim();
-}
-
-// Accept GOOGLE_GEMINI_API_KEY as alias for GEMINI_API_KEY (Coolify naming).
-if (!process.env.GEMINI_API_KEY?.trim() && process.env.GOOGLE_GEMINI_API_KEY?.trim()) {
-  process.env.GEMINI_API_KEY = process.env.GOOGLE_GEMINI_API_KEY.trim();
-}
+applyVoiceRuntimeEnvAliases();
 
 const AGENT_NAME = process.env.LIVEKIT_AGENT_NAME || "transovo-voice-runtime";
 

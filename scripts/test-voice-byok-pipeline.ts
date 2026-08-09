@@ -10,6 +10,7 @@ import {
   usesElevenLabsPluginTts,
   resolveDeepgramSttApi,
 } from "../voice-runtime/src/pipeline";
+import { resolveElevenLabsApiKey } from "../voice-runtime/src/env-aliases";
 
 function withEnv(
   vars: Record<string, string | undefined>,
@@ -54,3 +55,16 @@ withEnv(
 );
 
 console.log("voice BYOK pipeline tests: PASS");
+
+withEnv(
+  {
+    ELEVEN_API_KEY: undefined,
+    ELEVENLABS_API_KEY: undefined,
+    ELEVENLABS_KEY: "sk-test-eleven",
+  },
+  () => {
+    assert.equal(resolveElevenLabsApiKey(), "sk-test-eleven");
+  },
+);
+
+console.log("voice env alias tests: PASS");

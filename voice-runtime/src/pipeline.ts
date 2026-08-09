@@ -8,6 +8,7 @@ import {
 } from "@/lib/voice/runtime-provider/config";
 import { usesLiveKitInferenceLlm } from "@/lib/voice/runtime-provider/llm-presets";
 import { buildAmySttConfig, describeAmySttConfig, type AmySttConfig } from "./stt-config";
+import { resolveElevenLabsApiKey } from "./env-aliases";
 
 const INFERENCE_TTS_PROVIDERS = new Set([
   "inference",
@@ -118,6 +119,7 @@ export function buildAmyStt(
 export function buildAmyTts(cfg: VoicePipelineConfig): tts.TTS {
   if (usesElevenLabsPluginTts(cfg.ttsProvider)) {
     return new elevenlabs.TTS({
+      apiKey: resolveElevenLabsApiKey(),
       model: resolveElevenLabsPluginModel(cfg.ttsModel) as elevenlabs.TTSModels,
       voiceId: cfg.ttsVoice || process.env.VOICE_TTS_VOICE_ID || "cgSgspJ2msm6clMCkdW9",
     });
