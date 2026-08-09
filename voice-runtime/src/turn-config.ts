@@ -3,12 +3,14 @@ import { inference } from "@livekit/agents";
 /**
  * Endpointing benchmarks — tune fast → natural, not slow → fast.
  *
- * TEST A (default): 150 / 800 ms dynamic
- * TEST B:            200 / 1000 ms dynamic
- * TEST C:            250 / 1200 ms dynamic
+ * ultra_low (default): 100 / 400 ms dynamic — Telnyx-class target
+ * test_a:              150 / 800 ms dynamic
+ * test_b:              200 / 1000 ms dynamic
+ * test_c:              250 / 1200 ms dynamic
  * receptionist_legacy: old 300 / 2500 ms fixed ceiling (rollback)
  */
 export const VOICE_TURN_PRESETS = [
+  "ultra_low",
   "test_a",
   "test_b",
   "test_c",
@@ -28,14 +30,15 @@ type EndpointingPreset = {
 };
 
 const PRESET_DEFAULTS: Record<string, EndpointingPreset> = {
+  ultra_low: { minDelay: 100, maxDelay: 400, mode: "dynamic" },
   test_a: { minDelay: 150, maxDelay: 800, mode: "dynamic" },
   test_b: { minDelay: 200, maxDelay: 1000, mode: "dynamic" },
   test_c: { minDelay: 250, maxDelay: 1200, mode: "dynamic" },
   receptionist_legacy: { minDelay: 300, maxDelay: 2500, mode: "fixed" },
   // aliases
   receptionist: { minDelay: 300, maxDelay: 2500, mode: "fixed" },
-  low_latency: { minDelay: 200, maxDelay: 1000, mode: "dynamic" },
-  aggressive: { minDelay: 150, maxDelay: 800, mode: "dynamic" },
+  low_latency: { minDelay: 100, maxDelay: 400, mode: "dynamic" },
+  aggressive: { minDelay: 100, maxDelay: 400, mode: "dynamic" },
 };
 
 function readIntEnv(name: string): number | undefined {
@@ -52,14 +55,14 @@ function readBoolEnv(name: string, fallback: boolean): boolean {
 }
 
 function resolvePreset(): string {
-  const raw = (process.env.VOICE_TURN_PRESET || "test_a").trim().toLowerCase();
+  const raw = (process.env.VOICE_TURN_PRESET || "ultra_low").trim().toLowerCase();
   if (raw in PRESET_DEFAULTS) return raw;
-  return "test_a";
+  return "ultra_low";
 }
 
 export function buildAmyTurnHandling() {
   const preset = resolvePreset();
-  const defaults = PRESET_DEFAULTS[preset] ?? PRESET_DEFAULTS.test_a;
+  const defaults = PRESET_DEFAULTS[preset] ?? PRESET_DEFAULTS.ultra_low;
   const minDelay = readIntEnv("VOICE_ENDPOINTING_MIN_MS") ?? defaults.minDelay;
   const maxDelay = readIntEnv("VOICE_ENDPOINTING_MAX_MS") ?? defaults.maxDelay;
   const preemptiveTts = readBoolEnv("VOICE_PREEMPTIVE_TTS", true);
@@ -93,7 +96,7 @@ export function describeTurnHandlingConfig(): Record<string, unknown> {
     preemptiveGeneration: handling.preemptiveGeneration,
     turnDetector: "inference.TurnDetector",
     notes:
-      "Default test_a: 150/800ms dynamic. Raise max (test_b/test_c) if Amy clips mid-sentence pauses.",
+      "Default ultra_low: 100/400ms dynamic. Raise to test_a/test_b if Amy clips mid-sentence pauses.",
   };
 }
 

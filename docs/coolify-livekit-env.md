@@ -31,10 +31,11 @@ Telnyx must send PSTN to your LiveKit **SIP URI** (may differ from project URL, 
 |----------|---------|
 | `VOICE_STT_PROVIDER` | `inference` |
 | `VOICE_STT_MODEL` | `deepgram/nova-3` |
-| `VOICE_TTS_PROVIDER` | `inference` |
-| `VOICE_TTS_MODEL` | `inworld/inworld-tts-1.5-mini` |
+| `VOICE_TTS_PROVIDER` | `elevenlabs` |
+| `VOICE_TTS_MODEL` | `elevenlabs/eleven_flash_v2_5` |
+| `VOICE_TTS_PRESET` | `elevenlabs` (default when unset) |
 | `VOICE_LLM_PROVIDER` | `openai` |
-| `VOICE_LLM_MODEL` | `gpt-4.1-mini` |
+| `VOICE_LLM_MODEL` | `gpt-5-nano` (`gpt-5-mini` for higher quality) |
 
 ## Latency and audio (LiveKit)
 
@@ -42,16 +43,25 @@ Telnyx must send PSTN to your LiveKit **SIP URI** (may differ from project URL, 
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `VOICE_TURN_PRESET` | `test_a` | `test_a` (150/800ms dynamic), `test_b` (200/1000), `test_c` (250/1200), `receptionist_legacy` (300/2500 fixed) |
+| `VOICE_TURN_PRESET` | `ultra_low` | `ultra_low` (100/400ms dynamic), `test_a` (150/800), `test_b` (200/1000), `test_c` (250/1200), `receptionist_legacy` (300/2500 fixed) |
 | `VOICE_ENDPOINTING_MIN_MS` | preset default | Override min endpointing delay (ms) |
 | `VOICE_ENDPOINTING_MAX_MS` | preset default | Override max endpointing delay (ms) |
 | `VOICE_ENDPOINTING_MODE` | preset default | `dynamic` (adaptive) or `fixed` |
 | `VOICE_PREEMPTIVE_TTS` | `true` | Speculative TTS before turn confirmed |
 | `VOICE_AGENT_OUTPUT_GAIN_DB` | `-4` | Agent playback gain |
 
-If Amy clips mid-sentence pauses, raise preset to `test_b` or `test_c`.
+If Amy clips mid-sentence pauses, raise preset to `test_a` or `test_b`.
 
-### TTS A/B comparison (LiveKit Inference only)
+### Recommended low-latency stack (defaults in code)
+
+```
+VOICE_LLM_MODEL=gpt-5-nano
+VOICE_TTS_PRESET=elevenlabs
+VOICE_TURN_PRESET=ultra_low
+VOICE_PREEMPTIVE_TTS=true
+```
+
+Use `gpt-5-mini` instead of nano if tool-call accuracy drops.
 
 | Variable | Example | Purpose |
 |----------|---------|---------|
@@ -60,11 +70,13 @@ If Amy clips mid-sentence pauses, raise preset to `test_b` or `test_c`.
 | `VOICE_TTS_MODEL` | `cartesia/sonic-3.5` | Override model |
 | `VOICE_TTS_VOICE` | `9626c31c-...` | Voice ID / speaker name |
 
-**First Cartesia test:**
+**ElevenLabs Flash (default):**
 ```
-VOICE_TTS_PRESET=cartesia
-VOICE_TURN_PRESET=test_a
+VOICE_TTS_PRESET=elevenlabs
+VOICE_TURN_PRESET=ultra_low
 ```
+
+### TTS A/B comparison (LiveKit Inference only)
 
 ## LiveKit agent worker (required for Amy to answer calls)
 

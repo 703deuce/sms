@@ -53,8 +53,8 @@ export function buildAmyTts(cfg: VoicePipelineConfig): tts.TTS {
   }
 
   return new inference.TTS({
-    model: "inworld/inworld-tts-1.5-mini",
-    voice: cfg.ttsVoice || "Ashley",
+    model: "elevenlabs/eleven_flash_v2_5",
+    voice: cfg.ttsVoice || "21m00Tcm4TlvDq8ikWAM",
     language: cfg.ttsLanguage,
   });
 }

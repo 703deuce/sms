@@ -76,8 +76,8 @@ function resolveTtsFromEnv(): Pick<
 
   if (explicitModel || explicitProvider) {
     return {
-      ttsProvider: explicitProvider || preset?.provider || "inference",
-      ttsModel: explicitModel || preset?.model || "inworld/inworld-tts-1.5-mini",
+      ttsProvider: explicitProvider || preset?.provider || "elevenlabs",
+      ttsModel: explicitModel || preset?.model || "elevenlabs/eleven_flash_v2_5",
       ttsVoice: explicitVoice || preset?.voice,
       ttsLanguage: process.env.VOICE_TTS_LANGUAGE || preset?.language || "en",
       ttsPreset: preset?.id,
@@ -94,11 +94,13 @@ function resolveTtsFromEnv(): Pick<
     };
   }
 
+  const defaultPreset = resolveVoiceTtsPreset("elevenlabs");
   return {
-    ttsProvider: process.env.VOICE_TTS_PROVIDER || "inference",
-    ttsModel: process.env.VOICE_TTS_MODEL || "inworld/inworld-tts-1.5-mini",
-    ttsLanguage: process.env.VOICE_TTS_LANGUAGE || "en",
-    ttsVoice: explicitVoice || process.env.VOICE_TTS_VOICE || "Ashley",
+    ttsProvider: process.env.VOICE_TTS_PROVIDER || defaultPreset.provider,
+    ttsModel: process.env.VOICE_TTS_MODEL || defaultPreset.model,
+    ttsLanguage: process.env.VOICE_TTS_LANGUAGE || defaultPreset.language,
+    ttsVoice: explicitVoice || process.env.VOICE_TTS_VOICE || defaultPreset.voice,
+    ttsPreset: "elevenlabs",
   };
 }
 
@@ -110,7 +112,7 @@ export function getVoicePipelineConfig(): VoicePipelineConfig {
     sttModel: process.env.VOICE_STT_MODEL || "deepgram/nova-3",
     sttLanguage: process.env.VOICE_STT_LANGUAGE || "en",
     llmProvider: process.env.VOICE_LLM_PROVIDER || "openai",
-    llmModel: process.env.VOICE_LLM_MODEL || "gpt-4.1-mini",
+    llmModel: process.env.VOICE_LLM_MODEL || "gpt-5-nano",
     ttsProvider: tts.ttsProvider,
     ttsModel: tts.ttsModel,
     ttsLanguage: tts.ttsLanguage,

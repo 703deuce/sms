@@ -83,8 +83,10 @@ delete process.env.VOICE_TTS_PROVIDER;
 const pipeline = getVoicePipelineConfig();
 assert.equal(pipeline.sttProvider, "inference");
 assert.equal(pipeline.sttModel, "deepgram/nova-3");
-assert.equal(pipeline.ttsProvider, "inference");
-assert.equal(pipeline.ttsModel, "inworld/inworld-tts-1.5-mini");
+assert.equal(pipeline.ttsProvider, "elevenlabs");
+assert.equal(pipeline.ttsModel, "elevenlabs/eleven_flash_v2_5");
+assert.equal(pipeline.ttsPreset, "elevenlabs");
+assert.equal(pipeline.llmModel, "gpt-5-nano");
 if (prevStt) process.env.VOICE_STT_PROVIDER = prevStt;
 if (prevTts) process.env.VOICE_TTS_PROVIDER = prevTts;
 
