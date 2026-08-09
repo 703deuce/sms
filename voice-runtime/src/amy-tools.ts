@@ -58,6 +58,15 @@ function liveKitNextAction(
   if (expectedNextAction === "select_slot") {
     return "Offer returned slots, then call select_slot when the caller picks one.";
   }
+  if (expectedNextAction === "reschedule_appointment") {
+    return "Read back the new appointment time. After explicit yes, call reschedule_appointment({ confirmed: true }) with the held slot time.";
+  }
+  if (expectedNextAction === "cancel_appointment") {
+    return "Confirm cancellation. After explicit yes, call cancel_appointment({ confirmed: true }).";
+  }
+  if (expectedNextAction === "find_appointments") {
+    return "Look up the caller's existing appointment with find_appointments before changing it.";
+  }
   if (expectedNextAction === "check_availability") {
     return "Call check_availability before offering any appointment times.";
   }

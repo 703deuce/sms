@@ -113,7 +113,11 @@ export function compileTurnCapabilityEnvelope(input: {
   }
 
   const globalMissingCount = Number(state.flags.missingFieldCount ?? 0);
-  if (globalMissingCount > 0) {
+  if (
+    globalMissingCount > 0 &&
+    !state.flags.rescheduleIntent &&
+    !state.flags.cancelIntent
+  ) {
     capabilityIds.add("data.capture");
     capabilityIds.add("data.lookup");
   }

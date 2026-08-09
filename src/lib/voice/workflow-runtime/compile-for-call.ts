@@ -14,6 +14,7 @@ import {
   syncSessionFromCanonical,
   expectedToolForNextAction,
 } from "./canonical-state";
+import { capabilityForToolName } from "@/lib/voice/capability-registry";
 import { filterConversationalTools } from "./tool-surface";
 import { validateRuntimeInvariants } from "./runtime-invariants";
 import { requiresBookingReceiptToComplete } from "./completion-guards";
@@ -75,8 +76,29 @@ export function compileToolsForCallContext(callContext: LiveKitCallContext): {
     },
   });
 
-  const envelope = compileTurnCapabilityEnvelope({ workflow, state: snapshot });
-  const withEnvelope = stampEnvelopeCapabilities(snapshot, envelope.capabilityIds);
+  let envelope = compileTurnCapabilityEnvelope({ workflow, state: snapshot });
+
+  const modifyFlow =
+    callerIntent === "reschedule" || callerIntent === "cancel";
+  const schedulingNodes = new Set([
+    "reschedule_lookup",
+    "cancel_lookup",
+    "check_availability",
+    "select_slot",
+    "confirm_booking",
+    "cancel_confirm",
+  ]);
+  if (modifyFlow && schedulingNodes.has(canonical.currentNodeId)) {
+    envelope = {
+      ...envelope,
+      capabilityIds: envelope.capabilityIds.filter(
+        (id) => id !== "data.capture" && id !== "data.lookup",
+      ),
+      toolNames: envelope.toolNames.filter(
+        (name) => name !== "submit_caller_information" && name !== "get_booking_requirements",
+      ),
+    };
+  }
 
   let conversationalToolNames = filterConversationalTools(envelope.toolNames).filter(
     (name) => {
@@ -94,7 +116,18 @@ export function compileToolsForCallContext(callContext: LiveKitCallContext): {
   const expectedTool = expectedToolForNextAction(canonical.expectedNextAction);
   if (expectedTool && !conversationalToolNames.includes(expectedTool)) {
     conversationalToolNames = [...conversationalToolNames, expectedTool];
+    const expectedCap = capabilityForToolName(expectedTool);
+    if (expectedCap && !envelope.capabilityIds.includes(expectedCap.id)) {
+      envelope = {
+        ...envelope,
+        capabilityIds: [...envelope.capabilityIds, expectedCap.id],
+        toolNames: envelope.toolNames.includes(expectedTool)
+          ? envelope.toolNames
+          : [...envelope.toolNames, expectedTool],
+      };
+    }
   }
+  const stampedEnvelope = stampEnvelopeCapabilities(snapshot, envelope.capabilityIds);
   const invariant = validateRuntimeInvariants({
     canonical,
     envelope: { ...envelope, toolNames: conversationalToolNames },
@@ -113,7 +146,7 @@ export function compileToolsForCallContext(callContext: LiveKitCallContext): {
   }
 
   callContext.workflowRef = ref;
-  callContext.workflowRuntime = withEnvelope;
+  callContext.workflowRuntime = stampedEnvelope;
   callContext.lastToolEnvelope = envelope;
   callContext.canonicalWorkflow = canonical;
 

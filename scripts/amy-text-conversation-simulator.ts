@@ -10,8 +10,11 @@
  *   npm run simulate:amy-conversation -- --interactive
  *   npm run simulate:amy-conversation -- --e2e
  *
- * Seeds agent config via the same path as the appointment-receptionist wizard UI:
- * buildWizardAgentConfig → updateVoiceAgentDraft (collectFields in booking section).
+ * Requires: DATABASE_URL, and OPENAI_API_KEY or DEEPSEEK_API_KEY for LLM modes
+ * Optional: VOICE_LLM_PRESET=gpt-5-nano (defaults to gpt-4o-mini)
+ *
+ * Agent field config is seeded via the appointment-receptionist wizard path:
+ * buildWizardAgentConfig → updateVoiceAgentDraft (same as the frontend UI).
  * Optional: VOICE_LLM_PRESET=gpt-5-nano (defaults to gpt-4o-mini)
  */
 import * as readline from "node:readline/promises";

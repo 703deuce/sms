@@ -8,6 +8,17 @@ import { SYSTEM_FIELD_IDS } from "@/lib/voice/field-runtime/system-fields";
 import { recordFieldsForLiveKitVoice } from "@/lib/voice/field-runtime/save-voice-fast";
 import { prepareFieldsForPersistence } from "@/lib/voice/workflow-runtime/field-persist";
 
+function looksLikePlaceholderAddress(value: string): boolean {
+  const lower = value.toLowerCase().trim();
+  if (!lower) return true;
+  if (/^(the |my |your |caller'?s? )?(service )?address[.!]?$/.test(lower)) return true;
+  if (/service address$/i.test(lower) && !/\d/.test(lower)) return true;
+  if (lower.includes("address") && !/\d/.test(lower) && !/,/.test(lower) && lower.length < 24) {
+    return true;
+  }
+  return false;
+}
+
 function loadServiceAreaConfig(ctx: LiveKitCallContext): ServiceAreaConfig {
   const meta = (ctx.workflowDefinition?.metadata || {}) as Record<string, unknown>;
   const serviceAreas = meta.serviceAreas as ServiceAreaConfig | undefined;
@@ -31,7 +42,13 @@ export async function domainValidateEligibility(input: {
     input.ctx.session.collectedFields.fld_service_address ||
     null;
 
-  if (input.address?.trim()) {
+  if (input.address?.trim() && looksLikePlaceholderAddress(input.address)) {
+    address =
+      input.ctx.session.collectedFields.sys_address ||
+      input.ctx.session.collectedFields.service_address ||
+      input.ctx.session.collectedFields.fld_service_address ||
+      null;
+  } else if (input.address?.trim()) {
     const addressFieldId =
       input.ctx.session.fieldManifest.find(
         (f) =>

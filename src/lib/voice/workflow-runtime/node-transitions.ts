@@ -95,21 +95,23 @@ export function resolveNextNodeId(input: {
   }
 
   if (input.toolName === "detect_caller_intent" && input.result.ok) {
+    const intent = String(input.result.data?.intent || "");
+    if (intent === "emergency") {
+      return getNode(input.workflow, "detect_intent")?.transitions.find((t) => t.when === "emergency")
+        ?.to || "emergency_handoff";
+    }
+    if (intent === "reschedule") {
+      return getNode(input.workflow, "detect_intent")?.transitions.find(
+        (t) => t.when === "reschedule_intent",
+      )?.to || "reschedule_lookup";
+    }
+    if (intent === "cancel") {
+      return getNode(input.workflow, "detect_intent")?.transitions.find((t) => t.when === "cancel_intent")
+        ?.to || "cancel_lookup";
+    }
+
     const detectNode = getNode(input.workflow, "detect_intent");
     if (detectNode && (node.id === "lookup_customer" || node.id === "detect_intent")) {
-      const intent = String(input.result.data?.intent || "");
-      if (intent === "emergency") {
-        const edge = detectNode.transitions.find((t) => t.when === "emergency");
-        return edge?.to || "emergency_handoff";
-      }
-      if (intent === "reschedule") {
-        const edge = detectNode.transitions.find((t) => t.when === "reschedule_intent");
-        return edge?.to || "reschedule_lookup";
-      }
-      if (intent === "cancel") {
-        const edge = detectNode.transitions.find((t) => t.when === "cancel_intent");
-        return edge?.to || "cancel_lookup";
-      }
       const edge =
         detectNode.transitions.find((t) => t.when === "book_intent") ||
         detectNode.transitions.find((t) => t.when === "default");
@@ -189,7 +191,12 @@ export function resolveNextNodeId(input: {
       input.toolName === "find_appointments" &&
       input.result.ok
     ) {
-      return node.transitions[0]?.to || input.currentNodeId;
+      const appointments = input.result.data?.appointments;
+      const found = Array.isArray(appointments) && appointments.length > 0;
+      if (found) {
+        return node.transitions[0]?.to || input.currentNodeId;
+      }
+      return input.currentNodeId;
     }
     if (
       node.capability === "calendar.check_availability" &&

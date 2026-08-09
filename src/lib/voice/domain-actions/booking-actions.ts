@@ -149,20 +149,24 @@ export async function domainCheckAvailability(input: {
   if (blocked) return blocked;
 
   if (!fieldsComplete(input.ctx.session)) {
-    const payload = buildRequirementsPayload(input.ctx.session);
-    return {
-      ok: false,
-      speak: String(
-        (payload.activeField as { instruction?: string } | null)?.instruction ||
-          "I still need a few details before I can check the calendar.",
-      ),
-      error_code: "MISSING_REQUIRED_DATA",
-      workflow_state: "COLLECTING_FIELDS",
-      data: {
-        ...payload,
-        nextAction: "submit_caller_information",
-      },
-    };
+    const callerIntent = input.ctx.session.runtime.session_runtime?.callerIntent;
+    const modifyFlow = callerIntent === "reschedule" || callerIntent === "cancel";
+    if (!modifyFlow) {
+      const payload = buildRequirementsPayload(input.ctx.session);
+      return {
+        ok: false,
+        speak: String(
+          (payload.activeField as { instruction?: string } | null)?.instruction ||
+            "I still need a few details before I can check the calendar.",
+        ),
+        error_code: "MISSING_REQUIRED_DATA",
+        workflow_state: "COLLECTING_FIELDS",
+        data: {
+          ...payload,
+          nextAction: "submit_caller_information",
+        },
+      };
+    }
   }
 
   const taskId = taskForWorkflowState(input.ctx.session.currentState);

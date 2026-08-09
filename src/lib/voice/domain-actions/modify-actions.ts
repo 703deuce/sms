@@ -1,6 +1,6 @@
 import { getPrisma } from "@/lib/db";
 import { executeAgentTool } from "@/lib/voice/agent-tool-gateway/gateway";
-import { invalidateSchedulingState } from "@/lib/voice/session-runtime/state";
+import { invalidateSchedulingState, patchSessionRuntimeExt } from "@/lib/voice/session-runtime/state";
 import { structuredFailure, structuredSuccess } from "@/lib/voice/tool-policy/structured-result";
 import { guardToolInvocation } from "./guard";
 import type { LiveKitCallContext } from "./session-bootstrap";
@@ -14,8 +14,18 @@ export async function domainFindAppointments(input: {
   const blocked = guardToolInvocation(input.ctx, "find_appointments");
   if (blocked) return blocked;
 
-  const phone = input.phone || input.ctx.session.callerAni;
+  const prisma = getPrisma();
+  let phone = input.phone || input.ctx.session.callerAni;
   if (!phone) {
+    const call = await prisma.voiceCall.findUnique({
+      where: { id: input.ctx.callId },
+      select: { fromE164: true },
+    });
+    phone = call?.fromE164 || null;
+  }
+  const contactId = input.ctx.contactId || input.ctx.session.contactId;
+
+  if (!phone && !contactId) {
     return structuredFailure({
       speak: "I need a phone number to look up your appointment.",
       code: "MISSING_FIELDS",
@@ -30,18 +40,33 @@ export async function domainFindAppointments(input: {
       agentId: input.ctx.agentId,
       callId: input.ctx.callId,
     },
-    raw: { phone },
+    raw: { phone, contactId },
   });
 
   const appointments = Array.isArray(result.appointments) ? result.appointments : [];
+  if (!appointments.length) {
+    return structuredFailure({
+      speak: "I don't see an upcoming appointment on that number.",
+      code: "APPOINTMENT_NOT_FOUND",
+      workflowState: input.ctx.session.currentState,
+      nextAllowedActions: ["lookup_customer", "take_message"],
+      data: { appointments: [], found: false },
+    });
+  }
+
+  const primary = appointments[0] as { appointmentId?: string; id?: string };
+  const appointmentId = primary.appointmentId || primary.id;
+  if (appointmentId) {
+    input.ctx.session = patchSessionRuntimeExt(input.ctx.session, {
+      currentTask: "RescheduleTask",
+      foundAppointmentId: String(appointmentId),
+    });
+  }
+
   return structuredSuccess({
-    speak: appointments.length
-      ? `I found ${appointments.length} upcoming appointment${appointments.length === 1 ? "" : "s"}.`
-      : "I don't see an upcoming appointment on that number.",
-    data: { appointments },
-    nextAllowedActions: appointments.length
-      ? ["check_availability", "cancel_appointment", "reschedule_appointment"]
-      : ["take_message"],
+    speak: `I found ${appointments.length} upcoming appointment${appointments.length === 1 ? "" : "s"}.`,
+    data: { appointments, found: true },
+    nextAllowedActions: ["check_availability", "cancel_appointment", "reschedule_appointment"],
   });
 }
 
@@ -64,7 +89,20 @@ export async function domainRescheduleAppointment(input: {
     });
   }
 
-  const operationId = `${input.ctx.callId}-reschedule-${input.appointmentId}-${input.newStartsAt}`;
+  const appointmentId =
+    input.appointmentId ||
+    input.ctx.session.runtime.session_runtime?.foundAppointmentId ||
+    "";
+  if (!appointmentId) {
+    return structuredFailure({
+      speak: "I need to find your appointment before I can reschedule it.",
+      code: "MISSING_FIELDS",
+      workflowState: input.ctx.session.currentState,
+      nextAllowedActions: ["find_appointments"],
+    });
+  }
+
+  const operationId = `${input.ctx.callId}-reschedule-${appointmentId}-${input.newStartsAt}`;
   const result = await executeAgentTool({
     toolType: "reschedule_appointment",
     context: {
@@ -73,7 +111,7 @@ export async function domainRescheduleAppointment(input: {
       callId: input.ctx.callId,
     },
     raw: {
-      appointmentId: input.appointmentId,
+      appointmentId,
       newStartsAt: input.newStartsAt,
       operation_id: operationId,
       timezone: input.ctx.session.timezone,
@@ -122,7 +160,20 @@ export async function domainCancelAppointment(input: {
     });
   }
 
-  const operationId = `${input.ctx.callId}-cancel-${input.appointmentId}`;
+  const appointmentId =
+    input.appointmentId ||
+    input.ctx.session.runtime.session_runtime?.foundAppointmentId ||
+    "";
+  if (!appointmentId) {
+    return structuredFailure({
+      speak: "I need to find your appointment before I can cancel it.",
+      code: "MISSING_FIELDS",
+      workflowState: input.ctx.session.currentState,
+      nextAllowedActions: ["find_appointments"],
+    });
+  }
+
+  const operationId = `${input.ctx.callId}-cancel-${appointmentId}`;
   const result = await executeAgentTool({
     toolType: "cancel_appointment",
     context: {
@@ -131,7 +182,7 @@ export async function domainCancelAppointment(input: {
       callId: input.ctx.callId,
     },
     raw: {
-      appointmentId: input.appointmentId,
+      appointmentId,
       reason: input.reason || "Caller requested cancellation",
       operation_id: operationId,
     },
@@ -147,7 +198,7 @@ export async function domainCancelAppointment(input: {
 
   const prisma = getPrisma();
   await prisma.voiceAppointment.updateMany({
-    where: { id: input.appointmentId, workspaceId: input.ctx.workspaceId },
+    where: { id: appointmentId, workspaceId: input.ctx.workspaceId },
     data: { status: "cancelled" },
   });
 

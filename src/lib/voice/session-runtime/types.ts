@@ -74,6 +74,8 @@ export type SessionRuntimeExtensions = {
   currentTask?: string | null;
   /** Detected caller intent for routing */
   callerIntent?: string | null;
+  /** Appointment located during reschedule/cancel lookup */
+  foundAppointmentId?: string | null;
   /** Transfer state machine */
   transfer?: TransferState;
   /** Customer lookup candidates */

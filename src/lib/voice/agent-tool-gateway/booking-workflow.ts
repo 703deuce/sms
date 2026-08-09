@@ -1,4 +1,5 @@
 import { getPrisma } from "@/lib/db";
+import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import {
   assertBookingPermission,
   assertBookingTimingGates,
@@ -170,6 +171,15 @@ export async function executeBookAppointmentWorkflow(
   const bookingFields = systemFieldValueForBooking(session.fields);
   normalized.customer_name = normalized.customer_name || bookingFields.name;
   normalized.customer_phone = normalized.customer_phone || bookingFields.phone;
+  if (!normalized.customer_phone && ctx.callId) {
+    const call = await prisma.voiceCall.findUnique({
+      where: { id: ctx.callId },
+      select: { fromE164: true },
+    });
+    if (call?.fromE164 && call.fromE164 !== "unknown") {
+      normalized.customer_phone = normalizeE164(call.fromE164);
+    }
+  }
   normalized.customer_email = normalized.customer_email || bookingFields.email;
   normalized.address = normalized.address || bookingFields.address || null;
   if (!normalized.service_name && bookingFields.serviceName) {

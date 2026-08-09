@@ -14,6 +14,8 @@ import {
   type OpenAiFunctionTool,
 } from "./openai-tool-chat";
 import { executeWorkflowTool } from "./workflow-tool-executor";
+import { autoApplyCallerIntentFromUtterance } from "@/lib/voice/workflow-runtime/auto-intent";
+import { autoApplyWorkflowActionsFromUtterance } from "@/lib/voice/workflow-runtime/auto-workflow-actions";
 
 const TOOL_SCHEMAS: Record<string, OpenAiFunctionTool> = {
   submit_caller_information: {
@@ -154,6 +156,42 @@ const TOOL_SCHEMAS: Record<string, OpenAiFunctionTool> = {
       },
     },
   },
+  find_appointments: {
+    name: "find_appointments",
+    description: "Look up upcoming appointments for the caller by phone number.",
+    parameters: {
+      type: "object",
+      properties: {
+        phone: { type: "string", description: "Caller phone number in E.164 or spoken form" },
+      },
+    },
+  },
+  reschedule_appointment: {
+    name: "reschedule_appointment",
+    description: "Move an existing appointment to a new time after caller confirms.",
+    parameters: {
+      type: "object",
+      properties: {
+        appointment_id: { type: "string" },
+        new_starts_at: { type: "string", description: "ISO timestamp for the new slot" },
+        confirmed: { type: "boolean" },
+      },
+      required: ["appointment_id", "new_starts_at"],
+    },
+  },
+  cancel_appointment: {
+    name: "cancel_appointment",
+    description: "Cancel an existing appointment after explicit caller confirmation.",
+    parameters: {
+      type: "object",
+      properties: {
+        appointment_id: { type: "string" },
+        confirmed: { type: "boolean" },
+        reason: { type: "string" },
+      },
+      required: ["appointment_id"],
+    },
+  },
 };
 
 export type ConversationTurnResult = {
@@ -214,10 +252,15 @@ export function buildAmySystemMessage(ctx: LiveKitCallContext): OpenAiChatMessag
       "TEXT SIMULATOR MODE",
       "You are being tested via text instead of voice. Respond as Amy would on a phone call.",
       "Keep replies short. Use tools whenever the runtime requires an action.",
+      "ONLY call tools listed in your current allowed tool set — never call a tool that is not available.",
       "When the caller provides name, email, phone, address, or problem details you MUST call submit_caller_information in the same turn before replying.",
+      "Pass real values in tool arguments — never placeholders like 'service address' or 'the address'.",
+      "For validate_eligibility, pass the actual street address the caller gave, or omit address to use collected fields.",
       "When offering appointment times, only use times returned by check_availability.",
       "When the caller picks a time, call select_slot with their exact choice.",
       "After they confirm, call confirm_booking({ confirmed: true }).",
+      "For reschedule or cancel, call find_appointments first, then reschedule_appointment or cancel_appointment with confirmed: true.",
+      "When the caller picks a slot during reschedule, call select_slot with their choice, then after they confirm call reschedule_appointment with confirmed: true.",
     ].join("\n"),
   };
 }
@@ -301,6 +344,35 @@ export async function processCallerTurn(input: {
       messages.push({ role: "assistant", content: assistantText });
     }
     break;
+  }
+
+  const intentCalled = toolExecutions.some((t) => t.toolName === "detect_caller_intent");
+  const autoIntent = await autoApplyCallerIntentFromUtterance({
+    ctx,
+    userText: input.userText,
+    intentToolAlreadyCalled: intentCalled,
+  });
+  ctx = autoIntent.ctx;
+  if (autoIntent.applied) {
+    toolExecutions.push({
+      toolName: "detect_caller_intent",
+      ok: true,
+      speak: "Intent detected from caller utterance.",
+    });
+  }
+
+  const autoWorkflow = await autoApplyWorkflowActionsFromUtterance({
+    ctx,
+    userText: input.userText,
+    toolsCalledThisTurn: toolExecutions.map((t) => t.toolName),
+  });
+  ctx = autoWorkflow.ctx;
+  for (const action of autoWorkflow.actions) {
+    toolExecutions.push({
+      toolName: action.toolName,
+      ok: action.ok,
+      speak: action.speak,
+    });
   }
 
   return {

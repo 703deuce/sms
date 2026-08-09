@@ -27,6 +27,16 @@ const PLUMBING_APPOINTMENT_TYPE = {
   enabled: true,
 };
 
+const HVAC_APPOINTMENT_TYPE = {
+  ...PLUMBING_APPOINTMENT_TYPE,
+  id: "hvac_service",
+  name: "HVAC Service",
+};
+
+function appointmentTypeForScenario(scenarioId: string) {
+  return scenarioId === "call-1-hvac-booking" ? HVAC_APPOINTMENT_TYPE : PLUMBING_APPOINTMENT_TYPE;
+}
+
 export function buildSimulatorWizardState(input: {
   scenario: ConversationScenario;
   agentId: string;
@@ -34,6 +44,7 @@ export function buildSimulatorWizardState(input: {
 }): AppointmentReceptionistWizardState {
   const profile = resolveWizardProfileForScenario(input.scenario.id, input.scenario.wizardProfileId);
   const requiredFieldIds = enabledRequiredFieldIds(profile.collectFields);
+  const appointmentType = appointmentTypeForScenario(input.scenario.id);
 
   const state = createDefaultWizardState();
   state.agentId = input.agentId;
@@ -41,13 +52,13 @@ export function buildSimulatorWizardState(input: {
   state.businessName = "Test Plumbing Co";
   state.solutionName = "Test Plumbing Receptionist";
   state.collectFields = profile.collectFields.map((field) => ({ ...field }));
-  state.selectedAppointmentTypeId = PLUMBING_APPOINTMENT_TYPE.id;
+  state.selectedAppointmentTypeId = appointmentType.id;
   state.appointmentTypes = [
     {
-      ...PLUMBING_APPOINTMENT_TYPE,
+      ...appointmentType,
       requiredFields: requiredFieldIds,
     },
-    ...state.appointmentTypes.filter((t) => t.id !== PLUMBING_APPOINTMENT_TYPE.id).map((t) => ({
+    ...state.appointmentTypes.filter((t) => t.id !== appointmentType.id).map((t) => ({
       ...t,
       enabled: false,
     })),

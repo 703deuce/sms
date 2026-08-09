@@ -164,6 +164,61 @@ check(
   emailPrep.fields.sys_email,
 );
 
+const rescheduleSession = mockSession({
+  currentNodeId: "detect_intent",
+  missingFieldIds: ["sys_email", "sys_name"],
+  runtime: {
+    state: "INTENT_DISCOVERY",
+    current_node_id: "detect_intent",
+    session_runtime: { callerIntent: "reschedule" },
+  },
+} as Partial<AmyRealtimeSession>);
+check(
+  "fresh call with missing fields stays at detect_intent",
+  deriveAuthoritativeNodeId({
+    session: mockSession({
+      currentNodeId: "detect_intent",
+      missingFieldIds: ["sys_email", "sys_name"],
+      runtime: { state: "INTENT_DISCOVERY", current_node_id: "detect_intent" },
+    } as Partial<AmyRealtimeSession>),
+    workflow: HOME_SERVICE_DISPATCHER_WORKFLOW_V1,
+    storedNodeId: "detect_intent",
+  }) === "detect_intent",
+);
+check(
+  "reschedule intent routes to reschedule_lookup despite missing fields",
+  deriveAuthoritativeNodeId({
+    session: rescheduleSession,
+    workflow: HOME_SERVICE_DISPATCHER_WORKFLOW_V1,
+    storedNodeId: "reschedule_lookup",
+  }) === "reschedule_lookup",
+);
+check(
+  "reschedule intent with stored detect_intent advances to reschedule_lookup",
+  deriveAuthoritativeNodeId({
+    session: rescheduleSession,
+    workflow: HOME_SERVICE_DISPATCHER_WORKFLOW_V1,
+    storedNodeId: "detect_intent",
+  }) === "reschedule_lookup",
+);
+
+const cancelSession = mockSession({
+  currentNodeId: "cancel_lookup",
+  runtime: {
+    state: "GENERAL",
+    current_node_id: "cancel_lookup",
+    session_runtime: { callerIntent: "cancel" },
+  },
+} as Partial<AmyRealtimeSession>);
+check(
+  "cancel intent routes to cancel_lookup despite missing fields",
+  deriveAuthoritativeNodeId({
+    session: cancelSession,
+    workflow: HOME_SERVICE_DISPATCHER_WORKFLOW_V1,
+    storedNodeId: "cancel_lookup",
+  }) === "cancel_lookup",
+);
+
 import { readFileSync } from "node:fs";
 import { buildWizardAgentConfig } from "../src/lib/solutions/appointment-receptionist/build-agent-config";
 import { buildSimulatorWizardState } from "../src/lib/voice/testing/frontend-agent-seed";

@@ -68,7 +68,8 @@ export function authorizeCapabilityInvocation(input: {
 
   if (cap.id === "calendar.check_availability") {
     const missingCount = Number(input.state.flags.missingFieldCount ?? 0);
-    if (missingCount > 0) {
+    const modifyFlow = Boolean(input.state.flags.rescheduleIntent || input.state.flags.cancelIntent);
+    if (missingCount > 0 && !modifyFlow) {
       return {
         ok: false,
         speak: "I still need a bit more information before I can check availability.",
@@ -77,7 +78,7 @@ export function authorizeCapabilityInvocation(input: {
     }
 
     const collectNode = input.workflow.nodes.find((n) => n.type === "collect_fields");
-    if (collectNode?.fields?.length) {
+    if (collectNode?.fields?.length && !modifyFlow) {
       const missing = collectNode.fields
         .filter((f) => f.required && !input.state.collectedFields[f.id]?.trim())
         .map((f) => f.id);

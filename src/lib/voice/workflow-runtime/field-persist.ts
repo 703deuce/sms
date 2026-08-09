@@ -3,6 +3,12 @@ import { FieldValidationError, normalizeSpokenEmail, validateFieldValue } from "
 import type { RuntimeFieldManifestEntry } from "@/lib/voice/field-runtime/types";
 import { normalizeExtractedFields } from "./field-extraction";
 
+function extractEmailCandidate(raw: string): string {
+  const trimmed = raw.trim();
+  const match = trimmed.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+  return match?.[0] || trimmed;
+}
+
 export type PreparedFieldPersist = {
   fields: Record<string, string>;
   errors: Array<{ fieldId: string; message: string }>;
@@ -57,7 +63,9 @@ export function prepareFieldsForPersistence(input: {
     };
 
     try {
-      const validated = validateFieldValue(def, raw);
+      const valueForValidation =
+        entry.type === "email" ? extractEmailCandidate(String(raw)) : raw;
+      const validated = validateFieldValue(def, valueForValidation);
       fields[fieldId] = String(validated).trim();
     } catch (err) {
       const message =

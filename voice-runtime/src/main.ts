@@ -1,5 +1,5 @@
 import dotenv from "dotenv";
-import { cli, defineAgent, ServerOptions, voice } from "@livekit/agents";
+import { cli, defineAgent, ServerOptions, voice, AgentSessionEventTypes } from "@livekit/agents";
 import { getPrisma } from "@/lib/db";
 import { parseVoiceAgentConfig } from "@/lib/voice/types";
 import { fileURLToPath } from "node:url";
@@ -14,6 +14,7 @@ import { applyVoiceRuntimeEnvAliases } from "./env-aliases";
 import { attachLatencyInstrumentation } from "./latency-instrumentation";
 import { attachOutputGain, resolveLiveKitOutputGainDb } from "./output-gain";
 import { buildAmyTurnHandling, describeTurnHandlingConfig, getPreemptiveConfigForInstrumentation } from "./turn-config";
+import { applyAutoTurnActionsFromTranscript } from "./auto-turn-actions";
 
 dotenv.config();
 applyVoiceRuntimeEnvAliases();
@@ -106,6 +107,20 @@ export default defineAgent<AmyProcessUserData>({
         model: config.ttsModel,
         voice: config.ttsVoice,
       },
+    });
+
+    session.on(AgentSessionEventTypes.UserInputTranscribed, (ev) => {
+      if (!ev.isFinal || !ev.transcript?.trim()) return;
+      void applyAutoTurnActionsFromTranscript(session, ev.transcript).catch((err) => {
+        console.error(
+          JSON.stringify({
+            source: "transovo-voice-runtime",
+            event: "auto_turn_actions_error",
+            callId,
+            error: err instanceof Error ? err.message : String(err),
+          }),
+        );
+      });
     });
 
     ctx.addShutdownCallback(async () => {

@@ -79,6 +79,38 @@ export function planDeterministicToolCalls(input: {
   }
 
   if (
+    allowedToolNames.has("reschedule_appointment") &&
+    canonical?.expectedNextAction === "reschedule_appointment" &&
+    /yes|reschedule|confirm|please/i.test(lower)
+  ) {
+    const held = input.ctx.session.heldSlot || input.ctx.session.selectedSlot;
+    const appointmentId = input.ctx.session.runtime.session_runtime?.foundAppointmentId;
+    if (held && appointmentId) {
+      return [
+        {
+          name: "reschedule_appointment",
+          args: { appointment_id: appointmentId, new_starts_at: held, confirmed: true },
+        },
+      ];
+    }
+  }
+
+  if (
+    allowedToolNames.has("cancel_appointment") &&
+    canonical?.expectedNextAction === "cancel_appointment" &&
+    /yes|cancel|confirm|please/i.test(lower)
+  ) {
+    const appointmentId = input.ctx.session.runtime.session_runtime?.foundAppointmentId;
+    if (appointmentId) {
+      return [{ name: "cancel_appointment", args: { appointment_id: appointmentId, confirmed: true } }];
+    }
+  }
+
+  if (allowedToolNames.has("find_appointments") && /reschedule|cancel|appointment/i.test(lower)) {
+    return [{ name: "find_appointments", args: {} }];
+  }
+
+  if (
     allowedToolNames.has("confirm_booking") &&
     (/^(yes|yeah|yep|that's good|that is good|book it|confirm|sounds good)/i.test(lower) ||
       canonical?.expectedNextAction === "confirm_booking")
@@ -87,6 +119,10 @@ export function planDeterministicToolCalls(input: {
   }
 
   if (allowedToolNames.has("detect_caller_intent") && /book|appointment|repair|fix|leak|broken/i.test(lower)) {
+    return [{ name: "detect_caller_intent", args: { utterance: text } }];
+  }
+
+  if (allowedToolNames.has("detect_caller_intent") && /reschedule|cancel/i.test(lower)) {
     return [{ name: "detect_caller_intent", args: { utterance: text } }];
   }
 
