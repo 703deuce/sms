@@ -27,6 +27,8 @@ export function compileToolsForCallContext(callContext: LiveKitCallContext): {
   const workflow = callContext.workflowDefinition || resolved.definition;
   const ref = callContext.workflowRef || resolved.ref;
 
+  const callerIntent =
+    callContext.session.runtime.session_runtime?.callerIntent || null;
   const snapshot = buildRuntimeSnapshotFromSession({
     workflow,
     workflowVersion: ref.version,
@@ -42,9 +44,17 @@ export function compileToolsForCallContext(callContext: LiveKitCallContext): {
     flags: {
       ...(callContext.workflowRuntime?.flags || {}),
       missingFieldCount: callContext.session.missingFieldIds?.length ?? 0,
-      emergency: isEmergencyClassification(
-        callContext.session.runtime.session_runtime?.classifications,
-      ),
+      emergency:
+        isEmergencyClassification(
+          callContext.session.runtime.session_runtime?.classifications,
+        ) || callerIntent === "emergency",
+      bookIntent:
+        !callerIntent ||
+        callerIntent === "book_service" ||
+        callerIntent === "general_question" ||
+        callerIntent === "unknown",
+      rescheduleIntent: callerIntent === "reschedule",
+      cancelIntent: callerIntent === "cancel",
     },
   });
 

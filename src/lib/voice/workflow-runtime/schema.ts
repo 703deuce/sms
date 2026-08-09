@@ -25,7 +25,7 @@ export type WorkflowTransition = {
   /** Target node id */
   to: string;
   /** Condition key evaluated against runtime state; omit for default edge */
-  when?: "default" | "fields_complete" | "confirmation_received" | "emergency" | "normal";
+  when?: "default" | "fields_complete" | "confirmation_received" | "emergency" | "normal" | "book_intent" | "reschedule_intent" | "cancel_intent";
 };
 
 export type WorkflowNode = {

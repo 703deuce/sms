@@ -28,8 +28,10 @@ class CollectRequiredFieldsTask extends BaseWorkflowTask {
       "record_current_field",
       "record_fields",
       "lookup_customer",
+      "detect_caller_intent",
       "validate_eligibility",
       "classify_intent",
+      "get_business_answer",
       "request_human",
       "end_call",
     ];
@@ -49,7 +51,14 @@ class LookupCustomerTask extends BaseWorkflowTask {
   }
 
   allowedTools() {
-    return ["lookup_customer", "record_current_field", "request_human", "end_call"];
+    return [
+      "lookup_customer",
+      "detect_caller_intent",
+      "get_business_answer",
+      "record_current_field",
+      "request_human",
+      "end_call",
+    ];
   }
 }
 

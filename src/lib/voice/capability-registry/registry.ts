@@ -101,6 +101,22 @@ export const CAPABILITY_REGISTRY: Record<string, CapabilityDefinition> = {
     confirmationPolicy: "never",
     allowedInNodeTypes: ["collect_fields", "condition", "action"],
   },
+  "intent.detect": {
+    id: "intent.detect",
+    description: "Detect whether the caller wants to book, reschedule, cancel, or needs emergency help.",
+    toolNames: ["detect_caller_intent"],
+    sideEffectLevel: "read",
+    confirmationPolicy: "never",
+    allowedInNodeTypes: ["action", "conversation"],
+  },
+  "knowledge.answer": {
+    id: "knowledge.answer",
+    description: "Answer configured business questions such as pricing or hours.",
+    toolNames: ["get_business_answer"],
+    sideEffectLevel: "read",
+    confirmationPolicy: "never",
+    allowedInNodeTypes: ["collect_fields", "conversation", "action", "choice", "confirmation"],
+  },
   "calendar.find_appointments": {
     id: "calendar.find_appointments",
     description: "Find existing appointments for the caller.",

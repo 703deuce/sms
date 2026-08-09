@@ -1,5 +1,6 @@
 import { initiateTransfer } from "@/lib/voice/transfers";
 import { getPrisma } from "@/lib/db";
+import { transferLiveKitSipParticipant } from "@/lib/voice/livekit/sip-transfer";
 import {
   applyTransferEvent,
   initialTransferState,
@@ -11,6 +12,12 @@ import { structuredFailure, structuredSuccess } from "@/lib/voice/tool-policy/st
 import { guardToolInvocation } from "./guard";
 import type { LiveKitCallContext } from "./session-bootstrap";
 import type { DomainActionResult } from "./booking-actions";
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
 
 function transferDestination(ctx: LiveKitCallContext): string | null {
   const meta = (ctx.workflowDefinition?.metadata || {}) as Record<string, unknown>;
@@ -48,8 +55,15 @@ export async function domainRequestHuman(input: {
   const prisma = getPrisma();
   const call = await prisma.voiceCall.findUnique({
     where: { id: input.ctx.callId },
-    select: { telnyxCallControlId: true, livekitRoomName: true },
+    select: { telnyxCallControlId: true, metadata: true },
   });
+  const callMeta = asRecord(call?.metadata);
+  const livekitRoomName =
+    typeof callMeta.livekitRoomName === "string" ? callMeta.livekitRoomName : null;
+  const livekitParticipantId =
+    typeof callMeta.livekitParticipantId === "string"
+      ? callMeta.livekitParticipantId
+      : null;
 
   let transferOk = false;
   let failureReason = "no_telephony";
@@ -68,10 +82,22 @@ export async function domainRequestHuman(input: {
     } catch (err) {
       failureReason = err instanceof Error ? err.message : "transfer_error";
     }
-  } else if (call?.livekitRoomName) {
-    failureReason =
-      process.env.VOICE_TRANSFER_SIMULATE_NO_ANSWER === "1" ? "no_answer" : "livekit_transfer_pending";
-    transferOk = process.env.VOICE_TRANSFER_SIMULATE_ANSWER === "1";
+  } else if (livekitRoomName && livekitParticipantId) {
+    if (process.env.VOICE_TRANSFER_SIMULATE_NO_ANSWER === "1") {
+      failureReason = "no_answer";
+    } else if (process.env.VOICE_TRANSFER_SIMULATE_ANSWER === "1") {
+      transferOk = true;
+    } else {
+      const xfer = await transferLiveKitSipParticipant({
+        roomName: livekitRoomName,
+        participantIdentity: livekitParticipantId,
+        destinationE164: destination,
+      });
+      transferOk = xfer.ok;
+      if (!xfer.ok) {
+        failureReason = xfer.reason;
+      }
+    }
   }
 
   if (transferOk) {
@@ -98,10 +124,10 @@ export async function domainRequestHuman(input: {
   input.ctx.session = setTransferState(input.ctx.session, transfer);
 
   return structuredFailure({
-    speak: speakableTransferMessage(transfer),
+    speak: `${speakableTransferMessage(transfer)} I can take a message for the team if you'd like.`,
     code: failureType === "no_answer" ? "TRANSFER_NO_ANSWER" : "TRANSFER_FAILED",
     workflowState: input.ctx.session.currentState,
     nextAllowedActions: ["take_message", "end_call"],
-    data: { transfer, recovered: transferRequiresRecovery(transfer) },
+    data: { transfer, recovered: transferRequiresRecovery(transfer), autoFallback: "take_message" },
   });
 }

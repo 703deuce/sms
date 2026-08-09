@@ -18,6 +18,8 @@ export {
 export { domainLookupCustomer } from "./lookup-actions";
 export { domainValidateEligibility, domainClassifyIntent } from "./eligibility-actions";
 export { domainRequestHuman } from "./transfer-actions";
+export { domainDetectCallerIntent } from "./intent-actions";
+export { domainGetBusinessAnswer } from "./knowledge-actions";
 export {
   domainFindAppointments,
   domainRescheduleAppointment,

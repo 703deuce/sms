@@ -11,7 +11,7 @@ export const HOME_SERVICE_DISPATCHER_WORKFLOW_V1: WorkflowDefinition = {
     "Dynamic intake, qualification, eligibility, multi-resource scheduling, booking, transfer, and modify flows.",
   entryNodeId: "lookup_customer",
   globalPolicies: {
-    alwaysAllow: ["call.transfer", "call.end"],
+    alwaysAllow: ["call.transfer", "call.end", "knowledge.answer"],
   },
   metadata: {
     serviceAreas: {
@@ -39,6 +39,14 @@ export const HOME_SERVICE_DISPATCHER_WORKFLOW_V1: WorkflowDefinition = {
       },
     ],
     transferDestination: process.env.VOICE_TRANSFER_FALLBACK_E164 || "+15555550100",
+    pricing: {
+      serviceCallFee: "$89",
+      serviceCallScript:
+        "Our standard service call fee is $89, which covers the diagnostic visit. Additional repair costs are quoted on site.",
+      unknownScript:
+        "Pricing depends on the specific job. The technician will provide an exact quote after diagnosing the issue.",
+    },
+    businessHours: "Monday through Friday, 8 AM to 6 PM",
   },
   nodes: [
     {
@@ -48,10 +56,21 @@ export const HOME_SERVICE_DISPATCHER_WORKFLOW_V1: WorkflowDefinition = {
       instructions:
         "Use lookup_customer when appropriate. Do not assume the ANI match is the speaker.",
       requiresUserInput: false,
+      transitions: [{ to: "detect_intent", when: "default" }],
+    },
+    {
+      id: "detect_intent",
+      type: "action",
+      capability: "intent.detect",
+      instructions:
+        "Call detect_caller_intent once you understand why the caller is calling. Route book vs reschedule vs cancel vs emergency.",
+      requiresUserInput: false,
       transitions: [
+        { to: "emergency_handoff", when: "emergency" },
+        { to: "reschedule_lookup", when: "reschedule_intent" },
+        { to: "cancel_lookup", when: "cancel_intent" },
+        { to: "collect_fields", when: "book_intent" },
         { to: "collect_fields", when: "default" },
-        { to: "reschedule_lookup", when: "default" },
-        { to: "cancel_lookup", when: "default" },
       ],
     },
     {
@@ -59,7 +78,7 @@ export const HOME_SERVICE_DISPATCHER_WORKFLOW_V1: WorkflowDefinition = {
       type: "collect_fields",
       description: "Dynamic intake — fields from tenant manifest",
       instructions:
-        "Collect required fields. Use record_fields when the caller provides multiple details at once. One field at a time otherwise.",
+        "Collect required fields. Use record_fields when the caller provides multiple details at once. Answer pricing/hours with get_business_answer when asked.",
       fields: [],
       metadata: { manifestDriven: true },
       requiresUserInput: true,

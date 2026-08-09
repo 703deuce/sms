@@ -21,6 +21,8 @@ import {
   domainFindAppointments,
   domainRescheduleAppointment,
   domainCancelAppointment,
+  domainDetectCallerIntent,
+  domainGetBusinessAnswer,
   formatModelToolResult,
   taskContextPayload,
   taskForWorkflowState,
@@ -401,6 +403,43 @@ export function buildAmyToolList(callContext: LiveKitCallContext) {
         execute: async ({ utterance }, opts: AmyToolOptions) =>
           wrapToolExecute("classify_intent", opts, async (ctx) =>
             domainClassifyIntent({ ctx, utterance }),
+          ),
+      }),
+    );
+  }
+
+  if (allowed.has("detect_caller_intent")) {
+    tools.push(
+      llm.tool({
+        name: "detect_caller_intent",
+        description:
+          "Detect whether the caller wants to book service, reschedule, cancel, or has an emergency. Call once you understand why they are calling.",
+        parameters: z.object({
+          utterance: z
+            .string()
+            .optional()
+            .describe("Recent caller utterance summarizing their request"),
+        }),
+        execute: async ({ utterance }, opts: AmyToolOptions) =>
+          wrapToolExecute("detect_caller_intent", opts, async (ctx) =>
+            domainDetectCallerIntent({ ctx, utterance }),
+          ),
+      }),
+    );
+  }
+
+  if (allowed.has("get_business_answer")) {
+    tools.push(
+      llm.tool({
+        name: "get_business_answer",
+        description:
+          "Answer configured business questions such as pricing, fees, or business hours. Use when the caller asks about cost or hours.",
+        parameters: z.object({
+          topic: z.string().describe("What the caller asked about, e.g. pricing or hours"),
+        }),
+        execute: async ({ topic }, opts: AmyToolOptions) =>
+          wrapToolExecute("get_business_answer", opts, async (ctx) =>
+            domainGetBusinessAnswer({ ctx, topic }),
           ),
       }),
     );

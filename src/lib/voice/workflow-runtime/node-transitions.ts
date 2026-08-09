@@ -16,6 +16,7 @@ function getNode(def: WorkflowDefinition, nodeId: string): WorkflowNode | undefi
 function legacyStateForNode(nodeId: string, workflowId: string): WorkflowState {
   const map: Record<string, WorkflowState> = {
     lookup_customer: "INTENT_DISCOVERY",
+    detect_intent: "INTENT_DISCOVERY",
     collect_fields: "COLLECTING_FIELDS",
     classify: "COLLECTING_FIELDS",
     validate_eligibility: "COLLECTING_FIELDS",
@@ -71,7 +72,30 @@ export function resolveNextNodeId(input: {
       input.toolName === "lookup_customer" &&
       input.result.ok
     ) {
-      return node.transitions[0]?.to || "collect_fields";
+      return node.transitions[0]?.to || "detect_intent";
+    }
+    if (
+      node.capability === "intent.detect" &&
+      input.toolName === "detect_caller_intent" &&
+      input.result.ok
+    ) {
+      const intent = String(input.result.data?.intent || "");
+      if (intent === "emergency") {
+        const edge = node.transitions.find((t) => t.when === "emergency");
+        return edge?.to || "emergency_handoff";
+      }
+      if (intent === "reschedule") {
+        const edge = node.transitions.find((t) => t.when === "reschedule_intent");
+        return edge?.to || "reschedule_lookup";
+      }
+      if (intent === "cancel") {
+        const edge = node.transitions.find((t) => t.when === "cancel_intent");
+        return edge?.to || "cancel_lookup";
+      }
+      const edge =
+        node.transitions.find((t) => t.when === "book_intent") ||
+        node.transitions.find((t) => t.when === "default");
+      return edge?.to || "collect_fields";
     }
     if (
       node.capability === "rules.classify" &&
@@ -148,8 +172,12 @@ export function resolveNextNodeId(input: {
     return node.transitions[0]?.to || input.currentNodeId;
   }
 
-  if (node.type === "handoff" && input.toolName === "request_human" && input.result.ok) {
-    return node.transitions[0]?.to || "complete";
+  if (node.type === "handoff" && input.toolName === "request_human") {
+    if (input.result.ok) {
+      return "complete";
+    }
+    const edge = node.transitions.find((t) => t.when === "default");
+    return edge?.to || "transfer_fallback";
   }
 
   if (node.type === "confirmation" && input.toolName === "confirm_booking") {

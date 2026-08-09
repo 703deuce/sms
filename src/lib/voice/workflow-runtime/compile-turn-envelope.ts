@@ -43,6 +43,9 @@ function pickTransition(
     if (edge.when === "confirmation_received" && state.confirmationReceived) return edge;
     if (edge.when === "emergency" && state.flags.emergency) return edge;
     if (edge.when === "normal" && !state.flags.emergency) return edge;
+    if (edge.when === "book_intent" && state.flags.bookIntent) return edge;
+    if (edge.when === "reschedule_intent" && state.flags.rescheduleIntent) return edge;
+    if (edge.when === "cancel_intent" && state.flags.cancelIntent) return edge;
   }
 
   return (

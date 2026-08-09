@@ -34,6 +34,7 @@
     "test:amy-livekit-preprod": "tsx scripts/amy-livekit-preprod-suite.ts",
     "test:voice-livekit-booking-orchestration": "tsx scripts/test-voice-livekit-booking-orchestration.ts",
     "test:master-receptionist-runtime": "tsx scripts/test-master-receptionist-runtime.ts",
+    "activate:home-service-dispatcher": "tsx scripts/activate-home-service-dispatcher.mjs",
     "test:workflow-runtime-compiler": "tsx scripts/test-workflow-runtime-compiler.ts",
     "audit:livekit-booking-steps": "tsx scripts/audit-livekit-booking-steps.ts",
     "test:amy-livekit-readiness": "tsx scripts/amy-livekit-readiness.ts",

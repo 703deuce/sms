@@ -72,6 +72,8 @@ export type SessionRuntimeExtensions = {
   eligibleResourceIds?: string[];
   /** Active generic workflow task label */
   currentTask?: string | null;
+  /** Detected caller intent for routing */
+  callerIntent?: string | null;
   /** Transfer state machine */
   transfer?: TransferState;
   /** Customer lookup candidates */

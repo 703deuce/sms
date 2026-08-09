@@ -1,6 +1,8 @@
 import { recordFieldForLiveKitVoice, recordFieldsForLiveKitVoice } from "@/lib/voice/field-runtime/save-voice-fast";
 import { executeContinueWorkflow } from "@/lib/voice/workflow-engine/continue-workflow";
 import { resolveActiveWorkflowForAgent } from "@/lib/voice/workflow-runtime/loader";
+import { writebackBookingToCrm } from "@/lib/voice/crm/call-writeback";
+import { writeToolReceipt } from "./receipts-helper";
 import { startDomainActionTimer } from "./latency";
 import { assertTaskToolAllowed, taskForWorkflowState } from "./task-guard";
 import { guardToolInvocation } from "./guard";
@@ -356,7 +358,41 @@ export async function domainConfirmBooking(input: {
   });
 
   const heldSlot = buildHeldSlotPayload(session);
-  timer.finish(ok, result.error_code ? String(result.error_code) : undefined);
+  const timing = timer.finish(ok, result.error_code ? String(result.error_code) : undefined);
+
+  if (ok) {
+    const resultData =
+      typeof result.data === "object" && result.data ? (result.data as Record<string, unknown>) : {};
+    const appointmentId =
+      session.bookingId ||
+      (typeof resultData.appointment_id === "string" ? resultData.appointment_id : null) ||
+      (typeof resultData.booking === "object" &&
+      resultData.booking &&
+      typeof (resultData.booking as Record<string, unknown>).appointment_id === "string"
+        ? String((resultData.booking as Record<string, unknown>).appointment_id)
+        : null);
+
+    if (appointmentId) {
+      await writebackBookingToCrm({
+        workspaceId: input.ctx.workspaceId,
+        callId: input.ctx.callId,
+        appointmentId,
+        session,
+        serviceName: input.ctx.session.serviceName,
+      }).catch(() => undefined);
+
+      await writeToolReceipt({
+        callId: input.ctx.callId,
+        operationId: `${input.ctx.callId}-book-${appointmentId}`,
+        type: "calendar.create_booking",
+        status: "succeeded",
+        provider: "calendly",
+        providerReference: appointmentId,
+        latencyMs: timing.totalMs,
+      });
+    }
+  }
+
   const response: DomainActionResult = {
     ok,
     speak: String(

@@ -4,6 +4,7 @@
  * Run: npm run test:master-receptionist-runtime
  */
 import { validateServiceArea } from "../src/lib/voice/eligibility/validate";
+import { detectCallerIntent } from "../src/lib/voice/intent/detect";
 import {
   evaluateQualificationRules,
   inferClassifications,
@@ -221,7 +222,61 @@ async function main() {
     result: { ok: true },
     session,
   });
-  check("lookup_customer advances to collect_fields", afterLookup === "collect_fields");
+  check("lookup_customer advances to detect_intent", afterLookup === "detect_intent");
+
+  const afterDetectBook = resolveNextNodeId({
+    workflow: HOME_SERVICE_DISPATCHER_WORKFLOW_V1,
+    currentNodeId: "detect_intent",
+    toolName: "detect_caller_intent",
+    result: { ok: true, data: { intent: "book_service" } },
+    session,
+  });
+  check("detect_caller_intent book routes to collect_fields", afterDetectBook === "collect_fields");
+
+  const afterDetectReschedule = resolveNextNodeId({
+    workflow: HOME_SERVICE_DISPATCHER_WORKFLOW_V1,
+    currentNodeId: "detect_intent",
+    toolName: "detect_caller_intent",
+    result: { ok: true, data: { intent: "reschedule" } },
+    session,
+  });
+  check(
+    "detect_caller_intent reschedule routes to reschedule_lookup",
+    afterDetectReschedule === "reschedule_lookup",
+  );
+
+  const afterDetectCancel = resolveNextNodeId({
+    workflow: HOME_SERVICE_DISPATCHER_WORKFLOW_V1,
+    currentNodeId: "detect_intent",
+    toolName: "detect_caller_intent",
+    result: { ok: true, data: { intent: "cancel" } },
+    session,
+  });
+  check("detect_caller_intent cancel routes to cancel_lookup", afterDetectCancel === "cancel_lookup");
+
+  const afterDetectEmergency = resolveNextNodeId({
+    workflow: HOME_SERVICE_DISPATCHER_WORKFLOW_V1,
+    currentNodeId: "detect_intent",
+    toolName: "detect_caller_intent",
+    result: { ok: true, data: { intent: "emergency" } },
+    session,
+  });
+  check(
+    "detect_caller_intent emergency routes to emergency_handoff",
+    afterDetectEmergency === "emergency_handoff",
+  );
+
+  const intentDetect = detectCallerIntent({ utterance: "I need to reschedule my appointment" });
+  check("intent detect reschedule phrase", intentDetect.intent === "reschedule");
+
+  const transferFail = resolveNextNodeId({
+    workflow: HOME_SERVICE_DISPATCHER_WORKFLOW_V1,
+    currentNodeId: "emergency_handoff",
+    toolName: "request_human",
+    result: { ok: false, error_code: "TRANSFER_NO_ANSWER" },
+    session,
+  });
+  check("transfer failure routes to transfer_fallback", transferFail === "transfer_fallback");
 
   const afterClassifyEmergency = resolveNextNodeId({
     workflow: HOME_SERVICE_DISPATCHER_WORKFLOW_V1,

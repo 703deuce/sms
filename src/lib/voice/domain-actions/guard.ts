@@ -27,7 +27,15 @@ export function guardToolInvocation(
       missingFieldCount: ctx.session.missingFieldIds?.length ?? 0,
       emergency:
         ctx.session.runtime.session_runtime?.classifications?.urgency === "emergency" ||
-        ctx.session.runtime.session_runtime?.classifications?.safety === "gas_smell",
+        ctx.session.runtime.session_runtime?.classifications?.safety === "gas_smell" ||
+        ctx.session.runtime.session_runtime?.callerIntent === "emergency",
+      bookIntent:
+        !ctx.session.runtime.session_runtime?.callerIntent ||
+        ctx.session.runtime.session_runtime?.callerIntent === "book_service" ||
+        ctx.session.runtime.session_runtime?.callerIntent === "general_question" ||
+        ctx.session.runtime.session_runtime?.callerIntent === "unknown",
+      rescheduleIntent: ctx.session.runtime.session_runtime?.callerIntent === "reschedule",
+      cancelIntent: ctx.session.runtime.session_runtime?.callerIntent === "cancel",
     },
   });
   const guard = authorizeCapabilityInvocation({ workflow, state: snapshot, toolName });
