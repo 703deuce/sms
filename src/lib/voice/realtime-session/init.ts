@@ -28,6 +28,12 @@ function normalizeSlotIso(value: unknown): string {
   return Number.isNaN(d.getTime()) ? str : d.toISOString();
 }
 
+function isModifySchedulingSession(session: AmyRealtimeSession): boolean {
+  const intent = session.runtime?.session_runtime?.callerIntent;
+  if (intent === "reschedule" || intent === "cancel") return true;
+  return Boolean(session.runtime?.session_runtime?.foundAppointmentId?.trim());
+}
+
 function deriveStateFromSession(session: AmyRealtimeSession): WorkflowState {
   const runtime = session.runtime;
   if (runtime.pending_operations.length > 0) return "BOOKING_IN_PROGRESS";
@@ -36,6 +42,22 @@ function deriveStateFromSession(session: AmyRealtimeSession): WorkflowState {
   const workflow = session.workflowId;
   if (workflow === "general" || workflow === "leave_message" || workflow === "request_quote") {
     return "GENERAL";
+  }
+
+  if (isModifySchedulingSession(session)) {
+    const hasHeld =
+      session.selectedSlot || session.heldSlot || runtime.selected_slot || runtime.held_slot;
+    const hasSlots = session.availableSlots.length > 0 || runtime.proposed_slots.length > 0;
+    if (hasHeld) return "READY_TO_BOOK";
+    if (hasSlots) return "SELECTING_SLOT";
+    if (
+      session.currentState === "CHECKING_AVAILABILITY" ||
+      session.currentState === "SELECTING_SLOT" ||
+      session.currentState === "READY_TO_BOOK"
+    ) {
+      return session.currentState;
+    }
+    return "CHECKING_AVAILABILITY";
   }
 
   if (session.missingFieldIds.length > 0) {

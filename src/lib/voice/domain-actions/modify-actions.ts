@@ -1,11 +1,61 @@
 import { getPrisma } from "@/lib/db";
 import { executeAgentTool } from "@/lib/voice/agent-tool-gateway/gateway";
+import { refreshSessionFieldState } from "@/lib/voice/realtime-session/init";
 import { invalidateSchedulingState, patchSessionRuntimeExt } from "@/lib/voice/session-runtime/state";
 import { structuredFailure, structuredSuccess } from "@/lib/voice/tool-policy/structured-result";
 import { guardToolInvocation } from "./guard";
 import type { LiveKitCallContext } from "./session-bootstrap";
 import type { DomainActionResult } from "./booking-actions";
 import { reloadLiveKitSchedulingSession } from "./scheduling-session";
+
+async function hydrateSessionFromFoundAppointment(
+  ctx: LiveKitCallContext,
+  appointmentId: string,
+): Promise<LiveKitCallContext> {
+  const prisma = getPrisma();
+  const appointment = await prisma.voiceAppointment.findUnique({
+    where: { id: appointmentId, workspaceId: ctx.workspaceId },
+    include: {
+      contact: {
+        select: { firstName: true, lastName: true, email: true, phone: true },
+      },
+    },
+  });
+  if (!appointment) return ctx;
+
+  const meta = (appointment.metadata || {}) as Record<string, unknown>;
+  const fullName =
+    String(meta.customer_name || "").trim() ||
+    [appointment.contact?.firstName, appointment.contact?.lastName].filter(Boolean).join(" ").trim();
+  const email = String(appointment.contact?.email || meta.email || "").trim();
+  const phone = String(
+    meta.customerPhone || meta.phone || appointment.contact?.phone || ctx.session.callerAni || "",
+  ).trim();
+  const address = String(meta.service_address || meta.address || "").trim();
+  const problem = String(
+    meta.problem || meta.notes || appointment.serviceName || ctx.session.serviceName || "",
+  ).trim();
+
+  const updates: Record<string, string> = {};
+  for (const field of ctx.session.fieldManifest) {
+    const id = field.field_id;
+    if (!ctx.session.collectedFields[id]?.trim()) {
+      if (id.includes("name") && fullName) updates[id] = fullName;
+      else if (id.includes("email") && email) updates[id] = email;
+      else if (id.includes("phone") && phone) updates[id] = phone;
+      else if (id.includes("address") && address) updates[id] = address;
+      else if ((id.includes("notes") || id.includes("problem")) && problem) updates[id] = problem;
+    }
+  }
+
+  if (!Object.keys(updates).length) return ctx;
+
+  ctx.session = refreshSessionFieldState({
+    ...ctx.session,
+    collectedFields: { ...ctx.session.collectedFields, ...updates },
+  });
+  return ctx;
+}
 
 export async function domainFindAppointments(input: {
   ctx: LiveKitCallContext;
@@ -61,6 +111,7 @@ export async function domainFindAppointments(input: {
       currentTask: "RescheduleTask",
       foundAppointmentId: String(appointmentId),
     });
+    input.ctx = await hydrateSessionFromFoundAppointment(input.ctx, String(appointmentId));
   }
 
   return structuredSuccess({

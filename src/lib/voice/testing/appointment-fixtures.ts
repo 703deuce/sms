@@ -42,6 +42,8 @@ export async function seedConfirmedAppointment(input: {
         phone: input.callerPhone,
         customerPhone: input.callerPhone,
         customer_name: input.contactName || "John Smith",
+        service_address: "421 Main Street, Fredericksburg, Virginia 22401",
+        problem: "The AC is blowing warm air upstairs, started yesterday",
       } as object,
     },
   });
