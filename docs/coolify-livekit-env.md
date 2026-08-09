@@ -36,6 +36,7 @@ Telnyx must send PSTN to your LiveKit **SIP URI** (may differ from project URL, 
 | `VOICE_TTS_PRESET` | `elevenlabs` (default when unset) |
 | `VOICE_LLM_PROVIDER` | `openai` |
 | `VOICE_LLM_MODEL` | `gpt-5-nano` (`gpt-5-mini` for higher quality) |
+| `VOICE_LLM_PRESET` | Optional shortcut — see LLM A/B below |
 
 ## Latency and audio (LiveKit)
 
@@ -81,6 +82,42 @@ VOICE_PREEMPTIVE_TTS=true
 ```
 
 Use `gpt-5-mini` instead of nano if tool-call accuracy drops.
+
+### LLM A/B (Gemma 4 31B vs GPT-4.1 mini)
+
+Keep Flux EOT + preemptive on; only change the LLM between test calls.
+
+**Test A — Gemma 4 31B (LiveKit Inference, latency-optimized):**
+```
+VOICE_LLM_PRESET=gemma-4-31b
+```
+
+**Test B — GPT-4.1 mini (LiveKit Inference):**
+```
+VOICE_LLM_PRESET=gpt-4.1-mini
+```
+
+Equivalent explicit vars (if you prefer not to use presets):
+```
+# Gemma
+VOICE_LLM_PROVIDER=inference
+VOICE_LLM_MODEL=google/gemma-4-31b-it
+
+# GPT-4.1 mini
+VOICE_LLM_PROVIDER=inference
+VOICE_LLM_MODEL=openai/gpt-4.1-mini
+```
+
+Verify in call logs — `pipeline_config` should show:
+```json
+"llm": { "preset": "gemma-4-31b", "model": "google/gemma-4-31b-it", "via": "livekit_inference" }
+```
+or
+```json
+"llm": { "preset": "gpt-4.1-mini", "model": "openai/gpt-4.1-mini", "via": "livekit_inference" }
+```
+
+Compare `llmTtftMs` in `turn_latency_breakdown` lines across the two calls.
 
 | Variable | Example | Purpose |
 |----------|---------|---------|

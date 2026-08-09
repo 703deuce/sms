@@ -1,5 +1,10 @@
 import type { VoiceRuntimeProviderId } from "./types";
 import {
+  isVoiceLlmPresetId,
+  resolveVoiceLlmPreset,
+  type VoiceLlmPresetId,
+} from "./llm-presets";
+import {
   resolveVoiceTtsPreset,
   type VoiceTtsPresetId,
   isVoiceTtsPresetId,
@@ -56,6 +61,7 @@ export type VoicePipelineConfig = {
   sttLanguage: string;
   llmProvider: string;
   llmModel: string;
+  llmPreset?: VoiceLlmPresetId;
   ttsProvider: string;
   ttsModel: string;
   ttsLanguage: string;
@@ -104,15 +110,50 @@ function resolveTtsFromEnv(): Pick<
   };
 }
 
+function resolveLlmFromEnv(): Pick<
+  VoicePipelineConfig,
+  "llmProvider" | "llmModel" | "llmPreset"
+> {
+  const presetRaw = process.env.VOICE_LLM_PRESET?.trim().toLowerCase();
+  const preset = resolveVoiceLlmPreset(presetRaw);
+
+  const explicitModel = process.env.VOICE_LLM_MODEL?.trim();
+  const explicitProvider = process.env.VOICE_LLM_PROVIDER?.trim();
+
+  if (explicitModel || explicitProvider) {
+    return {
+      llmProvider: explicitProvider || preset?.provider || "openai",
+      llmModel: explicitModel || preset?.model || "gpt-5-nano",
+      llmPreset: preset?.id,
+    };
+  }
+
+  if (preset) {
+    return {
+      llmProvider: preset.provider,
+      llmModel: preset.model,
+      llmPreset: preset.id,
+    };
+  }
+
+  return {
+    llmProvider: "openai",
+    llmModel: "gpt-5-nano",
+    llmPreset: "gpt-5-nano",
+  };
+}
+
 /** LiveKit Inference STT/TTS — provider keys optional when using inference. */
 export function getVoicePipelineConfig(): VoicePipelineConfig {
   const tts = resolveTtsFromEnv();
+  const llm = resolveLlmFromEnv();
   return {
     sttProvider: process.env.VOICE_STT_PROVIDER || "inference",
     sttModel: process.env.VOICE_STT_MODEL || "deepgram/nova-3",
     sttLanguage: process.env.VOICE_STT_LANGUAGE || "en",
-    llmProvider: process.env.VOICE_LLM_PROVIDER || "openai",
-    llmModel: process.env.VOICE_LLM_MODEL || "gpt-5-nano",
+    llmProvider: llm.llmProvider,
+    llmModel: llm.llmModel,
+    llmPreset: llm.llmPreset,
     ttsProvider: tts.ttsProvider,
     ttsModel: tts.ttsModel,
     ttsLanguage: tts.ttsLanguage,

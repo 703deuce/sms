@@ -5,6 +5,7 @@ import {
   getVoicePipelineConfig,
   type VoicePipelineConfig,
 } from "@/lib/voice/runtime-provider/config";
+import { usesLiveKitInferenceLlm } from "@/lib/voice/runtime-provider/llm-presets";
 import { buildAmySttConfig, describeAmySttConfig } from "./stt-config";
 
 const INFERENCE_TTS_PROVIDERS = new Set([
@@ -75,12 +76,9 @@ export function buildAmyVoicePipeline() {
     ...(sttCfg.modelOptions ? { modelOptions: sttCfg.modelOptions } : {}),
   });
 
-  let llm: openai.LLM | inference.LLM;
-  if (cfg.llmProvider === "openai") {
-    llm = new openai.LLM({ model: cfg.llmModel });
-  } else {
-    llm = new inference.LLM({ model: cfg.llmModel });
-  }
+  const llm = usesLiveKitInferenceLlm(cfg.llmProvider, cfg.llmModel)
+    ? new inference.LLM({ model: cfg.llmModel })
+    : new openai.LLM({ model: cfg.llmModel });
 
   const ttsInstance = buildAmyTts(cfg);
 
@@ -93,7 +91,14 @@ export function describePipelineConfig(
 ) {
   return {
     stt: describeAmySttConfig(sttConfig),
-    llm: { provider: cfg.llmProvider, model: cfg.llmModel },
+    llm: {
+      provider: cfg.llmProvider,
+      model: cfg.llmModel,
+      preset: cfg.llmPreset || null,
+      via: usesLiveKitInferenceLlm(cfg.llmProvider, cfg.llmModel)
+        ? "livekit_inference"
+        : "openai_plugin",
+    },
     tts: {
       preset: cfg.ttsPreset || null,
       provider: cfg.ttsProvider,
