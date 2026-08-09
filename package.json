@@ -34,6 +34,7 @@
     "test:amy-livekit-preprod": "tsx scripts/amy-livekit-preprod-suite.ts",
     "test:voice-livekit-booking-orchestration": "tsx scripts/test-voice-livekit-booking-orchestration.ts",
     "audit:livekit-booking-steps": "tsx scripts/audit-livekit-booking-steps.ts",
+    "test:amy-agent-tool-discipline": "tsx scripts/test-amy-agent-tool-discipline.ts",
     "test:amy-livekit-readiness": "tsx scripts/amy-livekit-readiness.ts",
     "test:telephony-provisioning": "tsx scripts/test-telephony-provisioning.ts",
     "voice-runtime:dev": "tsx voice-runtime/src/main.ts dev",
