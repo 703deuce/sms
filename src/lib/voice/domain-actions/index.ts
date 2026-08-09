@@ -16,8 +16,10 @@ export {
 } from "./booking-actions";
 export {
   assertTaskToolAllowed,
+  taskToolGuard,
   taskForWorkflowState,
   toolsForTask,
+  toolsForTaskWithChain,
   workflowStateForTask,
 } from "./task-guard";
 export { startDomainActionTimer, type DomainActionTiming } from "./latency";

@@ -17,6 +17,7 @@ import {
   taskContextPayload,
   taskForWorkflowState,
   toolsForTask,
+  toolsForTaskWithChain,
   type DomainActionResult,
   type LiveKitCallContext,
 } from "@/lib/voice/domain-actions";
@@ -173,7 +174,7 @@ function wrapToolExecute(
 
 export function buildAmyToolList(callContext: LiveKitCallContext) {
   const taskId = taskForWorkflowState(callContext.session.currentState);
-  const allowed = new Set(toolsForTask(taskId));
+  const allowed = new Set(toolsForTaskWithChain(taskId));
   const tools: llm.ToolContextEntry[] = [];
 
   if (allowed.has("get_booking_requirements")) {
@@ -216,7 +217,7 @@ export function buildAmyToolList(callContext: LiveKitCallContext) {
       llm.tool({
         name: "check_availability",
         description:
-          "Checks the business's real connected calendar for appointment availability. Call this only after required booking information has been collected and the current workflow allows availability lookup. You MUST call this before offering specific appointment times. Never invent times. Do not call while required fields remain missing.",
+          "Checks the business's real connected calendar for appointment availability. Call only after required booking information has been collected. You MUST call this before offering specific appointment times. Never invent times. If called too early, the runtime will ask you to collect remaining fields first.",
         parameters: z.object({
           spoken: z
             .string()
@@ -238,7 +239,7 @@ export function buildAmyToolList(callContext: LiveKitCallContext) {
       llm.tool({
         name: "select_slot",
         description:
-          "Select one of the appointment slots previously returned by check_availability. Call when the caller chooses a time using natural language such as 'the first one' or '9 AM'. Do not construct arbitrary timestamps.",
+          "Select one of the appointment slots previously returned by check_availability. Call when the caller chooses a time using natural language such as 'the first one' or '9 AM'. Do not construct arbitrary timestamps. If called before availability is checked, the runtime will redirect you.",
         parameters: z.object({
           selection: z
             .string()
@@ -266,7 +267,7 @@ export function buildAmyToolList(callContext: LiveKitCallContext) {
       llm.tool({
         name: "confirm_booking",
         description:
-          "Creates the real appointment for the currently selected or held slot. Call only after the caller explicitly confirms the proposed appointment. Do not call merely because a slot was selected. A successful return is required before telling the caller the appointment is booked.",
+          "Creates the real appointment for the currently selected or held slot. Call only after the caller explicitly confirms the proposed appointment. Do not call merely because a slot was selected. A successful return is required before telling the caller the appointment is booked. If called before a slot is held, the runtime will redirect you.",
         parameters: z.object({
           confirmed: z.boolean().describe("True when caller explicitly confirms booking"),
         }),

@@ -48,6 +48,53 @@ export function assertTaskToolAllowed(taskId: string, toolName: string): void {
   }
 }
 
+/** Model-safe guard — returns a speakable error instead of throwing into LiveKit. */
+export function taskToolGuard(
+  taskId: string,
+  toolName: string,
+): { ok: true } | { ok: false; speak: string; error_code: string } {
+  const allowed = TASK_TOOLS[taskId];
+  if (!allowed?.includes(toolName)) {
+    return {
+      ok: false,
+      speak: "I need to finish the current step before I can do that. Let me help you with what's next.",
+      error_code: "TOOL_NOT_AVAILABLE_IN_TASK",
+    };
+  }
+  return { ok: true };
+}
+
 export function toolsForTask(taskId: string): readonly string[] {
   return TASK_TOOLS[taskId] || [];
+}
+
+/** Next task in the booking workflow — used to pre-register tools for same-turn chains. */
+const TASK_TRANSITION_CHAIN: Record<string, string | null> = {
+  DiscoverIntentTask: "CollectBookingFieldsTask",
+  CollectBookingFieldsTask: "CheckAvailabilityTask",
+  CheckAvailabilityTask: "SelectSlotTask",
+  SelectSlotTask: "ConfirmBookingTask",
+  ConfirmBookingTask: "CompleteCallTask",
+  CompleteCallTask: null,
+};
+
+/**
+ * Tools exposed to the LiveKit agent for the active task and all downstream tasks.
+ *
+ * LiveKit reuses the tool context captured at the start of a speech turn when
+ * chaining tool calls (e.g. record_current_field → check_availability → select_slot).
+ * Pre-registering downstream tools avoids "unknown AI function" rejections when the
+ * model chains multiple booking steps in one turn. Domain actions still enforce the
+ * active task via assertTaskToolAllowed.
+ */
+export function toolsForTaskWithChain(taskId: string): readonly string[] {
+  const tools = new Set<string>();
+  let current: string | null = taskId;
+  while (current) {
+    for (const tool of toolsForTask(current)) {
+      tools.add(tool);
+    }
+    current = TASK_TRANSITION_CHAIN[current] ?? null;
+  }
+  return [...tools];
 }

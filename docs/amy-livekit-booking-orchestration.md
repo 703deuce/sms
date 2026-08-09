@@ -56,7 +56,7 @@ Tool visibility is driven by deterministic workflow state via `task-guard.ts` an
 | Scope | Available tools |
 |-------|-----------------|
 | DISCOVERY | `get_booking_requirements`, `take_message`, `request_human` |
-| COLLECTING_FIELDS | `record_current_field`, `request_human` |
+| COLLECTING_FIELDS | `record_current_field`, `request_human` (+ `check_availability` pre-registered for same-turn chains) |
 | CHECKING_AVAILABILITY | `check_availability`, `request_human` |
 | SELECTING_SLOT | `select_slot`, `check_availability`, `request_human` |
 | READY_TO_BOOK | `confirm_booking`, `request_human` |
@@ -69,6 +69,8 @@ After every successful `record_current_field`:
 3. Call `agent.updateTools()` immediately
 4. Call `agent.updateInstructions()` with phase-specific task context
 5. Log `amy_agent_sync` with `previousState`, `newState`, `previousTools`, `newTools`
+
+**Same-turn tool chains:** LiveKit reuses the tool context captured at the start of a speech turn when the model chains tool calls (e.g. `record_current_field` → `check_availability` → `select_slot` → `confirm_booking`). We pre-register *all downstream* task tools via `toolsForTaskWithChain()` so chained calls are not rejected as `unknown AI function`. Domain actions still enforce the active task via `taskToolGuard`.
 
 ## Truthfulness rules
 
@@ -119,4 +121,6 @@ After every successful `record_current_field`:
 ```bash
 npm run test:amy-livekit-preprod
 npm run test:voice-livekit-booking-orchestration
+npm run test:amy-livekit-full-booking
+npm run audit:livekit-booking-steps
 ```

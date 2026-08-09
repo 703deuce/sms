@@ -91,7 +91,7 @@ async function main() {
     check("initial task", taskId === "DiscoverIntentTask" || taskId === "CollectBookingFieldsTask");
 
     const { tools } = buildAmyToolList(callContext);
-    check("collect task exposes scoped tools", tools.length >= 1 && tools.length <= 5);
+    check("collect task exposes scoped tools", tools.length >= 1);
 
     try {
       assertTaskToolAllowed(taskId, "confirm_booking");

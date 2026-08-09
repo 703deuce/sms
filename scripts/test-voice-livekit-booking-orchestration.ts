@@ -23,6 +23,7 @@ import {
   domainConfirmBooking,
   taskForWorkflowState,
   toolsForTask,
+  toolsForTaskWithChain,
   assertTaskToolAllowed,
   buildRequirementsPayload,
 } from "../src/lib/voice/domain-actions";
@@ -151,6 +152,14 @@ async function main() {
       !postCollectTools.tools.some((tool) => tool.id === "record_current_field"),
     );
 
+    const midCollectTask = taskForWorkflowState("COLLECTING_FIELDS");
+    const midCollectTools = new Set(toolsForTaskWithChain(midCollectTask));
+    check(
+      "collect task chain pre-registers check_availability for same-turn tool chains",
+      midCollectTools.has("record_current_field") && midCollectTools.has("check_availability"),
+      [...midCollectTools].join(", "),
+    );
+
     const instructions = buildAmyAgentInstructions(callContext);
     check("instructions require check_availability", instructions.includes("check_availability"));
     check("instructions include phase task context", instructions.includes("CURRENT TASK"));
@@ -189,6 +198,20 @@ async function main() {
       check(
         "declined confirmation does not book",
         confirmBlocked.ok === false || !confirmBlocked.data?.booking,
+      );
+
+      // Re-select for confirm test if we declined above (state may still be READY_TO_BOOK)
+      if (callContext.session.currentState === "SELECTING_SLOT") {
+        await domainSelectSlot({ ctx: callContext, utterance: "the first one" });
+      }
+      const confirmOk = await domainConfirmBooking({
+        ctx: callContext,
+        confirmed: true,
+      });
+      check("confirm_booking succeeds when confirmed", confirmOk.ok === true, confirmOk.error_code);
+      check(
+        "booking id on session after confirm",
+        Boolean(callContext.session.bookingId) || confirmOk.data?.booking != null,
       );
     } else {
       check("select_slot skipped without returned slots", true, `state=${callContext.session.currentState}`);
