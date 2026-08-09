@@ -8,6 +8,13 @@ import {
 import type { TurnToolEnvelope, WorkflowDefinition } from "./schema";
 import { resolveActiveWorkflowForAgent } from "./loader";
 import type { LiveKitCallContext } from "@/lib/voice/domain-actions/session-bootstrap";
+import {
+  buildCanonicalWorkflowState,
+  reconcileCanonicalWorkflowState,
+  syncSessionFromCanonical,
+} from "./canonical-state";
+import { filterConversationalTools } from "./tool-surface";
+import { validateRuntimeInvariants } from "./runtime-invariants";
 
 function isEmergencyClassification(
   classifications?: Record<string, string> | null,
@@ -27,23 +34,29 @@ export function compileToolsForCallContext(callContext: LiveKitCallContext): {
   const workflow = callContext.workflowDefinition || resolved.definition;
   const ref = callContext.workflowRef || resolved.ref;
 
+  const canonical = reconcileCanonicalWorkflowState({
+    session: callContext.session,
+    workflow,
+  });
+  syncSessionFromCanonical({ session: callContext.session, workflow, canonical });
+  callContext.workflowState = canonical.legacyState;
+
   const callerIntent =
     callContext.session.runtime.session_runtime?.callerIntent || null;
   const snapshot = buildRuntimeSnapshotFromSession({
     workflow,
     workflowVersion: ref.version,
-    legacyState: callContext.session.currentState,
-    currentNodeId:
-      callContext.session.currentNodeId ||
-      callContext.session.runtime.current_node_id ||
-      null,
+    legacyState: canonical.legacyState,
+    currentNodeId: canonical.currentNodeId,
     collectedFields: callContext.session.collectedFields || {},
     confirmationReceived:
       callContext.session.confirmationState === "confirmed" ||
       Boolean(callContext.session.runtime.confirmation_received),
     flags: {
       ...(callContext.workflowRuntime?.flags || {}),
-      missingFieldCount: callContext.session.missingFieldIds?.length ?? 0,
+      missingFieldCount: canonical.missingFieldIds.length,
+      expectedNextAction: canonical.expectedNextAction,
+      readyForAvailability: canonical.readyForAvailability,
       emergency:
         isEmergencyClassification(
           callContext.session.runtime.session_runtime?.classifications,
@@ -61,9 +74,28 @@ export function compileToolsForCallContext(callContext: LiveKitCallContext): {
   const envelope = compileTurnCapabilityEnvelope({ workflow, state: snapshot });
   const withEnvelope = stampEnvelopeCapabilities(snapshot, envelope.capabilityIds);
 
+  const conversationalToolNames = filterConversationalTools(envelope.toolNames);
+  const invariant = validateRuntimeInvariants({
+    canonical,
+    envelope: { ...envelope, toolNames: conversationalToolNames },
+    allowRepair: true,
+  });
+
+  if (!invariant.ok) {
+    console.error(
+      JSON.stringify({
+        source: "transovo-voice-runtime",
+        event: "runtime_invariant_violation",
+        callId: callContext.callId,
+        ...invariant.violation,
+      }),
+    );
+  }
+
   callContext.workflowRef = ref;
   callContext.workflowRuntime = withEnvelope;
   callContext.lastToolEnvelope = envelope;
+  callContext.canonicalWorkflow = canonical;
 
   console.log(
     JSON.stringify({
@@ -72,9 +104,14 @@ export function compileToolsForCallContext(callContext: LiveKitCallContext): {
       callId: callContext.callId,
       workflowId: ref.workflowId,
       workflowVersion: ref.version,
-      currentNodeId: snapshot.currentNodeId,
+      currentNodeId: canonical.currentNodeId,
+      legacyState: canonical.legacyState,
+      expectedNextAction: canonical.expectedNextAction,
+      readyForAvailability: canonical.readyForAvailability,
       capabilityIds: envelope.capabilityIds,
-      toolNames: envelope.toolNames,
+      toolNames: conversationalToolNames,
+      runtimeToolNames: envelope.toolNames.filter((t) => !conversationalToolNames.includes(t)),
+      invariantOk: invariant.ok,
       stoppedAtUserBoundary: envelope.stoppedAtUserBoundary,
       stoppedAtNodeId: envelope.stoppedAtNodeId,
       visitedNodeIds: envelope.visitedNodeIds,
@@ -84,6 +121,8 @@ export function compileToolsForCallContext(callContext: LiveKitCallContext): {
   return {
     workflow,
     envelope,
-    allowedToolNames: new Set(envelope.toolNames),
+    allowedToolNames: new Set(conversationalToolNames),
+    canonical,
+    invariantOk: invariant.ok,
   };
 }

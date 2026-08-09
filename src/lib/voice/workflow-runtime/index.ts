@@ -10,3 +10,8 @@ export * from "./node-transitions";
 export * from "./hydrate";
 export * from "./architect-to-workflow";
 export * from "./livekit-task-adapter";
+export * from "./canonical-state";
+export * from "./tool-surface";
+export * from "./runtime-invariants";
+export * from "./loop-detection";
+export * from "./field-extraction";

@@ -12,6 +12,7 @@ import {
   domainGetBookingRequirements,
   domainRecordField,
   domainRecordFields,
+  domainSubmitCallerInformation,
   domainSelectSlot,
   domainTakeMessage,
   domainLookupCustomer,
@@ -34,11 +35,29 @@ import "@/lib/voice/workflow-tasks/registry";
 import { applyWorkflowNodeTransition } from "@/lib/voice/workflow-runtime/node-transitions";
 import { compileToolsForCallContext } from "@/lib/voice/workflow-runtime/compile-for-call";
 import { resolveActiveWorkflowForAgent } from "@/lib/voice/workflow-runtime/loader";
+import {
+  shouldBlockRepeatedToolCall,
+  fingerprintToolCall,
+  hashToolResult,
+  isNoProgressToolResult,
+  recordToolCallHistory,
+} from "@/lib/voice/workflow-runtime/loop-detection";
+import { reconcileCanonicalWorkflowState } from "@/lib/voice/workflow-runtime/canonical-state";
 import type { WorkflowState } from "@/lib/voice/workflow-engine/types";
 import type { AmyProcessUserData } from "./metadata";
 
-function liveKitNextAction(state: WorkflowState, envelopeInstructions?: string): string {
+function liveKitNextAction(
+  state: WorkflowState,
+  envelopeInstructions?: string,
+  expectedNextAction?: string,
+): string {
   if (envelopeInstructions?.trim()) return envelopeInstructions;
+  if (expectedNextAction === "check_availability") {
+    return "Call check_availability before offering any appointment times.";
+  }
+  if (expectedNextAction === "collect_caller_information") {
+    return "When the caller provides information, call submit_caller_information with extracted_fields. The runtime persists values and advances the workflow.";
+  }
   switch (state) {
     case "INTENT_DISCOVERY":
     case "COLLECTING_FIELDS":
@@ -146,11 +165,43 @@ function wrapToolExecute(
   const startedAt = Date.now();
   const ctx = requireCallContext(opts);
   const workflowStateBefore = ctx.session.currentState;
+  const nodeIdBefore =
+    ctx.session.currentNodeId || ctx.session.runtime.current_node_id || "";
+  const missingBefore = ctx.session.missingFieldIds.length;
   const taskBefore = taskForWorkflowState(workflowStateBefore);
   const { allowedToolNames: toolSetBefore } = compileToolsForCallContext(ctx);
   const toolSetBeforeList = [...toolSetBefore];
 
   const run = async () => {
+    const loopFingerprint = fingerprintToolCall({
+      toolName,
+      nodeId: nodeIdBefore,
+      missingFieldCount: missingBefore,
+    });
+    const loopCheck = shouldBlockRepeatedToolCall({
+      history: ctx.toolCallHistory || [],
+      toolName,
+      fingerprint: loopFingerprint,
+    });
+    if (loopCheck.blocked) {
+      const workflow =
+        ctx.workflowDefinition ?? resolveActiveWorkflowForAgent(ctx.agentId).definition;
+      reconcileCanonicalWorkflowState({
+        session: ctx.session,
+        workflow,
+      });
+      await refreshAmyAgentAfterTool(opts, ctx);
+      throw new llm.ToolError(
+        JSON.stringify({
+          success: false,
+          errorCode: "NO_PROGRESS_LOOP",
+          message:
+            "Repeated identical tool calls with no workflow progress were blocked. Re-read the task context and use the currently available tools.",
+          repeatCount: loopCheck.repeatCount,
+        }),
+      );
+    }
+
     const result = await execute(ctx);
 
     const workflow =
@@ -164,14 +215,43 @@ function wrapToolExecute(
       result,
     });
 
+    const canonical = reconcileCanonicalWorkflowState({
+      session: ctx.session,
+      workflow,
+      toolName,
+      toolResult: result,
+    });
+    ctx.canonicalWorkflow = canonical;
+    ctx.workflowState = canonical.legacyState;
+
     stashContext(opts, ctx);
 
     const workflowStateAfter = ctx.session.currentState;
+    const nodeIdAfter =
+      ctx.session.currentNodeId || ctx.session.runtime.current_node_id || "";
+    const missingAfter = ctx.session.missingFieldIds.length;
     const { allowedToolNames: toolSetAfter } = compileToolsForCallContext(ctx);
     const toolSetAfterList = [...toolSetAfter];
     const payload = formatModelToolResult(result, {
       session: ctx.session,
       toolName,
+    });
+
+    const noProgress = isNoProgressToolResult({
+      toolName,
+      ok: result.ok,
+      beforeMissingCount: missingBefore,
+      afterMissingCount: missingAfter,
+      beforeNodeId: nodeIdBefore,
+      afterNodeId: nodeIdAfter,
+    });
+    const resultHash = hashToolResult(payload);
+    ctx.toolCallHistory = recordToolCallHistory(ctx.toolCallHistory || [], {
+      toolName,
+      fingerprint: loopFingerprint,
+      resultHash,
+      atMs: Date.now(),
+      noProgress,
     });
 
     logToolExecution({
@@ -218,61 +298,44 @@ export function buildAmyToolList(callContext: LiveKitCallContext) {
   const { envelope, allowedToolNames: allowed } = compileToolsForCallContext(callContext);
   const tools: llm.ToolContextEntry[] = [];
 
-  if (allowed.has("get_booking_requirements")) {
+  if (allowed.has("submit_caller_information")) {
     tools.push(
       llm.tool({
-        name: "get_booking_requirements",
+        name: "submit_caller_information",
         description:
-          "Returns the booking fields this customer requires and which field is currently active. Call at the start of booking or when you need to know what information is still missing. Do not invent a fixed schema such as name + phone + email.",
-        parameters: z.object({}),
-        execute: async (_args, opts: AmyToolOptions) =>
-          wrapToolExecute("get_booking_requirements", opts, async (ctx) =>
-            domainGetBookingRequirements({ ctx }),
-          ),
-      }),
-    );
-  }
-
-  if (allowed.has("record_current_field")) {
-    tools.push(
-      llm.tool({
-        name: "record_current_field",
-        description:
-          "Records the caller's answer for the field currently requested by the booking workflow. Call immediately after the caller provides the requested value. The runtime determines the actual field and what comes next. Do not guess a different field.",
+          "Persist structured information the caller just provided. Call whenever the caller gives name, email, phone, address, service issue, or other booking details. Pass extracted_fields with workflow field ids or common aliases (name, email, service_address, problem). The runtime validates, stores, and advances the workflow — you do not need to call record_current_field separately.",
         parameters: z.object({
-          value: z.string().describe("The caller's answer for the active field"),
-        }),
-        execute: async ({ value }, opts: AmyToolOptions) =>
-          wrapToolExecute(
-            "record_current_field",
-            opts,
-            async (ctx) => domainRecordField({ ctx, value }),
-          ),
-      }),
-    );
-  }
-
-  if (allowed.has("record_fields")) {
-    tools.push(
-      llm.tool({
-        name: "record_fields",
-        description:
-          "Record multiple field values at once when the caller provides several answers together. Keys must match workflow field ids.",
-        parameters: z.object({
-          fields: z
+          extracted_fields: z
             .record(z.string(), z.string())
-            .describe("Map of field_id to caller-provided value"),
+            .optional()
+            .describe("Map of field id or alias to the value the caller provided"),
+          utterance: z
+            .string()
+            .optional()
+            .describe("Raw caller utterance when structured fields are unclear"),
+          intent: z
+            .string()
+            .optional()
+            .describe("Caller intent if newly understood: book, reschedule, cancel, emergency"),
         }),
-        execute: async ({ fields }, opts: AmyToolOptions) =>
+        execute: async ({ extracted_fields, utterance, intent }, opts: AmyToolOptions) =>
           wrapToolExecute(
-            "record_fields",
+            "submit_caller_information",
             opts,
-            async (ctx) => domainRecordFields({ ctx, fields }),
-            { fillerMessage: "Got it, one moment." },
+            async (ctx) =>
+              domainSubmitCallerInformation({
+                ctx,
+                extractedFields: extracted_fields,
+                utterance,
+                intent,
+              }),
           ),
       }),
     );
   }
+
+  // Runtime-only: record_current_field / record_fields / get_booking_requirements are
+  // not exposed to the LLM — use submit_caller_information instead.
 
   if (allowed.has("check_availability")) {
     tools.push(
@@ -564,14 +627,21 @@ export function buildAmyToolList(callContext: LiveKitCallContext) {
 
 export function buildAmyAgentInstructions(callContext: LiveKitCallContext): string {
   const taskId = taskTypeForSession(callContext.session) || taskForWorkflowState(callContext.session.currentState);
-  const { envelope } = compileToolsForCallContext(callContext);
+  const { envelope, canonical } = compileToolsForCallContext(callContext);
   return [
     buildAmyLiveKitPermanentPrompt(callContext.businessName),
     buildAmyTaskContextBlock({
       active_task: taskId,
-      next_action: liveKitNextAction(callContext.session.currentState, envelope.taskInstructions),
+      next_action: liveKitNextAction(
+        callContext.session.currentState,
+        envelope.taskInstructions,
+        canonical?.expectedNextAction,
+      ),
       workflow_id: callContext.workflowRef?.workflowId,
       workflow_version: callContext.workflowRef?.version,
+      current_node_id: canonical?.currentNodeId,
+      expected_next_action: canonical?.expectedNextAction,
+      ready_for_availability: canonical?.readyForAvailability,
       ...taskContextPayload(callContext),
     }),
   ].join("\n\n");

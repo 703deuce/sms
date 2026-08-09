@@ -17,13 +17,15 @@ class CollectRequiredFieldsTask extends BaseWorkflowTask {
     return [
       "CollectRequiredFieldsTask:",
       "- Ask for the active field naturally.",
-      "- When the caller provides one or more values, use record_current_field or record_fields.",
+      "- When the caller provides one or more values, call submit_caller_information with extracted_fields.",
+      "- The runtime persists fields and advances the workflow automatically.",
       "- Do not check availability until every required field is collected.",
     ].join("\n");
   }
 
   allowedTools() {
     return [
+      "submit_caller_information",
       "get_booking_requirements",
       "record_current_field",
       "record_fields",

@@ -13,7 +13,7 @@ function getNode(def: WorkflowDefinition, nodeId: string): WorkflowNode | undefi
   return def.nodes.find((n) => n.id === nodeId);
 }
 
-function legacyStateForNode(nodeId: string, workflowId: string): WorkflowState {
+export function legacyStateForNode(nodeId: string, workflowId: string): WorkflowState {
   const map: Record<string, WorkflowState> = {
     lookup_customer: "INTENT_DISCOVERY",
     detect_intent: "INTENT_DISCOVERY",

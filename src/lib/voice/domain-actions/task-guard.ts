@@ -1,6 +1,7 @@
 /** Task-scoped tool allowlist — defense in depth beyond LiveKit tool visibility. */
 const TASK_TOOLS: Record<string, readonly string[]> = {
   DiscoverIntentTask: [
+    "submit_caller_information",
     "get_booking_requirements",
     "record_current_field",
     "record_fields",
@@ -13,6 +14,7 @@ const TASK_TOOLS: Record<string, readonly string[]> = {
     "end_call",
   ],
   CollectRequiredFieldsTask: [
+    "submit_caller_information",
     "record_current_field",
     "record_fields",
     "get_booking_requirements",
@@ -27,15 +29,16 @@ const TASK_TOOLS: Record<string, readonly string[]> = {
   LookupCustomerTask: [
     "lookup_customer",
     "detect_caller_intent",
+    "submit_caller_information",
     "record_current_field",
     "record_fields",
     "get_business_answer",
     "request_human",
     "end_call",
   ],
-  QualificationTask: ["classify_intent", "record_current_field", "record_fields", "request_human", "take_message", "end_call"],
-  ValidateEligibilityTask: ["validate_eligibility", "record_current_field", "record_fields", "take_message", "request_human", "end_call"],
-  CheckAvailabilityTask: ["check_availability", "record_current_field", "record_fields", "request_human", "end_call"],
+  QualificationTask: ["classify_intent", "submit_caller_information", "record_current_field", "record_fields", "request_human", "take_message", "end_call"],
+  ValidateEligibilityTask: ["validate_eligibility", "submit_caller_information", "record_current_field", "record_fields", "take_message", "request_human", "end_call"],
+  CheckAvailabilityTask: ["check_availability", "submit_caller_information", "record_current_field", "record_fields", "request_human", "end_call"],
   SelectResourceTask: ["select_slot", "check_availability", "request_human", "end_call"],
   SelectSlotTask: ["select_slot", "check_availability", "request_human", "end_call"],
   ConfirmActionTask: [

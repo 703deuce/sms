@@ -6,6 +6,7 @@ export {
 } from "./session-bootstrap";
 export {
   domainGetBookingRequirements,
+  domainSubmitCallerInformation,
   domainRecordField,
   domainRecordFields,
   domainCheckAvailability,

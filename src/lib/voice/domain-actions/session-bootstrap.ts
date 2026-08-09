@@ -8,6 +8,8 @@ import type {
   TurnToolEnvelope,
   WorkflowRuntimeSnapshot,
 } from "@/lib/voice/workflow-runtime/schema";
+import type { CanonicalWorkflowState } from "@/lib/voice/workflow-runtime/canonical-state";
+import type { ToolCallRecord } from "@/lib/voice/workflow-runtime/loop-detection";
 import {
   applyVoiceWorkflowStore,
   resolveActiveWorkflowForAgent,
@@ -42,6 +44,8 @@ export type LiveKitCallContext = {
   workflowDefinition?: import("@/lib/voice/workflow-runtime/schema").WorkflowDefinition;
   workflowRuntime?: WorkflowRuntimeSnapshot;
   lastToolEnvelope?: TurnToolEnvelope;
+  canonicalWorkflow?: CanonicalWorkflowState;
+  toolCallHistory?: ToolCallRecord[];
   lastAgentSync?: LiveKitAgentSyncSnapshot;
 };
 

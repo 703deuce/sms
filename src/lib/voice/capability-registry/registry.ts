@@ -8,7 +8,7 @@ export const CAPABILITY_REGISTRY: Record<string, CapabilityDefinition> = {
   "data.capture": {
     id: "data.capture",
     description: "Record caller-provided field values for the active workflow.",
-    toolNames: ["record_current_field", "record_fields"],
+    toolNames: ["record_current_field", "record_fields", "submit_caller_information"],
     sideEffectLevel: "write",
     confirmationPolicy: "never",
     allowedInNodeTypes: ["collect_fields", "conversation"],
