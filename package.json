@@ -32,6 +32,7 @@
     "test:caller-amy-preprod": "tsx scripts/caller-amy-preprod-suite.ts",
     "test:caller-amy-realtime-benchmark": "tsx scripts/caller-amy-realtime-benchmark.ts",
     "test:amy-livekit-preprod": "tsx scripts/amy-livekit-preprod-suite.ts",
+    "test:voice-livekit-booking-orchestration": "tsx scripts/test-voice-livekit-booking-orchestration.ts",
     "test:amy-livekit-readiness": "tsx scripts/amy-livekit-readiness.ts",
     "test:telephony-provisioning": "tsx scripts/test-telephony-provisioning.ts",
     "voice-runtime:dev": "tsx voice-runtime/src/main.ts dev",

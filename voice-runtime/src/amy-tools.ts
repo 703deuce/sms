@@ -8,11 +8,16 @@ import {
 import {
   domainCheckAvailability,
   domainConfirmBooking,
+  domainEndCall,
+  domainGetBookingRequirements,
   domainRecordField,
   domainSelectSlot,
+  domainTakeMessage,
+  formatModelToolResult,
   taskContextPayload,
   taskForWorkflowState,
   toolsForTask,
+  type DomainActionResult,
   type LiveKitCallContext,
 } from "@/lib/voice/domain-actions";
 import type { WorkflowState } from "@/lib/voice/workflow-engine/types";
@@ -22,11 +27,11 @@ function liveKitNextAction(state: WorkflowState): string {
   switch (state) {
     case "INTENT_DISCOVERY":
     case "COLLECTING_FIELDS":
-      return "Collect the active_field from the caller, then call record_field({ value }).";
+      return "Collect the active field from the caller, then call record_current_field({ value }).";
     case "CHECKING_AVAILABILITY":
-      return "Call check_availability({ spoken }) with the caller's preferred time window.";
+      return "Call check_availability before offering any appointment times.";
     case "SELECTING_SLOT":
-      return "Offer returned slots, then call select_slot({ utterance }) when the caller picks one.";
+      return "Offer returned slots, then call select_slot when the caller picks one.";
     case "READY_TO_BOOK":
     case "BOOKING_IN_PROGRESS":
       return "After explicit confirmation, call confirm_booking({ confirmed: true }).";
@@ -57,20 +62,19 @@ async function refreshAmyAgentAfterTool(
   await syncAmyAgentFromContext(opts.ctx.session, ctx);
 }
 
-function formatToolResult(result: {
-  ok: boolean;
-  speak: string;
-  workflow_state?: string;
-  data?: Record<string, unknown>;
-  error_code?: string;
-}): string {
-  return JSON.stringify({
-    ok: result.ok,
-    speak: result.speak,
-    workflow_state: result.workflow_state,
-    data: result.data || {},
-    error_code: result.error_code,
-  });
+function serializeToolResult(
+  result: DomainActionResult,
+  options: {
+    toolName: string;
+    session?: LiveKitCallContext["session"];
+  },
+): string {
+  return JSON.stringify(
+    formatModelToolResult(result, {
+      session: options.session,
+      toolName: options.toolName,
+    }),
+  );
 }
 
 async function withSlowToolFiller<T>(
@@ -85,27 +89,124 @@ async function withSlowToolFiller<T>(
   );
 }
 
+function logToolExecution(input: {
+  callId: string;
+  toolName: string;
+  workflowStateBefore: WorkflowState;
+  workflowStateAfter: WorkflowState;
+  startedAt: number;
+  success: boolean;
+  nextAction?: string;
+  toolSetBefore: readonly string[];
+  toolSetAfter: readonly string[];
+}) {
+  console.log(
+    JSON.stringify({
+      source: "transovo-voice-runtime",
+      event: "tool_executed",
+      callId: input.callId,
+      toolName: input.toolName,
+      workflowStateBefore: input.workflowStateBefore,
+      workflowStateAfter: input.workflowStateAfter,
+      startedAt: new Date(input.startedAt).toISOString(),
+      completedAt: new Date().toISOString(),
+      durationMs: Date.now() - input.startedAt,
+      success: input.success,
+      nextAction: input.nextAction,
+      toolSetBefore: input.toolSetBefore,
+      toolSetAfter: input.toolSetAfter,
+    }),
+  );
+}
+
+function wrapToolExecute(
+  toolName: string,
+  opts: AmyToolOptions,
+  execute: (ctx: LiveKitCallContext) => Promise<DomainActionResult>,
+  options?: {
+    refresh?: boolean;
+    fillerMessage?: string;
+  },
+): Promise<string> {
+  const startedAt = Date.now();
+  const ctx = requireCallContext(opts);
+  const workflowStateBefore = ctx.session.currentState;
+  const taskBefore = taskForWorkflowState(workflowStateBefore);
+  const toolSetBefore = toolsForTask(taskBefore);
+
+  const run = async () => {
+    const result = await execute(ctx);
+    if (options?.refresh !== false) {
+      await refreshAmyAgentAfterTool(opts, ctx);
+    } else {
+      stashContext(opts, ctx);
+    }
+
+    const workflowStateAfter = ctx.session.currentState;
+    const taskAfter = taskForWorkflowState(workflowStateAfter);
+    const toolSetAfter = toolsForTask(taskAfter);
+    const payload = formatModelToolResult(result, {
+      session: ctx.session,
+      toolName,
+    });
+
+    logToolExecution({
+      callId: ctx.callId,
+      toolName,
+      workflowStateBefore,
+      workflowStateAfter,
+      startedAt,
+      success: result.ok,
+      nextAction: payload.nextAction ? String(payload.nextAction) : undefined,
+      toolSetBefore,
+      toolSetAfter,
+    });
+
+    return serializeToolResult(result, { toolName, session: ctx.session });
+  };
+
+  if (options?.fillerMessage) {
+    return withSlowToolFiller(opts, options.fillerMessage, run);
+  }
+  return run();
+}
+
 export function buildAmyToolList(callContext: LiveKitCallContext) {
   const taskId = taskForWorkflowState(callContext.session.currentState);
   const allowed = new Set(toolsForTask(taskId));
   const tools: llm.ToolContextEntry[] = [];
 
-  if (allowed.has("record_field")) {
+  if (allowed.has("get_booking_requirements")) {
     tools.push(
       llm.tool({
-        name: "record_field",
-        description: "Save the caller's answer for the currently active required field.",
+        name: "get_booking_requirements",
+        description:
+          "Returns the booking fields this customer requires and which field is currently active. Call at the start of booking or when you need to know what information is still missing. Do not invent a fixed schema such as name + phone + email.",
+        parameters: z.object({}),
+        execute: async (_args, opts: AmyToolOptions) =>
+          wrapToolExecute("get_booking_requirements", opts, async (ctx) =>
+            domainGetBookingRequirements({ ctx }),
+          ),
+      }),
+    );
+  }
+
+  if (allowed.has("record_current_field")) {
+    tools.push(
+      llm.tool({
+        name: "record_current_field",
+        description:
+          "Records the caller's answer for the field currently requested by the booking workflow. Call immediately after the caller provides the requested value. The runtime determines the actual field and what comes next. Do not guess a different field.",
         parameters: z.object({
           value: z.string().describe("The caller's answer for the active field"),
         }),
-        execute: async ({ value }, opts: AmyToolOptions) => {
-          const ctx = requireCallContext(opts);
-          const result = await withSlowToolFiller(opts, "Got it, one moment.", async () =>
-            domainRecordField({ ctx, value }),
-          );
-          await refreshAmyAgentAfterTool(opts, ctx);
-          return formatToolResult(result);
-        },
+        execute: async ({ value }, opts: AmyToolOptions) =>
+          wrapToolExecute(
+            "record_current_field",
+            opts,
+            async (ctx) => domainRecordField({ ctx, value }),
+            { fillerMessage: "Got it, one moment." },
+          ),
       }),
     );
   }
@@ -114,18 +215,20 @@ export function buildAmyToolList(callContext: LiveKitCallContext) {
     tools.push(
       llm.tool({
         name: "check_availability",
-        description: "Check real calendar availability for the caller's preferred time window.",
+        description:
+          "Checks the business's real connected calendar for appointment availability. Call this only after required booking information has been collected and the current workflow allows availability lookup. You MUST call this before offering specific appointment times. Never invent times. Do not call while required fields remain missing.",
         parameters: z.object({
-          spoken: z.string().describe("Caller time preference, e.g. tomorrow afternoon"),
+          spoken: z
+            .string()
+            .describe("Caller time preference, e.g. tomorrow afternoon or next Tuesday"),
         }),
-        execute: async ({ spoken }, opts: AmyToolOptions) => {
-          const ctx = requireCallContext(opts);
-          const result = await withSlowToolFiller(opts, "Sure, let me check.", async () =>
-            domainCheckAvailability({ ctx, spoken }),
-          );
-          await refreshAmyAgentAfterTool(opts, ctx);
-          return formatToolResult(result);
-        },
+        execute: async ({ spoken }, opts: AmyToolOptions) =>
+          wrapToolExecute(
+            "check_availability",
+            opts,
+            async (ctx) => domainCheckAvailability({ ctx, spoken }),
+            { fillerMessage: "Sure, let me check." },
+          ),
       }),
     );
   }
@@ -134,23 +237,26 @@ export function buildAmyToolList(callContext: LiveKitCallContext) {
     tools.push(
       llm.tool({
         name: "select_slot",
-        description: "Select one of the offered appointment slots and place a hold.",
+        description:
+          "Select one of the appointment slots previously returned by check_availability. Call when the caller chooses a time using natural language such as 'the first one' or '9 AM'. Do not construct arbitrary timestamps.",
         parameters: z.object({
-          utterance: z.string().describe("Caller slot choice, e.g. 2 PM or the second one"),
-          slot_iso: z.string().optional().describe("ISO timestamp if explicitly known"),
+          selection: z
+            .string()
+            .describe("Caller slot choice, e.g. 2 PM or the second one"),
+          slot_iso: z.string().optional().describe("ISO timestamp only if explicitly known"),
         }),
-        execute: async ({ utterance, slot_iso }, opts: AmyToolOptions) => {
-          const ctx = requireCallContext(opts);
-          const result = await withSlowToolFiller(opts, "One moment.", async () =>
-            domainSelectSlot({
-              ctx,
-              utterance,
-              slotIso: slot_iso,
-            }),
-          );
-          await refreshAmyAgentAfterTool(opts, ctx);
-          return formatToolResult(result);
-        },
+        execute: async ({ selection, slot_iso }, opts: AmyToolOptions) =>
+          wrapToolExecute(
+            "select_slot",
+            opts,
+            async (ctx) =>
+              domainSelectSlot({
+                ctx,
+                utterance: selection,
+                slotIso: slot_iso,
+              }),
+            { fillerMessage: "One moment." },
+          ),
       }),
     );
   }
@@ -159,18 +265,43 @@ export function buildAmyToolList(callContext: LiveKitCallContext) {
     tools.push(
       llm.tool({
         name: "confirm_booking",
-        description: "Confirm or decline booking the held appointment slot.",
+        description:
+          "Creates the real appointment for the currently selected or held slot. Call only after the caller explicitly confirms the proposed appointment. Do not call merely because a slot was selected. A successful return is required before telling the caller the appointment is booked.",
         parameters: z.object({
           confirmed: z.boolean().describe("True when caller explicitly confirms booking"),
         }),
-        execute: async ({ confirmed }, opts: AmyToolOptions) => {
-          const ctx = requireCallContext(opts);
-          const result = await withSlowToolFiller(opts, "One moment.", async () =>
-            domainConfirmBooking({ ctx, confirmed }),
-          );
-          await refreshAmyAgentAfterTool(opts, ctx);
-          return formatToolResult(result);
-        },
+        execute: async ({ confirmed }, opts: AmyToolOptions) =>
+          wrapToolExecute(
+            "confirm_booking",
+            opts,
+            async (ctx) => domainConfirmBooking({ ctx, confirmed }),
+            { fillerMessage: "One moment." },
+          ),
+      }),
+    );
+  }
+
+  if (allowed.has("take_message")) {
+    tools.push(
+      llm.tool({
+        name: "take_message",
+        description:
+          "Capture a message for the business when the caller does not want to book or needs a human follow-up. Call after collecting the caller's message.",
+        parameters: z.object({
+          message: z.string().describe("The caller's message"),
+          caller_name: z.string().optional().describe("Caller name if known"),
+        }),
+        execute: async ({ message, caller_name }, opts: AmyToolOptions) =>
+          wrapToolExecute(
+            "take_message",
+            opts,
+            async (ctx) =>
+              domainTakeMessage({
+                ctx,
+                message,
+                callerName: caller_name,
+              }),
+          ),
       }),
     );
   }
@@ -179,18 +310,46 @@ export function buildAmyToolList(callContext: LiveKitCallContext) {
     tools.push(
       llm.tool({
         name: "request_human",
-        description: "Transfer or escalate to a human when the caller requests it.",
+        description:
+          "Transfer or escalate to a human when the caller requests it or the issue cannot be resolved with available tools.",
         parameters: z.object({
           reason: z.string().optional(),
         }),
-        execute: async ({ reason }) => {
-          return JSON.stringify({
-            ok: true,
-            speak: "Let me connect you with someone who can help.",
-            action: "transfer_requested",
-            reason: reason || "caller requested human",
-          });
-        },
+        execute: async ({ reason }, opts: AmyToolOptions) =>
+          wrapToolExecute(
+            "request_human",
+            opts,
+            async (ctx) => ({
+              ok: true,
+              speak: "Let me connect you with someone who can help.",
+              workflow_state: ctx.session.currentState,
+              data: {
+                action: "transfer_requested",
+                reason: reason || "caller requested human",
+              },
+            }),
+            { refresh: false },
+          ),
+      }),
+    );
+  }
+
+  if (allowed.has("end_call")) {
+    tools.push(
+      llm.tool({
+        name: "end_call",
+        description:
+          "End the call politely after the workflow is complete or the caller is finished. Do not call while booking actions are still pending.",
+        parameters: z.object({
+          reason: z.string().optional(),
+        }),
+        execute: async ({ reason }, opts: AmyToolOptions) =>
+          wrapToolExecute(
+            "end_call",
+            opts,
+            async (ctx) => domainEndCall({ ctx, reason }),
+            { refresh: false },
+          ),
       }),
     );
   }
@@ -214,21 +373,40 @@ export async function syncAmyAgentFromContext(
   session: AgentSession<AmyProcessUserData>,
   callContext: LiveKitCallContext,
 ): Promise<void> {
+  const previousState =
+    callContext.lastAgentSync?.workflowState ?? callContext.session.currentState;
+  const previousTask =
+    callContext.lastAgentSync?.taskId ?? taskForWorkflowState(previousState);
+  const previousTools = [...(callContext.lastAgentSync?.toolNames || [])];
+
   session.userData = { ...session.userData, callContext };
   const agent = session.currentAgent;
   const { tools, taskId } = buildAmyToolList(callContext);
   const instructions = buildAmyAgentInstructions(callContext);
+  const newState = callContext.session.currentState;
+  const newTools = tools.map((tool) => tool.id);
 
   console.log(
     JSON.stringify({
       source: "transovo-voice-runtime",
       event: "amy_agent_sync",
       callId: callContext.callId,
-      workflow_state: callContext.session.currentState,
-      active_task: taskId,
-      tool_names: tools.map((tool) => tool.id),
+      previousState,
+      newState,
+      previousTask,
+      newTask: taskId,
+      previousTools,
+      newTools,
+      readyForAvailability: callContext.session.missingFieldIds.length === 0,
     }),
   );
+
+  callContext.lastAgentSync = {
+    workflowState: newState,
+    taskId,
+    toolNames: newTools,
+  };
+  callContext.workflowState = newState;
 
   await agent.updateInstructions(instructions);
   await agent.updateTools(llm.toToolContext(tools));

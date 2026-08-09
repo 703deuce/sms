@@ -8,9 +8,8 @@ import { getPrisma } from "../src/lib/db";
 import {
   createPreprodTenant,
   cleanupPreprodTenant,
-  preprodCallerAni,
-  type PreprodContext,
 } from "../src/lib/voice/testing/preprod-harness";
+import { sampleValueForManifestField } from "../src/lib/voice/testing/livekit-field-samples";
 import {
   resetRealtimeSessionStoreForTests,
   InMemoryRealtimeSessionStore,
@@ -23,6 +22,7 @@ import {
 import { liveKitRuntimeProvider } from "../src/lib/voice/runtime-provider/livekit";
 import {
   bootstrapLiveKitCallContext,
+  domainGetBookingRequirements,
   domainRecordField,
   domainCheckAvailability,
   taskForWorkflowState,
@@ -91,7 +91,7 @@ async function main() {
     check("initial task", taskId === "DiscoverIntentTask" || taskId === "CollectBookingFieldsTask");
 
     const { tools } = buildAmyToolList(callContext);
-    check("collect task exposes scoped tools", tools.length >= 1 && tools.length <= 3);
+    check("collect task exposes scoped tools", tools.length >= 1 && tools.length <= 5);
 
     try {
       assertTaskToolAllowed(taskId, "confirm_booking");
@@ -100,33 +100,31 @@ async function main() {
       check("illegal tool guard blocks confirm in collect", true);
     }
 
+    const requirements = await domainGetBookingRequirements({ ctx: callContext });
+    check("get booking requirements ok", requirements.ok !== false);
+
     const nameResult = await domainRecordField({
       ctx: callContext,
-      value: "Jordan Lee",
+      value: sampleValueForManifestField(
+        callContext.session,
+        callContext.session.activeField,
+      ),
     });
     check("record field ok", nameResult.ok !== false, nameResult.error_code);
+    check(
+      "record result exposes readyForAvailability flag",
+      typeof nameResult.data?.readyForAvailability === "boolean",
+    );
 
     const allowedCollect = toolsForTask("CollectBookingFieldsTask");
-    check("task tool list", allowedCollect.includes("record_field"));
+    check("task tool list", allowedCollect.includes("record_current_field"));
 
     for (let i = 0; i < 6; i++) {
-      const { reloadRealtimeSession } = await import("../src/lib/voice/realtime-session");
-      callContext.session = await reloadRealtimeSession({
-        callId,
-        workspaceId: ctx.workspaceId,
-        agentId: ctx.agentId,
-      });
       if (!callContext.session.missingFieldIds.length) break;
       const active = callContext.session.activeField;
-      const sample =
-        active === "email"
-          ? "jordan@example.com"
-          : active === "phone" || active === "sys_phone"
-            ? preprodCallerAni()
-            : active === "problem_description"
-              ? "Kitchen sink is leaking"
-              : `sample-${active}-${i}`;
-      await domainRecordField({ ctx: callContext, value: sample });
+      const sample = sampleValueForManifestField(callContext.session, active, i);
+      const loopResult = await domainRecordField({ ctx: callContext, value: sample });
+      if (!loopResult.ok) break;
     }
 
     const { reloadRealtimeSession } = await import("../src/lib/voice/realtime-session");

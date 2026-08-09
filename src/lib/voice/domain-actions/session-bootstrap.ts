@@ -4,6 +4,13 @@ import { searchCrmContactsForVoice } from "@/lib/voice/tools/crm-contact-search"
 import { getOrCreateRealtimeSession } from "@/lib/voice/realtime-session/init";
 import type { AmyRealtimeSession } from "@/lib/voice/realtime-session/types";
 import type { WorkflowState } from "@/lib/voice/workflow-engine/types";
+import { buildHeldSlotPayload, buildRequirementsPayload } from "./tool-results";
+
+export type LiveKitAgentSyncSnapshot = {
+  workflowState: WorkflowState;
+  taskId: string;
+  toolNames: string[];
+};
 
 export type LiveKitCallContext = {
   callId: string;
@@ -13,6 +20,7 @@ export type LiveKitCallContext = {
   businessName: string;
   contactId: string | null;
   workflowState: WorkflowState;
+  lastAgentSync?: LiveKitAgentSyncSnapshot;
 };
 
 export async function bootstrapLiveKitCallContext(input: {
@@ -88,16 +96,31 @@ export async function finalizeLiveKitCall(callId: string): Promise<void> {
     .catch(() => undefined);
 }
 
+function activeFieldPayload(session: AmyRealtimeSession): Record<string, unknown> | null {
+  const payload = buildRequirementsPayload(session);
+  return (payload.activeField as Record<string, unknown> | null) || null;
+}
+
+function missingFieldIds(session: AmyRealtimeSession): string[] {
+  return session.fieldManifest
+    .filter((field) => field.required && !session.collectedFields[field.field_id]?.trim())
+    .map((field) => field.field_id);
+}
+
 export function taskContextPayload(ctx: LiveKitCallContext): Record<string, unknown> {
   const s = ctx.session;
+  const missing = missingFieldIds(s);
   return {
     workflow_state: s.currentState,
     active_field: s.activeField,
-    missing_fields: s.missingFieldIds,
+    activeField: activeFieldPayload(s),
+    missing_fields: missing.length ? missing : s.missingFieldIds,
     collected_fields: s.collectedFields,
+    ready_for_availability: missing.length === 0,
     service_name: s.serviceName,
     available_slots: s.availableSlots,
     held_slot: s.heldSlot,
+    heldSlot: buildHeldSlotPayload(s),
     selected_slot: s.selectedSlot,
     contact_id: ctx.contactId,
     caller_ani: s.callerAni,
