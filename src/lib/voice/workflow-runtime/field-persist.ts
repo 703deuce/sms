@@ -64,7 +64,9 @@ export function prepareFieldsForPersistence(input: {
 
     try {
       const valueForValidation =
-        entry.type === "email" ? extractEmailCandidate(String(raw)) : raw;
+        entry.type === "email"
+          ? normalizeSpokenEmail(String(raw))
+          : raw;
       const validated = validateFieldValue(def, valueForValidation);
       fields[fieldId] = String(validated).trim();
     } catch (err) {

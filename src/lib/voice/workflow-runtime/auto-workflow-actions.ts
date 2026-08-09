@@ -5,6 +5,7 @@ import {
   domainRescheduleAppointment,
   domainSelectSlot,
   domainValidateEligibility,
+  type DomainActionResult,
   type LiveKitCallContext,
 } from "@/lib/voice/domain-actions";
 import { applyWorkflowNodeTransition } from "./node-transitions";
@@ -21,7 +22,48 @@ export type AutoWorkflowAction = {
   toolName: string;
   ok: boolean;
   speak: string;
+  result?: DomainActionResult;
 };
+
+function utteranceContainsSchedulingPreference(userText: string): boolean {
+  return /tomorrow|morning|afternoon|thursday|friday|monday|tuesday|wednesday|saturday|sunday|available|next available|later in the week/i.test(
+    userText,
+  );
+}
+
+async function maybeAutoCheckAvailability(input: {
+  ctx: LiveKitCallContext;
+  userText: string;
+  called: Set<string>;
+  actions: AutoWorkflowAction[];
+  callerIntent?: string | null;
+}): Promise<LiveKitCallContext> {
+  let ctx = input.ctx;
+  if (input.called.has("check_availability")) return ctx;
+  if (input.actions.some((a) => a.toolName === "check_availability")) return ctx;
+  if (input.callerIntent === "reschedule" || input.callerIntent === "cancel") return ctx;
+  if (/reschedule/i.test(input.userText)) return ctx;
+
+  const { canonical, allowedToolNames } = compileToolsForCallContext(ctx);
+  if (canonical?.expectedNextAction !== "check_availability") return ctx;
+  if (!allowedToolNames.has("check_availability")) return ctx;
+  if (hasAvailableSlots(ctx.session)) return ctx;
+
+  const spoken =
+    input.userText.trim() && utteranceContainsSchedulingPreference(input.userText)
+      ? input.userText.trim()
+      : "next available";
+
+  const result = await domainCheckAvailability({ ctx, spoken });
+  ctx = await applyToolResult({ ctx, toolName: "check_availability", result });
+  input.actions.push({
+    toolName: "check_availability",
+    ok: result.ok,
+    speak: result.speak,
+    result,
+  });
+  return ctx;
+}
 
 function normalizeText(text: string): string {
   return text.trim().toLowerCase();
@@ -152,26 +194,13 @@ export async function autoApplyWorkflowActionsFromUtterance(input: {
     });
   }
 
-  if (
-    !called.has("check_availability") &&
-    expected === "check_availability" &&
-    allowedToolNames.has("check_availability") &&
-    !/reschedule/i.test(input.userText) &&
-    /tomorrow|morning|afternoon|thursday|friday|monday|tuesday|wednesday|available|later in the week/i.test(
-      input.userText,
-    )
-  ) {
-    const result = await domainCheckAvailability({
-      ctx,
-      spoken: input.userText.trim(),
-    });
-    ctx = await applyToolResult({ ctx, toolName: "check_availability", result });
-    actions.push({
-      toolName: "check_availability",
-      ok: result.ok,
-      speak: result.speak,
-    });
-  }
+  ctx = await maybeAutoCheckAvailability({
+    ctx,
+    userText: input.userText,
+    called,
+    actions,
+    callerIntent,
+  });
 
   const { canonical: afterAvailability, allowedToolNames: allowedAfterAvailability } =
     compileToolsForCallContext(ctx);

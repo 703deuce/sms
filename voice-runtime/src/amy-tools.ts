@@ -42,6 +42,7 @@ import {
   isNoProgressToolResult,
   recordToolCallHistory,
 } from "@/lib/voice/workflow-runtime/loop-detection";
+import { autoApplyWorkflowActionsFromUtterance } from "@/lib/voice/workflow-runtime/auto-workflow-actions";
 import { reconcileCanonicalWorkflowState } from "@/lib/voice/workflow-runtime/canonical-state";
 import type { WorkflowState } from "@/lib/voice/workflow-engine/types";
 import type { AmyProcessUserData } from "./metadata";
@@ -180,7 +181,7 @@ function wrapToolExecute(
   },
 ): Promise<string> {
   const startedAt = Date.now();
-  const ctx = requireCallContext(opts);
+  let ctx = requireCallContext(opts);
   const workflowStateBefore = ctx.session.currentState;
   const nodeIdBefore =
     ctx.session.currentNodeId || ctx.session.runtime.current_node_id || "";
@@ -285,7 +286,44 @@ function wrapToolExecute(
       toolSetAfter: toolSetAfterList,
     });
 
-    const serialized = serializeToolResult(result, { toolName, session: ctx.session });
+    let finalResult = result;
+    let finalToolName = toolName;
+
+    if (result.ok) {
+      const autoChain = await autoApplyWorkflowActionsFromUtterance({
+        ctx,
+        userText: "",
+        toolsCalledThisTurn: [toolName],
+      });
+      if (autoChain.actions.length > 0) {
+        ctx = autoChain.ctx;
+        stashContext(opts, ctx);
+        console.log(
+          JSON.stringify({
+            source: "transovo-voice-runtime",
+            event: "auto_workflow_chain_after_tool",
+            callId: ctx.callId,
+            afterTool: toolName,
+            actions: autoChain.actions.map((a) => ({
+              toolName: a.toolName,
+              ok: a.ok,
+            })),
+          }),
+        );
+        const chainedAvailability = autoChain.actions.find(
+          (a) => a.toolName === "check_availability" && a.ok && a.result,
+        );
+        if (chainedAvailability?.result) {
+          finalResult = chainedAvailability.result;
+          finalToolName = "check_availability";
+        }
+      }
+    }
+
+    const serialized = serializeToolResult(finalResult, {
+      toolName: finalToolName,
+      session: ctx.session,
+    });
 
     // Return tool output to the LLM immediately; sync instructions/tools in the
     // background so updateTools() does not stall or invalidate in-flight speech.
