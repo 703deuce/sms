@@ -8,8 +8,8 @@ import {
 import type { TurnToolEnvelope, WorkflowDefinition } from "./schema";
 import { resolveActiveWorkflowForAgent } from "./loader";
 import type { LiveKitCallContext } from "@/lib/voice/domain-actions/session-bootstrap";
+import type { CanonicalWorkflowState } from "./canonical-state";
 import {
-  buildCanonicalWorkflowState,
   reconcileCanonicalWorkflowState,
   syncSessionFromCanonical,
 } from "./canonical-state";
@@ -29,6 +29,8 @@ export function compileToolsForCallContext(callContext: LiveKitCallContext): {
   workflow: WorkflowDefinition;
   envelope: TurnToolEnvelope;
   allowedToolNames: Set<string>;
+  canonical: CanonicalWorkflowState;
+  invariantOk: boolean;
 } {
   const resolved = resolveActiveWorkflowForAgent(callContext.agentId);
   const workflow = callContext.workflowDefinition || resolved.definition;
