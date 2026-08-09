@@ -164,6 +164,49 @@ check(
   emailPrep.fields.sys_email,
 );
 
+import { readFileSync } from "node:fs";
+import { buildWizardAgentConfig } from "../src/lib/solutions/appointment-receptionist/build-agent-config";
+import { buildSimulatorWizardState } from "../src/lib/voice/testing/frontend-agent-seed";
+import { getScenario } from "../src/lib/voice/testing/conversation-scenarios";
+
+const phoneFirstState = buildSimulatorWizardState({
+  scenario: getScenario("garbage-disposal-phone-first"),
+  agentId: "agent-sim",
+  phoneNumberE164: "+14155550198",
+});
+const phoneFirstConfig = buildWizardAgentConfig(phoneFirstState);
+const bookingSection = phoneFirstConfig.conversationFlow?.sections?.find(
+  (section) => section.type === "booking",
+);
+const wizardCollectFields = (
+  bookingSection?.config as { collectFields?: Array<{ id: string; enabled?: boolean }> } | undefined
+)?.collectFields;
+check(
+  "frontend wizard seed writes collectFields on booking section",
+  Array.isArray(wizardCollectFields) && wizardCollectFields.length >= 4,
+);
+check(
+  "phone-first profile disables email in draftConfig",
+  wizardCollectFields?.find((field) => field.id === "email")?.enabled === false,
+);
+
+const availabilitySource = readFileSync(
+  "src/lib/voice/scheduling-domain/availability.ts",
+  "utf8",
+);
+const bookingActionsSource = readFileSync(
+  "src/lib/voice/domain-actions/booking-actions.ts",
+  "utf8",
+);
+check(
+  "production availability passes callId to executeAgentTool",
+  availabilitySource.includes("callId: query.callId"),
+);
+check(
+  "production check_availability passes ctx.callId into availability lookup",
+  bookingActionsSource.includes("callId: input.ctx.callId"),
+);
+
 if (failures.length) {
   console.error(`\n${failures.length} test(s) failed`);
   process.exit(1);

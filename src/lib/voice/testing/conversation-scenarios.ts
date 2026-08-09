@@ -4,8 +4,8 @@ export type ConversationScenario = {
   callerLines: string[];
   /** Minimum turns that should reach confirm_booking exposure (optional assertion). */
   expectConfirmBookingByTurn?: number;
-  /** Overrides default field profile for this scenario. */
-  fieldProfileId?: string;
+  /** Overrides default wizard field profile (frontend collectFields shape). */
+  wizardProfileId?: string;
   /** LLM caller persona override for E2E runs. */
   callerPersona?: string;
   /** Goal hint for the LLM caller brain. */
@@ -60,7 +60,7 @@ export const CONVERSATION_SCENARIOS: Record<string, ConversationScenario> = {
     id: "garbage-disposal-phone-first",
     description:
       "Different field set: name, phone, address, problem — no email. Garbage disposal repair booking.",
-    fieldProfileId: "phone-first-no-email",
+    wizardProfileId: "phone-address-problem",
     callerGoal: "Book a plumbing appointment for a jammed garbage disposal.",
     callerPersona: `You are Maria Santos, a homeowner calling to book a plumbing repair.
 Your garbage disposal is jammed and hums but won't spin.

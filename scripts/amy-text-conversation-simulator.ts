@@ -10,12 +10,12 @@
  *   npm run simulate:amy-conversation -- --interactive
  *   npm run simulate:amy-conversation -- --e2e
  *
- * Requires: DATABASE_URL, and OPENAI_API_KEY or DEEPSEEK_API_KEY for LLM modes
+ * Seeds agent config via the same path as the appointment-receptionist wizard UI:
+ * buildWizardAgentConfig → updateVoiceAgentDraft (collectFields in booking section).
  * Optional: VOICE_LLM_PRESET=gpt-5-nano (defaults to gpt-4o-mini)
  */
 import * as readline from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
-import { getPrisma } from "../src/lib/db";
 import {
   createPreprodTenant,
   cleanupPreprodTenant,
@@ -32,9 +32,6 @@ import {
   domainLookupCustomer,
   type LiveKitCallContext,
 } from "../src/lib/voice/domain-actions";
-import { HOME_SERVICE_DISPATCHER_WORKFLOW_V1 } from "../src/lib/voice/workflow-runtime/definitions/home-service-dispatcher";
-import { persistVoiceWorkflowDefinition } from "../src/lib/voice/workflow-runtime/persistence";
-import { setActiveWorkflowForAgent } from "../src/lib/voice/workflow-runtime/loader";
 import { applyWorkflowNodeTransition } from "../src/lib/voice/workflow-runtime/node-transitions";
 import { hasBookingReceipt } from "../src/lib/voice/workflow-runtime/completion-guards";
 import { compileToolsForCallContext } from "../src/lib/voice/workflow-runtime/compile-for-call";
@@ -55,7 +52,10 @@ import {
   listScenarioIds,
   type ConversationScenario,
 } from "../src/lib/voice/testing/conversation-scenarios";
-import { resolveFieldProfileForScenario } from "../src/lib/voice/testing/conversation-field-profiles";
+import { seedAgentViaFrontendWizard } from "../src/lib/voice/testing/frontend-agent-seed";
+import {
+  resolveWizardProfileForScenario,
+} from "../src/lib/voice/testing/conversation-wizard-profiles";
 import { generateCallerUtterance } from "../src/lib/voice/testing/llm-caller-brain";
 import { executeWorkflowTool } from "../src/lib/voice/testing/workflow-tool-executor";
 import { hasLlmConfigured, providers } from "../src/lib/ai/llm-providers";
@@ -141,81 +141,14 @@ async function seedDispatcherTenant(
   callerPhone: string,
   scenario: ConversationScenario,
 ) {
-  const prisma = getPrisma();
-  const fieldProfile = resolveFieldProfileForScenario(scenario.id, scenario.fieldProfileId);
-
-  await persistVoiceWorkflowDefinition({
+  const { serviceName } = await seedAgentViaFrontendWizard({
     workspaceId: ctx.workspaceId,
     agentId: ctx.agentId,
-    definition: HOME_SERVICE_DISPATCHER_WORKFLOW_V1,
-    setActive: true,
-  });
-  setActiveWorkflowForAgent(ctx.agentId, {
-    workflowId: "home_service_dispatcher",
-    version: 1,
+    phoneNumberE164: callerPhone,
+    scenario,
   });
 
-  await prisma.voiceAgent.update({
-    where: { id: ctx.agentId },
-    data: {
-      draftConfig: {
-        agentType: "appointment_booking",
-        knowledgeBase: {
-          pricing: { serviceCallFee: "$89", serviceCallScript: "Our diagnostic visit is $89." },
-          businessHours: "Mon-Fri 8am-6pm",
-        },
-        conversationFlow: {
-          sections: [
-            {
-              id: "booking",
-              type: "booking",
-              config: {
-                collectFields: fieldProfile.collectFields,
-              },
-            },
-          ],
-        },
-      } as object,
-    },
-  });
-
-  const service = await prisma.voiceService.create({
-    data: {
-      workspaceId: ctx.workspaceId,
-      name: "Plumbing Repair",
-      durationMinutes: 60,
-      bufferMinutes: 15,
-      config: {
-        enabled: true,
-        requiredSkills: ["plumbing"],
-        staffIds: [],
-        bookingHours: "8-18",
-        timezone: "America/New_York",
-        minimumBookingNoticeMinutes: 0,
-        maxDaysAhead: 30,
-      } as object,
-    },
-  });
-
-  const tech = await prisma.voiceStaffMember.create({
-    data: {
-      workspaceId: ctx.workspaceId,
-      name: "Tech A",
-      config: { skills: ["plumbing"], zones: ["zone_b"], calendarConnected: true } as object,
-    },
-  });
-
-  await prisma.voiceService.update({
-    where: { id: service.id },
-    data: {
-      config: {
-        ...(service.config as object),
-        staffIds: [tech.id],
-      } as object,
-    },
-  });
-
-  return { callerPhone, service, tech };
+  return { callerPhone, serviceName };
 }
 
 function applySimulatorServiceContext(
@@ -365,12 +298,12 @@ async function runScenario(input: {
 
   console.log(`\nScenario: ${input.scenario.id}`);
   console.log(input.scenario.description);
-  const fieldProfile = resolveFieldProfileForScenario(
+  const fieldProfile = resolveWizardProfileForScenario(
     input.scenario.id,
-    input.scenario.fieldProfileId,
+    input.scenario.wizardProfileId,
   );
   console.log(
-    `Fields: ${fieldProfile.collectFields.map((f) => f.label).join(" → ")}`,
+    `Fields (wizard UI): ${fieldProfile.collectFields.filter((f) => f.enabled !== false).map((f) => f.label).join(" → ")}`,
   );
   console.log(`Amy model: ${modelLabel}`);
   console.log(`Caller: ${input.llmCaller ? `llm (${modelLabel})` : "scripted"}`);
@@ -523,7 +456,7 @@ async function main() {
     const seeded = await seedDispatcherTenant(ctx, callerPhone, scenario);
 
     if (opts.interactive) {
-      await runInteractive({ ctx, callerPhone, serviceName: seeded.service.name });
+      await runInteractive({ ctx, callerPhone, serviceName: seeded.serviceName });
       return;
     }
 
@@ -531,7 +464,7 @@ async function main() {
       scenario,
       ctx,
       callerPhone,
-      serviceName: seeded.service.name,
+      serviceName: seeded.serviceName,
       json: opts.json,
       deterministic: opts.deterministic,
       llmCaller: opts.llmCaller,
