@@ -7,7 +7,11 @@ import { resolveActiveWorkflowForAgent } from "@/lib/voice/workflow-runtime/load
 import { buildRuntimeSnapshotFromSession } from "@/lib/voice/workflow-runtime/compile-turn-envelope";
 import { startDomainActionTimer } from "./latency";
 import { assertTaskToolAllowed, taskForWorkflowState } from "./task-guard";
-import type { LiveKitCallContext } from "./session-bootstrap";
+import {
+  bookingFailureNeedsFieldCollection,
+  reconcileSessionAfterBookingFieldGap,
+  resolveRecordFieldId,
+} from "./late-booking-fields";
 import {
   buildHeldSlotPayload,
   buildRecordFieldPayload,
@@ -106,7 +110,11 @@ export async function domainRecordField(input: {
   assertTaskToolAllowed(taskId, "record_current_field");
   const timer = startDomainActionTimer("record_current_field", input.ctx.callId, taskId);
 
-  const fieldId = input.fieldId || input.ctx.session.activeField;
+  const fieldId = resolveRecordFieldId({
+    session: input.ctx.session,
+    value: input.value,
+    fieldId: input.fieldId,
+  });
   if (!fieldId) {
     timer.finish(false, "NO_ACTIVE_FIELD");
     return {
@@ -290,33 +298,25 @@ export async function domainConfirmBooking(input: {
   timer.markProviderEnd();
 
   const refreshed = await reloadLiveKitSchedulingSession(input.ctx, result);
-  const ok = result.ok !== false && input.confirmed;
-  const missingFieldError = result.error_code === "MISSING_REQUIRED_FIELD";
+  const ok = result.ok === true && input.confirmed;
   let session = refreshed;
 
-  if (!ok && missingFieldError) {
-    const { getWorkflowRequirements } = await import("@/lib/voice/field-runtime/requirements");
-    const requirements = await getWorkflowRequirements({
-      workspaceId: input.ctx.workspaceId,
-      agentId: input.ctx.agentId,
-      callId: input.ctx.callId,
-      workflow: "book_appointment",
-      serviceName: input.ctx.session.serviceName,
+  if (!ok && input.confirmed) {
+    session = await reconcileSessionAfterBookingFieldGap({
+      ctx: input.ctx,
+      session: refreshed,
+      result,
+      confirmed: input.confirmed,
     });
-    const missingIds = requirements.missing_fields.map((f) => f.field_id);
-    const activeField = requirements.active_field || missingIds[0] || null;
-    session = {
-      ...refreshed,
-      currentState: "COLLECTING_FIELDS",
-      missingFieldIds: missingIds,
-      activeField,
-      fieldManifest: requirements.fields_to_collect,
-    };
-    input.ctx.session = session;
-    input.ctx.workflowState = "COLLECTING_FIELDS";
   } else {
     input.ctx.session = refreshed;
   }
+
+  const missingFieldError = bookingFailureNeedsFieldCollection({
+    confirmed: input.confirmed,
+    result,
+    session,
+  });
 
   const heldSlot = buildHeldSlotPayload(session);
   timer.finish(ok, result.error_code ? String(result.error_code) : undefined);

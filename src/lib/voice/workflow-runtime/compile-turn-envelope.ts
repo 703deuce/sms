@@ -57,6 +57,10 @@ function nodeCapabilities(node: WorkflowNode): string[] {
   if (node.type === "collect_fields") {
     caps.push("data.capture", "data.lookup");
   }
+  // Booking confirmation may still need late identity fields (e.g. Calendly email).
+  if (node.type === "confirmation") {
+    caps.push("data.capture", "data.lookup");
+  }
   if (node.capability) caps.push(node.capability);
   if (node.type === "handoff") caps.push("call.transfer");
   if (node.type === "completion") caps.push("call.end");

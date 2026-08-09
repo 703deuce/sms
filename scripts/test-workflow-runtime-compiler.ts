@@ -88,6 +88,15 @@ check(
   confirming.toolNames.join(", "),
 );
 
+const confirmAlwaysCaptures = envelopeTools(APPOINTMENT_BOOKING_WORKFLOW_V1, "READY_TO_BOOK", {
+  service_needed: "cleaning",
+});
+check(
+  "confirm node always exposes record_current_field for late email",
+  confirmAlwaysCaptures.toolNames.includes("record_current_field"),
+  confirmAlwaysCaptures.toolNames.join(", "),
+);
+
 const msgCollect = envelopeTools(MESSAGE_TAKING_WORKFLOW_V1, "COLLECTING_FIELDS", {}, {
   missingFieldCount: 2,
 });
