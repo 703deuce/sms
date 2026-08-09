@@ -1,3 +1,8 @@
+import {
+  getOrCreateRealtimeSession,
+  reloadRealtimeSession,
+  updateSessionAfterRuntimeChange,
+} from "@/lib/voice/realtime-session/init";
 import { getSessionRuntimeExt, patchSessionRuntimeExt } from "@/lib/voice/session-runtime/state";
 import type { AmyRealtimeSession } from "@/lib/voice/realtime-session/types";
 import type { WorkflowState } from "@/lib/voice/workflow-engine/types";
@@ -42,9 +47,9 @@ export async function reloadLiveKitSchedulingSession(
         ? (data.heldSlot as { start: string }).start
         : null;
 
-  const preservedExt = getSessionRuntimeExt(input.ctx.session);
-  const preservedNodeId = input.ctx.session.currentNodeId;
-  const preservedCollected = { ...input.ctx.session.collectedFields };
+  const preservedExt = getSessionRuntimeExt(ctx.session);
+  const preservedNodeId = ctx.session.currentNodeId;
+  const preservedCollected = { ...ctx.session.collectedFields };
 
   let session = await reloadRealtimeSession({
     callId: ctx.callId,
@@ -71,6 +76,16 @@ export async function reloadLiveKitSchedulingSession(
     lastRuntimeResult: result,
     runtime: session.runtime,
   });
+
+  session = patchSessionRuntimeExt(session, preservedExt);
+  session.currentNodeId = preservedNodeId || session.currentNodeId;
+  session.collectedFields = {
+    ...session.collectedFields,
+    ...preservedCollected,
+  };
+  session.missingFieldIds = session.fieldManifest
+    .filter((field) => field.required && !session.collectedFields[field.field_id]?.trim())
+    .map((field) => field.field_id);
 
   ctx.session = session;
   ctx.workflowState = session.currentState;

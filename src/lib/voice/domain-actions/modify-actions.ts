@@ -177,7 +177,23 @@ export async function domainRescheduleAppointment(input: {
     });
   }
 
-  const operationId = `${input.ctx.callId}-reschedule-${appointmentId}-${input.newStartsAt}`;
+  const newStartsAt =
+    input.newStartsAt ||
+    input.ctx.session.heldSlot ||
+    input.ctx.session.selectedSlot ||
+    input.ctx.session.runtime.held_slot ||
+    "";
+
+  if (!newStartsAt) {
+    return structuredFailure({
+      speak: "I need to know which new time you'd like before I can reschedule.",
+      code: "MISSING_FIELDS",
+      workflowState: input.ctx.session.currentState,
+      nextAllowedActions: ["select_slot", "check_availability"],
+    });
+  }
+
+  const operationId = `${input.ctx.callId}-reschedule-${appointmentId}-${newStartsAt}`;
   const result = await executeAgentTool({
     toolType: "reschedule_appointment",
     context: {
@@ -187,7 +203,8 @@ export async function domainRescheduleAppointment(input: {
     },
     raw: {
       appointmentId,
-      newStartsAt: input.newStartsAt,
+      newStartAt: newStartsAt,
+      new_starts_at: newStartsAt,
       operation_id: operationId,
       timezone: input.ctx.session.timezone,
     },

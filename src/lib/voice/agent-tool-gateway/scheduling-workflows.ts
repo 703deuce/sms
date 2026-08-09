@@ -186,8 +186,10 @@ export async function runRescheduleAppointment(
   const { getPrisma } = await import("@/lib/db");
   const prisma = getPrisma();
   const operationId = deriveOperationId(raw, ctx, "reschedule");
-  const appointmentId = String(raw.appointmentId || "");
-  const newStartAt = String(raw.newStartAt || raw.startsAt || "");
+  const newStartAt = String(
+    raw.newStartAt || raw.new_starts_at || raw.newStartsAt || raw.startsAt || "",
+  );
+  const appointmentId = String(raw.appointmentId || raw.appointment_id || "");
   if (!appointmentId || !newStartAt) {
     throw new AgentToolError(
       "INVALID_INPUT",
