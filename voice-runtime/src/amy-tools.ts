@@ -20,11 +20,9 @@ import {
   type DomainActionResult,
   type LiveKitCallContext,
 } from "@/lib/voice/domain-actions";
-import {
-  applyWorkflowNodeTransition,
-  compileToolsForCallContext,
-  resolveActiveWorkflowForAgent,
-} from "@/lib/voice/workflow-runtime";
+import { applyWorkflowNodeTransition } from "@/lib/voice/workflow-runtime/node-transitions";
+import { compileToolsForCallContext } from "@/lib/voice/workflow-runtime/compile-for-call";
+import { resolveActiveWorkflowForAgent } from "@/lib/voice/workflow-runtime/loader";
 import type { WorkflowState } from "@/lib/voice/workflow-engine/types";
 import type { AmyProcessUserData } from "./metadata";
 

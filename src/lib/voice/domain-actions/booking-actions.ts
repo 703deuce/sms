@@ -2,9 +2,9 @@ import { recordFieldForLiveKitVoice } from "@/lib/voice/field-runtime/save-voice
 import { executeContinueWorkflow } from "@/lib/voice/workflow-engine/continue-workflow";
 import {
   authorizeCapabilityInvocation,
-  resolveActiveWorkflowForAgent,
-  buildRuntimeSnapshotFromSession,
-} from "@/lib/voice/workflow-runtime";
+} from "@/lib/voice/workflow-runtime/capability-guard";
+import { resolveActiveWorkflowForAgent } from "@/lib/voice/workflow-runtime/loader";
+import { buildRuntimeSnapshotFromSession } from "@/lib/voice/workflow-runtime/compile-turn-envelope";
 import { startDomainActionTimer } from "./latency";
 import { assertTaskToolAllowed, taskForWorkflowState } from "./task-guard";
 import type { LiveKitCallContext } from "./session-bootstrap";

@@ -1,8 +1,12 @@
-import type { DomainActionResult } from "@/lib/voice/domain-actions/booking-actions";
 import type { AmyRealtimeSession } from "@/lib/voice/realtime-session/types";
 import type { WorkflowState } from "@/lib/voice/workflow-engine/types";
 import { saveAgentRuntime, loadAgentRuntime } from "@/lib/voice/workflow-engine/runtime-state";
 import type { WorkflowDefinition, WorkflowNode } from "./schema";
+
+export type WorkflowToolResult = {
+  ok: boolean;
+  data?: Record<string, unknown>;
+};
 
 function getNode(def: WorkflowDefinition, nodeId: string): WorkflowNode | undefined {
   return def.nodes.find((n) => n.id === nodeId);
@@ -27,7 +31,7 @@ export function resolveNextNodeId(input: {
   workflow: WorkflowDefinition;
   currentNodeId: string;
   toolName: string;
-  result: DomainActionResult;
+  result: WorkflowToolResult;
   session: AmyRealtimeSession;
 }): string {
   const node = getNode(input.workflow, input.currentNodeId);
@@ -90,7 +94,7 @@ export async function applyWorkflowNodeTransition(input: {
   callId: string;
   session: AmyRealtimeSession;
   toolName: string;
-  result: DomainActionResult;
+  result: WorkflowToolResult;
 }): Promise<{ currentNodeId: string; legacyState: WorkflowState }> {
   const previousNodeId =
     input.session.currentNodeId ||

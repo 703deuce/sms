@@ -154,7 +154,7 @@ const nextAfterFields = resolveNextNodeId({
   workflow: APPOINTMENT_BOOKING_WORKFLOW_V1,
   currentNodeId: "collect_fields",
   toolName: "record_current_field",
-  result: { ok: true, speak: "ok" },
+  result: { ok: true },
   session: {
     missingFieldIds: [],
   } as unknown as Parameters<typeof resolveNextNodeId>[0]["session"],
