@@ -1,4 +1,4 @@
-import type { AmyRealtimeSession } from "../src/lib/voice/realtime-session/types";
+import type { AmyRealtimeSession } from "@/lib/voice/realtime-session/types";
 import { preprodCallerAni } from "./preprod-harness";
 
 /** Produce a valid sample value for a manifest field during LiveKit preprod tests. */
