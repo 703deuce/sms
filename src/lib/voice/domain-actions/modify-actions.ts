@@ -83,7 +83,7 @@ export async function domainRescheduleAppointment(input: {
   if (result.ok === false) {
     return structuredFailure({
       speak: String(result.message || "I couldn't reschedule that appointment."),
-      code: String(result.error_code || "PROVIDER_UNAVAILABLE"),
+      code: "PROVIDER_UNAVAILABLE",
       workflowState: input.ctx.session.currentState,
       retryable: true,
     });
@@ -140,7 +140,7 @@ export async function domainCancelAppointment(input: {
   if (result.ok === false) {
     return structuredFailure({
       speak: String(result.message || "I couldn't cancel that appointment."),
-      code: String(result.error_code || "PROVIDER_UNAVAILABLE"),
+      code: "PROVIDER_UNAVAILABLE",
       workflowState: input.ctx.session.currentState,
     });
   }

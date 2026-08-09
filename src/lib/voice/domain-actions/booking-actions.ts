@@ -385,7 +385,7 @@ export async function domainConfirmBooking(input: {
         callId: input.ctx.callId,
         operationId: `${input.ctx.callId}-book-${appointmentId}`,
         type: "calendar.create_booking",
-        status: "succeeded",
+        status: "confirmed",
         provider: "calendly",
         providerReference: appointmentId,
         latencyMs: timing.totalMs,

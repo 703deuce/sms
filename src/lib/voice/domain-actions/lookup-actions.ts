@@ -51,11 +51,11 @@ export async function domainLookupCustomer(input: {
   });
   for (const row of crm.matches || []) {
     candidates.push({
-      id: String(row.safeId || row.id || ""),
+      id: String(row.safeId || ""),
       name: row.displayName,
       phone: row.phone || null,
       email: row.email || null,
-      source: row.source || "crm",
+      source: row.recordType === "local" ? "local" : row.provider || "crm",
     });
   }
 

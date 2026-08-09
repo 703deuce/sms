@@ -335,7 +335,9 @@ async function main() {
     );
     check(
       "classify_intent suggests request_human",
-      (classify.data?.nextAllowedActions as string[] | undefined)?.includes("request_human"),
+      Boolean(
+        (classify.data?.nextAllowedActions as string[] | undefined)?.includes("request_human"),
+      ),
     );
 
     // --- 6. Multi-resource scheduling ---

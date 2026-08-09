@@ -42,8 +42,18 @@ export function inProcessVoiceRuntimeEnabled(): boolean {
 }
 
 function resolveVoiceRuntimeSpawn(): { command: string; args: string[] } {
-  const entry = path.join(process.cwd(), "voice-runtime/src/main.ts");
-  const tsxBin = path.join(process.cwd(), "node_modules", ".bin", "tsx");
+  const entry = path.join(
+    /* turbopackIgnore: true */ process.cwd(),
+    "voice-runtime",
+    "src",
+    "main.ts",
+  );
+  const tsxBin = path.join(
+    /* turbopackIgnore: true */ process.cwd(),
+    "node_modules",
+    ".bin",
+    "tsx",
+  );
   if (existsSync(tsxBin)) {
     return { command: tsxBin, args: [entry, "start"] };
   }
