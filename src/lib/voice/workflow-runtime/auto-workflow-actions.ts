@@ -1,5 +1,6 @@
 import {
   domainCancelAppointment,
+  domainCheckAvailability,
   domainConfirmBooking,
   domainRescheduleAppointment,
   domainSelectSlot,
@@ -93,9 +94,33 @@ export async function autoApplyWorkflowActionsFromUtterance(input: {
   const callerIntent = ctx.session.runtime.session_runtime?.callerIntent;
 
   if (
+    !called.has("check_availability") &&
+    expected === "check_availability" &&
+    allowedToolNames.has("check_availability") &&
+    /tomorrow|morning|afternoon|thursday|friday|monday|tuesday|wednesday|available|schedule|later in the week/i.test(
+      input.userText,
+    )
+  ) {
+    const result = await domainCheckAvailability({
+      ctx,
+      spoken: input.userText.trim(),
+    });
+    ctx = await applyToolResult({ ctx, toolName: "check_availability", result });
+    actions.push({
+      toolName: "check_availability",
+      ok: result.ok,
+      speak: result.speak,
+    });
+  }
+
+  const { canonical: afterAvailability, allowedToolNames: allowedAfterAvailability } =
+    compileToolsForCallContext(ctx);
+  const expectedAfterAvailability = afterAvailability?.expectedNextAction;
+
+  if (
     !called.has("select_slot") &&
-    expected === "select_slot" &&
-    allowedToolNames.has("select_slot") &&
+    expectedAfterAvailability === "select_slot" &&
+    allowedAfterAvailability.has("select_slot") &&
     hasAvailableSlots(ctx.session) &&
     !hasHeldSlot(ctx.session) &&
     utteranceIndicatesSlotSelection(input.userText)

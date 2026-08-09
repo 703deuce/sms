@@ -37,15 +37,27 @@ async function hydrateSessionFromFoundAppointment(
   ).trim();
 
   const updates: Record<string, string> = {};
+  const byId: Record<string, string> = {
+    sys_name: fullName,
+    sys_email: email,
+    sys_phone: phone,
+    fld_service_address: address,
+    sys_address: address,
+    fld_notes: problem,
+  };
   for (const field of ctx.session.fieldManifest) {
     const id = field.field_id;
-    if (!ctx.session.collectedFields[id]?.trim()) {
-      if (id.includes("name") && fullName) updates[id] = fullName;
-      else if (id.includes("email") && email) updates[id] = email;
-      else if (id.includes("phone") && phone) updates[id] = phone;
-      else if (id.includes("address") && address) updates[id] = address;
-      else if ((id.includes("notes") || id.includes("problem")) && problem) updates[id] = problem;
+    if (ctx.session.collectedFields[id]?.trim()) continue;
+    const direct = byId[id];
+    if (direct) {
+      updates[id] = direct;
+      continue;
     }
+    if (id.includes("name") && fullName) updates[id] = fullName;
+    else if (id.includes("email") && email) updates[id] = email;
+    else if (id.includes("phone") && phone) updates[id] = phone;
+    else if (id.includes("address") && address) updates[id] = address;
+    else if ((id.includes("notes") || id.includes("problem")) && problem) updates[id] = problem;
   }
 
   if (!Object.keys(updates).length) return ctx;

@@ -107,7 +107,12 @@ export function compileToolsForCallContext(callContext: LiveKitCallContext): {
     },
   );
 
-  if (!canonical.readyForAvailability) {
+  const modifyFlow =
+    callerIntent === "reschedule" ||
+    callerIntent === "cancel" ||
+    Boolean(callContext.session.runtime.session_runtime?.foundAppointmentId?.trim());
+
+  if (!canonical.readyForAvailability && !modifyFlow) {
     conversationalToolNames = conversationalToolNames.filter(
       (name) => name !== "check_availability",
     );

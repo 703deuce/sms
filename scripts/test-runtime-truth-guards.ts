@@ -15,6 +15,7 @@ import { prepareFieldsForPersistence } from "../src/lib/voice/workflow-runtime/f
 import { normalizeExtractedFields } from "../src/lib/voice/workflow-runtime/field-extraction";
 import { HOME_SERVICE_DISPATCHER_WORKFLOW_V1 } from "../src/lib/voice/workflow-runtime/definitions/home-service-dispatcher";
 import type { AmyRealtimeSession } from "../src/lib/voice/realtime-session/types";
+import { computeWorkflowStateFromSession } from "../src/lib/voice/realtime-session/init";
 
 const failures: string[] = [];
 
@@ -260,6 +261,25 @@ check(
 check(
   "production check_availability passes ctx.callId into availability lookup",
   bookingActionsSource.includes("callId: input.ctx.callId"),
+);
+
+const rescheduleSelecting = mockSession({
+  missingFieldIds: ["sys_email", "sys_address"],
+  availableSlots: ["2026-08-11T13:30:00.000Z"],
+  runtime: {
+    state: "SELECTING_SLOT",
+    current_node_id: "select_slot",
+    pending_operations: [],
+    proposed_slots: [],
+    session_runtime: {
+      callerIntent: "reschedule",
+      foundAppointmentId: "appt-1",
+    },
+  } as AmyRealtimeSession["runtime"],
+});
+check(
+  "reschedule flow with missing fields still derives SELECTING_SLOT when slots offered",
+  computeWorkflowStateFromSession(rescheduleSelecting) === "SELECTING_SLOT",
 );
 
 if (failures.length) {

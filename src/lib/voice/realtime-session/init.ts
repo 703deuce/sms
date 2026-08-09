@@ -36,7 +36,7 @@ function isModifySchedulingSession(session: AmyRealtimeSession): boolean {
 
 function deriveStateFromSession(session: AmyRealtimeSession): WorkflowState {
   const runtime = session.runtime;
-  if (runtime.pending_operations.length > 0) return "BOOKING_IN_PROGRESS";
+  if ((runtime.pending_operations || []).length > 0) return "BOOKING_IN_PROGRESS";
   if (session.bookingId || runtime.booking_id) return "COMPLETE";
 
   const workflow = session.workflowId;

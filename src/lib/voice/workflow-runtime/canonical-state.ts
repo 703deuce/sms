@@ -222,11 +222,20 @@ export function buildCanonicalWorkflowState(input: {
   const held = hasHeldSlot(input.session);
   const bookingReceiptPresent = hasBookingReceipt(input.session);
   const callerIntent = callerIntentFromSession(input.session);
-  const readyForAvailability =
-    callerIntent === "reschedule"
-      ? ["check_availability", "select_slot", "confirm_booking"].includes(currentNodeId) ||
-        fieldsComplete(input.session)
-      : fieldsComplete(input.session);
+  const modifyFlow =
+    callerIntent === "reschedule" ||
+    callerIntent === "cancel" ||
+    Boolean(input.session.runtime?.session_runtime?.foundAppointmentId?.trim());
+  const readyForAvailability = modifyFlow
+    ? [
+        "reschedule_lookup",
+        "cancel_lookup",
+        "check_availability",
+        "select_slot",
+        "confirm_booking",
+        "cancel_confirm",
+      ].includes(currentNodeId) || fieldsComplete(input.session)
+    : fieldsComplete(input.session);
 
   return {
     currentNodeId,
