@@ -71,6 +71,11 @@ function parseAgentRuntime(raw: Record<string, unknown>): AgentRuntimeRecord {
     held_slot: raw.held_slot ? String(raw.held_slot) : null,
     selected_slot: raw.selected_slot ? String(raw.selected_slot) : null,
     booking_id: raw.booking_id ? String(raw.booking_id) : null,
+    voice_workflow_id: raw.voice_workflow_id ? String(raw.voice_workflow_id) : null,
+    voice_workflow_version:
+      raw.voice_workflow_version != null ? Number(raw.voice_workflow_version) : null,
+    current_node_id: raw.current_node_id ? String(raw.current_node_id) : null,
+    confirmation_received: Boolean(raw.confirmation_received),
     pending_operations: Array.isArray(raw.pending_operations)
       ? raw.pending_operations.map(String)
       : [],

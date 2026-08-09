@@ -153,11 +153,18 @@ export async function hydrateRealtimeSession(input: {
     availableSlots,
     heldSlot: runtime.held_slot ?? null,
     selectedSlot: runtime.selected_slot ?? null,
-    confirmationState: runtime.held_slot ? "awaiting" : "none",
+    confirmationState: runtime.confirmation_received || runtime.booking_id
+      ? "confirmed"
+      : runtime.held_slot
+        ? "awaiting"
+        : "none",
     contactId: call?.contactId ?? null,
     callerAni: input.callerAni ?? call?.fromE164 ?? null,
     serviceName: input.serviceName ?? runtime.service_name ?? staticConfig.defaultServiceName ?? null,
     bookingId: runtime.booking_id ?? null,
+    voiceWorkflowId: runtime.voice_workflow_id ?? null,
+    voiceWorkflowVersion: runtime.voice_workflow_version ?? null,
+    currentNodeId: runtime.current_node_id ?? null,
     runtime,
     fieldManifest: staticConfig.fieldManifest,
     timezone: staticConfig.timezone,

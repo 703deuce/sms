@@ -4,12 +4,30 @@ import { searchCrmContactsForVoice } from "@/lib/voice/tools/crm-contact-search"
 import { getOrCreateRealtimeSession } from "@/lib/voice/realtime-session/init";
 import type { AmyRealtimeSession } from "@/lib/voice/realtime-session/types";
 import type { WorkflowState } from "@/lib/voice/workflow-engine/types";
+import type {
+  TurnToolEnvelope,
+  WorkflowRuntimeSnapshot,
+} from "@/lib/voice/workflow-runtime/schema";
+import {
+  applyVoiceWorkflowStore,
+  resolveActiveWorkflowForAgent,
+  setActiveWorkflowForAgent,
+} from "@/lib/voice/workflow-runtime/loader";
+import {
+  getPinnedWorkflowFromCall,
+  loadDefinitionFromStore,
+  loadVoiceWorkflowStoreForAgent,
+  pinWorkflowOnCall,
+} from "@/lib/voice/workflow-runtime/persistence";
+import { hydrateWorkflowDefinition } from "@/lib/voice/workflow-runtime/hydrate";
+import type { ActiveWorkflowRef } from "@/lib/voice/workflow-runtime/loader";
 import { buildHeldSlotPayload, buildRequirementsPayload } from "./tool-results";
 
 export type LiveKitAgentSyncSnapshot = {
   workflowState: WorkflowState;
   taskId: string;
   toolNames: string[];
+  envelope?: TurnToolEnvelope;
 };
 
 export type LiveKitCallContext = {
@@ -20,6 +38,10 @@ export type LiveKitCallContext = {
   businessName: string;
   contactId: string | null;
   workflowState: WorkflowState;
+  workflowRef?: ActiveWorkflowRef;
+  workflowDefinition?: import("@/lib/voice/workflow-runtime/schema").WorkflowDefinition;
+  workflowRuntime?: WorkflowRuntimeSnapshot;
+  lastToolEnvelope?: TurnToolEnvelope;
   lastAgentSync?: LiveKitAgentSyncSnapshot;
 };
 
@@ -46,6 +68,54 @@ export async function bootstrapLiveKitCallContext(input: {
     agentId: input.agentId,
     workflow: "book_appointment",
   });
+
+  const call = await prisma.voiceCall.findUnique({
+    where: { id: input.callId },
+    select: { metadata: true },
+  });
+  const pinned = getPinnedWorkflowFromCall(call?.metadata);
+
+  const store = await loadVoiceWorkflowStoreForAgent({
+    workspaceId: input.workspaceId,
+    agentId: input.agentId,
+  });
+  applyVoiceWorkflowStore(store);
+
+  const activeRef =
+    pinned ||
+    store.activeByAgent[input.agentId] ||
+    resolveActiveWorkflowForAgent(input.agentId).ref;
+
+  let definition =
+    loadDefinitionFromStore(store, activeRef) ||
+    resolveActiveWorkflowForAgent(input.agentId).definition;
+
+  definition = hydrateWorkflowDefinition(definition, session.fieldManifest);
+  setActiveWorkflowForAgent(input.agentId, activeRef);
+
+  const entryNodeId = definition.entryNodeId;
+  const runtimeNodeId =
+    session.currentNodeId ||
+    session.runtime.current_node_id ||
+    entryNodeId;
+
+  session.voiceWorkflowId = activeRef.workflowId;
+  session.voiceWorkflowVersion = activeRef.version;
+  session.currentNodeId = runtimeNodeId;
+  session.runtime = {
+    ...session.runtime,
+    voice_workflow_id: activeRef.workflowId,
+    voice_workflow_version: activeRef.version,
+    current_node_id: runtimeNodeId,
+  };
+
+  if (!pinned) {
+    await pinWorkflowOnCall({
+      callId: input.callId,
+      ref: activeRef,
+      entryNodeId: runtimeNodeId,
+    });
+  }
 
   let contactId = session.contactId;
   const ani = input.fromE164?.trim();
@@ -83,6 +153,8 @@ export async function bootstrapLiveKitCallContext(input: {
     businessName: ws?.name || agent?.name || "the business",
     contactId,
     workflowState: session.currentState,
+    workflowRef: activeRef,
+    workflowDefinition: definition,
   };
 }
 

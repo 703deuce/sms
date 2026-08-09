@@ -7,6 +7,7 @@ export {
 export {
   domainGetBookingRequirements,
   domainRecordField,
+  domainRecordFields,
   domainCheckAvailability,
   domainSelectSlot,
   domainConfirmBooking,

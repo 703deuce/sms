@@ -11,19 +11,25 @@ import {
   domainEndCall,
   domainGetBookingRequirements,
   domainRecordField,
+  domainRecordFields,
   domainSelectSlot,
   domainTakeMessage,
   formatModelToolResult,
   taskContextPayload,
   taskForWorkflowState,
-  toolsForTask,
   type DomainActionResult,
   type LiveKitCallContext,
 } from "@/lib/voice/domain-actions";
+import {
+  applyWorkflowNodeTransition,
+  compileToolsForCallContext,
+  resolveActiveWorkflowForAgent,
+} from "@/lib/voice/workflow-runtime";
 import type { WorkflowState } from "@/lib/voice/workflow-engine/types";
 import type { AmyProcessUserData } from "./metadata";
 
-function liveKitNextAction(state: WorkflowState): string {
+function liveKitNextAction(state: WorkflowState, envelopeInstructions?: string): string {
+  if (envelopeInstructions?.trim()) return envelopeInstructions;
   switch (state) {
     case "INTENT_DISCOVERY":
     case "COLLECTING_FIELDS":
@@ -132,10 +138,23 @@ function wrapToolExecute(
   const ctx = requireCallContext(opts);
   const workflowStateBefore = ctx.session.currentState;
   const taskBefore = taskForWorkflowState(workflowStateBefore);
-  const toolSetBefore = toolsForTask(taskBefore);
+  const { allowedToolNames: toolSetBefore } = compileToolsForCallContext(ctx);
+  const toolSetBeforeList = [...toolSetBefore];
 
   const run = async () => {
     const result = await execute(ctx);
+
+    const workflow =
+      ctx.workflowDefinition ??
+      resolveActiveWorkflowForAgent(ctx.agentId).definition;
+    await applyWorkflowNodeTransition({
+      workflow,
+      callId: ctx.callId,
+      session: ctx.session,
+      toolName,
+      result,
+    });
+
     if (options?.refresh !== false) {
       await refreshAmyAgentAfterTool(opts, ctx);
     } else {
@@ -144,7 +163,8 @@ function wrapToolExecute(
 
     const workflowStateAfter = ctx.session.currentState;
     const taskAfter = taskForWorkflowState(workflowStateAfter);
-    const toolSetAfter = toolsForTask(taskAfter);
+    const { allowedToolNames: toolSetAfter } = compileToolsForCallContext(ctx);
+    const toolSetAfterList = [...toolSetAfter];
     const payload = formatModelToolResult(result, {
       session: ctx.session,
       toolName,
@@ -158,8 +178,8 @@ function wrapToolExecute(
       startedAt,
       success: result.ok,
       nextAction: payload.nextAction ? String(payload.nextAction) : undefined,
-      toolSetBefore,
-      toolSetAfter,
+      toolSetBefore: toolSetBeforeList,
+      toolSetAfter: toolSetAfterList,
     });
 
     return serializeToolResult(result, { toolName, session: ctx.session });
@@ -173,7 +193,7 @@ function wrapToolExecute(
 
 export function buildAmyToolList(callContext: LiveKitCallContext) {
   const taskId = taskForWorkflowState(callContext.session.currentState);
-  const allowed = new Set(toolsForTask(taskId));
+  const { envelope, allowedToolNames: allowed } = compileToolsForCallContext(callContext);
   const tools: llm.ToolContextEntry[] = [];
 
   if (allowed.has("get_booking_requirements")) {
@@ -205,6 +225,28 @@ export function buildAmyToolList(callContext: LiveKitCallContext) {
             "record_current_field",
             opts,
             async (ctx) => domainRecordField({ ctx, value }),
+            { fillerMessage: "Got it, one moment." },
+          ),
+      }),
+    );
+  }
+
+  if (allowed.has("record_fields")) {
+    tools.push(
+      llm.tool({
+        name: "record_fields",
+        description:
+          "Record multiple field values at once when the caller provides several answers together. Keys must match workflow field ids.",
+        parameters: z.object({
+          fields: z
+            .record(z.string(), z.string())
+            .describe("Map of field_id to caller-provided value"),
+        }),
+        execute: async ({ fields }, opts: AmyToolOptions) =>
+          wrapToolExecute(
+            "record_fields",
+            opts,
+            async (ctx) => domainRecordFields({ ctx, fields }),
             { fillerMessage: "Got it, one moment." },
           ),
       }),
@@ -281,7 +323,7 @@ export function buildAmyToolList(callContext: LiveKitCallContext) {
     );
   }
 
-  if (allowed.has("take_message")) {
+  if (allowed.has("take_message") || allowed.has("save_message")) {
     tools.push(
       llm.tool({
         name: "take_message",
@@ -359,11 +401,14 @@ export function buildAmyToolList(callContext: LiveKitCallContext) {
 
 export function buildAmyAgentInstructions(callContext: LiveKitCallContext): string {
   const taskId = taskForWorkflowState(callContext.session.currentState);
+  const { envelope } = compileToolsForCallContext(callContext);
   return [
     buildAmyLiveKitPermanentPrompt(callContext.businessName),
     buildAmyTaskContextBlock({
       active_task: taskId,
-      next_action: liveKitNextAction(callContext.session.currentState),
+      next_action: liveKitNextAction(callContext.session.currentState, envelope.taskInstructions),
+      workflow_id: callContext.workflowRef?.workflowId,
+      workflow_version: callContext.workflowRef?.version,
       ...taskContextPayload(callContext),
     }),
   ].join("\n\n");
@@ -398,6 +443,14 @@ export async function syncAmyAgentFromContext(
       previousTools,
       newTools,
       readyForAvailability: callContext.session.missingFieldIds.length === 0,
+      workflowId: callContext.workflowRef?.workflowId,
+      workflowVersion: callContext.workflowRef?.version,
+      toolEnvelope: callContext.lastToolEnvelope
+        ? {
+            capabilityIds: callContext.lastToolEnvelope.capabilityIds,
+            stoppedAtUserBoundary: callContext.lastToolEnvelope.stoppedAtUserBoundary,
+          }
+        : undefined,
     }),
   );
 
@@ -405,6 +458,7 @@ export async function syncAmyAgentFromContext(
     workflowState: newState,
     taskId,
     toolNames: newTools,
+    envelope: callContext.lastToolEnvelope,
   };
   callContext.workflowState = newState;
 

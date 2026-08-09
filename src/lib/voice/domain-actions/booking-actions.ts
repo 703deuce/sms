@@ -1,5 +1,10 @@
 import { recordFieldForLiveKitVoice } from "@/lib/voice/field-runtime/save-voice-fast";
 import { executeContinueWorkflow } from "@/lib/voice/workflow-engine/continue-workflow";
+import {
+  authorizeCapabilityInvocation,
+  resolveActiveWorkflowForAgent,
+  buildRuntimeSnapshotFromSession,
+} from "@/lib/voice/workflow-runtime";
 import { startDomainActionTimer } from "./latency";
 import { assertTaskToolAllowed, taskForWorkflowState } from "./task-guard";
 import type { LiveKitCallContext } from "./session-bootstrap";
@@ -21,6 +26,38 @@ export type DomainActionResult = {
   data?: Record<string, unknown>;
   error_code?: string;
 };
+
+function guardToolInvocation(
+  ctx: LiveKitCallContext,
+  toolName: string,
+): DomainActionResult | null {
+  const { definition: workflow, ref } = resolveActiveWorkflowForAgent(ctx.agentId);
+  const snapshot = buildRuntimeSnapshotFromSession({
+    workflow,
+    workflowVersion: ref.version,
+    legacyState: ctx.session.currentState,
+    currentNodeId:
+      ctx.session.currentNodeId ||
+      ctx.session.runtime.current_node_id ||
+      null,
+    collectedFields: ctx.session.collectedFields || {},
+    confirmationReceived:
+      ctx.session.confirmationState === "confirmed" ||
+      Boolean(ctx.session.runtime.confirmation_received),
+    flags: {
+      ...(ctx.workflowRuntime?.flags || {}),
+      _envelopeCapabilities: ctx.lastToolEnvelope?.capabilityIds,
+    },
+  });
+  const guard = authorizeCapabilityInvocation({ workflow, state: snapshot, toolName });
+  if (guard.ok) return null;
+  return {
+    ok: false,
+    speak: guard.speak,
+    error_code: guard.error_code,
+    workflow_state: ctx.session.currentState,
+  };
+}
 
 export async function domainGetBookingRequirements(input: {
   ctx: LiveKitCallContext;
@@ -62,6 +99,9 @@ export async function domainRecordField(input: {
   value: string;
   fieldId?: string;
 }): Promise<DomainActionResult> {
+  const blocked = guardToolInvocation(input.ctx, "record_current_field");
+  if (blocked) return blocked;
+
   const taskId = taskForWorkflowState(input.ctx.session.currentState);
   assertTaskToolAllowed(taskId, "record_current_field");
   const timer = startDomainActionTimer("record_current_field", input.ctx.callId, taskId);
@@ -117,6 +157,7 @@ export async function domainRecordField(input: {
     data: {
       ...fieldPayload,
       voice_field_timing: recorded.timing,
+      readyForAvailability: recorded.amySession.missingFieldIds.length === 0,
     },
   };
 }
@@ -125,8 +166,10 @@ export async function domainCheckAvailability(input: {
   ctx: LiveKitCallContext;
   spoken: string;
 }): Promise<DomainActionResult> {
+  const blocked = guardToolInvocation(input.ctx, "check_availability");
+  if (blocked) return blocked;
+
   const taskId = taskForWorkflowState(input.ctx.session.currentState);
-  assertTaskToolAllowed(taskId, "check_availability");
   const timer = startDomainActionTimer("check_availability", input.ctx.callId, taskId);
   timer.markProviderStart();
 
@@ -179,8 +222,10 @@ export async function domainSelectSlot(input: {
   utterance: string;
   slotIso?: string;
 }): Promise<DomainActionResult> {
+  const blocked = guardToolInvocation(input.ctx, "select_slot");
+  if (blocked) return blocked;
+
   const taskId = taskForWorkflowState(input.ctx.session.currentState);
-  assertTaskToolAllowed(taskId, "select_slot");
   const timer = startDomainActionTimer("select_slot", input.ctx.callId, taskId);
   timer.markProviderStart();
 
@@ -225,8 +270,10 @@ export async function domainConfirmBooking(input: {
   ctx: LiveKitCallContext;
   confirmed: boolean;
 }): Promise<DomainActionResult> {
+  const blocked = guardToolInvocation(input.ctx, "confirm_booking");
+  if (blocked) return blocked;
+
   const taskId = taskForWorkflowState(input.ctx.session.currentState);
-  assertTaskToolAllowed(taskId, "confirm_booking");
   const timer = startDomainActionTimer("confirm_booking", input.ctx.callId, taskId);
   timer.markProviderStart();
 
@@ -275,25 +322,91 @@ export async function domainConfirmBooking(input: {
   return response;
 }
 
+export async function domainRecordFields(input: {
+  ctx: LiveKitCallContext;
+  fields: Record<string, string>;
+}): Promise<DomainActionResult> {
+  const blocked = guardToolInvocation(input.ctx, "record_fields");
+  if (blocked) return blocked;
+
+  let lastResult: DomainActionResult | null = null;
+  for (const [fieldId, value] of Object.entries(input.fields)) {
+    if (!value?.trim()) continue;
+    lastResult = await domainRecordField({ ctx: input.ctx, value, fieldId });
+    if (!lastResult.ok) return lastResult;
+  }
+  return (
+    lastResult || {
+      ok: false,
+      speak: "I didn't receive any field values to record.",
+      error_code: "NO_FIELDS",
+      workflow_state: input.ctx.session.currentState,
+    }
+  );
+}
+
 export async function domainTakeMessage(input: {
   ctx: LiveKitCallContext;
   message: string;
   callerName?: string;
 }): Promise<DomainActionResult> {
+  const blocked = guardToolInvocation(input.ctx, "take_message");
+  if (blocked) return blocked;
+
   const taskId = taskForWorkflowState(input.ctx.session.currentState);
   assertTaskToolAllowed(taskId, "take_message");
   const timer = startDomainActionTimer("take_message", input.ctx.callId, taskId);
-  timer.finish(true);
-  return {
-    ok: true,
-    speak: "Thanks — I've noted that and someone from the team will follow up.",
-    workflow_state: input.ctx.session.currentState,
-    data: {
-      messageCaptured: true,
-      callerName: input.callerName || null,
-      messageLength: input.message.length,
+
+  const collected = input.ctx.session.collectedFields || {};
+  const callerName =
+    input.callerName ||
+    collected.caller_name ||
+    collected.name ||
+    collected.full_name ||
+    "";
+  const phone =
+    collected.callback_number ||
+    collected.phone ||
+    input.ctx.session.callerAni ||
+    "";
+
+  const { executeBuiltinVoiceAction } = await import("@/lib/voice/tools/builtin-actions");
+  const result = await executeBuiltinVoiceAction({
+    workspaceId: input.ctx.workspaceId,
+    agentId: input.ctx.agentId,
+    callId: input.ctx.callId,
+    toolType: "take_structured_message",
+    input: {
+      reason: input.message,
+      caller_name: callerName,
+      phone,
+      urgency: "normal",
+      notes: JSON.stringify(collected),
     },
+  }).catch((err) => ({
+    ok: false,
+    error: err instanceof Error ? err.message : String(err),
+  }));
+
+  const ok = result && typeof result === "object" && (result as { ok?: boolean }).ok !== false;
+  timer.finish(ok);
+
+  const response: DomainActionResult = {
+    ok,
+    speak: ok
+      ? "Thanks — I've noted that and someone from the team will follow up."
+      : "I had trouble saving that message. Let me try again.",
+    workflow_state: ok ? "COMPLETE" : input.ctx.session.currentState,
+    data: {
+      messageCaptured: ok,
+      callerName: callerName || null,
+      messageLength: input.message.length,
+      persisted: ok,
+    },
+    error_code: ok ? undefined : "MESSAGE_SAVE_FAILED",
   };
+  await traceLiveKitDomainAction(input.ctx, "take_message", response);
+  return response;
 }
 
 export async function domainEndCall(input: {
