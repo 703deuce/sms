@@ -161,19 +161,23 @@ export async function recordFieldForLiveKitVoice(input: {
   const refreshStart = Date.now();
   let amySession = setSessionFieldFast(input.amySession, fieldId, String(input.value));
   const missing = missingFromManifest(amySession.fieldManifest, amySession.collectedFields);
+  const workflowState = deriveWorkflowState(
+    missing.length === 0,
+    Object.keys(amySession.collectedFields).length,
+  );
   amySession = refreshSessionFieldState({
     ...amySession,
     activeField: missing[0]?.field_id || null,
-    currentState: deriveWorkflowState(
-      missing.length === 0,
-      Object.keys(amySession.collectedFields).length,
-    ),
+    currentState: workflowState,
+    runtime: {
+      ...amySession.runtime,
+      intent: amySession.workflowId,
+    },
   });
   const sessionRefreshMs = Date.now() - refreshStart;
 
   const complete = missing.length === 0;
   const speak = speakForMissing(missing);
-  const workflowState = amySession.currentState;
 
   void persistFieldReceiptBackground({
     callId: input.amySession.callId,
@@ -218,7 +222,10 @@ async function persistFieldReceiptBackground(input: {
     workflowId: input.workflowId,
     serviceName: input.serviceName,
   });
-  runtime = appendFieldReceipt(runtime, input.fieldId, input.value);
+  runtime = {
+    ...appendFieldReceipt(runtime, input.fieldId, input.value),
+    intent: input.workflowId,
+  };
   await saveAgentRuntime(input.callId, runtime);
 
   const store = (await import("@/lib/voice/realtime-session/store")).getRealtimeSessionStore();

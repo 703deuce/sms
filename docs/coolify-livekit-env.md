@@ -75,9 +75,9 @@ VOICE_TURN_PRESET=flux_eager
 ### Recommended low-latency stack (defaults in code)
 
 ```
-VOICE_LLM_MODEL=gpt-5-nano
+VOICE_LLM_PRESET=gemma-4-31b
 VOICE_TTS_PRESET=elevenlabs
-VOICE_TURN_PRESET=ultra_low
+VOICE_TURN_PRESET=flux_eager
 VOICE_PREEMPTIVE_TTS=true
 ```
 
@@ -118,6 +118,23 @@ or
 ```
 
 Compare `llmTtftMs` in `turn_latency_breakdown` lines across the two calls.
+
+### Booking test (LiveKit + Gemma + Flux)
+
+Keep the latency stack above, then place a test call and walk through booking:
+
+1. Amy collects required fields (`record_field`)
+2. Amy calls `check_availability` (Calendly must be connected on the workspace)
+3. Caller picks a slot → `select_slot`
+4. Caller confirms → `confirm_booking`
+
+Verify in logs:
+
+- `amy_agent_sync` events as workflow advances (tools swap per phase)
+- `tool_executed` with `check_availability`, `select_slot`, `confirm_booking`
+- `workflow_state` reaches `COMPLETE`
+
+Required workspace setup: published appointment-booking agent, Calendly OAuth connected, email in field manifest when Calendly is active.
 
 | Variable | Example | Purpose |
 |----------|---------|---------|

@@ -29,7 +29,7 @@ import {
   toolsForTask,
   assertTaskToolAllowed,
 } from "../src/lib/voice/domain-actions";
-import { buildAmyToolList } from "../voice-runtime/src/amy-tools";
+import { buildAmyAgentInstructions, buildAmyToolList } from "../voice-runtime/src/amy-tools";
 import { parseRoomMetadata } from "../voice-runtime/src/metadata";
 
 const failures: string[] = [];
@@ -138,11 +138,30 @@ async function main() {
     callContext.workflowState = callContext.session.currentState;
 
     if (callContext.session.missingFieldIds.length === 0) {
+      const postTaskId = taskForWorkflowState(callContext.session.currentState);
+      check("post-collect task", postTaskId === "CheckAvailabilityTask");
+      const { tools: postCollectTools } = buildAmyToolList(callContext);
+      check(
+        "post-collect exposes check_availability",
+        postCollectTools.some((tool) => tool.id === "check_availability"),
+      );
+      check(
+        "post-collect instructions mention check_availability",
+        buildAmyAgentInstructions(callContext).includes("check_availability"),
+      );
+
       const avail = await domainCheckAvailability({
         ctx: callContext,
         spoken: "tomorrow afternoon",
       });
       check("availability action returns speak", Boolean(avail.speak));
+      check(
+        "availability advances workflow state",
+        callContext.session.currentState === "SELECTING_SLOT" ||
+          callContext.session.currentState === "CHECKING_AVAILABILITY" ||
+          Boolean(callContext.session.availableSlots?.length),
+        `state=${callContext.session.currentState}`,
+      );
     } else {
       check(
         "availability action returns speak",

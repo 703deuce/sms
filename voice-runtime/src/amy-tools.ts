@@ -1,4 +1,5 @@
 import { llm, voice } from "@livekit/agents";
+import type { AgentSession } from "@livekit/agents";
 import { z } from "zod";
 import {
   buildAmyLiveKitPermanentPrompt,
@@ -14,7 +15,27 @@ import {
   toolsForTask,
   type LiveKitCallContext,
 } from "@/lib/voice/domain-actions";
+import type { WorkflowState } from "@/lib/voice/workflow-engine/types";
 import type { AmyProcessUserData } from "./metadata";
+
+function liveKitNextAction(state: WorkflowState): string {
+  switch (state) {
+    case "INTENT_DISCOVERY":
+    case "COLLECTING_FIELDS":
+      return "Collect the active_field from the caller, then call record_field({ value }).";
+    case "CHECKING_AVAILABILITY":
+      return "Call check_availability({ spoken }) with the caller's preferred time window.";
+    case "SELECTING_SLOT":
+      return "Offer returned slots, then call select_slot({ utterance }) when the caller picks one.";
+    case "READY_TO_BOOK":
+    case "BOOKING_IN_PROGRESS":
+      return "After explicit confirmation, call confirm_booking({ confirmed: true }).";
+    case "COMPLETE":
+      return "Booking is complete. Wrap up the call politely.";
+    default:
+      return "Follow the active task using only the tools currently available.";
+  }
+}
 
 function requireCallContext(opts: llm.ToolOptions): LiveKitCallContext {
   const callContext = (opts.ctx.userData as AmyProcessUserData).callContext;
@@ -24,6 +45,14 @@ function requireCallContext(opts: llm.ToolOptions): LiveKitCallContext {
 
 function stashContext(opts: llm.ToolOptions, ctx: LiveKitCallContext) {
   (opts.ctx.userData as AmyProcessUserData).callContext = ctx;
+}
+
+async function refreshAmyAgentAfterTool(
+  opts: llm.ToolOptions,
+  ctx: LiveKitCallContext,
+): Promise<void> {
+  stashContext(opts, ctx);
+  await syncAmyAgentFromContext(opts.ctx.session, ctx);
 }
 
 function formatToolResult(result: {
@@ -72,7 +101,7 @@ export function buildAmyToolList(callContext: LiveKitCallContext) {
           const result = await withSlowToolFiller(opts, "Got it, one moment.", async () =>
             domainRecordField({ ctx, value }),
           );
-          stashContext(opts, ctx);
+          await refreshAmyAgentAfterTool(opts, ctx);
           return formatToolResult(result);
         },
       }),
@@ -92,7 +121,7 @@ export function buildAmyToolList(callContext: LiveKitCallContext) {
           const result = await withSlowToolFiller(opts, "Sure, let me check.", async () =>
             domainCheckAvailability({ ctx, spoken }),
           );
-          stashContext(opts, ctx);
+          await refreshAmyAgentAfterTool(opts, ctx);
           return formatToolResult(result);
         },
       }),
@@ -117,7 +146,7 @@ export function buildAmyToolList(callContext: LiveKitCallContext) {
               slotIso: slot_iso,
             }),
           );
-          stashContext(opts, ctx);
+          await refreshAmyAgentAfterTool(opts, ctx);
           return formatToolResult(result);
         },
       }),
@@ -137,7 +166,7 @@ export function buildAmyToolList(callContext: LiveKitCallContext) {
           const result = await withSlowToolFiller(opts, "One moment.", async () =>
             domainConfirmBooking({ ctx, confirmed }),
           );
-          stashContext(opts, ctx);
+          await refreshAmyAgentAfterTool(opts, ctx);
           return formatToolResult(result);
         },
       }),
@@ -167,15 +196,45 @@ export function buildAmyToolList(callContext: LiveKitCallContext) {
   return { tools, taskId };
 }
 
-export function createAmyAgent(callContext: LiveKitCallContext) {
-  const { tools, taskId } = buildAmyToolList(callContext);
-  const instructions = [
+export function buildAmyAgentInstructions(callContext: LiveKitCallContext): string {
+  const taskId = taskForWorkflowState(callContext.session.currentState);
+  return [
     buildAmyLiveKitPermanentPrompt(callContext.businessName),
     buildAmyTaskContextBlock({
       active_task: taskId,
+      next_action: liveKitNextAction(callContext.session.currentState),
       ...taskContextPayload(callContext),
     }),
   ].join("\n\n");
+}
+
+export async function syncAmyAgentFromContext(
+  session: AgentSession<AmyProcessUserData>,
+  callContext: LiveKitCallContext,
+): Promise<void> {
+  session.userData = { ...session.userData, callContext };
+  const agent = session.currentAgent;
+  const { tools, taskId } = buildAmyToolList(callContext);
+  const instructions = buildAmyAgentInstructions(callContext);
+
+  console.log(
+    JSON.stringify({
+      source: "transovo-voice-runtime",
+      event: "amy_agent_sync",
+      callId: callContext.callId,
+      workflow_state: callContext.session.currentState,
+      active_task: taskId,
+      tool_names: tools.map((tool) => tool.id),
+    }),
+  );
+
+  await agent.updateInstructions(instructions);
+  await agent.updateTools(llm.toToolContext(tools));
+}
+
+export function createAmyAgent(callContext: LiveKitCallContext) {
+  const { tools } = buildAmyToolList(callContext);
+  const instructions = buildAmyAgentInstructions(callContext);
 
   return voice.Agent.create<AmyProcessUserData>({
     instructions,
