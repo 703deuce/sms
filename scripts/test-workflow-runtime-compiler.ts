@@ -17,6 +17,7 @@ import {
   linearVoiceNodePath,
 } from "../src/lib/voice/workflow-runtime";
 import { architectWorkflowFromRequest } from "../src/lib/agents/appointment-booking/workflow-architect";
+import { normalizeSpokenEmail } from "../src/lib/voice/field-runtime/validate";
 
 const failures: string[] = [];
 
@@ -160,6 +161,29 @@ const nextAfterFields = resolveNextNodeId({
   } as unknown as Parameters<typeof resolveNextNodeId>[0]["session"],
 });
 check("fields complete transitions to check_availability", nextAfterFields === "check_availability");
+
+const confirmMissingEmail = buildRuntimeSnapshotFromSession({
+  workflow: APPOINTMENT_BOOKING_WORKFLOW_V1,
+  workflowVersion: 1,
+  legacyState: "READY_TO_BOOK",
+  currentNodeId: "confirm_booking",
+  collectedFields: { service_needed: "cleaning" },
+  flags: { missingFieldCount: 1 },
+});
+const missingFieldEnvelope = compileTurnCapabilityEnvelope({
+  workflow: APPOINTMENT_BOOKING_WORKFLOW_V1,
+  state: confirmMissingEmail,
+});
+check(
+  "confirm with missing fields exposes record_current_field",
+  missingFieldEnvelope.toolNames.includes("record_current_field"),
+  missingFieldEnvelope.toolNames.join(", "),
+);
+
+check(
+  "spoken email normalizes at/dot",
+  normalizeSpokenEmail("Anthony at Yahoo dot com") === "anthony@yahoo.com",
+);
 
 console.log(`\nOVERALL: ${failures.length ? "FAIL" : "PASS"}`);
 if (failures.length) {

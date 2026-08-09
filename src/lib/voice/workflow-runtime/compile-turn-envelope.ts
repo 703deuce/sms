@@ -107,6 +107,12 @@ export function compileTurnCapabilityEnvelope(input: {
     capabilityIds.add(cap);
   }
 
+  const globalMissingCount = Number(state.flags.missingFieldCount ?? 0);
+  if (globalMissingCount > 0) {
+    capabilityIds.add("data.capture");
+    capabilityIds.add("data.lookup");
+  }
+
   while (nodeId) {
     const node = getNode(workflow, nodeId);
     if (visitedNodeIds.includes(node.id)) break;

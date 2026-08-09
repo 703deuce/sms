@@ -291,7 +291,33 @@ export async function domainConfirmBooking(input: {
 
   const refreshed = await reloadLiveKitSchedulingSession(input.ctx, result);
   const ok = result.ok !== false && input.confirmed;
-  const heldSlot = buildHeldSlotPayload(refreshed);
+  const missingFieldError = result.error_code === "MISSING_REQUIRED_FIELD";
+  let session = refreshed;
+
+  if (!ok && missingFieldError) {
+    const { getWorkflowRequirements } = await import("@/lib/voice/field-runtime/requirements");
+    const requirements = await getWorkflowRequirements({
+      workspaceId: input.ctx.workspaceId,
+      agentId: input.ctx.agentId,
+      callId: input.ctx.callId,
+      workflow: "book_appointment",
+      serviceName: input.ctx.session.serviceName,
+    });
+    const missingIds = requirements.missing_fields.map((f) => f.field_id);
+    const activeField = requirements.active_field || missingIds[0] || null;
+    session = {
+      ...refreshed,
+      currentState: "COLLECTING_FIELDS",
+      missingFieldIds: missingIds,
+      activeField,
+    };
+    input.ctx.session = session;
+    input.ctx.workflowState = "COLLECTING_FIELDS";
+  } else {
+    input.ctx.session = refreshed;
+  }
+
+  const heldSlot = buildHeldSlotPayload(session);
   timer.finish(ok, result.error_code ? String(result.error_code) : undefined);
   const response: DomainActionResult = {
     ok,
@@ -299,21 +325,24 @@ export async function domainConfirmBooking(input: {
       result.speak ||
         (input.confirmed ? "Should I go ahead and book that?" : "No problem. What would you like instead?"),
     ),
-    workflow_state: String(result.workflow_state || refreshed.currentState),
+    workflow_state: missingFieldError && !ok ? "COLLECTING_FIELDS" : String(result.workflow_state || session.currentState),
     data: {
       booking: ok
         ? {
-            bookingId: refreshed.bookingId,
+            bookingId: session.bookingId,
             start: heldSlot?.start,
             spokenLabel: heldSlot?.spokenLabel,
           }
         : undefined,
       heldSlot,
+      needsFieldCollection: missingFieldError && !ok,
       nextAction: ok
         ? "end_call"
-        : result.error_code === "SLOT_NO_LONGER_AVAILABLE"
-          ? "check_availability"
-          : "confirm_booking",
+        : missingFieldError
+          ? "record_current_field"
+          : result.error_code === "SLOT_NO_LONGER_AVAILABLE"
+            ? "check_availability"
+            : "confirm_booking",
       ...(typeof result.data === "object" && result.data ? (result.data as Record<string, unknown>) : {}),
     },
     error_code: result.error_code ? String(result.error_code) : undefined,

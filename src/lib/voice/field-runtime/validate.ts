@@ -1,5 +1,16 @@
 import type { BuilderFieldType, WorkflowFieldDefinition } from "./types";
 
+export function normalizeSpokenEmail(value: string): string {
+  let normalized = value.trim();
+  if (!normalized || normalized.includes("@")) return normalized;
+  normalized = normalized
+    .replace(/\s+at\s+/gi, "@")
+    .replace(/\s+dot\s+/gi, ".")
+    .replace(/\s+/g, "")
+    .toLowerCase();
+  return normalized;
+}
+
 export class FieldValidationError extends Error {
   constructor(
     public readonly fieldId: string,
@@ -35,10 +46,11 @@ export function validateFieldValue(
       throw new FieldValidationError(def.field_id, `${def.label} must be yes or no`);
     }
     case "email": {
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(str)) {
+      const emailValue = normalizeSpokenEmail(str);
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailValue)) {
         throw new FieldValidationError(def.field_id, `${def.label} must be a valid email`);
       }
-      return str;
+      return emailValue;
     }
     case "phone":
       return str;

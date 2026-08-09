@@ -5,6 +5,7 @@ import type { WorkflowDefinition, WorkflowNode } from "./schema";
 
 export type WorkflowToolResult = {
   ok: boolean;
+  error_code?: string;
   data?: Record<string, unknown>;
 };
 
@@ -41,6 +42,15 @@ export function resolveNextNodeId(input: {
 
   if (node.type === "collect_fields") {
     if (missing === 0 || input.result.data?.readyForAvailability) {
+      const hasHeldSlot = Boolean(
+        input.session.heldSlot ||
+          input.session.selectedSlot ||
+          input.session.runtime?.held_slot ||
+          input.session.runtime?.selected_slot,
+      );
+      if (hasHeldSlot) {
+        return "confirm_booking";
+      }
       const edge = node.transitions.find((t) => t.when === "fields_complete");
       return edge?.to || node.transitions[0]?.to || input.currentNodeId;
     }
@@ -81,9 +91,18 @@ export function resolveNextNodeId(input: {
     return node.transitions[0]?.to || "complete";
   }
 
-  if (node.type === "confirmation" && input.toolName === "confirm_booking" && input.result.ok) {
-    const edge = node.transitions.find((t) => t.when === "confirmation_received");
-    return edge?.to || "complete";
+  if (node.type === "confirmation" && input.toolName === "confirm_booking") {
+    if (input.result.ok) {
+      const edge = node.transitions.find((t) => t.when === "confirmation_received");
+      return edge?.to || "complete";
+    }
+    const needsMoreFields =
+      input.session.missingFieldIds.length > 0 ||
+      input.result.error_code === "MISSING_REQUIRED_FIELD" ||
+      input.result.data?.needsFieldCollection === true;
+    if (needsMoreFields) {
+      return "collect_fields";
+    }
   }
 
   return input.currentNodeId;
