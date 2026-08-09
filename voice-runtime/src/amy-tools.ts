@@ -37,18 +37,20 @@ function liveKitNextAction(state: WorkflowState): string {
   }
 }
 
-function requireCallContext(opts: llm.ToolOptions): LiveKitCallContext {
-  const callContext = (opts.ctx.userData as AmyProcessUserData).callContext;
+type AmyToolOptions = llm.ToolOptions<AmyProcessUserData>;
+
+function requireCallContext(opts: AmyToolOptions): LiveKitCallContext {
+  const callContext = opts.ctx.userData.callContext;
   if (!callContext) throw new llm.ToolError("Call context not initialized");
   return callContext;
 }
 
-function stashContext(opts: llm.ToolOptions, ctx: LiveKitCallContext) {
-  (opts.ctx.userData as AmyProcessUserData).callContext = ctx;
+function stashContext(opts: AmyToolOptions, ctx: LiveKitCallContext) {
+  opts.ctx.userData.callContext = ctx;
 }
 
 async function refreshAmyAgentAfterTool(
-  opts: llm.ToolOptions,
+  opts: AmyToolOptions,
   ctx: LiveKitCallContext,
 ): Promise<void> {
   stashContext(opts, ctx);
@@ -72,7 +74,7 @@ function formatToolResult(result: {
 }
 
 async function withSlowToolFiller<T>(
-  opts: llm.ToolOptions,
+  opts: AmyToolOptions,
   startMessage: string,
   fn: () => Promise<T>,
 ): Promise<T> {
@@ -96,7 +98,7 @@ export function buildAmyToolList(callContext: LiveKitCallContext) {
         parameters: z.object({
           value: z.string().describe("The caller's answer for the active field"),
         }),
-        execute: async ({ value }, opts) => {
+        execute: async ({ value }, opts: AmyToolOptions) => {
           const ctx = requireCallContext(opts);
           const result = await withSlowToolFiller(opts, "Got it, one moment.", async () =>
             domainRecordField({ ctx, value }),
@@ -116,7 +118,7 @@ export function buildAmyToolList(callContext: LiveKitCallContext) {
         parameters: z.object({
           spoken: z.string().describe("Caller time preference, e.g. tomorrow afternoon"),
         }),
-        execute: async ({ spoken }, opts) => {
+        execute: async ({ spoken }, opts: AmyToolOptions) => {
           const ctx = requireCallContext(opts);
           const result = await withSlowToolFiller(opts, "Sure, let me check.", async () =>
             domainCheckAvailability({ ctx, spoken }),
@@ -137,7 +139,7 @@ export function buildAmyToolList(callContext: LiveKitCallContext) {
           utterance: z.string().describe("Caller slot choice, e.g. 2 PM or the second one"),
           slot_iso: z.string().optional().describe("ISO timestamp if explicitly known"),
         }),
-        execute: async ({ utterance, slot_iso }, opts) => {
+        execute: async ({ utterance, slot_iso }, opts: AmyToolOptions) => {
           const ctx = requireCallContext(opts);
           const result = await withSlowToolFiller(opts, "One moment.", async () =>
             domainSelectSlot({
@@ -161,7 +163,7 @@ export function buildAmyToolList(callContext: LiveKitCallContext) {
         parameters: z.object({
           confirmed: z.boolean().describe("True when caller explicitly confirms booking"),
         }),
-        execute: async ({ confirmed }, opts) => {
+        execute: async ({ confirmed }, opts: AmyToolOptions) => {
           const ctx = requireCallContext(opts);
           const result = await withSlowToolFiller(opts, "One moment.", async () =>
             domainConfirmBooking({ ctx, confirmed }),
