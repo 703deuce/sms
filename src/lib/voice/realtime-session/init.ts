@@ -28,7 +28,7 @@ function normalizeSlotIso(value: unknown): string {
   return Number.isNaN(d.getTime()) ? str : d.toISOString();
 }
 
-function isModifySchedulingSession(session: AmyRealtimeSession): boolean {
+export function isModifySchedulingSession(session: AmyRealtimeSession): boolean {
   const intent = session.runtime?.session_runtime?.callerIntent;
   if (intent === "reschedule" || intent === "cancel") return true;
   return Boolean(session.runtime?.session_runtime?.foundAppointmentId?.trim());

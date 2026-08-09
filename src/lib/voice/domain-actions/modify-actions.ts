@@ -1,6 +1,7 @@
 import { getPrisma } from "@/lib/db";
 import { executeAgentTool } from "@/lib/voice/agent-tool-gateway/gateway";
 import { refreshSessionFieldState } from "@/lib/voice/realtime-session/init";
+import { recordFieldsForLiveKitVoice } from "@/lib/voice/field-runtime/save-voice-fast";
 import { invalidateSchedulingState, patchSessionRuntimeExt } from "@/lib/voice/session-runtime/state";
 import { structuredFailure, structuredSuccess } from "@/lib/voice/tool-policy/structured-result";
 import { guardToolInvocation } from "./guard";
@@ -62,9 +63,16 @@ async function hydrateSessionFromFoundAppointment(
 
   if (!Object.keys(updates).length) return ctx;
 
+  const recorded = await recordFieldsForLiveKitVoice({
+    amySession: ctx.session,
+    fields: updates,
+    callId: ctx.callId,
+    workspaceId: ctx.workspaceId,
+    agentId: ctx.agentId,
+  });
   ctx.session = refreshSessionFieldState({
-    ...ctx.session,
-    collectedFields: { ...ctx.session.collectedFields, ...updates },
+    ...recorded.session,
+    collectedFields: { ...recorded.session.collectedFields, ...updates },
   });
   return ctx;
 }

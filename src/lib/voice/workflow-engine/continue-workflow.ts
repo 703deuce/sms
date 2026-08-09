@@ -21,7 +21,7 @@ import { deriveNextAction } from "./next-action";
 import { loadAgentRuntime, saveAgentRuntime } from "./runtime-state";
 import type { WorkflowState } from "./types";
 import type { AmyRealtimeSession } from "@/lib/voice/realtime-session/types";
-import { computeWorkflowStateFromSession } from "@/lib/voice/realtime-session/init";
+import { computeWorkflowStateFromSession, isModifySchedulingSession } from "@/lib/voice/realtime-session/init";
 
 export type ContinueWorkflowInput = {
   workspaceId: string;
@@ -245,6 +245,13 @@ export async function executeContinueWorkflow(
     null;
 
   const resolvedServiceName = serviceName || "Service Visit";
+
+  if (input.sessionContext && isModifySchedulingSession(input.sessionContext)) {
+    const nodeId = input.sessionContext.currentNodeId || input.sessionContext.runtime.current_node_id;
+    if (nodeId === "select_slot") state = "SELECTING_SLOT";
+    else if (nodeId === "check_availability") state = "CHECKING_AVAILABILITY";
+    else if (nodeId === "confirm_booking" || nodeId === "cancel_confirm") state = "READY_TO_BOOK";
+  }
 
   if (state === "INTENT_DISCOVERY" || state === "COLLECTING_FIELDS") {
     const ctx = await buildRuntimeContext({

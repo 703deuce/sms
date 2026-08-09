@@ -79,10 +79,10 @@ export function compileToolsForCallContext(callContext: LiveKitCallContext): {
   let envelope = compileTurnCapabilityEnvelope({ workflow, state: snapshot });
 
   const modifyFlow =
-    callerIntent === "reschedule" || callerIntent === "cancel";
+    callerIntent === "reschedule" ||
+    callerIntent === "cancel" ||
+    Boolean(callContext.session.runtime.session_runtime?.foundAppointmentId?.trim());
   const schedulingNodes = new Set([
-    "reschedule_lookup",
-    "cancel_lookup",
     "check_availability",
     "select_slot",
     "confirm_booking",
@@ -106,11 +106,6 @@ export function compileToolsForCallContext(callContext: LiveKitCallContext): {
       return !requiresBookingReceiptToComplete(callContext.session);
     },
   );
-
-  const modifyFlow =
-    callerIntent === "reschedule" ||
-    callerIntent === "cancel" ||
-    Boolean(callContext.session.runtime.session_runtime?.foundAppointmentId?.trim());
 
   if (!canonical.readyForAvailability && !modifyFlow) {
     conversationalToolNames = conversationalToolNames.filter(

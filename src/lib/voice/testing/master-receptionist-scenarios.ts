@@ -64,7 +64,7 @@ export const MASTER_RECEPTIONIST_SCENARIOS: Record<string, MasterReceptionistSce
     callerPersona: JOHN_SMITH_PERSONA,
     callerLines: [
       "Hi, I need to reschedule my appointment.",
-      "John Smith.",
+      "John Smith, john.smith.test@example.com.",
       "Can we move it to later in the week, maybe Thursday morning?",
       "The first one works.",
       "Yes, please reschedule it.",

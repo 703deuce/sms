@@ -296,8 +296,12 @@ export async function domainSelectSlot(input: {
   timer.markProviderEnd();
 
   const refreshed = await reloadLiveKitSchedulingSession(input.ctx, result);
-  const ok = result.ok !== false;
   const heldSlot = buildHeldSlotPayload(refreshed);
+  const nextAction = String(result.next_action || (result.data as Record<string, unknown> | undefined)?.nextAction || "");
+  const ok =
+    result.ok !== false &&
+    nextAction !== "COLLECT_CURRENT_FIELD" &&
+    Boolean(heldSlot || (result.data as Record<string, unknown> | undefined)?.selected_slot);
   const ambiguous =
     !ok &&
     (result.error_code === "AMBIGUOUS_SELECTION" ||
