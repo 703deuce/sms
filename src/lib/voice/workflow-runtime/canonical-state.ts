@@ -60,13 +60,7 @@ export function deriveAuthoritativeNodeId(input: {
     return "complete";
   }
 
-  const missing = missingRequiredFieldCount(input.session);
-  if (missing > 0) {
-    if (nodeIds.has("collect_fields")) return "collect_fields";
-    if (stored === "lookup_customer" || stored === "detect_intent") return stored;
-    return input.workflow.entryNodeId;
-  }
-
+  // Scheduling phase wins over missing-field rewind — late fields are collected at confirmation.
   if (hasHeldSlot(input.session) && nodeIds.has("confirm_booking")) {
     return "confirm_booking";
   }
@@ -77,6 +71,13 @@ export function deriveAuthoritativeNodeId(input: {
     nodeIds.has("select_slot")
   ) {
     return "select_slot";
+  }
+
+  const missing = missingRequiredFieldCount(input.session);
+  if (missing > 0) {
+    if (nodeIds.has("collect_fields")) return "collect_fields";
+    if (stored === "lookup_customer" || stored === "detect_intent") return stored;
+    return input.workflow.entryNodeId;
   }
 
   if (

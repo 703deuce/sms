@@ -1,6 +1,7 @@
 import type { AmyRealtimeSession } from "@/lib/voice/realtime-session/types";
 import type { WorkflowState } from "@/lib/voice/workflow-engine/types";
 import { saveAgentRuntime, loadAgentRuntime } from "@/lib/voice/workflow-engine/runtime-state";
+import { hasHeldSlot, missingRequiredFieldCount } from "./completion-guards";
 import type { WorkflowDefinition, WorkflowNode } from "./schema";
 
 export type WorkflowToolResult = {
@@ -47,7 +48,7 @@ export function resolveNextNodeId(input: {
   const node = getNode(input.workflow, input.currentNodeId);
   if (!node) return input.workflow.entryNodeId;
 
-  const missing = input.session.missingFieldIds.length;
+  const missing = missingRequiredFieldCount(input.session);
 
   if (
     (input.toolName === "submit_caller_information" ||
@@ -55,6 +56,9 @@ export function resolveNextNodeId(input: {
       input.toolName === "record_fields") &&
     input.result.ok
   ) {
+    if (hasHeldSlot(input.session) && getNode(input.workflow, "confirm_booking")) {
+      return "confirm_booking";
+    }
     if (missing === 0) {
       const collectNode = getNode(input.workflow, "collect_fields");
       const edge = collectNode?.transitions.find((t) => t.when === "fields_complete");
@@ -114,14 +118,9 @@ export function resolveNextNodeId(input: {
   }
 
   if (node.type === "collect_fields") {
-    if (missing === 0) {
-      const hasHeldSlot = Boolean(
-        input.session.heldSlot ||
-          input.session.selectedSlot ||
-          input.session.runtime?.held_slot ||
-          input.session.runtime?.selected_slot,
-      );
-      if (hasHeldSlot) {
+    const missingCount = missingRequiredFieldCount(input.session);
+    if (missingCount === 0) {
+      if (hasHeldSlot(input.session) && getNode(input.workflow, "confirm_booking")) {
         return "confirm_booking";
       }
       const edge = node.transitions.find((t) => t.when === "fields_complete");

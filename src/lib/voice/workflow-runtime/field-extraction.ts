@@ -3,12 +3,31 @@ import { SYSTEM_FIELD_IDS } from "@/lib/voice/field-runtime/system-fields";
 import { looksLikeSpokenEmail } from "@/lib/voice/domain-actions/late-booking-fields";
 import type { RuntimeFieldManifestEntry } from "@/lib/voice/field-runtime/types";
 
+const ADDRESS_UTTERANCE_PATTERN =
+  /\b(address|street|lane|road|avenue|ave|blvd|boulevard|drive|dr|court|ct|way|place|pl|zip|virginia|va\b|fredericksburg|stafford)/i;
+
+function missingAddressFieldId(session: AmyRealtimeSession): string | null {
+  const manifestIds = manifestFieldIds(session.fieldManifest);
+  const addressId = resolveAddressFieldId(manifestIds);
+  if (!addressId) return null;
+  if (!session.collectedFields[addressId]?.trim()) return addressId;
+  return null;
+}
+
+function looksLikeAddressUtterance(utterance: string): boolean {
+  const trimmed = utterance.trim();
+  if (!trimmed) return false;
+  if (/^\d{1,6}\s+\w/.test(trimmed)) return true;
+  return ADDRESS_UTTERANCE_PATTERN.test(trimmed);
+}
+
 const EXTRACTED_KEY_ALIASES: Record<string, string[]> = {
   [SYSTEM_FIELD_IDS.name]: ["name", "caller_name", "full_name", "customer_name"],
   [SYSTEM_FIELD_IDS.email]: ["email", "email_address"],
   [SYSTEM_FIELD_IDS.phone]: ["phone", "phone_number", "callback_number"],
   [SYSTEM_FIELD_IDS.address]: [
     "address",
+    "addr",
     "service_address",
     "serviceAddress",
     "fld_service_address",
@@ -22,12 +41,30 @@ function manifestFieldIds(manifest: RuntimeFieldManifestEntry[]): Set<string> {
   return new Set(manifest.map((f) => f.field_id));
 }
 
+const ADDRESS_FIELD_CANDIDATES = [
+  SYSTEM_FIELD_IDS.address,
+  "fld_service_address",
+] as const;
+
+function resolveAddressFieldId(manifestIds: Set<string>): string | null {
+  for (const fieldId of ADDRESS_FIELD_CANDIDATES) {
+    if (manifestIds.has(fieldId)) return fieldId;
+  }
+  return null;
+}
+
 function resolveFieldId(key: string, manifestIds: Set<string>): string | null {
   const trimmed = key.trim();
   if (manifestIds.has(trimmed)) return trimmed;
 
   for (const [fieldId, aliases] of Object.entries(EXTRACTED_KEY_ALIASES)) {
-    if (aliases.includes(trimmed) && manifestIds.has(fieldId)) return fieldId;
+    if (aliases.includes(trimmed)) {
+      if (manifestIds.has(fieldId)) return fieldId;
+      if (fieldId === SYSTEM_FIELD_IDS.address) {
+        const addressId = resolveAddressFieldId(manifestIds);
+        if (addressId) return addressId;
+      }
+    }
   }
 
   if (trimmed.startsWith("fld_") || trimmed.startsWith("sys_")) {
@@ -80,6 +117,12 @@ export function inferFieldsFromUtterance(input: {
 
   if (activeId && looksLikeSpokenEmail(utterance)) {
     out[SYSTEM_FIELD_IDS.email] = utterance;
+    return out;
+  }
+
+  const missingAddressId = missingAddressFieldId(input.session);
+  if (missingAddressId && looksLikeAddressUtterance(utterance)) {
+    out[missingAddressId] = utterance;
     return out;
   }
 

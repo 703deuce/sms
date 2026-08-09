@@ -11,6 +11,7 @@ import {
   hasBookingReceipt,
   requiresBookingReceiptToComplete,
   getBookingReceipt,
+  fieldsComplete,
 } from "@/lib/voice/workflow-runtime/completion-guards";
 import { resolveActiveWorkflowForAgent } from "@/lib/voice/workflow-runtime/loader";
 import { writebackBookingToCrm } from "@/lib/voice/crm/call-writeback";
@@ -147,7 +148,7 @@ export async function domainCheckAvailability(input: {
   const blocked = guardToolInvocation(input.ctx, "check_availability");
   if (blocked) return blocked;
 
-  if (input.ctx.session.missingFieldIds.length > 0) {
+  if (!fieldsComplete(input.ctx.session)) {
     const payload = buildRequirementsPayload(input.ctx.session);
     return {
       ok: false,
@@ -159,7 +160,7 @@ export async function domainCheckAvailability(input: {
       workflow_state: "COLLECTING_FIELDS",
       data: {
         ...payload,
-        nextAction: "record_current_field",
+        nextAction: "submit_caller_information",
       },
     };
   }

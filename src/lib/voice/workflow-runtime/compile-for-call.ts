@@ -12,6 +12,7 @@ import type { CanonicalWorkflowState } from "./canonical-state";
 import {
   reconcileCanonicalWorkflowState,
   syncSessionFromCanonical,
+  expectedToolForNextAction,
 } from "./canonical-state";
 import { filterConversationalTools } from "./tool-surface";
 import { validateRuntimeInvariants } from "./runtime-invariants";
@@ -77,12 +78,23 @@ export function compileToolsForCallContext(callContext: LiveKitCallContext): {
   const envelope = compileTurnCapabilityEnvelope({ workflow, state: snapshot });
   const withEnvelope = stampEnvelopeCapabilities(snapshot, envelope.capabilityIds);
 
-  const conversationalToolNames = filterConversationalTools(envelope.toolNames).filter(
+  let conversationalToolNames = filterConversationalTools(envelope.toolNames).filter(
     (name) => {
       if (name !== "end_call") return true;
       return !requiresBookingReceiptToComplete(callContext.session);
     },
   );
+
+  if (!canonical.readyForAvailability) {
+    conversationalToolNames = conversationalToolNames.filter(
+      (name) => name !== "check_availability",
+    );
+  }
+
+  const expectedTool = expectedToolForNextAction(canonical.expectedNextAction);
+  if (expectedTool && !conversationalToolNames.includes(expectedTool)) {
+    conversationalToolNames = [...conversationalToolNames, expectedTool];
+  }
   const invariant = validateRuntimeInvariants({
     canonical,
     envelope: { ...envelope, toolNames: conversationalToolNames },

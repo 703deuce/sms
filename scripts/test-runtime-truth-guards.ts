@@ -12,6 +12,7 @@ import {
   requiresBookingReceiptToComplete,
 } from "../src/lib/voice/workflow-runtime/completion-guards";
 import { prepareFieldsForPersistence } from "../src/lib/voice/workflow-runtime/field-persist";
+import { normalizeExtractedFields } from "../src/lib/voice/workflow-runtime/field-extraction";
 import { HOME_SERVICE_DISPATCHER_WORKFLOW_V1 } from "../src/lib/voice/workflow-runtime/definitions/home-service-dispatcher";
 import type { AmyRealtimeSession } from "../src/lib/voice/realtime-session/types";
 
@@ -89,6 +90,49 @@ const heldCanonical = buildCanonicalWorkflowState({
 });
 check("held slot → confirm_booking node", heldCanonical.currentNodeId === "confirm_booking");
 check("held slot expects confirm_booking action", heldCanonical.expectedNextAction === "confirm_booking");
+
+const heldMissingAddress = mockSession({
+  collectedFields: { sys_email: "a@b.com" },
+  availableSlots: ["2026-08-11T13:30:00.000Z"],
+  heldSlot: "2026-08-11T13:30:00.000Z",
+  missingFieldIds: ["fld_service_address"],
+});
+const heldMissingCanonical = buildCanonicalWorkflowState({
+  session: heldMissingAddress,
+  workflow: HOME_SERVICE_DISPATCHER_WORKFLOW_V1,
+});
+check(
+  "held slot with missing address still → confirm_booking",
+  heldMissingCanonical.currentNodeId === "confirm_booking",
+  heldMissingCanonical.currentNodeId,
+);
+check(
+  "held slot with missing address expects confirm_booking tool",
+  heldMissingCanonical.expectedNextAction === "confirm_booking",
+);
+
+const nextAfterLateSubmit = resolveNextNodeId({
+  workflow: HOME_SERVICE_DISPATCHER_WORKFLOW_V1,
+  currentNodeId: "select_slot",
+  toolName: "submit_caller_information",
+  result: { ok: true },
+  session: heldMissingAddress,
+});
+check(
+  "late submit with held slot stays at confirm_booking",
+  nextAfterLateSubmit === "confirm_booking",
+  nextAfterLateSubmit,
+);
+
+const addrMapped = normalizeExtractedFields({
+  session: mockSession(),
+  extracted: { addr: "11146 Sunburst Lane, Fredericksburg VA" },
+});
+check(
+  "addr alias maps to service address field",
+  addrMapped.fld_service_address === "11146 Sunburst Lane, Fredericksburg VA",
+  JSON.stringify(addrMapped),
+);
 
 const nextAfterSelect = resolveNextNodeId({
   workflow: HOME_SERVICE_DISPATCHER_WORKFLOW_V1,
