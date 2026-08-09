@@ -106,6 +106,52 @@ const WORKFLOW_DEFAULT_SYSTEM_REQUIRED: Record<WorkflowAction, string[]> = {
   ],
 };
 
+const SYSTEM_FIELD_LABELS: Record<string, { label: string; type: WorkflowFieldDefinition["type"] }> =
+  {
+    [SYSTEM_FIELD_IDS.name]: { label: "Name", type: "text" },
+    [SYSTEM_FIELD_IDS.phone]: { label: "Phone", type: "phone" },
+    [SYSTEM_FIELD_IDS.email]: { label: "Email", type: "email" },
+    [SYSTEM_FIELD_IDS.address]: { label: "Address", type: "address" },
+    [SYSTEM_FIELD_IDS.service]: { label: "Service", type: "text" },
+    [SYSTEM_FIELD_IDS.message]: { label: "Message", type: "long_text" },
+  };
+
+/** Booking always needs core identity fields; Calendly additionally requires email up front. */
+export function bookingSystemFieldIds(calendlyConnected: boolean): string[] {
+  const ids = [...WORKFLOW_DEFAULT_SYSTEM_REQUIRED.book_appointment];
+  if (calendlyConnected && !ids.includes(SYSTEM_FIELD_IDS.email)) {
+    ids.push(SYSTEM_FIELD_IDS.email);
+  }
+  return ids;
+}
+
+function ensureSystemFieldDefs(
+  defs: WorkflowFieldDefinition[],
+  requiredIds: string[],
+): WorkflowFieldDefinition[] {
+  const byId = new Map(defs.map((d) => [d.field_id, d]));
+  for (const field_id of requiredIds) {
+    const meta = SYSTEM_FIELD_LABELS[field_id];
+    const existing = byId.get(field_id);
+    if (existing) {
+      byId.set(field_id, { ...existing, required: true });
+      continue;
+    }
+    byId.set(field_id, {
+      field_id,
+      label: meta?.label || field_id,
+      type: meta?.type || "text",
+      required: true,
+      collection_instruction: `Ask for ${(meta?.label || field_id).toLowerCase()}.`,
+      kind: "system",
+      system_key: field_id.replace("sys_", ""),
+      enabled: true,
+      ask_order: field_id === SYSTEM_FIELD_IDS.name ? 0 : field_id === SYSTEM_FIELD_IDS.phone ? 1 : 98,
+    });
+  }
+  return dedupeByFieldId(Array.from(byId.values()));
+}
+
 export async function loadWorkflowFieldDefinitions(input: {
   workspaceId: string;
   agentId?: string;
@@ -188,7 +234,15 @@ export async function loadWorkflowFieldDefinitions(input: {
     }));
   }
 
-  return dedupeByFieldId(defs.filter((d) => d.enabled !== false));
+  defs = dedupeByFieldId(defs.filter((d) => d.enabled !== false));
+
+  if (input.workflow === "book_appointment") {
+    const { getConnectedCalendly } = await import("@/lib/voice/calendar/calendly-voice");
+    const calendlyConnected = Boolean(await getConnectedCalendly(input.workspaceId));
+    defs = ensureSystemFieldDefs(defs, bookingSystemFieldIds(calendlyConnected));
+  }
+
+  return defs;
 }
 
 export function toManifestEntries(

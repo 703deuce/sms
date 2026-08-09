@@ -310,6 +310,7 @@ export async function domainConfirmBooking(input: {
       currentState: "COLLECTING_FIELDS",
       missingFieldIds: missingIds,
       activeField,
+      fieldManifest: requirements.fields_to_collect,
     };
     input.ctx.session = session;
     input.ctx.workflowState = "COLLECTING_FIELDS";

@@ -465,20 +465,29 @@ export async function executeContinueWorkflow(
     });
 
     const booked = bookResult.ok !== false && bookResult.status === "confirmed";
+    const errorCode =
+      bookResult.error_code != null ? String(bookResult.error_code) : undefined;
+    const missingField = errorCode === "MISSING_REQUIRED_FIELD";
     return normalizeResponse({
-      success: bookResult.ok !== false,
-      workflowState: nextState,
-      nextAction: booked ? "BOOKING_COMPLETE" : "RETRY_OR_OFFER_ALTERNATIVES",
+      success: booked,
+      workflowState: missingField ? "COLLECTING_FIELDS" : nextState,
+      nextAction: booked
+        ? "BOOKING_COMPLETE"
+        : missingField
+          ? "COLLECT_CURRENT_FIELD"
+          : "RETRY_OR_OFFER_ALTERNATIVES",
       speak:
         typeof bookResult.speak === "string" && bookResult.speak
           ? bookResult.speak
           : booked
             ? "You're all set — your appointment is confirmed."
             : "I wasn't able to complete the booking. Would you like to try another time?",
+      errorCode,
       data: {
         appointment_id: bookResult.appointment_id || bookResult.appointmentId,
         startsAt,
         booking: bookResult,
+        needsFieldCollection: missingField,
       },
     });
   }
