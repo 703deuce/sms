@@ -5,6 +5,7 @@ import {
   getVoicePipelineConfig,
   type VoicePipelineConfig,
 } from "@/lib/voice/runtime-provider/config";
+import { buildAmySttConfig, describeAmySttConfig } from "./stt-config";
 
 const INFERENCE_TTS_PROVIDERS = new Set([
   "inference",
@@ -61,15 +62,17 @@ export function buildAmyTts(cfg: VoicePipelineConfig): tts.TTS {
 
 export function buildAmyVoicePipeline() {
   const cfg = getVoicePipelineConfig();
+  const sttCfg = buildAmySttConfig();
 
   const sttModel =
     cfg.sttProvider === "inference"
-      ? cfg.sttModel
-      : normalizeInferenceModel(cfg.sttProvider, cfg.sttModel, "deepgram");
+      ? sttCfg.model
+      : normalizeInferenceModel(cfg.sttProvider, sttCfg.model, "deepgram");
 
   const stt = new inference.STT({
     model: sttModel,
-    language: cfg.sttLanguage,
+    language: sttCfg.language,
+    ...(sttCfg.modelOptions ? { modelOptions: sttCfg.modelOptions } : {}),
   });
 
   let llm: openai.LLM | inference.LLM;
@@ -81,12 +84,15 @@ export function buildAmyVoicePipeline() {
 
   const ttsInstance = buildAmyTts(cfg);
 
-  return { stt, llm, tts: ttsInstance, config: cfg };
+  return { stt, llm, tts: ttsInstance, config: cfg, sttConfig: sttCfg };
 }
 
-export function describePipelineConfig(cfg: VoicePipelineConfig) {
+export function describePipelineConfig(
+  cfg: VoicePipelineConfig,
+  sttConfig = buildAmySttConfig(),
+) {
   return {
-    stt: { provider: cfg.sttProvider, model: cfg.sttModel, language: cfg.sttLanguage },
+    stt: describeAmySttConfig(sttConfig),
     llm: { provider: cfg.llmProvider, model: cfg.llmModel },
     tts: {
       preset: cfg.ttsPreset || null,

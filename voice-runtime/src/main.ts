@@ -79,13 +79,13 @@ export default defineAgent<AmyProcessUserData>({
     const agentConfig = parseVoiceAgentConfig(agentRow?.draftConfig);
     const outputGainDb = resolveLiveKitOutputGainDb(agentConfig.voiceLanguage?.outputGainDb);
 
-    const { stt, llm, tts, config } = buildAmyVoicePipeline();
+    const { stt, llm, tts, config, sttConfig } = buildAmyVoicePipeline();
     console.log(
       JSON.stringify({
         source: "transovo-voice-runtime",
         event: "pipeline_config",
         callId,
-        pipeline: describePipelineConfig(config),
+        pipeline: describePipelineConfig(config, sttConfig),
         turnHandling: describeTurnHandlingConfig(),
         outputGainDb,
       }),

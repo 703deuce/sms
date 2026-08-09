@@ -52,6 +52,25 @@ Telnyx must send PSTN to your LiveKit **SIP URI** (may differ from project URL, 
 
 If Amy clips mid-sentence pauses, raise preset to `test_a` or `test_b`.
 
+### Deepgram Flux EOT (Telnyx-class turn-taking)
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `VOICE_TURN_PRESET` | `ultra_low` | Set to `flux_eager` for Flux STT+EOT (no LiveKit TurnDetector) |
+| `VOICE_STT_MODEL` | `deepgram/flux-general-en` | Only when `flux_eager` (else `deepgram/nova-3`) |
+| `VOICE_FLUX_EAGER_EOT_THRESHOLD` | `0.3` | Eager EOT — starts preemptive LLM early |
+| `VOICE_FLUX_EOT_THRESHOLD` | `0.7` | Confirmed end-of-turn |
+| `VOICE_FLUX_EOT_TIMEOUT_MS` | `5000` | Flux EOT timeout ceiling |
+
+**A/B Flux vs TurnDetector:**
+```
+# A — current (Nova-3 + TurnDetector)
+VOICE_TURN_PRESET=ultra_low
+
+# B — Flux eager EOT (closer to Telnyx Flux profile)
+VOICE_TURN_PRESET=flux_eager
+```
+
 ### Recommended low-latency stack (defaults in code)
 
 ```
