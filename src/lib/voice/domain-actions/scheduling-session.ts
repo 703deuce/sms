@@ -1,8 +1,4 @@
-import {
-  getOrCreateRealtimeSession,
-  reloadRealtimeSession,
-  updateSessionAfterRuntimeChange,
-} from "@/lib/voice/realtime-session/init";
+import { getSessionRuntimeExt, patchSessionRuntimeExt } from "@/lib/voice/session-runtime/state";
 import type { AmyRealtimeSession } from "@/lib/voice/realtime-session/types";
 import type { WorkflowState } from "@/lib/voice/workflow-engine/types";
 import type { LiveKitCallContext } from "./session-bootstrap";
@@ -45,6 +41,10 @@ export async function reloadLiveKitSchedulingSession(
       : typeof (data.heldSlot as { start?: string } | undefined)?.start === "string"
         ? (data.heldSlot as { start: string }).start
         : null;
+
+  const preservedExt = getSessionRuntimeExt(input.ctx.session);
+  const preservedNodeId = input.ctx.session.currentNodeId;
+  const preservedCollected = { ...input.ctx.session.collectedFields };
 
   let session = await reloadRealtimeSession({
     callId: ctx.callId,

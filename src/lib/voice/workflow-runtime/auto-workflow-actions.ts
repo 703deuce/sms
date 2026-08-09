@@ -97,7 +97,8 @@ export async function autoApplyWorkflowActionsFromUtterance(input: {
     !called.has("check_availability") &&
     expected === "check_availability" &&
     allowedToolNames.has("check_availability") &&
-    /tomorrow|morning|afternoon|thursday|friday|monday|tuesday|wednesday|available|schedule|later in the week/i.test(
+    !/reschedule/i.test(input.userText) &&
+    /tomorrow|morning|afternoon|thursday|friday|monday|tuesday|wednesday|available|later in the week/i.test(
       input.userText,
     )
   ) {

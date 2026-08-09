@@ -25,14 +25,24 @@ async function hydrateSessionFromFoundAppointment(
   if (!appointment) return ctx;
 
   const meta = (appointment.metadata || {}) as Record<string, unknown>;
+  const collectedMeta = meta.collectedFields as Record<string, { value?: string }> | undefined;
+  const fromCollected = (needle: string): string => {
+    if (!collectedMeta) return "";
+    for (const [fieldId, entry] of Object.entries(collectedMeta)) {
+      if (fieldId.includes(needle) && entry?.value?.trim()) return String(entry.value).trim();
+    }
+    return "";
+  };
   const fullName =
-    String(meta.customer_name || "").trim() ||
+    String(meta.customer_name || meta.inviteeName || "").trim() ||
     [appointment.contact?.firstName, appointment.contact?.lastName].filter(Boolean).join(" ").trim();
-  const email = String(appointment.contact?.email || meta.email || "").trim();
+  const email = String(appointment.contact?.email || meta.email || meta.inviteeEmail || fromCollected("email") || "").trim();
   const phone = String(
-    meta.customerPhone || meta.phone || appointment.contact?.phone || ctx.session.callerAni || "",
+    meta.customerPhone || meta.phone || meta.inviteePhone || appointment.contact?.phone || ctx.session.callerAni || "",
   ).trim();
-  const address = String(meta.service_address || meta.address || "").trim();
+  const address = String(
+    meta.service_address || meta.address || fromCollected("address") || "",
+  ).trim();
   const problem = String(
     meta.problem || meta.notes || appointment.serviceName || ctx.session.serviceName || "",
   ).trim();
