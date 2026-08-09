@@ -44,6 +44,8 @@
     "simulate:amy-e2e-alt-fields": "tsx scripts/amy-text-conversation-simulator.ts -- --e2e --scenario garbage-disposal-phone-first",
     "test:amy-master-receptionist": "tsx scripts/amy-master-receptionist-suite.ts",
     "test:amy-master-receptionist-all": "tsx scripts/amy-master-receptionist-suite.ts -- --all",
+    "test:amy-master-receptionist-variations": "tsx scripts/amy-master-receptionist-variations.ts",
+    "test:amy-master-receptionist-variations-curated": "tsx scripts/amy-master-receptionist-variations.ts -- --curated-only",
     "audit:livekit-booking-steps": "tsx scripts/audit-livekit-booking-steps.ts",
     "test:amy-livekit-readiness": "tsx scripts/amy-livekit-readiness.ts",
     "test:telephony-provisioning": "tsx scripts/test-telephony-provisioning.ts",

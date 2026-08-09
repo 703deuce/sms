@@ -7,7 +7,6 @@
  *
  * Run: npm run test:amy-master-receptionist
  */
-import { getPrisma } from "../src/lib/db";
 import {
   createPreprodTenant,
   cleanupPreprodTenant,
@@ -22,9 +21,12 @@ import { runConversationScenario } from "../src/lib/voice/testing/conversation-r
 import {
   getMasterScenario,
   MASTER_RECEPTIONIST_OPTIONAL_SCENARIOS,
-  MASTER_RECEPTIONIST_SUITE_ORDER,
 } from "../src/lib/voice/testing/master-receptionist-scenarios";
-import { seedConfirmedAppointment } from "../src/lib/voice/testing/appointment-fixtures";
+import {
+  COMBINED_LIFECYCLE_SCENARIO_ID,
+  lifecycleResultToSuiteRows,
+  runBookRescheduleCancelLifecycle,
+} from "../src/lib/voice/testing/master-receptionist-journey";
 import { hasLlmConfigured } from "../src/lib/ai/llm-providers";
 
 type SuiteReport = {
@@ -37,85 +39,6 @@ type SuiteReport = {
     bookingId: string | null;
   }>;
 };
-
-async function runCoreJourney(
-  ctx: PreprodContext,
-  callerPhone: string,
-  serviceName: string,
-  useLlmCaller: boolean,
-) {
-  const results: SuiteReport["results"] = [];
-  let priorAppointmentId: string | undefined;
-  let priorStartsAt: Date | undefined;
-
-  for (const scenarioId of MASTER_RECEPTIONIST_SUITE_ORDER) {
-    const scenario = getMasterScenario(scenarioId);
-
-    if (scenario.requiresPriorAppointment) {
-      if (!priorAppointmentId) {
-        const placeholderCallId = `seed-${Date.now()}`;
-        const seeded = await seedConfirmedAppointment({
-          workspaceId: ctx.workspaceId,
-          agentId: ctx.agentId,
-          callId: placeholderCallId,
-          callerPhone,
-          contactName: "John Smith",
-          serviceName,
-        });
-        priorAppointmentId = seeded.appointmentId;
-        priorStartsAt = seeded.startsAt;
-      }
-    }
-
-    const report = await runConversationScenario({
-      scenario,
-      ctx,
-      callerPhone,
-      serviceName,
-      llmCaller: useLlmCaller,
-      maxTurns: scenarioId === "call-2-reschedule" || scenarioId === "call-3-cancel" ? 15 : 25,
-      priorAppointmentId,
-      priorStartsAt,
-    });
-
-    if (scenarioId === "call-1-hvac-booking" && report.bookingId) {
-      const prisma = getPrisma();
-      const appt = await prisma.voiceAppointment.findFirst({
-        where: {
-          workspaceId: ctx.workspaceId,
-          callId: { in: ctx.callIds },
-          status: { notIn: ["cancelled", "canceled"] },
-        },
-        orderBy: { createdAt: "desc" },
-      });
-      if (appt) {
-        priorAppointmentId = appt.id;
-        priorStartsAt = appt.startsAt;
-      }
-    }
-
-    if (scenarioId === "call-2-reschedule" && priorAppointmentId) {
-      const prisma = getPrisma();
-      const appt = await prisma.voiceAppointment.findUnique({
-        where: { id: priorAppointmentId },
-        select: { startsAt: true },
-      });
-      if (appt) priorStartsAt = appt.startsAt;
-    }
-
-    results.push({
-      scenario: scenarioId,
-      passed: report.passed,
-      turns: report.turns,
-      failures: report.failures,
-      bookingId: report.bookingId,
-    });
-
-    if (!report.passed) break;
-  }
-
-  return results;
-}
 
 async function runOptionalScenario(
   ctx: PreprodContext,
@@ -169,8 +92,13 @@ async function main() {
       scenario,
     });
 
-    const coreResults = await runCoreJourney(ctx, callerPhone, serviceName, useLlmCaller);
-    suite.results.push(...coreResults);
+    const lifecycle = await runBookRescheduleCancelLifecycle({
+      ctx,
+      callerPhone,
+      serviceName,
+      llmCaller: useLlmCaller,
+    });
+    suite.results.push(...lifecycleResultToSuiteRows(lifecycle));
 
     if (includeOptional) {
       for (const scenarioId of MASTER_RECEPTIONIST_OPTIONAL_SCENARIOS) {
@@ -209,8 +137,9 @@ async function main() {
     console.log("\n══ Master Receptionist Suite Summary ══");
     for (const result of suite.results) {
       const status = result.passed ? "PASS" : "FAIL";
+      const lifecycleTag = result.scenario === COMBINED_LIFECYCLE_SCENARIO_ID ? " [lifecycle]" : "";
       console.log(
-        `${status}  ${result.scenario} (${result.turns} turns)${result.bookingId ? ` booking=${result.bookingId}` : ""}`,
+        `${status}  ${result.scenario}${lifecycleTag} (${result.turns} turns)${result.bookingId ? ` booking=${result.bookingId}` : ""}`,
       );
       for (const failure of result.failures) {
         console.error(`       - ${failure}`);
