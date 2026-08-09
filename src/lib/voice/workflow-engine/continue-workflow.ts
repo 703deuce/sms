@@ -360,6 +360,25 @@ export async function executeContinueWorkflow(
       });
     }
 
+    const existingHeld =
+      normalizeSlotIso(input.sessionContext?.heldSlot || runtime.held_slot || "") === picked;
+    if (existingHeld) {
+      const { state: nextState } = await computeWorkflowState({
+        callId: input.callId,
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+        workflow,
+        serviceName: resolvedServiceName,
+      });
+      return normalizeResponse({
+        success: true,
+        workflowState: nextState,
+        nextAction: "ASK_CALLER_TO_CONFIRM_BOOKING",
+        speak: `I have ${formatSlotLabel(picked, timezone)} held for you.`,
+        data: { selected_slot: picked, startsAt: picked, holdReused: true },
+      });
+    }
+
     const holdResult = await internalHold({
       workspaceId: input.workspaceId,
       agentId: input.agentId,

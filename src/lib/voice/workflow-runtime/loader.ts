@@ -5,6 +5,7 @@ import {
   MESSAGE_TAKING_WORKFLOW_V1,
   MESSAGE_TAKING_WORKFLOW_V2,
 } from "./definitions";
+import { HOME_SERVICE_DISPATCHER_WORKFLOW_V1 } from "./definitions/home-service-dispatcher";
 
 export type ActiveWorkflowRef = {
   workflowId: string;
@@ -18,6 +19,9 @@ const REGISTRY: Record<string, Record<number, WorkflowDefinition>> = {
   message_taking: {
     1: MESSAGE_TAKING_WORKFLOW_V1,
     2: MESSAGE_TAKING_WORKFLOW_V2,
+  },
+  home_service_dispatcher: {
+    1: HOME_SERVICE_DISPATCHER_WORKFLOW_V1,
   },
 };
 

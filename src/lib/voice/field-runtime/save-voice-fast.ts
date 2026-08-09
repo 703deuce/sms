@@ -169,10 +169,14 @@ export async function recordFieldForLiveKitVoice(input: {
     ...amySession,
     activeField: missing[0]?.field_id || null,
     currentState: workflowState,
-    runtime: {
-      ...amySession.runtime,
-      intent: amySession.workflowId,
-    },
+    runtime: appendFieldReceipt(
+      {
+        ...amySession.runtime,
+        intent: amySession.workflowId,
+      },
+      fieldId,
+      String(input.value),
+    ),
   });
   const sessionRefreshMs = Date.now() - refreshStart;
 
@@ -203,6 +207,79 @@ export async function recordFieldForLiveKitVoice(input: {
       sessionRefreshMs,
       totalMs: Date.now() - started,
     },
+  };
+}
+
+const SCHEDULING_INVALIDATION_FIELDS = new Set([
+  "preferred_time",
+  "fld_preferred_time",
+  "sys_address",
+  "service_address",
+  "fld_service_address",
+]);
+
+/**
+ * Batch field save — validates all fields, single session write, sync receipts.
+ */
+export async function recordFieldsForLiveKitVoice(input: {
+  amySession: AmyRealtimeSession;
+  fields: Record<string, string>;
+}): Promise<{
+  ok: boolean;
+  speak: string;
+  amySession: AmyRealtimeSession;
+  workflowState: WorkflowState;
+  recorded: string[];
+  error_code?: string;
+}> {
+  const recorded: string[] = [];
+  let session = input.amySession;
+
+  for (const [fieldId, value] of Object.entries(input.fields)) {
+    if (!value?.trim()) continue;
+    const result = await recordFieldForLiveKitVoice({
+      amySession: session,
+      fieldId,
+      value,
+    });
+    if (!result.ok) {
+      return {
+        ok: false,
+        speak: result.speak,
+        amySession: result.amySession,
+        workflowState: result.workflowState,
+        recorded,
+        error_code: result.error_code,
+      };
+    }
+    session = result.amySession;
+    recorded.push(fieldId);
+  }
+
+  if (!recorded.length) {
+    return {
+      ok: false,
+      speak: "I didn't catch any details to save.",
+      amySession: session,
+      workflowState: session.currentState,
+      recorded,
+      error_code: "NO_FIELDS",
+    };
+  }
+
+  const invalidated = recorded.some((id) => SCHEDULING_INVALIDATION_FIELDS.has(id));
+  if (invalidated) {
+    const { invalidateSchedulingState } = await import("@/lib/voice/session-runtime/state");
+    session = invalidateSchedulingState(session, "field_changed");
+  }
+
+  const missing = missingFromManifest(session.fieldManifest, session.collectedFields);
+  return {
+    ok: true,
+    speak: speakForMissing(missing),
+    amySession: session,
+    workflowState: session.currentState,
+    recorded,
   };
 }
 

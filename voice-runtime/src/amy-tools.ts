@@ -14,12 +14,21 @@ import {
   domainRecordFields,
   domainSelectSlot,
   domainTakeMessage,
+  domainLookupCustomer,
+  domainValidateEligibility,
+  domainClassifyIntent,
+  domainRequestHuman,
+  domainFindAppointments,
+  domainRescheduleAppointment,
+  domainCancelAppointment,
   formatModelToolResult,
   taskContextPayload,
   taskForWorkflowState,
   type DomainActionResult,
   type LiveKitCallContext,
 } from "@/lib/voice/domain-actions";
+import { taskTypeForSession } from "@/lib/voice/workflow-tasks/registry";
+import "@/lib/voice/workflow-tasks/registry";
 import { applyWorkflowNodeTransition } from "@/lib/voice/workflow-runtime/node-transitions";
 import { compileToolsForCallContext } from "@/lib/voice/workflow-runtime/compile-for-call";
 import { resolveActiveWorkflowForAgent } from "@/lib/voice/workflow-runtime/loader";
@@ -346,6 +355,119 @@ export function buildAmyToolList(callContext: LiveKitCallContext) {
     );
   }
 
+  if (allowed.has("lookup_customer")) {
+    tools.push(
+      llm.tool({
+        name: "lookup_customer",
+        description:
+          "Look up an existing customer by phone, email, or name. Do not assume ANI is the speaker.",
+        parameters: z.object({
+          phone: z.string().optional(),
+          email: z.string().optional(),
+          name: z.string().optional(),
+        }),
+        execute: async ({ phone, email, name }, opts: AmyToolOptions) =>
+          wrapToolExecute("lookup_customer", opts, async (ctx) =>
+            domainLookupCustomer({ ctx, phone, email, name }),
+          ),
+      }),
+    );
+  }
+
+  if (allowed.has("validate_eligibility")) {
+    tools.push(
+      llm.tool({
+        name: "validate_eligibility",
+        description: "Validate whether the service address is in the business service area.",
+        parameters: z.object({
+          address: z.string().optional().describe("Service address if not already collected"),
+        }),
+        execute: async ({ address }, opts: AmyToolOptions) =>
+          wrapToolExecute("validate_eligibility", opts, async (ctx) =>
+            domainValidateEligibility({ ctx, address }),
+          ),
+      }),
+    );
+  }
+
+  if (allowed.has("classify_intent")) {
+    tools.push(
+      llm.tool({
+        name: "classify_intent",
+        description: "Classify urgency and safety for triage routing per configured rules.",
+        parameters: z.object({
+          utterance: z.string().optional().describe("Recent caller utterance for classification"),
+        }),
+        execute: async ({ utterance }, opts: AmyToolOptions) =>
+          wrapToolExecute("classify_intent", opts, async (ctx) =>
+            domainClassifyIntent({ ctx, utterance }),
+          ),
+      }),
+    );
+  }
+
+  if (allowed.has("find_appointments")) {
+    tools.push(
+      llm.tool({
+        name: "find_appointments",
+        description: "Find existing appointments for the caller before reschedule or cancel.",
+        parameters: z.object({
+          phone: z.string().optional(),
+        }),
+        execute: async ({ phone }, opts: AmyToolOptions) =>
+          wrapToolExecute("find_appointments", opts, async (ctx) =>
+            domainFindAppointments({ ctx, phone }),
+          ),
+      }),
+    );
+  }
+
+  if (allowed.has("reschedule_appointment")) {
+    tools.push(
+      llm.tool({
+        name: "reschedule_appointment",
+        description: "Reschedule an appointment after explicit caller confirmation.",
+        parameters: z.object({
+          appointment_id: z.string(),
+          new_starts_at: z.string().describe("ISO start time for the new slot"),
+          confirmed: z.boolean().optional(),
+        }),
+        execute: async ({ appointment_id, new_starts_at, confirmed }, opts: AmyToolOptions) =>
+          wrapToolExecute("reschedule_appointment", opts, async (ctx) =>
+            domainRescheduleAppointment({
+              ctx,
+              appointmentId: appointment_id,
+              newStartsAt: new_starts_at,
+              confirmed,
+            }),
+          ),
+      }),
+    );
+  }
+
+  if (allowed.has("cancel_appointment")) {
+    tools.push(
+      llm.tool({
+        name: "cancel_appointment",
+        description: "Cancel an appointment after explicit caller confirmation.",
+        parameters: z.object({
+          appointment_id: z.string(),
+          confirmed: z.boolean().optional(),
+          reason: z.string().optional(),
+        }),
+        execute: async ({ appointment_id, confirmed, reason }, opts: AmyToolOptions) =>
+          wrapToolExecute("cancel_appointment", opts, async (ctx) =>
+            domainCancelAppointment({
+              ctx,
+              appointmentId: appointment_id,
+              confirmed,
+              reason,
+            }),
+          ),
+      }),
+    );
+  }
+
   if (allowed.has("request_human")) {
     tools.push(
       llm.tool({
@@ -359,15 +481,7 @@ export function buildAmyToolList(callContext: LiveKitCallContext) {
           wrapToolExecute(
             "request_human",
             opts,
-            async (ctx) => ({
-              ok: true,
-              speak: "Let me connect you with someone who can help.",
-              workflow_state: ctx.session.currentState,
-              data: {
-                action: "transfer_requested",
-                reason: reason || "caller requested human",
-              },
-            }),
+            async (ctx) => domainRequestHuman({ ctx, reason }),
             { refresh: false },
           ),
       }),
@@ -398,7 +512,7 @@ export function buildAmyToolList(callContext: LiveKitCallContext) {
 }
 
 export function buildAmyAgentInstructions(callContext: LiveKitCallContext): string {
-  const taskId = taskForWorkflowState(callContext.session.currentState);
+  const taskId = taskTypeForSession(callContext.session) || taskForWorkflowState(callContext.session.currentState);
   const { envelope } = compileToolsForCallContext(callContext);
   return [
     buildAmyLiveKitPermanentPrompt(callContext.businessName),

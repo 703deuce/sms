@@ -1,12 +1,9 @@
-import { recordFieldForLiveKitVoice } from "@/lib/voice/field-runtime/save-voice-fast";
+import { recordFieldForLiveKitVoice, recordFieldsForLiveKitVoice } from "@/lib/voice/field-runtime/save-voice-fast";
 import { executeContinueWorkflow } from "@/lib/voice/workflow-engine/continue-workflow";
-import {
-  authorizeCapabilityInvocation,
-} from "@/lib/voice/workflow-runtime/capability-guard";
 import { resolveActiveWorkflowForAgent } from "@/lib/voice/workflow-runtime/loader";
-import { buildRuntimeSnapshotFromSession } from "@/lib/voice/workflow-runtime/compile-turn-envelope";
 import { startDomainActionTimer } from "./latency";
 import { assertTaskToolAllowed, taskForWorkflowState } from "./task-guard";
+import { guardToolInvocation } from "./guard";
 import {
   bookingFailureNeedsFieldCollection,
   reconcileSessionAfterBookingFieldGap,
@@ -30,39 +27,8 @@ export type DomainActionResult = {
   workflow_state?: string;
   data?: Record<string, unknown>;
   error_code?: string;
+  retryable?: boolean;
 };
-
-function guardToolInvocation(
-  ctx: LiveKitCallContext,
-  toolName: string,
-): DomainActionResult | null {
-  const { definition: workflow, ref } = resolveActiveWorkflowForAgent(ctx.agentId);
-  const snapshot = buildRuntimeSnapshotFromSession({
-    workflow,
-    workflowVersion: ref.version,
-    legacyState: ctx.session.currentState,
-    currentNodeId:
-      ctx.session.currentNodeId ||
-      ctx.session.runtime.current_node_id ||
-      null,
-    collectedFields: ctx.session.collectedFields || {},
-    confirmationReceived:
-      ctx.session.confirmationState === "confirmed" ||
-      Boolean(ctx.session.runtime.confirmation_received),
-    flags: {
-      ...(ctx.workflowRuntime?.flags || {}),
-      _envelopeCapabilities: ctx.lastToolEnvelope?.capabilityIds,
-    },
-  });
-  const guard = authorizeCapabilityInvocation({ workflow, state: snapshot, toolName });
-  if (guard.ok) return null;
-  return {
-    ok: false,
-    speak: guard.speak,
-    error_code: guard.error_code,
-    workflow_state: ctx.session.currentState,
-  };
-}
 
 export async function domainGetBookingRequirements(input: {
   ctx: LiveKitCallContext;
@@ -199,15 +165,68 @@ export async function domainCheckAvailability(input: {
   const timer = startDomainActionTimer("check_availability", input.ctx.callId, taskId);
   timer.markProviderStart();
 
-  const result = await executeContinueWorkflow({
+  const { findMultiResourceAvailability, schedulingSlotToSlotRef } = await import(
+    "@/lib/voice/scheduling-domain/availability"
+  );
+  const { setProposedSlotRefs } = await import("@/lib/voice/session-runtime/state");
+
+  const zone =
+    input.ctx.session.collectedFields.fld_zone ||
+    input.ctx.session.runtime.session_runtime?.eligibility?.zone ||
+    null;
+  const urgency = input.ctx.session.runtime.session_runtime?.classifications?.urgency || null;
+
+  const multiResult = await findMultiResourceAvailability({
     workspaceId: input.ctx.workspaceId,
     agentId: input.ctx.agentId,
-    callId: input.ctx.callId,
-    userInput: input.spoken,
-    workflow: "book_appointment",
-    serviceName: input.ctx.session.serviceName,
-    sessionContext: input.ctx.session,
+    serviceName: input.ctx.session.serviceName || "Service Visit",
+    zone,
+    urgency,
+    timezone: input.ctx.session.timezone,
+    daysAhead: 7,
+    preferredStart: input.spoken || null,
   });
+
+  let result: Record<string, unknown>;
+  if (multiResult.slots.length > 0) {
+    input.ctx.session = setProposedSlotRefs(
+      input.ctx.session,
+      multiResult.slots.map(schedulingSlotToSlotRef),
+    );
+    input.ctx.session = {
+      ...input.ctx.session,
+      currentState: "SELECTING_SLOT",
+      availableSlots: multiResult.slots.map((s) => s.start),
+    };
+    const { saveAgentRuntime } = await import("@/lib/voice/workflow-engine/runtime-state");
+    await saveAgentRuntime(input.ctx.callId, {
+      ...input.ctx.session.runtime,
+      state: "SELECTING_SLOT",
+      proposed_slots: multiResult.slots.map((s) => s.start),
+    });
+    result = {
+      ok: true,
+      workflow_state: "SELECTING_SLOT",
+      speak: multiResult.slots
+        .slice(0, 3)
+        .map((s) => s.spokenLabel || s.start)
+        .join(", "),
+      data: {
+        slots: multiResult.slots.map((s) => ({ startsAt: s.start, staffName: s.resourceName })),
+        eligibleResourceCount: multiResult.eligibleResources.length,
+      },
+    };
+  } else {
+    result = await executeContinueWorkflow({
+      workspaceId: input.ctx.workspaceId,
+      agentId: input.ctx.agentId,
+      callId: input.ctx.callId,
+      userInput: input.spoken,
+      workflow: "book_appointment",
+      serviceName: input.ctx.session.serviceName,
+      sessionContext: input.ctx.session,
+    });
+  }
   timer.markProviderEnd();
 
   const refreshed = await reloadLiveKitSchedulingSession(input.ctx, result);
@@ -377,20 +396,50 @@ export async function domainRecordFields(input: {
   const blocked = guardToolInvocation(input.ctx, "record_fields");
   if (blocked) return blocked;
 
-  let lastResult: DomainActionResult | null = null;
-  for (const [fieldId, value] of Object.entries(input.fields)) {
-    if (!value?.trim()) continue;
-    lastResult = await domainRecordField({ ctx: input.ctx, value, fieldId });
-    if (!lastResult.ok) return lastResult;
-  }
-  return (
-    lastResult || {
+  const taskId = taskForWorkflowState(input.ctx.session.currentState);
+  assertTaskToolAllowed(taskId, "record_fields");
+  const timer = startDomainActionTimer("record_fields", input.ctx.callId, taskId);
+
+  const recorded = await recordFieldsForLiveKitVoice({
+    amySession: input.ctx.session,
+    fields: input.fields,
+  });
+  timer.finish(recorded.ok, recorded.error_code);
+
+  if (!recorded.ok) {
+    return {
       ok: false,
-      speak: "I didn't receive any field values to record.",
-      error_code: "NO_FIELDS",
-      workflow_state: input.ctx.session.currentState,
-    }
-  );
+      speak: recorded.speak,
+      error_code: recorded.error_code,
+      workflow_state: recorded.workflowState,
+    };
+  }
+
+  input.ctx.session = recorded.amySession;
+  input.ctx.workflowState = recorded.workflowState;
+
+  const fieldPayload = buildRecordFieldPayload({
+    session: recorded.amySession,
+    recordedFieldId: recorded.recorded[recorded.recorded.length - 1] || "",
+  });
+
+  await traceLiveKitDomainAction(input.ctx, "record_fields", {
+    ok: true,
+    speak: recorded.speak,
+    workflow_state: recorded.workflowState,
+    data: { ...fieldPayload, recordedFields: recorded.recorded },
+  });
+
+  return {
+    ok: true,
+    speak: recorded.speak,
+    workflow_state: recorded.workflowState,
+    data: {
+      ...fieldPayload,
+      recordedFields: recorded.recorded,
+      readyForAvailability: recorded.amySession.missingFieldIds.length === 0,
+    },
+  };
 }
 
 export async function domainTakeMessage(input: {

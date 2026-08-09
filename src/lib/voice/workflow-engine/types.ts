@@ -1,4 +1,5 @@
 import type { RuntimeFieldManifestEntry, WorkflowAction } from "@/lib/voice/field-runtime/types";
+import type { SessionRuntimeExtensions } from "@/lib/voice/session-runtime/types";
 
 /** Deterministic workflow phases for Caller Amy appointment booking. */
 export type WorkflowState =
@@ -27,6 +28,8 @@ export type OperationReceipt = {
   created_at: string;
   completed_at?: string | null;
   error_code?: string | null;
+  input_hash?: string | null;
+  latency_ms?: number | null;
 };
 
 export type StateTransition = {
@@ -57,6 +60,8 @@ export type AgentRuntimeRecord = {
   pending_operations: string[];
   state_history: StateTransition[];
   updated_at: string;
+  /** Extended receptionist runtime state (holds, classifications, transfer, etc.) */
+  session_runtime?: SessionRuntimeExtensions;
 };
 
 export type RuntimeContextPayload = {

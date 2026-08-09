@@ -15,6 +15,15 @@ export {
   domainEndCall,
   type DomainActionResult,
 } from "./booking-actions";
+export { domainLookupCustomer } from "./lookup-actions";
+export { domainValidateEligibility, domainClassifyIntent } from "./eligibility-actions";
+export { domainRequestHuman } from "./transfer-actions";
+export {
+  domainFindAppointments,
+  domainRescheduleAppointment,
+  domainCancelAppointment,
+} from "./modify-actions";
+export { guardToolInvocation } from "./guard";
 export {
   assertTaskToolAllowed,
   taskForWorkflowState,
