@@ -144,8 +144,9 @@ function wrapToolExecute(
   const run = async () => {
     const result = await execute(ctx);
 
-    const { definition: workflow } =
-      ctx.workflowDefinition || resolveActiveWorkflowForAgent(ctx.agentId);
+    const workflow =
+      ctx.workflowDefinition ??
+      resolveActiveWorkflowForAgent(ctx.agentId).definition;
     await applyWorkflowNodeTransition({
       workflow,
       callId: ctx.callId,
@@ -238,7 +239,7 @@ export function buildAmyToolList(callContext: LiveKitCallContext) {
           "Record multiple field values at once when the caller provides several answers together. Keys must match workflow field ids.",
         parameters: z.object({
           fields: z
-            .record(z.string())
+            .record(z.string(), z.string())
             .describe("Map of field_id to caller-provided value"),
         }),
         execute: async ({ fields }, opts: AmyToolOptions) =>

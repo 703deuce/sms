@@ -113,7 +113,6 @@ export async function applyWorkflowNodeTransition(input: {
   input.session.voiceWorkflowId = input.workflow.id;
   input.session.voiceWorkflowVersion = input.workflow.version;
   input.session.currentState = legacyState;
-  input.session.workflowState = legacyState;
   if (confirmationReceived) {
     input.session.confirmationState = "confirmed";
   }

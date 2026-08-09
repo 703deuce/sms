@@ -157,7 +157,7 @@ const nextAfterFields = resolveNextNodeId({
   result: { ok: true, speak: "ok" },
   session: {
     missingFieldIds: [],
-  } as Parameters<typeof resolveNextNodeId>[0]["session"],
+  } as unknown as Parameters<typeof resolveNextNodeId>[0]["session"],
 });
 check("fields complete transitions to check_availability", nextAfterFields === "check_availability");
 
