@@ -66,14 +66,8 @@ async function hydrateSessionFromFoundAppointment(
   const recorded = await recordFieldsForLiveKitVoice({
     amySession: ctx.session,
     fields: updates,
-    callId: ctx.callId,
-    workspaceId: ctx.workspaceId,
-    agentId: ctx.agentId,
   });
-  ctx.session = refreshSessionFieldState({
-    ...recorded.session,
-    collectedFields: { ...recorded.session.collectedFields, ...updates },
-  });
+  ctx.session = refreshSessionFieldState(recorded.amySession);
   return ctx;
 }
 
