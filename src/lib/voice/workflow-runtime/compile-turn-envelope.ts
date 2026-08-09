@@ -205,7 +205,15 @@ function resolveSnapshotNodeId(input: {
       : legacyStateToNodeId(input.workflow, input.legacyState);
 
   const missingCount = Number(input.flags?.missingFieldCount ?? 0);
-  if (
+  const fieldsCompleteAtEarlyNode =
+    missingCount === 0 &&
+    (nodeId === "lookup_customer" || nodeId === "detect_intent" || nodeId === "collect_fields");
+
+  if (fieldsCompleteAtEarlyNode) {
+    const collectNode = input.workflow.nodes.find((n) => n.id === "collect_fields");
+    const edge = collectNode?.transitions.find((t) => t.when === "fields_complete");
+    if (edge?.to) nodeId = edge.to;
+  } else if (
     nodeId === "collect_fields" &&
     !["INTENT_DISCOVERY", "COLLECTING_FIELDS"].includes(input.legacyState)
   ) {

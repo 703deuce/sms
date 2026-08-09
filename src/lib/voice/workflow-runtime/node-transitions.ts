@@ -49,6 +49,50 @@ export function resolveNextNodeId(input: {
 
   const missing = input.session.missingFieldIds.length;
 
+  if (
+    (input.toolName === "record_current_field" || input.toolName === "record_fields") &&
+    input.result.ok
+  ) {
+    if (missing === 0) {
+      const collectNode = getNode(input.workflow, "collect_fields");
+      const edge = collectNode?.transitions.find((t) => t.when === "fields_complete");
+      return edge?.to || "classify";
+    }
+    if (node.id !== "collect_fields" && getNode(input.workflow, "collect_fields")) {
+      return "collect_fields";
+    }
+    return input.currentNodeId;
+  }
+
+  if (input.toolName === "get_booking_requirements" && input.result.ok && missing === 0) {
+    const collectNode = getNode(input.workflow, "collect_fields");
+    const edge = collectNode?.transitions.find((t) => t.when === "fields_complete");
+    return edge?.to || "check_availability";
+  }
+
+  if (input.toolName === "detect_caller_intent" && input.result.ok) {
+    const detectNode = getNode(input.workflow, "detect_intent");
+    if (detectNode && (node.id === "lookup_customer" || node.id === "detect_intent")) {
+      const intent = String(input.result.data?.intent || "");
+      if (intent === "emergency") {
+        const edge = detectNode.transitions.find((t) => t.when === "emergency");
+        return edge?.to || "emergency_handoff";
+      }
+      if (intent === "reschedule") {
+        const edge = detectNode.transitions.find((t) => t.when === "reschedule_intent");
+        return edge?.to || "reschedule_lookup";
+      }
+      if (intent === "cancel") {
+        const edge = detectNode.transitions.find((t) => t.when === "cancel_intent");
+        return edge?.to || "cancel_lookup";
+      }
+      const edge =
+        detectNode.transitions.find((t) => t.when === "book_intent") ||
+        detectNode.transitions.find((t) => t.when === "default");
+      return edge?.to || "collect_fields";
+    }
+  }
+
   if (node.type === "collect_fields") {
     if (missing === 0) {
       const hasHeldSlot = Boolean(

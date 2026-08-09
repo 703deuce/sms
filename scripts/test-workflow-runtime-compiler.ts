@@ -16,6 +16,7 @@ import {
   resolveNextNodeId,
   linearVoiceNodePath,
 } from "../src/lib/voice/workflow-runtime";
+import { HOME_SERVICE_DISPATCHER_WORKFLOW_V1 } from "../src/lib/voice/workflow-runtime/definitions/home-service-dispatcher";
 import { architectWorkflowFromRequest } from "../src/lib/agents/appointment-booking/workflow-architect";
 import { normalizeSpokenEmail } from "../src/lib/voice/field-runtime/validate";
 
@@ -187,6 +188,38 @@ const nextAfterFields = resolveNextNodeId({
   } as unknown as Parameters<typeof resolveNextNodeId>[0]["session"],
 });
 check("fields complete transitions to check_availability", nextAfterFields === "check_availability");
+
+const dispatcherFieldsComplete = envelopeTools(
+  HOME_SERVICE_DISPATCHER_WORKFLOW_V1,
+  "INTENT_DISCOVERY",
+  {
+    fld_problem: "AC not cooling",
+    sys_name: "John Smith",
+    sys_email: "john@example.com",
+    sys_phone: "+15714776175",
+  },
+  { missingFieldCount: 0 },
+);
+check(
+  "dispatcher INTENT_DISCOVERY + fields complete exposes check_availability",
+  dispatcherFieldsComplete.toolNames.includes("check_availability"),
+  dispatcherFieldsComplete.toolNames.join(", "),
+);
+
+const dispatcherRecordFromLookup = resolveNextNodeId({
+  workflow: HOME_SERVICE_DISPATCHER_WORKFLOW_V1,
+  currentNodeId: "lookup_customer",
+  toolName: "record_current_field",
+  result: { ok: true },
+  session: {
+    missingFieldIds: [],
+  } as unknown as Parameters<typeof resolveNextNodeId>[0]["session"],
+});
+check(
+  "dispatcher record_current_field from lookup_customer advances to classify",
+  dispatcherRecordFromLookup === "classify",
+  dispatcherRecordFromLookup,
+);
 
 const confirmMissingEmail = buildRuntimeSnapshotFromSession({
   workflow: APPOINTMENT_BOOKING_WORKFLOW_V1,
