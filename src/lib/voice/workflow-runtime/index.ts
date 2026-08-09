@@ -15,4 +15,6 @@ export * from "./tool-surface";
 export * from "./runtime-invariants";
 export * from "./loop-detection";
 export * from "./field-extraction";
+export * from "./field-persist";
+export * from "./completion-guards";
 export { shouldBlockRepeatedToolCall } from "./loop-detection";

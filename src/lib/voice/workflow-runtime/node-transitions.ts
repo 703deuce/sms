@@ -50,7 +50,9 @@ export function resolveNextNodeId(input: {
   const missing = input.session.missingFieldIds.length;
 
   if (
-    (input.toolName === "record_current_field" || input.toolName === "record_fields") &&
+    (input.toolName === "submit_caller_information" ||
+      input.toolName === "record_current_field" ||
+      input.toolName === "record_fields") &&
     input.result.ok
   ) {
     if (missing === 0) {
@@ -62,6 +64,24 @@ export function resolveNextNodeId(input: {
       return "collect_fields";
     }
     return input.currentNodeId;
+  }
+
+  if (input.toolName === "check_availability" && input.result.ok) {
+    const checkNode = getNode(input.workflow, "check_availability");
+    if (checkNode) return checkNode.transitions[0]?.to || "select_slot";
+    if (getNode(input.workflow, "select_slot")) return "select_slot";
+  }
+
+  if (input.toolName === "select_slot" && input.result.ok) {
+    if (getNode(input.workflow, "confirm_booking")) return "confirm_booking";
+  }
+
+  if (
+    input.toolName === "confirm_booking" &&
+    input.result.ok &&
+    (input.result.data?.booking != null || input.session.bookingId)
+  ) {
+    return getNode(input.workflow, "complete") ? "complete" : input.currentNodeId;
   }
 
   if (input.toolName === "get_booking_requirements" && input.result.ok && missing === 0) {

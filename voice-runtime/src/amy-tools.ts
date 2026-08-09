@@ -52,6 +52,12 @@ function liveKitNextAction(
   expectedNextAction?: string,
 ): string {
   if (envelopeInstructions?.trim()) return envelopeInstructions;
+  if (expectedNextAction === "confirm_booking") {
+    return "Read back the appointment details. After explicit yes from the caller, call confirm_booking({ confirmed: true }). Do not say the appointment is booked until confirm_booking succeeds.";
+  }
+  if (expectedNextAction === "select_slot") {
+    return "Offer returned slots, then call select_slot when the caller picks one.";
+  }
   if (expectedNextAction === "check_availability") {
     return "Call check_availability before offering any appointment times.";
   }
@@ -61,7 +67,7 @@ function liveKitNextAction(
   switch (state) {
     case "INTENT_DISCOVERY":
     case "COLLECTING_FIELDS":
-      return "Collect the active field from the caller, then call record_current_field({ value }).";
+      return "When the caller provides information, call submit_caller_information with extracted_fields.";
     case "CHECKING_AVAILABILITY":
       return "Call check_availability before offering any appointment times.";
     case "SELECTING_SLOT":
@@ -91,7 +97,9 @@ function stashContext(opts: AmyToolOptions, ctx: LiveKitCallContext) {
 async function refreshAmyAgentAfterTool(
   opts: AmyToolOptions,
   ctx: LiveKitCallContext,
+  generation: number,
 ): Promise<void> {
+  if (ctx.agentSyncGeneration !== generation) return;
   stashContext(opts, ctx);
   await syncAmyAgentFromContext(opts.ctx.session, ctx);
 }
@@ -190,7 +198,9 @@ function wrapToolExecute(
         session: ctx.session,
         workflow,
       });
-      await refreshAmyAgentAfterTool(opts, ctx);
+      const syncGeneration = (ctx.agentSyncGeneration ?? 0) + 1;
+      ctx.agentSyncGeneration = syncGeneration;
+      await refreshAmyAgentAfterTool(opts, ctx, syncGeneration);
       throw new llm.ToolError(
         JSON.stringify({
           success: false,
@@ -271,7 +281,9 @@ function wrapToolExecute(
     // Return tool output to the LLM immediately; sync instructions/tools in the
     // background so updateTools() does not stall or invalidate in-flight speech.
     if (options?.refresh !== false) {
-      void refreshAmyAgentAfterTool(opts, ctx).catch((err) => {
+      const syncGeneration = (ctx.agentSyncGeneration ?? 0) + 1;
+      ctx.agentSyncGeneration = syncGeneration;
+      void refreshAmyAgentAfterTool(opts, ctx, syncGeneration).catch((err) => {
         console.error(
           JSON.stringify({
             source: "transovo-voice-runtime",
@@ -607,7 +619,7 @@ export function buildAmyToolList(callContext: LiveKitCallContext) {
       llm.tool({
         name: "end_call",
         description:
-          "End the call politely after the workflow is complete or the caller is finished. Do not call while booking actions are still pending.",
+          "End the call politely after the workflow is complete or the caller is finished. Only call after confirm_booking succeeds or the caller explicitly wants to hang up without booking. Do not call while a slot is held but booking is unconfirmed.",
         parameters: z.object({
           reason: z.string().optional(),
         }),

@@ -5,7 +5,13 @@ import {
   normalizeExtractedFields,
   inferFieldsFromUtterance,
 } from "@/lib/voice/workflow-runtime/field-extraction";
+import { prepareFieldsForPersistence } from "@/lib/voice/workflow-runtime/field-persist";
 import { reconcileCanonicalWorkflowState } from "@/lib/voice/workflow-runtime/canonical-state";
+import {
+  hasBookingReceipt,
+  requiresBookingReceiptToComplete,
+  getBookingReceipt,
+} from "@/lib/voice/workflow-runtime/completion-guards";
 import { resolveActiveWorkflowForAgent } from "@/lib/voice/workflow-runtime/loader";
 import { writebackBookingToCrm } from "@/lib/voice/crm/call-writeback";
 import { writeToolReceipt } from "./receipts-helper";
@@ -441,26 +447,33 @@ export async function domainSubmitCallerInformation(input: {
     session: input.ctx.session,
     utterance: input.utterance || "",
   });
-  const fieldsToPersist = mergeExtractedFieldMaps(normalized, inferred);
+  const merged = mergeExtractedFieldMaps(normalized, inferred);
+  const prepared = prepareFieldsForPersistence({
+    session: input.ctx.session,
+    extracted: merged,
+  });
 
-  if (!Object.keys(fieldsToPersist).length) {
+  if (!Object.keys(prepared.fields).length) {
     const payload = buildRequirementsPayload(input.ctx.session);
-    timer.finish(false, "NO_EXTRACTED_FIELDS");
+    const validationMessage = prepared.errors[0]?.message;
+    timer.finish(false, prepared.errors.length ? "VALIDATION_FAILED" : "NO_EXTRACTED_FIELDS");
     return {
       ok: false,
-      speak: String(
-        (payload.activeField as { instruction?: string } | null)?.instruction ||
-          "I still need a bit more information.",
-      ),
-      error_code: "NO_EXTRACTED_FIELDS",
+      speak:
+        validationMessage ||
+        String(
+          (payload.activeField as { instruction?: string } | null)?.instruction ||
+            "I still need a bit more information.",
+        ),
+      error_code: prepared.errors.length ? "VALIDATION_FAILED" : "NO_EXTRACTED_FIELDS",
       workflow_state: input.ctx.session.currentState,
-      data: payload,
+      data: { ...payload, fieldErrors: prepared.errors },
     };
   }
 
   const recorded = await recordFieldsForLiveKitVoice({
     amySession: input.ctx.session,
-    fields: fieldsToPersist,
+    fields: prepared.fields,
   });
   timer.markProviderEnd();
 
@@ -481,7 +494,7 @@ export async function domainSubmitCallerInformation(input: {
   const canonical = reconcileCanonicalWorkflowState({
     session: input.ctx.session,
     workflow,
-    toolName: "record_fields",
+    toolName: "submit_caller_information",
     toolResult: { ok: true, data: { recordedFields: recorded.recorded } },
   });
   input.ctx.workflowState = canonical.legacyState;
@@ -642,17 +655,35 @@ export async function domainEndCall(input: {
   ctx: LiveKitCallContext;
   reason?: string;
 }): Promise<DomainActionResult> {
+  if (requiresBookingReceiptToComplete(input.ctx.session)) {
+    return {
+      ok: false,
+      speak:
+        "I still need to confirm your appointment in the system before we wrap up. Let me finish the booking first.",
+      error_code: "BOOKING_NOT_CONFIRMED",
+      workflow_state: input.ctx.session.currentState,
+      data: {
+        nextAction: "confirm_booking",
+        heldSlot: buildHeldSlotPayload(input.ctx.session),
+        bookingReceiptRequired: true,
+      },
+    };
+  }
+
   const taskId = taskForWorkflowState(input.ctx.session.currentState);
   assertTaskToolAllowed(taskId, "end_call");
   const timer = startDomainActionTimer("end_call", input.ctx.callId, taskId);
   timer.finish(true);
   return {
     ok: true,
-    speak: "Thanks for calling. Have a great day!",
+    speak: hasBookingReceipt(input.ctx.session)
+      ? "Thanks for calling. Your appointment is confirmed. Have a great day!"
+      : "Thanks for calling. Have a great day!",
     workflow_state: "COMPLETE",
     data: {
       endCall: true,
       reason: input.reason || "workflow_complete",
+      bookingReceipt: getBookingReceipt(input.ctx.session),
     },
   };
 }

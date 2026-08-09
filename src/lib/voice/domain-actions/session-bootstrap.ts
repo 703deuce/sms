@@ -47,6 +47,7 @@ export type LiveKitCallContext = {
   canonicalWorkflow?: CanonicalWorkflowState;
   toolCallHistory?: ToolCallRecord[];
   lastAgentSync?: LiveKitAgentSyncSnapshot;
+  agentSyncGeneration?: number;
 };
 
 export async function bootstrapLiveKitCallContext(input: {

@@ -3,6 +3,13 @@ import type { WorkflowState } from "@/lib/voice/workflow-engine/types";
 import { legacyStateForNode } from "./node-transitions";
 import { resolveNextNodeId } from "./node-transitions";
 import type { WorkflowDefinition } from "./schema";
+import {
+  fieldsComplete,
+  hasAvailableSlots,
+  hasBookingReceipt,
+  hasHeldSlot,
+  missingRequiredFieldCount,
+} from "./completion-guards";
 
 /** Canonical progression view — currentNodeId is the single source of truth. */
 export type CanonicalWorkflowState = {
@@ -11,6 +18,8 @@ export type CanonicalWorkflowState = {
   legacyState: WorkflowState;
   missingFieldIds: string[];
   readyForAvailability: boolean;
+  bookingReceiptPresent: boolean;
+  bookingInProgress: boolean;
   /** Runtime-computed next business action (not LLM-managed). */
   expectedNextAction: CanonicalNextAction;
 };
@@ -32,37 +41,90 @@ function missingFieldIdsFromSession(session: AmyRealtimeSession): string[] {
     .map((field) => field.field_id);
 }
 
+/**
+ * Derive graph position from session facts (receipts, slots, fields).
+ * Overrides stale cursors such as classify while a slot is held.
+ */
+export function deriveAuthoritativeNodeId(input: {
+  session: AmyRealtimeSession;
+  workflow: WorkflowDefinition;
+  storedNodeId?: string | null;
+}): string {
+  const nodeIds = new Set(input.workflow.nodes.map((n) => n.id));
+  const stored =
+    input.storedNodeId && nodeIds.has(input.storedNodeId)
+      ? input.storedNodeId
+      : input.workflow.entryNodeId;
+
+  if (hasBookingReceipt(input.session) && nodeIds.has("complete")) {
+    return "complete";
+  }
+
+  const missing = missingRequiredFieldCount(input.session);
+  if (missing > 0) {
+    if (nodeIds.has("collect_fields")) return "collect_fields";
+    if (stored === "lookup_customer" || stored === "detect_intent") return stored;
+    return input.workflow.entryNodeId;
+  }
+
+  if (hasHeldSlot(input.session) && nodeIds.has("confirm_booking")) {
+    return "confirm_booking";
+  }
+
+  if (
+    hasAvailableSlots(input.session) &&
+    !hasHeldSlot(input.session) &&
+    nodeIds.has("select_slot")
+  ) {
+    return "select_slot";
+  }
+
+  if (
+    !hasAvailableSlots(input.session) &&
+    !hasHeldSlot(input.session) &&
+    nodeIds.has("check_availability")
+  ) {
+    return "check_availability";
+  }
+
+  if (nodeIds.has("classify")) return "classify";
+
+  return stored;
+}
+
 function deriveExpectedNextAction(input: {
   nodeId: string;
   missingCount: number;
   hasSlots: boolean;
   hasHeldSlot: boolean;
-  confirmationReceived: boolean;
+  bookingReceiptPresent: boolean;
 }): CanonicalNextAction {
-  if (input.confirmationReceived || input.nodeId === "complete") return "complete";
+  if (input.bookingReceiptPresent || input.nodeId === "complete") return "complete";
 
-  if (input.nodeId === "lookup_customer" || input.nodeId === "detect_intent") {
-    return input.missingCount > 0 ? "collect_caller_information" : "detect_intent";
-  }
-
-  if (input.nodeId === "collect_fields") {
-    return input.missingCount > 0 ? "collect_caller_information" : "classify";
-  }
-
-  if (input.nodeId === "classify") return "classify";
-  if (input.nodeId === "validate_eligibility") return "validate_eligibility";
-
-  if (input.nodeId === "check_availability") return "check_availability";
+  if (input.nodeId === "confirm_booking") return "confirm_booking";
 
   if (input.nodeId === "select_slot") {
     return input.hasHeldSlot ? "confirm_booking" : "select_slot";
   }
 
-  if (input.nodeId === "confirm_booking") {
-    return input.hasHeldSlot || input.hasSlots ? "confirm_booking" : "check_availability";
-  }
+  if (input.nodeId === "check_availability") return "check_availability";
 
   if (input.missingCount > 0) return "collect_caller_information";
+
+  if (input.nodeId === "lookup_customer" || input.nodeId === "detect_intent") {
+    return "detect_intent";
+  }
+
+  if (input.nodeId === "collect_fields") return "classify";
+
+  if (input.nodeId === "classify") {
+    if (input.hasHeldSlot) return "confirm_booking";
+    if (input.hasSlots) return "select_slot";
+    return "check_availability";
+  }
+
+  if (input.nodeId === "validate_eligibility") return "validate_eligibility";
+
   if (!input.hasSlots && !input.hasHeldSlot) return "check_availability";
   return "converse";
 }
@@ -75,51 +137,37 @@ export function buildCanonicalWorkflowState(input: {
   session: AmyRealtimeSession;
   workflow: WorkflowDefinition;
 }): CanonicalWorkflowState {
-  const nodeIds = new Set(input.workflow.nodes.map((n) => n.id));
-  const missingFieldIds = missingFieldIdsFromSession(input.session);
-  const missingCount = missingFieldIds.length;
-
-  let currentNodeId =
+  const storedNodeId =
     input.session.currentNodeId ||
     input.session.runtime.current_node_id ||
     input.workflow.entryNodeId;
 
-  if (!nodeIds.has(currentNodeId)) {
-    currentNodeId = input.workflow.entryNodeId;
-  }
+  const currentNodeId = deriveAuthoritativeNodeId({
+    session: input.session,
+    workflow: input.workflow,
+    storedNodeId,
+  });
 
-  // Deterministic advance when required fields are complete but cursor is still on early nodes.
-  if (
-    missingCount === 0 &&
-    (currentNodeId === "lookup_customer" ||
-      currentNodeId === "detect_intent" ||
-      currentNodeId === "collect_fields")
-  ) {
-    const collectNode = input.workflow.nodes.find((n) => n.id === "collect_fields");
-    const edge = collectNode?.transitions.find((t) => t.when === "fields_complete");
-    if (edge?.to && nodeIds.has(edge.to)) {
-      currentNodeId = edge.to;
-    }
-  }
-
+  const missingFieldIds = missingFieldIdsFromSession(input.session);
+  const missingCount = missingFieldIds.length;
   const legacyState = legacyStateForNode(currentNodeId, input.workflow.id);
-  const hasSlots = (input.session.availableSlots || []).length > 0;
-  const hasHeldSlot = Boolean(input.session.heldSlot || input.session.selectedSlot);
-  const confirmationReceived =
-    input.session.confirmationState === "confirmed" ||
-    Boolean(input.session.runtime.confirmation_received);
+  const slots = hasAvailableSlots(input.session);
+  const held = hasHeldSlot(input.session);
+  const bookingReceiptPresent = hasBookingReceipt(input.session);
 
   return {
     currentNodeId,
     legacyState,
     missingFieldIds,
-    readyForAvailability: missingCount === 0,
+    readyForAvailability: fieldsComplete(input.session),
+    bookingReceiptPresent,
+    bookingInProgress: !bookingReceiptPresent && (held || slots),
     expectedNextAction: deriveExpectedNextAction({
       nodeId: currentNodeId,
       missingCount,
-      hasSlots,
-      hasHeldSlot,
-      confirmationReceived,
+      hasSlots: slots,
+      hasHeldSlot: held,
+      bookingReceiptPresent,
     }),
   };
 }
@@ -157,32 +205,22 @@ export function reconcileCanonicalWorkflowState(input: {
   toolName?: string;
   toolResult?: { ok: boolean; data?: Record<string, unknown> };
 }): CanonicalWorkflowState {
-  const previousNodeId =
-    input.session.currentNodeId ||
-    input.session.runtime.current_node_id ||
-    input.workflow.entryNodeId;
-
-  let nextNodeId = previousNodeId;
-
   if (input.toolName && input.toolResult) {
-    nextNodeId = resolveNextNodeId({
+    const previousNodeId =
+      input.session.currentNodeId ||
+      input.session.runtime.current_node_id ||
+      input.workflow.entryNodeId;
+
+    const transitioned = resolveNextNodeId({
       workflow: input.workflow,
       currentNodeId: previousNodeId,
       toolName: input.toolName,
       result: input.toolResult,
       session: input.session,
     });
-  } else if (input.session.missingFieldIds.length === 0) {
-    nextNodeId = resolveNextNodeId({
-      workflow: input.workflow,
-      currentNodeId: previousNodeId,
-      toolName: "record_current_field",
-      result: { ok: true },
-      session: input.session,
-    });
+    input.session.currentNodeId = transitioned;
   }
 
-  input.session.currentNodeId = nextNodeId;
   const canonical = buildCanonicalWorkflowState({
     session: input.session,
     workflow: input.workflow,

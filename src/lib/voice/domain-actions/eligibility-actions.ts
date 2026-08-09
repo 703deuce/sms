@@ -4,6 +4,9 @@ import type { DomainActionResult } from "./booking-actions";
 import { validateServiceArea, type ServiceAreaConfig } from "@/lib/voice/eligibility/validate";
 import { setEligibility } from "@/lib/voice/session-runtime/state";
 import { structuredFailure, structuredSuccess } from "@/lib/voice/tool-policy/structured-result";
+import { SYSTEM_FIELD_IDS } from "@/lib/voice/field-runtime/system-fields";
+import { recordFieldsForLiveKitVoice } from "@/lib/voice/field-runtime/save-voice-fast";
+import { prepareFieldsForPersistence } from "@/lib/voice/workflow-runtime/field-persist";
 
 function loadServiceAreaConfig(ctx: LiveKitCallContext): ServiceAreaConfig {
   const meta = (ctx.workflowDefinition?.metadata || {}) as Record<string, unknown>;
@@ -21,12 +24,38 @@ export async function domainValidateEligibility(input: {
   const blocked = guardToolInvocation(input.ctx, "validate_eligibility");
   if (blocked) return blocked;
 
-  const address =
+  let address =
     input.address ||
     input.ctx.session.collectedFields.sys_address ||
     input.ctx.session.collectedFields.service_address ||
     input.ctx.session.collectedFields.fld_service_address ||
     null;
+
+  if (input.address?.trim()) {
+    const addressFieldId =
+      input.ctx.session.fieldManifest.find(
+        (f) =>
+          f.field_id === "fld_service_address" ||
+          f.field_id === SYSTEM_FIELD_IDS.address ||
+          f.type === "address",
+      )?.field_id || SYSTEM_FIELD_IDS.address;
+
+    const prepared = prepareFieldsForPersistence({
+      session: input.ctx.session,
+      extracted: { [addressFieldId]: input.address.trim() },
+    });
+
+    if (Object.keys(prepared.fields).length) {
+      const recorded = await recordFieldsForLiveKitVoice({
+        amySession: input.ctx.session,
+        fields: prepared.fields,
+      });
+      if (recorded.ok) {
+        input.ctx.session = recorded.amySession;
+        address = prepared.fields[addressFieldId] || input.address.trim();
+      }
+    }
+  }
 
   const outcome = validateServiceArea({
     address,

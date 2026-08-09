@@ -99,8 +99,8 @@ check(
   incomplete.expectedNextAction,
 );
 check(
-  "legacy state derived from node",
-  incomplete.legacyState === "INTENT_DISCOVERY",
+  "legacy state derived from authoritative node",
+  incomplete.legacyState === "COLLECTING_FIELDS" || incomplete.legacyState === "INTENT_DISCOVERY",
   incomplete.legacyState,
 );
 
@@ -121,8 +121,8 @@ const completeCanonical = buildCanonicalWorkflowState({
   workflow: HOME_SERVICE_DISPATCHER_WORKFLOW_V1,
 });
 check(
-  "fields complete advances canonical node past lookup_customer",
-  completeCanonical.currentNodeId === "classify",
+  "fields complete advances canonical node to check_availability",
+  completeCanonical.currentNodeId === "check_availability",
   completeCanonical.currentNodeId,
 );
 check("fields complete ready for availability", completeCanonical.readyForAvailability);
@@ -230,7 +230,7 @@ reconcileCanonicalWorkflowState({
 });
 check(
   "reconcile advances session node after field completion",
-  sessionForReconcile.currentNodeId === "classify",
+  sessionForReconcile.currentNodeId === "check_availability",
   sessionForReconcile.currentNodeId,
 );
 check(

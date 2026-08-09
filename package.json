@@ -38,6 +38,7 @@
     "activate:home-service-dispatcher": "tsx scripts/activate-home-service-dispatcher.mjs",
     "test:workflow-runtime-compiler": "tsx scripts/test-workflow-runtime-compiler.ts",
     "test:workflow-runtime-authority": "tsx scripts/test-workflow-runtime-authority.ts",
+    "test:runtime-truth-guards": "tsx scripts/test-runtime-truth-guards.ts",
     "audit:livekit-booking-steps": "tsx scripts/audit-livekit-booking-steps.ts",
     "test:amy-livekit-readiness": "tsx scripts/amy-livekit-readiness.ts",
     "test:telephony-provisioning": "tsx scripts/test-telephony-provisioning.ts",

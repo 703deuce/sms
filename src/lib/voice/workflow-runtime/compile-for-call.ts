@@ -15,6 +15,7 @@ import {
 } from "./canonical-state";
 import { filterConversationalTools } from "./tool-surface";
 import { validateRuntimeInvariants } from "./runtime-invariants";
+import { requiresBookingReceiptToComplete } from "./completion-guards";
 
 function isEmergencyClassification(
   classifications?: Record<string, string> | null,
@@ -76,7 +77,12 @@ export function compileToolsForCallContext(callContext: LiveKitCallContext): {
   const envelope = compileTurnCapabilityEnvelope({ workflow, state: snapshot });
   const withEnvelope = stampEnvelopeCapabilities(snapshot, envelope.capabilityIds);
 
-  const conversationalToolNames = filterConversationalTools(envelope.toolNames);
+  const conversationalToolNames = filterConversationalTools(envelope.toolNames).filter(
+    (name) => {
+      if (name !== "end_call") return true;
+      return !requiresBookingReceiptToComplete(callContext.session);
+    },
+  );
   const invariant = validateRuntimeInvariants({
     canonical,
     envelope: { ...envelope, toolNames: conversationalToolNames },
