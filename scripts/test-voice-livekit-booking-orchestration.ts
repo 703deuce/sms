@@ -199,6 +199,20 @@ async function main() {
         "declined confirmation does not book",
         confirmBlocked.ok === false || !confirmBlocked.data?.booking,
       );
+
+      // Re-select for confirm test if we declined above (state may still be READY_TO_BOOK)
+      if (callContext.session.currentState === "SELECTING_SLOT") {
+        await domainSelectSlot({ ctx: callContext, utterance: "the first one" });
+      }
+      const confirmOk = await domainConfirmBooking({
+        ctx: callContext,
+        confirmed: true,
+      });
+      check("confirm_booking succeeds when confirmed", confirmOk.ok === true, confirmOk.error_code);
+      check(
+        "booking id on session after confirm",
+        Boolean(callContext.session.bookingId) || confirmOk.data?.booking != null,
+      );
     } else {
       check("select_slot skipped without returned slots", true, `state=${callContext.session.currentState}`);
       check("confirm_booking skipped without returned slots", true);

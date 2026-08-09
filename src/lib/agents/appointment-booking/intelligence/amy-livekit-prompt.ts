@@ -73,13 +73,15 @@ export function buildAmyPhaseTaskContext(input: {
         "All required booking information has been collected.",
         "You must now call check_availability before discussing specific appointment times.",
         "Do not say that you are checking and then continue without making the tool call.",
+        "When slots are returned, offer them and call select_slot when the caller chooses.",
         "Only offer returned slots.",
       ].join("\n");
     case "SelectSlotTask":
       return [
         "CURRENT TASK: Help the caller choose an appointment time.",
         "Offer the available slots conversationally.",
-        "When the caller chooses one, use select_slot.",
+        "When the caller chooses one, call select_slot immediately.",
+        "After a slot is held, ask for explicit confirmation, then call confirm_booking({ confirmed: true }).",
         "Do not create or modify times yourself.",
       ].join("\n");
     case "ConfirmBookingTask":

@@ -1,7 +1,7 @@
 import { recordFieldForLiveKitVoice } from "@/lib/voice/field-runtime/save-voice-fast";
 import { executeContinueWorkflow } from "@/lib/voice/workflow-engine/continue-workflow";
 import { startDomainActionTimer } from "./latency";
-import { assertTaskToolAllowed, taskForWorkflowState } from "./task-guard";
+import { assertTaskToolAllowed, taskForWorkflowState, taskToolGuard } from "./task-guard";
 import type { LiveKitCallContext } from "./session-bootstrap";
 import {
   buildHeldSlotPayload,
@@ -21,6 +21,21 @@ export type DomainActionResult = {
   data?: Record<string, unknown>;
   error_code?: string;
 };
+
+function rejectIfToolNotAllowed(
+  ctx: LiveKitCallContext,
+  toolName: string,
+): DomainActionResult | null {
+  const taskId = taskForWorkflowState(ctx.session.currentState);
+  const guard = taskToolGuard(taskId, toolName);
+  if (guard.ok) return null;
+  return {
+    ok: false,
+    speak: guard.speak,
+    error_code: guard.error_code,
+    workflow_state: ctx.session.currentState,
+  };
+}
 
 export async function domainGetBookingRequirements(input: {
   ctx: LiveKitCallContext;
@@ -125,8 +140,10 @@ export async function domainCheckAvailability(input: {
   ctx: LiveKitCallContext;
   spoken: string;
 }): Promise<DomainActionResult> {
+  const blocked = rejectIfToolNotAllowed(input.ctx, "check_availability");
+  if (blocked) return blocked;
+
   const taskId = taskForWorkflowState(input.ctx.session.currentState);
-  assertTaskToolAllowed(taskId, "check_availability");
   const timer = startDomainActionTimer("check_availability", input.ctx.callId, taskId);
   timer.markProviderStart();
 
@@ -179,8 +196,10 @@ export async function domainSelectSlot(input: {
   utterance: string;
   slotIso?: string;
 }): Promise<DomainActionResult> {
+  const blocked = rejectIfToolNotAllowed(input.ctx, "select_slot");
+  if (blocked) return blocked;
+
   const taskId = taskForWorkflowState(input.ctx.session.currentState);
-  assertTaskToolAllowed(taskId, "select_slot");
   const timer = startDomainActionTimer("select_slot", input.ctx.callId, taskId);
   timer.markProviderStart();
 
@@ -225,8 +244,10 @@ export async function domainConfirmBooking(input: {
   ctx: LiveKitCallContext;
   confirmed: boolean;
 }): Promise<DomainActionResult> {
+  const blocked = rejectIfToolNotAllowed(input.ctx, "confirm_booking");
+  if (blocked) return blocked;
+
   const taskId = taskForWorkflowState(input.ctx.session.currentState);
-  assertTaskToolAllowed(taskId, "confirm_booking");
   const timer = startDomainActionTimer("confirm_booking", input.ctx.callId, taskId);
   timer.markProviderStart();
 

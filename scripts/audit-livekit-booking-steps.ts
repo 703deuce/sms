@@ -19,6 +19,7 @@ import {
   domainRecordField,
   domainCheckAvailability,
   domainSelectSlot,
+  domainConfirmBooking,
   taskForWorkflowState,
   toolsForTask,
 } from "../src/lib/voice/domain-actions";
@@ -175,6 +176,25 @@ async function main() {
         Boolean(callContext.session.heldSlot || callContext.session.selectedSlot),
         String(callContext.session.heldSlot),
       );
+
+      if (
+        callContext.session.currentState === "READY_TO_BOOK" ||
+        callContext.session.currentState === "BOOKING_IN_PROGRESS"
+      ) {
+        const confirm = await domainConfirmBooking({
+          ctx: callContext,
+          confirmed: true,
+        });
+        check("confirm_booking ok", confirm.ok === true, confirm.error_code);
+        check(
+          "workflow complete after confirm",
+          callContext.session.currentState === "COMPLETE" ||
+            Boolean(callContext.session.bookingId),
+          callContext.session.currentState,
+        );
+      } else {
+        console.log("  ~ confirm_booking skipped — slot not ready");
+      }
     } else {
       console.log("\n## slot-selection (skipped — no calendar slots in test env)");
     }

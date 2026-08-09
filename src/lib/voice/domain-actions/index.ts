@@ -16,6 +16,7 @@ export {
 } from "./booking-actions";
 export {
   assertTaskToolAllowed,
+  taskToolGuard,
   taskForWorkflowState,
   toolsForTask,
   toolsForTaskWithChain,
