@@ -53,6 +53,17 @@ function resolveElevenLabsPluginModel(model: string): string {
   return stripProviderPrefix(model, "elevenlabs");
 }
 
+function isFluxDeepgramModel(model: string): boolean {
+  return resolveDeepgramPluginModel(model).startsWith("flux-");
+}
+
+export function resolveDeepgramSttApi(
+  sttCfg: AmySttConfig,
+): "flux_v2" | "nova_v1" | "inference" {
+  if (sttCfg.mode === "flux" || isFluxDeepgramModel(sttCfg.model)) return "flux_v2";
+  return "nova_v1";
+}
+
 export function usesDeepgramPluginStt(provider: string): boolean {
   const normalized = provider.trim().toLowerCase();
   return normalized === "deepgram-plugin" || normalized === "deepgram";
@@ -68,10 +79,23 @@ export function buildAmyStt(
 ): stt.STT {
   if (usesDeepgramPluginStt(cfg.sttProvider)) {
     const model = resolveDeepgramPluginModel(sttCfg.model);
+    const apiKey = process.env.DEEPGRAM_API_KEY?.trim();
+
+    if (resolveDeepgramSttApi(sttCfg) === "flux_v2") {
+      return new deepgram.STTv2({
+        model,
+        language: sttCfg.language,
+        apiKey,
+        eagerEotThreshold: sttCfg.modelOptions?.eager_eot_threshold,
+        eotThreshold: sttCfg.modelOptions?.eot_threshold,
+        eotTimeoutMs: sttCfg.modelOptions?.eot_timeout_ms,
+      });
+    }
+
     return new deepgram.STT({
       model: model as deepgram.STTModels,
       language: sttCfg.language,
-      apiKey: process.env.DEEPGRAM_API_KEY?.trim(),
+      apiKey,
       interimResults: true,
       punctuate: true,
       smartFormat: true,
@@ -137,7 +161,11 @@ export function describePipelineConfig(
     stt: {
       ...describeAmySttConfig(sttConfig),
       provider: cfg.sttProvider,
-      via: usesDeepgramPluginStt(cfg.sttProvider) ? "deepgram_plugin" : "livekit_inference",
+      via: usesDeepgramPluginStt(cfg.sttProvider)
+        ? resolveDeepgramSttApi(sttConfig) === "flux_v2"
+          ? "deepgram_plugin_flux"
+          : "deepgram_plugin"
+        : "livekit_inference",
     },
     llm: {
       provider: cfg.llmProvider,

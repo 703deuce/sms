@@ -21,6 +21,11 @@ if (!process.env.ELEVENLABS_API_KEY?.trim() && process.env.ELEVENLABS_KEY?.trim(
   process.env.ELEVENLABS_API_KEY = process.env.ELEVENLABS_KEY.trim();
 }
 
+// Accept GOOGLE_GEMINI_API_KEY as alias for GEMINI_API_KEY (Coolify naming).
+if (!process.env.GEMINI_API_KEY?.trim() && process.env.GOOGLE_GEMINI_API_KEY?.trim()) {
+  process.env.GEMINI_API_KEY = process.env.GOOGLE_GEMINI_API_KEY.trim();
+}
+
 const AGENT_NAME = process.env.LIVEKIT_AGENT_NAME || "transovo-voice-runtime";
 
 export default defineAgent<AmyProcessUserData>({

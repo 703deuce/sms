@@ -69,7 +69,7 @@ Unset inference-only LLM presets (`VOICE_LLM_PRESET=gemma-4-31b`, etc.).
 
 After deploy, `pipeline_config` in call logs should show:
 ```json
-"stt": { "via": "deepgram_plugin" }
+"stt": { "via": "deepgram_plugin_flux" }
 "llm": { "via": "openai_plugin" }
 "tts": { "via": "elevenlabs_plugin" }
 ```

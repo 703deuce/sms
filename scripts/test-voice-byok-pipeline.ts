@@ -4,9 +4,11 @@
  */
 import assert from "node:assert/strict";
 import { getVoicePipelineConfig } from "../src/lib/voice/runtime-provider/config";
+import { buildAmySttConfig } from "../voice-runtime/src/stt-config";
 import {
   usesDeepgramPluginStt,
   usesElevenLabsPluginTts,
+  resolveDeepgramSttApi,
 } from "../voice-runtime/src/pipeline";
 
 function withEnv(
@@ -47,6 +49,7 @@ withEnv(
     assert.equal(cfg.ttsProvider, "elevenlabs-plugin");
     assert.equal(usesDeepgramPluginStt(cfg.sttProvider), true);
     assert.equal(usesElevenLabsPluginTts(cfg.ttsProvider), true);
+    assert.equal(resolveDeepgramSttApi(buildAmySttConfig()), "flux_v2");
   },
 );
 
