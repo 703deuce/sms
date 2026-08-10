@@ -62,14 +62,17 @@ export async function recordLiveKitBuiltinToolExecution<T>(input: {
   try {
     const output = await input.run();
     const latencyMs = Date.now() - started;
+    const softFailure =
+      typeof output === "string" && output.includes("BOOKING_FAILED_ALREADY_SPOKEN");
     void persistLiveKitToolExecution({
       prisma,
       workspaceId: input.workspaceId,
       callId: input.callId,
       toolType: input.toolType,
       args: input.args,
-      status: "completed",
-      output: output as Prisma.InputJsonValue,
+      status: softFailure ? "failed" : "completed",
+      output: softFailure ? undefined : (output as Prisma.InputJsonValue),
+      errorMessage: softFailure ? String(output) : undefined,
       latencyMs,
     });
     return output;

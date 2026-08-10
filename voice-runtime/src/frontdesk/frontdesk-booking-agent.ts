@@ -12,9 +12,12 @@ import { GetEmailTask } from "./get-email-task";
 import { withLiveKitToolTelemetry } from "../livekit-tool-telemetry";
 import {
   BOOKING_COMPLETE_TOOL_RESULT,
+  BOOKING_FAILED_TOOL_RESULT,
+  buildBookingFailureLine,
   buildBookingSuccessLine,
   POST_EMAIL_BOOKING_FILLER,
 } from "../booking-completion-messages";
+import { bookingFailureReason } from "../booking-error";
 import { buildFrontDeskBusinessAnswerTool } from "./knowledge-tool";
 import { buildFrontDeskCancelAppointmentTool } from "./cancel-appointment-tool";
 import { markBookingConfirmed, type FrontDeskUserData } from "./userdata";
@@ -50,12 +53,15 @@ function buildFrontDeskInstructions(businessLabel: string): string {
     "Only offer times that list_available_slots returned — never invent slots. ",
     "Call get_business_answer for hours, pricing, services, policies, or FAQs — including during booking. ",
     "To cancel an appointment, confirm with the caller then call cancel_appointment with confirmed true. ",
+    "If cancel_appointment says no booking completed on this call, do not claim a cancellation succeeded. ",
     "Booking workflow: after the caller picks a slot, call schedule_appointment with that ",
     "slot_id. Email collection happens inside that tool — do not ask for email before calling ",
     "schedule_appointment. Never call schedule_appointment before the caller confirms a time. ",
     "If schedule_appointment reports already_completed, tell the caller they're confirmed — ",
     "do not book again or re-ask for email. ",
-    "Never claim a booking succeeded unless schedule_appointment confirms it. ",
+    "Never claim a booking succeeded unless schedule_appointment returns BOOKING_COMPLETE_ALREADY_SPOKEN. ",
+    "If schedule_appointment returns BOOKING_FAILED_ALREADY_SPOKEN, the caller already heard that booking failed — ",
+    "do NOT say they are confirmed or that a text was sent. ",
     "After a successful booking the runtime speaks one confirmation — do not repeat it or give ",
     "multiple goodbyes. When the caller is done, call end_call once with a brief farewell. ",
     "A confirmation text is sent automatically to the caller's phone after booking — ",
@@ -236,7 +242,12 @@ export function createFrontDeskBookingAgent(input: {
           } catch (err) {
             if (err instanceof SlotUnavailableError) {
               userData.slotUnavailableCount += 1;
-              throw new llm.ToolError("This slot isn't available anymore");
+              await runCtx.update(
+                buildBookingFailureLine(
+                  "That time slot isn't available anymore — I can check what else is open.",
+                ),
+              );
+              return BOOKING_FAILED_TOOL_RESULT;
             }
             const recovered = alreadyBookedToolMessage(userData);
             if (recovered) return recovered;
@@ -249,9 +260,8 @@ export function createFrontDeskBookingAgent(input: {
                 error: err instanceof Error ? err.message : String(err),
               }),
             );
-            throw new llm.ToolError(
-              "Booking didn't go through. Apologize briefly and offer to try again or pick another time.",
-            );
+            await runCtx.update(buildBookingFailureLine(bookingFailureReason(err)));
+            return BOOKING_FAILED_TOOL_RESULT;
           }
         },
       );

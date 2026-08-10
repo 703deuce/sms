@@ -4,6 +4,10 @@ import { safeInterruptSession } from "../session-utils";
 import type { AvailableSlot, BookedAppointment } from "./calendly-calendar";
 import { SlotUnavailableError } from "./calendly-calendar";
 import { isBookingConfirmed, markBookingConfirmed, type FrontDeskUserData } from "./userdata";
+import {
+  CALENDLY_RATE_LIMIT_RETRY_DELAYS_MS,
+  isCalendlyRateLimitError,
+} from "../booking-error";
 
 const BOOKING_RETRY_DELAY_MS = 400;
 
@@ -108,7 +112,8 @@ export async function scheduleAppointmentResilient(input: {
   await safeInterruptSession(session);
 
   let lastError: unknown;
-  for (let attempt = 0; attempt < 2; attempt++) {
+  const maxAttempts = 1 + CALENDLY_RATE_LIMIT_RETRY_DELAYS_MS.length;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
       const booked = await cal.scheduleAppointment({ slot, attendeeEmail });
       markBookedOnUserData(booked, slot.slotId);
@@ -123,7 +128,14 @@ export async function scheduleAppointmentResilient(input: {
         return recovered;
       }
 
-      if (attempt < 1) {
+      if (isCalendlyRateLimitError(err) && attempt < CALENDLY_RATE_LIMIT_RETRY_DELAYS_MS.length) {
+        await new Promise((resolve) =>
+          setTimeout(resolve, CALENDLY_RATE_LIMIT_RETRY_DELAYS_MS[attempt]),
+        );
+        continue;
+      }
+
+      if (attempt < maxAttempts - 1 && !isCalendlyRateLimitError(err)) {
         await new Promise((resolve) => setTimeout(resolve, BOOKING_RETRY_DELAY_MS));
       }
     }

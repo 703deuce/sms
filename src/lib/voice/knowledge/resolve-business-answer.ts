@@ -2,6 +2,12 @@ import { getPrisma } from "@/lib/db";
 import { loadBusinessBrain } from "@/lib/agents/appointment-booking/business-brain";
 import { loadVoiceAgentRuntimeConfigRecord } from "@/lib/voice/load-agent-config";
 import { searchKnowledge } from "@/lib/voice/knowledge-processor";
+import {
+  isHoursTopic,
+  isPricingTopic,
+  isServiceAreaTopic,
+  isServicesTopic,
+} from "@/lib/voice/knowledge/business-answer-topics";
 
 export type BusinessAnswerResult =
   | { ok: true; speak: string; data: Record<string, unknown> }
@@ -35,6 +41,33 @@ function synthesizeRagSnippets(
   return parts.join(" ");
 }
 
+function resolveStructuredPricing(
+  pricing: Record<string, unknown>,
+  knowledge: Record<string, unknown>,
+): BusinessAnswerResult | null {
+  const serviceCallFee =
+    pricing.serviceCallFee || pricing.diagnosticFee || pricing.defaultServiceCall;
+  const packages = asRecord(knowledge.packages || pricing.packages);
+  const packageLines = Object.entries(packages)
+    .filter(([, v]) => v)
+    .map(([name, detail]) => `${name}: ${String(detail)}`);
+  if (packageLines.length) {
+    return {
+      ok: true,
+      speak: packageLines.join(". ") + ".",
+      data: { topic: "pricing", packages: packageLines },
+    };
+  }
+  if (serviceCallFee) {
+    return {
+      ok: true,
+      speak: String(pricing.serviceCallScript || `Our service call fee is ${serviceCallFee}.`),
+      data: { topic: "pricing", serviceCallFee },
+    };
+  }
+  return null;
+}
+
 async function linkedKnowledgeBaseIds(workspaceId: string, agentId: string): Promise<string[]> {
   const prisma = getPrisma();
   const agent = await prisma.voiceAgent.findFirst({
@@ -54,6 +87,36 @@ async function linkedKnowledgeBaseIds(workspaceId: string, agentId: string): Pro
   return links.map((l: { knowledgeBaseId: string }) => l.knowledgeBaseId);
 }
 
+async function searchRagAnswer(
+  workspaceId: string,
+  kbIds: string[],
+  topic: string,
+): Promise<BusinessAnswerResult | null> {
+  const ragHits: Array<{ name: string; snippet: string; provider?: string }> = [];
+  for (const kbId of kbIds) {
+    const hits = await searchKnowledge(workspaceId, kbId, topic);
+    for (const hit of hits) {
+      ragHits.push({
+        name: hit.name,
+        snippet: hit.snippet,
+        provider: hit.provider,
+      });
+    }
+  }
+  const ragSpeak = synthesizeRagSnippets(ragHits);
+  if (!ragSpeak) return null;
+  return {
+    ok: true,
+    speak: ragSpeak,
+    data: {
+      topic,
+      source: "rag",
+      hitCount: ragHits.length,
+      providers: [...new Set(ragHits.map((h) => h.provider).filter(Boolean))],
+    },
+  };
+}
+
 export async function resolveBusinessAnswer(input: {
   workspaceId: string;
   agentId: string;
@@ -69,33 +132,16 @@ export async function resolveBusinessAnswer(input: {
   const advanced = asRecord(cfg.advanced);
   const wizard = asRecord(advanced.appointmentReceptionistWizard);
   const pricing = asRecord(knowledge.pricing || cfg.pricing);
+  const kbIds = await linkedKnowledgeBaseIds(input.workspaceId, input.agentId);
 
   // --- Structured pricing ---
-  if (/price|cost|fee|charge|how much|package|plan/.test(topicLower)) {
-    const serviceCallFee =
-      pricing.serviceCallFee || pricing.diagnosticFee || pricing.defaultServiceCall;
-    const packages = asRecord(knowledge.packages || pricing.packages);
-    const packageLines = Object.entries(packages)
-      .filter(([, v]) => v)
-      .map(([name, detail]) => `${name}: ${String(detail)}`);
-    if (packageLines.length) {
-      return {
-        ok: true,
-        speak: packageLines.join(". ") + ".",
-        data: { topic: "pricing", packages: packageLines },
-      };
-    }
-    if (serviceCallFee) {
-      return {
-        ok: true,
-        speak: String(pricing.serviceCallScript || `Our service call fee is ${serviceCallFee}.`),
-        data: { topic: "pricing", serviceCallFee },
-      };
-    }
+  if (isPricingTopic(topicLower)) {
+    const priced = resolveStructuredPricing(pricing, knowledge);
+    if (priced) return priced;
   }
 
   // --- Hours ---
-  if (/hour|open|close|when are you|availability/.test(topicLower)) {
+  if (isHoursTopic(topicLower)) {
     const hours =
       knowledge.businessHours ||
       cfg.businessHours ||
@@ -110,8 +156,14 @@ export async function resolveBusinessAnswer(input: {
     }
   }
 
+  // --- Service area / coverage (RAG-first — before generic services blurb) ---
+  if (isServiceAreaTopic(topicLower)) {
+    const ragArea = await searchRagAnswer(input.workspaceId, kbIds, topic);
+    if (ragArea) return ragArea;
+  }
+
   // --- Services / what we do ---
-  if (/service|what do you do|what does|offer|repair|install/.test(topicLower)) {
+  if (isServicesTopic(topicLower)) {
     const services =
       knowledge.services ||
       cfg.services ||
@@ -171,31 +223,8 @@ export async function resolveBusinessAnswer(input: {
   }
 
   // --- Vector / local RAG search across linked knowledge bases ---
-  const kbIds = await linkedKnowledgeBaseIds(input.workspaceId, input.agentId);
-  const ragHits: Array<{ name: string; snippet: string; provider?: string }> = [];
-  for (const kbId of kbIds) {
-    const hits = await searchKnowledge(input.workspaceId, kbId, topic);
-    for (const hit of hits) {
-      ragHits.push({
-        name: hit.name,
-        snippet: hit.snippet,
-        provider: hit.provider,
-      });
-    }
-  }
-  const ragSpeak = synthesizeRagSnippets(ragHits);
-  if (ragSpeak) {
-    return {
-      ok: true,
-      speak: ragSpeak,
-      data: {
-        topic,
-        source: "rag",
-        hitCount: ragHits.length,
-        providers: [...new Set(ragHits.map((h) => h.provider).filter(Boolean))],
-      },
-    };
-  }
+  const ragAnswer = await searchRagAnswer(input.workspaceId, kbIds, topic);
+  if (ragAnswer) return ragAnswer;
 
   return {
     ok: false,

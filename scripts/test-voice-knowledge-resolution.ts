@@ -1,11 +1,16 @@
 /**
- * Offline tests for resolveBusinessAnswer (structured + RAG paths).
+ * Offline tests for resolveBusinessAnswer topic routing and helpers.
  * Run: npx tsx scripts/test-voice-knowledge-resolution.ts
  */
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { resolveBusinessAnswer } from "../src/lib/voice/knowledge/resolve-business-answer";
+import {
+  isHoursTopic,
+  isPricingTopic,
+  isServiceAreaTopic,
+  isServicesTopic,
+} from "../src/lib/voice/knowledge/business-answer-topics";
 
 const source = fs.readFileSync(
   path.join(process.cwd(), "src/lib/voice/knowledge/resolve-business-answer.ts"),
@@ -15,8 +20,21 @@ const source = fs.readFileSync(
 assert.ok(source.includes("searchKnowledge"), "resolver uses RAG search");
 assert.ok(source.includes("loadBusinessBrain"), "resolver uses company brain");
 assert.ok(source.includes("knowledgeBaseIds"), "resolver reads linked KB ids");
+assert.ok(source.includes("isServiceAreaTopic"), "resolver checks service area before services");
 
-// Pure matching helpers (no DB) — mirror resolver topic logic
+assert.equal(isPricingTopic("pricing"), true, '"pricing" must match pricing topics');
+assert.equal(isPricingTopic("diagnostic visit"), true);
+assert.equal(isPricingTopic("how much"), true);
+assert.equal(isPricingTopic("hours"), false);
+
+assert.equal(isServiceAreaTopic("service area"), true);
+assert.equal(isServiceAreaTopic("do you serve Arlington"), true);
+assert.equal(isServicesTopic("service area"), false, "service area must not route to services blurb");
+assert.equal(isServicesTopic("what services do you offer"), true);
+
+assert.equal(isHoursTopic("hours"), true);
+assert.equal(isHoursTopic("when are you open"), true);
+
 function topicMatches(text: string, topic: string): boolean {
   const hay = text.toLowerCase();
   const needles = topic
