@@ -1,0 +1,105 @@
+{
+  "id": "blue-ridge-realty-lead-qual",
+  "label": "New lead qualification — Blue Ridge Realty (demo)",
+  "businessName": "Blue Ridge Realty",
+  "reasonForContact": "You recently requested information about buying a home in the area.",
+  "introTemplate": "Hi, is this {leadName}? This is Amy calling on behalf of {businessName}. {reason}",
+  "allowedOutcomes": [
+    "QUALIFIED",
+    "NOT_QUALIFIED",
+    "NOT_INTERESTED",
+    "NURTURE",
+    "HOT",
+    "CALLBACK_REQUESTED",
+    "WRONG_NUMBER",
+    "COMPLETED_INTAKE"
+  ],
+  "fields": [
+    {
+      "field_id": "name",
+      "label": "Name",
+      "type": "text",
+      "required": true,
+      "collection_instruction": "Confirm their name if not already known."
+    },
+    {
+      "field_id": "callback_phone",
+      "label": "Callback phone",
+      "type": "phone",
+      "required": false,
+      "collection_instruction": "Best number to reach them if different from this line."
+    },
+    {
+      "field_id": "buying_or_selling",
+      "label": "Buying or selling",
+      "type": "single_select",
+      "required": true,
+      "collection_instruction": "Whether they are looking to buy or sell.",
+      "options": ["buying", "selling", "both", "unsure"]
+    },
+    {
+      "field_id": "target_location",
+      "label": "Target area",
+      "type": "text",
+      "required": true,
+      "collection_instruction": "City or area they want to buy or sell in."
+    },
+    {
+      "field_id": "property_type",
+      "label": "Property type",
+      "type": "text",
+      "required": false,
+      "collection_instruction": "House, townhouse, condo, land, etc."
+    },
+    {
+      "field_id": "price_range_or_budget",
+      "label": "Budget",
+      "type": "text",
+      "required": false,
+      "collection_instruction": "Rough price range or budget."
+    },
+    {
+      "field_id": "timeframe",
+      "label": "Timeframe",
+      "type": "text",
+      "required": true,
+      "collection_instruction": "When they hope to buy or sell."
+    },
+    {
+      "field_id": "financing_status",
+      "label": "Financing status",
+      "type": "text",
+      "required": false,
+      "collection_instruction": "Cash, pre-approved, still exploring financing, etc."
+    },
+    {
+      "field_id": "preapproved",
+      "label": "Pre-approved",
+      "type": "boolean",
+      "required": false,
+      "collection_instruction": "Whether they are pre-approved for a mortgage."
+    },
+    {
+      "field_id": "notes",
+      "label": "What they are looking for",
+      "type": "long_text",
+      "required": false,
+      "collection_instruction": "Anything else about what they want."
+    }
+  ],
+  "rules": [
+    {
+      "outcome": "NOT_INTERESTED",
+      "requireInterested": false
+    },
+    {
+      "outcome": "QUALIFIED",
+      "requiredFields": ["buying_or_selling", "target_location", "timeframe"],
+      "requireInterested": true
+    },
+    {
+      "outcome": "NOT_QUALIFIED",
+      "requireInterested": true
+    }
+  ]
+}
