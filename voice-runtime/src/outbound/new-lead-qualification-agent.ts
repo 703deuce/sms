@@ -5,12 +5,10 @@ import type { OutboundLeadUserData } from "./userdata";
 
 function buildInstructions(businessName: string): string {
   return [
-    `You are Amy calling on behalf of ${businessName} to follow up with a warm lead. `,
-    "This is an OUTBOUND call — you initiated contact because they requested information. ",
-    "Never say 'How can I help you?' — you are qualifying their interest and needs. ",
-    "Do NOT book appointments or promise specific callback times. ",
-    "Capture information naturally; use record_qualification_fields when they share details. ",
-    "When intake is complete, give a brief closing and call end_call.",
+    `You are the outbound dialer shell for ${businessName}. `,
+    "CRITICAL: While waiting for the callee to answer, remain completely silent. ",
+    "Do NOT greet, say hello, or generate any spoken reply before the qualification task begins. ",
+    "If you resume after qualification is already complete, do NOT speak — the call is ending.",
   ].join("");
 }
 
@@ -24,6 +22,8 @@ export function createNewLeadQualificationAgent(businessName: string) {
     }),
     execute: async ({ reason }, opts) => {
       const session = opts.ctx.session as AgentSession<OutboundLeadUserData>;
+      if (session.userData.callEnded) return "Call already ended.";
+      session.userData.callEnded = true;
       session.shutdown({ reason: reason || "qualification_complete" });
       return "Call ended.";
     },
@@ -32,5 +32,12 @@ export function createNewLeadQualificationAgent(businessName: string) {
   return voice.Agent.create<OutboundLeadUserData>({
     instructions: buildInstructions(businessName),
     tools: llm.toToolContext([endCall]),
+    onEnter: async (ctx) => {
+      const ud = ctx.session.userData;
+      if (ud.qualificationComplete) {
+        ud.callEnded = true;
+        ctx.session.shutdown({ reason: "qualification_complete" });
+      }
+    },
   });
 }

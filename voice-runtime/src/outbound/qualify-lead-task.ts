@@ -93,7 +93,7 @@ export class QualifyLeadTask extends voice.AgentTask<QualifyLeadResult> {
             }
             const missing = this.missingFieldsForPrompt(ud.collectedFields);
             if (!missing.length && ud.interested) {
-              return "All required fields captured. Wrap up naturally and call set_qualification_outcome with complete.";
+              return "All required fields captured. Say one brief transition, then call set_qualification_outcome with complete.";
             }
             if (missing.length) {
               return `Saved. Still need: ${missing.join(", ")}. Ask naturally for the next missing item only.`;
@@ -157,14 +157,13 @@ export class QualifyLeadTask extends voice.AgentTask<QualifyLeadResult> {
           telephonyOutcome: "ANSWERED",
         });
 
-        if (!this.done) {
-          this.complete(result);
-        }
-
         if (mapped === "WRONG_NUMBER" || mapped === "NOT_INTERESTED") {
-          return "Outcome saved. Apologize briefly and end the call.";
+          return "Outcome saved. Apologize once briefly, then call end_call exactly once. Do not summarize the call.";
         }
-        return "Outcome saved. Give a brief closing line, then the call may end.";
+        return (
+          "Outcome saved. Say one brief goodbye (for example that a realtor will follow up). " +
+          "Then call end_call exactly once. Do not repeat goodbye, recap fields, or summarize the conversation."
+        );
       },
     });
   }
@@ -177,6 +176,10 @@ export class QualifyLeadTask extends voice.AgentTask<QualifyLeadResult> {
         reason: z.string().optional(),
       }),
       execute: async ({ reason }) => {
+        const ud = this.sessionRef.userData;
+        if (ud.callEnded) return "Call already ended.";
+        ud.callEnded = true;
+        ud.qualificationComplete = true;
         this.sessionRef.shutdown({ reason: reason || "qualification_complete" });
         return "Call ended.";
       },

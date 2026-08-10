@@ -15,7 +15,6 @@ import { appendTraceEvent } from "@/lib/voice/workflow-engine/trace";
 import { liveKitRuntimeProvider } from "@/lib/voice/runtime-provider/livekit";
 import { createNewLeadQualificationAgent } from "./new-lead-qualification-agent";
 import { QualifyLeadTask } from "./qualify-lead-task";
-import { buildQualificationCloseLine } from "./outbound-messages";
 import { waitForQualificationComplete } from "./wait-for-qualification";
 import type { OutboundLeadUserData } from "./userdata";
 import { buildAmyVoicePipeline, describePipelineConfig } from "../pipeline";
@@ -223,6 +222,11 @@ export async function runOutboundLeadQualificationEntry(
     });
 
     userData.callAnsweredAt = Date.now();
+    userData.firstAudioAt = Date.now();
+
+    const qualifyTask = new QualifyLeadTask(session, { chatCtx: session.chatCtx });
+    session.updateAgent(qualifyTask);
+
     await appendTraceEvent(job.callId, {
       kind: "call_answered",
       detail: { at: new Date().toISOString() },
@@ -275,28 +279,21 @@ export async function runOutboundLeadQualificationEntry(
   }
 
   try {
-    userData.firstAudioAt = Date.now();
     await appendTraceEvent(job.callId, {
       kind: "qualification_started",
       detail: {
         answerToFirstAudioMs: userData.callAnsweredAt
-          ? userData.firstAudioAt - userData.callAnsweredAt
+          ? userData.firstAudioAt! - userData.callAnsweredAt
           : null,
       },
     }).catch(() => undefined);
 
-    const qualifyTask = new QualifyLeadTask(session, { chatCtx: session.chatCtx });
-    session.updateAgent(qualifyTask);
     await waitForQualificationComplete(session);
 
-    const closeLine = buildQualificationCloseLine(businessName);
-    await session.generateReply({
-      instructions:
-        `If qualification is complete and you have not already said goodbye, say: "${closeLine}" ` +
-        "Then call end_call.",
-      toolChoice: "auto",
-      allowInterruptions: false,
-    });
+    if (!userData.callEnded) {
+      userData.callEnded = true;
+      session.shutdown({ reason: "qualification_complete" });
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.warn(

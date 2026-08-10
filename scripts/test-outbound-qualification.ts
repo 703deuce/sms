@@ -154,6 +154,10 @@ assert.ok(outboundEntry.includes("createSipParticipant"), "dials after agent rea
 assert.ok(outboundEntry.includes("updateAgent(qualifyTask)"), "hand off via updateAgent after answer");
 assert.ok(outboundEntry.includes("waitForQualificationComplete"), "waits for qualification completion");
 assert.ok(outboundEntry.includes("prefillCollectedFields"), "pre-fills lead context before conversation");
+assert.ok(
+  !outboundEntry.includes("buildQualificationCloseLine"),
+  "close/goodbye must be handled inside QualifyLeadTask, not a second generateReply in entry",
+);
 assert.ok(qualifyTaskSource.includes("buildQualificationTaskInstructions"), "uses compiled mission instructions");
 assert.ok(qualifyTaskSource.includes("buildOpeningReplyInstructions"), "uses compiled opening guidance");
 assert.ok(
@@ -163,6 +167,10 @@ assert.ok(
 assert.ok(
   !/QualifyLeadTask\([^)]*\)\.run\(\)/.test(outboundEntry),
   "QualifyLeadTask.run must not be called outside a tool/task context",
+);
+assert.ok(
+  !qualifyTaskSource.includes("this.complete(result)"),
+  "must not complete QualifyLeadTask during set_qualification_outcome — that resumes the root agent and causes duplicate goodbyes",
 );
 
 console.log("outbound qualification tests: PASS");

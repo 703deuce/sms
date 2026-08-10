@@ -20,6 +20,7 @@ export type OutboundLeadUserData = {
   explicitOutcome?: QualificationBusinessOutcome | null;
   interested: boolean;
   qualificationComplete: boolean;
+  callEnded?: boolean;
   result?: LeadQualificationResult;
   firstAudioAt?: number;
   callAnsweredAt?: number;
