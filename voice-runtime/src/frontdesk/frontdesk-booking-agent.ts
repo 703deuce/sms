@@ -16,6 +16,8 @@ const FRONTDESK_INSTRUCTIONS = [
   "Be proactive: when the caller greets you, move toward booking rather than only greeting back.",
   "Before a tool call that takes a moment, give a brief spoken acknowledgment so there is no dead air.",
   "When talking about availability, call list_available_slots and offer a few clear options at a time.",
+  "Only offer times that list_available_slots returned — never invent, guess, or retry with made-up slots.",
+  "If list_available_slots fails or returns no slots, say you cannot see the calendar right now and offer to try again.",
   "Say times like 'Monday at 2' — avoid timezones, timestamps, and the words AM/PM.",
   "Use natural phrases like 'in the morning' or 'in the evening'.",
   "Never claim a booking succeeded unless schedule_appointment confirms it.",
@@ -61,20 +63,22 @@ export function createFrontDeskBookingAgent(input: {
     execute: async ({ range }, opts) => {
       const session = opts.ctx.session as AgentSession<FrontDeskUserData>;
       const cal = session.userData.cal;
-      const current = cal.now();
       const rangeDays =
-        range === "+1month" ? 30 : range === "+3month" ? 90 : 14;
-      const end = new Date(current.getTime() + rangeDays * 86_400_000);
-      const slots = await cal.listAvailableSlots({
-        startTime: current,
-        endTime: end,
-      });
-      slotsMap.clear();
-      for (const slot of slots) {
-        slotsMap.set(slot.slotId, slot);
+        range === "+1month" ? 14 : range === "+3month" ? 14 : 14;
+      try {
+        const slots = await cal.listAvailableSlots({ daysAhead: rangeDays });
+        slotsMap.clear();
+        for (const slot of slots) {
+          slotsMap.set(slot.slotId, slot);
+        }
+        const lines = cal.formatSlotsForModel(slots);
+        return lines || "No slots available at the moment.";
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        throw new llm.ToolError(
+          `Could not load calendar availability: ${message}. Do not invent times — tell the caller the calendar is temporarily unavailable.`,
+        );
       }
-      const lines = cal.formatSlotsForModel(slots);
-      return lines || "No slots available at the moment.";
     },
   });
 

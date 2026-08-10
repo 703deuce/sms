@@ -4,6 +4,10 @@ import {
   bookEventInvitee,
   listEventTypeAvailableTimes,
 } from "@/lib/integrations/adapters/calendly-actions";
+import { buildCalendlyListAvailableTimesParams } from "@/lib/voice/calendar/booking-args";
+
+/** Calendly rejects windows longer than 7 days in a single request. */
+const CALENDLY_MAX_WINDOW_DAYS = 7;
 
 export class SlotUnavailableError extends Error {
   constructor(message: string) {
@@ -87,28 +91,51 @@ export class CalendlyCalendar {
   }
 
   async listAvailableSlots(input: {
-    startTime: Date;
-    endTime: Date;
+    daysAhead?: number;
     durationMin?: number;
-  }): Promise<AvailableSlot[]> {
+  } = {}): Promise<AvailableSlot[]> {
     const ctx = await this.adapter();
     const durationMin = input.durationMin ?? 30;
-    const listed = await listEventTypeAvailableTimes(ctx, {
-      eventTypeUri: this.eventTypeUri || undefined,
-      startTime: input.startTime.toISOString(),
-      endTime: input.endTime.toISOString(),
-    });
-    this.eventTypeUri = listed.eventTypeUri;
-    return listed.slots
-      .filter((slot) => slot.status === "available")
-      .map((slot) => {
-        const startTime = new Date(slot.startTime);
-        return {
-          startTime,
-          durationMin,
-          slotId: slotIdFor(startTime, durationMin),
-        };
+    const requestedDays = Math.max(1, Math.min(14, input.daysAhead ?? 7));
+    const now = this.now();
+    const slotsByStart = new Map<string, AvailableSlot>();
+    let scanFrom: string | undefined;
+    let remainingDays = requestedDays;
+
+    while (remainingDays > 0) {
+      const chunkDays = Math.min(CALENDLY_MAX_WINDOW_DAYS, remainingDays);
+      const calParams = buildCalendlyListAvailableTimesParams(
+        {
+          daysAhead: chunkDays,
+          ...(scanFrom ? { startTime: scanFrom } : {}),
+        },
+        { maxDays: chunkDays, now },
+      );
+      const listed = await listEventTypeAvailableTimes(ctx, {
+        eventTypeUri: this.eventTypeUri || undefined,
+        startTime: calParams.startTime,
+        endTime: calParams.endTime,
       });
+      this.eventTypeUri = listed.eventTypeUri;
+      for (const slot of listed.slots) {
+        if (slot.status !== "available" || !slot.startTime) continue;
+        const startTime = new Date(slot.startTime);
+        const key = startTime.toISOString();
+        if (!slotsByStart.has(key)) {
+          slotsByStart.set(key, {
+            startTime,
+            durationMin,
+            slotId: slotIdFor(startTime, durationMin),
+          });
+        }
+      }
+      scanFrom = calParams.endTime;
+      remainingDays -= chunkDays;
+    }
+
+    return [...slotsByStart.values()].sort(
+      (a, b) => a.startTime.getTime() - b.startTime.getTime(),
+    );
   }
 
   formatSlotsForModel(slots: AvailableSlot[]): string {
