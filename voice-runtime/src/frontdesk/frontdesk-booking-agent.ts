@@ -21,6 +21,8 @@ const FRONTDESK_INSTRUCTIONS = [
   "Say times like 'Monday at 2' — avoid timezones, timestamps, and the words AM/PM.",
   "Use natural phrases like 'in the morning' or 'in the evening'.",
   "Never claim a booking succeeded unless schedule_appointment confirms it.",
+  "After the caller picks a slot, call schedule_appointment with that slot_id — do not re-ask for date or time.",
+  "A confirmation text is sent automatically to the caller's phone after booking — never ask for their number or offer to send texts manually.",
 ].join("\n");
 
 export function createFrontDeskBookingAgent(input: {
@@ -138,6 +140,16 @@ export function createFrontDeskBookingAgent(input: {
           );
           return { sent: false, reason: "send_failed" };
         });
+
+        console.log(
+          JSON.stringify({
+            source: "frontdesk-booking-agent",
+            event: "booking_confirmation_sms",
+            callId: session.userData.callId,
+            sent: sms.sent,
+            reason: sms.reason || null,
+          }),
+        );
 
         const smsNote = sms.sent
           ? " A confirmation text has been sent to their phone."

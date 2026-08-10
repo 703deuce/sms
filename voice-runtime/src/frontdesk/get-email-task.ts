@@ -24,10 +24,11 @@ export class GetEmailTask extends voice.AgentTask<GetEmailResult> {
   constructor(private readonly sessionRef: AgentSession<FrontDeskUserData>) {
     super({
       instructions:
-        "You are collecting the caller's email address for appointment confirmation. " +
+        "You are collecting the caller's email address because Calendly requires one to book. " +
         "You are on a live phone call — speak naturally. " +
         "Expect spoken formats like 'john dot doe at gmail dot com'. " +
-        "Call update_email_address with the normalized email, then confirm_email_address after they say yes.",
+        "A confirmation text to their phone is sent automatically after booking — do not ask for their phone number or offer to send texts or emails yourself. " +
+        "Call update_email_address with the normalized email, then confirm_email_address as soon as they say yes.",
       tools: [],
     });
   }
@@ -48,7 +49,7 @@ export class GetEmailTask extends voice.AgentTask<GetEmailResult> {
         await this.updateTools([this.buildUpdateTool(), this.buildConfirmTool()]);
         return (
           `Email updated to ${normalized}. ` +
-          "Repeat it back if needed and ask the caller to confirm before calling confirm_email_address."
+          "Repeat it back briefly and ask if that's right — then call confirm_email_address when they agree."
         );
       },
     });
@@ -72,7 +73,7 @@ export class GetEmailTask extends voice.AgentTask<GetEmailResult> {
   async onEnter(): Promise<void> {
     await this.updateTools([this.buildUpdateTool()]);
     await this.session.generateReply({
-      instructions: "Ask the caller for the email address to send their appointment confirmation to.",
+      instructions: "Ask for the email address to put on the calendar booking. Keep it brief — one question only.",
     });
   }
 }
