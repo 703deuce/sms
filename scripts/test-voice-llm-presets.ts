@@ -31,13 +31,13 @@ function withEnv(
 }
 
 assert.equal(VOICE_LLM_PRESETS["gemma-4-31b"].model, "google/gemma-4-31b-it");
-assert.equal(VOICE_LLM_PRESETS["gpt-4.1-mini"].model, "openai/gpt-4.1-mini");
+assert.equal(VOICE_LLM_PRESETS["gpt-4.1-mini"].model, "gpt-4.1-mini");
 
 assert.equal(
   usesLiveKitInferenceLlm("inference", "google/gemma-4-31b-it"),
   true,
 );
-assert.equal(usesLiveKitInferenceLlm("openai", "openai/gpt-4.1-mini"), true);
+assert.equal(usesLiveKitInferenceLlm("openai", "gpt-4.1-mini"), false);
 assert.equal(usesLiveKitInferenceLlm("openai", "gpt-5-nano"), false);
 
 withEnv(
@@ -64,8 +64,9 @@ withEnv(
   () => {
     const cfg = getVoicePipelineConfig();
     assert.equal(cfg.llmPreset, "gpt-4.1-mini");
-    assert.equal(cfg.llmProvider, "inference");
-    assert.equal(cfg.llmModel, "openai/gpt-4.1-mini");
+    assert.equal(cfg.llmProvider, "openai");
+    assert.equal(cfg.llmModel, "gpt-4.1-mini");
+    assert.equal(usesLiveKitInferenceLlm(cfg.llmProvider, cfg.llmModel), false);
   },
 );
 

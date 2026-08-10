@@ -36,10 +36,10 @@ export const VOICE_LLM_PRESETS: Record<VoiceLlmPresetId, VoiceLlmPreset> = {
   },
   "gpt-4.1-mini": {
     id: "gpt-4.1-mini",
-    label: "GPT-4.1 mini (LiveKit Inference)",
-    provider: "inference",
-    model: "openai/gpt-4.1-mini",
-    notes: "OpenAI GPT-4.1 mini routed through LiveKit Inference.",
+    label: "OpenAI GPT-4.1 mini (direct API)",
+    provider: "openai",
+    model: "gpt-4.1-mini",
+    notes: "Production default — OpenAI plugin, not LiveKit Inference.",
   },
 };
 

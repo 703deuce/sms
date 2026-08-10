@@ -25,28 +25,28 @@ Telnyx must send PSTN to your LiveKit **SIP URI** (may differ from project URL, 
 
 `LIVEKIT_URL`, `LIVEKIT_SIP_URI`, and API keys must all be from the **same** LiveKit project (your **Sms** project).
 
-## Voice pipeline (LiveKit Inference)
+## Voice pipeline (production defaults — BYO plugins)
 
 | Variable | Default |
 |----------|---------|
-| `VOICE_STT_PROVIDER` | `inference` |
-| `VOICE_STT_MODEL` | `deepgram/nova-3` |
-| `VOICE_TTS_PROVIDER` | `elevenlabs` |
-| `VOICE_TTS_MODEL` | `elevenlabs/eleven_flash_v2_5` |
-| `VOICE_TTS_PRESET` | `elevenlabs` (default when unset) |
+| `VOICE_STT_PROVIDER` | `deepgram-plugin` |
+| `VOICE_STT_MODEL` | `deepgram/flux-general-en` |
+| `VOICE_TTS_PROVIDER` | `elevenlabs-plugin` |
+| `VOICE_TTS_MODEL` | `eleven_flash_v2_5` |
+| `VOICE_TTS_VOICE` | `cgSgspJ2msm6clMCkdW9` |
 | `VOICE_LLM_PROVIDER` | `openai` |
-| `VOICE_LLM_MODEL` | `gpt-5-nano` (`gpt-5-mini` for higher quality) |
-| `VOICE_LLM_PRESET` | Optional shortcut — see LLM A/B below |
+| `VOICE_LLM_MODEL` | `gpt-5-nano` |
+| `VOICE_LLM_PRESET` | Optional shortcut — `gpt-4.1-mini` and `gpt-5-nano` use OpenAI direct |
 
 ## Latency and audio (LiveKit)
 
-### Bring your own keys (no LiveKit Inference credits)
+### Bring your own keys (production — no LiveKit Inference credits)
 
 Use your own OpenAI, Deepgram, and ElevenLabs accounts — no LiveKit Inference billing required:
 
 ```bash
-# LLM — OpenAI direct
-VOICE_LLM_PRESET=gpt-5-nano
+# LLM — OpenAI direct (production)
+VOICE_LLM_PRESET=gpt-4.1-mini
 OPENAI_API_KEY=sk-...
 
 # STT — Deepgram direct (keep flux_eager for Flux turn-taking)
@@ -106,18 +106,17 @@ VOICE_TURN_PRESET=ultra_low
 VOICE_TURN_PRESET=flux_eager
 ```
 
-### Recommended low-latency stack (defaults in code)
+### Recommended production stack (defaults in code)
 
 ```
-VOICE_LLM_PRESET=gemma-4-31b
-VOICE_TTS_PRESET=elevenlabs
+VOICE_LLM_PRESET=gpt-4.1-mini
 VOICE_TURN_PRESET=flux_eager
 VOICE_PREEMPTIVE_TTS=true
 ```
 
-Use `gpt-5-mini` instead of nano if tool-call accuracy drops.
+STT/TTS default to Deepgram + ElevenLabs plugins when unset. Use `gpt-5-nano` or `gpt-5-mini` if you want a faster/cheaper model.
 
-### LLM A/B (Gemma 4 31B vs GPT-4.1 mini)
+### LLM A/B (optional — LiveKit Inference only for Gemma)
 
 Keep Flux EOT + preemptive on; only change the LLM between test calls.
 
@@ -126,29 +125,30 @@ Keep Flux EOT + preemptive on; only change the LLM between test calls.
 VOICE_LLM_PRESET=gemma-4-31b
 ```
 
-**Test B — GPT-4.1 mini (LiveKit Inference):**
+**Production — GPT-4.1 mini (OpenAI direct, same as old agent):**
 ```
 VOICE_LLM_PRESET=gpt-4.1-mini
 ```
 
 Equivalent explicit vars (if you prefer not to use presets):
 ```
-# Gemma
+# Gemma (inference only)
 VOICE_LLM_PROVIDER=inference
 VOICE_LLM_MODEL=google/gemma-4-31b-it
 
-# GPT-4.1 mini
-VOICE_LLM_PROVIDER=inference
-VOICE_LLM_MODEL=openai/gpt-4.1-mini
+# GPT-4.1 mini (OpenAI plugin)
+VOICE_LLM_PROVIDER=openai
+VOICE_LLM_MODEL=gpt-4.1-mini
 ```
 
-Verify in call logs — `pipeline_config` should show:
+Verify in call logs — `pipeline_config` should show for production:
+```json
+"llm": { "preset": "gpt-4.1-mini", "model": "gpt-4.1-mini", "via": "openai_plugin" }
+```
+
+For Gemma inference A/B only:
 ```json
 "llm": { "preset": "gemma-4-31b", "model": "google/gemma-4-31b-it", "via": "livekit_inference" }
-```
-or
-```json
-"llm": { "preset": "gpt-4.1-mini", "model": "openai/gpt-4.1-mini", "via": "livekit_inference" }
 ```
 
 Compare `llmTtftMs` in `turn_latency_breakdown` lines across the two calls.

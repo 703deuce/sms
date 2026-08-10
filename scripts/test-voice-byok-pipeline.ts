@@ -54,6 +54,21 @@ withEnv(
   },
 );
 
+withEnv(
+  {
+    VOICE_LLM_PRESET: "gpt-4.1-mini",
+    VOICE_STT_PROVIDER: undefined,
+    VOICE_TTS_PROVIDER: undefined,
+  },
+  () => {
+    const cfg = getVoicePipelineConfig();
+    assert.equal(cfg.llmProvider, "openai");
+    assert.equal(cfg.llmModel, "gpt-4.1-mini");
+    assert.equal(cfg.sttProvider, "deepgram-plugin");
+    assert.equal(cfg.ttsProvider, "elevenlabs-plugin");
+  },
+);
+
 console.log("voice BYOK pipeline tests: PASS");
 
 withEnv(

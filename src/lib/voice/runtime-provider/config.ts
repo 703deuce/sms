@@ -100,12 +100,11 @@ function resolveTtsFromEnv(): Pick<
     };
   }
 
-  const defaultPreset = resolveVoiceTtsPreset("elevenlabs");
   return {
-    ttsProvider: process.env.VOICE_TTS_PROVIDER || defaultPreset.provider,
-    ttsModel: process.env.VOICE_TTS_MODEL || defaultPreset.model,
-    ttsLanguage: process.env.VOICE_TTS_LANGUAGE || defaultPreset.language,
-    ttsVoice: explicitVoice || process.env.VOICE_TTS_VOICE || defaultPreset.voice,
+    ttsProvider: process.env.VOICE_TTS_PROVIDER || "elevenlabs-plugin",
+    ttsModel: process.env.VOICE_TTS_MODEL || "eleven_flash_v2_5",
+    ttsLanguage: process.env.VOICE_TTS_LANGUAGE || "en",
+    ttsVoice: explicitVoice || process.env.VOICE_TTS_VOICE || "cgSgspJ2msm6clMCkdW9",
     ttsPreset: "elevenlabs",
   };
 }
@@ -143,13 +142,13 @@ function resolveLlmFromEnv(): Pick<
   };
 }
 
-/** LiveKit Inference STT/TTS — provider keys optional when using inference. */
+/** Voice pipeline — defaults to BYO plugins (OpenAI, Deepgram, ElevenLabs). */
 export function getVoicePipelineConfig(): VoicePipelineConfig {
   const tts = resolveTtsFromEnv();
   const llm = resolveLlmFromEnv();
   return {
-    sttProvider: process.env.VOICE_STT_PROVIDER || "inference",
-    sttModel: process.env.VOICE_STT_MODEL || "deepgram/nova-3",
+    sttProvider: process.env.VOICE_STT_PROVIDER || "deepgram-plugin",
+    sttModel: process.env.VOICE_STT_MODEL || "deepgram/flux-general-en",
     sttLanguage: process.env.VOICE_STT_LANGUAGE || "en",
     llmProvider: llm.llmProvider,
     llmModel: llm.llmModel,
