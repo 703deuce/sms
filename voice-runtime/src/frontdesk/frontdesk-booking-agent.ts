@@ -145,17 +145,22 @@ export function createFrontDeskBookingAgent(input: {
           }
 
           const emailResult = await new GetEmailTask(session).run();
-          if (opts.ctx.speechHandle.interrupted) {
-            return null;
-          }
 
-          // Stop any email-subagent speech (e.g. premature "booked" lines) before Calendly.
+          // Email sub-agent may have started closing speech; clear it before Calendly.
+          await session.interrupt({ force: true }).catch(() => undefined);
+
           try {
-            await session.interrupt({ force: true });
-          } catch {
-            // best effort
+            opts.ctx.disallowInterruptions();
+          } catch (err) {
+            console.warn(
+              JSON.stringify({
+                source: "frontdesk-booking-agent",
+                event: "disallow_interruptions_skipped",
+                callId: session.userData.callId,
+                error: err instanceof Error ? err.message : String(err),
+              }),
+            );
           }
-          opts.ctx.disallowInterruptions();
 
           try {
             const booked = await session.userData.cal.scheduleAppointment({
