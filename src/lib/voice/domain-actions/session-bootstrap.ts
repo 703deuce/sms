@@ -29,6 +29,7 @@ export type LiveKitAgentSyncSnapshot = {
   workflowState: WorkflowState;
   taskId: string;
   toolNames: string[];
+  instructions?: string;
   envelope?: TurnToolEnvelope;
 };
 

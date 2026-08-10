@@ -350,6 +350,7 @@ export async function syncAmyAgentFromContext(
   const previousTask =
     callContext.lastAgentSync?.taskId ?? taskForWorkflowState(previousState);
   const previousTools = [...(callContext.lastAgentSync?.toolNames || [])];
+  const previousInstructions = callContext.lastAgentSync?.instructions ?? "";
 
   session.userData = { ...session.userData, callContext };
   const agent = session.currentAgent;
@@ -357,6 +358,7 @@ export async function syncAmyAgentFromContext(
   const instructions = buildAmyAgentInstructions(callContext);
   const newState = callContext.session.currentState;
   const newTools = tools.map((tool) => tool.id);
+  const instructionsChanged = previousInstructions !== instructions;
 
   console.log(
     JSON.stringify({
@@ -385,6 +387,7 @@ export async function syncAmyAgentFromContext(
     workflowState: newState,
     taskId,
     toolNames: newTools,
+    instructions,
     envelope: callContext.lastToolEnvelope,
   };
   callContext.workflowState = newState;
@@ -393,19 +396,40 @@ export async function syncAmyAgentFromContext(
     previousTools.length !== newTools.length ||
     previousTools.some((name) => !newTools.includes(name));
 
-  await agent.updateInstructions(instructions);
+  if (instructionsChanged) {
+    await agent.updateInstructions(instructions);
+  }
   if (toolsChanged || taskId !== previousTask) {
     await agent.updateTools(llm.toToolContext(tools));
   }
 }
 
+function buildAmyGreetingInstructions(businessName: string): string {
+  const businessLabel = businessName.trim() || "our team";
+  return (
+    `Greet the caller in one short sentence as Amy with ${businessLabel}. ` +
+    "If they've already said what they need, move straight into helping; " +
+    "otherwise ask how you can help. Do not call any tools for this greeting."
+  );
+}
+
 export function createAmyAgent(callContext: LiveKitCallContext) {
   const { tools } = buildAmyToolList(callContext);
   const instructions = buildAmyAgentInstructions(callContext);
+  const greetingInstructions = buildAmyGreetingInstructions(callContext.businessName);
 
   return voice.Agent.create<AmyProcessUserData>({
     instructions,
     tools: llm.toToolContext(tools),
+    onEnter: async (agentCtx) => {
+      await agentCtx.session
+        .generateReply({
+          instructions: greetingInstructions,
+          toolChoice: "none",
+          allowInterruptions: false,
+        })
+        .waitForPlayout();
+    },
     onUserTurnCompleted: async (agentCtx, _chatCtx, newMessage) => {
       const transcript = userMessageText(newMessage);
       if (!transcript) return;

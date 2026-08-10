@@ -46,13 +46,19 @@ function check(name: string, cond: boolean, detail?: string) {
 }
 
 function mockSession(callContext: Awaited<ReturnType<typeof bootstrapLiveKitCallContext>>) {
+  let instructionUpdates = 0;
   return {
     currentAgent: {
-      updateInstructions: async () => undefined,
+      updateInstructions: async () => {
+        instructionUpdates++;
+      },
       updateTools: async () => undefined,
     },
     userData: { callContext },
-  } as unknown as Parameters<typeof syncAmyAgentFromContext>[0];
+    get instructionUpdates() {
+      return instructionUpdates;
+    },
+  } as unknown as Parameters<typeof syncAmyAgentFromContext>[0] & { instructionUpdates: number };
 }
 
 async function collectAllFields(
@@ -171,8 +177,19 @@ async function main() {
     );
 
     const beforeSyncTools = callContext.lastAgentSync?.toolNames || [];
-    await syncAmyAgentFromContext(mockSession(callContext), callContext);
+    const session = mockSession(callContext);
+    await syncAmyAgentFromContext(session, callContext);
     check("sync records lastAgentSync", Boolean(callContext.lastAgentSync?.toolNames.length));
+    check(
+      "sync stores instructions snapshot",
+      callContext.lastAgentSync?.instructions === buildAmyAgentInstructions(callContext),
+    );
+    await syncAmyAgentFromContext(session, callContext);
+    check(
+      "sync skips updateInstructions when unchanged",
+      session.instructionUpdates === 1,
+      `updates=${session.instructionUpdates}`,
+    );
     check(
       "sync exposes semantic tools in lastAgentSync",
       (callContext.lastAgentSync?.toolNames.includes("choose_appointment_time") ||
