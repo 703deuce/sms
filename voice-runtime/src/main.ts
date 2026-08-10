@@ -103,10 +103,13 @@ export default defineAgent<VoiceRuntimeUserData>({
     if (useFrontDesk) {
       const cal = await CalendlyCalendar.create({
         workspaceId: routing.workspaceId,
+        agentId: routing.agentId,
+        callId,
         timezone,
       });
       userData = {
         workspaceId: routing.workspaceId,
+        agentId: routing.agentId,
         callId,
         businessName,
         timezone,

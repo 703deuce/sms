@@ -2,6 +2,7 @@ import type { CalendlyCalendar } from "./calendly-calendar";
 
 export type FrontDeskUserData = {
   workspaceId: string;
+  agentId: string;
   callId: string;
   businessName: string;
   timezone: string;

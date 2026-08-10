@@ -1,12 +1,22 @@
 import { createHash } from "node:crypto";
 import { buildAdapterContext } from "@/lib/integrations/framework/context";
+import { listEventTypeAvailableTimes } from "@/lib/integrations/adapters/calendly-actions";
 import {
-  bookEventInvitee,
-  listEventTypeAvailableTimes,
-} from "@/lib/integrations/adapters/calendly-actions";
-import { buildCalendlyListAvailableTimesParams } from "@/lib/voice/calendar/booking-args";
+  buildCalendlyBookParams,
+  buildCalendlyListAvailableTimesParams,
+} from "@/lib/voice/calendar/booking-args";
+import { requireCalendlyIntegrationOk } from "@/lib/voice/calendar/calendly-voice";
+import { executeLiveAgentCalendlyAction } from "@/lib/voice/tools/builtin-actions-calendly";
 
-/** Calendly rejects windows longer than 7 days in a single request. */
+/**
+ * Calendly scheduling constraints (see calendly-actions.ts):
+ * - GET /event_type_available_times: start_time must be future ISO; window ≤7 days per request
+ *   (API allows up to 31 — we chunk at 7 to match the Amy/Telnyx path and tool timeouts).
+ * - POST /invitees: start_time must match a slot from the latest availability call; requires
+ *   paid plan + write OAuth scopes (scheduling_links:write, scheduled_events:write).
+ * - event_type: full Calendly URI (https://api.calendly.com/event_types/…); defaults to the
+ *   first active event type on the connected account when omitted.
+ */
 const CALENDLY_MAX_WINDOW_DAYS = 7;
 
 export class SlotUnavailableError extends Error {
@@ -56,15 +66,24 @@ export class CalendlyCalendar {
 
   private constructor(
     private readonly workspaceId: string,
+    private readonly agentId: string,
+    private readonly callId: string,
     readonly timezone: string,
   ) {}
 
   static async create(input: {
     workspaceId: string;
+    agentId: string;
+    callId: string;
     timezone: string;
     eventTypeUri?: string | null;
   }): Promise<CalendlyCalendar> {
-    const cal = new CalendlyCalendar(input.workspaceId, input.timezone);
+    const cal = new CalendlyCalendar(
+      input.workspaceId,
+      input.agentId,
+      input.callId,
+      input.timezone,
+    );
     await cal.initialize(input.eventTypeUri || null);
     return cal;
   }
@@ -107,12 +126,13 @@ export class CalendlyCalendar {
       const calParams = buildCalendlyListAvailableTimesParams(
         {
           daysAhead: chunkDays,
+          eventTypeUri: this.eventTypeUri || undefined,
           ...(scanFrom ? { startTime: scanFrom } : {}),
         },
         { maxDays: chunkDays, now },
       );
       const listed = await listEventTypeAvailableTimes(ctx, {
-        eventTypeUri: this.eventTypeUri || undefined,
+        eventTypeUri: calParams.eventTypeUri,
         startTime: calParams.startTime,
         endTime: calParams.endTime,
       });
@@ -166,20 +186,43 @@ export class CalendlyCalendar {
     attendeeEmail: string;
     attendeeName?: string;
   }): Promise<BookedAppointment> {
-    const ctx = await this.adapter();
+    const bookParams = buildCalendlyBookParams({
+      startsAt: input.slot.startTime.toISOString(),
+      name:
+        input.attendeeName?.trim() ||
+        input.attendeeEmail.split("@")[0] ||
+        "Caller",
+      email: input.attendeeEmail,
+      timezone: this.timezone,
+      eventTypeUri: this.eventTypeUri || undefined,
+    });
+    if (!bookParams.startTime) {
+      throw new Error("Missing start time for booking");
+    }
+
     try {
-      const booked = await bookEventInvitee(ctx, {
-        eventTypeUri: this.eventTypeUri || undefined,
-        startTime: input.slot.startTime.toISOString(),
-        name: input.attendeeName?.trim() || input.attendeeEmail.split("@")[0] || "Caller",
-        email: input.attendeeEmail,
-        timezone: this.timezone,
+      const result = await executeLiveAgentCalendlyAction({
+        workspaceId: this.workspaceId,
+        agentId: this.agentId,
+        callId: this.callId,
+        actionId: "appointment.book",
+        params: bookParams,
       });
+      const booked = requireCalendlyIntegrationOk(result, "book invitee");
+      const data = (booked.data || {}) as {
+        inviteeUri?: string;
+        eventUri?: string;
+      };
+      const inviteeUri = String(data.inviteeUri || "");
+      const eventUri = String(data.eventUri || "");
+      if (!inviteeUri || !eventUri) {
+        throw new Error("Calendly booking succeeded but returned no invitee/event URI");
+      }
       const appointment: BookedAppointment = {
         slot: input.slot,
         attendeeEmail: input.attendeeEmail,
-        inviteeUri: booked.inviteeUri,
-        eventUri: booked.eventUri,
+        inviteeUri,
+        eventUri,
       };
       this.scheduledAppointments.push(appointment);
       return appointment;
