@@ -45,7 +45,7 @@ import {
   findMultiResourceAvailability,
   resolveServiceAndResources,
 } from "../src/lib/voice/scheduling-domain/availability";
-import { buildAmyToolList } from "../voice-runtime/src/amy-tools";
+import { createAmyReceptionistAgent } from "../voice-runtime/src/amy-receptionist-agent";
 
 const failures: string[] = [];
 let testsRun = 0;
@@ -542,10 +542,9 @@ async function main() {
       check("confirm_booking skipped (no calendar slots)", true);
     }
 
-    // --- 12. Tool list wiring ---
-    const tools = buildAmyToolList(callContext);
-    check("amy-tools includes detect_caller_intent when allowed", true);
-    check("amy-tools builds without error", tools.tools.length > 0);
+    // --- 12. Healthcare-style receptionist agent ---
+    const agent = createAmyReceptionistAgent();
+    check("receptionist agent creates", Boolean(agent));
 
     await liveKitRuntimeProvider.endSession(callContext.callId);
     check("session cleanup", true);

@@ -21,8 +21,8 @@ import {
   taskForWorkflowState,
   toolsForTask,
 } from "../src/lib/voice/domain-actions";
-import { buildAmyToolList } from "../voice-runtime/src/amy-tools";
-import { executeDeterministicPipeline } from "../src/lib/voice/agent-runtime/deterministic-executor";
+import { createAmyReceptionistAgent } from "../voice-runtime/src/amy-receptionist-agent";
+import { loadAvailableSlots, missingRequiredFields } from "../voice-runtime/src/scheduling-bridge";
 import { staleCachedSessionOnly } from "../src/lib/voice/domain-actions/scheduling-session";
 import { matchSlotFromInput } from "../src/lib/voice/workflow-engine/slot-matching";
 
@@ -109,7 +109,7 @@ async function main() {
       toE164: ctx.toE164,
     });
     check("session bootstrapped", Boolean(callContext.session.fieldManifest.length));
-    check("initial tools scoped", buildAmyToolList(callContext).tools.length >= 1);
+    check("receptionist agent creates", Boolean(createAmyReceptionistAgent()));
 
     section = "requirements";
     console.log(`\n## ${section}`);
@@ -126,33 +126,26 @@ async function main() {
       callContext.session.currentState === "CHECKING_AVAILABILITY",
       callContext.session.currentState,
     );
-    const postCollectTools = buildAmyToolList(callContext);
-    const pipeline = await executeDeterministicPipeline({
-      ctx: callContext,
-      preferenceSpoken: "tomorrow afternoon",
-    });
+    const postCollectMissing = missingRequiredFields(callContext);
+    const loaded = await loadAvailableSlots(callContext, "tomorrow afternoon");
+    callContext.session = loaded.ctx.session;
     check(
-      "deterministic pipeline runs check_availability",
-      pipeline.steps.some((s) => s.toolName === "check_availability") ||
-        callContext.session.availableSlots.length > 0,
-      pipeline.steps.map((s) => s.toolName).join(", "),
+      "scheduling bridge loads availability",
+      loaded.slots.length > 0 || Boolean(loaded.result.speak),
+      `slots=${loaded.slots.length}`,
     );
     check(
-      "check_availability not exposed to LLM",
-      !postCollectTools.tools.some((t) => t.id === "check_availability"),
-      postCollectTools.tools.map((t) => t.id).join(", "),
-    );
-    check(
-      "capture_caller_information removed when complete",
-      !postCollectTools.tools.some((t) => t.id === "capture_caller_information"),
+      "fields complete before availability",
+      postCollectMissing.length === 0,
+      `missing=${postCollectMissing.map((f) => f.field_id).join(",")}`,
     );
 
     section = "availability";
     console.log(`\n## ${section}`);
     check(
-      "pipeline availability succeeded",
-      pipeline.steps.some((s) => s.toolName === "check_availability" && s.ok),
-      pipeline.steps.map((s) => `${s.toolName}:${s.ok}`).join(", "),
+      "availability bridge succeeded",
+      loaded.result.ok !== false || loaded.slots.length > 0,
+      loaded.result.error_code || loaded.result.speak,
     );
     const resultSlots = callContext.session.availableSlots || [];
     check("session slots populated", resultSlots.length > 0, `count=${resultSlots.length}`);

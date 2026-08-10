@@ -1,12 +1,7 @@
 import type { LiveKitCallContext } from "@/lib/voice/domain-actions";
-import { buildAmyLiveKitPermanentPrompt } from "@/lib/agents/appointment-booking/intelligence/amy-livekit-prompt";
-import { buildConversationalContextBlock } from "./conversational-context";
+import { buildAmyLiveKitRootInstructions } from "@/lib/agents/appointment-booking/intelligence/amy-livekit-prompt";
 
-/** Shared Amy instructions for LiveKit phone and text simulator — must stay identical. */
+/** Root-agent instructions for LiveKit phone runtime (healthcare-style thin receptionist). */
 export function buildAmyAgentInstructions(callContext: LiveKitCallContext): string {
-  const capabilityContext = buildConversationalContextBlock(callContext);
-
-  return [buildAmyLiveKitPermanentPrompt(callContext.businessName), capabilityContext]
-    .filter(Boolean)
-    .join("\n\n");
+  return buildAmyLiveKitRootInstructions(callContext.businessName);
 }

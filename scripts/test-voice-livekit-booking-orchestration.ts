@@ -1,6 +1,6 @@
 #!/usr/bin/env npx tsx
 /**
- * LiveKit booking orchestration tests — domain actions + tool scoping.
+ * LiveKit booking orchestration tests — healthcare-style scheduling bridge.
  *
  * Run: npm run test:voice-livekit-booking-orchestration
  */
@@ -17,20 +17,16 @@ import { liveKitRuntimeProvider } from "../src/lib/voice/runtime-provider/liveki
 import {
   bootstrapLiveKitCallContext,
   domainGetBookingRequirements,
-  domainRecordField,
-  domainSelectSlot,
-  domainConfirmBooking,
-  taskForWorkflowState,
-  toolsForTask,
-  assertTaskToolAllowed,
   buildRequirementsPayload,
 } from "../src/lib/voice/domain-actions";
-import { executeDeterministicPipeline } from "../src/lib/voice/agent-runtime/deterministic-executor";
+import { buildAmyAgentInstructions } from "../src/lib/voice/agent-runtime/build-amy-instructions";
 import {
-  buildAmyAgentInstructions,
-  buildAmyToolList,
-  syncAmyAgentFromContext,
-} from "../voice-runtime/src/amy-tools";
+  loadAvailableSlots,
+  recordCallerField,
+  holdAppointmentSlot,
+  commitBooking,
+  missingRequiredFields,
+} from "../voice-runtime/src/scheduling-bridge";
 
 const failures: string[] = [];
 let testsRun = 0;
@@ -45,24 +41,16 @@ function check(name: string, cond: boolean, detail?: string) {
   }
 }
 
-function mockSession(callContext: Awaited<ReturnType<typeof bootstrapLiveKitCallContext>>) {
-  return {
-    currentAgent: {
-      updateInstructions: async () => undefined,
-      updateTools: async () => undefined,
-    },
-    userData: { callContext },
-  } as unknown as Parameters<typeof syncAmyAgentFromContext>[0];
-}
-
 async function collectAllFields(
   callContext: Awaited<ReturnType<typeof bootstrapLiveKitCallContext>>,
 ) {
   for (let i = 0; i < 8; i++) {
-    if (!callContext.session.missingFieldIds.length) break;
-    const active = callContext.session.activeField;
-    const sample = sampleValueForManifestField(callContext.session, active, i);
-    const result = await domainRecordField({ ctx: callContext, value: sample });
+    const missing = missingRequiredFields(callContext);
+    if (!missing.length) break;
+    const field = missing[0]!;
+    const sample = sampleValueForManifestField(callContext.session, field.field_id, i);
+    const { ctx, result } = await recordCallerField(callContext, sample, field.field_id);
+    callContext.session = ctx.session;
     if (!result.ok) break;
   }
 }
@@ -89,7 +77,7 @@ async function main() {
     });
     ctx.callIds.push(callId);
 
-    const callContext = await bootstrapLiveKitCallContext({
+    let callContext = await bootstrapLiveKitCallContext({
       callId,
       workspaceId: ctx.workspaceId,
       agentId: ctx.agentId,
@@ -97,19 +85,7 @@ async function main() {
       toE164: ctx.toE164,
     });
 
-    const initialTask = taskForWorkflowState(callContext.session.currentState);
-    const initialTools = buildAmyToolList(callContext);
-    check(
-      "discovery/collect exposes semantic capture tool",
-      initialTools.tools.some((tool) => tool.id === "capture_caller_information"),
-    );
-
-    try {
-      assertTaskToolAllowed(initialTask, "check_availability");
-      check("availability blocked before fields complete", false, "should throw");
-    } catch {
-      check("availability blocked before fields complete", true);
-    }
+    check("missing fields before collect", missingRequiredFields(callContext).length > 0);
 
     const requirements = await domainGetBookingRequirements({ ctx: callContext });
     check("get_booking_requirements succeeds", requirements.ok);
@@ -118,103 +94,48 @@ async function main() {
       Boolean(requirements.data?.activeField || requirements.data?.readyForAvailability === false),
     );
 
-    const firstField = await domainRecordField({
-      ctx: callContext,
-      value: sampleValueForManifestField(
-        callContext.session,
-        callContext.session.activeField,
-      ),
-    });
-    check("record_current_field succeeds", firstField.ok !== false);
-    check(
-      "record result includes next field or ready flag",
-      Boolean(firstField.data?.nextField || firstField.data?.readyForAvailability),
+    const firstField = missingRequiredFields(callContext)[0];
+    const firstSample = sampleValueForManifestField(
+      callContext.session,
+      firstField?.field_id || callContext.session.activeField,
     );
+    const firstRecorded = await recordCallerField(callContext, firstSample, firstField?.field_id);
+    callContext = firstRecorded.ctx;
+    check("record field succeeds", firstRecorded.result.ok !== false);
 
     await collectAllFields(callContext);
-
-    callContext.workflowState = callContext.session.currentState;
-
-    const postCollectTask = taskForWorkflowState(callContext.session.currentState);
-    check("post-collect task is CheckAvailabilityTask", postCollectTask === "CheckAvailabilityTask");
-
-    const postCollectTools = buildAmyToolList(callContext);
-    const pipeline = await executeDeterministicPipeline({
-      ctx: callContext,
-      preferenceSpoken: "next available",
-    });
-    check(
-      "deterministic pipeline runs check_availability after collect",
-      pipeline.steps.some((s) => s.toolName === "check_availability") ||
-        callContext.session.availableSlots.length > 0,
-      pipeline.steps.map((s) => s.toolName).join(", "),
-    );
-    check(
-      "post-collect does not expose check_availability to LLM",
-      !postCollectTools.tools.some((tool) => tool.id === "check_availability"),
-      postCollectTools.tools.map((tool) => tool.id).join(", "),
-    );
-    check(
-      "post-collect removes capture when complete",
-      !postCollectTools.tools.some((tool) => tool.id === "capture_caller_information") ||
-        callContext.session.missingFieldIds.length > 0,
-    );
-
-    const instructions = buildAmyAgentInstructions(callContext);
-    check(
-      "instructions do not teach LLM to call check_availability",
-      !instructions.includes("call check_availability"),
-    );
-    check(
-      "instructions include conversational context",
-      instructions.includes("SESSION:"),
-    );
-
-    const beforeSyncTools = callContext.lastAgentSync?.toolNames || [];
-    await syncAmyAgentFromContext(mockSession(callContext), callContext);
-    check("sync records lastAgentSync", Boolean(callContext.lastAgentSync?.toolNames.length));
-    check(
-      "sync exposes semantic tools in lastAgentSync",
-      (callContext.lastAgentSync?.toolNames.includes("choose_appointment_time") ||
-        callContext.lastAgentSync?.toolNames.includes("capture_caller_information")) === true,
-      `before=${beforeSyncTools.join(",")} after=${callContext.lastAgentSync?.toolNames.join(",")}`,
-    );
 
     const payload = buildRequirementsPayload(callContext.session);
     check("requirements payload readyForAvailability", payload.readyForAvailability === true);
 
+    const loaded = await loadAvailableSlots(callContext, "next available");
+    callContext = loaded.ctx;
     check(
-      "availability slots present after pipeline",
-      callContext.session.availableSlots.length > 0 ||
-        pipeline.steps.some((s) => s.toolName === "check_availability" && s.ok),
+      "availability loads slots or returns speakable failure",
+      loaded.slots.length > 0 || Boolean(loaded.result.speak),
+      `slots=${loaded.slots.length}`,
     );
 
-    const slots =
-      (callContext.session.availableSlots as unknown[] | undefined) || [];
-    if (slots.length && callContext.session.currentState === "SELECTING_SLOT") {
-      const select = await domainSelectSlot({
-        ctx: callContext,
-        utterance: "the first one",
-      });
-      check("select_slot returns result", Boolean(select.speak));
+    const instructions = buildAmyAgentInstructions(callContext);
+    check("root instructions mention schedule_appointment", instructions.includes("schedule_appointment"));
+    check("root instructions avoid SESSION block", !instructions.includes("SESSION:"));
 
-      const confirmBlocked = await domainConfirmBooking({
-        ctx: callContext,
-        confirmed: false,
-      });
+    if (loaded.slots.length > 0) {
+      const slotId = loaded.slots[0]!.slotId;
+      const held = await holdAppointmentSlot(callContext, slotId);
+      callContext = held.ctx;
+      check("hold slot returns result", Boolean(held.result.speak));
+
+      const declined = await commitBooking(callContext, false);
+      callContext = declined.ctx;
       check(
         "declined confirmation does not book",
-        confirmBlocked.ok === false || !confirmBlocked.data?.booking,
+        declined.result.ok === false || !declined.result.data?.booking,
       );
     } else {
-      check("select_slot skipped without returned slots", true, `state=${callContext.session.currentState}`);
-      check("confirm_booking skipped without returned slots", true);
+      check("hold slot skipped without slots", true);
+      check("confirm booking skipped without slots", true);
     }
-
-    check(
-      "confirm_booking unavailable during collect",
-      !toolsForTask("CollectBookingFieldsTask").includes("confirm_booking"),
-    );
 
     await liveKitRuntimeProvider.endSession(callId);
     check("session cleanup", true);

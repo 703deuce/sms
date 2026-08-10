@@ -6,9 +6,9 @@ import { fileURLToPath } from "node:url";
 import { liveKitRuntimeProvider } from "@/lib/voice/runtime-provider/livekit";
 import { bootstrapLiveKitCallContext } from "@/lib/voice/domain-actions";
 import { resolveAgentRoutingForCall } from "@/lib/telephony/provisioning";
-import { createAmyAgent } from "./amy-tools";
+import { createAmyReceptionistAgent } from "./amy-receptionist-agent";
 import { resolveInboundSipCallIdentity } from "./call-identity";
-import type { AmyProcessUserData } from "./metadata";
+import type { AmyUserData } from "./metadata";
 import { buildAmyVoicePipeline, describePipelineConfig } from "./pipeline";
 import { applyVoiceRuntimeEnvAliases } from "./env-aliases";
 import { attachLatencyInstrumentation } from "./latency-instrumentation";
@@ -20,7 +20,7 @@ applyVoiceRuntimeEnvAliases();
 
 const AGENT_NAME = process.env.LIVEKIT_AGENT_NAME || "transovo-voice-runtime";
 
-export default defineAgent<AmyProcessUserData>({
+export default defineAgent<AmyUserData>({
   entry: async (ctx) => {
     const identity = await resolveInboundSipCallIdentity(ctx);
 
@@ -66,7 +66,7 @@ export default defineAgent<AmyProcessUserData>({
       toE164: identity.toE164 || routing.e164,
     });
 
-    ctx.proc.userData = { callContext } satisfies AmyProcessUserData;
+    ctx.proc.userData = { callContext } satisfies AmyUserData;
 
     const prisma = getPrisma();
     const agentRow = await prisma.voiceAgent.findFirst({
@@ -87,14 +87,14 @@ export default defineAgent<AmyProcessUserData>({
         outputGainDb,
       }),
     );
-    const agent = createAmyAgent(callContext);
+    const agent = createAmyReceptionistAgent();
 
-    const session = new voice.AgentSession<AmyProcessUserData>({
+    const session = new voice.AgentSession<AmyUserData>({
       stt,
       llm,
       tts,
       turnHandling: buildAmyTurnHandling(),
-      maxToolSteps: Number(process.env.VOICE_MAX_TOOL_STEPS?.trim()) || 6,
+      maxToolSteps: Number(process.env.VOICE_MAX_TOOL_STEPS?.trim()) || 2,
       userData: { callContext },
     });
 
