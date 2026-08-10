@@ -5,13 +5,25 @@
 import {
   canonicalToolType,
   isToolAllowedForState,
-  toolsForState,
-  STATE_ALLOWED_TOOLS,
 } from "../src/lib/voice/workflow-engine/states";
 import { emptyAgentRuntime, appendFieldReceipt, transitionState } from "../src/lib/voice/workflow-engine/runtime-state";
 import { assertToolAllowed } from "../src/lib/voice/workflow-engine/guard";
 
 const failures: string[] = [];
+
+function withPreprodLegacyTools<T>(run: () => T): T {
+  const previous = process.env.VOICE_PREPROD_ALLOW_INTERNAL_TOOLS;
+  process.env.VOICE_PREPROD_ALLOW_INTERNAL_TOOLS = "1";
+  try {
+    return run();
+  } finally {
+    if (previous === undefined) {
+      delete process.env.VOICE_PREPROD_ALLOW_INTERNAL_TOOLS;
+    } else {
+      process.env.VOICE_PREPROD_ALLOW_INTERNAL_TOOLS = previous;
+    }
+  }
+}
 
 function check(name: string, cond: boolean, detail?: string) {
   if (!cond) {
@@ -27,11 +39,11 @@ check("canonical save shim", canonicalToolType("save_caller_info") === "save_col
 
 check(
   "COLLECTING allows record_current_field",
-  isToolAllowedForState("COLLECTING_FIELDS", "record_current_field"),
+  withPreprodLegacyTools(() => isToolAllowedForState("COLLECTING_FIELDS", "record_current_field")),
 );
 check(
   "READY_TO_BOOK allows continue_workflow",
-  isToolAllowedForState("READY_TO_BOOK", "continue_workflow"),
+  withPreprodLegacyTools(() => isToolAllowedForState("READY_TO_BOOK", "continue_workflow")),
 );
 check(
   "COLLECTING blocks book_appointment",
@@ -43,7 +55,7 @@ check(
 );
 check(
   "CHECKING_AVAILABILITY allows continue_workflow",
-  isToolAllowedForState("CHECKING_AVAILABILITY", "continue_workflow"),
+  withPreprodLegacyTools(() => isToolAllowedForState("CHECKING_AVAILABILITY", "continue_workflow")),
 );
 check(
   "INTENT_DISCOVERY blocks calendar_availability",
@@ -55,16 +67,18 @@ check(
 );
 check(
   "BOOKING_IN_PROGRESS allows continue_workflow",
-  isToolAllowedForState("BOOKING_IN_PROGRESS", "continue_workflow"),
+  withPreprodLegacyTools(() => isToolAllowedForState("BOOKING_IN_PROGRESS", "continue_workflow")),
 );
 check(
   "escape hatches in COLLECTING",
-  toolsForState("COLLECTING_FIELDS").includes("transfer"),
+  withPreprodLegacyTools(() => isToolAllowedForState("COLLECTING_FIELDS", "escalate_human")),
 );
 check(
   "get_runtime_context in all booking states",
-  (["COLLECTING_FIELDS", "CHECKING_AVAILABILITY", "SELECTING_SLOT", "READY_TO_BOOK"] as const).every(
-    (s) => STATE_ALLOWED_TOOLS[s].includes("get_runtime_context"),
+  withPreprodLegacyTools(() =>
+    (["COLLECTING_FIELDS", "CHECKING_AVAILABILITY", "SELECTING_SLOT", "READY_TO_BOOK"] as const).every(
+      (s) => isToolAllowedForState(s, "get_runtime_context"),
+    ),
   ),
 );
 
