@@ -19,7 +19,7 @@ import {
   domainGetBookingRequirements,
   buildRequirementsPayload,
 } from "../src/lib/voice/domain-actions";
-import { buildAmyAgentInstructions } from "../src/lib/voice/agent-runtime/build-amy-instructions";
+import { buildAmyLiveKitRootInstructions } from "../src/lib/agents/appointment-booking/intelligence/amy-livekit-prompt";
 import {
   loadAvailableSlots,
   recordCallerField,
@@ -116,7 +116,7 @@ async function main() {
       `slots=${loaded.slots.length}`,
     );
 
-    const instructions = buildAmyAgentInstructions(callContext);
+    const instructions = buildAmyLiveKitRootInstructions(callContext.businessName);
     check("root instructions mention schedule_appointment", instructions.includes("schedule_appointment"));
     check("root instructions avoid SESSION block", !instructions.includes("SESSION:"));
 

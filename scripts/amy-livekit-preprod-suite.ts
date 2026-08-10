@@ -20,7 +20,7 @@ import {
 } from "../src/lib/voice/runtime-provider";
 import { liveKitRuntimeProvider } from "../src/lib/voice/runtime-provider/livekit";
 import { bootstrapLiveKitCallContext, domainGetBookingRequirements } from "../src/lib/voice/domain-actions";
-import { buildAmyAgentInstructions } from "../src/lib/voice/agent-runtime/build-amy-instructions";
+import { buildAmyLiveKitRootInstructions } from "../src/lib/agents/appointment-booking/intelligence/amy-livekit-prompt";
 import { createAmyReceptionistAgent } from "../voice-runtime/src/amy-receptionist-agent";
 import {
   loadAvailableSlots,
@@ -62,7 +62,7 @@ async function main() {
   );
   check("room metadata parse", Boolean(meta?.workspaceId));
 
-  const agent = createAmyReceptionistAgent();
+  const agent = createAmyReceptionistAgent("Test Business");
   check("receptionist agent creates", Boolean(agent));
 
   const ctx = await createPreprodTenant();
@@ -109,9 +109,13 @@ async function main() {
       if (!loop.result.ok) break;
     }
 
-    const instructions = buildAmyAgentInstructions(callContext);
-    check("root instructions are thin", instructions.includes("schedule_appointment"));
+    const instructions = buildAmyLiveKitRootInstructions(callContext.businessName);
+    check("root instructions mention schedule_appointment", instructions.includes("schedule_appointment"));
     check("root instructions avoid SESSION block", !instructions.includes("SESSION:"));
+    check(
+      "root instructions match healthcare pattern",
+      instructions.includes("do not preemptively ask") && instructions.includes("modify_appointment"),
+    );
 
     if (!missingRequiredFields(callContext).length) {
       const loaded = await loadAvailableSlots(callContext, "next available");

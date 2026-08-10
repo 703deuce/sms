@@ -1,18 +1,18 @@
 import { llm, voice } from "@livekit/agents";
 import { z } from "zod";
 import type { AgentSession } from "@livekit/agents";
+import { buildModifyAppointmentTaskInstructions } from "@/lib/agents/appointment-booking/intelligence/amy-livekit-prompt";
 import type { AmyUserData } from "../metadata";
 import { requireCallContext, stashCallContext } from "../call-context";
-import type { ModelSlotRef } from "@/lib/voice/domain-actions/tool-results";
 import {
-  commitBooking,
-  holdAppointmentSlot,
-  loadAvailableSlots,
-  rescheduleHeldAppointment,
+  BookAppointmentTask,
+  type BookAppointmentResult,
+} from "./book-appointment-task";
+import {
   cancelCallerAppointment,
   findCallerAppointments,
+  rescheduleHeldAppointment,
 } from "../scheduling-bridge";
-import { BookAppointmentTask, type BookAppointmentResult } from "./book-appointment-task";
 
 export type ModifyAppointmentResult = {
   action: "reschedule" | "cancel";
@@ -33,10 +33,7 @@ export class ModifyAppointmentTask extends voice.AgentTask<ModifyAppointmentResu
     private readonly sessionRef: AgentSession<AmyUserData>,
   ) {
     super({
-      instructions:
-        modifyAction === "cancel"
-          ? "Help the caller cancel an existing appointment."
-          : "Help the caller reschedule an existing appointment.",
+      instructions: buildModifyAppointmentTaskInstructions(modifyAction),
       tools: [],
     });
   }
@@ -69,10 +66,23 @@ export class ModifyAppointmentTask extends voice.AgentTask<ModifyAppointmentResu
       return;
     }
 
+    await this.publishAppointments();
     await this.attachSelectionTool();
     await this.session.generateReply({
-      instructions: `Ask which appointment they want to ${this.modifyAction}.`,
+      instructions:
+        `Prompt the caller to choose an appointment to ${this.modifyAction}. ` +
+        "Confirm before proceeding.",
     });
+  }
+
+  private async publishAppointments(): Promise<void> {
+    const lines = this.appointments.map((appt) => `${appt.id} – ${appt.label}`);
+    const chatCtx = this.chatCtx.copy();
+    chatCtx.addMessage({
+      role: "system",
+      content: `The caller has these appointments on file:\n${lines.join("\n")}`,
+    });
+    await this.updateChatCtx(chatCtx);
   }
 
   private async attachSelectionTool(): Promise<void> {

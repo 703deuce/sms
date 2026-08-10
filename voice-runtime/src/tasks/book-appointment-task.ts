@@ -1,6 +1,7 @@
 import { llm, voice } from "@livekit/agents";
 import { z } from "zod";
 import type { AgentSession } from "@livekit/agents";
+import { buildBookAppointmentTaskInstructions } from "@/lib/agents/appointment-booking/intelligence/amy-livekit-prompt";
 import type { AmyUserData } from "../metadata";
 import { requireCallContext, stashCallContext } from "../call-context";
 import type { ModelSlotRef } from "@/lib/voice/domain-actions/tool-results";
@@ -21,9 +22,7 @@ export class BookAppointmentTask extends voice.AgentTask<BookAppointmentResult> 
 
   constructor(private readonly sessionRef: AgentSession<AmyUserData>) {
     super({
-      instructions:
-        "Help the caller choose an appointment time and confirm the booking. " +
-        "Offer a few times naturally. Do not invent availability.",
+      instructions: buildBookAppointmentTaskInstructions(),
       tools: [],
     });
   }
@@ -45,14 +44,33 @@ export class BookAppointmentTask extends voice.AgentTask<BookAppointmentResult> 
     }
 
     this.slots = loaded.slots;
+    await this.publishAvailableSlots();
     await this.attachSlotSelectionTool();
-    const preview = this.slots
-      .slice(0, 3)
-      .map((slot) => slot.spokenLabel)
-      .join(", ");
-    await this.session.generateReply({
-      instructions: `Offer a few appointment times such as: ${preview}. Ask which works for them.`,
+
+    if (this.slots.length > 1) {
+      await this.session.generateReply({
+        instructions:
+          "Inform the caller of the available appointment times and ask which they prefer. " +
+          "Offer a few options naturally — avoid listing every slot.",
+      });
+    } else {
+      await this.session.generateReply({
+        instructions:
+          "Inform the caller of the available time and confirm if they would like that appointment.",
+      });
+    }
+  }
+
+  private async publishAvailableSlots(): Promise<void> {
+    const lines = this.slots.map(
+      (slot) => `${slot.slotId} – ${slot.spokenLabel}`,
+    );
+    const chatCtx = this.chatCtx.copy();
+    chatCtx.addMessage({
+      role: "system",
+      content: `These appointment times are available:\n${lines.join("\n")}`,
     });
+    await this.updateChatCtx(chatCtx);
   }
 
   private async attachSlotSelectionTool(): Promise<void> {

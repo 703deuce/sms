@@ -3,6 +3,10 @@ import { z } from "zod";
 import type { AgentSession } from "@livekit/agents";
 import type { RuntimeFieldManifestEntry } from "@/lib/voice/field-runtime/types";
 import type { LiveKitCallContext } from "@/lib/voice/domain-actions";
+import {
+  buildCollectFieldOnEnterInstructions,
+  buildCollectFieldTaskInstructions,
+} from "@/lib/agents/appointment-booking/intelligence/amy-livekit-prompt";
 import type { AmyUserData } from "../metadata";
 import { requireCallContext, stashCallContext } from "../call-context";
 import { missingRequiredFields, recordCallerField } from "../scheduling-bridge";
@@ -43,9 +47,10 @@ export class CollectFieldTask extends voice.AgentTask<CollectedFieldResult> {
     private readonly sessionRef: AgentSession<AmyUserData>,
   ) {
     super({
-      instructions:
-        `Collect the caller's ${field.label}. ` +
-        `${field.collection_instruction || "Ask naturally and record only what they say."}`,
+      instructions: buildCollectFieldTaskInstructions({
+        label: field.label,
+        collectionInstruction: field.collection_instruction,
+      }),
       tools: [
         buildRecordFieldTool(field, sessionRef, (result) => this.complete(result)),
       ],
@@ -54,7 +59,7 @@ export class CollectFieldTask extends voice.AgentTask<CollectedFieldResult> {
 
   async onEnter(): Promise<void> {
     await this.session.generateReply({
-      instructions: `Ask for their ${this.field.label}. One short question only.`,
+      instructions: buildCollectFieldOnEnterInstructions(this.field.label),
     });
   }
 }
@@ -62,7 +67,7 @@ export class CollectFieldTask extends voice.AgentTask<CollectedFieldResult> {
 export async function runCollectCallerFieldsTaskGroup(
   session: AgentSession<AmyUserData>,
 ): Promise<LiveKitCallContext> {
-  let ctx = requireCallContext(session);
+  const ctx = requireCallContext(session);
   const fields = missingRequiredFields(ctx);
   if (!fields.length) return ctx;
 

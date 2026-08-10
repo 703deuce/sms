@@ -87,7 +87,7 @@ export default defineAgent<AmyUserData>({
         outputGainDb,
       }),
     );
-    const agent = createAmyReceptionistAgent();
+    const agent = createAmyReceptionistAgent(callContext.businessName);
 
     const session = new voice.AgentSession<AmyUserData>({
       stt,

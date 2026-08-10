@@ -2,7 +2,10 @@ import { llm, voice } from "@livekit/agents";
 import type { AgentSession } from "@livekit/agents";
 import { z } from "zod";
 import { domainDetectCallerIntent, domainEndCall, domainRequestHuman } from "@/lib/voice/domain-actions";
-import { buildAmyLiveKitRootInstructions } from "@/lib/agents/appointment-booking/intelligence/amy-livekit-prompt";
+import {
+  buildAmyLiveKitRootInstructions,
+  buildAmyRootGreetingInstructions,
+} from "@/lib/agents/appointment-booking/intelligence/amy-livekit-prompt";
 import type { AmyUserData } from "./metadata";
 import { requireCallContext, stashCallContext } from "./call-context";
 import { alignCallContext } from "./scheduling-bridge";
@@ -10,8 +13,8 @@ import { runCollectCallerFieldsTaskGroup } from "./tasks/collect-field-task";
 import { BookAppointmentTask } from "./tasks/book-appointment-task";
 import { ModifyAppointmentTask } from "./tasks/modify-appointment-task";
 
-export function createAmyReceptionistAgent() {
-  const instructions = buildAmyLiveKitRootInstructions("our team");
+export function createAmyReceptionistAgent(businessName: string) {
+  const instructions = buildAmyLiveKitRootInstructions(businessName);
 
   const scheduleAppointment = llm.tool({
     name: "schedule_appointment",
@@ -105,14 +108,9 @@ export function createAmyReceptionistAgent() {
     tools: llm.toToolContext([scheduleAppointment, modifyAppointment, transferToHuman, endCall]),
     onEnter: async (agentCtx) => {
       const business =
-        agentCtx.session.userData.callContext?.businessName?.trim() || "our team";
-      if (business !== "our team") {
-        await agentCtx.agent.updateInstructions(buildAmyLiveKitRootInstructions(business));
-      }
+        agentCtx.session.userData.callContext?.businessName?.trim() || businessName || "our team";
       await agentCtx.session.generateReply({
-        instructions:
-          `Greet the caller in one short sentence as Amy with ${business}. ` +
-          "If they already said what they need, help with that; otherwise ask how you can help.",
+        instructions: buildAmyRootGreetingInstructions(business),
         toolChoice: "none",
         allowInterruptions: false,
       });
