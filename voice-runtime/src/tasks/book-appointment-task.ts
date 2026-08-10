@@ -11,6 +11,12 @@ import {
   loadAvailableSlots,
 } from "../scheduling-bridge";
 
+import {
+  agentTaskSuperOptions,
+  nestedTaskOptionsFromSession,
+  type NestedTaskContextOptions,
+} from "./task-context";
+
 export type BookAppointmentResult = {
   bookingId?: string | null;
   slotLabel?: string | null;
@@ -20,11 +26,19 @@ export class BookAppointmentTask extends voice.AgentTask<BookAppointmentResult> 
   private slots: ModelSlotRef[] = [];
   private selectedSlotId: string | null = null;
 
-  constructor(private readonly sessionRef: AgentSession<AmyUserData>) {
-    super({
-      instructions: buildBookAppointmentTaskInstructions(),
-      tools: [],
-    });
+  constructor(
+    private readonly sessionRef: AgentSession<AmyUserData>,
+    taskContext?: NestedTaskContextOptions,
+  ) {
+    super(
+      agentTaskSuperOptions(
+        {
+          instructions: buildBookAppointmentTaskInstructions(),
+          tools: [],
+        },
+        taskContext ?? nestedTaskOptionsFromSession(sessionRef),
+      ),
+    );
   }
 
   async onEnter(): Promise<void> {

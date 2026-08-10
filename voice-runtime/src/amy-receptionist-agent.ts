@@ -6,12 +6,25 @@ import {
   buildAmyLiveKitRootInstructions,
   buildAmyRootGreetingInstructions,
 } from "@/lib/agents/appointment-booking/intelligence/amy-livekit-prompt";
+import { getBookingReceipt, hasBookingReceipt } from "@/lib/voice/workflow-runtime/completion-guards";
 import type { AmyUserData } from "./metadata";
 import { requireCallContext, stashCallContext } from "./call-context";
 import { alignCallContext } from "./scheduling-bridge";
 import { runCollectCallerFieldsTaskGroup } from "./tasks/collect-field-task";
 import { BookAppointmentTask } from "./tasks/book-appointment-task";
 import { ModifyAppointmentTask } from "./tasks/modify-appointment-task";
+import { nestedTaskOptionsFromSession } from "./tasks/task-context";
+
+function alreadyBookedAmyMessage(session: AgentSession<AmyUserData>): string | null {
+  const ctx = session.userData.callContext;
+  if (!hasBookingReceipt(ctx.session)) return null;
+  const receipt = getBookingReceipt(ctx.session);
+  const when = receipt?.start ? ` for ${receipt.start}` : "";
+  return (
+    `already_completed: The appointment is already confirmed${when}. ` +
+    "Tell the caller they're all set — do not book again."
+  );
+}
 
 export function createAmyReceptionistAgent(businessName: string) {
   const instructions = buildAmyLiveKitRootInstructions(businessName);
@@ -23,8 +36,30 @@ export function createAmyReceptionistAgent(businessName: string) {
     parameters: z.object({}),
     execute: async (_args, opts) => {
       const session = opts.ctx.session as AgentSession<AmyUserData>;
+      const runCtx = opts.ctx;
+
+      const alreadyBooked = alreadyBookedAmyMessage(session);
+      if (alreadyBooked) return alreadyBooked;
+
+      if (runCtx.speechHandle.interrupted) {
+        return "Booking was interrupted. Ask if they'd still like to schedule.";
+      }
+
       await runCollectCallerFieldsTaskGroup(session);
-      const result = await new BookAppointmentTask(session).run();
+
+      if (runCtx.speechHandle.interrupted) {
+        return "Booking was interrupted during field collection.";
+      }
+
+      runCtx.disallowInterruptions();
+      await runCtx.update("Perfect — one moment while I get that scheduled for you.");
+
+      const taskContext = nestedTaskOptionsFromSession(session);
+      const result = await new BookAppointmentTask(session, taskContext).run();
+
+      const bookedAgain = alreadyBookedAmyMessage(session);
+      if (bookedAgain) return bookedAgain;
+
       if (result.bookingId) {
         return `The appointment is booked${result.slotLabel ? ` for ${result.slotLabel}` : ""}. Ask if they need anything else.`;
       }
@@ -40,6 +75,7 @@ export function createAmyReceptionistAgent(businessName: string) {
     }),
     execute: async ({ action }, opts) => {
       const session = opts.ctx.session as AgentSession<AmyUserData>;
+      const runCtx = opts.ctx;
       let ctx = requireCallContext(session);
       alignCallContext(ctx, "find");
       await domainDetectCallerIntent({
@@ -53,7 +89,15 @@ export function createAmyReceptionistAgent(businessName: string) {
       stashCallContext(session, ctx);
 
       await runCollectCallerFieldsTaskGroup(session);
-      const result = await new ModifyAppointmentTask(action, session).run();
+
+      if (runCtx.speechHandle.interrupted) {
+        return "The modification was interrupted. Ask if they'd still like to continue.";
+      }
+
+      runCtx.disallowInterruptions();
+
+      const taskContext = nestedTaskOptionsFromSession(session);
+      const result = await new ModifyAppointmentTask(action, session, taskContext).run();
       if (!result) {
         return "I could not find an appointment to change. Offer to book a new one.";
       }

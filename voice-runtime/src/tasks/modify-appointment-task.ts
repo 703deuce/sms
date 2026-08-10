@@ -13,6 +13,11 @@ import {
   findCallerAppointments,
   rescheduleHeldAppointment,
 } from "../scheduling-bridge";
+import {
+  agentTaskSuperOptions,
+  nestedTaskOptionsFromSession,
+  type NestedTaskContextOptions,
+} from "./task-context";
 
 export type ModifyAppointmentResult = {
   action: "reschedule" | "cancel";
@@ -31,11 +36,17 @@ export class ModifyAppointmentTask extends voice.AgentTask<ModifyAppointmentResu
   constructor(
     private readonly modifyAction: "reschedule" | "cancel",
     private readonly sessionRef: AgentSession<AmyUserData>,
+    taskContext?: NestedTaskContextOptions,
   ) {
-    super({
-      instructions: buildModifyAppointmentTaskInstructions(modifyAction),
-      tools: [],
-    });
+    super(
+      agentTaskSuperOptions(
+        {
+          instructions: buildModifyAppointmentTaskInstructions(modifyAction),
+          tools: [],
+        },
+        taskContext ?? nestedTaskOptionsFromSession(sessionRef),
+      ),
+    );
   }
 
   async onEnter(): Promise<void> {
@@ -113,7 +124,8 @@ export class ModifyAppointmentTask extends voice.AgentTask<ModifyAppointmentResu
           return cancelled.result.speak || "The appointment was cancelled.";
         }
 
-        const newBooking = await new BookAppointmentTask(this.sessionRef).run();
+        const taskContext = nestedTaskOptionsFromSession(this.sessionRef);
+        const newBooking = await new BookAppointmentTask(this.sessionRef, taskContext).run();
         ctx = requireCallContext(this.sessionRef);
         const slotId = ctx.session.heldSlot || ctx.session.selectedSlot;
         if (!slotId) {

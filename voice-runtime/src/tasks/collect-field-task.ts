@@ -10,6 +10,12 @@ import {
 import type { AmyUserData } from "../metadata";
 import { requireCallContext, stashCallContext } from "../call-context";
 import { missingRequiredFields, recordCallerField } from "../scheduling-bridge";
+import {
+  agentTaskSuperOptions,
+  nestedTaskOptionsFromSession,
+  taskGroupOptionsFromSession,
+  type NestedTaskContextOptions,
+} from "./task-context";
 
 export type CollectedFieldResult = {
   fieldId: string;
@@ -45,19 +51,32 @@ export class CollectFieldTask extends voice.AgentTask<CollectedFieldResult> {
   constructor(
     private readonly field: RuntimeFieldManifestEntry,
     private readonly sessionRef: AgentSession<AmyUserData>,
+    taskContext?: NestedTaskContextOptions,
   ) {
-    super({
-      instructions: buildCollectFieldTaskInstructions({
-        label: field.label,
-        collectionInstruction: field.collection_instruction,
-      }),
-      tools: [
-        buildRecordFieldTool(field, sessionRef, (result) => this.complete(result)),
-      ],
-    });
+    super(
+      agentTaskSuperOptions(
+        {
+          instructions: buildCollectFieldTaskInstructions({
+            label: field.label,
+            collectionInstruction: field.collection_instruction,
+          }),
+          tools: [
+            buildRecordFieldTool(field, sessionRef, (result) => this.complete(result)),
+          ],
+        },
+        taskContext ?? nestedTaskOptionsFromSession(sessionRef),
+      ),
+    );
   }
 
   async onEnter(): Promise<void> {
+    const ctx = requireCallContext(this.sessionRef);
+    const alreadyCollected = ctx.session.collectedFields[this.field.field_id]?.trim();
+    if (alreadyCollected) {
+      this.complete({ fieldId: this.field.field_id, value: alreadyCollected });
+      return;
+    }
+
     await this.session.generateReply({
       instructions: buildCollectFieldOnEnterInstructions(this.field.label),
     });
@@ -71,9 +90,10 @@ export async function runCollectCallerFieldsTaskGroup(
   const fields = missingRequiredFields(ctx);
   if (!fields.length) return ctx;
 
-  const group = new workflows.TaskGroup({ summarizeChatCtx: false });
+  const taskContext = nestedTaskOptionsFromSession(session);
+  const group = new workflows.TaskGroup(taskGroupOptionsFromSession(session));
   for (const field of fields) {
-    group.add(() => new CollectFieldTask(field, session), {
+    group.add(() => new CollectFieldTask(field, session, taskContext), {
       id: field.field_id,
       description: `Collect ${field.label}`,
     });

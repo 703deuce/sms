@@ -1,5 +1,5 @@
-import { llm, voice } from "@livekit/agents";
 import type { ChatContext } from "@livekit/agents";
+import { llm, voice } from "@livekit/agents";
 import { z } from "zod";
 import type { AgentSession } from "@livekit/agents";
 import { withLiveKitToolTelemetry } from "../livekit-tool-telemetry";
@@ -95,6 +95,14 @@ export class GetEmailTask extends voice.AgentTask<GetEmailResult> {
   }
 
   async onEnter(): Promise<void> {
+    const existing = this.sessionRef.userData.confirmedEmail?.trim();
+    if (existing) {
+      if (!this.done) {
+        this.complete({ emailAddress: existing });
+      }
+      return;
+    }
+
     await this.updateTools([this.buildUpdateTool()]);
     await this.session.generateReply({
       instructions:
