@@ -1,5 +1,9 @@
 import type { VoiceAgentConfig } from "./types";
 import { extractDynamicVariables } from "./types";
+import { isOutboundLeadQualificationProfile } from "./outbound/agent-config";
+import {
+  validateQualificationDefinition,
+} from "./outbound/validate-qualification-definition";
 
 export type ValidationIssue = {
   section: string;
@@ -74,6 +78,19 @@ export function validateAgentForPublish(
       });
     }
   }
+
+  if (isOutboundLeadQualificationProfile(config)) {
+    const qualIssues = validateQualificationDefinition(config.advanced?.outboundQualification);
+    for (const issue of qualIssues) {
+      issues.push({
+        section: "outboundQualification",
+        field: issue.path,
+        message: issue.message,
+        blocking: true,
+      });
+    }
+  }
+
   return issues;
 }
 

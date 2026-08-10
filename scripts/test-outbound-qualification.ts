@@ -29,6 +29,10 @@ import {
   validateOutboundDestination,
   assertOutboundTestModeEnabled,
 } from "../src/lib/voice/outbound/outbound-call-service";
+import {
+  validateQualificationDefinition,
+} from "../src/lib/voice/outbound/validate-qualification-definition";
+import { createDefaultQualificationDefinition } from "../src/lib/voice/outbound/default-qualification-definition";
 import type { QualificationDefinition } from "../src/lib/voice/outbound/types";
 import type { OutboundLeadUserData } from "../voice-runtime/src/outbound/userdata";
 
@@ -59,11 +63,16 @@ const taskInstructions = buildQualificationTaskInstructions(mission);
 assert.match(taskInstructions, /Blue Ridge Realty/);
 assert.match(taskInstructions, /home buying|home buyer|finding homes/i);
 assert.match(taskInstructions, /target_areas/);
-assert.match(taskInstructions, /Do NOT invent specific homes/);
+assert.match(taskInstructions, /Do NOT invent specific inventory|Do NOT invent specific homes/);
+
+const defaultQual = createDefaultQualificationDefinition({ businessName: "Acme HVAC" });
+assert.equal(validateQualificationDefinition(defaultQual).length, 0);
+assert.ok(defaultQual.fields.length >= 3);
+assert.ok(defaultQual.closeTemplate?.includes("{businessName}"));
 
 const opening = buildOpeningReplyInstructions(mission, prefilled);
-assert.match(opening, /Do NOT ask about unrelated topics like 'projects'/);
 assert.match(opening, /Anthony/);
+assert.match(opening, /Blue Ridge Realty/);
 
 const staffordAnswer = resolveOutboundProfileBusinessAnswer({
   business: fixture.business || null,
@@ -77,7 +86,7 @@ const mlsAnswer = resolveOutboundProfileBusinessAnswer({
   businessName: fixture.businessName,
   topic: "Do you have any townhouses for 450k in Woodbridge?",
 });
-assert.ok(mlsAnswer && /don't have live MLS/i.test(mlsAnswer));
+assert.ok(mlsAnswer && /does not have live inventory|don't have live MLS/i.test(mlsAnswer));
 
 const merged = mergeQualificationFields(
   prefilled,

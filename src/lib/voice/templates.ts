@@ -152,6 +152,25 @@ export const VOICE_AGENT_TEMPLATES: AgentTemplate[] = [
     },
   },
   {
+    id: "outbound_lead_qualification",
+    name: "Outbound lead qualification (LiveKit)",
+    agentType: "lead_qualification",
+    description: "Warm outbound lead follow-up with configurable qualification fields.",
+    config: {
+      identity: { directions: ["outbound"] },
+      instructions: {
+        system:
+          "You follow up with warm outbound leads, gather configured qualification fields, and close with a brief handoff message.",
+        goals: "Collect missing lead criteria and save structured qualification results.",
+        tone: "warm",
+        style: "professional",
+      },
+      advanced: {
+        livekitProfile: "outbound_lead_qualification",
+      },
+    },
+  },
+  {
     id: "custom",
     name: "Custom",
     agentType: "custom",

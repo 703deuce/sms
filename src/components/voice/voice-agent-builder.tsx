@@ -16,6 +16,14 @@ import {
   type CatalogToolDef,
 } from "@/lib/voice/tools/catalog";
 import { VoiceFlowBuilder } from "@/components/voice/flow-builder/voice-flow-builder";
+import { OutboundQualificationEditor } from "@/components/voice/outbound-qualification-editor";
+import {
+  ensureOutboundQualificationConfig,
+  getOutboundQualificationFromConfig,
+  isOutboundLeadQualificationProfile,
+  withOutboundQualification,
+} from "@/lib/voice/outbound/agent-config";
+import type { QualificationDefinition } from "@/lib/voice/outbound/types";
 import { toErrorMessage } from "@/lib/errors";
 import { isUltraVoice, voiceLabel } from "@/lib/voice/telnyx/voices";
 import { cn } from "@/lib/utils";
@@ -23,6 +31,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 const SECTIONS = [
   { id: "identity", label: "Identity" },
+  { id: "outboundQualification", label: "Outbound Qualification" },
   { id: "instructions", label: "Instructions" },
   { id: "flow", label: "Visual Flow" },
   { id: "conversationFlow", label: "Flow sections" },
@@ -467,6 +476,33 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
 
   const cfg = agent.draftConfig;
   const directions = cfg.identity?.directions || agent.directions || [];
+  const outboundQualEnabled = isOutboundLeadQualificationProfile(cfg);
+  const outboundQual =
+    getOutboundQualificationFromConfig(cfg) ||
+    ensureOutboundQualificationConfig(cfg, agent.name);
+
+  function setOutboundQualificationEnabled(enabled: boolean) {
+    if (!agent) return;
+    if (enabled) {
+      updateConfig(withOutboundQualification(agent.draftConfig, outboundQual));
+      return;
+    }
+    updateConfig({
+      advanced: {
+        ...((agent.draftConfig.advanced || {}) as Record<string, unknown>),
+        livekitProfile: undefined,
+      },
+    });
+  }
+
+  function updateOutboundQualification(qualification: QualificationDefinition) {
+    if (!agent) return;
+    updateConfig(withOutboundQualification(agent.draftConfig, qualification));
+  }
+
+  const visibleSections = SECTIONS.filter(
+    (s) => s.id !== "outboundQualification" || directions.includes("outbound"),
+  );
   const greeting =
     (cfg.callHandling?.greeting as string | undefined) || "";
 
@@ -475,7 +511,7 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
       <Card className="w-full shrink-0 p-3 lg:w-56">
         <p className="mb-2 px-2 text-xs font-medium uppercase text-muted-foreground">Sections</p>
         <nav className="space-y-1">
-          {SECTIONS.map((s) => (
+          {visibleSections.map((s) => (
             <button
               key={s.id}
               type="button"
@@ -707,6 +743,24 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
                 }}
               />
             </div>
+          </Card>
+        )}
+
+        {section === "outboundQualification" && (
+          <Card className="space-y-4 p-5">
+            <CardTitle>Outbound lead qualification</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Configure business context, campaign reason, qualification fields, and guardrails for
+              LiveKit outbound warm-lead calls. Blue Ridge Realty settings live here as demo config —
+              other tenants replace this with their own business.
+            </p>
+            <OutboundQualificationEditor
+              businessName={agent.name}
+              enabled={outboundQualEnabled}
+              onEnabledChange={setOutboundQualificationEnabled}
+              value={outboundQualEnabled ? outboundQual : null}
+              onChange={updateOutboundQualification}
+            />
           </Card>
         )}
 

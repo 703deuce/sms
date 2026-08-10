@@ -4,7 +4,8 @@
   "businessName": "Blue Ridge Realty",
   "agentDisplayName": "Amy",
   "reasonForContact": "You recently submitted a request for information about finding homes in the area.",
-  "introTemplate": "Hi, is this {leadName}? This is Amy with {businessName}. {reason} I'm just following up to get a better idea of what you're looking for so one of our realtors can help you. Do you have a minute for a few quick questions?",
+  "introTemplate": "Hi, is this {leadName}? This is {agentDisplayName} with {businessName}. {reason} I'm just following up to get a better idea of what you're looking for so one of our realtors can help you. Do you have a minute for a few quick questions?",
+  "closeTemplate": "Perfect, I've got everything I need. I'll pass this along to one of our realtors at {businessName} so they can follow up with you. Thanks for your time!",
   "openingGuidance": [
     "Confirm identity, introduce yourself as Amy with Blue Ridge Realty.",
     "Explain they submitted a home search / information request online.",

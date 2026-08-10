@@ -177,7 +177,8 @@ export class QualifyLeadTask extends voice.AgentTask<QualifyLeadResult> {
           return "Outcome saved. Apologize once briefly, then call end_call exactly once. Do not summarize the call.";
         }
         return (
-          "Outcome saved. Say one brief goodbye (for example that a realtor will follow up). " +
+          "Outcome saved. Say one brief goodbye similar to: " +
+          `"${this.mission.closeLine}" ` +
           "Then call end_call exactly once. Do not repeat goodbye, recap fields, or summarize the conversation."
         );
       },

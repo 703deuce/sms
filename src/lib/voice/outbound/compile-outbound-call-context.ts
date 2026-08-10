@@ -16,30 +16,39 @@ export type OutboundCallMission = {
   lead: OutboundLeadContext;
   qualification: QualificationDefinition;
   authorityBoundaries: string[];
+  closeLine: string;
 };
+
+const DEFAULT_AUTHORITY_BOUNDARIES = [
+  "Do NOT invent specific inventory, listings, prices, or availability you do not have authoritative data for.",
+  "Do NOT claim approval, financing qualification, or guarantees you cannot verify on this call.",
+  "Do NOT book appointments or promise an exact callback time unless configured to do so.",
+  "Do NOT tell the caller they financially 'qualify' unless a configured rule explicitly allows that wording.",
+];
 
 export function resolveOutboundCallMission(input: {
   qualification: QualificationDefinition;
   lead: OutboundLeadContext;
 }): OutboundCallMission {
   const { qualification, lead } = input;
+  const agentDisplayName = qualification.agentDisplayName?.trim() || DEFAULT_AGENT_NAME;
+  const closeTemplate =
+    qualification.closeTemplate?.trim() ||
+    "Perfect, I've got everything I need. I'll pass this along to the team at {businessName} so someone can follow up with you. Thanks for your time!";
   return {
-    agentDisplayName: qualification.agentDisplayName?.trim() || DEFAULT_AGENT_NAME,
+    agentDisplayName,
     businessName: qualification.businessName,
     business: qualification.business || null,
     campaign: qualification.campaign || null,
     lead,
     qualification,
     authorityBoundaries: qualification.authorityBoundaries || DEFAULT_AUTHORITY_BOUNDARIES,
+    closeLine: closeTemplate
+      .replace(/\{businessName\}/g, qualification.businessName)
+      .replace(/\{leadName\}/g, lead.leadName?.trim() || "there")
+      .replace(/\{agentDisplayName\}/g, agentDisplayName),
   };
 }
-
-const DEFAULT_AUTHORITY_BOUNDARIES = [
-  "Do NOT invent specific homes, addresses, listing prices, or MLS inventory.",
-  "Do NOT claim mortgage approval, financing qualification, or that a specific property is available.",
-  "Do NOT book appointments or promise an exact callback time.",
-  "Do NOT tell the caller they 'qualify' in a financial or mortgage sense.",
-];
 
 export function prefillCollectedFields(input: {
   qualification: QualificationDefinition;
@@ -61,25 +70,11 @@ export function prefillCollectedFields(input: {
     if (text) patch[key] = text;
   }
 
-  const skipIds = new Set(input.qualification.campaign?.skipFieldIds || []);
-  for (const fieldId of skipIds) {
-    const established = input.qualification.campaign?.establishedIntent;
-    if (fieldId === "buying_or_selling" && established) {
-      patch.buying_or_selling = established.includes("sell") ? "selling" : "buying";
-    }
-  }
-
   return mergeQualificationFields({}, patch);
 }
 
 export function fieldIdsToSkipAsking(mission: OutboundCallMission): Set<string> {
-  const skip = new Set(mission.campaign?.skipFieldIds || []);
-  const established = mission.campaign?.establishedIntent?.trim();
-  if (established) {
-    skip.add("buying_or_selling");
-    skip.add("intent");
-  }
-  return skip;
+  return new Set(mission.campaign?.skipFieldIds || []);
 }
 
 export function formatFieldManifestForPrompt(definition: QualificationDefinition): string {
@@ -130,10 +125,16 @@ export function formatBusinessContextBlock(business: OutboundBusinessProfile | n
   const parts = [`Business: ${businessName}`, business.description];
   if (business.services?.length) parts.push(`Services: ${business.services.join("; ")}`);
   if (business.serviceAreas?.length) parts.push(`Service areas: ${business.serviceAreas.join(", ")}`);
-  if (business.propertyTypes?.length) parts.push(`Property types: ${business.propertyTypes.join(", ")}`);
+  if (business.propertyTypes?.length) parts.push(`Categories: ${business.propertyTypes.join(", ")}`);
   if (business.website) parts.push(`Website: ${business.website}`);
   if (business.knowledgeNotes?.length) {
     parts.push("Authoritative facts:", ...business.knowledgeNotes.map((f) => `- ${f}`));
+  }
+  if (business.qaPairs?.length) {
+    parts.push(
+      "Configured Q&A:",
+      ...business.qaPairs.map((pair) => `- Q: ${pair.question} A: ${pair.answer}`),
+    );
   }
   return parts.join("\n");
 }
@@ -148,7 +149,7 @@ export function formatCampaignContextBlock(campaign: OutboundCampaignProfile | n
   if (campaign.offerOrInterest) parts.push(`Their interest: ${campaign.offerOrInterest}`);
   if (campaign.establishedIntent) {
     parts.push(
-      `Known intent: ${campaign.establishedIntent}. Do NOT ask unrelated generic sales questions or whether they are buying vs selling unless they correct you.`,
+      `Known intent: ${campaign.establishedIntent}. Do NOT ask unrelated generic questions that contradict this intent unless they correct you.`,
     );
   }
   return parts.join("\n");
@@ -158,6 +159,11 @@ function formatOpeningGuidance(guidance?: string | string[]): string {
   if (!guidance) return "";
   if (Array.isArray(guidance)) return guidance.filter(Boolean).join("\n");
   return guidance.trim();
+}
+
+function topicIncludes(topic: string, phrases: string[]): boolean {
+  const hay = topic.toLowerCase();
+  return phrases.some((phrase) => hay.includes(phrase.toLowerCase()));
 }
 
 export function resolveOutboundProfileBusinessAnswer(input: {
@@ -171,47 +177,50 @@ export function resolveOutboundProfileBusinessAnswer(input: {
   const business = input.business;
   const name = business?.name || input.businessName;
 
-  const topicIncludes = (...phrases: string[]) =>
-    phrases.some((phrase) => topic.includes(phrase.toLowerCase()));
+  for (const pair of business?.qaPairs || []) {
+    const q = pair.question.trim().toLowerCase();
+    if (q && (topic.includes(q) || q.split(/\s+/).filter((w) => w.length > 3).some((w) => topic.includes(w)))) {
+      return pair.answer;
+    }
+  }
 
-  if (
-    topicIncludes("who are you", "what company", "real estate company", "who is this", "who are you guys")
-  ) {
+  if (topicIncludes(topic, ["who are you", "what company", "who is this", "who are you guys"])) {
     return business?.description
-      ? `${name} ${business.description}`
-      : `${name} helps customers in our service area.`;
+      ? `${name}. ${business.description}`
+      : `${name} follows up with leads who requested information.`;
   }
 
-  if (topicIncludes("listing", "mls", "house for", "available", "have any homes", "have any townhouses")) {
-    return (
-      `${name} helps buyers search available properties with a licensed realtor. ` +
-      "I don't have live MLS inventory on this call, but I'll pass your criteria along so a realtor can follow up with options."
-    );
-  }
-
-  if (topicIncludes("stafford", "woodbridge", "dale city", "manassas", "fredericksburg", "service area", "work in", "located")) {
+  if (topicIncludes(topic, ["service area", "work in", "located", "coverage", "area do you"])) {
     const areas = business?.serviceAreas;
     if (areas?.length) {
       const askedArea = areas.find((a) => topic.includes(a.toLowerCase()));
       if (askedArea) {
-        return `Yes, ${name} works with buyers in ${askedArea} and nearby Northern Virginia communities.`;
+        return `Yes, ${name} can help in ${askedArea} and nearby areas we cover.`;
       }
-      return `We help buyers throughout ${areas.slice(0, 4).join(", ")}${areas.length > 4 ? ", and other nearby areas" : ""}.`;
+      return `We help customers in ${areas.slice(0, 5).join(", ")}${areas.length > 5 ? ", and other nearby areas" : ""}.`;
     }
   }
 
-  if (topicIncludes("condo", "townhouse", "single family", "single-family", "property type")) {
-    const types = business?.propertyTypes;
-    if (types?.length) {
-      return `Yes, we help buyers with ${types.join(", ")}.`;
-    }
+  if (topicIncludes(topic, ["inventory", "listing", "available", "in stock", "have any"])) {
+    return (
+      `${name} does not have live inventory details on this call. ` +
+      "I'll pass your criteria along so someone from the team can follow up with accurate options."
+    );
+  }
+
+  if (business?.propertyTypes?.length && topicIncludes(topic, ["type", "category", "kind of"])) {
+    return `We can help with ${business.propertyTypes.join(", ")}.`;
   }
 
   for (const note of business?.knowledgeNotes || []) {
-    if (topicIncludes(note.toLowerCase())) return note;
+    if (topicIncludes(topic, [note.toLowerCase()])) return note;
   }
 
-  if (business?.description && topicIncludes("what do you do", "services", "what do you guys do")) {
+  if (business?.services?.length && topicIncludes(topic, ["what do you do", "services", "what do you guys do"])) {
+    return business.services.join(". ");
+  }
+
+  if (business?.description && topicIncludes(topic, ["what do you do", "what is this about"])) {
     return business.description;
   }
 
@@ -219,7 +228,7 @@ export function resolveOutboundProfileBusinessAnswer(input: {
 }
 
 export function buildQualificationTaskInstructions(mission: OutboundCallMission): string {
-  const { agentDisplayName, businessName, authorityBoundaries } = mission;
+  const { agentDisplayName, businessName, authorityBoundaries, closeLine } = mission;
   const blocks = [
     `You are ${agentDisplayName}, calling on behalf of ${businessName} on a LIVE OUTBOUND phone call.`,
     "YOU initiated this call — never open with 'How can I help you?'",
@@ -246,8 +255,7 @@ export function buildQualificationTaskInstructions(mission: OutboundCallMission)
     formatFieldManifestForPrompt(mission.qualification),
     "",
     "=== CALLER-FACING CLOSE ===",
-    'When done, say one brief goodbye, then call set_qualification_outcome with complete.',
-    "Never tell the caller they financially or mortgage 'qualify'.",
+    `When done, say one brief goodbye similar to: "${closeLine}" Then call set_qualification_outcome with complete.`,
     "Never repeat goodbye, recap collected fields, or summarize the conversation at the end.",
     "",
     "=== AUTHORITY BOUNDARIES ===",
@@ -292,7 +300,7 @@ export function buildOpeningReplyInstructions(mission: OutboundCallMission, coll
     semanticChecklist,
     "",
     "Do NOT ask 'How can I help you?' — you called them.",
-    "Do NOT ask about unrelated topics like 'projects', generic sales pipelines, or buying vs selling if intent is already established.",
+    "Do NOT ask unrelated generic sales questions that contradict established campaign intent.",
     "Do NOT jump into detailed qualification before explaining why you are calling.",
     "",
     "=== KNOWN BEFORE THIS CALL ===",

@@ -9,11 +9,14 @@ export type OutboundBusinessProfile = {
   description: string;
   services?: string[];
   serviceAreas?: string[];
+  /** Optional category labels (e.g. property types, service lines). */
   propertyTypes?: string[];
   phone?: string;
   website?: string;
   /** Authoritative facts for business Q&A when RAG has no hit. */
   knowledgeNotes?: string[];
+  /** Optional explicit Q&A pairs for business questions during qualification. */
+  qaPairs?: Array<{ question: string; answer: string }>;
 };
 
 /** Why this outbound campaign is calling and what the lead already established. */
@@ -41,8 +44,10 @@ export type QualificationDefinition = {
   id: string;
   label: string;
   businessName: string;
-  /** Spoken intro template — supports {leadName}, {businessName}, {reason} */
+  /** Spoken intro template — supports {leadName}, {businessName}, {reason}, {agentDisplayName} */
   introTemplate?: string;
+  /** Spoken close template — supports {leadName}, {businessName}, {agentDisplayName} */
+  closeTemplate?: string;
   reasonForContact: string;
   /** Display name for the voice agent (e.g. Amy). */
   agentDisplayName?: string;

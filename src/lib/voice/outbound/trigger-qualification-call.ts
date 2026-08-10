@@ -2,6 +2,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { getPrisma } from "@/lib/db";
 import { parseVoiceAgentConfig } from "@/lib/voice/types";
+import {
+  getOutboundQualificationFromConfig,
+  isOutboundLeadQualificationProfile,
+} from "./agent-config";
 import type { QualificationDefinition } from "./types";
 import { startOutboundLeadQualificationCall } from "./outbound-call-service";
 
@@ -10,30 +14,31 @@ const DEFAULT_FIXTURE_PATH = path.join(
   "scripts/fixtures/blue-ridge-realty-qualification.json",
 );
 
+function fixtureFallbackAllowed(): boolean {
+  return (
+    process.env.ALLOW_OUTBOUND_FIXTURE_FALLBACK === "1" ||
+    process.env.NODE_ENV === "development"
+  );
+}
+
 export function isOutboundLeadQualificationAgent(
   config: ReturnType<typeof parseVoiceAgentConfig>,
 ): boolean {
-  return config.advanced?.livekitProfile === "outbound_lead_qualification";
+  return isOutboundLeadQualificationProfile(config);
 }
 
 export function resolveQualificationDefinition(
   config: ReturnType<typeof parseVoiceAgentConfig>,
 ): QualificationDefinition {
-  const fromAgent = config.advanced?.outboundQualification;
-  if (
-    fromAgent &&
-    typeof fromAgent === "object" &&
-    Array.isArray((fromAgent as QualificationDefinition).fields)
-  ) {
-    return fromAgent as QualificationDefinition;
-  }
+  const fromAgent = getOutboundQualificationFromConfig(config);
+  if (fromAgent) return fromAgent;
 
-  if (fs.existsSync(DEFAULT_FIXTURE_PATH)) {
+  if (fixtureFallbackAllowed() && fs.existsSync(DEFAULT_FIXTURE_PATH)) {
     return JSON.parse(fs.readFileSync(DEFAULT_FIXTURE_PATH, "utf8")) as QualificationDefinition;
   }
 
   throw new Error(
-    "No outboundQualification config on agent and demo fixture missing — run setup-outbound-lead-agent.ts",
+    "No outboundQualification config on agent — configure Outbound Qualification in the voice agent builder",
   );
 }
 
@@ -53,7 +58,7 @@ export async function resolveOutboundQualificationAgentId(input: {
   );
   if (!found) {
     throw new Error(
-      "No outbound_lead_qualification agent found — run scripts/setup-outbound-lead-agent.ts first",
+      "No outbound_lead_qualification agent found — create one in Voice Agents and enable Outbound Qualification",
     );
   }
   return found.id;
@@ -71,6 +76,8 @@ export async function triggerOutboundQualificationCall(input: {
   triggerReason?: string;
   /** CLI keeps env gate; API/cron/boot pass false. */
   requireTestModeEnv?: boolean;
+  submittedFields?: Record<string, string>;
+  intent?: string | null;
 }) {
   const agentId = await resolveOutboundQualificationAgentId({
     workspaceId: input.workspaceId,
@@ -80,7 +87,7 @@ export async function triggerOutboundQualificationCall(input: {
   const prisma = getPrisma();
   const agent = await prisma.voiceAgent.findFirst({
     where: { id: agentId, workspaceId: input.workspaceId },
-    select: { id: true, draftConfig: true, status: true },
+    select: { id: true, draftConfig: true, status: true, name: true },
   });
   if (!agent) throw new Error("Agent not found");
 
@@ -96,7 +103,11 @@ export async function triggerOutboundQualificationCall(input: {
 
   const qualification = resolveQualificationDefinition(config);
   const destinationPhone = input.destinationPhone.trim();
-  const leadName = input.leadName?.trim() || "Anthony";
+  const leadName = input.leadName?.trim() || undefined;
+
+  const submittedFields: Record<string, string> = { ...(input.submittedFields || {}) };
+  if (leadName) submittedFields.name = leadName;
+  submittedFields.callback_phone = destinationPhone;
 
   return startOutboundLeadQualificationCall({
     workspaceId: input.workspaceId,
@@ -110,17 +121,14 @@ export async function triggerOutboundQualificationCall(input: {
       contactId: input.contactId,
       leadPhone: destinationPhone,
       leadName,
-      leadSource: input.leadSource || qualification.campaign?.source || "Website home buyer inquiry form",
+      leadSource: input.leadSource || qualification.campaign?.source || input.triggerSource,
       reasonForContact: qualification.campaign?.callerExplanation || qualification.reasonForContact,
-      intent: qualification.campaign?.establishedIntent || "home buying",
-      submittedFields: {
-        name: leadName,
-        callback_phone: destinationPhone,
-      },
+      intent: input.intent ?? qualification.campaign?.establishedIntent ?? null,
+      submittedFields,
     },
     trigger: {
       source: input.triggerSource,
-      reason: input.triggerReason || "Outbound qualification test dial",
+      reason: input.triggerReason || "Outbound qualification call",
       consentRecorded: true,
     },
   });
