@@ -3,7 +3,7 @@ import type { AgentSession } from "@livekit/agents";
 import { safeInterruptSession } from "../session-utils";
 import type { AvailableSlot, BookedAppointment } from "./calendly-calendar";
 import { SlotUnavailableError } from "./calendly-calendar";
-import type { FrontDeskUserData } from "./userdata";
+import { isBookingConfirmed, markBookingConfirmed, type FrontDeskUserData } from "./userdata";
 
 const BOOKING_RETRY_DELAY_MS = 400;
 
@@ -24,10 +24,11 @@ export function formatBookedTimeLabel(
 
 /** Caller-visible success when booking already completed this call. */
 export function alreadyBookedToolMessage(userData: FrontDeskUserData): string | null {
-  if (!userData.bookingComplete) return null;
-  const when = userData.bookedTimeLabel || "the time you chose";
+  if (!isBookingConfirmed(userData)) return null;
+  const when =
+    userData.booking?.bookedTimeLabel || userData.bookedTimeLabel || "the time you chose";
   return (
-    `The appointment is already confirmed for ${when}. ` +
+    `already_completed: The appointment is already confirmed for ${when}. ` +
     "Tell the caller they're all set and a confirmation text was sent — do not book again or re-ask for email."
   );
 }
@@ -86,12 +87,16 @@ export async function scheduleAppointmentResilient(input: {
   const { session, slot, attendeeEmail } = input;
   const { workspaceId, callId, cal } = session.userData;
 
-  const markBookedOnUserData = (booked: BookedAppointment) => {
-    session.userData.bookingComplete = true;
-    session.userData.bookedTimeLabel = formatBookedTimeLabel(
+  const markBookedOnUserData = (booked: BookedAppointment, slotId?: string) => {
+    const bookedTimeLabel = formatBookedTimeLabel(
       booked.slot.startTime,
       session.userData.timezone,
     );
+    markBookingConfirmed(session.userData, {
+      slotId: slotId || session.userData.pendingSlotId,
+      providerEventId: booked.eventUri,
+      bookedTimeLabel,
+    });
   };
 
   const existing = await findExistingBookingForCall(workspaceId, callId);
@@ -106,7 +111,7 @@ export async function scheduleAppointmentResilient(input: {
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const booked = await cal.scheduleAppointment({ slot, attendeeEmail });
-      markBookedOnUserData(booked);
+      markBookedOnUserData(booked, slot.slotId);
       return booked;
     } catch (err) {
       lastError = err;

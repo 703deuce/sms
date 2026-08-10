@@ -82,6 +82,13 @@ function isDeepSeekThinkingEnabled(): boolean {
   return process.env.VOICE_LLM_THINKING?.trim().toLowerCase() === "enabled";
 }
 
+/** Applied to every DeepSeek chat-completions body unless thinking is explicitly enabled. */
+export function applyDeepSeekVoiceRequestDefaults(body: Record<string, unknown>): void {
+  if (!isDeepSeekThinkingEnabled()) {
+    body.thinking = { type: "disabled" };
+  }
+}
+
 /** DeepSeek V4 defaults to thinking on; disable unless explicitly enabled for voice. */
 function createDeepSeekClient(): OpenAI {
   const apiKey = process.env.DEEPSEEK_API_KEY?.trim();
@@ -105,7 +112,7 @@ function createDeepSeekClient(): OpenAI {
       if (init?.body && typeof init.body === "string") {
         try {
           const body = JSON.parse(init.body) as Record<string, unknown>;
-          body.thinking = { type: "disabled" };
+          applyDeepSeekVoiceRequestDefaults(body);
           init = { ...init, body: JSON.stringify(body) };
         } catch {
           // leave request unchanged

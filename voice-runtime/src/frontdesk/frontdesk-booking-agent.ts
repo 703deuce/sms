@@ -8,9 +8,8 @@ import {
   formatBookedTimeLabel,
   scheduleAppointmentResilient,
 } from "./booking-recovery";
-import { createEmailCollectionTools } from "./email-tools";
-import type { FrontDeskUserData } from "./userdata";
-import { withLiveKitToolTelemetry } from "../livekit-tool-telemetry";
+import { GetEmailTask } from "./get-email-task";
+import { markBookingConfirmed, type FrontDeskUserData } from "./userdata";
 
 function buildFrontDeskInstructions(businessLabel: string): string {
   return [
@@ -30,8 +29,9 @@ function buildFrontDeskInstructions(businessLabel: string): string {
     "your openers across turns — if you opened the last turn with 'gotcha', pick ",
     "'alright' or 'okay' this turn; don't repeat the same opener back-to-back. ",
     "Never speak internal reasoning or planning aloud — do not say things like ",
-    "'I need to collect the email', 'let me ask for it', 'I should confirm with the caller', ",
-    "or 'I realize I should have'. Only say what you would say directly to the caller. ",
+    "'I need to specify the range', 'I need to collect the email', 'let me ask for it', ",
+    "'I realize I should have', or 'I need to determine'. Only say what you would say ",
+    "directly to the caller. ",
     "Be proactive: when the caller greets you, use it to move things forward (e.g. ",
     "'Would you like to book a time?') rather than just greeting back. ",
     "Commitment rule: if you tell the caller you will check the calendar, look up times, ",
@@ -40,12 +40,11 @@ function buildFrontDeskInstructions(businessLabel: string): string {
     "When talking about availability, call list_available_slots and offer a few clear ",
     "options at a time. Say times like 'Monday at 2' — avoid timezones and AM/PM labels. ",
     "Only offer times that list_available_slots returned — never invent slots. ",
-    "Booking workflow: after the caller picks a slot, collect their email on this phone call ",
-    "(they SAY it out loud — never ask them to type or read instructions). Call ",
-    "update_email_address, then confirm_email_address when they agree, then schedule_appointment. ",
-    "Never call schedule_appointment before confirm_email_address. ",
-    "If schedule_appointment already succeeded, do not book again or re-ask for email — ",
-    "tell the caller they're confirmed. ",
+    "Booking workflow: after the caller picks a slot, call schedule_appointment with that ",
+    "slot_id. Email collection happens inside that tool — do not ask for email before calling ",
+    "schedule_appointment. Never call schedule_appointment before the caller confirms a time. ",
+    "If schedule_appointment reports already_completed, tell the caller they're confirmed — ",
+    "do not book again or re-ask for email. ",
     "Never claim a booking succeeded unless schedule_appointment confirms it. ",
     "A confirmation text is sent automatically to the caller's phone after booking — ",
     "never ask for their number or offer to send texts manually.",
@@ -93,7 +92,6 @@ export function createFrontDeskBookingAgent(input: {
 }) {
   const slotsMap = new Map<string, AvailableSlot>();
   const label = input.businessName.trim() || "our office";
-  const { updateEmailAddress, confirmEmailAddress } = createEmailCollectionTools();
 
   const getCurrentTime = llm.tool({
     name: "get_current_time",
@@ -153,13 +151,14 @@ export function createFrontDeskBookingAgent(input: {
   const scheduleAppointment = llm.tool({
     name: "schedule_appointment",
     description:
-      "Book the appointment at slot_id. Requires confirm_email_address first.",
+      "Book the appointment at slot_id. Collects email inside this tool — call after the caller picks a time.",
     parameters: z.object({
       slot_id: z.string().describe("Slot id from list_available_slots"),
     }),
     execute: async ({ slot_id }, opts) => {
       const session = opts.ctx.session as AgentSession<FrontDeskUserData>;
       const userData = session.userData;
+      const runCtx = opts.ctx;
 
       const alreadyBooked = alreadyBookedToolMessage(userData);
       if (alreadyBooked) return alreadyBooked;
@@ -169,17 +168,24 @@ export function createFrontDeskBookingAgent(input: {
         throw new llm.ToolError(`Slot ${slot_id} was not found — call list_available_slots again.`);
       }
 
-      const email = userData.confirmedEmail?.trim();
-      if (!email) {
-        throw new llm.ToolError(
-          "Email not confirmed yet. Ask the caller to SAY their email out loud, then call " +
-            "update_email_address and confirm_email_address before schedule_appointment.",
-        );
-      }
-
       userData.pendingSlotId = slot_id;
 
-      await opts.ctx.update("One moment — I'm getting that on the calendar for you.");
+      let email = userData.confirmedEmail?.trim();
+      if (!email) {
+        const emailResult = await new GetEmailTask(session, {
+          chatCtx: session.chatCtx,
+        }).run();
+
+        if (runCtx.speechHandle.interrupted) {
+          return "Booking was interrupted before email was collected. Ask if they'd still like to book.";
+        }
+
+        email = emailResult.emailAddress.trim();
+        userData.confirmedEmail = email;
+      }
+
+      runCtx.disallowInterruptions();
+      await runCtx.update("Perfect — one moment while I put that on the calendar for you.");
 
       return withLiveKitToolTelemetry(
         userData,
@@ -193,8 +199,11 @@ export function createFrontDeskBookingAgent(input: {
               attendeeEmail: email,
             });
             const local = formatBookedTimeLabel(booked.slot.startTime, userData.timezone);
-            userData.bookingComplete = true;
-            userData.bookedTimeLabel = local;
+            markBookingConfirmed(userData, {
+              slotId: slot_id,
+              providerEventId: booked.eventUri,
+              bookedTimeLabel: local,
+            });
 
             sendBookingSmsAsync(session, booked.slot.startTime);
 
@@ -229,13 +238,7 @@ export function createFrontDeskBookingAgent(input: {
 
   return voice.Agent.create<FrontDeskUserData>({
     instructions: buildFrontDeskInstructions(label),
-    tools: llm.toToolContext([
-      getCurrentTime,
-      listAvailableSlots,
-      updateEmailAddress,
-      confirmEmailAddress,
-      scheduleAppointment,
-    ]),
+    tools: llm.toToolContext([getCurrentTime, listAvailableSlots, scheduleAppointment]),
     onEnter: async (agentCtx) => {
       const session = agentCtx.session as AgentSession<FrontDeskUserData>;
       const hour = session.userData.cal.now().getHours();
