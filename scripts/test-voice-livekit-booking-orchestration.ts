@@ -167,7 +167,7 @@ async function main() {
     );
     check(
       "instructions include conversational context",
-      instructions.includes("ACTIVE CAPABILITY"),
+      instructions.includes("SESSION:"),
     );
 
     const beforeSyncTools = callContext.lastAgentSync?.toolNames || [];

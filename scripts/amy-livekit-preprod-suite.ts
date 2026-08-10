@@ -174,7 +174,7 @@ async function main() {
       if ((callContext.session.availableSlots || []).length > 0) {
         check(
           "instructions list offered slots when available",
-          instructions.includes("Available appointment times"),
+          instructions.includes("Times to offer"),
         );
       }
     } else {

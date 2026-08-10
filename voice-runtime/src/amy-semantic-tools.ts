@@ -76,8 +76,7 @@ export function buildAmySemanticToolList(input: {
     tools.push(
       llm.tool({
         name: "capture_caller_information",
-        description:
-          "Save structured information the caller just provided (name, email, phone, address, service issue, or other configured fields). The runtime persists values and advances automatically.",
+        description: "Save caller details they just provided (only new values not already collected).",
         parameters: z.object({
           extracted_fields: z
             .record(z.string(), z.string())
@@ -136,8 +135,7 @@ export function buildAmySemanticToolList(input: {
     tools.push(
       llm.tool({
         name: "choose_appointment_time",
-        description:
-          "Record which offered appointment time the caller chose. Use the slot id from the active capability context.",
+        description: "Record the appointment time they chose (slot id from session context).",
         parameters: z.object({
           slot_id: slotIdSchema(),
           selection: z
@@ -178,8 +176,7 @@ export function buildAmySemanticToolList(input: {
     tools.push(
       llm.tool({
         name: "confirm_action",
-        description:
-          "Commit the held appointment after the caller explicitly confirms. Only call when they clearly say yes.",
+        description: "Commit after an explicit yes to book, reschedule, or cancel.",
         parameters: z.object({
           confirmed: z.boolean().describe("True when caller explicitly confirms"),
         }),
