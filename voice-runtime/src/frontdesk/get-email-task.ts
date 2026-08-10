@@ -2,6 +2,7 @@ import { llm, voice } from "@livekit/agents";
 import { z } from "zod";
 import type { AgentSession } from "@livekit/agents";
 import { withLiveKitToolTelemetry } from "../livekit-tool-telemetry";
+import { safeInterruptSession } from "../session-utils";
 import type { FrontDeskUserData } from "./userdata";
 
 const EMAIL_RE =
@@ -92,7 +93,7 @@ export class GetEmailTask extends voice.AgentTask<GetEmailResult> {
             }
             const email = this.currentEmail;
             // Stop any follow-up TTS from this sub-agent before handing off to booking.
-            await this.session.interrupt({ force: true }).catch(() => undefined);
+            await safeInterruptSession(this.session);
             this.complete({ emailAddress: email });
             return "Email confirmed. Produce no further speech.";
           },

@@ -4,6 +4,7 @@ import type { AgentSession } from "@livekit/agents";
 import type { AvailableSlot } from "./calendly-calendar";
 import { SlotUnavailableError } from "./calendly-calendar";
 import { GetEmailTask } from "./get-email-task";
+import { scheduleAppointmentResilient } from "./booking-recovery";
 import type { FrontDeskUserData } from "./userdata";
 import { withLiveKitToolTelemetry } from "../livekit-tool-telemetry";
 
@@ -146,24 +147,9 @@ export function createFrontDeskBookingAgent(input: {
 
           const emailResult = await new GetEmailTask(session).run();
 
-          // Email sub-agent may have started closing speech; clear it before Calendly.
-          await session.interrupt({ force: true }).catch(() => undefined);
-
           try {
-            opts.ctx.disallowInterruptions();
-          } catch (err) {
-            console.warn(
-              JSON.stringify({
-                source: "frontdesk-booking-agent",
-                event: "disallow_interruptions_skipped",
-                callId: session.userData.callId,
-                error: err instanceof Error ? err.message : String(err),
-              }),
-            );
-          }
-
-          try {
-            const booked = await session.userData.cal.scheduleAppointment({
+            const booked = await scheduleAppointmentResilient({
+              session,
               slot,
               attendeeEmail: emailResult.emailAddress,
             });
@@ -219,7 +205,17 @@ export function createFrontDeskBookingAgent(input: {
               session.userData.slotUnavailableCount += 1;
               throw new llm.ToolError("This slot isn't available anymore");
             }
-            throw err;
+            console.warn(
+              JSON.stringify({
+                source: "frontdesk-booking-agent",
+                event: "schedule_appointment_failed",
+                callId: session.userData.callId,
+                error: err instanceof Error ? err.message : String(err),
+              }),
+            );
+            throw new llm.ToolError(
+              "I wasn't able to finish booking just now. Apologize briefly and offer to try again or pick another time.",
+            );
           }
         },
       );
