@@ -202,7 +202,6 @@ export class QualifyLeadTask extends voice.AgentTask<QualifyLeadResult> {
   }
 
   async onEnter(): Promise<void> {
-    const ud = this.sessionRef.userData;
     await this.updateTools([
       this.buildRecordFieldsTool(),
       this.buildOutcomeTool(),
