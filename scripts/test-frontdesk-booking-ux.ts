@@ -80,6 +80,8 @@ assert.match(BOOKING_COMPLETE_TOOL_RESULT, /end_call/);
 // --- 4. No duplicate goodbye sequence — end_call on frontdesk ---
 
 assert.ok(frontdeskSource.includes('name: "end_call"'), "frontdesk exposes end_call");
+assert.ok(frontdeskSource.includes("buildFrontDeskBusinessAnswerTool"), "frontdesk wires business answer tool");
+assert.ok(frontdeskSource.includes("buildFrontDeskCancelAppointmentTool"), "frontdesk wires cancel tool");
 assert.ok(
   frontdeskSource.includes("do not repeat it or give") &&
     frontdeskSource.includes("multiple goodbyes"),

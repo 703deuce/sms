@@ -15,6 +15,8 @@ import {
   buildBookingSuccessLine,
   POST_EMAIL_BOOKING_FILLER,
 } from "../booking-completion-messages";
+import { buildFrontDeskBusinessAnswerTool } from "./knowledge-tool";
+import { buildFrontDeskCancelAppointmentTool } from "./cancel-appointment-tool";
 import { markBookingConfirmed, type FrontDeskUserData } from "./userdata";
 
 function buildFrontDeskInstructions(businessLabel: string): string {
@@ -46,6 +48,8 @@ function buildFrontDeskInstructions(businessLabel: string): string {
     "When talking about availability, call list_available_slots and offer a few clear ",
     "options at a time. Say times like 'Monday at 2' — avoid timezones and AM/PM labels. ",
     "Only offer times that list_available_slots returned — never invent slots. ",
+    "Call get_business_answer for hours, pricing, services, policies, or FAQs — including during booking. ",
+    "To cancel an appointment, confirm with the caller then call cancel_appointment with confirmed true. ",
     "Booking workflow: after the caller picks a slot, call schedule_appointment with that ",
     "slot_id. Email collection happens inside that tool — do not ask for email before calling ",
     "schedule_appointment. Never call schedule_appointment before the caller confirms a time. ",
@@ -270,7 +274,14 @@ export function createFrontDeskBookingAgent(input: {
 
   return voice.Agent.create<FrontDeskUserData>({
     instructions: buildFrontDeskInstructions(label),
-    tools: llm.toToolContext([getCurrentTime, listAvailableSlots, scheduleAppointment, endCall]),
+    tools: llm.toToolContext([
+      getCurrentTime,
+      listAvailableSlots,
+      scheduleAppointment,
+      buildFrontDeskBusinessAnswerTool(),
+      buildFrontDeskCancelAppointmentTool(),
+      endCall,
+    ]),
     onEnter: async (agentCtx) => {
       const session = agentCtx.session as AgentSession<FrontDeskUserData>;
       const hour = session.userData.cal.now().getHours();

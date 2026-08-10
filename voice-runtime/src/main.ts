@@ -117,6 +117,7 @@ export default defineAgent<VoiceRuntimeUserData>({
         timezone,
         cal,
         slotUnavailableCount: 0,
+        callerE164: identity.fromE164?.trim() || undefined,
       };
       agent = createFrontDeskBookingAgent({ businessName, timezone }) as voice.Agent<VoiceRuntimeUserData>;
       ctx.proc.userData = userData;

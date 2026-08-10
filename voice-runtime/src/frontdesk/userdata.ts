@@ -22,6 +22,8 @@ export type FrontDeskUserData = {
   draftEmail?: string;
   /** Confirmed email for Calendly — persists for the whole call. */
   confirmedEmail?: string;
+  /** Caller ANI for appointment lookup (cancel/reschedule). */
+  callerE164?: string;
   /** Canonical booking state for server-side duplicate guards. */
   booking?: FrontDeskBookingState;
   /** @deprecated Prefer booking.status === "confirmed". */

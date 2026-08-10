@@ -1,0 +1,206 @@
+import { getPrisma } from "@/lib/db";
+import { loadBusinessBrain } from "@/lib/agents/appointment-booking/business-brain";
+import { loadVoiceAgentRuntimeConfigRecord } from "@/lib/voice/load-agent-config";
+import { searchKnowledge } from "@/lib/voice/knowledge-processor";
+
+export type BusinessAnswerResult =
+  | { ok: true; speak: string; data: Record<string, unknown> }
+  | { ok: false; speak: string; code: string };
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function topicMatches(text: string, topic: string): boolean {
+  const hay = text.toLowerCase();
+  const needles = topic
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((w) => w.length > 2);
+  if (!needles.length) return hay.includes(topic.toLowerCase());
+  return needles.some((n) => hay.includes(n));
+}
+
+function synthesizeRagSnippets(
+  hits: Array<{ name: string; snippet: string; provider?: string }>,
+): string | null {
+  if (!hits.length) return null;
+  const parts = hits
+    .slice(0, 3)
+    .map((h) => h.snippet.trim())
+    .filter(Boolean);
+  if (!parts.length) return null;
+  return parts.join(" ");
+}
+
+async function linkedKnowledgeBaseIds(workspaceId: string, agentId: string): Promise<string[]> {
+  const prisma = getPrisma();
+  const agent = await prisma.voiceAgent.findFirst({
+    where: { id: agentId, workspaceId },
+    select: { draftConfig: true },
+  });
+  const cfg = asRecord(agent?.draftConfig);
+  const fromConfig = Array.isArray(cfg.knowledgeBaseIds)
+    ? cfg.knowledgeBaseIds.map(String).filter(Boolean)
+    : [];
+  if (fromConfig.length) return [...new Set(fromConfig)];
+
+  const links = await prisma.voiceAgentKnowledgeBase.findMany({
+    where: { workspaceId, agentId },
+    select: { knowledgeBaseId: true },
+  });
+  return links.map((l: { knowledgeBaseId: string }) => l.knowledgeBaseId);
+}
+
+export async function resolveBusinessAnswer(input: {
+  workspaceId: string;
+  agentId: string;
+  topic: string;
+}): Promise<BusinessAnswerResult> {
+  const topic = input.topic.trim();
+  const topicLower = topic.toLowerCase();
+
+  const config = await loadVoiceAgentRuntimeConfigRecord(input.workspaceId, input.agentId);
+  const cfg = asRecord(config);
+  const knowledge = asRecord(cfg.knowledgeBase || cfg.knowledge);
+  const dynamicVars = asRecord(cfg.dynamicVariables);
+  const advanced = asRecord(cfg.advanced);
+  const wizard = asRecord(advanced.appointmentReceptionistWizard);
+  const pricing = asRecord(knowledge.pricing || cfg.pricing);
+
+  // --- Structured pricing ---
+  if (/price|cost|fee|charge|how much|package|plan/.test(topicLower)) {
+    const serviceCallFee =
+      pricing.serviceCallFee || pricing.diagnosticFee || pricing.defaultServiceCall;
+    const packages = asRecord(knowledge.packages || pricing.packages);
+    const packageLines = Object.entries(packages)
+      .filter(([, v]) => v)
+      .map(([name, detail]) => `${name}: ${String(detail)}`);
+    if (packageLines.length) {
+      return {
+        ok: true,
+        speak: packageLines.join(". ") + ".",
+        data: { topic: "pricing", packages: packageLines },
+      };
+    }
+    if (serviceCallFee) {
+      return {
+        ok: true,
+        speak: String(pricing.serviceCallScript || `Our service call fee is ${serviceCallFee}.`),
+        data: { topic: "pricing", serviceCallFee },
+      };
+    }
+  }
+
+  // --- Hours ---
+  if (/hour|open|close|when are you|availability/.test(topicLower)) {
+    const hours =
+      knowledge.businessHours ||
+      cfg.businessHours ||
+      dynamicVars.business_hours ||
+      wizard.businessHours;
+    if (hours) {
+      return {
+        ok: true,
+        speak: `Our hours are ${String(hours)}.`,
+        data: { topic: "hours", hours },
+      };
+    }
+  }
+
+  // --- Services / what we do ---
+  if (/service|what do you do|what does|offer|repair|install/.test(topicLower)) {
+    const services =
+      knowledge.services ||
+      cfg.services ||
+      dynamicVars.services_description ||
+      wizard.servicesDescription;
+    if (services) {
+      return {
+        ok: true,
+        speak: String(services),
+        data: { topic: "services" },
+      };
+    }
+  }
+
+  // --- FAQ map in draftConfig ---
+  const faq = asRecord(knowledge.faq);
+  for (const [key, value] of Object.entries(faq)) {
+    if (topicLower.includes(key.toLowerCase()) || topicMatches(String(value), topic)) {
+      return {
+        ok: true,
+        speak: String(value),
+        data: { topic: key, source: "faq" },
+      };
+    }
+  }
+
+  // --- Wizard knowledge items ---
+  const wizardItems = Array.isArray(wizard.knowledgeItems) ? wizard.knowledgeItems : [];
+  for (const raw of wizardItems) {
+    const item = asRecord(raw);
+    const label = String(item.label || "").trim();
+    const summary = String(item.summary || "").trim();
+    const status = String(item.status || "complete");
+    if (!summary || status === "missing" || status === "rejected") continue;
+    if (topicMatches(label, topic) || topicMatches(summary, topic)) {
+      return {
+        ok: true,
+        speak: summary,
+        data: { topic: label, source: "wizard" },
+      };
+    }
+  }
+
+  // --- Company brain facts ---
+  const brain = await loadBusinessBrain(input.workspaceId, {
+    agentId: input.agentId,
+    draftConfig: config,
+  });
+  for (const fact of brain.knowledgeFacts || []) {
+    if (topicMatches(fact.label, topic) || topicMatches(fact.summary, topic)) {
+      return {
+        ok: true,
+        speak: fact.summary,
+        data: { topic: fact.label, source: "company_brain" },
+      };
+    }
+  }
+
+  // --- Vector / local RAG search across linked knowledge bases ---
+  const kbIds = await linkedKnowledgeBaseIds(input.workspaceId, input.agentId);
+  const ragHits: Array<{ name: string; snippet: string; provider?: string }> = [];
+  for (const kbId of kbIds) {
+    const hits = await searchKnowledge(input.workspaceId, kbId, topic);
+    for (const hit of hits) {
+      ragHits.push({
+        name: hit.name,
+        snippet: hit.snippet,
+        provider: hit.provider,
+      });
+    }
+  }
+  const ragSpeak = synthesizeRagSnippets(ragHits);
+  if (ragSpeak) {
+    return {
+      ok: true,
+      speak: ragSpeak,
+      data: {
+        topic,
+        source: "rag",
+        hitCount: ragHits.length,
+        providers: [...new Set(ragHits.map((h) => h.provider).filter(Boolean))],
+      },
+    };
+  }
+
+  return {
+    ok: false,
+    speak:
+      "I don't have specific information on that in my system. I can take a message or connect you with the team.",
+    code: "NOT_FOUND",
+  };
+}
