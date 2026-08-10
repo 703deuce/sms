@@ -89,10 +89,18 @@ export function compileSemanticToolNamesForSession(input: {
 
   if (modifyFlow) {
     allowed.add("modify_appointment");
-    if (input.callerIntent === "reschedule" && hasAvailableSlots(input.session) && !hasHeldSlot(input.session)) {
+    if (
+      input.callerIntent === "reschedule" &&
+      hasAvailableSlots(input.session) &&
+      !hasHeldSlot(input.session)
+    ) {
       allowed.add("choose_appointment_time");
     }
-    if (input.callerIntent === "reschedule" && hasHeldSlot(input.session)) {
+    if (
+      internalAllowed.has("reschedule_appointment") &&
+      input.callerIntent === "reschedule" &&
+      hasHeldSlot(input.session)
+    ) {
       allowed.add("confirm_action");
     }
   }

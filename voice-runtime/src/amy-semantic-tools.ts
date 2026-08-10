@@ -21,6 +21,12 @@ import { compileSemanticToolNamesForSession } from "@/lib/voice/agent-runtime/se
 import { taskForWorkflowState } from "@/lib/voice/domain-actions/task-guard";
 import type { AmyToolOptions } from "./amy-tool-types";
 
+function liveCallContext(opts: AmyToolOptions): LiveKitCallContext {
+  const ctx = opts.ctx.userData.callContext;
+  if (!ctx) throw new Error("Call context not initialized");
+  return ctx;
+}
+
 function slotIdSchema(callContext: LiveKitCallContext) {
   const slots = buildSlotsPayload(callContext.session);
   if (!slots.length) {
@@ -137,12 +143,13 @@ export function buildAmySemanticToolList(input: {
           confirmed: z.boolean().describe("True when caller explicitly confirms"),
         }),
         execute: async ({ confirmed }, opts: AmyToolOptions) => {
-          const intent = callContext.session.runtime.session_runtime?.callerIntent;
+          const liveCtx = liveCallContext(opts);
+          const intent = liveCtx.session.runtime.session_runtime?.callerIntent;
           const appointmentId =
-            callContext.session.runtime.session_runtime?.foundAppointmentId?.trim() || "";
+            liveCtx.session.runtime.session_runtime?.foundAppointmentId?.trim() || "";
 
           if (intent === "reschedule" && appointmentId) {
-            const held = callContext.session.heldSlot || callContext.session.selectedSlot;
+            const held = liveCtx.session.heldSlot || liveCtx.session.selectedSlot;
             return wrap(
               "confirm_action",
               "reschedule_appointment",

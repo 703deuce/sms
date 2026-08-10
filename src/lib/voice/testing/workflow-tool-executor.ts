@@ -250,14 +250,14 @@ export async function executeWorkflowTool(input: {
     workflow,
     callId: input.ctx.callId,
     session: input.ctx.session,
-    toolName: input.toolName,
+    toolName,
     result,
   });
 
   const canonical = reconcileCanonicalWorkflowState({
     session: input.ctx.session,
     workflow,
-    toolName: input.toolName,
+    toolName,
     toolResult: result,
   });
   input.ctx.canonicalWorkflow = canonical;
@@ -292,7 +292,7 @@ export async function executeWorkflowTool(input: {
   const serialized = JSON.stringify(payload);
 
   const noProgress = isNoProgressToolResult({
-    toolName: input.toolName,
+    toolName,
     ok: result.ok,
     beforeMissingCount: missingBefore,
     afterMissingCount: missingAfter,

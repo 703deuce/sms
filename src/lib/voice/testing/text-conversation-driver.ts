@@ -206,6 +206,20 @@ export async function processCallerTurn(input: {
   const maxRounds = input.maxToolRounds ?? 10;
   let assistantText = "";
 
+  const autoIntent = await autoApplyCallerIntentFromUtterance({
+    ctx,
+    userText: input.userText,
+    intentToolAlreadyCalled: false,
+  });
+  ctx = autoIntent.ctx;
+  if (autoIntent.applied) {
+    toolExecutions.push({
+      toolName: "detect_caller_intent",
+      ok: true,
+      speak: "Intent detected from caller utterance.",
+    });
+  }
+
   const autoCapture = await autoCaptureCallerInformationFromUtterance({
     ctx,
     userText: input.userText,
@@ -216,21 +230,6 @@ export async function processCallerTurn(input: {
       toolName: "capture_caller_information",
       ok: true,
       speak: autoCapture.speak || "Caller information captured.",
-    });
-  }
-
-  const intentCalled = false;
-  const autoIntent = await autoApplyCallerIntentFromUtterance({
-    ctx,
-    userText: input.userText,
-    intentToolAlreadyCalled: intentCalled,
-  });
-  ctx = autoIntent.ctx;
-  if (autoIntent.applied) {
-    toolExecutions.push({
-      toolName: "detect_caller_intent",
-      ok: true,
-      speak: "Intent detected from caller utterance.",
     });
   }
 

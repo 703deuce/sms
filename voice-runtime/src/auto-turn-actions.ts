@@ -7,6 +7,7 @@ import { syncAmyAgentFromContext } from "./amy-tools";
 
 /**
  * Apply authoritative runtime actions from final caller transcripts before the LLM turn.
+ * Intent is detected before field capture so reschedule/cancel/emergency routing wins.
  */
 export async function applyAutoTurnActionsFromTranscript(
   session: AgentSession<AmyProcessUserData>,
@@ -17,18 +18,18 @@ export async function applyAutoTurnActionsFromTranscript(
 
   callContext.session.lastUserUtterance = transcript;
 
-  const autoCapture = await autoCaptureCallerInformationFromUtterance({
-    ctx: callContext,
-    userText: transcript,
-  });
-
   const autoIntent = await autoApplyCallerIntentFromUtterance({
-    ctx: autoCapture.ctx,
+    ctx: callContext,
     userText: transcript,
     intentToolAlreadyCalled: false,
   });
 
-  let ctx = autoIntent.ctx;
+  const autoCapture = await autoCaptureCallerInformationFromUtterance({
+    ctx: autoIntent.ctx,
+    userText: transcript,
+  });
+
+  let ctx = autoCapture.ctx;
   const pipeline = await executeDeterministicPipeline({
     ctx,
     preferenceSpoken: transcript,

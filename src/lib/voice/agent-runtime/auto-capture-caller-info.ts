@@ -2,12 +2,9 @@ import {
   domainSubmitCallerInformation,
   type LiveKitCallContext,
 } from "@/lib/voice/domain-actions";
-import { applyWorkflowNodeTransition } from "@/lib/voice/workflow-runtime/node-transitions";
-import { reconcileCanonicalWorkflowState } from "@/lib/voice/workflow-runtime/canonical-state";
 import { compileToolsForCallContext } from "@/lib/voice/workflow-runtime/compile-for-call";
 import { inferFieldsFromUtterance } from "@/lib/voice/workflow-runtime/field-extraction";
 import { prepareFieldsForPersistence } from "@/lib/voice/workflow-runtime/field-persist";
-import { resolveActiveWorkflowForAgent } from "@/lib/voice/workflow-runtime/loader";
 import { executeDeterministicPipeline } from "./deterministic-executor";
 
 export type AutoCaptureResult = {
@@ -46,7 +43,7 @@ export async function autoCaptureCallerInformationFromUtterance(input: {
     activeFieldId: input.ctx.session.activeField,
   });
 
-  if (!Object.keys(prepared.fields).length) {
+  if (prepared.errors.length > 0 || !Object.keys(prepared.fields).length) {
     return { ctx: input.ctx, applied: false };
   }
 
@@ -57,23 +54,11 @@ export async function autoCaptureCallerInformationFromUtterance(input: {
     utterance,
   });
 
-  const workflow =
-    ctx.workflowDefinition ?? resolveActiveWorkflowForAgent(ctx.agentId).definition;
-  await applyWorkflowNodeTransition({
-    workflow,
-    callId: ctx.callId,
-    session: ctx.session,
-    toolName: "submit_caller_information",
-    result,
-  });
-  const reconciled = reconcileCanonicalWorkflowState({
-    session: ctx.session,
-    workflow,
-    toolName: "submit_caller_information",
-    toolResult: result,
-  });
-  ctx.canonicalWorkflow = reconciled;
-  ctx.workflowState = reconciled.legacyState;
+  if (!result.ok) {
+    return { ctx, applied: false, speak: result.speak };
+  }
+
+  // domainSubmitCallerInformation already reconciled canonical state — do not re-transition.
   compileToolsForCallContext(ctx);
 
   const pipeline = await executeDeterministicPipeline({

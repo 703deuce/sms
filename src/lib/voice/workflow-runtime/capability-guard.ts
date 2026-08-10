@@ -39,7 +39,12 @@ export function authorizeCapabilityInvocation(input: {
     : [];
   const allowedOnEnvelope = envelopeCaps.includes(cap.id);
 
-  if (!allowedOnNode && !allowedOnEnvelope) {
+  const modifyIntentAllowed =
+    node.type === "confirmation" &&
+    ((input.state.flags.rescheduleIntent && cap.id === "calendar.reschedule") ||
+      (input.state.flags.cancelIntent && cap.id === "calendar.cancel"));
+
+  if (!allowedOnNode && !allowedOnEnvelope && !modifyIntentAllowed) {
     return {
       ok: false,
       speak: "I need to finish the current step before I can do that.",

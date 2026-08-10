@@ -132,6 +132,15 @@ function wrapToolExecute(
 
   const run = async () => {
     if (isIrreversibleWriteTool(toolName)) {
+      if (opts.ctx.speechHandle.interrupted) {
+        throw new llm.ToolError(
+          JSON.stringify({
+            success: false,
+            errorCode: "INTERRUPTED",
+            message: "Caller interrupted before the action could complete. Ask if they still want to proceed.",
+          }),
+        );
+      }
       opts.ctx.disallowInterruptions();
     }
 
