@@ -118,7 +118,7 @@ export default defineAgent<VoiceRuntimeUserData>({
         cal,
         slotUnavailableCount: 0,
       };
-      agent = createFrontDeskBookingAgent({ businessName, timezone });
+      agent = createFrontDeskBookingAgent({ businessName, timezone }) as voice.Agent<VoiceRuntimeUserData>;
       ctx.proc.userData = userData;
     } else {
       const callContext = await bootstrapLiveKitCallContext({
@@ -129,7 +129,7 @@ export default defineAgent<VoiceRuntimeUserData>({
         toE164: identity.toE164 || routing.e164,
       });
       userData = { callContext };
-      agent = createAmyReceptionistAgent(callContext.businessName);
+      agent = createAmyReceptionistAgent(callContext.businessName) as voice.Agent<VoiceRuntimeUserData>;
       ctx.proc.userData = userData;
     }
 

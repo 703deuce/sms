@@ -1,9 +1,13 @@
-import { LLM, type AgentSession, type ChatContext } from "@livekit/agents";
+import { LLM, type AgentOptions, type AgentSession, type ChatContext } from "@livekit/agents";
 
 /** Options every nested AgentTask should receive from its parent tool/agent. */
 export type NestedTaskContextOptions = {
   chatCtx?: ChatContext;
   preserveFunctionCallHistory?: boolean;
+};
+
+type AgentTaskSuperOptions<UserData> = AgentOptions<UserData> & {
+  preserveFunctionCallHistory: boolean;
 };
 
 /**
@@ -33,13 +37,10 @@ export function taskGroupOptionsFromSession<UserData>(session: AgentSession<User
   };
 }
 
-export function agentTaskSuperOptions(
-  base: {
-    instructions: string;
-    tools?: unknown[];
-  },
+export function agentTaskSuperOptions<UserData = unknown>(
+  base: Pick<AgentOptions<UserData>, "instructions" | "tools">,
   options?: NestedTaskContextOptions,
-) {
+): AgentTaskSuperOptions<UserData> {
   return {
     ...base,
     chatCtx: options?.chatCtx,

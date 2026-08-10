@@ -9,6 +9,7 @@ import {
   scheduleAppointmentResilient,
 } from "./booking-recovery";
 import { GetEmailTask } from "./get-email-task";
+import { withLiveKitToolTelemetry } from "../livekit-tool-telemetry";
 import { markBookingConfirmed, type FrontDeskUserData } from "./userdata";
 
 function buildFrontDeskInstructions(businessLabel: string): string {
