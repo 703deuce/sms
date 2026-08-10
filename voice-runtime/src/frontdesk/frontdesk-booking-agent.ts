@@ -172,16 +172,27 @@ export function createFrontDeskBookingAgent(input: {
 
       let email = userData.confirmedEmail?.trim();
       if (!email) {
-        const emailResult = await new GetEmailTask(session, {
-          chatCtx: session.chatCtx,
-        }).run();
+        try {
+          const emailResult = await new GetEmailTask(session, {
+            chatCtx: session.chatCtx,
+          }).run();
 
-        if (runCtx.speechHandle.interrupted) {
-          return "Booking was interrupted before email was collected. Ask if they'd still like to book.";
+          if (runCtx.speechHandle.interrupted) {
+            return "Booking was interrupted before email was collected. Ask if they'd still like to book.";
+          }
+
+          email = emailResult.emailAddress.trim();
+          userData.confirmedEmail = email;
+        } catch (err) {
+          if (runCtx.speechHandle.interrupted) {
+            return "Booking was interrupted before email was collected. Ask if they'd still like to book.";
+          }
+          const reason = err instanceof Error ? err.message : String(err);
+          return (
+            `Email is required to book on the calendar. ${reason} ` +
+            "Ask if they can provide an email or would like to call back later."
+          );
         }
-
-        email = emailResult.emailAddress.trim();
-        userData.confirmedEmail = email;
       }
 
       runCtx.disallowInterruptions();

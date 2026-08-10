@@ -16,6 +16,7 @@ import {
   nestedTaskOptionsFromSession,
   type NestedTaskContextOptions,
 } from "./task-context";
+import { buildGetBusinessAnswerTool } from "./knowledge-tool";
 
 export type BookAppointmentResult = {
   bookingId?: string | null;
@@ -42,6 +43,8 @@ export class BookAppointmentTask extends voice.AgentTask<BookAppointmentResult> 
   }
 
   async onEnter(): Promise<void> {
+    await this.updateTools([this.knowledgeTool()]);
+
     let ctx = requireCallContext(this.sessionRef);
     const loaded = await loadAvailableSlots(ctx);
     ctx = loaded.ctx;
@@ -87,6 +90,10 @@ export class BookAppointmentTask extends voice.AgentTask<BookAppointmentResult> 
     await this.updateChatCtx(chatCtx);
   }
 
+  private knowledgeTool() {
+    return buildGetBusinessAnswerTool(this.sessionRef);
+  }
+
   private async attachSlotSelectionTool(): Promise<void> {
     const slotIds = this.slots.map((slot) => slot.slotId) as [string, ...string[]];
     const slotById = new Map(this.slots.map((slot) => [slot.slotId, slot]));
@@ -116,7 +123,7 @@ export class BookAppointmentTask extends voice.AgentTask<BookAppointmentResult> 
       },
     });
 
-    await this.updateTools([chooseTime]);
+    await this.updateTools([this.knowledgeTool(), chooseTime]);
   }
 
   private async attachBookingConfirmationTool(): Promise<void> {
@@ -156,6 +163,6 @@ export class BookAppointmentTask extends voice.AgentTask<BookAppointmentResult> 
       },
     });
 
-    await this.updateTools([confirmBooking]);
+    await this.updateTools([this.knowledgeTool(), confirmBooking]);
   }
 }

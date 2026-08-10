@@ -10,12 +10,14 @@ import {
 import type { AmyUserData } from "../metadata";
 import { requireCallContext, stashCallContext } from "../call-context";
 import { missingRequiredFields, recordCallerField } from "../scheduling-bridge";
+import { compileToolsForCallContext } from "@/lib/voice/workflow-runtime/compile-for-call";
 import {
   agentTaskSuperOptions,
   nestedTaskOptionsFromSession,
   taskGroupOptionsFromSession,
   type NestedTaskContextOptions,
 } from "./task-context";
+import { buildGetBusinessAnswerTool } from "./knowledge-tool";
 
 export type CollectedFieldResult = {
   fieldId: string;
@@ -62,6 +64,7 @@ export class CollectFieldTask extends voice.AgentTask<CollectedFieldResult> {
           }),
           tools: [
             buildRecordFieldTool(field, sessionRef, (result) => this.complete(result)),
+            buildGetBusinessAnswerTool(sessionRef),
           ],
         },
         taskContext ?? nestedTaskOptionsFromSession(sessionRef),
@@ -91,7 +94,16 @@ export async function runCollectCallerFieldsTaskGroup(
   if (!fields.length) return ctx;
 
   const taskContext = nestedTaskOptionsFromSession(session);
-  const group = new workflows.TaskGroup(taskGroupOptionsFromSession(session));
+  const group = new workflows.TaskGroup({
+    ...taskGroupOptionsFromSession(session),
+    onTaskCompleted: async (event) => {
+      const result = event.result as CollectedFieldResult | undefined;
+      if (!result?.fieldId || !result.value) return;
+      const nextCtx = requireCallContext(session);
+      compileToolsForCallContext(nextCtx);
+      stashCallContext(session, nextCtx);
+    },
+  });
   for (const field of fields) {
     group.add(() => new CollectFieldTask(field, session, taskContext), {
       id: field.field_id,

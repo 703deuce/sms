@@ -56,7 +56,11 @@ export class GetEmailTask extends voice.AgentTask<GetEmailResult> {
               throw new llm.ToolError(`Invalid email address: ${email}`);
             }
             this.currentEmail = normalized;
-            await this.updateTools([this.buildUpdateTool(), this.buildConfirmTool()]);
+            await this.updateTools([
+              this.buildUpdateTool(),
+              this.buildConfirmTool(),
+              this.buildDeclineTool(),
+            ]);
             return (
               `Email updated to ${normalized}. ` +
               "Repeat it back briefly and ask if that's right — then call confirm_email_address when they agree."
@@ -94,6 +98,30 @@ export class GetEmailTask extends voice.AgentTask<GetEmailResult> {
     });
   }
 
+  private buildDeclineTool() {
+    return llm.tool({
+      name: "decline_email_capture",
+      description:
+        "Call when the caller explicitly refuses to provide an email address.",
+      parameters: z.object({
+        reason: z.string().describe("Brief reason the caller declined"),
+      }),
+      execute: async ({ reason }) => {
+        return withLiveKitToolTelemetry(
+          this.sessionRef.userData,
+          "decline_email_capture",
+          { reason },
+          async () => {
+            if (!this.done) {
+              this.complete(new llm.ToolError(`couldn't get the email address: ${reason}`));
+            }
+            return "Email capture declined.";
+          },
+        );
+      },
+    });
+  }
+
   async onEnter(): Promise<void> {
     const existing = this.sessionRef.userData.confirmedEmail?.trim();
     if (existing) {
@@ -103,7 +131,7 @@ export class GetEmailTask extends voice.AgentTask<GetEmailResult> {
       return;
     }
 
-    await this.updateTools([this.buildUpdateTool()]);
+    await this.updateTools([this.buildUpdateTool(), this.buildDeclineTool()]);
     await this.session.generateReply({
       instructions:
         "Ask them to SAY their email address out loud for the calendar booking — e.g. " +

@@ -28,6 +28,7 @@ export function buildAmyLiveKitRootInstructions(businessName: string): string {
       "do not preemptively ask for name, email, phone, or other fields unless instructed to.",
     "Call schedule_appointment to book a new appointment — the runtime collects fields and books via tools.",
     "Call modify_appointment when the caller wants to reschedule or cancel.",
+    "Call get_business_answer for hours, pricing, policies, or FAQs — including during booking flows.",
     "Call transfer_to_human only after the caller confirms they want a person.",
     "Never say you lack access to scheduling or the booking system — use schedule_appointment instead.",
     AMY_VOICE_MODALITY,

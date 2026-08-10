@@ -31,7 +31,7 @@ assert.equal(nestedOpts.preserveFunctionCallHistory, true);
 assert.ok(nestedOpts.chatCtx);
 
 const groupOpts = taskGroupOptionsFromSession(fakeSession);
-assert.equal(groupOpts.summarizeChatCtx, false);
+assert.equal(groupOpts.summarizeChatCtx, true);
 assert.equal(groupOpts.preserveFunctionCallHistory, true);
 assert.ok(groupOpts.chatCtx);
 

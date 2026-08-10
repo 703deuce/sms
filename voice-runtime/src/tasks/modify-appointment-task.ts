@@ -16,8 +16,10 @@ import {
 import {
   agentTaskSuperOptions,
   nestedTaskOptionsFromSession,
+  summarizeChatContextForNestedTask,
   type NestedTaskContextOptions,
 } from "./task-context";
+import { buildGetBusinessAnswerTool } from "./knowledge-tool";
 
 export type ModifyAppointmentResult = {
   action: "reschedule" | "cancel";
@@ -50,6 +52,8 @@ export class ModifyAppointmentTask extends voice.AgentTask<ModifyAppointmentResu
   }
 
   async onEnter(): Promise<void> {
+    await this.updateTools([buildGetBusinessAnswerTool(this.sessionRef)]);
+
     let ctx = requireCallContext(this.sessionRef);
     const found = await findCallerAppointments(ctx);
     ctx = found.ctx;
@@ -124,7 +128,13 @@ export class ModifyAppointmentTask extends voice.AgentTask<ModifyAppointmentResu
           return cancelled.result.speak || "The appointment was cancelled.";
         }
 
-        const taskContext = nestedTaskOptionsFromSession(this.sessionRef);
+        const summarizedCtx = await summarizeChatContextForNestedTask(this.sessionRef, {
+          keepLastTurns: 0,
+        });
+        const taskContext: NestedTaskContextOptions = {
+          ...nestedTaskOptionsFromSession(this.sessionRef),
+          chatCtx: summarizedCtx,
+        };
         const newBooking = await new BookAppointmentTask(this.sessionRef, taskContext).run();
         ctx = requireCallContext(this.sessionRef);
         const slotId = ctx.session.heldSlot || ctx.session.selectedSlot;
@@ -146,6 +156,6 @@ export class ModifyAppointmentTask extends voice.AgentTask<ModifyAppointmentResu
       },
     });
 
-    await this.updateTools([selectAppointment]);
+    await this.updateTools([buildGetBusinessAnswerTool(this.sessionRef), selectAppointment]);
   }
 }

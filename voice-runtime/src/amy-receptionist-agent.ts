@@ -1,7 +1,7 @@
 import { llm, voice } from "@livekit/agents";
 import type { AgentSession } from "@livekit/agents";
 import { z } from "zod";
-import { domainDetectCallerIntent, domainEndCall, domainRequestHuman } from "@/lib/voice/domain-actions";
+import { domainDetectCallerIntent, domainEndCall, domainGetBusinessAnswer, domainRequestHuman } from "@/lib/voice/domain-actions";
 import {
   buildAmyLiveKitRootInstructions,
   buildAmyRootGreetingInstructions,
@@ -108,6 +108,25 @@ export function createAmyReceptionistAgent(businessName: string) {
     },
   });
 
+  const getBusinessAnswer = llm.tool({
+    name: "get_business_answer",
+    description:
+      "Look up business hours, pricing, policies, or FAQs when the caller asks a general question.",
+    parameters: z.object({
+      topic: z.string().describe("What the caller wants to know"),
+    }),
+    execute: async ({ topic }, opts) => {
+      const session = opts.ctx.session as AgentSession<AmyUserData>;
+      let ctx = requireCallContext(session);
+      const result = await domainGetBusinessAnswer({ ctx, topic });
+      stashCallContext(session, ctx);
+      if (!result.ok) {
+        throw new llm.ToolError(result.speak);
+      }
+      return result.speak;
+    },
+  });
+
   const transferToHuman = llm.tool({
     name: "transfer_to_human",
     description:
@@ -149,7 +168,13 @@ export function createAmyReceptionistAgent(businessName: string) {
 
   return voice.Agent.create<AmyUserData>({
     instructions,
-    tools: llm.toToolContext([scheduleAppointment, modifyAppointment, transferToHuman, endCall]),
+    tools: llm.toToolContext([
+      scheduleAppointment,
+      modifyAppointment,
+      getBusinessAnswer,
+      transferToHuman,
+      endCall,
+    ]),
     onEnter: async (agentCtx) => {
       const business =
         agentCtx.session.userData.callContext?.businessName?.trim() || businessName || "our team";
