@@ -15,6 +15,7 @@ import { liveKitRuntimeProvider } from "@/lib/voice/runtime-provider/livekit";
 import { createNewLeadQualificationAgent } from "./new-lead-qualification-agent";
 import { QualifyLeadTask } from "./qualify-lead-task";
 import { buildQualificationCloseLine } from "./outbound-messages";
+import { waitForQualificationComplete } from "./wait-for-qualification";
 import type { OutboundLeadUserData } from "./userdata";
 import { buildAmyVoicePipeline, describePipelineConfig } from "../pipeline";
 import { attachLatencyInstrumentation } from "../latency-instrumentation";
@@ -229,27 +230,6 @@ export async function runOutboundLeadQualificationEntry(
       where: { id: job.callId },
       data: { status: "IN_PROGRESS", answeredAt: new Date() },
     });
-
-    userData.firstAudioAt = Date.now();
-    await appendTraceEvent(job.callId, {
-      kind: "qualification_started",
-      detail: {
-        answerToFirstAudioMs: userData.callAnsweredAt
-          ? userData.firstAudioAt - userData.callAnsweredAt
-          : null,
-      },
-    }).catch(() => undefined);
-
-    await new QualifyLeadTask(session, { chatCtx: session.chatCtx }).run();
-
-    const closeLine = buildQualificationCloseLine(businessName);
-    await session.generateReply({
-      instructions:
-        `If qualification is complete and you have not already said goodbye, say: "${closeLine}" ` +
-        "Then call end_call.",
-      toolChoice: "auto",
-      allowInterruptions: false,
-    });
   } catch (err) {
     const telephonyOutcome = mapSipErrorToTelephonyOutcome(err);
     const message = err instanceof Error ? err.message : String(err);
@@ -289,6 +269,69 @@ export async function runOutboundLeadQualificationEntry(
     });
 
     session.shutdown({ reason: "dial_failed" });
+    return;
+  }
+
+  try {
+    userData.firstAudioAt = Date.now();
+    await appendTraceEvent(job.callId, {
+      kind: "qualification_started",
+      detail: {
+        answerToFirstAudioMs: userData.callAnsweredAt
+          ? userData.firstAudioAt - userData.callAnsweredAt
+          : null,
+      },
+    }).catch(() => undefined);
+
+    const qualifyTask = new QualifyLeadTask(session, { chatCtx: session.chatCtx });
+    session.updateAgent(qualifyTask);
+    await waitForQualificationComplete(session);
+
+    const closeLine = buildQualificationCloseLine(businessName);
+    await session.generateReply({
+      instructions:
+        `If qualification is complete and you have not already said goodbye, say: "${closeLine}" ` +
+        "Then call end_call.",
+      toolChoice: "auto",
+      allowInterruptions: false,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn(
+      JSON.stringify({
+        source: "transovo-voice-runtime",
+        event: "qualification_failed",
+        callId: job.callId,
+        error: message,
+      }),
+    );
+
+    await prisma.voiceCall.update({
+      where: { id: job.callId },
+      data: {
+        status: "FAILED",
+        errorMessage: message,
+        endedAt: new Date(),
+      },
+    });
+
+    await persistLeadQualificationResult({
+      callId: job.callId,
+      workspaceId: job.workspaceId,
+      result: {
+        leadId: job.lead.leadId || null,
+        contactId: job.lead.contactId || null,
+        outcome: "NOT_STARTED",
+        telephonyOutcome: "ANSWERED",
+        collectedFields: userData.collectedFields,
+        summary: `Qualification failed: ${message}`,
+        nextAction: "Review call logs",
+        completedAt: new Date().toISOString(),
+      },
+      telephonyOutcome: "ANSWERED",
+    });
+
+    session.shutdown({ reason: "qualification_failed" });
     return;
   }
 

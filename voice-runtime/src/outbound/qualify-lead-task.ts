@@ -163,12 +163,27 @@ export class QualifyLeadTask extends voice.AgentTask<QualifyLeadResult> {
     });
   }
 
+  private buildEndCallTool() {
+    return llm.tool({
+      name: "end_call",
+      description: "End the call after qualification is complete or the caller is done.",
+      parameters: z.object({
+        reason: z.string().optional(),
+      }),
+      execute: async ({ reason }) => {
+        this.sessionRef.shutdown({ reason: reason || "qualification_complete" });
+        return "Call ended.";
+      },
+    });
+  }
+
   async onEnter(): Promise<void> {
     const ud = this.sessionRef.userData;
     await this.updateTools([
       this.buildRecordFieldsTool(),
       this.buildOutcomeTool(),
       buildBusinessAnswerTool(this.sessionRef),
+      this.buildEndCallTool(),
     ]);
 
     const intro = buildOutboundIntroLine(ud.qualification, ud.job.lead.leadName);

@@ -100,6 +100,11 @@ assert.ok(mainSource.includes("runOutboundLeadQualificationEntry"), "main routes
 assert.ok(mainSource.includes("runInboundEntry"), "main routes inbound jobs");
 assert.ok(outboundEntry.includes("session.start"), "agent starts before dial");
 assert.ok(outboundEntry.includes("createSipParticipant"), "dials after agent ready");
-assert.ok(outboundEntry.includes("QualifyLeadTask"), "runs qualification after answer");
+assert.ok(outboundEntry.includes("updateAgent(qualifyTask)"), "hand off via updateAgent after answer");
+assert.ok(outboundEntry.includes("waitForQualificationComplete"), "waits for qualification completion");
+assert.ok(
+  !/QualifyLeadTask\([^)]*\)\.run\(\)/.test(outboundEntry),
+  "QualifyLeadTask.run must not be called outside a tool/task context",
+);
 
 console.log("outbound qualification tests: PASS");
