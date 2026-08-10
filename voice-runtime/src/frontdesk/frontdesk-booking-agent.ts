@@ -5,6 +5,7 @@ import type { AvailableSlot } from "./calendly-calendar";
 import { SlotUnavailableError } from "./calendly-calendar";
 import { GetEmailTask } from "./get-email-task";
 import type { FrontDeskUserData } from "./userdata";
+import { withLiveKitToolTelemetry } from "../livekit-tool-telemetry";
 
 function buildFrontDeskInstructions(businessLabel: string): string {
   return [
@@ -76,17 +77,19 @@ export function createFrontDeskBookingAgent(input: {
     parameters: z.object({}),
     execute: async (_args, opts) => {
       const session = opts.ctx.session as AgentSession<FrontDeskUserData>;
-      const now = session.userData.cal.now();
-      const formatted = now.toLocaleString("en-US", {
-        weekday: "long",
-        month: "long",
-        day: "numeric",
-        year: "numeric",
-        hour: "numeric",
-        minute: "2-digit",
-        timeZone: session.userData.timezone,
+      return withLiveKitToolTelemetry(session.userData, "get_current_time", {}, async () => {
+        const now = session.userData.cal.now();
+        const formatted = now.toLocaleString("en-US", {
+          weekday: "long",
+          month: "long",
+          day: "numeric",
+          year: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+          timeZone: session.userData.timezone,
+        });
+        return `The current date and time is ${formatted}.`;
       });
-      return `The current date and time is ${formatted}.`;
     },
   });
 
@@ -101,23 +104,25 @@ export function createFrontDeskBookingAgent(input: {
     }),
     execute: async ({ range }, opts) => {
       const session = opts.ctx.session as AgentSession<FrontDeskUserData>;
-      const cal = session.userData.cal;
-      const rangeDays =
-        range === "+1month" ? 14 : range === "+3month" ? 14 : 14;
-      try {
-        const slots = await cal.listAvailableSlots({ daysAhead: rangeDays });
-        slotsMap.clear();
-        for (const slot of slots) {
-          slotsMap.set(slot.slotId, slot);
+      return withLiveKitToolTelemetry(session.userData, "list_available_slots", { range }, async () => {
+        const cal = session.userData.cal;
+        const rangeDays =
+          range === "+1month" ? 14 : range === "+3month" ? 14 : 14;
+        try {
+          const slots = await cal.listAvailableSlots({ daysAhead: rangeDays });
+          slotsMap.clear();
+          for (const slot of slots) {
+            slotsMap.set(slot.slotId, slot);
+          }
+          const lines = cal.formatSlotsForModel(slots);
+          return lines || "No slots available at the moment.";
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          throw new llm.ToolError(
+            `Could not load calendar availability: ${message}. Do not invent times — tell the caller the calendar is temporarily unavailable.`,
+          );
         }
-        const lines = cal.formatSlotsForModel(slots);
-        return lines || "No slots available at the moment.";
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        throw new llm.ToolError(
-          `Could not load calendar availability: ${message}. Do not invent times — tell the caller the calendar is temporarily unavailable.`,
-        );
-      }
+      });
     },
   });
 
@@ -129,76 +134,89 @@ export function createFrontDeskBookingAgent(input: {
     }),
     execute: async ({ slot_id }, opts) => {
       const session = opts.ctx.session as AgentSession<FrontDeskUserData>;
-      const slot = slotsMap.get(slot_id);
-      if (!slot) {
-        throw new llm.ToolError(`Slot ${slot_id} was not found`);
-      }
+      return withLiveKitToolTelemetry(
+        session.userData,
+        "schedule_appointment",
+        { slot_id },
+        async () => {
+          const slot = slotsMap.get(slot_id);
+          if (!slot) {
+            throw new llm.ToolError(`Slot ${slot_id} was not found`);
+          }
 
-      const emailResult = await new GetEmailTask(session).run();
-      if (opts.ctx.speechHandle.interrupted) {
-        return null;
-      }
+          const emailResult = await new GetEmailTask(session).run();
+          if (opts.ctx.speechHandle.interrupted) {
+            return null;
+          }
 
-      opts.ctx.disallowInterruptions();
+          // Stop any email-subagent speech (e.g. premature "booked" lines) before Calendly.
+          try {
+            await session.interrupt({ force: true });
+          } catch {
+            // best effort
+          }
+          opts.ctx.disallowInterruptions();
 
-      try {
-        const booked = await session.userData.cal.scheduleAppointment({
-          slot,
-          attendeeEmail: emailResult.emailAddress,
-        });
-        const local = booked.slot.startTime.toLocaleString("en-US", {
-          weekday: "long",
-          month: "long",
-          day: "numeric",
-          year: "numeric",
-          hour: "numeric",
-          minute: "2-digit",
-          timeZone: session.userData.timezone,
-        });
+          try {
+            const booked = await session.userData.cal.scheduleAppointment({
+              slot,
+              attendeeEmail: emailResult.emailAddress,
+            });
+            const local = booked.slot.startTime.toLocaleString("en-US", {
+              weekday: "long",
+              month: "long",
+              day: "numeric",
+              year: "numeric",
+              hour: "numeric",
+              minute: "2-digit",
+              timeZone: session.userData.timezone,
+            });
 
-        const { sendVoiceBookingConfirmationSms } = await import(
-          "@/lib/voice/booking-confirmation-sms"
-        );
-        const sms = await sendVoiceBookingConfirmationSms({
-          workspaceId: session.userData.workspaceId,
-          agentId: session.userData.agentId,
-          callId: session.userData.callId,
-          startsAt: booked.slot.startTime,
-          businessName: session.userData.businessName,
-          timezone: session.userData.timezone,
-        }).catch((err) => {
-          console.warn(
-            JSON.stringify({
-              source: "frontdesk-booking-agent",
-              event: "booking_confirmation_sms_failed",
+            const { sendVoiceBookingConfirmationSms } = await import(
+              "@/lib/voice/booking-confirmation-sms"
+            );
+            const sms = await sendVoiceBookingConfirmationSms({
+              workspaceId: session.userData.workspaceId,
+              agentId: session.userData.agentId,
               callId: session.userData.callId,
-              error: err instanceof Error ? err.message : String(err),
-            }),
-          );
-          return { sent: false, reason: "send_failed" };
-        });
+              startsAt: booked.slot.startTime,
+              businessName: session.userData.businessName,
+              timezone: session.userData.timezone,
+            }).catch((err) => {
+              console.warn(
+                JSON.stringify({
+                  source: "frontdesk-booking-agent",
+                  event: "booking_confirmation_sms_failed",
+                  callId: session.userData.callId,
+                  error: err instanceof Error ? err.message : String(err),
+                }),
+              );
+              return { sent: false, reason: "send_failed" };
+            });
 
-        console.log(
-          JSON.stringify({
-            source: "frontdesk-booking-agent",
-            event: "booking_confirmation_sms",
-            callId: session.userData.callId,
-            sent: sms.sent,
-            reason: sms.reason || null,
-          }),
-        );
+            console.log(
+              JSON.stringify({
+                source: "frontdesk-booking-agent",
+                event: "booking_confirmation_sms",
+                callId: session.userData.callId,
+                sent: sms.sent,
+                reason: sms.reason || null,
+              }),
+            );
 
-        const smsNote = sms.sent
-          ? " A confirmation text has been sent to their phone."
-          : "";
-        return `The appointment was successfully scheduled for ${local}.${smsNote}`;
-      } catch (err) {
-        if (err instanceof SlotUnavailableError) {
-          session.userData.slotUnavailableCount += 1;
-          throw new llm.ToolError("This slot isn't available anymore");
-        }
-        throw err;
-      }
+            const smsNote = sms.sent
+              ? " A confirmation text has been sent to their phone."
+              : "";
+            return `The appointment was successfully scheduled for ${local}.${smsNote}`;
+          } catch (err) {
+            if (err instanceof SlotUnavailableError) {
+              session.userData.slotUnavailableCount += 1;
+              throw new llm.ToolError("This slot isn't available anymore");
+            }
+            throw err;
+          }
+        },
+      );
     },
   });
 

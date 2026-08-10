@@ -851,11 +851,15 @@ export async function executeIntegrationAction(input: {
             "@/lib/integrations/adapters/calendly-actions"
           );
           const details = await getAppointment(ctx, { eventUri: booked.eventUri });
-          await persistAppointmentFromIntegration({
+          const callId =
+            input.liveAgent?.callId ||
+            (typeof p.callId === "string" ? p.callId.trim() : "") ||
+            null;
+          const row = await persistAppointmentFromIntegration({
             workspaceId: input.workspaceId,
             provider: "calendly",
             contactId: input.contactId || null,
-            callId: (p.callId as string) || null,
+            callId,
             appointment: {
               id: booked.eventUri,
               title: "Calendly booking",
@@ -871,6 +875,18 @@ export async function executeIntegrationAction(input: {
               metadata: { inviteeUri: booked.inviteeUri, bookedVia: "scheduling_api" },
             },
           });
+          if (callId) {
+            const { markVoiceCallBooked } = await import(
+              "@/lib/voice/runtime-provider/livekit-call-telemetry"
+            );
+            await markVoiceCallBooked({
+              workspaceId: input.workspaceId,
+              callId,
+              contactId: input.contactId || null,
+              appointmentId: row?.id || null,
+              externalId: booked.eventUri,
+            });
+          }
         } catch (persistErr) {
           console.warn(
             "[appointment.book] product persist skipped",

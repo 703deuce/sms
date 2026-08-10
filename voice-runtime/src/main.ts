@@ -15,6 +15,7 @@ import type { VoiceRuntimeUserData } from "./metadata";
 import { buildAmyVoicePipeline, describePipelineConfig } from "./pipeline";
 import { applyVoiceRuntimeEnvAliases } from "./env-aliases";
 import { attachLatencyInstrumentation } from "./latency-instrumentation";
+import { attachLiveKitTranscriptPersistence } from "./transcript-persistence";
 import { attachOutputGain, resolveLiveKitOutputGainDb } from "./output-gain";
 import { buildAmyTurnHandling, describeTurnHandlingConfig, getPreemptiveConfigForInstrumentation } from "./turn-config";
 
@@ -149,6 +150,11 @@ export default defineAgent<VoiceRuntimeUserData>({
         model: config.ttsModel,
         voice: config.ttsVoice,
       },
+    });
+
+    attachLiveKitTranscriptPersistence(session, {
+      workspaceId: routing.workspaceId,
+      callId,
     });
 
     ctx.addShutdownCallback(async () => {

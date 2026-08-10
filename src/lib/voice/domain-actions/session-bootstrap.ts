@@ -165,12 +165,38 @@ export async function bootstrapLiveKitCallContext(input: {
 
 export async function finalizeLiveKitCall(callId: string): Promise<void> {
   const prisma = getPrisma();
+  const call = await prisma.voiceCall.findUnique({
+    where: { id: callId },
+    select: { workspaceId: true, startedAt: true, endedAt: true },
+  });
+  if (!call) return;
+
+  const endedAt = call.endedAt || new Date();
+  const durationSeconds =
+    call.startedAt != null
+      ? Math.max(0, Math.round((endedAt.getTime() - call.startedAt.getTime()) / 1000))
+      : undefined;
+
+  const { finalizeLiveKitTranscript, enqueueLiveKitPostCallJob } = await import(
+    "@/lib/voice/runtime-provider/livekit-call-telemetry"
+  );
+  await finalizeLiveKitTranscript(callId).catch(() => undefined);
+
   await prisma.voiceCall
     .updateMany({
-      where: { id: callId, endedAt: null },
-      data: { endedAt: new Date(), status: "COMPLETED" },
+      where: { id: callId },
+      data: {
+        endedAt,
+        status: "COMPLETED",
+        ...(durationSeconds != null ? { durationSeconds } : {}),
+      },
     })
     .catch(() => undefined);
+
+  await enqueueLiveKitPostCallJob({
+    workspaceId: call.workspaceId,
+    callId,
+  });
 }
 
 function activeFieldPayload(session: AmyRealtimeSession): Record<string, unknown> | null {

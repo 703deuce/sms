@@ -35,6 +35,8 @@ export class GetEmailTask extends voice.AgentTask<GetEmailResult> {
         // System constraints
         "A confirmation text to their phone is sent automatically after booking — do not ask " +
         "for their phone number or offer to send texts or emails yourself. " +
+        "Never say the appointment is booked or confirmed — only collect email. " +
+        "After confirm_email_address, do not add any closing line. " +
         "Call update_email_address with the normalized email, then confirm_email_address as " +
         "soon as they agree.",
       tools: [],
@@ -72,8 +74,9 @@ export class GetEmailTask extends voice.AgentTask<GetEmailResult> {
         if (!this.currentEmail) {
           throw new llm.ToolError("No email recorded yet.");
         }
-        this.complete({ emailAddress: this.currentEmail });
-        return "Email confirmed.";
+        const email = this.currentEmail;
+        this.complete({ emailAddress: email });
+        return "Email confirmed. Do not mention booking — remain silent.";
       },
     });
   }
