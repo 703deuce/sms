@@ -192,6 +192,17 @@ function wrapToolExecute(
 
     const result = await execute(ctx);
 
+    if (isIrreversibleWriteTool(toolName) && opts.ctx.speechHandle.interrupted) {
+      throw new llm.ToolError(
+        JSON.stringify({
+          success: false,
+          errorCode: "INTERRUPTED",
+          message:
+            "Caller interrupted before the action could complete. Ask if they still want to proceed.",
+        }),
+      );
+    }
+
     const workflow =
       ctx.workflowDefinition ??
       resolveActiveWorkflowForAgent(ctx.agentId).definition;
@@ -227,7 +238,7 @@ function wrapToolExecute(
     });
 
     const noProgress = isNoProgressToolResult({
-      toolName: loopToolName,
+      toolName,
       ok: result.ok,
       beforeMissingCount: missingBefore,
       afterMissingCount: missingAfter,

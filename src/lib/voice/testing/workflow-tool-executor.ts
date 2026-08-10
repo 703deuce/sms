@@ -36,7 +36,9 @@ import { executeDeterministicPipeline } from "@/lib/voice/agent-runtime/determin
 import {
   isSemanticToolName,
   resolveSemanticToolInvocation,
+  SemanticToolResolutionError,
 } from "@/lib/voice/agent-runtime/resolve-semantic-tool";
+import { buildSlotsPayload } from "@/lib/voice/domain-actions/tool-results";
 
 export type WorkflowToolExecution = {
   ctx: LiveKitCallContext;
@@ -165,11 +167,63 @@ export async function executeWorkflowTool(input: {
   args?: Record<string, unknown>;
 }): Promise<WorkflowToolExecution> {
   const semanticName = input.toolName;
-  const resolved = isSemanticToolName(input.toolName)
-    ? resolveSemanticToolInvocation(input.toolName, input.args || {}, input.ctx)
-    : { internalTool: input.toolName, args: input.args || {} };
+  let resolved: { internalTool: string; args: Record<string, unknown> };
+  try {
+    resolved = isSemanticToolName(input.toolName)
+      ? resolveSemanticToolInvocation(input.toolName, input.args || {}, input.ctx)
+      : { internalTool: input.toolName, args: input.args || {} };
+  } catch (err) {
+    if (err instanceof SemanticToolResolutionError) {
+      return {
+        ctx: input.ctx,
+        toolName: semanticName,
+        result: {
+          ok: false,
+          speak: err.message,
+          error_code: err.errorCode,
+        },
+        serialized: JSON.stringify({
+          success: false,
+          errorCode: err.errorCode,
+          message: err.message,
+        }),
+        workflowStateBefore: input.ctx.session.currentState,
+        workflowStateAfter: input.ctx.session.currentState,
+        blocked: true,
+        blockReason: err.errorCode,
+      };
+    }
+    throw err;
+  }
   const toolName = resolved.internalTool;
   const args = resolved.args;
+
+  if (semanticName === "choose_appointment_time") {
+    const slotId = String(args.slot_iso || "");
+    if (slotId) {
+      const offered = buildSlotsPayload(input.ctx.session);
+      if (offered.length > 0 && !offered.some((slot) => slot.slotId === slotId)) {
+        return {
+          ctx: input.ctx,
+          toolName: semanticName,
+          result: {
+            ok: false,
+            speak: "That time is not in the currently offered appointment slots.",
+            error_code: "INVALID_SLOT",
+          },
+          serialized: JSON.stringify({
+            success: false,
+            errorCode: "INVALID_SLOT",
+            offeredSlotIds: offered.map((slot) => slot.slotId),
+          }),
+          workflowStateBefore: input.ctx.session.currentState,
+          workflowStateAfter: input.ctx.session.currentState,
+          blocked: true,
+          blockReason: "INVALID_SLOT",
+        };
+      }
+    }
+  }
 
   const startedAt = Date.now();
   const workflowStateBefore = input.ctx.session.currentState;

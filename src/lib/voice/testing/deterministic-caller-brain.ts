@@ -1,6 +1,6 @@
 import type { LiveKitCallContext } from "@/lib/voice/domain-actions";
+import { buildSlotsPayload } from "@/lib/voice/domain-actions/tool-results";
 import { compileToolsForCallContext } from "@/lib/voice/workflow-runtime/compile-for-call";
-import { hasAvailableSlots } from "@/lib/voice/workflow-runtime/completion-guards";
 import { normalizeExtractedFields, inferFieldsFromUtterance } from "@/lib/voice/workflow-runtime/field-extraction";
 import { prepareFieldsForPersistence } from "@/lib/voice/workflow-runtime/field-persist";
 import type { OpenAiChatMessage } from "./openai-tool-chat";
@@ -22,7 +22,7 @@ export type DeterministicToolCall = {
 
 /**
  * Rule-based caller brain for CI / offline testing when OPENAI_API_KEY is unavailable.
- * Mimics what a competent LLM should do at each workflow stage.
+ * Mimics what a competent LLM should do at each workflow stage using semantic tool names.
  */
 export function planDeterministicToolCalls(input: {
   ctx: LiveKitCallContext;
@@ -32,7 +32,7 @@ export function planDeterministicToolCalls(input: {
   const text = input.userText.trim();
   const lower = text.toLowerCase();
 
-  if (allowedToolNames.has("submit_caller_information")) {
+  if (allowedToolNames.has("capture_caller_information")) {
     const extracted = normalizeExtractedFields({
       session: input.ctx.session,
       extracted: {},
@@ -49,7 +49,7 @@ export function planDeterministicToolCalls(input: {
     if (Object.keys(prepared.fields).length > 0) {
       return [
         {
-          name: "submit_caller_information",
+          name: "capture_caller_information",
           args: {
             extracted_fields: prepared.fields,
             utterance: text,
@@ -59,63 +59,57 @@ export function planDeterministicToolCalls(input: {
     }
   }
 
-  if (
-    allowedToolNames.has("check_availability") &&
-    canonical?.readyForAvailability &&
-    !hasAvailableSlots(input.ctx.session) &&
-    /tomorrow|morning|afternoon|earlier|available|time|schedule/i.test(text)
-  ) {
-    return [{ name: "check_availability", args: { spoken: text } }];
-  }
-
-  if (allowedToolNames.has("select_slot")) {
-    const slots = input.ctx.session.availableSlots || [];
+  if (allowedToolNames.has("choose_appointment_time")) {
+    const slots = buildSlotsPayload(input.ctx.session);
     if (/\d{1,2}(:\d{2})?\s*(am|pm)/i.test(text) || /nine thirty|first|second|third|earlier|that one|that time/i.test(lower)) {
-      return [{ name: "select_slot", args: { selection: text } }];
+      const slotId = slots[0]?.slotId;
+      if (slotId) {
+        return [{ name: "choose_appointment_time", args: { slot_id: slotId, selection: text } }];
+      }
     }
     if (slots.length > 0 && /good|book|confirm|yes|works/i.test(lower)) {
-      return [{ name: "select_slot", args: { selection: "the first one" } }];
-    }
-  }
-
-  if (
-    allowedToolNames.has("reschedule_appointment") &&
-    canonical?.expectedNextAction === "reschedule_appointment" &&
-    /yes|reschedule|confirm|please/i.test(lower)
-  ) {
-    const held = input.ctx.session.heldSlot || input.ctx.session.selectedSlot;
-    const appointmentId = input.ctx.session.runtime.session_runtime?.foundAppointmentId;
-    if (held && appointmentId) {
       return [
         {
-          name: "reschedule_appointment",
-          args: { appointment_id: appointmentId, new_starts_at: held, confirmed: true },
+          name: "choose_appointment_time",
+          args: { slot_id: slots[0].slotId, selection: "the first one" },
         },
       ];
     }
   }
 
   if (
-    allowedToolNames.has("cancel_appointment") &&
+    allowedToolNames.has("confirm_action") &&
+    canonical?.expectedNextAction === "reschedule_appointment" &&
+    /yes|reschedule|confirm|please/i.test(lower)
+  ) {
+    const held = input.ctx.session.heldSlot || input.ctx.session.selectedSlot;
+    const appointmentId = input.ctx.session.runtime.session_runtime?.foundAppointmentId;
+    if (held && appointmentId) {
+      return [{ name: "confirm_action", args: { confirmed: true } }];
+    }
+  }
+
+  if (
+    allowedToolNames.has("confirm_action") &&
     canonical?.expectedNextAction === "cancel_appointment" &&
     /yes|cancel|confirm|please/i.test(lower)
   ) {
     const appointmentId = input.ctx.session.runtime.session_runtime?.foundAppointmentId;
     if (appointmentId) {
-      return [{ name: "cancel_appointment", args: { appointment_id: appointmentId, confirmed: true } }];
+      return [{ name: "confirm_action", args: { confirmed: true } }];
     }
   }
 
-  if (allowedToolNames.has("find_appointments") && /reschedule|cancel|appointment/i.test(lower)) {
-    return [{ name: "find_appointments", args: {} }];
+  if (allowedToolNames.has("modify_appointment") && /reschedule|cancel|appointment/i.test(lower)) {
+    return [{ name: "modify_appointment", args: { action: "find" } }];
   }
 
   if (
-    allowedToolNames.has("confirm_booking") &&
+    allowedToolNames.has("confirm_action") &&
     (/^(yes|yeah|yep|that's good|that is good|book it|confirm|sounds good)/i.test(lower) ||
       canonical?.expectedNextAction === "confirm_booking")
   ) {
-    return [{ name: "confirm_booking", args: { confirmed: true } }];
+    return [{ name: "confirm_action", args: { confirmed: true } }];
   }
 
   if (allowedToolNames.has("detect_caller_intent") && /book|appointment|repair|fix|leak|broken/i.test(lower)) {

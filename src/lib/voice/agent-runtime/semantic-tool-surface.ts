@@ -45,9 +45,16 @@ export function compileSemanticToolNamesForSession(input: {
     heldSlot?: string | null;
     selectedSlot?: string | null;
     missingFieldIds: string[];
+    runtime?: {
+      session_runtime?: {
+        foundAppointmentId?: string | null;
+      };
+    };
   };
   callerIntent?: string | null;
 }): Set<SemanticToolName> {
+  const foundAppointmentId =
+    input.session.runtime?.session_runtime?.foundAppointmentId?.trim() || "";
   const allowed = new Set<SemanticToolName>();
   const internalAllowed = new Set(
     input.envelopeToolNames.filter((name) => !isRuntimeExecutedTool(name)),
@@ -76,7 +83,11 @@ export function compileSemanticToolNamesForSession(input: {
     allowed.add("confirm_action");
   }
 
-  if (internalAllowed.has("cancel_appointment") && input.callerIntent === "cancel") {
+  if (
+    internalAllowed.has("cancel_appointment") &&
+    input.callerIntent === "cancel" &&
+    foundAppointmentId
+  ) {
     allowed.add("confirm_action");
   }
 
@@ -99,6 +110,7 @@ export function compileSemanticToolNamesForSession(input: {
     if (
       internalAllowed.has("reschedule_appointment") &&
       input.callerIntent === "reschedule" &&
+      foundAppointmentId &&
       hasHeldSlot(input.session)
     ) {
       allowed.add("confirm_action");

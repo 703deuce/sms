@@ -1,6 +1,16 @@
 import { SEMANTIC_TOOL_NAMES, type SemanticToolName } from "./semantic-tool-surface";
 import type { LiveKitCallContext } from "@/lib/voice/domain-actions";
 
+export class SemanticToolResolutionError extends Error {
+  constructor(
+    message: string,
+    public readonly errorCode: string,
+  ) {
+    super(message);
+    this.name = "SemanticToolResolutionError";
+  }
+}
+
 /** Map semantic LLM tool invocations to internal domain tool names + normalized args. */
 export function resolveSemanticToolInvocation(
   toolName: string,
@@ -58,6 +68,15 @@ export function resolveSemanticToolInvocation(
         };
       }
 
+      if (intent === "cancel" || intent === "reschedule") {
+        throw new SemanticToolResolutionError(
+          intent === "cancel"
+            ? "I need to find your appointment before I can cancel it."
+            : "I need to find your appointment before I can reschedule it.",
+          "MISSING_APPOINTMENT",
+        );
+      }
+
       return {
         internalTool: SEMANTIC_TOOL_NAMES.confirm_action,
         args: { confirmed: args.confirmed === true },
@@ -94,20 +113,40 @@ export function resolveSemanticToolInvocation(
     case "modify_appointment": {
       const action = String(args.action || "find");
       if (action === "reschedule") {
+        const appointmentId =
+          (args.appointment_id ? String(args.appointment_id) : null) ||
+          ctx?.session.runtime.session_runtime?.foundAppointmentId?.trim() ||
+          "";
+        if (!appointmentId) {
+          throw new SemanticToolResolutionError(
+            "I need to find your appointment before I can reschedule it.",
+            "MISSING_APPOINTMENT",
+          );
+        }
         return {
           internalTool: "reschedule_appointment",
           args: {
-            appointment_id: args.appointment_id,
+            appointment_id: appointmentId,
             new_starts_at: args.new_starts_at || args.slot_id,
             confirmed: args.confirmed,
           },
         };
       }
       if (action === "cancel") {
+        const appointmentId =
+          (args.appointment_id ? String(args.appointment_id) : null) ||
+          ctx?.session.runtime.session_runtime?.foundAppointmentId?.trim() ||
+          "";
+        if (!appointmentId) {
+          throw new SemanticToolResolutionError(
+            "I need to find your appointment before I can cancel it.",
+            "MISSING_APPOINTMENT",
+          );
+        }
         return {
           internalTool: "cancel_appointment",
           args: {
-            appointment_id: args.appointment_id,
+            appointment_id: appointmentId,
             confirmed: args.confirmed,
             reason: args.reason,
           },

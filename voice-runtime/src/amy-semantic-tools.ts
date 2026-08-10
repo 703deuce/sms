@@ -27,13 +27,8 @@ function liveCallContext(opts: AmyToolOptions): LiveKitCallContext {
   return ctx;
 }
 
-function slotIdSchema(callContext: LiveKitCallContext) {
-  const slots = buildSlotsPayload(callContext.session);
-  if (!slots.length) {
-    return z.string().describe("Slot id from the offered appointment times");
-  }
-  const ids = slots.map((s) => s.slotId);
-  return z.enum(ids as [string, ...string[]]).describe("One of the offered slot ids");
+function slotIdSchema() {
+  return z.string().describe("Slot id from the offered appointment times");
 }
 
 export function buildAmySemanticToolList(input: {
@@ -111,7 +106,7 @@ export function buildAmySemanticToolList(input: {
         description:
           "Record which offered appointment time the caller chose. Use the slot id from the active capability context.",
         parameters: z.object({
-          slot_id: slotIdSchema(callContext),
+          slot_id: slotIdSchema(),
           selection: z
             .string()
             .optional()
@@ -175,13 +170,15 @@ export function buildAmySemanticToolList(input: {
             return wrap(
               "confirm_action",
               "reschedule_appointment",
-              async (ctx) =>
-                domainRescheduleAppointment({
+              async (ctx) => {
+                const slot = ctx.session.heldSlot || ctx.session.selectedSlot || held;
+                return domainRescheduleAppointment({
                   ctx,
                   appointmentId,
-                  newStartsAt: String(held || ""),
+                  newStartsAt: String(slot || ""),
                   confirmed,
-                }),
+                });
+              },
               { fillerMessage: "One moment." },
             )(opts);
           }
@@ -276,19 +273,49 @@ export function buildAmySemanticToolList(input: {
             )(opts);
           }
           if (args.action === "reschedule") {
+            const liveCtx = liveCallContext(opts);
+            const appointmentId = String(
+              args.appointment_id ||
+                liveCtx.session.runtime.session_runtime?.foundAppointmentId?.trim() ||
+                "",
+            );
+            if (!appointmentId) {
+              throw new llm.ToolError(
+                JSON.stringify({
+                  success: false,
+                  errorCode: "MISSING_APPOINTMENT",
+                  message: "I need to find your appointment before I can reschedule it.",
+                }),
+              );
+            }
             return wrap("modify_appointment", "reschedule_appointment", async (ctx) =>
               domainRescheduleAppointment({
                 ctx,
-                appointmentId: String(args.appointment_id || ""),
+                appointmentId,
                 newStartsAt: String(args.slot_id || ""),
                 confirmed: args.confirmed,
               }),
             )(opts);
           }
+          const liveCtx = liveCallContext(opts);
+          const appointmentId = String(
+            args.appointment_id ||
+              liveCtx.session.runtime.session_runtime?.foundAppointmentId?.trim() ||
+              "",
+          );
+          if (!appointmentId) {
+            throw new llm.ToolError(
+              JSON.stringify({
+                success: false,
+                errorCode: "MISSING_APPOINTMENT",
+                message: "I need to find your appointment before I can cancel it.",
+              }),
+            );
+          }
           return wrap("modify_appointment", "cancel_appointment", async (ctx) =>
             domainCancelAppointment({
               ctx,
-              appointmentId: String(args.appointment_id || ""),
+              appointmentId,
               confirmed: args.confirmed,
               reason: args.reason,
             }),
