@@ -5,6 +5,7 @@
 import assert from "node:assert/strict";
 import { getVoicePipelineConfig } from "../src/lib/voice/runtime-provider/config";
 import {
+  usesDeepSeekPluginLlm,
   usesLiveKitInferenceLlm,
   VOICE_LLM_PRESETS,
 } from "../src/lib/voice/runtime-provider/llm-presets";
@@ -32,6 +33,11 @@ function withEnv(
 
 assert.equal(VOICE_LLM_PRESETS["gemma-4-31b"].model, "google/gemma-4-31b-it");
 assert.equal(VOICE_LLM_PRESETS["gpt-4.1-mini"].model, "gpt-4.1-mini");
+assert.equal(VOICE_LLM_PRESETS["deepseek-v4-flash"].model, "deepseek-v4-flash");
+
+assert.equal(usesDeepSeekPluginLlm("deepseek"), true);
+assert.equal(usesDeepSeekPluginLlm("deepseek-plugin"), true);
+assert.equal(usesDeepSeekPluginLlm("openai"), false);
 
 assert.equal(
   usesLiveKitInferenceLlm("inference", "google/gemma-4-31b-it"),
@@ -67,6 +73,35 @@ withEnv(
     assert.equal(cfg.llmProvider, "openai");
     assert.equal(cfg.llmModel, "gpt-4.1-mini");
     assert.equal(usesLiveKitInferenceLlm(cfg.llmProvider, cfg.llmModel), false);
+  },
+);
+
+withEnv(
+  {
+    VOICE_LLM_PRESET: "deepseek-v4-flash",
+    VOICE_LLM_PROVIDER: undefined,
+    VOICE_LLM_MODEL: undefined,
+  },
+  () => {
+    const cfg = getVoicePipelineConfig();
+    assert.equal(cfg.llmPreset, "deepseek-v4-flash");
+    assert.equal(cfg.llmProvider, "deepseek");
+    assert.equal(cfg.llmModel, "deepseek-v4-flash");
+    assert.equal(usesLiveKitInferenceLlm(cfg.llmProvider, cfg.llmModel), false);
+    assert.equal(usesDeepSeekPluginLlm(cfg.llmProvider), true);
+  },
+);
+
+withEnv(
+  {
+    VOICE_LLM_PRESET: undefined,
+    VOICE_LLM_PROVIDER: undefined,
+    VOICE_LLM_MODEL: "deepseek-v4-flash",
+  },
+  () => {
+    const cfg = getVoicePipelineConfig();
+    assert.equal(cfg.llmProvider, "deepseek");
+    assert.equal(cfg.llmModel, "deepseek-v4-flash");
   },
 );
 

@@ -1,6 +1,6 @@
 import type { VoiceRuntimeProviderId } from "./types";
 import {
-  isVoiceLlmPresetId,
+  inferVoiceLlmProvider,
   resolveVoiceLlmPreset,
   type VoiceLlmPresetId,
 } from "./llm-presets";
@@ -120,9 +120,13 @@ function resolveLlmFromEnv(): Pick<
   const explicitProvider = process.env.VOICE_LLM_PROVIDER?.trim();
 
   if (explicitModel || explicitProvider) {
+    const llmModel = explicitModel || preset?.model || "gpt-5-nano";
     return {
-      llmProvider: explicitProvider || preset?.provider || "openai",
-      llmModel: explicitModel || preset?.model || "gpt-5-nano",
+      llmProvider: inferVoiceLlmProvider(
+        explicitProvider || preset?.provider,
+        llmModel,
+      ),
+      llmModel,
       llmPreset: preset?.id,
     };
   }

@@ -31,6 +31,12 @@ function resolveLlmConfig(): { apiKey: string; baseUrl: string; model: string } 
     const openai = providers().find((p) => p.id === "openai");
     if (openai) return openai;
   }
+  if (preset?.provider === "deepseek") {
+    const deepseek = providers().find((p) => p.id === "deepseek");
+    if (deepseek) {
+      return { ...deepseek, model: preset.model };
+    }
+  }
 
   const chain = providers();
   if (chain.length) return chain[0]!;

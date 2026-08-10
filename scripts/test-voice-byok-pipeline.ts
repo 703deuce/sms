@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import { getVoicePipelineConfig } from "../src/lib/voice/runtime-provider/config";
 import { buildAmySttConfig } from "../voice-runtime/src/stt-config";
 import {
+  buildAmyLlm,
   usesDeepgramPluginStt,
   usesElevenLabsPluginTts,
   resolveDeepgramSttApi,
@@ -66,6 +67,23 @@ withEnv(
     assert.equal(cfg.llmModel, "gpt-4.1-mini");
     assert.equal(cfg.sttProvider, "deepgram-plugin");
     assert.equal(cfg.ttsProvider, "elevenlabs-plugin");
+  },
+);
+
+withEnv(
+  {
+    VOICE_LLM_PRESET: "deepseek-v4-flash",
+    VOICE_STT_PROVIDER: "deepgram-plugin",
+    VOICE_TTS_PROVIDER: "elevenlabs-plugin",
+    DEEPSEEK_API_KEY: "sk-test-deepseek",
+  },
+  () => {
+    const cfg = getVoicePipelineConfig();
+    assert.equal(cfg.llmProvider, "deepseek");
+    assert.equal(cfg.llmModel, "deepseek-v4-flash");
+    const llm = buildAmyLlm(cfg);
+    assert.equal(llm.model, "deepseek-v4-flash");
+    assert.match(llm.provider, /deepseek\.com/);
   },
 );
 

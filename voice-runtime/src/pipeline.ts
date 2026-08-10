@@ -2,11 +2,15 @@ import { inference, stt, tts } from "@livekit/agents";
 import * as deepgram from "@livekit/agents-plugin-deepgram";
 import * as openai from "@livekit/agents-plugin-openai";
 import * as elevenlabs from "@livekit/agents-plugin-elevenlabs";
+import OpenAI from "openai";
 import {
   getVoicePipelineConfig,
   type VoicePipelineConfig,
 } from "@/lib/voice/runtime-provider/config";
-import { usesLiveKitInferenceLlm } from "@/lib/voice/runtime-provider/llm-presets";
+import {
+  usesDeepSeekPluginLlm,
+  usesLiveKitInferenceLlm,
+} from "@/lib/voice/runtime-provider/llm-presets";
 import { buildAmySttConfig, describeAmySttConfig, type AmySttConfig } from "./stt-config";
 import { resolveElevenLabsApiKey } from "./env-aliases";
 
@@ -72,6 +76,69 @@ export function usesDeepgramPluginStt(provider: string): boolean {
 
 export function usesElevenLabsPluginTts(provider: string): boolean {
   return provider.trim().toLowerCase() === "elevenlabs-plugin";
+}
+
+function isDeepSeekThinkingEnabled(): boolean {
+  return process.env.VOICE_LLM_THINKING?.trim().toLowerCase() === "enabled";
+}
+
+/** DeepSeek V4 defaults to thinking on; disable unless explicitly enabled for voice. */
+function createDeepSeekClient(): OpenAI {
+  const apiKey = process.env.DEEPSEEK_API_KEY?.trim();
+  if (!apiKey) {
+    throw new Error("DEEPSEEK_API_KEY is required for DeepSeek voice LLM");
+  }
+
+  const baseOptions = {
+    apiKey,
+    baseURL: process.env.DEEPSEEK_BASE_URL?.trim() || "https://api.deepseek.com/v1",
+    maxRetries: 0,
+  };
+
+  if (isDeepSeekThinkingEnabled()) {
+    return new OpenAI(baseOptions);
+  }
+
+  return new OpenAI({
+    ...baseOptions,
+    fetch: async (url, init) => {
+      if (init?.body && typeof init.body === "string") {
+        try {
+          const body = JSON.parse(init.body) as Record<string, unknown>;
+          body.thinking = { type: "disabled" };
+          init = { ...init, body: JSON.stringify(body) };
+        } catch {
+          // leave request unchanged
+        }
+      }
+      return fetch(url, init);
+    },
+  });
+}
+
+export function buildAmyLlm(cfg: VoicePipelineConfig): openai.LLM | inference.LLM {
+  if (usesLiveKitInferenceLlm(cfg.llmProvider, cfg.llmModel)) {
+    return new inference.LLM({ model: cfg.llmModel });
+  }
+
+  if (usesDeepSeekPluginLlm(cfg.llmProvider)) {
+    return openai.LLM.withDeepSeek({
+      model: cfg.llmModel,
+      client: createDeepSeekClient(),
+    });
+  }
+
+  return new openai.LLM({ model: cfg.llmModel });
+}
+
+function describeLlmVia(cfg: VoicePipelineConfig): string {
+  if (usesLiveKitInferenceLlm(cfg.llmProvider, cfg.llmModel)) {
+    return "livekit_inference";
+  }
+  if (usesDeepSeekPluginLlm(cfg.llmProvider)) {
+    return "deepseek_plugin";
+  }
+  return "openai_plugin";
 }
 
 export function buildAmyStt(
@@ -146,9 +213,7 @@ export function buildAmyVoicePipeline() {
   const sttCfg = buildAmySttConfig();
   const sttInstance = buildAmyStt(cfg, sttCfg);
 
-  const llm = usesLiveKitInferenceLlm(cfg.llmProvider, cfg.llmModel)
-    ? new inference.LLM({ model: cfg.llmModel })
-    : new openai.LLM({ model: cfg.llmModel });
+  const llm = buildAmyLlm(cfg);
 
   const ttsInstance = buildAmyTts(cfg);
 
@@ -173,9 +238,7 @@ export function describePipelineConfig(
       provider: cfg.llmProvider,
       model: cfg.llmModel,
       preset: cfg.llmPreset || null,
-      via: usesLiveKitInferenceLlm(cfg.llmProvider, cfg.llmModel)
-        ? "livekit_inference"
-        : "openai_plugin",
+      via: describeLlmVia(cfg),
     },
     tts: {
       preset: cfg.ttsPreset || null,

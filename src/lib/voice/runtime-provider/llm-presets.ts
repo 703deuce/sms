@@ -7,6 +7,7 @@ export const VOICE_LLM_PRESET_IDS = [
   "gpt-5-nano",
   "gemma-4-31b",
   "gpt-4.1-mini",
+  "deepseek-v4-flash",
 ] as const;
 
 export type VoiceLlmPresetId = (typeof VOICE_LLM_PRESET_IDS)[number];
@@ -41,6 +42,13 @@ export const VOICE_LLM_PRESETS: Record<VoiceLlmPresetId, VoiceLlmPreset> = {
     model: "gpt-4.1-mini",
     notes: "Production default — OpenAI plugin, not LiveKit Inference.",
   },
+  "deepseek-v4-flash": {
+    id: "deepseek-v4-flash",
+    label: "DeepSeek V4 Flash (direct API)",
+    provider: "deepseek",
+    model: "deepseek-v4-flash",
+    notes: "BYO DeepSeek — non-thinking mode by default for voice latency.",
+  },
 };
 
 export function isVoiceLlmPresetId(value: unknown): value is VoiceLlmPresetId {
@@ -59,5 +67,26 @@ export function resolveVoiceLlmPreset(id?: string | null): VoiceLlmPreset | null
 export function usesLiveKitInferenceLlm(provider: string, model: string): boolean {
   if (provider === "inference") return true;
   if (provider === "openai" && !model.includes("/")) return false;
+  if (usesDeepSeekPluginLlm(provider)) return false;
   return model.includes("/");
+}
+
+export function usesDeepSeekPluginLlm(provider: string): boolean {
+  const normalized = provider.trim().toLowerCase();
+  return normalized === "deepseek" || normalized === "deepseek-plugin";
+}
+
+/** Infer BYO provider when only VOICE_LLM_MODEL is set (e.g. deepseek-v4-flash). */
+export function inferVoiceLlmProvider(
+  provider: string | undefined,
+  model: string,
+): string {
+  const explicit = provider?.trim().toLowerCase();
+  if (explicit) {
+    if (explicit === "deepseek-plugin") return "deepseek";
+    return explicit;
+  }
+  const normalizedModel = model.trim().toLowerCase();
+  if (normalizedModel.startsWith("deepseek-")) return "deepseek";
+  return "openai";
 }

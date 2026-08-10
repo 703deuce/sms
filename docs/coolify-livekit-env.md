@@ -36,7 +36,7 @@ Telnyx must send PSTN to your LiveKit **SIP URI** (may differ from project URL, 
 | `VOICE_TTS_VOICE` | `cgSgspJ2msm6clMCkdW9` |
 | `VOICE_LLM_PROVIDER` | `openai` |
 | `VOICE_LLM_MODEL` | `gpt-5-nano` |
-| `VOICE_LLM_PRESET` | Optional shortcut — `gpt-4.1-mini` and `gpt-5-nano` use OpenAI direct |
+| `VOICE_LLM_PRESET` | Optional shortcut — `gpt-4.1-mini`, `gpt-5-nano`, `deepseek-v4-flash` use direct BYO APIs |
 
 ## Latency and audio (LiveKit)
 
@@ -67,10 +67,30 @@ VOICE_PREEMPTIVE_TTS=true
 
 Unset inference-only LLM presets (`VOICE_LLM_PRESET=gemma-4-31b`, etc.).
 
+### DeepSeek V4 Flash (BYO)
+
+```bash
+VOICE_LLM_PRESET=deepseek-v4-flash
+# or explicit:
+# VOICE_LLM_PROVIDER=deepseek
+# VOICE_LLM_MODEL=deepseek-v4-flash
+DEEPSEEK_API_KEY=sk-...
+
+# Non-thinking mode is default for voice latency. Set only when testing reasoning:
+# VOICE_LLM_THINKING=enabled
+```
+
+Switch back to OpenAI anytime:
+
+```bash
+VOICE_LLM_PRESET=gpt-4.1-mini
+OPENAI_API_KEY=sk-...
+```
+
 After deploy, `pipeline_config` in call logs should show:
 ```json
 "stt": { "via": "deepgram_plugin_flux" }
-"llm": { "via": "openai_plugin" }
+"llm": { "via": "openai_plugin" }   # or "deepseek_plugin"
 "tts": { "via": "elevenlabs_plugin" }
 ```
 
