@@ -29,10 +29,10 @@ const PHASE_ALIGNMENT: Record<SchedulingPhase, { state: WorkflowState; nodeId: s
   collect: { state: "COLLECTING_FIELDS", nodeId: "collect_fields" },
   availability: { state: "CHECKING_AVAILABILITY", nodeId: "check_availability" },
   select: { state: "SELECTING_SLOT", nodeId: "select_slot" },
-  confirm: { state: "CONFIRMING", nodeId: "confirm_booking" },
+  confirm: { state: "READY_TO_BOOK", nodeId: "confirm_booking" },
   find: { state: "COLLECTING_FIELDS", nodeId: "reschedule_lookup" },
   reschedule: { state: "SELECTING_SLOT", nodeId: "select_slot" },
-  cancel: { state: "CONFIRMING", nodeId: "cancel_confirm" },
+  cancel: { state: "READY_TO_BOOK", nodeId: "cancel_confirm" },
 };
 
 export function alignCallContext(ctx: LiveKitCallContext, phase: SchedulingPhase): LiveKitCallContext {
