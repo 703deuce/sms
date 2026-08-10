@@ -32,7 +32,7 @@ PSTN → Telnyx DID
 | Telnyx → LiveKit | ✅ FQDN connection | N/A (reverse direction) |
 | LiveKit → Telnyx PSTN | N/A | ❌ **Outbound trunk + Telnyx SIP auth** |
 | Telnyx Outbound Voice Profile | Partial (Call Control path) | ✅ Exists for human/assistant dial; **not wired to LiveKit SIP** |
-| Worker entry | ✅ `main.ts` inbound only | ❌ **Separate outbound worker** |
+| Worker entry | ✅ `main.ts` inbound | ✅ **`main.ts` routes outbound via `outbound/entry.ts` (same worker)** |
 | Agent dispatch | ✅ Via SIP dispatch rule | ❌ **Explicit `AgentDispatchClient.createDispatch`** |
 | SIP participant create | N/A | ❌ **`SipClient.createSipParticipant`** |
 | AI outbound runtime | Telnyx Assistant only | ❌ **LiveKit worker path** |
@@ -50,7 +50,7 @@ From `livekit-server-sdk` + `@livekit/agents`:
 | `SipClient.createSipOutboundTrunk(name, address, numbers, opts)` | Provision outbound trunk to carrier |
 | `SipClient.listSipOutboundTrunk()` | Inspect trunks |
 | `SipClient.createSipParticipant(trunkId, number, roomName, opts)` | **Originate PSTN call into room** |
-| `AgentDispatchClient.createDispatch({ agentName, room, metadata })` | Dispatch outbound worker to room |
+| `AgentDispatchClient.createDispatch` | Dispatches **same** `LIVEKIT_AGENT_NAME` with outbound metadata |
 | `session.start({ agent, room })` **before** `createSipParticipant` | Agent-first pattern (no dead air) |
 | `opts.waitUntilAnswered: true`, `opts.fromNumber` | Block until answer; set caller ID |
 
@@ -70,7 +70,7 @@ Reference: `/agent/repos/agents/examples/telephony/amd.py`, `@livekit/agents` `w
 - `LIVEKIT_OUTBOUND_TRUNK_ID` — optional; auto-provisioned if missing
 - `TELNYX_SIP_OUTBOUND_ADDRESS` — default `sip.telnyx.com`
 - `TELNYX_SIP_OUTBOUND_USERNAME` / `TELNYX_SIP_OUTBOUND_PASSWORD` — Telnyx credential connection
-- `LIVEKIT_OUTBOUND_AGENT_NAME` — default `transovo-outbound-voice-runtime`
+- `LIVEKIT_OUTBOUND_ROOM_PREFIX` — default `transovo-outbound-`
 - `OUTBOUND_VOICE_TEST_MODE=1` — required for CLI test dial
 - `OUTBOUND_TEST_PHONE` — dev-only destination (e.g. `+15714776175`)
 
@@ -96,7 +96,8 @@ Reference: `/agent/repos/agents/examples/telephony/amd.py`, `@livekit/agents` `w
 | `src/lib/telephony/provisioning/livekit/outbound-trunk.ts` | Outbound trunk ensure/list |
 | `src/lib/voice/outbound/*` | Types, evaluator, `OutboundCallService`, persistence |
 | `voice-runtime/src/outbound/*` | Agent, task, userdata |
-| `voice-runtime/src/outbound-main.ts` | Outbound worker entry (separate agent name) |
+| `voice-runtime/src/main.ts` | Shared worker entry — routes inbound vs outbound |
+| `voice-runtime/src/outbound/entry.ts` | Outbound lead qualification session |
 | `scripts/audit-outbound-telephony.ts` | Pre-flight audit |
 | `scripts/test-outbound-qualification.ts` | Unit tests |
 | `scripts/outbound-lead-smoke-call.ts` | Manual test trigger |
@@ -179,7 +180,7 @@ QualifyLeadTask (AgentTask)
 1. Run `npx tsx scripts/audit-outbound-telephony.ts`
 2. Set Telnyx SIP outbound credentials in env
 3. Run `ensureLiveKitOutboundTrunk` (via audit or smoke script)
-4. Deploy **outbound worker** (`voice-runtime:outbound`) alongside inbound worker
+4. Deploy / restart the **existing** Coolify voice-runtime container (no second worker)
 5. Create/configure outbound qualification agent (`livekitProfile: outbound_lead_qualification`)
 6. Assign caller ID number to agent
 7. `OUTBOUND_VOICE_TEST_MODE=1 npx tsx scripts/outbound-lead-smoke-call.ts --phone=+15714776175`

@@ -78,12 +78,18 @@ process.env.OUTBOUND_VOICE_TEST_MODE = "0";
 assert.throws(() => assertOutboundTestModeEnabled());
 process.env.OUTBOUND_VOICE_TEST_MODE = prev;
 
-const outboundMain = fs.readFileSync(
-  path.join(process.cwd(), "voice-runtime/src/outbound-main.ts"),
+const mainSource = fs.readFileSync(
+  path.join(process.cwd(), "voice-runtime/src/main.ts"),
   "utf8",
 );
-assert.ok(outboundMain.includes("session.start"), "agent starts before dial");
-assert.ok(outboundMain.includes("createSipParticipant"), "dials after agent ready");
-assert.ok(outboundMain.includes("QualifyLeadTask"), "runs qualification after answer");
+const outboundEntry = fs.readFileSync(
+  path.join(process.cwd(), "voice-runtime/src/outbound/entry.ts"),
+  "utf8",
+);
+assert.ok(mainSource.includes("runOutboundLeadQualificationEntry"), "main routes outbound jobs");
+assert.ok(mainSource.includes("runInboundEntry"), "main routes inbound jobs");
+assert.ok(outboundEntry.includes("session.start"), "agent starts before dial");
+assert.ok(outboundEntry.includes("createSipParticipant"), "dials after agent ready");
+assert.ok(outboundEntry.includes("QualifyLeadTask"), "runs qualification after answer");
 
 console.log("outbound qualification tests: PASS");

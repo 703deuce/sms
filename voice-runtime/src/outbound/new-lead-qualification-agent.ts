@@ -14,7 +14,7 @@ function buildInstructions(businessName: string): string {
   ].join("");
 }
 
-/** Root agent shell — QualifyLeadTask runs after the callee answers (see outbound-main). */
+/** Root agent shell — QualifyLeadTask runs after the callee answers (see outbound/entry.ts). */
 export function createNewLeadQualificationAgent(businessName: string) {
   const endCall = llm.tool({
     name: "end_call",
