@@ -1,6 +1,8 @@
 import { llm, voice } from "@livekit/agents";
 import type { AgentSession } from "@livekit/agents";
+import type { ChatMessage } from "@livekit/agents/dist/llm/chat_context.js";
 import { buildAmyAgentInstructions } from "@/lib/voice/agent-runtime/build-amy-instructions";
+import { semanticToolName } from "@/lib/voice/agent-runtime/semantic-tool-surface";
 import { executeDeterministicPipeline } from "@/lib/voice/agent-runtime/deterministic-executor";
 import {
   formatModelToolResult,
@@ -23,8 +25,20 @@ import { reconcileCanonicalWorkflowState } from "@/lib/voice/workflow-runtime/ca
 import type { WorkflowState } from "@/lib/voice/workflow-engine/types";
 import type { AmyProcessUserData } from "./metadata";
 import { buildAmySemanticToolList } from "./amy-semantic-tools";
+import { applyAutoTurnActionsFromTranscript } from "./auto-turn-actions";
 
 type AmyToolOptions = llm.ToolOptions<AmyProcessUserData>;
+
+function userMessageText(message: ChatMessage): string {
+  const content = message.content;
+  if (typeof content === "string") return content.trim();
+  if (!Array.isArray(content)) return "";
+  return content
+    .filter((part): part is { type: "text"; text: string } => part.type === "text")
+    .map((part) => part.text)
+    .join(" ")
+    .trim();
+}
 
 function requireCallContext(opts: AmyToolOptions): LiveKitCallContext {
   const callContext = opts.ctx.userData.callContext;
@@ -130,6 +144,7 @@ function wrapToolExecute(
   const { allowedToolNames: toolSetBefore } = compileToolsForCallContext(ctx);
   const toolSetBeforeList = [...toolSetBefore];
 
+  const loopToolName = semanticToolName(toolName);
   const run = async () => {
     if (isIrreversibleWriteTool(toolName)) {
       if (opts.ctx.speechHandle.interrupted) {
@@ -145,13 +160,13 @@ function wrapToolExecute(
     }
 
     const loopFingerprint = fingerprintToolCall({
-      toolName,
+      toolName: loopToolName,
       nodeId: nodeIdBefore,
       missingFieldCount: missingBefore,
     });
     const loopCheck = shouldBlockRepeatedToolCall({
       history: ctx.toolCallHistory || [],
-      toolName,
+      toolName: loopToolName,
       fingerprint: loopFingerprint,
     });
     if (loopCheck.blocked) {
@@ -191,8 +206,9 @@ function wrapToolExecute(
     const canonical = reconcileCanonicalWorkflowState({
       session: ctx.session,
       workflow,
-      toolName,
-      toolResult: result,
+      ...(toolName === "submit_caller_information"
+        ? {}
+        : { toolName, toolResult: result }),
     });
     ctx.canonicalWorkflow = canonical;
     ctx.workflowState = canonical.legacyState;
@@ -211,7 +227,7 @@ function wrapToolExecute(
     });
 
     const noProgress = isNoProgressToolResult({
-      toolName,
+      toolName: loopToolName,
       ok: result.ok,
       beforeMissingCount: missingBefore,
       afterMissingCount: missingAfter,
@@ -220,7 +236,7 @@ function wrapToolExecute(
     });
     const resultHash = hashToolResult(payload);
     ctx.toolCallHistory = recordToolCallHistory(ctx.toolCallHistory || [], {
-      toolName,
+      toolName: loopToolName,
       fingerprint: loopFingerprint,
       resultHash,
       atMs: Date.now(),
@@ -376,5 +392,10 @@ export function createAmyAgent(callContext: LiveKitCallContext) {
   return voice.Agent.create<AmyProcessUserData>({
     instructions,
     tools: llm.toToolContext(tools),
+    onUserTurnCompleted: async (agentCtx, _chatCtx, newMessage) => {
+      const transcript = userMessageText(newMessage);
+      if (!transcript) return;
+      await applyAutoTurnActionsFromTranscript(agentCtx.session, transcript);
+    },
   });
 }

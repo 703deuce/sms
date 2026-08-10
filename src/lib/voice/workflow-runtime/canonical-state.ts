@@ -137,6 +137,23 @@ export function deriveAuthoritativeNodeId(input: {
     return input.workflow.entryNodeId;
   }
 
+  const classifications = input.session.runtime?.session_runtime?.classifications;
+  const hasClassifications = Boolean(classifications && Object.keys(classifications).length > 0);
+  const eligibilityStatus = input.session.runtime?.session_runtime?.eligibility?.status;
+
+  if (nodeIds.has("classify") && !hasClassifications) {
+    return "classify";
+  }
+  if (nodeIds.has("validate_eligibility") && hasClassifications && !eligibilityStatus) {
+    return "validate_eligibility";
+  }
+  if (
+    (stored === "classify" || stored === "validate_eligibility") &&
+    nodeIds.has(stored)
+  ) {
+    return stored;
+  }
+
   if (
     !hasAvailableSlots(input.session) &&
     !hasHeldSlot(input.session) &&
@@ -145,7 +162,7 @@ export function deriveAuthoritativeNodeId(input: {
     return "check_availability";
   }
 
-  if (nodeIds.has("classify")) return "classify";
+  if (nodeIds.has("classify") && !hasClassifications) return "classify";
 
   return stored;
 }
@@ -157,6 +174,8 @@ function deriveExpectedNextAction(input: {
   hasHeldSlot: boolean;
   bookingReceiptPresent: boolean;
   callerIntent?: string | null;
+  hasClassifications?: boolean;
+  hasEligibility?: boolean;
 }): CanonicalNextAction {
   if (input.bookingReceiptPresent || input.nodeId === "complete") return "complete";
 
@@ -185,12 +204,16 @@ function deriveExpectedNextAction(input: {
   if (input.nodeId === "collect_fields") return "classify";
 
   if (input.nodeId === "classify") {
+    if (!input.hasClassifications) return "classify";
     if (input.hasHeldSlot) return "confirm_booking";
     if (input.hasSlots) return "select_slot";
     return "check_availability";
   }
 
-  if (input.nodeId === "validate_eligibility") return "validate_eligibility";
+  if (input.nodeId === "validate_eligibility") {
+    if (!input.hasEligibility) return "validate_eligibility";
+    return "check_availability";
+  }
 
   if (!input.hasSlots && !input.hasHeldSlot) return "check_availability";
   return "converse";
@@ -222,6 +245,9 @@ export function buildCanonicalWorkflowState(input: {
   const held = hasHeldSlot(input.session);
   const bookingReceiptPresent = hasBookingReceipt(input.session);
   const callerIntent = callerIntentFromSession(input.session);
+  const classifications = input.session.runtime?.session_runtime?.classifications;
+  const hasClassifications = Boolean(classifications && Object.keys(classifications).length > 0);
+  const hasEligibility = Boolean(input.session.runtime?.session_runtime?.eligibility?.status);
   const modifyFlow =
     callerIntent === "reschedule" ||
     callerIntent === "cancel" ||
@@ -250,7 +276,9 @@ export function buildCanonicalWorkflowState(input: {
       hasSlots: slots,
       hasHeldSlot: held,
       bookingReceiptPresent,
-      callerIntent: callerIntentFromSession(input.session),
+      callerIntent,
+      hasClassifications,
+      hasEligibility,
     }),
   };
 }

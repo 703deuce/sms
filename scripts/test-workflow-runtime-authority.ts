@@ -121,11 +121,15 @@ const completeCanonical = buildCanonicalWorkflowState({
   workflow: HOME_SERVICE_DISPATCHER_WORKFLOW_V1,
 });
 check(
-  "fields complete advances canonical node to check_availability",
-  completeCanonical.currentNodeId === "check_availability",
+  "fields complete advances canonical node to classify before availability",
+  completeCanonical.currentNodeId === "classify",
   completeCanonical.currentNodeId,
 );
-check("fields complete ready for availability", completeCanonical.readyForAvailability);
+check(
+  "fields complete expects classify next action",
+  completeCanonical.expectedNextAction === "classify",
+  completeCanonical.expectedNextAction,
+);
 
 const incompleteSnapshot = buildRuntimeSnapshotFromSession({
   workflow: HOME_SERVICE_DISPATCHER_WORKFLOW_V1,
@@ -232,7 +236,7 @@ reconcileCanonicalWorkflowState({
 });
 check(
   "reconcile advances session node after field completion",
-  sessionForReconcile.currentNodeId === "check_availability",
+  sessionForReconcile.currentNodeId === "classify",
   sessionForReconcile.currentNodeId,
 );
 check(

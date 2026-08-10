@@ -5,7 +5,6 @@ import {
 import { compileToolsForCallContext } from "@/lib/voice/workflow-runtime/compile-for-call";
 import { inferFieldsFromUtterance } from "@/lib/voice/workflow-runtime/field-extraction";
 import { prepareFieldsForPersistence } from "@/lib/voice/workflow-runtime/field-persist";
-import { executeDeterministicPipeline } from "./deterministic-executor";
 
 export type AutoCaptureResult = {
   ctx: LiveKitCallContext;
@@ -16,6 +15,7 @@ export type AutoCaptureResult = {
 /**
  * When the caller provides field values in speech but the model has not invoked
  * capture_caller_information yet, persist inferred values before the LLM turn.
+ * Deterministic pipeline runs once in auto-turn-actions after capture.
  */
 export async function autoCaptureCallerInformationFromUtterance(input: {
   ctx: LiveKitCallContext;
@@ -47,7 +47,7 @@ export async function autoCaptureCallerInformationFromUtterance(input: {
     return { ctx: input.ctx, applied: false };
   }
 
-  let ctx = input.ctx;
+  const ctx = input.ctx;
   const result = await domainSubmitCallerInformation({
     ctx,
     extractedFields: prepared.fields,
@@ -58,14 +58,7 @@ export async function autoCaptureCallerInformationFromUtterance(input: {
     return { ctx, applied: false, speak: result.speak };
   }
 
-  // domainSubmitCallerInformation already reconciled canonical state — do not re-transition.
   compileToolsForCallContext(ctx);
-
-  const pipeline = await executeDeterministicPipeline({
-    ctx,
-    preferenceSpoken: utterance,
-  });
-  ctx = pipeline.ctx;
 
   console.log(
     JSON.stringify({
@@ -74,7 +67,6 @@ export async function autoCaptureCallerInformationFromUtterance(input: {
       callId: ctx.callId,
       fields: Object.keys(prepared.fields),
       ok: result.ok,
-      deterministicSteps: pipeline.steps.map((s) => s.toolName),
     }),
   );
 

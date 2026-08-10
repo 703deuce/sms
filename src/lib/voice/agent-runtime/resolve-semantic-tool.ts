@@ -42,7 +42,7 @@ export function resolveSemanticToolInvocation(
           args: {
             appointment_id: appointmentId,
             new_starts_at: args.slot_id || args.new_starts_at || held,
-            confirmed: args.confirmed ?? true,
+            confirmed: args.confirmed === true,
           },
         };
       }
@@ -52,7 +52,7 @@ export function resolveSemanticToolInvocation(
           internalTool: "cancel_appointment",
           args: {
             appointment_id: appointmentId,
-            confirmed: args.confirmed ?? true,
+            confirmed: args.confirmed === true,
             reason: args.reason,
           },
         };
@@ -60,7 +60,7 @@ export function resolveSemanticToolInvocation(
 
       return {
         internalTool: SEMANTIC_TOOL_NAMES.confirm_action,
-        args: { confirmed: args.confirmed ?? true },
+        args: { confirmed: args.confirmed === true },
       };
     }
     case "answer_business_question":

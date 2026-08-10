@@ -1,6 +1,5 @@
 import { llm } from "@livekit/agents";
 import { z } from "zod";
-import type { LiveKitCallContext } from "@/lib/voice/domain-actions";
 import {
   domainCancelAppointment,
   domainConfirmBooking,
@@ -14,6 +13,7 @@ import {
   domainSubmitCallerInformation,
   domainTakeMessage,
   type DomainActionResult,
+  type LiveKitCallContext,
 } from "@/lib/voice/domain-actions";
 import { buildSlotsPayload } from "@/lib/voice/domain-actions/tool-results";
 import { compileToolsForCallContext } from "@/lib/voice/workflow-runtime/compile-for-call";
@@ -117,8 +117,20 @@ export function buildAmySemanticToolList(input: {
             .optional()
             .describe("How the caller described their choice, e.g. the first one"),
         }),
-        execute: async ({ slot_id, selection }, opts: AmyToolOptions) =>
-          wrap(
+        execute: async ({ slot_id, selection }, opts: AmyToolOptions) => {
+          const liveCtx = liveCallContext(opts);
+          const offered = buildSlotsPayload(liveCtx.session);
+          if (offered.length > 0 && !offered.some((slot) => slot.slotId === slot_id)) {
+            throw new llm.ToolError(
+              JSON.stringify({
+                success: false,
+                errorCode: "INVALID_SLOT",
+                message: "That time is not in the currently offered appointment slots.",
+                offeredSlotIds: offered.map((slot) => slot.slotId),
+              }),
+            );
+          }
+          return wrap(
             "choose_appointment_time",
             "select_slot",
             async (ctx) =>
@@ -128,7 +140,8 @@ export function buildAmySemanticToolList(input: {
                 slotIso: slot_id,
               }),
             { fillerMessage: "One moment." },
-          )(opts),
+          )(opts);
+        },
       }),
     );
   }
@@ -148,7 +161,16 @@ export function buildAmySemanticToolList(input: {
           const appointmentId =
             liveCtx.session.runtime.session_runtime?.foundAppointmentId?.trim() || "";
 
-          if (intent === "reschedule" && appointmentId) {
+          if (intent === "reschedule") {
+            if (!appointmentId) {
+              throw new llm.ToolError(
+                JSON.stringify({
+                  success: false,
+                  errorCode: "MISSING_APPOINTMENT",
+                  message: "I need to find your appointment before I can reschedule it.",
+                }),
+              );
+            }
             const held = liveCtx.session.heldSlot || liveCtx.session.selectedSlot;
             return wrap(
               "confirm_action",
@@ -164,7 +186,16 @@ export function buildAmySemanticToolList(input: {
             )(opts);
           }
 
-          if (intent === "cancel" && appointmentId) {
+          if (intent === "cancel") {
+            if (!appointmentId) {
+              throw new llm.ToolError(
+                JSON.stringify({
+                  success: false,
+                  errorCode: "MISSING_APPOINTMENT",
+                  message: "I need to find your appointment before I can cancel it.",
+                }),
+              );
+            }
             return wrap(
               "confirm_action",
               "cancel_appointment",
