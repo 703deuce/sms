@@ -16,6 +16,7 @@ import { liveKitRuntimeProvider } from "@/lib/voice/runtime-provider/livekit";
 import { createNewLeadQualificationAgent } from "./new-lead-qualification-agent";
 import { QualifyLeadTask } from "./qualify-lead-task";
 import { waitForQualificationComplete } from "./wait-for-qualification";
+import { endOutboundCall } from "./end-outbound-call";
 import type { OutboundLeadUserData } from "./userdata";
 import { buildAmyVoicePipeline, describePipelineConfig } from "../pipeline";
 import { attachLatencyInstrumentation } from "../latency-instrumentation";
@@ -274,7 +275,7 @@ export async function runOutboundLeadQualificationEntry(
       telephonyOutcome,
     });
 
-    session.shutdown({ reason: "dial_failed" });
+    await endOutboundCall(session, { source: "dial_failed", reason: "dial_failed" });
     return;
   }
 
@@ -291,8 +292,10 @@ export async function runOutboundLeadQualificationEntry(
     await waitForQualificationComplete(session);
 
     if (!userData.callEnded) {
-      userData.callEnded = true;
-      session.shutdown({ reason: "qualification_complete" });
+      await endOutboundCall(session, {
+        source: "entry_fallback",
+        reason: "qualification_complete_fallback",
+      });
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -330,7 +333,7 @@ export async function runOutboundLeadQualificationEntry(
       telephonyOutcome: "ANSWERED",
     });
 
-    session.shutdown({ reason: "qualification_failed" });
+    await endOutboundCall(session, { source: "qualification_failed", reason: "qualification_failed" });
     return;
   }
 

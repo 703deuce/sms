@@ -20,7 +20,11 @@ export type OutboundLeadUserData = {
   explicitOutcome?: QualificationBusinessOutcome | null;
   interested: boolean;
   qualificationComplete: boolean;
+  /** True once outcome saved and we are in the single-goodbye closing window. */
+  callEnding?: boolean;
   callEnded?: boolean;
+  endCallAttemptCount?: number;
+  endCallEffectiveAt?: string;
   result?: LeadQualificationResult;
   firstAudioAt?: number;
   callAnsweredAt?: number;

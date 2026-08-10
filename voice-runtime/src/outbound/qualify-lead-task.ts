@@ -20,6 +20,12 @@ import { persistLeadQualificationResult } from "@/lib/voice/outbound/outbound-ca
 import { buildBusinessAnswerTool } from "../shared/business-answer-tool";
 import type { OutboundLeadUserData } from "./userdata";
 import { withLiveKitToolTelemetry } from "../livekit-tool-telemetry";
+import {
+  beginOutboundCallClosing,
+  endCallToolMessage,
+  endOutboundCall,
+  isOutboundCallClosing,
+} from "./end-outbound-call";
 
 export type QualifyLeadResult = LeadQualificationResult;
 
@@ -87,6 +93,9 @@ export class QualifyLeadTask extends voice.AgentTask<QualifyLeadResult> {
       execute: async ({ fields, still_interested }) => {
         const ud = this.sessionRef.userData;
         return withLiveKitToolTelemetry(ud, "record_qualification_fields", { fieldIds: Object.keys(fields) }, async () => {
+            if (isOutboundCallClosing(ud)) {
+              return "Call is ending. Do not collect more fields or speak — call end_call if you have not already.";
+            }
             ud.collectedFields = mergeQualificationFields(ud.collectedFields, fields);
             if (still_interested === false) {
               ud.interested = false;
@@ -115,6 +124,12 @@ export class QualifyLeadTask extends voice.AgentTask<QualifyLeadResult> {
       }),
       execute: async ({ outcome, callback_notes }) => {
         const ud = this.sessionRef.userData;
+        if (ud.qualificationComplete) {
+          return (
+            "Outcome already saved. If the call is not over yet, say one brief goodbye and call end_call exactly once. " +
+            "Otherwise remain completely silent."
+          );
+        }
         const mapped = mapToolOutcome(outcome);
         if (mapped !== "complete") {
           ud.explicitOutcome = mapped;
@@ -149,6 +164,7 @@ export class QualifyLeadTask extends voice.AgentTask<QualifyLeadResult> {
 
         ud.qualificationComplete = true;
         ud.result = result;
+        beginOutboundCallClosing(ud);
 
         await persistLeadQualificationResult({
           callId: ud.callId,
@@ -176,12 +192,11 @@ export class QualifyLeadTask extends voice.AgentTask<QualifyLeadResult> {
         reason: z.string().optional(),
       }),
       execute: async ({ reason }) => {
-        const ud = this.sessionRef.userData;
-        if (ud.callEnded) return "Call already ended.";
-        ud.callEnded = true;
-        ud.qualificationComplete = true;
-        this.sessionRef.shutdown({ reason: reason || "qualification_complete" });
-        return "Call ended.";
+        const result = await endOutboundCall(this.sessionRef, {
+          source: "end_call_tool",
+          reason: reason || undefined,
+        });
+        return endCallToolMessage(result);
       },
     });
   }

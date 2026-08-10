@@ -20,10 +20,17 @@ import {
   resolveOutboundProfileBusinessAnswer,
 } from "../src/lib/voice/outbound/compile-outbound-call-context";
 import {
+  beginOutboundCallClosing,
+  endCallToolMessage,
+  endOutboundCall,
+  isOutboundCallClosing,
+} from "../voice-runtime/src/outbound/end-outbound-call";
+import {
   validateOutboundDestination,
   assertOutboundTestModeEnabled,
 } from "../src/lib/voice/outbound/outbound-call-service";
 import type { QualificationDefinition } from "../src/lib/voice/outbound/types";
+import type { OutboundLeadUserData } from "../voice-runtime/src/outbound/userdata";
 
 const fixture = JSON.parse(
   fs.readFileSync(
@@ -153,7 +160,7 @@ assert.ok(outboundEntry.includes("session.start"), "agent starts before dial");
 assert.ok(outboundEntry.includes("createSipParticipant"), "dials after agent ready");
 assert.ok(outboundEntry.includes("updateAgent(qualifyTask)"), "hand off via updateAgent after answer");
 assert.ok(outboundEntry.includes("waitForQualificationComplete"), "waits for qualification completion");
-assert.ok(outboundEntry.includes("prefillCollectedFields"), "pre-fills lead context before conversation");
+assert.ok(outboundEntry.includes("endOutboundCall"), "all hangups go through idempotent endOutboundCall");
 assert.ok(
   !outboundEntry.includes("buildQualificationCloseLine"),
   "close/goodbye must be handled inside QualifyLeadTask, not a second generateReply in entry",
@@ -173,4 +180,62 @@ assert.ok(
   "must not complete QualifyLeadTask during set_qualification_outcome — that resumes the root agent and causes duplicate goodbyes",
 );
 
-console.log("outbound qualification tests: PASS");
+const endCallSource = fs.readFileSync(
+  path.join(process.cwd(), "voice-runtime/src/outbound/end-outbound-call.ts"),
+  "utf8",
+);
+assert.match(endCallSource, /outbound_end_call_effective/);
+assert.match(endCallSource, /outbound_end_call_duplicate/);
+
+const rootAgentSource = fs.readFileSync(
+  path.join(process.cwd(), "voice-runtime/src/outbound/new-lead-qualification-agent.ts"),
+  "utf8",
+);
+assert.ok(rootAgentSource.includes("tools: {}"), "root shell must not expose end_call");
+
+function makeMockSession(userData: Partial<OutboundLeadUserData> & { callId: string }) {
+  const ud = {
+    workspaceId: "ws_1",
+    agentId: "agent_1",
+    businessName: "Blue Ridge Realty",
+    timezone: "America/New_York",
+    collectedFields: {},
+    interested: true,
+    qualificationComplete: false,
+    job: { kind: "outbound_lead_qualification" },
+    ...userData,
+  } as OutboundLeadUserData;
+  const shutdownCalls: string[] = [];
+  return {
+    userData: ud,
+    shutdownCalls,
+    session: {
+      userData: ud,
+      shutdown: (opts: { reason?: string }) => {
+        shutdownCalls.push(opts.reason || "unknown");
+      },
+      interrupt: () => ({ await: Promise.resolve() }),
+    },
+  };
+}
+
+void (async () => {
+  const mock = makeMockSession({ callId: "call-idempotent-1" });
+  const first = await endOutboundCall(mock.session as never, { source: "end_call_tool" });
+  const second = await endOutboundCall(mock.session as never, { source: "end_call_tool" });
+  assert.equal(first.applied, true);
+  assert.equal(second.applied, false);
+  assert.equal(second.reason, "already_ended");
+  assert.equal(mock.shutdownCalls.length, 1);
+  assert.match(endCallToolMessage(second), /already ending/i);
+
+  const closing = makeMockSession({ callId: "call-closing-1" });
+  assert.equal(beginOutboundCallClosing(closing.userData), true);
+  assert.equal(beginOutboundCallClosing(closing.userData), false);
+  assert.equal(isOutboundCallClosing(closing.userData), true);
+
+  console.log("outbound qualification tests: PASS");
+})().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});
