@@ -165,7 +165,6 @@ export function buildAmySemanticToolList(input: {
                 utterance: selection || slot_id,
                 slotIso: slot_id,
               }),
-            { fillerMessage: "One moment." },
           )(opts);
         },
       }),
@@ -209,7 +208,6 @@ export function buildAmySemanticToolList(input: {
                   confirmed,
                 });
               },
-              { fillerMessage: "One moment." },
             )(opts);
           }
 
@@ -232,7 +230,6 @@ export function buildAmySemanticToolList(input: {
                   appointmentId,
                   confirmed,
                 }),
-              { fillerMessage: "One moment." },
             )(opts);
           }
 
@@ -240,7 +237,6 @@ export function buildAmySemanticToolList(input: {
             "confirm_action",
             "confirm_booking",
             async (ctx) => domainConfirmBooking({ ctx, confirmed }),
-            { fillerMessage: "One moment." },
           )(opts);
         },
       }),
