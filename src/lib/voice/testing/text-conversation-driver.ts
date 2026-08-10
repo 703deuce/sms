@@ -1,11 +1,10 @@
 import type { LiveKitCallContext } from "@/lib/voice/domain-actions";
-import { taskContextPayload, taskForWorkflowState } from "@/lib/voice/domain-actions";
+import { buildAmyAgentInstructions } from "@/lib/voice/agent-runtime/build-amy-instructions";
+import { executeDeterministicPipeline } from "@/lib/voice/agent-runtime/deterministic-executor";
 import {
-  buildAmyLiveKitPermanentPrompt,
-  buildAmyTaskContextBlock,
-} from "@/lib/agents/appointment-booking/intelligence/amy-livekit-prompt";
-import { taskTypeForSession } from "@/lib/voice/workflow-tasks/registry";
-import "@/lib/voice/workflow-tasks/registry";
+  isSemanticToolName,
+  resolveSemanticToolInvocation,
+} from "@/lib/voice/agent-runtime/resolve-semantic-tool";
 import { compileToolsForCallContext } from "@/lib/voice/workflow-runtime/compile-for-call";
 import { hasBookingReceipt } from "@/lib/voice/workflow-runtime/completion-guards";
 import {
@@ -15,72 +14,45 @@ import {
 } from "./openai-tool-chat";
 import { executeWorkflowTool } from "./workflow-tool-executor";
 import { autoApplyCallerIntentFromUtterance } from "@/lib/voice/workflow-runtime/auto-intent";
-import { autoApplyWorkflowActionsFromUtterance } from "@/lib/voice/workflow-runtime/auto-workflow-actions";
 
 const TOOL_SCHEMAS: Record<string, OpenAiFunctionTool> = {
-  submit_caller_information: {
-    name: "submit_caller_information",
+  capture_caller_information: {
+    name: "capture_caller_information",
     description:
-      "Persist structured information the caller just provided. Call whenever the caller gives name, email, phone, address, service issue, or other booking details.",
+      "Save structured information the caller just provided (name, email, phone, address, service issue, etc.).",
     parameters: {
       type: "object",
       properties: {
         extracted_fields: {
           type: "object",
           additionalProperties: { type: "string" },
-          description: "Map of field id or alias to the value the caller provided",
         },
-        utterance: { type: "string", description: "Raw caller utterance when structured fields are unclear" },
-        intent: { type: "string", description: "Caller intent if newly understood" },
+        utterance: { type: "string" },
+        intent: { type: "string" },
       },
     },
   },
-  check_availability: {
-    name: "check_availability",
-    description:
-      "Checks real calendar availability. Call only after required booking information has been collected.",
+  choose_appointment_time: {
+    name: "choose_appointment_time",
+    description: "Record which offered appointment time the caller chose.",
     parameters: {
       type: "object",
       properties: {
-        spoken: { type: "string", description: "Caller time preference" },
+        slot_id: { type: "string", description: "Slot id from the active capability context" },
+        selection: { type: "string", description: "How the caller described their choice" },
       },
-      required: ["spoken"],
+      required: ["slot_id"],
     },
   },
-  select_slot: {
-    name: "select_slot",
-    description: "Select one of the appointment slots previously returned by check_availability.",
+  confirm_action: {
+    name: "confirm_action",
+    description: "Commit the held appointment after explicit caller confirmation.",
     parameters: {
       type: "object",
       properties: {
-        selection: { type: "string", description: "Caller slot choice in natural language" },
-        slot_iso: { type: "string", description: "ISO timestamp only if explicitly known" },
-      },
-      required: ["selection"],
-    },
-  },
-  confirm_booking: {
-    name: "confirm_booking",
-    description:
-      "Creates the real appointment after explicit caller confirmation. Required before saying the appointment is booked.",
-    parameters: {
-      type: "object",
-      properties: {
-        confirmed: { type: "boolean", description: "True when caller explicitly confirms booking" },
+        confirmed: { type: "boolean" },
       },
       required: ["confirmed"],
-    },
-  },
-  lookup_customer: {
-    name: "lookup_customer",
-    description: "Look up an existing customer by phone, email, or name.",
-    parameters: {
-      type: "object",
-      properties: {
-        phone: { type: "string" },
-        email: { type: "string" },
-        name: { type: "string" },
-      },
     },
   },
   detect_caller_intent: {
@@ -93,28 +65,8 @@ const TOOL_SCHEMAS: Record<string, OpenAiFunctionTool> = {
       },
     },
   },
-  validate_eligibility: {
-    name: "validate_eligibility",
-    description: "Validate whether the service address is in the business service area.",
-    parameters: {
-      type: "object",
-      properties: {
-        address: { type: "string" },
-      },
-    },
-  },
-  classify_intent: {
-    name: "classify_intent",
-    description: "Classify urgency and safety for triage routing.",
-    parameters: {
-      type: "object",
-      properties: {
-        utterance: { type: "string" },
-      },
-    },
-  },
-  get_business_answer: {
-    name: "get_business_answer",
+  answer_business_question: {
+    name: "answer_business_question",
     description: "Answer configured business questions such as pricing or hours.",
     parameters: {
       type: "object",
@@ -122,6 +74,22 @@ const TOOL_SCHEMAS: Record<string, OpenAiFunctionTool> = {
         topic: { type: "string" },
       },
       required: ["topic"],
+    },
+  },
+  modify_appointment: {
+    name: "modify_appointment",
+    description: "Find, reschedule, or cancel an existing appointment.",
+    parameters: {
+      type: "object",
+      properties: {
+        action: { type: "string", enum: ["find", "reschedule", "cancel"] },
+        appointment_id: { type: "string" },
+        slot_id: { type: "string" },
+        confirmed: { type: "boolean" },
+        reason: { type: "string" },
+        phone: { type: "string" },
+      },
+      required: ["action"],
     },
   },
   take_message: {
@@ -136,9 +104,9 @@ const TOOL_SCHEMAS: Record<string, OpenAiFunctionTool> = {
       required: ["message"],
     },
   },
-  request_human: {
-    name: "request_human",
-    description: "Transfer or escalate to a human.",
+  transfer_to_human: {
+    name: "transfer_to_human",
+    description: "Transfer to a human after the caller confirms.",
     parameters: {
       type: "object",
       properties: {
@@ -154,42 +122,6 @@ const TOOL_SCHEMAS: Record<string, OpenAiFunctionTool> = {
       properties: {
         reason: { type: "string" },
       },
-    },
-  },
-  find_appointments: {
-    name: "find_appointments",
-    description: "Look up upcoming appointments for the caller by phone number.",
-    parameters: {
-      type: "object",
-      properties: {
-        phone: { type: "string", description: "Caller phone number in E.164 or spoken form" },
-      },
-    },
-  },
-  reschedule_appointment: {
-    name: "reschedule_appointment",
-    description: "Move an existing appointment to a new time after caller confirms.",
-    parameters: {
-      type: "object",
-      properties: {
-        appointment_id: { type: "string" },
-        new_starts_at: { type: "string", description: "ISO timestamp for the new slot" },
-        confirmed: { type: "boolean" },
-      },
-      required: ["appointment_id", "new_starts_at"],
-    },
-  },
-  cancel_appointment: {
-    name: "cancel_appointment",
-    description: "Cancel an existing appointment after explicit caller confirmation.",
-    parameters: {
-      type: "object",
-      properties: {
-        appointment_id: { type: "string" },
-        confirmed: { type: "boolean" },
-        reason: { type: "string" },
-      },
-      required: ["appointment_id"],
     },
   },
 };
@@ -222,46 +154,10 @@ function parseToolArgs(raw: string): Record<string, unknown> {
   }
 }
 
-function buildAmyAgentInstructions(ctx: LiveKitCallContext): string {
-  const taskId = taskTypeForSession(ctx.session) || taskForWorkflowState(ctx.session.currentState);
-  const { envelope, canonical } = compileToolsForCallContext(ctx);
-  return [
-    buildAmyLiveKitPermanentPrompt(ctx.businessName),
-    buildAmyTaskContextBlock({
-      active_task: taskId,
-      next_action: canonical?.expectedNextAction,
-      workflow_id: ctx.workflowRef?.workflowId,
-      workflow_version: ctx.workflowRef?.version,
-      current_node_id: canonical?.currentNodeId,
-      expected_next_action: canonical?.expectedNextAction,
-      ready_for_availability: canonical?.readyForAvailability,
-      ...taskContextPayload(ctx),
-    }),
-    envelope.taskInstructions ? `TASK INSTRUCTIONS:\n${envelope.taskInstructions}` : "",
-  ]
-    .filter(Boolean)
-    .join("\n\n");
-}
-
 export function buildAmySystemMessage(ctx: LiveKitCallContext): OpenAiChatMessage {
   return {
     role: "system",
-    content: [
-      buildAmyAgentInstructions(ctx),
-      "",
-      "TEXT SIMULATOR MODE",
-      "You are being tested via text instead of voice. Respond as Amy would on a phone call.",
-      "Keep replies short. Use tools whenever the runtime requires an action.",
-      "ONLY call tools listed in your current allowed tool set — never call a tool that is not available.",
-      "When the caller provides name, email, phone, address, or problem details you MUST call submit_caller_information in the same turn before replying.",
-      "Pass real values in tool arguments — never placeholders like 'service address' or 'the address'.",
-      "For validate_eligibility, pass the actual street address the caller gave, or omit address to use collected fields.",
-      "When offering appointment times, only use times returned by check_availability.",
-      "When the caller picks a time, call select_slot with their exact choice.",
-      "After they confirm, call confirm_booking({ confirmed: true }).",
-      "For reschedule or cancel, call find_appointments first, then reschedule_appointment or cancel_appointment with confirmed: true.",
-      "When the caller picks a slot during reschedule, call select_slot with their choice, then after they confirm call reschedule_appointment with confirmed: true.",
-    ].join("\n"),
+    content: buildAmyAgentInstructions(ctx),
   };
 }
 
@@ -304,6 +200,7 @@ export async function processCallerTurn(input: {
 }): Promise<ConversationTurnResult> {
   const messages = [...input.messages, { role: "user" as const, content: input.userText }];
   let ctx = input.ctx;
+  ctx.session.lastUserUtterance = input.userText;
   const toolExecutions: ConversationTurnResult["toolExecutions"] = [];
   const maxRounds = input.maxToolRounds ?? 10;
   let assistantText = "";
@@ -361,17 +258,16 @@ export async function processCallerTurn(input: {
     });
   }
 
-  const autoWorkflow = await autoApplyWorkflowActionsFromUtterance({
+  const pipeline = await executeDeterministicPipeline({
     ctx,
-    userText: input.userText,
-    toolsCalledThisTurn: toolExecutions.map((t) => t.toolName),
+    preferenceSpoken: input.userText,
   });
-  ctx = autoWorkflow.ctx;
-  for (const action of autoWorkflow.actions) {
+  ctx = pipeline.ctx;
+  for (const step of pipeline.steps) {
     toolExecutions.push({
-      toolName: action.toolName,
-      ok: action.ok,
-      speak: action.speak,
+      toolName: step.toolName,
+      ok: step.ok,
+      speak: step.speak,
     });
   }
 

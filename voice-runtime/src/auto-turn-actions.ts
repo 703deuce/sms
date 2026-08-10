@@ -1,12 +1,11 @@
 import type { AgentSession } from "@livekit/agents";
 import { autoApplyCallerIntentFromUtterance } from "@/lib/voice/workflow-runtime/auto-intent";
-import { autoApplyWorkflowActionsFromUtterance } from "@/lib/voice/workflow-runtime/auto-workflow-actions";
+import { executeDeterministicPipeline } from "@/lib/voice/agent-runtime/deterministic-executor";
 import type { AmyProcessUserData } from "./metadata";
 import { syncAmyAgentFromContext } from "./amy-tools";
 
 /**
  * Apply authoritative runtime actions from final caller transcripts before the LLM turn.
- * Mirrors text-simulator post-turn auto-apply for phone parity.
  */
 export async function applyAutoTurnActionsFromTranscript(
   session: AgentSession<AmyProcessUserData>,
@@ -15,6 +14,8 @@ export async function applyAutoTurnActionsFromTranscript(
   const callContext = session.userData.callContext;
   if (!callContext || !transcript.trim()) return;
 
+  callContext.session.lastUserUtterance = transcript;
+
   const autoIntent = await autoApplyCallerIntentFromUtterance({
     ctx: callContext,
     userText: transcript,
@@ -22,14 +23,13 @@ export async function applyAutoTurnActionsFromTranscript(
   });
 
   let ctx = autoIntent.ctx;
-  const autoWorkflow = await autoApplyWorkflowActionsFromUtterance({
+  const pipeline = await executeDeterministicPipeline({
     ctx,
-    userText: transcript,
-    toolsCalledThisTurn: autoIntent.applied ? ["detect_caller_intent"] : [],
+    preferenceSpoken: transcript,
   });
-  ctx = autoWorkflow.ctx;
+  ctx = pipeline.ctx;
 
-  if (!autoIntent.applied && autoWorkflow.actions.length === 0) return;
+  if (!autoIntent.applied && pipeline.steps.length === 0) return;
 
   session.userData = { ...session.userData, callContext: ctx };
   await syncAmyAgentFromContext(session, ctx);
@@ -40,9 +40,9 @@ export async function applyAutoTurnActionsFromTranscript(
       event: "auto_turn_actions_applied",
       callId: ctx.callId,
       intentApplied: autoIntent.applied,
-      workflowActions: autoWorkflow.actions.map((a) => ({
-        toolName: a.toolName,
-        ok: a.ok,
+      deterministicSteps: pipeline.steps.map((s) => ({
+        toolName: s.toolName,
+        ok: s.ok,
       })),
     }),
   );

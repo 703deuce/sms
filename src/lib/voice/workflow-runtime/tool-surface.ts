@@ -8,29 +8,50 @@ export const RUNTIME_ONLY_TOOL_NAMES = new Set([
   "record_fields",
 ]);
 
-/** Tools exposed to the LiveKit model for judgment-based actions. */
+/** Internal tools the runtime may execute — never offered to the LLM directly. */
+export const DETERMINISTIC_EXECUTION_TOOL_NAMES = new Set([
+  "lookup_customer",
+  "validate_eligibility",
+  "classify_intent",
+  "check_availability",
+  "find_appointments",
+]);
+
+/** Tools exposed to the LiveKit model for judgment-based actions (legacy internal names). */
 export const CONVERSATIONAL_TOOL_NAMES = new Set([
   "submit_caller_information",
-  "check_availability",
   "select_slot",
   "confirm_booking",
   "get_business_answer",
   "detect_caller_intent",
-  "lookup_customer",
-  "validate_eligibility",
-  "classify_intent",
-  "find_appointments",
   "reschedule_appointment",
   "cancel_appointment",
   "take_message",
   "save_message",
   "request_human",
   "end_call",
+  "modify_appointment",
+]);
+
+/** Semantic names shown to the model (see agent-runtime/semantic-tool-surface.ts). */
+export const SEMANTIC_CONVERSATIONAL_TOOL_NAMES = new Set([
+  "capture_caller_information",
+  "choose_appointment_time",
+  "confirm_action",
+  "answer_business_question",
+  "detect_caller_intent",
+  "modify_appointment",
+  "take_message",
+  "transfer_to_human",
+  "end_call",
 ]);
 
 export function filterConversationalTools(toolNames: string[]): string[] {
   return toolNames.filter(
-    (name) => CONVERSATIONAL_TOOL_NAMES.has(name) && !RUNTIME_ONLY_TOOL_NAMES.has(name),
+    (name) =>
+      CONVERSATIONAL_TOOL_NAMES.has(name) &&
+      !RUNTIME_ONLY_TOOL_NAMES.has(name) &&
+      !DETERMINISTIC_EXECUTION_TOOL_NAMES.has(name),
   );
 }
 

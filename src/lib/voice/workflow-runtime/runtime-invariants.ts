@@ -2,6 +2,7 @@ import type { TurnToolEnvelope } from "./schema";
 import type { CanonicalWorkflowState } from "./canonical-state";
 import { expectedToolForNextAction } from "./canonical-state";
 import { filterConversationalTools } from "./tool-surface";
+import { isDeterministicNextAction } from "@/lib/voice/agent-runtime/deterministic-actions";
 
 export type RuntimeInvariantViolation = {
   code: "RUNTIME_INVARIANT_VIOLATION";
@@ -40,6 +41,7 @@ export function validateRuntimeInvariants(input: {
 
   const toolMismatch =
     expectedTool &&
+    !isDeterministicNextAction(input.canonical.expectedNextAction) &&
     !toolSupportsAction(conversational, expectedTool) &&
     !toolSupportsAction(input.envelope.toolNames, expectedTool);
 

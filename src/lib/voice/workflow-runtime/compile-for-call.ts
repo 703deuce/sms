@@ -12,12 +12,11 @@ import type { CanonicalWorkflowState } from "./canonical-state";
 import {
   reconcileCanonicalWorkflowState,
   syncSessionFromCanonical,
-  expectedToolForNextAction,
 } from "./canonical-state";
-import { capabilityForToolName } from "@/lib/voice/capability-registry";
-import { filterConversationalTools } from "./tool-surface";
+import { filterConversationalTools, DETERMINISTIC_EXECUTION_TOOL_NAMES } from "./tool-surface";
 import { validateRuntimeInvariants } from "./runtime-invariants";
 import { requiresBookingReceiptToComplete } from "./completion-guards";
+import { compileSemanticToolNamesForSession } from "@/lib/voice/agent-runtime/semantic-tool-surface";
 
 function isEmergencyClassification(
   classifications?: Record<string, string> | null,
@@ -115,20 +114,17 @@ export function compileToolsForCallContext(callContext: LiveKitCallContext): {
     );
   }
 
-  const expectedTool = expectedToolForNextAction(canonical.expectedNextAction);
-  if (expectedTool && !conversationalToolNames.includes(expectedTool)) {
-    conversationalToolNames = [...conversationalToolNames, expectedTool];
-    const expectedCap = capabilityForToolName(expectedTool);
-    if (expectedCap && !envelope.capabilityIds.includes(expectedCap.id)) {
-      envelope = {
-        ...envelope,
-        capabilityIds: [...envelope.capabilityIds, expectedCap.id],
-        toolNames: envelope.toolNames.includes(expectedTool)
-          ? envelope.toolNames
-          : [...envelope.toolNames, expectedTool],
-      };
-    }
-  }
+  conversationalToolNames = conversationalToolNames.filter(
+    (name) => !DETERMINISTIC_EXECUTION_TOOL_NAMES.has(name),
+  );
+
+  const semanticToolNames = compileSemanticToolNamesForSession({
+    canonical,
+    envelopeToolNames: envelope.toolNames,
+    session: callContext.session,
+    callerIntent,
+  });
+
   const stampedEnvelope = stampEnvelopeCapabilities(snapshot, envelope.capabilityIds);
   const invariant = validateRuntimeInvariants({
     canonical,
@@ -164,7 +160,7 @@ export function compileToolsForCallContext(callContext: LiveKitCallContext): {
       expectedNextAction: canonical.expectedNextAction,
       readyForAvailability: canonical.readyForAvailability,
       capabilityIds: envelope.capabilityIds,
-      toolNames: conversationalToolNames,
+      toolNames: [...semanticToolNames],
       runtimeToolNames: envelope.toolNames.filter((t) => !conversationalToolNames.includes(t)),
       invariantOk: invariant.ok,
       stoppedAtUserBoundary: envelope.stoppedAtUserBoundary,
@@ -176,7 +172,7 @@ export function compileToolsForCallContext(callContext: LiveKitCallContext): {
   return {
     workflow,
     envelope,
-    allowedToolNames: new Set(conversationalToolNames),
+    allowedToolNames: semanticToolNames,
     canonical,
     invariantOk: invariant.ok,
   };

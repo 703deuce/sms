@@ -32,6 +32,11 @@ import {
   shouldBlockRepeatedToolCall,
 } from "@/lib/voice/workflow-runtime/loop-detection";
 import type { WorkflowState } from "@/lib/voice/workflow-engine/types";
+import { executeDeterministicPipeline } from "@/lib/voice/agent-runtime/deterministic-executor";
+import {
+  isSemanticToolName,
+  resolveSemanticToolInvocation,
+} from "@/lib/voice/agent-runtime/resolve-semantic-tool";
 
 export type WorkflowToolExecution = {
   ctx: LiveKitCallContext;
@@ -159,6 +164,13 @@ export async function executeWorkflowTool(input: {
   toolName: string;
   args?: Record<string, unknown>;
 }): Promise<WorkflowToolExecution> {
+  const semanticName = input.toolName;
+  const resolved = isSemanticToolName(input.toolName)
+    ? resolveSemanticToolInvocation(input.toolName, input.args || {})
+    : { internalTool: input.toolName, args: input.args || {} };
+  const toolName = resolved.internalTool;
+  const args = resolved.args;
+
   const startedAt = Date.now();
   const workflowStateBefore = input.ctx.session.currentState;
   const nodeIdBefore =
@@ -182,7 +194,7 @@ export async function executeWorkflowTool(input: {
     reconcileCanonicalWorkflowState({ session: input.ctx.session, workflow });
     return {
       ctx: input.ctx,
-      toolName: input.toolName,
+      toolName: semanticName,
       result: {
         ok: false,
         speak: "Repeated identical tool calls were blocked.",
@@ -200,13 +212,13 @@ export async function executeWorkflowTool(input: {
     };
   }
 
-  if (!toolSetBefore.has(input.toolName)) {
+  if (!toolSetBefore.has(semanticName)) {
     return {
       ctx: input.ctx,
-      toolName: input.toolName,
+      toolName: semanticName,
       result: {
         ok: false,
-        speak: `${input.toolName} is not available in the current workflow state.`,
+        speak: `${semanticName} is not available in the current workflow state.`,
         error_code: "TOOL_NOT_ALLOWED",
       },
       serialized: JSON.stringify({
@@ -221,7 +233,7 @@ export async function executeWorkflowTool(input: {
     };
   }
 
-  const result = await dispatchDomainAction(input.ctx, input.toolName, input.args || {}).catch(
+  const result = await dispatchDomainAction(input.ctx, toolName, args).catch(
     (err: unknown) => {
       const message = err instanceof Error ? err.message : String(err);
       return {
@@ -257,9 +269,25 @@ export async function executeWorkflowTool(input: {
   const missingAfter = input.ctx.session.missingFieldIds.length;
   const { allowedToolNames: toolSetAfter } = compileToolsForCallContext(input.ctx);
 
-  const payload = formatModelToolResult(result, {
+  let finalCtx = input.ctx;
+  let finalResult = result;
+  let finalToolName = toolName;
+  if (result.ok) {
+    const pipeline = await executeDeterministicPipeline({
+      ctx: input.ctx,
+      preferenceSpoken: input.ctx.session.lastUserUtterance || "",
+    });
+    finalCtx = pipeline.ctx;
+    input.ctx = pipeline.ctx;
+    if (pipeline.lastResult && pipeline.lastToolName) {
+      finalResult = pipeline.lastResult;
+      finalToolName = pipeline.lastToolName;
+    }
+  }
+
+  const payload = formatModelToolResult(finalResult, {
     session: input.ctx.session,
-    toolName: input.toolName,
+    toolName: finalToolName,
   });
   const serialized = JSON.stringify(payload);
 
@@ -284,7 +312,7 @@ export async function executeWorkflowTool(input: {
       source: "amy-text-simulator",
       event: "tool_executed",
       callId: input.ctx.callId,
-      toolName: input.toolName,
+      toolName: semanticName,
       ok: result.ok,
       workflowStateBefore,
       workflowStateAfter,
@@ -298,10 +326,10 @@ export async function executeWorkflowTool(input: {
 
   return {
     ctx: input.ctx,
-    toolName: input.toolName,
-    result,
+    toolName: semanticName,
+    result: finalResult,
     serialized,
     workflowStateBefore,
-    workflowStateAfter,
+    workflowStateAfter: input.ctx.session.currentState,
   };
 }

@@ -24,12 +24,12 @@ import {
   bootstrapLiveKitCallContext,
   domainGetBookingRequirements,
   domainRecordField,
-  domainCheckAvailability,
   taskForWorkflowState,
   toolsForTask,
   assertTaskToolAllowed,
 } from "../src/lib/voice/domain-actions";
 import { buildAmyAgentInstructions, buildAmyToolList } from "../voice-runtime/src/amy-tools";
+import { executeDeterministicPipeline } from "../src/lib/voice/agent-runtime/deterministic-executor";
 import { parseRoomMetadata } from "../voice-runtime/src/metadata";
 
 const failures: string[] = [];
@@ -88,10 +88,19 @@ async function main() {
     check("ANI on session", Boolean(callContext.session.callerAni));
 
     const taskId = taskForWorkflowState(callContext.session.currentState);
-    check("initial task", taskId === "DiscoverIntentTask" || taskId === "CollectBookingFieldsTask");
+    check(
+      "initial task is intake",
+      taskId === "DiscoverIntentTask" ||
+        taskId === "CollectBookingFieldsTask" ||
+        taskId === "CollectRequiredFieldsTask",
+    );
 
     const { tools } = buildAmyToolList(callContext);
-    check("collect task exposes scoped tools", tools.length >= 1 && tools.length <= 5);
+    check(
+      "collect exposes semantic capture tool",
+      tools.some((tool) => tool.id === "capture_caller_information"),
+    );
+    check("collect task exposes scoped tools", tools.length >= 1 && tools.length <= 8);
 
     try {
       assertTaskToolAllowed(taskId, "confirm_booking");
@@ -116,8 +125,11 @@ async function main() {
       typeof nameResult.data?.readyForAvailability === "boolean",
     );
 
-    const allowedCollect = toolsForTask("CollectBookingFieldsTask");
-    check("task tool list", allowedCollect.includes("record_current_field"));
+    check(
+      "legacy task registry still maps collect task",
+      toolsForTask("CollectBookingFieldsTask").includes("submit_caller_information") ||
+        toolsForTask("CollectRequiredFieldsTask").includes("submit_caller_information"),
+    );
 
     for (let i = 0; i < 6; i++) {
       if (!callContext.session.missingFieldIds.length) break;
@@ -136,35 +148,40 @@ async function main() {
     callContext.workflowState = callContext.session.currentState;
 
     if (callContext.session.missingFieldIds.length === 0) {
-      const postTaskId = taskForWorkflowState(callContext.session.currentState);
-      check("post-collect task", postTaskId === "CheckAvailabilityTask");
+      const pipeline = await executeDeterministicPipeline({
+        ctx: callContext,
+        preferenceSpoken: "next available",
+      });
+      callContext.session = pipeline.ctx.session;
+
       const { tools: postCollectTools } = buildAmyToolList(callContext);
       check(
-        "post-collect exposes check_availability",
-        postCollectTools.some((tool) => tool.id === "check_availability"),
+        "post-collect does not expose check_availability to LLM",
+        !postCollectTools.some((tool) => tool.id === "check_availability"),
       );
       check(
-        "post-collect instructions mention check_availability",
-        buildAmyAgentInstructions(callContext).includes("check_availability"),
+        "deterministic pipeline ran availability or advanced state",
+        pipeline.steps.some((s) => s.toolName === "check_availability") ||
+          (callContext.session.availableSlots || []).length > 0 ||
+          callContext.session.currentState === "SELECTING_SLOT",
+        `steps=${pipeline.steps.map((s) => s.toolName).join(",")} state=${callContext.session.currentState}`,
       );
-
-      const avail = await domainCheckAvailability({
-        ctx: callContext,
-        spoken: "tomorrow afternoon",
-      });
-      check("availability action returns speak", Boolean(avail.speak));
+      const instructions = buildAmyAgentInstructions(callContext);
       check(
-        "availability advances workflow state",
-        callContext.session.currentState === "SELECTING_SLOT" ||
-          callContext.session.currentState === "CHECKING_AVAILABILITY" ||
-          Boolean(callContext.session.availableSlots?.length),
-        `state=${callContext.session.currentState}`,
+        "instructions do not teach LLM to call check_availability",
+        !instructions.includes("call check_availability"),
       );
+      if ((callContext.session.availableSlots || []).length > 0) {
+        check(
+          "instructions list offered slots when available",
+          instructions.includes("Available appointment times"),
+        );
+      }
     } else {
       check(
-        "availability action returns speak",
+        "deterministic pipeline skipped until fields complete",
         true,
-        `skipped — missing=${callContext.session.missingFieldIds.join(",")}`,
+        `missing=${callContext.session.missingFieldIds.join(",")}`,
       );
     }
 
