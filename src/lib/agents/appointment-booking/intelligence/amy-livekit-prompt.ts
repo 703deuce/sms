@@ -9,11 +9,14 @@
 
 export const AMY_GLOBAL_INSTRUCTIONS =
   "Be succinct and to the point when assisting the caller. " +
-  "Do not invent appointment times or claim a booking, reschedule, or cancel succeeded unless a tool confirms it.";
+  "Do not invent appointment times or claim a booking, reschedule, or cancel succeeded unless a tool confirms it. " +
+  "Never say an appointment is booked, confirmed, or in the system unless confirm_booking returned success.";
 
 export const AMY_VOICE_MODALITY =
-  "You are speaking with the caller over a voice call. Maintain a natural conversational tone. " +
-  "Avoid bullet points, lists, and special characters — TTS reads punctuation literally.";
+  "You are on a live phone call — the caller hears your voice through text-to-speech, not by reading text. " +
+  "Speak in short, natural sentences. Never mention text, typing, transcription, or chat. " +
+  "Never use bullet points, numbered lists, colons for lists, or markdown — TTS reads punctuation literally. " +
+  "Offer at most two or three spoken options at a time, woven into a sentence.";
 
 /** Root HealthcareAgent-style instructions — set once at agent init. */
 export function buildAmyLiveKitRootInstructions(businessName: string): string {
@@ -23,9 +26,10 @@ export function buildAmyLiveKitRootInstructions(businessName: string): string {
     "If the caller refuses to provide requested information or does not cooperate, call end_call.",
     "Before scheduling or modifying appointments, the runtime will collect their details — " +
       "do not preemptively ask for name, email, phone, or other fields unless instructed to.",
-    "Call schedule_appointment to book a new appointment.",
+    "Call schedule_appointment to book a new appointment — the runtime collects fields and books via tools.",
     "Call modify_appointment when the caller wants to reschedule or cancel.",
     "Call transfer_to_human only after the caller confirms they want a person.",
+    "Never say you lack access to scheduling or the booking system — use schedule_appointment instead.",
     AMY_VOICE_MODALITY,
     AMY_GLOBAL_INSTRUCTIONS,
   ].join("\n");
@@ -57,7 +61,10 @@ export function buildCollectFieldTaskInstructions(input: {
 }
 
 export function buildCollectFieldOnEnterInstructions(label: string): string {
-  return `Collect the caller's ${label}. Ask one short question.`;
+  return (
+    `Collect the caller's ${label}. Ask one short spoken question. ` +
+    "Do not give advice, troubleshooting tips, or numbered options."
+  );
 }
 
 /** BookAppointmentTask — mirrors ScheduleAppointmentTask style. */

@@ -94,7 +94,7 @@ export default defineAgent<AmyUserData>({
       llm,
       tts,
       turnHandling: buildAmyTurnHandling(),
-      maxToolSteps: Number(process.env.VOICE_MAX_TOOL_STEPS?.trim()) || 2,
+      maxToolSteps: Number(process.env.VOICE_MAX_TOOL_STEPS?.trim()) || 8,
       userData: { callContext },
     });
 
@@ -121,13 +121,6 @@ export default defineAgent<AmyUserData>({
     if (session.output.audio) {
       session.output.audio = attachOutputGain(session.output.audio, outputGainDb) ?? session.output.audio;
     }
-
-    const businessLabel = callContext.businessName?.trim() || "our team";
-    const greeting = session.say(
-      `Hi, this is Amy with ${businessLabel}. How can I help you today?`,
-      { allowInterruptions: false },
-    );
-    await greeting.waitForPlayout();
   },
 });
 
