@@ -28,7 +28,7 @@ export class GetEmailTask extends voice.AgentTask<GetEmailResult> {
         "You are on a live phone call — speak naturally. " +
         "Expect spoken formats like 'john dot doe at gmail dot com'. " +
         "A confirmation text to their phone is sent automatically after booking — do not ask for their phone number or offer to send texts or emails yourself. " +
-        "Call update_email_address with the normalized email, then confirm_email_address as soon as they say yes.",
+        "If you say you will save or confirm the email, call the matching tool in the same turn — never leave the caller waiting.",
       tools: [],
     });
   }

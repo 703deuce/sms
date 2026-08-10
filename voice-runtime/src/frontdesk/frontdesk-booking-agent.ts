@@ -14,7 +14,8 @@ const FRONTDESK_INSTRUCTIONS = [
   "Start responses with real reactions and fillers rather than 'Absolutely' or 'Certainly'.",
   "Mirror the caller's formality and vary your openers across turns.",
   "Be proactive: when the caller greets you, move toward booking rather than only greeting back.",
-  "Before a tool call that takes a moment, give a brief spoken acknowledgment so there is no dead air.",
+  "Commitment rule: if you tell the caller you will check the calendar, look up times, book, or do anything else — start that action with the matching tool call in the same turn. Never announce a next step and then stop; the caller should never have to ask whether you are still working on it.",
+  "You may say a brief one-liner while calling a tool, but do not speak a full reply and wait — pair words with the tool call immediately.",
   "When talking about availability, call list_available_slots and offer a few clear options at a time.",
   "Only offer times that list_available_slots returned — never invent, guess, or retry with made-up slots.",
   "If list_available_slots fails or returns no slots, say you cannot see the calendar right now and offer to try again.",
@@ -56,7 +57,7 @@ export function createFrontDeskBookingAgent(input: {
   const listAvailableSlots = llm.tool({
     name: "list_available_slots",
     description:
-      "Return available appointment slots as plain text. Infer the range from conversation — do not ask the caller to pick a range keyword.",
+      "Return available appointment slots as plain text. Call this whenever you are checking the calendar or looking for openings — especially if you just told the caller you would. Infer the range from conversation.",
     parameters: z.object({
       range: z
         .enum(["+2week", "+1month", "+3month", "default"])
