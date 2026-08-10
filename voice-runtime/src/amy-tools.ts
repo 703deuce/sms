@@ -1,6 +1,5 @@
 import { llm, voice } from "@livekit/agents";
 import type { AgentSession } from "@livekit/agents";
-import type { ChatMessage } from "@livekit/agents/dist/llm/chat_context.js";
 import { buildAmyAgentInstructions } from "@/lib/voice/agent-runtime/build-amy-instructions";
 import { semanticToolName } from "@/lib/voice/agent-runtime/semantic-tool-surface";
 import { executeDeterministicPipeline } from "@/lib/voice/agent-runtime/deterministic-executor";
@@ -29,7 +28,11 @@ import { applyAutoTurnActionsFromTranscript } from "./auto-turn-actions";
 
 type AmyToolOptions = llm.ToolOptions<AmyProcessUserData>;
 
-function userMessageText(message: ChatMessage): string {
+type UserTurnMessage = {
+  content: unknown;
+};
+
+function userMessageText(message: UserTurnMessage): string {
   const content = message.content;
   if (typeof content === "string") return content.trim();
   if (!Array.isArray(content)) return "";

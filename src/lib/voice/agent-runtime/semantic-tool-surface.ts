@@ -1,5 +1,6 @@
 import type { CanonicalWorkflowState } from "@/lib/voice/workflow-runtime/canonical-state";
 import { hasAvailableSlots, hasHeldSlot } from "@/lib/voice/workflow-runtime/completion-guards";
+import type { AmyRealtimeSession } from "@/lib/voice/realtime-session/types";
 import { RUNTIME_EXECUTED_TOOL_NAMES } from "./deterministic-actions";
 
 /** Semantic tools exposed to the LLM — map to internal domain actions at execution time. */
@@ -40,17 +41,7 @@ export function isRuntimeExecutedTool(toolName: string): boolean {
 export function compileSemanticToolNamesForSession(input: {
   canonical: CanonicalWorkflowState;
   envelopeToolNames: string[];
-  session: {
-    availableSlots?: string[];
-    heldSlot?: string | null;
-    selectedSlot?: string | null;
-    missingFieldIds: string[];
-    runtime?: {
-      session_runtime?: {
-        foundAppointmentId?: string | null;
-      };
-    };
-  };
+  session: AmyRealtimeSession;
   callerIntent?: string | null;
 }): Set<SemanticToolName> {
   const foundAppointmentId =
