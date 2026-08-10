@@ -19,6 +19,12 @@ import { buildSlotsPayload } from "@/lib/voice/domain-actions/tool-results";
 import { compileToolsForCallContext } from "@/lib/voice/workflow-runtime/compile-for-call";
 import { compileSemanticToolNamesForSession } from "@/lib/voice/agent-runtime/semantic-tool-surface";
 import { taskForWorkflowState } from "@/lib/voice/domain-actions/task-guard";
+import {
+  inferFieldsFromUtterance,
+  mergeExtractedFieldMaps,
+  normalizeExtractedFields,
+} from "@/lib/voice/workflow-runtime/field-extraction";
+import { prepareFieldsForPersistence } from "@/lib/voice/workflow-runtime/field-persist";
 import type { AmyToolOptions } from "./amy-tool-types";
 
 function liveCallContext(opts: AmyToolOptions): LiveKitCallContext {
@@ -83,8 +89,34 @@ export function buildAmySemanticToolList(input: {
             .optional()
             .describe("book, reschedule, cancel, or emergency if newly understood"),
         }),
-        execute: async ({ extracted_fields, utterance, intent }, opts: AmyToolOptions) =>
-          wrap(
+        execute: async ({ extracted_fields, utterance, intent }, opts: AmyToolOptions) => {
+          const liveCtx = liveCallContext(opts);
+          const normalized = normalizeExtractedFields({
+            session: liveCtx.session,
+            extracted: extracted_fields || {},
+          });
+          const inferred = inferFieldsFromUtterance({
+            session: liveCtx.session,
+            utterance: utterance || "",
+          });
+          const prepared = prepareFieldsForPersistence({
+            session: liveCtx.session,
+            extracted: mergeExtractedFieldMaps(normalized, inferred),
+            utterance,
+            activeFieldId: liveCtx.session.activeField,
+          });
+          if (!Object.keys(prepared.fields).length) {
+            throw new llm.ToolError(
+              JSON.stringify({
+                success: false,
+                errorCode: "NO_FIELDS",
+                message:
+                  prepared.errors[0]?.message ||
+                  "No new field values to save. Ask for the next missing detail instead of calling capture again.",
+              }),
+            );
+          }
+          return wrap(
             "capture_caller_information",
             "submit_caller_information",
             async (ctx) =>
@@ -94,7 +126,8 @@ export function buildAmySemanticToolList(input: {
                 utterance,
                 intent,
               }),
-          )(opts),
+          )(opts);
+        },
       }),
     );
   }

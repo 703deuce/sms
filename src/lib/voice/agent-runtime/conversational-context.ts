@@ -26,6 +26,17 @@ export function buildConversationalContextBlock(ctx: LiveKitCallContext): string
   }
 
   const missing = canonical?.missingFieldIds || [];
+  const collected = Object.entries(ctx.session.collectedFields)
+    .filter(([, value]) => value?.trim())
+    .map(([fieldId, value]) => {
+      const label =
+        ctx.session.fieldManifest.find((field) => field.field_id === fieldId)?.label || fieldId;
+      return `${label}: ${value.trim()}`;
+    });
+  if (collected.length > 0) {
+    lines.push(`Already collected: ${collected.join("; ")}`);
+  }
+
   if (missing.length > 0) {
     lines.push(`Still need from caller: ${missing.join(", ")}`);
     const activeField = requirements.activeField as { label?: string; instruction?: string } | null;

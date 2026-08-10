@@ -6,6 +6,16 @@ import type { RuntimeFieldManifestEntry } from "@/lib/voice/field-runtime/types"
 const ADDRESS_UTTERANCE_PATTERN =
   /\b(address|street|lane|road|avenue|ave|blvd|boulevard|drive|dr|court|ct|way|place|pl|zip|virginia|va\b|fredericksburg|stafford)/i;
 
+function looksLikePersonName(utterance: string): boolean {
+  const trimmed = utterance.trim();
+  if (!trimmed || trimmed.length > 80) return false;
+  if (/[@\d]/.test(trimmed)) return false;
+  if (looksLikeSpokenEmail(trimmed)) return false;
+  const words = trimmed.split(/\s+/).filter(Boolean);
+  if (words.length < 1 || words.length > 5) return false;
+  return words.every((word) => /^[A-Za-z][A-Za-z'.-]*$/.test(word));
+}
+
 function missingAddressFieldId(session: AmyRealtimeSession): string | null {
   const manifestIds = manifestFieldIds(session.fieldManifest);
   const addressId = resolveAddressFieldId(manifestIds);
@@ -113,10 +123,16 @@ export function inferFieldsFromUtterance(input: {
   if (!missing.length) return {};
 
   const out: Record<string, string> = {};
+  const missingIds = new Set(missing.map((field) => field.field_id));
   const activeId = input.session.activeField || missing[0]?.field_id;
 
-  if (activeId && looksLikeSpokenEmail(utterance)) {
+  if (missingIds.has(SYSTEM_FIELD_IDS.email) && looksLikeSpokenEmail(utterance)) {
     out[SYSTEM_FIELD_IDS.email] = utterance;
+    return out;
+  }
+
+  if (missingIds.has(SYSTEM_FIELD_IDS.name) && looksLikePersonName(utterance)) {
+    out[SYSTEM_FIELD_IDS.name] = utterance;
     return out;
   }
 

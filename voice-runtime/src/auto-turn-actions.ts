@@ -36,7 +36,19 @@ export async function applyAutoTurnActionsFromTranscript(
   });
   ctx = pipeline.ctx;
 
-  if (!autoCapture.applied && !autoIntent.applied && pipeline.steps.length === 0) return;
+  const skipped =
+    !autoCapture.applied && !autoIntent.applied && pipeline.steps.length === 0;
+  if (skipped) {
+    console.log(
+      JSON.stringify({
+        source: "transovo-voice-runtime",
+        event: "auto_turn_actions_skipped",
+        callId: ctx.callId,
+        transcriptPreview: transcript.slice(0, 120),
+      }),
+    );
+    return;
+  }
 
   session.userData = { ...session.userData, callContext: ctx };
   await syncAmyAgentFromContext(session, ctx);

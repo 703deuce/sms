@@ -56,7 +56,9 @@ export function compileSemanticToolNamesForSession(input: {
   };
 
   addIfInternal("capture_caller_information", "submit_caller_information");
-  addIfInternal("detect_caller_intent", "detect_caller_intent");
+  if (!input.callerIntent) {
+    addIfInternal("detect_caller_intent", "detect_caller_intent");
+  }
   addIfInternal("answer_business_question", "get_business_answer");
   addIfInternal("take_message", "take_message");
   addIfInternal("transfer_to_human", "request_human");
