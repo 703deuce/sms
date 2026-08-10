@@ -17,12 +17,12 @@ import {
   bootstrapLiveKitCallContext,
   domainGetBookingRequirements,
   domainRecordField,
-  domainCheckAvailability,
   domainSelectSlot,
   taskForWorkflowState,
   toolsForTask,
 } from "../src/lib/voice/domain-actions";
 import { buildAmyToolList } from "../voice-runtime/src/amy-tools";
+import { executeDeterministicPipeline } from "../src/lib/voice/agent-runtime/deterministic-executor";
 import { staleCachedSessionOnly } from "../src/lib/voice/domain-actions/scheduling-session";
 import { matchSlotFromInput } from "../src/lib/voice/workflow-engine/slot-matching";
 
@@ -127,25 +127,35 @@ async function main() {
       callContext.session.currentState,
     );
     const postCollectTools = buildAmyToolList(callContext);
+    const pipeline = await executeDeterministicPipeline({
+      ctx: callContext,
+      preferenceSpoken: "tomorrow afternoon",
+    });
     check(
-      "check_availability exposed",
-      postCollectTools.tools.some((t) => t.id === "check_availability"),
+      "deterministic pipeline runs check_availability",
+      pipeline.steps.some((s) => s.toolName === "check_availability") ||
+        callContext.session.availableSlots.length > 0,
+      pipeline.steps.map((s) => s.toolName).join(", "),
+    );
+    check(
+      "check_availability not exposed to LLM",
+      !postCollectTools.tools.some((t) => t.id === "check_availability"),
       postCollectTools.tools.map((t) => t.id).join(", "),
     );
     check(
-      "record_current_field removed",
-      !postCollectTools.tools.some((t) => t.id === "record_current_field"),
+      "capture_caller_information removed when complete",
+      !postCollectTools.tools.some((t) => t.id === "capture_caller_information"),
     );
 
     section = "availability";
     console.log(`\n## ${section}`);
-    const avail = await domainCheckAvailability({
-      ctx: callContext,
-      spoken: "tomorrow afternoon",
-    });
-    check("check_availability returns", avail.ok !== false, avail.error_code);
-    const resultSlots = (avail.data?.slots as unknown[] | undefined) || [];
-    check("tool result includes slots array", Array.isArray(resultSlots));
+    check(
+      "pipeline availability succeeded",
+      pipeline.steps.some((s) => s.toolName === "check_availability" && s.ok),
+      pipeline.steps.map((s) => `${s.toolName}:${s.ok}`).join(", "),
+    );
+    const resultSlots = callContext.session.availableSlots || [];
+    check("session slots populated", resultSlots.length > 0, `count=${resultSlots.length}`);
     check(
       "session availableSlots populated after reload",
       callContext.session.availableSlots.length > 0 || resultSlots.length > 0,

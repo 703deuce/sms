@@ -166,7 +166,7 @@ export async function executeWorkflowTool(input: {
 }): Promise<WorkflowToolExecution> {
   const semanticName = input.toolName;
   const resolved = isSemanticToolName(input.toolName)
-    ? resolveSemanticToolInvocation(input.toolName, input.args || {})
+    ? resolveSemanticToolInvocation(input.toolName, input.args || {}, input.ctx)
     : { internalTool: input.toolName, args: input.args || {} };
   const toolName = resolved.internalTool;
   const args = resolved.args;

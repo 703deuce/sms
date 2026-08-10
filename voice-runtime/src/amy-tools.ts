@@ -103,6 +103,14 @@ function logToolExecution(input: {
   );
 }
 
+function isIrreversibleWriteTool(toolName: string): boolean {
+  return (
+    toolName === "confirm_booking" ||
+    toolName === "reschedule_appointment" ||
+    toolName === "cancel_appointment"
+  );
+}
+
 function wrapToolExecute(
   toolName: string,
   opts: AmyToolOptions,
@@ -123,6 +131,10 @@ function wrapToolExecute(
   const toolSetBeforeList = [...toolSetBefore];
 
   const run = async () => {
+    if (isIrreversibleWriteTool(toolName)) {
+      opts.ctx.disallowInterruptions();
+    }
+
     const loopFingerprint = fingerprintToolCall({
       toolName,
       nodeId: nodeIdBefore,

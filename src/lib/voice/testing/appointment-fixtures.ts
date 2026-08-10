@@ -32,7 +32,7 @@ export async function seedConfirmedAppointment(input: {
     data: {
       workspaceId: input.workspaceId,
       agentId: input.agentId,
-      callId: input.callId,
+      callId: null,
       contactId: contact.id,
       serviceName: input.serviceName || "Plumbing Repair",
       status: "confirmed",

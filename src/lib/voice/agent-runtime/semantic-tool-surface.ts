@@ -76,6 +76,10 @@ export function compileSemanticToolNamesForSession(input: {
     allowed.add("confirm_action");
   }
 
+  if (internalAllowed.has("cancel_appointment") && input.callerIntent === "cancel") {
+    allowed.add("confirm_action");
+  }
+
   const modifyFlow =
     input.callerIntent === "reschedule" ||
     input.callerIntent === "cancel" ||

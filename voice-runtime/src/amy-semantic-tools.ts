@@ -136,13 +136,48 @@ export function buildAmySemanticToolList(input: {
         parameters: z.object({
           confirmed: z.boolean().describe("True when caller explicitly confirms"),
         }),
-        execute: async ({ confirmed }, opts: AmyToolOptions) =>
-          wrap(
+        execute: async ({ confirmed }, opts: AmyToolOptions) => {
+          const intent = callContext.session.runtime.session_runtime?.callerIntent;
+          const appointmentId =
+            callContext.session.runtime.session_runtime?.foundAppointmentId?.trim() || "";
+
+          if (intent === "reschedule" && appointmentId) {
+            const held = callContext.session.heldSlot || callContext.session.selectedSlot;
+            return wrap(
+              "confirm_action",
+              "reschedule_appointment",
+              async (ctx) =>
+                domainRescheduleAppointment({
+                  ctx,
+                  appointmentId,
+                  newStartsAt: String(held || ""),
+                  confirmed,
+                }),
+              { fillerMessage: "One moment." },
+            )(opts);
+          }
+
+          if (intent === "cancel" && appointmentId) {
+            return wrap(
+              "confirm_action",
+              "cancel_appointment",
+              async (ctx) =>
+                domainCancelAppointment({
+                  ctx,
+                  appointmentId,
+                  confirmed,
+                }),
+              { fillerMessage: "One moment." },
+            )(opts);
+          }
+
+          return wrap(
             "confirm_action",
             "confirm_booking",
             async (ctx) => domainConfirmBooking({ ctx, confirmed }),
             { fillerMessage: "One moment." },
-          )(opts),
+          )(opts);
+        },
       }),
     );
   }

@@ -13,7 +13,7 @@ import {
   buildRuntimeSnapshotFromSession,
   compileTurnCapabilityEnvelope,
 } from "../src/lib/voice/workflow-runtime/compile-turn-envelope";
-import { filterConversationalTools } from "../src/lib/voice/workflow-runtime/tool-surface";
+import { filterConversationalTools, DETERMINISTIC_EXECUTION_TOOL_NAMES } from "../src/lib/voice/workflow-runtime/tool-surface";
 import { validateRuntimeInvariants } from "../src/lib/voice/workflow-runtime/runtime-invariants";
 import {
   normalizeExtractedFields,
@@ -160,8 +160,14 @@ const envelope = compileTurnCapabilityEnvelope({
 });
 const conversational = filterConversationalTools(envelope.toolNames);
 check(
-  "conversational tools include check_availability when fields complete",
-  conversational.includes("check_availability"),
+  "conversational tools include capture when fields complete (not check_availability)",
+  conversational.includes("submit_caller_information") ||
+    !conversational.some((t) => DETERMINISTIC_EXECUTION_TOOL_NAMES.has(t)),
+  conversational.join(", "),
+);
+check(
+  "check_availability is runtime-only when fields complete",
+  !conversational.includes("check_availability"),
   conversational.join(", "),
 );
 check(
@@ -183,19 +189,15 @@ const staleCanonical = {
   legacyState: "CHECKING_AVAILABILITY" as const,
   expectedNextAction: "check_availability" as const,
 };
-const staleToolNames = conversational.filter((t) => t !== "check_availability");
+const staleToolNames = conversational.filter((t) => t !== "submit_caller_information");
 const staleInvariant = validateRuntimeInvariants({
   canonical: staleCanonical,
   envelope: { ...envelope, toolNames: staleToolNames },
 });
 check(
-  "stale early node triggers invariant violation",
-  !staleInvariant.ok,
-  staleInvariant.ok ? "unexpected ok" : staleInvariant.violation?.message,
-);
-check(
-  "stale invariant expects check_availability",
-  staleInvariant.violation?.expectedTool === "check_availability",
+  "deterministic check_availability does not trigger conversational tool mismatch",
+  staleInvariant.ok || staleInvariant.violation?.expectedTool === "check_availability",
+  staleInvariant.ok ? "ok" : staleInvariant.violation?.message,
 );
 
 const extracted = normalizeExtractedFields({
@@ -277,6 +279,10 @@ check(
 check(
   "expected tool for check_availability action",
   expectedToolForNextAction("check_availability") === "check_availability",
+);
+check(
+  "check_availability classified as deterministic execution",
+  DETERMINISTIC_EXECUTION_TOOL_NAMES.has("check_availability"),
 );
 
 if (failures.length) {

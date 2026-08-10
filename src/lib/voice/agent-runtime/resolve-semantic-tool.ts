@@ -1,9 +1,11 @@
 import { SEMANTIC_TOOL_NAMES, type SemanticToolName } from "./semantic-tool-surface";
+import type { LiveKitCallContext } from "@/lib/voice/domain-actions";
 
 /** Map semantic LLM tool invocations to internal domain tool names + normalized args. */
 export function resolveSemanticToolInvocation(
   toolName: string,
   args: Record<string, unknown> = {},
+  ctx?: LiveKitCallContext,
 ): { internalTool: string; args: Record<string, unknown> } {
   switch (toolName as SemanticToolName) {
     case "capture_caller_information":
@@ -23,11 +25,44 @@ export function resolveSemanticToolInvocation(
           slot_iso: args.slot_id || args.slot_iso,
         },
       };
-    case "confirm_action":
+    case "confirm_action": {
+      const intent =
+        (args.intent ? String(args.intent) : null) ||
+        ctx?.session.runtime.session_runtime?.callerIntent ||
+        null;
+      const appointmentId =
+        (args.appointment_id ? String(args.appointment_id) : null) ||
+        ctx?.session.runtime.session_runtime?.foundAppointmentId?.trim() ||
+        "";
+
+      if (intent === "reschedule" && appointmentId) {
+        const held = ctx?.session.heldSlot || ctx?.session.selectedSlot;
+        return {
+          internalTool: "reschedule_appointment",
+          args: {
+            appointment_id: appointmentId,
+            new_starts_at: args.slot_id || args.new_starts_at || held,
+            confirmed: args.confirmed ?? true,
+          },
+        };
+      }
+
+      if (intent === "cancel" && appointmentId) {
+        return {
+          internalTool: "cancel_appointment",
+          args: {
+            appointment_id: appointmentId,
+            confirmed: args.confirmed ?? true,
+            reason: args.reason,
+          },
+        };
+      }
+
       return {
         internalTool: SEMANTIC_TOOL_NAMES.confirm_action,
         args: { confirmed: args.confirmed ?? true },
       };
+    }
     case "answer_business_question":
       return {
         internalTool: SEMANTIC_TOOL_NAMES.answer_business_question,

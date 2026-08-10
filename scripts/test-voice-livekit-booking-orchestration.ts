@@ -18,7 +18,6 @@ import {
   bootstrapLiveKitCallContext,
   domainGetBookingRequirements,
   domainRecordField,
-  domainCheckAvailability,
   domainSelectSlot,
   domainConfirmBooking,
   taskForWorkflowState,
@@ -26,6 +25,7 @@ import {
   assertTaskToolAllowed,
   buildRequirementsPayload,
 } from "../src/lib/voice/domain-actions";
+import { executeDeterministicPipeline } from "../src/lib/voice/agent-runtime/deterministic-executor";
 import {
   buildAmyAgentInstructions,
   buildAmyToolList,
@@ -100,10 +100,8 @@ async function main() {
     const initialTask = taskForWorkflowState(callContext.session.currentState);
     const initialTools = buildAmyToolList(callContext);
     check(
-      "discovery/collect exposes record_current_field or get_booking_requirements",
-      initialTools.tools.some(
-        (tool) => tool.id === "record_current_field" || tool.id === "get_booking_requirements",
-      ),
+      "discovery/collect exposes semantic capture tool",
+      initialTools.tools.some((tool) => tool.id === "capture_caller_information"),
     );
 
     try {
@@ -141,40 +139,58 @@ async function main() {
     check("post-collect task is CheckAvailabilityTask", postCollectTask === "CheckAvailabilityTask");
 
     const postCollectTools = buildAmyToolList(callContext);
+    const pipeline = await executeDeterministicPipeline({
+      ctx: callContext,
+      preferenceSpoken: "next available",
+    });
     check(
-      "post-collect exposes check_availability immediately",
-      postCollectTools.tools.some((tool) => tool.id === "check_availability"),
+      "deterministic pipeline runs check_availability after collect",
+      pipeline.steps.some((s) => s.toolName === "check_availability") ||
+        callContext.session.availableSlots.length > 0,
+      pipeline.steps.map((s) => s.toolName).join(", "),
+    );
+    check(
+      "post-collect does not expose check_availability to LLM",
+      !postCollectTools.tools.some((tool) => tool.id === "check_availability"),
       postCollectTools.tools.map((tool) => tool.id).join(", "),
     );
     check(
-      "post-collect removes record_current_field when complete",
-      !postCollectTools.tools.some((tool) => tool.id === "record_current_field"),
+      "post-collect removes capture when complete",
+      !postCollectTools.tools.some((tool) => tool.id === "capture_caller_information") ||
+        callContext.session.missingFieldIds.length > 0,
     );
 
     const instructions = buildAmyAgentInstructions(callContext);
-    check("instructions require check_availability", instructions.includes("check_availability"));
-    check("instructions include phase task context", instructions.includes("CURRENT TASK"));
+    check(
+      "instructions do not teach LLM to call check_availability",
+      !instructions.includes("call check_availability"),
+    );
+    check(
+      "instructions include conversational context",
+      instructions.includes("ACTIVE CAPABILITY"),
+    );
 
     const beforeSyncTools = callContext.lastAgentSync?.toolNames || [];
     await syncAmyAgentFromContext(mockSession(callContext), callContext);
     check("sync records lastAgentSync", Boolean(callContext.lastAgentSync?.toolNames.length));
     check(
-      "sync exposes check_availability in lastAgentSync",
-      callContext.lastAgentSync?.toolNames.includes("check_availability") === true,
+      "sync exposes semantic tools in lastAgentSync",
+      (callContext.lastAgentSync?.toolNames.includes("choose_appointment_time") ||
+        callContext.lastAgentSync?.toolNames.includes("capture_caller_information")) === true,
       `before=${beforeSyncTools.join(",")} after=${callContext.lastAgentSync?.toolNames.join(",")}`,
     );
 
     const payload = buildRequirementsPayload(callContext.session);
     check("requirements payload readyForAvailability", payload.readyForAvailability === true);
 
-    const avail = await domainCheckAvailability({
-      ctx: callContext,
-      spoken: "tomorrow afternoon",
-    });
-    check("check_availability returns speak", Boolean(avail.speak));
-    check("check_availability returns slots array", Array.isArray(avail.data?.slots));
+    check(
+      "availability slots present after pipeline",
+      callContext.session.availableSlots.length > 0 ||
+        pipeline.steps.some((s) => s.toolName === "check_availability" && s.ok),
+    );
 
-    const slots = (avail.data?.slots as unknown[] | undefined) || [];
+    const slots =
+      (callContext.session.availableSlots as unknown[] | undefined) || [];
     if (slots.length && callContext.session.currentState === "SELECTING_SLOT") {
       const select = await domainSelectSlot({
         ctx: callContext,

@@ -1,5 +1,6 @@
 import type { LiveKitCallContext } from "@/lib/voice/domain-actions";
 import { buildAmyAgentInstructions } from "@/lib/voice/agent-runtime/build-amy-instructions";
+import { autoCaptureCallerInformationFromUtterance } from "@/lib/voice/agent-runtime/auto-capture-caller-info";
 import { executeDeterministicPipeline } from "@/lib/voice/agent-runtime/deterministic-executor";
 import {
   isSemanticToolName,
@@ -205,6 +206,47 @@ export async function processCallerTurn(input: {
   const maxRounds = input.maxToolRounds ?? 10;
   let assistantText = "";
 
+  const autoCapture = await autoCaptureCallerInformationFromUtterance({
+    ctx,
+    userText: input.userText,
+  });
+  ctx = autoCapture.ctx;
+  if (autoCapture.applied) {
+    toolExecutions.push({
+      toolName: "capture_caller_information",
+      ok: true,
+      speak: autoCapture.speak || "Caller information captured.",
+    });
+  }
+
+  const intentCalled = false;
+  const autoIntent = await autoApplyCallerIntentFromUtterance({
+    ctx,
+    userText: input.userText,
+    intentToolAlreadyCalled: intentCalled,
+  });
+  ctx = autoIntent.ctx;
+  if (autoIntent.applied) {
+    toolExecutions.push({
+      toolName: "detect_caller_intent",
+      ok: true,
+      speak: "Intent detected from caller utterance.",
+    });
+  }
+
+  const prePipeline = await executeDeterministicPipeline({
+    ctx,
+    preferenceSpoken: input.userText,
+  });
+  ctx = prePipeline.ctx;
+  for (const step of prePipeline.steps) {
+    toolExecutions.push({
+      toolName: step.toolName,
+      ok: step.ok,
+      speak: step.speak,
+    });
+  }
+
   for (let round = 0; round < maxRounds; round++) {
     const tools = toolsForContext(ctx);
     const syncedMessages = refreshAmySystemMessage(messages, ctx);
@@ -241,34 +283,6 @@ export async function processCallerTurn(input: {
       messages.push({ role: "assistant", content: assistantText });
     }
     break;
-  }
-
-  const intentCalled = toolExecutions.some((t) => t.toolName === "detect_caller_intent");
-  const autoIntent = await autoApplyCallerIntentFromUtterance({
-    ctx,
-    userText: input.userText,
-    intentToolAlreadyCalled: intentCalled,
-  });
-  ctx = autoIntent.ctx;
-  if (autoIntent.applied) {
-    toolExecutions.push({
-      toolName: "detect_caller_intent",
-      ok: true,
-      speak: "Intent detected from caller utterance.",
-    });
-  }
-
-  const pipeline = await executeDeterministicPipeline({
-    ctx,
-    preferenceSpoken: input.userText,
-  });
-  ctx = pipeline.ctx;
-  for (const step of pipeline.steps) {
-    toolExecutions.push({
-      toolName: step.toolName,
-      ok: step.ok,
-      speak: step.speak,
-    });
   }
 
   return {

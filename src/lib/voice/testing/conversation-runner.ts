@@ -184,6 +184,20 @@ async function processDeterministicTurn(input: {
   };
 }
 
+function toolSucceeded(
+  toolLog: Array<{ toolName: string; ok: boolean }>,
+  names: string[],
+): boolean {
+  return toolLog.some((t) => names.includes(t.toolName) && t.ok);
+}
+
+function toolAttempted(
+  toolLog: Array<{ toolName: string; ok: boolean }>,
+  names: string[],
+): boolean {
+  return toolLog.some((t) => names.includes(t.toolName));
+}
+
 export async function evaluateScenarioOutcome(input: {
   scenario: MasterReceptionistScenario;
   callContext: LiveKitCallContext;
@@ -199,19 +213,20 @@ export async function evaluateScenarioOutcome(input: {
       if (!hasBookingReceipt(callContext.session)) {
         failures.push("conversation ended without booking receipt (no bookingId)");
       }
-      if (!toolLog.some((t) => t.toolName === "confirm_booking" && t.ok)) {
+      if (!toolSucceeded(toolLog, ["confirm_booking", "confirm_action"])) {
         failures.push("confirm_booking never succeeded");
       }
       break;
     }
     case "reschedule": {
-      const foundAppointments = toolLog.some(
-        (t) => t.toolName === "find_appointments" && t.ok,
-      );
+      const foundAppointments = toolSucceeded(toolLog, [
+        "find_appointments",
+        "modify_appointment",
+      ]);
       if (!foundAppointments) {
         failures.push("find_appointments never succeeded");
       }
-      if (!toolLog.some((t) => t.toolName === "reschedule_appointment")) {
+      if (!toolAttempted(toolLog, ["reschedule_appointment", "confirm_action", "modify_appointment"])) {
         failures.push("reschedule_appointment was never attempted");
       }
       if (input.priorAppointmentId) {
@@ -228,10 +243,10 @@ export async function evaluateScenarioOutcome(input: {
       break;
     }
     case "cancel": {
-      if (!toolLog.some((t) => t.toolName === "find_appointments" && t.ok)) {
+      if (!toolSucceeded(toolLog, ["find_appointments", "modify_appointment"])) {
         failures.push("find_appointments never succeeded");
       }
-      if (!toolLog.some((t) => t.toolName === "cancel_appointment" && t.ok)) {
+      if (!toolSucceeded(toolLog, ["cancel_appointment", "confirm_action", "modify_appointment"])) {
         failures.push("cancel_appointment never succeeded");
       }
       if (input.priorAppointmentId) {
@@ -268,7 +283,7 @@ export async function evaluateScenarioOutcome(input: {
       const emergencyHandled =
         ["emergency_handoff", "transfer_fallback"].includes(nodeId) ||
         toolLog.some((t) => t.toolName === "detect_caller_intent" && t.ok) ||
-        toolLog.some((t) => t.toolName === "request_human") ||
+        toolLog.some((t) => ["request_human", "transfer_to_human"].includes(t.toolName)) ||
         toolLog.some((t) => t.toolName === "classify_intent" && t.ok);
       if (!emergencyHandled) {
         failures.push("expected emergency handoff (detect_intent, request_human, or classify_intent)");
@@ -366,11 +381,13 @@ export async function runConversationScenario(input: {
 
     for (const tool of result.toolExecutions) {
       toolLog.push({ toolName: tool.toolName, ok: tool.ok && !tool.blocked });
-      if (tool.toolName === "confirm_booking") confirmBookingAttempted = true;
+      if (tool.toolName === "confirm_booking" || tool.toolName === "confirm_action") {
+        confirmBookingAttempted = true;
+      }
     }
 
     const { allowedToolNames } = compileToolsForCallContext(callContext);
-    if (allowedToolNames.has("confirm_booking")) {
+    if (allowedToolNames.has("confirm_booking") || allowedToolNames.has("confirm_action")) {
       confirmBookingEverExposed = true;
     }
 
@@ -391,17 +408,17 @@ export async function runConversationScenario(input: {
     }
 
     if (successType === "booking" && result.bookingComplete) break;
-    if (successType === "cancel" && toolLog.some((t) => t.toolName === "cancel_appointment" && t.ok)) {
+    if (successType === "cancel" && toolSucceeded(toolLog, ["cancel_appointment", "confirm_action", "modify_appointment"])) {
       break;
     }
     if (
       successType === "reschedule" &&
-      toolLog.some((t) => t.toolName === "reschedule_appointment" && t.ok)
+      toolSucceeded(toolLog, ["reschedule_appointment", "confirm_action", "modify_appointment"])
     ) {
       break;
     }
     if (successType === "emergency_transfer" && (
-      toolLog.some((t) => t.toolName === "request_human") ||
+      toolLog.some((t) => ["request_human", "transfer_to_human"].includes(t.toolName)) ||
       toolLog.some((t) => t.toolName === "detect_caller_intent" && t.ok)
     )) {
       break;

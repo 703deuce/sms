@@ -1,6 +1,7 @@
 import type { AgentSession } from "@livekit/agents";
-import { autoApplyCallerIntentFromUtterance } from "@/lib/voice/workflow-runtime/auto-intent";
+import { autoCaptureCallerInformationFromUtterance } from "@/lib/voice/agent-runtime/auto-capture-caller-info";
 import { executeDeterministicPipeline } from "@/lib/voice/agent-runtime/deterministic-executor";
+import { autoApplyCallerIntentFromUtterance } from "@/lib/voice/workflow-runtime/auto-intent";
 import type { AmyProcessUserData } from "./metadata";
 import { syncAmyAgentFromContext } from "./amy-tools";
 
@@ -16,8 +17,13 @@ export async function applyAutoTurnActionsFromTranscript(
 
   callContext.session.lastUserUtterance = transcript;
 
-  const autoIntent = await autoApplyCallerIntentFromUtterance({
+  const autoCapture = await autoCaptureCallerInformationFromUtterance({
     ctx: callContext,
+    userText: transcript,
+  });
+
+  const autoIntent = await autoApplyCallerIntentFromUtterance({
+    ctx: autoCapture.ctx,
     userText: transcript,
     intentToolAlreadyCalled: false,
   });
@@ -29,7 +35,7 @@ export async function applyAutoTurnActionsFromTranscript(
   });
   ctx = pipeline.ctx;
 
-  if (!autoIntent.applied && pipeline.steps.length === 0) return;
+  if (!autoCapture.applied && !autoIntent.applied && pipeline.steps.length === 0) return;
 
   session.userData = { ...session.userData, callContext: ctx };
   await syncAmyAgentFromContext(session, ctx);
@@ -39,6 +45,7 @@ export async function applyAutoTurnActionsFromTranscript(
       source: "transovo-voice-runtime",
       event: "auto_turn_actions_applied",
       callId: ctx.callId,
+      captureApplied: autoCapture.applied,
       intentApplied: autoIntent.applied,
       deterministicSteps: pipeline.steps.map((s) => ({
         toolName: s.toolName,
