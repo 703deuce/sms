@@ -14,6 +14,10 @@ import { runCollectCallerFieldsTaskGroup } from "./tasks/collect-field-task";
 import { BookAppointmentTask } from "./tasks/book-appointment-task";
 import { ModifyAppointmentTask } from "./tasks/modify-appointment-task";
 import { nestedTaskOptionsFromSession } from "./tasks/task-context";
+import {
+  BOOKING_COMPLETE_TOOL_RESULT,
+  buildBookingSuccessLine,
+} from "./booking-completion-messages";
 
 function alreadyBookedAmyMessage(session: AgentSession<AmyUserData>): string | null {
   const ctx = session.userData.callContext;
@@ -61,7 +65,9 @@ export function createAmyReceptionistAgent(businessName: string) {
       if (bookedAgain) return bookedAgain;
 
       if (result.bookingId) {
-        return `The appointment is booked${result.slotLabel ? ` for ${result.slotLabel}` : ""}. Ask if they need anything else.`;
+        const when = result.slotLabel || "your selected time";
+        await runCtx.update(buildBookingSuccessLine(when));
+        return BOOKING_COMPLETE_TOOL_RESULT;
       }
       return "I could not complete the booking. Offer to try another time or take a message.";
     },

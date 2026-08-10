@@ -29,6 +29,7 @@ export function buildAmyLiveKitRootInstructions(businessName: string): string {
     "Call schedule_appointment to book a new appointment — the runtime collects fields and books via tools.",
     "Call modify_appointment when the caller wants to reschedule or cancel.",
     "Call get_business_answer for hours, pricing, policies, or FAQs — including during booking flows.",
+    "After a successful booking the runtime speaks one confirmation — do not repeat it or give multiple goodbyes. When the caller is done, call end_call once.",
     "Call transfer_to_human only after the caller confirms they want a person.",
     "Never say you lack access to scheduling or the booking system — use schedule_appointment instead.",
     AMY_VOICE_MODALITY,

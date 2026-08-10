@@ -10,6 +10,11 @@ import {
 } from "./booking-recovery";
 import { GetEmailTask } from "./get-email-task";
 import { withLiveKitToolTelemetry } from "../livekit-tool-telemetry";
+import {
+  BOOKING_COMPLETE_TOOL_RESULT,
+  buildBookingSuccessLine,
+  POST_EMAIL_BOOKING_FILLER,
+} from "../booking-completion-messages";
 import { markBookingConfirmed, type FrontDeskUserData } from "./userdata";
 
 function buildFrontDeskInstructions(businessLabel: string): string {
@@ -47,6 +52,8 @@ function buildFrontDeskInstructions(businessLabel: string): string {
     "If schedule_appointment reports already_completed, tell the caller they're confirmed — ",
     "do not book again or re-ask for email. ",
     "Never claim a booking succeeded unless schedule_appointment confirms it. ",
+    "After a successful booking the runtime speaks one confirmation — do not repeat it or give ",
+    "multiple goodbyes. When the caller is done, call end_call once with a brief farewell. ",
     "A confirmation text is sent automatically to the caller's phone after booking — ",
     "never ask for their number or offer to send texts manually.",
   ].join("");
@@ -196,8 +203,8 @@ export function createFrontDeskBookingAgent(input: {
         }
       }
 
+      await runCtx.update(POST_EMAIL_BOOKING_FILLER);
       runCtx.disallowInterruptions();
-      await runCtx.update("Perfect — one moment while I put that on the calendar for you.");
 
       return withLiveKitToolTelemetry(
         userData,
@@ -219,10 +226,9 @@ export function createFrontDeskBookingAgent(input: {
 
             sendBookingSmsAsync(session, booked.slot.startTime);
 
-            return (
-              `The appointment was successfully scheduled for ${local}. ` +
-              "A confirmation text is being sent to their phone. Tell the caller they're all set."
-            );
+            await runCtx.update(buildBookingSuccessLine(local));
+
+            return BOOKING_COMPLETE_TOOL_RESULT;
           } catch (err) {
             if (err instanceof SlotUnavailableError) {
               userData.slotUnavailableCount += 1;
@@ -248,9 +254,23 @@ export function createFrontDeskBookingAgent(input: {
     },
   });
 
+  const endCall = llm.tool({
+    name: "end_call",
+    description:
+      "End the call when the conversation is complete — use after booking when the caller is done.",
+    parameters: z.object({
+      reason: z.string().optional(),
+    }),
+    execute: async ({ reason }, opts) => {
+      const session = opts.ctx.session as AgentSession<FrontDeskUserData>;
+      session.shutdown({ reason: reason || "caller_done" });
+      return "Call ended.";
+    },
+  });
+
   return voice.Agent.create<FrontDeskUserData>({
     instructions: buildFrontDeskInstructions(label),
-    tools: llm.toToolContext([getCurrentTime, listAvailableSlots, scheduleAppointment]),
+    tools: llm.toToolContext([getCurrentTime, listAvailableSlots, scheduleAppointment, endCall]),
     onEnter: async (agentCtx) => {
       const session = agentCtx.session as AgentSession<FrontDeskUserData>;
       const hour = session.userData.cal.now().getHours();
