@@ -192,10 +192,6 @@ export async function runOutboundLeadQualificationEntry(
 
   await session.start({ agent, room: ctx.room });
 
-  if (session.room_io?.setParticipant) {
-    session.room_io.setParticipant(job.calleeParticipantIdentity);
-  }
-
   await appendTraceEvent(job.callId, {
     kind: "sip_dial_started",
     detail: {

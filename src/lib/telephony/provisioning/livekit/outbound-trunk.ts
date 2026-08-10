@@ -1,3 +1,4 @@
+import { ListUpdate, SIPTransport } from "@livekit/protocol";
 import type { SIPOutboundTrunkInfo } from "livekit-server-sdk";
 import { getLiveKitSipClient } from "./client";
 
@@ -40,7 +41,7 @@ export async function ensureLiveKitOutboundTrunk(input: {
     const numbers = trunk.numbers || [];
     if (!numbers.includes(number)) {
       trunk = await client.updateSipOutboundTrunkFields(trunk.sipTrunkId!, {
-        numbers: [...new Set([...numbers, number])],
+        numbers: new ListUpdate({ set: [...new Set([...numbers, number])] }),
       });
       actions.push("added_caller_id_to_outbound_trunk");
     }
@@ -67,6 +68,7 @@ export async function ensureLiveKitOutboundTrunk(input: {
     address,
     [number],
     {
+      transport: SIPTransport.SIP_TRANSPORT_AUTO,
       authUsername,
       authPassword,
       metadata: JSON.stringify({ owner: "transovo", kind: "telnyx_outbound" }),

@@ -2,7 +2,10 @@ import type { FrontDeskUserData } from "./frontdesk/userdata";
 import type { OutboundLeadUserData } from "./outbound/userdata";
 import type { VoiceRuntimeUserData } from "./metadata";
 
-export type TelemetryUserData = VoiceRuntimeUserData | OutboundLeadUserData;
+export type TelemetryUserData =
+  | VoiceRuntimeUserData
+  | OutboundLeadUserData
+  | { workspaceId: string; callId: string };
 
 export function resolveLiveKitToolContext(userData: TelemetryUserData | undefined): {
   workspaceId: string;

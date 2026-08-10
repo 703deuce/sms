@@ -1,4 +1,4 @@
-import { llm, voice } from "@livekit/agents";
+import { llm, voice, type ChatContext } from "@livekit/agents";
 import { z } from "zod";
 import type { AgentSession } from "@livekit/agents";
 import {
@@ -42,7 +42,7 @@ function mapToolOutcome(
 export class QualifyLeadTask extends voice.AgentTask<QualifyLeadResult> {
   constructor(
     private readonly sessionRef: AgentSession<OutboundLeadUserData>,
-    options?: { chatCtx?: voice.ChatContext },
+    options?: { chatCtx?: ChatContext },
   ) {
     super({
       chatCtx: options?.chatCtx,
@@ -71,7 +71,7 @@ export class QualifyLeadTask extends voice.AgentTask<QualifyLeadResult> {
         "Save one or more qualification fields the caller provided. Pass all fields understood from their last utterance.",
       parameters: z.object({
         fields: z
-          .record(z.string())
+          .record(z.string(), z.string())
           .describe("Map of field_id to value, e.g. name, target_location, price_range_or_budget"),
         still_interested: z
           .boolean()
@@ -155,7 +155,7 @@ export class QualifyLeadTask extends voice.AgentTask<QualifyLeadResult> {
           this.complete(result);
         }
 
-        if (mapped === "wrong_number" || mapped === "NOT_INTERESTED") {
+        if (mapped === "WRONG_NUMBER" || mapped === "NOT_INTERESTED") {
           return "Outcome saved. Apologize briefly and end the call.";
         }
         return "Outcome saved. Give a brief closing line, then the call may end.";
