@@ -52,16 +52,6 @@ export default defineAgent<VoiceRuntimeUserData>({
       );
     }
 
-    const { callId } = await liveKitRuntimeProvider.bootstrapSession({
-      workspaceId: routing.workspaceId,
-      agentId: routing.agentId,
-      callId: identity.parsedMeta?.callId,
-      fromE164: identity.fromE164,
-      toE164: identity.toE164 || routing.e164,
-      livekitRoomName: ctx.room.name,
-      livekitParticipantId: identity.participant.identity,
-    });
-
     const prisma = getPrisma();
     const agentRow = await prisma.voiceAgent.findFirst({
       where: { id: routing.agentId, workspaceId: routing.workspaceId },
@@ -70,6 +60,17 @@ export default defineAgent<VoiceRuntimeUserData>({
     const agentConfig = parseVoiceAgentConfig(agentRow?.draftConfig);
     const outputGainDb = resolveLiveKitOutputGainDb(agentConfig.voiceLanguage?.outputGainDb);
     const useFrontDesk = isFrontDeskProfile(agentConfig.advanced);
+
+    const { callId } = await liveKitRuntimeProvider.bootstrapSession({
+      workspaceId: routing.workspaceId,
+      agentId: routing.agentId,
+      callId: identity.parsedMeta?.callId,
+      fromE164: identity.fromE164,
+      toE164: identity.toE164 || routing.e164,
+      livekitRoomName: ctx.room.name,
+      livekitParticipantId: identity.participant.identity,
+      lightweightBootstrap: useFrontDesk,
+    });
 
     const messaging = await prisma.workspaceMessagingSettings.findUnique({
       where: { workspaceId: routing.workspaceId },
@@ -102,7 +103,7 @@ export default defineAgent<VoiceRuntimeUserData>({
     let agent: voice.Agent<VoiceRuntimeUserData>;
 
     if (useFrontDesk) {
-      const cal = await CalendlyCalendar.create({
+      const cal = CalendlyCalendar.create({
         workspaceId: routing.workspaceId,
         agentId: routing.agentId,
         callId,

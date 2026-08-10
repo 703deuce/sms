@@ -63,29 +63,32 @@ function formatRelativeTime(start: Date, now: Date): string {
 export class CalendlyCalendar {
   readonly scheduledAppointments: BookedAppointment[] = [];
   private eventTypeUri: string | null = null;
+  private initPromise: Promise<void> | null = null;
 
   private constructor(
     private readonly workspaceId: string,
     private readonly agentId: string,
     private readonly callId: string,
     readonly timezone: string,
-  ) {}
+    eventTypeUri?: string | null,
+  ) {
+    if (eventTypeUri) this.eventTypeUri = eventTypeUri;
+  }
 
-  static async create(input: {
+  static create(input: {
     workspaceId: string;
     agentId: string;
     callId: string;
     timezone: string;
     eventTypeUri?: string | null;
-  }): Promise<CalendlyCalendar> {
-    const cal = new CalendlyCalendar(
+  }): CalendlyCalendar {
+    return new CalendlyCalendar(
       input.workspaceId,
       input.agentId,
       input.callId,
       input.timezone,
+      input.eventTypeUri,
     );
-    await cal.initialize(input.eventTypeUri || null);
-    return cal;
   }
 
   now(): Date {
@@ -97,11 +100,12 @@ export class CalendlyCalendar {
   }
 
   async initialize(eventTypeUri: string | null): Promise<void> {
-    const ctx = await this.adapter();
+    if (this.eventTypeUri) return;
     if (eventTypeUri) {
       this.eventTypeUri = eventTypeUri;
       return;
     }
+    const ctx = await this.adapter();
     const listed = await listEventTypeAvailableTimes(ctx, {
       startTime: new Date(Date.now() + 60 * 60_000).toISOString(),
       endTime: new Date(Date.now() + 7 * 86_400_000).toISOString(),
@@ -109,10 +113,22 @@ export class CalendlyCalendar {
     this.eventTypeUri = listed.eventTypeUri;
   }
 
+  private ensureInitialized(): Promise<void> {
+    if (this.eventTypeUri) return Promise.resolve();
+    if (!this.initPromise) {
+      this.initPromise = this.initialize(null).catch((err) => {
+        this.initPromise = null;
+        throw err;
+      });
+    }
+    return this.initPromise;
+  }
+
   async listAvailableSlots(input: {
     daysAhead?: number;
     durationMin?: number;
   } = {}): Promise<AvailableSlot[]> {
+    await this.ensureInitialized();
     const ctx = await this.adapter();
     const durationMin = input.durationMin ?? 30;
     const requestedDays = Math.max(1, Math.min(14, input.daysAhead ?? 7));
@@ -186,6 +202,7 @@ export class CalendlyCalendar {
     attendeeEmail: string;
     attendeeName?: string;
   }): Promise<BookedAppointment> {
+    await this.ensureInitialized();
     const bookParams = buildCalendlyBookParams({
       startsAt: input.slot.startTime.toISOString(),
       name:

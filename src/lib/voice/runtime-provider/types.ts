@@ -14,6 +14,8 @@ export type InboundSessionMetadata = {
   telnyxCallControlId?: string | null;
   livekitRoomName?: string | null;
   livekitParticipantId?: string | null;
+  /** Frontdesk profile — skip Amy workflow/realtime session bootstrap for faster answer. */
+  lightweightBootstrap?: boolean;
 };
 
 export type VoiceRuntimeProvider = {

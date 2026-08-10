@@ -90,6 +90,7 @@ async function main() {
   });
   assert.deepEqual(toolOutput, { slots: 2 });
 
+  await new Promise((resolve) => setTimeout(resolve, 200));
   const tools = await prisma.voiceToolExecution.findMany({ where: { callId } });
   assert.equal(tools.length, 1);
   assert.equal(tools[0]?.status, "completed");

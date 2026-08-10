@@ -172,42 +172,43 @@ export function createFrontDeskBookingAgent(input: {
               timeZone: session.userData.timezone,
             });
 
-            const { sendVoiceBookingConfirmationSms } = await import(
-              "@/lib/voice/booking-confirmation-sms"
-            );
-            const sms = await sendVoiceBookingConfirmationSms({
-              workspaceId: session.userData.workspaceId,
-              agentId: session.userData.agentId,
-              callId: session.userData.callId,
-              startsAt: booked.slot.startTime,
-              businessName: session.userData.businessName,
-              timezone: session.userData.timezone,
-            }).catch((err) => {
-              console.warn(
-                JSON.stringify({
-                  source: "frontdesk-booking-agent",
-                  event: "booking_confirmation_sms_failed",
+            void import("@/lib/voice/booking-confirmation-sms")
+              .then(({ sendVoiceBookingConfirmationSms }) =>
+                sendVoiceBookingConfirmationSms({
+                  workspaceId: session.userData.workspaceId,
+                  agentId: session.userData.agentId,
                   callId: session.userData.callId,
-                  error: err instanceof Error ? err.message : String(err),
+                  startsAt: booked.slot.startTime,
+                  businessName: session.userData.businessName,
+                  timezone: session.userData.timezone,
                 }),
-              );
-              return { sent: false, reason: "send_failed" };
-            });
+              )
+              .then((sms) => {
+                console.log(
+                  JSON.stringify({
+                    source: "frontdesk-booking-agent",
+                    event: "booking_confirmation_sms",
+                    callId: session.userData.callId,
+                    sent: sms.sent,
+                    reason: sms.reason || null,
+                  }),
+                );
+              })
+              .catch((err) => {
+                console.warn(
+                  JSON.stringify({
+                    source: "frontdesk-booking-agent",
+                    event: "booking_confirmation_sms_failed",
+                    callId: session.userData.callId,
+                    error: err instanceof Error ? err.message : String(err),
+                  }),
+                );
+              });
 
-            console.log(
-              JSON.stringify({
-                source: "frontdesk-booking-agent",
-                event: "booking_confirmation_sms",
-                callId: session.userData.callId,
-                sent: sms.sent,
-                reason: sms.reason || null,
-              }),
+            return (
+              `The appointment was successfully scheduled for ${local}. ` +
+              "A confirmation text is being sent to their phone."
             );
-
-            const smsNote = sms.sent
-              ? " A confirmation text has been sent to their phone."
-              : "";
-            return `The appointment was successfully scheduled for ${local}.${smsNote}`;
           } catch (err) {
             if (err instanceof SlotUnavailableError) {
               session.userData.slotUnavailableCount += 1;

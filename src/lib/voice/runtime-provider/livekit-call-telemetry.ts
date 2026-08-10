@@ -58,63 +58,83 @@ export async function recordLiveKitBuiltinToolExecution<T>(input: {
 }): Promise<T> {
   const prisma = getPrisma();
   const started = Date.now();
-  const execution = await prisma.voiceToolExecution
-    .create({
-      data: {
-        workspaceId: input.workspaceId,
-        callId: input.callId,
-        toolId: null,
-        status: "running",
-        input: { toolType: input.toolType, ...(input.args || {}) } as Prisma.InputJsonValue,
-        isAsync: false,
-      },
-    })
-    .catch(() => null);
 
   try {
     const output = await input.run();
     const latencyMs = Date.now() - started;
-    if (execution) {
-      await prisma.voiceToolExecution
-        .update({
-          where: { id: execution.id },
-          data: {
-            status: "completed",
-            output: output as Prisma.InputJsonValue,
-            latencyMs,
-            completedAt: new Date(),
-          },
-        })
-        .catch(() => undefined);
-    }
-    await appendTraceEvent(input.callId, {
-      kind: "tool_success",
-      tool: input.toolType,
-      detail: { latencyMs },
-    }).catch(() => undefined);
+    void persistLiveKitToolExecution({
+      prisma,
+      workspaceId: input.workspaceId,
+      callId: input.callId,
+      toolType: input.toolType,
+      args: input.args,
+      status: "completed",
+      output: output as Prisma.InputJsonValue,
+      latencyMs,
+    });
     return output;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     const latencyMs = Date.now() - started;
-    if (execution) {
-      await prisma.voiceToolExecution
-        .update({
-          where: { id: execution.id },
-          data: {
-            status: "failed",
-            errorMessage: message,
-            latencyMs,
-            completedAt: new Date(),
-          },
-        })
-        .catch(() => undefined);
-    }
-    await appendTraceEvent(input.callId, {
-      kind: "tool_failure",
-      tool: input.toolType,
-      detail: { error: message, latencyMs },
-    }).catch(() => undefined);
+    void persistLiveKitToolExecution({
+      prisma,
+      workspaceId: input.workspaceId,
+      callId: input.callId,
+      toolType: input.toolType,
+      args: input.args,
+      status: "failed",
+      errorMessage: message,
+      latencyMs,
+    });
     throw err;
+  }
+}
+
+async function persistLiveKitToolExecution(input: {
+  prisma: ReturnType<typeof getPrisma>;
+  workspaceId: string;
+  callId: string;
+  toolType: string;
+  args?: Record<string, unknown>;
+  status: "completed" | "failed";
+  output?: Prisma.InputJsonValue;
+  errorMessage?: string;
+  latencyMs: number;
+}): Promise<void> {
+  try {
+    const execution = await input.prisma.voiceToolExecution.create({
+      data: {
+        workspaceId: input.workspaceId,
+        callId: input.callId,
+        toolId: null,
+        status: input.status,
+        input: { toolType: input.toolType, ...(input.args || {}) } as Prisma.InputJsonValue,
+        output: input.output,
+        errorMessage: input.errorMessage,
+        latencyMs: input.latencyMs,
+        isAsync: false,
+        completedAt: new Date(),
+      },
+    });
+    await appendTraceEvent(input.callId, {
+      kind: input.status === "completed" ? "tool_success" : "tool_failure",
+      tool: input.toolType,
+      detail: {
+        latencyMs: input.latencyMs,
+        executionId: execution.id,
+        ...(input.errorMessage ? { error: input.errorMessage } : {}),
+      },
+    });
+  } catch (err) {
+    console.warn(
+      JSON.stringify({
+        source: "livekit-call-telemetry",
+        event: "tool_persist_failed",
+        callId: input.callId,
+        toolType: input.toolType,
+        error: err instanceof Error ? err.message : String(err),
+      }),
+    );
   }
 }
 

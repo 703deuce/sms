@@ -66,6 +66,19 @@ export const liveKitRuntimeProvider: VoiceRuntimeProvider = {
       throw new Error("Failed to resolve call ID for LiveKit session");
     }
 
+    if (metadata.lightweightBootstrap) {
+      const fromE164 = metadata.fromE164?.trim();
+      if (fromE164 && fromE164 !== "unknown") {
+        await prisma.voiceCall
+          .update({
+            where: { id: callId },
+            data: { fromE164: normalizeE164(fromE164) },
+          })
+          .catch(() => undefined);
+      }
+      return { callId };
+    }
+
     const { initializeRealtimeSessionForCall } = await import(
       "@/lib/voice/realtime-session/init"
     );
