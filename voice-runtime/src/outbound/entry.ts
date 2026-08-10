@@ -9,6 +9,7 @@ import {
   persistLeadQualificationResult,
   TRANSOVO_OUTBOUND_ROOM_PREFIX,
 } from "@/lib/voice/outbound/outbound-call-service";
+import { prefillCollectedFields, resolveOutboundCallMission } from "@/lib/voice/outbound/compile-outbound-call-context";
 import { ensureLiveKitOutboundTrunk } from "@/lib/telephony/provisioning/livekit/outbound-trunk";
 import { appendTraceEvent } from "@/lib/voice/workflow-engine/trace";
 import { liveKitRuntimeProvider } from "@/lib/voice/runtime-provider/livekit";
@@ -125,7 +126,8 @@ export async function runOutboundLeadQualificationEntry(
     timezone,
     job,
     qualification: job.qualification,
-    collectedFields: {},
+    mission: resolveOutboundCallMission({ qualification: job.qualification, lead: job.lead }),
+    collectedFields: prefillCollectedFields({ qualification: job.qualification, lead: job.lead }),
     interested: true,
     qualificationComplete: false,
   };

@@ -8,11 +8,17 @@ import {
   missingRequiredFields,
   nextActionForOutcome,
 } from "@/lib/voice/outbound/qualification-evaluator";
+import {
+  buildOpeningReplyInstructions,
+  buildQualificationTaskInstructions,
+  fieldIdsToSkipAsking,
+  resolveOutboundCallMission,
+  type OutboundCallMission,
+} from "@/lib/voice/outbound/compile-outbound-call-context";
 import type { LeadQualificationResult, QualificationBusinessOutcome } from "@/lib/voice/outbound/types";
 import { persistLeadQualificationResult } from "@/lib/voice/outbound/outbound-call-service";
 import { buildBusinessAnswerTool } from "../shared/business-answer-tool";
 import type { OutboundLeadUserData } from "./userdata";
-import { buildOutboundIntroLine } from "./outbound-messages";
 import { withLiveKitToolTelemetry } from "../livekit-tool-telemetry";
 
 export type QualifyLeadResult = LeadQualificationResult;
@@ -40,28 +46,28 @@ function mapToolOutcome(
 }
 
 export class QualifyLeadTask extends voice.AgentTask<QualifyLeadResult> {
+  private readonly mission: OutboundCallMission;
+
   constructor(
     private readonly sessionRef: AgentSession<OutboundLeadUserData>,
     options?: { chatCtx?: ChatContext },
   ) {
+    const mission = resolveOutboundCallMission({
+      qualification: sessionRef.userData.qualification,
+      lead: sessionRef.userData.job.lead,
+    });
     super({
       chatCtx: options?.chatCtx,
       preserveFunctionCallHistory: true,
-      instructions: [
-        "You are qualifying a warm lead on a LIVE OUTBOUND phone call. ",
-        "The caller already requested information — you are following up, not cold calling. ",
-        "Speak naturally in short sentences. Do not read a rigid survey. ",
-        "When the caller provides information, call record_qualification_fields with every field you understood — ",
-        "they may answer several questions in one sentence. ",
-        "Never re-ask for fields already captured unless they correct something. ",
-        "If they correct a value, call record_qualification_fields again with the updated field only. ",
-        "Use get_business_answer for simple business questions, then return to qualification. ",
-        "Do NOT book appointments or promise specific follow-up times. ",
-        "When intake is complete or the caller is done, call set_qualification_outcome with complete, ",
-        "wrong_number, not_interested, or callback_requested as appropriate.",
-      ].join(""),
+      instructions: buildQualificationTaskInstructions(mission),
       tools: [],
     });
+    this.mission = mission;
+  }
+
+  private missingFieldsForPrompt(collected: Record<string, string>): string[] {
+    const skip = fieldIdsToSkipAsking(this.mission);
+    return missingRequiredFields(this.mission.qualification, collected).filter((id) => !skip.has(id));
   }
 
   private buildRecordFieldsTool() {
@@ -85,7 +91,7 @@ export class QualifyLeadTask extends voice.AgentTask<QualifyLeadResult> {
             if (still_interested === false) {
               ud.interested = false;
             }
-            const missing = missingRequiredFields(ud.qualification, ud.collectedFields);
+            const missing = this.missingFieldsForPrompt(ud.collectedFields);
             if (!missing.length && ud.interested) {
               return "All required fields captured. Wrap up naturally and call set_qualification_outcome with complete.";
             }
@@ -186,12 +192,8 @@ export class QualifyLeadTask extends voice.AgentTask<QualifyLeadResult> {
       this.buildEndCallTool(),
     ]);
 
-    const intro = buildOutboundIntroLine(ud.qualification, ud.job.lead.leadName);
     await this.session.generateReply({
-      instructions:
-        `Say exactly this outbound opener (adapt name pronunciation only): "${intro}" ` +
-        "Then listen — if they confirm identity, ask one open question about what they're looking for. " +
-        "Do not ask how you can help them; you called them.",
+      instructions: buildOpeningReplyInstructions(this.mission, ud.collectedFields),
       toolChoice: "none",
       allowInterruptions: true,
     });

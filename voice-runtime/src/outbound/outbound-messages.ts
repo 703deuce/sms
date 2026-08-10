@@ -16,7 +16,7 @@ export function buildOutboundIntroLine(
 
 export function buildQualificationCloseLine(businessName: string): string {
   return (
-    `Perfect, I've got that. I'll pass this along to the team at ${businessName} ` +
-    "so someone can follow up with you. Thanks for your time!"
+    `Perfect, I've got everything I need. I'll pass this along to one of our realtors at ${businessName} ` +
+    "so they can follow up with you. Thanks for your time!"
   );
 }

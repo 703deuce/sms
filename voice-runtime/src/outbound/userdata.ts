@@ -4,6 +4,7 @@ import type {
   QualificationBusinessOutcome,
   QualificationDefinition,
 } from "@/lib/voice/outbound/types";
+import type { OutboundCallMission } from "@/lib/voice/outbound/compile-outbound-call-context";
 
 export type OutboundLeadUserData = {
   workspaceId: string;
@@ -13,6 +14,7 @@ export type OutboundLeadUserData = {
   timezone: string;
   job: OutboundJobMetadata;
   qualification: QualificationDefinition;
+  mission: OutboundCallMission;
   /** Authoritative collected field values. */
   collectedFields: Record<string, string>;
   explicitOutcome?: QualificationBusinessOutcome | null;

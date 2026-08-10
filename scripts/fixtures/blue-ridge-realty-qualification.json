@@ -2,8 +2,56 @@
   "id": "blue-ridge-realty-lead-qual",
   "label": "New lead qualification — Blue Ridge Realty (demo)",
   "businessName": "Blue Ridge Realty",
-  "reasonForContact": "You recently requested information about buying a home in the area.",
-  "introTemplate": "Hi, is this {leadName}? This is Amy calling on behalf of {businessName}. {reason}",
+  "agentDisplayName": "Amy",
+  "reasonForContact": "You recently submitted a request for information about finding homes in the area.",
+  "introTemplate": "Hi, is this {leadName}? This is Amy with {businessName}. {reason} I'm just following up to get a better idea of what you're looking for so one of our realtors can help you. Do you have a minute for a few quick questions?",
+  "openingGuidance": [
+    "Confirm identity, introduce yourself as Amy with Blue Ridge Realty.",
+    "Explain they submitted a home search / information request online.",
+    "Ask permission for a few quick questions — do not jump straight into qualification.",
+    "Do not ask generic sales questions like what projects they are working on."
+  ],
+  "authorityBoundaries": [
+    "Do NOT invent specific homes, addresses, listing prices, or MLS inventory.",
+    "Do NOT claim mortgage approval, financing qualification, or that a specific property is available.",
+    "Do NOT book appointments or promise an exact callback time.",
+    "Do NOT tell the caller they financially or mortgage 'qualify'."
+  ],
+  "business": {
+    "name": "Blue Ridge Realty",
+    "description": "Blue Ridge Realty helps home buyers find residential properties throughout Northern Virginia. We connect buyers with licensed realtors who can search available homes and guide them through the buying process.",
+    "services": [
+      "Buyer representation and home search support",
+      "Connecting buyers with licensed Northern Virginia realtors"
+    ],
+    "serviceAreas": [
+      "Woodbridge",
+      "Dale City",
+      "Lake Ridge",
+      "Stafford",
+      "Fredericksburg",
+      "Manassas"
+    ],
+    "propertyTypes": [
+      "single-family homes",
+      "townhouses",
+      "condos"
+    ],
+    "knowledgeNotes": [
+      "We are a real estate brokerage — not a lender and we do not approve mortgages on this call.",
+      "We do not have live MLS listings on this call; a realtor will follow up with matching options.",
+      "We help buyers throughout Northern Virginia including Woodbridge, Stafford, Fredericksburg, and Manassas."
+    ]
+  },
+  "campaign": {
+    "type": "new_lead_follow_up",
+    "source": "Website home buyer inquiry form",
+    "reasonForContact": "Follow up on a new home buyer lead who requested information online.",
+    "offerOrInterest": "Finding a home in Northern Virginia",
+    "callerExplanation": "You recently submitted a request for information about finding homes in the area. I'm following up to learn what you're looking for so a realtor can help.",
+    "establishedIntent": "home buying",
+    "skipFieldIds": ["name", "callback_phone"]
+  },
   "allowedOutcomes": [
     "QUALIFIED",
     "NOT_QUALIFIED",
@@ -30,61 +78,74 @@
       "collection_instruction": "Best number to reach them if different from this line."
     },
     {
-      "field_id": "buying_or_selling",
-      "label": "Buying or selling",
-      "type": "single_select",
-      "required": true,
-      "collection_instruction": "Whether they are looking to buy or sell.",
-      "options": ["buying", "selling", "both", "unsure"]
-    },
-    {
-      "field_id": "target_location",
-      "label": "Target area",
+      "field_id": "target_areas",
+      "label": "Target areas",
       "type": "text",
       "required": true,
-      "collection_instruction": "City or area they want to buy or sell in."
+      "collection_instruction": "Neighborhoods, cities, or areas they want to buy in (may be multiple)."
     },
     {
       "field_id": "property_type",
       "label": "Property type",
       "type": "text",
-      "required": false,
-      "collection_instruction": "House, townhouse, condo, land, etc."
+      "required": true,
+      "collection_instruction": "Single-family, townhouse, condo, or open to multiple types."
     },
     {
-      "field_id": "price_range_or_budget",
+      "field_id": "budget_or_price_range",
       "label": "Budget",
       "type": "text",
-      "required": false,
-      "collection_instruction": "Rough price range or budget."
+      "required": true,
+      "collection_instruction": "Rough price range or budget in natural language."
     },
     {
-      "field_id": "timeframe",
-      "label": "Timeframe",
+      "field_id": "bedrooms",
+      "label": "Bedrooms",
+      "type": "text",
+      "required": false,
+      "collection_instruction": "How many bedrooms they need."
+    },
+    {
+      "field_id": "bathrooms",
+      "label": "Bathrooms",
+      "type": "text",
+      "required": false,
+      "collection_instruction": "How many bathrooms they prefer."
+    },
+    {
+      "field_id": "purchase_timeframe",
+      "label": "Purchase timeframe",
       "type": "text",
       "required": true,
-      "collection_instruction": "When they hope to buy or sell."
+      "collection_instruction": "When they hope to buy (ASAP, 1-3 months, 3-6 months, 6+ months, just researching)."
     },
     {
       "field_id": "financing_status",
       "label": "Financing status",
       "type": "text",
       "required": false,
-      "collection_instruction": "Cash, pre-approved, still exploring financing, etc."
+      "collection_instruction": "Cash, financing, or unsure."
     },
     {
-      "field_id": "preapproved",
-      "label": "Pre-approved",
-      "type": "boolean",
+      "field_id": "preapproval_status",
+      "label": "Pre-approval status",
+      "type": "text",
       "required": false,
-      "collection_instruction": "Whether they are pre-approved for a mortgage."
+      "collection_instruction": "Whether they are pre-approved, in progress, no, or unknown."
     },
     {
-      "field_id": "notes",
-      "label": "What they are looking for",
+      "field_id": "must_have_features",
+      "label": "Must-have features",
       "type": "long_text",
       "required": false,
-      "collection_instruction": "Anything else about what they want."
+      "collection_instruction": "Garage, yard, school district, etc."
+    },
+    {
+      "field_id": "additional_notes",
+      "label": "Additional notes",
+      "type": "long_text",
+      "required": false,
+      "collection_instruction": "Anything else useful for the realtor follow-up."
     }
   ],
   "rules": [
@@ -94,7 +155,12 @@
     },
     {
       "outcome": "QUALIFIED",
-      "requiredFields": ["buying_or_selling", "target_location", "timeframe"],
+      "requiredFields": [
+        "target_areas",
+        "property_type",
+        "budget_or_price_range",
+        "purchase_timeframe"
+      ],
       "requireInterested": true
     },
     {

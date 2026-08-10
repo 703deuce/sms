@@ -13,6 +13,13 @@ import {
   nextActionForOutcome,
 } from "../src/lib/voice/outbound/qualification-evaluator";
 import {
+  buildOpeningReplyInstructions,
+  buildQualificationTaskInstructions,
+  prefillCollectedFields,
+  resolveOutboundCallMission,
+  resolveOutboundProfileBusinessAnswer,
+} from "../src/lib/voice/outbound/compile-outbound-call-context";
+import {
   validateOutboundDestination,
   assertOutboundTestModeEnabled,
 } from "../src/lib/voice/outbound/outbound-call-service";
@@ -28,20 +35,60 @@ const fixture = JSON.parse(
 assert.equal(validateOutboundDestination("5714776175"), "+15714776175");
 assert.throws(() => validateOutboundDestination("abc"));
 
+const lead = {
+  leadPhone: "+15714776175",
+  leadName: "Anthony",
+  leadSource: "Website home buyer inquiry form",
+  intent: "home buying",
+  submittedFields: { name: "Anthony", callback_phone: "+15714776175" },
+};
+
+const mission = resolveOutboundCallMission({ qualification: fixture, lead });
+const prefilled = prefillCollectedFields({ qualification: fixture, lead });
+assert.equal(prefilled.name, "Anthony");
+assert.equal(prefilled.callback_phone, "+15714776175");
+
+const taskInstructions = buildQualificationTaskInstructions(mission);
+assert.match(taskInstructions, /Blue Ridge Realty/);
+assert.match(taskInstructions, /home buying|home buyer|finding homes/i);
+assert.match(taskInstructions, /target_areas/);
+assert.match(taskInstructions, /Do NOT invent specific homes/);
+
+const opening = buildOpeningReplyInstructions(mission, prefilled);
+assert.match(opening, /Do NOT ask about unrelated topics like 'projects'/);
+assert.match(opening, /Anthony/);
+
+const staffordAnswer = resolveOutboundProfileBusinessAnswer({
+  business: fixture.business || null,
+  businessName: fixture.businessName,
+  topic: "Do you work in Stafford?",
+});
+assert.ok(staffordAnswer && /Stafford/i.test(staffordAnswer));
+
+const mlsAnswer = resolveOutboundProfileBusinessAnswer({
+  business: fixture.business || null,
+  businessName: fixture.businessName,
+  topic: "Do you have any townhouses for 450k in Woodbridge?",
+});
+assert.ok(mlsAnswer && /don't have live MLS/i.test(mlsAnswer));
+
 const merged = mergeQualificationFields(
-  { name: "Anthony" },
-  { target_location: "Woodbridge", price_range_or_budget: "~450000" },
+  prefilled,
+  {
+    target_areas: "Woodbridge",
+    property_type: "townhouse",
+    budget_or_price_range: "~$450,000",
+    bedrooms: "3",
+  },
 );
-assert.equal(merged.name, "Anthony");
-assert.equal(merged.target_location, "Woodbridge");
+assert.equal(merged.target_areas, "Woodbridge");
+assert.equal(merged.property_type, "townhouse");
 
 const multiUtterance = normalizeQualificationFields({
-  name: "Anthony",
-  buying_or_selling: "buying",
-  target_location: "Woodbridge",
-  property_type: "townhouse",
-  price_range_or_budget: "450000",
-  timeframe: "3 months",
+  ...merged,
+  purchase_timeframe: "1-3 months",
+  financing_status: "financing",
+  preapproval_status: "in progress",
 });
 assert.equal(missingRequiredFields(fixture, multiUtterance).length, 0);
 
@@ -52,8 +99,8 @@ const qualified = evaluateQualificationOutcome({
 });
 assert.equal(qualified, "QUALIFIED");
 
-const corrected = mergeQualificationFields(multiUtterance, { target_location: "Stafford" });
-assert.equal(corrected.target_location, "Stafford");
+const corrected = mergeQualificationFields(multiUtterance, { target_areas: "Stafford" });
+assert.equal(corrected.target_areas, "Stafford");
 
 const notInterested = evaluateQualificationOutcome({
   definition: fixture,
@@ -96,12 +143,23 @@ const outboundEntry = fs.readFileSync(
   path.join(process.cwd(), "voice-runtime/src/outbound/entry.ts"),
   "utf8",
 );
+const qualifyTaskSource = fs.readFileSync(
+  path.join(process.cwd(), "voice-runtime/src/outbound/qualify-lead-task.ts"),
+  "utf8",
+);
 assert.ok(mainSource.includes("runOutboundLeadQualificationEntry"), "main routes outbound jobs");
 assert.ok(mainSource.includes("runInboundEntry"), "main routes inbound jobs");
 assert.ok(outboundEntry.includes("session.start"), "agent starts before dial");
 assert.ok(outboundEntry.includes("createSipParticipant"), "dials after agent ready");
 assert.ok(outboundEntry.includes("updateAgent(qualifyTask)"), "hand off via updateAgent after answer");
 assert.ok(outboundEntry.includes("waitForQualificationComplete"), "waits for qualification completion");
+assert.ok(outboundEntry.includes("prefillCollectedFields"), "pre-fills lead context before conversation");
+assert.ok(qualifyTaskSource.includes("buildQualificationTaskInstructions"), "uses compiled mission instructions");
+assert.ok(qualifyTaskSource.includes("buildOpeningReplyInstructions"), "uses compiled opening guidance");
+assert.ok(
+  !/ask one open question about what they're looking for/.test(qualifyTaskSource),
+  "must not use vague open-question prompt that caused 'projects' improvisation",
+);
 assert.ok(
   !/QualifyLeadTask\([^)]*\)\.run\(\)/.test(outboundEntry),
   "QualifyLeadTask.run must not be called outside a tool/task context",

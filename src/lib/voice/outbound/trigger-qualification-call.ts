@@ -110,8 +110,13 @@ export async function triggerOutboundQualificationCall(input: {
       contactId: input.contactId,
       leadPhone: destinationPhone,
       leadName,
-      leadSource: input.leadSource || "api_test",
-      reasonForContact: qualification.reasonForContact,
+      leadSource: input.leadSource || qualification.campaign?.source || "Website home buyer inquiry form",
+      reasonForContact: qualification.campaign?.callerExplanation || qualification.reasonForContact,
+      intent: qualification.campaign?.establishedIntent || "home buying",
+      submittedFields: {
+        name: leadName,
+        callback_phone: destinationPhone,
+      },
     },
     trigger: {
       source: input.triggerSource,
