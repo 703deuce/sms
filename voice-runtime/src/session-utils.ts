@@ -1,7 +1,7 @@
 import type { AgentSession } from "@livekit/agents";
 
 /** Best-effort interrupt — LiveKit returns a Future, not a Promise. */
-export async function safeInterruptSession(session: AgentSession<unknown>): Promise<void> {
+export async function safeInterruptSession<T>(session: AgentSession<T>): Promise<void> {
   try {
     await session.interrupt({ force: true }).await;
   } catch {

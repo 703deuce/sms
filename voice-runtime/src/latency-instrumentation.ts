@@ -245,8 +245,8 @@ function recordMetrics(
   }
 }
 
-export function attachLatencyInstrumentation(
-  session: voice.AgentSession,
+export function attachLatencyInstrumentation<T>(
+  session: voice.AgentSession<T>,
   input?: {
     callId?: string;
     preemptiveConfig?: TurnLatencyBreakdown["preemptiveConfig"];

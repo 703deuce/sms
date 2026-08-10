@@ -17,8 +17,8 @@ function speakerForRole(role: string): string {
   return role;
 }
 
-export function attachLiveKitTranscriptPersistence(
-  session: voice.AgentSession,
+export function attachLiveKitTranscriptPersistence<T>(
+  session: voice.AgentSession<T>,
   input: { workspaceId: string; callId: string },
 ) {
   session.on(AgentSessionEventTypes.ConversationItemAdded, (ev: ConversationItemAddedEvent) => {
