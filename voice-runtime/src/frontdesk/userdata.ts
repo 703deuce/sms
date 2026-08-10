@@ -8,6 +8,14 @@ export type FrontDeskUserData = {
   timezone: string;
   cal: CalendlyCalendar;
   slotUnavailableCount: number;
+  /** Email captured but not yet confirmed by caller. */
+  draftEmail?: string;
+  /** Confirmed email for Calendly — persists for the whole call. */
+  confirmedEmail?: string;
+  /** Set after a successful schedule_appointment. */
+  bookingComplete?: boolean;
+  bookedTimeLabel?: string;
+  pendingSlotId?: string;
 };
 
 export function isFrontDeskUserData(

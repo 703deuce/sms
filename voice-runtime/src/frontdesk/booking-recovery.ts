@@ -7,6 +7,31 @@ import type { FrontDeskUserData } from "./userdata";
 
 const BOOKING_RETRY_DELAY_MS = 400;
 
+export function formatBookedTimeLabel(
+  startTime: Date,
+  timezone: string,
+): string {
+  return startTime.toLocaleString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: timezone,
+  });
+}
+
+/** Caller-visible success when booking already completed this call. */
+export function alreadyBookedToolMessage(userData: FrontDeskUserData): string | null {
+  if (!userData.bookingComplete) return null;
+  const when = userData.bookedTimeLabel || "the time you chose";
+  return (
+    `The appointment is already confirmed for ${when}. ` +
+    "Tell the caller they're all set and a confirmation text was sent — do not book again or re-ask for email."
+  );
+}
+
 async function findExistingBookingForCall(
   workspaceId: string,
   callId: string,
@@ -61,21 +86,37 @@ export async function scheduleAppointmentResilient(input: {
   const { session, slot, attendeeEmail } = input;
   const { workspaceId, callId, cal } = session.userData;
 
+  const markBookedOnUserData = (booked: BookedAppointment) => {
+    session.userData.bookingComplete = true;
+    session.userData.bookedTimeLabel = formatBookedTimeLabel(
+      booked.slot.startTime,
+      session.userData.timezone,
+    );
+  };
+
   const existing = await findExistingBookingForCall(workspaceId, callId);
-  if (existing) return existing;
+  if (existing) {
+    markBookedOnUserData(existing);
+    return existing;
+  }
 
   await safeInterruptSession(session);
 
   let lastError: unknown;
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      return await cal.scheduleAppointment({ slot, attendeeEmail });
+      const booked = await cal.scheduleAppointment({ slot, attendeeEmail });
+      markBookedOnUserData(booked);
+      return booked;
     } catch (err) {
       lastError = err;
       if (err instanceof SlotUnavailableError) throw err;
 
       const recovered = await findExistingBookingForCall(workspaceId, callId);
-      if (recovered) return recovered;
+      if (recovered) {
+        markBookedOnUserData(recovered);
+        return recovered;
+      }
 
       if (attempt < 1) {
         await new Promise((resolve) => setTimeout(resolve, BOOKING_RETRY_DELAY_MS));
