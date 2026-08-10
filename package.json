@@ -51,6 +51,7 @@
     "test:telephony-provisioning": "tsx scripts/test-telephony-provisioning.ts",
     "voice-runtime:dev": "tsx voice-runtime/src/main.ts dev",
     "voice-runtime:start": "tsx voice-runtime/src/main.ts start",
+    "setup:frontdesk-booking-agent": "tsx scripts/setup-frontdesk-booking-agent.ts",
     "test:caller-amy": "tsx scripts/test-caller-amy-orchestration.ts && tsx scripts/caller-amy-preprod-suite.ts",
     "test:john-preprod": "tsx scripts/john-preprod-suite.ts",
     "test:platform-runtime": "tsx scripts/test-owner-amy-runtime.ts && tsx scripts/test-workflow-architect-runtime.ts",

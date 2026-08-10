@@ -7,8 +7,11 @@ import { liveKitRuntimeProvider } from "@/lib/voice/runtime-provider/livekit";
 import { bootstrapLiveKitCallContext } from "@/lib/voice/domain-actions";
 import { resolveAgentRoutingForCall } from "@/lib/telephony/provisioning";
 import { createAmyReceptionistAgent } from "./amy-receptionist-agent";
+import { CalendlyCalendar } from "./frontdesk/calendly-calendar";
+import { createFrontDeskBookingAgent } from "./frontdesk/frontdesk-booking-agent";
+import { isFrontDeskProfile } from "./frontdesk/userdata";
 import { resolveInboundSipCallIdentity } from "./call-identity";
-import type { AmyUserData } from "./metadata";
+import type { VoiceRuntimeUserData } from "./metadata";
 import { buildAmyVoicePipeline, describePipelineConfig } from "./pipeline";
 import { applyVoiceRuntimeEnvAliases } from "./env-aliases";
 import { attachLatencyInstrumentation } from "./latency-instrumentation";
@@ -20,7 +23,7 @@ applyVoiceRuntimeEnvAliases();
 
 const AGENT_NAME = process.env.LIVEKIT_AGENT_NAME || "transovo-voice-runtime";
 
-export default defineAgent<AmyUserData>({
+export default defineAgent<VoiceRuntimeUserData>({
   entry: async (ctx) => {
     const identity = await resolveInboundSipCallIdentity(ctx);
 
@@ -58,23 +61,28 @@ export default defineAgent<AmyUserData>({
       livekitParticipantId: identity.participant.identity,
     });
 
-    const callContext = await bootstrapLiveKitCallContext({
-      callId,
-      workspaceId: routing.workspaceId,
-      agentId: routing.agentId,
-      fromE164: identity.fromE164,
-      toE164: identity.toE164 || routing.e164,
-    });
-
-    ctx.proc.userData = { callContext } satisfies AmyUserData;
-
     const prisma = getPrisma();
     const agentRow = await prisma.voiceAgent.findFirst({
       where: { id: routing.agentId, workspaceId: routing.workspaceId },
-      select: { draftConfig: true },
+      select: { draftConfig: true, name: true },
     });
     const agentConfig = parseVoiceAgentConfig(agentRow?.draftConfig);
     const outputGainDb = resolveLiveKitOutputGainDb(agentConfig.voiceLanguage?.outputGainDb);
+    const useFrontDesk = isFrontDeskProfile(agentConfig.advanced);
+
+    const messaging = await prisma.workspaceMessagingSettings.findUnique({
+      where: { workspaceId: routing.workspaceId },
+      select: { timezone: true },
+    });
+    const timezone = String(
+      agentConfig.dynamicVariables?.business_timezone ||
+        messaging?.timezone ||
+        "America/New_York",
+    );
+    const businessName =
+      String(agentConfig.dynamicVariables?.business_name || "").trim() ||
+      agentRow?.name?.trim() ||
+      "our office";
 
     const { stt, llm, tts, config, sttConfig } = buildAmyVoicePipeline();
     console.log(
@@ -82,20 +90,51 @@ export default defineAgent<AmyUserData>({
         source: "transovo-voice-runtime",
         event: "pipeline_config",
         callId,
+        profile: useFrontDesk ? "frontdesk" : "amy",
         pipeline: describePipelineConfig(config, sttConfig),
         turnHandling: describeTurnHandlingConfig(),
         outputGainDb,
       }),
     );
-    const agent = createAmyReceptionistAgent(callContext.businessName);
 
-    const session = new voice.AgentSession<AmyUserData>({
+    let userData: VoiceRuntimeUserData;
+    let agent: voice.Agent<VoiceRuntimeUserData>;
+
+    if (useFrontDesk) {
+      const cal = await CalendlyCalendar.create({
+        workspaceId: routing.workspaceId,
+        timezone,
+      });
+      userData = {
+        workspaceId: routing.workspaceId,
+        callId,
+        businessName,
+        timezone,
+        cal,
+        slotUnavailableCount: 0,
+      };
+      agent = createFrontDeskBookingAgent({ businessName, timezone });
+      ctx.proc.userData = userData;
+    } else {
+      const callContext = await bootstrapLiveKitCallContext({
+        callId,
+        workspaceId: routing.workspaceId,
+        agentId: routing.agentId,
+        fromE164: identity.fromE164,
+        toE164: identity.toE164 || routing.e164,
+      });
+      userData = { callContext };
+      agent = createAmyReceptionistAgent(callContext.businessName);
+      ctx.proc.userData = userData;
+    }
+
+    const session = new voice.AgentSession<VoiceRuntimeUserData>({
       stt,
       llm,
       tts,
       turnHandling: buildAmyTurnHandling(),
-      maxToolSteps: Number(process.env.VOICE_MAX_TOOL_STEPS?.trim()) || 8,
-      userData: { callContext },
+      maxToolSteps: Number(process.env.VOICE_MAX_TOOL_STEPS?.trim()) || (useFrontDesk ? 4 : 8),
+      userData,
     });
 
     attachLatencyInstrumentation(session, {
