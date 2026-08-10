@@ -71,6 +71,16 @@ assert.equal(wrongNumber, "WRONG_NUMBER");
 
 assert.match(nextActionForOutcome("QUALIFIED"), /follow-up/i);
 
+const outboundServiceSource = fs.readFileSync(
+  path.join(process.cwd(), "src/lib/voice/outbound/outbound-call-service.ts"),
+  "utf8",
+);
+assert.match(
+  outboundServiceSource,
+  /createDispatch\(\s*roomName,\s*TRANSOVO_LIVEKIT_AGENT_NAME/s,
+  "createDispatch must pass (roomName, agentName) per livekit-server-sdk",
+);
+
 const prev = process.env.OUTBOUND_VOICE_TEST_MODE;
 process.env.OUTBOUND_VOICE_TEST_MODE = "1";
 assert.doesNotThrow(() => assertOutboundTestModeEnabled());

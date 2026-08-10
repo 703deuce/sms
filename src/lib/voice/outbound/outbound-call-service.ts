@@ -198,8 +198,8 @@ export async function startOutboundLeadQualificationCall(input: {
   let dispatchId: string | null = null;
   try {
     const dispatch = await dispatchClient.createDispatch(
-      TRANSOVO_LIVEKIT_AGENT_NAME,
       roomName,
+      TRANSOVO_LIVEKIT_AGENT_NAME,
       { metadata: JSON.stringify(jobMetadata) },
     );
     dispatchId = dispatch.id || null;
