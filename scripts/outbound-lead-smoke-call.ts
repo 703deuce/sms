@@ -1,47 +1,26 @@
 /**
- * Manual outbound lead qualification smoke call (requires OUTBOUND_VOICE_TEST_MODE=1).
+ * Manual outbound lead qualification smoke call.
  *
- * Usage:
+ * Preferred (no Coolify terminal):
+ *   curl -X POST "$APP_URL/api/voice/outbound/qualification/test" \
+ *     -H "Authorization: Bearer $CRON_SECRET" \
+ *     -H "Content-Type: application/json" \
+ *     -d '{"workspaceId":"ws_1","destinationPhone":"+15714776175"}'
+ *
+ * Or set OUTBOUND_AUTO_SMOKE_CALL=1 + OUTBOUND_TEST_PHONE on Coolify and redeploy.
+ *
+ * CLI (still requires OUTBOUND_VOICE_TEST_MODE=1):
  *   OUTBOUND_VOICE_TEST_MODE=1 npx tsx scripts/outbound-lead-smoke-call.ts --phone=+15714776175
- *
- * Optional: --agent-id=... --workspace-id=ws_1 --schedule=2026-08-10T18:30:00Z
  */
 import dotenv from "dotenv";
-import fs from "node:fs";
-import path from "node:path";
-import { getPrisma } from "../src/lib/db";
-import { parseVoiceAgentConfig } from "../src/lib/voice/types";
-import type { QualificationDefinition } from "../src/lib/voice/outbound/types";
-import {
-  assertOutboundTestModeEnabled,
-  startOutboundLeadQualificationCall,
-} from "../src/lib/voice/outbound/outbound-call-service";
+import { assertOutboundTestModeEnabled } from "../src/lib/voice/outbound/outbound-call-service";
+import { triggerOutboundQualificationCall } from "../src/lib/voice/outbound/trigger-qualification-call";
 
 dotenv.config();
 
 function arg(name: string): string | undefined {
   const hit = process.argv.find((a) => a.startsWith(`--${name}=`));
   return hit?.split("=").slice(1).join("=");
-}
-
-async function resolveOutboundAgent(workspaceId: string, agentId?: string): Promise<string> {
-  const prisma = getPrisma();
-  if (agentId?.trim()) return agentId.trim();
-
-  const agents = await prisma.voiceAgent.findMany({
-    where: { workspaceId },
-    select: { id: true, draftConfig: true, name: true },
-  });
-  const found = agents.find((a) => {
-    const cfg = parseVoiceAgentConfig(a.draftConfig);
-    return cfg.advanced?.livekitProfile === "outbound_lead_qualification";
-  });
-  if (!found) {
-    throw new Error(
-      "No outbound_lead_qualification agent found — run scripts/setup-outbound-lead-agent.ts first",
-    );
-  }
-  return found.id;
 }
 
 async function main() {
@@ -53,8 +32,7 @@ async function main() {
   }
 
   const workspaceId = arg("workspace-id") || process.env.WORKSPACE_ID || "ws_1";
-  const agentId = await resolveOutboundAgent(workspaceId, arg("agent-id"));
-
+  const agentId = arg("agent-id");
   const scheduleAt = arg("schedule");
   if (scheduleAt) {
     const when = new Date(scheduleAt);
@@ -65,33 +43,14 @@ async function main() {
     }
   }
 
-  const qualification = JSON.parse(
-    fs.readFileSync(
-      path.join(process.cwd(), "scripts/fixtures/blue-ridge-realty-qualification.json"),
-      "utf8",
-    ),
-  ) as QualificationDefinition;
-
-  const leadName = arg("lead-name") || "Anthony";
-
-  const result = await startOutboundLeadQualificationCall({
+  const result = await triggerOutboundQualificationCall({
     workspaceId,
     agentId,
     destinationPhone: phone,
-    isTest: true,
-    qualification,
-    lead: {
-      leadId: `demo-lead-${Date.now()}`,
-      leadPhone: phone,
-      leadName,
-      leadSource: "website_form",
-      reasonForContact: qualification.reasonForContact,
-    },
-    trigger: {
-      source: "manual_smoke_test",
-      reason: "Developer outbound qualification smoke",
-      consentRecorded: true,
-    },
+    leadName: arg("lead-name") || "Anthony",
+    triggerSource: "manual_smoke_cli",
+    triggerReason: "Developer outbound qualification smoke",
+    requireTestModeEnv: true,
   });
 
   console.log(JSON.stringify({ ok: result.status !== "failed", ...result }, null, 2));

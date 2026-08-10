@@ -128,8 +128,9 @@ export default function VoiceTestingPage() {
         <Card className="space-y-4 p-5">
           <h2 className="font-medium">Outbound test call</h2>
           <p className="text-xs text-muted-foreground">
-            Works in mock mode without a number. With Telnyx + a number, places a real test call
-            (including unpublished drafts when the agent has been synced).
+            LiveKit outbound qualification agents dial via the shared voice worker. Other agents use
+            Telnyx test mode when configured. No Coolify terminal needed — click below or use the
+            cron API.
           </p>
           <div>
             <Label>Agent (includes drafts)</Label>

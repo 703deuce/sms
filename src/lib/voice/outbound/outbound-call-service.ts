@@ -96,8 +96,10 @@ export async function startOutboundLeadQualificationCall(input: {
   trigger: OutboundCallTrigger;
   fromE164?: string;
   isTest?: boolean;
+  /** When true (default for isTest), requires OUTBOUND_VOICE_TEST_MODE in env (CLI safety). */
+  requireTestModeEnv?: boolean;
 }): Promise<OutboundCallStartResult> {
-  if (input.isTest) {
+  if (input.isTest && input.requireTestModeEnv !== false) {
     assertOutboundTestModeEnabled();
   }
 

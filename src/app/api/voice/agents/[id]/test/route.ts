@@ -2,6 +2,11 @@ import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
 import { getPrisma } from "@/lib/db";
 import { initiateOutboundCall } from "@/lib/voice/call-service";
+import { parseVoiceAgentConfig } from "@/lib/voice/types";
+import {
+  isOutboundLeadQualificationAgent,
+  triggerOutboundQualificationCall,
+} from "@/lib/voice/outbound/trigger-qualification-call";
 
 export async function POST(
   request: Request,
@@ -16,6 +21,7 @@ export async function POST(
       direction?: string;
       agentVersionId?: string;
       dynamicVariables?: Record<string, unknown>;
+      contactId?: string;
     };
 
     const agent = await getPrisma().voiceAgent.findFirst({
@@ -38,6 +44,43 @@ export async function POST(
         status: "running",
       },
     });
+
+    const agentConfig = parseVoiceAgentConfig(agent.draftConfig);
+    if (isOutboundLeadQualificationAgent(agentConfig)) {
+      const result = await triggerOutboundQualificationCall({
+        workspaceId: auth.workspaceId,
+        agentId: id,
+        destinationPhone: testNumber,
+        contactId: body.contactId,
+        triggerSource: "voice_testing_lab",
+        requireTestModeEnv: false,
+      });
+
+      await getPrisma().voiceTestRun.update({
+        where: { id: testRun.id },
+        data: {
+          callId: result.callId,
+          status: result.status === "failed" ? "failed" : "completed",
+          completedAt: new Date(),
+        },
+      });
+
+      if (result.status === "failed") {
+        return NextResponse.json(
+          { error: result.error || "Outbound qualification call failed to start", data: result },
+          { status: 502 },
+        );
+      }
+
+      return NextResponse.json({
+        data: {
+          testRunId: testRun.id,
+          callId: result.callId,
+          mode: "livekit_outbound_qualification",
+          roomName: result.roomName,
+        },
+      });
+    }
 
     const result = await initiateOutboundCall({
       workspaceId: auth.workspaceId,

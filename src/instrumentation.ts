@@ -10,4 +10,8 @@ export async function register() {
     "@/lib/voice/inprocess-voice-runtime"
   );
   await startInProcessVoiceRuntime();
+  const { scheduleOutboundAutoSmokeCall } = await import(
+    "@/lib/voice/outbound/auto-smoke"
+  );
+  scheduleOutboundAutoSmokeCall();
 }
