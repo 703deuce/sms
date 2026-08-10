@@ -116,7 +116,33 @@ export function createFrontDeskBookingAgent(input: {
           minute: "2-digit",
           timeZone: session.userData.timezone,
         });
-        return `The appointment was successfully scheduled for ${local}.`;
+
+        const { sendVoiceBookingConfirmationSms } = await import(
+          "@/lib/voice/booking-confirmation-sms"
+        );
+        const sms = await sendVoiceBookingConfirmationSms({
+          workspaceId: session.userData.workspaceId,
+          agentId: session.userData.agentId,
+          callId: session.userData.callId,
+          startsAt: booked.slot.startTime,
+          businessName: session.userData.businessName,
+          timezone: session.userData.timezone,
+        }).catch((err) => {
+          console.warn(
+            JSON.stringify({
+              source: "frontdesk-booking-agent",
+              event: "booking_confirmation_sms_failed",
+              callId: session.userData.callId,
+              error: err instanceof Error ? err.message : String(err),
+            }),
+          );
+          return { sent: false, reason: "send_failed" };
+        });
+
+        const smsNote = sms.sent
+          ? " A confirmation text has been sent to their phone."
+          : "";
+        return `The appointment was successfully scheduled for ${local}.${smsNote}`;
       } catch (err) {
         if (err instanceof SlotUnavailableError) {
           session.userData.slotUnavailableCount += 1;

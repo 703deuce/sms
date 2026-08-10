@@ -59,6 +59,10 @@ async function main() {
         ...(DEFAULT_VOICE_CONFIG.advanced || {}),
         livekitProfile: "frontdesk",
       },
+      messaging: {
+        ...(DEFAULT_VOICE_CONFIG.messaging || {}),
+        smsConfirmations: true,
+      },
     };
 
     const created = await prisma.voiceAgent.create({
@@ -91,7 +95,7 @@ async function main() {
     select: { draftConfig: true },
   });
   const cfg = parseVoiceAgentConfig(agent?.draftConfig);
-  if (!cfg.advanced?.livekitProfile) {
+  if (!cfg.advanced?.livekitProfile || !cfg.messaging?.smsConfirmations) {
     await prisma.voiceAgent.update({
       where: { id: agentId },
       data: {
@@ -100,6 +104,10 @@ async function main() {
           advanced: {
             ...(cfg.advanced || {}),
             livekitProfile: "frontdesk",
+          },
+          messaging: {
+            ...(cfg.messaging || {}),
+            smsConfirmations: true,
           },
         },
       },

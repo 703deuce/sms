@@ -57,25 +57,22 @@ export async function runPostBookSideEffects(input: {
 
   let smsSent = false;
   if (input.phone && input.agentId) {
-    const { loadVoiceAgentRuntimeConfigRecord } = await import("@/lib/voice/load-agent-config");
-    const cfg = await loadVoiceAgentRuntimeConfigRecord(input.workspaceId, input.agentId);
-    const messaging = (cfg.messaging || {}) as Record<string, unknown>;
-    const smsOn =
-      "smsConfirmations" in messaging
-        ? Boolean(messaging.smsConfirmations)
-        : (cfg.enabledBuiltinTools as string[] | undefined)?.includes("send_sms");
-    if (smsOn) {
-      try {
-        const { sendQuickSms } = await import("@/lib/sms/send-quick");
-        await sendQuickSms({
-          workspaceId: input.workspaceId,
-          to: normalizeE164(input.phone),
-          body: `Your ${input.serviceName} appointment is confirmed for ${when}.`,
-        });
-        smsSent = true;
-      } catch {
-        // queued via verify path
-      }
+    try {
+      const { sendVoiceBookingConfirmationSms } = await import(
+        "@/lib/voice/booking-confirmation-sms"
+      );
+      const result = await sendVoiceBookingConfirmationSms({
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+        callId: input.callId,
+        to: normalizeE164(input.phone),
+        startsAt: input.startsAt,
+        serviceName: input.serviceName,
+        idempotencyKey: `booking-confirm:${input.appointmentId}`,
+      });
+      smsSent = result.sent;
+    } catch {
+      // non-blocking for voice path
     }
   }
 
