@@ -166,7 +166,11 @@ assert.ok(
   "close/goodbye must be handled inside QualifyLeadTask, not a second generateReply in entry",
 );
 assert.ok(qualifyTaskSource.includes("buildQualificationTaskInstructions"), "uses compiled mission instructions");
-assert.ok(qualifyTaskSource.includes("buildOpeningReplyInstructions"), "uses compiled opening guidance");
+assert.ok(qualifyTaskSource.includes("deliverOutboundOpening"), "opening uses verbatim TTS say, not generateReply");
+assert.ok(
+  !qualifyTaskSource.includes("buildOpeningReplyInstructions"),
+  "opening must not use LLM generateReply — callee hello causes duplicate intros",
+);
 assert.ok(
   !/ask one open question about what they're looking for/.test(qualifyTaskSource),
   "must not use vague open-question prompt that caused 'projects' improvisation",

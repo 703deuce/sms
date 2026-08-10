@@ -235,6 +235,8 @@ export function buildQualificationTaskInstructions(mission: OutboundCallMission)
       mission.qualification.reasonForContact ||
       "Follow up on a lead who requested information.",
     "Naturally gather the configured qualification fields, save them with record_qualification_fields, then close the call.",
+    "The verbatim outbound opening is already spoken before you listen — never repeat your introduction, company name, or reason for calling.",
+    "When the caller confirms identity or agrees to continue, go straight to the first missing qualification field.",
     "This is a conversation, not a rigid survey. If they give multiple answers at once, capture all of them.",
     "Never re-ask for information already captured unless they are correcting it.",
     "Use get_business_answer for questions about the company, service areas, or what you do — then return to qualification.",

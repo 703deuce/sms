@@ -225,6 +225,8 @@ export async function runOutboundLeadQualificationEntry(
     userData.callAnsweredAt = Date.now();
     userData.firstAudioAt = Date.now();
 
+    session.clearUserTurn();
+
     const qualifyTask = new QualifyLeadTask(session, { chatCtx: session.chatCtx });
     session.updateAgent(qualifyTask);
 

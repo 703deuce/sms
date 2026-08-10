@@ -9,7 +9,6 @@ import {
   nextActionForOutcome,
 } from "@/lib/voice/outbound/qualification-evaluator";
 import {
-  buildOpeningReplyInstructions,
   buildQualificationTaskInstructions,
   fieldIdsToSkipAsking,
   resolveOutboundCallMission,
@@ -26,6 +25,7 @@ import {
   endOutboundCall,
   isOutboundCallClosing,
 } from "./end-outbound-call";
+import { deliverOutboundOpening } from "./deliver-outbound-opening";
 
 export type QualifyLeadResult = LeadQualificationResult;
 
@@ -210,10 +210,6 @@ export class QualifyLeadTask extends voice.AgentTask<QualifyLeadResult> {
       this.buildEndCallTool(),
     ]);
 
-    await this.session.generateReply({
-      instructions: buildOpeningReplyInstructions(this.mission, ud.collectedFields),
-      toolChoice: "none",
-      allowInterruptions: true,
-    });
+    await deliverOutboundOpening(this.sessionRef);
   }
 }
