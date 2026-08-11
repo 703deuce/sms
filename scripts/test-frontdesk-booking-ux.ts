@@ -18,6 +18,10 @@ const frontdeskSource = fs.readFileSync(
   path.join(process.cwd(), "voice-runtime/src/frontdesk/frontdesk-booking-agent.ts"),
   "utf8",
 );
+const bookingToolsSource = fs.readFileSync(
+  path.join(process.cwd(), "voice-runtime/src/frontdesk/booking-tools.ts"),
+  "utf8",
+);
 const amySource = fs.readFileSync(
   path.join(process.cwd(), "voice-runtime/src/amy-receptionist-agent.ts"),
   "utf8",
@@ -26,16 +30,16 @@ const amySource = fs.readFileSync(
 // --- 1. Post-email filler is spoken before protected write (inline email flow) ---
 
 assert.ok(
-  frontdeskSource.includes("POST_EMAIL_BOOKING_FILLER"),
+  bookingToolsSource.includes("POST_EMAIL_BOOKING_FILLER"),
   "frontdesk uses shared post-email filler constant",
 );
 
 assert.ok(
-  !frontdeskSource.includes("GetEmailTask"),
+  !bookingToolsSource.includes("GetEmailTask"),
   "frontdesk must not use GetEmailTask (Realtime agent_handoff)",
 );
 
-const fillerBeforeProtect = frontdeskSource.match(
+const fillerBeforeProtect = bookingToolsSource.match(
   /await speakBookingLine\(session,\s*POST_EMAIL_BOOKING_FILLER\)/,
 );
 assert.ok(
@@ -44,25 +48,25 @@ assert.ok(
 );
 
 assert.doesNotMatch(
-  frontdeskSource,
+  bookingToolsSource,
   /runCtx\.update\(POST_EMAIL_BOOKING_FILLER\)/,
   "must not use runCtx.update for filler — breaks OpenAI Realtime",
 );
 
 // --- 2. Provider booking still occurs once inside telemetry wrapper ---
 
-const scheduleTelemetryBlocks = frontdeskSource.match(
+const scheduleTelemetryBlocks = bookingToolsSource.match(
   /withLiveKitToolTelemetry\([\s\S]*?scheduleAppointmentResilient/g,
 );
 assert.ok(scheduleTelemetryBlocks, "schedule_appointment still calls scheduleAppointmentResilient");
 
 assert.ok(
-  frontdeskSource.includes("markBookingConfirmed"),
+  bookingToolsSource.includes("markBookingConfirmed"),
   "booking receipt is still persisted after provider write",
 );
 
 assert.ok(
-  frontdeskSource.includes("lookupAppointmentIdForCallWithRetry"),
+  bookingToolsSource.includes("lookupAppointmentIdForCallWithRetry"),
   "CRM sync waits for product persist with retry",
 );
 
@@ -73,12 +77,12 @@ assert.match(successLine, /confirmed for Monday at 3 PM/);
 assert.match(successLine, /confirmation text/i);
 
 assert.ok(
-  frontdeskSource.includes("await speakBookingLine(session, buildBookingSuccessLine(local))"),
+  bookingToolsSource.includes("await speakBookingLine(session, buildBookingSuccessLine(local))"),
   "final confirmation is spoken via Realtime-safe speakBookingLine",
 );
 
 assert.ok(
-  frontdeskSource.includes("return BOOKING_COMPLETE_TOOL_RESULT"),
+  bookingToolsSource.includes("return BOOKING_COMPLETE_TOOL_RESULT"),
   "tool result tells model not to repeat confirmation",
 );
 
@@ -98,21 +102,21 @@ assert.match(
 );
 
 assert.ok(
-  frontdeskSource.includes("BOOKING_FAILED_TOOL_RESULT"),
+  bookingToolsSource.includes("BOOKING_FAILED_TOOL_RESULT"),
   "failed booking returns deterministic tool result instead of hallucination",
 );
 assert.ok(
-  frontdeskSource.includes("buildBookingFailureLine"),
-  "failed booking speaks caller-facing failure via update()",
+  bookingToolsSource.includes("buildBookingFailureLine"),
+  "failed booking speaks caller-facing failure via speakBookingLine",
 );
 
 // --- 4. No duplicate goodbye sequence — end_call on frontdesk ---
 
-assert.ok(frontdeskSource.includes('name: "end_call"'), "frontdesk exposes end_call");
-assert.ok(frontdeskSource.includes("buildFrontDeskBusinessAnswerTool"), "frontdesk wires business answer tool");
-assert.ok(frontdeskSource.includes("buildFrontDeskCancelAppointmentTool"), "frontdesk wires cancel tool");
+assert.ok(bookingToolsSource.includes('name: "end_call"'), "frontdesk exposes end_call");
+assert.ok(bookingToolsSource.includes("buildFrontDeskBusinessAnswerTool"), "frontdesk wires business answer tool");
+assert.ok(bookingToolsSource.includes("buildFrontDeskCancelAppointmentTool"), "frontdesk wires cancel tool");
 assert.ok(
-  frontdeskSource.includes("buildFrontDeskRescheduleAppointmentTool"),
+  bookingToolsSource.includes("buildFrontDeskRescheduleAppointmentTool"),
   "frontdesk wires reschedule tool",
 );
 assert.ok(

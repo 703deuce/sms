@@ -8,6 +8,9 @@ import { resolveInboundFrontDeskRouting } from "@/lib/voice/frontdesk/resolve-fr
 import { resolveOutboundRealtimePipelineConfig } from "@/lib/voice/outbound/agent-config";
 import { CalendlyCalendar } from "./frontdesk/calendly-calendar";
 import { createFrontDeskBookingAgent } from "./frontdesk/frontdesk-booking-agent";
+import { createRealEstateFrontDeskAgent } from "./frontdesk/real-estate/real-estate-frontdesk-agent";
+import { isRealEstateFrontDeskProfile } from "@/lib/voice/frontdesk/agent-config";
+import { createInitialCallState } from "@/lib/voice/real-estate/state";
 import { resolveInboundSipCallIdentity } from "./call-identity";
 import type { FrontDeskUserData } from "./frontdesk/userdata";
 import {
@@ -69,6 +72,7 @@ export async function runInboundEntry(ctx: JobContext): Promise<void> {
   const agentConfig = parseVoiceAgentConfig(agentRow?.draftConfig);
   const outputGainDb = resolveLiveKitOutputGainDb(agentConfig.voiceLanguage?.outputGainDb);
   const useRealtime = usesFrontDeskRealtimeVoicePipeline(agentConfig);
+  const isRealEstate = isRealEstateFrontDeskProfile(agentConfig);
 
   const { callId } = await liveKitRuntimeProvider.bootstrapSession({
     workspaceId: routing.workspaceId,
@@ -112,11 +116,20 @@ export async function runInboundEntry(ctx: JobContext): Promise<void> {
     callerE164: identity.fromE164?.trim() || undefined,
     livekitRoomName: ctx.room.name,
     livekitParticipantId: identity.participant.identity,
+    ...(isRealEstate ? { callState: createInitialCallState() } : {}),
   };
-  const agent = createFrontDeskBookingAgent({
-    businessName,
-    timezone,
-  }) as voice.Agent<FrontDeskUserData>;
+  const agent = (
+    isRealEstate
+      ? createRealEstateFrontDeskAgent({
+          businessName,
+          timezone,
+          dynamicVariables: agentConfig.dynamicVariables as Record<string, unknown> | null,
+        })
+      : createFrontDeskBookingAgent({
+          businessName,
+          timezone,
+        })
+  ) as voice.Agent<FrontDeskUserData>;
   ctx.proc.userData = userData;
 
   let session: voice.AgentSession<FrontDeskUserData>;
@@ -158,7 +171,7 @@ export async function runInboundEntry(ctx: JobContext): Promise<void> {
         callId,
         agentId: routing.agentId,
         agentName: agentRow?.name || null,
-        profile: "frontdesk_realtime",
+        profile: isRealEstate ? "frontdesk_real_estate_realtime" : "frontdesk_realtime",
         pipeline: describeRealtimePipelineConfig(realtimeCfg, outputMode, pipelineCfg),
         outputGainDb,
       }),
@@ -185,7 +198,7 @@ export async function runInboundEntry(ctx: JobContext): Promise<void> {
         callId,
         agentId: routing.agentId,
         agentName: agentRow?.name || null,
-        profile: "frontdesk",
+        profile: isRealEstate ? "frontdesk_real_estate" : "frontdesk",
         pipeline: describePipelineConfig(config, sttConfig),
         turnHandling: describeTurnHandlingConfig(),
         outputGainDb,

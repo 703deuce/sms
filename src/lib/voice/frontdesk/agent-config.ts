@@ -4,6 +4,7 @@ import {
   type OutboundRealtimePipelineConfig,
   type OutboundRealtimePipelineOverrides,
 } from "@/lib/voice/outbound/agent-config";
+import { isRealEstateFrontDeskAgent } from "@/lib/voice/real-estate/config";
 
 export const FRONTDESK_PROFILE = "frontdesk";
 export const FRONTDESK_REALTIME_PROFILE = "frontdesk_realtime";
@@ -48,4 +49,10 @@ export function resolveFrontDeskRealtimePipelineConfig(
   overrides?: OutboundRealtimePipelineOverrides,
 ): OutboundRealtimePipelineConfig {
   return resolveOutboundRealtimePipelineConfig(config, overrides);
+}
+
+export function isRealEstateFrontDeskProfile(
+  config: Pick<VoiceAgentConfig, "advanced">,
+): boolean {
+  return isRealEstateFrontDeskAgent(config.advanced as Record<string, unknown>);
 }

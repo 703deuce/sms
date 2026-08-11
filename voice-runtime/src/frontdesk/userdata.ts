@@ -3,6 +3,7 @@ import {
   isFrontDeskProfile as isFrontDeskProfileFromConfig,
   usesFrontDeskRealtimeVoicePipeline,
 } from "@/lib/voice/frontdesk/agent-config";
+import type { RealEstateCallState } from "@/lib/voice/real-estate/types";
 
 export type BookingStatus = "pending" | "confirmed";
 
@@ -33,6 +34,8 @@ export type FrontDeskUserData = {
   livekitParticipantId?: string;
   /** Canonical booking state for server-side duplicate guards. */
   booking?: FrontDeskBookingState;
+  /** Real estate front desk runtime state (intent, fields, lead status). */
+  callState?: RealEstateCallState;
   /** @deprecated Prefer booking.status === "confirmed". */
   bookingComplete?: boolean;
   bookedTimeLabel?: string;

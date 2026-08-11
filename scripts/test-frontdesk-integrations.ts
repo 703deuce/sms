@@ -13,21 +13,26 @@ function read(rel: string): string {
 }
 
 const agentSource = read("voice-runtime/src/frontdesk/frontdesk-booking-agent.ts");
+const bookingToolsSource = read("voice-runtime/src/frontdesk/booking-tools.ts");
 assert.ok(
-  !agentSource.includes("GetEmailTask"),
+  !agentSource.includes("GetEmailTask") && !bookingToolsSource.includes("GetEmailTask"),
   "frontdesk agent must not use GetEmailTask (agent_handoff)",
 );
 assert.ok(
-  agentSource.includes("buildFrontDeskEmailTools"),
-  "frontdesk agent includes inline email tools",
+  bookingToolsSource.includes("buildFrontDeskEmailTools"),
+  "frontdesk booking tools include inline email tools",
 );
 assert.ok(
-  agentSource.includes("syncFrontDeskBookingToCrm"),
-  "frontdesk agent syncs CRM on book",
+  bookingToolsSource.includes("syncFrontDeskBookingToCrm"),
+  "frontdesk booking tools sync CRM on book",
 );
 assert.ok(
-  agentSource.includes("buildFrontDeskRescheduleAppointmentTool"),
-  "frontdesk agent includes reschedule tool",
+  bookingToolsSource.includes("buildFrontDeskRescheduleAppointmentTool"),
+  "frontdesk booking tools include reschedule tool",
+);
+assert.ok(
+  agentSource.includes("buildFrontDeskBookingTools"),
+  "frontdesk agent uses shared booking tools module",
 );
 
 const cancelSource = read("voice-runtime/src/frontdesk/cancel-appointment-tool.ts");
@@ -74,13 +79,13 @@ const crmEvents = read("src/lib/crm/events.ts");
 assert.ok(crmEvents.includes("publishAppointmentCancelled"));
 
 assert.ok(
-  agentSource.includes("buildFrontDeskCheckBookingStatusTool"),
+  bookingToolsSource.includes("buildFrontDeskCheckBookingStatusTool"),
   "frontdesk includes check_booking_status tool",
 );
 assert.ok(
-  agentSource.includes("speakBookingLine"),
+  bookingToolsSource.includes("speakBookingLine"),
   "frontdesk uses Realtime-safe scripted speech for booking lines",
 );
-assert.ok(!agentSource.includes("runCtx.update(POST_EMAIL_BOOKING_FILLER)"));
+assert.ok(!bookingToolsSource.includes("runCtx.update(POST_EMAIL_BOOKING_FILLER)"));
 
 console.log("frontdesk integrations tests: PASS");
