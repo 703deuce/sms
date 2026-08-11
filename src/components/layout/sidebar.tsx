@@ -6,6 +6,7 @@ import {
   buildSolutionsNav,
   type SolutionNavInstance,
 } from "@/lib/solutions-nav";
+import { buildRealtorNav } from "@/lib/realtor/nav";
 import { cn } from "@/lib/utils";
 import { ChevronDown, LogOut, MessageSquare } from "lucide-react";
 import Link from "next/link";
@@ -188,11 +189,13 @@ export function Sidebar({
   open,
   onClose,
   outcomeInstances = {},
+  realtorMode = false,
 }: {
   userName: string;
   open?: boolean;
   onClose?: () => void;
   outcomeInstances?: Record<string, SolutionNavInstance[]>;
+  realtorMode?: boolean;
 }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -201,8 +204,8 @@ export function Sidebar({
   const [expanded, setExpanded] = useState<string | null>(null);
 
   const navItems: NavItem[] = useMemo(
-    () => buildSolutionsNav({ instancesBySolution: outcomeInstances }),
-    [outcomeInstances],
+    () => (realtorMode ? buildRealtorNav() : buildSolutionsNav({ instancesBySolution: outcomeInstances })),
+    [outcomeInstances, realtorMode],
   );
 
   useEffect(() => {

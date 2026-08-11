@@ -17,6 +17,7 @@ export function AppShell({
   activeFromNumberId,
   unreadNotifications,
   outcomeInstances = {},
+  realtorMode = false,
 }: {
   children: React.ReactNode;
   userName: string;
@@ -27,6 +28,7 @@ export function AppShell({
   activeFromNumberId?: string | null;
   unreadNotifications?: number;
   outcomeInstances?: Record<string, SolutionNavInstance[]>;
+  realtorMode?: boolean;
 }) {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -47,6 +49,7 @@ export function AppShell({
           open={menuOpen}
           onClose={() => setMenuOpen(false)}
           outcomeInstances={outcomeInstances}
+          realtorMode={realtorMode}
         />
       </Suspense>
       <div className="lg:pl-[260px]">

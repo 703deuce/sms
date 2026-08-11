@@ -135,19 +135,47 @@ assert.ok(crmSyncSource.includes("createCrmTaskForVoice"));
 const notificationsSource = read("src/lib/voice/real-estate/notifications.ts");
 assert.ok(notificationsSource.includes("voice.real_estate."));
 
-// --- Setup script ---
+// --- Setup / deploy scripts ---
 const setupSource = read("scripts/setup-real-estate-frontdesk-agent.ts");
-assert.ok(setupSource.includes("realEstateFrontDesk: true"));
-assert.ok(setupSource.includes("FRONTDESK_REALTIME_PROFILE"));
-assert.ok(setupSource.includes("buildRealEstateDraftConfig"));
-assert.ok(setupSource.includes("preserved existing config") || setupSource.includes("existingCfg"));
+assert.ok(setupSource.includes("ensureRealEstateFrontDeskAgent"));
+
+const deployAgentSource = read("src/lib/voice/real-estate/deploy-agent.ts");
+assert.ok(deployAgentSource.includes("realEstateFrontDesk: true"));
+assert.ok(deployAgentSource.includes("FRONTDESK_REALTIME_PROFILE"));
+assert.ok(deployAgentSource.includes("buildRealEstateDraftConfig"));
 
 const seedSource = read("scripts/seed-real-estate-frontdesk-knowledge.ts");
-assert.ok(seedSource.includes("processKnowledgeSource(source.id)"));
-assert.ok(seedSource.includes("voiceKnowledgeBase.create"));
+assert.ok(seedSource.includes("seedRealEstateFrontDeskKnowledge"));
+
+const deployKnowledgeSource = read("src/lib/voice/real-estate/deploy-knowledge.ts");
+assert.ok(deployKnowledgeSource.includes("processKnowledgeSource(source.id)"));
+assert.ok(deployKnowledgeSource.includes("voiceKnowledgeBase.create"));
 
 // --- Fixtures ---
 assert.ok(fs.existsSync(path.join(root, "scripts/fixtures/blue-ridge-realty-rag-knowledge.txt")));
-assert.ok(fs.existsSync(path.join(root, "scripts/fixtures/blue-ridge-realty-qualification.json")));
+assert.ok(fs.existsSync(path.join(root, "src/lib/voice/real-estate/bootstrap.ts")));
+assert.ok(fs.existsSync(path.join(root, "src/lib/voice/real-estate/deploy-agent.ts")));
+assert.ok(fs.existsSync(path.join(root, "src/lib/voice/real-estate/deploy-knowledge.ts")));
+
+const bootstrapSource = read("src/lib/voice/real-estate/bootstrap.ts");
+assert.ok(bootstrapSource.includes("bootstrapRealEstateFrontDesk"));
+assert.ok(bootstrapSource.includes("deployRealEstateFrontDesk"));
+assert.ok(bootstrapSource.includes("ensureRealEstateFrontDeskAgent"));
+assert.ok(bootstrapSource.includes("seedRealEstateFrontDeskKnowledge"));
+assert.ok(bootstrapSource.includes("deployRealtorSpeedToLead"));
+
+const deploySpeed = read("src/lib/realtor/deploy-speed-to-lead.ts");
+assert.ok(deploySpeed.includes("buildRealtorFollowUpDefinition"));
+
+const instrumentation = read("src/instrumentation.ts");
+assert.ok(instrumentation.includes("bootstrapRealEstateFrontDesk"));
+
+const realtorNav = read("src/lib/realtor/nav.ts");
+assert.ok(realtorNav.includes("buildRealtorNav"));
+assert.ok(realtorNav.includes("/realtor/dashboard"));
+
+assert.ok(fs.existsSync(path.join(root, "src/app/(app)/realtor/onboarding/page.tsx")));
+assert.ok(fs.existsSync(path.join(root, "src/app/(app)/realtor/dashboard/page.tsx")));
+assert.ok(fs.existsSync(path.join(root, "src/app/(app)/realtor/leads/page.tsx")));
 
 console.log("real-estate frontdesk tests: PASS");
