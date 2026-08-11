@@ -64,7 +64,7 @@ function resolveRealtimeVoice(input?: string): string {
 async function resolveSourceOutboundPhone(input: {
   workspaceId: string;
   sourceAgentId: string;
-}): Promise<{ phoneNumberId: string; e164: string } | null> {
+}): Promise<{ id: string; e164: string } | null> {
   const prisma = getPrisma();
 
   const join = await prisma.voiceAgentPhoneNumber.findFirst({
