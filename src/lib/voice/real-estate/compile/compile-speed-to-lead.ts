@@ -11,6 +11,7 @@ import {
 } from "../templates/definitions";
 import { resolveIntentFields } from "./field-manifest";
 import { buildSpeedToLeadWorkflowDefinition } from "./compile-workflow-visual";
+import { workflowVisualizationMeta } from "@/lib/voice/architecture/compiled-policy";
 import type { AgentInstanceStatus, CompiledRealEstateSpeedToLead } from "./types";
 
 function resolveLeadTypes(config: RealtorProductConfig): "buyer" | "seller" | "both" | "auto_detect" {
@@ -166,7 +167,10 @@ export function compileSpeedToLeadFromProductConfig(
     config.business.brokerage?.trim() ||
     "Your Real Estate Team";
 
-  const partial: Omit<CompiledRealEstateSpeedToLead, "workflowDefinition" | "qualification"> = {
+  const partial: Omit<
+    CompiledRealEstateSpeedToLead,
+    "workflowDefinition" | "workflowVisualization" | "qualification"
+  > = {
     templateKey: REAL_ESTATE_TEMPLATE_KEYS.SPEED_TO_LEAD,
     templateVersion: REAL_ESTATE_TEMPLATE_VERSION,
     configVersion: input?.configVersion ?? (config.compiledVersion ?? 0) + 1,
@@ -214,6 +218,7 @@ export function compileSpeedToLeadFromProductConfig(
       partial,
       input?.agentId || "pending",
     ),
+    workflowVisualization: workflowVisualizationMeta(),
   };
 }
 

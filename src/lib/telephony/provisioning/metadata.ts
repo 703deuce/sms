@@ -7,6 +7,13 @@ export const roomMetadataSchema = z.object({
   fromE164: z.string().optional(),
   toE164: z.string().optional(),
   callId: z.string().optional(),
+  /** Published voiceAgentVersion id — pinned at dispatch when available. */
+  publishedVersionId: z.string().min(1).optional(),
+  /** frontdesk | frontdesk_realtime | outbound_* — explicit dispatch hint. */
+  livekitProfile: z.string().optional(),
+  dispatchSource: z
+    .enum(["phone_provision", "sip_metadata", "job_metadata", "did_lookup"])
+    .optional(),
 });
 
 export type RoomMetadata = z.infer<typeof roomMetadataSchema>;
@@ -36,5 +43,12 @@ export function parseDispatchAttributes(attrs: Record<string, string>): RoomMeta
     fromE164,
     toE164,
     callId: attrs.callId,
+    publishedVersionId: attrs.publishedVersionId,
+    livekitProfile: attrs.livekitProfile,
+    dispatchSource: attrs.dispatchSource as RoomMetadata["dispatchSource"],
   });
+}
+
+export function parseJobDispatchMetadata(raw: string | undefined): RoomMetadata | null {
+  return parseRoomMetadata(raw);
 }

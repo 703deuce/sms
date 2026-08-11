@@ -30,6 +30,8 @@ function alreadyBookedAmyMessage(session: AgentSession<AmyUserData>): string | n
   );
 }
 
+/** LEGACY / TEST ONLY — not routed from production inbound SIP. */
+
 export function createAmyReceptionistAgent(businessName: string) {
   const instructions = buildAmyLiveKitRootInstructions(businessName);
 

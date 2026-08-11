@@ -201,12 +201,17 @@ export async function updateVoiceAgentDraft(
 async function syncAssistantToTelnyx(
   workspaceId: string,
   agentId: string,
-  agent: { id: string; telnyxAssistantId: string | null },
+  agent: { id: string; telnyxAssistantId: string | null; agentType?: string | null },
   config: VoiceAgentConfig,
 ) {
   const { getVoiceRuntimeProvider, isLiveKitVoiceRuntime } = await import(
     "./runtime-provider"
   );
+  const { requiresLiveKitVoiceRuntime } = await import("./architecture/livekit-voice-profiles");
+  if (requiresLiveKitVoiceRuntime({ ...config, agentType: agent.agentType })) {
+    await getVoiceRuntimeProvider().syncAgentConfig?.({ workspaceId, agentId });
+    return { skipped: true, reason: "livekit_only_profile" };
+  }
   if (isLiveKitVoiceRuntime()) {
     await getVoiceRuntimeProvider().syncAgentConfig?.({ workspaceId, agentId });
     return { skipped: true, reason: "livekit_runtime" };

@@ -30,7 +30,7 @@ function outcomeNodeLabel(outcome: string): string {
   }
 }
 
-/** Build a visual workflow graph from compiled front desk config — reflects enabled intents only. */
+/** Build a visual workflow graph from compiled front desk policy — UI/automation only, not voice executor. */
 export function buildFrontDeskWorkflowDefinition(
   compiled: Pick<CompiledRealEstateFrontDesk, "intents" | "booking" | "identity">,
 ): AutomationDefinition {

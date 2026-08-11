@@ -66,11 +66,19 @@ export async function ensureSharedDispatchRule(input: {
       name: TRANSOVO_LIVEKIT_DISPATCH_RULE_NAME,
       trunkIds: [input.trunkId],
       hidePhoneNumber: false,
-      metadata: JSON.stringify({ owner: "transovo", kind: "shared_inbound_dispatch" }),
+      metadata: JSON.stringify({
+        owner: "transovo",
+        kind: "shared_inbound_dispatch",
+        dispatchHint: "resolve_explicit_metadata_at_worker",
+      }),
       roomConfig: new RoomConfiguration({
         agents: [
           new RoomAgentDispatch({
             agentName: TRANSOVO_LIVEKIT_AGENT_NAME,
+            metadata: JSON.stringify({
+              runtime: "transovo-voice-runtime",
+              resolve: "explicit_dispatch_metadata",
+            }),
           }),
         ],
       }),

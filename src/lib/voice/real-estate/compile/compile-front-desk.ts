@@ -10,6 +10,7 @@ import {
   type FrontDeskIntentConfigKey,
 } from "../templates/definitions";
 import { resolveIntentFields } from "./field-manifest";
+import { workflowVisualizationMeta } from "@/lib/voice/architecture/compiled-policy";
 import { buildFrontDeskWorkflowDefinition } from "./compile-workflow-visual";
 import type { AgentInstanceStatus, CompiledRealEstateFrontDesk } from "./types";
 
@@ -89,7 +90,7 @@ export function compileFrontDeskFromProductConfig(
     (i) => i.enabled && i.qualifiedOutcome === "book",
   );
 
-  const partial: Omit<CompiledRealEstateFrontDesk, "workflowDefinition"> = {
+  const partial: Omit<CompiledRealEstateFrontDesk, "workflowDefinition" | "workflowVisualization"> = {
     templateKey: REAL_ESTATE_TEMPLATE_KEYS.FRONT_DESK,
     templateVersion: REAL_ESTATE_TEMPLATE_VERSION,
     configVersion: input?.configVersion ?? (config.compiledVersion ?? 0) + 1,
@@ -113,5 +114,6 @@ export function compileFrontDeskFromProductConfig(
   return {
     ...partial,
     workflowDefinition: buildFrontDeskWorkflowDefinition(partial),
+    workflowVisualization: workflowVisualizationMeta(),
   };
 }

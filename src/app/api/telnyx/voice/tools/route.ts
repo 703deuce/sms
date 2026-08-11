@@ -12,6 +12,15 @@ import {
   normalizeCallerAni,
 } from "@/lib/voice/call-identity";
 import { recordToolWebhookIngress } from "@/lib/voice/telnyx/tool-webhook-ingress";
+import { parseVoiceAgentConfig } from "@/lib/voice/types";
+import {
+  isLegacyCallerAmyAgent,
+  requiresLiveKitVoiceRuntime,
+} from "@/lib/voice/architecture/livekit-voice-profiles";
+import {
+  LEGACY_WORKFLOW_VOICE_TOOL_TYPES,
+  isLegacyWorkflowVoicePathEnabled,
+} from "@/lib/voice/architecture/legacy-voice-path";
 
 function resolveInboundAni(request: Request, body: Record<string, unknown>): string {
   const headerKeys = [
@@ -73,6 +82,49 @@ export async function POST(request: Request) {
           {
             ok: false,
             error: "agent not found for workspace",
+            speak: "I'm not able to do that right now.",
+          },
+          { status: 200 },
+        );
+      }
+
+      const agentConfig = parseVoiceAgentConfig(agent.draftConfig);
+      if (requiresLiveKitVoiceRuntime({ ...agentConfig, agentType: agent.agentType })) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "LiveKit-only voice agent — Telnyx AI tool webhooks are not supported",
+            speak:
+              "This line uses our LiveKit voice system. Please call back on the provisioned number.",
+          },
+          { status: 200 },
+        );
+      }
+
+      if (
+        toolType &&
+        LEGACY_WORKFLOW_VOICE_TOOL_TYPES.has(toolType) &&
+        !isLegacyWorkflowVoicePathEnabled()
+      ) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: `Legacy workflow tool "${toolType}" is retired`,
+            speak: "I'm not able to do that on this line right now.",
+          },
+          { status: 200 },
+        );
+      }
+
+      if (
+        toolType &&
+        LEGACY_WORKFLOW_VOICE_TOOL_TYPES.has(toolType) &&
+        !isLegacyCallerAmyAgent({ agentType: agent.agentType, config: agentConfig })
+      ) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "Workflow tools are only available for legacy Caller Amy agents",
             speak: "I'm not able to do that right now.",
           },
           { status: 200 },

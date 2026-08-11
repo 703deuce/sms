@@ -64,7 +64,9 @@ export function verifyRealEstateFrontdesk(): void {
   assert.ok(multiMissing.some((f) => f.field_id === "property_address"));
 
   const inboundSource = readProjectFile("voice-runtime/src/inbound-entry.ts");
-  assert.ok(inboundSource.includes("createRealEstateFrontDeskAgent"));
+  const pipelineSource = readProjectFile("voice-runtime/src/inbound-session-pipeline.ts");
+  assert.ok(inboundSource.includes("inbound-session-pipeline"));
+  assert.ok(pipelineSource.includes("createRealEstateFrontDeskAgent"));
 
   const bootstrapSource = readProjectFile("src/lib/voice/real-estate/bootstrap.ts");
   assert.ok(bootstrapSource.includes("bootstrapRealEstateFrontDesk"));

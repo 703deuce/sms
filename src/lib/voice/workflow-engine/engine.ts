@@ -1,3 +1,7 @@
+/**
+ * Legacy Caller Amy workflow state machine.
+ * LEGACY / TEST ONLY — production Realtor/frontdesk use LiveKit AgentSession + domain state.
+ */
 import { getPrisma } from "@/lib/db";
 import { getWorkflowRequirements } from "@/lib/voice/field-runtime/requirements";
 import { ensureWorkflowFieldSession, allSessionFieldsFlat } from "@/lib/voice/field-runtime/session";

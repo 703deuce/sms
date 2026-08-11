@@ -16,6 +16,12 @@ import {
 } from "./livekit/inspect";
 import { trunkNumbersIncludeDid } from "./livekit/did";
 import {
+  buildExplicitDispatchMetadata,
+  explicitDispatchPatchForPhoneSettings,
+} from "./dispatch-metadata";
+import { parseVoiceAgentConfig } from "@/lib/voice/types";
+import { livekitProfileFromConfig } from "@/lib/voice/frontdesk/agent-config";
+import {
   ensureTelnyxLiveKitFqdnConnection,
   routeTelnyxNumberToConnection,
 } from "./telnyx/sip-connection";
@@ -87,6 +93,27 @@ async function writeProvision(
 function resolveRoutingMode(explicit?: VoiceRoutingMode): VoiceRoutingMode {
   if (explicit) return explicit;
   return isLiveKitVoiceRuntime() ? "livekit_sip" : "telnyx_assistant";
+}
+
+async function buildDispatchMetadataForAgent(input: {
+  workspaceId: string;
+  agentId: string;
+  toE164: string;
+}) {
+  const prisma = getPrisma();
+  const agent = await prisma.voiceAgent.findFirst({
+    where: { id: input.agentId, workspaceId: input.workspaceId },
+    select: { publishedVersionId: true, draftConfig: true },
+  });
+  const config = parseVoiceAgentConfig(agent?.draftConfig);
+  return buildExplicitDispatchMetadata({
+    workspaceId: input.workspaceId,
+    agentId: input.agentId,
+    publishedVersionId: agent?.publishedVersionId,
+    livekitProfile: livekitProfileFromConfig(config.advanced as Record<string, unknown>),
+    toE164: input.toE164,
+    dispatchSource: "phone_provision",
+  });
 }
 
 /**
@@ -165,6 +192,15 @@ export async function ensureNumberProvisioned(
       livekitInboundTrunkId: trunkId,
       livekitDispatchRuleId: rule.sipDispatchRuleId,
       lastError: null,
+      ...(input.agentId
+        ? explicitDispatchPatchForPhoneSettings(
+            await buildDispatchMetadataForAgent({
+              workspaceId: input.workspaceId,
+              agentId: input.agentId,
+              toE164: phone.e164,
+            }),
+          )
+        : {}),
     });
 
     return {

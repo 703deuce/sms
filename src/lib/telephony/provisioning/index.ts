@@ -25,10 +25,19 @@ export {
 
 export {
   parseDispatchAttributes,
+  parseJobDispatchMetadata,
   parseRoomMetadata,
   roomMetadataSchema,
   type RoomMetadata,
 } from "./metadata";
+
+export {
+  buildExplicitDispatchMetadata,
+  explicitDispatchPatchForPhoneSettings,
+  loadExplicitDispatchForDid,
+  mergeExplicitDispatchMetadata,
+  type ExplicitDispatchMetadata,
+} from "./dispatch-metadata";
 
 export {
   assignNumberToAgent,

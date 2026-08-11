@@ -6,6 +6,7 @@ import type {
 } from "@/lib/realtor/types";
 import type { RealEstateBusinessConfig, RealEstateFieldDefinition, RealEstateIntent } from "../types";
 import type { RealEstateTemplateKey } from "../templates/definitions";
+import type { WorkflowVisualizationMeta } from "@/lib/voice/architecture/compiled-policy";
 
 export type AgentInstanceStatus = "draft" | "testing" | "active" | "paused";
 
@@ -52,8 +53,9 @@ export type CompiledRealEstateFrontDesk = {
     appointmentTypes: string[];
     calendlyEventMappings?: Record<string, string>;
   };
-  /** Visual workflow graph derived from enabled intents — not a giant prompt. */
+  /** Visual workflow graph derived from policy — not executed at LiveKit voice runtime. */
   workflowDefinition: AutomationDefinition;
+  workflowVisualization: WorkflowVisualizationMeta;
 };
 
 export type CompiledSpeedToLeadCalling = {
@@ -89,6 +91,7 @@ export type CompiledRealEstateSpeedToLead = {
     calendlyEventMappings?: Record<string, string>;
   };
   workflowDefinition: AutomationDefinition;
+  workflowVisualization: WorkflowVisualizationMeta;
 };
 
 export type CompileValidationIssue = {

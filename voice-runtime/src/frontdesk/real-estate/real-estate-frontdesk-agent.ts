@@ -1,5 +1,6 @@
 import { llm, voice } from "@livekit/agents";
 import type { AgentSession } from "@livekit/agents";
+import type { CompiledRealEstateFrontDesk } from "@/lib/voice/real-estate/compile/types";
 import { resolveRealEstateBusinessConfig } from "@/lib/voice/real-estate/config";
 import { createInitialCallState } from "@/lib/voice/real-estate/state";
 import { buildFrontDeskBookingTools } from "../booking-tools";
@@ -10,32 +11,47 @@ import {
   buildRealEstateGetRequiredFieldsTool,
   buildRealEstateIntentTools,
   buildRealEstateLookupContactTool,
+  buildRealEstateStructuredFieldTool,
   buildRealEstateTakeMessageTool,
 } from "./re-tools";
 
+/**
+ * Composition root for the Real Estate Front Desk LiveKit agent.
+ * Instructions + allowed tools are assembled here; implementations live in sibling modules.
+ */
 export function createRealEstateFrontDeskAgent(input: {
   businessName: string;
   timezone: string;
   dynamicVariables?: Record<string, unknown> | null;
+  publishedConfig?: CompiledRealEstateFrontDesk;
 }) {
   const business = resolveRealEstateBusinessConfig({
     ...input.dynamicVariables,
     business_name: input.businessName,
+    ...(input.publishedConfig?.business
+      ? {
+          service_areas: input.publishedConfig.business.serviceAreas,
+          property_types: input.publishedConfig.business.propertyTypes,
+        }
+      : {}),
   });
   const label = business.businessName;
   const { toolDefs: bookingToolDefs } = buildFrontDeskBookingTools({
     timezone: input.timezone,
   });
 
+  const agentHolder: { root?: voice.Agent<FrontDeskUserData> } = {};
+
   const reTools = [
     buildRealEstateLookupContactTool(),
     ...buildRealEstateIntentTools(),
     buildRealEstateGetRequiredFieldsTool(),
     buildRealEstateFieldTools(),
+    buildRealEstateStructuredFieldTool(() => agentHolder.root!),
     buildRealEstateTakeMessageTool(),
   ];
 
-  return voice.Agent.create<FrontDeskUserData>({
+  const agent = voice.Agent.create<FrontDeskUserData>({
     instructions: buildRealEstateFrontDeskInstructions({
       business,
       timezone: input.timezone,
@@ -61,4 +77,7 @@ export function createRealEstateFrontDeskAgent(input: {
       });
     },
   });
+
+  agentHolder.root = agent;
+  return agent;
 }

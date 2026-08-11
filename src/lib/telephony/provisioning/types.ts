@@ -14,6 +14,13 @@ export type TelephonyProvisionRecord = {
   telnyxFqdnId?: string;
   livekitInboundTrunkId?: string;
   livekitDispatchRuleId?: string;
+  explicitDispatch?: {
+    workspaceId?: string;
+    agentId?: string;
+    publishedVersionId?: string;
+    livekitProfile?: string;
+    updatedAt?: string;
+  };
   lastProvisionedAt?: string;
   lastVerifiedAt?: string;
   lastError?: string | null;

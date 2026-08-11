@@ -220,6 +220,8 @@ export async function ensureRealEstateFrontDeskAgent(
   }
 
   const workflow = await ensureAgentPrimaryWorkflow({
+    // Automation/workflow UI bundle — not the LiveKit voice turn executor.
+    // Voice runtime uses AgentSession + compiled policy (intents/fields) + tools.
     workspaceId,
     agentId,
     agentName,

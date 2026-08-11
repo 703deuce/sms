@@ -24,6 +24,8 @@ import { REAL_ESTATE_INTENT_LABELS, type RealEstateIntent } from "@/lib/voice/re
 import { parseLocalContactIdFromSafeId } from "@/lib/voice/real-estate/contact-id";
 import type { FrontDeskUserData } from "../userdata";
 import { withLiveKitToolTelemetry } from "../../livekit-tool-telemetry";
+import type { voice } from "@livekit/agents";
+import { runSchemaFieldCollectionTask } from "../../tasks/schema-field-collection-task";
 
 function activeIntents(userData: FrontDeskUserData): RealEstateIntent[] {
   const state = userData.callState;
@@ -174,6 +176,51 @@ export function buildRealEstateFieldTools() {
             : `Saved ${field_id}.`;
         },
       );
+    },
+  });
+}
+
+/** Optional bounded AgentTask collection for schema fields (LiveKit-native structured capture). */
+export function buildRealEstateStructuredFieldTool(
+  restoreRootAgent: () => voice.Agent<FrontDeskUserData>,
+) {
+  return llm.tool({
+    name: "collect_field_structured",
+    description:
+      "Run a focused collection task for one required field when flat record_collected_field is insufficient.",
+    parameters: z.object({
+      field_id: z.string().describe("Field id from get_required_fields"),
+    }),
+    execute: async ({ field_id }, opts) => {
+      const session = opts.ctx.session as AgentSession<FrontDeskUserData>;
+      const ud = session.userData;
+      if (!ud.callState) {
+        throw new llm.ToolError("Call state not initialized.");
+      }
+      const intents = activeIntents(ud);
+      const field = fieldsForIntents(intents).find((f) => f.field_id === field_id);
+      if (!field) {
+        throw new llm.ToolError(`Unknown field ${field_id} for active intents.`);
+      }
+
+      return withLiveKitToolTelemetry(ud, "collect_field_structured", { field_id }, async () => {
+        const result = await runSchemaFieldCollectionTask({
+          session,
+          field,
+          handlers: {
+            onRecord: async (value) => {
+              ud.callState = recordCollectedField(ud.callState!, field_id, value);
+              if (field_id === "name") {
+                ud.callState!.contactName = value.trim();
+              }
+              await syncState(ud);
+              return { ok: true, speak: `Saved ${field.label}.` };
+            },
+          },
+        });
+        session.updateAgent(restoreRootAgent());
+        return `Collected ${result.fieldId}: ${result.value}`;
+      });
     },
   });
 }

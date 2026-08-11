@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
 
 const SUITES: Array<{ name: string; cmd: string }> = [
+  { name: "livekit_architecture", cmd: "npx tsx scripts/test-livekit-architecture-gate.ts" },
   { name: "typescript", cmd: "npx tsc --noEmit" },
   { name: "realtor_full", cmd: "npx tsx scripts/test-realtor-full.ts" },
   { name: "frontdesk_integrations", cmd: "npx tsx scripts/test-frontdesk-integrations.ts" },

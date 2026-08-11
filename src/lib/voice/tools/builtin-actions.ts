@@ -1,6 +1,7 @@
 import { getPrisma } from "@/lib/db";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import { executeAgentTool } from "@/lib/voice/agent-tool-gateway/gateway";
+import { assertLegacyWorkflowVoiceToolAllowed } from "@/lib/voice/architecture/legacy-voice-path";
 
 export async function executeBuiltinVoiceAction(input: {
   workspaceId: string;
@@ -9,6 +10,8 @@ export async function executeBuiltinVoiceAction(input: {
   toolType: string;
   input: Record<string, unknown>;
 }) {
+  assertLegacyWorkflowVoiceToolAllowed(input.toolType);
+
   const prisma = getPrisma();
   const args = input.input || {};
 
