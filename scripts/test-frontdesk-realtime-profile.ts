@@ -37,6 +37,7 @@ process.env.FRONTDESK_REALTIME_TEST = "1";
 assert.equal(isFrontDeskRealtimeTestEnabled(), true);
 process.env.FRONTDESK_REALTIME_TEST = "0";
 assert.equal(isFrontDeskRealtimeTestEnabled(), false);
+assert.equal(isInboundRealtimeEnabled(), false);
 process.env.FRONTDESK_REALTIME_TEST = prev;
 if (prev == null) delete process.env.FRONTDESK_REALTIME_TEST;
 
@@ -44,5 +45,11 @@ process.env.INBOUND_REALTIME_TEST = "1";
 assert.equal(isInboundRealtimeEnabled(), true);
 delete process.env.INBOUND_REALTIME_TEST;
 assert.equal(isInboundRealtimeEnabled(), false);
+
+// FRONTDESK_REALTIME_TEST must NOT enable Amy realtime (frontdesk uses DB profile only)
+process.env.FRONTDESK_REALTIME_TEST = "1";
+assert.equal(isInboundRealtimeEnabled(), false);
+process.env.FRONTDESK_REALTIME_TEST = prev;
+if (prev == null) delete process.env.FRONTDESK_REALTIME_TEST;
 
 console.log("frontdesk realtime profile tests: PASS");

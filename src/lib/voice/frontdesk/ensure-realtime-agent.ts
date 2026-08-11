@@ -13,6 +13,7 @@ export type EnsureFrontDeskRealtimeAgentResult = {
   agentName: string;
   upgraded: boolean;
   phoneE164: string | null;
+  phoneReassigned: boolean;
   realtimeModel: string;
   realtimeVoice: string;
 };
@@ -22,6 +23,10 @@ export type EnsureFrontDeskRealtimeAgentInput = {
   agentId?: string;
   realtimeModel?: string;
   realtimeVoice?: string;
+  /** Inbound DID to assign exclusively to frontdesk (default +18663464256). */
+  phoneE164?: string;
+  /** When false, skip phone reassignment (default: reassign on boot). */
+  assignPhone?: boolean;
 };
 
 function resolveRealtimeModel(input?: string): string {
@@ -108,8 +113,40 @@ export async function ensureFrontDeskRealtimeAgent(
     },
   });
 
+  const assignPhone = input.assignPhone !== false;
+  const targetE164 = (
+    input.phoneE164 ||
+    process.env.FRONTDESK_PHONE_E164 ||
+    process.env.PHONE_E164 ||
+    "+18663464256"
+  ).trim();
+
   let phoneE164: string | null = null;
-  if (agent.phoneNumberId) {
+  let phoneReassigned = false;
+
+  if (assignPhone && targetE164) {
+    const phone = await prisma.phoneNumber.findFirst({
+      where: { workspaceId, e164: targetE164 },
+      select: { id: true, e164: true },
+    });
+    if (phone) {
+      const { assignNumberToAgent } = await import("@/lib/telephony/provisioning");
+      await assignNumberToAgent({
+        workspaceId,
+        phoneNumberId: phone.id,
+        agentId: agent.id,
+        exclusive: true,
+      });
+      phoneE164 = phone.e164;
+      phoneReassigned = true;
+    } else {
+      console.warn(
+        `[frontdesk-realtime] phone ${targetE164} not found in ${workspaceId} — skipping reassignment`,
+      );
+    }
+  }
+
+  if (!phoneE164 && agent.phoneNumberId) {
     const phone = await prisma.phoneNumber.findFirst({
       where: { id: agent.phoneNumberId, workspaceId },
       select: { e164: true },
@@ -122,6 +159,7 @@ export async function ensureFrontDeskRealtimeAgent(
     agentName: agent.name,
     upgraded,
     phoneE164,
+    phoneReassigned,
     realtimeModel,
     realtimeVoice,
   };

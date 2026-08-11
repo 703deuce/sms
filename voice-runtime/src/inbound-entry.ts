@@ -6,7 +6,6 @@ import { liveKitRuntimeProvider } from "@/lib/voice/runtime-provider/livekit";
 import { bootstrapLiveKitCallContext } from "@/lib/voice/domain-actions";
 import { resolveAgentRoutingForCall } from "@/lib/telephony/provisioning";
 import {
-  FRONTDESK_REALTIME_PROFILE,
   usesFrontDeskRealtimeVoicePipeline,
 } from "@/lib/voice/frontdesk/agent-config";
 import {

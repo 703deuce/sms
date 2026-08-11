@@ -8,8 +8,8 @@ export function isFrontDeskRealtimeTestEnabled(): boolean {
 }
 
 /**
- * On deploy: when FRONTDESK_REALTIME_TEST=1, upgrade the inbound frontdesk agent
- * to OpenAI Realtime (same VAD/model/voice env as outbound).
+ * On deploy: when FRONTDESK_REALTIME_TEST=1, upgrade frontdesk to OpenAI Realtime
+ * and reassign the inbound DID (default +18663464256) away from Amy.
  */
 export async function bootstrapFrontDeskRealtimeTest(): Promise<void> {
   if (!isFrontDeskRealtimeTestEnabled()) return;
