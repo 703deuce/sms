@@ -1,0 +1,86 @@
+"use client";
+
+import { Button } from "@/components/ui/button";
+import { Card, CardTitle } from "@/components/ui/card";
+import type { RealtorAgentInstanceStatus, RealtorProductConfig } from "@/lib/realtor/types";
+import { useState } from "react";
+
+const STATUS_LABELS: Record<RealtorAgentInstanceStatus, string> = {
+  draft: "Draft",
+  testing: "Testing",
+  active: "Active",
+  paused: "Paused",
+};
+
+export function RealtorAgentStatusPanel({
+  config,
+  agentLabel,
+  onUpdated,
+}: {
+  config: RealtorProductConfig;
+  agentLabel: "Front Desk" | "Speed-to-Lead";
+  onUpdated?: (config: RealtorProductConfig) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const status = config.status || "draft";
+
+  async function runAction(action: string) {
+    setBusy(true);
+    try {
+      const res = await fetch("/api/realtor/agents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, config }),
+      });
+      const json = await res.json();
+      if (json.config) onUpdated?.(json.config);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card className="p-4 space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <CardTitle>{agentLabel} status</CardTitle>
+        <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium">
+          {STATUS_LABELS[status]} · v{config.compiledVersion ?? 0}
+        </span>
+      </div>
+      <p className="text-sm text-muted-foreground">
+        Production calls use the last published configuration. Edits save as draft until you publish.
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={busy}
+          onClick={() => void runAction("save_draft")}
+        >
+          Save draft
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={busy}
+          onClick={() => void runAction("set_testing")}
+        >
+          Mark testing
+        </Button>
+        <Button size="sm" disabled={busy} onClick={() => void runAction("publish")}>
+          Publish
+        </Button>
+        {status === "active" ? (
+          <Button variant="outline" size="sm" disabled={busy} onClick={() => void runAction("pause")}>
+            Pause
+          </Button>
+        ) : null}
+      </div>
+      {config.publishedAt ? (
+        <p className="text-xs text-muted-foreground">
+          Last published: {new Date(config.publishedAt).toLocaleString()}
+        </p>
+      ) : null}
+    </Card>
+  );
+}

@@ -41,6 +41,11 @@ export function verifyRealtorProduct(): void {
 
   const onboardingApi = readProjectFile("src/app/api/realtor/onboarding/route.ts");
   assert.ok(onboardingApi.includes("deployRealEstateFrontDesk"));
+  assert.ok(onboardingApi.includes("onboardingStepsForConfig"));
+
+  assert.ok(projectFileExists("src/app/api/realtor/agents/route.ts"));
+  assert.ok(projectFileExists("src/lib/realtor/wizard-steps.ts"));
+  assert.ok(projectFileExists("src/components/realtor/intent-field-editor.tsx"));
 
   const deploySpeed = readProjectFile("src/lib/realtor/deploy-speed-to-lead.ts");
   assert.ok(deploySpeed.includes("resolveOutboundTemplateAgent"));

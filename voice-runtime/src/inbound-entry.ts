@@ -72,12 +72,8 @@ export async function runInboundEntry(ctx: JobContext): Promise<void> {
   const prisma = getPrisma();
   const agentRow = await prisma.voiceAgent.findFirst({
     where: { id: routing.agentId, workspaceId: routing.workspaceId },
-    select: { draftConfig: true, name: true },
+    select: { draftConfig: true, name: true, publishedVersionId: true },
   });
-  const agentConfig = parseVoiceAgentConfig(agentRow?.draftConfig);
-  const outputGainDb = resolveLiveKitOutputGainDb(agentConfig.voiceLanguage?.outputGainDb);
-  const useRealtime = usesFrontDeskRealtimeVoicePipeline(agentConfig);
-  const isRealEstate = isRealEstateFrontDeskProfile(agentConfig);
 
   const { callId } = await liveKitRuntimeProvider.bootstrapSession({
     workspaceId: routing.workspaceId,
@@ -89,6 +85,23 @@ export async function runInboundEntry(ctx: JobContext): Promise<void> {
     livekitParticipantId: identity.participant.identity,
     lightweightBootstrap: true,
   });
+
+  const callRow = await prisma.voiceCall.findFirst({
+    where: { id: callId, workspaceId: routing.workspaceId },
+    select: { agentVersionId: true, metadata: true },
+  });
+
+  const { loadVoiceAgentConfigForCall } = await import("@/lib/voice/real-estate/publish");
+  const loaded = await loadVoiceAgentConfigForCall({
+    workspaceId: routing.workspaceId,
+    agentId: routing.agentId,
+    agentVersionId: callRow?.agentVersionId,
+  });
+  const agentConfig = loaded.config;
+
+  const outputGainDb = resolveLiveKitOutputGainDb(agentConfig.voiceLanguage?.outputGainDb);
+  const useRealtime = usesFrontDeskRealtimeVoicePipeline(agentConfig);
+  const isRealEstate = isRealEstateFrontDeskProfile(agentConfig);
 
   const messaging = await prisma.workspaceMessagingSettings.findUnique({
     where: { workspaceId: routing.workspaceId },
@@ -134,6 +147,11 @@ export async function runInboundEntry(ctx: JobContext): Promise<void> {
       ? {
           callState: createInitialCallState(),
           realEstateCompiled: compiledFrontDesk || undefined,
+          agentConfigVersion:
+            (agentConfig.advanced as Record<string, unknown> | undefined)?.configVersion as
+              | number
+              | undefined,
+          agentVersionId: loaded.agentVersionId || undefined,
         }
       : {}),
   };

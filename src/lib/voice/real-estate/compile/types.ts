@@ -62,6 +62,7 @@ export type CompiledSpeedToLeadCalling = {
   maxAttempts: number;
   retryScheduleHours: number[];
   voicemailBehavior: "leave_message" | "hang_up";
+  firstCallDelayMinutes?: number;
   callingWindowStart?: string;
   callingWindowEnd?: string;
 };

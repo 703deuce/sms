@@ -12,6 +12,7 @@ import { getOutboundQualificationFromConfig } from "@/lib/voice/outbound/agent-c
 import { isOutboundRealtimeTestEnabled } from "@/lib/voice/outbound/outbound-boot";
 import type { RealtorProductConfig } from "./types";
 import { compileSpeedToLeadFromProductConfig } from "@/lib/voice/real-estate/compile";
+import { publishVoiceAgentVersion } from "@/lib/voice/real-estate/publish";
 import {
   REAL_ESTATE_DEPLOYED_OUTBOUND_NAME,
   resolveOutboundTemplateAgent,
@@ -376,6 +377,7 @@ export async function deployRealtorSpeedToLead(input: {
   outboundTemplateAgentId?: string;
   followUpAutomationId?: string;
   configVersion?: number;
+  publishedVersionId?: string;
 }> {
   if (input.config.amyMode === "front_desk") {
     return { outboundAgentId: "" };
@@ -385,39 +387,6 @@ export async function deployRealtorSpeedToLead(input: {
     workspaceId: input.workspaceId,
     productConfig: input.config,
   });
-
-  if (input.publish) {
-    const prisma = getPrisma();
-    const agentRow = await prisma.voiceAgent.findFirst({
-      where: { id: outbound.agentId },
-      select: { draftConfig: true },
-    });
-    const latestVersion = await prisma.voiceAgentVersion.findFirst({
-      where: { agentId: outbound.agentId, workspaceId: input.workspaceId },
-      orderBy: { version: "desc" },
-      select: { version: true },
-    });
-    const nextVersion = (latestVersion?.version ?? 0) + 1;
-    const compiled = compileSpeedToLeadFromProductConfig(input.config, {
-      status: "active",
-      agentId: outbound.agentId,
-    });
-    await prisma.voiceAgentVersion.updateMany({
-      where: { agentId: outbound.agentId, workspaceId: input.workspaceId, isMain: true },
-      data: { isMain: false },
-    });
-    await prisma.voiceAgentVersion.create({
-      data: {
-        workspaceId: input.workspaceId,
-        agentId: outbound.agentId,
-        version: nextVersion,
-        config: agentRow?.draftConfig ?? {},
-        changeLog: `Published real_estate_speed_to_lead v${compiled.configVersion}`,
-        isMain: true,
-        publishedBy: "system",
-      },
-    });
-  }
 
   let followUpAutomationId: string | undefined;
 
@@ -430,13 +399,31 @@ export async function deployRealtorSpeedToLead(input: {
   }
 
   const compiled = compileSpeedToLeadFromProductConfig(input.config, {
+    status: input.publish ? "active" : input.config.status,
     agentId: outbound.agentId,
   });
+
+  let publishedVersionId: string | undefined;
+  if (input.publish) {
+    const prisma = getPrisma();
+    const agentRow = await prisma.voiceAgent.findFirst({
+      where: { id: outbound.agentId },
+      select: { draftConfig: true },
+    });
+    const published = await publishVoiceAgentVersion({
+      workspaceId: input.workspaceId,
+      agentId: outbound.agentId,
+      config: agentRow?.draftConfig ?? {},
+      changeLog: `Published real_estate_speed_to_lead v${compiled.configVersion}`,
+    });
+    publishedVersionId = published.versionId;
+  }
 
   return {
     outboundAgentId: outbound.agentId,
     outboundTemplateAgentId: outbound.templateAgentId,
     followUpAutomationId,
     configVersion: compiled.configVersion,
+    publishedVersionId,
   };
 }

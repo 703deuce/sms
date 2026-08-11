@@ -100,6 +100,9 @@ export async function bootstrapRealEstateFrontDesk(): Promise<BootstrapRealEstat
       frontDeskTemplateAgentId: agent.templateAgentId || existing.frontDeskTemplateAgentId,
       outboundTemplateAgentId: speedToLead.outboundTemplateAgentId || existing.outboundTemplateAgentId,
       followUpAutomationId: speedToLead.followUpAutomationId || existing.followUpAutomationId,
+      frontDeskPublishedVersionId: agent.publishedVersionId || existing.frontDeskPublishedVersionId,
+      outboundPublishedVersionId:
+        speedToLead.publishedVersionId || existing.outboundPublishedVersionId,
     });
     console.log(
       JSON.stringify({

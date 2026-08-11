@@ -1,42 +1,39 @@
 "use client";
 
+import { IntentFieldEditor } from "@/components/realtor/intent-field-editor";
+import { RealtorWorkflowPreview } from "@/components/realtor/workflow-preview";
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { STEP_LABELS } from "@/lib/realtor/workspace-config";
+import { onboardingStepsForConfig } from "@/lib/realtor/wizard-steps";
 import type {
   RealtorAmyMode,
   RealtorOnboardingStep,
   RealtorProductConfig,
+  RealtorQualifiedOutcome,
 } from "@/lib/realtor/types";
-import { useRouter } from "next/navigation";
+import { compileRealtorAgents } from "@/lib/voice/real-estate/compile";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useMemo, useState } from "react";
 
 type Props = {
   initialConfig: RealtorProductConfig;
   steps: RealtorOnboardingStep[];
 };
 
-const STEP_LABELS: Record<RealtorOnboardingStep, string> = {
-  intent: "What Amy does",
-  business: "Business",
-  phone: "Phone",
-  lead_sources: "Lead Sources",
-  calendar: "Calendar",
-  ai_setup: "Configure Amy",
-  follow_up: "Follow-Up",
-  test: "Test Amy",
-  go_live: "Go Live",
-};
-
-export function RealtorOnboardingWizard({ initialConfig, steps }: Props) {
+export function RealtorOnboardingWizard({ initialConfig }: Props) {
   const router = useRouter();
   const [config, setConfig] = useState(initialConfig);
+  const steps = useMemo(() => onboardingStepsForConfig(config), [config]);
   const [stepIndex, setStepIndex] = useState(() =>
     Math.max(0, steps.indexOf(initialConfig.currentStep)),
   );
   const [saving, setSaving] = useState(false);
-  const step = steps[stepIndex] || "intent";
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
+  const step = steps[Math.min(stepIndex, steps.length - 1)] || "intent";
+  const compiled = useMemo(() => compileRealtorAgents(config), [config]);
 
   async function save(partial: Partial<RealtorProductConfig>, nextStep?: RealtorOnboardingStep) {
     setSaving(true);
@@ -45,14 +42,16 @@ export function RealtorOnboardingWizard({ initialConfig, steps }: Props) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          config: {
-            ...partial,
-            currentStep: nextStep || step,
-          },
+          config: { ...partial, currentStep: nextStep || step },
         }),
       });
       const json = await res.json();
       if (json.config) setConfig(json.config);
+      if (json.validation?.errors?.length) {
+        setValidationErrors(json.validation.errors.map((e: { message: string }) => e.message));
+      } else {
+        setValidationErrors([]);
+      }
     } finally {
       setSaving(false);
     }
@@ -67,12 +66,22 @@ export function RealtorOnboardingWizard({ initialConfig, steps }: Props) {
         body: JSON.stringify({ action: "go_live", config }),
       });
       const json = await res.json();
+      if (json.validation && !json.validation.ok) {
+        setValidationErrors(json.validation.errors.map((e: { message: string }) => e.message));
+        return;
+      }
       if (json.config) setConfig(json.config);
       router.push("/realtor/dashboard");
       router.refresh();
     } finally {
       setSaving(false);
     }
+  }
+
+  function patch(partial: Partial<RealtorProductConfig>) {
+    const next = { ...config, ...partial };
+    setConfig(next);
+    void save(partial);
   }
 
   function next() {
@@ -87,12 +96,12 @@ export function RealtorOnboardingWizard({ initialConfig, steps }: Props) {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 p-6">
+    <div className="mx-auto max-w-4xl space-y-6 p-6">
       <div>
         <p className="text-sm font-medium text-primary">Get Amy working</p>
-        <h1 className="text-2xl font-bold tracking-tight">Welcome to Transovo Real Estate</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Configure your Real Estate agents</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Step {stepIndex + 1} of {steps.length}: {STEP_LABELS[step]}
+          Step {stepIndex + 1} of {steps.length}: {STEP_LABELS[step]} · Status: {config.status || "draft"}
         </p>
       </div>
 
@@ -114,70 +123,16 @@ export function RealtorOnboardingWizard({ initialConfig, steps }: Props) {
         ))}
       </div>
 
+      {validationErrors.length ? (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+          {validationErrors.map((e) => (
+            <p key={e}>{e}</p>
+          ))}
+        </div>
+      ) : null}
+
       <Card className="p-6">
-        {step === "intent" ? (
-          <IntentStep
-            value={config.amyMode}
-            onChange={(amyMode) => {
-              setConfig({ ...config, amyMode });
-              void save({ amyMode });
-            }}
-          />
-        ) : null}
-        {step === "business" ? (
-          <BusinessStep
-            value={config.business}
-            onChange={(business) => {
-              setConfig({ ...config, business });
-              void save({ business });
-            }}
-          />
-        ) : null}
-        {step === "phone" ? (
-          <PhoneStep
-            amyMode={config.amyMode}
-            value={config.phone}
-            onChange={(phone) => {
-              setConfig({ ...config, phone });
-              void save({ phone });
-            }}
-          />
-        ) : null}
-        {step === "lead_sources" ? (
-          <LeadSourcesStep
-            value={config.leadSources}
-            onChange={(leadSources) => {
-              setConfig({ ...config, leadSources });
-              void save({ leadSources });
-            }}
-          />
-        ) : null}
-        {step === "calendar" ? (
-          <CalendarStep
-            value={config.appointmentTypes}
-            onChange={(appointmentTypes) => {
-              setConfig({ ...config, appointmentTypes });
-              void save({ appointmentTypes });
-            }}
-          />
-        ) : null}
-        {step === "ai_setup" ? (
-          <AiSetupStep config={config} onChange={(partial) => void save(partial)} />
-        ) : null}
-        {step === "follow_up" ? (
-          <FollowUpStep
-            value={config.speedToLead.useRecommendedFollowUp}
-            onChange={(useRecommendedFollowUp) => {
-              setConfig({
-                ...config,
-                speedToLead: { ...config.speedToLead, useRecommendedFollowUp },
-              });
-              void save({ speedToLead: { ...config.speedToLead, useRecommendedFollowUp } });
-            }}
-          />
-        ) : null}
-        {step === "test" ? <TestStep phoneE164={config.phone.outboundNumberE164} /> : null}
-        {step === "go_live" ? <GoLiveStep config={config} onGoLive={() => void goLive()} /> : null}
+        <WizardStepContent config={config} step={step} compiled={compiled} onChange={patch} onGoLive={() => void goLive()} />
       </Card>
 
       <div className="flex justify-between">
@@ -186,7 +141,7 @@ export function RealtorOnboardingWizard({ initialConfig, steps }: Props) {
         </Button>
         {step === "go_live" ? (
           <Button onClick={() => void goLive()} disabled={saving}>
-            {saving ? "Deploying Amy…" : "Go Live"}
+            {saving ? "Publishing…" : "Activate Amy"}
           </Button>
         ) : (
           <Button onClick={next} disabled={saving}>
@@ -198,17 +153,131 @@ export function RealtorOnboardingWizard({ initialConfig, steps }: Props) {
   );
 }
 
-function IntentStep({
-  value,
+function WizardStepContent({
+  config,
+  step,
+  compiled,
   onChange,
+  onGoLive,
 }: {
-  value: RealtorAmyMode;
-  onChange: (v: RealtorAmyMode) => void;
+  config: RealtorProductConfig;
+  step: RealtorOnboardingStep;
+  compiled: ReturnType<typeof compileRealtorAgents>;
+  onChange: (p: Partial<RealtorProductConfig>) => void;
+  onGoLive: () => void;
 }) {
-  const options: { id: RealtorAmyMode; title: string; desc: string }[] = [
-    { id: "front_desk", title: "Answer my incoming calls", desc: "Front Desk" },
-    { id: "speed_to_lead", title: "Call my new leads automatically", desc: "Speed-to-Lead" },
-    { id: "both", title: "Both", desc: "Front Desk + Speed-to-Lead" },
+  if (step === "intent") {
+    return (
+      <IntentStep
+        value={config.amyMode}
+        onChange={(amyMode) => onChange({ amyMode })}
+      />
+    );
+  }
+  if (step === "business") {
+    return (
+      <BusinessStep
+        value={config.business}
+        identity={config.identity}
+        onChange={(business) => onChange({ business })}
+        onIdentityChange={(identity) => onChange({ identity })}
+      />
+    );
+  }
+  if (step === "phone") return <PhoneStep amyMode={config.amyMode} value={config.phone} onChange={(phone) => onChange({ phone })} />;
+  if (step === "lead_sources") return <LeadSourcesStep value={config.leadSources} onChange={(leadSources) => onChange({ leadSources })} />;
+  if (step === "calendar") return <CalendarStep value={config.appointmentTypes} onChange={(appointmentTypes) => onChange({ appointmentTypes })} />;
+  if (step === "front_desk_capabilities") return <FrontDeskCapabilitiesStep config={config} onChange={onChange} />;
+  if (step === "buyer_qualification") {
+    return (
+      <IntentFieldEditor
+        intent="buyer"
+        title="Buyer qualification fields"
+        config={config.frontDesk.buyer}
+        onChange={(buyer) => onChange({ frontDesk: { ...config.frontDesk, buyer } })}
+      />
+    );
+  }
+  if (step === "seller_qualification") {
+    return (
+      <IntentFieldEditor
+        intent="seller"
+        title="Seller qualification fields"
+        config={config.frontDesk.seller}
+        onChange={(seller) => onChange({ frontDesk: { ...config.frontDesk, seller } })}
+      />
+    );
+  }
+  if (step === "showing_config") {
+    return (
+      <IntentFieldEditor
+        intent="showing"
+        title="Showing request fields"
+        config={config.frontDesk.showing}
+        onChange={(showing) => onChange({ frontDesk: { ...config.frontDesk, showing } })}
+      />
+    );
+  }
+  if (step === "existing_client_config") {
+    return (
+      <IntentOutcomeStep
+        title="Existing client behavior"
+        config={config.frontDesk.existingClient}
+        onChange={(existingClient) => onChange({ frontDesk: { ...config.frontDesk, existingClient } })}
+      />
+    );
+  }
+  if (step === "agent_to_agent_config") {
+    return (
+      <IntentOutcomeStep
+        title="Other Realtor / agent-to-agent"
+        config={config.frontDesk.agentToAgent}
+        onChange={(agentToAgent) => onChange({ frontDesk: { ...config.frontDesk, agentToAgent } })}
+      />
+    );
+  }
+  if (step === "speed_lead_types") return <SpeedLeadTypesStep config={config} onChange={onChange} />;
+  if (step === "outbound_buyer_qual") {
+    return (
+      <IntentFieldEditor
+        intent="buyer"
+        title="Outbound buyer qualification (Speed-to-Lead)"
+        config={config.frontDesk.buyer}
+        onChange={(buyer) => onChange({ frontDesk: { ...config.frontDesk, buyer } })}
+        showOutcome={false}
+      />
+    );
+  }
+  if (step === "outbound_seller_qual") {
+    return (
+      <IntentFieldEditor
+        intent="seller"
+        title="Outbound seller qualification (Speed-to-Lead)"
+        config={config.frontDesk.seller}
+        onChange={(seller) => onChange({ frontDesk: { ...config.frontDesk, seller } })}
+        showOutcome={false}
+      />
+    );
+  }
+  if (step === "first_call_timing") return <FirstCallTimingStep config={config} onChange={onChange} />;
+  if (step === "follow_up") return <FollowUpStep config={config} onChange={onChange} />;
+  if (step === "sms_email") return <SmsEmailStep config={config} onChange={onChange} />;
+  if (step === "booking") return <BookingStep config={config} onChange={onChange} />;
+  if (step === "transfers") return <TransfersStep config={config} onChange={onChange} />;
+  if (step === "knowledge") return <KnowledgeStep config={config} onChange={onChange} />;
+  if (step === "voice") return <VoiceStep config={config} onChange={onChange} />;
+  if (step === "notifications") return <NotificationsStep config={config} onChange={onChange} />;
+  if (step === "review") return <ReviewStep config={config} compiled={compiled} />;
+  if (step === "test") return <TestStep config={config} />;
+  if (step === "go_live") return <GoLiveStep config={config} onGoLive={onGoLive} />;
+  return null;
+}
+
+function IntentStep({ value, onChange }: { value: RealtorAmyMode; onChange: (v: RealtorAmyMode) => void }) {
+  const options = [
+    { id: "front_desk" as const, title: "Answer my incoming calls", desc: "Front Desk" },
+    { id: "speed_to_lead" as const, title: "Call new leads automatically", desc: "Speed-to-Lead" },
+    { id: "both" as const, title: "Both", desc: "Front Desk + Speed-to-Lead" },
   ];
   return (
     <div className="space-y-4">
@@ -235,104 +304,82 @@ function IntentStep({
 
 function BusinessStep({
   value,
+  identity,
   onChange,
+  onIdentityChange,
 }: {
   value: RealtorProductConfig["business"];
+  identity?: RealtorProductConfig["identity"];
   onChange: (v: RealtorProductConfig["business"]) => void;
+  onIdentityChange: (v: RealtorProductConfig["identity"]) => void;
 }) {
-  const fields: Array<{ key: keyof RealtorProductConfig["business"]; label: string }> = [
-    { key: "teamName", label: "Realtor / team name" },
-    { key: "brokerage", label: "Brokerage" },
-    { key: "website", label: "Website" },
-    { key: "officePhone", label: "Office number" },
-    { key: "businessHours", label: "Business hours" },
-    { key: "timezone", label: "Time zone" },
-  ];
   return (
     <div className="space-y-4">
-      <CardTitle>Business profile</CardTitle>
+      <CardTitle>Identity & business</CardTitle>
       <div className="grid gap-3 sm:grid-cols-2">
-        {fields.map((f) => (
-          <label key={f.key} className="block text-sm">
-            <span className="font-medium">{f.label}</span>
-            <input
-              className="mt-1 w-full rounded-lg border px-3 py-2"
-              value={String(value[f.key] || "")}
-              onChange={(e) => onChange({ ...value, [f.key]: e.target.value })}
-            />
-          </label>
-        ))}
+        <label className="block text-sm">
+          <span className="font-medium">Amy display name</span>
+          <input className="mt-1 w-full rounded-lg border px-3 py-2" value={identity?.agentName || "Amy"} onChange={(e) => onIdentityChange({ ...identity, agentName: e.target.value })} />
+        </label>
+        <label className="block text-sm">
+          <span className="font-medium">Team / company name</span>
+          <input className="mt-1 w-full rounded-lg border px-3 py-2" value={value.teamName || ""} onChange={(e) => onChange({ ...value, teamName: e.target.value })} />
+        </label>
+        <label className="block text-sm">
+          <span className="font-medium">Brokerage</span>
+          <input className="mt-1 w-full rounded-lg border px-3 py-2" value={value.brokerage || ""} onChange={(e) => onChange({ ...value, brokerage: e.target.value })} />
+        </label>
+        <label className="block text-sm">
+          <span className="font-medium">Service areas (comma-separated)</span>
+          <input
+            className="mt-1 w-full rounded-lg border px-3 py-2"
+            value={(value.serviceAreas || []).join(", ")}
+            onChange={(e) =>
+              onChange({
+                ...value,
+                serviceAreas: e.target.value.split(",").map((s) => s.trim()).filter(Boolean),
+              })
+            }
+          />
+        </label>
+        <label className="block text-sm sm:col-span-2">
+          <span className="font-medium">Greeting note (optional)</span>
+          <input className="mt-1 w-full rounded-lg border px-3 py-2" value={identity?.greeting || ""} onChange={(e) => onIdentityChange({ ...identity, greeting: e.target.value })} placeholder="Warm welcome style — runtime uses structured config, not a giant prompt" />
+        </label>
       </div>
     </div>
   );
 }
 
-function PhoneStep({
-  amyMode,
-  value,
-  onChange,
-}: {
-  amyMode: RealtorAmyMode;
-  value: RealtorProductConfig["phone"];
-  onChange: (v: RealtorProductConfig["phone"]) => void;
-}) {
+function PhoneStep({ amyMode, value, onChange }: { amyMode: RealtorAmyMode; value: RealtorProductConfig["phone"]; onChange: (v: RealtorProductConfig["phone"]) => void }) {
   return (
     <div className="space-y-4">
       <CardTitle>Phone setup</CardTitle>
       {(amyMode === "front_desk" || amyMode === "both") && (
-        <div className="space-y-2">
-          <p className="text-sm font-medium">How should Amy receive calls?</p>
-          {(["transovo_number", "forward"] as const).map((mode) => (
-            <label key={mode} className="flex items-center gap-2 text-sm">
-              <input
-                type="radio"
-                checked={value.mode === mode}
-                onChange={() => onChange({ ...value, mode })}
-              />
-              {mode === "transovo_number" ? "Use a new Transovo number" : "Forward my existing number"}
-            </label>
-          ))}
-          <label className="block text-sm">
-            <span className="font-medium">Transfer number</span>
-            <input
-              className="mt-1 w-full rounded-lg border px-3 py-2"
-              value={value.transferNumber || ""}
-              onChange={(e) => onChange({ ...value, transferNumber: e.target.value })}
-            />
-          </label>
-        </div>
+        <label className="block text-sm">
+          <span className="font-medium">Transfer number</span>
+          <input className="mt-1 w-full rounded-lg border px-3 py-2" value={value.transferNumber || ""} onChange={(e) => onChange({ ...value, transferNumber: e.target.value })} />
+        </label>
       )}
       {(amyMode === "speed_to_lead" || amyMode === "both") && (
-        <p className="text-sm text-muted-foreground">
-          Amy will use your Transovo number for outbound Speed-to-Lead. Callbacks route to Front Desk when
-          enabled.
-        </p>
+        <label className="block text-sm">
+          <span className="font-medium">Outbound caller ID (E.164)</span>
+          <input className="mt-1 w-full rounded-lg border px-3 py-2" value={value.outboundNumberE164 || ""} onChange={(e) => onChange({ ...value, outboundNumberE164: e.target.value })} />
+        </label>
       )}
     </div>
   );
 }
 
-function LeadSourcesStep({
-  value,
-  onChange,
-}: {
-  value: string[];
-  onChange: (v: string[]) => void;
-}) {
+function LeadSourcesStep({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {
   const sources = ["Facebook", "Zillow", "Realtor.com", "Website", "Follow Up Boss", "HubSpot", "Webhook", "CSV"];
   return (
     <div className="space-y-4">
-      <CardTitle>Where do your leads come from?</CardTitle>
+      <CardTitle>Lead sources</CardTitle>
       <div className="grid gap-2 sm:grid-cols-2">
         {sources.map((s) => (
           <label key={s} className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm">
-            <input
-              type="checkbox"
-              checked={value.includes(s)}
-              onChange={(e) =>
-                onChange(e.target.checked ? [...value, s] : value.filter((x) => x !== s))
-              }
-            />
+            <input type="checkbox" checked={value.includes(s)} onChange={(e) => onChange(e.target.checked ? [...value, s] : value.filter((x) => x !== s))} />
             {s}
           </label>
         ))}
@@ -341,48 +388,19 @@ function LeadSourcesStep({
   );
 }
 
-function CalendarStep({
-  value,
-  onChange,
-}: {
-  value: string[];
-  onChange: (v: string[]) => void;
-}) {
+function CalendarStep({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {
   return (
     <div className="space-y-4">
-      <CardTitle>What should Amy schedule?</CardTitle>
-      <div className="space-y-2">
-        {value.map((type, i) => (
-          <input
-            key={i}
-            className="w-full rounded-lg border px-3 py-2 text-sm"
-            value={type}
-            onChange={(e) => {
-              const next = [...value];
-              next[i] = e.target.value;
-              onChange(next);
-            }}
-          />
-        ))}
-      </div>
-      <p className="text-sm text-muted-foreground">
-        Connect Calendly under Integrations — Amy books using your connected calendar.
-      </p>
+      <CardTitle>Appointment types Amy can book</CardTitle>
+      {value.map((type, i) => (
+        <input key={i} className="w-full rounded-lg border px-3 py-2 text-sm" value={type} onChange={(e) => { const next = [...value]; next[i] = e.target.value; onChange(next); }} />
+      ))}
     </div>
   );
 }
 
-function AiSetupStep({
-  config,
-  onChange,
-}: {
-  config: RealtorProductConfig;
-  onChange: (p: Partial<RealtorProductConfig>) => void;
-}) {
-  const intentRows: Array<{
-    key: keyof RealtorProductConfig["frontDesk"];
-    label: string;
-  }> = [
+function FrontDeskCapabilitiesStep({ config, onChange }: { config: RealtorProductConfig; onChange: (p: Partial<RealtorProductConfig>) => void }) {
+  const rows: Array<{ key: keyof RealtorProductConfig["frontDesk"]; label: string }> = [
     { key: "buyer", label: "Buyer / property inquiries" },
     { key: "seller", label: "Seller inquiries" },
     { key: "showing", label: "Showing requests" },
@@ -390,159 +408,221 @@ function AiSetupStep({
     { key: "agentToAgent", label: "Other Realtors" },
     { key: "general", label: "General calls" },
   ];
-
-  function toggleIntent(key: keyof RealtorProductConfig["frontDesk"], enabled: boolean) {
-    onChange({
-      frontDesk: {
-        ...config.frontDesk,
-        [key]: { ...config.frontDesk[key], enabled },
-      },
-    });
-  }
-
   return (
-    <div className="space-y-6">
-      <CardTitle>Configure Amy</CardTitle>
-      <p className="text-sm text-muted-foreground">
-        These settings are saved as structured configuration — Amy&apos;s runtime walks your field
-        schemas; we do not generate giant custom prompts.
-      </p>
+    <div className="space-y-3">
+      <CardTitle>What should Front Desk Amy handle?</CardTitle>
+      {rows.map(({ key, label }) => (
+        <label key={key} className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm">
+          <input
+            type="checkbox"
+            checked={config.frontDesk[key].enabled}
+            onChange={(e) =>
+              onChange({
+                frontDesk: { ...config.frontDesk, [key]: { ...config.frontDesk[key], enabled: e.target.checked } },
+              })
+            }
+          />
+          {label}
+        </label>
+      ))}
+    </div>
+  );
+}
 
-      {(config.amyMode === "front_desk" || config.amyMode === "both") && (
-        <div className="space-y-3">
-          <p className="text-sm font-medium">Front Desk — what Amy handles</p>
-          <div className="grid gap-2 sm:grid-cols-2">
-            {intentRows.map(({ key, label }) => (
-              <label key={key} className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={config.frontDesk[key].enabled}
-                  onChange={(e) => toggleIntent(key, e.target.checked)}
-                />
-                {label}
-              </label>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {(config.amyMode === "speed_to_lead" || config.amyMode === "both") && (
-        <div className="space-y-3">
-          <p className="text-sm font-medium">Speed-to-Lead — lead types</p>
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={config.speedToLead.buyerQualification}
-              onChange={(e) =>
-                onChange({
-                  speedToLead: { ...config.speedToLead, buyerQualification: e.target.checked },
-                })
-              }
-            />
-            Buyer qualification
-          </label>
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={config.speedToLead.sellerQualification}
-              onChange={(e) =>
-                onChange({
-                  speedToLead: { ...config.speedToLead, sellerQualification: e.target.checked },
-                })
-              }
-            />
-            Seller qualification
-          </label>
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={config.speedToLead.callImmediately}
-              onChange={(e) =>
-                onChange({
-                  speedToLead: { ...config.speedToLead, callImmediately: e.target.checked },
-                })
-              }
-            />
-            Call new leads immediately
-          </label>
-        </div>
-      )}
-
+function IntentOutcomeStep({
+  title,
+  config,
+  onChange,
+}: {
+  title: string;
+  config: RealtorProductConfig["frontDesk"]["general"];
+  onChange: (c: RealtorProductConfig["frontDesk"]["general"]) => void;
+}) {
+  const outcomes: RealtorQualifiedOutcome[] = ["book", "transfer", "notify", "message"];
+  return (
+    <div className="space-y-3">
+      <CardTitle>{title}</CardTitle>
       <label className="block text-sm">
-        Agent display name
-        <input
-          className="mt-1 w-full rounded-lg border px-3 py-2"
-          value={config.identity?.agentName || "Amy"}
-          onChange={(e) =>
-            onChange({ identity: { ...config.identity, agentName: e.target.value } })
-          }
-        />
+        When intake is complete:
+        <select className="mt-1 w-full rounded-lg border px-3 py-2" value={config.qualifiedOutcome} onChange={(e) => onChange({ ...config, qualifiedOutcome: e.target.value as RealtorQualifiedOutcome })}>
+          {outcomes.map((o) => (
+            <option key={o} value={o}>{o}</option>
+          ))}
+        </select>
       </label>
     </div>
   );
 }
 
-function FollowUpStep({
-  value,
-  onChange,
-}: {
-  value: boolean;
-  onChange: (v: boolean) => void;
-}) {
+function SpeedLeadTypesStep({ config, onChange }: { config: RealtorProductConfig; onChange: (p: Partial<RealtorProductConfig>) => void }) {
   return (
-    <div className="space-y-4">
-      <CardTitle>Recommended New Lead Follow-Up</CardTitle>
-      <ul className="space-y-1 text-sm text-muted-foreground">
-        <li>Immediately — Amy calls</li>
-        <li>No answer — Send SMS</li>
-        <li>2 hours later — Amy retries</li>
-        <li>Next day — SMS / email</li>
-        <li>Day 3 — Amy retries</li>
-        <li>Day 7 — Follow-up</li>
-      </ul>
-      <Button variant={value ? "primary" : "outline"} onClick={() => onChange(true)}>
-        Use recommended
-      </Button>
+    <div className="space-y-3">
+      <CardTitle>Speed-to-Lead lead types</CardTitle>
+      <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={config.speedToLead.buyerQualification} onChange={(e) => onChange({ speedToLead: { ...config.speedToLead, buyerQualification: e.target.checked } })} /> Buyer leads</label>
+      <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={config.speedToLead.sellerQualification} onChange={(e) => onChange({ speedToLead: { ...config.speedToLead, sellerQualification: e.target.checked } })} /> Seller leads</label>
+      <label className="block text-sm">
+        Qualified outcome:
+        <select className="mt-1 w-full rounded-lg border px-3 py-2" value={config.speedToLead.qualifiedOutcome} onChange={(e) => onChange({ speedToLead: { ...config.speedToLead, qualifiedOutcome: e.target.value as RealtorQualifiedOutcome } })}>
+          <option value="book">Book appointment</option>
+          <option value="transfer">Transfer</option>
+          <option value="notify">Notify realtor</option>
+          <option value="message">Take message</option>
+        </select>
+      </label>
     </div>
   );
 }
 
-function TestStep({ phoneE164 }: { phoneE164?: string }) {
+function FirstCallTimingStep({ config, onChange }: { config: RealtorProductConfig; onChange: (p: Partial<RealtorProductConfig>) => void }) {
+  return (
+    <div className="space-y-3">
+      <CardTitle>First-call timing</CardTitle>
+      <label className="flex items-center gap-2 text-sm">
+        <input type="checkbox" checked={config.speedToLead.callImmediately} onChange={(e) => onChange({ speedToLead: { ...config.speedToLead, callImmediately: e.target.checked, firstCallDelayMinutes: e.target.checked ? 0 : config.speedToLead.firstCallDelayMinutes } })} />
+        Call immediately when lead arrives
+      </label>
+      {!config.speedToLead.callImmediately && (
+        <label className="block text-sm">
+          Delay (minutes)
+          <input type="number" min={1} className="mt-1 w-full rounded-lg border px-3 py-2" value={config.speedToLead.firstCallDelayMinutes || 5} onChange={(e) => onChange({ speedToLead: { ...config.speedToLead, firstCallDelayMinutes: Number(e.target.value) } })} />
+        </label>
+      )}
+    </div>
+  );
+}
+
+function FollowUpStep({ config, onChange }: { config: RealtorProductConfig; onChange: (p: Partial<RealtorProductConfig>) => void }) {
+  return (
+    <div className="space-y-4">
+      <CardTitle>Retry & follow-up</CardTitle>
+      <label className="flex items-center gap-2 text-sm">
+        <input type="checkbox" checked={config.speedToLead.useRecommendedFollowUp} onChange={(e) => onChange({ speedToLead: { ...config.speedToLead, useRecommendedFollowUp: e.target.checked } })} />
+        Use recommended follow-up sequence
+      </label>
+      <label className="block text-sm">
+        Max call attempts
+        <input type="number" min={1} max={10} className="mt-1 w-full rounded-lg border px-3 py-2" value={config.speedToLead.maxAttempts || 3} onChange={(e) => onChange({ speedToLead: { ...config.speedToLead, maxAttempts: Number(e.target.value) } })} />
+      </label>
+    </div>
+  );
+}
+
+function SmsEmailStep({ config, onChange }: { config: RealtorProductConfig; onChange: (p: Partial<RealtorProductConfig>) => void }) {
+  return (
+    <div className="space-y-3">
+      <CardTitle>SMS & email follow-up</CardTitle>
+      <p className="text-sm text-muted-foreground">Recommended automation sends SMS on no-answer, retries calls, and day-2 SMS.</p>
+      <label className="flex items-center gap-2 text-sm">
+        <input type="checkbox" checked={config.speedToLead.useRecommendedFollowUp} onChange={(e) => onChange({ speedToLead: { ...config.speedToLead, useRecommendedFollowUp: e.target.checked } })} />
+        Enable SMS steps in follow-up automation
+      </label>
+    </div>
+  );
+}
+
+function BookingStep({ config, onChange }: { config: RealtorProductConfig; onChange: (p: Partial<RealtorProductConfig>) => void }) {
+  return (
+    <div className="space-y-3">
+      <CardTitle>Booking behavior</CardTitle>
+      <p className="text-sm text-muted-foreground">Amy books using your connected Calendly calendar. Map appointment types under Integrations.</p>
+      <ul className="text-sm">{config.appointmentTypes.map((t) => <li key={t}>• {t}</li>)}</ul>
+    </div>
+  );
+}
+
+function TransfersStep({ config, onChange }: { config: RealtorProductConfig; onChange: (p: Partial<RealtorProductConfig>) => void }) {
+  return (
+    <label className="block text-sm">
+      <span className="font-medium">Transfer destination</span>
+      <input className="mt-1 w-full rounded-lg border px-3 py-2" value={config.phone.transferNumber || ""} onChange={(e) => onChange({ phone: { ...config.phone, transferNumber: e.target.value } })} />
+    </label>
+  );
+}
+
+function KnowledgeStep({ config, onChange }: { config: RealtorProductConfig; onChange: (p: Partial<RealtorProductConfig>) => void }) {
+  return (
+    <div className="space-y-3">
+      <CardTitle>Knowledge base</CardTitle>
+      <label className="flex items-center gap-2 text-sm">
+        <input type="checkbox" checked={config.knowledge?.useRecommended !== false} onChange={(e) => onChange({ knowledge: { ...config.knowledge, useRecommended: e.target.checked } })} />
+        Use recommended Realtor knowledge categories
+      </label>
+      <label className="block text-sm">
+        Additional notes (one per line)
+        <textarea className="mt-1 w-full rounded-lg border px-3 py-2" rows={4} value={(config.knowledge?.customNotes || []).join("\n")} onChange={(e) => onChange({ knowledge: { ...config.knowledge, customNotes: e.target.value.split("\n").map((s) => s.trim()).filter(Boolean) } })} />
+      </label>
+    </div>
+  );
+}
+
+function VoiceStep({ config, onChange }: { config: RealtorProductConfig; onChange: (p: Partial<RealtorProductConfig>) => void }) {
+  return (
+    <div className="grid gap-3 sm:grid-cols-2">
+      <CardTitle className="sm:col-span-2">Voice</CardTitle>
+      <label className="block text-sm">Model<input className="mt-1 w-full rounded-lg border px-3 py-2" value={config.voice?.model || ""} onChange={(e) => onChange({ voice: { ...config.voice, model: e.target.value } })} /></label>
+      <label className="block text-sm">Voice<input className="mt-1 w-full rounded-lg border px-3 py-2" value={config.voice?.voice || ""} onChange={(e) => onChange({ voice: { ...config.voice, voice: e.target.value } })} /></label>
+    </div>
+  );
+}
+
+function NotificationsStep({ config, onChange }: { config: RealtorProductConfig; onChange: (p: Partial<RealtorProductConfig>) => void }) {
+  return (
+    <div className="space-y-3">
+      <CardTitle>Notifications</CardTitle>
+      <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={config.notifications?.onQualified !== false} onChange={(e) => onChange({ notifications: { ...config.notifications, onQualified: e.target.checked } })} /> Notify when lead qualified</label>
+      <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={config.notifications?.onAppointmentBooked !== false} onChange={(e) => onChange({ notifications: { ...config.notifications, onAppointmentBooked: e.target.checked } })} /> Notify when appointment booked</label>
+      <label className="block text-sm">Email recipients (comma-separated)<input className="mt-1 w-full rounded-lg border px-3 py-2" value={(config.notifications?.emailRecipients || []).join(", ")} onChange={(e) => onChange({ notifications: { ...config.notifications, emailRecipients: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) } })} /></label>
+    </div>
+  );
+}
+
+function ReviewStep({ config, compiled }: { config: RealtorProductConfig; compiled: ReturnType<typeof compileRealtorAgents> }) {
+  return (
+    <div className="space-y-4">
+      <CardTitle>Review configuration</CardTitle>
+      <p className="text-sm text-muted-foreground">This is your structured configuration — not a custom prompt. The workflow below reflects what Amy will do.</p>
+      <ul className="grid gap-2 text-sm sm:grid-cols-2">
+        <li>Mode: {config.amyMode}</li>
+        <li>Company: {config.business.teamName || config.business.brokerage || "—"}</li>
+        <li>Compiled version: {compiled.compiledVersion}</li>
+        <li>Status: {config.status || "draft"}</li>
+      </ul>
+      {compiled.frontDesk?.workflowDefinition ? (
+        <div>
+          <p className="mb-2 text-sm font-medium">Front Desk workflow</p>
+          <RealtorWorkflowPreview definition={compiled.frontDesk.workflowDefinition} height={360} />
+        </div>
+      ) : null}
+      {compiled.speedToLead?.workflowDefinition ? (
+        <div>
+          <p className="mb-2 text-sm font-medium">Speed-to-Lead workflow</p>
+          <RealtorWorkflowPreview definition={compiled.speedToLead.workflowDefinition} height={280} />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function TestStep({ config }: { config: RealtorProductConfig }) {
   return (
     <div className="space-y-4">
       <CardTitle>Test Amy</CardTitle>
-      <p className="text-sm">
-        Call your Front Desk number{phoneE164 ? ` (${phoneE164})` : ""} or add a test lead on the Test Agent
-        page after Go Live.
-      </p>
-      <Link href="/realtor/test" className="inline-flex h-9 items-center rounded-md border px-4 text-sm">
-        Open Test Agent
-      </Link>
+      <p className="text-sm">Test using the same compiled configuration as production — save draft, then test calls and leads.</p>
+      <Link href="/realtor/test" className="inline-flex h-9 items-center rounded-md border px-4 text-sm">Open Test Agent</Link>
     </div>
   );
 }
 
-function GoLiveStep({
-  config,
-  onGoLive,
-}: {
-  config: RealtorProductConfig;
-  onGoLive: () => void;
-}) {
+function GoLiveStep({ config, onGoLive }: { config: RealtorProductConfig; onGoLive: () => void }) {
   return (
     <div className="space-y-4">
-      <CardTitle>Ready to go live</CardTitle>
+      <CardTitle>Activate Amy</CardTitle>
+      <p className="text-sm text-muted-foreground">Publishing creates immutable agent versions. New calls use the published config; in-progress calls finish on the version they started with.</p>
       <ul className="space-y-2 text-sm">
-        <li>✓ Front Desk — {config.amyMode !== "speed_to_lead" ? "Active on deploy" : "Off"}</li>
-        <li>✓ Speed-to-Lead — {config.amyMode !== "front_desk" ? "Ready" : "Off"}</li>
-        <li>✓ Calendar — Connected via Calendly integration</li>
-        <li>✓ Agent + knowledge — Deployed automatically through code</li>
+        <li>Front Desk: {config.amyMode !== "speed_to_lead" ? "Will deploy" : "Off"}</li>
+        <li>Speed-to-Lead: {config.amyMode !== "front_desk" ? "Will deploy" : "Off"}</li>
       </ul>
-      <p className="text-sm text-muted-foreground">
-        Go Live deploys your Real Estate Front Desk agent, seeds knowledge, and assigns your inbound number.
-        No manual Coolify scripts required.
-      </p>
-      <Button onClick={onGoLive}>Go Live — Deploy Amy</Button>
+      <Button onClick={onGoLive}>Publish & Activate</Button>
     </div>
   );
 }

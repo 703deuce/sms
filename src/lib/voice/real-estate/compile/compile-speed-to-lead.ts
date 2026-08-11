@@ -187,6 +187,9 @@ export function compileSpeedToLeadFromProductConfig(
       maxAttempts: config.speedToLead.maxAttempts ?? 3,
       retryScheduleHours: config.speedToLead.retryScheduleHours ?? [2, 24, 72],
       voicemailBehavior: config.speedToLead.voicemailBehavior ?? "leave_message",
+      firstCallDelayMinutes: config.speedToLead.callImmediately
+        ? 0
+        : config.speedToLead.firstCallDelayMinutes ?? 5,
     },
     followUp: {
       useRecommended: config.speedToLead.useRecommendedFollowUp,

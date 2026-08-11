@@ -6,8 +6,24 @@ export type RealtorOnboardingStep =
   | "phone"
   | "lead_sources"
   | "calendar"
-  | "ai_setup"
+  | "front_desk_capabilities"
+  | "buyer_qualification"
+  | "seller_qualification"
+  | "showing_config"
+  | "existing_client_config"
+  | "agent_to_agent_config"
+  | "speed_lead_types"
+  | "outbound_buyer_qual"
+  | "outbound_seller_qual"
+  | "first_call_timing"
   | "follow_up"
+  | "sms_email"
+  | "booking"
+  | "transfers"
+  | "knowledge"
+  | "voice"
+  | "notifications"
+  | "review"
   | "test"
   | "go_live";
 
@@ -67,6 +83,19 @@ export type RealtorVoiceConfig = {
   speed?: number;
 };
 
+export type RealtorKnowledgeConfig = {
+  useRecommended?: boolean;
+  customNotes?: string[];
+  serviceAreaNotes?: string;
+};
+
+export type RealtorNotificationConfig = {
+  onQualified?: boolean;
+  onAppointmentBooked?: boolean;
+  onNeedsHuman?: boolean;
+  emailRecipients?: string[];
+};
+
 export type RealtorProductConfig = {
   version: 1 | 2;
   enabled: boolean;
@@ -105,6 +134,7 @@ export type RealtorProductConfig = {
     maxAttempts?: number;
     retryScheduleHours?: number[];
     voicemailBehavior?: "leave_message" | "hang_up";
+    firstCallDelayMinutes?: number;
   };
   deployedAgentId?: string;
   deployedOutboundAgentId?: string;
@@ -113,8 +143,15 @@ export type RealtorProductConfig = {
   followUpAutomationId?: string;
   deployedAt?: string;
   publishedAt?: string;
+  /** Draft config saved while editing — production uses last published compile. */
+  draftSavedAt?: string;
+  knowledge?: RealtorKnowledgeConfig;
+  notifications?: RealtorNotificationConfig;
   /** Maps appointment type label → Calendly event type URI or slug */
   calendlyEventMappings?: Record<string, string>;
+  /** Published voice agent version ids for reproducibility */
+  frontDeskPublishedVersionId?: string;
+  outboundPublishedVersionId?: string;
 };
 
 export const DEFAULT_REALTOR_PRODUCT_CONFIG: RealtorProductConfig = {
@@ -178,6 +215,14 @@ export const DEFAULT_REALTOR_PRODUCT_CONFIG: RealtorProductConfig = {
     sellerQualification: true,
     qualifiedOutcome: "book",
     useRecommendedFollowUp: true,
+    firstCallDelayMinutes: 0,
+  },
+  knowledge: { useRecommended: true, customNotes: [] },
+  notifications: {
+    onQualified: true,
+    onAppointmentBooked: true,
+    onNeedsHuman: true,
+    emailRecipients: [],
   },
 };
 

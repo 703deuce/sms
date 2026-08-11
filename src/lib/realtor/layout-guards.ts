@@ -2,7 +2,7 @@ import { getActiveWorkspaceId } from "@/lib/auth";
 import {
   isRealtorWorkspace,
   loadRealtorProductConfig,
-  onboardingStepsForMode,
+  onboardingStepsForConfig,
 } from "@/lib/realtor/workspace-config";
 import { redirect } from "next/navigation";
 
@@ -23,6 +23,6 @@ export async function loadRealtorOnboardingProps() {
   return {
     workspaceId,
     config,
-    steps: onboardingStepsForMode(config.amyMode),
+    steps: onboardingStepsForConfig(config),
   };
 }

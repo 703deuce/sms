@@ -39,6 +39,8 @@ export type FrontDeskUserData = {
   callState?: RealEstateCallState;
   /** Compiled template configuration for this session — authoritative field/intent rules. */
   realEstateCompiled?: CompiledRealEstateFrontDesk;
+  agentConfigVersion?: number;
+  agentVersionId?: string;
   /** @deprecated Prefer booking.status === "confirmed". */
   bookingComplete?: boolean;
   bookedTimeLabel?: string;

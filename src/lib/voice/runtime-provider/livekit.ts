@@ -1,6 +1,8 @@
 import { getPrisma } from "@/lib/db";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import type { VoiceRuntimeProvider, InboundSessionMetadata } from "./types";
+import { realEstateCallConfigStamp } from "@/lib/voice/real-estate/publish";
+import { parseVoiceAgentConfig } from "@/lib/voice/types";
 
 export const liveKitRuntimeProvider: VoiceRuntimeProvider = {
   id: "livekit",
@@ -21,9 +23,21 @@ export const liveKitRuntimeProvider: VoiceRuntimeProvider = {
           id: true,
           phoneNumberId: true,
           publishedVersionId: true,
+          draftConfig: true,
         },
       });
       if (!agent) throw new Error("Agent not found");
+
+      const runtimeCfg = agent.publishedVersionId
+        ? await (async () => {
+            const ver = await prisma.voiceAgentVersion.findFirst({
+              where: { id: agent.publishedVersionId!, workspaceId: metadata.workspaceId },
+              select: { config: true },
+            });
+            return parseVoiceAgentConfig(ver?.config || agent.draftConfig);
+          })()
+        : parseVoiceAgentConfig(agent.draftConfig);
+      const configStamp = realEstateCallConfigStamp(runtimeCfg);
 
       let toE164 = metadata.toE164 || "";
       if (!toE164 && agent.phoneNumberId) {
@@ -56,6 +70,7 @@ export const liveKitRuntimeProvider: VoiceRuntimeProvider = {
             source: "livekit_voice_runtime",
             livekitRoomName: metadata.livekitRoomName,
             livekitParticipantId: metadata.livekitParticipantId,
+            realtorAgentConfig: configStamp,
           } as object,
         },
       });

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { DEFAULT_REALTOR_PRODUCT_CONFIG } from "@/lib/realtor/types";
+import { onboardingStepsForConfig } from "@/lib/realtor/wizard-steps";
 import {
   compileFrontDeskFromProductConfig,
   compileRealtorAgents,
@@ -55,10 +56,23 @@ export function verifyRealtorCompile(): void {
   assert.ok(templates.includes("real_estate_front_desk"));
   assert.ok(templates.includes("real_estate_speed_to_lead"));
 
+  assert.ok(projectFileExists("src/lib/realtor/wizard-steps.ts"));
+  assert.ok(projectFileExists("src/app/api/realtor/agents/route.ts"));
+  assert.ok(projectFileExists("src/components/realtor/intent-field-editor.tsx"));
+  assert.ok(projectFileExists("src/components/realtor/workflow-preview.tsx"));
+  assert.ok(projectFileExists("src/lib/voice/real-estate/publish.ts"));
+
+  const steps = onboardingStepsForConfig(DEFAULT_REALTOR_PRODUCT_CONFIG);
+  assert.ok(steps.includes("buyer_qualification"));
+  assert.ok(steps.includes("review"));
+
   const deployAgent = readProjectFile("src/lib/voice/real-estate/deploy-agent.ts");
   assert.ok(deployAgent.includes("realEstateCompiled"));
   assert.ok(deployAgent.includes("ensureAgentPrimaryWorkflow"));
-  assert.ok(deployAgent.includes("productConfig"));
+  assert.ok(deployAgent.includes("publishVoiceAgentVersion"));
+
+  const publishSource = readProjectFile("src/lib/voice/real-estate/publish.ts");
+  assert.ok(publishSource.includes("loadVoiceAgentConfigForCall"));
 
   const deploySpeed = readProjectFile("src/lib/realtor/deploy-speed-to-lead.ts");
   assert.ok(deploySpeed.includes("compileSpeedToLeadFromProductConfig"));

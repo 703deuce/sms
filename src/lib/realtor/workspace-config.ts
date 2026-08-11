@@ -6,6 +6,13 @@ import {
   type RealtorOnboardingStep,
   type RealtorProductConfig,
 } from "./types";
+import {
+  onboardingStepsForConfig,
+  onboardingStepsForMode,
+  STEP_LABELS,
+} from "./wizard-steps";
+
+export { onboardingStepsForConfig, onboardingStepsForMode, STEP_LABELS };
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -13,12 +20,27 @@ function asRecord(value: unknown): Record<string, unknown> {
     : {};
 }
 
+function migrateStep(step: string | undefined): RealtorOnboardingStep {
+  if (step === "ai_setup") return "front_desk_capabilities";
+  const valid = new Set<string>([
+    "intent", "business", "phone", "lead_sources", "calendar",
+    "front_desk_capabilities", "buyer_qualification", "seller_qualification",
+    "showing_config", "existing_client_config", "agent_to_agent_config",
+    "speed_lead_types", "outbound_buyer_qual", "outbound_seller_qual",
+    "first_call_timing", "follow_up", "sms_email", "booking", "transfers",
+    "knowledge", "voice", "notifications", "review", "test", "go_live",
+  ]);
+  if (step && valid.has(step)) return step as RealtorOnboardingStep;
+  return "intent";
+}
+
 export function parseRealtorProductConfig(raw: unknown): RealtorProductConfig {
   const stored = asRecord(raw);
   if (!stored.version) return { ...DEFAULT_REALTOR_PRODUCT_CONFIG };
-  return {
+  const parsed = {
     ...DEFAULT_REALTOR_PRODUCT_CONFIG,
     ...(stored as Partial<RealtorProductConfig>),
+    currentStep: migrateStep(String(stored.currentStep || "intent")),
     identity: {
       ...DEFAULT_REALTOR_PRODUCT_CONFIG.identity,
       ...asRecord(stored.identity),
@@ -26,6 +48,14 @@ export function parseRealtorProductConfig(raw: unknown): RealtorProductConfig {
     voice: {
       ...DEFAULT_REALTOR_PRODUCT_CONFIG.voice,
       ...asRecord(stored.voice),
+    },
+    knowledge: {
+      ...DEFAULT_REALTOR_PRODUCT_CONFIG.knowledge,
+      ...asRecord(stored.knowledge),
+    },
+    notifications: {
+      ...DEFAULT_REALTOR_PRODUCT_CONFIG.notifications,
+      ...asRecord(stored.notifications),
     },
     business: { ...DEFAULT_REALTOR_PRODUCT_CONFIG.business, ...asRecord(stored.business) },
     phone: { ...DEFAULT_REALTOR_PRODUCT_CONFIG.phone, ...asRecord(stored.phone) },
@@ -38,6 +68,7 @@ export function parseRealtorProductConfig(raw: unknown): RealtorProductConfig {
       ...(stored.speedToLead as RealtorProductConfig["speedToLead"]),
     },
   };
+  return parsed;
 }
 
 export async function loadRealtorProductConfig(
@@ -85,32 +116,6 @@ export async function isRealtorWorkspace(workspaceId: string): Promise<boolean> 
   );
 }
 
-export function onboardingStepsForMode(
-  amyMode: RealtorProductConfig["amyMode"],
-): RealtorOnboardingStep[] {
-  const base: RealtorOnboardingStep[] = ["intent", "business", "phone"];
-  if (amyMode === "speed_to_lead" || amyMode === "both") {
-    base.push("lead_sources");
-  }
-  base.push("calendar", "ai_setup");
-  if (amyMode === "speed_to_lead" || amyMode === "both") {
-    base.push("follow_up");
-  }
-  base.push("test", "go_live");
-  return base;
-}
-
 export function stepLabel(step: RealtorOnboardingStep): string {
-  const labels: Record<RealtorOnboardingStep, string> = {
-    intent: "What Amy does",
-    business: "Business",
-    phone: "Phone",
-    lead_sources: "Lead Sources",
-    calendar: "Calendar",
-    ai_setup: "Configure Amy",
-    follow_up: "Follow-Up",
-    test: "Test Amy",
-    go_live: "Go Live",
-  };
-  return labels[step];
+  return STEP_LABELS[step] || step;
 }

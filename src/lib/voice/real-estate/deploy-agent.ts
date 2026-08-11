@@ -3,6 +3,7 @@ import { createId } from "@/lib/supabase/id";
 import { assignNumberToAgent } from "@/lib/telephony/provisioning";
 import { ensureAgentPrimaryWorkflow } from "@/lib/agents/compile-workflow";
 import { parseVoiceAgentConfig, DEFAULT_VOICE_CONFIG } from "@/lib/voice/types";
+import { publishVoiceAgentVersion } from "./publish";
 import {
   FRONTDESK_REALTIME_PROFILE,
   isFrontDeskProfile,
@@ -37,6 +38,7 @@ export type EnsureRealEstateFrontDeskAgentResult = {
   templateAgentName?: string;
   primaryFlowId?: string;
   configVersion?: number;
+  publishedVersionId?: string;
 };
 
 function resolvePhoneE164(input?: string): string {
@@ -231,28 +233,16 @@ export async function ensureRealEstateFrontDeskAgent(
     activate: input.publish === true,
   });
 
+  let publishedVersionId: string | undefined;
+
   if (input.publish) {
-    const latestVersion = await prisma.voiceAgentVersion.findFirst({
-      where: { agentId, workspaceId },
-      orderBy: { version: "desc" },
-      select: { version: true },
+    const published = await publishVoiceAgentVersion({
+      workspaceId,
+      agentId,
+      config: draftConfig,
+      changeLog: `Published real_estate_front_desk v${compiled.configVersion}`,
     });
-    const nextVersion = (latestVersion?.version ?? 0) + 1;
-    await prisma.voiceAgentVersion.updateMany({
-      where: { agentId, workspaceId, isMain: true },
-      data: { isMain: false },
-    });
-    await prisma.voiceAgentVersion.create({
-      data: {
-        workspaceId,
-        agentId,
-        version: nextVersion,
-        config: draftConfig as object,
-        changeLog: `Published real_estate_front_desk v${compiled.configVersion}`,
-        isMain: true,
-        publishedBy: "system",
-      },
-    });
+    publishedVersionId = published.versionId;
   }
 
   return {
@@ -266,5 +256,6 @@ export async function ensureRealEstateFrontDeskAgent(
     templateAgentName,
     primaryFlowId: workflow.flowId,
     configVersion: compiled.configVersion,
+    publishedVersionId,
   };
 }
