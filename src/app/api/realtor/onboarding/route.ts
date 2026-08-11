@@ -5,6 +5,7 @@ import {
   saveRealtorProductConfig,
 } from "@/lib/realtor/workspace-config";
 import { deployRealEstateFrontDesk } from "@/lib/voice/real-estate/bootstrap";
+import { compileRealtorAgents, validateRealtorProductConfig } from "@/lib/voice/real-estate/compile";
 import { NextResponse } from "next/server";
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -32,29 +33,43 @@ export async function POST(req: Request) {
 
   if (body.action === "go_live") {
     const current = await loadRealtorProductConfig(auth.workspaceId);
-    const deploy = await deployRealEstateFrontDesk({
-      workspaceId: auth.workspaceId,
-      phoneE164: current.phone.outboundNumberE164,
-      agentName: current.business.teamName
-        ? `${current.business.teamName} Front Desk`
-        : undefined,
-      amyMode: current.amyMode,
-      useRecommendedFollowUp: current.speedToLead.useRecommendedFollowUp,
-    });
-    const next = await saveRealtorProductConfig(auth.workspaceId, {
+    const merged = {
       ...current,
       ...(body.config as typeof current),
+    };
+    const validation = validateRealtorProductConfig(merged);
+    if (!validation.ok) {
+      return NextResponse.json(
+        { error: "Configuration invalid", validation },
+        { status: 400 },
+      );
+    }
+    const deploy = await deployRealEstateFrontDesk({
+      workspaceId: auth.workspaceId,
+      phoneE164: merged.phone.outboundNumberE164,
+      agentName: merged.business.teamName
+        ? `${merged.business.teamName} Front Desk`
+        : undefined,
+      amyMode: merged.amyMode,
+      useRecommendedFollowUp: merged.speedToLead.useRecommendedFollowUp,
+      productConfig: merged,
+    });
+    const next = await saveRealtorProductConfig(auth.workspaceId, {
+      ...merged,
       enabled: true,
       onboardingComplete: true,
       live: true,
+      status: "active",
+      compiledVersion: deploy.compiled?.compiledVersion ?? merged.compiledVersion,
       currentStep: "go_live",
-      deployedAgentId: deploy.agent.agentId,
-      deployedOutboundAgentId: deploy.speedToLead?.outboundAgentId || current.deployedOutboundAgentId,
-      frontDeskTemplateAgentId: deploy.agent.templateAgentId || current.frontDeskTemplateAgentId,
+      deployedAgentId: deploy.agent?.agentId || merged.deployedAgentId,
+      deployedOutboundAgentId: deploy.speedToLead?.outboundAgentId || merged.deployedOutboundAgentId,
+      frontDeskTemplateAgentId: deploy.agent?.templateAgentId || merged.frontDeskTemplateAgentId,
       outboundTemplateAgentId:
-        deploy.speedToLead?.outboundTemplateAgentId || current.outboundTemplateAgentId,
-      followUpAutomationId: deploy.speedToLead?.followUpAutomationId || current.followUpAutomationId,
+        deploy.speedToLead?.outboundTemplateAgentId || merged.outboundTemplateAgentId,
+      followUpAutomationId: deploy.speedToLead?.followUpAutomationId || merged.followUpAutomationId,
       deployedAt: new Date().toISOString(),
+      publishedAt: new Date().toISOString(),
     });
     const { bootstrapRealtorVerification } = await import("@/lib/realtor/boot-verification");
     await bootstrapRealtorVerification();
@@ -71,8 +86,16 @@ export async function POST(req: Request) {
       frontDesk: { ...current.frontDesk, ...(body.config?.frontDesk as object) },
       speedToLead: { ...current.speedToLead, ...(body.config?.speedToLead as object) },
     };
-    const saved = await saveRealtorProductConfig(auth.workspaceId, merged);
-    return NextResponse.json({ config: saved, steps: onboardingStepsForMode(saved.amyMode) });
+    const saved = await saveRealtorProductConfig(auth.workspaceId, {
+      ...merged,
+      enabled: true,
+      compiledVersion: compileRealtorAgents(merged).compiledVersion,
+    });
+    return NextResponse.json({
+      config: saved,
+      steps: onboardingStepsForMode(saved.amyMode),
+      validation: validateRealtorProductConfig(saved),
+    });
   } catch (err) {
     return jsonError(err, 500);
   }

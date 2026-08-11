@@ -5,6 +5,7 @@ import { isFrontDeskProfile } from "@/lib/voice/frontdesk/agent-config";
 import {
   isOutboundLeadQualificationProfile,
 } from "@/lib/voice/outbound/agent-config";
+import { DEFAULT_REALTOR_PRODUCT_CONFIG } from "@/lib/realtor/types";
 import { ensureRealtorOutboundAgent, buildRealtorFollowUpDefinition } from "@/lib/realtor/deploy-speed-to-lead";
 import { parseAutomationDefinition } from "@/lib/automations/types";
 import { isRealEstateFrontDeskAgent } from "@/lib/voice/real-estate/config";
@@ -70,6 +71,8 @@ export async function verifyRealtorIntegration(): Promise<IntegrationVerificatio
     workspaceId: ws,
     phoneE164: phone.e164,
     assignPhone: true,
+    productConfig: DEFAULT_REALTOR_PRODUCT_CONFIG,
+    publish: false,
   });
   assert.ok(frontDesk.agentId);
   assert.ok(frontDesk.templateAgentId || frontDesk.templateAgentName);
@@ -83,6 +86,7 @@ export async function verifyRealtorIntegration(): Promise<IntegrationVerificatio
   const cfg = parseVoiceAgentConfig(agentRow.draftConfig);
   assert.ok(isRealEstateFrontDeskAgent(cfg.advanced as Record<string, unknown>));
   assert.ok(isFrontDeskProfile(cfg.advanced as Record<string, unknown>));
+  assert.ok((cfg.advanced as Record<string, unknown>)?.realEstateCompiled);
   assert.equal(agentRow.status, "ACTIVE");
   checks.push("front_desk_config_valid");
 
@@ -100,7 +104,10 @@ export async function verifyRealtorIntegration(): Promise<IntegrationVerificatio
   assert.ok(kbLink);
   checks.push("knowledge_linked_to_agent");
 
-  const outbound = await ensureRealtorOutboundAgent({ workspaceId: ws });
+  const outbound = await ensureRealtorOutboundAgent({
+    workspaceId: ws,
+    productConfig: DEFAULT_REALTOR_PRODUCT_CONFIG,
+  });
   assert.ok(outbound.agentId);
   checks.push(`deploy_outbound:${outbound.agentId}`);
 
@@ -111,6 +118,7 @@ export async function verifyRealtorIntegration(): Promise<IntegrationVerificatio
   assert.ok(outboundRow);
   const outboundCfg = parseVoiceAgentConfig(outboundRow.draftConfig);
   assert.ok(isOutboundLeadQualificationProfile(outboundCfg));
+  assert.ok((outboundCfg.advanced as Record<string, unknown>)?.realEstateSpeedToLeadCompiled);
   assert.equal(outboundRow.outboundAiEnabled, true);
   checks.push("outbound_config_valid");
 

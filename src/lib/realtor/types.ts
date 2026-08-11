@@ -35,6 +35,16 @@ export type RealtorIntentFieldToggle = {
   fieldId: string;
   enabled: boolean;
   required: boolean;
+  /** Customer-facing label override. */
+  label?: string;
+  /** Spoken question — configuration, not prompt code. */
+  question?: string;
+  /** Collection guidance for the runtime field engine. */
+  instruction?: string;
+  type?: "text" | "phone" | "long_text" | "currency_range" | "select";
+  order?: number;
+  /** True when the customer added a field not in the template catalog. */
+  custom?: boolean;
 };
 
 export type RealtorIntentConfig = {
@@ -43,13 +53,37 @@ export type RealtorIntentConfig = {
   qualifiedOutcome: RealtorQualifiedOutcome;
 };
 
+export type RealtorAgentInstanceStatus = "draft" | "testing" | "active" | "paused";
+
+export type RealtorIdentityConfig = {
+  agentName?: string;
+  greeting?: string;
+};
+
+export type RealtorVoiceConfig = {
+  provider?: "openai_realtime";
+  model?: string;
+  voice?: string;
+  speed?: number;
+};
+
 export type RealtorProductConfig = {
-  version: 1;
+  version: 1 | 2;
   enabled: boolean;
   onboardingComplete: boolean;
   live: boolean;
   amyMode: RealtorAmyMode;
   currentStep: RealtorOnboardingStep;
+  /** draft → testing → active; production uses last published version. */
+  status?: RealtorAgentInstanceStatus;
+  /** Monotonic compile version — bumped on each publish. */
+  compiledVersion?: number;
+  /** Template keys for deployed agent instances. */
+  frontDeskTemplateKey?: "real_estate_front_desk";
+  speedToLeadTemplateKey?: "real_estate_speed_to_lead";
+  templateVersion?: number;
+  identity?: RealtorIdentityConfig;
+  voice?: RealtorVoiceConfig;
   business: RealtorBusinessConfig;
   phone: RealtorPhoneConfig;
   leadSources: string[];
@@ -68,6 +102,9 @@ export type RealtorProductConfig = {
     sellerQualification: boolean;
     qualifiedOutcome: RealtorQualifiedOutcome;
     useRecommendedFollowUp: boolean;
+    maxAttempts?: number;
+    retryScheduleHours?: number[];
+    voicemailBehavior?: "leave_message" | "hang_up";
   };
   deployedAgentId?: string;
   deployedOutboundAgentId?: string;
@@ -75,21 +112,29 @@ export type RealtorProductConfig = {
   outboundTemplateAgentId?: string;
   followUpAutomationId?: string;
   deployedAt?: string;
+  publishedAt?: string;
   /** Maps appointment type label → Calendly event type URI or slug */
   calendlyEventMappings?: Record<string, string>;
 };
 
 export const DEFAULT_REALTOR_PRODUCT_CONFIG: RealtorProductConfig = {
-  version: 1,
+  version: 2,
   enabled: false,
   onboardingComplete: false,
   live: false,
   amyMode: "both",
   currentStep: "intent",
+  status: "draft",
+  compiledVersion: 0,
+  frontDeskTemplateKey: "real_estate_front_desk",
+  speedToLeadTemplateKey: "real_estate_speed_to_lead",
+  templateVersion: 1,
+  identity: { agentName: "Amy" },
+  voice: { provider: "openai_realtime", model: "gpt-realtime-2.1-mini", voice: "marin", speed: 1.0 },
   business: {
     teamType: "solo",
     timezone: "America/New_York",
-    serviceAreas: ["Woodbridge", "Stafford", "Fredericksburg"],
+    serviceAreas: [],
   },
   phone: { mode: "transovo_number", inboundHours: "after_hours" },
   leadSources: [],
@@ -123,7 +168,7 @@ export const DEFAULT_REALTOR_PRODUCT_CONFIG: RealtorProductConfig = {
       ],
     },
     showing: { enabled: true, qualifiedOutcome: "book", fields: [] },
-    existingClient: { enabled: true, qualifiedOutcome: "transfer", fields: [] },
+    existingClient: { enabled: true, qualifiedOutcome: "message", fields: [] },
     agentToAgent: { enabled: true, qualifiedOutcome: "message", fields: [] },
     general: { enabled: true, qualifiedOutcome: "message", fields: [] },
   },

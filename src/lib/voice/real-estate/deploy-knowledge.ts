@@ -4,25 +4,31 @@ import { getPrisma } from "@/lib/db";
 import { createId } from "@/lib/supabase/id";
 import { parseVoiceAgentConfig } from "@/lib/voice/types";
 import { processKnowledgeSource } from "@/lib/voice/knowledge-processor";
-import { DEFAULT_REAL_ESTATE_BUSINESS, isRealEstateFrontDeskAgent } from "./config";
+import { DEFAULT_REAL_ESTATE_BUSINESS, isRealEstateFrontDeskAgent, getCompiledFrontDeskFromAdvanced } from "./config";
 
-const business = DEFAULT_REAL_ESTATE_BUSINESS;
+function buildStructuredKnowledge(businessName: string, serviceAreas: string[]) {
+  const areas = serviceAreas.length ? serviceAreas.join(", ") : "your service area";
+  return {
+    businessHours: "Monday through Friday 9 AM to 6 PM, Saturday 10 AM to 2 PM. Closed Sunday.",
+    services:
+      "Buyer representation, seller listings, showing coordination, and realtor consultations.",
+    pricing: {
+      consultationFee: "Free initial consultation with a licensed realtor",
+      consultationScript:
+        "Our initial consultation with a realtor is complimentary — they'll learn what you're looking for and outline next steps.",
+    },
+    faq: {
+      mls: "We don't have live MLS listings on this call. A realtor will follow up with matching options.",
+      financing: "We are a brokerage, not a lender. We can connect you with trusted lending partners separately.",
+      areas: `We serve ${areas}.`,
+    },
+  };
+}
 
-export const REAL_ESTATE_STRUCTURED_KNOWLEDGE = {
-  businessHours: "Monday through Friday 9 AM to 6 PM, Saturday 10 AM to 2 PM. Closed Sunday.",
-  services:
-    "Buyer representation, seller listings, showing coordination, and realtor consultations throughout Northern Virginia.",
-  pricing: {
-    consultationFee: "Free initial consultation with a licensed realtor",
-    consultationScript:
-      "Our initial consultation with a realtor is complimentary — they'll learn what you're looking for and outline next steps.",
-  },
-  faq: {
-    mls: "We don't have live MLS listings on this call. A realtor will follow up with matching options.",
-    financing: "We are a brokerage, not a lender. We can connect you with trusted lending partners separately.",
-    areas: `We serve ${business.serviceAreas.join(", ")} and surrounding Northern Virginia.`,
-  },
-};
+export const REAL_ESTATE_STRUCTURED_KNOWLEDGE = buildStructuredKnowledge(
+  DEFAULT_REAL_ESTATE_BUSINESS.businessName,
+  DEFAULT_REAL_ESTATE_BUSINESS.serviceAreas,
+);
 
 function ragFixturePath(): string {
   return path.join(process.cwd(), "scripts/fixtures/blue-ridge-realty-rag-knowledge.txt");
@@ -31,6 +37,8 @@ function ragFixturePath(): string {
 export type SeedRealEstateFrontDeskKnowledgeInput = {
   workspaceId?: string;
   agentId?: string;
+  businessName?: string;
+  serviceAreas?: string[];
 };
 
 export type SeedRealEstateFrontDeskKnowledgeResult = {
@@ -76,26 +84,40 @@ export async function seedRealEstateFrontDeskKnowledge(
   if (!agent) throw new Error(`Agent ${agentId} not found`);
 
   const existingCfg = parseVoiceAgentConfig(agent.draftConfig);
+  const compiled = getCompiledFrontDeskFromAdvanced(
+    existingCfg.advanced as Record<string, unknown>,
+  );
+  const businessName =
+    input.businessName?.trim() ||
+    compiled?.identity.companyName ||
+    String(existingCfg.dynamicVariables?.business_name || DEFAULT_REAL_ESTATE_BUSINESS.businessName);
+  const serviceAreas =
+    input.serviceAreas ||
+    compiled?.business.serviceAreas ||
+    DEFAULT_REAL_ESTATE_BUSINESS.serviceAreas;
+
   const draftConfig = {
     ...existingCfg,
     dynamicVariables: {
       ...(existingCfg.dynamicVariables || {}),
-      business_name: business.businessName,
-      service_areas: business.serviceAreas,
-      property_types: business.propertyTypes,
-      knowledge_notes: business.knowledgeNotes,
-      authority_boundaries: business.authorityBoundaries,
+      business_name: businessName,
+      service_areas: serviceAreas,
+      property_types: compiled?.business.propertyTypes || DEFAULT_REAL_ESTATE_BUSINESS.propertyTypes,
+      knowledge_notes: compiled?.business.knowledgeNotes || DEFAULT_REAL_ESTATE_BUSINESS.knowledgeNotes,
+      authority_boundaries:
+        compiled?.business.authorityBoundaries || DEFAULT_REAL_ESTATE_BUSINESS.authorityBoundaries,
     },
-    knowledgeBase: REAL_ESTATE_STRUCTURED_KNOWLEDGE,
+    knowledgeBase: buildStructuredKnowledge(businessName, serviceAreas),
     knowledgeBaseIds: Array.isArray(existingCfg.knowledgeBaseIds)
       ? [...existingCfg.knowledgeBaseIds]
       : [],
   };
 
+  const kbName = `${businessName} Voice Knowledge`;
   let kbId = draftConfig.knowledgeBaseIds[0];
   if (!kbId) {
     const existingKb = await prisma.voiceKnowledgeBase.findFirst({
-      where: { workspaceId, name: "Blue Ridge Realty Voice Knowledge" },
+      where: { workspaceId, name: kbName },
       select: { id: true },
     });
     kbId = existingKb?.id || createId();
@@ -104,7 +126,7 @@ export async function seedRealEstateFrontDeskKnowledge(
         data: {
           id: kbId,
           workspaceId,
-          name: "Blue Ridge Realty Voice Knowledge",
+          name: kbName,
           description: "Structured wizard facts + RAG corpus for RE front desk",
           status: "active",
         },
@@ -123,7 +145,7 @@ export async function seedRealEstateFrontDeskKnowledge(
     });
   }
 
-  const sourceName = "Blue Ridge Realty RE Front Desk RAG";
+  const sourceName = `${businessName} RE Front Desk RAG`;
   let source = await prisma.voiceKnowledgeSource.findFirst({
     where: { workspaceId, knowledgeBaseId: kbId, name: sourceName },
   });

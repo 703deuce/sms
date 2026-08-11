@@ -14,6 +14,7 @@ import {
 } from "@/lib/voice/real-estate/state";
 import {
   fieldsForIntents,
+  isIntentEnabled,
   missingRequiredFields,
   normalizeIntent,
 } from "@/lib/voice/real-estate/fields";
@@ -68,7 +69,16 @@ export function buildRealEstateIntentTools() {
         throw new llm.ToolError("Call state not initialized.");
       }
       return withLiveKitToolTelemetry(ud, "set_intent", { intent }, async () => {
-        ud.callState = applyPrimaryIntent(ud.callState!, intent);
+        if (!isIntentEnabled(intent)) {
+          const fallback = ud.realEstateCompiled?.intents.general;
+          if (fallback?.enabled) {
+            ud.callState = applyPrimaryIntent(ud.callState!, "general");
+          } else {
+            return `${REAL_ESTATE_INTENT_LABELS[intent]} handling is not enabled for this account. Take a message or offer to connect them with the team.`;
+          }
+        } else {
+          ud.callState = applyPrimaryIntent(ud.callState!, intent);
+        }
         await syncState(ud);
         const missing = buildMissingFieldsSummary(ud.callState);
         return `Intent set to ${REAL_ESTATE_INTENT_LABELS[intent]}. ${missing}`;
@@ -92,6 +102,9 @@ export function buildRealEstateIntentTools() {
         throw new llm.ToolError("Call state not initialized.");
       }
       return withLiveKitToolTelemetry(ud, "add_secondary_intent", { intent }, async () => {
+        if (!isIntentEnabled(intent)) {
+          return `${REAL_ESTATE_INTENT_LABELS[intent]} handling is not enabled. Continue with the primary intent or take a message.`;
+        }
         ud.callState = applySecondaryIntent(ud.callState!, intent);
         await syncState(ud);
         const missing = buildMissingFieldsSummary(ud.callState);

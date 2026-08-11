@@ -4,6 +4,7 @@ import {
   usesFrontDeskRealtimeVoicePipeline,
 } from "@/lib/voice/frontdesk/agent-config";
 import type { RealEstateCallState } from "@/lib/voice/real-estate/types";
+import type { CompiledRealEstateFrontDesk } from "@/lib/voice/real-estate/compile/types";
 
 export type BookingStatus = "pending" | "confirmed";
 
@@ -36,6 +37,8 @@ export type FrontDeskUserData = {
   booking?: FrontDeskBookingState;
   /** Real estate front desk runtime state (intent, fields, lead status). */
   callState?: RealEstateCallState;
+  /** Compiled template configuration for this session — authoritative field/intent rules. */
+  realEstateCompiled?: CompiledRealEstateFrontDesk;
   /** @deprecated Prefer booking.status === "confirmed". */
   bookingComplete?: boolean;
   bookedTimeLabel?: string;

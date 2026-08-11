@@ -2,6 +2,7 @@ import { verifyRealEstateFrontdesk } from "./verify-frontdesk";
 import { verifyRealtorProduct } from "./verify-product";
 import { verifyRealtorEdgeCases } from "./verify-edge-cases";
 import { verifyRealtorIntegration } from "./verify-integration";
+import { verifyRealtorCompile } from "./verify-compile";
 
 export type RealtorVerificationResult = {
   ok: boolean;
@@ -14,6 +15,7 @@ export function runRealtorVerificationSuite(): RealtorVerificationResult {
     { name: "frontdesk", ok: false },
     { name: "product", ok: false },
     { name: "edge_cases", ok: false },
+    { name: "compile", ok: false },
   ];
 
   try {
@@ -37,6 +39,14 @@ export function runRealtorVerificationSuite(): RealtorVerificationResult {
     suites[2]!.ok = true;
   } catch (err) {
     suites[2]!.error = err instanceof Error ? err.message : String(err);
+    return { ok: false, suites };
+  }
+
+  try {
+    verifyRealtorCompile();
+    suites[3]!.ok = true;
+  } catch (err) {
+    suites[3]!.error = err instanceof Error ? err.message : String(err);
     return { ok: false, suites };
   }
 
@@ -71,4 +81,4 @@ export async function runRealtorFullVerificationSuite(): Promise<RealtorVerifica
   return staticResult;
 }
 
-export { verifyRealEstateFrontdesk, verifyRealtorProduct, verifyRealtorEdgeCases, verifyRealtorIntegration };
+export { verifyRealEstateFrontdesk, verifyRealtorProduct, verifyRealtorEdgeCases, verifyRealtorIntegration, verifyRealtorCompile };

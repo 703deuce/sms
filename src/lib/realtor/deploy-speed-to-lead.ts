@@ -1,5 +1,3 @@
-import fs from "node:fs";
-import path from "node:path";
 import { getPrisma } from "@/lib/db";
 import {
   createEdgeId,
@@ -12,21 +10,14 @@ import { enqueueJob } from "@/lib/messaging/enqueue-advance";
 import { parseVoiceAgentConfig } from "@/lib/voice/types";
 import { getOutboundQualificationFromConfig } from "@/lib/voice/outbound/agent-config";
 import { isOutboundRealtimeTestEnabled } from "@/lib/voice/outbound/outbound-boot";
+import type { RealtorProductConfig } from "./types";
+import { compileSpeedToLeadFromProductConfig } from "@/lib/voice/real-estate/compile";
 import {
   REAL_ESTATE_DEPLOYED_OUTBOUND_NAME,
   resolveOutboundTemplateAgent,
 } from "@/lib/voice/real-estate/agent-templates";
-import type { RealtorProductConfig } from "./types";
 
 const FOLLOW_UP_FLOW_NAME = "Amy — New Lead Follow-Up (Recommended)";
-
-function loadQualificationFixture(): Record<string, unknown> {
-  const fixturePath = path.join(
-    process.cwd(),
-    "scripts/fixtures/blue-ridge-realty-qualification.json",
-  );
-  return JSON.parse(fs.readFileSync(fixturePath, "utf8")) as Record<string, unknown>;
-}
 
 export function buildRealtorFollowUpDefinition(agentId: string): AutomationDefinition {
   const triggerId = createNodeId();
@@ -64,6 +55,7 @@ export function buildRealtorFollowUpDefinition(agentId: string): AutomationDefin
           label: "Amy calls immediately",
           config: {
             agentId,
+            agentInstanceReference: true,
             purpose: "Speed-to-Lead qualification",
             timeoutSeconds: 90,
             retryCount: 0,
@@ -121,6 +113,7 @@ export function buildRealtorFollowUpDefinition(agentId: string): AutomationDefin
           label: "Amy retries call",
           config: {
             agentId,
+            agentInstanceReference: true,
             purpose: "Speed-to-Lead retry",
             timeoutSeconds: 90,
             retryCount: 0,
@@ -184,18 +177,22 @@ export function buildRealtorFollowUpDefinition(agentId: string): AutomationDefin
   };
 }
 
-async function ensureStackOutboundAgent(workspaceId: string): Promise<{
+async function ensureStackOutboundAgent(
+  workspaceId: string,
+  productConfig: RealtorProductConfig,
+): Promise<{
   agentId: string;
   templateAgentId?: string;
   templateAgentName?: string;
+  configVersion?: number;
 }> {
   const prisma = getPrisma();
   const template = await resolveOutboundTemplateAgent(workspaceId);
-  const qualification =
-    (template ? getOutboundQualificationFromConfig(template.draftConfig) : null) ||
-    (loadQualificationFixture() as ReturnType<typeof getOutboundQualificationFromConfig>);
+  const compiled = compileSpeedToLeadFromProductConfig(productConfig, { status: "active" });
+  const qualification = compiled.qualification;
 
   const phoneE164 =
+    productConfig.phone.outboundNumberE164?.trim() ||
     process.env.PHONE_E164?.trim() ||
     process.env.FRONTDESK_PHONE_E164?.trim() ||
     "+18663464256";
@@ -216,11 +213,16 @@ async function ensureStackOutboundAgent(workspaceId: string): Promise<{
     advanced: {
       ...(baseConfig.advanced || {}),
       livekitProfile: "outbound_lead_qualification",
+      templateKey: compiled.templateKey,
+      templateVersion: compiled.templateVersion,
+      configVersion: compiled.configVersion,
+      realEstateSpeedToLeadCompiled: compiled,
       outboundQualification: qualification,
     },
     dynamicVariables: {
       ...(baseConfig.dynamicVariables || {}),
-      business_name: String(qualification?.businessName || "Blue Ridge Realty"),
+      business_name: qualification.businessName,
+      agent_name: compiled.identity.agentName,
     },
   };
 
@@ -239,6 +241,7 @@ async function ensureStackOutboundAgent(workspaceId: string): Promise<{
       agentId: agent.id,
       templateAgentId: template?.agentId,
       templateAgentName: template?.agentName,
+      configVersion: compiled.configVersion,
     };
   }
 
@@ -246,7 +249,7 @@ async function ensureStackOutboundAgent(workspaceId: string): Promise<{
     data: {
       workspaceId,
       name: REAL_ESTATE_DEPLOYED_OUTBOUND_NAME,
-      description: "Speed-to-Lead outbound qualification — cloned from outbound template agent",
+      description: "Speed-to-Lead outbound qualification — compiled from customer configuration",
       agentType: "custom",
       status: "ACTIVE",
       outboundAiEnabled: true,
@@ -260,14 +263,17 @@ async function ensureStackOutboundAgent(workspaceId: string): Promise<{
     agentId: created.id,
     templateAgentId: template?.agentId,
     templateAgentName: template?.agentName,
+    configVersion: compiled.configVersion,
   };
 }
 
 export async function ensureRealtorOutboundAgent(input: {
   workspaceId: string;
+  productConfig: RealtorProductConfig;
 }): Promise<{ agentId: string; created: boolean; templateAgentId?: string; templateAgentName?: string }> {
   if (isOutboundRealtimeTestEnabled()) {
     const template = await resolveOutboundTemplateAgent(input.workspaceId);
+    const compiled = compileSpeedToLeadFromProductConfig(input.productConfig, { status: "active" });
     const { ensureOutboundRealtimeCloneAgent } = await import(
       "@/lib/voice/outbound/ensure-realtime-clone-agent"
     );
@@ -276,6 +282,25 @@ export async function ensureRealtorOutboundAgent(input: {
       sourceAgentId: template?.agentId,
       sourceAgentName: template?.agentName,
       cloneAgentName: REAL_ESTATE_DEPLOYED_OUTBOUND_NAME,
+    });
+    const prisma = getPrisma();
+    await prisma.voiceAgent.update({
+      where: { id: clone.agentId },
+      data: {
+        draftConfig: {
+          advanced: {
+            livekitProfile: "outbound_lead_qualification_realtime",
+            templateKey: compiled.templateKey,
+            configVersion: compiled.configVersion,
+            realEstateSpeedToLeadCompiled: compiled,
+            outboundQualification: compiled.qualification,
+          },
+          dynamicVariables: {
+            business_name: compiled.qualification.businessName,
+            agent_name: compiled.identity.agentName,
+          },
+        } as object,
+      },
     });
     return {
       agentId: clone.agentId,
@@ -288,7 +313,7 @@ export async function ensureRealtorOutboundAgent(input: {
     where: { workspaceId: input.workspaceId, name: REAL_ESTATE_DEPLOYED_OUTBOUND_NAME },
     select: { id: true },
   });
-  const result = await ensureStackOutboundAgent(input.workspaceId);
+  const result = await ensureStackOutboundAgent(input.workspaceId, input.productConfig);
   return { ...result, created: !existing };
 }
 
@@ -345,16 +370,55 @@ export async function ensureRealtorFollowUpAutomation(input: {
 export async function deployRealtorSpeedToLead(input: {
   workspaceId: string;
   config: RealtorProductConfig;
+  publish?: boolean;
 }): Promise<{
   outboundAgentId: string;
   outboundTemplateAgentId?: string;
   followUpAutomationId?: string;
+  configVersion?: number;
 }> {
   if (input.config.amyMode === "front_desk") {
     return { outboundAgentId: "" };
   }
 
-  const outbound = await ensureRealtorOutboundAgent({ workspaceId: input.workspaceId });
+  const outbound = await ensureRealtorOutboundAgent({
+    workspaceId: input.workspaceId,
+    productConfig: input.config,
+  });
+
+  if (input.publish) {
+    const prisma = getPrisma();
+    const agentRow = await prisma.voiceAgent.findFirst({
+      where: { id: outbound.agentId },
+      select: { draftConfig: true },
+    });
+    const latestVersion = await prisma.voiceAgentVersion.findFirst({
+      where: { agentId: outbound.agentId, workspaceId: input.workspaceId },
+      orderBy: { version: "desc" },
+      select: { version: true },
+    });
+    const nextVersion = (latestVersion?.version ?? 0) + 1;
+    const compiled = compileSpeedToLeadFromProductConfig(input.config, {
+      status: "active",
+      agentId: outbound.agentId,
+    });
+    await prisma.voiceAgentVersion.updateMany({
+      where: { agentId: outbound.agentId, workspaceId: input.workspaceId, isMain: true },
+      data: { isMain: false },
+    });
+    await prisma.voiceAgentVersion.create({
+      data: {
+        workspaceId: input.workspaceId,
+        agentId: outbound.agentId,
+        version: nextVersion,
+        config: agentRow?.draftConfig ?? {},
+        changeLog: `Published real_estate_speed_to_lead v${compiled.configVersion}`,
+        isMain: true,
+        publishedBy: "system",
+      },
+    });
+  }
+
   let followUpAutomationId: string | undefined;
 
   if (input.config.speedToLead.useRecommendedFollowUp) {
@@ -365,9 +429,14 @@ export async function deployRealtorSpeedToLead(input: {
     followUpAutomationId = flow.flowId;
   }
 
+  const compiled = compileSpeedToLeadFromProductConfig(input.config, {
+    agentId: outbound.agentId,
+  });
+
   return {
     outboundAgentId: outbound.agentId,
     outboundTemplateAgentId: outbound.templateAgentId,
     followUpAutomationId,
+    configVersion: compiled.configVersion,
   };
 }

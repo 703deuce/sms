@@ -1,22 +1,29 @@
 import { getPrisma } from "@/lib/db";
 import { createId } from "@/lib/supabase/id";
 import { assignNumberToAgent } from "@/lib/telephony/provisioning";
+import { ensureAgentPrimaryWorkflow } from "@/lib/agents/compile-workflow";
 import { parseVoiceAgentConfig, DEFAULT_VOICE_CONFIG } from "@/lib/voice/types";
 import {
   FRONTDESK_REALTIME_PROFILE,
   isFrontDeskProfile,
 } from "@/lib/voice/frontdesk/agent-config";
+import type { RealtorProductConfig } from "@/lib/realtor/types";
+import {
+  compileFrontDeskFromProductConfig,
+  compileRealtorAgents,
+} from "./compile";
 import {
   resolveFrontDeskTemplateAgent,
   REAL_ESTATE_DEPLOYED_FRONT_DESK_NAME,
 } from "./agent-templates";
-import { DEFAULT_REAL_ESTATE_BUSINESS } from "./config";
 
 export type EnsureRealEstateFrontDeskAgentInput = {
   workspaceId?: string;
   phoneE164?: string;
   agentName?: string;
   assignPhone?: boolean;
+  productConfig?: RealtorProductConfig;
+  publish?: boolean;
 };
 
 export type EnsureRealEstateFrontDeskAgentResult = {
@@ -28,6 +35,8 @@ export type EnsureRealEstateFrontDeskAgentResult = {
   upgraded: boolean;
   templateAgentId?: string;
   templateAgentName?: string;
+  primaryFlowId?: string;
+  configVersion?: number;
 };
 
 function resolvePhoneE164(input?: string): string {
@@ -39,9 +48,10 @@ function resolvePhoneE164(input?: string): string {
   );
 }
 
-function resolveAgentName(input?: string): string {
+function resolveAgentName(input?: string, compiledName?: string): string {
   return (
     input?.trim() ||
+    compiledName ||
     process.env.RE_FRONTDESK_AGENT_NAME?.trim() ||
     REAL_ESTATE_DEPLOYED_FRONT_DESK_NAME
   ).trim();
@@ -49,20 +59,24 @@ function resolveAgentName(input?: string): string {
 
 export function buildRealEstateDraftConfig(
   existing = DEFAULT_VOICE_CONFIG,
-  agentName = resolveAgentName(),
+  input: {
+    agentName: string;
+    compiled: ReturnType<typeof compileFrontDeskFromProductConfig>;
+  },
 ) {
-  const business = DEFAULT_REAL_ESTATE_BUSINESS;
+  const { compiled } = input;
+  const business = compiled.business;
   return {
     ...existing,
     identity: {
       ...(existing.identity || {}),
-      displayName: agentName,
+      displayName: input.agentName,
       businessLocation: business.businessName,
     },
     dynamicVariables: {
       ...(existing.dynamicVariables || {}),
       business_name: business.businessName,
-      agent_name: agentName,
+      agent_name: compiled.identity.agentName,
       service_areas: business.serviceAreas,
       property_types: business.propertyTypes,
       knowledge_notes: business.knowledgeNotes,
@@ -73,14 +87,12 @@ export function buildRealEstateDraftConfig(
       livekitProfile: FRONTDESK_REALTIME_PROFILE,
       realEstateFrontDesk: true,
       vertical: "real_estate",
-      realtimeModel:
-        process.env.VOICE_REALTIME_MODEL?.trim() ||
-        (existing.advanced as Record<string, unknown> | undefined)?.realtimeModel ||
-        "gpt-realtime-2.1-mini",
-      realtimeVoice:
-        process.env.VOICE_REALTIME_VOICE?.trim() ||
-        (existing.advanced as Record<string, unknown> | undefined)?.realtimeVoice ||
-        "marin",
+      templateKey: compiled.templateKey,
+      templateVersion: compiled.templateVersion,
+      configVersion: compiled.configVersion,
+      realEstateCompiled: compiled,
+      realtimeModel: compiled.voice.model,
+      realtimeVoice: compiled.voice.voice,
     },
     messaging: {
       ...(existing.messaging || {}),
@@ -91,7 +103,7 @@ export function buildRealEstateDraftConfig(
 
 /**
  * Idempotently create or upgrade the inbound Real Estate Front Desk voice agent.
- * Safe to call on every deploy — preserves existing draftConfig fields.
+ * Compiles structured customer configuration — never a giant custom prompt.
  */
 export async function ensureRealEstateFrontDeskAgent(
   input: EnsureRealEstateFrontDeskAgentInput = {},
@@ -99,8 +111,21 @@ export async function ensureRealEstateFrontDeskAgent(
   const prisma = getPrisma();
   const workspaceId = input.workspaceId?.trim() || process.env.WORKSPACE_ID?.trim() || "ws_1";
   const phoneE164 = resolvePhoneE164(input.phoneE164);
-  const agentName = resolveAgentName(input.agentName);
   const assignPhone = input.assignPhone !== false;
+
+  const productConfig = input.productConfig;
+  if (!productConfig) {
+    throw new Error("productConfig is required — deploy via compile layer, not hardcoded defaults.");
+  }
+
+  const compiledBundle = compileRealtorAgents(productConfig, {
+    status: input.publish ? "active" : productConfig.status,
+  });
+  if (!compiledBundle.frontDesk) {
+    throw new Error("Front Desk template not enabled for this amyMode.");
+  }
+  const compiled = compiledBundle.frontDesk;
+  const agentName = resolveAgentName(input.agentName, compiled.identity.agentName);
 
   const phone = await prisma.phoneNumber.findFirst({
     where: { workspaceId, e164: phoneE164 },
@@ -114,7 +139,7 @@ export async function ensureRealEstateFrontDeskAgent(
 
   const agents = await prisma.voiceAgent.findMany({
     where: { workspaceId },
-    select: { id: true, name: true, draftConfig: true },
+    select: { id: true, name: true, draftConfig: true, primaryFlowId: true },
   });
 
   const existingRe = agents.find((row: (typeof agents)[number]) => {
@@ -128,6 +153,7 @@ export async function ensureRealEstateFrontDeskAgent(
   let created = false;
   let templateAgentId = template?.agentId;
   let templateAgentName = template?.agentName;
+  let existingFlowId = existingRe?.primaryFlowId || null;
 
   if (!existingCfg && template) {
     existingCfg = template.draftConfig;
@@ -143,10 +169,14 @@ export async function ensureRealEstateFrontDeskAgent(
       existingCfg = parseVoiceAgentConfig(frontdeskFallback.draftConfig);
       templateAgentId = templateAgentId || frontdeskFallback.id;
       templateAgentName = templateAgentName || frontdeskFallback.name;
+      existingFlowId = frontdeskFallback.primaryFlowId || null;
     }
   }
 
-  const draftConfig = buildRealEstateDraftConfig(existingCfg || DEFAULT_VOICE_CONFIG, agentName);
+  const draftConfig = buildRealEstateDraftConfig(existingCfg || DEFAULT_VOICE_CONFIG, {
+    agentName,
+    compiled,
+  });
 
   if (agentId) {
     await prisma.voiceAgent.update({
@@ -187,6 +217,44 @@ export async function ensureRealEstateFrontDeskAgent(
     });
   }
 
+  const workflow = await ensureAgentPrimaryWorkflow({
+    workspaceId,
+    agentId,
+    agentName,
+    existingFlowId,
+    outcomeSlug: "appointment-booking",
+    phoneNumberId: phone?.id || null,
+    phoneNumberE164: phone?.e164 || phoneE164,
+    includeBookingBranches: compiled.booking.enabled,
+    includeSmsConfirmation: compiled.booking.enabled,
+    purpose: agentName,
+    activate: input.publish === true,
+  });
+
+  if (input.publish) {
+    const latestVersion = await prisma.voiceAgentVersion.findFirst({
+      where: { agentId, workspaceId },
+      orderBy: { version: "desc" },
+      select: { version: true },
+    });
+    const nextVersion = (latestVersion?.version ?? 0) + 1;
+    await prisma.voiceAgentVersion.updateMany({
+      where: { agentId, workspaceId, isMain: true },
+      data: { isMain: false },
+    });
+    await prisma.voiceAgentVersion.create({
+      data: {
+        workspaceId,
+        agentId,
+        version: nextVersion,
+        config: draftConfig as object,
+        changeLog: `Published real_estate_front_desk v${compiled.configVersion}`,
+        isMain: true,
+        publishedBy: "system",
+      },
+    });
+  }
+
   return {
     ok: true,
     agentId,
@@ -196,5 +264,7 @@ export async function ensureRealEstateFrontDeskAgent(
     upgraded: !created,
     templateAgentId,
     templateAgentName,
+    primaryFlowId: workflow.flowId,
+    configVersion: compiled.configVersion,
   };
 }

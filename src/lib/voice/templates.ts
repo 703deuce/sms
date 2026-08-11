@@ -224,6 +224,50 @@ export const VOICE_AGENT_TEMPLATES: AgentTemplate[] = [
       identity: { directions: ["inbound", "outbound"] },
     },
   },
+  {
+    id: "real_estate_front_desk",
+    name: "Real Estate Front Desk",
+    agentType: "appointment_booking",
+    description:
+      "Inbound Realtor front desk — multi-intent routing, qualification, booking, transfer. Customer-configurable via structured template.",
+    config: {
+      identity: { directions: ["inbound"] },
+      instructions: {
+        system:
+          "You are the front desk for a real estate brokerage. Route callers by intent, collect configured qualification fields, and offer booking or transfer per customer rules.",
+        tone: "warm",
+        style: "professional",
+      },
+      advanced: {
+        livekitProfile: "frontdesk_realtime",
+        realEstateFrontDesk: true,
+        vertical: "real_estate",
+        templateKey: "real_estate_front_desk",
+        templateVersion: 1,
+      },
+    },
+  },
+  {
+    id: "real_estate_speed_to_lead",
+    name: "Real Estate Speed-to-Lead",
+    agentType: "lead_qualification",
+    description:
+      "Outbound speed-to-lead qualification for buyer/seller leads with retries, booking, and CRM sync. Customer-configurable via structured template.",
+    config: {
+      identity: { directions: ["outbound"] },
+      instructions: {
+        system:
+          "Follow up with warm outbound real estate leads using configured qualification fields. Deterministic runtime owns outcomes — not prompt paragraphs.",
+        tone: "warm",
+        style: "professional",
+      },
+      advanced: {
+        livekitProfile: "outbound_lead_qualification",
+        templateKey: "real_estate_speed_to_lead",
+        templateVersion: 1,
+      },
+    },
+  },
 ];
 
 export function templateConfig(templateId: string): VoiceAgentConfig {

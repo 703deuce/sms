@@ -1,27 +1,18 @@
 import type { RealEstateBusinessConfig } from "./types";
+import {
+  TEMPLATE_AUTHORITY_BOUNDARIES,
+  TEMPLATE_KNOWLEDGE_NOTES,
+  TEMPLATE_PROPERTY_TYPES,
+} from "./templates/definitions";
+import type { CompiledRealEstateFrontDesk } from "./compile/types";
 
+/** Generic template defaults — no customer-specific names or locations. */
 export const DEFAULT_REAL_ESTATE_BUSINESS: RealEstateBusinessConfig = {
-  businessName: "Blue Ridge Realty",
-  serviceAreas: [
-    "Woodbridge",
-    "Dale City",
-    "Lake Ridge",
-    "Stafford",
-    "Fredericksburg",
-    "Manassas",
-  ],
-  propertyTypes: ["single-family homes", "townhouses", "condos"],
-  knowledgeNotes: [
-    "We are a real estate brokerage — not a lender and we do not approve mortgages on this call.",
-    "We do not have live MLS listings on this call; a realtor will follow up with matching options.",
-    "We help buyers and sellers throughout Northern Virginia.",
-  ],
-  authorityBoundaries: [
-    "Do NOT invent specific homes, addresses, listing prices, or MLS inventory.",
-    "Do NOT claim mortgage approval, financing qualification, or that a specific property is available.",
-    "Do NOT tell the caller they financially or mortgage qualify.",
-    "Do NOT promise an exact callback time — say a realtor will follow up.",
-  ],
+  businessName: "Your Real Estate Team",
+  serviceAreas: ["your service area"],
+  propertyTypes: TEMPLATE_PROPERTY_TYPES,
+  knowledgeNotes: TEMPLATE_KNOWLEDGE_NOTES,
+  authorityBoundaries: TEMPLATE_AUTHORITY_BOUNDARIES,
 };
 
 export function resolveRealEstateBusinessConfig(
@@ -52,6 +43,12 @@ export function resolveRealEstateBusinessConfig(
   };
 }
 
+export function businessConfigFromCompiled(
+  compiled: CompiledRealEstateFrontDesk,
+): RealEstateBusinessConfig {
+  return compiled.business;
+}
+
 export function isRealEstateFrontDeskAgent(
   advanced: Record<string, unknown> | undefined,
 ): boolean {
@@ -59,4 +56,12 @@ export function isRealEstateFrontDeskAgent(
   if (advanced.realEstateFrontDesk === true) return true;
   const vertical = String(advanced.vertical || "").trim().toLowerCase();
   return vertical === "real_estate" || vertical === "real-estate";
+}
+
+export function getCompiledFrontDeskFromAdvanced(
+  advanced: Record<string, unknown> | undefined,
+): CompiledRealEstateFrontDesk | null {
+  const compiled = advanced?.realEstateCompiled;
+  if (!compiled || typeof compiled !== "object") return null;
+  return compiled as CompiledRealEstateFrontDesk;
 }

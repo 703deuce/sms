@@ -379,36 +379,105 @@ function AiSetupStep({
   config: RealtorProductConfig;
   onChange: (p: Partial<RealtorProductConfig>) => void;
 }) {
+  const intentRows: Array<{
+    key: keyof RealtorProductConfig["frontDesk"];
+    label: string;
+  }> = [
+    { key: "buyer", label: "Buyer / property inquiries" },
+    { key: "seller", label: "Seller inquiries" },
+    { key: "showing", label: "Showing requests" },
+    { key: "existingClient", label: "Existing clients" },
+    { key: "agentToAgent", label: "Other Realtors" },
+    { key: "general", label: "General calls" },
+  ];
+
+  function toggleIntent(key: keyof RealtorProductConfig["frontDesk"], enabled: boolean) {
+    onChange({
+      frontDesk: {
+        ...config.frontDesk,
+        [key]: { ...config.frontDesk[key], enabled },
+      },
+    });
+  }
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <CardTitle>Configure Amy</CardTitle>
+      <p className="text-sm text-muted-foreground">
+        These settings are saved as structured configuration — Amy&apos;s runtime walks your field
+        schemas; we do not generate giant custom prompts.
+      </p>
+
       {(config.amyMode === "front_desk" || config.amyMode === "both") && (
-        <div>
-          <p className="mb-2 text-sm font-medium">Front Desk — caller types (all enabled by default)</p>
-          <ul className="list-inside list-disc text-sm text-muted-foreground">
-            <li>Buyer / property inquiries</li>
-            <li>Seller inquiries</li>
-            <li>Showing requests</li>
-            <li>Existing clients</li>
-            <li>Other Realtors</li>
-            <li>General calls</li>
-          </ul>
+        <div className="space-y-3">
+          <p className="text-sm font-medium">Front Desk — what Amy handles</p>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {intentRows.map(({ key, label }) => (
+              <label key={key} className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={config.frontDesk[key].enabled}
+                  onChange={(e) => toggleIntent(key, e.target.checked)}
+                />
+                {label}
+              </label>
+            ))}
+          </div>
         </div>
       )}
+
       {(config.amyMode === "speed_to_lead" || config.amyMode === "both") && (
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={config.speedToLead.callImmediately}
-            onChange={(e) =>
-              onChange({
-                speedToLead: { ...config.speedToLead, callImmediately: e.target.checked },
-              })
-            }
-          />
-          Call new leads immediately
-        </label>
+        <div className="space-y-3">
+          <p className="text-sm font-medium">Speed-to-Lead — lead types</p>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={config.speedToLead.buyerQualification}
+              onChange={(e) =>
+                onChange({
+                  speedToLead: { ...config.speedToLead, buyerQualification: e.target.checked },
+                })
+              }
+            />
+            Buyer qualification
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={config.speedToLead.sellerQualification}
+              onChange={(e) =>
+                onChange({
+                  speedToLead: { ...config.speedToLead, sellerQualification: e.target.checked },
+                })
+              }
+            />
+            Seller qualification
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={config.speedToLead.callImmediately}
+              onChange={(e) =>
+                onChange({
+                  speedToLead: { ...config.speedToLead, callImmediately: e.target.checked },
+                })
+              }
+            />
+            Call new leads immediately
+          </label>
+        </div>
       )}
+
+      <label className="block text-sm">
+        Agent display name
+        <input
+          className="mt-1 w-full rounded-lg border px-3 py-2"
+          value={config.identity?.agentName || "Amy"}
+          onChange={(e) =>
+            onChange({ identity: { ...config.identity, agentName: e.target.value } })
+          }
+        />
+      </label>
     </div>
   );
 }

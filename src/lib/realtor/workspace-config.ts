@@ -19,6 +19,14 @@ export function parseRealtorProductConfig(raw: unknown): RealtorProductConfig {
   return {
     ...DEFAULT_REALTOR_PRODUCT_CONFIG,
     ...(stored as Partial<RealtorProductConfig>),
+    identity: {
+      ...DEFAULT_REALTOR_PRODUCT_CONFIG.identity,
+      ...asRecord(stored.identity),
+    },
+    voice: {
+      ...DEFAULT_REALTOR_PRODUCT_CONFIG.voice,
+      ...asRecord(stored.voice),
+    },
     business: { ...DEFAULT_REALTOR_PRODUCT_CONFIG.business, ...asRecord(stored.business) },
     phone: { ...DEFAULT_REALTOR_PRODUCT_CONFIG.phone, ...asRecord(stored.phone) },
     frontDesk: {

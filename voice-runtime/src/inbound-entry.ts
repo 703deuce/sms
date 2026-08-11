@@ -11,6 +11,11 @@ import { createFrontDeskBookingAgent } from "./frontdesk/frontdesk-booking-agent
 import { createRealEstateFrontDeskAgent } from "./frontdesk/real-estate/real-estate-frontdesk-agent";
 import { isRealEstateFrontDeskProfile } from "@/lib/voice/frontdesk/agent-config";
 import { createInitialCallState } from "@/lib/voice/real-estate/state";
+import { getCompiledFrontDeskFromAdvanced } from "@/lib/voice/real-estate/config";
+import {
+  manifestFromCompiledIntents,
+  setActiveFieldManifest,
+} from "@/lib/voice/real-estate/fields";
 import { resolveInboundSipCallIdentity } from "./call-identity";
 import type { FrontDeskUserData } from "./frontdesk/userdata";
 import {
@@ -99,6 +104,15 @@ export async function runInboundEntry(ctx: JobContext): Promise<void> {
     agentRow?.name?.trim() ||
     "our office";
 
+  const compiledFrontDesk = isRealEstate
+    ? getCompiledFrontDeskFromAdvanced(agentConfig.advanced as Record<string, unknown>)
+    : null;
+  if (compiledFrontDesk) {
+    setActiveFieldManifest(manifestFromCompiledIntents(compiledFrontDesk.intents));
+  } else {
+    setActiveFieldManifest(null);
+  }
+
   const cal = CalendlyCalendar.create({
     workspaceId: routing.workspaceId,
     agentId: routing.agentId,
@@ -116,7 +130,12 @@ export async function runInboundEntry(ctx: JobContext): Promise<void> {
     callerE164: identity.fromE164?.trim() || undefined,
     livekitRoomName: ctx.room.name,
     livekitParticipantId: identity.participant.identity,
-    ...(isRealEstate ? { callState: createInitialCallState() } : {}),
+    ...(isRealEstate
+      ? {
+          callState: createInitialCallState(),
+          realEstateCompiled: compiledFrontDesk || undefined,
+        }
+      : {}),
   };
   const agent = (
     isRealEstate

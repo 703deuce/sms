@@ -69,6 +69,10 @@ export function verifyRealEstateFrontdesk(): void {
   const bootstrapSource = readProjectFile("src/lib/voice/real-estate/bootstrap.ts");
   assert.ok(bootstrapSource.includes("bootstrapRealEstateFrontDesk"));
   assert.ok(bootstrapSource.includes("deployRealtorSpeedToLead"));
+  assert.ok(bootstrapSource.includes("compileRealtorAgents"));
+
+  assert.ok(projectFileExists("src/lib/voice/real-estate/compile/index.ts"));
+  assert.ok(projectFileExists("src/lib/voice/real-estate/templates/definitions.ts"));
 
   const instrumentation = readProjectFile("src/instrumentation.ts");
   assert.ok(instrumentation.includes("bootstrapRealEstateFrontDesk"));
