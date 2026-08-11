@@ -3,6 +3,11 @@ import * as deepgram from "@livekit/agents-plugin-deepgram";
 import * as openai from "@livekit/agents-plugin-openai";
 import * as elevenlabs from "@livekit/agents-plugin-elevenlabs";
 import OpenAI from "openai";
+import type { VoiceAgentConfig } from "@/lib/voice/types";
+import {
+  resolveOutboundRealtimePipelineConfig,
+  type OutboundRealtimePipelineConfig,
+} from "@/lib/voice/outbound/agent-config";
 import {
   getVoicePipelineConfig,
   type VoicePipelineConfig,
@@ -213,6 +218,44 @@ export function buildAmyTts(cfg: VoicePipelineConfig): tts.TTS {
     voice: cfg.ttsVoice || "cgSgspJ2msm6clMCkdW9",
     language: cfg.ttsLanguage,
   });
+}
+
+export function buildOutboundRealtimeModel(config: Pick<VoiceAgentConfig, "advanced">) {
+  const realtimeCfg = resolveOutboundRealtimePipelineConfig(config);
+  const apiKey = process.env.OPENAI_API_KEY?.trim();
+  if (!apiKey) {
+    throw new Error("OPENAI_API_KEY is required for OpenAI Realtime outbound voice");
+  }
+
+  return new openai.realtime.RealtimeModel({
+    apiKey,
+    model: realtimeCfg.model,
+    voice: realtimeCfg.voice,
+    modalities: ["audio"],
+    inputAudioTranscription: null,
+    turnDetection: {
+      type: "server_vad",
+      threshold: 0.5,
+      prefix_padding_ms: 300,
+      silence_duration_ms: 500,
+      create_response: true,
+    },
+    ...(realtimeCfg.reasoning ? { reasoning: realtimeCfg.reasoning } : {}),
+  });
+}
+
+export function describeRealtimePipelineConfig(
+  realtimeCfg: OutboundRealtimePipelineConfig,
+) {
+  return {
+    mode: "openai_realtime",
+    model: realtimeCfg.model,
+    voice: realtimeCfg.voice,
+    reasoning: realtimeCfg.reasoning?.effort || null,
+    turnDetection: "server_vad",
+    inputAudioTranscription: false,
+    via: "openai_plugin_realtime",
+  };
 }
 
 export function buildAmyVoicePipeline() {

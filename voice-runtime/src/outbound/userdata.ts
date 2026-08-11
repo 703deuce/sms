@@ -44,5 +44,9 @@ export function isOutboundLeadUserData(value: unknown): value is OutboundLeadUse
 export function isOutboundLeadQualificationProfile(
   advanced: Record<string, unknown> | undefined,
 ): boolean {
-  return String(advanced?.livekitProfile || "").trim().toLowerCase() === "outbound_lead_qualification";
+  const profile = String(advanced?.livekitProfile || "").trim().toLowerCase();
+  return (
+    profile === "outbound_lead_qualification" ||
+    profile === "outbound_lead_qualification_realtime"
+  );
 }

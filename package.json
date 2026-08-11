@@ -52,6 +52,7 @@
     "voice-runtime:dev": "tsx voice-runtime/src/main.ts dev",
     "voice-runtime:start": "tsx voice-runtime/src/main.ts start",
     "setup:outbound-lead-agent": "tsx scripts/setup-outbound-lead-agent.ts",
+    "setup:outbound-lead-agent-realtime-clone": "tsx scripts/setup-outbound-lead-agent-realtime-clone.ts",
     "test:outbound-qualification": "tsx scripts/test-outbound-qualification.ts",
     "audit:outbound-telephony": "tsx scripts/audit-outbound-telephony.ts",
     "test:outbound-lead": "tsx scripts/outbound-lead-smoke-call.ts",

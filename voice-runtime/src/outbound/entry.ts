@@ -13,12 +13,16 @@ import { prefillCollectedFields, resolveOutboundCallMission } from "@/lib/voice/
 import { ensureLiveKitOutboundTrunk } from "@/lib/telephony/provisioning/livekit/outbound-trunk";
 import { appendTraceEvent } from "@/lib/voice/workflow-engine/trace";
 import { liveKitRuntimeProvider } from "@/lib/voice/runtime-provider/livekit";
+import {
+  resolveOutboundRealtimePipelineConfig,
+  usesOutboundRealtimeVoicePipeline,
+} from "@/lib/voice/outbound/agent-config";
 import { createNewLeadQualificationAgent } from "./new-lead-qualification-agent";
 import { QualifyLeadTask } from "./qualify-lead-task";
 import { waitForQualificationComplete } from "./wait-for-qualification";
 import { endOutboundCall } from "./end-outbound-call";
 import type { OutboundLeadUserData } from "./userdata";
-import { buildAmyVoicePipeline, describePipelineConfig } from "../pipeline";
+import { buildAmyVoicePipeline, buildOutboundRealtimeModel, describePipelineConfig, describeRealtimePipelineConfig } from "../pipeline";
 import { attachLatencyInstrumentation } from "../latency-instrumentation";
 import { attachLiveKitTranscriptPersistence } from "../transcript-persistence";
 import { attachOutputGain, resolveLiveKitOutputGainDb } from "../output-gain";
@@ -133,39 +137,64 @@ export async function runOutboundLeadQualificationEntry(
   };
   ctx.proc.userData = userData;
 
-  const { stt, llm, tts, config, sttConfig } = buildAmyVoicePipeline();
-  console.log(
-    JSON.stringify({
-      source: "transovo-voice-runtime",
-      event: "pipeline_config",
-      callId: job.callId,
-      profile: "outbound_lead_qualification",
-      pipeline: describePipelineConfig(config, sttConfig),
-      turnHandling: describeTurnHandlingConfig(),
-      outputGainDb,
-    }),
-  );
+  const usesRealtime = usesOutboundRealtimeVoicePipeline(agentConfig);
 
   const agent = createNewLeadQualificationAgent(businessName);
-  const session = new voice.AgentSession<OutboundLeadUserData>({
-    stt,
-    llm,
-    tts,
-    turnHandling: buildAmyTurnHandling(),
-    maxToolSteps: Number(process.env.VOICE_MAX_TOOL_STEPS?.trim()) || 8,
-    userData,
-  });
+  let session: voice.AgentSession<OutboundLeadUserData>;
 
-  attachLatencyInstrumentation(session, {
-    callId: job.callId,
-    preemptiveConfig: getPreemptiveConfigForInstrumentation(),
-    ttsConfig: {
-      preset: config.ttsPreset || null,
-      provider: config.ttsProvider,
-      model: config.ttsModel,
-      voice: config.ttsVoice,
-    },
-  });
+  if (usesRealtime) {
+    const realtimeCfg = resolveOutboundRealtimePipelineConfig(agentConfig);
+    const realtimeLlm = buildOutboundRealtimeModel(agentConfig);
+    console.log(
+      JSON.stringify({
+        source: "transovo-voice-runtime",
+        event: "pipeline_config",
+        callId: job.callId,
+        profile: "outbound_lead_qualification_realtime",
+        pipeline: describeRealtimePipelineConfig(realtimeCfg),
+        outputGainDb,
+      }),
+    );
+
+    session = new voice.AgentSession<OutboundLeadUserData>({
+      llm: realtimeLlm,
+      maxToolSteps: Number(process.env.VOICE_MAX_TOOL_STEPS?.trim()) || 8,
+      userData,
+    });
+  } else {
+    const { stt, llm, tts, config, sttConfig } = buildAmyVoicePipeline();
+    console.log(
+      JSON.stringify({
+        source: "transovo-voice-runtime",
+        event: "pipeline_config",
+        callId: job.callId,
+        profile: "outbound_lead_qualification",
+        pipeline: describePipelineConfig(config, sttConfig),
+        turnHandling: describeTurnHandlingConfig(),
+        outputGainDb,
+      }),
+    );
+
+    session = new voice.AgentSession<OutboundLeadUserData>({
+      stt,
+      llm,
+      tts,
+      turnHandling: buildAmyTurnHandling(),
+      maxToolSteps: Number(process.env.VOICE_MAX_TOOL_STEPS?.trim()) || 8,
+      userData,
+    });
+
+    attachLatencyInstrumentation(session, {
+      callId: job.callId,
+      preemptiveConfig: getPreemptiveConfigForInstrumentation(),
+      ttsConfig: {
+        preset: config.ttsPreset || null,
+        provider: config.ttsProvider,
+        model: config.ttsModel,
+        voice: config.ttsVoice,
+      },
+    });
+  }
 
   attachLiveKitTranscriptPersistence(session, {
     workspaceId: job.workspaceId,

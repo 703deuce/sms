@@ -171,6 +171,28 @@ export const VOICE_AGENT_TEMPLATES: AgentTemplate[] = [
     },
   },
   {
+    id: "outbound_lead_qualification_realtime",
+    name: "Outbound lead qualification (OpenAI Realtime)",
+    agentType: "lead_qualification",
+    description:
+      "Warm outbound lead follow-up using OpenAI Realtime speech-to-speech (A/B clone of stack agent).",
+    config: {
+      identity: { directions: ["outbound"] },
+      instructions: {
+        system:
+          "You follow up with warm outbound leads, gather configured qualification fields, and close with a brief handoff message.",
+        goals: "Collect missing lead criteria and save structured qualification results.",
+        tone: "warm",
+        style: "professional",
+      },
+      advanced: {
+        livekitProfile: "outbound_lead_qualification_realtime",
+        realtimeModel: "gpt-realtime-2.1-mini",
+        realtimeVoice: "marin",
+      },
+    },
+  },
+  {
     id: "custom",
     name: "Custom",
     agentType: "custom",

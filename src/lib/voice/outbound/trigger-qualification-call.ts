@@ -5,6 +5,7 @@ import { parseVoiceAgentConfig } from "@/lib/voice/types";
 import {
   getOutboundQualificationFromConfig,
   isOutboundLeadQualificationProfile,
+  isOutboundLeadQualificationStackProfile,
 } from "./agent-config";
 import type { QualificationDefinition } from "./types";
 import { startOutboundLeadQualificationCall } from "./outbound-call-service";
@@ -54,11 +55,11 @@ export async function resolveOutboundQualificationAgentId(input: {
     select: { id: true, draftConfig: true, name: true },
   });
   const found = agents.find((agent: (typeof agents)[number]) =>
-    isOutboundLeadQualificationAgent(parseVoiceAgentConfig(agent.draftConfig)),
+    isOutboundLeadQualificationStackProfile(parseVoiceAgentConfig(agent.draftConfig)),
   );
   if (!found) {
     throw new Error(
-      "No outbound_lead_qualification agent found — create one in Voice Agents and enable Outbound Qualification",
+      "No outbound_lead_qualification agent found — create one in Voice Agents and enable Outbound Qualification (or pass agentId for the realtime clone)",
     );
   }
   return found.id;

@@ -35,6 +35,13 @@ import {
 import { createDefaultQualificationDefinition } from "../src/lib/voice/outbound/default-qualification-definition";
 import type { QualificationDefinition } from "../src/lib/voice/outbound/types";
 import type { OutboundLeadUserData } from "../voice-runtime/src/outbound/userdata";
+import {
+  isOutboundLeadQualificationProfile,
+  isOutboundLeadQualificationRealtimeProfile,
+  isOutboundLeadQualificationStackProfile,
+  resolveOutboundRealtimePipelineConfig,
+  OUTBOUND_LEAD_QUALIFICATION_REALTIME_PROFILE,
+} from "../src/lib/voice/outbound/agent-config";
 
 const fixture = JSON.parse(
   fs.readFileSync(
@@ -87,6 +94,34 @@ const mlsAnswer = resolveOutboundProfileBusinessAnswer({
   topic: "Do you have any townhouses for 450k in Woodbridge?",
 });
 assert.ok(mlsAnswer && /does not have live inventory|don't have live MLS/i.test(mlsAnswer));
+
+const stackConfig = {
+  advanced: { livekitProfile: "outbound_lead_qualification" },
+} as const;
+const realtimeConfig = {
+  advanced: {
+    livekitProfile: OUTBOUND_LEAD_QUALIFICATION_REALTIME_PROFILE,
+    realtimeModel: "gpt-realtime-2.1-mini",
+    realtimeVoice: "marin",
+  },
+} as const;
+assert.ok(isOutboundLeadQualificationStackProfile(stackConfig));
+assert.ok(!isOutboundLeadQualificationRealtimeProfile(stackConfig));
+assert.ok(isOutboundLeadQualificationRealtimeProfile(realtimeConfig));
+assert.ok(isOutboundLeadQualificationProfile(realtimeConfig));
+assert.equal(
+  resolveOutboundRealtimePipelineConfig(realtimeConfig).model,
+  "gpt-realtime-2.1-mini",
+);
+assert.equal(resolveOutboundRealtimePipelineConfig(realtimeConfig).voice, "marin");
+const fullRealtime = resolveOutboundRealtimePipelineConfig({
+  advanced: {
+    livekitProfile: OUTBOUND_LEAD_QUALIFICATION_REALTIME_PROFILE,
+    realtimeModel: "gpt-realtime-2.1",
+  },
+});
+assert.equal(fullRealtime.model, "gpt-realtime-2.1");
+assert.equal(fullRealtime.reasoning?.effort, "low");
 
 const merged = mergeQualificationFields(
   prefilled,

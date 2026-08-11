@@ -3,10 +3,25 @@ import { createDefaultQualificationDefinition } from "./default-qualification-de
 import type { QualificationDefinition } from "./types";
 
 export const OUTBOUND_LEAD_QUALIFICATION_PROFILE = "outbound_lead_qualification";
+export const OUTBOUND_LEAD_QUALIFICATION_REALTIME_PROFILE =
+  "outbound_lead_qualification_realtime";
+
+export type OutboundRealtimeReasoningEffort =
+  | "minimal"
+  | "low"
+  | "medium"
+  | "high"
+  | "xhigh";
 
 export type VoiceAgentAdvancedConfig = {
   livekitProfile?: string;
   outboundQualification?: QualificationDefinition;
+  /** OpenAI Realtime model id — e.g. gpt-realtime-2.1-mini or gpt-realtime-2.1 */
+  realtimeModel?: string;
+  /** OpenAI Realtime voice — defaults to marin */
+  realtimeVoice?: string;
+  /** Optional reasoning effort for gpt-realtime-2 family (full model) */
+  realtimeReasoningEffort?: OutboundRealtimeReasoningEffort;
   [key: string]: unknown;
 };
 
@@ -14,10 +29,67 @@ export function getVoiceAgentAdvanced(config: VoiceAgentConfig): VoiceAgentAdvan
   return (config.advanced || {}) as VoiceAgentAdvancedConfig;
 }
 
-export function isOutboundLeadQualificationProfile(
+export function isOutboundLeadQualificationStackProfile(
   config: Pick<VoiceAgentConfig, "advanced">,
 ): boolean {
   return getVoiceAgentAdvanced(config).livekitProfile === OUTBOUND_LEAD_QUALIFICATION_PROFILE;
+}
+
+export function isOutboundLeadQualificationRealtimeProfile(
+  config: Pick<VoiceAgentConfig, "advanced">,
+): boolean {
+  return (
+    getVoiceAgentAdvanced(config).livekitProfile ===
+    OUTBOUND_LEAD_QUALIFICATION_REALTIME_PROFILE
+  );
+}
+
+/** Stack or realtime outbound qualification — same workflow, different voice pipeline. */
+export function isOutboundLeadQualificationProfile(
+  config: Pick<VoiceAgentConfig, "advanced">,
+): boolean {
+  return (
+    isOutboundLeadQualificationStackProfile(config) ||
+    isOutboundLeadQualificationRealtimeProfile(config)
+  );
+}
+
+export function usesOutboundRealtimeVoicePipeline(
+  config: Pick<VoiceAgentConfig, "advanced">,
+): boolean {
+  return isOutboundLeadQualificationRealtimeProfile(config);
+}
+
+export type OutboundRealtimePipelineConfig = {
+  model: string;
+  voice: string;
+  reasoning?: { effort: OutboundRealtimeReasoningEffort };
+};
+
+export function resolveOutboundRealtimePipelineConfig(
+  config: Pick<VoiceAgentConfig, "advanced">,
+): OutboundRealtimePipelineConfig {
+  const advanced = getVoiceAgentAdvanced(config);
+  const model =
+    process.env.VOICE_REALTIME_MODEL?.trim() ||
+    String(advanced.realtimeModel || "gpt-realtime-2.1-mini").trim();
+  const voice =
+    process.env.VOICE_REALTIME_VOICE?.trim() ||
+    String(advanced.realtimeVoice || "marin").trim();
+
+  const envEffort = process.env.VOICE_REALTIME_REASONING_EFFORT?.trim().toLowerCase();
+  const configEffort = advanced.realtimeReasoningEffort;
+  const effortRaw = envEffort || configEffort;
+  const isGptRealtime2Family = model.startsWith("gpt-realtime-2");
+  const isMini = model.includes("mini");
+
+  let reasoning: OutboundRealtimePipelineConfig["reasoning"];
+  if (isGptRealtime2Family && !isMini) {
+    const effort = (effortRaw || "low") as OutboundRealtimeReasoningEffort;
+    reasoning = { effort };
+  }
+
+  return { model, voice, reasoning };
 }
 
 export function getOutboundQualificationFromConfig(
