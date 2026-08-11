@@ -12,6 +12,7 @@ import {
   usesFrontDeskRealtimeVoicePipeline,
 } from "../src/lib/voice/frontdesk/agent-config";
 import { isFrontDeskRealtimeTestEnabled } from "../src/lib/voice/frontdesk/frontdesk-boot";
+import { isInboundRealtimeEnabled } from "../src/lib/voice/inbound-realtime";
 
 const stackConfig = { advanced: { livekitProfile: FRONTDESK_PROFILE } } as const;
 const realtimeConfig = {
@@ -38,5 +39,10 @@ process.env.FRONTDESK_REALTIME_TEST = "0";
 assert.equal(isFrontDeskRealtimeTestEnabled(), false);
 process.env.FRONTDESK_REALTIME_TEST = prev;
 if (prev == null) delete process.env.FRONTDESK_REALTIME_TEST;
+
+process.env.INBOUND_REALTIME_TEST = "1";
+assert.equal(isInboundRealtimeEnabled(), true);
+delete process.env.INBOUND_REALTIME_TEST;
+assert.equal(isInboundRealtimeEnabled(), false);
 
 console.log("frontdesk realtime profile tests: PASS");

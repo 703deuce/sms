@@ -9,6 +9,10 @@ import {
   FRONTDESK_REALTIME_PROFILE,
   usesFrontDeskRealtimeVoicePipeline,
 } from "@/lib/voice/frontdesk/agent-config";
+import {
+  inboundRealtimeProfileLabel,
+  isInboundRealtimeEnabled,
+} from "@/lib/voice/inbound-realtime";
 import { resolveOutboundRealtimePipelineConfig } from "@/lib/voice/outbound/agent-config";
 import { createAmyReceptionistAgent } from "./amy-receptionist-agent";
 import { CalendlyCalendar } from "./frontdesk/calendly-calendar";
@@ -68,7 +72,9 @@ export async function runInboundEntry(ctx: JobContext): Promise<void> {
   const agentConfig = parseVoiceAgentConfig(agentRow?.draftConfig);
   const outputGainDb = resolveLiveKitOutputGainDb(agentConfig.voiceLanguage?.outputGainDb);
   const useFrontDesk = isFrontDeskProfile(agentConfig.advanced);
-  const useRealtime = useFrontDesk && usesFrontDeskRealtimeVoicePipeline(agentConfig);
+  const useRealtime =
+    isInboundRealtimeEnabled() ||
+    (useFrontDesk && usesFrontDeskRealtimeVoicePipeline(agentConfig));
 
   const { callId } = await liveKitRuntimeProvider.bootstrapSession({
     workspaceId: routing.workspaceId,
@@ -167,7 +173,10 @@ export async function runInboundEntry(ctx: JobContext): Promise<void> {
         source: "transovo-voice-runtime",
         event: "pipeline_config",
         callId,
-        profile: FRONTDESK_REALTIME_PROFILE,
+        agentId: routing.agentId,
+        agentName: agentRow?.name || null,
+        profile: inboundRealtimeProfileLabel(useFrontDesk),
+        inboundRealtimeEnv: isInboundRealtimeEnabled(),
         pipeline: describeRealtimePipelineConfig(realtimeCfg, outputMode, pipelineCfg),
         outputGainDb,
       }),
