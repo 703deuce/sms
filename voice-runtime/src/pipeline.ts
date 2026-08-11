@@ -7,6 +7,7 @@ import type { VoiceAgentConfig } from "@/lib/voice/types";
 import {
   resolveOutboundRealtimePipelineConfig,
   type OutboundRealtimePipelineConfig,
+  type OutboundRealtimePipelineOverrides,
 } from "@/lib/voice/outbound/agent-config";
 import {
   getVoicePipelineConfig,
@@ -243,8 +244,9 @@ export function resolveOutboundRealtimeOutputMode(): OutboundRealtimeOutputMode 
 export function buildOutboundRealtimeModel(
   config: Pick<VoiceAgentConfig, "advanced">,
   outputMode: OutboundRealtimeOutputMode = resolveOutboundRealtimeOutputMode(),
+  overrides?: OutboundRealtimePipelineOverrides,
 ) {
-  const realtimeCfg = resolveOutboundRealtimePipelineConfig(config);
+  const realtimeCfg = resolveOutboundRealtimePipelineConfig(config, overrides);
   const apiKey = process.env.OPENAI_API_KEY?.trim();
   if (!apiKey) {
     throw new Error("OPENAI_API_KEY is required for OpenAI Realtime outbound voice");
@@ -266,10 +268,11 @@ export function buildOutboundRealtimeModel(
 
 export function buildOutboundRealtimeSessionComponents(
   config: Pick<VoiceAgentConfig, "advanced">,
+  overrides?: OutboundRealtimePipelineOverrides,
 ) {
   const outputMode = resolveOutboundRealtimeOutputMode();
   const pipelineCfg = getVoicePipelineConfig();
-  const llm = buildOutboundRealtimeModel(config, outputMode);
+  const llm = buildOutboundRealtimeModel(config, outputMode, overrides);
   const ttsInstance = outputMode === "elevenlabs" ? buildAmyTts(pipelineCfg) : undefined;
   return { llm, tts: ttsInstance, outputMode, pipelineCfg };
 }

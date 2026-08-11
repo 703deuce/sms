@@ -95,6 +95,8 @@ export async function triggerOutboundQualificationCall(input: {
   requireTestModeEnv?: boolean;
   submittedFields?: Record<string, string>;
   intent?: string | null;
+  /** Per-call OpenAI Realtime native voice (marin, coral, etc.). */
+  realtimeVoice?: string;
 }) {
   const agentId = await resolveOutboundQualificationAgentId({
     workspaceId: input.workspaceId,
@@ -119,6 +121,7 @@ export async function triggerOutboundQualificationCall(input: {
   }
 
   const profile = config.advanced?.livekitProfile || "unknown";
+  const realtimeVoice = input.realtimeVoice?.trim() || undefined;
   console.log(
     JSON.stringify({
       source: "transovo-outbound-trigger",
@@ -128,6 +131,9 @@ export async function triggerOutboundQualificationCall(input: {
       livekitProfile: profile,
       realtimeTest: isOutboundRealtimeTestEnabled(),
       voiceRealtimeModel: process.env.VOICE_REALTIME_MODEL?.trim() || null,
+      voiceRealtimeVoice:
+        realtimeVoice || process.env.VOICE_REALTIME_VOICE?.trim() || null,
+      realtimeVoiceOverride: realtimeVoice || null,
     }),
   );
 
@@ -146,6 +152,7 @@ export async function triggerOutboundQualificationCall(input: {
     isTest: input.isTest !== false,
     requireTestModeEnv: input.requireTestModeEnv,
     qualification,
+    realtimeVoice,
     lead: {
       leadId: `lead-${Date.now()}`,
       contactId: input.contactId,

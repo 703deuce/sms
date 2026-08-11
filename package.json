@@ -56,6 +56,7 @@
     "test:outbound-qualification": "tsx scripts/test-outbound-qualification.ts",
     "audit:outbound-telephony": "tsx scripts/audit-outbound-telephony.ts",
     "test:outbound-lead": "tsx scripts/outbound-lead-smoke-call.ts",
+    "benchmark:outbound-realtime-voices": "tsx scripts/outbound-realtime-voice-benchmark.ts",
     "setup:frontdesk-booking-agent": "tsx scripts/setup-frontdesk-booking-agent.ts",
     "seed:frontdesk-voice-knowledge": "tsx scripts/seed-frontdesk-voice-knowledge.ts",
     "test:caller-amy": "tsx scripts/test-caller-amy-orchestration.ts && tsx scripts/caller-amy-preprod-suite.ts",

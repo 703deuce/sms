@@ -1,5 +1,6 @@
 import type { VoiceAgentConfig } from "@/lib/voice/types";
 import { createDefaultQualificationDefinition } from "./default-qualification-definition";
+import { normalizeRealtimeNativeVoice } from "./realtime-native-voices";
 import type { QualificationDefinition } from "./types";
 
 export const OUTBOUND_LEAD_QUALIFICATION_PROFILE = "outbound_lead_qualification";
@@ -66,16 +67,24 @@ export type OutboundRealtimePipelineConfig = {
   reasoning?: { effort: OutboundRealtimeReasoningEffort };
 };
 
+export type OutboundRealtimePipelineOverrides = {
+  /** Per-call voice — wins over VOICE_REALTIME_VOICE env and agent advanced.realtimeVoice. */
+  voice?: string;
+};
+
 export function resolveOutboundRealtimePipelineConfig(
   config: Pick<VoiceAgentConfig, "advanced">,
+  overrides?: OutboundRealtimePipelineOverrides,
 ): OutboundRealtimePipelineConfig {
   const advanced = getVoiceAgentAdvanced(config);
   const model =
     process.env.VOICE_REALTIME_MODEL?.trim() ||
     String(advanced.realtimeModel || "gpt-realtime-2.1-mini").trim();
-  const voice =
+  const voiceRaw =
+    overrides?.voice?.trim() ||
     process.env.VOICE_REALTIME_VOICE?.trim() ||
     String(advanced.realtimeVoice || "marin").trim();
+  const voice = normalizeRealtimeNativeVoice(voiceRaw, "realtimeVoice");
 
   const envEffort = process.env.VOICE_REALTIME_REASONING_EFFORT?.trim().toLowerCase();
   const configEffort = advanced.realtimeReasoningEffort;

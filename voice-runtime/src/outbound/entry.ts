@@ -158,9 +158,14 @@ export async function runOutboundLeadQualificationEntry(
     | undefined;
 
   if (usesRealtime) {
-    const realtimeCfg = resolveOutboundRealtimePipelineConfig(agentConfig);
+    const voiceOverride = job.realtimeVoice?.trim() || undefined;
+    const realtimeCfg = resolveOutboundRealtimePipelineConfig(agentConfig, {
+      voice: voiceOverride,
+    });
     const outputMode = resolveOutboundRealtimeOutputMode();
-    const { llm, tts, pipelineCfg } = buildOutboundRealtimeSessionComponents(agentConfig);
+    const { llm, tts, pipelineCfg } = buildOutboundRealtimeSessionComponents(agentConfig, {
+      voice: voiceOverride,
+    });
     latencyPipelineKind =
       outputMode === "elevenlabs" ? "realtime_elevenlabs" : "realtime_native";
     latencyTtsConfig =
@@ -182,6 +187,7 @@ export async function runOutboundLeadQualificationEntry(
         event: "pipeline_config",
         callId: job.callId,
         profile: "outbound_lead_qualification_realtime",
+        realtimeVoiceOverride: voiceOverride || null,
         pipeline: describeRealtimePipelineConfig(realtimeCfg, outputMode, pipelineCfg),
         outputGainDb,
       }),

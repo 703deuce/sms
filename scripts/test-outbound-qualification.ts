@@ -49,6 +49,11 @@ import {
   resolveOutboundRealtimeTurnDetection,
   resolveOutboundRealtimeVadMode,
 } from "../voice-runtime/src/realtime-turn-config";
+import {
+  normalizeRealtimeNativeVoice,
+  parseRealtimeNativeVoiceList,
+  OUTBOUND_REALTIME_VOICE_BENCHMARK,
+} from "../src/lib/voice/outbound/realtime-native-voices";
 
 const fixture = JSON.parse(
   fs.readFileSync(
@@ -129,6 +134,29 @@ const fullRealtime = resolveOutboundRealtimePipelineConfig({
 });
 assert.equal(fullRealtime.model, "gpt-realtime-2.1");
 assert.equal(fullRealtime.reasoning?.effort, "low");
+
+assert.equal(normalizeRealtimeNativeVoice("Marin"), "marin");
+assert.deepEqual([...OUTBOUND_REALTIME_VOICE_BENCHMARK], [
+  "marin",
+  "coral",
+  "shimmer",
+  "cedar",
+]);
+assert.deepEqual(parseRealtimeNativeVoiceList("marin,coral"), ["marin", "coral"]);
+assert.throws(() => normalizeRealtimeNativeVoice("not-a-voice"));
+
+const prevVoiceEnv = process.env.VOICE_REALTIME_VOICE;
+process.env.VOICE_REALTIME_VOICE = "coral";
+assert.equal(
+  resolveOutboundRealtimePipelineConfig(realtimeConfig).voice,
+  "coral",
+);
+assert.equal(
+  resolveOutboundRealtimePipelineConfig(realtimeConfig, { voice: "shimmer" }).voice,
+  "shimmer",
+);
+process.env.VOICE_REALTIME_VOICE = prevVoiceEnv;
+if (prevVoiceEnv == null) delete process.env.VOICE_REALTIME_VOICE;
 
 const prevRealtimeTest = process.env.OUTBOUND_REALTIME_TEST;
 process.env.OUTBOUND_REALTIME_TEST = "1";

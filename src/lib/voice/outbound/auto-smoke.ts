@@ -21,6 +21,7 @@ export function scheduleOutboundAutoSmokeCall(): void {
 
   const workspaceId = process.env.WORKSPACE_ID?.trim() || "ws_1";
   const explicitAgentId = process.env.OUTBOUND_SMOKE_AGENT_ID?.trim() || undefined;
+  const smokeVoice = process.env.OUTBOUND_AUTO_SMOKE_VOICE?.trim() || undefined;
 
   if (isOutboundRealtimeTestEnabled() && explicitAgentId) {
     console.warn(
@@ -36,6 +37,7 @@ export function scheduleOutboundAutoSmokeCall(): void {
       delaySec: AUTO_SMOKE_DELAY_MS / 1000,
       realtimeTest: isOutboundRealtimeTestEnabled(),
       explicitAgentId: explicitAgentId || null,
+      realtimeVoice: smokeVoice || process.env.VOICE_REALTIME_VOICE?.trim() || null,
     }),
   );
 
@@ -55,6 +57,7 @@ export function scheduleOutboundAutoSmokeCall(): void {
           triggerSource: "auto_boot_smoke",
           triggerReason: "Automatic post-deploy outbound qualification smoke",
           requireTestModeEnv: false,
+          realtimeVoice: smokeVoice,
         });
         console.log(
           JSON.stringify({
@@ -64,6 +67,7 @@ export function scheduleOutboundAutoSmokeCall(): void {
             callId: result.callId,
             status: result.status,
             roomName: result.roomName,
+            realtimeVoice: smokeVoice || null,
           }),
         );
       } catch (err) {

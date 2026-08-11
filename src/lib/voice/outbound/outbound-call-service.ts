@@ -98,6 +98,8 @@ export async function startOutboundLeadQualificationCall(input: {
   isTest?: boolean;
   /** When true (default for isTest), requires OUTBOUND_VOICE_TEST_MODE in env (CLI safety). */
   requireTestModeEnv?: boolean;
+  /** Per-call OpenAI Realtime native voice (marin, coral, etc.). */
+  realtimeVoice?: string;
 }): Promise<OutboundCallStartResult> {
   if (input.isTest && input.requireTestModeEnv !== false) {
     assertOutboundTestModeEnabled();
@@ -167,6 +169,7 @@ export async function startOutboundLeadQualificationCall(input: {
     lead: input.lead,
     trigger: input.trigger,
     qualification: input.qualification,
+    ...(input.realtimeVoice?.trim() ? { realtimeVoice: input.realtimeVoice.trim() } : {}),
   };
 
   await prisma.voiceCall.update({
@@ -187,6 +190,7 @@ export async function startOutboundLeadQualificationCall(input: {
       callerIdE164,
       roomName,
       agentName: TRANSOVO_LIVEKIT_AGENT_NAME,
+      realtimeVoice: jobMetadata.realtimeVoice || null,
     },
   }).catch(() => undefined);
 

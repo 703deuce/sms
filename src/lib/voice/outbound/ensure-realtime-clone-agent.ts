@@ -8,6 +8,7 @@ import {
   getOutboundQualificationFromConfig,
   isOutboundLeadQualificationStackProfile,
 } from "./agent-config";
+import { normalizeRealtimeNativeVoice } from "./realtime-native-voices";
 
 const DEFAULT_FIXTURE_PATH = path.join(
   process.cwd(),
@@ -58,7 +59,8 @@ function resolveRealtimeModel(input?: string): string {
 }
 
 function resolveRealtimeVoice(input?: string): string {
-  return input?.trim() || process.env.VOICE_REALTIME_VOICE?.trim() || "marin";
+  const raw = input?.trim() || process.env.VOICE_REALTIME_VOICE?.trim() || "marin";
+  return normalizeRealtimeNativeVoice(raw, "realtimeVoice");
 }
 
 async function resolveSourceOutboundPhone(input: {

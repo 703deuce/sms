@@ -17,7 +17,7 @@ function cronAuthorized(request: Request): boolean {
  * - Signed-in workspace session (Voice testing lab / integrations)
  * - Authorization: Bearer $CRON_SECRET (for Coolify cron / external trigger)
  *
- * Body: { destinationPhone, agentId?, leadName?, contactId?, workspaceId? }
+ * Body: { destinationPhone, agentId?, leadName?, contactId?, workspaceId?, realtimeVoice? }
  * workspaceId is required for CRON_SECRET calls.
  */
 export async function POST(request: Request) {
@@ -28,6 +28,7 @@ export async function POST(request: Request) {
       leadName?: string;
       contactId?: string;
       workspaceId?: string;
+      realtimeVoice?: string;
     };
 
     const destinationPhone = (body.destinationPhone || process.env.OUTBOUND_TEST_PHONE || "").trim();
@@ -65,6 +66,7 @@ export async function POST(request: Request) {
       contactId: body.contactId,
       triggerSource,
       requireTestModeEnv: false,
+      realtimeVoice: body.realtimeVoice,
     });
 
     if (result.status === "failed") {

@@ -129,6 +129,8 @@ export type OutboundJobMetadata = {
   lead: OutboundLeadContext;
   trigger: OutboundCallTrigger;
   qualification: QualificationDefinition;
+  /** Per-call OpenAI Realtime native voice override (marin, coral, etc.). */
+  realtimeVoice?: string;
 };
 
 export type OutboundCallStartResult = {

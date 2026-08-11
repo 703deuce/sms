@@ -11,6 +11,7 @@
  *
  * CLI (still requires OUTBOUND_VOICE_TEST_MODE=1):
  *   OUTBOUND_VOICE_TEST_MODE=1 npx tsx scripts/outbound-lead-smoke-call.ts --phone=+15714776175
+ *   OUTBOUND_VOICE_TEST_MODE=1 npx tsx scripts/outbound-lead-smoke-call.ts --phone=+1... --voice=coral
  */
 import dotenv from "dotenv";
 import { assertOutboundTestModeEnabled } from "../src/lib/voice/outbound/outbound-call-service";
@@ -51,6 +52,7 @@ async function main() {
     triggerSource: "manual_smoke_cli",
     triggerReason: "Developer outbound qualification smoke",
     requireTestModeEnv: true,
+    realtimeVoice: arg("voice") || process.env.VOICE_REALTIME_VOICE?.trim(),
   });
 
   console.log(JSON.stringify({ ok: result.status !== "failed", ...result }, null, 2));
