@@ -118,12 +118,10 @@ export async function resolveInboundAiAgent(workspaceId: string, phoneNumberId: 
         const config = parseVoiceAgentConfig(agent.draftConfig);
         return isFrontDeskProfile(config.advanced as Record<string, unknown>);
       });
-      if (frontdeskAgents.length === 1) return frontdeskAgents[0];
-      if (frontdeskAgents.length > 1) {
+      if (frontdeskAgents.length >= 1) {
         return (
-          frontdeskAgents.find(
-            (a: ActiveAgent) => a.phoneNumberId === phoneNumberId,
-          ) || frontdeskAgents[0]
+          frontdeskAgents.find((a: ActiveAgent) => a.phoneNumberId === phoneNumberId) ||
+          frontdeskAgents[0]
         );
       }
       // Prefer the agent whose phoneNumberId still matches (post-switch winner).

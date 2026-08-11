@@ -1,7 +1,17 @@
 import type { JobContext } from "@livekit/agents";
 import { RoomEvent, type RemoteParticipant } from "@livekit/rtc-node";
 import { resolveFallbackInboundCalledNumber } from "@/lib/telephony/provisioning";
+import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import { parseDispatchAttributes, parseRoomMetadata, type RoomMetadata } from "./metadata";
+
+function normalizeCalledE164(phone: string | undefined): string | undefined {
+  if (!phone?.trim()) return undefined;
+  try {
+    return normalizeE164(phone.trim());
+  } catch {
+    return phone.trim();
+  }
+}
 
 export type InboundSipCallIdentity = {
   participant: RemoteParticipant;
@@ -108,6 +118,8 @@ export async function resolveInboundSipCallIdentity(
       toE164Source = "fallback";
     }
   }
+
+  toE164 = normalizeCalledE164(toE164);
 
   return {
     participant,

@@ -7,12 +7,9 @@ export function isFrontDeskRealtimeTestEnabled(): boolean {
   return process.env.FRONTDESK_REALTIME_TEST?.trim() === "1";
 }
 
-/** LiveKit inbound should ignore Amy and always use the frontdesk booking agent. */
+/** LiveKit inbound uses frontdesk booking only — Amy is not routed for inbound SIP. */
 export function isInboundFrontDeskDefaultEnabled(): boolean {
-  return (
-    isFrontDeskRealtimeTestEnabled() ||
-    process.env.VOICE_INBOUND_DEFAULT?.trim().toLowerCase() === "frontdesk"
-  );
+  return true;
 }
 
 /**

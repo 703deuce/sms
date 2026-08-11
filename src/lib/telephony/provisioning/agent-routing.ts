@@ -3,7 +3,6 @@ import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import { resolveInboundAiAgent } from "@/lib/voice/agent-phone";
 import {
   findFrontDeskAgentForWorkspace,
-  isInboundFrontDeskDefaultEnabled,
 } from "@/lib/voice/frontdesk/resolve-frontdesk-agent";
 import { getLiveKitSipClient } from "./livekit/client";
 import type { AgentRoutingResolution } from "./types";
@@ -79,7 +78,8 @@ export async function resolveFallbackInboundCalledNumber(input: {
 export async function resolveAgentByCalledNumber(
   toE164: string,
 ): Promise<AgentRoutingResolution | null> {
-  const e164 = normalizeE164(toE164);
+  const e164 = safeNormalizeE164(toE164);
+  if (!e164) return null;
   const prisma = getPrisma();
 
   const phone = await prisma.phoneNumber.findFirst({
@@ -104,8 +104,6 @@ export async function resolveAgentByCalledNumber(
 async function applyInboundFrontDeskDefault(
   routing: AgentRoutingResolution,
 ): Promise<AgentRoutingResolution> {
-  if (!isInboundFrontDeskDefaultEnabled()) return routing;
-
   const frontdesk = await findFrontDeskAgentForWorkspace(routing.workspaceId);
   if (!frontdesk || frontdesk.id === routing.agentId) return routing;
 

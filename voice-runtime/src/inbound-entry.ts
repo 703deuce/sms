@@ -3,22 +3,13 @@ import { voice } from "@livekit/agents";
 import { getPrisma } from "@/lib/db";
 import { parseVoiceAgentConfig } from "@/lib/voice/types";
 import { liveKitRuntimeProvider } from "@/lib/voice/runtime-provider/livekit";
-import { bootstrapLiveKitCallContext } from "@/lib/voice/domain-actions";
-import { resolveAgentRoutingForCall } from "@/lib/telephony/provisioning";
-import {
-  usesFrontDeskRealtimeVoicePipeline,
-} from "@/lib/voice/frontdesk/agent-config";
-import {
-  inboundRealtimeProfileLabel,
-  isInboundRealtimeEnabled,
-} from "@/lib/voice/inbound-realtime";
+import { usesFrontDeskRealtimeVoicePipeline } from "@/lib/voice/frontdesk/agent-config";
+import { resolveInboundFrontDeskRouting } from "@/lib/voice/frontdesk/resolve-frontdesk-agent";
 import { resolveOutboundRealtimePipelineConfig } from "@/lib/voice/outbound/agent-config";
-import { createAmyReceptionistAgent } from "./amy-receptionist-agent";
 import { CalendlyCalendar } from "./frontdesk/calendly-calendar";
 import { createFrontDeskBookingAgent } from "./frontdesk/frontdesk-booking-agent";
-import { isFrontDeskProfile } from "./frontdesk/userdata";
 import { resolveInboundSipCallIdentity } from "./call-identity";
-import type { VoiceRuntimeUserData } from "./metadata";
+import type { FrontDeskUserData } from "./frontdesk/userdata";
 import {
   buildAmyVoicePipeline,
   buildOutboundRealtimeSessionComponents,
@@ -35,7 +26,7 @@ import {
   getPreemptiveConfigForInstrumentation,
 } from "./turn-config";
 
-/** Inbound SIP path — Amy or Frontdesk on the shared voice-runtime worker. */
+/** Inbound SIP path — frontdesk booking only (no Amy). */
 export async function runInboundEntry(ctx: JobContext): Promise<void> {
   const identity = await resolveInboundSipCallIdentity(ctx);
 
@@ -51,28 +42,22 @@ export async function runInboundEntry(ctx: JobContext): Promise<void> {
     }),
   );
 
-  const routing = await resolveAgentRoutingForCall({
+  const routing = await resolveInboundFrontDeskRouting({
     workspaceId: identity.parsedMeta?.workspaceId,
     agentId: identity.parsedMeta?.agentId,
     toE164: identity.toE164,
   });
 
-  if (routing && identity.parsedMeta?.agentId && identity.parsedMeta.agentId !== routing.agentId) {
+  if (routing.metadataAgentId && routing.metadataAgentId !== routing.agentId) {
     console.log(
       JSON.stringify({
         source: "transovo-voice-runtime",
         event: "inbound_routing_override",
         toE164: identity.toE164,
-        metadataAgentId: identity.parsedMeta.agentId,
+        metadataAgentId: routing.metadataAgentId,
         resolvedAgentId: routing.agentId,
         resolvedAgentName: routing.agentName,
       }),
-    );
-  }
-
-  if (!routing) {
-    throw new Error(
-      `No Transovo agent routing for called number ${identity.toE164 || "(unknown)"} — assign the DID to an active agent`,
     );
   }
 
@@ -83,10 +68,7 @@ export async function runInboundEntry(ctx: JobContext): Promise<void> {
   });
   const agentConfig = parseVoiceAgentConfig(agentRow?.draftConfig);
   const outputGainDb = resolveLiveKitOutputGainDb(agentConfig.voiceLanguage?.outputGainDb);
-  const useFrontDesk = isFrontDeskProfile(agentConfig.advanced);
-  const useRealtime =
-    isInboundRealtimeEnabled() ||
-    (useFrontDesk && usesFrontDeskRealtimeVoicePipeline(agentConfig));
+  const useRealtime = usesFrontDeskRealtimeVoicePipeline(agentConfig);
 
   const { callId } = await liveKitRuntimeProvider.bootstrapSession({
     workspaceId: routing.workspaceId,
@@ -96,7 +78,7 @@ export async function runInboundEntry(ctx: JobContext): Promise<void> {
     toE164: identity.toE164 || routing.e164,
     livekitRoomName: ctx.room.name,
     livekitParticipantId: identity.participant.identity,
-    lightweightBootstrap: useFrontDesk,
+    lightweightBootstrap: true,
   });
 
   const messaging = await prisma.workspaceMessagingSettings.findUnique({
@@ -113,42 +95,29 @@ export async function runInboundEntry(ctx: JobContext): Promise<void> {
     agentRow?.name?.trim() ||
     "our office";
 
-  let userData: VoiceRuntimeUserData;
-  let agent: voice.Agent<VoiceRuntimeUserData>;
+  const cal = CalendlyCalendar.create({
+    workspaceId: routing.workspaceId,
+    agentId: routing.agentId,
+    callId,
+    timezone,
+  });
+  const userData: FrontDeskUserData = {
+    workspaceId: routing.workspaceId,
+    agentId: routing.agentId,
+    callId,
+    businessName,
+    timezone,
+    cal,
+    slotUnavailableCount: 0,
+    callerE164: identity.fromE164?.trim() || undefined,
+  };
+  const agent = createFrontDeskBookingAgent({
+    businessName,
+    timezone,
+  }) as voice.Agent<FrontDeskUserData>;
+  ctx.proc.userData = userData;
 
-  if (useFrontDesk) {
-    const cal = CalendlyCalendar.create({
-      workspaceId: routing.workspaceId,
-      agentId: routing.agentId,
-      callId,
-      timezone,
-    });
-    userData = {
-      workspaceId: routing.workspaceId,
-      agentId: routing.agentId,
-      callId,
-      businessName,
-      timezone,
-      cal,
-      slotUnavailableCount: 0,
-      callerE164: identity.fromE164?.trim() || undefined,
-    };
-    agent = createFrontDeskBookingAgent({ businessName, timezone }) as voice.Agent<VoiceRuntimeUserData>;
-    ctx.proc.userData = userData;
-  } else {
-    const callContext = await bootstrapLiveKitCallContext({
-      callId,
-      workspaceId: routing.workspaceId,
-      agentId: routing.agentId,
-      fromE164: identity.fromE164,
-      toE164: identity.toE164 || routing.e164,
-    });
-    userData = { callContext };
-    agent = createAmyReceptionistAgent(callContext.businessName) as voice.Agent<VoiceRuntimeUserData>;
-    ctx.proc.userData = userData;
-  }
-
-  let session: voice.AgentSession<VoiceRuntimeUserData>;
+  let session: voice.AgentSession<FrontDeskUserData>;
   let latencyPipelineKind: "stack" | "realtime_native" | "realtime_elevenlabs" = "stack";
   let latencyTtsConfig:
     | {
@@ -159,7 +128,7 @@ export async function runInboundEntry(ctx: JobContext): Promise<void> {
       }
     | undefined;
 
-  const maxToolSteps = Number(process.env.VOICE_MAX_TOOL_STEPS?.trim()) || (useFrontDesk ? 4 : 8);
+  const maxToolSteps = Number(process.env.VOICE_MAX_TOOL_STEPS?.trim()) || 4;
 
   if (useRealtime) {
     const realtimeCfg = resolveOutboundRealtimePipelineConfig(agentConfig);
@@ -187,14 +156,13 @@ export async function runInboundEntry(ctx: JobContext): Promise<void> {
         callId,
         agentId: routing.agentId,
         agentName: agentRow?.name || null,
-        profile: inboundRealtimeProfileLabel(useFrontDesk),
-        inboundRealtimeEnv: isInboundRealtimeEnabled(),
+        profile: "frontdesk_realtime",
         pipeline: describeRealtimePipelineConfig(realtimeCfg, outputMode, pipelineCfg),
         outputGainDb,
       }),
     );
 
-    session = new voice.AgentSession<VoiceRuntimeUserData>({
+    session = new voice.AgentSession<FrontDeskUserData>({
       llm,
       ...(tts ? { tts } : {}),
       maxToolSteps,
@@ -213,14 +181,16 @@ export async function runInboundEntry(ctx: JobContext): Promise<void> {
         source: "transovo-voice-runtime",
         event: "pipeline_config",
         callId,
-        profile: useFrontDesk ? "frontdesk" : "amy",
+        agentId: routing.agentId,
+        agentName: agentRow?.name || null,
+        profile: "frontdesk",
         pipeline: describePipelineConfig(config, sttConfig),
         turnHandling: describeTurnHandlingConfig(),
         outputGainDb,
       }),
     );
 
-    session = new voice.AgentSession<VoiceRuntimeUserData>({
+    session = new voice.AgentSession<FrontDeskUserData>({
       stt,
       llm,
       tts,

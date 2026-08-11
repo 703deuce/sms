@@ -1,17 +1,10 @@
 /**
- * Inbound OpenAI Realtime — runtime override for Amy inbound path only.
- *
- * Frontdesk uses `frontdesk_realtime` profile (set via FRONTDESK_REALTIME_TEST boot hook).
- * Do not set these if you only want frontdesk on Realtime — Amy will stay on the stack.
+ * @deprecated Inbound LiveKit calls are frontdesk-only. These env vars are ignored.
  */
 export function isInboundRealtimeEnabled(): boolean {
-  return (
-    process.env.VOICE_INBOUND_REALTIME?.trim() === "1" ||
-    process.env.INBOUND_REALTIME_TEST?.trim() === "1"
-  );
+  return false;
 }
 
-export function inboundRealtimeProfileLabel(useFrontDesk: boolean): string {
-  if (useFrontDesk) return "frontdesk_realtime";
-  return "amy_realtime";
+export function inboundRealtimeProfileLabel(_useFrontDesk: boolean): string {
+  return "frontdesk_realtime";
 }
