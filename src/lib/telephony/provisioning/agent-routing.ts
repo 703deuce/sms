@@ -1,6 +1,10 @@
 import { getPrisma } from "@/lib/db";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import { resolveInboundAiAgent } from "@/lib/voice/agent-phone";
+import {
+  findFrontDeskAgentForWorkspace,
+  isInboundFrontDeskDefaultEnabled,
+} from "@/lib/voice/frontdesk/resolve-frontdesk-agent";
 import { getLiveKitSipClient } from "./livekit/client";
 import type { AgentRoutingResolution } from "./types";
 
@@ -97,6 +101,36 @@ export async function resolveAgentByCalledNumber(
   };
 }
 
+async function applyInboundFrontDeskDefault(
+  routing: AgentRoutingResolution,
+): Promise<AgentRoutingResolution> {
+  if (!isInboundFrontDeskDefaultEnabled()) return routing;
+
+  const frontdesk = await findFrontDeskAgentForWorkspace(routing.workspaceId);
+  if (!frontdesk || frontdesk.id === routing.agentId) return routing;
+
+  console.log(
+    JSON.stringify({
+      source: "transovo-agent-routing",
+      event: "inbound_frontdesk_default",
+      workspaceId: routing.workspaceId,
+      previousAgentId: routing.agentId,
+      previousAgentName: routing.agentName,
+      frontdeskAgentId: frontdesk.id,
+      frontdeskAgentName: frontdesk.name,
+      toE164: routing.e164 || null,
+    }),
+  );
+
+  return {
+    ...routing,
+    agentId: frontdesk.id,
+    agentName: frontdesk.name,
+    agentStatus: frontdesk.status,
+    phoneNumberId: frontdesk.phoneNumberId || routing.phoneNumberId,
+  };
+}
+
 export async function resolveAgentRoutingForCall(input: {
   toE164?: string | null;
   workspaceId?: string | null;
@@ -105,7 +139,7 @@ export async function resolveAgentRoutingForCall(input: {
   // Called DID is authoritative — DB phone assignment wins over stale dispatch/room metadata.
   if (input.toE164?.trim()) {
     const byPhone = await resolveAgentByCalledNumber(input.toE164);
-    if (byPhone) return byPhone;
+    if (byPhone) return applyInboundFrontDeskDefault(byPhone);
   }
 
   if (input.workspaceId && input.agentId) {
@@ -129,14 +163,14 @@ export async function resolveAgentRoutingForCall(input: {
       });
       e164 = pn?.e164 || "";
     }
-    return {
+    return applyInboundFrontDeskDefault({
       workspaceId: agent.workspaceId,
       agentId: agent.id,
       phoneNumberId: agent.phoneNumberId || "",
       e164,
       agentStatus: agent.status,
       agentName: agent.name,
-    };
+    });
   }
 
   return null;

@@ -7,6 +7,14 @@ export function isFrontDeskRealtimeTestEnabled(): boolean {
   return process.env.FRONTDESK_REALTIME_TEST?.trim() === "1";
 }
 
+/** LiveKit inbound should ignore Amy and always use the frontdesk booking agent. */
+export function isInboundFrontDeskDefaultEnabled(): boolean {
+  return (
+    isFrontDeskRealtimeTestEnabled() ||
+    process.env.VOICE_INBOUND_DEFAULT?.trim().toLowerCase() === "frontdesk"
+  );
+}
+
 /**
  * On deploy: when FRONTDESK_REALTIME_TEST=1, upgrade frontdesk to OpenAI Realtime
  * and reassign the inbound DID (default +18663464256) away from Amy.

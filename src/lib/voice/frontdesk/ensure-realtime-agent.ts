@@ -139,6 +139,34 @@ export async function ensureFrontDeskRealtimeAgent(
       });
       phoneE164 = phone.e164;
       phoneReassigned = true;
+
+      // Strip stale Amy (or any non-frontdesk) inbound ownership on this DID.
+      const otherAssignments = await prisma.voiceAgentPhoneNumber.findMany({
+        where: {
+          workspaceId,
+          phoneNumberId: phone.id,
+          agentId: { not: agent.id },
+          inboundEnabled: true,
+        },
+        select: { agentId: true },
+      });
+      if (otherAssignments.length) {
+        await prisma.voiceAgentPhoneNumber.deleteMany({
+          where: {
+            workspaceId,
+            phoneNumberId: phone.id,
+            agentId: { not: agent.id },
+          },
+        });
+        await prisma.voiceAgent.updateMany({
+          where: {
+            workspaceId,
+            phoneNumberId: phone.id,
+            id: { not: agent.id },
+          },
+          data: { phoneNumberId: null },
+        });
+      }
     } else {
       console.warn(
         `[frontdesk-realtime] phone ${targetE164} not found in ${workspaceId} — skipping reassignment`,

@@ -13,6 +13,7 @@ import {
 } from "../src/lib/voice/frontdesk/agent-config";
 import { isFrontDeskRealtimeTestEnabled } from "../src/lib/voice/frontdesk/frontdesk-boot";
 import { isInboundRealtimeEnabled } from "../src/lib/voice/inbound-realtime";
+import { isInboundFrontDeskDefaultEnabled } from "../src/lib/voice/frontdesk/resolve-frontdesk-agent";
 
 const stackConfig = { advanced: { livekitProfile: FRONTDESK_PROFILE } } as const;
 const realtimeConfig = {
@@ -49,6 +50,12 @@ assert.equal(isInboundRealtimeEnabled(), false);
 // FRONTDESK_REALTIME_TEST must NOT enable Amy realtime (frontdesk uses DB profile only)
 process.env.FRONTDESK_REALTIME_TEST = "1";
 assert.equal(isInboundRealtimeEnabled(), false);
+assert.equal(isInboundFrontDeskDefaultEnabled(), true);
+process.env.FRONTDESK_REALTIME_TEST = "0";
+assert.equal(isInboundFrontDeskDefaultEnabled(), false);
+process.env.VOICE_INBOUND_DEFAULT = "frontdesk";
+assert.equal(isInboundFrontDeskDefaultEnabled(), true);
+delete process.env.VOICE_INBOUND_DEFAULT;
 process.env.FRONTDESK_REALTIME_TEST = prev;
 if (prev == null) delete process.env.FRONTDESK_REALTIME_TEST;
 

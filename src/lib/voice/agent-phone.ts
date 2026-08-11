@@ -1,4 +1,6 @@
 import { getPrisma } from "@/lib/db";
+import { parseVoiceAgentConfig } from "@/lib/voice/types";
+import { isFrontDeskProfile } from "@/lib/voice/frontdesk/agent-config";
 
 /**
  * Keep `VoiceAgent.phoneNumberId` and the inbound join table
@@ -111,6 +113,18 @@ export async function resolveInboundAiAgent(workspaceId: string, phoneNumberId: 
     });
     if (agents.length === 1) return agents[0];
     if (agents.length > 1) {
+      const frontdeskAgents = agents.filter((agent) => {
+        const config = parseVoiceAgentConfig(agent.draftConfig);
+        return isFrontDeskProfile(config.advanced as Record<string, unknown>);
+      });
+      if (frontdeskAgents.length === 1) return frontdeskAgents[0];
+      if (frontdeskAgents.length > 1) {
+        return (
+          frontdeskAgents.find(
+            (a: { phoneNumberId: string | null }) => a.phoneNumberId === phoneNumberId,
+          ) || frontdeskAgents[0]
+        );
+      }
       // Prefer the agent whose phoneNumberId still matches (post-switch winner).
       return (
         agents.find(
