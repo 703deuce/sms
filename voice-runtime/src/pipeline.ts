@@ -18,6 +18,10 @@ import {
 } from "@/lib/voice/runtime-provider/llm-presets";
 import { buildAmySttConfig, describeAmySttConfig, type AmySttConfig } from "./stt-config";
 import { resolveElevenLabsApiKey } from "./env-aliases";
+import {
+  describeOutboundRealtimeTurnDetection,
+  resolveOutboundRealtimeTurnDetection,
+} from "./realtime-turn-config";
 
 const INFERENCE_TTS_PROVIDERS = new Set([
   "inference",
@@ -247,6 +251,7 @@ export function buildOutboundRealtimeModel(
   }
 
   const useElevenLabsOutput = outputMode === "elevenlabs";
+  const turnDetectionCfg = resolveOutboundRealtimeTurnDetection();
 
   return new openai.realtime.RealtimeModel({
     apiKey,
@@ -254,13 +259,7 @@ export function buildOutboundRealtimeModel(
     ...(useElevenLabsOutput ? {} : { voice: realtimeCfg.voice }),
     modalities: useElevenLabsOutput ? ["text"] : ["audio"],
     inputAudioTranscription: null,
-    turnDetection: {
-      type: "server_vad",
-      threshold: 0.5,
-      prefix_padding_ms: 300,
-      silence_duration_ms: 500,
-      create_response: true,
-    },
+    turnDetection: turnDetectionCfg.turnDetection,
     ...(realtimeCfg.reasoning ? { reasoning: realtimeCfg.reasoning } : {}),
   });
 }
@@ -281,13 +280,14 @@ export function describeRealtimePipelineConfig(
   pipelineCfg = getVoicePipelineConfig(),
 ) {
   const halfCascade = outputMode === "elevenlabs";
+  const turnDetectionCfg = resolveOutboundRealtimeTurnDetection();
   return {
     mode: halfCascade ? "openai_realtime_half_cascade" : "openai_realtime",
     outputMode: halfCascade ? "REALTIME_ELEVENLABS" : "REALTIME_NATIVE",
     model: realtimeCfg.model,
     voice: halfCascade ? null : realtimeCfg.voice,
     reasoning: realtimeCfg.reasoning?.effort || null,
-    turnDetection: "server_vad",
+    turnDetection: describeOutboundRealtimeTurnDetection(turnDetectionCfg),
     inputAudioTranscription: false,
     tts: halfCascade
       ? {

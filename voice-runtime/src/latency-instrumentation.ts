@@ -9,6 +9,8 @@ import {
   voice,
 } from "@livekit/agents";
 
+export type LatencyPipelineKind = "stack" | "realtime_native" | "realtime_elevenlabs";
+
 export type TurnLatencyBreakdown = {
   callId?: string;
   turn: number;
@@ -181,6 +183,7 @@ function recordMetrics(
   state: TurnState,
   input: {
     callId?: string;
+    pipelineKind: LatencyPipelineKind;
     preemptiveConfig: TurnLatencyBreakdown["preemptiveConfig"];
     ttsConfig?: TurnLatencyBreakdown["ttsConfig"];
   },
@@ -243,17 +246,34 @@ function recordMetrics(
     });
     emitTurnBreakdown(state, input);
   }
+
+  if (metrics.type === "realtime_model_metrics") {
+    if (metrics.ttftMs > 0) {
+      state.llmTtftMs = metrics.ttftMs;
+    }
+    logLatency("realtime_model_metrics", {
+      turn: state.turn,
+      callId: input.callId,
+      ttftMs: metrics.ttftMs,
+      durationMs: metrics.durationMs,
+      cancelled: metrics.cancelled,
+      label: metrics.label,
+      requestId: metrics.requestId,
+    });
+  }
 }
 
 export function attachLatencyInstrumentation<T>(
   session: voice.AgentSession<T>,
   input?: {
     callId?: string;
+    pipelineKind?: LatencyPipelineKind;
     preemptiveConfig?: TurnLatencyBreakdown["preemptiveConfig"];
     ttsConfig?: TurnLatencyBreakdown["ttsConfig"];
   },
 ) {
   const callId = input?.callId;
+  const pipelineKind = input?.pipelineKind ?? "stack";
   const preemptiveConfig = input?.preemptiveConfig ?? {
     enabled: true,
     preemptiveTts: false,
@@ -266,7 +286,7 @@ export function attachLatencyInstrumentation<T>(
     breakdownEmitted: false,
   };
 
-  const ctx = { callId, preemptiveConfig, ttsConfig };
+  const ctx = { callId, pipelineKind, preemptiveConfig, ttsConfig };
 
   session.on(
     AgentSessionEventTypes.UserStateChanged,
@@ -321,9 +341,15 @@ export function attachLatencyInstrumentation<T>(
   session.on(
     AgentSessionEventTypes.AgentStateChanged,
     (ev: AgentStateChangedEvent) => {
-      if (ev.newState === "speaking" && state.ttsFirstAudioMs != null) {
-        state.agentSpeakingMs = Date.now();
+      if (ev.newState !== "speaking") return;
+      const now = Date.now();
+      if (state.ttsFirstAudioMs == null) {
+        state.ttsFirstAudioMs = now;
+        if (pipelineKind === "realtime_native") {
+          emitTurnBreakdown(state, ctx);
+        }
       }
+      state.agentSpeakingMs = now;
     },
   );
 

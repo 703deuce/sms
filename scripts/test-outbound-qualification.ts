@@ -44,6 +44,11 @@ import {
 } from "../src/lib/voice/outbound/agent-config";
 import { isOutboundRealtimeTestEnabled } from "../src/lib/voice/outbound/outbound-boot";
 import { resolveOutboundRealtimeOutputMode } from "../voice-runtime/src/pipeline";
+import {
+  describeOutboundRealtimeTurnDetection,
+  resolveOutboundRealtimeTurnDetection,
+  resolveOutboundRealtimeVadMode,
+} from "../voice-runtime/src/realtime-turn-config";
 
 const fixture = JSON.parse(
   fs.readFileSync(
@@ -138,6 +143,37 @@ assert.equal(resolveOutboundRealtimeOutputMode(), "elevenlabs");
 process.env.VOICE_REALTIME_OUTPUT_MODE = "native";
 assert.equal(resolveOutboundRealtimeOutputMode(), "native");
 process.env.VOICE_REALTIME_OUTPUT_MODE = prevOutputMode;
+
+const prevVadMode = process.env.VOICE_REALTIME_VAD_MODE;
+const prevVadEagerness = process.env.VOICE_REALTIME_VAD_EAGERNESS;
+delete process.env.VOICE_REALTIME_VAD_MODE;
+delete process.env.VOICE_REALTIME_VAD_EAGERNESS;
+const defaultTurnDetection = resolveOutboundRealtimeTurnDetection();
+assert.equal(defaultTurnDetection.mode, "semantic");
+assert.equal(defaultTurnDetection.turnDetection.type, "semantic_vad");
+if (defaultTurnDetection.turnDetection.type === "semantic_vad") {
+  assert.equal(defaultTurnDetection.turnDetection.eagerness, "high");
+}
+assert.deepEqual(describeOutboundRealtimeTurnDetection(defaultTurnDetection), {
+  type: "semantic_vad",
+  eagerness: "high",
+  interrupt_response: true,
+});
+
+process.env.VOICE_REALTIME_VAD_MODE = "server";
+process.env.VOICE_REALTIME_VAD_SILENCE_MS = "400";
+const serverVad = resolveOutboundRealtimeTurnDetection();
+assert.equal(resolveOutboundRealtimeVadMode(), "server");
+assert.equal(serverVad.turnDetection.type, "server_vad");
+if (serverVad.turnDetection.type === "server_vad") {
+  assert.equal(serverVad.turnDetection.silence_duration_ms, 400);
+  assert.equal(serverVad.turnDetection.threshold, 0.7);
+}
+
+process.env.VOICE_REALTIME_VAD_MODE = prevVadMode;
+process.env.VOICE_REALTIME_VAD_EAGERNESS = prevVadEagerness;
+if (prevVadMode == null) delete process.env.VOICE_REALTIME_VAD_MODE;
+if (prevVadEagerness == null) delete process.env.VOICE_REALTIME_VAD_EAGERNESS;
 
 const merged = mergeQualificationFields(
   prefilled,

@@ -147,11 +147,35 @@ export async function runOutboundLeadQualificationEntry(
 
   const agent = createNewLeadQualificationAgent(businessName);
   let session: voice.AgentSession<OutboundLeadUserData>;
+  let latencyPipelineKind: "stack" | "realtime_native" | "realtime_elevenlabs" = "stack";
+  let latencyTtsConfig:
+    | {
+        preset?: string | null;
+        provider?: string;
+        model?: string;
+        voice?: string;
+      }
+    | undefined;
 
   if (usesRealtime) {
     const realtimeCfg = resolveOutboundRealtimePipelineConfig(agentConfig);
     const outputMode = resolveOutboundRealtimeOutputMode();
     const { llm, tts, pipelineCfg } = buildOutboundRealtimeSessionComponents(agentConfig);
+    latencyPipelineKind =
+      outputMode === "elevenlabs" ? "realtime_elevenlabs" : "realtime_native";
+    latencyTtsConfig =
+      outputMode === "elevenlabs"
+        ? {
+            preset: pipelineCfg.ttsPreset || null,
+            provider: pipelineCfg.ttsProvider,
+            model: pipelineCfg.ttsModel,
+            voice: pipelineCfg.ttsVoice,
+          }
+        : {
+            provider: "openai_realtime",
+            model: realtimeCfg.model,
+            voice: realtimeCfg.voice,
+          };
     console.log(
       JSON.stringify({
         source: "transovo-voice-runtime",
@@ -171,6 +195,12 @@ export async function runOutboundLeadQualificationEntry(
     });
   } else {
     const { stt, llm, tts, config, sttConfig } = buildAmyVoicePipeline();
+    latencyTtsConfig = {
+      preset: config.ttsPreset || null,
+      provider: config.ttsProvider,
+      model: config.ttsModel,
+      voice: config.ttsVoice,
+    };
     console.log(
       JSON.stringify({
         source: "transovo-voice-runtime",
@@ -191,18 +221,17 @@ export async function runOutboundLeadQualificationEntry(
       maxToolSteps: Number(process.env.VOICE_MAX_TOOL_STEPS?.trim()) || 8,
       userData,
     });
-
-    attachLatencyInstrumentation(session, {
-      callId: job.callId,
-      preemptiveConfig: getPreemptiveConfigForInstrumentation(),
-      ttsConfig: {
-        preset: config.ttsPreset || null,
-        provider: config.ttsProvider,
-        model: config.ttsModel,
-        voice: config.ttsVoice,
-      },
-    });
   }
+
+  attachLatencyInstrumentation(session, {
+    callId: job.callId,
+    pipelineKind: latencyPipelineKind,
+    preemptiveConfig:
+      latencyPipelineKind === "stack"
+        ? getPreemptiveConfigForInstrumentation()
+        : { enabled: false, preemptiveTts: false },
+    ttsConfig: latencyTtsConfig,
+  });
 
   attachLiveKitTranscriptPersistence(session, {
     workspaceId: job.workspaceId,
