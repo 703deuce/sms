@@ -220,18 +220,39 @@ export function buildAmyTts(cfg: VoicePipelineConfig): tts.TTS {
   });
 }
 
-export function buildOutboundRealtimeModel(config: Pick<VoiceAgentConfig, "advanced">) {
+export type OutboundRealtimeOutputMode = "native" | "elevenlabs";
+
+/** REALTIME_NATIVE = OpenAI audio out. REALTIME_ELEVENLABS = OpenAI text out + ElevenLabs TTS. */
+export function resolveOutboundRealtimeOutputMode(): OutboundRealtimeOutputMode {
+  const raw = (process.env.VOICE_REALTIME_OUTPUT_MODE || "native").trim().toLowerCase();
+  if (
+    raw === "elevenlabs" ||
+    raw === "realtime_elevenlabs" ||
+    raw === "half_cascade" ||
+    raw === "realtime-elevenlabs"
+  ) {
+    return "elevenlabs";
+  }
+  return "native";
+}
+
+export function buildOutboundRealtimeModel(
+  config: Pick<VoiceAgentConfig, "advanced">,
+  outputMode: OutboundRealtimeOutputMode = resolveOutboundRealtimeOutputMode(),
+) {
   const realtimeCfg = resolveOutboundRealtimePipelineConfig(config);
   const apiKey = process.env.OPENAI_API_KEY?.trim();
   if (!apiKey) {
     throw new Error("OPENAI_API_KEY is required for OpenAI Realtime outbound voice");
   }
 
+  const useElevenLabsOutput = outputMode === "elevenlabs";
+
   return new openai.realtime.RealtimeModel({
     apiKey,
     model: realtimeCfg.model,
-    voice: realtimeCfg.voice,
-    modalities: ["audio"],
+    ...(useElevenLabsOutput ? {} : { voice: realtimeCfg.voice }),
+    modalities: useElevenLabsOutput ? ["text"] : ["audio"],
     inputAudioTranscription: null,
     turnDetection: {
       type: "server_vad",
@@ -244,17 +265,41 @@ export function buildOutboundRealtimeModel(config: Pick<VoiceAgentConfig, "advan
   });
 }
 
+export function buildOutboundRealtimeSessionComponents(
+  config: Pick<VoiceAgentConfig, "advanced">,
+) {
+  const outputMode = resolveOutboundRealtimeOutputMode();
+  const pipelineCfg = getVoicePipelineConfig();
+  const llm = buildOutboundRealtimeModel(config, outputMode);
+  const ttsInstance = outputMode === "elevenlabs" ? buildAmyTts(pipelineCfg) : undefined;
+  return { llm, tts: ttsInstance, outputMode, pipelineCfg };
+}
+
 export function describeRealtimePipelineConfig(
   realtimeCfg: OutboundRealtimePipelineConfig,
+  outputMode: OutboundRealtimeOutputMode = resolveOutboundRealtimeOutputMode(),
+  pipelineCfg = getVoicePipelineConfig(),
 ) {
+  const halfCascade = outputMode === "elevenlabs";
   return {
-    mode: "openai_realtime",
+    mode: halfCascade ? "openai_realtime_half_cascade" : "openai_realtime",
+    outputMode: halfCascade ? "REALTIME_ELEVENLABS" : "REALTIME_NATIVE",
     model: realtimeCfg.model,
-    voice: realtimeCfg.voice,
+    voice: halfCascade ? null : realtimeCfg.voice,
     reasoning: realtimeCfg.reasoning?.effort || null,
     turnDetection: "server_vad",
     inputAudioTranscription: false,
-    via: "openai_plugin_realtime",
+    tts: halfCascade
+      ? {
+          provider: pipelineCfg.ttsProvider,
+          model: pipelineCfg.ttsModel,
+          voice: pipelineCfg.ttsVoice,
+          via: usesElevenLabsPluginTts(pipelineCfg.ttsProvider)
+            ? "elevenlabs_plugin"
+            : "livekit_inference",
+        }
+      : null,
+    via: halfCascade ? "openai_realtime_text + elevenlabs_tts" : "openai_plugin_realtime",
   };
 }
 

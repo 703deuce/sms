@@ -43,6 +43,7 @@ import {
   OUTBOUND_LEAD_QUALIFICATION_REALTIME_PROFILE,
 } from "../src/lib/voice/outbound/agent-config";
 import { isOutboundRealtimeTestEnabled } from "../src/lib/voice/outbound/outbound-boot";
+import { resolveOutboundRealtimeOutputMode } from "../voice-runtime/src/pipeline";
 
 const fixture = JSON.parse(
   fs.readFileSync(
@@ -130,6 +131,13 @@ assert.equal(isOutboundRealtimeTestEnabled(), true);
 process.env.OUTBOUND_REALTIME_TEST = "0";
 assert.equal(isOutboundRealtimeTestEnabled(), false);
 process.env.OUTBOUND_REALTIME_TEST = prevRealtimeTest;
+
+const prevOutputMode = process.env.VOICE_REALTIME_OUTPUT_MODE;
+process.env.VOICE_REALTIME_OUTPUT_MODE = "elevenlabs";
+assert.equal(resolveOutboundRealtimeOutputMode(), "elevenlabs");
+process.env.VOICE_REALTIME_OUTPUT_MODE = "native";
+assert.equal(resolveOutboundRealtimeOutputMode(), "native");
+process.env.VOICE_REALTIME_OUTPUT_MODE = prevOutputMode;
 
 const merged = mergeQualificationFields(
   prefilled,

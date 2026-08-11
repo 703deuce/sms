@@ -1,5 +1,6 @@
 import type { AgentSession } from "@livekit/agents";
 import { buildOutboundIntroLine } from "./outbound-messages";
+import { deliverScriptedSpeech } from "./scripted-speech";
 import type { OutboundLeadUserData } from "./userdata";
 
 /**
@@ -13,18 +14,10 @@ export async function deliverOutboundOpening(
   if (ud.openingDelivered) return;
 
   const intro = buildOutboundIntroLine(ud.qualification, ud.job.lead.leadName);
-
-  session.clearUserTurn();
-
-  const handle = session.say(intro, {
+  await deliverScriptedSpeech(session, intro, {
     allowInterruptions: false,
     addToChatCtx: true,
   });
-
-  await handle.waitForPlayout();
-
-  // Drop any "Hello?" / greeting captured during connect — do not answer it separately.
-  session.clearUserTurn();
 
   ud.openingDelivered = true;
 }

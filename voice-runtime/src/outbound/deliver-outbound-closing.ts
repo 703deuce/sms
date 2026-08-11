@@ -1,5 +1,6 @@
 import type { AgentSession } from "@livekit/agents";
 import { buildQualificationCloseLine } from "./outbound-messages";
+import { deliverScriptedSpeech } from "./scripted-speech";
 import type { OutboundLeadUserData } from "./userdata";
 
 /**
@@ -17,15 +18,10 @@ export async function deliverOutboundClosing(
     ud.job.lead.leadName,
   );
 
-  session.clearUserTurn();
-
-  const handle = session.say(closeLine, {
+  await deliverScriptedSpeech(session, closeLine, {
     allowInterruptions: false,
     addToChatCtx: true,
   });
-
-  await handle.waitForPlayout();
-  session.clearUserTurn();
 
   ud.closingDelivered = true;
 }

@@ -27,6 +27,7 @@ import {
 } from "./end-outbound-call";
 import { deliverOutboundOpening } from "./deliver-outbound-opening";
 import { deliverOutboundClosing } from "./deliver-outbound-closing";
+import { deliverScriptedSpeech } from "./scripted-speech";
 
 export type QualifyLeadResult = LeadQualificationResult;
 
@@ -179,12 +180,10 @@ export class QualifyLeadTask extends voice.AgentTask<QualifyLeadResult> {
             mapped === "WRONG_NUMBER"
               ? "Sorry about that — wrong number. Have a good day."
               : "No problem at all. Thanks for your time.";
-          this.sessionRef.clearUserTurn();
-          const handle = this.sessionRef.say(apology, {
+          await deliverScriptedSpeech(this.sessionRef, apology, {
             allowInterruptions: false,
             addToChatCtx: true,
           });
-          await handle.waitForPlayout();
           ud.closingDelivered = true;
           await endOutboundCall(this.sessionRef, {
             source: "end_call_tool",

@@ -22,7 +22,13 @@ import { QualifyLeadTask } from "./qualify-lead-task";
 import { waitForQualificationComplete } from "./wait-for-qualification";
 import { endOutboundCall } from "./end-outbound-call";
 import type { OutboundLeadUserData } from "./userdata";
-import { buildAmyVoicePipeline, buildOutboundRealtimeModel, describePipelineConfig, describeRealtimePipelineConfig } from "../pipeline";
+import {
+  buildAmyVoicePipeline,
+  buildOutboundRealtimeSessionComponents,
+  describePipelineConfig,
+  describeRealtimePipelineConfig,
+  resolveOutboundRealtimeOutputMode,
+} from "../pipeline";
 import { attachLatencyInstrumentation } from "../latency-instrumentation";
 import { attachLiveKitTranscriptPersistence } from "../transcript-persistence";
 import { attachOutputGain, resolveLiveKitOutputGainDb } from "../output-gain";
@@ -144,20 +150,22 @@ export async function runOutboundLeadQualificationEntry(
 
   if (usesRealtime) {
     const realtimeCfg = resolveOutboundRealtimePipelineConfig(agentConfig);
-    const realtimeLlm = buildOutboundRealtimeModel(agentConfig);
+    const outputMode = resolveOutboundRealtimeOutputMode();
+    const { llm, tts, pipelineCfg } = buildOutboundRealtimeSessionComponents(agentConfig);
     console.log(
       JSON.stringify({
         source: "transovo-voice-runtime",
         event: "pipeline_config",
         callId: job.callId,
         profile: "outbound_lead_qualification_realtime",
-        pipeline: describeRealtimePipelineConfig(realtimeCfg),
+        pipeline: describeRealtimePipelineConfig(realtimeCfg, outputMode, pipelineCfg),
         outputGainDb,
       }),
     );
 
     session = new voice.AgentSession<OutboundLeadUserData>({
-      llm: realtimeLlm,
+      llm,
+      ...(tts ? { tts } : {}),
       maxToolSteps: Number(process.env.VOICE_MAX_TOOL_STEPS?.trim()) || 8,
       userData,
     });
