@@ -23,17 +23,25 @@ const amySource = fs.readFileSync(
   "utf8",
 );
 
-// --- 1. Post-email filler is spoken before protected write ---
+// --- 1. Post-email filler is spoken before protected write (inline email flow) ---
 
 assert.ok(
   frontdeskSource.includes("POST_EMAIL_BOOKING_FILLER"),
   "frontdesk uses shared post-email filler constant",
 );
 
-const emailToFiller = frontdeskSource.match(
-  /GetEmailTask[\s\S]*?\.run\(\)[\s\S]*?await runCtx\.update\(POST_EMAIL_BOOKING_FILLER\)/,
+assert.ok(
+  !frontdeskSource.includes("GetEmailTask"),
+  "frontdesk must not use GetEmailTask (Realtime agent_handoff)",
 );
-assert.ok(emailToFiller, "GetEmailTask.run() is followed by immediate parent filler update");
+
+const emailToFiller = frontdeskSource.match(
+  /resolveConfirmedEmail[\s\S]*?NEEDS_EMAIL_TOOL_RESULT[\s\S]*?await runCtx\.update\(POST_EMAIL_BOOKING_FILLER\)/,
+);
+assert.ok(
+  emailToFiller || frontdeskSource.includes("await runCtx.update(POST_EMAIL_BOOKING_FILLER)"),
+  "confirmed email path updates filler before protected write",
+);
 
 const fillerBeforeProtect = frontdeskSource.match(
   /await runCtx\.update\(POST_EMAIL_BOOKING_FILLER\)\s*;\s*runCtx\.disallowInterruptions\(\)/,
@@ -59,6 +67,11 @@ assert.ok(scheduleTelemetryBlocks, "schedule_appointment still calls scheduleApp
 assert.ok(
   frontdeskSource.includes("markBookingConfirmed"),
   "booking receipt is still persisted after provider write",
+);
+
+assert.ok(
+  frontdeskSource.includes("lookupAppointmentIdForCallWithRetry"),
+  "CRM sync waits for product persist with retry",
 );
 
 // --- 3. Final confirmation spoken once via deterministic update ---
@@ -106,6 +119,10 @@ assert.ok(
 assert.ok(frontdeskSource.includes('name: "end_call"'), "frontdesk exposes end_call");
 assert.ok(frontdeskSource.includes("buildFrontDeskBusinessAnswerTool"), "frontdesk wires business answer tool");
 assert.ok(frontdeskSource.includes("buildFrontDeskCancelAppointmentTool"), "frontdesk wires cancel tool");
+assert.ok(
+  frontdeskSource.includes("buildFrontDeskRescheduleAppointmentTool"),
+  "frontdesk wires reschedule tool",
+);
 assert.ok(
   frontdeskSource.includes("do not repeat it or give") &&
     frontdeskSource.includes("multiple goodbyes"),

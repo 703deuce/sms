@@ -110,6 +110,8 @@ export async function runInboundEntry(ctx: JobContext): Promise<void> {
     cal,
     slotUnavailableCount: 0,
     callerE164: identity.fromE164?.trim() || undefined,
+    livekitRoomName: ctx.room.name,
+    livekitParticipantId: identity.participant.identity,
   };
   const agent = createFrontDeskBookingAgent({
     businessName,
@@ -128,7 +130,7 @@ export async function runInboundEntry(ctx: JobContext): Promise<void> {
       }
     | undefined;
 
-  const maxToolSteps = Number(process.env.VOICE_MAX_TOOL_STEPS?.trim()) || 4;
+  const maxToolSteps = Number(process.env.VOICE_MAX_TOOL_STEPS?.trim()) || 8;
 
   if (useRealtime) {
     const realtimeCfg = resolveOutboundRealtimePipelineConfig(agentConfig);

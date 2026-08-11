@@ -66,6 +66,32 @@ export const liveKitRuntimeProvider: VoiceRuntimeProvider = {
       throw new Error("Failed to resolve call ID for LiveKit session");
     }
 
+    if (metadata.livekitRoomName || metadata.livekitParticipantId) {
+      const existing = await prisma.voiceCall.findUnique({
+        where: { id: callId },
+        select: { metadata: true },
+      });
+      const prior =
+        existing?.metadata && typeof existing.metadata === "object" && !Array.isArray(existing.metadata)
+          ? (existing.metadata as Record<string, unknown>)
+          : {};
+      await prisma.voiceCall
+        .update({
+          where: { id: callId },
+          data: {
+            metadata: {
+              ...prior,
+              source: prior.source || "livekit_voice_runtime",
+              ...(metadata.livekitRoomName ? { livekitRoomName: metadata.livekitRoomName } : {}),
+              ...(metadata.livekitParticipantId
+                ? { livekitParticipantId: metadata.livekitParticipantId }
+                : {}),
+            } as object,
+          },
+        })
+        .catch(() => undefined);
+    }
+
     if (metadata.lightweightBootstrap) {
       const fromE164 = metadata.fromE164?.trim();
       if (fromE164 && fromE164 !== "unknown") {

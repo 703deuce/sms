@@ -52,9 +52,11 @@ export function buildFrontDeskTransferTool() {
         });
         const meta = asRecord(call?.metadata);
         const livekitRoomName =
-          typeof meta.livekitRoomName === "string" ? meta.livekitRoomName : null;
+          ud.livekitRoomName ||
+          (typeof meta.livekitRoomName === "string" ? meta.livekitRoomName : null);
         const livekitParticipantId =
-          typeof meta.livekitParticipantId === "string" ? meta.livekitParticipantId : null;
+          ud.livekitParticipantId ||
+          (typeof meta.livekitParticipantId === "string" ? meta.livekitParticipantId : null);
 
         if (call?.telnyxCallControlId) {
           await initiateTransfer({

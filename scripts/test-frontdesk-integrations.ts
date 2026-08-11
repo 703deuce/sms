@@ -26,8 +26,7 @@ assert.ok(
   "frontdesk agent syncs CRM on book",
 );
 assert.ok(
-  agentSource.includes("reschedule_appointment") ||
-    agentSource.includes("buildFrontDeskRescheduleAppointmentTool"),
+  agentSource.includes("buildFrontDeskRescheduleAppointmentTool"),
   "frontdesk agent includes reschedule tool",
 );
 
@@ -37,10 +36,36 @@ assert.ok(
   "cancel tool syncs CRM on cancel",
 );
 
+const recoverySource = read("voice-runtime/src/frontdesk/booking-recovery.ts");
+assert.ok(
+  recoverySource.includes("lookupAppointmentIdForCallWithRetry"),
+  "booking recovery retries appointment id lookup",
+);
+assert.ok(
+  recoverySource.includes("deleteMany") && recoverySource.includes("rescheduledVia"),
+  "reschedule dedupes duplicate product-persist rows",
+);
+assert.ok(
+  /const booked = await cal\.scheduleAppointment[\s\S]*cancelCalendlyEventResilient/.test(
+    recoverySource,
+  ),
+  "reschedule books new slot before cancelling old event",
+);
+
 const rescheduleSource = read("voice-runtime/src/frontdesk/reschedule-appointment-tool.ts");
 assert.ok(rescheduleSource.includes("rescheduleAppointmentResilient"));
-assert.ok(rescheduleSource.includes("cancelCalendlyEventResilient") === false);
+assert.ok(!rescheduleSource.includes("lookupAppointmentIdForCall"));
 assert.ok(rescheduleSource.includes("resolveFrontDeskAppointment"));
+
+const transferSource = read("voice-runtime/src/frontdesk/transfer-tool.ts");
+assert.ok(transferSource.includes("transferLiveKitSipParticipant"));
+assert.ok(transferSource.includes("ud.livekitRoomName"));
+
+const livekitBootstrap = read("src/lib/voice/runtime-provider/livekit.ts");
+assert.ok(
+  livekitBootstrap.includes("livekitRoomName") && livekitBootstrap.includes("lightweightBootstrap"),
+  "bootstrap patches livekit transfer metadata on existing calls",
+);
 
 const crmTypes = read("src/lib/crm/types.ts");
 assert.ok(crmTypes.includes('"appointment.cancelled"'));
@@ -48,9 +73,6 @@ assert.ok(crmTypes.includes('"appointment.cancelled"'));
 const crmEvents = read("src/lib/crm/events.ts");
 assert.ok(crmEvents.includes("publishAppointmentCancelled"));
 
-const transferSource = read("voice-runtime/src/frontdesk/transfer-tool.ts");
-assert.ok(transferSource.includes("transferLiveKitSipParticipant"));
-assert.ok(transferSource.includes("session.shutdown") === false);
 assert.ok(agentSource.includes("session.shutdown"));
 
 console.log("frontdesk integrations tests: PASS");

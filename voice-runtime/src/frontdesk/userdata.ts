@@ -28,6 +28,9 @@ export type FrontDeskUserData = {
   confirmedEmail?: string;
   /** Caller ANI for appointment lookup (cancel/reschedule). */
   callerE164?: string;
+  /** LiveKit room/participant for SIP transfer (set at session start). */
+  livekitRoomName?: string;
+  livekitParticipantId?: string;
   /** Canonical booking state for server-side duplicate guards. */
   booking?: FrontDeskBookingState;
   /** @deprecated Prefer booking.status === "confirmed". */

@@ -49,7 +49,7 @@ async function findExistingBookingForCall(
     where: {
       workspaceId,
       callId,
-      status: { not: "cancelled" },
+      status: { notIn: ["cancelled", "canceled"] },
     },
     orderBy: { createdAt: "desc" },
     select: {
@@ -171,24 +171,46 @@ export async function lookupAppointmentIdForCall(input: {
   return appt?.id || null;
 }
 
-/** Reschedule: cancel old Calendly event, book new slot, update DB row. */
+/** Product persist after Calendly book can lag briefly — retry before CRM sync. */
+export async function lookupAppointmentIdForCallWithRetry(input: {
+  workspaceId: string;
+  callId: string;
+  eventUri?: string | null;
+  attempts?: number;
+  delayMs?: number;
+}): Promise<string | null> {
+  const attempts = input.attempts ?? 6;
+  const delayMs = input.delayMs ?? 250;
+  for (let i = 0; i < attempts; i++) {
+    const id = await lookupAppointmentIdForCall(input);
+    if (id) return id;
+    if (i < attempts - 1) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+  return lookupAppointmentIdForCall({
+    workspaceId: input.workspaceId,
+    callId: input.callId,
+  });
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+/** Reschedule: book new slot first, update canonical row, cancel old Calendly event. */
 export async function rescheduleAppointmentResilient(input: {
   session: AgentSession<FrontDeskUserData>;
   appointmentId: string;
   oldEventUri: string | null;
   slot: AvailableSlot;
   attendeeEmail: string;
+  existingMetadata?: unknown;
 }): Promise<BookedAppointment> {
-  const { session, slot, attendeeEmail, appointmentId, oldEventUri } = input;
+  const { session, slot, attendeeEmail, appointmentId, oldEventUri, existingMetadata } = input;
   const { workspaceId, callId, cal } = session.userData;
-
-  if (oldEventUri) {
-    await cancelCalendlyEventResilient({
-      workspaceId,
-      eventUri: oldEventUri,
-      reason: "Rescheduled by caller on phone",
-    });
-  }
 
   const booked = await cal.scheduleAppointment({ slot, attendeeEmail });
   const bookedTimeLabel = formatBookedTimeLabel(booked.slot.startTime, session.userData.timezone);
@@ -198,6 +220,17 @@ export async function rescheduleAppointmentResilient(input: {
     ? booked.eventUri
     : `calendly:${booked.eventUri}`;
   const endsAt = new Date(booked.slot.startTime.getTime() + booked.slot.durationMin * 60_000);
+  const priorMeta = asRecord(existingMetadata);
+
+  // appointment.book write-through may create a duplicate row — keep the canonical one.
+  await prisma.voiceAppointment.deleteMany({
+    where: {
+      workspaceId,
+      callId,
+      externalId,
+      id: { not: appointmentId },
+    },
+  });
 
   await prisma.voiceAppointment.update({
     where: { id: appointmentId, workspaceId },
@@ -207,13 +240,36 @@ export async function rescheduleAppointmentResilient(input: {
       externalId,
       status: "confirmed",
       metadata: {
+        ...priorMeta,
         inviteeUri: booked.inviteeUri,
         inviteeEmail: attendeeEmail,
         rescheduledAt: new Date().toISOString(),
         rescheduledVia: "frontdesk_voice",
+        previousExternalId: oldEventUri || priorMeta.previousExternalId || null,
       },
     },
   });
+
+  if (oldEventUri) {
+    try {
+      await cancelCalendlyEventResilient({
+        workspaceId,
+        eventUri: oldEventUri,
+        reason: "Rescheduled by caller on phone",
+      });
+    } catch (err) {
+      console.warn(
+        JSON.stringify({
+          source: "frontdesk-reschedule",
+          event: "old_event_cancel_failed",
+          callId,
+          appointmentId,
+          oldEventUri,
+          error: err instanceof Error ? err.message : String(err),
+        }),
+      );
+    }
+  }
 
   markBookingConfirmed(session.userData, {
     slotId: slot.slotId,

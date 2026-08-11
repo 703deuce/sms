@@ -6,7 +6,7 @@ import { SlotUnavailableError } from "./calendly-calendar";
 import {
   alreadyBookedToolMessage,
   formatBookedTimeLabel,
-  lookupAppointmentIdForCall,
+  lookupAppointmentIdForCallWithRetry,
   scheduleAppointmentResilient,
 } from "./booking-recovery";
 import {
@@ -29,6 +29,7 @@ import { buildFrontDeskBusinessAnswerTool } from "./knowledge-tool";
 import { buildFrontDeskCancelAppointmentTool } from "./cancel-appointment-tool";
 import { buildFrontDeskTransferTool } from "./transfer-tool";
 import { markBookingConfirmed, type FrontDeskUserData } from "./userdata";
+import { sendBookingSmsAsync } from "./booking-sms";
 
 function buildFrontDeskInstructions(businessLabel: string): string {
   return [
@@ -78,41 +79,6 @@ function buildFrontDeskInstructions(businessLabel: string): string {
     "A confirmation text is sent automatically to the caller's phone after booking — ",
     "never ask for their number or offer to send texts manually.",
   ].join("");
-}
-
-function sendBookingSmsAsync(session: AgentSession<FrontDeskUserData>, startsAt: Date): void {
-  void import("@/lib/voice/booking-confirmation-sms")
-    .then(({ sendVoiceBookingConfirmationSms }) =>
-      sendVoiceBookingConfirmationSms({
-        workspaceId: session.userData.workspaceId,
-        agentId: session.userData.agentId,
-        callId: session.userData.callId,
-        startsAt,
-        businessName: session.userData.businessName,
-        timezone: session.userData.timezone,
-      }),
-    )
-    .then((sms) => {
-      console.log(
-        JSON.stringify({
-          source: "frontdesk-booking-agent",
-          event: "booking_confirmation_sms",
-          callId: session.userData.callId,
-          sent: sms.sent,
-          reason: sms.reason || null,
-        }),
-      );
-    })
-    .catch((err) => {
-      console.warn(
-        JSON.stringify({
-          source: "frontdesk-booking-agent",
-          event: "booking_confirmation_sms_failed",
-          callId: session.userData.callId,
-          error: err instanceof Error ? err.message : String(err),
-        }),
-      );
-    });
 }
 
 export function createFrontDeskBookingAgent(input: {
@@ -181,7 +147,7 @@ export function createFrontDeskBookingAgent(input: {
   const scheduleAppointment = llm.tool({
     name: "schedule_appointment",
     description:
-      "Book the appointment at slot_id. Collects email inside this tool — call after the caller picks a time.",
+      "Book the appointment at slot_id after the caller picks a time. Returns NEEDS_EMAIL if email is not confirmed yet.",
     parameters: z.object({
       slot_id: z.string().describe("Slot id from list_available_slots"),
       email: z
@@ -231,7 +197,7 @@ export function createFrontDeskBookingAgent(input: {
               bookedTimeLabel: local,
             });
 
-            const appointmentId = await lookupAppointmentIdForCall({
+            const appointmentId = await lookupAppointmentIdForCallWithRetry({
               workspaceId: userData.workspaceId,
               callId: userData.callId,
               eventUri: booked.eventUri,

@@ -25,7 +25,15 @@ async function resolveOrCreateLocalContact(input: {
   });
   if (call?.contactId) return call.contactId;
 
-  const phone = normalizeE164(input.callerE164 || call?.fromE164 || "");
+  const phoneRaw = (input.callerE164 || call?.fromE164 || "").trim();
+  let phone = "";
+  if (phoneRaw) {
+    try {
+      phone = normalizeE164(phoneRaw);
+    } catch {
+      phone = "";
+    }
+  }
   const email = input.email?.trim() || "";
 
   if (phone) {

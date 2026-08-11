@@ -3,17 +3,21 @@ import { z } from "zod";
 import type { AgentSession } from "@livekit/agents";
 import type { AvailableSlot } from "./calendly-calendar";
 import { SlotUnavailableError } from "./calendly-calendar";
-import { resolveFrontDeskAppointment } from "./cancel-appointment-tool";
+import {
+  peekEmailForFrontDeskCall,
+  resolveFrontDeskAppointment,
+} from "./appointment-lookup";
 import {
   formatBookedTimeLabel,
-  lookupAppointmentIdForCall,
   rescheduleAppointmentResilient,
 } from "./booking-recovery";
 import {
   NEEDS_EMAIL_TOOL_RESULT,
   resolveConfirmedEmail,
 } from "./email-collection-tools";
-import { syncFrontDeskBookingToCrm } from "@/lib/voice/crm/frontdesk-crm-sync";
+import {
+  syncFrontDeskBookingToCrm,
+} from "@/lib/voice/crm/frontdesk-crm-sync";
 import { withLiveKitToolTelemetry } from "../livekit-tool-telemetry";
 import {
   BOOKING_COMPLETE_TOOL_RESULT,
@@ -24,6 +28,7 @@ import {
 } from "../booking-completion-messages";
 import { bookingFailureReason } from "../booking-error";
 import { markBookingConfirmed, type FrontDeskUserData } from "./userdata";
+import { sendBookingSmsAsync } from "./booking-sms";
 
 function externalEventUri(externalId: string | null | undefined): string | null {
   if (!externalId) return null;
@@ -59,9 +64,13 @@ export function buildFrontDeskRescheduleAppointmentTool(slotsMap: Map<string, Av
         throw new llm.ToolError(`Slot ${slot_id} was not found — call list_available_slots again.`);
       }
 
-      const attendeeEmail = resolveConfirmedEmail(ud, inlineEmail);
+      let attendeeEmail: string | null = resolveConfirmedEmail(ud, inlineEmail);
       if (!attendeeEmail) {
-        return NEEDS_EMAIL_TOOL_RESULT;
+        attendeeEmail = await peekEmailForFrontDeskCall(ud, appointment_id);
+        if (attendeeEmail) ud.confirmedEmail = attendeeEmail;
+      }
+      if (!attendeeEmail) {
+        return NEEDS_EMAIL_TOOL_RESULT.replaceAll("schedule_appointment", "reschedule_appointment");
       }
       ud.confirmedEmail = attendeeEmail;
 
@@ -74,7 +83,7 @@ export function buildFrontDeskRescheduleAppointmentTool(slotsMap: Map<string, Av
         { slot_id, appointment_id, confirmed },
         async () => {
           try {
-            const appointment = await resolveFrontDeskAppointment(ud, appointment_id);
+            const appointment = await resolveFrontDeskAppointment(ud, appointment_id, "reschedule");
             const oldEventUri = externalEventUri(appointment.externalId);
             const when = formatBookedTimeLabel(appointment.startsAt, ud.timezone);
 
@@ -84,6 +93,7 @@ export function buildFrontDeskRescheduleAppointmentTool(slotsMap: Map<string, Av
               oldEventUri,
               slot,
               attendeeEmail,
+              existingMetadata: appointment.metadata,
             });
 
             const local = formatBookedTimeLabel(rescheduled.slot.startTime, ud.timezone);
@@ -103,6 +113,8 @@ export function buildFrontDeskRescheduleAppointmentTool(slotsMap: Map<string, Av
               businessName: ud.businessName,
             }).catch(() => undefined);
 
+            sendBookingSmsAsync(session, rescheduled.slot.startTime);
+
             await runCtx.update(buildBookingSuccessLine(local));
 
             return (
@@ -118,16 +130,6 @@ export function buildFrontDeskRescheduleAppointmentTool(slotsMap: Map<string, Av
                 ),
               );
               return BOOKING_FAILED_TOOL_RESULT;
-            }
-
-            const recoveredId = await lookupAppointmentIdForCall({
-              workspaceId: ud.workspaceId,
-              callId: ud.callId,
-            });
-            if (recoveredId) {
-              const local = formatBookedTimeLabel(slot.startTime, ud.timezone);
-              await runCtx.update(buildBookingSuccessLine(local));
-              return BOOKING_COMPLETE_TOOL_RESULT;
             }
 
             console.warn(
