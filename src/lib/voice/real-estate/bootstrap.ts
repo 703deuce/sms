@@ -72,6 +72,8 @@ export async function bootstrapRealEstateFrontDesk(): Promise<BootstrapRealEstat
         sourceId: knowledge.sourceId,
       }),
     );
+    const { bootstrapRealtorVerification } = await import("@/lib/realtor/boot-verification");
+    await bootstrapRealtorVerification();
     return { agent, knowledge };
   } catch (err) {
     console.error(

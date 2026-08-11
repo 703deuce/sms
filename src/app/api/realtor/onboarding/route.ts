@@ -56,6 +56,8 @@ export async function POST(req: Request) {
       followUpAutomationId: deploy.speedToLead?.followUpAutomationId || current.followUpAutomationId,
       deployedAt: new Date().toISOString(),
     });
+    const { bootstrapRealtorVerification } = await import("@/lib/realtor/boot-verification");
+    await bootstrapRealtorVerification();
     return NextResponse.json({ config: next, deploy });
   }
 

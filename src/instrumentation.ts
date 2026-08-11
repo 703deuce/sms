@@ -22,6 +22,8 @@ export async function register() {
     "@/lib/voice/real-estate/bootstrap"
   );
   await bootstrapRealEstateFrontDesk();
+  const { bootstrapRealtorVerification } = await import("@/lib/realtor/boot-verification");
+  await bootstrapRealtorVerification();
   const { scheduleOutboundAutoSmokeCall } = await import(
     "@/lib/voice/outbound/auto-smoke"
   );
