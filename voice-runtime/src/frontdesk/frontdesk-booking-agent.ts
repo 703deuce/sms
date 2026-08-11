@@ -35,9 +35,8 @@ function buildFrontDeskInstructions(businessLabel: string): string {
     "To cancel an appointment, confirm with the caller then call cancel_appointment with confirmed true. ",
     "If cancel_appointment says no booking completed on this call, do not claim a cancellation succeeded. ",
     "To reach a human, confirm with the caller then call transfer_to_human. ",
-    "Booking workflow: after the caller picks a slot, call schedule_appointment with that ",
-    "slot_id. If it returns NEEDS_EMAIL, ask for their email, call update_email_address and ",
-    "confirm_email_address, then schedule_appointment again with the same slot_id. ",
+    "Booking workflow: after the caller picks a slot, call schedule_appointment with that slot_id. ",
+    "Email is collected automatically when needed — do not ask for email before calling schedule. ",
     "To reschedule, call list_available_slots, confirm the new time, then reschedule_appointment. ",
     "Never call schedule_appointment before the caller confirms a time. ",
     "If schedule_appointment reports already_completed, tell the caller they're confirmed — ",
@@ -47,7 +46,7 @@ function buildFrontDeskInstructions(businessLabel: string): string {
     "If schedule_appointment returns BOOKING_FAILED_ALREADY_SPOKEN, the caller already heard that booking failed — ",
     "do NOT say they are confirmed or that a text was sent. ",
     "After a successful booking the runtime speaks one confirmation — do not repeat it or give ",
-    "multiple goodbyes. When the caller is done, call end_call once with a brief farewell. ",
+    "multiple goodbyes. When the caller is done, use the end-call tool once with a brief farewell. ",
     "A confirmation text is sent automatically to the caller's phone after booking — ",
     "never ask for their number or offer to send texts manually.",
   ].join("");
@@ -58,11 +57,14 @@ export function createFrontDeskBookingAgent(input: {
   timezone: string;
 }) {
   const label = input.businessName.trim() || "our office";
+  const agentHolder: { root?: voice.Agent<import("./userdata").FrontDeskUserData> } = {};
+
   const { toolDefs } = buildFrontDeskBookingTools({
     timezone: input.timezone,
+    restoreRootAgent: () => agentHolder.root!,
   });
 
-  return voice.Agent.create({
+  const agent = voice.Agent.create<import("./userdata").FrontDeskUserData>({
     instructions: buildFrontDeskInstructions(label),
     tools: llm.toToolContext(toolDefs),
     onEnter: async (agentCtx) => {
@@ -79,4 +81,7 @@ export function createFrontDeskBookingAgent(input: {
       });
     },
   });
+
+  agentHolder.root = agent;
+  return agent;
 }

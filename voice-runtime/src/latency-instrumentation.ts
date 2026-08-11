@@ -190,6 +190,18 @@ function recordMetrics(
 ) {
   const now = Date.now();
 
+  logLatency("livekit_metrics", {
+    turn: state.turn,
+    callId: input.callId,
+    metricType: metrics.type,
+    ttftMs: "ttftMs" in metrics ? metrics.ttftMs : undefined,
+    ttfbMs: "ttfbMs" in metrics ? metrics.ttfbMs : undefined,
+    durationMs: "durationMs" in metrics ? metrics.durationMs : undefined,
+    speechId: "speechId" in metrics ? metrics.speechId : undefined,
+    provider: "metadata" in metrics ? metrics.metadata?.modelProvider : undefined,
+    model: "metadata" in metrics ? metrics.metadata?.modelName : undefined,
+  });
+
   if (metrics.type === "eou_metrics") {
     state.eou = {
       transcriptionDelayMs: metrics.transcriptionDelayMs,

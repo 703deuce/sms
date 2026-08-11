@@ -1,7 +1,8 @@
 import { llm } from "@livekit/agents";
 import { z } from "zod";
 import type { AgentSession } from "@livekit/agents";
-import { executeBuiltinVoiceAction } from "@/lib/voice/tools/builtin-actions";
+import type { voice } from "@livekit/agents";
+import { takeStructuredMessage } from "@/lib/voice/domain-actions/take-structured-message";
 import { searchCrmContactsForVoice } from "@/lib/voice/tools/crm-contact-search";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import {
@@ -10,22 +11,18 @@ import {
   buildMissingFieldsSummary,
   markMessageTaken,
   persistCallState,
-  recordCollectedField,
 } from "@/lib/voice/real-estate/state";
-import {
-  fieldsForIntents,
-  isIntentEnabled,
-  missingRequiredFields,
-  normalizeIntent,
-} from "@/lib/voice/real-estate/fields";
+import { isIntentEnabled, normalizeIntent } from "@/lib/voice/real-estate/fields";
 import { notifyRealEstateStaff } from "@/lib/voice/real-estate/notifications";
 import { syncRealEstateLeadToCrm } from "@/lib/voice/real-estate/crm-sync";
 import { REAL_ESTATE_INTENT_LABELS, type RealEstateIntent } from "@/lib/voice/real-estate/types";
 import { parseLocalContactIdFromSafeId } from "@/lib/voice/real-estate/contact-id";
 import type { FrontDeskUserData } from "../userdata";
 import { withLiveKitToolTelemetry } from "../../livekit-tool-telemetry";
-import type { voice } from "@livekit/agents";
-import { runSchemaFieldCollectionTask } from "../../tasks/schema-field-collection-task";
+import {
+  runRealEstateIntakeTaskGroup,
+  summarizeIntakeFields,
+} from "./intake-task-group";
 
 function activeIntents(userData: FrontDeskUserData): RealEstateIntent[] {
   const state = userData.callState;
@@ -118,109 +115,43 @@ export function buildRealEstateIntentTools() {
   return [setIntent, addSecondaryIntent];
 }
 
-export function buildRealEstateFieldTools() {
+export function buildRealEstateCollectRequiredFieldsTool(
+  restoreRootAgent: () => voice.Agent<FrontDeskUserData>,
+) {
   return llm.tool({
-    name: "record_collected_field",
+    name: "collect_required_fields",
     description:
-      "Save a field the caller provided. Use field_id from the required fields for their intent.",
-    parameters: z.object({
-      field_id: z.string().describe("Field identifier, e.g. target_areas, property_address, name"),
-      value: z.string().describe("What the caller said"),
-    }),
-    execute: async ({ field_id, value }, opts) => {
+      "Run LiveKit field-collection tasks for all missing required fields after set_intent. " +
+      "Call once when ready to gather intake — do not collect fields one-by-one manually.",
+    parameters: z.object({}),
+    execute: async (_args, opts) => {
       const session = opts.ctx.session as AgentSession<FrontDeskUserData>;
       const ud = session.userData;
       if (!ud.callState) {
         throw new llm.ToolError("Call state not initialized.");
       }
-      return withLiveKitToolTelemetry(
-        ud,
-        "record_collected_field",
-        { field_id },
-        async () => {
-          ud.callState = recordCollectedField(ud.callState!, field_id, value);
-          if (field_id === "name") {
-            ud.callState.contactName = value.trim();
-          }
-          await syncState(ud);
-
-          const intents = activeIntents(ud);
-          if (!intents.length) {
-            return "Saved. Call set_intent first to know which fields to collect.";
-          }
-
-          const missing = missingRequiredFields(intents, ud.callState.collectedFields);
-          if (!missing.length && ud.callState.intakeComplete) {
-            void syncRealEstateLeadToCrm({
-              workspaceId: ud.workspaceId,
-              callId: ud.callId,
-              callState: ud.callState,
-              callerE164: ud.callerE164,
-              businessName: ud.businessName,
-              trigger: "intake_complete",
-            }).catch(() => undefined);
-            void notifyRealEstateStaff({
-              workspaceId: ud.workspaceId,
-              callId: ud.callId,
-              callState: ud.callState,
-              businessName: ud.businessName,
-              event: "intake_complete",
-              callerE164: ud.callerE164,
-            }).catch(() => undefined);
-            return "All required fields collected. Offer to schedule a consultation or take a message if they prefer.";
-          }
-
-          const next = missing[0];
-          return next
-            ? `Saved ${field_id}. Next collect: ${next.label} — ${next.collection_instruction}`
-            : `Saved ${field_id}.`;
-        },
-      );
+      return withLiveKitToolTelemetry(ud, "collect_required_fields", {}, async () => {
+        const result = await runRealEstateIntakeTaskGroup({
+          session,
+          restoreRootAgent,
+        });
+        if (result.complete) {
+          return "All required fields collected. Offer to schedule a consultation or take a message.";
+        }
+        return `Collected: ${result.collected.join(", ") || "none"}. ${summarizeIntakeFields(ud)}`;
+      });
     },
   });
 }
 
-/** Optional bounded AgentTask collection for schema fields (LiveKit-native structured capture). */
-export function buildRealEstateStructuredFieldTool(
-  restoreRootAgent: () => voice.Agent<FrontDeskUserData>,
-) {
+export function buildRealEstateGetRequiredFieldsTool() {
   return llm.tool({
-    name: "collect_field_structured",
-    description:
-      "Run a focused collection task for one required field when flat record_collected_field is insufficient.",
-    parameters: z.object({
-      field_id: z.string().describe("Field id from get_required_fields"),
-    }),
-    execute: async ({ field_id }, opts) => {
+    name: "get_required_fields",
+    description: "Read-only summary of intake fields and what is still missing.",
+    parameters: z.object({}),
+    execute: async (_args, opts) => {
       const session = opts.ctx.session as AgentSession<FrontDeskUserData>;
-      const ud = session.userData;
-      if (!ud.callState) {
-        throw new llm.ToolError("Call state not initialized.");
-      }
-      const intents = activeIntents(ud);
-      const field = fieldsForIntents(intents).find((f) => f.field_id === field_id);
-      if (!field) {
-        throw new llm.ToolError(`Unknown field ${field_id} for active intents.`);
-      }
-
-      return withLiveKitToolTelemetry(ud, "collect_field_structured", { field_id }, async () => {
-        const result = await runSchemaFieldCollectionTask({
-          session,
-          field,
-          handlers: {
-            onRecord: async (value) => {
-              ud.callState = recordCollectedField(ud.callState!, field_id, value);
-              if (field_id === "name") {
-                ud.callState!.contactName = value.trim();
-              }
-              await syncState(ud);
-              return { ok: true, speak: `Saved ${field.label}.` };
-            },
-          },
-        });
-        session.updateAgent(restoreRootAgent());
-        return `Collected ${result.fieldId}: ${result.value}`;
-      });
+      return summarizeIntakeFields(session.userData);
     },
   });
 }
@@ -310,19 +241,15 @@ export function buildRealEstateTakeMessageTool() {
           "";
         const phone = ud.callState?.collectedFields.callback_phone || ud.callerE164 || "";
 
-        await executeBuiltinVoiceAction({
+        await takeStructuredMessage({
           workspaceId: ud.workspaceId,
-          agentId: ud.agentId,
           callId: ud.callId,
-          toolType: "take_structured_message",
-          input: {
-            reason,
-            caller_name: name,
-            phone,
-            urgency: urgency || "normal",
-            preferred_callback,
-            notes,
-          },
+          reason,
+          caller_name: name,
+          phone,
+          urgency: urgency || "normal",
+          preferred_callback,
+          notes,
         });
 
         if (ud.callState) {
@@ -352,35 +279,9 @@ export function buildRealEstateTakeMessageTool() {
   });
 }
 
-export function buildRealEstateGetRequiredFieldsTool() {
-  return llm.tool({
-    name: "get_required_fields",
-    description:
-      "Get the list of fields still needed for the caller's intent(s). Call after set_intent to plan collection.",
-    parameters: z.object({}),
-    execute: async (_args, opts) => {
-      const session = opts.ctx.session as AgentSession<FrontDeskUserData>;
-      const ud = session.userData;
-      const intents = activeIntents(ud);
-      if (!intents.length) {
-        return "No intent set yet. Infer intent from conversation and call set_intent.";
-      }
-      const allFields = fieldsForIntents(intents);
-      const missing = missingRequiredFields(intents, ud.callState?.collectedFields || {});
-      const lines = allFields.map((f) => {
-        const collected = ud.callState?.collectedFields[f.field_id];
-        const status = collected ? `[collected: ${collected}]` : f.required ? "[required]" : "[optional]";
-        return `${f.field_id} (${f.label}) ${status}: ${f.collection_instruction}`;
-      });
-      return [
-        `Intents: ${intents.map((i) => REAL_ESTATE_INTENT_LABELS[i]).join(" + ")}`,
-        missing.length
-          ? `Missing required: ${missing.map((f) => f.field_id).join(", ")}`
-          : "All required fields collected.",
-        ...lines,
-      ].join("\n");
-    },
-  });
+/** @deprecated Use buildRealEstateCollectRequiredFieldsTool */
+export function buildRealEstateFieldTools() {
+  throw new Error("buildRealEstateFieldTools removed — use buildRealEstateCollectRequiredFieldsTool");
 }
 
 /** Expose normalizeIntent for instruction hints */

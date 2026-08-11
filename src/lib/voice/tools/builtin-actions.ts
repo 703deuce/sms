@@ -2,6 +2,7 @@ import { getPrisma } from "@/lib/db";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import { executeAgentTool } from "@/lib/voice/agent-tool-gateway/gateway";
 import { assertLegacyWorkflowVoiceToolAllowed } from "@/lib/voice/architecture/legacy-voice-path";
+import { takeStructuredMessage } from "@/lib/voice/domain-actions/take-structured-message";
 
 export async function executeBuiltinVoiceAction(input: {
   workspaceId: string;
@@ -156,102 +157,23 @@ export async function executeBuiltinVoiceAction(input: {
     case "take_structured_message": {
       const reason = String(args.reason || args.message || "").trim();
       if (!reason) throw new Error("reason required");
-      const phone = args.phone ? normalizeE164(String(args.phone)) : "";
-      const callerName = String(args.caller_name || args.name || "").trim();
-      const email = args.email ? String(args.email).trim() : "";
+      const result = await takeStructuredMessage({
+        workspaceId: input.workspaceId,
+        callId: input.callId,
+        reason,
+        caller_name: String(args.caller_name || args.name || ""),
+        phone: args.phone ? String(args.phone) : undefined,
+        email: args.email ? String(args.email) : undefined,
+        urgency: String(args.urgency || "normal"),
+        preferred_callback: String(args.preferred_callback || ""),
+        notes: String(args.notes || ""),
+      });
+
       const urgency = String(args.urgency || "normal");
+      const callerName = String(args.caller_name || args.name || "").trim();
+      const phone = args.phone ? normalizeE164(String(args.phone)) : "";
       const preferredCallback = String(args.preferred_callback || "");
       const notes = String(args.notes || "");
-      let contactId: string | undefined;
-      if (phone) {
-        const parts = callerName.split(/\s+/).filter(Boolean);
-        const contact = await prisma.contact.upsert({
-          where: {
-            workspaceId_phone: { workspaceId: input.workspaceId, phone },
-          },
-          create: {
-            workspaceId: input.workspaceId,
-            phone,
-            firstName: parts[0] || null,
-            lastName: parts.slice(1).join(" ") || null,
-            email: email || null,
-          },
-          update: {
-            ...(parts[0] ? { firstName: parts[0] } : {}),
-            ...(parts.length > 1 ? { lastName: parts.slice(1).join(" ") } : {}),
-            ...(email ? { email } : {}),
-          },
-        });
-        contactId = contact.id;
-      }
-      if (input.callId) {
-        const existing = await prisma.voiceCall.findFirst({
-          where: { id: input.callId, workspaceId: input.workspaceId },
-          select: { metadata: true },
-        });
-        const prevMeta = (existing?.metadata || {}) as Record<string, unknown>;
-        await prisma.voiceCall.update({
-          where: { id: input.callId },
-          data: {
-            outcome: "message_taken",
-            contactId: contactId || undefined,
-            metadata: {
-              ...prevMeta,
-              follow_up_required: true,
-              structuredMessage: {
-                callerName,
-                phone,
-                email,
-                reason,
-                urgency,
-                preferredCallback,
-                notes,
-              },
-            },
-          },
-        }).catch(() => undefined);
-      }
-      await prisma.auditLog.create({
-        data: {
-          workspaceId: input.workspaceId,
-          event: "voice.message_taken",
-          detail: JSON.stringify({
-            callerName,
-            phone,
-            email,
-            reason,
-            urgency,
-            preferredCallback,
-            notes,
-            contactId,
-            callId: input.callId,
-          }),
-        },
-      });
-      const { createCrmNoteForVoice } = await import("./crm-writes");
-      const crm = await createCrmNoteForVoice({
-        workspaceId: input.workspaceId,
-        subject: `Caller message: ${reason.slice(0, 80)}`,
-        body: [
-          `From: ${callerName || "Unknown"}`,
-          phone ? `Phone: ${phone}` : "",
-          email ? `Email: ${email}` : "",
-          `Urgency: ${urgency}`,
-          preferredCallback ? `Callback: ${preferredCallback}` : "",
-          "",
-          reason,
-          notes,
-        ]
-          .filter(Boolean)
-          .join("\n"),
-        phone: phone || undefined,
-        email: email || undefined,
-        callId: input.callId,
-      }).catch((err) => ({
-        ok: false as const,
-        error: err instanceof Error ? err.message : String(err),
-      }));
-
       const notifyTitle =
         urgency === "high" || urgency === "urgent"
           ? "Urgent caller message"
@@ -261,19 +183,6 @@ export async function executeBuiltinVoiceAction(input: {
         .join(" · ");
       const notifyHref = input.callId ? `/voice/calls/${input.callId}` : "/voice/calls";
 
-      // Staff notification — required for every receptionist message-taking path.
-      await import("@/lib/notifications/in-app")
-        .then(({ notifyWorkspace }) =>
-          notifyWorkspace(input.workspaceId, {
-            type: "system",
-            title: notifyTitle,
-            body: notifyBody,
-            href: notifyHref,
-          }),
-        )
-        .catch(() => undefined);
-
-      // Best-effort email via Brevo / voice_send_email when staff emails are available.
       await notifyStaffByEmail({
         workspaceId: input.workspaceId,
         subject: notifyTitle,
@@ -291,7 +200,6 @@ export async function executeBuiltinVoiceAction(input: {
         kind: "caller_message",
       }).catch(() => undefined);
 
-      // High/urgent messages also create a follow-up task for the team.
       let task: unknown = null;
       if (urgency === "high" || urgency === "urgent") {
         task = await executeBuiltinVoiceAction({
@@ -313,10 +221,8 @@ export async function executeBuiltinVoiceAction(input: {
       }
 
       return {
-        ok: true,
+        ...result,
         message: "Message saved. Tell the caller you will make sure the team receives it.",
-        contactId,
-        crm,
         follow_up_required: true,
         task,
       };

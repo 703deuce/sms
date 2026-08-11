@@ -12,9 +12,9 @@ import {
   rescheduleAppointmentResilient,
 } from "./booking-recovery";
 import {
-  NEEDS_EMAIL_TOOL_RESULT,
   resolveConfirmedEmail,
 } from "./email-collection-tools";
+import { runEmailCollectionTask } from "./email-collection-task";
 import {
   syncFrontDeskBookingToCrm,
 } from "@/lib/voice/crm/frontdesk-crm-sync";
@@ -37,7 +37,10 @@ function externalEventUri(externalId: string | null | undefined): string | null 
   return raw.trim() || null;
 }
 
-export function buildFrontDeskRescheduleAppointmentTool(slotsMap: Map<string, AvailableSlot>) {
+export function buildFrontDeskRescheduleAppointmentTool(
+  slotsMap: Map<string, AvailableSlot>,
+  restoreRootAgent: () => import("@livekit/agents").voice.Agent<FrontDeskUserData>,
+) {
   return llm.tool({
     name: "reschedule_appointment",
     description:
@@ -70,7 +73,14 @@ export function buildFrontDeskRescheduleAppointmentTool(slotsMap: Map<string, Av
         if (attendeeEmail) ud.confirmedEmail = attendeeEmail;
       }
       if (!attendeeEmail) {
-        return NEEDS_EMAIL_TOOL_RESULT.replaceAll("schedule_appointment", "reschedule_appointment");
+        const collected = await runEmailCollectionTask({
+          session,
+          restoreRootAgent,
+        });
+        if (collected.declined || !collected.email) {
+          return "Email is required to reschedule. Offer to call back later.";
+        }
+        attendeeEmail = collected.email;
       }
       ud.confirmedEmail = attendeeEmail;
 

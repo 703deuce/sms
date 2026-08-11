@@ -23,6 +23,12 @@ import {
   mergeExplicitDispatchMetadata,
 } from "../src/lib/telephony/provisioning/dispatch-metadata";
 import { FRONTDESK_REALTIME_PROFILE } from "../src/lib/voice/frontdesk/agent-config";
+import fs from "node:fs";
+import path from "node:path";
+
+function readProjectFile(rel: string): string {
+  return fs.readFileSync(path.join(process.cwd(), rel), "utf8");
+}
 
 function check(name: string, fn: () => void) {
   try {
@@ -82,6 +88,19 @@ check("explicit dispatch metadata merges with precedence", () => {
   );
   assert.equal(merged?.agentId, "agentExplicit");
   assert.equal(merged?.publishedVersionId, "ver1");
+});
+
+check("RE intake uses TaskGroup collect_required_fields", () => {
+  const reTools = readProjectFile("voice-runtime/src/frontdesk/real-estate/re-tools.ts");
+  assert.ok(reTools.includes("collect_required_fields"));
+  assert.ok(reTools.includes("runRealEstateIntakeTaskGroup"));
+  assert.ok(!reTools.includes('name: "record_collected_field"'));
+});
+
+check("booking uses EmailCollectionTask and LiveKit end call", () => {
+  const booking = readProjectFile("voice-runtime/src/frontdesk/booking-tools.ts");
+  assert.ok(booking.includes("runEmailCollectionTask"));
+  assert.ok(booking.includes("buildEndCallToolset"));
 });
 
 check("legacy tool set is complete", () => {

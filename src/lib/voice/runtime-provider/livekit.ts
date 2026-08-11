@@ -120,6 +120,25 @@ export const liveKitRuntimeProvider: VoiceRuntimeProvider = {
       return { callId };
     }
 
+    const { requiresLiveKitVoiceRuntime } = await import(
+      "@/lib/voice/architecture/livekit-voice-profiles"
+    );
+    const agent = await prisma.voiceAgent.findFirst({
+      where: { id: metadata.agentId, workspaceId: metadata.workspaceId },
+      select: { agentType: true, draftConfig: true },
+    });
+    if (
+      agent &&
+      requiresLiveKitVoiceRuntime({
+        ...parseVoiceAgentConfig(agent.draftConfig),
+        agentType: agent.agentType,
+      })
+    ) {
+      throw new Error(
+        "Full Amy bootstrap is not supported for LiveKit-only agents — use lightweightBootstrap",
+      );
+    }
+
     const { initializeRealtimeSessionForCall } = await import(
       "@/lib/voice/realtime-session/init"
     );

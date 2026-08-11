@@ -112,7 +112,7 @@ assert.ok(
 
 // --- 4. No duplicate goodbye sequence — end_call on frontdesk ---
 
-assert.ok(bookingToolsSource.includes('name: "end_call"'), "frontdesk exposes end_call");
+assert.ok(bookingToolsSource.includes("buildEndCallToolset"), "frontdesk uses LiveKit end-call toolset");
 assert.ok(bookingToolsSource.includes("buildFrontDeskBusinessAnswerTool"), "frontdesk wires business answer tool");
 assert.ok(bookingToolsSource.includes("buildFrontDeskCancelAppointmentTool"), "frontdesk wires cancel tool");
 assert.ok(

@@ -7,11 +7,10 @@ import { buildFrontDeskBookingTools } from "../booking-tools";
 import type { FrontDeskUserData } from "../userdata";
 import { buildRealEstateFrontDeskInstructions } from "./instructions";
 import {
-  buildRealEstateFieldTools,
+  buildRealEstateCollectRequiredFieldsTool,
   buildRealEstateGetRequiredFieldsTool,
   buildRealEstateIntentTools,
   buildRealEstateLookupContactTool,
-  buildRealEstateStructuredFieldTool,
   buildRealEstateTakeMessageTool,
 } from "./re-tools";
 
@@ -36,18 +35,17 @@ export function createRealEstateFrontDeskAgent(input: {
       : {}),
   });
   const label = business.businessName;
+  const agentHolder: { root?: voice.Agent<FrontDeskUserData> } = {};
   const { toolDefs: bookingToolDefs } = buildFrontDeskBookingTools({
     timezone: input.timezone,
+    restoreRootAgent: () => agentHolder.root!,
   });
-
-  const agentHolder: { root?: voice.Agent<FrontDeskUserData> } = {};
 
   const reTools = [
     buildRealEstateLookupContactTool(),
     ...buildRealEstateIntentTools(),
     buildRealEstateGetRequiredFieldsTool(),
-    buildRealEstateFieldTools(),
-    buildRealEstateStructuredFieldTool(() => agentHolder.root!),
+    buildRealEstateCollectRequiredFieldsTool(() => agentHolder.root!),
     buildRealEstateTakeMessageTool(),
   ];
 

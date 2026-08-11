@@ -19,8 +19,12 @@ assert.ok(
   "frontdesk agent must not use GetEmailTask (agent_handoff)",
 );
 assert.ok(
-  bookingToolsSource.includes("buildFrontDeskEmailTools"),
-  "frontdesk booking tools include inline email tools",
+  bookingToolsSource.includes("runEmailCollectionTask"),
+  "frontdesk booking uses EmailCollectionTask for email gate",
+);
+assert.ok(
+  bookingToolsSource.includes("buildEndCallToolset"),
+  "frontdesk booking uses LiveKit end-call toolset",
 );
 assert.ok(
   bookingToolsSource.includes("syncFrontDeskBookingToCrm"),

@@ -1,6 +1,7 @@
 import { llm } from "@livekit/agents";
 import { z } from "zod";
 import type { AgentSession } from "@livekit/agents";
+import type { voice } from "@livekit/agents";
 import type { AvailableSlot } from "./calendly-calendar";
 import { SlotUnavailableError } from "./calendly-calendar";
 import {
@@ -9,11 +10,9 @@ import {
   lookupAppointmentIdForCallWithRetry,
   scheduleAppointmentResilient,
 } from "./booking-recovery";
-import {
-  NEEDS_EMAIL_TOOL_RESULT,
-  buildFrontDeskEmailTools,
-  resolveConfirmedEmail,
-} from "./email-collection-tools";
+import { resolveConfirmedEmail } from "./email-collection-tools";
+import { runEmailCollectionTask } from "./email-collection-task";
+import { buildEndCallToolset } from "../shared/end-call-tool";
 import { buildFrontDeskRescheduleAppointmentTool } from "./reschedule-appointment-tool";
 import { syncFrontDeskBookingToCrm } from "@/lib/voice/crm/frontdesk-crm-sync";
 import { withLiveKitToolTelemetry } from "../livekit-tool-telemetry";
@@ -70,6 +69,7 @@ export type FrontDeskBookingTools = {
 
 export function buildFrontDeskBookingTools(input: {
   timezone: string;
+  restoreRootAgent: () => voice.Agent<FrontDeskUserData>;
 }): FrontDeskBookingTools {
   const slotsMap = new Map<string, AvailableSlot>();
 
@@ -131,7 +131,7 @@ export function buildFrontDeskBookingTools(input: {
   const scheduleAppointment = llm.tool({
     name: "schedule_appointment",
     description:
-      "Book the appointment at slot_id after the caller picks a time. Returns NEEDS_EMAIL if email is not confirmed yet.",
+      "Book the appointment at slot_id after the caller picks a time. Collects email via AgentTask when needed.",
     parameters: z.object({
       slot_id: z.string().describe("Slot id from list_available_slots"),
       email: z
@@ -155,9 +155,21 @@ export function buildFrontDeskBookingTools(input: {
 
       const email = resolveConfirmedEmail(userData, inlineEmail);
       if (!email) {
-        return NEEDS_EMAIL_TOOL_RESULT;
+        const collected = await runEmailCollectionTask({
+          session,
+          restoreRootAgent: input.restoreRootAgent,
+        });
+        if (collected.declined || !collected.email) {
+          return (
+            "Email is required for the calendar invite. Explain that and offer to call back later."
+          );
+        }
+        userData.confirmedEmail = collected.email;
+      } else {
+        userData.confirmedEmail = email;
       }
-      userData.confirmedEmail = email;
+
+      const confirmedEmail = userData.confirmedEmail!;
 
       await speakBookingLine(session, POST_EMAIL_BOOKING_FILLER);
 
@@ -170,7 +182,7 @@ export function buildFrontDeskBookingTools(input: {
             const booked = await scheduleAppointmentResilient({
               session,
               slot,
-              attendeeEmail: email,
+              attendeeEmail: confirmedEmail,
             });
             const local = formatBookedTimeLabel(booked.slot.startTime, userData.timezone);
             markBookingConfirmed(userData, {
@@ -195,7 +207,7 @@ export function buildFrontDeskBookingTools(input: {
                 callId: userData.callId,
                 appointmentId,
                 callerE164: userData.callerE164,
-                email,
+                email: confirmedEmail,
                 businessName: userData.businessName,
               }).catch((err) => {
                 console.warn(
@@ -244,21 +256,9 @@ export function buildFrontDeskBookingTools(input: {
     },
   });
 
-  const endCall = llm.tool({
-    name: "end_call",
-    description:
-      "End the call when the conversation is complete — use after booking when the caller is done.",
-    parameters: z.object({
-      reason: z.string().optional(),
-    }),
-    execute: async ({ reason }, opts) => {
-      const session = opts.ctx.session as AgentSession<FrontDeskUserData>;
-      session.shutdown({ reason: reason || "caller_done" });
-      return "Call ended.";
-    },
-  });
-
-  const emailTools = buildFrontDeskEmailTools();
+  const endCallTools = buildEndCallToolset(
+    "End when the caller is done after booking or if they say goodbye.",
+  );
 
   return {
     slotsMap,
@@ -266,13 +266,12 @@ export function buildFrontDeskBookingTools(input: {
       getCurrentTime,
       listAvailableSlots,
       scheduleAppointment,
-      ...emailTools,
       buildFrontDeskBusinessAnswerTool(),
       buildFrontDeskCancelAppointmentTool(),
-      buildFrontDeskRescheduleAppointmentTool(slotsMap),
+      buildFrontDeskRescheduleAppointmentTool(slotsMap, input.restoreRootAgent),
       buildFrontDeskCheckBookingStatusTool(),
       buildFrontDeskTransferTool(),
-      endCall,
+      ...endCallTools.tools,
     ],
   };
 }
