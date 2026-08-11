@@ -13,7 +13,7 @@ export function buildBookingSuccessLine(timeLabel: string): string {
   );
 }
 
-/** Tool result after success line was already spoken via ctx.update(). */
+/** Tool result after success line was already spoken via speakBookingLine(). */
 export const BOOKING_COMPLETE_TOOL_RESULT =
   "BOOKING_COMPLETE_ALREADY_SPOKEN: The confirmation was already spoken to the caller. " +
   "Do not repeat the booking details or give another goodbye. " +
@@ -29,7 +29,7 @@ export function buildBookingFailureLine(reason?: string): string {
   return detail.startsWith("I'm sorry") ? detail : `I'm sorry — ${detail}`;
 }
 
-/** Tool result after failure line was already spoken via ctx.update(). */
+/** Tool result after failure line was already spoken via speakBookingLine(). */
 export const BOOKING_FAILED_TOOL_RESULT =
   "BOOKING_FAILED_ALREADY_SPOKEN: The runtime already told the caller the booking did NOT go through. " +
   "Do NOT say they are booked, confirmed, or that a confirmation text was sent. " +

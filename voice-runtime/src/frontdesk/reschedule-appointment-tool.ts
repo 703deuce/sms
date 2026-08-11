@@ -29,6 +29,7 @@ import {
 import { bookingFailureReason } from "../booking-error";
 import { markBookingConfirmed, type FrontDeskUserData } from "./userdata";
 import { sendBookingSmsAsync } from "./booking-sms";
+import { speakBookingLine } from "./booking-speech";
 
 function externalEventUri(externalId: string | null | undefined): string | null {
   if (!externalId) return null;
@@ -53,7 +54,6 @@ export function buildFrontDeskRescheduleAppointmentTool(slotsMap: Map<string, Av
     execute: async ({ slot_id, appointment_id, confirmed, email: inlineEmail }, opts) => {
       const session = opts.ctx.session as AgentSession<FrontDeskUserData>;
       const ud = session.userData;
-      const runCtx = opts.ctx;
 
       if (!confirmed) {
         return "Ask the caller to confirm the new time before rescheduling.";
@@ -74,8 +74,7 @@ export function buildFrontDeskRescheduleAppointmentTool(slotsMap: Map<string, Av
       }
       ud.confirmedEmail = attendeeEmail;
 
-      await runCtx.update(POST_EMAIL_BOOKING_FILLER);
-      runCtx.disallowInterruptions();
+      await speakBookingLine(session, POST_EMAIL_BOOKING_FILLER);
 
       return withLiveKitToolTelemetry(
         ud,
@@ -115,7 +114,9 @@ export function buildFrontDeskRescheduleAppointmentTool(slotsMap: Map<string, Av
 
             sendBookingSmsAsync(session, rescheduled.slot.startTime);
 
-            await runCtx.update(buildBookingSuccessLine(local));
+            sendBookingSmsAsync(session, rescheduled.slot.startTime);
+
+            await speakBookingLine(session, buildBookingSuccessLine(local));
 
             return (
               `${BOOKING_COMPLETE_TOOL_RESULT} ` +
@@ -124,7 +125,8 @@ export function buildFrontDeskRescheduleAppointmentTool(slotsMap: Map<string, Av
           } catch (err) {
             if (err instanceof SlotUnavailableError) {
               ud.slotUnavailableCount += 1;
-              await runCtx.update(
+              await speakBookingLine(
+                session,
                 buildBookingFailureLine(
                   "That new time isn't available anymore — I can check what else is open.",
                 ),
@@ -140,7 +142,7 @@ export function buildFrontDeskRescheduleAppointmentTool(slotsMap: Map<string, Av
                 error: err instanceof Error ? err.message : String(err),
               }),
             );
-            await runCtx.update(buildBookingFailureLine(bookingFailureReason(err)));
+            await speakBookingLine(session, buildBookingFailureLine(bookingFailureReason(err)));
             return BOOKING_FAILED_TOOL_RESULT;
           }
         },

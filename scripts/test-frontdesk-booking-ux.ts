@@ -35,26 +35,18 @@ assert.ok(
   "frontdesk must not use GetEmailTask (Realtime agent_handoff)",
 );
 
-const emailToFiller = frontdeskSource.match(
-  /resolveConfirmedEmail[\s\S]*?NEEDS_EMAIL_TOOL_RESULT[\s\S]*?await runCtx\.update\(POST_EMAIL_BOOKING_FILLER\)/,
-);
-assert.ok(
-  emailToFiller || frontdeskSource.includes("await runCtx.update(POST_EMAIL_BOOKING_FILLER)"),
-  "confirmed email path updates filler before protected write",
-);
-
 const fillerBeforeProtect = frontdeskSource.match(
-  /await runCtx\.update\(POST_EMAIL_BOOKING_FILLER\)\s*;\s*runCtx\.disallowInterruptions\(\)/,
+  /await speakBookingLine\(session,\s*POST_EMAIL_BOOKING_FILLER\)/,
 );
 assert.ok(
   fillerBeforeProtect,
-  "filler is spoken before disallowInterruptions (protected provider write)",
+  "filler uses speakBookingLine (Realtime-safe) before protected Calendly write",
 );
 
 assert.doesNotMatch(
   frontdeskSource,
-  /runCtx\.disallowInterruptions\(\)\s*;\s*await runCtx\.update\(POST_EMAIL_BOOKING_FILLER\)/,
-  "filler must not come after disallowInterruptions",
+  /runCtx\.update\(POST_EMAIL_BOOKING_FILLER\)/,
+  "must not use runCtx.update for filler — breaks OpenAI Realtime",
 );
 
 // --- 2. Provider booking still occurs once inside telemetry wrapper ---
@@ -81,8 +73,8 @@ assert.match(successLine, /confirmed for Monday at 3 PM/);
 assert.match(successLine, /confirmation text/i);
 
 assert.ok(
-  frontdeskSource.includes("await runCtx.update(buildBookingSuccessLine(local))"),
-  "final confirmation is spoken once from parent tool via update()",
+  frontdeskSource.includes("await speakBookingLine(session, buildBookingSuccessLine(local))"),
+  "final confirmation is spoken via Realtime-safe speakBookingLine",
 );
 
 assert.ok(

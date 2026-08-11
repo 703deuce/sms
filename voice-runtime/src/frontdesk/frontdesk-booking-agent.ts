@@ -28,6 +28,8 @@ import { bookingFailureReason } from "../booking-error";
 import { buildFrontDeskBusinessAnswerTool } from "./knowledge-tool";
 import { buildFrontDeskCancelAppointmentTool } from "./cancel-appointment-tool";
 import { buildFrontDeskTransferTool } from "./transfer-tool";
+import { buildFrontDeskCheckBookingStatusTool } from "./check-booking-status-tool";
+import { speakBookingLine } from "./booking-speech";
 import { markBookingConfirmed, type FrontDeskUserData } from "./userdata";
 import { sendBookingSmsAsync } from "./booking-sms";
 
@@ -72,6 +74,7 @@ function buildFrontDeskInstructions(businessLabel: string): string {
     "If schedule_appointment reports already_completed, tell the caller they're confirmed — ",
     "do not book again or re-ask for email. ",
     "Never claim a booking succeeded unless schedule_appointment returns BOOKING_COMPLETE_ALREADY_SPOKEN. ",
+    "If the caller asks whether booking went through, call check_booking_status. ",
     "If schedule_appointment returns BOOKING_FAILED_ALREADY_SPOKEN, the caller already heard that booking failed — ",
     "do NOT say they are confirmed or that a text was sent. ",
     "After a successful booking the runtime speaks one confirmation — do not repeat it or give ",
@@ -158,7 +161,6 @@ export function createFrontDeskBookingAgent(input: {
     execute: async ({ slot_id, email: inlineEmail }, opts) => {
       const session = opts.ctx.session as AgentSession<FrontDeskUserData>;
       const userData = session.userData;
-      const runCtx = opts.ctx;
 
       const alreadyBooked = alreadyBookedToolMessage(userData);
       if (alreadyBooked) return alreadyBooked;
@@ -176,8 +178,7 @@ export function createFrontDeskBookingAgent(input: {
       }
       userData.confirmedEmail = email;
 
-      await runCtx.update(POST_EMAIL_BOOKING_FILLER);
-      runCtx.disallowInterruptions();
+      await speakBookingLine(session, POST_EMAIL_BOOKING_FILLER);
 
       return withLiveKitToolTelemetry(
         userData,
@@ -228,13 +229,14 @@ export function createFrontDeskBookingAgent(input: {
 
             sendBookingSmsAsync(session, booked.slot.startTime);
 
-            await runCtx.update(buildBookingSuccessLine(local));
+            await speakBookingLine(session, buildBookingSuccessLine(local));
 
             return BOOKING_COMPLETE_TOOL_RESULT;
           } catch (err) {
             if (err instanceof SlotUnavailableError) {
               userData.slotUnavailableCount += 1;
-              await runCtx.update(
+              await speakBookingLine(
+                session,
                 buildBookingFailureLine(
                   "That time slot isn't available anymore — I can check what else is open.",
                 ),
@@ -252,7 +254,7 @@ export function createFrontDeskBookingAgent(input: {
                 error: err instanceof Error ? err.message : String(err),
               }),
             );
-            await runCtx.update(buildBookingFailureLine(bookingFailureReason(err)));
+            await speakBookingLine(session, buildBookingFailureLine(bookingFailureReason(err)));
             return BOOKING_FAILED_TOOL_RESULT;
           }
         },
@@ -284,6 +286,7 @@ export function createFrontDeskBookingAgent(input: {
       buildFrontDeskBusinessAnswerTool(),
       buildFrontDeskCancelAppointmentTool(),
       buildFrontDeskRescheduleAppointmentTool(slotsMap),
+      buildFrontDeskCheckBookingStatusTool(),
       buildFrontDeskTransferTool(),
       endCall,
     ]),

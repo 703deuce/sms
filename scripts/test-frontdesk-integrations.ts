@@ -73,6 +73,14 @@ assert.ok(crmTypes.includes('"appointment.cancelled"'));
 const crmEvents = read("src/lib/crm/events.ts");
 assert.ok(crmEvents.includes("publishAppointmentCancelled"));
 
-assert.ok(agentSource.includes("session.shutdown"));
+assert.ok(
+  agentSource.includes("buildFrontDeskCheckBookingStatusTool"),
+  "frontdesk includes check_booking_status tool",
+);
+assert.ok(
+  agentSource.includes("speakBookingLine"),
+  "frontdesk uses Realtime-safe scripted speech for booking lines",
+);
+assert.ok(!agentSource.includes("runCtx.update(POST_EMAIL_BOOKING_FILLER)"));
 
 console.log("frontdesk integrations tests: PASS");

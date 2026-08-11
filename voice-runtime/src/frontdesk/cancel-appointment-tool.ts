@@ -10,6 +10,7 @@ import {
   formatBookedTimeLabel,
 } from "./booking-recovery";
 import { resolveFrontDeskAppointment } from "./appointment-lookup";
+import { speakBookingLine } from "./booking-speech";
 import { POST_CANCEL_FILLER } from "../booking-completion-messages";
 import { bookingFailureReason } from "../booking-error";
 import { syncFrontDeskCancelToCrm } from "@/lib/voice/crm/frontdesk-crm-sync";
@@ -40,14 +41,12 @@ export function buildFrontDeskCancelAppointmentTool() {
     execute: async ({ appointment_id, confirmed }, opts) => {
       const session = opts.ctx.session as AgentSession<FrontDeskUserData>;
       const ud = session.userData;
-      const runCtx = opts.ctx;
 
       if (!confirmed) {
         return "Ask the caller to confirm before cancelling.";
       }
 
-      await runCtx.update(POST_CANCEL_FILLER);
-      runCtx.disallowInterruptions();
+      await speakBookingLine(session, POST_CANCEL_FILLER);
 
       return withLiveKitToolTelemetry(
         ud,
@@ -97,7 +96,7 @@ export function buildFrontDeskCancelAppointmentTool() {
           }
 
           const line = `Your appointment for ${when} has been cancelled.`;
-          await runCtx.update(line);
+          await speakBookingLine(session, line);
 
           void syncFrontDeskCancelToCrm({
             workspaceId: ud.workspaceId,
