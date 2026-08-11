@@ -7,6 +7,7 @@ import {
   isOutboundLeadQualificationProfile,
   isOutboundLeadQualificationStackProfile,
 } from "./agent-config";
+import { isOutboundRealtimeTestEnabled } from "./outbound-boot";
 import type { QualificationDefinition } from "./types";
 import { startOutboundLeadQualificationCall } from "./outbound-call-service";
 
@@ -48,6 +49,21 @@ export async function resolveOutboundQualificationAgentId(input: {
   agentId?: string;
 }): Promise<string> {
   if (input.agentId?.trim()) return input.agentId.trim();
+
+  if (isOutboundRealtimeTestEnabled()) {
+    const { ensureOutboundRealtimeCloneAgent } = await import("./ensure-realtime-clone-agent");
+    const clone = await ensureOutboundRealtimeCloneAgent({ workspaceId: input.workspaceId });
+    console.log(
+      JSON.stringify({
+        source: "transovo-outbound-trigger",
+        event: "resolved_realtime_clone_agent",
+        agentId: clone.agentId,
+        agentName: clone.agentName,
+        realtimeModel: clone.realtimeModel,
+      }),
+    );
+    return clone.agentId;
+  }
 
   const prisma = getPrisma();
   const agents = await prisma.voiceAgent.findMany({
@@ -101,6 +117,19 @@ export async function triggerOutboundQualificationCall(input: {
   if (!isOutboundLeadQualificationAgent(config)) {
     throw new Error("Agent is not configured for outbound lead qualification");
   }
+
+  const profile = config.advanced?.livekitProfile || "unknown";
+  console.log(
+    JSON.stringify({
+      source: "transovo-outbound-trigger",
+      event: "outbound_qualification_agent_selected",
+      agentId: agent.id,
+      agentName: agent.name,
+      livekitProfile: profile,
+      realtimeTest: isOutboundRealtimeTestEnabled(),
+      voiceRealtimeModel: process.env.VOICE_REALTIME_MODEL?.trim() || null,
+    }),
+  );
 
   const qualification = resolveQualificationDefinition(config);
   const destinationPhone = input.destinationPhone.trim();

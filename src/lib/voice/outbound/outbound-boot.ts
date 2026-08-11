@@ -27,6 +27,10 @@ export async function bootstrapOutboundRealtimeTest(): Promise<void> {
 
     if (!process.env.OUTBOUND_SMOKE_AGENT_ID?.trim()) {
       process.env.OUTBOUND_SMOKE_AGENT_ID = result.agentId;
+    } else if (process.env.OUTBOUND_SMOKE_AGENT_ID.trim() !== result.agentId) {
+      console.warn(
+        `[outbound-realtime] OUTBOUND_SMOKE_AGENT_ID=${process.env.OUTBOUND_SMOKE_AGENT_ID} does not match realtime clone ${result.agentId} — smoke will use the explicit id`,
+      );
     }
 
     console.log(

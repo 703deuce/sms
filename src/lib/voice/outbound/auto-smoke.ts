@@ -3,6 +3,9 @@ declare global {
   var __transovoOutboundAutoSmokeScheduled: boolean | undefined;
 }
 
+import { isOutboundRealtimeTestEnabled } from "./outbound-boot";
+import { resolveOutboundQualificationAgentId } from "./trigger-qualification-call";
+
 const AUTO_SMOKE_DELAY_MS = 45_000;
 
 export function scheduleOutboundAutoSmokeCall(): void {
@@ -17,15 +20,33 @@ export function scheduleOutboundAutoSmokeCall(): void {
   }
 
   const workspaceId = process.env.WORKSPACE_ID?.trim() || "ws_1";
-  const agentId = process.env.OUTBOUND_SMOKE_AGENT_ID?.trim() || undefined;
+  const explicitAgentId = process.env.OUTBOUND_SMOKE_AGENT_ID?.trim() || undefined;
+
+  if (isOutboundRealtimeTestEnabled() && explicitAgentId) {
+    console.warn(
+      `[outbound-smoke] OUTBOUND_SMOKE_AGENT_ID=${explicitAgentId} overrides realtime test clone — remove it to force realtime`,
+    );
+  }
 
   console.log(
-    `[outbound-smoke] scheduling auto qualification dial to ${destinationPhone} in ${AUTO_SMOKE_DELAY_MS / 1000}s`,
+    JSON.stringify({
+      source: "outbound-smoke",
+      event: "auto_smoke_scheduled",
+      destinationPhone,
+      delaySec: AUTO_SMOKE_DELAY_MS / 1000,
+      realtimeTest: isOutboundRealtimeTestEnabled(),
+      explicitAgentId: explicitAgentId || null,
+    }),
   );
 
   setTimeout(() => {
     void (async () => {
       try {
+        const agentId = await resolveOutboundQualificationAgentId({
+          workspaceId,
+          agentId: explicitAgentId,
+        });
+
         const { triggerOutboundQualificationCall } = await import("./trigger-qualification-call");
         const result = await triggerOutboundQualificationCall({
           workspaceId,
@@ -35,11 +56,16 @@ export function scheduleOutboundAutoSmokeCall(): void {
           triggerReason: "Automatic post-deploy outbound qualification smoke",
           requireTestModeEnv: false,
         });
-        console.log("[outbound-smoke] auto dial started", {
-          callId: result.callId,
-          status: result.status,
-          roomName: result.roomName,
-        });
+        console.log(
+          JSON.stringify({
+            source: "outbound-smoke",
+            event: "auto_dial_started",
+            agentId,
+            callId: result.callId,
+            status: result.status,
+            roomName: result.roomName,
+          }),
+        );
       } catch (err) {
         console.error(
           "[outbound-smoke] auto dial failed:",
