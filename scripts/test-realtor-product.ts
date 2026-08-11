@@ -67,4 +67,13 @@ const wizard = read("src/components/realtor/onboarding-wizard.tsx");
 assert.ok(wizard.includes("Go Live — Deploy Amy"));
 assert.ok(wizard.includes("intent"));
 
+const mobileNav = read("src/components/layout/mobile-nav.tsx");
+assert.ok(mobileNav.includes("buildRealtorMobileNav"));
+
+const appShell = read("src/components/layout/app-shell.tsx");
+assert.ok(appShell.includes("getRealtorPageTitle"));
+
+assert.ok(fs.existsSync(path.join(root, "src/lib/voice/real-estate/policy.ts")));
+assert.ok(fs.existsSync(path.join(root, "src/lib/voice/real-estate/agent-templates.ts")));
+
 console.log("realtor product tests: PASS");

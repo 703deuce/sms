@@ -10,6 +10,18 @@ export default async function FrontDeskAgentPage() {
   return (
     <div className="space-y-6 p-6">
       <PageHeader title="Front Desk" description="Configuration — not daily operations." />
+      <Card className="p-4 space-y-2 text-sm">
+        <p>
+          Deployed agent: {config.deployedAgentId || "Not deployed yet"}
+        </p>
+        <p>
+          Built from template: {config.frontDeskTemplateAgentId || "Front Desk Booking agent"}
+        </p>
+        <p className="text-muted-foreground">
+          Inbound Amy clones your existing Front Desk Booking (Realtime) agent — wizard fields
+          customize business profile, intents, and outcomes later.
+        </p>
+      </Card>
       <Card className="p-4">
         <CardTitle className="mb-3">Caller types</CardTitle>
         <ul className="space-y-2 text-sm">

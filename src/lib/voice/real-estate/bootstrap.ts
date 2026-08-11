@@ -58,6 +58,8 @@ export async function bootstrapRealEstateFrontDesk(): Promise<BootstrapRealEstat
     await saveRealtorProductConfig(workspaceId, {
       ...mergedConfig,
       deployedOutboundAgentId: speedToLead.outboundAgentId || existing.deployedOutboundAgentId,
+      frontDeskTemplateAgentId: agent.templateAgentId || existing.frontDeskTemplateAgentId,
+      outboundTemplateAgentId: speedToLead.outboundTemplateAgentId || existing.outboundTemplateAgentId,
       followUpAutomationId: speedToLead.followUpAutomationId || existing.followUpAutomationId,
     });
     console.log(

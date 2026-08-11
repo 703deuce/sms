@@ -6,6 +6,10 @@ import {
   FRONTDESK_REALTIME_PROFILE,
   isFrontDeskProfile,
 } from "@/lib/voice/frontdesk/agent-config";
+import {
+  resolveFrontDeskTemplateAgent,
+  REAL_ESTATE_DEPLOYED_FRONT_DESK_NAME,
+} from "./agent-templates";
 import { DEFAULT_REAL_ESTATE_BUSINESS } from "./config";
 
 export type EnsureRealEstateFrontDeskAgentInput = {
@@ -22,6 +26,8 @@ export type EnsureRealEstateFrontDeskAgentResult = {
   phoneE164: string | null;
   created: boolean;
   upgraded: boolean;
+  templateAgentId?: string;
+  templateAgentName?: string;
 };
 
 function resolvePhoneE164(input?: string): string {
@@ -34,7 +40,11 @@ function resolvePhoneE164(input?: string): string {
 }
 
 function resolveAgentName(input?: string): string {
-  return (input?.trim() || process.env.RE_FRONTDESK_AGENT_NAME?.trim() || "Real Estate Front Desk").trim();
+  return (
+    input?.trim() ||
+    process.env.RE_FRONTDESK_AGENT_NAME?.trim() ||
+    REAL_ESTATE_DEPLOYED_FRONT_DESK_NAME
+  ).trim();
 }
 
 export function buildRealEstateDraftConfig(
@@ -100,6 +110,8 @@ export async function ensureRealEstateFrontDeskAgent(
     throw new Error(`Phone number ${phoneE164} not found in workspace ${workspaceId}`);
   }
 
+  const template = await resolveFrontDeskTemplateAgent(workspaceId);
+
   const agents = await prisma.voiceAgent.findMany({
     where: { workspaceId },
     select: { id: true, name: true, draftConfig: true },
@@ -114,6 +126,12 @@ export async function ensureRealEstateFrontDeskAgent(
   let agentId = existingRe?.id;
   let existingCfg = existingRe ? parseVoiceAgentConfig(existingRe.draftConfig) : undefined;
   let created = false;
+  let templateAgentId = template?.agentId;
+  let templateAgentName = template?.agentName;
+
+  if (!existingCfg && template) {
+    existingCfg = template.draftConfig;
+  }
 
   if (!agentId) {
     const frontdeskFallback = agents.find((row: (typeof agents)[number]) => {
@@ -121,7 +139,11 @@ export async function ensureRealEstateFrontDeskAgent(
       return isFrontDeskProfile(cfg.advanced as Record<string, unknown>);
     });
     agentId = frontdeskFallback?.id;
-    existingCfg = frontdeskFallback ? parseVoiceAgentConfig(frontdeskFallback.draftConfig) : undefined;
+    if (!existingCfg && frontdeskFallback) {
+      existingCfg = parseVoiceAgentConfig(frontdeskFallback.draftConfig);
+      templateAgentId = templateAgentId || frontdeskFallback.id;
+      templateAgentName = templateAgentName || frontdeskFallback.name;
+    }
   }
 
   const draftConfig = buildRealEstateDraftConfig(existingCfg || DEFAULT_VOICE_CONFIG, agentName);
@@ -172,5 +194,7 @@ export async function ensureRealEstateFrontDeskAgent(
     phoneE164: phone?.e164 || phoneE164,
     created,
     upgraded: !created,
+    templateAgentId,
+    templateAgentName,
   };
 }

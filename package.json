@@ -64,6 +64,7 @@
     "seed:real-estate-frontdesk-knowledge": "tsx scripts/seed-real-estate-frontdesk-knowledge.ts",
     "test:real-estate-frontdesk": "tsx scripts/test-real-estate-frontdesk.ts",
     "test:realtor-product": "tsx scripts/test-realtor-product.ts",
+    "test:realtor-edge-cases": "tsx scripts/test-realtor-edge-cases.ts",
     "seed:frontdesk-voice-knowledge": "tsx scripts/seed-frontdesk-voice-knowledge.ts",
     "test:caller-amy": "tsx scripts/test-caller-amy-orchestration.ts && tsx scripts/caller-amy-preprod-suite.ts",
     "test:john-preprod": "tsx scripts/john-preprod-suite.ts",

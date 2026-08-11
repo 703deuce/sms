@@ -226,16 +226,20 @@ export function Sidebar({
   const content = (
     <aside className="flex h-dvh w-[260px] flex-col overflow-hidden bg-sidebar text-sidebar-foreground">
       <div className="shrink-0 px-3.5 pb-2.5 pt-3.5">
-        <Link href="/outcomes" className="flex items-start gap-2.5" onClick={onClose}>
+        <Link
+          href={realtorMode ? "/realtor/dashboard" : "/outcomes"}
+          className="flex items-start gap-2.5"
+          onClick={onClose}
+        >
           <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] bg-primary text-white shadow-[0_8px_18px_rgba(16,185,129,0.35)]">
             <MessageSquare className="h-3.5 w-3.5" fill="currentColor" />
           </span>
           <span>
             <span className="block text-[14px] font-bold tracking-tight text-white">
-              Transovo SMS
+              {realtorMode ? "Transovo Real Estate" : "Transovo SMS"}
             </span>
             <span className="mt-0.5 block text-[10px] leading-tight text-sidebar-muted">
-              Solutions-first workspace
+              {realtorMode ? "Amy AI Front Desk" : "Solutions-first workspace"}
             </span>
           </span>
         </Link>

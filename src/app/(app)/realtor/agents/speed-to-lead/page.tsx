@@ -11,6 +11,14 @@ export default async function SpeedToLeadAgentPage() {
     <div className="space-y-6 p-6">
       <PageHeader title="Speed-to-Lead" description="Outbound qualification and follow-up." />
       <Card className="p-4 space-y-2 text-sm">
+        <p>Deployed agent: {config.deployedOutboundAgentId || "Not deployed yet"}</p>
+        <p>
+          Built from template: {config.outboundTemplateAgentId || "Outbound Lead Qualification (Demo)"}
+        </p>
+        <p className="text-muted-foreground">
+          Speed-to-Lead clones your existing Outbound Lead Qualification agent — qualification fields
+          and follow-up timing are wizard-configurable.
+        </p>
         <p>Call immediately: {config.speedToLead.callImmediately ? "Yes" : "No"}</p>
         <p>Buyer qualification: {config.speedToLead.buyerQualification ? "Yes" : "No"}</p>
         <p>Seller qualification: {config.speedToLead.sellerQualification ? "Yes" : "No"}</p>

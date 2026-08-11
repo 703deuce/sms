@@ -3,6 +3,11 @@ import { getPrisma } from "@/lib/db";
 import { createId } from "@/lib/supabase/id";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import { loadRealtorProductConfig } from "@/lib/realtor/workspace-config";
+import {
+  applyPolicyEvent,
+  assertPolicyAllows,
+  createInitialLeadPolicy,
+} from "@/lib/voice/real-estate/policy";
 import { triggerOutboundQualificationCall } from "@/lib/voice/outbound/trigger-qualification-call";
 import { NextResponse } from "next/server";
 
@@ -50,6 +55,8 @@ export async function POST(req: Request) {
       config.speedToLead.callImmediately;
 
     if (shouldDial) {
+      const policy = applyPolicyEvent(createInitialLeadPolicy(), { type: "outbound_attempt_queued" });
+      assertPolicyAllows(policy, "place_outbound_call");
       outboundCall = await triggerOutboundQualificationCall({
         workspaceId: auth.workspaceId,
         destinationPhone: phone,

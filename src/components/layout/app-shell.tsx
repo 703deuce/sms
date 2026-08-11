@@ -4,6 +4,7 @@ import { Header } from "@/components/layout/header";
 import { MobileNav } from "@/components/layout/mobile-nav";
 import { Sidebar } from "@/components/layout/sidebar";
 import { getPageTitle } from "@/lib/nav";
+import { getRealtorPageTitle } from "@/lib/realtor/nav";
 import type { SolutionNavInstance } from "@/lib/solutions-nav";
 import type { DashboardMetrics, PhoneNumber, Workspace } from "@/lib/types";
 import { usePathname } from "next/navigation";
@@ -39,7 +40,7 @@ export function AppShell({
       pathname === "/agents" ||
       pathname.startsWith("/agents/")
       ? ""
-      : getPageTitle(pathname);
+      : (realtorMode ? getRealtorPageTitle(pathname) : null) || getPageTitle(pathname);
 
   return (
     <div className="min-h-screen bg-background">
@@ -64,7 +65,7 @@ export function AppShell({
         />
         <main className="px-4 pb-28 pt-5 lg:px-6 lg:pb-8">{children}</main>
       </div>
-      <MobileNav onMore={() => setMenuOpen(true)} />
+      <MobileNav realtorMode={realtorMode} onMore={() => setMenuOpen(true)} />
     </div>
   );
 }

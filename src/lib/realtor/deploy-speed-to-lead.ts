@@ -10,11 +10,15 @@ import { triggerFromBlockType } from "@/lib/automations/catalog";
 import { findTriggerNode, parseAutomationDefinition } from "@/lib/automations/types";
 import { enqueueJob } from "@/lib/messaging/enqueue-advance";
 import { parseVoiceAgentConfig } from "@/lib/voice/types";
+import { getOutboundQualificationFromConfig } from "@/lib/voice/outbound/agent-config";
 import { isOutboundRealtimeTestEnabled } from "@/lib/voice/outbound/outbound-boot";
+import {
+  REAL_ESTATE_DEPLOYED_OUTBOUND_NAME,
+  resolveOutboundTemplateAgent,
+} from "@/lib/voice/real-estate/agent-templates";
 import type { RealtorProductConfig } from "./types";
 
 const FOLLOW_UP_FLOW_NAME = "Amy — New Lead Follow-Up (Recommended)";
-const OUTBOUND_STACK_AGENT_NAME = "Outbound Lead Qualification (Demo)";
 
 function loadQualificationFixture(): Record<string, unknown> {
   const fixturePath = path.join(
@@ -180,9 +184,17 @@ export function buildRealtorFollowUpDefinition(agentId: string): AutomationDefin
   };
 }
 
-async function ensureStackOutboundAgent(workspaceId: string): Promise<string> {
+async function ensureStackOutboundAgent(workspaceId: string): Promise<{
+  agentId: string;
+  templateAgentId?: string;
+  templateAgentName?: string;
+}> {
   const prisma = getPrisma();
-  const qualification = loadQualificationFixture();
+  const template = await resolveOutboundTemplateAgent(workspaceId);
+  const qualification =
+    (template ? getOutboundQualificationFromConfig(template.draftConfig) : null) ||
+    (loadQualificationFixture() as ReturnType<typeof getOutboundQualificationFromConfig>);
+
   const phoneE164 =
     process.env.PHONE_E164?.trim() ||
     process.env.FRONTDESK_PHONE_E164?.trim() ||
@@ -194,11 +206,11 @@ async function ensureStackOutboundAgent(workspaceId: string): Promise<string> {
   });
 
   let agent = await prisma.voiceAgent.findFirst({
-    where: { workspaceId, name: OUTBOUND_STACK_AGENT_NAME },
+    where: { workspaceId, name: REAL_ESTATE_DEPLOYED_OUTBOUND_NAME },
     select: { id: true, draftConfig: true },
   });
 
-  const baseConfig = agent ? parseVoiceAgentConfig(agent.draftConfig) : parseVoiceAgentConfig({});
+  const baseConfig = template?.draftConfig || (agent ? parseVoiceAgentConfig(agent.draftConfig) : parseVoiceAgentConfig({}));
   const draftConfig = {
     ...baseConfig,
     advanced: {
@@ -208,7 +220,7 @@ async function ensureStackOutboundAgent(workspaceId: string): Promise<string> {
     },
     dynamicVariables: {
       ...(baseConfig.dynamicVariables || {}),
-      business_name: String(qualification.businessName || "Blue Ridge Realty"),
+      business_name: String(qualification?.businessName || "Blue Ridge Realty"),
     },
   };
 
@@ -223,14 +235,18 @@ async function ensureStackOutboundAgent(workspaceId: string): Promise<string> {
         directions: ["outbound"],
       },
     });
-    return agent.id;
+    return {
+      agentId: agent.id,
+      templateAgentId: template?.agentId,
+      templateAgentName: template?.agentName,
+    };
   }
 
   const created = await prisma.voiceAgent.create({
     data: {
       workspaceId,
-      name: OUTBOUND_STACK_AGENT_NAME,
-      description: "Speed-to-Lead outbound qualification for Transovo Real Estate",
+      name: REAL_ESTATE_DEPLOYED_OUTBOUND_NAME,
+      description: "Speed-to-Lead outbound qualification — cloned from outbound template agent",
       agentType: "custom",
       status: "ACTIVE",
       outboundAiEnabled: true,
@@ -240,25 +256,40 @@ async function ensureStackOutboundAgent(workspaceId: string): Promise<string> {
     },
     select: { id: true },
   });
-  return created.id;
+  return {
+    agentId: created.id,
+    templateAgentId: template?.agentId,
+    templateAgentName: template?.agentName,
+  };
 }
 
 export async function ensureRealtorOutboundAgent(input: {
   workspaceId: string;
-}): Promise<{ agentId: string; created: boolean }> {
+}): Promise<{ agentId: string; created: boolean; templateAgentId?: string; templateAgentName?: string }> {
   if (isOutboundRealtimeTestEnabled()) {
+    const template = await resolveOutboundTemplateAgent(input.workspaceId);
     const { ensureOutboundRealtimeCloneAgent } = await import(
       "@/lib/voice/outbound/ensure-realtime-clone-agent"
     );
-    const clone = await ensureOutboundRealtimeCloneAgent({ workspaceId: input.workspaceId });
-    return { agentId: clone.agentId, created: clone.created };
+    const clone = await ensureOutboundRealtimeCloneAgent({
+      workspaceId: input.workspaceId,
+      sourceAgentId: template?.agentId,
+      sourceAgentName: template?.agentName,
+      cloneAgentName: REAL_ESTATE_DEPLOYED_OUTBOUND_NAME,
+    });
+    return {
+      agentId: clone.agentId,
+      created: clone.created,
+      templateAgentId: clone.sourceAgentId,
+      templateAgentName: template?.agentName,
+    };
   }
   const existing = await getPrisma().voiceAgent.findFirst({
-    where: { workspaceId: input.workspaceId, name: OUTBOUND_STACK_AGENT_NAME },
+    where: { workspaceId: input.workspaceId, name: REAL_ESTATE_DEPLOYED_OUTBOUND_NAME },
     select: { id: true },
   });
-  const agentId = await ensureStackOutboundAgent(input.workspaceId);
-  return { agentId, created: !existing };
+  const result = await ensureStackOutboundAgent(input.workspaceId);
+  return { ...result, created: !existing };
 }
 
 export async function ensureRealtorFollowUpAutomation(input: {
@@ -316,6 +347,7 @@ export async function deployRealtorSpeedToLead(input: {
   config: RealtorProductConfig;
 }): Promise<{
   outboundAgentId: string;
+  outboundTemplateAgentId?: string;
   followUpAutomationId?: string;
 }> {
   if (input.config.amyMode === "front_desk") {
@@ -333,5 +365,9 @@ export async function deployRealtorSpeedToLead(input: {
     followUpAutomationId = flow.flowId;
   }
 
-  return { outboundAgentId: outbound.agentId, followUpAutomationId };
+  return {
+    outboundAgentId: outbound.agentId,
+    outboundTemplateAgentId: outbound.templateAgentId,
+    followUpAutomationId,
+  };
 }

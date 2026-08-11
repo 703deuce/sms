@@ -71,6 +71,8 @@ export type RealtorProductConfig = {
   };
   deployedAgentId?: string;
   deployedOutboundAgentId?: string;
+  frontDeskTemplateAgentId?: string;
+  outboundTemplateAgentId?: string;
   followUpAutomationId?: string;
   deployedAt?: string;
   /** Maps appointment type label → Calendly event type URI or slug */

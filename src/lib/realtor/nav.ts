@@ -15,6 +15,52 @@ import {
   Workflow,
 } from "lucide-react";
 
+export const REALTOR_PIPELINE_COLUMNS: Array<{
+  status: import("./types").RealtorLeadStatus;
+  label: string;
+}> = [
+  { status: "new", label: "New" },
+  { status: "working", label: "Working" },
+  { status: "contacted", label: "Contacted" },
+  { status: "qualified", label: "Qualified" },
+  { status: "appointment", label: "Appointment" },
+  { status: "nurture", label: "Nurture" },
+  { status: "closed", label: "Closed" },
+];
+
+export function buildRealtorMobileNav(): NavItem[] {
+  return [
+    { label: "Dashboard", href: "/realtor/dashboard", icon: LayoutDashboard },
+    { label: "Leads", href: "/realtor/leads", icon: Users },
+    { label: "Inbox", href: "/inbox", icon: Inbox },
+    { label: "Calls", href: "/phone/calls", icon: PhoneCall },
+  ];
+}
+
+const REALTOR_PAGE_TITLES: Record<string, string> = {
+  "/realtor": "Real Estate",
+  "/realtor/onboarding": "Get Amy Working",
+  "/realtor/dashboard": "Dashboard",
+  "/realtor/leads": "Leads",
+  "/realtor/needs-attention": "Needs Attention",
+  "/realtor/test": "Test Amy",
+  "/realtor/messages": "Messages",
+  "/realtor/appointments": "Appointments",
+  "/realtor/appointments/types": "Appointment Types",
+  "/realtor/leads/sources": "Lead Sources",
+  "/realtor/settings/business": "Business Settings",
+  "/realtor/agents/front-desk": "Front Desk Agent",
+  "/realtor/agents/speed-to-lead": "Speed-to-Lead",
+  "/realtor/agents/knowledge": "Knowledge",
+  "/realtor/agents/activity": "Agent Activity",
+};
+
+export function getRealtorPageTitle(pathname: string): string | null {
+  if (REALTOR_PAGE_TITLES[pathname]) return REALTOR_PAGE_TITLES[pathname];
+  if (pathname.startsWith("/realtor/leads/")) return "Lead Detail";
+  return null;
+}
+
 export function buildRealtorNav(): NavItem[] {
   return [
     { label: "Dashboard", href: "/realtor/dashboard", icon: LayoutDashboard },

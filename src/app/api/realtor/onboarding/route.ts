@@ -50,6 +50,9 @@ export async function POST(req: Request) {
       currentStep: "go_live",
       deployedAgentId: deploy.agent.agentId,
       deployedOutboundAgentId: deploy.speedToLead?.outboundAgentId || current.deployedOutboundAgentId,
+      frontDeskTemplateAgentId: deploy.agent.templateAgentId || current.frontDeskTemplateAgentId,
+      outboundTemplateAgentId:
+        deploy.speedToLead?.outboundTemplateAgentId || current.outboundTemplateAgentId,
       followUpAutomationId: deploy.speedToLead?.followUpAutomationId || current.followUpAutomationId,
       deployedAt: new Date().toISOString(),
     });
