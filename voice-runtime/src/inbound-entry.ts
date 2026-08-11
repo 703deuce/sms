@@ -143,7 +143,8 @@ export async function runInboundEntry(ctx: JobContext): Promise<void> {
       }
     | undefined;
 
-  const maxToolSteps = Number(process.env.VOICE_MAX_TOOL_STEPS?.trim()) || 8;
+  const maxToolSteps =
+    Number(process.env.VOICE_MAX_TOOL_STEPS?.trim()) || (isRealEstate ? 12 : 8);
 
   if (useRealtime) {
     const realtimeCfg = resolveOutboundRealtimePipelineConfig(agentConfig);

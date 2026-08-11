@@ -23,6 +23,45 @@ const AGENT_NAME = (process.env.RE_FRONTDESK_AGENT_NAME || "Real Estate Front De
 const REALTIME_MODEL = process.env.VOICE_REALTIME_MODEL?.trim() || "gpt-realtime-2.1-mini";
 const REALTIME_VOICE = process.env.VOICE_REALTIME_VOICE?.trim() || "marin";
 
+function buildRealEstateDraftConfig(existing = DEFAULT_VOICE_CONFIG) {
+  const business = DEFAULT_REAL_ESTATE_BUSINESS;
+  return {
+    ...existing,
+    identity: {
+      ...(existing.identity || {}),
+      displayName: AGENT_NAME,
+      businessLocation: business.businessName,
+    },
+    dynamicVariables: {
+      ...(existing.dynamicVariables || {}),
+      business_name: business.businessName,
+      agent_name: AGENT_NAME,
+      service_areas: business.serviceAreas,
+      property_types: business.propertyTypes,
+      knowledge_notes: business.knowledgeNotes,
+      authority_boundaries: business.authorityBoundaries,
+    },
+    advanced: {
+      ...(existing.advanced || {}),
+      livekitProfile: FRONTDESK_REALTIME_PROFILE,
+      realEstateFrontDesk: true,
+      vertical: "real_estate",
+      realtimeModel:
+        process.env.VOICE_REALTIME_MODEL?.trim() ||
+        (existing.advanced as Record<string, unknown> | undefined)?.realtimeModel ||
+        REALTIME_MODEL,
+      realtimeVoice:
+        process.env.VOICE_REALTIME_VOICE?.trim() ||
+        (existing.advanced as Record<string, unknown> | undefined)?.realtimeVoice ||
+        REALTIME_VOICE,
+    },
+    messaging: {
+      ...(existing.messaging || {}),
+      smsConfirmations: existing.messaging?.smsConfirmations !== false,
+    },
+  };
+}
+
 async function main() {
   const prisma = getPrisma();
   const phone = await prisma.phoneNumber.findFirst({
@@ -37,50 +76,29 @@ async function main() {
     where: { workspaceId: phone.workspaceId },
     select: { id: true, name: true, draftConfig: true },
   });
-  const existing = agents.find((row) => {
+  const existingRe = agents.find((row) => {
     const cfg = parseVoiceAgentConfig(row.draftConfig);
     const advanced = cfg.advanced as Record<string, unknown> | undefined;
     return isFrontDeskProfile(advanced) && advanced?.realEstateFrontDesk === true;
   });
 
-  const business = DEFAULT_REAL_ESTATE_BUSINESS;
-  const draftConfig = {
-    ...DEFAULT_VOICE_CONFIG,
-    identity: {
-      ...DEFAULT_VOICE_CONFIG.identity,
-      displayName: AGENT_NAME,
-      businessLocation: business.businessName,
-    },
-    dynamicVariables: {
-      business_name: business.businessName,
-      agent_name: AGENT_NAME,
-      service_areas: business.serviceAreas,
-      property_types: business.propertyTypes,
-      knowledge_notes: business.knowledgeNotes,
-      authority_boundaries: business.authorityBoundaries,
-    },
-    advanced: {
-      ...(DEFAULT_VOICE_CONFIG.advanced || {}),
-      livekitProfile: FRONTDESK_REALTIME_PROFILE,
-      realEstateFrontDesk: true,
-      vertical: "real_estate",
-      realtimeModel: REALTIME_MODEL,
-      realtimeVoice: REALTIME_VOICE,
-    },
-    messaging: {
-      ...(DEFAULT_VOICE_CONFIG.messaging || {}),
-      smsConfirmations: true,
-    },
-  };
+  let agentId = existingRe?.id;
+  let existingCfg = existingRe
+    ? parseVoiceAgentConfig(existingRe.draftConfig)
+    : undefined;
 
-  let agentId = existing?.id;
   if (!agentId) {
     const frontdeskFallback = agents.find((row) => {
       const cfg = parseVoiceAgentConfig(row.draftConfig);
       return isFrontDeskProfile(cfg.advanced as Record<string, unknown>);
     });
     agentId = frontdeskFallback?.id;
+    existingCfg = frontdeskFallback
+      ? parseVoiceAgentConfig(frontdeskFallback.draftConfig)
+      : undefined;
   }
+
+  const draftConfig = buildRealEstateDraftConfig(existingCfg || DEFAULT_VOICE_CONFIG);
 
   if (agentId) {
     await prisma.voiceAgent.update({
@@ -94,7 +112,7 @@ async function main() {
         draftConfig: draftConfig as object,
       },
     });
-    console.log(`Upgraded agent ${agentId} to Real Estate Front Desk`);
+    console.log(`Upgraded agent ${agentId} to Real Estate Front Desk (preserved existing config)`);
   } else {
     const created = await prisma.voiceAgent.create({
       data: {
@@ -130,8 +148,8 @@ async function main() {
         livekitProfile: FRONTDESK_REALTIME_PROFILE,
         realEstateFrontDesk: true,
         assign,
-        realtimeModel: REALTIME_MODEL,
-        realtimeVoice: REALTIME_VOICE,
+        realtimeModel: draftConfig.advanced?.realtimeModel || REALTIME_MODEL,
+        realtimeVoice: draftConfig.advanced?.realtimeVoice || REALTIME_VOICE,
       },
       null,
       2,

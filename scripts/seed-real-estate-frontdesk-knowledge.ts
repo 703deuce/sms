@@ -10,8 +10,11 @@ import { getPrisma } from "../src/lib/db";
 import { createId } from "../src/lib/supabase/id";
 import { parseVoiceAgentConfig } from "../src/lib/voice/types";
 import { processKnowledgeSource } from "../src/lib/voice/knowledge-processor";
-import { isRealEstateFrontDeskAgent } from "../src/lib/voice/real-estate/config";
-import { DEFAULT_REAL_ESTATE_BUSINESS } from "../src/lib/voice/real-estate/config";
+import { resolveBusinessAnswer } from "../src/lib/voice/knowledge/resolve-business-answer";
+import {
+  DEFAULT_REAL_ESTATE_BUSINESS,
+  isRealEstateFrontDeskAgent,
+} from "../src/lib/voice/real-estate/config";
 
 dotenv.config();
 
@@ -69,37 +72,90 @@ async function main() {
   });
   if (!agent) throw new Error(`Agent ${agentId} not found`);
 
-  const config = parseVoiceAgentConfig(agent.draftConfig);
-  const nextConfig = {
-    ...config,
-    knowledge: {
-      ...(config.knowledge || {}),
-      structured: STRUCTURED_KNOWLEDGE,
-    },
+  const existingCfg = parseVoiceAgentConfig(agent.draftConfig);
+  const draftConfig = {
+    ...existingCfg,
     dynamicVariables: {
-      ...(config.dynamicVariables || {}),
+      ...(existingCfg.dynamicVariables || {}),
       business_name: business.businessName,
       service_areas: business.serviceAreas,
       property_types: business.propertyTypes,
       knowledge_notes: business.knowledgeNotes,
       authority_boundaries: business.authorityBoundaries,
     },
+    knowledgeBase: STRUCTURED_KNOWLEDGE,
+    knowledgeBaseIds: Array.isArray(existingCfg.knowledgeBaseIds)
+      ? [...existingCfg.knowledgeBaseIds]
+      : [],
   };
+
+  let kbId = draftConfig.knowledgeBaseIds[0];
+  if (!kbId) {
+    const existingKb = await prisma.voiceKnowledgeBase.findFirst({
+      where: { workspaceId: WORKSPACE_ID, name: "Blue Ridge Realty Voice Knowledge" },
+      select: { id: true },
+    });
+    kbId = existingKb?.id || createId();
+    if (!existingKb) {
+      await prisma.voiceKnowledgeBase.create({
+        data: {
+          id: kbId,
+          workspaceId: WORKSPACE_ID,
+          name: "Blue Ridge Realty Voice Knowledge",
+          description: "Structured wizard facts + RAG corpus for RE front desk",
+          status: "active",
+        },
+      });
+    }
+    draftConfig.knowledgeBaseIds = [kbId];
+  }
+
+  await prisma.voiceAgentKnowledgeBase.upsert({
+    where: {
+      agentId_knowledgeBaseId: {
+        agentId,
+        knowledgeBaseId: kbId,
+      },
+    },
+    create: { workspaceId: WORKSPACE_ID, agentId, knowledgeBaseId: kbId },
+    update: {},
+  });
+
+  const sourceName = "Blue Ridge Realty RE Front Desk RAG";
+  let source = await prisma.voiceKnowledgeSource.findFirst({
+    where: { workspaceId: WORKSPACE_ID, knowledgeBaseId: kbId, name: sourceName },
+  });
+  if (!source) {
+    source = await prisma.voiceKnowledgeSource.create({
+      data: {
+        id: createId(),
+        workspaceId: WORKSPACE_ID,
+        knowledgeBaseId: kbId,
+        name: sourceName,
+        sourceType: "text",
+        contentText: ragText,
+        status: "pending",
+      },
+    });
+  } else {
+    await prisma.voiceKnowledgeSource.update({
+      where: { id: source.id },
+      data: { contentText: ragText, status: "pending" },
+    });
+  }
+
+  await processKnowledgeSource(source.id);
 
   await prisma.voiceAgent.update({
     where: { id: agentId },
-    data: { draftConfig: nextConfig as object },
+    data: { draftConfig },
   });
 
-  const sourceId = createId();
-  await processKnowledgeSource({
-    workspaceId: WORKSPACE_ID,
-    agentId,
-    sourceId,
-    title: "Blue Ridge Realty — RE Front Desk",
-    rawText: ragText,
-    sourceType: "text",
-  });
+  const checks = await Promise.all([
+    resolveBusinessAnswer({ workspaceId: WORKSPACE_ID, agentId, topic: "hours" }),
+    resolveBusinessAnswer({ workspaceId: WORKSPACE_ID, agentId, topic: "MLS listings" }),
+    resolveBusinessAnswer({ workspaceId: WORKSPACE_ID, agentId, topic: "consultation fee" }),
+  ]);
 
   console.log(
     JSON.stringify(
@@ -107,10 +163,16 @@ async function main() {
         ok: true,
         agentId,
         agentName: agent.name,
-        sourceId,
+        knowledgeBaseId: kbId,
+        sourceId: source.id,
         structuredKnowledge: true,
         ragChars: ragText.length,
         phoneE164: PHONE_E164,
+        smokeChecks: checks.map((c, i) => ({
+          query: ["hours", "MLS", "consultation"][i],
+          ok: c.ok,
+          speak: c.speak.slice(0, 120),
+        })),
       },
       null,
       2,

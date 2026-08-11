@@ -1,6 +1,10 @@
 import { getPrisma } from "@/lib/db";
 import type { RealEstateCallState, RealEstateIntent, RealEstateLeadStatus } from "./types";
 import { isIntakeComplete, missingRequiredFields } from "./fields";
+import {
+  isBareLocalContactId,
+  parseLocalContactIdFromSafeId,
+} from "./contact-id";
 
 export function createInitialCallState(): RealEstateCallState {
   return {
@@ -140,6 +144,9 @@ export async function persistCallState(input: {
     existing?.metadata && typeof existing.metadata === "object" && !Array.isArray(existing.metadata)
       ? (existing.metadata as Record<string, unknown>)
       : {};
+  const localContactId =
+    parseLocalContactIdFromSafeId(input.callState.contactId) ||
+    (isBareLocalContactId(input.callState.contactId) ? input.callState.contactId : undefined);
   await prisma.voiceCall.update({
     where: { id: input.callId },
     data: {
@@ -147,7 +154,7 @@ export async function persistCallState(input: {
         ...prevMeta,
         realEstateCallState: input.callState,
       },
-      ...(input.callState.contactId ? { contactId: input.callState.contactId } : {}),
+      ...(localContactId ? { contactId: localContactId } : {}),
     },
   });
 }

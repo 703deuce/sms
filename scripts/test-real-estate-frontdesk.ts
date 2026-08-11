@@ -18,6 +18,10 @@ import {
   normalizeIntent,
 } from "../src/lib/voice/real-estate/fields";
 import { isRealEstateFrontDeskAgent } from "../src/lib/voice/real-estate/config";
+import {
+  isBareLocalContactId,
+  parseLocalContactIdFromSafeId,
+} from "../src/lib/voice/real-estate/contact-id";
 
 const root = process.cwd();
 
@@ -36,6 +40,19 @@ assert.equal(normalizeIntent("home_seller"), "seller");
 assert.equal(normalizeIntent("tour"), "showing");
 assert.equal(normalizeIntent("realtor"), "agent_to_agent");
 assert.equal(normalizeIntent("unknown_thing"), null);
+
+// --- Contact id safety (avoid FK violations on voiceCall.contactId) ---
+assert.equal(parseLocalContactIdFromSafeId("local:cnt_abc"), "cnt_abc");
+assert.equal(parseLocalContactIdFromSafeId("crm:zoho:123"), undefined);
+assert.equal(isBareLocalContactId("cnt_abc"), true);
+assert.equal(isBareLocalContactId("local:cnt_abc"), false);
+
+const stateSource = read("src/lib/voice/real-estate/state.ts");
+assert.ok(stateSource.includes("parseLocalContactIdFromSafeId"));
+assert.ok(stateSource.includes("isBareLocalContactId"));
+
+const reToolsSourceEarly = read("voice-runtime/src/frontdesk/real-estate/re-tools.ts");
+assert.ok(reToolsSourceEarly.includes("parseLocalContactIdFromSafeId"));
 
 // --- Buyer field requirements ---
 const buyerFields = fieldsForIntent("buyer");
@@ -83,6 +100,7 @@ const inboundSource = read("voice-runtime/src/inbound-entry.ts");
 assert.ok(inboundSource.includes("createRealEstateFrontDeskAgent"));
 assert.ok(inboundSource.includes("isRealEstateFrontDeskProfile"));
 assert.ok(inboundSource.includes("createInitialCallState"));
+assert.ok(inboundSource.includes("isRealEstate ? 12 : 8") || inboundSource.includes("isRealEstate ? 12"));
 
 const reAgentSource = read("voice-runtime/src/frontdesk/real-estate/real-estate-frontdesk-agent.ts");
 assert.ok(reAgentSource.includes("buildFrontDeskBookingTools"));
@@ -121,6 +139,12 @@ assert.ok(notificationsSource.includes("voice.real_estate."));
 const setupSource = read("scripts/setup-real-estate-frontdesk-agent.ts");
 assert.ok(setupSource.includes("realEstateFrontDesk: true"));
 assert.ok(setupSource.includes("FRONTDESK_REALTIME_PROFILE"));
+assert.ok(setupSource.includes("buildRealEstateDraftConfig"));
+assert.ok(setupSource.includes("preserved existing config") || setupSource.includes("existingCfg"));
+
+const seedSource = read("scripts/seed-real-estate-frontdesk-knowledge.ts");
+assert.ok(seedSource.includes("processKnowledgeSource(source.id)"));
+assert.ok(seedSource.includes("voiceKnowledgeBase.create"));
 
 // --- Fixtures ---
 assert.ok(fs.existsSync(path.join(root, "scripts/fixtures/blue-ridge-realty-rag-knowledge.txt")));

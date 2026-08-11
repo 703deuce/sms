@@ -64,7 +64,8 @@ async function onRealEstateBookingConfirmed(userData: FrontDeskUserData): Promis
 
 export type FrontDeskBookingTools = {
   slotsMap: Map<string, AvailableSlot>;
-  toolDefs: Parameters<typeof llm.toToolContext>[0];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  toolDefs: any[];
 };
 
 export function buildFrontDeskBookingTools(input: {

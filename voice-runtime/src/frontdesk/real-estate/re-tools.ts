@@ -20,6 +20,7 @@ import {
 import { notifyRealEstateStaff } from "@/lib/voice/real-estate/notifications";
 import { syncRealEstateLeadToCrm } from "@/lib/voice/real-estate/crm-sync";
 import { REAL_ESTATE_INTENT_LABELS, type RealEstateIntent } from "@/lib/voice/real-estate/types";
+import { parseLocalContactIdFromSafeId } from "@/lib/voice/real-estate/contact-id";
 import type { FrontDeskUserData } from "../userdata";
 import { withLiveKitToolTelemetry } from "../../livekit-tool-telemetry";
 
@@ -194,8 +195,9 @@ export function buildRealEstateLookupContactTool() {
         const first = result.matches[0]!;
         if (ud.callState) {
           ud.callState.contactName = first.displayName;
-          if (first.safeId) {
-            ud.callState.contactId = String(first.safeId);
+          const localContactId = parseLocalContactIdFromSafeId(first.safeId);
+          if (localContactId) {
+            ud.callState.contactId = localContactId;
           }
           if (first.displayName) {
             ud.callState.collectedFields = {
