@@ -133,8 +133,9 @@ export async function ensureOutboundRealtimeCloneAgent(
       select: { id: true, draftConfig: true, name: true, agentType: true },
     });
     resolvedSource =
-      stackByProfile.find((row) =>
-        isOutboundLeadQualificationStackProfile(parseVoiceAgentConfig(row.draftConfig)),
+      stackByProfile.find(
+        (row: (typeof stackByProfile)[number]) =>
+          isOutboundLeadQualificationStackProfile(parseVoiceAgentConfig(row.draftConfig)),
       ) ?? null;
   }
 
