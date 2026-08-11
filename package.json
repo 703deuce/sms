@@ -66,6 +66,8 @@
     "test:realtor-product": "tsx scripts/test-realtor-product.ts",
     "test:realtor-edge-cases": "tsx scripts/test-realtor-edge-cases.ts",
     "test:realtor": "tsx scripts/test-realtor-verification.ts",
+    "test:realtor-full": "tsx scripts/test-realtor-full.ts",
+    "test:realtor-release-gate": "tsx scripts/test-realtor-release-gate.ts",
     "seed:frontdesk-voice-knowledge": "tsx scripts/seed-frontdesk-voice-knowledge.ts",
     "test:caller-amy": "tsx scripts/test-caller-amy-orchestration.ts && tsx scripts/caller-amy-preprod-suite.ts",
     "test:john-preprod": "tsx scripts/john-preprod-suite.ts",

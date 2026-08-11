@@ -113,11 +113,15 @@ export async function seedRealEstateFrontDeskKnowledge(
     draftConfig.knowledgeBaseIds = [kbId];
   }
 
-  await prisma.voiceAgentKnowledgeBase.upsert({
-    where: { agentId_knowledgeBaseId: { agentId, knowledgeBaseId: kbId } },
-    create: { workspaceId, agentId, knowledgeBaseId: kbId },
-    update: {},
+  const existingLink = await prisma.voiceAgentKnowledgeBase.findFirst({
+    where: { agentId, knowledgeBaseId: kbId, workspaceId },
+    select: { id: true },
   });
+  if (!existingLink) {
+    await prisma.voiceAgentKnowledgeBase.create({
+      data: { workspaceId, agentId, knowledgeBaseId: kbId },
+    });
+  }
 
   const sourceName = "Blue Ridge Realty RE Front Desk RAG";
   let source = await prisma.voiceKnowledgeSource.findFirst({

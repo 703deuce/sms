@@ -1,10 +1,11 @@
 import { verifyRealEstateFrontdesk } from "./verify-frontdesk";
 import { verifyRealtorProduct } from "./verify-product";
 import { verifyRealtorEdgeCases } from "./verify-edge-cases";
+import { verifyRealtorIntegration } from "./verify-integration";
 
 export type RealtorVerificationResult = {
   ok: boolean;
-  suites: Array<{ name: string; ok: boolean; error?: string }>;
+  suites: Array<{ name: string; ok: boolean; skipped?: boolean; error?: string }>;
 };
 
 /** In-process realtor verification — no shell scripts required. */
@@ -42,4 +43,32 @@ export function runRealtorVerificationSuite(): RealtorVerificationResult {
   return { ok: true, suites };
 }
 
-export { verifyRealEstateFrontdesk, verifyRealtorProduct, verifyRealtorEdgeCases };
+/** Static + DB integration verification. */
+export async function runRealtorFullVerificationSuite(): Promise<RealtorVerificationResult> {
+  const staticResult = runRealtorVerificationSuite();
+  if (!staticResult.ok) return staticResult;
+
+  try {
+    const integration = await verifyRealtorIntegration();
+    staticResult.suites.push({
+      name: "integration",
+      ok: integration.ok,
+      skipped: integration.skipped,
+      error: integration.skipped ? integration.reason : undefined,
+    });
+    if (!integration.ok) {
+      staticResult.ok = false;
+    }
+  } catch (err) {
+    staticResult.ok = false;
+    staticResult.suites.push({
+      name: "integration",
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+
+  return staticResult;
+}
+
+export { verifyRealEstateFrontdesk, verifyRealtorProduct, verifyRealtorEdgeCases, verifyRealtorIntegration };
