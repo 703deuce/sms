@@ -69,8 +69,9 @@ export async function ensureFrontDeskRealtimeAgent(
       select: { id: true, name: true, draftConfig: true, phoneNumberId: true },
     });
     agent =
-      agents.find((row) => isFrontDeskProfile(row.draftConfig?.advanced as Record<string, unknown>)) ??
-      null;
+      agents.find((row: (typeof agents)[number]) =>
+        isFrontDeskProfile(row.draftConfig?.advanced as Record<string, unknown>),
+      ) ?? null;
   }
 
   if (!agent) {
