@@ -179,7 +179,7 @@ export class QualifyLeadTask extends voice.AgentTask<QualifyLeadResult> {
             mapped === "WRONG_NUMBER"
               ? "Sorry about that — wrong number. Have a good day."
               : "No problem at all. Thanks for your time.";
-          session.clearUserTurn();
+          this.sessionRef.clearUserTurn();
           const handle = this.sessionRef.say(apology, {
             allowInterruptions: false,
             addToChatCtx: true,
