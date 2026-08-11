@@ -27,6 +27,8 @@ export type OutboundLeadUserData = {
   endCallEffectiveAt?: string;
   /** Set after the verbatim TTS opening has played. */
   openingDelivered?: boolean;
+  /** Set after the verbatim close line has played. */
+  closingDelivered?: boolean;
   result?: LeadQualificationResult;
   firstAudioAt?: number;
   callAnsweredAt?: number;

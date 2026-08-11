@@ -67,7 +67,7 @@ function logEndCallEvent(input: {
  */
 export async function endOutboundCall(
   session: AgentSession<OutboundLeadUserData>,
-  input: { source: EndOutboundCallSource; reason?: string },
+  input: { source: EndOutboundCallSource; reason?: string; interrupt?: boolean },
 ): Promise<EndOutboundCallResult> {
   const ud = session.userData;
   ud.endCallAttemptCount = (ud.endCallAttemptCount || 0) + 1;
@@ -106,7 +106,9 @@ export async function endOutboundCall(
     },
   }).catch(() => undefined);
 
-  await safeInterruptSession(session);
+  if (input.interrupt !== false) {
+    await safeInterruptSession(session);
+  }
   session.shutdown({
     reason: input.reason || defaultShutdownReason(input.source),
   });

@@ -26,6 +26,7 @@ import {
   isOutboundCallClosing,
 } from "./end-outbound-call";
 import { deliverOutboundOpening } from "./deliver-outbound-opening";
+import { deliverOutboundClosing } from "./deliver-outbound-closing";
 
 export type QualifyLeadResult = LeadQualificationResult;
 
@@ -102,7 +103,7 @@ export class QualifyLeadTask extends voice.AgentTask<QualifyLeadResult> {
             }
             const missing = this.missingFieldsForPrompt(ud.collectedFields);
             if (!missing.length && ud.interested) {
-              return "All required fields captured. Say one brief transition, then call set_qualification_outcome with complete.";
+              return "All required fields captured. Call set_qualification_outcome with complete now — do not add filler like 'perfect' or 'got it'; closing is automatic.";
             }
             if (missing.length) {
               return `Saved. Still need: ${missing.join(", ")}. Ask naturally for the next missing item only.`;
@@ -174,13 +175,32 @@ export class QualifyLeadTask extends voice.AgentTask<QualifyLeadResult> {
         });
 
         if (mapped === "WRONG_NUMBER" || mapped === "NOT_INTERESTED") {
-          return "Outcome saved. Apologize once briefly, then call end_call exactly once. Do not summarize the call.";
+          const apology =
+            mapped === "WRONG_NUMBER"
+              ? "Sorry about that — wrong number. Have a good day."
+              : "No problem at all. Thanks for your time.";
+          session.clearUserTurn();
+          const handle = this.sessionRef.say(apology, {
+            allowInterruptions: false,
+            addToChatCtx: true,
+          });
+          await handle.waitForPlayout();
+          ud.closingDelivered = true;
+          await endOutboundCall(this.sessionRef, {
+            source: "end_call_tool",
+            reason: `${mapped.toLowerCase()}_close`,
+            interrupt: false,
+          });
+          return "Call ended. Remain completely silent.";
         }
-        return (
-          "Outcome saved. Say one brief goodbye similar to: " +
-          `"${this.mission.closeLine}" ` +
-          "Then call end_call exactly once. Do not repeat goodbye, recap fields, or summarize the conversation."
-        );
+
+        await deliverOutboundClosing(this.sessionRef);
+        await endOutboundCall(this.sessionRef, {
+          source: "end_call_tool",
+          reason: "Qualification complete",
+          interrupt: false,
+        });
+        return "Call ended. Remain completely silent — do not speak or call any tools again.";
       },
     });
   }
