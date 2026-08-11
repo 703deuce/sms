@@ -93,7 +93,7 @@ async function resolveSourceOutboundPhone(input: {
     select: { id: true, e164: true },
   });
   if (!phone?.e164) return null;
-  return { phoneNumberId: phone.id, e164: phone.e164 };
+  return { id: phone.id, e164: phone.e164 };
 }
 
 /**
@@ -220,40 +220,55 @@ export async function ensureOutboundRealtimeCloneAgent(
     });
   }
 
-  const outboundPhone = phoneNumberId
-    ? await prisma.phoneNumber.findFirst({
-        where: { id: phoneNumberId, workspaceId },
-        select: { id: true, e164: true },
-      })
-    : sourcePhone;
-
-  if (outboundPhone) {
-    await prisma.voiceAgentPhoneNumber.upsert({
-      where: {
-        agentId_phoneNumberId: { agentId: clone.id, phoneNumberId: outboundPhone.id },
-      },
-      create: {
-        workspaceId,
-        agentId: clone.id,
-        phoneNumberId: outboundPhone.id,
-        inboundEnabled: false,
-        outboundEnabled: true,
-        isDefault: true,
-      },
-      update: {
-        inboundEnabled: false,
-        outboundEnabled: true,
-        isDefault: true,
-      },
+  let outboundPhone: { id: string; e164: string } | null = null;
+  if (phoneNumberId) {
+    outboundPhone = await prisma.phoneNumber.findFirst({
+      where: { id: phoneNumberId, workspaceId },
+      select: { id: true, e164: true },
     });
+  } else {
+    outboundPhone = sourcePhone;
   }
+
+  if (!outboundPhone) {
+    const fallbackPhone = await prisma.phoneNumber.findFirst({
+      where: { workspaceId, e164: phoneE164 },
+      select: { id: true, e164: true },
+    });
+    if (fallbackPhone) outboundPhone = fallbackPhone;
+  }
+
+  if (!outboundPhone) {
+    throw new Error(
+      `No outbound caller ID found for realtime clone in ${workspaceId} — assign a phone to the stack agent or set PHONE_E164`,
+    );
+  }
+
+  await prisma.voiceAgentPhoneNumber.upsert({
+    where: {
+      agentId_phoneNumberId: { agentId: clone.id, phoneNumberId: outboundPhone.id },
+    },
+    create: {
+      workspaceId,
+      agentId: clone.id,
+      phoneNumberId: outboundPhone.id,
+      inboundEnabled: false,
+      outboundEnabled: true,
+      isDefault: true,
+    },
+    update: {
+      inboundEnabled: false,
+      outboundEnabled: true,
+      isDefault: true,
+    },
+  });
 
   return {
     agentId: clone.id,
     agentName: clone.name,
     sourceAgentId: resolvedSource.id,
     created,
-    callerIdE164: outboundPhone?.e164 || null,
+    callerIdE164: outboundPhone.e164,
     realtimeModel,
     realtimeVoice,
   };
