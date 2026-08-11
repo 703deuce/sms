@@ -16,7 +16,8 @@ export async function isVoiceBookingSmsEnabled(input: {
     return Boolean(messaging.smsConfirmations);
   }
   const advanced = (cfg.advanced || {}) as Record<string, unknown>;
-  if (String(advanced.livekitProfile || "").trim().toLowerCase() === "frontdesk") {
+  const profile = String(advanced.livekitProfile || "").trim().toLowerCase();
+  if (profile === "frontdesk" || profile === "frontdesk_realtime") {
     return true;
   }
   const tools = Array.isArray(cfg.enabledBuiltinTools)

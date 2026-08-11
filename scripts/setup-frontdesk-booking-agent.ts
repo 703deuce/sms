@@ -10,11 +10,18 @@ import { getPrisma } from "@/lib/db";
 import { createId } from "@/lib/supabase/id";
 import { assignNumberToAgent } from "@/lib/telephony/provisioning";
 import { parseVoiceAgentConfig, DEFAULT_VOICE_CONFIG } from "@/lib/voice/types";
+import {
+  FRONTDESK_PROFILE,
+  FRONTDESK_REALTIME_PROFILE,
+  isFrontDeskProfile,
+} from "@/lib/voice/frontdesk/agent-config";
 
 dotenv.config();
 
 const PHONE_E164 = (process.env.PHONE_E164 || "+18663464256").trim();
 const AGENT_NAME = (process.env.FRONTDESK_AGENT_NAME || "Front Desk Booking").trim();
+const USE_REALTIME = process.env.FRONTDESK_REALTIME?.trim() === "1";
+const LIVEKIT_PROFILE = USE_REALTIME ? FRONTDESK_REALTIME_PROFILE : FRONTDESK_PROFILE;
 
 async function main() {
   const prisma = getPrisma();
@@ -33,7 +40,7 @@ async function main() {
   });
   const existing = agents.find((row) => {
     const cfg = parseVoiceAgentConfig(row.draftConfig);
-    return cfg.advanced?.livekitProfile === "frontdesk";
+    return isFrontDeskProfile(cfg.advanced as Record<string, unknown>);
   });
 
   let agentId = existing?.id;
@@ -57,7 +64,14 @@ async function main() {
       },
       advanced: {
         ...(DEFAULT_VOICE_CONFIG.advanced || {}),
-        livekitProfile: "frontdesk",
+        livekitProfile: LIVEKIT_PROFILE,
+        ...(USE_REALTIME
+          ? {
+              realtimeModel:
+                process.env.VOICE_REALTIME_MODEL?.trim() || "gpt-realtime-2.1-mini",
+              realtimeVoice: process.env.VOICE_REALTIME_VOICE?.trim() || "marin",
+            }
+          : {}),
       },
       messaging: {
         ...(DEFAULT_VOICE_CONFIG.messaging || {}),
@@ -95,7 +109,10 @@ async function main() {
     select: { draftConfig: true },
   });
   const cfg = parseVoiceAgentConfig(agent?.draftConfig);
-  if (!cfg.advanced?.livekitProfile || !cfg.messaging?.smsConfirmations) {
+  const needsProfileUpdate =
+    !isFrontDeskProfile(cfg.advanced as Record<string, unknown>) ||
+    (USE_REALTIME && cfg.advanced?.livekitProfile !== FRONTDESK_REALTIME_PROFILE);
+  if (needsProfileUpdate || !cfg.messaging?.smsConfirmations) {
     await prisma.voiceAgent.update({
       where: { id: agentId },
       data: {
@@ -103,7 +120,19 @@ async function main() {
           ...cfg,
           advanced: {
             ...(cfg.advanced || {}),
-            livekitProfile: "frontdesk",
+            livekitProfile: LIVEKIT_PROFILE,
+            ...(USE_REALTIME
+              ? {
+                  realtimeModel:
+                    process.env.VOICE_REALTIME_MODEL?.trim() ||
+                    cfg.advanced?.realtimeModel ||
+                    "gpt-realtime-2.1-mini",
+                  realtimeVoice:
+                    process.env.VOICE_REALTIME_VOICE?.trim() ||
+                    cfg.advanced?.realtimeVoice ||
+                    "marin",
+                }
+              : {}),
           },
           messaging: {
             ...(cfg.messaging || {}),
@@ -121,7 +150,8 @@ async function main() {
         agentId,
         agentName: AGENT_NAME,
         phoneE164: phone.e164,
-        livekitProfile: "frontdesk",
+        livekitProfile: LIVEKIT_PROFILE,
+        realtime: USE_REALTIME,
         assign,
       },
       null,

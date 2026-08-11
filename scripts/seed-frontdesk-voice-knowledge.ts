@@ -57,7 +57,9 @@ async function resolveFrontDeskAgentId(): Promise<string> {
   });
   const frontdesk = agents.find((row) => {
     const cfg = parseVoiceAgentConfig(row.draftConfig);
-    return cfg.advanced?.livekitProfile === "frontdesk";
+    const advanced = cfg.advanced as Record<string, unknown> | undefined;
+    const profile = String(advanced?.livekitProfile || "").trim().toLowerCase();
+    return profile === "frontdesk" || profile === "frontdesk_realtime";
   });
   if (!frontdesk) {
     throw new Error("No frontdesk agent found — run setup:frontdesk-booking-agent first");

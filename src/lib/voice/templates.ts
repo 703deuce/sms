@@ -193,6 +193,29 @@ export const VOICE_AGENT_TEMPLATES: AgentTemplate[] = [
     },
   },
   {
+    id: "frontdesk_realtime",
+    name: "Front desk booking (OpenAI Realtime)",
+    agentType: "appointment_booking",
+    description:
+      "Inbound appointment booking with Calendly — OpenAI Realtime speech-to-speech (same VAD as outbound realtime).",
+    config: {
+      identity: { directions: ["inbound"] },
+      instructions: {
+        system:
+          "Help callers book appointments. Always check live availability before offering times. Only confirm booking after the system returns success.",
+        tone: "helpful",
+      },
+      messaging: {
+        smsConfirmations: true,
+      },
+      advanced: {
+        livekitProfile: "frontdesk_realtime",
+        realtimeModel: "gpt-realtime-2.1-mini",
+        realtimeVoice: "marin",
+      },
+    },
+  },
+  {
     id: "custom",
     name: "Custom",
     agentType: "custom",

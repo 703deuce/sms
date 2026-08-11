@@ -1,4 +1,8 @@
 import type { CalendlyCalendar } from "./calendly-calendar";
+import {
+  isFrontDeskProfile as isFrontDeskProfileFromConfig,
+  usesFrontDeskRealtimeVoicePipeline,
+} from "@/lib/voice/frontdesk/agent-config";
 
 export type BookingStatus = "pending" | "confirmed";
 
@@ -74,5 +78,7 @@ export function livekitProfileFromConfig(
 }
 
 export function isFrontDeskProfile(advanced: Record<string, unknown> | undefined): boolean {
-  return livekitProfileFromConfig(advanced) === "frontdesk";
+  return isFrontDeskProfileFromConfig({ advanced });
 }
+
+export { usesFrontDeskRealtimeVoicePipeline };

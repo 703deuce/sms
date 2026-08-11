@@ -14,6 +14,10 @@ export async function register() {
     "@/lib/voice/outbound/outbound-boot"
   );
   await bootstrapOutboundRealtimeTest();
+  const { bootstrapFrontDeskRealtimeTest } = await import(
+    "@/lib/voice/frontdesk/frontdesk-boot"
+  );
+  await bootstrapFrontDeskRealtimeTest();
   const { scheduleOutboundAutoSmokeCall } = await import(
     "@/lib/voice/outbound/auto-smoke"
   );

@@ -5,13 +5,24 @@ import { parseVoiceAgentConfig } from "@/lib/voice/types";
 import { liveKitRuntimeProvider } from "@/lib/voice/runtime-provider/livekit";
 import { bootstrapLiveKitCallContext } from "@/lib/voice/domain-actions";
 import { resolveAgentRoutingForCall } from "@/lib/telephony/provisioning";
+import {
+  FRONTDESK_REALTIME_PROFILE,
+  usesFrontDeskRealtimeVoicePipeline,
+} from "@/lib/voice/frontdesk/agent-config";
+import { resolveOutboundRealtimePipelineConfig } from "@/lib/voice/outbound/agent-config";
 import { createAmyReceptionistAgent } from "./amy-receptionist-agent";
 import { CalendlyCalendar } from "./frontdesk/calendly-calendar";
 import { createFrontDeskBookingAgent } from "./frontdesk/frontdesk-booking-agent";
 import { isFrontDeskProfile } from "./frontdesk/userdata";
 import { resolveInboundSipCallIdentity } from "./call-identity";
 import type { VoiceRuntimeUserData } from "./metadata";
-import { buildAmyVoicePipeline, describePipelineConfig } from "./pipeline";
+import {
+  buildAmyVoicePipeline,
+  buildOutboundRealtimeSessionComponents,
+  describePipelineConfig,
+  describeRealtimePipelineConfig,
+  resolveOutboundRealtimeOutputMode,
+} from "./pipeline";
 import { attachLatencyInstrumentation } from "./latency-instrumentation";
 import { attachLiveKitTranscriptPersistence } from "./transcript-persistence";
 import { attachOutputGain, resolveLiveKitOutputGainDb } from "./output-gain";
@@ -57,6 +68,7 @@ export async function runInboundEntry(ctx: JobContext): Promise<void> {
   const agentConfig = parseVoiceAgentConfig(agentRow?.draftConfig);
   const outputGainDb = resolveLiveKitOutputGainDb(agentConfig.voiceLanguage?.outputGainDb);
   const useFrontDesk = isFrontDeskProfile(agentConfig.advanced);
+  const useRealtime = useFrontDesk && usesFrontDeskRealtimeVoicePipeline(agentConfig);
 
   const { callId } = await liveKitRuntimeProvider.bootstrapSession({
     workspaceId: routing.workspaceId,
@@ -82,19 +94,6 @@ export async function runInboundEntry(ctx: JobContext): Promise<void> {
     String(agentConfig.dynamicVariables?.business_name || "").trim() ||
     agentRow?.name?.trim() ||
     "our office";
-
-  const { stt, llm, tts, config, sttConfig } = buildAmyVoicePipeline();
-  console.log(
-    JSON.stringify({
-      source: "transovo-voice-runtime",
-      event: "pipeline_config",
-      callId,
-      profile: useFrontDesk ? "frontdesk" : "amy",
-      pipeline: describePipelineConfig(config, sttConfig),
-      turnHandling: describeTurnHandlingConfig(),
-      outputGainDb,
-    }),
-  );
 
   let userData: VoiceRuntimeUserData;
   let agent: voice.Agent<VoiceRuntimeUserData>;
@@ -131,24 +130,93 @@ export async function runInboundEntry(ctx: JobContext): Promise<void> {
     ctx.proc.userData = userData;
   }
 
-  const session = new voice.AgentSession<VoiceRuntimeUserData>({
-    stt,
-    llm,
-    tts,
-    turnHandling: buildAmyTurnHandling(),
-    maxToolSteps: Number(process.env.VOICE_MAX_TOOL_STEPS?.trim()) || (useFrontDesk ? 4 : 8),
-    userData,
-  });
+  let session: voice.AgentSession<VoiceRuntimeUserData>;
+  let latencyPipelineKind: "stack" | "realtime_native" | "realtime_elevenlabs" = "stack";
+  let latencyTtsConfig:
+    | {
+        preset?: string | null;
+        provider?: string;
+        model?: string;
+        voice?: string;
+      }
+    | undefined;
 
-  attachLatencyInstrumentation(session, {
-    callId,
-    preemptiveConfig: getPreemptiveConfigForInstrumentation(),
-    ttsConfig: {
+  const maxToolSteps = Number(process.env.VOICE_MAX_TOOL_STEPS?.trim()) || (useFrontDesk ? 4 : 8);
+
+  if (useRealtime) {
+    const realtimeCfg = resolveOutboundRealtimePipelineConfig(agentConfig);
+    const outputMode = resolveOutboundRealtimeOutputMode();
+    const { llm, tts, pipelineCfg } = buildOutboundRealtimeSessionComponents(agentConfig);
+    latencyPipelineKind =
+      outputMode === "elevenlabs" ? "realtime_elevenlabs" : "realtime_native";
+    latencyTtsConfig =
+      outputMode === "elevenlabs"
+        ? {
+            preset: pipelineCfg.ttsPreset || null,
+            provider: pipelineCfg.ttsProvider,
+            model: pipelineCfg.ttsModel,
+            voice: pipelineCfg.ttsVoice,
+          }
+        : {
+            provider: "openai_realtime",
+            model: realtimeCfg.model,
+            voice: realtimeCfg.voice,
+          };
+    console.log(
+      JSON.stringify({
+        source: "transovo-voice-runtime",
+        event: "pipeline_config",
+        callId,
+        profile: FRONTDESK_REALTIME_PROFILE,
+        pipeline: describeRealtimePipelineConfig(realtimeCfg, outputMode, pipelineCfg),
+        outputGainDb,
+      }),
+    );
+
+    session = new voice.AgentSession<VoiceRuntimeUserData>({
+      llm,
+      ...(tts ? { tts } : {}),
+      maxToolSteps,
+      userData,
+    });
+  } else {
+    const { stt, llm, tts, config, sttConfig } = buildAmyVoicePipeline();
+    latencyTtsConfig = {
       preset: config.ttsPreset || null,
       provider: config.ttsProvider,
       model: config.ttsModel,
       voice: config.ttsVoice,
-    },
+    };
+    console.log(
+      JSON.stringify({
+        source: "transovo-voice-runtime",
+        event: "pipeline_config",
+        callId,
+        profile: useFrontDesk ? "frontdesk" : "amy",
+        pipeline: describePipelineConfig(config, sttConfig),
+        turnHandling: describeTurnHandlingConfig(),
+        outputGainDb,
+      }),
+    );
+
+    session = new voice.AgentSession<VoiceRuntimeUserData>({
+      stt,
+      llm,
+      tts,
+      turnHandling: buildAmyTurnHandling(),
+      maxToolSteps,
+      userData,
+    });
+  }
+
+  attachLatencyInstrumentation(session, {
+    callId,
+    pipelineKind: latencyPipelineKind,
+    preemptiveConfig:
+      latencyPipelineKind === "stack"
+        ? getPreemptiveConfigForInstrumentation()
+        : { enabled: false, preemptiveTts: false },
+    ttsConfig: latencyTtsConfig,
   });
 
   attachLiveKitTranscriptPersistence(session, {
