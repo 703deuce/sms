@@ -42,6 +42,7 @@ import {
   resolveOutboundRealtimePipelineConfig,
   OUTBOUND_LEAD_QUALIFICATION_REALTIME_PROFILE,
 } from "../src/lib/voice/outbound/agent-config";
+import { isOutboundRealtimeTestEnabled } from "../src/lib/voice/outbound/outbound-boot";
 
 const fixture = JSON.parse(
   fs.readFileSync(
@@ -122,6 +123,13 @@ const fullRealtime = resolveOutboundRealtimePipelineConfig({
 });
 assert.equal(fullRealtime.model, "gpt-realtime-2.1");
 assert.equal(fullRealtime.reasoning?.effort, "low");
+
+const prevRealtimeTest = process.env.OUTBOUND_REALTIME_TEST;
+process.env.OUTBOUND_REALTIME_TEST = "1";
+assert.equal(isOutboundRealtimeTestEnabled(), true);
+process.env.OUTBOUND_REALTIME_TEST = "0";
+assert.equal(isOutboundRealtimeTestEnabled(), false);
+process.env.OUTBOUND_REALTIME_TEST = prevRealtimeTest;
 
 const merged = mergeQualificationFields(
   prefilled,
