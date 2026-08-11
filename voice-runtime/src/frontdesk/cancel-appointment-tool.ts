@@ -2,12 +2,15 @@ import { llm } from "@livekit/agents";
 import { z } from "zod";
 import type { AgentSession } from "@livekit/agents";
 import { getPrisma } from "@/lib/db";
-import { buildAdapterContext } from "@/lib/integrations/framework/context";
-import { cancelAppointment as cancelCalendlyEvent } from "@/lib/integrations/adapters/calendly-actions";
 import type { FrontDeskUserData } from "./userdata";
-import { isBookingConfirmed } from "./userdata";
+import { isBookingConfirmed, markBookingCancelled } from "./userdata";
 import { withLiveKitToolTelemetry } from "../livekit-tool-telemetry";
-import { formatBookedTimeLabel } from "./booking-recovery";
+import {
+  cancelCalendlyEventResilient,
+  formatBookedTimeLabel,
+} from "./booking-recovery";
+import { POST_CANCEL_FILLER } from "../booking-completion-messages";
+import { bookingFailureReason } from "../booking-error";
 
 function externalEventUri(externalId: string | null | undefined): string | null {
   if (!externalId) return null;
@@ -48,6 +51,79 @@ async function activeFutureAppointmentsForCaller(
   });
 }
 
+async function resolveAppointmentToCancel(
+  ud: FrontDeskUserData,
+  appointment_id?: string,
+): Promise<AppointmentRow> {
+  const prisma = getPrisma();
+  let appointment: AppointmentRow | null = null;
+
+  if (appointment_id) {
+    appointment = await prisma.voiceAppointment.findFirst({
+      where: {
+        id: appointment_id,
+        workspaceId: ud.workspaceId,
+        status: { in: ["active", "confirmed"] },
+      },
+      select: { id: true, callId: true, startsAt: true, externalId: true },
+    });
+    if (!appointment) {
+      throw new llm.ToolError(
+        "I could not find that appointment — it may already be cancelled.",
+      );
+    }
+    return appointment;
+  }
+
+  appointment = await prisma.voiceAppointment.findFirst({
+    where: {
+      workspaceId: ud.workspaceId,
+      callId: ud.callId,
+      status: { in: ["active", "confirmed"] },
+      startsAt: { gte: new Date() },
+    },
+    orderBy: { startsAt: "asc" },
+    select: { id: true, callId: true, startsAt: true, externalId: true },
+  });
+
+  if (!appointment && ud.pendingSlotId && !isBookingConfirmed(ud)) {
+    throw new llm.ToolError(
+      "No appointment was booked on this call — the calendar booking did not complete. " +
+        "Do not claim a cancellation succeeded. Offer to try booking again or check other visits on file.",
+    );
+  }
+
+  if (!appointment && ud.callerE164) {
+    const candidates = await activeFutureAppointmentsForCaller(ud.workspaceId, ud.callerE164);
+    if (candidates.length === 0) {
+      throw new llm.ToolError(
+        "I could not find an upcoming appointment on file for this number.",
+      );
+    }
+    if (candidates.length === 1) {
+      return candidates[0]!;
+    }
+    const options = candidates
+      .map((row) => {
+        const when = formatBookedTimeLabel(row.startsAt, ud.timezone);
+        return `${when} (id ${row.id})`;
+      })
+      .join("; ");
+    throw new llm.ToolError(
+      `Multiple upcoming appointments on this number: ${options}. ` +
+        "Ask which one to cancel, then call cancel_appointment again with appointment_id.",
+    );
+  }
+
+  if (!appointment) {
+    throw new llm.ToolError(
+      "I could not find an upcoming appointment on file for this number.",
+    );
+  }
+
+  return appointment;
+}
+
 /**
  * Cancel the caller's upcoming appointment (Calendly + DB).
  * Prefers appointments booked on the current call; never silently cancels an older visit
@@ -68,103 +144,73 @@ export function buildFrontDeskCancelAppointmentTool() {
     execute: async ({ appointment_id, confirmed }, opts) => {
       const session = opts.ctx.session as AgentSession<FrontDeskUserData>;
       const ud = session.userData;
+      const runCtx = opts.ctx;
+
+      if (!confirmed) {
+        return "Ask the caller to confirm before cancelling.";
+      }
+
+      await runCtx.update(POST_CANCEL_FILLER);
+      runCtx.disallowInterruptions();
+
       return withLiveKitToolTelemetry(
         ud,
         "cancel_appointment",
         { appointment_id, confirmed },
         async () => {
-          if (!confirmed) {
-            return "Ask the caller to confirm before cancelling.";
-          }
-
-          const prisma = getPrisma();
-          let appointment: AppointmentRow | null = null;
-
-          if (appointment_id) {
-            appointment = await prisma.voiceAppointment.findFirst({
-              where: {
-                id: appointment_id,
-                workspaceId: ud.workspaceId,
-                status: { in: ["active", "confirmed"] },
-              },
-              select: { id: true, callId: true, startsAt: true, externalId: true },
-            });
-            if (!appointment) {
-              throw new llm.ToolError(
-                "I could not find that appointment — it may already be cancelled.",
-              );
-            }
-          } else {
-            appointment = await prisma.voiceAppointment.findFirst({
-              where: {
-                workspaceId: ud.workspaceId,
-                callId: ud.callId,
-                status: { in: ["active", "confirmed"] },
-                startsAt: { gte: new Date() },
-              },
-              orderBy: { startsAt: "asc" },
-              select: { id: true, callId: true, startsAt: true, externalId: true },
-            });
-
-            if (!appointment && ud.pendingSlotId && !isBookingConfirmed(ud)) {
-              throw new llm.ToolError(
-                "No appointment was booked on this call — the calendar booking did not complete. " +
-                  "Do not claim a cancellation succeeded. Offer to try booking again or check other visits on file.",
-              );
-            }
-
-            if (!appointment && ud.callerE164) {
-              const candidates = await activeFutureAppointmentsForCaller(
-                ud.workspaceId,
-                ud.callerE164,
-              );
-              if (candidates.length === 0) {
-                throw new llm.ToolError(
-                  "I could not find an upcoming appointment on file for this number.",
-                );
-              }
-              if (candidates.length === 1) {
-                appointment = candidates[0];
-              } else {
-                const options = candidates
-                  .map((row) => {
-                    const when = formatBookedTimeLabel(row.startsAt, ud.timezone);
-                    return `${when} (id ${row.id})`;
-                  })
-                  .join("; ");
-                throw new llm.ToolError(
-                  `Multiple upcoming appointments on this number: ${options}. ` +
-                    "Ask which one to cancel, then call cancel_appointment again with appointment_id.",
-                );
-              }
-            }
-          }
-
-          if (!appointment) {
-            throw new llm.ToolError(
-              "I could not find an upcoming appointment on file for this number.",
-            );
-          }
+          const appointment = await resolveAppointmentToCancel(ud, appointment_id);
+          const when = formatBookedTimeLabel(appointment.startsAt, ud.timezone);
+          const fromThisCall = appointment.callId === ud.callId;
 
           const eventUri = externalEventUri(appointment.externalId);
           if (eventUri) {
-            const ctx = await buildAdapterContext(ud.workspaceId, "calendly");
-            await cancelCalendlyEvent(ctx, { eventUri, reason: "Canceled by caller on phone" });
+            try {
+              await cancelCalendlyEventResilient({
+                workspaceId: ud.workspaceId,
+                eventUri,
+                reason: "Canceled by caller on phone",
+              });
+            } catch (err) {
+              console.warn(
+                JSON.stringify({
+                  source: "frontdesk-cancel",
+                  event: "calendly_cancel_failed",
+                  callId: ud.callId,
+                  appointmentId: appointment.id,
+                  error: err instanceof Error ? err.message : String(err),
+                }),
+              );
+              throw new llm.ToolError(bookingFailureReason(err));
+            }
           }
 
+          const prisma = getPrisma();
           await prisma.voiceAppointment.update({
             where: { id: appointment.id },
             data: { status: "cancelled" },
           });
 
-          const when = formatBookedTimeLabel(appointment.startsAt, ud.timezone);
-          const fromThisCall = appointment.callId === ud.callId;
           if (fromThisCall) {
-            return `The appointment for ${when} has been cancelled.`;
+            markBookingCancelled(ud);
+            await prisma.voiceCall
+              .update({
+                where: { id: ud.callId },
+                data: { appointmentBooked: false, outcome: "appointment_cancelled" },
+              })
+              .catch(() => undefined);
+          }
+
+          const line = `Your appointment for ${when} has been cancelled.`;
+          await runCtx.update(line);
+
+          if (fromThisCall) {
+            return (
+              "CANCEL_COMPLETE_ALREADY_SPOKEN: The cancellation was already spoken to the caller. " +
+              "Do not repeat the details. Ask if they need anything else or call end_call."
+            );
           }
           return (
-            `The appointment for ${when} has been cancelled. ` +
-            "Note: that visit was from an earlier call, not the booking attempt on this call."
+            `${line} Note: that visit was from an earlier call, not the booking on this call.`
           );
         },
       );

@@ -17,6 +17,8 @@ export async function integrationFetch<T = unknown>(
     accessToken?: string;
     basicAuth?: { username: string; password: string };
     apiKeyHeader?: { name: string; value: string };
+    /** Abort the request after this many milliseconds (default: no timeout). */
+    timeoutMs?: number;
   } = {},
 ): Promise<T> {
   const headers = new Headers(init.headers || {});
@@ -34,7 +36,27 @@ export async function integrationFetch<T = unknown>(
     headers.set("Content-Type", "application/json");
   }
 
-  const res = await fetch(url, { ...init, headers });
+  const { timeoutMs, ...fetchInit } = init;
+  const controller = new AbortController();
+  const timer =
+    timeoutMs && timeoutMs > 0
+      ? setTimeout(() => controller.abort(), timeoutMs)
+      : undefined;
+
+  let res: Response;
+  try {
+    res = await fetch(url, { ...fetchInit, headers, signal: controller.signal });
+  } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new IntegrationHttpError(
+        `Integration HTTP timeout after ${timeoutMs}ms`,
+        408,
+      );
+    }
+    throw err;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
   const text = await res.text();
   let json: unknown = null;
   try {

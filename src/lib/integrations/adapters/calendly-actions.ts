@@ -14,15 +14,19 @@ import { integrationFetch } from "../framework/http";
 import type { AdapterContext } from "../framework/types";
 
 const CALENDLY_API = "https://api.calendly.com";
+const CALENDLY_WRITE_TIMEOUT_MS = 25_000;
 
 function calendlyApi<T = Record<string, unknown>>(
   path: string,
   ctx: AdapterContext,
-  init?: RequestInit,
+  init?: RequestInit & { timeoutMs?: number },
 ): Promise<T> {
+  const timeoutMs =
+    init?.method && init.method !== "GET" ? CALENDLY_WRITE_TIMEOUT_MS : init?.timeoutMs;
   return integrationFetch<T>(`${CALENDLY_API}${path}`, {
     ...init,
     accessToken: ctx.accessToken,
+    timeoutMs,
   });
 }
 

@@ -60,6 +60,13 @@ export function markBookingConfirmed(
   userData.bookedTimeLabel = input.bookedTimeLabel;
 }
 
+export function markBookingCancelled(userData: FrontDeskUserData): void {
+  userData.booking = undefined;
+  userData.bookingComplete = false;
+  userData.bookedTimeLabel = undefined;
+  userData.pendingSlotId = undefined;
+}
+
 export function isFrontDeskUserData(
   value: unknown,
 ): value is FrontDeskUserData {

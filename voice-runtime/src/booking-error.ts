@@ -22,3 +22,8 @@ export function bookingFailureReason(err: unknown): string {
 
 /** Backoff delays (ms) after a 429 before retrying Calendly book. */
 export const CALENDLY_RATE_LIMIT_RETRY_DELAYS_MS = [2_000, 4_000, 8_000] as const;
+
+export function isCalendlyAlreadyCancelledError(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  return /already cancel|already canceled|not found|404/i.test(message);
+}

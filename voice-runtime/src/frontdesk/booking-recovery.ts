@@ -6,8 +6,11 @@ import { SlotUnavailableError } from "./calendly-calendar";
 import { isBookingConfirmed, markBookingConfirmed, type FrontDeskUserData } from "./userdata";
 import {
   CALENDLY_RATE_LIMIT_RETRY_DELAYS_MS,
+  isCalendlyAlreadyCancelledError,
   isCalendlyRateLimitError,
 } from "../booking-error";
+import { buildAdapterContext } from "@/lib/integrations/framework/context";
+import { cancelAppointment as cancelCalendlyEvent } from "@/lib/integrations/adapters/calendly-actions";
 
 const BOOKING_RETRY_DELAY_MS = 400;
 
@@ -136,6 +139,41 @@ export async function scheduleAppointmentResilient(input: {
       }
 
       if (attempt < maxAttempts - 1 && !isCalendlyRateLimitError(err)) {
+        await new Promise((resolve) => setTimeout(resolve, BOOKING_RETRY_DELAY_MS));
+      }
+    }
+  }
+
+  throw lastError;
+}
+
+/** Cancel on Calendly with timeout, retries, and idempotent already-cancelled handling. */
+export async function cancelCalendlyEventResilient(input: {
+  workspaceId: string;
+  eventUri: string;
+  reason?: string;
+}): Promise<void> {
+  const ctx = await buildAdapterContext(input.workspaceId, "calendly");
+  let lastError: unknown;
+  const maxAttempts = 1 + CALENDLY_RATE_LIMIT_RETRY_DELAYS_MS.length;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      await cancelCalendlyEvent(ctx, {
+        eventUri: input.eventUri,
+        reason: input.reason || "Canceled by caller on phone",
+      });
+      return;
+    } catch (err) {
+      if (isCalendlyAlreadyCancelledError(err)) return;
+      lastError = err;
+      if (isCalendlyRateLimitError(err) && attempt < CALENDLY_RATE_LIMIT_RETRY_DELAYS_MS.length) {
+        await new Promise((resolve) =>
+          setTimeout(resolve, CALENDLY_RATE_LIMIT_RETRY_DELAYS_MS[attempt]),
+        );
+        continue;
+      }
+      if (attempt < maxAttempts - 1) {
         await new Promise((resolve) => setTimeout(resolve, BOOKING_RETRY_DELAY_MS));
       }
     }

@@ -20,6 +20,7 @@ import {
 import { bookingFailureReason } from "../booking-error";
 import { buildFrontDeskBusinessAnswerTool } from "./knowledge-tool";
 import { buildFrontDeskCancelAppointmentTool } from "./cancel-appointment-tool";
+import { buildFrontDeskTransferTool } from "./transfer-tool";
 import { markBookingConfirmed, type FrontDeskUserData } from "./userdata";
 
 function buildFrontDeskInstructions(businessLabel: string): string {
@@ -54,6 +55,7 @@ function buildFrontDeskInstructions(businessLabel: string): string {
     "Call get_business_answer for hours, pricing, services, policies, or FAQs — including during booking. ",
     "To cancel an appointment, confirm with the caller then call cancel_appointment with confirmed true. ",
     "If cancel_appointment says no booking completed on this call, do not claim a cancellation succeeded. ",
+    "To reach a human, confirm with the caller then call transfer_to_human. ",
     "Booking workflow: after the caller picks a slot, call schedule_appointment with that ",
     "slot_id. Email collection happens inside that tool — do not ask for email before calling ",
     "schedule_appointment. Never call schedule_appointment before the caller confirms a time. ",
@@ -290,6 +292,7 @@ export function createFrontDeskBookingAgent(input: {
       scheduleAppointment,
       buildFrontDeskBusinessAnswerTool(),
       buildFrontDeskCancelAppointmentTool(),
+      buildFrontDeskTransferTool(),
       endCall,
     ]),
     onEnter: async (agentCtx) => {

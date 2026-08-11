@@ -3,6 +3,9 @@
 export const POST_EMAIL_BOOKING_FILLER =
   "Perfect — one moment while I put that on the calendar for you. This can take a few seconds.";
 
+export const POST_CANCEL_FILLER =
+  "Okay — give me just a moment while I cancel that appointment on the calendar.";
+
 export function buildBookingSuccessLine(timeLabel: string): string {
   return (
     `You're all set — your appointment is confirmed for ${timeLabel}. ` +
