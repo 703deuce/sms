@@ -43,6 +43,7 @@ const COMMS: CrmPlatformEventType[] = [
   "sms.received",
   "callback.scheduled",
   "appointment.booked",
+  "appointment.cancelled",
   "contact.created",
   "contact.updated",
 ];

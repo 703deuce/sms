@@ -405,6 +405,15 @@ export async function pushCrmEventJob(payload: {
             ]
               .filter(Boolean)
               .join("\n")
+          : event.type === "appointment.cancelled"
+            ? [
+                event.payload.subject || "Appointment cancelled",
+                event.payload.startsAt ? `Was scheduled: ${String(event.payload.startsAt)}` : null,
+                event.payload.reason ? `Reason: ${String(event.payload.reason)}` : null,
+                event.payload.notes ? String(event.payload.notes) : null,
+              ]
+                .filter(Boolean)
+                .join("\n")
           : (event.payload.notes as string) ||
             (event.payload.body as string) ||
             `Transovo ${event.type}${contactPhone ? ` (${contactPhone})` : ""}`;
@@ -452,6 +461,8 @@ export async function pushCrmEventJob(payload: {
               ? `Voicemail follow-up${contactPhone ? ` (${contactPhone})` : ""}`
               : event.type === "appointment.booked"
                 ? String(event.payload.subject || "Appointment follow-up")
+                : event.type === "appointment.cancelled"
+                  ? `Cancelled: ${String(event.payload.serviceName || event.payload.subject || "Appointment")}`
                 : event.type === "task.completed"
                   ? `Completed: ${String(event.payload.subject || "Task")}`
                   : event.type.startsWith("task.")
@@ -476,7 +487,10 @@ export async function pushCrmEventJob(payload: {
           internalId: taskInternalId,
         });
         const due = new Date(Date.now() + 86400000).toISOString();
-        const status = event.type === "task.completed" ? "Completed" : "Not Started";
+        const status =
+          event.type === "task.completed" || event.type === "appointment.cancelled"
+            ? "Completed"
+            : "Not Started";
         let result;
         if (existingTask?.externalId && connector.updateTask) {
           result = await connector.updateTask(ctx, {

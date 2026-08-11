@@ -159,6 +159,9 @@ export async function publishAppointmentBooked(input: {
   startsAt?: string | Date | null;
   endsAt?: string | Date | null;
   timezone?: string | null;
+  dealName?: string | null;
+  dealId?: string | null;
+  opportunityName?: string | null;
 }) {
   return emitTypedEvent("appointment.booked", {
     workspaceId: input.workspaceId,
@@ -172,6 +175,32 @@ export async function publishAppointmentBooked(input: {
       subject: input.serviceName
         ? `Appointment: ${input.serviceName}`
         : "Appointment booked",
+    },
+  });
+}
+
+export async function publishAppointmentCancelled(input: {
+  workspaceId: string;
+  contactId?: string | null;
+  appointmentId: string;
+  callId?: string | null;
+  serviceName?: string | null;
+  startsAt?: string | Date | null;
+  reason?: string | null;
+}) {
+  return emitTypedEvent("appointment.cancelled", {
+    workspaceId: input.workspaceId,
+    contactId: input.contactId,
+    eventId: `appt-cancel-${input.appointmentId}`,
+    payload: {
+      ...input,
+      taskId: `appt-${input.appointmentId}`,
+      startsAt:
+        input.startsAt instanceof Date ? input.startsAt.toISOString() : input.startsAt,
+      subject: input.serviceName
+        ? `Cancelled: ${input.serviceName}`
+        : "Appointment cancelled",
+      notes: input.reason || "Appointment cancelled",
     },
   });
 }

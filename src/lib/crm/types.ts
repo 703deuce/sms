@@ -316,6 +316,7 @@ export type CrmPlatformEventType =
   | "task.completed"
   | "callback.scheduled"
   | "appointment.booked"
+  | "appointment.cancelled"
   | "user.created"
   | "user.updated";
 
@@ -339,6 +340,7 @@ export const ALL_CRM_PLATFORM_EVENT_TYPES: CrmPlatformEventType[] = [
   "task.completed",
   "callback.scheduled",
   "appointment.booked",
+  "appointment.cancelled",
   "user.created",
   "user.updated",
 ];

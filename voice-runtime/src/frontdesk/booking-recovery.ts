@@ -56,13 +56,12 @@ async function findExistingBookingForCall(
       startsAt: true,
       endsAt: true,
       externalId: true,
-      inviteeEmail: true,
       metadata: true,
     },
   });
   if (!appt?.startsAt || !appt.externalId) return null;
 
-  const meta = appt.metadata as { inviteeUri?: string } | null;
+  const meta = appt.metadata as { inviteeUri?: string; inviteeEmail?: string } | null;
   const durationMin = appt.endsAt
     ? Math.max(1, Math.round((appt.endsAt.getTime() - appt.startsAt.getTime()) / 60_000))
     : 30;
@@ -76,7 +75,7 @@ async function findExistingBookingForCall(
       durationMin,
       slotId: "",
     },
-    attendeeEmail: appt.inviteeEmail || "",
+    attendeeEmail: meta?.inviteeEmail || "",
     inviteeUri: meta?.inviteeUri || "",
     eventUri,
   };
@@ -145,6 +144,92 @@ export async function scheduleAppointmentResilient(input: {
   }
 
   throw lastError;
+}
+
+export async function lookupAppointmentIdForCall(input: {
+  workspaceId: string;
+  callId: string;
+  eventUri?: string | null;
+}): Promise<string | null> {
+  const prisma = getPrisma();
+  const externalId = input.eventUri
+    ? input.eventUri.startsWith("calendly:")
+      ? input.eventUri
+      : `calendly:${input.eventUri}`
+    : null;
+
+  const appt = await prisma.voiceAppointment.findFirst({
+    where: {
+      workspaceId: input.workspaceId,
+      callId: input.callId,
+      ...(externalId ? { externalId } : {}),
+      status: { notIn: ["cancelled", "canceled"] },
+    },
+    orderBy: { createdAt: "desc" },
+    select: { id: true },
+  });
+  return appt?.id || null;
+}
+
+/** Reschedule: cancel old Calendly event, book new slot, update DB row. */
+export async function rescheduleAppointmentResilient(input: {
+  session: AgentSession<FrontDeskUserData>;
+  appointmentId: string;
+  oldEventUri: string | null;
+  slot: AvailableSlot;
+  attendeeEmail: string;
+}): Promise<BookedAppointment> {
+  const { session, slot, attendeeEmail, appointmentId, oldEventUri } = input;
+  const { workspaceId, callId, cal } = session.userData;
+
+  if (oldEventUri) {
+    await cancelCalendlyEventResilient({
+      workspaceId,
+      eventUri: oldEventUri,
+      reason: "Rescheduled by caller on phone",
+    });
+  }
+
+  const booked = await cal.scheduleAppointment({ slot, attendeeEmail });
+  const bookedTimeLabel = formatBookedTimeLabel(booked.slot.startTime, session.userData.timezone);
+
+  const prisma = getPrisma();
+  const externalId = booked.eventUri.startsWith("calendly:")
+    ? booked.eventUri
+    : `calendly:${booked.eventUri}`;
+  const endsAt = new Date(booked.slot.startTime.getTime() + booked.slot.durationMin * 60_000);
+
+  await prisma.voiceAppointment.update({
+    where: { id: appointmentId, workspaceId },
+    data: {
+      startsAt: booked.slot.startTime,
+      endsAt,
+      externalId,
+      status: "confirmed",
+      metadata: {
+        inviteeUri: booked.inviteeUri,
+        inviteeEmail: attendeeEmail,
+        rescheduledAt: new Date().toISOString(),
+        rescheduledVia: "frontdesk_voice",
+      },
+    },
+  });
+
+  markBookingConfirmed(session.userData, {
+    slotId: slot.slotId,
+    providerEventId: booked.eventUri,
+    appointmentId,
+    bookedTimeLabel,
+  });
+
+  await prisma.voiceCall
+    .update({
+      where: { id: callId },
+      data: { appointmentBooked: true, outcome: "appointment_rescheduled" },
+    })
+    .catch(() => undefined);
+
+  return booked;
 }
 
 /** Cancel on Calendly with timeout, retries, and idempotent already-cancelled handling. */

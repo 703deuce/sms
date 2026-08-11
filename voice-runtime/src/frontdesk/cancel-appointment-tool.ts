@@ -11,6 +11,7 @@ import {
 } from "./booking-recovery";
 import { POST_CANCEL_FILLER } from "../booking-completion-messages";
 import { bookingFailureReason } from "../booking-error";
+import { syncFrontDeskCancelToCrm } from "@/lib/voice/crm/frontdesk-crm-sync";
 
 function externalEventUri(externalId: string | null | undefined): string | null {
   if (!externalId) return null;
@@ -51,7 +52,7 @@ async function activeFutureAppointmentsForCaller(
   });
 }
 
-async function resolveAppointmentToCancel(
+export async function resolveFrontDeskAppointment(
   ud: FrontDeskUserData,
   appointment_id?: string,
 ): Promise<AppointmentRow> {
@@ -158,7 +159,7 @@ export function buildFrontDeskCancelAppointmentTool() {
         "cancel_appointment",
         { appointment_id, confirmed },
         async () => {
-          const appointment = await resolveAppointmentToCancel(ud, appointment_id);
+          const appointment = await resolveFrontDeskAppointment(ud, appointment_id);
           const when = formatBookedTimeLabel(appointment.startsAt, ud.timezone);
           const fromThisCall = appointment.callId === ud.callId;
 
@@ -202,6 +203,21 @@ export function buildFrontDeskCancelAppointmentTool() {
 
           const line = `Your appointment for ${when} has been cancelled.`;
           await runCtx.update(line);
+
+          void syncFrontDeskCancelToCrm({
+            workspaceId: ud.workspaceId,
+            callId: ud.callId,
+            appointmentId: appointment.id,
+          }).catch((err) => {
+            console.warn(
+              JSON.stringify({
+                source: "frontdesk-cancel",
+                event: "crm_sync_failed",
+                callId: ud.callId,
+                error: err instanceof Error ? err.message : String(err),
+              }),
+            );
+          });
 
           if (fromThisCall) {
             return (

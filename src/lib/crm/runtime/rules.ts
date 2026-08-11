@@ -130,6 +130,18 @@ const DEFAULT_RULES: CrmIntegrationRule[] = [
     requiresPref: "syncTasks",
   },
   {
+    id: "appointment_cancel_note",
+    when: "appointment.cancelled",
+    then: ["create_note"],
+    requiresPref: "syncNotes",
+  },
+  {
+    id: "appointment_cancel_task",
+    when: "appointment.cancelled",
+    then: ["create_task"],
+    requiresPref: "syncTasks",
+  },
+  {
     id: "contact_upsert",
     when: ["contact.created", "contact.updated"],
     then: ["upsert_contact"],

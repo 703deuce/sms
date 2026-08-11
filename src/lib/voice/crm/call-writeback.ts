@@ -11,7 +11,8 @@ export async function writebackBookingToCrm(input: {
   workspaceId: string;
   callId: string;
   appointmentId: string;
-  session: AmyRealtimeSession;
+  session?: AmyRealtimeSession;
+  collectedFields?: Record<string, string>;
   serviceName?: string | null;
 }): Promise<{ ok: boolean; detail: string }> {
   const prisma = getPrisma();
@@ -20,13 +21,13 @@ export async function writebackBookingToCrm(input: {
   });
   if (!appt) return { ok: false, detail: "appointment_not_found" };
 
-  const collected = input.session.collectedFields || {};
+  const collected = input.collectedFields || input.session?.collectedFields || {};
   const noteParts = [
     `Booked via voice call ${input.callId}`,
     collected.fld_custom_problem_desc || collected.problem || collected.fld_problem
       ? `Problem: ${collected.fld_custom_problem_desc || collected.problem || collected.fld_problem}`
       : null,
-    input.session.runtime.session_runtime?.classifications?.urgency
+    input.session?.runtime?.session_runtime?.classifications?.urgency
       ? `Urgency: ${input.session.runtime.session_runtime.classifications.urgency}`
       : null,
   ].filter(Boolean);

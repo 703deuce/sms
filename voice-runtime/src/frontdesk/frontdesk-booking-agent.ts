@@ -6,9 +6,16 @@ import { SlotUnavailableError } from "./calendly-calendar";
 import {
   alreadyBookedToolMessage,
   formatBookedTimeLabel,
+  lookupAppointmentIdForCall,
   scheduleAppointmentResilient,
 } from "./booking-recovery";
-import { GetEmailTask } from "./get-email-task";
+import {
+  NEEDS_EMAIL_TOOL_RESULT,
+  buildFrontDeskEmailTools,
+  resolveConfirmedEmail,
+} from "./email-collection-tools";
+import { buildFrontDeskRescheduleAppointmentTool } from "./reschedule-appointment-tool";
+import { syncFrontDeskBookingToCrm } from "@/lib/voice/crm/frontdesk-crm-sync";
 import { withLiveKitToolTelemetry } from "../livekit-tool-telemetry";
 import {
   BOOKING_COMPLETE_TOOL_RESULT,
@@ -57,8 +64,10 @@ function buildFrontDeskInstructions(businessLabel: string): string {
     "If cancel_appointment says no booking completed on this call, do not claim a cancellation succeeded. ",
     "To reach a human, confirm with the caller then call transfer_to_human. ",
     "Booking workflow: after the caller picks a slot, call schedule_appointment with that ",
-    "slot_id. Email collection happens inside that tool — do not ask for email before calling ",
-    "schedule_appointment. Never call schedule_appointment before the caller confirms a time. ",
+    "slot_id. If it returns NEEDS_EMAIL, ask for their email, call update_email_address and ",
+    "confirm_email_address, then schedule_appointment again with the same slot_id. ",
+    "To reschedule, call list_available_slots, confirm the new time, then reschedule_appointment. ",
+    "Never call schedule_appointment before the caller confirms a time. ",
     "If schedule_appointment reports already_completed, tell the caller they're confirmed — ",
     "do not book again or re-ask for email. ",
     "Never claim a booking succeeded unless schedule_appointment returns BOOKING_COMPLETE_ALREADY_SPOKEN. ",
@@ -112,6 +121,7 @@ export function createFrontDeskBookingAgent(input: {
 }) {
   const slotsMap = new Map<string, AvailableSlot>();
   const label = input.businessName.trim() || "our office";
+  const emailTools = buildFrontDeskEmailTools();
 
   const getCurrentTime = llm.tool({
     name: "get_current_time",
@@ -174,8 +184,12 @@ export function createFrontDeskBookingAgent(input: {
       "Book the appointment at slot_id. Collects email inside this tool — call after the caller picks a time.",
     parameters: z.object({
       slot_id: z.string().describe("Slot id from list_available_slots"),
+      email: z
+        .string()
+        .optional()
+        .describe("Caller email if already collected in conversation"),
     }),
-    execute: async ({ slot_id }, opts) => {
+    execute: async ({ slot_id, email: inlineEmail }, opts) => {
       const session = opts.ctx.session as AgentSession<FrontDeskUserData>;
       const userData = session.userData;
       const runCtx = opts.ctx;
@@ -190,30 +204,11 @@ export function createFrontDeskBookingAgent(input: {
 
       userData.pendingSlotId = slot_id;
 
-      let email = userData.confirmedEmail?.trim();
+      const email = resolveConfirmedEmail(userData, inlineEmail);
       if (!email) {
-        try {
-          const emailResult = await new GetEmailTask(session, {
-            chatCtx: session.chatCtx,
-          }).run();
-
-          if (runCtx.speechHandle.interrupted) {
-            return "Booking was interrupted before email was collected. Ask if they'd still like to book.";
-          }
-
-          email = emailResult.emailAddress.trim();
-          userData.confirmedEmail = email;
-        } catch (err) {
-          if (runCtx.speechHandle.interrupted) {
-            return "Booking was interrupted before email was collected. Ask if they'd still like to book.";
-          }
-          const reason = err instanceof Error ? err.message : String(err);
-          return (
-            `Email is required to book on the calendar. ${reason} ` +
-            "Ask if they can provide an email or would like to call back later."
-          );
-        }
+        return NEEDS_EMAIL_TOOL_RESULT;
       }
+      userData.confirmedEmail = email;
 
       await runCtx.update(POST_EMAIL_BOOKING_FILLER);
       runCtx.disallowInterruptions();
@@ -235,6 +230,35 @@ export function createFrontDeskBookingAgent(input: {
               providerEventId: booked.eventUri,
               bookedTimeLabel: local,
             });
+
+            const appointmentId = await lookupAppointmentIdForCall({
+              workspaceId: userData.workspaceId,
+              callId: userData.callId,
+              eventUri: booked.eventUri,
+            });
+            if (appointmentId) {
+              userData.booking = {
+                ...userData.booking!,
+                appointmentId,
+              };
+              void syncFrontDeskBookingToCrm({
+                workspaceId: userData.workspaceId,
+                callId: userData.callId,
+                appointmentId,
+                callerE164: userData.callerE164,
+                email,
+                businessName: userData.businessName,
+              }).catch((err) => {
+                console.warn(
+                  JSON.stringify({
+                    source: "frontdesk-booking-agent",
+                    event: "crm_sync_failed",
+                    callId: userData.callId,
+                    error: err instanceof Error ? err.message : String(err),
+                  }),
+                );
+              });
+            }
 
             sendBookingSmsAsync(session, booked.slot.startTime);
 
@@ -290,8 +314,10 @@ export function createFrontDeskBookingAgent(input: {
       getCurrentTime,
       listAvailableSlots,
       scheduleAppointment,
+      ...emailTools,
       buildFrontDeskBusinessAnswerTool(),
       buildFrontDeskCancelAppointmentTool(),
+      buildFrontDeskRescheduleAppointmentTool(slotsMap),
       buildFrontDeskTransferTool(),
       endCall,
     ]),

@@ -34,6 +34,7 @@ const MEDIUM: CrmPlatformEventType[] = [
   "contact.updated",
   "lead.created",
   "appointment.booked",
+  "appointment.cancelled",
 ];
 
 export function priorityForEvent(type: CrmPlatformEventType): EventPriority {
