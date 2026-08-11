@@ -102,6 +102,12 @@ export async function resolveAgentRoutingForCall(input: {
   workspaceId?: string | null;
   agentId?: string | null;
 }): Promise<AgentRoutingResolution | null> {
+  // Called DID is authoritative — DB phone assignment wins over stale dispatch/room metadata.
+  if (input.toE164?.trim()) {
+    const byPhone = await resolveAgentByCalledNumber(input.toE164);
+    if (byPhone) return byPhone;
+  }
+
   if (input.workspaceId && input.agentId) {
     const prisma = getPrisma();
     const agent = await prisma.voiceAgent.findFirst({
@@ -131,10 +137,6 @@ export async function resolveAgentRoutingForCall(input: {
       agentStatus: agent.status,
       agentName: agent.name,
     };
-  }
-
-  if (input.toE164) {
-    return resolveAgentByCalledNumber(input.toE164);
   }
 
   return null;

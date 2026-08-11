@@ -57,6 +57,19 @@ export async function runInboundEntry(ctx: JobContext): Promise<void> {
     toE164: identity.toE164,
   });
 
+  if (routing && identity.parsedMeta?.agentId && identity.parsedMeta.agentId !== routing.agentId) {
+    console.log(
+      JSON.stringify({
+        source: "transovo-voice-runtime",
+        event: "inbound_routing_override",
+        toE164: identity.toE164,
+        metadataAgentId: identity.parsedMeta.agentId,
+        resolvedAgentId: routing.agentId,
+        resolvedAgentName: routing.agentName,
+      }),
+    );
+  }
+
   if (!routing) {
     throw new Error(
       `No Transovo agent routing for called number ${identity.toE164 || "(unknown)"} — assign the DID to an active agent`,
