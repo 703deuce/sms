@@ -29,13 +29,15 @@ export async function findFrontDeskAgentForWorkspace(
     },
   });
 
-  const frontdesk = agents.filter((agent) => {
+  type WorkspaceAgent = (typeof agents)[number];
+
+  const frontdesk = agents.filter((agent: WorkspaceAgent) => {
     const config = parseVoiceAgentConfig(agent.draftConfig);
     return isFrontDeskProfile(config.advanced as Record<string, unknown>);
   });
   if (!frontdesk.length) return null;
 
-  const realtime = frontdesk.find((agent) => {
+  const realtime = frontdesk.find((agent: WorkspaceAgent) => {
     const config = parseVoiceAgentConfig(agent.draftConfig);
     return isFrontDeskRealtimeProfile(config);
   });

@@ -113,7 +113,8 @@ export async function resolveInboundAiAgent(workspaceId: string, phoneNumberId: 
     });
     if (agents.length === 1) return agents[0];
     if (agents.length > 1) {
-      const frontdeskAgents = agents.filter((agent) => {
+      type ActiveAgent = (typeof agents)[number];
+      const frontdeskAgents = agents.filter((agent: ActiveAgent) => {
         const config = parseVoiceAgentConfig(agent.draftConfig);
         return isFrontDeskProfile(config.advanced as Record<string, unknown>);
       });
@@ -121,15 +122,13 @@ export async function resolveInboundAiAgent(workspaceId: string, phoneNumberId: 
       if (frontdeskAgents.length > 1) {
         return (
           frontdeskAgents.find(
-            (a: { phoneNumberId: string | null }) => a.phoneNumberId === phoneNumberId,
+            (a: ActiveAgent) => a.phoneNumberId === phoneNumberId,
           ) || frontdeskAgents[0]
         );
       }
       // Prefer the agent whose phoneNumberId still matches (post-switch winner).
       return (
-        agents.find(
-          (a: { phoneNumberId: string | null }) => a.phoneNumberId === phoneNumberId,
-        ) || agents[0]
+        agents.find((a: ActiveAgent) => a.phoneNumberId === phoneNumberId) || agents[0]
       );
     }
   }
