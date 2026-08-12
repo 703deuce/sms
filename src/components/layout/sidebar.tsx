@@ -152,20 +152,22 @@ function NavLinkRow({
   pathname,
   search,
   onClose,
+  realtorMode = false,
 }: {
   link: NavLink;
   sectionHref: string;
   pathname: string;
   search: string;
   onClose?: () => void;
+  realtorMode?: boolean;
 }) {
   const pathPart = hrefPath(link.href);
   const sectionPath = hrefPath(sectionHref);
   const matched = isNavHrefActive(pathname, search, link.href);
-  const prefix =
-    pathPart !== sectionPath &&
-    (pathname === pathPart || pathname.startsWith(`${pathPart}/`));
-  const active = matched || prefix;
+  const exactLeadsHome = link.href === "/realtor/leads";
+  const active = exactLeadsHome
+    ? pathname === "/realtor/leads"
+    : matched;
 
   return (
     <Link
@@ -173,13 +175,25 @@ function NavLinkRow({
       data-nav-active={active ? "true" : undefined}
       onClick={onClose}
       className={cn(
-        "block rounded-md px-2.5 py-1 text-[12px] transition",
+        "flex items-center gap-2 rounded-md px-2.5 py-1.5 text-[12px] transition",
         active
-          ? "bg-primary/10 font-semibold text-primary"
+          ? realtorMode
+            ? "bg-[#2563eb] font-semibold text-white"
+            : "bg-primary/10 font-semibold text-primary"
           : "text-sidebar-muted hover:bg-white/5 hover:text-white",
       )}
     >
-      {link.label}
+      <span className="truncate">{link.label}</span>
+      {link.badge != null ? (
+        <span
+          className={cn(
+            "ml-auto flex h-[16px] min-w-[16px] items-center justify-center rounded-full px-1 text-[10px] font-bold",
+            active && realtorMode ? "bg-white text-[#2563eb]" : "bg-danger text-white",
+          )}
+        >
+          {link.badge}
+        </span>
+      ) : null}
     </Link>
   );
 }
@@ -255,11 +269,15 @@ export function Sidebar({
               <span className="block text-[14px] font-bold tracking-[0.04em] text-white">
                 {realtorMode ? "TRANSOVO" : "Transovo SMS"}
               </span>
-              {!realtorMode ? (
-                <span className="mt-0.5 block text-[10px] leading-tight text-sidebar-muted">
-                  Solutions-first workspace
-                </span>
-              ) : null}
+            {!realtorMode ? (
+              <span className="mt-0.5 block text-[10px] leading-tight text-sidebar-muted">
+                Solutions-first workspace
+              </span>
+            ) : (
+              <span className="mt-0.5 block text-[10px] leading-tight text-sidebar-muted">
+                Real Estate AI
+              </span>
+            )}
             </span>
           ) : null}
         </Link>
@@ -396,6 +414,7 @@ export function Sidebar({
                                 pathname={pathname}
                                 search={search}
                                 onClose={onClose}
+                                realtorMode={realtorMode}
                               />
                             ))}
                           </div>
@@ -411,6 +430,7 @@ export function Sidebar({
                         pathname={pathname}
                         search={search}
                         onClose={onClose}
+                        realtorMode={realtorMode}
                       />
                     );
                   })}

@@ -28,6 +28,17 @@ export const REALTOR_PIPELINE_COLUMNS: Array<{
   { status: "closed", label: "Closed" },
 ];
 
+const LEADS_CHILDREN = [
+  { label: "All Leads", href: "/realtor/leads" },
+  { label: "Pipeline", href: "/realtor/leads/pipeline" },
+  { label: "Needs Attention", href: "/realtor/leads/needs-attention", badge: 8 },
+  { label: "Lists / Segments", href: "/realtor/leads/lists" },
+  { label: "Tags", href: "/realtor/leads/tags" },
+  { label: "Lead Capture", href: "/realtor/leads/capture" },
+  { label: "Import", href: "/realtor/leads/import" },
+  { label: "Lead Sources", href: "/realtor/leads/sources" },
+];
+
 export function buildRealtorMobileNav(): NavItem[] {
   return [
     { label: "Dashboard", href: "/realtor/dashboard", icon: LayoutDashboard },
@@ -42,7 +53,13 @@ const REALTOR_PAGE_TITLES: Record<string, string> = {
   "/realtor/setup": "Setup",
   "/realtor/onboarding": "Guided Setup",
   "/realtor/dashboard": "Dashboard",
-  "/realtor/leads": "Leads",
+  "/realtor/leads": "All Leads",
+  "/realtor/leads/pipeline": "Pipeline",
+  "/realtor/leads/needs-attention": "Needs Attention",
+  "/realtor/leads/lists": "Lists / Segments",
+  "/realtor/leads/tags": "Tags",
+  "/realtor/leads/capture": "Lead Capture",
+  "/realtor/leads/import": "Import",
   "/realtor/needs-attention": "Needs Attention",
   "/realtor/test": "Test Amy",
   "/realtor/messages": "Messages",
@@ -58,16 +75,21 @@ const REALTOR_PAGE_TITLES: Record<string, string> = {
 
 export function getRealtorPageTitle(pathname: string): string | null {
   if (REALTOR_PAGE_TITLES[pathname]) return REALTOR_PAGE_TITLES[pathname];
-  if (pathname.startsWith("/realtor/leads/")) return "Lead Detail";
+  if (pathname.match(/^\/realtor\/leads\/[^/]+$/)) return "Lead Detail";
   return null;
 }
 
-/** Flat sidebar matching product mockups — badges set from shell unread count. */
+/** Sidebar nav with expandable Leads section matching CRM mockups. */
 export function buildRealtorNav(inboxBadge?: number): NavItem[] {
   return [
     { label: "Setup", href: "/realtor/setup", icon: SlidersHorizontal },
     { label: "Dashboard", href: "/realtor/dashboard", icon: LayoutDashboard },
-    { label: "Leads", href: "/realtor/leads", icon: Users },
+    {
+      label: "Leads",
+      href: "/realtor/leads",
+      icon: Users,
+      children: LEADS_CHILDREN,
+    },
     {
       label: "Inbox",
       href: "/inbox",
