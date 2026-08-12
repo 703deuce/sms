@@ -9,7 +9,7 @@ export default async function RealtorDashboardPage() {
   const data = await loadRealtorDashboard(workspaceId, session?.name);
 
   return (
-    <div className="p-6">
+    <div className="px-2 py-4 lg:px-4">
       <RealtorDashboardView
         greeting={data.greeting}
         amyWorkedSummary={data.amyWorkedSummary}
@@ -25,7 +25,10 @@ export default async function RealtorDashboardPage() {
         needsAttention={data.needsAttention}
         amyActivity={data.amyActivity}
         appointments={data.appointments}
-        recentLeads={data.leads}
+        leadSources={data.leadSources}
+        funnel={data.funnel}
+        aiPerformance={data.aiPerformance}
+        recentActivity={data.recentActivity}
       />
     </div>
   );

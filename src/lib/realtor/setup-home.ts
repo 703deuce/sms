@@ -12,12 +12,14 @@ export type SetupStepStatus =
 export type SetupHomeStep = {
   id: string;
   title: string;
+  subtitle?: string;
   description: string;
   status: SetupStepStatus;
   statusLabel: string;
   actionLabel: string;
   href: string;
   required: boolean;
+  stepNumber?: number;
 };
 
 export type SetupHomeState = {
@@ -105,6 +107,12 @@ export async function loadSetupHomeState(
 
   const testComplete = config.onboardingComplete && config.live;
 
+  let stepNum = 0;
+  const nextNum = () => {
+    stepNum += 1;
+    return stepNum;
+  };
+
   const steps: SetupHomeStep[] = [
     {
       id: "business",
@@ -112,9 +120,10 @@ export async function loadSetupHomeState(
       description: "Team name, brokerage, service areas, and hours Amy uses on calls.",
       status: businessComplete ? "complete" : "not_started",
       statusLabel: businessComplete ? "Complete" : "Not started",
-      actionLabel: businessComplete ? "Review" : "Set up",
+      actionLabel: businessComplete ? "Complete" : "Set up",
       href: "/realtor/onboarding?step=business",
       required: true,
+      stepNumber: nextNum(),
     },
     {
       id: "phone",
@@ -122,9 +131,10 @@ export async function loadSetupHomeState(
       description: "Inbound number, after-hours routing, and transfer destinations.",
       status: phoneComplete ? "complete" : "not_started",
       statusLabel: phoneComplete ? "Complete" : "Not started",
-      actionLabel: phoneComplete ? "Manage" : "Configure",
+      actionLabel: phoneComplete ? "Complete" : "Configure",
       href: "/realtor/onboarding?step=phone",
       required: true,
+      stepNumber: nextNum(),
     },
   ];
 
@@ -132,16 +142,14 @@ export async function loadSetupHomeState(
     steps.push({
       id: "front_desk",
       title: "Front Desk",
+      subtitle: "Inbound AI Agent",
       description: "Inbound call handling — intents, qualification, booking, and transfer.",
       status: frontDeskComplete ? "complete" : frontDeskReady ? "ready" : "not_started",
-      statusLabel: frontDeskComplete
-        ? "Active"
-        : frontDeskReady
-          ? "Ready to configure"
-          : "Not started",
-      actionLabel: frontDeskComplete ? "Manage" : "Configure",
+      statusLabel: frontDeskComplete ? "Complete" : frontDeskReady ? "Ready" : "Not started",
+      actionLabel: frontDeskComplete ? "Complete" : "Configure",
       href: "/realtor/agents/front-desk",
       required: true,
+      stepNumber: nextNum(),
     });
   }
 
@@ -149,16 +157,14 @@ export async function loadSetupHomeState(
     steps.push({
       id: "speed_to_lead",
       title: "Speed-to-Lead",
+      subtitle: "Outbound AI Agent",
       description: "Outbound qualification and follow-up for new leads.",
       status: speedComplete ? "complete" : speedReady ? "ready" : "not_started",
-      statusLabel: speedComplete
-        ? "Active"
-        : speedReady
-          ? "Ready to configure"
-          : "Not started",
-      actionLabel: speedComplete ? "Manage" : "Configure",
+      statusLabel: speedComplete ? "Complete" : speedReady ? "Ready" : "Not started",
+      actionLabel: speedComplete ? "Complete" : "Configure",
       href: "/realtor/agents/speed-to-lead",
       required: true,
+      stepNumber: nextNum(),
     });
   }
 
@@ -169,9 +175,10 @@ export async function loadSetupHomeState(
       description: "Facebook, Zillow, website forms, CRM, and webhook ingress.",
       status: leadSourcesComplete ? "complete" : "not_started",
       statusLabel: leadSourcesComplete ? "Complete" : "Not started",
-      actionLabel: leadSourcesComplete ? "Manage" : "Connect",
+      actionLabel: leadSourcesComplete ? "Complete" : "Connect",
       href: "/realtor/leads/sources",
       required: true,
+      stepNumber: nextNum(),
     },
     {
       id: "calendar",
@@ -179,33 +186,26 @@ export async function loadSetupHomeState(
       description: "Calendly event types for buyer and seller consultations.",
       status: calendarComplete ? "complete" : needsCalendar ? "not_started" : "complete",
       statusLabel: calendarComplete ? "Complete" : "Not started",
-      actionLabel: calendarComplete ? "Manage" : "Connect",
+      actionLabel: calendarComplete ? "Complete" : "Connect",
       href: "/integrations/native/calendly",
       required: needsCalendar,
+      stepNumber: nextNum(),
     },
     {
       id: "messaging",
       title: "Messaging",
+      subtitle: "SMS",
       description: "SMS registration and number attachment for confirmations and follow-up.",
       status: messagingReady ? "complete" : messagingPending ? "pending" : "not_started",
       statusLabel: messagingReady
         ? "Complete"
         : messagingPending
-          ? "SMS registration pending"
+          ? "Pending"
           : "Not started",
-      actionLabel: messagingReady ? "Manage" : "Register",
+      actionLabel: messagingReady ? "Complete" : "Complete",
       href: "/settings/messaging",
       required: true,
-    },
-    {
-      id: "test",
-      title: "Test Amy",
-      description: "Run a qualification call and confirm captured fields before going live.",
-      status: testComplete ? "complete" : config.onboardingComplete ? "ready" : "ready",
-      statusLabel: testComplete ? "Complete" : "Ready",
-      actionLabel: testComplete ? "Test again" : "Test now",
-      href: "/realtor/test",
-      required: false,
+      stepNumber: nextNum(),
     },
   );
 

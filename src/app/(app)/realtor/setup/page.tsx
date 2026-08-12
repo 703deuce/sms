@@ -9,7 +9,7 @@ export default async function RealtorSetupPage() {
   const setup = await loadSetupHomeState(workspaceId, config);
 
   return (
-    <div className="p-6">
+    <div className="px-2 py-4 lg:px-4">
       <SetupHomeView
         requiredComplete={setup.requiredComplete}
         requiredTotal={setup.requiredTotal}

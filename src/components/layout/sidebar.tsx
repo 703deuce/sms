@@ -190,12 +190,14 @@ export function Sidebar({
   onClose,
   outcomeInstances = {},
   realtorMode = false,
+  inboxBadge = 0,
 }: {
   userName: string;
   open?: boolean;
   onClose?: () => void;
   outcomeInstances?: Record<string, SolutionNavInstance[]>;
   realtorMode?: boolean;
+  inboxBadge?: number;
 }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -204,8 +206,11 @@ export function Sidebar({
   const [expanded, setExpanded] = useState<string | null>(null);
 
   const navItems: NavItem[] = useMemo(
-    () => (realtorMode ? buildRealtorNav() : buildSolutionsNav({ instancesBySolution: outcomeInstances })),
-    [outcomeInstances, realtorMode],
+    () =>
+      realtorMode
+        ? buildRealtorNav(inboxBadge)
+        : buildSolutionsNav({ instancesBySolution: outcomeInstances }),
+    [outcomeInstances, realtorMode, inboxBadge],
   );
 
   useEffect(() => {
@@ -231,16 +236,18 @@ export function Sidebar({
           className="flex items-start gap-2.5"
           onClick={onClose}
         >
-          <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] bg-primary text-white shadow-[0_8px_18px_rgba(16,185,129,0.35)]">
+          <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] bg-[#2563eb] text-white shadow-[0_8px_18px_rgba(37,99,235,0.35)]">
             <MessageSquare className="h-3.5 w-3.5" fill="currentColor" />
           </span>
           <span>
-            <span className="block text-[14px] font-bold tracking-tight text-white">
-              {realtorMode ? "Transovo Real Estate" : "Transovo SMS"}
+            <span className="block text-[14px] font-bold tracking-[0.04em] text-white">
+              {realtorMode ? "TRANSOVO" : "Transovo SMS"}
             </span>
-            <span className="mt-0.5 block text-[10px] leading-tight text-sidebar-muted">
-              {realtorMode ? "Lead → AI works it → you step in" : "Solutions-first workspace"}
-            </span>
+            {!realtorMode ? (
+              <span className="mt-0.5 block text-[10px] leading-tight text-sidebar-muted">
+                Solutions-first workspace
+              </span>
+            ) : null}
           </span>
         </Link>
       </div>
@@ -290,11 +297,13 @@ export function Sidebar({
                 className={cn(
                   "group relative flex items-center rounded-[10px] transition",
                   active
-                    ? "bg-primary/15 text-primary"
+                    ? realtorMode
+                      ? "bg-[#2563eb] text-white"
+                      : "bg-primary/15 text-primary"
                     : "text-sidebar-foreground/90 hover:bg-white/5 hover:text-white",
                 )}
               >
-                {active ? (
+                {active && !realtorMode ? (
                   <span className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r-full bg-primary" />
                 ) : null}
                 <Link
@@ -308,12 +317,23 @@ export function Sidebar({
                   <Icon
                     className={cn(
                       "h-4 w-4 shrink-0",
-                      active ? "text-primary" : "text-sidebar-muted group-hover:text-white",
+                      active
+                        ? realtorMode
+                          ? "text-white"
+                          : "text-primary"
+                        : "text-sidebar-muted group-hover:text-white",
                     )}
                   />
                   <span className="truncate">{item.label}</span>
                   {item.badge != null ? (
-                    <span className="ml-auto flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-white">
+                    <span
+                      className={cn(
+                        "ml-auto flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1.5 text-[10px] font-bold",
+                        active && realtorMode
+                          ? "bg-white text-[#2563eb]"
+                          : "bg-danger text-white",
+                      )}
+                    >
                       {item.badge}
                     </span>
                   ) : null}

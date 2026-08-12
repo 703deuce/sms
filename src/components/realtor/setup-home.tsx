@@ -1,55 +1,88 @@
-import { Card } from "@/components/ui/card";
 import type { SetupHomeStep, SetupStepStatus } from "@/lib/realtor/setup-home";
 import { cn } from "@/lib/utils";
-import { CheckCircle2, Circle, Clock, Sparkles } from "lucide-react";
+import {
+  AlertCircle,
+  Check,
+  ChevronRight,
+  Headphones,
+  Play,
+  Sparkles,
+} from "lucide-react";
 import Link from "next/link";
 
-function StatusIcon({ status }: { status: SetupStepStatus }) {
-  if (status === "complete") {
-    return <CheckCircle2 className="h-5 w-5 text-primary" aria-hidden />;
+function StepIcon({ step }: { step: SetupHomeStep }) {
+  if (step.status === "complete") {
+    return (
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-white">
+        <Check className="h-5 w-5" strokeWidth={2.5} />
+      </span>
+    );
   }
-  if (status === "pending") {
-    return <Clock className="h-5 w-5 text-amber-500" aria-hidden />;
+  if (step.status === "pending") {
+    return (
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-600">
+        <AlertCircle className="h-5 w-5" />
+      </span>
+    );
+  }
+  if (step.status === "ready") {
+    return (
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#2563eb] text-sm font-bold text-white">
+        {step.stepNumber}
+      </span>
+    );
+  }
+  return (
+    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#e5e7eb] text-sm font-bold text-[#6b7280]">
+      {step.stepNumber}
+    </span>
+  );
+}
+
+function actionClass(status: SetupStepStatus, label: string): string {
+  if (status === "complete" || label === "Complete") {
+    return "text-emerald-600 font-semibold";
   }
   if (status === "ready") {
-    return <Sparkles className="h-5 w-5 text-primary/70" aria-hidden />;
+    return "realtor-btn-outline realtor-btn-outline-blue";
   }
-  return <Circle className="h-5 w-5 text-muted-foreground/50" aria-hidden />;
+  if (status === "pending") {
+    return "realtor-btn-outline realtor-btn-outline-blue";
+  }
+  return "realtor-btn-outline text-[#6b7280]";
 }
 
 function SetupRow({ step }: { step: SetupHomeStep }) {
+  const isCompleteAction = step.status === "complete" || step.actionLabel === "Complete";
+
   return (
-    <Card className="flex items-center gap-4 p-4 transition hover:border-primary/30">
-      <StatusIcon status={step.status} />
+    <div className="realtor-card flex items-center gap-4 px-5 py-4">
+      <StepIcon step={step} />
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
-          <h3 className="font-semibold text-foreground">{step.title}</h3>
-          <span
-            className={cn(
-              "rounded-full px-2 py-0.5 text-[11px] font-medium",
-              step.status === "complete" && "bg-primary/10 text-primary",
-              step.status === "ready" && "bg-primary/5 text-primary",
-              step.status === "pending" && "bg-amber-500/10 text-amber-700",
-              step.status === "not_started" && "bg-muted text-muted-foreground",
-            )}
-          >
-            {step.statusLabel}
-          </span>
+          <h3 className="text-[15px] font-semibold text-[#111827]">{step.title}</h3>
+          {step.subtitle ? (
+            <span className="text-[13px] text-[#6b7280]">({step.subtitle})</span>
+          ) : null}
+          {step.status === "pending" ? (
+            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
+              Pending
+            </span>
+          ) : null}
         </div>
-        <p className="mt-1 text-sm text-muted-foreground">{step.description}</p>
+        <p className="mt-0.5 text-[13px] text-[#6b7280]">{step.description}</p>
       </div>
       <Link
         href={step.href}
         className={cn(
-          "inline-flex h-8 items-center justify-center rounded-lg px-3 text-xs font-medium",
-          step.status === "complete"
-            ? "border border-border bg-card hover:bg-muted"
-            : "bg-primary text-primary-foreground hover:bg-primary-hover",
+          "inline-flex h-9 items-center gap-1 text-[13px]",
+          isCompleteAction ? "text-emerald-600 font-semibold px-2" : actionClass(step.status, step.actionLabel),
         )}
       >
         {step.actionLabel}
+        <ChevronRight className="h-4 w-4 opacity-60" />
       </Link>
-    </Card>
+    </div>
   );
 }
 
@@ -58,7 +91,6 @@ export function SetupHomeView({
   requiredTotal,
   steps,
   readyToGoLive,
-  live,
 }: {
   requiredComplete: number;
   requiredTotal: number;
@@ -66,65 +98,99 @@ export function SetupHomeView({
   readyToGoLive: boolean;
   live: boolean;
 }) {
+  const pct = requiredTotal ? Math.round((requiredComplete / requiredTotal) * 100) : 0;
+
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      <div>
-        <h1 className="font-display text-2xl font-bold tracking-tight">Get Amy Ready</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          {live
-            ? "Your workspace is live. Return here anytime to finish optional setup or adjust agents."
-            : "Complete the essentials below. You can work through them in any sensible order."}
-        </p>
-        <p className="mt-3 text-sm font-medium text-foreground">
-          {requiredComplete} of {requiredTotal} required steps complete
-        </p>
-        <div className="mt-2 h-2 w-full max-w-md overflow-hidden rounded-full bg-muted">
-          <div
-            className="h-full rounded-full bg-primary transition-all"
-            style={{
-              width: `${requiredTotal ? (requiredComplete / requiredTotal) * 100 : 0}%`,
-            }}
-          />
-        </div>
-      </div>
-
-      <div className="space-y-3">
-        {steps.map((step) => (
-          <SetupRow key={step.id} step={step} />
-        ))}
-      </div>
-
-      {readyToGoLive ? (
-        <Card className="border-primary/30 bg-primary/5 p-4">
-          <p className="font-medium">You&apos;re ready to activate Amy.</p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Run a test call, then publish from Front Desk or Speed-to-Lead, or finish the guided
-            review in onboarding.
-          </p>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <Link href="/realtor/test" className="inline-flex h-10 items-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground">
-              Test Amy
-            </Link>
-            <Link
-              href="/realtor/onboarding?step=review"
-              className="inline-flex h-10 items-center rounded-lg border border-border px-4 text-sm font-medium"
-            >
-              Review &amp; activate
-            </Link>
+    <div className="mx-auto max-w-[1200px]">
+      <div className="grid gap-8 lg:grid-cols-[1fr_300px]">
+        <div>
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h1 className="text-[28px] font-bold tracking-tight text-[#111827]">
+                Let&apos;s get your AI system ready 👋
+              </h1>
+              <p className="mt-2 text-[15px] text-[#6b7280]">
+                Follow the steps below to launch Amy and start working more leads.
+              </p>
+            </div>
+            <div className="realtor-card min-w-[200px] px-4 py-3">
+              <p className="text-[13px] font-semibold text-[#111827]">
+                {requiredComplete} of {requiredTotal} steps complete
+              </p>
+              <p className="text-[12px] text-[#6b7280]">{pct}%</p>
+              <div className="mt-2 h-2 overflow-hidden rounded-full bg-[#e5e7eb]">
+                <div
+                  className="h-full rounded-full bg-[#2563eb] transition-all"
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+            </div>
           </div>
-        </Card>
-      ) : null}
 
-      {live ? (
-        <div className="flex gap-2">
-          <Link
-            href="/realtor/dashboard"
-            className="inline-flex h-10 items-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground"
-          >
-            Go to Dashboard
-          </Link>
+          <div className="mt-6 space-y-3">
+            {steps.map((step) => (
+              <SetupRow key={step.id} step={step} />
+            ))}
+          </div>
+
+          {readyToGoLive || requiredComplete < requiredTotal ? (
+            <div className="mt-6 flex items-center gap-4 rounded-xl border border-[#bfdbfe] bg-[#eff6ff] px-5 py-4">
+              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#2563eb] text-white">
+                <Sparkles className="h-5 w-5" />
+              </span>
+              <p className="flex-1 text-[14px] text-[#1e40af]">
+                Almost there! Finish the remaining steps to activate Amy and start capturing
+                more opportunities.
+              </p>
+              <Link href="/realtor/test" className="realtor-btn-primary shrink-0">
+                <Headphones className="h-4 w-4" />
+                Test Amy
+              </Link>
+            </div>
+          ) : null}
         </div>
-      ) : null}
+
+        <div className="space-y-4">
+          <div className="realtor-card overflow-hidden p-0">
+            <div className="h-28 bg-gradient-to-br from-[#dbeafe] to-[#eff6ff]" />
+            <div className="px-4 pb-4 pt-3">
+              <h3 className="font-semibold text-[#111827]">What is Amy?</h3>
+              <p className="mt-2 text-[13px] leading-relaxed text-[#6b7280]">
+                Amy is your AI receptionist and lead assistant. She answers calls, qualifies
+                leads, books appointments, and follows up 24/7 so you never miss an opportunity.
+              </p>
+              <Link href="/realtor/agents/front-desk" className="mt-3 text-[13px] font-semibold text-[#2563eb]">
+                Learn more &gt;
+              </Link>
+            </div>
+          </div>
+
+          <div className="realtor-card p-4">
+            <h3 className="font-semibold text-[#111827]">Need help?</h3>
+            <ul className="mt-3 space-y-3 text-[13px]">
+              <li>
+                <Link href="/help" className="flex items-center gap-2 text-[#374151] hover:text-[#2563eb]">
+                  <Play className="h-4 w-4 text-[#2563eb]" />
+                  Watch Setup Guide
+                </Link>
+              </li>
+              <li>
+                <Link href="/help" className="flex items-center gap-2 text-[#374151] hover:text-[#2563eb]">
+                  <span className="flex h-4 w-4 items-center justify-center text-[#2563eb]">📅</span>
+                  Join Live Training
+                </Link>
+              </li>
+              <li>
+                <Link href="/help" className="flex items-center gap-2 text-[#374151] hover:text-[#2563eb]">
+                  <Headphones className="h-4 w-4 text-[#2563eb]" />
+                  Contact Support
+                </Link>
+              </li>
+            </ul>
+            <p className="mt-4 text-[13px] font-medium text-[#2563eb]">We&apos;re here for you! 💙</p>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

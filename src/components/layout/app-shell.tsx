@@ -33,14 +33,20 @@ export function AppShell({
 }) {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
-  // Page hero owns the Solutions Dashboard title — avoid a duplicate chrome h1.
+  const hideChromeTitle =
+    realtorMode &&
+    (pathname.startsWith("/realtor/setup") ||
+      pathname.startsWith("/realtor/dashboard") ||
+      pathname.startsWith("/realtor/leads"));
   const title =
-    pathname === "/outcomes" ||
-      pathname === "/systems" ||
-      pathname === "/agents" ||
-      pathname.startsWith("/agents/")
+    hideChromeTitle
       ? ""
-      : (realtorMode ? getRealtorPageTitle(pathname) : null) || getPageTitle(pathname);
+      : pathname === "/outcomes" ||
+          pathname === "/systems" ||
+          pathname === "/agents" ||
+          pathname.startsWith("/agents/")
+        ? ""
+        : (realtorMode ? getRealtorPageTitle(pathname) : null) || getPageTitle(pathname);
 
   return (
     <div className="min-h-screen bg-background">
@@ -51,6 +57,7 @@ export function AppShell({
           onClose={() => setMenuOpen(false)}
           outcomeInstances={outcomeInstances}
           realtorMode={realtorMode}
+          inboxBadge={unreadNotifications}
         />
       </Suspense>
       <div className="lg:pl-[260px]">

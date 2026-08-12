@@ -1,9 +1,10 @@
-import { RealtorLeadDetailView, type LeadTimelineEvent } from "@/components/realtor/lead-detail";
+import { RealtorLeadDetailView } from "@/components/realtor/lead-detail";
 import { getActiveWorkspaceId } from "@/lib/auth";
 import { getPrisma } from "@/lib/db";
 import { mapLeadStatusFromMeta } from "@/lib/realtor/lead-detail-data";
 import { requireRealtorOnboardingComplete } from "@/lib/realtor/layout-guards";
 import { notFound } from "next/navigation";
+import type { LeadTimelineEvent } from "@/components/realtor/lead-detail";
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -13,6 +14,18 @@ function asRecord(value: unknown): Record<string, unknown> {
 
 function fieldLabel(key: string): string {
   return key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function computeLeadScore(
+  status: string,
+  fields: Record<string, string>,
+  needsAttention: boolean,
+): number {
+  let score = 45;
+  if (status === "qualified" || status === "appointment") score += 35;
+  if (Object.keys(fields).length >= 4) score += 15;
+  if (needsAttention) score += 8;
+  return Math.min(99, score);
 }
 
 export default async function RealtorLeadDetailPage({
@@ -50,12 +63,9 @@ export default async function RealtorLeadDetailPage({
       select: { id: true, serviceName: true, startsAt: true },
     }),
     prisma.auditLog.findMany({
-      where: {
-        workspaceId,
-        event: { startsWith: "voice.real_estate" },
-      },
+      where: { workspaceId, event: { startsWith: "voice.real_estate" } },
       orderBy: { createdAt: "desc" },
-      take: 20,
+      take: 15,
     }),
   ]);
 
@@ -64,8 +74,10 @@ export default async function RealtorLeadDetailPage({
   const reState = asRecord(latestMeta.realEstateCallState);
   const fields = asRecord(reState.collectedFields) as Record<string, string>;
   const status = mapLeadStatusFromMeta(calls[0]?.outcome, latestMeta);
+  const needsAttention = Boolean(latestMeta.follow_up_required) || reState.leadStatus === "message_taken";
 
   const profileFields = Object.entries(fields).map(([key, value]) => ({
+    key,
     label: fieldLabel(key),
     value,
   }));
@@ -76,7 +88,7 @@ export default async function RealtorLeadDetailPage({
     timeline.push({
       id: `call-${call.id}`,
       at: call.startedAt?.toISOString() || new Date().toISOString(),
-      title: `${call.direction === "INBOUND" ? "Inbound" : "AI Outbound"} call • ${call.durationSeconds || 0}s`,
+      title: `${call.direction === "INBOUND" ? "Inbound" : "AI Outbound"} call (${call.durationSeconds || 0}s)`,
       detail: call.outcome || "completed",
       href: `/phone/calls/${call.id}`,
       kind: "call",
@@ -84,14 +96,11 @@ export default async function RealtorLeadDetailPage({
   }
 
   for (const audit of audits) {
-    const detail = asRecord(JSON.parse(String(audit.detail || "{}")));
-    const contactId = String(detail.contactId || detail.callId || "");
-    if (contactId && contactId !== id && detail.contactId !== id) continue;
     timeline.push({
       id: `audit-${audit.id}`,
       at: audit.createdAt.toISOString(),
       title: audit.event.replace("voice.real_estate.", "Amy: ").replace(/_/g, " "),
-      detail: String(detail.title || detail.trigger || ""),
+      detail: "",
       kind: "ai",
     });
   }
@@ -99,10 +108,10 @@ export default async function RealtorLeadDetailPage({
   timeline.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
 
   const needsAction =
-    latestMeta.follow_up_required || reState.leadStatus === "message_taken"
+    needsAttention
       ? {
-          title: "Follow up requested",
-          detail: String(asRecord(latestMeta.structuredMessage).reason || "Caller needs a human callback."),
+          title: "Call back — Requested by lead",
+          detail: String(asRecord(latestMeta.structuredMessage).reason || "Follow up today"),
         }
       : calls[0]?.outcome === "transfer_requested"
         ? {
@@ -111,8 +120,13 @@ export default async function RealtorLeadDetailPage({
           }
         : undefined;
 
+  const tags: string[] = [];
+  if (status === "qualified") tags.push("Qualified");
+  if (fields.preapproval_status) tags.push("Preapproval Pending");
+  if (Object.keys(fields).length > 2) tags.push("Responds Fast");
+
   return (
-    <div className="p-6">
+    <div className="px-2 py-4 lg:px-4">
       <RealtorLeadDetailView
         leadId={id}
         name={name}
@@ -121,8 +135,9 @@ export default async function RealtorLeadDetailPage({
         source={contact.consentSource || undefined}
         phone={contact.phone}
         email={contact.email}
-        assignedTo="Sarah"
-        needsAction={needsAction}
+        assignedTo="Sarah Johnson"
+        createdAt={contact.createdAt.toISOString()}
+        leadScore={computeLeadScore(status, fields, needsAttention)}
         profileFields={profileFields}
         appointments={appointments.map((a: (typeof appointments)[number]) => ({
           id: a.id,
@@ -130,6 +145,8 @@ export default async function RealtorLeadDetailPage({
           serviceName: a.serviceName || "Consultation",
         }))}
         timeline={timeline}
+        needsAction={needsAction}
+        tags={tags}
       />
     </div>
   );

@@ -319,6 +319,8 @@ export function filterRealtorLeads(
     rows = rows.filter((l) => l.status === "nurture");
   } else if (view === "new") {
     rows = rows.filter((l) => l.status === "new");
+  } else if (view === "closed") {
+    rows = rows.filter((l) => l.status === "closed");
   }
 
   if (input.status) {
@@ -370,12 +372,52 @@ export async function loadRealtorDashboard(workspaceId: string, userName?: strin
   const greetingName = userName?.split(" ")[0] || "there";
   const hour = new Date().getHours();
   const greeting =
-    hour < 12 ? `Good morning, ${greetingName}` : hour < 17 ? `Good afternoon, ${greetingName}` : `Good evening, ${greetingName}`;
+    hour < 12
+      ? `Good morning, ${greetingName}!`
+      : hour < 17
+        ? `Good afternoon, ${greetingName}!`
+        : `Good evening, ${greetingName}!`;
+
+  const sourceMap = new Map<string, number>();
+  for (const lead of recentLeads) {
+    const src = lead.source || "Direct";
+    sourceMap.set(src, (sourceMap.get(src) || 0) + 1);
+  }
+  const leadSources = Array.from(sourceMap.entries())
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count);
+
+  const totalLeads = leads.length;
+  const workedCount = leads.filter((l) => l.status !== "new").length;
+  const convCount = conversations;
+  const qualCount = qualified.length;
+  const apptCount = leads.filter((l) => l.status === "appointment").length;
+
+  const callStats = await getPrisma().voiceCall.aggregate({
+    where: { workspaceId, startedAt: { gte: since } },
+    _count: { id: true },
+    _avg: { durationSeconds: true },
+  });
+
+  const recentAudits = await getPrisma().auditLog.findMany({
+    where: { workspaceId, event: { startsWith: "voice.real_estate" } },
+    orderBy: { createdAt: "desc" },
+    take: 6,
+  });
+
+  const recentActivity = recentAudits.map((audit: (typeof recentAudits)[number]) => {
+    const detail = asRecord(JSON.parse(String(audit.detail || "{}")));
+    return {
+      id: audit.id,
+      title: String(detail.name || detail.title || audit.event.replace("voice.real_estate.", "")),
+      at: audit.createdAt.toISOString(),
+    };
+  });
 
   return {
     config,
     greeting,
-    amyWorkedSummary: `Amy worked ${workedSince.length} leads since yesterday.`,
+    amyWorkedSummary: `Amy has worked ${workedSince.length} leads for you since yesterday.`,
     setupMode: !config.onboardingComplete || !config.live,
     amy: {
       frontDeskActive: config.amyMode !== "speed_to_lead" && config.live,
@@ -403,5 +445,22 @@ export async function loadRealtorDashboard(workspaceId: string, userName?: strin
     amyActivity,
     appointments,
     leads: leads.slice(0, 8).map((l) => ({ ...l, subtitle: leadSubtitle(l) })),
+    leadSources,
+    funnel: {
+      leads: totalLeads || recentLeads.length,
+      worked: workedCount,
+      conversations: convCount,
+      qualified: qualCount,
+      appointments: apptCount,
+    },
+    aiPerformance: {
+      totalCalls: callStats._count.id,
+      avgDurationSec: Math.round(callStats._avg.durationSeconds || 0),
+      qualificationRate:
+        workedCount > 0 ? Math.round((qualCount / workedCount) * 100) : 0,
+      appointmentRate:
+        qualCount > 0 ? Math.round((apptCount / qualCount) * 100) : 0,
+    },
+    recentActivity,
   };
 }
