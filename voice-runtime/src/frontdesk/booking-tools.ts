@@ -1,7 +1,6 @@
 import { llm } from "@livekit/agents";
 import { z } from "zod";
 import type { AgentSession } from "@livekit/agents";
-import type { voice } from "@livekit/agents";
 import type { AvailableSlot } from "./calendly-calendar";
 import { SlotUnavailableError } from "./calendly-calendar";
 import {
@@ -70,7 +69,6 @@ export type FrontDeskBookingTools = {
 
 export function buildFrontDeskBookingTools(input: {
   timezone: string;
-  restoreRootAgent: () => voice.Agent<FrontDeskUserData>;
   includeBooking?: boolean;
 }): FrontDeskBookingTools {
   const includeBooking = input.includeBooking !== false;
@@ -158,10 +156,7 @@ export function buildFrontDeskBookingTools(input: {
 
       const email = resolveConfirmedEmail(userData, inlineEmail);
       if (!email) {
-        const collected = await runEmailCollectionTask({
-          session,
-          restoreRootAgent: input.restoreRootAgent,
-        });
+        const collected = await runEmailCollectionTask(session);
         if (collected.declined || !collected.email) {
           return (
             "Email is required for the calendar invite. Explain that and offer to call back later."
@@ -272,7 +267,7 @@ export function buildFrontDeskBookingTools(input: {
             listAvailableSlots,
             scheduleAppointment,
             buildFrontDeskCancelAppointmentTool(),
-            buildFrontDeskRescheduleAppointmentTool(slotsMap, input.restoreRootAgent),
+            buildFrontDeskRescheduleAppointmentTool(slotsMap),
             buildFrontDeskCheckBookingStatusTool(),
           ]
         : []),

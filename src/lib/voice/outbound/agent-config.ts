@@ -70,6 +70,8 @@ export type OutboundRealtimePipelineConfig = {
 export type OutboundRealtimePipelineOverrides = {
   /** Per-call voice — wins over VOICE_REALTIME_VOICE env and agent advanced.realtimeVoice. */
   voice?: string;
+  /** Use OpenAI realtime default input transcription (required for nested AgentTask field collection). */
+  enableInputAudioTranscription?: boolean;
 };
 
 export function resolveOutboundRealtimePipelineConfig(

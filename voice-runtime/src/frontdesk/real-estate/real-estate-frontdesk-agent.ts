@@ -35,11 +35,9 @@ export function createRealEstateFrontDeskAgent(input: {
       : {}),
   });
   const label = business.businessName;
-  const agentHolder: { root?: voice.Agent<FrontDeskUserData> } = {};
   const bookingEnabled = input.publishedConfig?.booking?.enabled !== false;
   const { toolDefs: bookingToolDefs } = buildFrontDeskBookingTools({
     timezone: input.timezone,
-    restoreRootAgent: () => agentHolder.root!,
     includeBooking: bookingEnabled,
   });
 
@@ -47,7 +45,7 @@ export function createRealEstateFrontDeskAgent(input: {
     buildRealEstateLookupContactTool(),
     ...buildRealEstateIntentTools(),
     buildRealEstateGetRequiredFieldsTool(),
-    buildRealEstateCollectRequiredFieldsTool(() => agentHolder.root!),
+    buildRealEstateCollectRequiredFieldsTool(),
     buildRealEstateTakeMessageTool(),
   ];
 
@@ -78,6 +76,5 @@ export function createRealEstateFrontDeskAgent(input: {
     },
   });
 
-  agentHolder.root = agent;
   return agent;
 }

@@ -352,9 +352,13 @@ export function createVoicePipeline(input: {
     | undefined;
 
   if (input.sessionBase.useRealtime) {
-    const realtimeCfg = resolveOutboundRealtimePipelineConfig(input.agentConfig);
+    const realtimeOverrides = { enableInputAudioTranscription: true };
+    const realtimeCfg = resolveOutboundRealtimePipelineConfig(input.agentConfig, realtimeOverrides);
     const outputMode = resolveOutboundRealtimeOutputMode();
-    const { llm, tts, pipelineCfg } = buildOutboundRealtimeSessionComponents(input.agentConfig);
+    const { llm, tts, pipelineCfg } = buildOutboundRealtimeSessionComponents(
+      input.agentConfig,
+      realtimeOverrides,
+    );
     latencyPipelineKind =
       outputMode === "elevenlabs" ? "realtime_elevenlabs" : "realtime_native";
     latencyTtsConfig =
@@ -380,7 +384,9 @@ export function createVoicePipeline(input: {
         profile: input.sessionBase.isRealEstate
           ? "frontdesk_real_estate_realtime"
           : "frontdesk_realtime",
-        pipeline: describeRealtimePipelineConfig(realtimeCfg, outputMode, pipelineCfg),
+        pipeline: describeRealtimePipelineConfig(realtimeCfg, outputMode, pipelineCfg, {
+          inputAudioTranscription: true,
+        }),
         outputGainDb: input.sessionBase.outputGainDb,
       }),
     );

@@ -1,4 +1,4 @@
-import { voice, workflows } from "@livekit/agents";
+import { workflows } from "@livekit/agents";
 import type { AgentSession } from "@livekit/agents";
 import type { RealEstateFieldDefinition, RealEstateIntent } from "@/lib/voice/real-estate/types";
 import {
@@ -38,7 +38,6 @@ function activeIntents(userData: FrontDeskUserData): RealEstateIntent[] {
 
 export async function runRealEstateIntakeTaskGroup(input: {
   session: AgentSession<FrontDeskUserData>;
-  restoreRootAgent: () => voice.Agent<FrontDeskUserData>;
   fields?: RealEstateFieldDefinition[];
 }): Promise<{ collected: string[]; complete: boolean }> {
   const userData = input.session.userData;
@@ -82,12 +81,10 @@ export async function runRealEstateIntakeTaskGroup(input: {
     );
   }
 
-  input.session.updateAgent(group);
-  try {
-    await group.run();
-  } finally {
-    input.session.updateAgent(input.restoreRootAgent());
-  }
+  // AgentTask.run() pauses the parent activity (not drain) so onEnter generateReply
+  // can speak while the tool is still executing. Manual updateAgent() before run()
+  // drains scheduling and leaves the caller hearing silence after intake starts.
+  await group.run();
 
   const complete = isIntakeComplete(intents, userData.callState.collectedFields);
   if (complete && userData.callState) {

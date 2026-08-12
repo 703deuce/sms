@@ -57,11 +57,9 @@ export function createFrontDeskBookingAgent(input: {
   timezone: string;
 }) {
   const label = input.businessName.trim() || "our office";
-  const agentHolder: { root?: voice.Agent<import("./userdata").FrontDeskUserData> } = {};
 
   const { toolDefs } = buildFrontDeskBookingTools({
     timezone: input.timezone,
-    restoreRootAgent: () => agentHolder.root!,
   });
 
   const agent = voice.Agent.create<import("./userdata").FrontDeskUserData>({
@@ -81,6 +79,5 @@ export function createFrontDeskBookingAgent(input: {
     },
   });
 
-  agentHolder.root = agent;
   return agent;
 }

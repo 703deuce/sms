@@ -84,6 +84,5 @@ export async function runSchemaFieldCollectionTask(input: {
   handlers: SchemaFieldCollectionHandlers;
 }): Promise<SchemaFieldCollectionResult> {
   const task = new SchemaFieldCollectionTask(input.field, input.session, input.handlers);
-  input.session.updateAgent(task);
-  return task.run();
+  return await task.run();
 }

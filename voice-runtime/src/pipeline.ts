@@ -254,13 +254,14 @@ export function buildOutboundRealtimeModel(
 
   const useElevenLabsOutput = outputMode === "elevenlabs";
   const turnDetectionCfg = resolveOutboundRealtimeTurnDetection();
+  const disableInputTranscription = !overrides?.enableInputAudioTranscription;
 
   return new openai.realtime.RealtimeModel({
     apiKey,
     model: realtimeCfg.model,
     ...(useElevenLabsOutput ? {} : { voice: realtimeCfg.voice }),
     modalities: useElevenLabsOutput ? ["text"] : ["audio"],
-    inputAudioTranscription: null,
+    ...(disableInputTranscription ? { inputAudioTranscription: null } : {}),
     turnDetection: turnDetectionCfg.turnDetection,
     ...(realtimeCfg.reasoning ? { reasoning: realtimeCfg.reasoning } : {}),
   });
@@ -281,6 +282,7 @@ export function describeRealtimePipelineConfig(
   realtimeCfg: OutboundRealtimePipelineConfig,
   outputMode: OutboundRealtimeOutputMode = resolveOutboundRealtimeOutputMode(),
   pipelineCfg = getVoicePipelineConfig(),
+  options?: { inputAudioTranscription?: boolean },
 ) {
   const halfCascade = outputMode === "elevenlabs";
   const turnDetectionCfg = resolveOutboundRealtimeTurnDetection();
@@ -291,7 +293,7 @@ export function describeRealtimePipelineConfig(
     voice: halfCascade ? null : realtimeCfg.voice,
     reasoning: realtimeCfg.reasoning?.effort || null,
     turnDetection: describeOutboundRealtimeTurnDetection(turnDetectionCfg),
-    inputAudioTranscription: false,
+    inputAudioTranscription: options?.inputAudioTranscription ?? false,
     tts: halfCascade
       ? {
           provider: pipelineCfg.ttsProvider,

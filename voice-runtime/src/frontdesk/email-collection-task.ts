@@ -72,15 +72,9 @@ export class EmailCollectionTask extends voice.AgentTask<EmailCollectionResult> 
   }
 }
 
-export async function runEmailCollectionTask(input: {
-  session: AgentSession<FrontDeskUserData>;
-  restoreRootAgent: () => voice.Agent<FrontDeskUserData>;
-}): Promise<EmailCollectionResult> {
-  const task = new EmailCollectionTask(input.session);
-  input.session.updateAgent(task);
-  try {
-    return await task.run();
-  } finally {
-    input.session.updateAgent(input.restoreRootAgent());
-  }
+export async function runEmailCollectionTask(
+  session: AgentSession<FrontDeskUserData>,
+): Promise<EmailCollectionResult> {
+  const task = new EmailCollectionTask(session);
+  return await task.run();
 }

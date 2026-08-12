@@ -39,7 +39,6 @@ function externalEventUri(externalId: string | null | undefined): string | null 
 
 export function buildFrontDeskRescheduleAppointmentTool(
   slotsMap: Map<string, AvailableSlot>,
-  restoreRootAgent: () => import("@livekit/agents").voice.Agent<FrontDeskUserData>,
 ) {
   return llm.tool({
     name: "reschedule_appointment",
@@ -73,10 +72,7 @@ export function buildFrontDeskRescheduleAppointmentTool(
         if (attendeeEmail) ud.confirmedEmail = attendeeEmail;
       }
       if (!attendeeEmail) {
-        const collected = await runEmailCollectionTask({
-          session,
-          restoreRootAgent,
-        });
+        const collected = await runEmailCollectionTask(session);
         if (collected.declined || !collected.email) {
           return "Email is required to reschedule. Offer to call back later.";
         }

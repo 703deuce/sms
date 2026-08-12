@@ -1,7 +1,6 @@
 import { llm } from "@livekit/agents";
 import { z } from "zod";
 import type { AgentSession } from "@livekit/agents";
-import type { voice } from "@livekit/agents";
 import { takeStructuredMessage } from "@/lib/voice/domain-actions/take-structured-message";
 import { searchCrmContactsForVoice } from "@/lib/voice/tools/crm-contact-search";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
@@ -115,9 +114,7 @@ export function buildRealEstateIntentTools() {
   return [setIntent, addSecondaryIntent];
 }
 
-export function buildRealEstateCollectRequiredFieldsTool(
-  restoreRootAgent: () => voice.Agent<FrontDeskUserData>,
-) {
+export function buildRealEstateCollectRequiredFieldsTool() {
   return llm.tool({
     name: "collect_required_fields",
     description:
@@ -133,7 +130,6 @@ export function buildRealEstateCollectRequiredFieldsTool(
       return withLiveKitToolTelemetry(ud, "collect_required_fields", {}, async () => {
         const result = await runRealEstateIntakeTaskGroup({
           session,
-          restoreRootAgent,
         });
         if (result.complete) {
           return "All required fields collected. Offer to schedule a consultation or take a message.";
