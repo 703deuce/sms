@@ -8,9 +8,9 @@
   --muted: #eef0f5;
   --muted-foreground: #6b7280;
   --border: #e6e8ef;
-  --primary: #10b981;
+  --primary: #6366f1;
   --primary-foreground: #ffffff;
-  --primary-hover: #059669;
+  --primary-hover: #4f46e5;
   --accent: #3b82f6;
   --accent-foreground: #ffffff;
   --danger: #ef4444;
@@ -22,9 +22,9 @@
   --sidebar: #0b1220;
   --sidebar-foreground: #cbd5e1;
   --sidebar-muted: #94a3b8;
-  --sidebar-active: #10b981;
+  --sidebar-active: #6366f1;
   --header: #ffffff;
-  --ring: #10b981;
+  --ring: #6366f1;
   --shadow: 0 1px 2px rgb(15 23 42 / 0.04), 0 4px 16px rgb(15 23 42 / 0.04);
   --purple: #8b5cf6;
   --blue: #3b82f6;

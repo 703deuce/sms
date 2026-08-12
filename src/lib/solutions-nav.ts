@@ -44,11 +44,12 @@ export function buildSolutionsNav(_options: SolutionsNavOptions = {}): NavItem[]
       icon: AudioLines,
       children: [
         { label: "My Agent", href: "/voice/agents" },
-        { label: "Instructions", href: outcomeHref("answer-every-call", "call-handling") },
+        { label: "Instructions", href: "/voice/agents" },
         { label: "Knowledge", href: "/voice/knowledge" },
-        { label: "Actions", href: "/voice/tools" },
-        { label: "Voice", href: outcomeHref("answer-every-call", "voice") },
+        { label: "Actions", href: "/voice/agents" },
+        { label: "Voice", href: "/voice/agents" },
         { label: "Test", href: "/voice/testing" },
+        { label: "Advanced", href: "/voice/agents" },
       ],
     },
     {
@@ -139,5 +140,5 @@ export const appSolutionsNav = solutionsNav;
 
 /** Primary launch outcome slugs surfaced in the simplified sidebar. */
 export function solutionsLaunchSlugs(): string[] {
-  return ["answer-every-call", "missed-call-text-back"];
+  return ["missed-call-text-back"];
 }

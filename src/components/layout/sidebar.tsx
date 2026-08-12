@@ -247,13 +247,13 @@ export function Sidebar({
           className="flex items-start gap-2.5"
           onClick={onClose}
         >
-          <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] bg-[#2563eb] text-white shadow-[0_8px_18px_rgba(37,99,235,0.35)]">
+          <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] bg-[#6366f1] text-white shadow-[0_8px_18px_rgba(99,102,241,0.35)]">
             <MessageSquare className="h-3.5 w-3.5" fill="currentColor" />
           </span>
           {!collapsed ? (
             <span>
               <span className="block text-[14px] font-bold tracking-[0.04em] text-white">
-                {realtorMode ? "TRANSOVO" : "Transovo SMS"}
+                {realtorMode ? "TRANSOVO" : "TransOvo"}
               </span>
               {!realtorMode ? (
                 <span className="mt-0.5 block text-[10px] leading-tight text-sidebar-muted">

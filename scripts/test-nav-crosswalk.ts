@@ -109,8 +109,8 @@ const receptionist = solutionsNav.find((i) => i.label === "AI Receptionist");
 assert.ok(receptionist, "AI Receptionist required");
 assert.deepEqual(
   (receptionist?.children || []).map((c) => c.label),
-  ["My Agent", "Instructions", "Knowledge", "Actions", "Voice", "Test"],
-  "AI Receptionist submenu must stay light",
+  ["My Agent", "Instructions", "Knowledge", "Actions", "Voice", "Test", "Advanced"],
+  "AI Receptionist submenu must match editor tabs",
 );
 
 const mctb = solutionsNav.find((i) => i.label === "Missed Call Text Back");
