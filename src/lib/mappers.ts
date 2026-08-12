@@ -210,6 +210,7 @@ export function mapConversation(c: {
     tags: c.tags || [],
     updatedAt: new Date(c.updatedAt).toISOString(),
     unread: c.unread,
+    channel: "sms",
     messages: (c.messages || [])
       .slice()
       .sort(
