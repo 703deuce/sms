@@ -49,6 +49,16 @@ export type FrontDeskUserData = {
   bookingConfirmationSmsSent?: boolean;
   /** True while schedule_appointment is writing to Calendly. */
   bookingInProgress?: boolean;
+  /** Brief ack for the next intake field task onEnter (non-interactive). */
+  intakeTransitionPhrase?: string;
+  /** Instrumentation for task boundary first-audio metrics. */
+  activeTaskInstrumentation?: {
+    taskId: string;
+    taskType: string;
+    firstAudioLogged?: boolean;
+  };
+  /** Call is in closing phase — block duplicate end_call. */
+  callClosing?: boolean;
 };
 
 export function isBookingConfirmed(userData: FrontDeskUserData): boolean {

@@ -27,11 +27,11 @@ const amySource = fs.readFileSync(
   "utf8",
 );
 
-// --- 1. Post-email filler is spoken before protected write (inline email flow) ---
+// --- 1. Booking writes without a separate pre-write filler line (reduces double-speech) ---
 
 assert.ok(
-  bookingToolsSource.includes("POST_EMAIL_BOOKING_FILLER"),
-  "frontdesk uses shared post-email filler constant",
+  !bookingToolsSource.includes("POST_EMAIL_BOOKING_FILLER"),
+  "booking flow must not use separate post-email filler speech",
 );
 
 assert.ok(
@@ -39,12 +39,9 @@ assert.ok(
   "frontdesk must not use GetEmailTask (Realtime agent_handoff)",
 );
 
-const fillerBeforeProtect = bookingToolsSource.match(
-  /await speakBookingLine\(session,\s*POST_EMAIL_BOOKING_FILLER/,
-);
 assert.ok(
-  fillerBeforeProtect,
-  "filler uses speakBookingLine (Realtime-safe) before protected Calendly write",
+  bookingToolsSource.includes("speakBookingLine(session, buildBookingSuccessLine(local)"),
+  "confirmation uses speakBookingLine after Calendly write",
 );
 
 assert.doesNotMatch(
@@ -113,7 +110,7 @@ assert.ok(
 
 // --- 4. No duplicate goodbye sequence — end_call on frontdesk ---
 
-assert.ok(bookingToolsSource.includes("buildEndCallToolset"), "frontdesk uses LiveKit end-call toolset");
+assert.ok(bookingToolsSource.includes("buildFrontDeskEndCallToolset"), "frontdesk uses playout-aware end call");
 assert.ok(bookingToolsSource.includes("buildFrontDeskBusinessAnswerTool"), "frontdesk wires business answer tool");
 assert.ok(bookingToolsSource.includes("buildFrontDeskCancelAppointmentTool"), "frontdesk wires cancel tool");
 assert.ok(

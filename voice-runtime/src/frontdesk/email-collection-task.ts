@@ -4,6 +4,12 @@ import type { AgentSession } from "@livekit/agents";
 import { isValidEmail, normalizeSpokenEmail } from "./email-utils";
 import type { FrontDeskUserData } from "./userdata";
 import { agentTaskSuperOptions, nestedTaskOptionsFromSession } from "../tasks/task-context";
+import {
+  markFirstReplyRequested,
+  markTaskExitFinished,
+  markTaskExitStarted,
+  markTaskOnEnterStarted,
+} from "../task-transition-instrumentation";
 
 export type EmailCollectionResult = {
   email: string;
@@ -39,7 +45,17 @@ export class EmailCollectionTask extends voice.AgentTask<EmailCollectionResult> 
                 }
                 this.sessionRef.userData.confirmedEmail = normalized;
                 this.sessionRef.userData.draftEmail = undefined;
+                markTaskExitStarted({
+                  callId: this.sessionRef.userData.callId,
+                  taskId: "email_collection",
+                  taskType: "EmailCollectionTask",
+                });
                 this.complete({ email: normalized, declined: false });
+                markTaskExitFinished({
+                  callId: this.sessionRef.userData.callId,
+                  taskId: "email_collection",
+                  taskType: "EmailCollectionTask",
+                });
                 return "Email saved.";
               },
             }),
@@ -63,6 +79,22 @@ export class EmailCollectionTask extends voice.AgentTask<EmailCollectionResult> 
   }
 
   async onEnter(): Promise<void> {
+    const ud = this.sessionRef.userData;
+    markTaskOnEnterStarted({
+      callId: ud.callId,
+      taskId: "email_collection",
+      taskType: "EmailCollectionTask",
+    });
+    ud.activeTaskInstrumentation = {
+      taskId: "email_collection",
+      taskType: "EmailCollectionTask",
+    };
+    markFirstReplyRequested({
+      callId: ud.callId,
+      taskId: "email_collection",
+      taskType: "EmailCollectionTask",
+    });
+
     await this.session.generateReply({
       instructions:
         "Ask the caller to say their email address out loud for the calendar invite. " +

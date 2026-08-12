@@ -133,8 +133,8 @@ export function buildRealEstateCollectRequiredFieldsTool() {
         });
         if (result.complete) {
           return (
-            "Intake complete. Offer to schedule a consultation with list_available_slots. " +
-            "Do not mention internal intake processing or that you are still gathering fields."
+            "INTAKE_COMPLETE_SILENT_HANDOFF: Call list_available_slots immediately. " +
+            "Do not speak a summary, transition line, or intake recap — availability is next."
           );
         }
         return (

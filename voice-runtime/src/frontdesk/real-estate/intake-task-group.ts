@@ -15,6 +15,7 @@ import {
 import { notifyRealEstateStaff } from "@/lib/voice/real-estate/notifications";
 import { syncRealEstateLeadToCrm } from "@/lib/voice/real-estate/crm-sync";
 import type { FrontDeskUserData } from "../userdata";
+import { buildIntakeFieldAckPhrase } from "@/lib/voice/real-estate/intake-transition-phrases";
 import { SchemaFieldCollectionTask } from "../../tasks/schema-field-collection-task";
 import { taskGroupOptionsFromSession } from "../../tasks/task-context";
 
@@ -103,6 +104,7 @@ export async function runRealEstateIntakeTaskGroup(input: {
     value: string,
   ): Promise<{ ok: boolean }> => {
     userData.callState = recordCollectedField(userData.callState!, field.field_id, value);
+    userData.intakeTransitionPhrase = buildIntakeFieldAckPhrase(field, value);
     if (field.field_id === "name") {
       userData.callState!.contactName = value.trim();
     }

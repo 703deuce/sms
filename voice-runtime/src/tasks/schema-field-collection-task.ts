@@ -4,7 +4,13 @@ import type { AgentSession } from "@livekit/agents";
 import type { RealEstateFieldDefinition } from "@/lib/voice/real-estate/types";
 import { applyHeuristicIntakeBackfill } from "@/lib/voice/real-estate/intake-memory";
 import type { FrontDeskUserData } from "../frontdesk/userdata";
-import { FIELD_ANSWER_ACK_RULES, FIELD_TRANSITION_BRIDGE_RULES } from "@/lib/voice/field-transition-bridge";
+import { FIELD_TRANSITION_BRIDGE_RULES } from "@/lib/voice/field-transition-bridge";
+import {
+  markFirstReplyRequested,
+  markTaskExitFinished,
+  markTaskExitStarted,
+  markTaskOnEnterStarted,
+} from "../task-transition-instrumentation";
 import { agentTaskSuperOptions, nestedTaskOptionsFromSession } from "./task-context";
 
 export type SchemaFieldCollectionResult = {
@@ -57,7 +63,18 @@ export class SchemaFieldCollectionTask extends voice.AgentTask<SchemaFieldCollec
         if (!saved.ok) {
           throw new llm.ToolError(saved.speak || "I couldn't save that.");
         }
+        const ud = sessionRef.userData as FrontDeskUserData;
+        markTaskExitStarted({
+          callId: ud.callId,
+          taskId: field.field_id,
+          taskType: "SchemaFieldCollectionTask",
+        });
         this.complete({ fieldId: field.field_id, value: trimmed });
+        markTaskExitFinished({
+          callId: ud.callId,
+          taskId: field.field_id,
+          taskType: "SchemaFieldCollectionTask",
+        });
         return "OK";
       },
     });
@@ -106,9 +123,8 @@ export class SchemaFieldCollectionTask extends voice.AgentTask<SchemaFieldCollec
             `Ask naturally: ${question} ` +
             multiFieldHint +
             FIELD_TRANSITION_BRIDGE_RULES +
-            " " +
-            FIELD_ANSWER_ACK_RULES +
-            " When the caller answers, call record_schema_field_value. " +
+            " When the caller answers, call record_schema_field_value immediately without speaking. " +
+            "Do not acknowledge or add bridge speech — the next field task owns any brief acknowledgment. " +
             "Never narrate backend intake routing to the caller.",
           tools: [recordPrimaryTool, ...additionalTools],
         },
@@ -118,7 +134,17 @@ export class SchemaFieldCollectionTask extends voice.AgentTask<SchemaFieldCollec
   }
 
   async onEnter(): Promise<void> {
-    const ud = this.sessionRef.userData;
+    const ud = this.sessionRef.userData as FrontDeskUserData;
+    markTaskOnEnterStarted({
+      callId: ud.callId,
+      taskId: this.field.field_id,
+      taskType: "SchemaFieldCollectionTask",
+    });
+    ud.activeTaskInstrumentation = {
+      taskId: this.field.field_id,
+      taskType: "SchemaFieldCollectionTask",
+    };
+
     if (ud.callState) {
       const pending = this.handlers.pendingFields?.filter((f) => f.field_id !== this.field.field_id) ?? [];
       ud.callState = applyHeuristicIntakeBackfill({
@@ -137,8 +163,24 @@ export class SchemaFieldCollectionTask extends voice.AgentTask<SchemaFieldCollec
     const question =
       this.field.collection_instruction?.trim() ||
       `Could I get your ${this.field.label}?`;
+
+    const ack = ud.intakeTransitionPhrase?.trim();
+    if (ack) {
+      ud.intakeTransitionPhrase = undefined;
+    }
+
+    markFirstReplyRequested({
+      callId: ud.callId,
+      taskId: this.field.field_id,
+      taskType: "SchemaFieldCollectionTask",
+    });
+
+    const enterInstructions = ack
+      ? `Say this brief acknowledgment with no questions: "${ack}" Then ask one short question: ${question}. Ask only this one field.`
+      : `Ask one short question to collect: ${question}. Ask only this one field — do not bundle other intake questions.`;
+
     await this.session.generateReply({
-      instructions: `Ask one short question to collect: ${question}. Ask only this one field — do not bundle other intake questions.`,
+      instructions: enterInstructions,
       toolChoice: "none",
     });
   }

@@ -8,6 +8,8 @@ import {
   type UserStateChangedEvent,
   voice,
 } from "@livekit/agents";
+import { markFirstAudioStarted } from "./task-transition-instrumentation";
+import type { FrontDeskUserData } from "./frontdesk/userdata";
 
 export type LatencyPipelineKind = "stack" | "realtime_native" | "realtime_elevenlabs";
 
@@ -68,6 +70,18 @@ type TurnState = {
   hadToolCall: boolean;
   breakdownEmitted: boolean;
 };
+
+function maybeMarkTaskFirstAudio(session: voice.AgentSession<unknown>): void {
+  const ud = session.userData as FrontDeskUserData | undefined;
+  const inst = ud?.activeTaskInstrumentation;
+  if (!ud?.callId || !inst || inst.firstAudioLogged) return;
+  inst.firstAudioLogged = true;
+  markFirstAudioStarted({
+    callId: ud.callId,
+    taskId: inst.taskId,
+    taskType: inst.taskType,
+  });
+}
 
 function logLatency(event: string, payload: Record<string, unknown>) {
   console.log(
@@ -410,6 +424,7 @@ export function attachLatencyInstrumentation<T>(
     (ev: AgentStateChangedEvent) => {
       if (ev.newState !== "speaking") return;
       const now = Date.now();
+      maybeMarkTaskFirstAudio(session);
       if (state.ttsFirstAudioMs == null) {
         state.ttsFirstAudioMs = now;
         if (pipelineKind === "realtime_native") {

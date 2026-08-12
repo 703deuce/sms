@@ -25,7 +25,6 @@ import {
   buildBookingCompleteToolResultFallback,
   buildBookingFailureLine,
   buildBookingSuccessLine,
-  POST_EMAIL_BOOKING_FILLER,
 } from "../booking-completion-messages";
 import { bookingFailureReason } from "../booking-error";
 import { markBookingConfirmed, type FrontDeskUserData } from "./userdata";
@@ -81,8 +80,6 @@ export function buildFrontDeskRescheduleAppointmentTool(
       }
       ud.confirmedEmail = attendeeEmail;
 
-      await speakBookingLine(session, POST_EMAIL_BOOKING_FILLER, { runCtx: opts.ctx });
-
       return withLiveKitToolTelemetry(
         ud,
         "reschedule_appointment",
@@ -121,9 +118,7 @@ export function buildFrontDeskRescheduleAppointmentTool(
 
             sendBookingSmsAsync(session, rescheduled.slot.startTime);
 
-            const spoken = await speakBookingLine(session, buildBookingSuccessLine(local), {
-              runCtx: opts.ctx,
-            });
+            const spoken = await speakBookingLine(session, buildBookingSuccessLine(local));
 
             const completion = spoken
               ? BOOKING_COMPLETE_TOOL_RESULT

@@ -11,7 +11,7 @@ import {
 } from "./booking-recovery";
 import { resolveConfirmedEmail } from "./email-collection-tools";
 import { runEmailCollectionTask } from "./email-collection-task";
-import { buildEndCallToolset } from "../shared/end-call-tool";
+import { buildFrontDeskEndCallToolset } from "./end-frontdesk-call";
 import { buildFrontDeskRescheduleAppointmentTool } from "./reschedule-appointment-tool";
 import { syncFrontDeskBookingToCrm } from "@/lib/voice/crm/frontdesk-crm-sync";
 import { withLiveKitToolTelemetry } from "../livekit-tool-telemetry";
@@ -21,7 +21,6 @@ import {
   buildBookingCompleteToolResultFallback,
   buildBookingFailureLine,
   buildBookingSuccessLine,
-  POST_EMAIL_BOOKING_FILLER,
 } from "../booking-completion-messages";
 import { bookingFailureReason } from "../booking-error";
 import { buildFrontDeskBusinessAnswerTool } from "./knowledge-tool";
@@ -172,8 +171,6 @@ export function buildFrontDeskBookingTools(input: {
 
       userData.bookingInProgress = true;
       try {
-        await speakBookingLine(session, POST_EMAIL_BOOKING_FILLER, { runCtx: opts.ctx });
-
         return await withLiveKitToolTelemetry(
           userData,
           "schedule_appointment",
@@ -224,9 +221,7 @@ export function buildFrontDeskBookingTools(input: {
 
               sendBookingSmsAsync(session, booked.slot.startTime);
 
-              const spoken = await speakBookingLine(session, buildBookingSuccessLine(local), {
-                runCtx: opts.ctx,
-              });
+              const spoken = await speakBookingLine(session, buildBookingSuccessLine(local));
 
               if (spoken) {
                 return BOOKING_COMPLETE_TOOL_RESULT;
@@ -240,7 +235,6 @@ export function buildFrontDeskBookingTools(input: {
                   buildBookingFailureLine(
                     "That time slot isn't available anymore — I can check what else is open.",
                   ),
-                  { runCtx: opts.ctx },
                 );
                 return BOOKING_FAILED_TOOL_RESULT;
               }
@@ -255,9 +249,7 @@ export function buildFrontDeskBookingTools(input: {
                   error: err instanceof Error ? err.message : String(err),
                 }),
               );
-              await speakBookingLine(session, buildBookingFailureLine(bookingFailureReason(err)), {
-                runCtx: opts.ctx,
-              });
+              await speakBookingLine(session, buildBookingFailureLine(bookingFailureReason(err)));
               return BOOKING_FAILED_TOOL_RESULT;
             }
           },
@@ -268,7 +260,7 @@ export function buildFrontDeskBookingTools(input: {
     },
   });
 
-  const endCallTools = buildEndCallToolset(
+  const endCallTools = buildFrontDeskEndCallToolset(
     "End when the caller is done after booking or if they say goodbye.",
   );
 

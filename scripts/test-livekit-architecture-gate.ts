@@ -137,9 +137,20 @@ check("field transition bridge is non-interactive", () => {
   const bridge = readProjectFile("src/lib/voice/field-transition-bridge.ts");
   const schemaTask = readProjectFile("voice-runtime/src/tasks/schema-field-collection-task.ts");
   const compile = readProjectFile("src/lib/voice/real-estate/compile/compile-instructions.ts");
-  assert.ok(bridge.includes("Only the active field collection task"));
+  assert.ok(bridge.includes("Only the entering field task"));
   assert.ok(schemaTask.includes("FIELD_TRANSITION_BRIDGE_RULES"));
+  assert.ok(schemaTask.includes("record_schema_field_value immediately without speaking"));
   assert.ok(compile.includes("FIELD_TRANSITION_BRIDGE_RULES"));
+});
+
+check("task transition instrumentation and end call playout", () => {
+  const transition = readProjectFile("voice-runtime/src/task-transition-instrumentation.ts");
+  const endCall = readProjectFile("voice-runtime/src/frontdesk/end-frontdesk-call.ts");
+  const booking = readProjectFile("voice-runtime/src/frontdesk/booking-tools.ts");
+  assert.ok(transition.includes("task_transition_latency"));
+  assert.ok(endCall.includes("goodbye_playout_finished"));
+  assert.ok(endCall.includes("waitForFrontDeskGoodbyePlayout"));
+  assert.ok(booking.includes("buildFrontDeskEndCallToolset"));
 });
 
 check("frontdesk inbound uses safer realtime VAD", () => {
@@ -186,7 +197,7 @@ check("RE intake uses TaskGroup collect_required_fields", () => {
 check("booking uses EmailCollectionTask and LiveKit end call", () => {
   const booking = readProjectFile("voice-runtime/src/frontdesk/booking-tools.ts");
   assert.ok(booking.includes("runEmailCollectionTask"));
-  assert.ok(booking.includes("buildEndCallToolset"));
+  assert.ok(booking.includes("buildFrontDeskEndCallToolset"));
 });
 
 check("legacy tool set is complete", () => {
