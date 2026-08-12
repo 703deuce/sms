@@ -5,7 +5,6 @@ import type {
   RealtorLeadRow,
   RealtorNeedsAttentionItem,
 } from "@/lib/realtor/types";
-import { formatPhone } from "@/lib/utils";
 import type { LucideIcon } from "lucide-react";
 import {
   Calendar,
