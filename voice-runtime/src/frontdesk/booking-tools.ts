@@ -25,6 +25,7 @@ import {
 } from "../booking-completion-messages";
 import { bookingFailureReason } from "../booking-error";
 import { runAsyncWorkWithBridge } from "../task-async-work-bridge";
+import { safeInterruptSession } from "../session-utils";
 import { buildFrontDeskBusinessAnswerTool } from "./knowledge-tool";
 import { buildFrontDeskCancelAppointmentTool } from "./cancel-appointment-tool";
 import { buildFrontDeskTransferTool } from "./transfer-tool";
@@ -155,30 +156,33 @@ export function buildFrontDeskBookingTools(input: {
       }
 
       userData.pendingSlotId = slot_id;
-
-      const email = resolveConfirmedEmail(userData, inlineEmail);
-      if (!email) {
-        const collected = await runEmailCollectionTask(session);
-        if (collected.declined || !collected.email) {
-          return (
-            "Email is required for the calendar invite. Explain that and offer to call back later."
-          );
-        }
-        userData.confirmedEmail = collected.email;
-      } else {
-        userData.confirmedEmail = email;
-      }
-
-      const confirmedEmail = userData.confirmedEmail!;
-
       userData.bookingInProgress = true;
+
       try {
+        const email = resolveConfirmedEmail(userData, inlineEmail);
+        if (!email) {
+          const collected = await runEmailCollectionTask(session);
+          if (collected.declined || !collected.email) {
+            return (
+              "Email is required for the calendar invite. Explain that and offer to call back later."
+            );
+          }
+          userData.confirmedEmail = collected.email;
+        } else {
+          userData.confirmedEmail = email;
+        }
+
+        const confirmedEmail = userData.confirmedEmail!;
+
         return await withLiveKitToolTelemetry(
           userData,
           "schedule_appointment",
           { slot_id },
           async () => {
             try {
+              // Drop any model reply that started while email handoff / bridge was playing.
+              await safeInterruptSession(session);
+
               const booked = await runAsyncWorkWithBridge(
                 session,
                 POST_EMAIL_BOOKING_FILLER,
@@ -229,6 +233,15 @@ export function buildFrontDeskBookingTools(input: {
               sendBookingSmsAsync(session, booked.slot.startTime);
 
               const spoken = await speakBookingLine(session, buildBookingSuccessLine(local));
+              console.log(
+                JSON.stringify({
+                  source: "frontdesk-booking-tools",
+                  event: "booking_confirmation_spoken",
+                  callId: userData.callId,
+                  spoken,
+                  eventUri: booked.eventUri,
+                }),
+              );
 
               if (spoken) {
                 return BOOKING_COMPLETE_TOOL_RESULT;

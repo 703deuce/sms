@@ -1,7 +1,7 @@
 /** Deterministic spoken lines for the parent booking tool — not model-generated. */
 
 export const POST_EMAIL_BOOKING_FILLER =
-  "Perfect — one moment while I put that on the calendar for you. This can take a few seconds.";
+  "One moment — I'm putting that on the calendar now. This can take a few seconds.";
 
 export const POST_CANCEL_FILLER =
   "Okay — give me just a moment while I cancel that appointment on the calendar.";
