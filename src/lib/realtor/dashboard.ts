@@ -1,6 +1,8 @@
 import { getPrisma } from "@/lib/db";
 import type {
   RealtorAmyActivityItem,
+  RealtorAttentionKind,
+  RealtorDashboardAppointment,
   RealtorLeadRow,
   RealtorLeadStatus,
   RealtorNeedsAttentionItem,
@@ -11,6 +13,27 @@ function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
+}
+
+function attentionKind(outcome: string | null, urgency: string): RealtorAttentionKind {
+  if (outcome === "transfer_requested") return "transfer_missed";
+  if (urgency === "high") return "hot_buyer";
+  return "follow_up";
+}
+
+function formatIntentLabel(intent: string | undefined): string {
+  if (!intent) return "";
+  return intent.replace(/_/g, " ");
+}
+
+function leadSubtitle(lead: RealtorLeadRow): string | undefined {
+  const parts: string[] = [];
+  if (lead.intent) parts.push(formatIntentLabel(lead.intent));
+  const budget = lead.collectedFields?.budget_or_price_range;
+  const area = lead.collectedFields?.target_areas;
+  if (budget) parts.push(budget);
+  if (area) parts.push(area);
+  return parts.length ? parts.join(" • ") : undefined;
 }
 
 function mapLeadStatus(raw: string | null | undefined, meta: Record<string, unknown>): RealtorLeadStatus {
@@ -141,17 +164,24 @@ export async function loadRealtorNeedsAttention(
     const reState = asRecord(meta.realEstateCallState);
     const name =
       String(reState.contactName || meta.callerName || "Caller").trim() || "Caller";
-    const reason =
-      call.outcome === "transfer_requested"
-        ? "Transfer requested"
-        : "Message taken — follow up needed";
+    const urgency = call.outcome === "transfer_requested" ? "high" : "normal";
+    const intent = reState.primaryIntent ? formatIntentLabel(String(reState.primaryIntent)) : "";
+    const subtitleParts = [intent].filter(Boolean);
     items.push({
       id: `call-${call.id}`,
       leadId: call.contactId || undefined,
       leadName: name,
-      reason,
-      detail: String(asRecord(meta.structuredMessage).reason || reason),
-      urgency: call.outcome === "transfer_requested" ? "high" : "normal",
+      reason:
+        call.outcome === "transfer_requested"
+          ? "Amy attempted a live transfer"
+          : "Follow up needed",
+      detail:
+        call.outcome === "transfer_requested"
+          ? "Caller may still be waiting for a human."
+          : String(asRecord(meta.structuredMessage).reason || "Message taken for the team."),
+      subtitle: subtitleParts.join(" • ") || undefined,
+      urgency,
+      kind: attentionKind(call.outcome, urgency),
       createdAt: call.startedAt?.toISOString() || new Date().toISOString(),
       href: call.contactId ? `/realtor/leads/${call.contactId}` : `/phone/calls/${call.id}`,
     });
@@ -163,9 +193,10 @@ export async function loadRealtorNeedsAttention(
     items.push({
       id: `audit-${audit.id}`,
       leadName: String(detail.name || detail.title || "Lead"),
-      reason: audit.event.replace("voice.real_estate.", "").replace(/_/g, " "),
+      reason: "AI needs help",
       detail: String(detail.title || detail.reason || audit.event),
       urgency: "normal",
+      kind: "ai_needs_help",
       createdAt: audit.createdAt.toISOString(),
       href: "/realtor/needs-attention",
     });
@@ -186,7 +217,7 @@ export async function loadRealtorAmyActivity(
       },
       orderBy: { startedAt: "desc" },
       take: 5,
-      select: { id: true, metadata: true, direction: true, startedAt: true },
+      select: { id: true, contactId: true, metadata: true, direction: true, startedAt: true },
     }),
     prisma.auditLog.findMany({
       where: {
@@ -201,13 +232,21 @@ export async function loadRealtorAmyActivity(
   const items: RealtorAmyActivityItem[] = activeCalls.map((call: (typeof activeCalls)[number]) => {
     const meta = asRecord(call.metadata);
     const reState = asRecord(meta.realEstateCallState);
+    const contactName =
+      String(reState.contactName || meta.callerName || "Lead").trim() || "Lead";
     return {
       id: call.id,
-      title: call.direction === "INBOUND" ? "Front Desk on inbound call" : "Speed-to-Lead calling",
-      detail: reState.primaryIntent
-        ? `${String(reState.primaryIntent)} inquiry`
-        : "Active voice session",
-      kind: call.direction === "INBOUND" ? "front_desk" : "calling",
+      title:
+        call.direction === "INBOUND"
+          ? contactName
+          : contactName,
+      detail:
+        call.direction === "INBOUND"
+          ? `Inbound call • ${reState.primaryIntent ? formatIntentLabel(String(reState.primaryIntent)) : "Front Desk"}`
+          : `Speed-to-Lead • Attempt active`,
+      kind: call.direction === "INBOUND" ? "inbound" : "calling",
+      leadId: call.contactId || undefined,
+      href: call.contactId ? `/realtor/leads/${call.contactId}` : `/phone/calls/${call.id}`,
       createdAt: call.startedAt?.toISOString() || new Date().toISOString(),
     };
   });
@@ -226,9 +265,83 @@ export async function loadRealtorAmyActivity(
   return items.slice(0, 12);
 }
 
-export async function loadRealtorDashboard(workspaceId: string) {
+export async function loadUpcomingAppointments(
+  workspaceId: string,
+): Promise<RealtorDashboardAppointment[]> {
+  const prisma = getPrisma();
+  const now = new Date();
+  const appointments = await prisma.voiceAppointment.findMany({
+    where: { workspaceId, startsAt: { gte: now } },
+    orderBy: { startsAt: "asc" },
+    take: 8,
+    select: {
+      id: true,
+      serviceName: true,
+      startsAt: true,
+      contactId: true,
+      contact: { select: { firstName: true, lastName: true } },
+    },
+  });
+
+  return appointments.map((appt: (typeof appointments)[number]) => {
+    const name =
+      [appt.contact?.firstName, appt.contact?.lastName].filter(Boolean).join(" ") || "Guest";
+    return {
+      id: appt.id,
+      startsAt: appt.startsAt.toISOString(),
+      serviceName: appt.serviceName || "Consultation",
+      leadId: appt.contactId || undefined,
+      leadName: name,
+    };
+  });
+}
+
+export function filterRealtorLeads(
+  leads: RealtorLeadRow[],
+  input: {
+    view?: string;
+    q?: string;
+    status?: RealtorLeadStatus;
+  },
+): RealtorLeadRow[] {
+  let rows = [...leads];
+  const view = input.view || "all";
+
+  if (view === "hot") {
+    rows = rows.filter((l) => l.needsAttention || l.status === "qualified");
+  } else if (view === "needs_attention") {
+    rows = rows.filter((l) => l.needsAttention);
+  } else if (view === "qualified") {
+    rows = rows.filter((l) => l.status === "qualified");
+  } else if (view === "appointments") {
+    rows = rows.filter((l) => l.status === "appointment");
+  } else if (view === "nurture") {
+    rows = rows.filter((l) => l.status === "nurture");
+  } else if (view === "new") {
+    rows = rows.filter((l) => l.status === "new");
+  }
+
+  if (input.status) {
+    rows = rows.filter((l) => l.status === input.status);
+  }
+
+  const q = input.q?.trim().toLowerCase();
+  if (q) {
+    rows = rows.filter(
+      (l) =>
+        l.name.toLowerCase().includes(q) ||
+        l.phone?.includes(q) ||
+        l.email?.toLowerCase().includes(q) ||
+        l.source?.toLowerCase().includes(q),
+    );
+  }
+
+  return rows;
+}
+
+export async function loadRealtorDashboard(workspaceId: string, userName?: string) {
   const config = await loadRealtorProductConfig(workspaceId);
-  const [leads, needsAttention, amyActivity, phone, agent] = await Promise.all([
+  const [leads, needsAttention, amyActivity, phone, agent, appointments] = await Promise.all([
     loadRealtorLeads(workspaceId),
     loadRealtorNeedsAttention(workspaceId),
     loadRealtorAmyActivity(workspaceId),
@@ -241,14 +354,28 @@ export async function loadRealtorDashboard(workspaceId: string) {
       where: { workspaceId, status: "ACTIVE" },
       select: { id: true, name: true, draftConfig: true },
     }),
+    loadUpcomingAppointments(workspaceId),
   ]);
 
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
   const recentLeads = leads.filter((l) => new Date(l.addedAt) >= since);
+  const workedSince = leads.filter(
+    (l) => l.status !== "new" && new Date(l.lastActivityAt || l.addedAt) >= since,
+  );
+  const conversations = leads.filter((l) =>
+    ["contacted", "qualified", "appointment", "working"].includes(l.status),
+  ).length;
   const qualified = leads.filter((l) => l.status === "qualified" || l.status === "appointment");
+
+  const greetingName = userName?.split(" ")[0] || "there";
+  const hour = new Date().getHours();
+  const greeting =
+    hour < 12 ? `Good morning, ${greetingName}` : hour < 17 ? `Good afternoon, ${greetingName}` : `Good evening, ${greetingName}`;
 
   return {
     config,
+    greeting,
+    amyWorkedSummary: `Amy worked ${workedSince.length} leads since yesterday.`,
     setupMode: !config.onboardingComplete || !config.live,
     amy: {
       frontDeskActive: config.amyMode !== "speed_to_lead" && config.live,
@@ -259,16 +386,22 @@ export async function loadRealtorDashboard(workspaceId: string) {
     },
     metrics: {
       newLeads: recentLeads.length,
-      worked: leads.filter((l) => l.status !== "new").length,
-      contacted: leads.filter((l) =>
-        ["contacted", "qualified", "appointment", "working"].includes(l.status),
-      ).length,
+      worked: workedSince.length,
+      conversations,
       qualified: qualified.length,
       appointments: leads.filter((l) => l.status === "appointment").length,
       needYou: needsAttention.length,
     },
+    metricHrefs: {
+      newLeads: "/realtor/leads?view=new",
+      worked: "/realtor/leads",
+      conversations: "/realtor/leads?view=hot",
+      qualified: "/realtor/leads?view=qualified",
+      appointments: "/realtor/leads?view=appointments",
+    },
     needsAttention,
     amyActivity,
-    leads: leads.slice(0, 10),
+    appointments,
+    leads: leads.slice(0, 8).map((l) => ({ ...l, subtitle: leadSubtitle(l) })),
   };
 }

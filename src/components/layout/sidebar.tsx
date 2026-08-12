@@ -239,7 +239,7 @@ export function Sidebar({
               {realtorMode ? "Transovo Real Estate" : "Transovo SMS"}
             </span>
             <span className="mt-0.5 block text-[10px] leading-tight text-sidebar-muted">
-              {realtorMode ? "Amy AI Front Desk" : "Solutions-first workspace"}
+              {realtorMode ? "Lead → AI works it → you step in" : "Solutions-first workspace"}
             </span>
           </span>
         </Link>

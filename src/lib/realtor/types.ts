@@ -248,7 +248,10 @@ export type RealtorLeadRow = {
   lastActivityAt?: string | null;
   needsAttention?: boolean;
   collectedFields?: Record<string, string>;
+  subtitle?: string;
 };
+
+export type RealtorAttentionKind = "hot_buyer" | "transfer_missed" | "ai_needs_help" | "follow_up";
 
 export type RealtorNeedsAttentionItem = {
   id: string;
@@ -256,7 +259,9 @@ export type RealtorNeedsAttentionItem = {
   leadName: string;
   reason: string;
   detail: string;
+  subtitle?: string;
   urgency: "low" | "normal" | "high";
+  kind: RealtorAttentionKind;
   createdAt: string;
   href: string;
 };
@@ -265,6 +270,17 @@ export type RealtorAmyActivityItem = {
   id: string;
   title: string;
   detail: string;
-  kind: "calling" | "waiting" | "following_up" | "front_desk" | "completed";
+  kind: "calling" | "waiting" | "following_up" | "front_desk" | "completed" | "inbound";
+  leadId?: string;
+  href?: string;
   createdAt: string;
+};
+
+export type RealtorDashboardAppointment = {
+  id: string;
+  startsAt: string;
+  serviceName: string;
+  leadId?: string;
+  leadName: string;
+  assignedTo?: string;
 };

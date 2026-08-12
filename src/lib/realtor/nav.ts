@@ -11,6 +11,7 @@ import {
   PhoneCall,
   Puzzle,
   Settings,
+  SlidersHorizontal,
   Users,
   Workflow,
 } from "lucide-react";
@@ -39,7 +40,8 @@ export function buildRealtorMobileNav(): NavItem[] {
 
 const REALTOR_PAGE_TITLES: Record<string, string> = {
   "/realtor": "Real Estate",
-  "/realtor/onboarding": "Get Amy Working",
+  "/realtor/setup": "Get Amy Ready",
+  "/realtor/onboarding": "Guided Setup",
   "/realtor/dashboard": "Dashboard",
   "/realtor/leads": "Leads",
   "/realtor/needs-attention": "Needs Attention",
@@ -63,17 +65,21 @@ export function getRealtorPageTitle(pathname: string): string | null {
 
 export function buildRealtorNav(): NavItem[] {
   return [
-    { label: "Dashboard", href: "/realtor/dashboard", icon: LayoutDashboard },
+    {
+      sectionLabel: "Work",
+      label: "Dashboard",
+      href: "/realtor/dashboard",
+      icon: LayoutDashboard,
+    },
     {
       label: "Leads",
       href: "/realtor/leads",
       icon: Users,
       children: [
         { label: "All Leads", href: "/realtor/leads" },
-        { label: "Pipeline", href: "/realtor/leads?view=pipeline" },
-        { label: "Needs Attention", href: "/realtor/needs-attention" },
+        { label: "Needs Attention", href: "/realtor/leads?view=needs_attention" },
+        { label: "Qualified", href: "/realtor/leads?view=qualified" },
         { label: "Lead Sources", href: "/realtor/leads/sources" },
-        { label: "Import", href: "/contacts/imports" },
       ],
     },
     {
@@ -96,7 +102,74 @@ export function buildRealtorNav(): NavItem[] {
         { label: "Inbound", href: "/phone/calls?direction=inbound" },
         { label: "Outbound", href: "/phone/calls?direction=outbound" },
         { label: "AI Calls", href: "/phone/calls?kind=ai" },
-        { label: "Transcripts", href: "/phone/calls?tab=transcripts" },
+      ],
+    },
+    {
+      label: "Appointments",
+      href: "/realtor/appointments",
+      icon: CalendarDays,
+    },
+    {
+      sectionLabel: "Setup",
+      label: "Get Amy Ready",
+      href: "/realtor/setup",
+      icon: SlidersHorizontal,
+    },
+    {
+      label: "AI Agents",
+      href: "/realtor/agents/front-desk",
+      icon: Bot,
+      children: [
+        { label: "Front Desk", href: "/realtor/agents/front-desk" },
+        { label: "Speed-to-Lead", href: "/realtor/agents/speed-to-lead" },
+        { label: "Knowledge", href: "/realtor/agents/knowledge" },
+        { label: "Test Amy", href: "/realtor/test" },
+      ],
+    },
+    {
+      label: "Integrations",
+      href: "/integrations",
+      icon: Puzzle,
+      children: [
+        { label: "Lead Sources", href: "/realtor/leads/sources" },
+        { label: "CRM", href: "/integrations/crm" },
+        { label: "Calendar", href: "/integrations/native/calendly" },
+        { label: "Messaging", href: "/settings/messaging" },
+      ],
+    },
+    {
+      label: "Phone",
+      href: "/my-numbers",
+      icon: Phone,
+      children: [
+        { label: "Numbers", href: "/my-numbers" },
+        { label: "Phone Settings", href: "/settings/phone" },
+      ],
+    },
+    {
+      label: "Settings",
+      href: "/settings",
+      icon: Settings,
+      children: [
+        { label: "Setup Home", href: "/realtor/setup" },
+        { label: "Business", href: "/realtor/settings/business" },
+        { label: "Guided onboarding", href: "/realtor/onboarding" },
+      ],
+    },
+    {
+      sectionLabel: "Growth",
+      label: "Campaigns",
+      href: "/campaigns",
+      icon: Megaphone,
+    },
+    {
+      label: "Automations",
+      href: "/automations",
+      icon: Workflow,
+      children: [
+        { label: "Flows", href: "/automations" },
+        { label: "Templates", href: "/automations/templates" },
+        { label: "Logs", href: "/automations/logs" },
       ],
     },
     {
@@ -110,89 +183,9 @@ export function buildRealtorNav(): NavItem[] {
       ],
     },
     {
-      label: "AI Agents",
-      href: "/realtor/agents/front-desk",
-      icon: Bot,
-      children: [
-        { label: "Front Desk", href: "/realtor/agents/front-desk" },
-        { label: "Speed-to-Lead", href: "/realtor/agents/speed-to-lead" },
-        { label: "Knowledge", href: "/realtor/agents/knowledge" },
-        { label: "Agent Activity", href: "/realtor/agents/activity" },
-        { label: "Test Agent", href: "/realtor/test" },
-      ],
-    },
-    {
-      label: "Automations",
-      href: "/automations",
-      icon: Workflow,
-      children: [
-        { label: "Flows", href: "/automations" },
-        { label: "Templates", href: "/automations/templates" },
-        { label: "Active", href: "/automations?status=active" },
-        { label: "Logs", href: "/automations/logs" },
-      ],
-    },
-    {
-      label: "Appointments",
-      href: "/realtor/appointments",
-      icon: CalendarDays,
-      children: [
-        { label: "Calendar", href: "/realtor/appointments" },
-        { label: "Appointment Types", href: "/realtor/appointments/types" },
-        { label: "Connections", href: "/integrations/native/calendly" },
-      ],
-    },
-    {
-      label: "Campaigns",
-      href: "/campaigns",
-      icon: Megaphone,
-      children: [
-        { label: "All Campaigns", href: "/campaigns" },
-        { label: "SMS Campaigns", href: "/campaigns?channel=sms" },
-        { label: "Email Campaigns", href: "/campaigns?channel=email" },
-      ],
-    },
-    {
-      label: "Phone",
-      href: "/my-numbers",
-      icon: Phone,
-      children: [
-        { label: "Numbers", href: "/my-numbers" },
-        { label: "Dialer", href: "/phone" },
-        { label: "Phone Settings", href: "/settings/phone" },
-      ],
-    },
-    {
-      label: "Integrations",
-      href: "/integrations",
-      icon: Puzzle,
-      children: [
-        { label: "Connected Apps", href: "/integrations" },
-        { label: "CRM", href: "/integrations/crm" },
-        { label: "Lead Sources", href: "/realtor/leads/sources" },
-        { label: "Calendars", href: "/integrations/native/calendly" },
-      ],
-    },
-    {
       label: "Reports",
       href: "/reports",
       icon: BarChart3,
-      children: [
-        { label: "Overview", href: "/reports" },
-        { label: "Lead Conversion", href: "/reports?tab=leads" },
-        { label: "AI Performance", href: "/reports?tab=ai" },
-      ],
-    },
-    {
-      label: "Settings",
-      href: "/settings",
-      icon: Settings,
-      children: [
-        { label: "Business", href: "/realtor/settings/business" },
-        { label: "AI", href: "/realtor/agents/front-desk" },
-        { label: "Phone & Routing", href: "/settings/phone" },
-        { label: "Messaging", href: "/settings/messaging" },
-      ],
     },
   ];
 }

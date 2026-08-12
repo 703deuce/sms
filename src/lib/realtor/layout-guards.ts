@@ -9,10 +9,10 @@ import { redirect } from "next/navigation";
 export async function requireRealtorOnboardingComplete() {
   const workspaceId = await getActiveWorkspaceId();
   const isRealtor = await isRealtorWorkspace(workspaceId);
-  if (!isRealtor) redirect("/realtor/onboarding");
+  if (!isRealtor) redirect("/realtor/setup");
   const config = await loadRealtorProductConfig(workspaceId);
   if (!config.onboardingComplete || !config.live) {
-    redirect("/realtor/onboarding");
+    redirect("/realtor/setup");
   }
   return { workspaceId, config };
 }

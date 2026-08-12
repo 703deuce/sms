@@ -1,18 +1,18 @@
-import { Button } from "@/components/ui/button";
-import { Card, CardTitle } from "@/components/ui/card";
-import { PageHeader } from "@/components/ui/page-header";
+import { RealtorLeadDetailView, type LeadTimelineEvent } from "@/components/realtor/lead-detail";
 import { getActiveWorkspaceId } from "@/lib/auth";
 import { getPrisma } from "@/lib/db";
+import { mapLeadStatusFromMeta } from "@/lib/realtor/lead-detail-data";
 import { requireRealtorOnboardingComplete } from "@/lib/realtor/layout-guards";
-import { formatPhone } from "@/lib/utils";
-import { ClickToCallButton } from "@/components/contacts/click-to-call-button";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
+}
+
+function fieldLabel(key: string): string {
+  return key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 export default async function RealtorLeadDetailPage({
@@ -29,85 +29,108 @@ export default async function RealtorLeadDetailPage({
   });
   if (!contact) notFound();
 
-  const calls = await prisma.voiceCall.findMany({
-    where: { workspaceId, contactId: id },
-    orderBy: { startedAt: "desc" },
-    take: 20,
-    select: {
-      id: true,
-      direction: true,
-      outcome: true,
-      startedAt: true,
-      durationSeconds: true,
-      metadata: true,
-    },
-  });
+  const [calls, appointments, audits] = await Promise.all([
+    prisma.voiceCall.findMany({
+      where: { workspaceId, contactId: id },
+      orderBy: { startedAt: "desc" },
+      take: 20,
+      select: {
+        id: true,
+        direction: true,
+        outcome: true,
+        startedAt: true,
+        durationSeconds: true,
+        metadata: true,
+      },
+    }),
+    prisma.voiceAppointment.findMany({
+      where: { workspaceId, contactId: id },
+      orderBy: { startsAt: "asc" },
+      take: 10,
+      select: { id: true, serviceName: true, startsAt: true },
+    }),
+    prisma.auditLog.findMany({
+      where: {
+        workspaceId,
+        event: { startsWith: "voice.real_estate" },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 20,
+    }),
+  ]);
 
   const name = [contact.firstName, contact.lastName].filter(Boolean).join(" ") || "Unknown";
   const latestMeta = asRecord(calls[0]?.metadata);
   const reState = asRecord(latestMeta.realEstateCallState);
   const fields = asRecord(reState.collectedFields) as Record<string, string>;
+  const status = mapLeadStatusFromMeta(calls[0]?.outcome, latestMeta);
+
+  const profileFields = Object.entries(fields).map(([key, value]) => ({
+    label: fieldLabel(key),
+    value,
+  }));
+
+  const timeline: LeadTimelineEvent[] = [];
+
+  for (const call of calls) {
+    timeline.push({
+      id: `call-${call.id}`,
+      at: call.startedAt?.toISOString() || new Date().toISOString(),
+      title: `${call.direction === "INBOUND" ? "Inbound" : "AI Outbound"} call • ${call.durationSeconds || 0}s`,
+      detail: call.outcome || "completed",
+      href: `/phone/calls/${call.id}`,
+      kind: "call",
+    });
+  }
+
+  for (const audit of audits) {
+    const detail = asRecord(JSON.parse(String(audit.detail || "{}")));
+    const contactId = String(detail.contactId || detail.callId || "");
+    if (contactId && contactId !== id && detail.contactId !== id) continue;
+    timeline.push({
+      id: `audit-${audit.id}`,
+      at: audit.createdAt.toISOString(),
+      title: audit.event.replace("voice.real_estate.", "Amy: ").replace(/_/g, " "),
+      detail: String(detail.title || detail.trigger || ""),
+      kind: "ai",
+    });
+  }
+
+  timeline.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+
+  const needsAction =
+    latestMeta.follow_up_required || reState.leadStatus === "message_taken"
+      ? {
+          title: "Follow up requested",
+          detail: String(asRecord(latestMeta.structuredMessage).reason || "Caller needs a human callback."),
+        }
+      : calls[0]?.outcome === "transfer_requested"
+        ? {
+            title: "Transfer requested",
+            detail: "Caller asked to speak with someone on the team.",
+          }
+        : undefined;
 
   return (
-    <div className="space-y-6 p-6">
-      <Link href="/realtor/leads" className="text-sm text-primary">
-        ← Back to Leads
-      </Link>
-      <PageHeader
-        title={name}
-        description={`${reState.primaryIntent || "Lead"} · ${contact.consentSource || "Direct"}`}
+    <div className="p-6">
+      <RealtorLeadDetailView
+        leadId={id}
+        name={name}
+        status={status}
+        intent={reState.primaryIntent ? String(reState.primaryIntent) : undefined}
+        source={contact.consentSource || undefined}
+        phone={contact.phone}
+        email={contact.email}
+        assignedTo="Sarah"
+        needsAction={needsAction}
+        profileFields={profileFields}
+        appointments={appointments.map((a: (typeof appointments)[number]) => ({
+          id: a.id,
+          startsAt: a.startsAt.toISOString(),
+          serviceName: a.serviceName || "Consultation",
+        }))}
+        timeline={timeline}
       />
-      <div className="flex flex-wrap gap-2">
-        <ClickToCallButton phone={contact.phone} />
-        <Link href={`/inbox?contact=${contact.id}`} className="inline-flex h-8 items-center rounded-md border px-3 text-xs">
-          Text
-        </Link>
-        <Link href="/realtor/test" className="inline-flex h-8 items-center rounded-md border px-3 text-xs">
-          Have Amy Call
-        </Link>
-      </div>
-
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card className="p-4">
-          <CardTitle className="mb-3">Overview</CardTitle>
-          <dl className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <dt className="text-muted-foreground">Phone</dt>
-              <dd>{formatPhone(contact.phone)}</dd>
-            </div>
-            <div className="flex justify-between">
-              <dt className="text-muted-foreground">Email</dt>
-              <dd>{contact.email || "—"}</dd>
-            </div>
-            {Object.entries(fields).map(([k, v]) => (
-              <div key={k} className="flex justify-between gap-4">
-                <dt className="text-muted-foreground">{k.replace(/_/g, " ")}</dt>
-                <dd className="text-right">{v}</dd>
-              </div>
-            ))}
-          </dl>
-        </Card>
-
-        <Card className="p-4">
-          <CardTitle className="mb-3">Timeline</CardTitle>
-          <ul className="space-y-3 text-sm">
-            {calls.length ? (
-              calls.map((call: (typeof calls)[number]) => (
-                <li key={call.id} className="border-b pb-2 last:border-0">
-                  <Link href={`/phone/calls/${call.id}`} className="font-medium text-primary">
-                    {call.direction === "INBOUND" ? "Inbound" : "Outbound"} call
-                  </Link>
-                  <p className="text-muted-foreground">
-                    {call.startedAt?.toLocaleString()} · {call.outcome || "completed"}
-                  </p>
-                </li>
-              ))
-            ) : (
-              <li className="text-muted-foreground">No activity yet.</li>
-            )}
-          </ul>
-        </Card>
-      </div>
     </div>
   );
 }
