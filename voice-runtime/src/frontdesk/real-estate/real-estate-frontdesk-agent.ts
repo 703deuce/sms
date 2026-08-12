@@ -74,7 +74,6 @@ export function createRealEstateFrontDeskAgent(input: {
           "Ask how you can help with buying, selling, showings, or anything else today. " +
           "Keep it warm and brief — do not start collecting fields yet.",
         toolChoice: "none",
-        allowInterruptions: false,
       });
     },
   });

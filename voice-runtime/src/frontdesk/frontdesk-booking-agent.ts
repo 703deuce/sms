@@ -77,7 +77,6 @@ export function createFrontDeskBookingAgent(input: {
           `You're the front desk for ${label} and you're here to help them schedule a visit. ` +
           "Invite them to book an appointment and ask what time works. Keep it warm and brief.",
         toolChoice: "none",
-        allowInterruptions: false,
       });
     },
   });

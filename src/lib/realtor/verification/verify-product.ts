@@ -30,7 +30,7 @@ export function verifyRealtorProduct(): void {
   assert.ok(nav.includes("getRealtorPageTitle"));
 
   const sidebar = readProjectFile("src/components/layout/sidebar.tsx");
-  assert.ok(sidebar.includes("Transovo Real Estate"));
+  assert.ok(sidebar.includes("TRANSOVO"));
   assert.ok(sidebar.includes("realtorMode"));
 
   const mobileNav = readProjectFile("src/components/layout/mobile-nav.tsx");
