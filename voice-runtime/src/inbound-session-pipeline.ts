@@ -26,6 +26,7 @@ import {
   resolveOutboundRealtimeOutputMode,
 } from "./pipeline";
 import { attachLatencyInstrumentation } from "./latency-instrumentation";
+import { buildFrontDeskRealtimeTurnHandling } from "./frontdesk-realtime-turn-handling";
 import { attachLiveKitTranscriptPersistence } from "./transcript-persistence";
 import { attachOutputGain, resolveLiveKitOutputGainDb } from "./output-gain";
 import {
@@ -400,6 +401,8 @@ export function createVoicePipeline(input: {
       ...(tts ? { tts } : {}),
       maxToolSteps: input.sessionBase.maxToolSteps,
       userData: input.userData,
+      turnHandling: buildFrontDeskRealtimeTurnHandling(),
+      aecWarmupDuration: 3000,
     });
   } else {
     const { stt, llm, tts, config, sttConfig } = buildAmyVoicePipeline();

@@ -258,6 +258,7 @@ export function buildOutboundRealtimeModel(
     ? resolveFrontDeskInboundRealtimeTurnDetection()
     : resolveOutboundRealtimeTurnDetection();
   const disableInputTranscription = !overrides?.enableInputAudioTranscription;
+  const frontdeskInbound = overrides?.frontdeskInbound === true;
 
   return new openai.realtime.RealtimeModel({
     apiKey,
@@ -265,6 +266,9 @@ export function buildOutboundRealtimeModel(
     ...(useElevenLabsOutput ? {} : { voice: realtimeCfg.voice }),
     modalities: useElevenLabsOutput ? ["text"] : ["audio"],
     ...(disableInputTranscription ? { inputAudioTranscription: null } : {}),
+    ...(frontdeskInbound
+      ? { inputAudioNoiseReduction: { type: "far_field" as const } }
+      : {}),
     turnDetection: turnDetectionCfg.turnDetection,
     ...(realtimeCfg.reasoning ? { reasoning: realtimeCfg.reasoning } : {}),
   });

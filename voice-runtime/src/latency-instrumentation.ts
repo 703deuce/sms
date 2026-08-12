@@ -48,9 +48,12 @@ export type TurnLatencyBreakdown = {
 type TurnState = {
   turn: number;
   userSpeechEndMs?: number;
+  userSpeechStartMs?: number;
+  agentWasSpeakingAtSpeechStart?: boolean;
   sttFinalMs?: number;
   sttTranscript?: string;
   preemptiveObserved: boolean;
+  suspectedFalseInterruptionCount: number;
   eou?: {
     transcriptionDelayMs: number;
     endOfUtteranceDelayMs: number;
@@ -263,6 +266,15 @@ function recordMetrics(
     if (metrics.ttftMs > 0) {
       state.llmTtftMs = metrics.ttftMs;
     }
+    if (metrics.cancelled && state.agentWasSpeakingAtSpeechStart) {
+      logLatency("agent_interrupted", {
+        turn: state.turn,
+        callId: input.callId,
+        durationMs: metrics.durationMs,
+        requestId: metrics.requestId,
+        agentWasSpeakingAtSpeechStart: true,
+      });
+    }
     logLatency("realtime_model_metrics", {
       turn: state.turn,
       callId: input.callId,
@@ -296,6 +308,7 @@ export function attachLatencyInstrumentation<T>(
     preemptiveObserved: false,
     hadToolCall: false,
     breakdownEmitted: false,
+    suspectedFalseInterruptionCount: 0,
   };
 
   const ctx = { callId, pipelineKind, preemptiveConfig, ttsConfig };
@@ -303,6 +316,18 @@ export function attachLatencyInstrumentation<T>(
   session.on(
     AgentSessionEventTypes.UserStateChanged,
     (ev: UserStateChangedEvent) => {
+      if (ev.newState === "speaking" && ev.oldState !== "speaking") {
+        state.userSpeechStartMs = Date.now();
+        state.agentWasSpeakingAtSpeechStart = session.agentState === "speaking";
+        logLatency("user_speech_started", {
+          turn: state.turn,
+          callId,
+          agentState: session.agentState,
+          agentWasSpeaking: state.agentWasSpeakingAtSpeechStart,
+        });
+        return;
+      }
+
       if (ev.oldState === "speaking" && ev.newState === "listening") {
         state.turn += 1;
         state.userSpeechEndMs = Date.now();
@@ -338,6 +363,22 @@ export function attachLatencyInstrumentation<T>(
       }
       state.sttFinalMs = now;
       state.sttTranscript = ev.transcript;
+      const transcript = ev.transcript?.trim() ?? "";
+      const speechDurationMs =
+        state.userSpeechStartMs != null ? now - state.userSpeechStartMs : undefined;
+
+      if (!transcript) {
+        state.suspectedFalseInterruptionCount += 1;
+        logLatency("suspected_false_interruption", {
+          turn: state.turn,
+          callId,
+          transcript: "",
+          agentWasSpeakingAtStart: state.agentWasSpeakingAtSpeechStart ?? false,
+          speechDurationMs,
+          cumulativeSuspectedFalse: state.suspectedFalseInterruptionCount,
+        });
+      }
+
       logLatency("stt_transcript_final", {
         turn: state.turn,
         callId,
@@ -346,9 +387,23 @@ export function attachLatencyInstrumentation<T>(
         latencyMs:
           state.userSpeechEndMs != null ? now - state.userSpeechEndMs : undefined,
         preemptiveObserved: state.preemptiveObserved,
+        speechDurationMs,
+        agentWasSpeakingAtStart: state.agentWasSpeakingAtSpeechStart ?? false,
       });
     },
   );
+
+  session.on(AgentSessionEventTypes.AgentFalseInterruption, (ev) => {
+    logLatency("false_interruption", {
+      turn: state.turn,
+      callId,
+      resumed: ev.resumed,
+      cumulativeSuspectedFalse: state.suspectedFalseInterruptionCount,
+    });
+    if (ev.resumed) {
+      logLatency("agent_resumed", { turn: state.turn, callId });
+    }
+  });
 
   session.on(
     AgentSessionEventTypes.AgentStateChanged,

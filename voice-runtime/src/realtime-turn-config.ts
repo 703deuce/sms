@@ -53,36 +53,19 @@ export function resolveOutboundRealtimeTurnDetection(): OutboundRealtimeTurnDete
   return resolveOutboundRealtimeTurnDetectionWithOptions();
 }
 
-/** Inbound front desk — less eager VAD to reduce false interrupts on phone audio. */
+/** Inbound front desk — OpenAI Realtime server_vad tuned for phone line noise. */
 export function resolveFrontDeskInboundRealtimeTurnDetection(): OutboundRealtimeTurnDetectionConfig {
-  const base = resolveOutboundRealtimeTurnDetectionWithOptions();
-  if (base.turnDetection.type === "semantic_vad") {
-    const envEagerness = process.env.VOICE_REALTIME_VAD_EAGERNESS?.trim().toLowerCase();
-    const eagerness: OutboundRealtimeVadEagerness =
-      envEagerness &&
-      (["auto", "low", "medium", "high"] as const).includes(envEagerness as OutboundRealtimeVadEagerness)
-        ? (envEagerness as OutboundRealtimeVadEagerness)
-        : "medium";
-    return {
-      mode: base.mode,
-      turnDetection: {
-        ...base.turnDetection,
-        eagerness,
-        interrupt_response: parseBoolEnv(process.env.VOICE_REALTIME_INTERRUPT_RESPONSE, true),
-      },
-    };
-  }
-  if (base.turnDetection.type === "server_vad") {
-    return {
-      mode: base.mode,
-      turnDetection: {
-        ...base.turnDetection,
-        threshold: Math.max(base.turnDetection.threshold ?? 0.75, 0.75),
-        silence_duration_ms: Math.max(base.turnDetection.silence_duration_ms ?? 500, 500),
-      },
-    };
-  }
-  return base;
+  return {
+    mode: "server",
+    turnDetection: {
+      type: "server_vad",
+      threshold: parseNumberEnv(process.env.VOICE_REALTIME_VAD_THRESHOLD, 0.65),
+      prefix_padding_ms: parseNumberEnv(process.env.VOICE_REALTIME_VAD_PREFIX_MS, 300),
+      silence_duration_ms: parseNumberEnv(process.env.VOICE_REALTIME_VAD_SILENCE_MS, 500),
+      create_response: true,
+      interrupt_response: parseBoolEnv(process.env.VOICE_REALTIME_INTERRUPT_RESPONSE, true),
+    },
+  };
 }
 
 function resolveOutboundRealtimeTurnDetectionWithOptions(): OutboundRealtimeTurnDetectionConfig {

@@ -128,9 +128,23 @@ check("frontdesk inbound uses safer realtime VAD", () => {
   const pipeline = readProjectFile("voice-runtime/src/pipeline.ts");
   const inbound = readProjectFile("voice-runtime/src/inbound-session-pipeline.ts");
   const turnCfg = readProjectFile("voice-runtime/src/realtime-turn-config.ts");
+  const turnHandling = readProjectFile("voice-runtime/src/frontdesk-realtime-turn-handling.ts");
+  const latency = readProjectFile("voice-runtime/src/latency-instrumentation.ts");
   assert.ok(pipeline.includes("resolveFrontDeskInboundRealtimeTurnDetection"));
+  assert.ok(pipeline.includes("inputAudioNoiseReduction"));
   assert.ok(inbound.includes("frontdeskInbound: true"));
+  assert.ok(inbound.includes("buildFrontDeskRealtimeTurnHandling"));
+  assert.ok(inbound.includes("aecWarmupDuration: 3000"));
   assert.ok(turnCfg.includes("resolveFrontDeskInboundRealtimeTurnDetection"));
+  assert.match(turnCfg, /threshold: parseNumberEnv\(process\.env\.VOICE_REALTIME_VAD_THRESHOLD, 0\.65\)/);
+  assert.ok(turnHandling.includes("turnDetection: null"));
+  assert.ok(turnHandling.includes("resumeFalseInterruption: true"));
+  assert.ok(turnHandling.includes("minDuration: parseNumberEnv(process.env.VOICE_INTERRUPTION_MIN_DURATION_MS, 650)"));
+  assert.ok(latency.includes("user_speech_started"));
+  assert.ok(latency.includes("agent_interrupted"));
+  assert.ok(latency.includes("suspected_false_interruption"));
+  assert.ok(latency.includes("false_interruption"));
+  assert.ok(latency.includes("agent_resumed"));
 });
 
 check("RE intake uses TaskGroup collect_required_fields", () => {
