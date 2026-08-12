@@ -28,6 +28,23 @@ export const REALTOR_PIPELINE_COLUMNS: Array<{
   { status: "closed", label: "Closed" },
 ];
 
+const CALLS_CHILDREN = [
+  { label: "All Calls", href: "/realtor/calls" },
+  { label: "Dialer", href: "/realtor/calls/dialer" },
+  { label: "Voicemails", href: "/realtor/calls/voicemails" },
+  { label: "Transcripts", href: "/realtor/calls/transcripts" },
+  { label: "Recordings", href: "/realtor/calls/recordings" },
+  { label: "Phone Settings", href: "/realtor/calls/phone-settings" },
+];
+
+const APPOINTMENTS_CHILDREN = [
+  { label: "Calendar", href: "/realtor/appointments/calendar" },
+  { label: "Appointments", href: "/realtor/appointments" },
+  { label: "Appointment Types", href: "/realtor/appointments/types" },
+  { label: "Connections", href: "/realtor/appointments/connections" },
+  { label: "Availability", href: "/realtor/appointments/availability" },
+];
+
 export function buildRealtorMobileNav(): NavItem[] {
   return [
     { label: "Dashboard", href: "/realtor/dashboard", icon: LayoutDashboard },
@@ -46,8 +63,17 @@ const REALTOR_PAGE_TITLES: Record<string, string> = {
   "/realtor/needs-attention": "Needs Attention",
   "/realtor/test": "Test Amy",
   "/realtor/messages": "Messages",
+  "/realtor/calls": "All Calls",
+  "/realtor/calls/dialer": "Dialer",
+  "/realtor/calls/voicemails": "Voicemails",
+  "/realtor/calls/transcripts": "Transcripts",
+  "/realtor/calls/recordings": "Recordings",
+  "/realtor/calls/phone-settings": "Phone Settings",
   "/realtor/appointments": "Appointments",
+  "/realtor/appointments/calendar": "Calendar",
   "/realtor/appointments/types": "Appointment Types",
+  "/realtor/appointments/connections": "Connections",
+  "/realtor/appointments/availability": "Availability",
   "/realtor/leads/sources": "Lead Sources",
   "/realtor/settings/business": "Business Settings",
   "/realtor/agents/front-desk": "Front Desk Agent",
@@ -74,11 +100,21 @@ export function buildRealtorNav(inboxBadge?: number): NavItem[] {
       icon: Inbox,
       badge: inboxBadge && inboxBadge > 0 ? inboxBadge : undefined,
     },
-    { label: "Calls", href: "/phone/calls", icon: PhoneCall },
+    {
+      label: "Calls",
+      href: "/realtor/calls",
+      icon: PhoneCall,
+      children: CALLS_CHILDREN,
+    },
     { label: "Messages", href: "/realtor/messages", icon: MessageSquare },
     { label: "AI Agents", href: "/realtor/agents/front-desk", icon: Bot },
     { label: "Automations", href: "/automations", icon: Workflow },
-    { label: "Appointments", href: "/realtor/appointments", icon: CalendarDays },
+    {
+      label: "Appointments",
+      href: "/realtor/appointments/calendar",
+      icon: CalendarDays,
+      children: APPOINTMENTS_CHILDREN,
+    },
     { label: "Campaigns", href: "/campaigns", icon: Megaphone },
     { label: "Integrations", href: "/integrations", icon: Puzzle },
     { label: "Reports", href: "/reports", icon: BarChart3 },
