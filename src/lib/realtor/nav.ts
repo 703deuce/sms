@@ -62,7 +62,7 @@ const REALTOR_PAGE_TITLES: Record<string, string> = {
   "/realtor/leads/import": "Import",
   "/realtor/needs-attention": "Needs Attention",
   "/realtor/test": "Test Amy",
-  "/realtor/messages": "Messages",
+  "/realtor/messages": "All Conversations",
   "/realtor/appointments": "Appointments",
   "/realtor/appointments/types": "Appointment Types",
   "/realtor/leads/sources": "Lead Sources",
