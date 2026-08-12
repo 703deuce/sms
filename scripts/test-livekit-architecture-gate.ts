@@ -93,10 +93,14 @@ check("explicit dispatch metadata merges with precedence", () => {
 check("RE intake uses TaskGroup collect_required_fields", () => {
   const reTools = readProjectFile("voice-runtime/src/frontdesk/real-estate/re-tools.ts");
   const intake = readProjectFile("voice-runtime/src/frontdesk/real-estate/intake-task-group.ts");
+  const schemaTask = readProjectFile("voice-runtime/src/tasks/schema-field-collection-task.ts");
+  const taskCtx = readProjectFile("voice-runtime/src/tasks/task-context.ts");
   assert.ok(reTools.includes("collect_required_fields"));
   assert.ok(reTools.includes("runRealEstateIntakeTaskGroup"));
   assert.ok(!reTools.includes('name: "record_collected_field"'));
   assert.ok(!intake.includes("updateAgent(group)"), "intake must await group.run() without manual updateAgent");
+  assert.ok(schemaTask.includes("record_additional_intake_field"));
+  assert.ok(taskCtx.includes("sessionUsesRealtimeLlm"));
 });
 
 check("booking uses EmailCollectionTask and LiveKit end call", () => {

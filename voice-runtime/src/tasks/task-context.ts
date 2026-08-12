@@ -1,4 +1,10 @@
-import { LLM, type AgentOptions, type AgentSession, type ChatContext } from "@livekit/agents";
+import {
+  LLM,
+  RealtimeModel,
+  type AgentOptions,
+  type AgentSession,
+  type ChatContext,
+} from "@livekit/agents";
 
 /** Options every nested AgentTask should receive from its parent tool/agent. */
 export type NestedTaskContextOptions = {
@@ -25,13 +31,19 @@ export function nestedTaskOptionsFromSession<UserData>(
   };
 }
 
+/** Realtime-only sessions have no standard LLM — TaskGroup summarization would fail. */
+export function sessionUsesRealtimeLlm(session: AgentSession<any>): boolean {
+  return session.llm instanceof RealtimeModel;
+}
+
 /**
  * Healthcare TaskGroup passes chat_ctx and summarizes on completion (default summarizeChatCtx=true).
  * out_of_scope regression is built into the SDK TaskGroup when prior tasks were visited.
  */
 export function taskGroupOptionsFromSession<UserData>(session: AgentSession<UserData>) {
+  const summarizeChatCtx = !sessionUsesRealtimeLlm(session);
   return {
-    summarizeChatCtx: true as const,
+    summarizeChatCtx,
     chatCtx: session.chatCtx,
     preserveFunctionCallHistory: true as const,
   };

@@ -56,6 +56,21 @@ export async function runRealEstateIntakeTaskGroup(input: {
 
   const collected: string[] = [];
 
+  const recordIntakeField = async (
+    field: RealEstateFieldDefinition,
+    value: string,
+  ): Promise<{ ok: boolean }> => {
+    userData.callState = recordCollectedField(userData.callState!, field.field_id, value);
+    if (field.field_id === "name") {
+      userData.callState!.contactName = value.trim();
+    }
+    if (!collected.includes(field.field_id)) {
+      collected.push(field.field_id);
+    }
+    await syncIntakeSideEffects(userData);
+    return { ok: true };
+  };
+
   const group = new workflows.TaskGroup({
     ...taskGroupOptionsFromSession(input.session),
     onTaskCompleted: async () => {
@@ -64,16 +79,25 @@ export async function runRealEstateIntakeTaskGroup(input: {
   });
 
   for (const field of toCollect) {
+    const pendingFields = toCollect.filter((f) => f.field_id !== field.field_id);
     group.add(
       () =>
         new SchemaFieldCollectionTask(field, input.session, {
           onRecord: async (value) => {
-            userData.callState = recordCollectedField(userData.callState!, field.field_id, value);
-            if (field.field_id === "name") {
-              userData.callState!.contactName = value.trim();
+            await recordIntakeField(field, value);
+            return { ok: true };
+          },
+          pendingFields,
+          onRecordAdditionalField: async (fieldId, value) => {
+            const target = toCollect.find((f) => f.field_id === fieldId);
+            if (!target) {
+              return { ok: false, speak: "That field is not part of this intake pass." };
             }
-            collected.push(field.field_id);
-            await syncIntakeSideEffects(userData);
+            const already = userData.callState?.collectedFields[fieldId]?.trim();
+            if (already) {
+              return { ok: true, speak: `${target.label} was already recorded.` };
+            }
+            await recordIntakeField(target, value);
             return { ok: true };
           },
         }),
