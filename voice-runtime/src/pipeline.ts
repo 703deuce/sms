@@ -1,4 +1,4 @@
-import { inference, stt, tts } from "@livekit/agents";
+import { inference, stt, tts, tokenize } from "@livekit/agents";
 import * as deepgram from "@livekit/agents-plugin-deepgram";
 import * as openai from "@livekit/agents-plugin-openai";
 import * as elevenlabs from "@livekit/agents-plugin-elevenlabs";
@@ -204,10 +204,22 @@ export function buildAmyStt(
 
 export function buildAmyTts(cfg: VoicePipelineConfig): tts.TTS {
   if (usesElevenLabsPluginTts(cfg.ttsProvider)) {
+    const hybridOutput = resolveOutboundRealtimeOutputMode() === "elevenlabs";
     return new elevenlabs.TTS({
       apiKey: resolveElevenLabsApiKey(),
       model: resolveElevenLabsPluginModel(cfg.ttsModel) as elevenlabs.TTSModels,
       voiceId: cfg.ttsVoice || process.env.VOICE_TTS_VOICE_ID || "cgSgspJ2msm6clMCkdW9",
+      ...(hybridOutput
+        ? {
+            // Native WebSocket incremental input — not HTTP full-text synthesis.
+            autoMode: false,
+            chunkLengthSchedule: [50, 80, 120, 150],
+            wordTokenizer: new tokenize.basic.SentenceTokenizer({
+              minSentenceLength: 10,
+              streamContextLength: 6,
+            }),
+          }
+        : {}),
     });
   }
 
@@ -313,6 +325,13 @@ export function describeRealtimePipelineConfig(
           via: usesElevenLabsPluginTts(pipelineCfg.ttsProvider)
             ? "elevenlabs_plugin"
             : "livekit_inference",
+          streaming: {
+            nativeWebSocket: usesElevenLabsPluginTts(pipelineCfg.ttsProvider),
+            autoMode: false,
+            chunkLengthSchedule: [50, 80, 120, 150],
+            phraseBuffer: "punctuation_or_max_10_words",
+            ttsNodeHook: "hybrid_streaming_phrase_buffer",
+          },
         }
       : null,
     via: halfCascade ? "openai_realtime_text + elevenlabs_tts" : "openai_plugin_realtime",

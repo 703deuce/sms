@@ -1,6 +1,7 @@
 import { llm, voice } from "@livekit/agents";
 import type { AgentSession } from "@livekit/agents";
 import { buildFrontDeskBookingTools } from "./booking-tools";
+import { withHybridStreamingAgentOptions } from "../hybrid-streaming-tts-node";
 
 function buildFrontDeskInstructions(businessLabel: string): string {
   return [
@@ -63,7 +64,8 @@ export function createFrontDeskBookingAgent(input: {
     timezone: input.timezone,
   });
 
-  const agent = voice.Agent.create<import("./userdata").FrontDeskUserData>({
+  const agent = voice.Agent.create<import("./userdata").FrontDeskUserData>(
+    withHybridStreamingAgentOptions({
     instructions: buildFrontDeskInstructions(label),
     tools: llm.toToolContext(toolDefs),
     onEnter: async (agentCtx) => {
@@ -78,7 +80,8 @@ export function createFrontDeskBookingAgent(input: {
         toolChoice: "none",
       });
     },
-  });
+  }),
+  );
 
   return agent;
 }

@@ -2,6 +2,7 @@ import { llm, voice } from "@livekit/agents";
 import type { AgentSession } from "@livekit/agents";
 import { endOutboundCall } from "./end-outbound-call";
 import type { OutboundLeadUserData } from "./userdata";
+import { withHybridStreamingAgentOptions } from "../hybrid-streaming-tts-node";
 
 function buildInstructions(businessName: string): string {
   return [
@@ -14,7 +15,8 @@ function buildInstructions(businessName: string): string {
 
 /** Root agent shell — QualifyLeadTask runs after the callee answers (see outbound/entry.ts). */
 export function createNewLeadQualificationAgent(businessName: string) {
-  return voice.Agent.create<OutboundLeadUserData>({
+  return voice.Agent.create<OutboundLeadUserData>(
+    withHybridStreamingAgentOptions({
     instructions: buildInstructions(businessName),
     tools: {},
     onEnter: async (ctx) => {
@@ -25,5 +27,6 @@ export function createNewLeadQualificationAgent(businessName: string) {
         });
       }
     },
-  });
+  }),
+  );
 }

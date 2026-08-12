@@ -13,6 +13,7 @@ import {
   buildRealEstateLookupContactTool,
   buildRealEstateTakeMessageTool,
 } from "./re-tools";
+import { withHybridStreamingAgentOptions } from "../../hybrid-streaming-tts-node";
 
 /**
  * Composition root for the Real Estate Front Desk LiveKit agent.
@@ -49,7 +50,8 @@ export function createRealEstateFrontDeskAgent(input: {
     buildRealEstateTakeMessageTool(),
   ];
 
-  const agent = voice.Agent.create<FrontDeskUserData>({
+  const agent = voice.Agent.create<FrontDeskUserData>(
+    withHybridStreamingAgentOptions({
     instructions: buildRealEstateFrontDeskInstructions({
       business,
       timezone: input.timezone,
@@ -74,7 +76,8 @@ export function createRealEstateFrontDeskAgent(input: {
         toolChoice: "none",
       });
     },
-  });
+  }),
+  );
 
   return agent;
 }

@@ -9,6 +9,11 @@ import {
   voice,
 } from "@livekit/agents";
 import { markFirstAudioStarted } from "./task-transition-instrumentation";
+import {
+  markHybridElevenLabsTtfb,
+  markHybridFirstAudio,
+  resetHybridStreamingTurn,
+} from "./hybrid-streaming-telemetry";
 import type { FrontDeskUserData } from "./frontdesk/userdata";
 
 export type LatencyPipelineKind = "stack" | "realtime_native" | "realtime_elevenlabs";
@@ -228,6 +233,13 @@ function recordMetrics(
     };
     if (metrics.lastSpeakingTimeMs > 0) {
       state.userSpeechEndMs = metrics.lastSpeakingTimeMs;
+      if (input.pipelineKind === "realtime_elevenlabs") {
+        resetHybridStreamingTurn({
+          turn: state.turn,
+          callId: input.callId,
+          speechAnchorMs: metrics.lastSpeakingTimeMs,
+        });
+      }
     }
     logLatency("eou_metrics", {
       turn: state.turn,
@@ -265,6 +277,10 @@ function recordMetrics(
   if (metrics.type === "tts_metrics") {
     state.ttsTtfbMs = metrics.ttfbMs;
     state.ttsFirstAudioMs = now;
+    if (input.pipelineKind === "realtime_elevenlabs") {
+      markHybridElevenLabsTtfb(metrics.ttfbMs);
+      markHybridFirstAudio(now);
+    }
     logLatency("tts_first_audio", {
       turn: state.turn,
       ttfbMs: metrics.ttfbMs,
@@ -343,6 +359,7 @@ export function attachLatencyInstrumentation<T>(
       }
 
       if (ev.oldState === "speaking" && ev.newState === "listening") {
+        const priorEou = state.eou;
         state.turn += 1;
         state.userSpeechEndMs = Date.now();
         state.sttFinalMs = undefined;
@@ -356,6 +373,17 @@ export function attachLatencyInstrumentation<T>(
         state.hadToolCall = false;
         state.preemptiveObserved = false;
         state.breakdownEmitted = false;
+        if (pipelineKind === "realtime_elevenlabs") {
+          const speechAnchor =
+            priorEou?.lastSpeakingTimeMs && priorEou.lastSpeakingTimeMs > 0
+              ? priorEou.lastSpeakingTimeMs
+              : state.userSpeechEndMs;
+          resetHybridStreamingTurn({
+            turn: state.turn,
+            callId,
+            speechAnchorMs: speechAnchor,
+          });
+        }
         logLatency("user_speech_end", { turn: state.turn, callId });
       }
     },
@@ -427,6 +455,9 @@ export function attachLatencyInstrumentation<T>(
       maybeMarkTaskFirstAudio(session);
       if (state.ttsFirstAudioMs == null) {
         state.ttsFirstAudioMs = now;
+        if (pipelineKind === "realtime_elevenlabs") {
+          markHybridFirstAudio(now);
+        }
         if (pipelineKind === "realtime_native") {
           emitTurnBreakdown(state, ctx);
         }

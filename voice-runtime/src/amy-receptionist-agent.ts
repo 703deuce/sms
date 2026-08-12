@@ -18,6 +18,7 @@ import {
   BOOKING_COMPLETE_TOOL_RESULT,
   buildBookingSuccessLine,
 } from "./booking-completion-messages";
+import { withHybridStreamingAgentOptions } from "./hybrid-streaming-tts-node";
 
 function alreadyBookedAmyMessage(session: AgentSession<AmyUserData>): string | null {
   const ctx = session.userData.callContext;
@@ -174,7 +175,8 @@ export function createAmyReceptionistAgent(businessName: string) {
     },
   });
 
-  return voice.Agent.create<AmyUserData>({
+  return voice.Agent.create<AmyUserData>(
+    withHybridStreamingAgentOptions<AmyUserData>({
     instructions,
     tools: llm.toToolContext([
       scheduleAppointment,
@@ -192,5 +194,6 @@ export function createAmyReceptionistAgent(businessName: string) {
         allowInterruptions: false,
       });
     },
-  });
+  }),
+  );
 }
