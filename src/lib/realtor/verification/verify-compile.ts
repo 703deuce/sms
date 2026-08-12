@@ -13,6 +13,7 @@ import {
   fieldsForIntent,
   isIntentEnabled,
   manifestFromCompiledIntents,
+  setActiveCompiledIntents,
   setActiveFieldManifest,
 } from "@/lib/voice/real-estate/fields";
 import { projectFileExists, readProjectFile } from "./_read";
@@ -47,10 +48,13 @@ export function verifyRealtorCompile(): void {
 
   const manifest = manifestFromCompiledIntents(compiled.frontDesk!.intents);
   setActiveFieldManifest(manifest);
+  setActiveCompiledIntents(compiled.frontDesk!.intents);
   assert.equal(isIntentEnabled("buyer"), true);
   setActiveFieldManifest({ buyer: [] });
+  setActiveCompiledIntents({ buyer: { enabled: false } });
   assert.equal(isIntentEnabled("buyer"), false);
   setActiveFieldManifest(null);
+  setActiveCompiledIntents(null);
 
   const templates = readProjectFile("src/lib/voice/templates.ts");
   assert.ok(templates.includes("real_estate_front_desk"));

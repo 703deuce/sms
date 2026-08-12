@@ -42,12 +42,39 @@ export type EnsureRealEstateFrontDeskAgentResult = {
 };
 
 function resolvePhoneE164(input?: string): string {
-  return (
-    input?.trim() ||
-    process.env.FRONTDESK_PHONE_E164?.trim() ||
-    process.env.PHONE_E164?.trim() ||
-    "+18663464256"
-  );
+  const phone = input?.trim();
+  if (!phone) {
+    throw new Error(
+      "Inbound phone number (E.164) is required — select a number on the Front Desk Phone tab before publishing.",
+    );
+  }
+  return phone;
+}
+
+async function syncFrontDeskTransferDestination(
+  workspaceId: string,
+  agentId: string,
+  transferNumber?: string,
+): Promise<void> {
+  const destination = transferNumber?.trim();
+  if (!destination) return;
+  const prisma = getPrisma();
+  const name = "Front Desk Transfer";
+  const existing = await prisma.voiceTransferDestination.findFirst({
+    where: { workspaceId, agentId, name },
+  });
+  const data = {
+    kind: "phone",
+    destination,
+    enabled: true,
+  };
+  if (existing) {
+    await prisma.voiceTransferDestination.update({ where: { id: existing.id }, data });
+    return;
+  }
+  await prisma.voiceTransferDestination.create({
+    data: { workspaceId, agentId, name, ...data },
+  });
 }
 
 function resolveAgentName(input?: string, compiledName?: string): string {
@@ -210,6 +237,12 @@ export async function ensureRealEstateFrontDeskAgent(
     agentId = createdRow.id;
     created = true;
   }
+
+  await syncFrontDeskTransferDestination(
+    workspaceId,
+    agentId,
+    productConfig.phone.transferNumber,
+  );
 
   if (assignPhone && phone) {
     await assignNumberToAgent({

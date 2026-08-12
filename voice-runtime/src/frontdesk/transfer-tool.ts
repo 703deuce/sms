@@ -13,7 +13,15 @@ function asRecord(value: unknown): Record<string, unknown> {
     : {};
 }
 
-async function resolveTransferDestination(workspaceId: string): Promise<string | null> {
+async function resolveTransferDestination(
+  workspaceId: string,
+  ud?: FrontDeskUserData,
+): Promise<string | null> {
+  const compiledNumber = ud?.realEstateCompiled?.transfer?.transferNumber?.trim();
+  if (ud?.realEstateCompiled?.transfer?.enabled && compiledNumber) {
+    return compiledNumber;
+  }
+
   const fallback = process.env.VOICE_TRANSFER_FALLBACK_E164?.trim();
   if (fallback) return fallback;
 
@@ -38,7 +46,7 @@ export function buildFrontDeskTransferTool() {
       const session = opts.ctx.session as AgentSession<FrontDeskUserData>;
       const ud = session.userData;
       return withLiveKitToolTelemetry(ud, "transfer_to_human", { reason }, async () => {
-        const destination = await resolveTransferDestination(ud.workspaceId);
+        const destination = await resolveTransferDestination(ud.workspaceId, ud);
         if (!destination) {
           throw new llm.ToolError(
             "I can't transfer this call right now — I can take a message for the team instead.",

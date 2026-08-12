@@ -59,14 +59,11 @@ export function validateRealtorProductConfig(
       );
     }
 
-    if (
-      !config.phone.inboundNumberE164?.trim() &&
-      !config.phone.outboundNumberE164?.trim()
-    ) {
+    if (!config.phone.inboundNumberE164?.trim()) {
       warnings.push(
         warning(
           "no_inbound_number",
-          "No inbound phone number selected — publish will use workspace default if available.",
+          "Select an inbound phone number for Front Desk before publishing.",
           "phone.inboundNumberE164",
         ),
       );
@@ -132,9 +129,22 @@ export function validateRealtorProductConfig(
 
 export function assertPublishableConfig(config: RealtorProductConfig): CompileValidationResult {
   const result = validateRealtorProductConfig(config);
-  if (!result.ok) {
-    const messages = result.errors.map((e) => e.message).join("; ");
+  const errors = [...result.errors];
+  if (
+    (config.amyMode === "front_desk" || config.amyMode === "both") &&
+    !config.phone.inboundNumberE164?.trim()
+  ) {
+    errors.push(
+      error(
+        "no_inbound_number",
+        "Select an inbound phone number for Front Desk before publishing.",
+        "phone.inboundNumberE164",
+      ),
+    );
+  }
+  if (errors.length) {
+    const messages = errors.map((e) => e.message).join("; ");
     throw new Error(`Configuration cannot be published: ${messages}`);
   }
-  return result;
+  return { ...result, ok: true, errors };
 }

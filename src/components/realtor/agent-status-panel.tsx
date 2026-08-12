@@ -3,7 +3,8 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
 import type { RealtorAgentInstanceStatus, RealtorProductConfig } from "@/lib/realtor/types";
-import { useState } from "react";
+import { validateRealtorProductConfig } from "@/lib/voice/real-estate/compile";
+import { useMemo, useState } from "react";
 
 const STATUS_LABELS: Record<RealtorAgentInstanceStatus, string> = {
   draft: "Draft",
@@ -22,10 +23,23 @@ export function RealtorAgentStatusPanel({
   onUpdated?: (config: RealtorProductConfig) => void;
 }) {
   const [busy, setBusy] = useState(false);
+  const [errors, setErrors] = useState<string[]>([]);
   const status = config.status || "draft";
+  const validation = useMemo(() => validateRealtorProductConfig(config), [config]);
+  const publishBlockers = useMemo(() => {
+    const blockers = validation.errors.map((e) => e.message);
+    if (
+      agentLabel === "Front Desk" &&
+      !config.phone.inboundNumberE164?.trim()
+    ) {
+      blockers.push("Select an inbound phone number before publishing.");
+    }
+    return blockers;
+  }, [agentLabel, config.phone.inboundNumberE164, validation.errors]);
 
   async function runAction(action: string) {
     setBusy(true);
+    setErrors([]);
     try {
       const res = await fetch("/api/realtor/agents", {
         method: "POST",
@@ -33,6 +47,14 @@ export function RealtorAgentStatusPanel({
         body: JSON.stringify({ action, config }),
       });
       const json = await res.json();
+      if (!res.ok) {
+        if (json.validation?.errors?.length) {
+          setErrors(json.validation.errors.map((e: { message: string }) => e.message));
+        } else {
+          setErrors([json.error || "Action failed"]);
+        }
+        return;
+      }
       if (json.config) onUpdated?.(json.config);
     } finally {
       setBusy(false);
@@ -50,6 +72,13 @@ export function RealtorAgentStatusPanel({
       <p className="text-sm text-muted-foreground">
         Production calls use the last published configuration. Edits save as draft until you publish.
       </p>
+      {errors.length ? (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 p-2 text-sm text-amber-900">
+          {errors.map((e) => (
+            <p key={e}>{e}</p>
+          ))}
+        </div>
+      ) : null}
       <div className="flex flex-wrap gap-2">
         <Button
           variant="outline"
@@ -67,7 +96,11 @@ export function RealtorAgentStatusPanel({
         >
           Mark testing
         </Button>
-        <Button size="sm" disabled={busy} onClick={() => void runAction("publish")}>
+        <Button
+          size="sm"
+          disabled={busy || publishBlockers.length > 0}
+          onClick={() => void runAction("publish")}
+        >
           Publish
         </Button>
         {status === "active" ? (

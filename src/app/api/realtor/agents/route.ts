@@ -4,33 +4,22 @@ import {
   loadRealtorProductConfig,
   saveRealtorProductConfig,
 } from "@/lib/realtor/workspace-config";
+import { mergeRealtorProductConfig } from "@/lib/realtor/merge-config";
 import { deployRealEstateFrontDesk } from "@/lib/voice/real-estate/bootstrap";
-import { compileRealtorAgents, validateRealtorProductConfig } from "@/lib/voice/real-estate/compile";
+import { compileRealtorAgents, assertPublishableConfig, validateRealtorProductConfig } from "@/lib/voice/real-estate/compile";
 import { NextResponse } from "next/server";
 
 function resolveFrontDeskPhoneE164(config: {
-  phone: { inboundNumberE164?: string; outboundNumberE164?: string };
+  phone: { inboundNumberE164?: string };
 }): string | undefined {
-  return config.phone.inboundNumberE164?.trim() || config.phone.outboundNumberE164?.trim() || undefined;
+  return config.phone.inboundNumberE164?.trim() || undefined;
 }
 
 function mergeConfig(
   current: Awaited<ReturnType<typeof loadRealtorProductConfig>>,
   body: Record<string, unknown>,
 ) {
-  return {
-    ...current,
-    ...(body as typeof current),
-    business: { ...current.business, ...(body.business as object) },
-    phone: { ...current.phone, ...(body.phone as object) },
-    frontDesk: { ...current.frontDesk, ...(body.frontDesk as object) },
-    speedToLead: { ...current.speedToLead, ...(body.speedToLead as object) },
-    identity: { ...current.identity, ...(body.identity as object) },
-    voice: { ...current.voice, ...(body.voice as object) },
-    knowledge: { ...current.knowledge, ...(body.knowledge as object) },
-    notifications: { ...current.notifications, ...(body.notifications as object) },
-    instructions: { ...current.instructions, ...(body.instructions as object) },
-  };
+  return mergeRealtorProductConfig(current, body as Partial<typeof current>);
 }
 
 export async function GET(req: Request) {
@@ -78,7 +67,6 @@ export async function POST(req: Request) {
         ...merged,
         status: "draft",
         draftSavedAt: new Date().toISOString(),
-        compiledVersion: compileRealtorAgents(merged).compiledVersion,
       });
       return NextResponse.json({ config: saved, validation: validateRealtorProductConfig(saved) });
     }
@@ -101,9 +89,18 @@ export async function POST(req: Request) {
     }
 
     if (body.action === "publish" || body.action === "go_live") {
-      const validation = validateRealtorProductConfig(merged);
-      if (!validation.ok) {
-        return NextResponse.json({ error: "Configuration invalid", validation }, { status: 400 });
+      let validation: ReturnType<typeof validateRealtorProductConfig>;
+      try {
+        validation = assertPublishableConfig(merged);
+      } catch (err) {
+        validation = validateRealtorProductConfig(merged);
+        return NextResponse.json(
+          {
+            error: err instanceof Error ? err.message : "Configuration invalid",
+            validation,
+          },
+          { status: 400 },
+        );
       }
       const deploy = await deployRealEstateFrontDesk({
         workspaceId: auth.workspaceId,
@@ -118,8 +115,8 @@ export async function POST(req: Request) {
       const saved = await saveRealtorProductConfig(auth.workspaceId, {
         ...merged,
         status: "active",
-        live: body.action === "go_live" ? true : merged.live,
-        onboardingComplete: body.action === "go_live" ? true : merged.onboardingComplete,
+        live: true,
+        onboardingComplete: body.action === "go_live" ? true : merged.onboardingComplete || true,
         compiledVersion: deploy.compiled?.compiledVersion ?? merged.compiledVersion,
         deployedAgentId: deploy.agent?.agentId || merged.deployedAgentId,
         deployedOutboundAgentId: deploy.speedToLead?.outboundAgentId || merged.deployedOutboundAgentId,

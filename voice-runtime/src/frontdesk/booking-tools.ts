@@ -59,6 +59,7 @@ async function onRealEstateBookingConfirmed(userData: FrontDeskUserData): Promis
     businessName: userData.businessName,
     event: "appointment_booked",
     callerE164: userData.callerE164,
+    notifications: userData.realEstateCompiled?.notifications,
   }).catch(() => undefined);
 }
 
@@ -70,7 +71,9 @@ export type FrontDeskBookingTools = {
 
 export function buildFrontDeskBookingTools(input: {
   timezone: string;
+  includeBooking?: boolean;
 }): FrontDeskBookingTools {
+  const includeBooking = input.includeBooking !== false;
   const slotsMap = new Map<string, AvailableSlot>();
 
   const getCurrentTime = llm.tool({
@@ -264,13 +267,17 @@ export function buildFrontDeskBookingTools(input: {
     slotsMap,
     toolDefs: [
       getCurrentTime,
-      listAvailableSlots,
-      scheduleAppointment,
-      ...emailTools,
+      ...(includeBooking
+        ? [
+            listAvailableSlots,
+            scheduleAppointment,
+            ...emailTools,
+            buildFrontDeskCancelAppointmentTool(),
+            buildFrontDeskRescheduleAppointmentTool(slotsMap),
+            buildFrontDeskCheckBookingStatusTool(),
+          ]
+        : []),
       buildFrontDeskBusinessAnswerTool(),
-      buildFrontDeskCancelAppointmentTool(),
-      buildFrontDeskRescheduleAppointmentTool(slotsMap),
-      buildFrontDeskCheckBookingStatusTool(),
       buildFrontDeskTransferTool(),
       endCall,
     ],

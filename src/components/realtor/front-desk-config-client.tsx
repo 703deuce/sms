@@ -11,6 +11,7 @@ import type { CompiledIntentConfig } from "@/lib/voice/real-estate/compile/types
 import type { AutomationDefinition } from "@/lib/automations/types";
 import type { RealEstateIntent } from "@/lib/voice/real-estate/types";
 import { compileRealtorAgents, validateRealtorProductConfig } from "@/lib/voice/real-estate/compile";
+import { mergeRealtorProductConfig } from "@/lib/realtor/merge-config";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
@@ -54,9 +55,9 @@ const INTENT_ROWS: Array<{
   { key: "buyer", runtime: "buyer", label: "Buyer inquiries", hasFields: true },
   { key: "seller", runtime: "seller", label: "Seller inquiries", hasFields: true },
   { key: "showing", runtime: "showing", label: "Showing requests", hasFields: true },
-  { key: "existingClient", runtime: "existing_client", label: "Existing clients", hasFields: false },
-  { key: "agentToAgent", runtime: "agent_to_agent", label: "Other Realtors", hasFields: false },
-  { key: "general", runtime: "general", label: "General calls", hasFields: false },
+  { key: "existingClient", runtime: "existing_client", label: "Existing clients", hasFields: true },
+  { key: "agentToAgent", runtime: "agent_to_agent", label: "Other Realtors", hasFields: true },
+  { key: "general", runtime: "general", label: "General calls", hasFields: true },
 ];
 
 export function FrontDeskConfigClient({
@@ -74,6 +75,13 @@ export function FrontDeskConfigClient({
 
   const compiled = useMemo(() => compileRealtorAgents(config), [config]);
   const validation = useMemo(() => validateRealtorProductConfig(config), [config]);
+  const publishBlockers = useMemo(() => {
+    const blockers = validation.errors.map((e) => e.message);
+    if (!config.phone.inboundNumberE164?.trim()) {
+      blockers.push("Select an inbound phone number on the Phone tab before publishing.");
+    }
+    return blockers;
+  }, [validation.errors, config.phone.inboundNumberE164]);
 
   async function saveDraft() {
     setBusy(true);
@@ -85,6 +93,14 @@ export function FrontDeskConfigClient({
         body: JSON.stringify({ action: "save_draft", config }),
       });
       const json = await res.json();
+      if (!res.ok) {
+        if (json.validation?.errors?.length) {
+          setValidationErrors(json.validation.errors.map((e: { message: string }) => e.message));
+        } else {
+          setValidationErrors([json.error || "Save failed"]);
+        }
+        return;
+      }
       if (json.config) {
         setConfig(json.config);
         setLastSaved(new Date().toLocaleTimeString());
@@ -123,7 +139,7 @@ export function FrontDeskConfigClient({
   }
 
   function patch(partial: Partial<RealtorProductConfig>) {
-    setConfig((prev) => ({ ...prev, ...partial }));
+    setConfig((prev) => mergeRealtorProductConfig(prev, partial));
   }
 
   return (
@@ -143,6 +159,15 @@ export function FrontDeskConfigClient({
           <p className="font-medium">Fix before publishing:</p>
           {validation.errors.map((e) => (
             <p key={e.code}>{e.message}</p>
+          ))}
+        </div>
+      ) : null}
+
+      {publishBlockers.length && validation.ok ? (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-900">
+          <p className="font-medium">Fix before publishing:</p>
+          {publishBlockers.map((e) => (
+            <p key={e}>{e}</p>
           ))}
         </div>
       ) : null}
@@ -199,10 +224,14 @@ export function FrontDeskConfigClient({
         <Button variant="outline" disabled={busy} onClick={() => void saveDraft()}>
           {busy ? "Saving…" : "Save draft"}
         </Button>
-        <Button disabled={busy || !validation.ok} onClick={() => void publish(false)}>
+        <Button disabled={busy || publishBlockers.length > 0} onClick={() => void publish(false)}>
           {busy ? "Publishing…" : "Publish & redeploy"}
         </Button>
-        <Button variant="secondary" disabled={busy || !validation.ok} onClick={() => void publish(true)}>
+        <Button
+          variant="secondary"
+          disabled={busy || publishBlockers.length > 0}
+          onClick={() => void publish(true)}
+        >
           Go live
         </Button>
         {lastSaved ? <span className="text-xs text-muted-foreground">Last saved {lastSaved}</span> : null}

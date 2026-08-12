@@ -165,6 +165,7 @@ export function buildRealEstateFieldTools() {
               businessName: ud.businessName,
               event: "intake_complete",
               callerE164: ud.callerE164,
+              notifications: ud.realEstateCompiled?.notifications,
             }).catch(() => undefined);
             if (ud.realEstateCompiled) {
               return intakeCompleteGuidance(ud.realEstateCompiled, intents);
@@ -300,6 +301,7 @@ export function buildRealEstateTakeMessageTool() {
             businessName: ud.businessName,
             event: "message_taken",
             callerE164: ud.callerE164,
+            notifications: ud.realEstateCompiled?.notifications,
           }).catch(() => undefined);
         }
 

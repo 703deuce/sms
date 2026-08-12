@@ -26,8 +26,10 @@ export function createRealEstateFrontDeskAgent(input: {
   });
   const label = business.businessName;
   const agentName = input.compiled?.identity.agentName || "Amy";
+  const bookingEnabled = input.compiled?.booking?.enabled !== false;
   const { toolDefs: bookingToolDefs } = buildFrontDeskBookingTools({
     timezone: input.timezone,
+    includeBooking: bookingEnabled,
   });
 
   const reTools = [

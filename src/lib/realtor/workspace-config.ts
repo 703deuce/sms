@@ -1,11 +1,8 @@
 import { getPrisma } from "@/lib/db";
 import { parseVoiceAgentConfig } from "@/lib/voice/types";
 import { isRealEstateFrontDeskAgent } from "@/lib/voice/real-estate/config";
-import {
-  DEFAULT_REALTOR_PRODUCT_CONFIG,
-  type RealtorOnboardingStep,
-  type RealtorProductConfig,
-} from "./types";
+import { parseMergedRealtorProductConfig } from "./merge-config";
+import type { RealtorOnboardingStep, RealtorProductConfig } from "./types";
 import {
   onboardingStepsForConfig,
   onboardingStepsForMode,
@@ -35,43 +32,7 @@ function migrateStep(step: string | undefined): RealtorOnboardingStep {
 }
 
 export function parseRealtorProductConfig(raw: unknown): RealtorProductConfig {
-  const stored = asRecord(raw);
-  if (!stored.version) return { ...DEFAULT_REALTOR_PRODUCT_CONFIG };
-  const parsed = {
-    ...DEFAULT_REALTOR_PRODUCT_CONFIG,
-    ...(stored as Partial<RealtorProductConfig>),
-    currentStep: migrateStep(String(stored.currentStep || "intent")),
-    identity: {
-      ...DEFAULT_REALTOR_PRODUCT_CONFIG.identity,
-      ...asRecord(stored.identity),
-    },
-    voice: {
-      ...DEFAULT_REALTOR_PRODUCT_CONFIG.voice,
-      ...asRecord(stored.voice),
-    },
-    knowledge: {
-      ...DEFAULT_REALTOR_PRODUCT_CONFIG.knowledge,
-      ...asRecord(stored.knowledge),
-    },
-    notifications: {
-      ...DEFAULT_REALTOR_PRODUCT_CONFIG.notifications,
-      ...asRecord(stored.notifications),
-    },
-    instructions: {
-      ...asRecord(stored.instructions),
-    },
-    business: { ...DEFAULT_REALTOR_PRODUCT_CONFIG.business, ...asRecord(stored.business) },
-    phone: { ...DEFAULT_REALTOR_PRODUCT_CONFIG.phone, ...asRecord(stored.phone) },
-    frontDesk: {
-      ...DEFAULT_REALTOR_PRODUCT_CONFIG.frontDesk,
-      ...(stored.frontDesk as RealtorProductConfig["frontDesk"]),
-    },
-    speedToLead: {
-      ...DEFAULT_REALTOR_PRODUCT_CONFIG.speedToLead,
-      ...(stored.speedToLead as RealtorProductConfig["speedToLead"]),
-    },
-  };
-  return parsed;
+  return parseMergedRealtorProductConfig(raw);
 }
 
 export async function loadRealtorProductConfig(

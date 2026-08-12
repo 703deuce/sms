@@ -39,6 +39,7 @@ export type SeedRealEstateFrontDeskKnowledgeInput = {
   agentId?: string;
   businessName?: string;
   serviceAreas?: string[];
+  businessHours?: string;
 };
 
 export type SeedRealEstateFrontDeskKnowledgeResult = {
@@ -107,7 +108,12 @@ export async function seedRealEstateFrontDeskKnowledge(
       authority_boundaries:
         compiled?.business.authorityBoundaries || DEFAULT_REAL_ESTATE_BUSINESS.authorityBoundaries,
     },
-    knowledgeBase: buildStructuredKnowledge(businessName, serviceAreas),
+    knowledgeBase: {
+      ...buildStructuredKnowledge(businessName, serviceAreas),
+      businessHours:
+        input.businessHours?.trim() ||
+        buildStructuredKnowledge(businessName, serviceAreas).businessHours,
+    },
     knowledgeBaseIds: Array.isArray(existingCfg.knowledgeBaseIds)
       ? [...existingCfg.knowledgeBaseIds]
       : [],

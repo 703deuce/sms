@@ -14,6 +14,7 @@ import { createInitialCallState } from "@/lib/voice/real-estate/state";
 import { getCompiledFrontDeskFromAdvanced } from "@/lib/voice/real-estate/config";
 import {
   manifestFromCompiledIntents,
+  setActiveCompiledIntents,
   setActiveFieldManifest,
 } from "@/lib/voice/real-estate/fields";
 import { resolveInboundSipCallIdentity } from "./call-identity";
@@ -122,8 +123,14 @@ export async function runInboundEntry(ctx: JobContext): Promise<void> {
     : null;
   if (compiledFrontDesk) {
     setActiveFieldManifest(manifestFromCompiledIntents(compiledFrontDesk.intents));
+    const enabledMap: Partial<Record<string, { enabled: boolean }>> = {};
+    for (const [intent, cfg] of Object.entries(compiledFrontDesk.intents)) {
+      enabledMap[intent] = { enabled: cfg.enabled };
+    }
+    setActiveCompiledIntents(enabledMap);
   } else {
     setActiveFieldManifest(null);
+    setActiveCompiledIntents(null);
   }
 
   const cal = CalendlyCalendar.create({
