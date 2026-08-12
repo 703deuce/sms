@@ -466,8 +466,8 @@ export const appNav: NavItem[] = [
 
 export const mobilePrimaryNav = [
   { label: "Home", href: "/outcomes", icon: LayoutDashboard },
-  { label: "Inbox", href: "/inbox", icon: Inbox },
-  { label: "Campaigns", href: "/campaigns", icon: Megaphone },
+  { label: "Receptionist", href: "/voice/agents", icon: AudioLines },
+  { label: "Messages", href: "/inbox", icon: Inbox },
   { label: "Contacts", href: "/contacts", icon: Users },
 ];
 
@@ -486,7 +486,7 @@ export const adminNav: NavItem[] = [
 export const pageTitles: Record<string, string> = {
   "/dashboard": "Dashboard",
   "/getting-started": "Getting Started",
-  "/outcomes": "Solutions Dashboard",
+  "/outcomes": "Dashboard",
   "/systems": "Your Team",
   "/agents": "Your Team",
   "/my-numbers": "My Numbers",

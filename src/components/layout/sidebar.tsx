@@ -257,7 +257,7 @@ export function Sidebar({
               </span>
               {!realtorMode ? (
                 <span className="mt-0.5 block text-[10px] leading-tight text-sidebar-muted">
-                  Solutions-first workspace
+                  AI receptionist + SMS
                 </span>
               ) : null}
             </span>

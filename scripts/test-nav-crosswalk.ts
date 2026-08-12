@@ -1,6 +1,6 @@
 /**
  * Assert every legacy sidebar route remains reachable in Platform appNav,
- * and that the unified Solutions-first nav covers the launch catalog.
+ * and that the launch sidebar matches the AI receptionist + SMS catalog.
  * Run: npx tsx scripts/test-nav-crosswalk.ts
  */
 
@@ -72,179 +72,123 @@ for (const category of solutionCategories) {
   }
 }
 
-// Unified product nav covers outcome dashboards and management.
+// Launch sidebar covers core product areas.
 const solutionsHrefs = new Set(collectNavHrefs(solutionsNav));
-assert.ok(solutionsHrefs.has("/outcomes"), "Solutions dashboard required");
-assert.ok(solutionsHrefs.has("/systems"), "My Agents inventory required");
-assert.ok(solutionsHrefs.has("/my-numbers"), "My Numbers inventory required");
+assert.ok(solutionsHrefs.has("/outcomes"), "Dashboard required");
+assert.ok(solutionsHrefs.has("/voice/agents"), "AI Receptionist required");
+assert.ok(solutionsHrefs.has("/inbox"), "Messages required");
+assert.ok(solutionsHrefs.has("/contacts"), "Contacts required");
+assert.ok(solutionsHrefs.has("/integrations/native/appointments"), "Appointments required");
+assert.ok(solutionsHrefs.has("/automations"), "Automations required");
+assert.ok(solutionsHrefs.has("/integrations"), "Integrations required");
+assert.ok(solutionsHrefs.has("/settings/business"), "Settings required");
 
-assert.equal(solutionsNav[0]?.label, "Dashboard");
-assert.equal(solutionsNav[1]?.label, "My Agents");
-assert.equal(solutionsNav[1]?.href, "/systems");
-assert.equal(solutionsNav[2]?.label, "Automations");
-assert.equal(solutionsNav[2]?.href, "/automations");
-assert.equal(solutionsNav[3]?.label, "My Numbers");
-assert.equal(solutionsNav[3]?.href, "/my-numbers");
+const expectedTopLevel = [
+  "Dashboard",
+  "AI Receptionist",
+  "Missed Call Text Back",
+  "Messages",
+  "Contacts",
+  "Appointments",
+  "Automations",
+  "Integrations",
+  "Settings",
+];
+assert.deepEqual(
+  solutionsNav.map((item) => item.label),
+  expectedTopLevel,
+  "Launch sidebar top-level labels must match the product scope",
+);
 
 for (const slug of solutionsLaunchSlugs()) {
-  assert.ok(
-    solutionsHrefs.has(`/outcomes/${slug}`),
-    `Outcome ${slug} missing from solutionsNav`,
-  );
+  const reachable = [...solutionsHrefs].some((href) => href.includes(`/outcomes/${slug}`));
+  assert.ok(reachable, `Outcome ${slug} missing from solutionsNav`);
 }
 
-const expectedLaunchMenu: Array<{
-  section?: string;
-  area?: string;
-  labels: string[];
-}> = [
-  {
-    area: "AI Receptionist",
-    labels: [
-      "AI Answering Service",
-      "Cover Missed Calls",
-      "Answer After Hours",
-      "Book Appointments",
-      "Capture & Screen Inquiries",
-    ],
-  },
-  {
-    area: "SMS & Messaging",
-    labels: [
-      "Missed Call Text Back",
-      "Respond & Follow Up",
-      "Follow Up on Estimates",
-      "Appointment Reminders",
-      "Get More Reviews",
-      "Reconnect With Old Inquiries",
-      "Bring Back Past Customers",
-      "Send Promotions & Announcements",
-    ],
-  },
-];
-
-const launchItems = solutionsNav.filter((i) => i.href.startsWith("/outcomes/"));
-let cursor = 0;
-for (const section of expectedLaunchMenu) {
-  if (section.section) {
-    assert.equal(
-      launchItems[cursor]?.sectionLabel,
-      section.section,
-      `Expected section ${section.section} at position ${cursor}`,
-    );
-  } else {
-    assert.equal(
-      launchItems[cursor]?.sectionLabel,
-      undefined,
-      `Expected no Solutions band at position ${cursor}`,
-    );
-  }
-  if (section.area) {
-    assert.equal(
-      launchItems[cursor]?.areaLabel,
-      section.area,
-      `Expected area ${section.area} at position ${cursor}`,
-    );
-  }
-  for (const label of section.labels) {
-    assert.equal(
-      launchItems[cursor]?.label,
-      label,
-      `Expected catalog menu item "${label}"`,
-    );
-    cursor += 1;
-  }
-}
-assert.equal(cursor, 13, "Packaged catalog should be 13 items");
-
-const connect = solutionsNav.find(
-  (i) => i.areaLabel === "Connect With Customers",
+const receptionist = solutionsNav.find((i) => i.label === "AI Receptionist");
+assert.ok(receptionist, "AI Receptionist required");
+assert.deepEqual(
+  (receptionist?.children || []).map((c) => c.label),
+  ["My Agent", "Instructions", "Knowledge", "Actions", "Voice", "Test"],
+  "AI Receptionist submenu must stay light",
 );
-assert.ok(connect, "Connect With Customers area required");
-const connectStart = solutionsNav.indexOf(connect!);
-const connectLabels = [
-  "Forms",
-  "Website Popups",
-  "Signup Pages",
-  "QR Codes",
-  "Click-to-Text",
-  "Contact Cards",
-  "Text-to-Pay",
-];
-for (let i = 0; i < connectLabels.length; i += 1) {
-  assert.equal(
-    solutionsNav[connectStart + i]?.label,
-    connectLabels[i],
-    `Expected Connect item "${connectLabels[i]}"`,
-  );
-}
 
-// Automations lives under My Agents (inventory band), not Manage.
-assert.equal(solutionsNav[2]?.label, "Automations");
-assert.ok(
-  !solutionsNav.some((i) => i.label === "My Systems"),
-  "My Systems renamed/moved — should not remain in nav",
+const mctb = solutionsNav.find((i) => i.label === "Missed Call Text Back");
+assert.ok(mctb, "Missed Call Text Back required");
+assert.deepEqual(
+  (mctb?.children || []).map((c) => c.label),
+  ["Setup", "Message", "Rules", "Activity"],
+  "Missed Call Text Back submenu must stay light",
 );
-const manageOrder = [
-  "Inbox",
-  "Calls",
-  "Campaigns",
-  "Contacts",
-  "Calendar",
-  "Phone",
-  "Reports",
-  "Integrations",
-  "Compliance",
-];
-const manageStart = solutionsNav.findIndex((i) => i.label === "Inbox");
-assert.ok(manageStart >= 0, "Inbox required in product nav");
-for (let i = 0; i < manageOrder.length; i += 1) {
-  assert.equal(
-    solutionsNav[manageStart + i]?.label,
-    manageOrder[i],
-    `Expected Manage item "${manageOrder[i]}"`,
-  );
-}
+
+const messages = solutionsNav.find((i) => i.label === "Messages");
+assert.ok(messages, "Messages required");
+assert.deepEqual(
+  (messages?.children || []).map((c) => c.label),
+  ["SMS", "Templates", "Scheduled", "Sent"],
+  "Messages submenu must stay light",
+);
+
+const contacts = solutionsNav.find((i) => i.label === "Contacts");
+assert.ok(contacts, "Contacts required");
+assert.deepEqual(
+  (contacts?.children || []).map((c) => c.label),
+  ["All Contacts", "Lists", "Tags", "Import"],
+  "Contacts submenu must stay light",
+);
+
+const appointments = solutionsNav.find((i) => i.label === "Appointments");
+assert.ok(appointments, "Appointments required");
+assert.deepEqual(
+  (appointments?.children || []).map((c) => c.label),
+  ["Appointments", "Calendar", "Connections", "Availability"],
+  "Appointments submenu must stay light",
+);
 
 const automations = solutionsNav.find((i) => i.label === "Automations");
 assert.ok(automations, "Automations required");
-const automationChildLabels = (automations?.children || []).map((c) =>
-  "type" in c && c.type === "group" ? c.label : c.label,
-);
 assert.deepEqual(
-  automationChildLabels,
+  (automations?.children || []).map((c) => c.label),
   ["Flows", "Templates", "Logs"],
-  "Automations sidebar must be Flows / Templates / Logs (no permanent Builder)",
-);
-assert.ok(
-  !automationChildLabels.includes("Builder"),
-  "Builder belongs to a selected flow, not the sidebar",
+  "Automations sidebar must be Flows / Templates / Logs",
 );
 
-const advanced = solutionsNav.find((i) => i.sectionLabel === "Advanced");
-assert.ok(advanced, "Advanced band required");
-assert.equal(advanced?.label, "Phone & Routing");
-assert.ok(
-  solutionsNav.some((i) => i.label === "Developer Tools"),
-  "Developer Tools under Advanced",
-);
-assert.ok(
-  solutionsNav.some((i) => i.label === "Settings"),
-  "Settings required",
+const integrations = solutionsNav.find((i) => i.label === "Integrations");
+assert.ok(integrations, "Integrations required");
+assert.deepEqual(
+  (integrations?.children || []).map((c) => c.label),
+  ["Calendars", "CRM", "Webhooks"],
+  "Integrations submenu must stay light",
 );
 
-const removedFromCatalog = [
-  "Handle New Service Calls",
-  "Customer Support",
-  "Welcome New Customers",
-  "Client Onboarding",
-  "Run a Contest",
-  "Surveys",
+const settings = solutionsNav.find((i) => i.label === "Settings");
+assert.ok(settings, "Settings required");
+assert.deepEqual(
+  (settings?.children || []).map((c) => c.label),
+  ["Business", "AI", "Messaging", "Appointments", "Compliance", "Billing"],
+  "Settings submenu must stay light",
+);
+
+const hiddenFromLaunch = [
+  "Inbox",
+  "Calls",
+  "Campaigns",
+  "Phone",
+  "Reports",
+  "Your Team",
+  "My Numbers",
+  "Compliance",
+  "Phone & Routing",
+  "Developer Tools",
+  "Forms",
   "Growth",
+  "Surveys",
   "Business Phone",
   "AI Voice",
+  "AI Answering Service",
+  "Connect With Customers",
 ];
-for (const label of removedFromCatalog) {
+for (const label of hiddenFromLaunch) {
   assert.ok(
     !solutionsNav.some((i) => i.label === label),
     `"${label}" must be hidden from launch navigation`,
@@ -256,30 +200,9 @@ assert.ok(
   "Duplicate email channel shortcuts removed",
 );
 
-// Full permanent submenu is always visible — even before the customer sets up.
-const answering = solutionsNav.find((i) => i.label === "AI Answering Service");
-assert.ok(answering, "AI Answering Service required");
-const answeringChildLabels = (answering.children || []).map((c) =>
-  "type" in c && c.type === "group" ? c.label : c.label,
-);
-assert.ok(
-  answeringChildLabels.includes("Overview") &&
-    answeringChildLabels.includes("Set Up") &&
-    answeringChildLabels.includes("Answering Rules") &&
-    answeringChildLabels.includes("Calls & Results"),
-  "Empty AI Answering Service submenu should still show the full management tree",
-);
-
+// Instance shortcuts are no longer injected into the launch sidebar.
 const withInstances = buildSolutionsNav({
   instancesBySolution: {
-    "appointment-booking": [
-      {
-        id: "a1",
-        label: "Main Office Booking",
-        status: "Active",
-        href: "/voice/agents/a1",
-      },
-    ],
     "answer-every-call": [
       {
         id: "a2",
@@ -292,24 +215,8 @@ const withInstances = buildSolutionsNav({
 });
 const withInstanceHrefs = new Set(collectNavHrefs(withInstances));
 assert.ok(
-  withInstanceHrefs.has("/voice/agents/a1"),
-  "Instance shortcuts should appear in Solutions nav when 1–2 setups exist",
-);
-const answeringWith = withInstances.find((i) => i.label === "AI Answering Service");
-const answeringWithLabels = (answeringWith?.children || []).map((c) =>
-  "type" in c && c.type === "group" ? c.label : (c as { label: string }).label,
-);
-assert.ok(
-  answeringWithLabels.includes("+ Set Up Another"),
-  "After setup, Set Up should rename to + Set Up Another",
-);
-assert.ok(
-  answeringWithLabels.some((l) => l.includes("Maya — Main Office")),
-  "After setup, instance name should appear in the submenu",
-);
-assert.ok(
-  answeringWithLabels.includes("Answering Rules"),
-  "Full management pages remain visible alongside instance shortcuts",
+  !withInstanceHrefs.has("/voice/agents/a2"),
+  "Launch nav should not surface per-instance shortcuts",
 );
 
 console.log(
