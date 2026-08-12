@@ -403,7 +403,7 @@ export async function loadRealtorDashboard(workspaceId: string, userName?: strin
     count: recentCalls.length,
     avgDuration:
       recentCalls.length
-        ? recentCalls.reduce((sum, c) => sum + (c.durationSeconds || 0), 0) / recentCalls.length
+        ? recentCalls.reduce((sum: number, c) => sum + (c.durationSeconds || 0), 0) / recentCalls.length
         : 0,
   };
 
