@@ -49,7 +49,12 @@ export function RealtorHeader({
   const router = useRouter();
   const isSetup = pathname.startsWith("/realtor/setup");
   const isLeadDetail =
-    pathname.startsWith("/realtor/leads/") && pathname !== "/realtor/leads";
+    pathname.match(/^\/realtor\/leads\/[^/]+$/) &&
+    !["pipeline", "needs-attention", "lists", "tags", "capture", "import", "sources"].includes(
+      pathname.split("/").pop() || "",
+    );
+  const isLeadsCrm =
+    pathname.startsWith("/realtor/leads") && !isLeadDetail;
 
   const [numberId, setNumberId] = useState(activeFromNumberId || phoneNumbers[0]?.id || "");
   const activeNumber = phoneNumbers.find((n) => n.id === numberId) || phoneNumbers[0];
@@ -204,7 +209,7 @@ export function RealtorHeader({
           ) : null}
         </div>
 
-        {isLeadDetail ? (
+        {(isLeadDetail || isLeadsCrm) ? (
           <form
             ref={searchRef}
             onSubmit={onSearchSubmit}
@@ -214,7 +219,11 @@ export function RealtorHeader({
               <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9ca3af]" />
               <input
                 className="h-10 w-full rounded-lg border border-[#e5e7eb] bg-[#f9fafb] pl-10 pr-16 text-[13px] outline-none focus:border-[#2563eb] focus:bg-white focus:ring-2 focus:ring-[#2563eb]/20"
-                placeholder="Search anything..."
+                placeholder={
+                  isLeadsCrm
+                    ? "Search leads, people, or properties..."
+                    : "Search anything..."
+                }
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
               />

@@ -1,21 +1,63 @@
-import { InboxView } from "@/components/inbox/inbox-view";
-import { Button } from "@/components/ui/button";
+import {
+  AllConversationsView,
+  type ConversationTab,
+} from "@/components/realtor/conversations/all-conversations-view";
+import { isRealtorWorkspace } from "@/lib/realtor/workspace-config";
+import { mergeRealtorConversations } from "@/lib/realtor/conversations-mock";
 import {
   loadContacts,
   loadConversations,
   loadTeamMembers,
   requireWorkspaceContext,
 } from "@/lib/workspace-data";
+import { InboxView } from "@/components/inbox/inbox-view";
+import { Button } from "@/components/ui/button";
 import { Archive, MessageSquareText } from "lucide-react";
 import Link from "next/link";
 
-export default async function InboxPage() {
+const TAB_ALIASES: Record<string, ConversationTab> = {
+  all: "all",
+  mine: "mine",
+  assigned: "mine",
+  unassigned: "unassigned",
+  unread: "unread",
+  calls: "calls",
+  sms: "sms",
+  email: "email",
+};
+
+export default async function InboxPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string }>;
+}) {
   const { workspaceId, session } = await requireWorkspaceContext();
+  const params = await searchParams;
+  const realtorMode = await isRealtorWorkspace(workspaceId);
+
   const [conversations, contacts, teamMembers] = await Promise.all([
     loadConversations(workspaceId),
     loadContacts(workspaceId),
     loadTeamMembers(workspaceId),
   ]);
+
+  if (realtorMode) {
+    const initialTab = TAB_ALIASES[params.tab || "all"] || "all";
+    const merged = mergeRealtorConversations(conversations);
+
+    return (
+      <div className="px-2 py-4 lg:px-4">
+        <AllConversationsView
+          conversations={merged}
+          contacts={contacts}
+          teamMembers={teamMembers}
+          currentUserName={session.name}
+          currentUserId={session.userId}
+          initialTab={initialTab}
+        />
+      </div>
+    );
+  }
 
   return (
     <div>

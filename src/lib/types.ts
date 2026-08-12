@@ -96,17 +96,25 @@ export type Campaign = {
   configJson?: unknown;
 };
 
+export type ConversationChannel = "sms" | "email" | "call";
+
 export type Conversation = {
   id: string;
   contactId: string;
   contactName: string;
   phone: string;
+  email?: string;
+  location?: string;
   lastMessage: string;
   assignedTo: string | null;
   status: "Open" | "Pending" | "Closed" | "Snoozed" | "Spam";
   tags: string[];
   updatedAt: string;
   unread: boolean;
+  channel?: ConversationChannel;
+  leadType?: string;
+  leadStage?: string;
+  source?: string;
   messages: Array<{
     id: string;
     direction: "in" | "out" | "note";

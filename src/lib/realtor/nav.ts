@@ -28,12 +28,39 @@ export const REALTOR_PIPELINE_COLUMNS: Array<{
   { status: "closed", label: "Closed" },
 ];
 
+const CALLS_CHILDREN = [
+  { label: "All Calls", href: "/realtor/calls" },
+  { label: "Human Calls", href: "/realtor/calls?tab=human" },
+  { label: "Voicemails", href: "/realtor/calls/voicemails" },
+  { label: "Transcripts", href: "/realtor/calls/transcripts" },
+  { label: "Recordings", href: "/realtor/calls/recordings" },
+];
+
+const AI_AGENTS_CHILDREN = [
+  { label: "Front Desk", href: "/realtor/agents/front-desk" },
+  { label: "Speed-to-Lead", href: "/realtor/agents/speed-to-lead" },
+  { label: "Knowledge", href: "/realtor/agents/knowledge" },
+  { label: "Agent Activity", href: "/realtor/agents/activity" },
+  { label: "Test Agent", href: "/realtor/test" },
+];
+
+const LEADS_CHILDREN = [
+  { label: "All Leads", href: "/realtor/leads" },
+  { label: "Pipeline", href: "/realtor/leads/pipeline" },
+  { label: "Needs Attention", href: "/realtor/leads/needs-attention", badge: 8 },
+  { label: "Lists / Segments", href: "/realtor/leads/lists" },
+  { label: "Tags", href: "/realtor/leads/tags" },
+  { label: "Lead Capture", href: "/realtor/leads/capture" },
+  { label: "Import", href: "/realtor/leads/import" },
+  { label: "Lead Sources", href: "/realtor/leads/sources" },
+];
+
 export function buildRealtorMobileNav(): NavItem[] {
   return [
     { label: "Dashboard", href: "/realtor/dashboard", icon: LayoutDashboard },
     { label: "Leads", href: "/realtor/leads", icon: Users },
     { label: "Inbox", href: "/inbox", icon: Inbox },
-    { label: "Calls", href: "/phone/calls", icon: PhoneCall },
+    { label: "Calls", href: "/realtor/calls", icon: PhoneCall },
   ];
 }
 
@@ -42,10 +69,20 @@ const REALTOR_PAGE_TITLES: Record<string, string> = {
   "/realtor/setup": "Setup",
   "/realtor/onboarding": "Guided Setup",
   "/realtor/dashboard": "Dashboard",
-  "/realtor/leads": "Leads",
+  "/realtor/leads": "All Leads",
+  "/realtor/leads/pipeline": "Pipeline",
+  "/realtor/leads/needs-attention": "Needs Attention",
+  "/realtor/leads/lists": "Lists / Segments",
+  "/realtor/leads/tags": "Tags",
+  "/realtor/leads/capture": "Lead Capture",
+  "/realtor/leads/import": "Import",
   "/realtor/needs-attention": "Needs Attention",
-  "/realtor/test": "Test Amy",
-  "/realtor/messages": "Messages",
+  "/realtor/test": "Test Agent",
+  "/realtor/messages": "All Conversations",
+  "/realtor/calls": "All Calls",
+  "/realtor/calls/voicemails": "Voicemails",
+  "/realtor/calls/transcripts": "Transcripts",
+  "/realtor/calls/recordings": "Recordings",
   "/realtor/appointments": "Appointments",
   "/realtor/appointments/types": "Appointment Types",
   "/realtor/leads/sources": "Lead Sources",
@@ -58,25 +95,40 @@ const REALTOR_PAGE_TITLES: Record<string, string> = {
 
 export function getRealtorPageTitle(pathname: string): string | null {
   if (REALTOR_PAGE_TITLES[pathname]) return REALTOR_PAGE_TITLES[pathname];
-  if (pathname.startsWith("/realtor/leads/")) return "Lead Detail";
+  if (pathname.match(/^\/realtor\/leads\/[^/]+$/)) return "Lead Detail";
   return null;
 }
 
-/** Flat sidebar matching product mockups — badges set from shell unread count. */
+/** Sidebar nav with expandable Leads section matching CRM mockups. */
 export function buildRealtorNav(inboxBadge?: number): NavItem[] {
   return [
     { label: "Setup", href: "/realtor/setup", icon: SlidersHorizontal },
     { label: "Dashboard", href: "/realtor/dashboard", icon: LayoutDashboard },
-    { label: "Leads", href: "/realtor/leads", icon: Users },
+    {
+      label: "Leads",
+      href: "/realtor/leads",
+      icon: Users,
+      children: LEADS_CHILDREN,
+    },
     {
       label: "Inbox",
       href: "/inbox",
       icon: Inbox,
       badge: inboxBadge && inboxBadge > 0 ? inboxBadge : undefined,
     },
-    { label: "Calls", href: "/phone/calls", icon: PhoneCall },
+    {
+      label: "Calls",
+      href: "/realtor/calls",
+      icon: PhoneCall,
+      children: CALLS_CHILDREN,
+    },
     { label: "Messages", href: "/realtor/messages", icon: MessageSquare },
-    { label: "AI Agents", href: "/realtor/agents/front-desk", icon: Bot },
+    {
+      label: "AI Agents",
+      href: "/realtor/agents/front-desk",
+      icon: Bot,
+      children: AI_AGENTS_CHILDREN,
+    },
     { label: "Automations", href: "/automations", icon: Workflow },
     { label: "Appointments", href: "/realtor/appointments", icon: CalendarDays },
     { label: "Campaigns", href: "/campaigns", icon: Megaphone },
