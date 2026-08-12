@@ -59,7 +59,8 @@ export function verifyRealtorCompile(): void {
   assert.ok(projectFileExists("src/lib/realtor/wizard-steps.ts"));
   assert.ok(projectFileExists("src/app/api/realtor/agents/route.ts"));
   assert.ok(projectFileExists("src/components/realtor/intent-field-editor.tsx"));
-  assert.ok(projectFileExists("src/components/realtor/workflow-preview.tsx"));
+  assert.ok(projectFileExists("src/components/realtor/front-desk-config-client.tsx"));
+  assert.ok(projectFileExists("src/lib/voice/real-estate/compile/compile-instructions.ts"));
   assert.ok(projectFileExists("src/lib/voice/real-estate/publish.ts"));
 
   const steps = onboardingStepsForConfig(DEFAULT_REALTOR_PRODUCT_CONFIG);
@@ -84,8 +85,10 @@ export function verifyRealtorCompile(): void {
   const customConfig = compileFrontDeskFromProductConfig({
     ...DEFAULT_REALTOR_PRODUCT_CONFIG,
     business: { teamName: "Smith Realty Group", timezone: "America/New_York" },
+    instructions: { custom: "Mention our lakefront specialty." },
   });
   assert.equal(customConfig.identity.companyName, "Smith Realty Group");
+  assert.equal(customConfig.instructions?.custom, "Mention our lakefront specialty.");
   assert.ok(
     !JSON.stringify(customConfig).includes("Blue Ridge"),
     "compiled config must not contain demo customer names",

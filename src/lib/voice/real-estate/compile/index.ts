@@ -39,4 +39,5 @@ export * from "./compile-front-desk";
 export * from "./compile-speed-to-lead";
 export * from "./compile-workflow-visual";
 export * from "./field-manifest";
+export * from "./compile-instructions";
 export * from "./validate-config";

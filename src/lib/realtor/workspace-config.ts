@@ -57,6 +57,9 @@ export function parseRealtorProductConfig(raw: unknown): RealtorProductConfig {
       ...DEFAULT_REALTOR_PRODUCT_CONFIG.notifications,
       ...asRecord(stored.notifications),
     },
+    instructions: {
+      ...asRecord(stored.instructions),
+    },
     business: { ...DEFAULT_REALTOR_PRODUCT_CONFIG.business, ...asRecord(stored.business) },
     phone: { ...DEFAULT_REALTOR_PRODUCT_CONFIG.phone, ...asRecord(stored.phone) },
     frontDesk: {

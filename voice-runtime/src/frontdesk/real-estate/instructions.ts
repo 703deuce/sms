@@ -1,23 +1,26 @@
 import type { RealEstateBusinessConfig } from "@/lib/voice/real-estate/types";
-import { REAL_ESTATE_INTENT_LABELS, type RealEstateIntent } from "@/lib/voice/real-estate/types";
+import type { CompiledRealEstateFrontDesk } from "@/lib/voice/real-estate/compile/types";
+import { buildCompiledFrontDeskInstructions } from "@/lib/voice/real-estate/compile/compile-instructions";
+import { resolveRealEstateBusinessConfig } from "@/lib/voice/real-estate/config";
 
 export function buildRealEstateFrontDeskInstructions(input: {
   business: RealEstateBusinessConfig;
   timezone: string;
+  compiled?: CompiledRealEstateFrontDesk | null;
 }): string {
-  const { business } = input;
+  if (input.compiled) {
+    return buildCompiledFrontDeskInstructions(input.compiled);
+  }
+
+  const business = input.business;
   const areas = business.serviceAreas.join(", ");
   const types = business.propertyTypes.join(", ");
-  const intentList = (Object.keys(REAL_ESTATE_INTENT_LABELS) as RealEstateIntent[])
-    .map((k) => `${k} (${REAL_ESTATE_INTENT_LABELS[k]})`)
-    .join(", ");
 
   return [
     `You are the front desk for ${business.businessName}, a real estate brokerage. `,
     "You are ONE assistant — never mention routing, intents, or transferring between departments. ",
     "Infer why the caller reached out and silently call set_intent (buyer, seller, showing, ",
     "existing_client, agent_to_agent, or general). If they have multiple needs, use add_secondary_intent. ",
-    `Supported intents: ${intentList}. `,
     "",
     "Conversation style: warm, natural speech for voice synthesis. Use fillers and reactions ",
     "(um, oh, gotcha) sparingly. Mirror the caller's formality. Never speak internal planning aloud. ",
@@ -52,4 +55,15 @@ export function buildRealEstateFrontDeskInstructions(input: {
     "",
     "End: call end_call once when the caller is done. Do not give multiple goodbyes.",
   ].join("");
+}
+
+/** @deprecated use buildRealEstateFrontDeskInstructions with compiled config */
+export function buildLegacyRealEstateInstructions(input: {
+  business: RealEstateBusinessConfig;
+  dynamicVariables?: Record<string, unknown> | null;
+}): string {
+  return buildRealEstateFrontDeskInstructions({
+    business: resolveRealEstateBusinessConfig(input.dynamicVariables),
+    timezone: "America/New_York",
+  });
 }

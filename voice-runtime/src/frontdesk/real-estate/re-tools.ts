@@ -21,6 +21,7 @@ import {
 import { notifyRealEstateStaff } from "@/lib/voice/real-estate/notifications";
 import { syncRealEstateLeadToCrm } from "@/lib/voice/real-estate/crm-sync";
 import { REAL_ESTATE_INTENT_LABELS, type RealEstateIntent } from "@/lib/voice/real-estate/types";
+import { intakeCompleteGuidance } from "@/lib/voice/real-estate/compile/compile-instructions";
 import { parseLocalContactIdFromSafeId } from "@/lib/voice/real-estate/contact-id";
 import type { FrontDeskUserData } from "../userdata";
 import { withLiveKitToolTelemetry } from "../../livekit-tool-telemetry";
@@ -165,6 +166,9 @@ export function buildRealEstateFieldTools() {
               event: "intake_complete",
               callerE164: ud.callerE164,
             }).catch(() => undefined);
+            if (ud.realEstateCompiled) {
+              return intakeCompleteGuidance(ud.realEstateCompiled, intents);
+            }
             return "All required fields collected. Offer to schedule a consultation or take a message if they prefer.";
           }
 

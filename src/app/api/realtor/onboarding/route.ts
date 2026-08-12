@@ -26,6 +26,7 @@ function mergeBodyConfig(
     voice: { ...current.voice, ...asRecord(body.voice) },
     knowledge: { ...current.knowledge, ...asRecord(body.knowledge) },
     notifications: { ...current.notifications, ...asRecord(body.notifications) },
+    instructions: { ...current.instructions, ...asRecord(body.instructions) },
     business: { ...current.business, ...asRecord(body.business) },
     phone: { ...current.phone, ...asRecord(body.phone) },
     frontDesk: { ...current.frontDesk, ...(body.frontDesk as object) },
@@ -66,7 +67,10 @@ export async function POST(req: Request) {
       const deploy = await deployRealEstateFrontDesk({
         workspaceId: auth.workspaceId,
         productConfig: merged,
-        phoneE164: merged.phone.outboundNumberE164,
+        phoneE164:
+          merged.phone.inboundNumberE164?.trim() ||
+          merged.phone.outboundNumberE164?.trim() ||
+          undefined,
         agentName: merged.business.teamName
           ? `${merged.business.teamName} Front Desk`
           : undefined,

@@ -161,6 +161,7 @@ export async function runInboundEntry(ctx: JobContext): Promise<void> {
           businessName,
           timezone,
           dynamicVariables: agentConfig.dynamicVariables as Record<string, unknown> | null,
+          compiled: compiledFrontDesk,
         })
       : createFrontDeskBookingAgent({
           businessName,

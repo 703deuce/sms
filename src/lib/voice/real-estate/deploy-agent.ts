@@ -83,6 +83,7 @@ export function buildRealEstateDraftConfig(
       property_types: business.propertyTypes,
       knowledge_notes: business.knowledgeNotes,
       authority_boundaries: business.authorityBoundaries,
+      custom_instructions: compiled.instructions?.custom || "",
     },
     advanced: {
       ...(existing.advanced || {}),

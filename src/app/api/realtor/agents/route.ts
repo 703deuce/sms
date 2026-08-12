@@ -1,3 +1,4 @@
+import { getPrisma } from "@/lib/db";
 import { requireSession, jsonError } from "@/lib/api-auth";
 import {
   loadRealtorProductConfig,
@@ -6,6 +7,12 @@ import {
 import { deployRealEstateFrontDesk } from "@/lib/voice/real-estate/bootstrap";
 import { compileRealtorAgents, validateRealtorProductConfig } from "@/lib/voice/real-estate/compile";
 import { NextResponse } from "next/server";
+
+function resolveFrontDeskPhoneE164(config: {
+  phone: { inboundNumberE164?: string; outboundNumberE164?: string };
+}): string | undefined {
+  return config.phone.inboundNumberE164?.trim() || config.phone.outboundNumberE164?.trim() || undefined;
+}
 
 function mergeConfig(
   current: Awaited<ReturnType<typeof loadRealtorProductConfig>>,
@@ -22,6 +29,7 @@ function mergeConfig(
     voice: { ...current.voice, ...(body.voice as object) },
     knowledge: { ...current.knowledge, ...(body.knowledge as object) },
     notifications: { ...current.notifications, ...(body.notifications as object) },
+    instructions: { ...current.instructions, ...(body.instructions as object) },
   };
 }
 
@@ -31,12 +39,19 @@ export async function GET(req: Request) {
     if ("error" in auth) return auth.error;
     const config = await loadRealtorProductConfig(auth.workspaceId);
     const compiled = compileRealtorAgents(config, { status: config.status });
+    const prisma = getPrisma();
+    const phoneNumbers = await prisma.phoneNumber.findMany({
+      where: { workspaceId: auth.workspaceId },
+      orderBy: { e164: "asc" },
+      select: { id: true, e164: true, friendlyName: true, status: true },
+    });
     const url = new URL(req.url);
     const target = url.searchParams.get("target");
     return NextResponse.json({
       config,
       compiled,
       validation: validateRealtorProductConfig(config),
+      phoneNumbers,
       workflow:
         target === "speed_to_lead"
           ? compiled.speedToLead?.workflowDefinition
@@ -93,7 +108,7 @@ export async function POST(req: Request) {
       const deploy = await deployRealEstateFrontDesk({
         workspaceId: auth.workspaceId,
         productConfig: merged,
-        phoneE164: merged.phone.outboundNumberE164,
+        phoneE164: resolveFrontDeskPhoneE164(merged),
         agentName: merged.business.teamName
           ? `${merged.business.teamName} Front Desk`
           : undefined,

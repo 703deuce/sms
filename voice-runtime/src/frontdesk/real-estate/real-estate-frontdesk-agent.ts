@@ -1,5 +1,6 @@
 import { llm, voice } from "@livekit/agents";
 import type { AgentSession } from "@livekit/agents";
+import type { CompiledRealEstateFrontDesk } from "@/lib/voice/real-estate/compile/types";
 import { resolveRealEstateBusinessConfig } from "@/lib/voice/real-estate/config";
 import { createInitialCallState } from "@/lib/voice/real-estate/state";
 import { buildFrontDeskBookingTools } from "../booking-tools";
@@ -17,12 +18,14 @@ export function createRealEstateFrontDeskAgent(input: {
   businessName: string;
   timezone: string;
   dynamicVariables?: Record<string, unknown> | null;
+  compiled?: CompiledRealEstateFrontDesk | null;
 }) {
-  const business = resolveRealEstateBusinessConfig({
+  const business = input.compiled?.business || resolveRealEstateBusinessConfig({
     ...input.dynamicVariables,
     business_name: input.businessName,
   });
   const label = business.businessName;
+  const agentName = input.compiled?.identity.agentName || "Amy";
   const { toolDefs: bookingToolDefs } = buildFrontDeskBookingTools({
     timezone: input.timezone,
   });
@@ -39,6 +42,7 @@ export function createRealEstateFrontDeskAgent(input: {
     instructions: buildRealEstateFrontDeskInstructions({
       business,
       timezone: input.timezone,
+      compiled: input.compiled,
     }),
     tools: llm.toToolContext([...reTools, ...bookingToolDefs]),
     onEnter: async (agentCtx) => {
@@ -53,8 +57,10 @@ export function createRealEstateFrontDeskAgent(input: {
       await session.generateReply({
         instructions:
           `Say hello and welcome the caller — it's ${timeOfDay} their time. ` +
-          `You're the front desk for ${label}, a real estate brokerage. ` +
-          "Ask how you can help with buying, selling, showings, or anything else today. " +
+          `You're ${agentName}, the front desk for ${label}, a real estate brokerage. ` +
+          (input.compiled?.identity.greeting
+            ? `${input.compiled.identity.greeting} `
+            : "Ask how you can help with buying, selling, showings, or anything else today. ") +
           "Keep it warm and brief — do not start collecting fields yet.",
         toolChoice: "none",
         allowInterruptions: false,

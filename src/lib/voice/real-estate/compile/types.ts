@@ -52,6 +52,15 @@ export type CompiledRealEstateFrontDesk = {
     appointmentTypes: string[];
     calendlyEventMappings?: Record<string, string>;
   };
+  notifications?: {
+    onQualified?: boolean;
+    onAppointmentBooked?: boolean;
+    onNeedsHuman?: boolean;
+    emailRecipients?: string[];
+  };
+  instructions?: {
+    custom?: string;
+  };
   /** Visual workflow graph derived from enabled intents — not a giant prompt. */
   workflowDefinition: AutomationDefinition;
 };

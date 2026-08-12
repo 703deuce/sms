@@ -59,6 +59,19 @@ export function validateRealtorProductConfig(
       );
     }
 
+    if (
+      !config.phone.inboundNumberE164?.trim() &&
+      !config.phone.outboundNumberE164?.trim()
+    ) {
+      warnings.push(
+        warning(
+          "no_inbound_number",
+          "No inbound phone number selected — publish will use workspace default if available.",
+          "phone.inboundNumberE164",
+        ),
+      );
+    }
+
     for (const [key, intent] of Object.entries(config.frontDesk)) {
       if (!intent.enabled) continue;
       for (const field of intent.fields) {

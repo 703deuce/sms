@@ -36,13 +36,22 @@ function resolveBusiness(config: RealtorProductConfig): RealEstateBusinessConfig
   const areas = config.business.serviceAreas?.length
     ? config.business.serviceAreas
     : ["your service area"];
+  const customNotes =
+    config.knowledge?.customNotes?.filter((n) => n.trim()) ||
+    (config.knowledge?.serviceAreaNotes?.trim()
+      ? [config.knowledge.serviceAreaNotes.trim()]
+      : []);
+  const knowledgeNotes = [
+    ...TEMPLATE_KNOWLEDGE_NOTES.map((n) =>
+      n.replace("customer's configured service areas", areas.join(", ")),
+    ),
+    ...customNotes,
+  ];
   return {
     businessName: identity.companyName,
     serviceAreas: areas,
     propertyTypes: TEMPLATE_PROPERTY_TYPES,
-    knowledgeNotes: TEMPLATE_KNOWLEDGE_NOTES.map((n) =>
-      n.replace("customer's configured service areas", areas.join(", ")),
-    ),
+    knowledgeNotes,
     authorityBoundaries: TEMPLATE_AUTHORITY_BOUNDARIES,
   };
 }
@@ -108,6 +117,10 @@ export function compileFrontDeskFromProductConfig(
       appointmentTypes: config.appointmentTypes || [],
       calendlyEventMappings: config.calendlyEventMappings,
     },
+    notifications: config.notifications,
+    instructions: config.instructions?.custom?.trim()
+      ? { custom: config.instructions.custom.trim() }
+      : undefined,
   };
 
   return {
