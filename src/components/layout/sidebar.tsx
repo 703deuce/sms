@@ -8,7 +8,7 @@ import {
 } from "@/lib/solutions-nav";
 import { buildRealtorNav } from "@/lib/realtor/nav";
 import { cn } from "@/lib/utils";
-import { ChevronDown, LogOut, MessageSquare } from "lucide-react";
+import { ChevronDown, ChevronLeft, LogOut, MessageSquare } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -186,18 +186,24 @@ function NavLinkRow({
 
 export function Sidebar({
   userName,
+  workspaceName,
   open,
   onClose,
   outcomeInstances = {},
   realtorMode = false,
   inboxBadge = 0,
+  collapsed = false,
+  onToggleCollapse,
 }: {
   userName: string;
+  workspaceName?: string;
   open?: boolean;
   onClose?: () => void;
   outcomeInstances?: Record<string, SolutionNavInstance[]>;
   realtorMode?: boolean;
   inboxBadge?: number;
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
 }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -229,7 +235,12 @@ export function Sidebar({
   }
 
   const content = (
-    <aside className="flex h-dvh w-[260px] flex-col overflow-hidden bg-sidebar text-sidebar-foreground">
+    <aside
+      className={cn(
+        "flex h-dvh flex-col overflow-hidden bg-sidebar text-sidebar-foreground transition-[width] duration-200",
+        collapsed ? "w-[72px]" : "w-[260px]",
+      )}
+    >
       <div className="shrink-0 px-3.5 pb-2.5 pt-3.5">
         <Link
           href={realtorMode ? "/realtor/dashboard" : "/outcomes"}
@@ -239,16 +250,18 @@ export function Sidebar({
           <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] bg-[#2563eb] text-white shadow-[0_8px_18px_rgba(37,99,235,0.35)]">
             <MessageSquare className="h-3.5 w-3.5" fill="currentColor" />
           </span>
-          <span>
-            <span className="block text-[14px] font-bold tracking-[0.04em] text-white">
-              {realtorMode ? "TRANSOVO" : "Transovo SMS"}
-            </span>
-            {!realtorMode ? (
-              <span className="mt-0.5 block text-[10px] leading-tight text-sidebar-muted">
-                Solutions-first workspace
+          {!collapsed ? (
+            <span>
+              <span className="block text-[14px] font-bold tracking-[0.04em] text-white">
+                {realtorMode ? "TRANSOVO" : "Transovo SMS"}
               </span>
-            ) : null}
-          </span>
+              {!realtorMode ? (
+                <span className="mt-0.5 block text-[10px] leading-tight text-sidebar-muted">
+                  Solutions-first workspace
+                </span>
+              ) : null}
+            </span>
+          ) : null}
         </Link>
       </div>
 
@@ -324,8 +337,8 @@ export function Sidebar({
                         : "text-sidebar-muted group-hover:text-white",
                     )}
                   />
-                  <span className="truncate">{item.label}</span>
-                  {item.badge != null ? (
+                  {!collapsed ? <span className="truncate">{item.label}</span> : null}
+                  {!collapsed && item.badge != null ? (
                     <span
                       className={cn(
                         "ml-auto flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1.5 text-[10px] font-bold",
@@ -413,21 +426,42 @@ export function Sidebar({
             <img
               src="/avatars/alex.svg"
               alt={userName}
-              className="h-7 w-7 rounded-full object-cover ring-2 ring-white/10"
+              className="h-7 w-7 shrink-0 rounded-full object-cover ring-2 ring-white/10"
             />
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-[12px] font-semibold text-white">{userName}</p>
-              <p className="text-[10px] text-sidebar-muted">Owner</p>
-            </div>
+            {!collapsed ? (
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[12px] font-semibold text-white">{userName}</p>
+                <p className="truncate text-[10px] text-sidebar-muted">
+                  {realtorMode && workspaceName ? workspaceName : "Owner"}
+                </p>
+              </div>
+            ) : null}
+            {!collapsed && !realtorMode ? (
+              <button
+                type="button"
+                onClick={logout}
+                className="rounded-md p-1.5 text-sidebar-muted hover:bg-white/5 hover:text-white"
+                aria-label="Log out"
+              >
+                <LogOut className="h-3.5 w-3.5" />
+              </button>
+            ) : !collapsed ? (
+              <ChevronDown className="h-3.5 w-3.5 shrink-0 text-sidebar-muted" aria-hidden />
+            ) : null}
+          </div>
+          {realtorMode && onToggleCollapse ? (
             <button
               type="button"
-              onClick={logout}
-              className="rounded-md p-1.5 text-sidebar-muted hover:bg-white/5 hover:text-white"
-              aria-label="Log out"
+              onClick={onToggleCollapse}
+              className={cn(
+                "mt-2 flex w-full items-center gap-2 rounded-lg px-2 py-2 text-[12px] font-medium text-sidebar-muted hover:bg-white/5 hover:text-white",
+                collapsed && "justify-center px-0",
+              )}
             >
-              <LogOut className="h-3.5 w-3.5" />
+              <ChevronLeft className={cn("h-4 w-4", collapsed && "rotate-180")} />
+              {!collapsed ? "Collapse" : null}
             </button>
-          </div>
+          ) : null}
         </div>
       </nav>
     </aside>
@@ -435,7 +469,12 @@ export function Sidebar({
 
   return (
     <>
-      <div className="hidden lg:fixed lg:inset-y-0 lg:z-30 lg:flex lg:w-[260px]">
+      <div
+        className={cn(
+          "hidden lg:fixed lg:inset-y-0 lg:z-30 lg:flex",
+          collapsed ? "lg:w-[72px]" : "lg:w-[260px]",
+        )}
+      >
         {content}
       </div>
       {open ? (

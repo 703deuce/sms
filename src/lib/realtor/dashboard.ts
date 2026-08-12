@@ -52,8 +52,11 @@ export async function loadRealtorLeads(workspaceId: string): Promise<RealtorLead
   const prisma = getPrisma();
   const [contacts, calls] = await Promise.all([
     prisma.contact.findMany({
-      where: { workspaceId },
-      orderBy: { updatedAt: "desc" },
+      where: {
+        workspaceId,
+        NOT: { phone: { startsWith: "email:" } },
+      },
+      orderBy: { createdAt: "desc" },
       take: 200,
       select: {
         id: true,
@@ -63,7 +66,6 @@ export async function loadRealtorLeads(workspaceId: string): Promise<RealtorLead
         email: true,
         consentSource: true,
         createdAt: true,
-        updatedAt: true,
       },
     }),
     prisma.voiceCall.findMany({
@@ -104,7 +106,7 @@ export async function loadRealtorLeads(workspaceId: string): Promise<RealtorLead
       source: c.consentSource || String(meta.leadSource || "Direct"),
       intent: reState.primaryIntent ? String(reState.primaryIntent) : undefined,
       addedAt: c.createdAt.toISOString(),
-      lastActivityAt: (call?.endedAt || call?.startedAt || c.updatedAt).toISOString(),
+      lastActivityAt: (call?.endedAt || call?.startedAt || c.createdAt).toISOString(),
       needsAttention: Boolean(meta.follow_up_required) || reState.leadStatus === "message_taken",
       collectedFields: collected,
     };
@@ -349,7 +351,7 @@ export async function loadRealtorDashboard(workspaceId: string, userName?: strin
     loadRealtorAmyActivity(workspaceId),
     getPrisma().phoneNumber.findFirst({
       where: { workspaceId },
-      orderBy: { createdAt: "asc" },
+      orderBy: { e164: "asc" },
       select: { e164: true },
     }),
     getPrisma().voiceAgent.findFirst({
@@ -393,11 +395,17 @@ export async function loadRealtorDashboard(workspaceId: string, userName?: strin
   const qualCount = qualified.length;
   const apptCount = leads.filter((l) => l.status === "appointment").length;
 
-  const callStats = await getPrisma().voiceCall.aggregate({
+  const recentCalls = await getPrisma().voiceCall.findMany({
     where: { workspaceId, startedAt: { gte: since } },
-    _count: { id: true },
-    _avg: { durationSeconds: true },
+    select: { durationSeconds: true },
   });
+  const callStats = {
+    count: recentCalls.length,
+    avgDuration:
+      recentCalls.length
+        ? recentCalls.reduce((sum, c) => sum + (c.durationSeconds || 0), 0) / recentCalls.length
+        : 0,
+  };
 
   const recentAudits = await getPrisma().auditLog.findMany({
     where: { workspaceId, event: { startsWith: "voice.real_estate" } },
@@ -454,8 +462,8 @@ export async function loadRealtorDashboard(workspaceId: string, userName?: strin
       appointments: apptCount,
     },
     aiPerformance: {
-      totalCalls: callStats._count.id,
-      avgDurationSec: Math.round(callStats._avg.durationSeconds || 0),
+      totalCalls: callStats.count,
+      avgDurationSec: Math.round(callStats.avgDuration),
       qualificationRate:
         workedCount > 0 ? Math.round((qualCount / workedCount) * 100) : 0,
       appointmentRate:

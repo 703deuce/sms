@@ -4,7 +4,7 @@ import { getActiveWorkspaceId, getSession } from "@/lib/auth";
 import { loadOutcomeInstances } from "@/lib/outcomes/instances";
 import { isRealtorWorkspace } from "@/lib/realtor/workspace-config";
 import { getMaintenanceState } from "@/lib/platform-flags";
-import { loadShellData } from "@/lib/workspace-data";
+import { loadShellData, loadWorkspace } from "@/lib/workspace-data";
 import { redirect } from "next/navigation";
 
 export default async function AppLayout({
@@ -25,18 +25,25 @@ export default async function AppLayout({
   }
 
   const workspaceId = await getActiveWorkspaceId();
-  const [shell, outcomeInstances, realtorMode] = await Promise.all([
+  const [shell, outcomeInstances, realtorMode, workspaceRow] = await Promise.all([
     loadShellData(session.userId, workspaceId),
     loadOutcomeInstances(workspaceId),
     isRealtorWorkspace(workspaceId),
+    loadWorkspace(workspaceId),
   ]);
+  const workspaceName =
+    (workspaceRow as { displayName?: string | null; name?: string } | null)?.displayName ||
+    workspaceRow?.name ||
+    "Workspace";
 
   return (
     <>
     <ServiceWorkerRegister />
     <AppShell
       userName={session.name}
+      isAdmin={session.isAdmin}
       workspaceId={workspaceId}
+      workspaceName={workspaceName}
       workspaces={shell.workspaces}
       phoneNumbers={shell.phoneNumbers}
       metrics={shell.metrics}

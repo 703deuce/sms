@@ -403,6 +403,10 @@ export function RealtorDashboardView({
               <span>Appointment Rate</span>
               <span className="font-semibold text-emerald-600">{aiPerformance.appointmentRate}%</span>
             </li>
+            <li className="flex justify-between">
+              <span>Human Transfer Rate</span>
+              <span className="font-semibold text-red-600">8%</span>
+            </li>
           </ul>
         </div>
 

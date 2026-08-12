@@ -19,19 +19,23 @@ function countByView(leads: Awaited<ReturnType<typeof loadRealtorLeads>>) {
 export default async function RealtorLeadsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string; q?: string; status?: string }>;
+  searchParams: Promise<{ view?: string; q?: string; status?: string; page?: string; perPage?: string }>;
 }) {
   const { workspaceId } = await requireRealtorOnboardingComplete();
   const params = await searchParams;
   const view = params.view || "all";
+  const page = Math.max(1, Number(params.page) || 1);
+  const perPage = Math.min(100, Math.max(10, Number(params.perPage) || 25));
   const allLeads = await loadRealtorLeads(workspaceId);
   const counts = countByView(allLeads);
   const status = params.status as RealtorLeadStatus | undefined;
-  const leads = filterRealtorLeads(allLeads, {
+  const filtered = filterRealtorLeads(allLeads, {
     view,
     q: params.q,
     status,
   });
+  const total = filtered.length;
+  const leads = filtered.slice((page - 1) * perPage, page * perPage);
 
   return (
     <div className="px-2 py-4 lg:px-4">
@@ -40,7 +44,9 @@ export default async function RealtorLeadsPage({
         activeView={view}
         searchQuery={params.q}
         counts={counts}
-        total={allLeads.length}
+        total={total}
+        page={page}
+        perPage={perPage}
       />
     </div>
   );

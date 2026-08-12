@@ -1,16 +1,22 @@
 import { StatusChip } from "@/components/ui/status-chip";
+import { LeadDetailTabs } from "@/components/realtor/lead-detail-tabs";
 import type { RealtorLeadStatus } from "@/lib/realtor/types";
 import { formatPhone } from "@/lib/utils";
 import {
+  Calendar,
   Check,
   ChevronRight,
   Mail,
   MapPin,
+  MessageSquare,
   MoreHorizontal,
   Phone,
   Sparkles,
+  Star,
+  Zap,
 } from "lucide-react";
 import Link from "next/link";
+import { Suspense } from "react";
 
 export type LeadTimelineEvent = {
   id: string;
@@ -47,6 +53,7 @@ export function RealtorLeadDetailView({
   timeline,
   needsAction,
   tags,
+  activeTab = "overview",
 }: {
   leadId: string;
   name: string;
@@ -63,6 +70,7 @@ export function RealtorLeadDetailView({
   timeline: LeadTimelineEvent[];
   needsAction?: { title: string; detail: string };
   tags: string[];
+  activeTab?: string;
 }) {
   const scoreLabel = leadScore >= 85 ? "Excellent" : leadScore >= 70 ? "Good" : "Fair";
 
@@ -79,8 +87,8 @@ export function RealtorLeadDetailView({
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-[28px] font-bold text-[#111827]">{name}</h1>
             {leadScore >= 80 ? (
-              <span className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-bold text-red-700">
-                Hot Lead
+              <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-bold text-red-700">
+                🔥 Hot Lead
               </span>
             ) : null}
             <StatusChip status={status} />
@@ -125,19 +133,37 @@ export function RealtorLeadDetailView({
         </div>
       </div>
 
-      <div className="flex gap-6 border-b border-[#e5e7eb] text-[14px]">
-        {["Overview", "Activity", "Conversations", "Appointments", "Notes"].map((tab, i) => (
-          <button
-            key={tab}
-            type="button"
-            className={cnTab(i === 0)}
-          >
-            {tab}
-            {tab === "Appointments" && appointments.length ? ` (${appointments.length})` : ""}
-          </button>
-        ))}
-      </div>
+      <Suspense fallback={<div className="h-9 border-b border-[#e5e7eb]" />}>
+        <LeadDetailTabs
+          activityCount={timeline.length}
+          appointmentCount={appointments.length}
+          notesCount={2}
+          tasksCount={needsAction ? 3 : 0}
+        />
+      </Suspense>
 
+      {activeTab !== "overview" ? (
+        <div className="realtor-card p-8 text-center text-[14px] text-[#6b7280]">
+          {activeTab === "activity" ? (
+            <ActivityPanel timeline={timeline} />
+          ) : activeTab === "appointments" ? (
+            <div className="space-y-3 text-left">
+              {appointments.map((a) => (
+                <div key={a.id} className="rounded-lg border border-[#e5e7eb] p-4">
+                  <p className="font-semibold">{a.serviceName}</p>
+                  <p className="text-[13px] text-[#6b7280]">
+                    {new Date(a.startsAt).toLocaleString()}
+                  </p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p>
+              Open this section from the lead hub — content for &ldquo;{activeTab}&rdquo; loads here.
+            </p>
+          )}
+        </div>
+      ) : (
       <div className="grid gap-6 lg:grid-cols-12">
         <div className="space-y-4 lg:col-span-3">
           <div className="realtor-card p-4">
@@ -212,7 +238,7 @@ export function RealtorLeadDetailView({
               {timeline.map((event) => (
                 <li key={event.id} className="flex gap-3 border-b border-[#f3f4f6] pb-4 last:border-0">
                   <span className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#eff6ff] text-[#2563eb]">
-                    <Sparkles className="h-4 w-4" />
+                    <TimelineIcon kind={event.kind} />
                   </span>
                   <div>
                     <p className="text-[11px] text-[#9ca3af]">
@@ -251,11 +277,29 @@ export function RealtorLeadDetailView({
           {needsAction ? (
             <div className="realtor-card p-4">
               <h3 className="font-semibold text-[#111827]">Next Best Actions</h3>
-              <p className="mt-2 text-[13px] font-medium">{needsAction.title}</p>
-              <p className="text-[12px] text-[#6b7280]">{needsAction.detail}</p>
-              <Link href={`/phone?contact=${leadId}`} className="mt-3 realtor-btn-primary inline-flex text-[13px]">
-                Call {name.split(" ")[0]}
-              </Link>
+              <ol className="mt-3 space-y-4 text-[13px]">
+                <li>
+                  <p className="font-medium text-[#111827]">Personal call</p>
+                  <Link
+                    href={`/phone?contact=${leadId}`}
+                    className="mt-2 inline-flex realtor-btn-primary text-[12px]"
+                  >
+                    Call {name.split(" ")[0]}
+                  </Link>
+                </li>
+                <li>
+                  <p className="font-medium text-[#111827]">Send pre-approval resources</p>
+                  <Link href={`/send?contact=${leadId}`} className="mt-2 realtor-btn-outline inline-flex text-[12px]">
+                    Send Resources
+                  </Link>
+                </li>
+                <li>
+                  <p className="font-medium text-[#111827]">Prepare property suggestions</p>
+                  <Link href="/realtor/leads" className="mt-2 realtor-btn-outline inline-flex text-[12px]">
+                    View Listings
+                  </Link>
+                </li>
+              </ol>
             </div>
           ) : null}
 
@@ -278,12 +322,43 @@ export function RealtorLeadDetailView({
           </div>
         </div>
       </div>
+      )}
     </div>
   );
 }
 
-function cnTab(active: boolean): string {
-  return active
-    ? "border-b-2 border-[#2563eb] pb-2 font-semibold text-[#2563eb]"
-    : "pb-2 text-[#6b7280] hover:text-[#111827]";
+function TimelineIcon({ kind }: { kind: LeadTimelineEvent["kind"] }) {
+  switch (kind) {
+    case "call":
+      return <Phone className="h-4 w-4" />;
+    case "sms":
+      return <MessageSquare className="h-4 w-4" />;
+    case "appointment":
+      return <Calendar className="h-4 w-4" />;
+    case "ai":
+      return <Star className="h-4 w-4" />;
+    default:
+      return <Zap className="h-4 w-4" />;
+  }
+}
+
+function ActivityPanel({ timeline }: { timeline: LeadTimelineEvent[] }) {
+  return (
+    <ul className="space-y-4 text-left">
+      {timeline.map((event) => (
+        <li key={event.id} className="flex gap-3 border-b border-[#f3f4f6] pb-4 last:border-0">
+          <span className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#eff6ff] text-[#2563eb]">
+            <TimelineIcon kind={event.kind} />
+          </span>
+          <div>
+            <p className="text-[11px] text-[#9ca3af]">{new Date(event.at).toLocaleString()}</p>
+            <p className="font-semibold text-[#111827]">{event.title}</p>
+            {event.detail ? (
+              <p className="mt-1 text-[13px] text-[#6b7280]">{event.detail}</p>
+            ) : null}
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
 }

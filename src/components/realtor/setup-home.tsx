@@ -152,7 +152,19 @@ export function SetupHomeView({
 
         <div className="space-y-4">
           <div className="realtor-card overflow-hidden p-0">
-            <div className="h-28 bg-gradient-to-br from-[#dbeafe] to-[#eff6ff]" />
+            <div className="flex h-28 items-end justify-center bg-gradient-to-br from-[#dbeafe] to-[#eff6ff] px-4 pb-2">
+              <svg viewBox="0 0 120 64" className="h-20 w-auto text-[#2563eb]" aria-hidden>
+                <path
+                  fill="currentColor"
+                  opacity="0.25"
+                  d="M60 8 L95 32 V52 H25 V32 Z"
+                />
+                <path fill="currentColor" d="M60 14 L88 34 V48 H32 V34 Z" />
+                <rect x="52" y="36" width="16" height="12" fill="#eff6ff" />
+                <circle cx="24" cy="48" r="8" fill="currentColor" opacity="0.35" />
+                <circle cx="96" cy="44" r="10" fill="currentColor" opacity="0.2" />
+              </svg>
+            </div>
             <div className="px-4 pb-4 pt-3">
               <h3 className="font-semibold text-[#111827]">What is Amy?</h3>
               <p className="mt-2 text-[13px] leading-relaxed text-[#6b7280]">

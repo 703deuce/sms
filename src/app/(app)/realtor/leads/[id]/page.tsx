@@ -1,5 +1,5 @@
 import { RealtorLeadDetailView } from "@/components/realtor/lead-detail";
-import { getActiveWorkspaceId } from "@/lib/auth";
+import { getActiveWorkspaceId, getSession } from "@/lib/auth";
 import { getPrisma } from "@/lib/db";
 import { mapLeadStatusFromMeta } from "@/lib/realtor/lead-detail-data";
 import { requireRealtorOnboardingComplete } from "@/lib/realtor/layout-guards";
@@ -30,12 +30,16 @@ function computeLeadScore(
 
 export default async function RealtorLeadDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ tab?: string }>;
 }) {
   await requireRealtorOnboardingComplete();
+  const session = await getSession();
   const workspaceId = await getActiveWorkspaceId();
   const { id } = await params;
+  const { tab } = await searchParams;
   const prisma = getPrisma();
   const contact = await prisma.contact.findFirst({
     where: { id, workspaceId },
@@ -135,7 +139,7 @@ export default async function RealtorLeadDetailPage({
         source={contact.consentSource || undefined}
         phone={contact.phone}
         email={contact.email}
-        assignedTo="Sarah Johnson"
+        assignedTo={session?.name || "Unassigned"}
         createdAt={contact.createdAt.toISOString()}
         leadScore={computeLeadScore(status, fields, needsAttention)}
         profileFields={profileFields}
@@ -147,6 +151,7 @@ export default async function RealtorLeadDetailPage({
         timeline={timeline}
         needsAction={needsAction}
         tags={tags}
+        activeTab={tab || "overview"}
       />
     </div>
   );
