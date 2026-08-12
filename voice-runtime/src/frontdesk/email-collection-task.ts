@@ -4,6 +4,9 @@ import type { AgentSession } from "@livekit/agents";
 import { isValidEmail, normalizeSpokenEmail } from "./email-utils";
 import type { FrontDeskUserData } from "./userdata";
 import { agentTaskSuperOptions, nestedTaskOptionsFromSession } from "../tasks/task-context";
+import { POST_EMAIL_BOOKING_FILLER } from "../booking-completion-messages";
+import { speakBeforeTaskHandoff } from "../task-async-work-bridge";
+import { deliverScriptedSpeech } from "../outbound/scripted-speech";
 import {
   markFirstReplyRequested,
   markTaskExitFinished,
@@ -50,13 +53,16 @@ export class EmailCollectionTask extends voice.AgentTask<EmailCollectionResult> 
                   taskId: "email_collection",
                   taskType: "EmailCollectionTask",
                 });
+                await speakBeforeTaskHandoff(this.sessionRef, POST_EMAIL_BOOKING_FILLER);
                 this.complete({ email: normalized, declined: false });
                 markTaskExitFinished({
                   callId: this.sessionRef.userData.callId,
                   taskId: "email_collection",
                   taskType: "EmailCollectionTask",
                 });
-                return "Email saved.";
+                return (
+                  "Email saved. Calendar booking is in progress — do not speak or add filler."
+                );
               },
             }),
             llm.tool({
@@ -95,14 +101,15 @@ export class EmailCollectionTask extends voice.AgentTask<EmailCollectionResult> 
       taskType: "EmailCollectionTask",
     });
 
-    await this.session.generateReply({
-      instructions:
-        "Ask the caller to say their email address out loud for the calendar invite. " +
-        "Keep it brief and natural.",
-      toolChoice: "none",
+    await deliverScriptedSpeech(this.sessionRef, EMAIL_COLLECTION_PROMPT, {
+      allowInterruptions: true,
+      addToChatCtx: true,
     });
   }
 }
+
+const EMAIL_COLLECTION_PROMPT =
+  "What's the best email for your calendar invite? Please say it out loud.";
 
 export async function runEmailCollectionTask(
   session: AgentSession<FrontDeskUserData>,

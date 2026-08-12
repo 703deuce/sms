@@ -49,6 +49,8 @@ export type FrontDeskUserData = {
   bookingConfirmationSmsSent?: boolean;
   /** True while schedule_appointment is writing to Calendly. */
   bookingInProgress?: boolean;
+  /** speakBeforeTaskHandoff delivered — parent runAsyncWorkWithBridge skips duplicate line. */
+  asyncWorkBridgeDelivered?: boolean;
   /** Brief ack for the next intake field task onEnter (non-interactive). */
   intakeTransitionPhrase?: string;
   /** Instrumentation for task boundary first-audio metrics. */

@@ -5,6 +5,7 @@ import { getPrisma } from "@/lib/db";
 import type { FrontDeskUserData } from "./userdata";
 import { markBookingCancelled } from "./userdata";
 import { withLiveKitToolTelemetry } from "../livekit-tool-telemetry";
+import { runAsyncWorkWithBridge } from "../task-async-work-bridge";
 import {
   cancelCalendlyEventResilient,
   formatBookedTimeLabel,
@@ -46,8 +47,6 @@ export function buildFrontDeskCancelAppointmentTool() {
         return "Ask the caller to confirm before cancelling.";
       }
 
-      await speakBookingLine(session, POST_CANCEL_FILLER);
-
       return withLiveKitToolTelemetry(
         ud,
         "cancel_appointment",
@@ -57,43 +56,45 @@ export function buildFrontDeskCancelAppointmentTool() {
           const when = formatBookedTimeLabel(appointment.startsAt, ud.timezone);
           const fromThisCall = appointment.callId === ud.callId;
 
-          const eventUri = externalEventUri(appointment.externalId);
-          if (eventUri) {
-            try {
-              await cancelCalendlyEventResilient({
-                workspaceId: ud.workspaceId,
-                eventUri,
-                reason: "Canceled by caller on phone",
-              });
-            } catch (err) {
-              console.warn(
-                JSON.stringify({
-                  source: "frontdesk-cancel",
-                  event: "calendly_cancel_failed",
-                  callId: ud.callId,
-                  appointmentId: appointment.id,
-                  error: err instanceof Error ? err.message : String(err),
-                }),
-              );
-              throw new llm.ToolError(bookingFailureReason(err));
+          await runAsyncWorkWithBridge(session, POST_CANCEL_FILLER, async () => {
+            const eventUri = externalEventUri(appointment.externalId);
+            if (eventUri) {
+              try {
+                await cancelCalendlyEventResilient({
+                  workspaceId: ud.workspaceId,
+                  eventUri,
+                  reason: "Canceled by caller on phone",
+                });
+              } catch (err) {
+                console.warn(
+                  JSON.stringify({
+                    source: "frontdesk-cancel",
+                    event: "calendly_cancel_failed",
+                    callId: ud.callId,
+                    appointmentId: appointment.id,
+                    error: err instanceof Error ? err.message : String(err),
+                  }),
+                );
+                throw new llm.ToolError(bookingFailureReason(err));
+              }
             }
-          }
 
-          const prisma = getPrisma();
-          await prisma.voiceAppointment.update({
-            where: { id: appointment.id },
-            data: { status: "cancelled" },
+            const prisma = getPrisma();
+            await prisma.voiceAppointment.update({
+              where: { id: appointment.id },
+              data: { status: "cancelled" },
+            });
+
+            if (fromThisCall) {
+              markBookingCancelled(ud);
+              await prisma.voiceCall
+                .update({
+                  where: { id: ud.callId },
+                  data: { appointmentBooked: false, outcome: "appointment_cancelled" },
+                })
+                .catch(() => undefined);
+            }
           });
-
-          if (fromThisCall) {
-            markBookingCancelled(ud);
-            await prisma.voiceCall
-              .update({
-                where: { id: ud.callId },
-                data: { appointmentBooked: false, outcome: "appointment_cancelled" },
-              })
-              .catch(() => undefined);
-          }
 
           const line = `Your appointment for ${when} has been cancelled.`;
           await speakBookingLine(session, line);

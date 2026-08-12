@@ -1,6 +1,5 @@
-import { getPrisma } from "@/lib/db";
 import type { AgentSession } from "@livekit/agents";
-import { safeInterruptSession } from "../session-utils";
+import { getPrisma } from "@/lib/db";
 import type { AvailableSlot, BookedAppointment } from "./calendly-calendar";
 import { SlotUnavailableError } from "./calendly-calendar";
 import { isBookingConfirmed, markBookingConfirmed, type FrontDeskUserData } from "./userdata";
@@ -110,8 +109,6 @@ export async function scheduleAppointmentResilient(input: {
     markBookedOnUserData(existing);
     return existing;
   }
-
-  await safeInterruptSession(session);
 
   let lastError: unknown;
   const maxAttempts = 1 + CALENDLY_RATE_LIMIT_RETRY_DELAYS_MS.length;

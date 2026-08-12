@@ -25,8 +25,10 @@ import {
   buildBookingCompleteToolResultFallback,
   buildBookingFailureLine,
   buildBookingSuccessLine,
+  POST_EMAIL_BOOKING_FILLER,
 } from "../booking-completion-messages";
 import { bookingFailureReason } from "../booking-error";
+import { runAsyncWorkWithBridge } from "../task-async-work-bridge";
 import { markBookingConfirmed, type FrontDeskUserData } from "./userdata";
 import { sendBookingSmsAsync } from "./booking-sms";
 import { speakBookingLine } from "./booking-speech";
@@ -90,14 +92,19 @@ export function buildFrontDeskRescheduleAppointmentTool(
             const oldEventUri = externalEventUri(appointment.externalId);
             const when = formatBookedTimeLabel(appointment.startsAt, ud.timezone);
 
-            const rescheduled = await rescheduleAppointmentResilient({
+            const rescheduled = await runAsyncWorkWithBridge(
               session,
-              appointmentId: appointment.id,
-              oldEventUri,
-              slot,
-              attendeeEmail,
-              existingMetadata: appointment.metadata,
-            });
+              POST_EMAIL_BOOKING_FILLER,
+              () =>
+                rescheduleAppointmentResilient({
+                  session,
+                  appointmentId: appointment.id,
+                  oldEventUri,
+                  slot,
+                  attendeeEmail,
+                  existingMetadata: appointment.metadata,
+                }),
+            );
 
             const local = formatBookedTimeLabel(rescheduled.slot.startTime, ud.timezone);
             markBookingConfirmed(ud, {

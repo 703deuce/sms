@@ -71,7 +71,7 @@ type TurnState = {
   breakdownEmitted: boolean;
 };
 
-function maybeMarkTaskFirstAudio(session: voice.AgentSession<unknown>): void {
+function maybeMarkTaskFirstAudio(session: voice.AgentSession<any>): void {
   const ud = session.userData as FrontDeskUserData | undefined;
   const inst = ud?.activeTaskInstrumentation;
   if (!ud?.callId || !inst || inst.firstAudioLogged) return;

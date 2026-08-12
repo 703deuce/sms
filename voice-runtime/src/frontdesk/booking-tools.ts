@@ -21,8 +21,10 @@ import {
   buildBookingCompleteToolResultFallback,
   buildBookingFailureLine,
   buildBookingSuccessLine,
+  POST_EMAIL_BOOKING_FILLER,
 } from "../booking-completion-messages";
 import { bookingFailureReason } from "../booking-error";
+import { runAsyncWorkWithBridge } from "../task-async-work-bridge";
 import { buildFrontDeskBusinessAnswerTool } from "./knowledge-tool";
 import { buildFrontDeskCancelAppointmentTool } from "./cancel-appointment-tool";
 import { buildFrontDeskTransferTool } from "./transfer-tool";
@@ -177,11 +179,16 @@ export function buildFrontDeskBookingTools(input: {
           { slot_id },
           async () => {
             try {
-              const booked = await scheduleAppointmentResilient({
+              const booked = await runAsyncWorkWithBridge(
                 session,
-                slot,
-                attendeeEmail: confirmedEmail,
-              });
+                POST_EMAIL_BOOKING_FILLER,
+                () =>
+                  scheduleAppointmentResilient({
+                    session,
+                    slot,
+                    attendeeEmail: confirmedEmail,
+                  }),
+              );
               const local = formatBookedTimeLabel(booked.slot.startTime, userData.timezone);
               markBookingConfirmed(userData, {
                 slotId: slot_id,

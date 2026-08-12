@@ -22,16 +22,44 @@ const bookingToolsSource = fs.readFileSync(
   path.join(process.cwd(), "voice-runtime/src/frontdesk/booking-tools.ts"),
   "utf8",
 );
+const emailTaskSource = fs.readFileSync(
+  path.join(process.cwd(), "voice-runtime/src/frontdesk/email-collection-task.ts"),
+  "utf8",
+);
+const bridgeSource = fs.readFileSync(
+  path.join(process.cwd(), "voice-runtime/src/task-async-work-bridge.ts"),
+  "utf8",
+);
 const amySource = fs.readFileSync(
   path.join(process.cwd(), "voice-runtime/src/amy-receptionist-agent.ts"),
   "utf8",
 );
 
-// --- 1. Booking writes without a separate pre-write filler line (reduces double-speech) ---
+// --- 1. Async work bridge during Calendly writes (LiveKit say-before-transfer pattern) ---
 
 assert.ok(
-  !bookingToolsSource.includes("POST_EMAIL_BOOKING_FILLER"),
-  "booking flow must not use separate post-email filler speech",
+  bridgeSource.includes("runAsyncWorkWithBridge"),
+  "generic async-work bridge utility exists",
+);
+assert.ok(
+  bridgeSource.includes("speakBeforeTaskHandoff"),
+  "AgentTask handoff bridge exists",
+);
+assert.ok(
+  bookingToolsSource.includes("runAsyncWorkWithBridge"),
+  "schedule_appointment uses async-work bridge",
+);
+assert.ok(
+  bookingToolsSource.includes("POST_EMAIL_BOOKING_FILLER"),
+  "booking bridge line is passed to runAsyncWorkWithBridge",
+);
+assert.ok(
+  emailTaskSource.includes("speakBeforeTaskHandoff"),
+  "email task speaks bridge before handoff to parent",
+);
+assert.ok(
+  emailTaskSource.includes("deliverScriptedSpeech"),
+  "email onEnter uses scripted speech instead of generateReply",
 );
 
 assert.ok(
