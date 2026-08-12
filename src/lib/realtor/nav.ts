@@ -28,6 +28,14 @@ export const REALTOR_PIPELINE_COLUMNS: Array<{
   { status: "closed", label: "Closed" },
 ];
 
+const CALLS_CHILDREN = [
+  { label: "All Calls", href: "/realtor/calls" },
+  { label: "Human Calls", href: "/realtor/calls?tab=human" },
+  { label: "Voicemails", href: "/realtor/calls/voicemails" },
+  { label: "Transcripts", href: "/realtor/calls/transcripts" },
+  { label: "Recordings", href: "/realtor/calls/recordings" },
+];
+
 const LEADS_CHILDREN = [
   { label: "All Leads", href: "/realtor/leads" },
   { label: "Pipeline", href: "/realtor/leads/pipeline" },
@@ -44,7 +52,7 @@ export function buildRealtorMobileNav(): NavItem[] {
     { label: "Dashboard", href: "/realtor/dashboard", icon: LayoutDashboard },
     { label: "Leads", href: "/realtor/leads", icon: Users },
     { label: "Inbox", href: "/inbox", icon: Inbox },
-    { label: "Calls", href: "/phone/calls", icon: PhoneCall },
+    { label: "Calls", href: "/realtor/calls", icon: PhoneCall },
   ];
 }
 
@@ -63,6 +71,10 @@ const REALTOR_PAGE_TITLES: Record<string, string> = {
   "/realtor/needs-attention": "Needs Attention",
   "/realtor/test": "Test Amy",
   "/realtor/messages": "All Conversations",
+  "/realtor/calls": "All Calls",
+  "/realtor/calls/voicemails": "Voicemails",
+  "/realtor/calls/transcripts": "Transcripts",
+  "/realtor/calls/recordings": "Recordings",
   "/realtor/appointments": "Appointments",
   "/realtor/appointments/types": "Appointment Types",
   "/realtor/leads/sources": "Lead Sources",
@@ -96,7 +108,12 @@ export function buildRealtorNav(inboxBadge?: number): NavItem[] {
       icon: Inbox,
       badge: inboxBadge && inboxBadge > 0 ? inboxBadge : undefined,
     },
-    { label: "Calls", href: "/phone/calls", icon: PhoneCall },
+    {
+      label: "Calls",
+      href: "/realtor/calls",
+      icon: PhoneCall,
+      children: CALLS_CHILDREN,
+    },
     { label: "Messages", href: "/realtor/messages", icon: MessageSquare },
     { label: "AI Agents", href: "/realtor/agents/front-desk", icon: Bot },
     { label: "Automations", href: "/automations", icon: Workflow },

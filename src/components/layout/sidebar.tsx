@@ -31,6 +31,9 @@ function isNavHrefActive(pathname: string, search: string, href: string): boolea
       if (want.has("channel")) {
         return have.get("channel") === want.get("channel");
       }
+      if (want.has("tab")) {
+        return have.get("tab") === want.get("tab");
+      }
       let matchedQuery = true;
       let sawWantedKey = false;
       for (const [key, value] of want) {
@@ -48,10 +51,11 @@ function isNavHrefActive(pathname: string, search: string, href: string): boolea
   if (pathname === pathPart) {
     if (have.has("type")) return false;
     if (have.has("channel")) return false;
+    if (have.has("tab") && !queryPart) return false;
     return true;
   }
 
-  if (have.has("channel")) return false;
+  if (have.has("tab") && !queryPart) return false;
   return pathname.startsWith(`${pathPart}/`);
 }
 
