@@ -49,6 +49,10 @@ export type FrontDeskUserData = {
   bookingConfirmationSmsSent?: boolean;
   /** True while schedule_appointment is writing to Calendly. */
   bookingInProgress?: boolean;
+  /** IntakeSequenceCollectionTask is running inside a tool — blocks duplicate collect_required_fields. */
+  intakeSequenceActive?: boolean;
+  /** Background CRM prefetch started for caller ANI. */
+  callerContactPrefetched?: boolean;
   /** speakBeforeTaskHandoff delivered — parent runAsyncWorkWithBridge skips duplicate line. */
   asyncWorkBridgeDelivered?: boolean;
   /** Brief ack for the next intake field task onEnter (non-interactive). */

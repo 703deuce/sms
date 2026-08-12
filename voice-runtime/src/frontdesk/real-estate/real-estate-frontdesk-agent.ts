@@ -13,6 +13,7 @@ import {
   buildRealEstateLookupContactTool,
   buildRealEstateTakeMessageTool,
 } from "./re-tools";
+import { prefetchCallerContactFromAni } from "./intake-lifecycle";
 import { withHybridStreamingAgentOptions } from "../../hybrid-streaming-tts-node";
 
 /**
@@ -64,6 +65,7 @@ export function createRealEstateFrontDeskAgent(input: {
       if (!ud.callState) {
         ud.callState = createInitialCallState();
       }
+      prefetchCallerContactFromAni(session);
 
       const hour = ud.cal.now().getHours();
       const timeOfDay = hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening";

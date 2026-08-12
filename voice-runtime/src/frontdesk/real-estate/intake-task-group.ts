@@ -6,7 +6,10 @@ import {
   missingIntakeFields,
   missingRequiredFields,
 } from "@/lib/voice/real-estate/fields";
-import { backfillIntakeFromConversation } from "@/lib/voice/real-estate/intake-memory";
+import {
+  applyHeuristicIntakeBackfill,
+  backfillIntakeFromConversation,
+} from "@/lib/voice/real-estate/intake-memory";
 import {
   persistCallState,
   recordCollectedField,
@@ -72,12 +75,13 @@ export async function runRealEstateIntakeTaskGroup(input: {
   const intents = activeIntents(userData);
 
   const allFields = fieldsForIntents(intents);
-  userData.callState = await backfillIntakeFromConversation({
+  // Fast heuristic only before first intake speech — full LLM backfill runs after (was blocking ~1–3s).
+  userData.callState = applyHeuristicIntakeBackfill({
     state: userData.callState,
     chatCtx: input.session.chatCtx,
     candidateFields: allFields,
   });
-  await syncIntakeSideEffects(userData);
+  queueIntakeSideEffects(userData);
 
   const toCollect =
     input.fields ||
@@ -140,12 +144,20 @@ export async function runRealEstateIntakeTaskGroup(input: {
 
   await syncIntakeSideEffects(userData);
 
-  userData.callState = await backfillIntakeFromConversation({
-    state: userData.callState,
-    chatCtx: input.session.chatCtx,
-    candidateFields: allFields,
-  });
-  await syncIntakeSideEffects(userData);
+  // Full LLM extraction after intake spoke — does not delay first field question.
+  void (async () => {
+    if (!userData.callState) return;
+    try {
+      userData.callState = await backfillIntakeFromConversation({
+        state: userData.callState,
+        chatCtx: input.session.chatCtx,
+        candidateFields: allFields,
+      });
+      await syncIntakeSideEffects(userData);
+    } catch {
+      // intake already progressed; backfill is best-effort
+    }
+  })();
 
   const complete = isIntakeCompleteForIntents(intents, userData);
   if (complete && userData.callState) {

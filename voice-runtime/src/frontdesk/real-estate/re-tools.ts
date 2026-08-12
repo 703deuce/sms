@@ -7,11 +7,10 @@ import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import {
   applyPrimaryIntent,
   applySecondaryIntent,
-  buildMissingFieldsSummary,
   markMessageTaken,
   persistCallState,
 } from "@/lib/voice/real-estate/state";
-import { isIntentEnabled, normalizeIntent } from "@/lib/voice/real-estate/fields";
+import { isIntentEnabled, missingIntakeFields, normalizeIntent } from "@/lib/voice/real-estate/fields";
 import { notifyRealEstateStaff } from "@/lib/voice/real-estate/notifications";
 import { syncRealEstateLeadToCrm } from "@/lib/voice/real-estate/crm-sync";
 import { REAL_ESTATE_INTENT_LABELS, type RealEstateIntent } from "@/lib/voice/real-estate/types";
@@ -19,9 +18,14 @@ import { parseLocalContactIdFromSafeId } from "@/lib/voice/real-estate/contact-i
 import type { FrontDeskUserData } from "../userdata";
 import { withLiveKitToolTelemetry } from "../../livekit-tool-telemetry";
 import {
-  runRealEstateIntakeTaskGroup,
-  summarizeIntakeFields,
-} from "./intake-task-group";
+  INTAKE_INTENTS,
+  startIntakeSequenceFromTools,
+  TOOL_RESULT_INTAKE_ACTIVE_SILENT,
+  TOOL_RESULT_INTAKE_COMPLETE_SILENT,
+  TOOL_RESULT_LOOKUP_SILENT,
+  TOOL_RESULT_SET_INTENT_SILENT,
+  intakeFieldsPending,
+} from "./intake-lifecycle";
 
 function activeIntents(userData: FrontDeskUserData): RealEstateIntent[] {
   const state = userData.callState;
@@ -78,8 +82,13 @@ export function buildRealEstateIntentTools() {
           ud.callState = applyPrimaryIntent(ud.callState!, intent);
         }
         await syncState(ud);
-        const missing = buildMissingFieldsSummary(ud.callState);
-        return `Intent set to ${REAL_ESTATE_INTENT_LABELS[intent]}. ${missing}`;
+        if (INTAKE_INTENTS.includes(intent) && intakeFieldsPending(ud)) {
+          const { complete } = await startIntakeSequenceFromTools(session);
+          return complete
+            ? TOOL_RESULT_INTAKE_COMPLETE_SILENT
+            : TOOL_RESULT_INTAKE_ACTIVE_SILENT;
+        }
+        return TOOL_RESULT_SET_INTENT_SILENT;
       });
     },
   });
@@ -105,8 +114,13 @@ export function buildRealEstateIntentTools() {
         }
         ud.callState = applySecondaryIntent(ud.callState!, intent);
         await syncState(ud);
-        const missing = buildMissingFieldsSummary(ud.callState);
-        return `Added secondary intent: ${REAL_ESTATE_INTENT_LABELS[intent]}. ${missing}`;
+        if (INTAKE_INTENTS.includes(intent) && intakeFieldsPending(ud)) {
+          const { complete } = await startIntakeSequenceFromTools(session);
+          return complete
+            ? TOOL_RESULT_INTAKE_COMPLETE_SILENT
+            : TOOL_RESULT_INTAKE_ACTIVE_SILENT;
+        }
+        return TOOL_RESULT_SET_INTENT_SILENT;
       });
     },
   });
@@ -128,19 +142,27 @@ export function buildRealEstateCollectRequiredFieldsTool() {
         throw new llm.ToolError("Call state not initialized.");
       }
       return withLiveKitToolTelemetry(ud, "collect_required_fields", {}, async () => {
-        const result = await runRealEstateIntakeTaskGroup({
-          session,
-        });
-        if (result.complete) {
-          return (
-            "INTAKE_COMPLETE_SILENT_HANDOFF: Call list_available_slots immediately. " +
-            "Do not speak a summary, transition line, or intake recap — availability is next."
-          );
+        if (ud.intakeSequenceActive) {
+          return TOOL_RESULT_INTAKE_ACTIVE_SILENT;
         }
-        return (
-          `Intake pass finished. ${summarizeIntakeFields(ud)} ` +
-          "Continue naturally — never tell the caller about backend field routing or wrong-step messages."
-        );
+        if (!intakeFieldsPending(ud)) {
+          const intents = activeIntents(ud);
+          const complete =
+            intents.length > 0 &&
+            !missingIntakeFields(
+              intents,
+              ud.callState!.collectedFields,
+              ud.realEstateCompiled,
+            ).length;
+          return complete
+            ? TOOL_RESULT_INTAKE_COMPLETE_SILENT
+            : TOOL_RESULT_SET_INTENT_SILENT;
+        }
+        const result = await startIntakeSequenceFromTools(session);
+        if (result.complete) {
+          return TOOL_RESULT_INTAKE_COMPLETE_SILENT;
+        }
+        return TOOL_RESULT_INTAKE_ACTIVE_SILENT;
       });
     },
   });
@@ -153,7 +175,16 @@ export function buildRealEstateGetRequiredFieldsTool() {
     parameters: z.object({}),
     execute: async (_args, opts) => {
       const session = opts.ctx.session as AgentSession<FrontDeskUserData>;
-      return summarizeIntakeFields(session.userData);
+      const ud = session.userData;
+      const intents = activeIntents(ud);
+      if (!intents.length) return "Set intent first with set_intent.";
+      const missing = missingIntakeFields(
+        intents,
+        ud.callState?.collectedFields || {},
+        ud.realEstateCompiled,
+      );
+      if (!missing.length) return "All required fields collected.";
+      return `Still missing field ids: ${missing.map((f) => f.field_id).join(", ")}`;
     },
   });
 }
@@ -182,7 +213,7 @@ export function buildRealEstateLookupContactTool() {
         });
 
         if (!result.matches.length) {
-          return result.speak || "No existing contact found. Proceed with intake.";
+          return TOOL_RESULT_LOOKUP_SILENT;
         }
 
         const first = result.matches[0]!;
@@ -211,10 +242,7 @@ export function buildRealEstateLookupContactTool() {
           await syncState(ud);
         }
 
-        return (
-          result.speak ||
-          `Found ${first.displayName}. Use their info when collecting fields — confirm details rather than re-asking.`
-        );
+        return TOOL_RESULT_LOOKUP_SILENT;
       });
     },
   });

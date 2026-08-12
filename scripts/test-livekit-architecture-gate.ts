@@ -197,10 +197,12 @@ check("RE intake uses single IntakeSequenceCollectionTask", () => {
   const taskCtx = readProjectFile("voice-runtime/src/tasks/task-context.ts");
   const intakeMemory = readProjectFile("src/lib/voice/real-estate/intake-memory.ts");
   assert.ok(reTools.includes("collect_required_fields"));
-  assert.ok(reTools.includes("runRealEstateIntakeTaskGroup"));
+  assert.ok(reTools.includes("startIntakeSequenceFromTools"));
+  assert.ok(reTools.includes("TOOL_RESULT_SET_INTENT_SILENT"));
   assert.ok(!reTools.includes('name: "record_collected_field"'));
   assert.ok(intake.includes("runIntakeSequenceCollectionTask"));
   assert.ok(!intake.includes("workflows.TaskGroup"));
+  assert.ok(intake.includes("applyHeuristicIntakeBackfill"));
   assert.ok(intake.includes("backfillIntakeFromConversation"));
   assert.ok(sequenceTask.includes("record_schema_field_value"));
   assert.ok(sequenceTask.includes("speakIntakeTransitionLine"));
