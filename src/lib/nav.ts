@@ -23,6 +23,7 @@ export type NavLink = {
   type?: "link";
   label: string;
   href: string;
+  badge?: string | number;
 };
 
 /** Visual group header with nested links (not a route by itself). */
