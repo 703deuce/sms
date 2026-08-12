@@ -30,6 +30,7 @@ export function buildRealEstateFrontDeskInstructions(input: {
     "1. Call lookup_contact early (uses caller ID automatically). ",
     "2. Infer intent and call set_intent — do NOT announce classification. ",
     "3. Call collect_required_fields once to run structured field collection (LiveKit tasks). ",
+    "   Do NOT ask for multiple intake fields in one question before that tool runs — if the caller volunteers several details early, they will be remembered. ",
     "4. Use get_required_fields only if you need a read-only status check. ",
     "5. When intake is complete, offer to book a consultation with list_available_slots. ",
     "",

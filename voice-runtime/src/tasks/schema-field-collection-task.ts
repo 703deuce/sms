@@ -2,6 +2,7 @@ import { llm, voice } from "@livekit/agents";
 import { z } from "zod";
 import type { AgentSession } from "@livekit/agents";
 import type { RealEstateFieldDefinition } from "@/lib/voice/real-estate/types";
+import { applyHeuristicIntakeBackfill } from "@/lib/voice/real-estate/intake-memory";
 import type { FrontDeskUserData } from "../frontdesk/userdata";
 import { agentTaskSuperOptions, nestedTaskOptionsFromSession } from "./task-context";
 
@@ -92,7 +93,7 @@ export class SchemaFieldCollectionTask extends voice.AgentTask<SchemaFieldCollec
 
     const multiFieldHint =
       pending.length > 0
-        ? "If the caller already mentioned this or other pending intake fields in the same answer, call record_additional_intake_field for each extra detail you can extract, then record_schema_field_value for this field. Do not re-ask for details they already gave. "
+        ? "If the caller already mentioned this or other pending intake fields in the same answer, call record_additional_intake_field for each extra detail you can extract, then record_schema_field_value for this field. Do not re-ask for details they already gave. Map garage/yard/amenities to must_have_features. Map cash/financing/pre-approved to financing_status — never purchase_timeframe. Map when they want to buy to purchase_timeframe only. "
         : "";
 
     super(
@@ -111,7 +112,17 @@ export class SchemaFieldCollectionTask extends voice.AgentTask<SchemaFieldCollec
   }
 
   async onEnter(): Promise<void> {
-    const existing = this.sessionRef.userData.callState?.collectedFields[this.field.field_id]?.trim();
+    const ud = this.sessionRef.userData;
+    if (ud.callState) {
+      const pending = this.handlers.pendingFields?.filter((f) => f.field_id !== this.field.field_id) ?? [];
+      ud.callState = applyHeuristicIntakeBackfill({
+        state: ud.callState,
+        chatCtx: this.sessionRef.chatCtx,
+        candidateFields: [this.field, ...pending],
+      });
+    }
+
+    const existing = ud.callState?.collectedFields[this.field.field_id]?.trim();
     if (existing) {
       this.complete({ fieldId: this.field.field_id, value: existing });
       return;
@@ -121,7 +132,7 @@ export class SchemaFieldCollectionTask extends voice.AgentTask<SchemaFieldCollec
       this.field.collection_instruction?.trim() ||
       `Could I get your ${this.field.label}?`;
     await this.session.generateReply({
-      instructions: `Ask one short question to collect: ${question}`,
+      instructions: `Ask one short question to collect: ${question}. Ask only this one field — do not bundle other intake questions.`,
       toolChoice: "none",
     });
   }

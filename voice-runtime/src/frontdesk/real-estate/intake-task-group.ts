@@ -6,6 +6,7 @@ import {
   isIntakeComplete,
   missingRequiredFields,
 } from "@/lib/voice/real-estate/fields";
+import { backfillIntakeFromConversation } from "@/lib/voice/real-estate/intake-memory";
 import {
   persistCallState,
   recordCollectedField,
@@ -46,6 +47,15 @@ export async function runRealEstateIntakeTaskGroup(input: {
   }
 
   const intents = activeIntents(userData);
+
+  const allFields = fieldsForIntents(intents);
+  userData.callState = await backfillIntakeFromConversation({
+    state: userData.callState,
+    chatCtx: input.session.chatCtx,
+    candidateFields: allFields,
+  });
+  await syncIntakeSideEffects(userData);
+
   const toCollect =
     input.fields ||
     missingRequiredFields(intents, userData.callState.collectedFields);

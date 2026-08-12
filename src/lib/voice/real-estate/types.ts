@@ -39,6 +39,8 @@ export type RealEstateCallState = {
   secondaryIntents: RealEstateIntent[];
   callerType: RealEstateCallerType;
   collectedFields: Record<string, string>;
+  /** Rolling caller utterances for intake backfill (last N per call). */
+  intakeUtterances?: string[];
   contactId?: string;
   contactName?: string;
   leadStatus: RealEstateLeadStatus;

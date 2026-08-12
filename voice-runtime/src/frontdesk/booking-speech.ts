@@ -11,7 +11,7 @@ export async function speakBookingLine<T>(
   text: string,
 ): Promise<void> {
   await deliverScriptedSpeech(session, text, {
-    allowInterruptions: false,
+    allowInterruptions: true,
     addToChatCtx: true,
   });
 }

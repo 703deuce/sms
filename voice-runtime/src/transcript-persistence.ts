@@ -19,13 +19,20 @@ function speakerForRole(role: string): string {
 
 export function attachLiveKitTranscriptPersistence<T>(
   session: voice.AgentSession<T>,
-  input: { workspaceId: string; callId: string },
+  input: {
+    workspaceId: string;
+    callId: string;
+    onUserUtterance?: (session: voice.AgentSession<T>, text: string) => void;
+  },
 ) {
   session.on(AgentSessionEventTypes.ConversationItemAdded, (ev: ConversationItemAddedEvent) => {
     const item = ev.item;
     if (!(item instanceof ChatMessage)) return;
     const text = messageText(item);
     if (!text) return;
+    if (item.role === "user" && input.onUserUtterance) {
+      input.onUserUtterance(session, text);
+    }
     void appendLiveKitTranscriptLine({
       workspaceId: input.workspaceId,
       callId: input.callId,

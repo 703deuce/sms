@@ -5,6 +5,10 @@ export function sendBookingSmsAsync(
   session: AgentSession<FrontDeskUserData>,
   startsAt: Date,
 ): void {
+  const ud = session.userData;
+  if (ud.bookingConfirmationSmsSent) return;
+  ud.bookingConfirmationSmsSent = true;
+
   void import("@/lib/voice/booking-confirmation-sms")
     .then(({ sendVoiceBookingConfirmationSms }) =>
       sendVoiceBookingConfirmationSms({

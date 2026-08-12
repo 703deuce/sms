@@ -45,6 +45,8 @@ export type FrontDeskUserData = {
   bookingComplete?: boolean;
   bookedTimeLabel?: string;
   pendingSlotId?: string;
+  /** Prevents duplicate booking confirmation SMS on retry or reschedule. */
+  bookingConfirmationSmsSent?: boolean;
 };
 
 export function isBookingConfirmed(userData: FrontDeskUserData): boolean {

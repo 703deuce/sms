@@ -9,6 +9,7 @@ import { CalendlyCalendar } from "./frontdesk/calendly-calendar";
 import { createFrontDeskBookingAgent } from "./frontdesk/frontdesk-booking-agent";
 import { createRealEstateFrontDeskAgent } from "./frontdesk/real-estate/real-estate-frontdesk-agent";
 import { isRealEstateFrontDeskProfile } from "@/lib/voice/frontdesk/agent-config";
+import { appendIntakeUtterance } from "@/lib/voice/real-estate/intake-memory";
 import { createInitialCallState } from "@/lib/voice/real-estate/state";
 import { getCompiledFrontDeskFromAdvanced } from "@/lib/voice/real-estate/config";
 import {
@@ -460,6 +461,12 @@ export function attachObservers(input: {
   attachLiveKitTranscriptPersistence(input.session, {
     workspaceId: input.routing.workspaceId,
     callId: input.callId,
+    onUserUtterance: (session, text) => {
+      const ud = session.userData;
+      if (ud.callState) {
+        ud.callState = appendIntakeUtterance(ud.callState, text);
+      }
+    },
   });
 
   input.ctx.addShutdownCallback(async () => {

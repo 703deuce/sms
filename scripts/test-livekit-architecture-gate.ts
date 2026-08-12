@@ -18,6 +18,8 @@ import {
 } from "../src/lib/voice/architecture/compiled-policy";
 import { compileFrontDeskFromProductConfig } from "../src/lib/voice/real-estate/compile/compile-front-desk";
 import { DEFAULT_REALTOR_PRODUCT_CONFIG } from "../src/lib/realtor/types";
+import { TEMPLATE_BUYER_FIELDS } from "../src/lib/voice/real-estate/templates/definitions";
+import { heuristicIntakeExtractions } from "../src/lib/voice/real-estate/intake-memory";
 import {
   buildExplicitDispatchMetadata,
   mergeExplicitDispatchMetadata,
@@ -90,16 +92,44 @@ check("explicit dispatch metadata merges with precedence", () => {
   assert.equal(merged?.publishedVersionId, "ver1");
 });
 
+check("intake memory maps bundled buyer answers", () => {
+  const results = heuristicIntakeExtractions(
+    ["I'm looking in Dale City for a townhouse around 400k and I need a garage"],
+    TEMPLATE_BUYER_FIELDS,
+    {},
+  );
+  const ids = results.map((r) => r.fieldId);
+  assert.ok(ids.includes("target_areas"), `expected target_areas in ${ids.join(",")}`);
+  assert.ok(ids.includes("property_type"), `expected property_type in ${ids.join(",")}`);
+  assert.ok(ids.includes("budget_or_price_range"), `expected budget in ${ids.join(",")}`);
+  assert.ok(ids.includes("must_have_features"), `expected must_have_features in ${ids.join(",")}`);
+});
+
+check("intake memory separates financing from timeframe", () => {
+  const results = heuristicIntakeExtractions(
+    ["I have my own financing and we're hoping to buy ASAP"],
+    TEMPLATE_BUYER_FIELDS,
+    {},
+  );
+  const ids = results.map((r) => r.fieldId);
+  assert.ok(ids.includes("financing_status"), `expected financing_status in ${ids.join(",")}`);
+  assert.ok(ids.includes("purchase_timeframe"), `expected purchase_timeframe in ${ids.join(",")}`);
+});
+
 check("RE intake uses TaskGroup collect_required_fields", () => {
   const reTools = readProjectFile("voice-runtime/src/frontdesk/real-estate/re-tools.ts");
   const intake = readProjectFile("voice-runtime/src/frontdesk/real-estate/intake-task-group.ts");
   const schemaTask = readProjectFile("voice-runtime/src/tasks/schema-field-collection-task.ts");
   const taskCtx = readProjectFile("voice-runtime/src/tasks/task-context.ts");
+  const intakeMemory = readProjectFile("src/lib/voice/real-estate/intake-memory.ts");
   assert.ok(reTools.includes("collect_required_fields"));
   assert.ok(reTools.includes("runRealEstateIntakeTaskGroup"));
   assert.ok(!reTools.includes('name: "record_collected_field"'));
   assert.ok(!intake.includes("updateAgent(group)"), "intake must await group.run() without manual updateAgent");
+  assert.ok(intake.includes("backfillIntakeFromConversation"));
   assert.ok(schemaTask.includes("record_additional_intake_field"));
+  assert.ok(schemaTask.includes("applyHeuristicIntakeBackfill"));
+  assert.ok(intakeMemory.includes("backfillIntakeFromConversation"));
   assert.ok(taskCtx.includes("sessionUsesRealtimeLlm"));
 });
 

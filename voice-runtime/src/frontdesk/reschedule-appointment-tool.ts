@@ -120,8 +120,6 @@ export function buildFrontDeskRescheduleAppointmentTool(
 
             sendBookingSmsAsync(session, rescheduled.slot.startTime);
 
-            sendBookingSmsAsync(session, rescheduled.slot.startTime);
-
             await speakBookingLine(session, buildBookingSuccessLine(local));
 
             return (
