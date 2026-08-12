@@ -11,7 +11,10 @@ export async function requireRealtorOnboardingComplete() {
   const isRealtor = await isRealtorWorkspace(workspaceId);
   if (!isRealtor) redirect("/realtor/onboarding");
   const config = await loadRealtorProductConfig(workspaceId);
-  if (!config.onboardingComplete || !config.live) {
+  const hasPublishedFrontDesk = Boolean(
+    config.deployedAgentId?.trim() && config.frontDeskPublishedVersionId?.trim(),
+  );
+  if ((!config.onboardingComplete || !config.live) && !hasPublishedFrontDesk) {
     redirect("/realtor/onboarding");
   }
   return { workspaceId, config };

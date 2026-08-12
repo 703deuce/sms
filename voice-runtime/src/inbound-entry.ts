@@ -103,6 +103,29 @@ export async function runInboundEntry(ctx: JobContext): Promise<void> {
   const outputGainDb = resolveLiveKitOutputGainDb(agentConfig.voiceLanguage?.outputGainDb);
   const useRealtime = usesFrontDeskRealtimeVoicePipeline(agentConfig);
   const isRealEstate = isRealEstateFrontDeskProfile(agentConfig);
+  const advanced = agentConfig.advanced as Record<string, unknown> | undefined;
+
+  console.log(
+    JSON.stringify({
+      source: "transovo-voice-runtime",
+      event: "inbound_agent_profile",
+      callId,
+      agentId: routing.agentId,
+      agentName: agentRow?.name || routing.agentName || null,
+      configSource: loaded.source,
+      agentVersionId: loaded.agentVersionId,
+      livekitProfile: advanced?.livekitProfile || null,
+      realEstateFrontDesk: advanced?.realEstateFrontDesk === true,
+      hasCompiledFrontDesk: Boolean(advanced?.realEstateCompiled),
+      runtimeProfile: isRealEstate
+        ? useRealtime
+          ? "frontdesk_real_estate_realtime"
+          : "frontdesk_real_estate"
+        : useRealtime
+          ? "frontdesk_realtime"
+          : "frontdesk",
+    }),
+  );
 
   const messaging = await prisma.workspaceMessagingSettings.findUnique({
     where: { workspaceId: routing.workspaceId },

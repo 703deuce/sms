@@ -18,6 +18,24 @@ import {
 } from "@/lib/voice/real-estate/contact-id";
 import { projectFileExists, readProjectFile } from "./_read";
 
+function scoreFrontDeskCandidateSource(): void {
+  const pickSource = readProjectFile("src/lib/voice/frontdesk/pick-frontdesk-agent.ts");
+  assert.ok(pickSource.includes("isRealEstateFrontDeskAgent"));
+  assert.ok(pickSource.includes("scoreFrontDeskCandidate"));
+  assert.ok(pickSource.includes("pickPreferredFrontDeskAgent"));
+
+  const resolveSource = readProjectFile("src/lib/voice/frontdesk/resolve-frontdesk-agent.ts");
+  assert.ok(resolveSource.includes("isFrontDeskRuntimeConfig"));
+  assert.ok(!resolveSource.includes("frontdesk.id !== routing.agentId"));
+
+  const routingSource = readProjectFile("src/lib/telephony/provisioning/agent-routing.ts");
+  assert.ok(routingSource.includes("isFrontDeskRuntimeConfig"));
+  assert.ok(routingSource.includes("return routing"));
+
+  const agentPhoneSource = readProjectFile("src/lib/voice/agent-phone.ts");
+  assert.ok(agentPhoneSource.includes("isRealEstateFrontDeskAgent"));
+}
+
 export function verifyRealEstateFrontdesk(): void {
   assert.equal(isRealEstateFrontDeskAgent({ realEstateFrontDesk: true }), true);
   assert.equal(isRealEstateFrontDeskAgent({ vertical: "real_estate" }), true);
@@ -65,6 +83,9 @@ export function verifyRealEstateFrontdesk(): void {
 
   const inboundSource = readProjectFile("voice-runtime/src/inbound-entry.ts");
   assert.ok(inboundSource.includes("createRealEstateFrontDeskAgent"));
+  assert.ok(inboundSource.includes("inbound_agent_profile"));
+
+  scoreFrontDeskCandidateSource();
 
   const bootstrapSource = readProjectFile("src/lib/voice/real-estate/bootstrap.ts");
   assert.ok(bootstrapSource.includes("bootstrapRealEstateFrontDesk"));

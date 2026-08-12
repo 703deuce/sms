@@ -1,11 +1,11 @@
 import { getPrisma } from "@/lib/db";
-import { parseVoiceAgentConfig } from "@/lib/voice/types";
-import {
-  isFrontDeskProfile,
-  isFrontDeskRealtimeProfile,
-} from "./agent-config";
 import { resolveAgentRoutingForCall } from "@/lib/telephony/provisioning";
 import type { AgentRoutingResolution } from "@/lib/telephony/provisioning/types";
+import {
+  findPreferredFrontDeskAgentForWorkspace,
+  isFrontDeskRuntimeConfig,
+  loadFrontDeskRuntimeConfig,
+} from "./pick-frontdesk-agent";
 
 export type FrontDeskAgentRow = {
   id: string;
@@ -18,46 +18,24 @@ export type InboundFrontDeskRouting = AgentRoutingResolution & {
   metadataAgentId?: string;
 };
 
-/** Active frontdesk booking agent for a workspace (prefers realtime profile). */
+/** Active frontdesk agent for a workspace — prefers RE profile and published config. */
 export async function findFrontDeskAgentForWorkspace(
   workspaceId: string,
+  options?: { preferPhoneNumberId?: string | null },
 ): Promise<FrontDeskAgentRow | null> {
-  const prisma = getPrisma();
-  const agents = await prisma.voiceAgent.findMany({
-    where: { workspaceId, status: "ACTIVE" },
-    select: {
-      id: true,
-      name: true,
-      status: true,
-      phoneNumberId: true,
-      draftConfig: true,
-    },
-  });
-
-  type WorkspaceAgent = (typeof agents)[number];
-
-  const frontdesk = agents.filter((agent: WorkspaceAgent) => {
-    const config = parseVoiceAgentConfig(agent.draftConfig);
-    return isFrontDeskProfile(config.advanced as Record<string, unknown>);
-  });
-  if (!frontdesk.length) return null;
-
-  const realtime = frontdesk.find((agent: WorkspaceAgent) => {
-    const config = parseVoiceAgentConfig(agent.draftConfig);
-    return isFrontDeskRealtimeProfile(config);
-  });
-  const chosen = realtime || frontdesk[0]!;
+  const picked = await findPreferredFrontDeskAgentForWorkspace(workspaceId, options);
+  if (!picked) return null;
   return {
-    id: chosen.id,
-    name: chosen.name,
-    status: chosen.status,
-    phoneNumberId: chosen.phoneNumberId,
+    id: picked.id,
+    name: picked.name,
+    status: picked.status,
+    phoneNumberId: picked.phoneNumberId,
   };
 }
 
 /**
- * LiveKit inbound routing — always resolves to the workspace frontdesk booking agent.
- * Ignores stale Amy dispatch metadata and non-frontdesk phone assignments.
+ * LiveKit inbound routing — resolves to the phone-assigned frontdesk agent when valid,
+ * otherwise the workspace's preferred RE/generic frontdesk agent.
  */
 export async function resolveInboundFrontDeskRouting(input: {
   toE164?: string | null;
@@ -72,6 +50,7 @@ export async function resolveInboundFrontDeskRouting(input: {
   });
 
   let workspaceId = routing?.workspaceId || input.workspaceId?.trim();
+  let phoneNumberId = routing?.phoneNumberId || "";
   if (!workspaceId && input.toE164?.trim()) {
     const prisma = getPrisma();
     const digits = input.toE164.replace(/\D/g, "");
@@ -82,9 +61,10 @@ export async function resolveInboundFrontDeskRouting(input: {
           ...(digits ? [{ e164: { endsWith: digits.slice(-10) } }] : []),
         ],
       },
-      select: { workspaceId: true },
+      select: { workspaceId: true, id: true },
     });
     workspaceId = phone?.workspaceId;
+    phoneNumberId = phone?.id || phoneNumberId;
   }
 
   if (!workspaceId) {
@@ -93,23 +73,55 @@ export async function resolveInboundFrontDeskRouting(input: {
     );
   }
 
-  const frontdesk = await findFrontDeskAgentForWorkspace(workspaceId);
-  if (!frontdesk) {
-    throw new Error(
-      `No active frontdesk booking agent in ${workspaceId} — run setup:frontdesk-booking-agent`,
-    );
+  let chosenAgentId: string | undefined;
+  let chosenAgentName = routing?.agentName;
+  let chosenAgentStatus = routing?.agentStatus;
+  let chosenPhoneNumberId = routing?.phoneNumberId || phoneNumberId;
+
+  if (routing?.agentId) {
+    const prisma = getPrisma();
+    const routedAgent = await prisma.voiceAgent.findFirst({
+      where: { id: routing.agentId, workspaceId, status: "ACTIVE" },
+      select: { id: true, name: true, status: true, phoneNumberId: true, draftConfig: true },
+    });
+    if (routedAgent) {
+      const runtimeConfig = await loadFrontDeskRuntimeConfig(
+        workspaceId,
+        routedAgent.id,
+        routedAgent.draftConfig,
+      );
+      if (isFrontDeskRuntimeConfig(runtimeConfig)) {
+        chosenAgentId = routedAgent.id;
+        chosenAgentName = routedAgent.name;
+        chosenAgentStatus = routedAgent.status;
+        chosenPhoneNumberId = routedAgent.phoneNumberId || chosenPhoneNumberId;
+      }
+    }
   }
 
-  if (routing && frontdesk.id !== routing.agentId) {
+  if (!chosenAgentId) {
+    const frontdesk = await findFrontDeskAgentForWorkspace(workspaceId, {
+      preferPhoneNumberId: phoneNumberId || null,
+    });
+    if (!frontdesk) {
+      throw new Error(
+        `No active frontdesk booking agent in ${workspaceId} — run setup:frontdesk-booking-agent`,
+      );
+    }
+    chosenAgentId = frontdesk.id;
+    chosenAgentName = frontdesk.name;
+    chosenAgentStatus = frontdesk.status;
+    chosenPhoneNumberId = frontdesk.phoneNumberId || chosenPhoneNumberId;
+  } else if (routing?.agentId && chosenAgentId !== routing.agentId) {
     console.log(
       JSON.stringify({
         source: "transovo-agent-routing",
-        event: "inbound_frontdesk_only",
+        event: "inbound_frontdesk_fallback",
         workspaceId,
         previousAgentId: routing.agentId,
         previousAgentName: routing.agentName,
-        frontdeskAgentId: frontdesk.id,
-        frontdeskAgentName: frontdesk.name,
+        frontdeskAgentId: chosenAgentId,
+        frontdeskAgentName: chosenAgentName,
         toE164: routing.e164 || input.toE164 || null,
         metadataAgentId: metadataAgentId || null,
       }),
@@ -117,10 +129,10 @@ export async function resolveInboundFrontDeskRouting(input: {
   }
 
   let e164 = routing?.e164 || input.toE164?.trim() || "";
-  if (!e164 && frontdesk.phoneNumberId) {
+  if (!e164 && chosenPhoneNumberId) {
     const prisma = getPrisma();
     const phone = await prisma.phoneNumber.findFirst({
-      where: { id: frontdesk.phoneNumberId, workspaceId },
+      where: { id: chosenPhoneNumberId, workspaceId },
       select: { e164: true },
     });
     e164 = phone?.e164 || "";
@@ -128,10 +140,10 @@ export async function resolveInboundFrontDeskRouting(input: {
 
   return {
     workspaceId,
-    agentId: frontdesk.id,
-    agentName: frontdesk.name,
-    agentStatus: frontdesk.status,
-    phoneNumberId: frontdesk.phoneNumberId || routing?.phoneNumberId || "",
+    agentId: chosenAgentId,
+    agentName: chosenAgentName || "Front Desk",
+    agentStatus: chosenAgentStatus || "ACTIVE",
+    phoneNumberId: chosenPhoneNumberId,
     e164,
     metadataAgentId,
   };
