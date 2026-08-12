@@ -24,6 +24,7 @@ import {
   resolveFrontDeskInboundRealtimeTurnDetection,
   resolveOutboundRealtimeTurnDetection,
 } from "./realtime-turn-config";
+import { wrapRealtimeModelForOpenAI } from "./realtime-openai-chat-context";
 
 const INFERENCE_TTS_PROVIDERS = new Set([
   "inference",
@@ -260,7 +261,7 @@ export function buildOutboundRealtimeModel(
   const disableInputTranscription = !overrides?.enableInputAudioTranscription;
   const frontdeskInbound = overrides?.frontdeskInbound === true;
 
-  return new openai.realtime.RealtimeModel({
+  const model = new openai.realtime.RealtimeModel({
     apiKey,
     model: realtimeCfg.model,
     ...(useElevenLabsOutput ? {} : { voice: realtimeCfg.voice }),
@@ -272,6 +273,7 @@ export function buildOutboundRealtimeModel(
     turnDetection: turnDetectionCfg.turnDetection,
     ...(realtimeCfg.reasoning ? { reasoning: realtimeCfg.reasoning } : {}),
   });
+  return wrapRealtimeModelForOpenAI(model);
 }
 
 export function buildOutboundRealtimeSessionComponents(
@@ -289,10 +291,12 @@ export function describeRealtimePipelineConfig(
   realtimeCfg: OutboundRealtimePipelineConfig,
   outputMode: OutboundRealtimeOutputMode = resolveOutboundRealtimeOutputMode(),
   pipelineCfg = getVoicePipelineConfig(),
-  options?: { inputAudioTranscription?: boolean },
+  options?: { inputAudioTranscription?: boolean; frontdeskInbound?: boolean },
 ) {
   const halfCascade = outputMode === "elevenlabs";
-  const turnDetectionCfg = resolveOutboundRealtimeTurnDetection();
+  const turnDetectionCfg = options?.frontdeskInbound
+    ? resolveFrontDeskInboundRealtimeTurnDetection()
+    : resolveOutboundRealtimeTurnDetection();
   return {
     mode: halfCascade ? "openai_realtime_half_cascade" : "openai_realtime",
     outputMode: halfCascade ? "REALTIME_ELEVENLABS" : "REALTIME_NATIVE",

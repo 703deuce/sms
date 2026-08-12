@@ -124,6 +124,24 @@ check("seller notify intents require contact follow-up fields", () => {
   assert.ok(ids.includes("email"), `expected email in ${ids.join(",")}`);
 });
 
+check("OpenAI Realtime filters agent_handoff from chat context", () => {
+  const adapter = readProjectFile("voice-runtime/src/realtime-openai-chat-context.ts");
+  const pipeline = readProjectFile("voice-runtime/src/pipeline.ts");
+  assert.ok(adapter.includes("excludeHandoff: true"));
+  assert.ok(adapter.includes("excludeConfigUpdate: true"));
+  assert.ok(adapter.includes("wrapRealtimeModelForOpenAI"));
+  assert.ok(pipeline.includes("wrapRealtimeModelForOpenAI"));
+});
+
+check("field transition bridge is non-interactive", () => {
+  const bridge = readProjectFile("src/lib/voice/field-transition-bridge.ts");
+  const schemaTask = readProjectFile("voice-runtime/src/tasks/schema-field-collection-task.ts");
+  const compile = readProjectFile("src/lib/voice/real-estate/compile/compile-instructions.ts");
+  assert.ok(bridge.includes("Only the active field collection task"));
+  assert.ok(schemaTask.includes("FIELD_TRANSITION_BRIDGE_RULES"));
+  assert.ok(compile.includes("FIELD_TRANSITION_BRIDGE_RULES"));
+});
+
 check("frontdesk inbound uses safer realtime VAD", () => {
   const pipeline = readProjectFile("voice-runtime/src/pipeline.ts");
   const inbound = readProjectFile("voice-runtime/src/inbound-session-pipeline.ts");
@@ -131,6 +149,7 @@ check("frontdesk inbound uses safer realtime VAD", () => {
   const turnHandling = readProjectFile("voice-runtime/src/frontdesk-realtime-turn-handling.ts");
   const latency = readProjectFile("voice-runtime/src/latency-instrumentation.ts");
   assert.ok(pipeline.includes("resolveFrontDeskInboundRealtimeTurnDetection"));
+  assert.ok(pipeline.includes("wrapRealtimeModelForOpenAI"));
   assert.ok(pipeline.includes("inputAudioNoiseReduction"));
   assert.ok(inbound.includes("frontdeskInbound: true"));
   assert.ok(inbound.includes("buildFrontDeskRealtimeTurnHandling"));

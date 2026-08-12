@@ -1,6 +1,7 @@
 import { REAL_ESTATE_INTENT_LABELS, type RealEstateIntent } from "../types";
 import type { CompiledRealEstateFrontDesk } from "./types";
 import type { RealtorQualifiedOutcome } from "@/lib/realtor/types";
+import { FIELD_TRANSITION_BRIDGE_RULES } from "@/lib/voice/field-transition-bridge";
 
 function outcomeAction(outcome: RealtorQualifiedOutcome): string {
   switch (outcome) {
@@ -68,6 +69,9 @@ export function buildCompiledFrontDeskInstructions(
     "2. Infer intent and call set_intent — do NOT announce classification. ",
     "3. Call collect_required_fields once to run structured field collection (LiveKit tasks). ",
     "   Do NOT bundle multiple intake questions before that tool — early answers are remembered and backfilled. ",
+    "   During structured intake, only the active field task may ask the next required question. ",
+    FIELD_TRANSITION_BRIDGE_RULES,
+    " ",
     "4. Use get_required_fields only if you need a read-only status check. ",
     "5. When intake is complete, follow the qualified outcome for that caller type (see below). ",
     "   For seller and follow-up outcomes, collect preferred contact method (call, text, or email) and email when needed before saying someone will get back to them. ",

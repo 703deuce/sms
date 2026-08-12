@@ -391,6 +391,7 @@ export function createVoicePipeline(input: {
           : "frontdesk_realtime",
         pipeline: describeRealtimePipelineConfig(realtimeCfg, outputMode, pipelineCfg, {
           inputAudioTranscription: true,
+          frontdeskInbound: true,
         }),
         outputGainDb: input.sessionBase.outputGainDb,
       }),

@@ -2,6 +2,7 @@ import type { RealEstateBusinessConfig } from "@/lib/voice/real-estate/types";
 import type { CompiledRealEstateFrontDesk } from "@/lib/voice/real-estate/compile/types";
 import { buildCompiledFrontDeskInstructions } from "@/lib/voice/real-estate/compile/compile-instructions";
 import { resolveRealEstateBusinessConfig } from "@/lib/voice/real-estate/config";
+import { FIELD_TRANSITION_BRIDGE_RULES } from "@/lib/voice/field-transition-bridge";
 
 export function buildRealEstateFrontDeskInstructions(input: {
   business: RealEstateBusinessConfig;
@@ -31,6 +32,9 @@ export function buildRealEstateFrontDeskInstructions(input: {
     "2. Infer intent and call set_intent — do NOT announce classification. ",
     "3. Call collect_required_fields once to run structured field collection (LiveKit tasks). ",
     "   Do NOT ask for multiple intake fields in one question before that tool runs — if the caller volunteers several details early, they will be remembered. ",
+    "   During structured intake, only the active field task may ask the next required question. ",
+    FIELD_TRANSITION_BRIDGE_RULES,
+    " ",
     "4. Use get_required_fields only if you need a read-only status check. ",
     "5. When intake is complete, offer to book a consultation with list_available_slots. ",
     "   For seller and follow-up calls, collect how they want to be contacted (call, text, or email) before promising a callback. ",

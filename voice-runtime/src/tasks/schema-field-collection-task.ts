@@ -4,6 +4,7 @@ import type { AgentSession } from "@livekit/agents";
 import type { RealEstateFieldDefinition } from "@/lib/voice/real-estate/types";
 import { applyHeuristicIntakeBackfill } from "@/lib/voice/real-estate/intake-memory";
 import type { FrontDeskUserData } from "../frontdesk/userdata";
+import { FIELD_ANSWER_ACK_RULES, FIELD_TRANSITION_BRIDGE_RULES } from "@/lib/voice/field-transition-bridge";
 import { agentTaskSuperOptions, nestedTaskOptionsFromSession } from "./task-context";
 
 export type SchemaFieldCollectionResult = {
@@ -104,7 +105,10 @@ export class SchemaFieldCollectionTask extends voice.AgentTask<SchemaFieldCollec
             `Collect exactly one field: ${field.label}. ` +
             `Ask naturally: ${question} ` +
             multiFieldHint +
-            "When the caller answers, call record_schema_field_value. " +
+            FIELD_TRANSITION_BRIDGE_RULES +
+            " " +
+            FIELD_ANSWER_ACK_RULES +
+            " When the caller answers, call record_schema_field_value. " +
             "Never narrate backend intake routing to the caller.",
           tools: [recordPrimaryTool, ...additionalTools],
         },
