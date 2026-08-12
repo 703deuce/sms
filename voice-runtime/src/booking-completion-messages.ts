@@ -29,6 +29,16 @@ export function buildBookingFailureLine(reason?: string): string {
   return detail.startsWith("I'm sorry") ? detail : `I'm sorry — ${detail}`;
 }
 
+/** Tool result when confirmation audio did not play — agent must speak confirmation. */
+export function buildBookingCompleteToolResultFallback(timeLabel: string): string {
+  return (
+    `BOOKING_COMPLETE_SPEAK_NOW: The appointment IS confirmed for ${timeLabel}. ` +
+    "Tell the caller clearly they are all set for that time and a confirmation text was sent. " +
+    "Sound certain — the booking succeeded on the calendar. " +
+    "Do not say you're still checking or waiting."
+  );
+}
+
 /** Tool result after failure line was already spoken via speakBookingLine(). */
 export const BOOKING_FAILED_TOOL_RESULT =
   "BOOKING_FAILED_ALREADY_SPOKEN: The runtime already told the caller the booking did NOT go through. " +

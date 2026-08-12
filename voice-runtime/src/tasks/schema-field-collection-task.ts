@@ -57,7 +57,7 @@ export class SchemaFieldCollectionTask extends voice.AgentTask<SchemaFieldCollec
           throw new llm.ToolError(saved.speak || "I couldn't save that.");
         }
         this.complete({ fieldId: field.field_id, value: trimmed });
-        return saved.speak || "Saved.";
+        return "OK";
       },
     });
 
@@ -67,7 +67,8 @@ export class SchemaFieldCollectionTask extends voice.AgentTask<SchemaFieldCollec
             llm.tool({
               name: "record_additional_intake_field",
               description:
-                "When the caller gives multiple intake details in one answer, record each extra field here before finishing the current question.",
+                "Silently record extra intake details the caller volunteered in the same answer. " +
+                "Never tell the caller this is the wrong step or field.",
               parameters: z.object({
                 field_id: z
                   .enum(pending.map((f) => f.field_id) as [string, ...string[]])
@@ -85,7 +86,7 @@ export class SchemaFieldCollectionTask extends voice.AgentTask<SchemaFieldCollec
                 if (!saved.ok) {
                   throw new llm.ToolError(saved.speak || "I couldn't save that.");
                 }
-                return saved.speak || `Saved ${field_id}.`;
+                return "OK";
               },
             }),
           ]
@@ -93,7 +94,7 @@ export class SchemaFieldCollectionTask extends voice.AgentTask<SchemaFieldCollec
 
     const multiFieldHint =
       pending.length > 0
-        ? "If the caller already mentioned this or other pending intake fields in the same answer, call record_additional_intake_field for each extra detail you can extract, then record_schema_field_value for this field. Do not re-ask for details they already gave. Map garage/yard/amenities to must_have_features. Map cash/financing/pre-approved to financing_status — never purchase_timeframe. Map when they want to buy to purchase_timeframe only. "
+        ? "If the caller volunteers multiple intake details in one answer, silently call record_additional_intake_field for each extra detail, then record_schema_field_value for this field. Never tell the caller which step you're on, that something is not the current question, or that you are saving fields in the background. Do not re-ask for details they already gave. Map garage/yard/backyard/amenities to must_have_features. Map cash/financing/funding/pre-approved to financing_status — never purchase_timeframe. Map when they want to buy to purchase_timeframe only. "
         : "";
 
     super(
@@ -103,7 +104,8 @@ export class SchemaFieldCollectionTask extends voice.AgentTask<SchemaFieldCollec
             `Collect exactly one field: ${field.label}. ` +
             `Ask naturally: ${question} ` +
             multiFieldHint +
-            "When the caller answers, call record_schema_field_value.",
+            "When the caller answers, call record_schema_field_value. " +
+            "Never narrate backend intake routing to the caller.",
           tools: [recordPrimaryTool, ...additionalTools],
         },
         nestedTaskOptionsFromSession(sessionRef),

@@ -132,9 +132,15 @@ export function buildRealEstateCollectRequiredFieldsTool() {
           session,
         });
         if (result.complete) {
-          return "All required fields collected. Offer to schedule a consultation or take a message.";
+          return (
+            "Intake complete. Offer to schedule a consultation with list_available_slots. " +
+            "Do not mention internal intake processing or that you are still gathering fields."
+          );
         }
-        return `Collected: ${result.collected.join(", ") || "none"}. ${summarizeIntakeFields(ud)}`;
+        return (
+          `Intake pass finished. ${summarizeIntakeFields(ud)} ` +
+          "Continue naturally — never tell the caller about backend field routing or wrong-step messages."
+        );
       });
     },
   });

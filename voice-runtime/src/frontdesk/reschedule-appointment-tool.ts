@@ -22,6 +22,7 @@ import { withLiveKitToolTelemetry } from "../livekit-tool-telemetry";
 import {
   BOOKING_COMPLETE_TOOL_RESULT,
   BOOKING_FAILED_TOOL_RESULT,
+  buildBookingCompleteToolResultFallback,
   buildBookingFailureLine,
   buildBookingSuccessLine,
   POST_EMAIL_BOOKING_FILLER,
@@ -80,7 +81,7 @@ export function buildFrontDeskRescheduleAppointmentTool(
       }
       ud.confirmedEmail = attendeeEmail;
 
-      await speakBookingLine(session, POST_EMAIL_BOOKING_FILLER);
+      await speakBookingLine(session, POST_EMAIL_BOOKING_FILLER, { runCtx: opts.ctx });
 
       return withLiveKitToolTelemetry(
         ud,
@@ -120,10 +121,16 @@ export function buildFrontDeskRescheduleAppointmentTool(
 
             sendBookingSmsAsync(session, rescheduled.slot.startTime);
 
-            await speakBookingLine(session, buildBookingSuccessLine(local));
+            const spoken = await speakBookingLine(session, buildBookingSuccessLine(local), {
+              runCtx: opts.ctx,
+            });
+
+            const completion = spoken
+              ? BOOKING_COMPLETE_TOOL_RESULT
+              : buildBookingCompleteToolResultFallback(local);
 
             return (
-              `${BOOKING_COMPLETE_TOOL_RESULT} ` +
+              `${completion} ` +
               `(Rescheduled from ${when} to ${local}.)`
             );
           } catch (err) {

@@ -37,6 +37,26 @@ function activeIntents(userData: FrontDeskUserData): RealEstateIntent[] {
   return intents;
 }
 
+function pendingFieldsForTask(
+  currentField: RealEstateFieldDefinition,
+  toCollect: RealEstateFieldDefinition[],
+  allFields: RealEstateFieldDefinition[],
+  collected: Record<string, string>,
+): RealEstateFieldDefinition[] {
+  const pending: RealEstateFieldDefinition[] = [];
+  for (const field of allFields) {
+    if (field.field_id === currentField.field_id) continue;
+    if (toCollect.some((f) => f.field_id === field.field_id)) {
+      pending.push(field);
+      continue;
+    }
+    if (!field.required && !collected[field.field_id]?.trim()) {
+      pending.push(field);
+    }
+  }
+  return pending;
+}
+
 export async function runRealEstateIntakeTaskGroup(input: {
   session: AgentSession<FrontDeskUserData>;
   fields?: RealEstateFieldDefinition[];
@@ -89,7 +109,12 @@ export async function runRealEstateIntakeTaskGroup(input: {
   });
 
   for (const field of toCollect) {
-    const pendingFields = toCollect.filter((f) => f.field_id !== field.field_id);
+    const pendingFields = pendingFieldsForTask(
+      field,
+      toCollect,
+      allFields,
+      userData.callState.collectedFields,
+    );
     group.add(
       () =>
         new SchemaFieldCollectionTask(field, input.session, {
@@ -99,13 +124,13 @@ export async function runRealEstateIntakeTaskGroup(input: {
           },
           pendingFields,
           onRecordAdditionalField: async (fieldId, value) => {
-            const target = toCollect.find((f) => f.field_id === fieldId);
+            const target = allFields.find((f) => f.field_id === fieldId);
             if (!target) {
-              return { ok: false, speak: "That field is not part of this intake pass." };
+              return { ok: true };
             }
             const already = userData.callState?.collectedFields[fieldId]?.trim();
             if (already) {
-              return { ok: true, speak: `${target.label} was already recorded.` };
+              return { ok: true };
             }
             await recordIntakeField(target, value);
             return { ok: true };
@@ -119,6 +144,13 @@ export async function runRealEstateIntakeTaskGroup(input: {
   // can speak while the tool is still executing. Manual updateAgent() before run()
   // drains scheduling and leaves the caller hearing silence after intake starts.
   await group.run();
+
+  userData.callState = await backfillIntakeFromConversation({
+    state: userData.callState,
+    chatCtx: input.session.chatCtx,
+    candidateFields: allFields,
+  });
+  await syncIntakeSideEffects(userData);
 
   const complete = isIntakeComplete(intents, userData.callState.collectedFields);
   if (complete && userData.callState) {

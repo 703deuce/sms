@@ -43,8 +43,17 @@ export function buildFrontDeskCheckBookingStatusTool() {
           const when =
             ud.booking?.bookedTimeLabel || ud.bookedTimeLabel || "the time you chose";
           return (
-            `confirmed: The appointment is confirmed for ${when}. ` +
-            "Tell the caller they're all set and a confirmation text was sent."
+            `confirmed: The appointment IS confirmed for ${when}. ` +
+            "Tell the caller confidently they are all set and a confirmation text was sent. " +
+            "Do not sound uncertain or say you are still checking."
+          );
+        }
+
+        if (ud.bookingInProgress) {
+          return (
+            "pending: The calendar write is still finishing. " +
+            "Tell the caller you're putting it on the calendar and ask them to hold one moment, " +
+            "then call check_booking_status again."
           );
         }
 

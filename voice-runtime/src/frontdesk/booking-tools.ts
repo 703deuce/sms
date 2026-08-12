@@ -18,6 +18,7 @@ import { withLiveKitToolTelemetry } from "../livekit-tool-telemetry";
 import {
   BOOKING_COMPLETE_TOOL_RESULT,
   BOOKING_FAILED_TOOL_RESULT,
+  buildBookingCompleteToolResultFallback,
   buildBookingFailureLine,
   buildBookingSuccessLine,
   POST_EMAIL_BOOKING_FILLER,
@@ -169,88 +170,101 @@ export function buildFrontDeskBookingTools(input: {
 
       const confirmedEmail = userData.confirmedEmail!;
 
-      await speakBookingLine(session, POST_EMAIL_BOOKING_FILLER);
+      userData.bookingInProgress = true;
+      try {
+        await speakBookingLine(session, POST_EMAIL_BOOKING_FILLER, { runCtx: opts.ctx });
 
-      return withLiveKitToolTelemetry(
-        userData,
-        "schedule_appointment",
-        { slot_id },
-        async () => {
-          try {
-            const booked = await scheduleAppointmentResilient({
-              session,
-              slot,
-              attendeeEmail: confirmedEmail,
-            });
-            const local = formatBookedTimeLabel(booked.slot.startTime, userData.timezone);
-            markBookingConfirmed(userData, {
-              slotId: slot_id,
-              providerEventId: booked.eventUri,
-              bookedTimeLabel: local,
-            });
-            void onRealEstateBookingConfirmed(userData);
+        return await withLiveKitToolTelemetry(
+          userData,
+          "schedule_appointment",
+          { slot_id },
+          async () => {
+            try {
+              const booked = await scheduleAppointmentResilient({
+                session,
+                slot,
+                attendeeEmail: confirmedEmail,
+              });
+              const local = formatBookedTimeLabel(booked.slot.startTime, userData.timezone);
+              markBookingConfirmed(userData, {
+                slotId: slot_id,
+                providerEventId: booked.eventUri,
+                bookedTimeLabel: local,
+              });
+              void onRealEstateBookingConfirmed(userData);
 
-            const appointmentId = await lookupAppointmentIdForCallWithRetry({
-              workspaceId: userData.workspaceId,
-              callId: userData.callId,
-              eventUri: booked.eventUri,
-            });
-            if (appointmentId) {
-              userData.booking = {
-                ...userData.booking!,
-                appointmentId,
-              };
-              void syncFrontDeskBookingToCrm({
+              const appointmentId = await lookupAppointmentIdForCallWithRetry({
                 workspaceId: userData.workspaceId,
                 callId: userData.callId,
-                appointmentId,
-                callerE164: userData.callerE164,
-                email: confirmedEmail,
-                businessName: userData.businessName,
-              }).catch((err) => {
-                console.warn(
-                  JSON.stringify({
-                    source: "frontdesk-booking-tools",
-                    event: "crm_sync_failed",
-                    callId: userData.callId,
-                    error: err instanceof Error ? err.message : String(err),
-                  }),
-                );
+                eventUri: booked.eventUri,
               });
-            }
+              if (appointmentId) {
+                userData.booking = {
+                  ...userData.booking!,
+                  appointmentId,
+                };
+                void syncFrontDeskBookingToCrm({
+                  workspaceId: userData.workspaceId,
+                  callId: userData.callId,
+                  appointmentId,
+                  callerE164: userData.callerE164,
+                  email: confirmedEmail,
+                  businessName: userData.businessName,
+                }).catch((err) => {
+                  console.warn(
+                    JSON.stringify({
+                      source: "frontdesk-booking-tools",
+                      event: "crm_sync_failed",
+                      callId: userData.callId,
+                      error: err instanceof Error ? err.message : String(err),
+                    }),
+                  );
+                });
+              }
 
-            sendBookingSmsAsync(session, booked.slot.startTime);
+              sendBookingSmsAsync(session, booked.slot.startTime);
 
-            await speakBookingLine(session, buildBookingSuccessLine(local));
+              const spoken = await speakBookingLine(session, buildBookingSuccessLine(local), {
+                runCtx: opts.ctx,
+              });
 
-            return BOOKING_COMPLETE_TOOL_RESULT;
-          } catch (err) {
-            if (err instanceof SlotUnavailableError) {
-              userData.slotUnavailableCount += 1;
-              await speakBookingLine(
-                session,
-                buildBookingFailureLine(
-                  "That time slot isn't available anymore — I can check what else is open.",
-                ),
+              if (spoken) {
+                return BOOKING_COMPLETE_TOOL_RESULT;
+              }
+              return buildBookingCompleteToolResultFallback(local);
+            } catch (err) {
+              if (err instanceof SlotUnavailableError) {
+                userData.slotUnavailableCount += 1;
+                await speakBookingLine(
+                  session,
+                  buildBookingFailureLine(
+                    "That time slot isn't available anymore — I can check what else is open.",
+                  ),
+                  { runCtx: opts.ctx },
+                );
+                return BOOKING_FAILED_TOOL_RESULT;
+              }
+              const recovered = alreadyBookedToolMessage(userData);
+              if (recovered) return recovered;
+
+              console.warn(
+                JSON.stringify({
+                  source: "frontdesk-booking-tools",
+                  event: "schedule_appointment_failed",
+                  callId: userData.callId,
+                  error: err instanceof Error ? err.message : String(err),
+                }),
               );
+              await speakBookingLine(session, buildBookingFailureLine(bookingFailureReason(err)), {
+                runCtx: opts.ctx,
+              });
               return BOOKING_FAILED_TOOL_RESULT;
             }
-            const recovered = alreadyBookedToolMessage(userData);
-            if (recovered) return recovered;
-
-            console.warn(
-              JSON.stringify({
-                source: "frontdesk-booking-tools",
-                event: "schedule_appointment_failed",
-                callId: userData.callId,
-                error: err instanceof Error ? err.message : String(err),
-              }),
-            );
-            await speakBookingLine(session, buildBookingFailureLine(bookingFailureReason(err)));
-            return BOOKING_FAILED_TOOL_RESULT;
-          }
-        },
-      );
+          },
+        );
+      } finally {
+        userData.bookingInProgress = false;
+      }
     },
   });
 

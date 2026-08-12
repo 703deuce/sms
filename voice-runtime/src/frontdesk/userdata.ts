@@ -47,6 +47,8 @@ export type FrontDeskUserData = {
   pendingSlotId?: string;
   /** Prevents duplicate booking confirmation SMS on retry or reschedule. */
   bookingConfirmationSmsSent?: boolean;
+  /** True while schedule_appointment is writing to Calendly. */
+  bookingInProgress?: boolean;
 };
 
 export function isBookingConfirmed(userData: FrontDeskUserData): boolean {

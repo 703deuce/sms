@@ -40,7 +40,7 @@ assert.ok(
 );
 
 const fillerBeforeProtect = bookingToolsSource.match(
-  /await speakBookingLine\(session,\s*POST_EMAIL_BOOKING_FILLER\)/,
+  /await speakBookingLine\(session,\s*POST_EMAIL_BOOKING_FILLER/,
 );
 assert.ok(
   fillerBeforeProtect,
@@ -77,13 +77,14 @@ assert.match(successLine, /confirmed for Monday at 3 PM/);
 assert.match(successLine, /confirmation text/i);
 
 assert.ok(
-  bookingToolsSource.includes("await speakBookingLine(session, buildBookingSuccessLine(local))"),
+  bookingToolsSource.includes("speakBookingLine(session, buildBookingSuccessLine(local)"),
   "final confirmation is spoken via Realtime-safe speakBookingLine",
 );
 
 assert.ok(
-  bookingToolsSource.includes("return BOOKING_COMPLETE_TOOL_RESULT"),
-  "tool result tells model not to repeat confirmation",
+  bookingToolsSource.includes("return BOOKING_COMPLETE_TOOL_RESULT") ||
+    bookingToolsSource.includes("buildBookingCompleteToolResultFallback"),
+  "tool result tells model confirmation state after booking",
 );
 
 assert.match(BOOKING_COMPLETE_TOOL_RESULT, /BOOKING_COMPLETE_ALREADY_SPOKEN/);

@@ -43,6 +43,7 @@ export function buildRealEstateFrontDeskInstructions(input: {
     "Booking: use list_available_slots and schedule_appointment for realtor consultations. ",
     "Email is collected automatically via a focused task when schedule_appointment needs it. ",
     "Never claim booking succeeded unless BOOKING_COMPLETE. ",
+    "If schedule_appointment returns BOOKING_COMPLETE_SPEAK_NOW, confirm confidently — the booking succeeded. ",
     "Use check_booking_status if caller asks whether booking went through. ",
     "Cancel/reschedule: cancel_appointment and reschedule_appointment when requested. ",
     "",

@@ -85,6 +85,7 @@ export function buildCompiledFrontDeskInstructions(
       : "Booking is disabled for this account — do not offer to schedule appointments. ",
     "Email flow: if schedule_appointment returns NEEDS_EMAIL, collect email with update_email_address ",
     "and confirm_email_address, then retry. Never claim booking succeeded unless BOOKING_COMPLETE. ",
+    "If schedule_appointment returns BOOKING_COMPLETE_SPEAK_NOW, confirm confidently — do not sound uncertain. ",
     "Use check_booking_status if caller asks whether booking went through. ",
     "Cancel/reschedule: cancel_appointment and reschedule_appointment when requested. ",
     "",

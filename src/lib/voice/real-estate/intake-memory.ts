@@ -52,7 +52,7 @@ export type IntakeExtractionResult = {
 };
 
 function hasFinancingCue(text: string): boolean {
-  return /\b(financ|pre-?approved|preapproved|lender|mortgage|cash buyer|own financing|have financing|my own financing)\b/i.test(
+  return /\b(financ|funding|pre-?approved|preapproved|lender|mortgage|cash buyer|own financing|have financing|my own financing|have funding)\b/i.test(
     text,
   );
 }
@@ -120,7 +120,9 @@ export function heuristicIntakeExtractions(
     push("purchase_timeframe", tf?.[0] || "Flexible");
   }
 
-  const featureMatches = text.match(/\b(garage|yard|school district|basement|pool|fenced yard)\b/gi);
+  const featureMatches = text.match(
+    /\b(garage|yard|backyard|school district|basement|pool|fenced yard)\b/gi,
+  );
   if (featureMatches?.length && allowed.has("must_have_features")) {
     push("must_have_features", [...new Set(featureMatches.map((m) => m.toLowerCase()))].join(", "));
   }
