@@ -53,6 +53,15 @@ export type CompiledRealEstateFrontDesk = {
     appointmentTypes: string[];
     calendlyEventMappings?: Record<string, string>;
   };
+  notifications?: {
+    onQualified?: boolean;
+    onAppointmentBooked?: boolean;
+    onNeedsHuman?: boolean;
+    emailRecipients?: string[];
+  };
+  instructions?: {
+    custom?: string;
+  };
   /** Visual workflow graph derived from policy — not executed at LiveKit voice runtime. */
   workflowDefinition: AutomationDefinition;
   workflowVisualization: WorkflowVisualizationMeta;

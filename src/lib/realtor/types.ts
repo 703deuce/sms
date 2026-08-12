@@ -43,8 +43,15 @@ export type RealtorBusinessConfig = {
 export type RealtorPhoneConfig = {
   mode?: "transovo_number" | "forward" | "port";
   inboundHours?: "always" | "after_hours" | "overflow";
+  /** Inbound Front Desk number (E.164) — assigned on publish. */
+  inboundNumberE164?: string;
   transferNumber?: string;
   outboundNumberE164?: string;
+};
+
+export type RealtorInstructionsConfig = {
+  /** User-authored flavor appended to core system instructions — never replaces core behavior. */
+  custom?: string;
 };
 
 export type RealtorIntentFieldToggle = {
@@ -147,6 +154,7 @@ export type RealtorProductConfig = {
   draftSavedAt?: string;
   knowledge?: RealtorKnowledgeConfig;
   notifications?: RealtorNotificationConfig;
+  instructions?: RealtorInstructionsConfig;
   /** Maps appointment type label → Calendly event type URI or slug */
   calendlyEventMappings?: Record<string, string>;
   /** Published voice agent version ids for reproducibility */
@@ -224,6 +232,7 @@ export const DEFAULT_REALTOR_PRODUCT_CONFIG: RealtorProductConfig = {
     onNeedsHuman: true,
     emailRecipients: [],
   },
+  instructions: {},
 };
 
 export type RealtorLeadStatus =

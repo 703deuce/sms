@@ -5,8 +5,9 @@ import {
   saveRealtorProductConfig,
   STEP_LABELS,
 } from "@/lib/realtor/workspace-config";
+import { mergeRealtorProductConfig } from "@/lib/realtor/merge-config";
 import { deployRealEstateFrontDesk } from "@/lib/voice/real-estate/bootstrap";
-import { compileRealtorAgents, validateRealtorProductConfig } from "@/lib/voice/real-estate/compile";
+import { compileRealtorAgents, assertPublishableConfig, validateRealtorProductConfig } from "@/lib/voice/real-estate/compile";
 import { NextResponse } from "next/server";
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -19,18 +20,7 @@ function mergeBodyConfig(
   current: Awaited<ReturnType<typeof loadRealtorProductConfig>>,
   body: Record<string, unknown>,
 ) {
-  return {
-    ...current,
-    ...(body as typeof current),
-    identity: { ...current.identity, ...asRecord(body.identity) },
-    voice: { ...current.voice, ...asRecord(body.voice) },
-    knowledge: { ...current.knowledge, ...asRecord(body.knowledge) },
-    notifications: { ...current.notifications, ...asRecord(body.notifications) },
-    business: { ...current.business, ...asRecord(body.business) },
-    phone: { ...current.phone, ...asRecord(body.phone) },
-    frontDesk: { ...current.frontDesk, ...(body.frontDesk as object) },
-    speedToLead: { ...current.speedToLead, ...(body.speedToLead as object) },
-  };
+  return mergeRealtorProductConfig(current, body as Partial<typeof current>);
 }
 
 export async function GET() {
@@ -59,14 +49,21 @@ export async function POST(req: Request) {
     if (body.action === "go_live") {
       const current = await loadRealtorProductConfig(auth.workspaceId);
       const merged = mergeBodyConfig(current, body.config || {});
-      const validation = validateRealtorProductConfig(merged);
-      if (!validation.ok) {
-        return NextResponse.json({ error: "Configuration invalid", validation }, { status: 400 });
+      try {
+        assertPublishableConfig(merged);
+      } catch (err) {
+        return NextResponse.json(
+          {
+            error: err instanceof Error ? err.message : "Configuration invalid",
+            validation: validateRealtorProductConfig(merged),
+          },
+          { status: 400 },
+        );
       }
       const deploy = await deployRealEstateFrontDesk({
         workspaceId: auth.workspaceId,
         productConfig: merged,
-        phoneE164: merged.phone.outboundNumberE164,
+        phoneE164: merged.phone.inboundNumberE164?.trim() || undefined,
         agentName: merged.business.teamName
           ? `${merged.business.teamName} Front Desk`
           : undefined,

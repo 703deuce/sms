@@ -1,6 +1,7 @@
 import { getPrisma } from "@/lib/db";
 import { parseVoiceAgentConfig } from "@/lib/voice/types";
 import { isFrontDeskProfile } from "@/lib/voice/frontdesk/agent-config";
+import { isRealEstateFrontDeskAgent } from "@/lib/voice/real-estate/config";
 
 /**
  * Keep `VoiceAgent.phoneNumberId` and the inbound join table
@@ -119,9 +120,13 @@ export async function resolveInboundAiAgent(workspaceId: string, phoneNumberId: 
         return isFrontDeskProfile(config.advanced as Record<string, unknown>);
       });
       if (frontdeskAgents.length >= 1) {
+        const reFrontdesk = frontdeskAgents.filter((agent: ActiveAgent) => {
+          const config = parseVoiceAgentConfig(agent.draftConfig);
+          return isRealEstateFrontDeskAgent(config.advanced as Record<string, unknown>);
+        });
+        const pool = reFrontdesk.length ? reFrontdesk : frontdeskAgents;
         return (
-          frontdeskAgents.find((a: ActiveAgent) => a.phoneNumberId === phoneNumberId) ||
-          frontdeskAgents[0]
+          pool.find((a: ActiveAgent) => a.phoneNumberId === phoneNumberId) || pool[0]
         );
       }
       // Prefer the agent whose phoneNumberId still matches (post-switch winner).

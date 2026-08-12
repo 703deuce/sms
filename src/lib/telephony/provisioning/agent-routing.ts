@@ -1,9 +1,11 @@
 import { getPrisma } from "@/lib/db";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import { resolveInboundAiAgent } from "@/lib/voice/agent-phone";
+import { findFrontDeskAgentForWorkspace } from "@/lib/voice/frontdesk/resolve-frontdesk-agent";
 import {
-  findFrontDeskAgentForWorkspace,
-} from "@/lib/voice/frontdesk/resolve-frontdesk-agent";
+  isFrontDeskRuntimeConfig,
+  loadFrontDeskRuntimeConfig,
+} from "@/lib/voice/frontdesk/pick-frontdesk-agent";
 import { getLiveKitSipClient } from "./livekit/client";
 import type { AgentRoutingResolution } from "./types";
 
@@ -104,7 +106,25 @@ export async function resolveAgentByCalledNumber(
 async function applyInboundFrontDeskDefault(
   routing: AgentRoutingResolution,
 ): Promise<AgentRoutingResolution> {
-  const frontdesk = await findFrontDeskAgentForWorkspace(routing.workspaceId);
+  const prisma = getPrisma();
+  const routedAgent = await prisma.voiceAgent.findFirst({
+    where: { id: routing.agentId, workspaceId: routing.workspaceId, status: "ACTIVE" },
+    select: { id: true, draftConfig: true },
+  });
+  if (routedAgent) {
+    const runtimeConfig = await loadFrontDeskRuntimeConfig(
+      routing.workspaceId,
+      routedAgent.id,
+      routedAgent.draftConfig,
+    );
+    if (isFrontDeskRuntimeConfig(runtimeConfig)) {
+      return routing;
+    }
+  }
+
+  const frontdesk = await findFrontDeskAgentForWorkspace(routing.workspaceId, {
+    preferPhoneNumberId: routing.phoneNumberId,
+  });
   if (!frontdesk || frontdesk.id === routing.agentId) return routing;
 
   console.log(

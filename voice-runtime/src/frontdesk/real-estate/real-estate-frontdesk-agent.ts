@@ -36,9 +36,11 @@ export function createRealEstateFrontDeskAgent(input: {
   });
   const label = business.businessName;
   const agentHolder: { root?: voice.Agent<FrontDeskUserData> } = {};
+  const bookingEnabled = input.publishedConfig?.booking?.enabled !== false;
   const { toolDefs: bookingToolDefs } = buildFrontDeskBookingTools({
     timezone: input.timezone,
     restoreRootAgent: () => agentHolder.root!,
+    includeBooking: bookingEnabled,
   });
 
   const reTools = [
@@ -53,6 +55,7 @@ export function createRealEstateFrontDeskAgent(input: {
     instructions: buildRealEstateFrontDeskInstructions({
       business,
       timezone: input.timezone,
+      compiled: input.publishedConfig,
     }),
     tools: llm.toToolContext([...reTools, ...bookingToolDefs]),
     onEnter: async (agentCtx) => {

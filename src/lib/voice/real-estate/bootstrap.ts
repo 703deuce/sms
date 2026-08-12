@@ -1,9 +1,12 @@
 import { deployRealtorSpeedToLead } from "@/lib/realtor/deploy-speed-to-lead";
+import { getPrisma } from "@/lib/db";
 import { loadRealtorProductConfig, saveRealtorProductConfig } from "@/lib/realtor/workspace-config";
 import { DEFAULT_REALTOR_PRODUCT_CONFIG } from "@/lib/realtor/types";
 import { compileRealtorAgents } from "@/lib/voice/real-estate/compile";
 import { ensureRealEstateFrontDeskAgent } from "./deploy-agent";
 import { seedRealEstateFrontDeskKnowledge } from "./deploy-knowledge";
+import { publishVoiceAgentVersion } from "./publish";
+import { parseVoiceAgentConfig } from "@/lib/voice/types";
 
 declare global {
   // eslint-disable-next-line no-var
@@ -68,24 +71,18 @@ export async function bootstrapRealEstateFrontDesk(): Promise<BootstrapRealEstat
     const workspaceId = process.env.WORKSPACE_ID?.trim() || "ws_1";
     const existing = await loadRealtorProductConfig(workspaceId);
     const productConfig = bootstrapProductConfig(existing);
-    const compiled = compileRealtorAgents(productConfig, { status: "active" });
-
-    const agent = await ensureRealEstateFrontDeskAgent({
+    const deploy = await deployRealEstateFrontDesk({
       workspaceId,
       productConfig,
-      publish: true,
-      agentName: compiled.frontDesk?.identity.agentName,
+      amyMode: productConfig.amyMode || "both",
     });
-    const knowledge = await seedRealEstateFrontDeskKnowledge({
-      workspaceId,
-      agentId: agent.agentId,
-      businessName: compiled.frontDesk?.identity.companyName,
-    });
-    const speedToLead = await deployRealtorSpeedToLead({
-      workspaceId,
-      config: productConfig,
-      publish: true,
-    });
+    const agent = deploy.agent;
+    const knowledge = deploy.knowledge;
+    const speedToLead = deploy.speedToLead;
+    const compiled = deploy.compiled;
+    if (!agent || !compiled) {
+      throw new Error("Front Desk deploy did not return an agent.");
+    }
     await saveRealtorProductConfig(workspaceId, {
       ...productConfig,
       live: true,
@@ -96,13 +93,14 @@ export async function bootstrapRealEstateFrontDesk(): Promise<BootstrapRealEstat
       deployedAt: new Date().toISOString(),
       publishedAt: new Date().toISOString(),
       amyMode: productConfig.amyMode || "both",
-      deployedOutboundAgentId: speedToLead.outboundAgentId || existing.deployedOutboundAgentId,
+      deployedOutboundAgentId: speedToLead?.outboundAgentId || existing.deployedOutboundAgentId,
       frontDeskTemplateAgentId: agent.templateAgentId || existing.frontDeskTemplateAgentId,
-      outboundTemplateAgentId: speedToLead.outboundTemplateAgentId || existing.outboundTemplateAgentId,
-      followUpAutomationId: speedToLead.followUpAutomationId || existing.followUpAutomationId,
+      outboundTemplateAgentId:
+        speedToLead?.outboundTemplateAgentId || existing.outboundTemplateAgentId,
+      followUpAutomationId: speedToLead?.followUpAutomationId || existing.followUpAutomationId,
       frontDeskPublishedVersionId: agent.publishedVersionId || existing.frontDeskPublishedVersionId,
       outboundPublishedVersionId:
-        speedToLead.publishedVersionId || existing.outboundPublishedVersionId,
+        speedToLead?.publishedVersionId || existing.outboundPublishedVersionId,
     });
     console.log(
       JSON.stringify({
@@ -111,8 +109,8 @@ export async function bootstrapRealEstateFrontDesk(): Promise<BootstrapRealEstat
         agentId: agent.agentId,
         phoneE164: agent.phoneE164,
         configVersion: agent.configVersion,
-        knowledgeBaseId: knowledge.knowledgeBaseId,
-        sourceId: knowledge.sourceId,
+        knowledgeBaseId: knowledge?.knowledgeBaseId,
+        sourceId: knowledge?.sourceId,
       }),
     );
     const { bootstrapRealtorVerification } = await import("@/lib/realtor/boot-verification");
@@ -153,6 +151,22 @@ export async function deployRealEstateFrontDesk(input?: {
     },
   };
   const compiled = compileRealtorAgents(productConfig, { status: "active" });
+  const prisma = getPrisma();
+  const phoneE164 =
+    input?.phoneE164?.trim() ||
+    productConfig.phone.inboundNumberE164?.trim() ||
+    (
+      await prisma.phoneNumber.findFirst({
+        where: { workspaceId },
+        orderBy: { e164: "asc" },
+        select: { e164: true },
+      })
+    )?.e164;
+  if (!phoneE164) {
+    throw new Error(
+      "Inbound phone number (E.164) is required — select a number on the Front Desk Phone tab before publishing.",
+    );
+  }
 
   let agent: Awaited<ReturnType<typeof ensureRealEstateFrontDeskAgent>> | undefined;
   let knowledge: Awaited<ReturnType<typeof seedRealEstateFrontDeskKnowledge>> | undefined;
@@ -160,7 +174,7 @@ export async function deployRealEstateFrontDesk(input?: {
   if (productConfig.amyMode !== "speed_to_lead") {
     agent = await ensureRealEstateFrontDeskAgent({
       workspaceId,
-      phoneE164: input?.phoneE164,
+      phoneE164,
       agentName:
         input?.agentName ||
         (productConfig.business.teamName
@@ -168,13 +182,28 @@ export async function deployRealEstateFrontDesk(input?: {
           : compiled.frontDesk?.identity.agentName),
       assignPhone: true,
       productConfig,
-      publish: true,
+      publish: false,
     });
     knowledge = await seedRealEstateFrontDeskKnowledge({
       workspaceId,
       agentId: agent.agentId,
       businessName: compiled.frontDesk?.identity.companyName,
+      businessHours: productConfig.business.businessHours,
+      serviceAreas: compiled.frontDesk?.business.serviceAreas,
     });
+    const agentRow = await prisma.voiceAgent.findFirst({
+      where: { id: agent.agentId, workspaceId },
+      select: { draftConfig: true },
+    });
+    if (agentRow) {
+      const published = await publishVoiceAgentVersion({
+        workspaceId,
+        agentId: agent.agentId,
+        config: parseVoiceAgentConfig(agentRow.draftConfig),
+        changeLog: `Published real_estate_front_desk v${compiled.frontDesk?.configVersion}`,
+      });
+      agent.publishedVersionId = published.versionId;
+    }
   }
 
   const speedToLead = await deployRealtorSpeedToLead({

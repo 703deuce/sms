@@ -8,8 +8,19 @@ import type { RealEstateFieldManifest } from "./compile/field-manifest";
 /** Session-scoped field manifest — set at call start from compiled agent config. */
 let activeFieldManifest: RealEstateFieldManifest | null = null;
 
+/** Session-scoped intent enablement — separate from field manifest length. */
+let activeCompiledIntents: Partial<
+  Record<RealEstateIntent, { enabled: boolean }>
+> | null = null;
+
 export function setActiveFieldManifest(manifest: RealEstateFieldManifest | null): void {
   activeFieldManifest = manifest;
+}
+
+export function setActiveCompiledIntents(
+  intents: Partial<Record<RealEstateIntent, { enabled: boolean }>> | null,
+): void {
+  activeCompiledIntents = intents;
 }
 
 export function getActiveFieldManifest(): RealEstateFieldManifest | null {
@@ -76,6 +87,10 @@ export function isIntakeComplete(
 }
 
 export function isIntentEnabled(intent: RealEstateIntent): boolean {
+  if (activeCompiledIntents) {
+    const cfg = activeCompiledIntents[intent];
+    if (cfg !== undefined) return cfg.enabled;
+  }
   if (!activeFieldManifest) return true;
   return Boolean(activeFieldManifest[intent]?.length);
 }

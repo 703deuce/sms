@@ -13,6 +13,7 @@ import { createInitialCallState } from "@/lib/voice/real-estate/state";
 import { getCompiledFrontDeskFromAdvanced } from "@/lib/voice/real-estate/config";
 import {
   manifestFromCompiledIntents,
+  setActiveCompiledIntents,
   setActiveFieldManifest,
 } from "@/lib/voice/real-estate/fields";
 import type { FrontDeskUserData } from "./frontdesk/userdata";
@@ -194,9 +195,40 @@ export function buildSessionContext(input: {
 
   if (compiledFrontDesk) {
     setActiveFieldManifest(manifestFromCompiledIntents(compiledFrontDesk.intents));
+    const enabledMap: Partial<Record<string, { enabled: boolean }>> = {};
+    for (const [intent, cfg] of Object.entries(compiledFrontDesk.intents)) {
+      enabledMap[intent] = { enabled: cfg.enabled };
+    }
+    setActiveCompiledIntents(enabledMap);
   } else {
     setActiveFieldManifest(null);
+    setActiveCompiledIntents(null);
   }
+
+  const useRealtime = usesFrontDeskRealtimeVoicePipeline(input.agentConfig);
+  const advanced = input.agentConfig.advanced as Record<string, unknown> | undefined;
+  console.log(
+    JSON.stringify({
+      source: "transovo-voice-runtime",
+      event: "inbound_agent_profile",
+      callId: input.callId,
+      agentId: input.routing.agentId,
+      agentName: input.agentRow?.name || input.routing.agentName || null,
+      configSource: input.loaded.source,
+      agentVersionId: input.loaded.agentVersionId,
+      livekitProfile: advanced?.livekitProfile || null,
+      realEstateFrontDesk: advanced?.realEstateFrontDesk === true,
+      hasCompiledFrontDesk: Boolean(advanced?.realEstateCompiled),
+      dispatchSource: input.routing.dispatchSource || null,
+      runtimeProfile: isRealEstate
+        ? useRealtime
+          ? "frontdesk_real_estate_realtime"
+          : "frontdesk_real_estate"
+        : useRealtime
+          ? "frontdesk_realtime"
+          : "frontdesk",
+    }),
+  );
 
   return {
     identity: input.identity,
@@ -210,7 +242,7 @@ export function buildSessionContext(input: {
     isRealEstate,
     compiledFrontDesk,
     outputGainDb: resolveLiveKitOutputGainDb(input.agentConfig.voiceLanguage?.outputGainDb),
-    useRealtime: usesFrontDeskRealtimeVoicePipeline(input.agentConfig),
+    useRealtime,
     maxToolSteps:
       Number(process.env.VOICE_MAX_TOOL_STEPS?.trim()) || (isRealEstate ? 12 : 8),
   };
