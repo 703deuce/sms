@@ -50,6 +50,42 @@ export function resolveOutboundRealtimeVadMode(): OutboundRealtimeVadMode {
 }
 
 export function resolveOutboundRealtimeTurnDetection(): OutboundRealtimeTurnDetectionConfig {
+  return resolveOutboundRealtimeTurnDetectionWithOptions();
+}
+
+/** Inbound front desk — less eager VAD to reduce false interrupts on phone audio. */
+export function resolveFrontDeskInboundRealtimeTurnDetection(): OutboundRealtimeTurnDetectionConfig {
+  const base = resolveOutboundRealtimeTurnDetectionWithOptions();
+  if (base.turnDetection.type === "semantic_vad") {
+    const envEagerness = process.env.VOICE_REALTIME_VAD_EAGERNESS?.trim().toLowerCase();
+    const eagerness: OutboundRealtimeVadEagerness =
+      envEagerness &&
+      (["auto", "low", "medium", "high"] as const).includes(envEagerness as OutboundRealtimeVadEagerness)
+        ? (envEagerness as OutboundRealtimeVadEagerness)
+        : "medium";
+    return {
+      mode: base.mode,
+      turnDetection: {
+        ...base.turnDetection,
+        eagerness,
+        interrupt_response: parseBoolEnv(process.env.VOICE_REALTIME_INTERRUPT_RESPONSE, true),
+      },
+    };
+  }
+  if (base.turnDetection.type === "server_vad") {
+    return {
+      mode: base.mode,
+      turnDetection: {
+        ...base.turnDetection,
+        threshold: Math.max(base.turnDetection.threshold ?? 0.75, 0.75),
+        silence_duration_ms: Math.max(base.turnDetection.silence_duration_ms ?? 500, 500),
+      },
+    };
+  }
+  return base;
+}
+
+function resolveOutboundRealtimeTurnDetectionWithOptions(): OutboundRealtimeTurnDetectionConfig {
   const mode = resolveOutboundRealtimeVadMode();
   const interruptResponse = parseBoolEnv(process.env.VOICE_REALTIME_INTERRUPT_RESPONSE, true);
 
@@ -58,16 +94,16 @@ export function resolveOutboundRealtimeTurnDetection(): OutboundRealtimeTurnDete
       mode,
       turnDetection: {
         type: "server_vad",
-        threshold: parseNumberEnv(process.env.VOICE_REALTIME_VAD_THRESHOLD, 0.7),
+        threshold: parseNumberEnv(process.env.VOICE_REALTIME_VAD_THRESHOLD, 0.75),
         prefix_padding_ms: parseNumberEnv(process.env.VOICE_REALTIME_VAD_PREFIX_MS, 300),
-        silence_duration_ms: parseNumberEnv(process.env.VOICE_REALTIME_VAD_SILENCE_MS, 400),
+        silence_duration_ms: parseNumberEnv(process.env.VOICE_REALTIME_VAD_SILENCE_MS, 500),
         create_response: true,
         interrupt_response: interruptResponse,
       },
     };
   }
 
-  const eagernessRaw = (process.env.VOICE_REALTIME_VAD_EAGERNESS || "high").trim().toLowerCase();
+  const eagernessRaw = (process.env.VOICE_REALTIME_VAD_EAGERNESS || "medium").trim().toLowerCase();
   const eagerness: OutboundRealtimeVadEagerness = (
     ["auto", "low", "medium", "high"] as const
   ).includes(eagernessRaw as OutboundRealtimeVadEagerness)

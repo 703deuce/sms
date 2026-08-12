@@ -116,6 +116,23 @@ check("intake memory separates financing from timeframe", () => {
   assert.ok(ids.includes("purchase_timeframe"), `expected purchase_timeframe in ${ids.join(",")}`);
 });
 
+check("seller notify intents require contact follow-up fields", () => {
+  const { missingContactFollowUpFields } = require("../src/lib/voice/real-estate/fields");
+  const missing = missingContactFollowUpFields(["seller"], {}, null);
+  const ids = missing.map((f: { field_id: string }) => f.field_id);
+  assert.ok(ids.includes("preferred_contact_method"), `expected preferred_contact_method in ${ids.join(",")}`);
+  assert.ok(ids.includes("email"), `expected email in ${ids.join(",")}`);
+});
+
+check("frontdesk inbound uses safer realtime VAD", () => {
+  const pipeline = readProjectFile("voice-runtime/src/pipeline.ts");
+  const inbound = readProjectFile("voice-runtime/src/inbound-session-pipeline.ts");
+  const turnCfg = readProjectFile("voice-runtime/src/realtime-turn-config.ts");
+  assert.ok(pipeline.includes("resolveFrontDeskInboundRealtimeTurnDetection"));
+  assert.ok(inbound.includes("frontdeskInbound: true"));
+  assert.ok(turnCfg.includes("resolveFrontDeskInboundRealtimeTurnDetection"));
+});
+
 check("RE intake uses TaskGroup collect_required_fields", () => {
   const reTools = readProjectFile("voice-runtime/src/frontdesk/real-estate/re-tools.ts");
   const intake = readProjectFile("voice-runtime/src/frontdesk/real-estate/intake-task-group.ts");

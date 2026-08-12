@@ -70,6 +70,21 @@ const SHARED_FIELDS: RealEstateFieldDefinition[] = [
     required: false,
     collection_instruction: "Best number to reach them if different from this line.",
   },
+  {
+    field_id: "preferred_contact_method",
+    label: "Preferred contact method",
+    type: "text",
+    required: false,
+    collection_instruction:
+      "How they want the team to follow up — phone call, text message, or email.",
+  },
+  {
+    field_id: "email",
+    label: "Email",
+    type: "email",
+    required: false,
+    collection_instruction: "Email address when they want follow-up by email.",
+  },
 ];
 
 export const TEMPLATE_BUYER_FIELDS: RealEstateFieldDefinition[] = [
@@ -251,6 +266,20 @@ export const TEMPLATE_AGENT_TO_AGENT_FIELDS: RealEstateFieldDefinition[] = [
     type: "text",
     required: true,
     collection_instruction: "Showing coordination, offer, referral, or other agent matter.",
+  },
+  {
+    field_id: "preferred_contact_method",
+    label: "Preferred contact method",
+    type: "text",
+    required: false,
+    collection_instruction: "Phone call, text message, or email for follow-up.",
+  },
+  {
+    field_id: "email",
+    label: "Email",
+    type: "email",
+    required: false,
+    collection_instruction: "Email when they want follow-up by email.",
   },
   {
     field_id: "callback_phone",

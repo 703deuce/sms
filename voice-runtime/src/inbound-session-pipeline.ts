@@ -353,7 +353,10 @@ export function createVoicePipeline(input: {
     | undefined;
 
   if (input.sessionBase.useRealtime) {
-    const realtimeOverrides = { enableInputAudioTranscription: true };
+    const realtimeOverrides = {
+      enableInputAudioTranscription: true,
+      frontdeskInbound: true,
+    };
     const realtimeCfg = resolveOutboundRealtimePipelineConfig(input.agentConfig, realtimeOverrides);
     const outputMode = resolveOutboundRealtimeOutputMode();
     const { llm, tts, pipelineCfg } = buildOutboundRealtimeSessionComponents(

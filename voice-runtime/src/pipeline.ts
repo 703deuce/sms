@@ -21,6 +21,7 @@ import { buildAmySttConfig, describeAmySttConfig, type AmySttConfig } from "./st
 import { resolveElevenLabsApiKey } from "./env-aliases";
 import {
   describeOutboundRealtimeTurnDetection,
+  resolveFrontDeskInboundRealtimeTurnDetection,
   resolveOutboundRealtimeTurnDetection,
 } from "./realtime-turn-config";
 
@@ -253,7 +254,9 @@ export function buildOutboundRealtimeModel(
   }
 
   const useElevenLabsOutput = outputMode === "elevenlabs";
-  const turnDetectionCfg = resolveOutboundRealtimeTurnDetection();
+  const turnDetectionCfg = overrides?.frontdeskInbound
+    ? resolveFrontDeskInboundRealtimeTurnDetection()
+    : resolveOutboundRealtimeTurnDetection();
   const disableInputTranscription = !overrides?.enableInputAudioTranscription;
 
   return new openai.realtime.RealtimeModel({

@@ -33,6 +33,7 @@ export function buildRealEstateFrontDeskInstructions(input: {
     "   Do NOT ask for multiple intake fields in one question before that tool runs — if the caller volunteers several details early, they will be remembered. ",
     "4. Use get_required_fields only if you need a read-only status check. ",
     "5. When intake is complete, offer to book a consultation with list_available_slots. ",
+    "   For seller and follow-up calls, collect how they want to be contacted (call, text, or email) before promising a callback. ",
     "",
     `Service areas: ${areas}. Property types: ${types}. `,
     ...business.knowledgeNotes.map((n) => `${n} `),

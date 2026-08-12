@@ -72,6 +72,8 @@ export type OutboundRealtimePipelineOverrides = {
   voice?: string;
   /** Use OpenAI realtime default input transcription (required for nested AgentTask field collection). */
   enableInputAudioTranscription?: boolean;
+  /** Inbound front desk SIP — use less eager VAD defaults to reduce false speech interrupts. */
+  frontdeskInbound?: boolean;
 };
 
 export function resolveOutboundRealtimePipelineConfig(

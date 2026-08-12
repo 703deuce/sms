@@ -70,6 +70,7 @@ export function buildCompiledFrontDeskInstructions(
     "   Do NOT bundle multiple intake questions before that tool — early answers are remembered and backfilled. ",
     "4. Use get_required_fields only if you need a read-only status check. ",
     "5. When intake is complete, follow the qualified outcome for that caller type (see below). ",
+    "   For seller and follow-up outcomes, collect preferred contact method (call, text, or email) and email when needed before saying someone will get back to them. ",
     "",
     "Qualified outcomes by caller type:",
     ...outcomeRules,

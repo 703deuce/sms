@@ -3,7 +3,8 @@ import type { AgentSession } from "@livekit/agents";
 import type { RealEstateFieldDefinition, RealEstateIntent } from "@/lib/voice/real-estate/types";
 import {
   fieldsForIntents,
-  isIntakeComplete,
+  missingContactFollowUpFields,
+  missingIntakeFields,
   missingRequiredFields,
 } from "@/lib/voice/real-estate/fields";
 import { backfillIntakeFromConversation } from "@/lib/voice/real-estate/intake-memory";
@@ -78,10 +79,21 @@ export async function runRealEstateIntakeTaskGroup(input: {
 
   const toCollect =
     input.fields ||
-    missingRequiredFields(intents, userData.callState.collectedFields);
+    missingIntakeFields(
+      intents,
+      userData.callState.collectedFields,
+      userData.realEstateCompiled,
+    );
 
   if (!toCollect.length) {
-    return { collected: [], complete: isIntakeComplete(intents, userData.callState.collectedFields) };
+    const complete =
+      missingRequiredFields(intents, userData.callState.collectedFields).length === 0 &&
+      missingContactFollowUpFields(
+        intents,
+        userData.callState.collectedFields,
+        userData.realEstateCompiled,
+      ).length === 0;
+    return { collected: [], complete };
   }
 
   const collected: string[] = [];
@@ -152,7 +164,13 @@ export async function runRealEstateIntakeTaskGroup(input: {
   });
   await syncIntakeSideEffects(userData);
 
-  const complete = isIntakeComplete(intents, userData.callState.collectedFields);
+  const complete =
+    missingRequiredFields(intents, userData.callState.collectedFields).length === 0 &&
+    missingContactFollowUpFields(
+      intents,
+      userData.callState.collectedFields,
+      userData.realEstateCompiled,
+    ).length === 0;
   if (complete && userData.callState) {
     void syncRealEstateLeadToCrm({
       workspaceId: userData.workspaceId,
