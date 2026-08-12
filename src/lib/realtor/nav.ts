@@ -36,6 +36,14 @@ const CALLS_CHILDREN = [
   { label: "Recordings", href: "/realtor/calls/recordings" },
 ];
 
+const AI_AGENTS_CHILDREN = [
+  { label: "Front Desk", href: "/realtor/agents/front-desk" },
+  { label: "Speed-to-Lead", href: "/realtor/agents/speed-to-lead" },
+  { label: "Knowledge", href: "/realtor/agents/knowledge" },
+  { label: "Agent Activity", href: "/realtor/agents/activity" },
+  { label: "Test Agent", href: "/realtor/test" },
+];
+
 const LEADS_CHILDREN = [
   { label: "All Leads", href: "/realtor/leads" },
   { label: "Pipeline", href: "/realtor/leads/pipeline" },
@@ -69,7 +77,7 @@ const REALTOR_PAGE_TITLES: Record<string, string> = {
   "/realtor/leads/capture": "Lead Capture",
   "/realtor/leads/import": "Import",
   "/realtor/needs-attention": "Needs Attention",
-  "/realtor/test": "Test Amy",
+  "/realtor/test": "Test Agent",
   "/realtor/messages": "All Conversations",
   "/realtor/calls": "All Calls",
   "/realtor/calls/voicemails": "Voicemails",
@@ -115,7 +123,12 @@ export function buildRealtorNav(inboxBadge?: number): NavItem[] {
       children: CALLS_CHILDREN,
     },
     { label: "Messages", href: "/realtor/messages", icon: MessageSquare },
-    { label: "AI Agents", href: "/realtor/agents/front-desk", icon: Bot },
+    {
+      label: "AI Agents",
+      href: "/realtor/agents/front-desk",
+      icon: Bot,
+      children: AI_AGENTS_CHILDREN,
+    },
     { label: "Automations", href: "/automations", icon: Workflow },
     { label: "Appointments", href: "/realtor/appointments", icon: CalendarDays },
     { label: "Campaigns", href: "/campaigns", icon: Megaphone },
