@@ -1,10 +1,11 @@
 import type { AgentSession } from "@livekit/agents";
 import type { RealEstateFieldDefinition } from "@/lib/voice/real-estate/types";
+import { callerFacingFieldQuestion } from "@/lib/voice/real-estate/field-spoken-prompts";
 import { buildIntakeFieldAckPhrase } from "@/lib/voice/real-estate/intake-transition-phrases";
 import { deliverScriptedSpeech } from "./outbound/scripted-speech";
 
 export function intakeFieldQuestion(field: RealEstateFieldDefinition): string {
-  return field.collection_instruction?.trim() || `What is your ${field.label}?`;
+  return callerFacingFieldQuestion(field);
 }
 
 export function buildIntakeFieldTransitionLine(

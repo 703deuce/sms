@@ -2,6 +2,7 @@ import { llm, voice } from "@livekit/agents";
 import { z } from "zod";
 import type { AgentSession } from "@livekit/agents";
 import type { RealEstateFieldDefinition } from "@/lib/voice/real-estate/types";
+import { callerFacingFieldQuestion } from "@/lib/voice/real-estate/field-spoken-prompts";
 import { applyHeuristicIntakeBackfill } from "@/lib/voice/real-estate/intake-memory";
 import type { FrontDeskUserData } from "../frontdesk/userdata";
 import { FIELD_TRANSITION_BRIDGE_RULES } from "@/lib/voice/field-transition-bridge";
@@ -40,8 +41,7 @@ export class SchemaFieldCollectionTask extends voice.AgentTask<SchemaFieldCollec
     private readonly sessionRef: AgentSession<FrontDeskUserData>,
     private readonly handlers: SchemaFieldCollectionHandlers,
   ) {
-    const question =
-      field.collection_instruction?.trim() || `What is your ${field.label}?`;
+    const question = callerFacingFieldQuestion(field);
     const pending = handlers.pendingFields?.filter((f) => f.field_id !== field.field_id) ?? [];
 
     const recordPrimaryTool = llm.tool({
@@ -160,9 +160,7 @@ export class SchemaFieldCollectionTask extends voice.AgentTask<SchemaFieldCollec
       return;
     }
 
-    const question =
-      this.field.collection_instruction?.trim() ||
-      `Could I get your ${this.field.label}?`;
+    const question = callerFacingFieldQuestion(this.field);
 
     const ack = ud.intakeTransitionPhrase?.trim();
     if (ack) {

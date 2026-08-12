@@ -177,6 +177,15 @@ check("frontdesk inbound uses safer realtime VAD", () => {
   assert.ok(latency.includes("agent_resumed"));
 });
 
+check("intake scripted speech uses caller-facing questions", () => {
+  const transitionSpeech = readProjectFile("voice-runtime/src/intake-transition-speech.ts");
+  const spokenPrompts = readProjectFile("src/lib/voice/real-estate/field-spoken-prompts.ts");
+  assert.ok(transitionSpeech.includes("callerFacingFieldQuestion"));
+  assert.ok(spokenPrompts.includes("target_areas"));
+  assert.ok(spokenPrompts.includes("What neighborhoods or cities"));
+  assert.ok(!transitionSpeech.includes("collection_instruction"));
+});
+
 check("RE intake uses single IntakeSequenceCollectionTask", () => {
   const reTools = readProjectFile("voice-runtime/src/frontdesk/real-estate/re-tools.ts");
   const intake = readProjectFile("voice-runtime/src/frontdesk/real-estate/intake-task-group.ts");
