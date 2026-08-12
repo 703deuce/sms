@@ -177,19 +177,27 @@ check("frontdesk inbound uses safer realtime VAD", () => {
   assert.ok(latency.includes("agent_resumed"));
 });
 
-check("RE intake uses TaskGroup collect_required_fields", () => {
+check("RE intake uses single IntakeSequenceCollectionTask", () => {
   const reTools = readProjectFile("voice-runtime/src/frontdesk/real-estate/re-tools.ts");
   const intake = readProjectFile("voice-runtime/src/frontdesk/real-estate/intake-task-group.ts");
-  const schemaTask = readProjectFile("voice-runtime/src/tasks/schema-field-collection-task.ts");
+  const sequenceTask = readProjectFile(
+    "voice-runtime/src/frontdesk/real-estate/intake-sequence-collection-task.ts",
+  );
+  const transitionSpeech = readProjectFile("voice-runtime/src/intake-transition-speech.ts");
+  const scriptedSpeech = readProjectFile("voice-runtime/src/outbound/scripted-speech.ts");
   const taskCtx = readProjectFile("voice-runtime/src/tasks/task-context.ts");
   const intakeMemory = readProjectFile("src/lib/voice/real-estate/intake-memory.ts");
   assert.ok(reTools.includes("collect_required_fields"));
   assert.ok(reTools.includes("runRealEstateIntakeTaskGroup"));
   assert.ok(!reTools.includes('name: "record_collected_field"'));
-  assert.ok(!intake.includes("updateAgent(group)"), "intake must await group.run() without manual updateAgent");
+  assert.ok(intake.includes("runIntakeSequenceCollectionTask"));
+  assert.ok(!intake.includes("workflows.TaskGroup"));
   assert.ok(intake.includes("backfillIntakeFromConversation"));
-  assert.ok(schemaTask.includes("record_additional_intake_field"));
-  assert.ok(schemaTask.includes("applyHeuristicIntakeBackfill"));
+  assert.ok(sequenceTask.includes("record_schema_field_value"));
+  assert.ok(sequenceTask.includes("speakIntakeTransitionLine"));
+  assert.ok(sequenceTask.includes("applyHeuristicIntakeBackfill"));
+  assert.ok(transitionSpeech.includes("deliverScriptedSpeech"));
+  assert.ok(scriptedSpeech.includes("waitForPlayout"));
   assert.ok(intakeMemory.includes("backfillIntakeFromConversation"));
   assert.ok(taskCtx.includes("sessionUsesRealtimeLlm"));
 });

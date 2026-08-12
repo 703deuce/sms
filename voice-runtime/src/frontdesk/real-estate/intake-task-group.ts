@@ -1,4 +1,3 @@
-import { workflows } from "@livekit/agents";
 import type { AgentSession } from "@livekit/agents";
 import type { RealEstateFieldDefinition, RealEstateIntent } from "@/lib/voice/real-estate/types";
 import {
@@ -15,9 +14,16 @@ import {
 import { notifyRealEstateStaff } from "@/lib/voice/real-estate/notifications";
 import { syncRealEstateLeadToCrm } from "@/lib/voice/real-estate/crm-sync";
 import type { FrontDeskUserData } from "../userdata";
-import { buildIntakeFieldAckPhrase } from "@/lib/voice/real-estate/intake-transition-phrases";
-import { SchemaFieldCollectionTask } from "../../tasks/schema-field-collection-task";
-import { taskGroupOptionsFromSession } from "../../tasks/task-context";
+import { runIntakeSequenceCollectionTask } from "./intake-sequence-collection-task";
+
+function queueIntakeSideEffects(userData: FrontDeskUserData): void {
+  if (!userData.callState) return;
+  void persistCallState({
+    workspaceId: userData.workspaceId,
+    callId: userData.callId,
+    callState: userData.callState,
+  }).catch(() => undefined);
+}
 
 async function syncIntakeSideEffects(userData: FrontDeskUserData): Promise<void> {
   if (!userData.callState) return;
@@ -39,24 +45,19 @@ function activeIntents(userData: FrontDeskUserData): RealEstateIntent[] {
   return intents;
 }
 
-function pendingFieldsForTask(
-  currentField: RealEstateFieldDefinition,
-  toCollect: RealEstateFieldDefinition[],
-  allFields: RealEstateFieldDefinition[],
-  collected: Record<string, string>,
-): RealEstateFieldDefinition[] {
-  const pending: RealEstateFieldDefinition[] = [];
-  for (const field of allFields) {
-    if (field.field_id === currentField.field_id) continue;
-    if (toCollect.some((f) => f.field_id === field.field_id)) {
-      pending.push(field);
-      continue;
-    }
-    if (!field.required && !collected[field.field_id]?.trim()) {
-      pending.push(field);
-    }
-  }
-  return pending;
+function isIntakeCompleteForIntents(
+  intents: RealEstateIntent[],
+  userData: FrontDeskUserData,
+): boolean {
+  const collected = userData.callState?.collectedFields || {};
+  return (
+    missingRequiredFields(intents, collected).length === 0 &&
+    missingContactFollowUpFields(
+      intents,
+      collected,
+      userData.realEstateCompiled,
+    ).length === 0
+  );
 }
 
 export async function runRealEstateIntakeTaskGroup(input: {
@@ -87,13 +88,7 @@ export async function runRealEstateIntakeTaskGroup(input: {
     );
 
   if (!toCollect.length) {
-    const complete =
-      missingRequiredFields(intents, userData.callState.collectedFields).length === 0 &&
-      missingContactFollowUpFields(
-        intents,
-        userData.callState.collectedFields,
-        userData.realEstateCompiled,
-      ).length === 0;
+    const complete = isIntakeCompleteForIntents(intents, userData);
     return { collected: [], complete };
   }
 
@@ -104,60 +99,46 @@ export async function runRealEstateIntakeTaskGroup(input: {
     value: string,
   ): Promise<{ ok: boolean }> => {
     userData.callState = recordCollectedField(userData.callState!, field.field_id, value);
-    userData.intakeTransitionPhrase = buildIntakeFieldAckPhrase(field, value);
     if (field.field_id === "name") {
       userData.callState!.contactName = value.trim();
     }
     if (!collected.includes(field.field_id)) {
       collected.push(field.field_id);
     }
-    await syncIntakeSideEffects(userData);
+    queueIntakeSideEffects(userData);
     return { ok: true };
   };
 
-  const group = new workflows.TaskGroup({
-    ...taskGroupOptionsFromSession(input.session),
-    onTaskCompleted: async () => {
-      await syncIntakeSideEffects(userData);
+  // One AgentTask for the full intake sequence — avoids per-field activity handoffs
+  // that cause multi-second silence on OpenAI Realtime.
+  const sequenceResult = await runIntakeSequenceCollectionTask({
+    session: input.session,
+    handlers: {
+      fieldsToCollect: toCollect,
+      allFields,
+      onRecordField: recordIntakeField,
+      onRecordAdditionalField: async (fieldId, value) => {
+        const target = allFields.find((f) => f.field_id === fieldId);
+        if (!target) {
+          return { ok: true };
+        }
+        const already = userData.callState?.collectedFields[fieldId]?.trim();
+        if (already) {
+          return { ok: true };
+        }
+        return await recordIntakeField(target, value);
+      },
+      isIntakeComplete: () => isIntakeCompleteForIntents(intents, userData),
     },
   });
 
-  for (const field of toCollect) {
-    const pendingFields = pendingFieldsForTask(
-      field,
-      toCollect,
-      allFields,
-      userData.callState.collectedFields,
-    );
-    group.add(
-      () =>
-        new SchemaFieldCollectionTask(field, input.session, {
-          onRecord: async (value) => {
-            await recordIntakeField(field, value);
-            return { ok: true };
-          },
-          pendingFields,
-          onRecordAdditionalField: async (fieldId, value) => {
-            const target = allFields.find((f) => f.field_id === fieldId);
-            if (!target) {
-              return { ok: true };
-            }
-            const already = userData.callState?.collectedFields[fieldId]?.trim();
-            if (already) {
-              return { ok: true };
-            }
-            await recordIntakeField(target, value);
-            return { ok: true };
-          },
-        }),
-      { id: field.field_id, description: `Collect ${field.label}` },
-    );
+  for (const fieldId of sequenceResult.collected) {
+    if (!collected.includes(fieldId)) {
+      collected.push(fieldId);
+    }
   }
 
-  // AgentTask.run() pauses the parent activity (not drain) so onEnter generateReply
-  // can speak while the tool is still executing. Manual updateAgent() before run()
-  // drains scheduling and leaves the caller hearing silence after intake starts.
-  await group.run();
+  await syncIntakeSideEffects(userData);
 
   userData.callState = await backfillIntakeFromConversation({
     state: userData.callState,
@@ -166,13 +147,7 @@ export async function runRealEstateIntakeTaskGroup(input: {
   });
   await syncIntakeSideEffects(userData);
 
-  const complete =
-    missingRequiredFields(intents, userData.callState.collectedFields).length === 0 &&
-    missingContactFollowUpFields(
-      intents,
-      userData.callState.collectedFields,
-      userData.realEstateCompiled,
-    ).length === 0;
+  const complete = isIntakeCompleteForIntents(intents, userData);
   if (complete && userData.callState) {
     void syncRealEstateLeadToCrm({
       workspaceId: userData.workspaceId,
