@@ -25,6 +25,7 @@ import {
   Search,
 } from "lucide-react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 type CallRow = {
@@ -115,10 +116,27 @@ function filterRow(filter: CallListFilter, row: CallRow): boolean {
   return true;
 }
 
+function parseUrlFilter(raw: string | null): CallListFilter {
+  const valid: CallListFilter[] = [
+    "all",
+    "leads",
+    "appointments",
+    "messages",
+    "transferred",
+    "voicemails",
+    "no_answer",
+  ];
+  if (raw && valid.includes(raw as CallListFilter)) return raw as CallListFilter;
+  return "all";
+}
+
 export default function VoiceCallsPage() {
+  const searchParams = useSearchParams();
   const [apiRows, setApiRows] = useState<CallRow[]>([]);
   const [apiMetrics, setApiMetrics] = useState<Analytics | null>(null);
-  const [filter, setFilter] = useState<CallListFilter>("all");
+  const [filter, setFilter] = useState<CallListFilter>(() =>
+    parseUrlFilter(searchParams.get("filter")),
+  );
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -126,8 +144,12 @@ export default function VoiceCallsPage() {
   const useDemo = apiRows.length === 0;
 
   useEffect(() => {
+    setFilter(parseUrlFilter(searchParams.get("filter")));
+  }, [searchParams]);
+
+  useEffect(() => {
     setLoading(true);
-    const params = new URLSearchParams({ limit: "100", test: "0", filter: "all", dateRange: "7d" });
+    const params = new URLSearchParams({ limit: "100", filter: "all", dateRange: "7d" });
     fetch(`/api/voice/calls?${params}`)
       .then((r) => r.json())
       .then((j) => {

@@ -1,9 +1,7 @@
 import { getPrisma } from "@/lib/db";
 import {
-  deriveCallOutcomeBadge,
-  fmtCallDurationShort,
+  fmtCallDurationTable,
   fmtCallPhone,
-  type CallOutcomeBadge,
 } from "@/lib/voice/calls/display";
 import { loadPrimaryVoiceAgentId } from "@/lib/voice/shell-nav";
 import {
@@ -14,6 +12,8 @@ import {
 export type DashboardDateRange = "today" | "7d" | "30d";
 
 export type AttentionTone = "red" | "yellow" | "green";
+
+export type CallDisposition = "answered" | "voicemail" | "missed";
 
 export type OperationalDashboardData = {
   greeting: string;
@@ -30,20 +30,25 @@ export type OperationalDashboardData = {
     ready: boolean;
     label: string;
     sublabel: string;
+    detail: string;
   };
   kpis: {
     callsAnswered: number;
     callsAnsweredChangePct: number | null;
-    callsAnsweredHint: string;
     newLeads: number;
-    newLeadsHint: string;
+    newLeadsChangePct: number | null;
     appointmentsBooked: number;
-    appointmentsHint: string;
+    appointmentsChangePct: number | null;
     messagesTaken: number;
-    messagesHint: string;
+    messagesChangePct: number | null;
   };
   chart: {
-    days: Array<{ label: string; leads: number; existing: number; other: number }>;
+    days: Array<{
+      label: string;
+      answered: number;
+      voicemail: number;
+      missed: number;
+    }>;
   };
   attention: Array<{
     id: string;
@@ -56,41 +61,41 @@ export type OperationalDashboardData = {
   recentCalls: Array<{
     id: string;
     name: string;
+    initials: string;
     reason: string;
-    statusLabel: string;
-    statusClass: string;
+    disposition: CallDisposition;
     duration: string;
-    time: string;
+    timeLabel: string;
     href: string;
     hasRecording: boolean;
   }>;
   smsPanel: {
     sent: number;
     replies: number;
+    messagesUsed: number;
+    messagesLimit: number;
+    messagesPct: number;
     campaign?: {
       name: string;
-      sent: number;
-      total: number;
-      pct: number;
+      endsLabel?: string;
       href: string;
     };
     empty?: { title: string; body: string; actionLabel: string; href: string };
   };
   automationsPanel: {
     activeCount: number;
-    runsThisWeek: number;
-    failedCount: number;
-    flows: Array<{ name: string; status: string }>;
+    flows: Array<{ name: string; active: boolean }>;
     href: string;
   };
   planUsage: {
     receptionistMinutesUsed: number;
     receptionistMinutesLimit: number;
+    receptionistPct: number;
     smsMessagesUsed: number;
     smsMessagesLimit: number;
+    smsPct: number;
     daysLeftInCycle: number;
   };
-  isDemo: boolean;
 };
 
 function greetingForHour(hour: number): string {
@@ -126,179 +131,67 @@ function pctChange(current: number, previous: number): number | null {
 
 function maskPhoneDisplay(e164: string): string {
   const formatted = fmtCallPhone(e164);
-  return formatted.replace(/\d{4}$/, "XXXX").replace(/-\d{4}$/, "-XXXX");
-}
-
-function statusLabel(badge: CallOutcomeBadge): string {
-  if (badge === "Appointment Booked") return "Booked";
-  if (badge === "Message Taken") return "Message";
-  return badge;
-}
-
-function statusClass(badge: CallOutcomeBadge): string {
-  switch (badge) {
-    case "New Lead":
-    case "Lead Captured":
-      return "bg-violet-50 text-violet-700 ring-violet-200";
-    case "Appointment Booked":
-      return "bg-indigo-50 text-indigo-700 ring-indigo-200";
-    case "Spam":
-      return "bg-slate-100 text-slate-600 ring-slate-200";
-    case "Message Taken":
-      return "bg-indigo-50 text-indigo-700 ring-indigo-200";
-    default:
-      return "bg-slate-100 text-slate-600 ring-slate-200";
+  if (formatted.includes("(")) {
+    return formatted.replace(/\d{4}$/, "XXXX");
   }
+  return formatted;
 }
 
-function classifyChartBucket(call: {
-  contactId: string | null;
-  leadScore: number | null;
-  outcome: string | null;
-  appointmentBooked: boolean;
-}): "leads" | "existing" | "other" {
-  const outcome = String(call.outcome || "").toLowerCase();
-  if (
-    (call.leadScore != null && call.leadScore >= 40) ||
-    outcome.includes("lead")
-  ) {
-    return "leads";
+function initialsFromName(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) {
+    return `${parts[0][0] ?? ""}${parts[1][0] ?? ""}`.toUpperCase();
   }
-  if (call.contactId) return "existing";
-  return "other";
+  if (parts[0]?.startsWith("(")) return "#";
+  return (parts[0]?.slice(0, 2) ?? "?").toUpperCase();
 }
 
-const DEMO_DATA: OperationalDashboardData = {
-  greeting: "Good afternoon",
-  userName: "Anthony",
-  dateRange: "7d",
-  receptionist: {
-    name: "Amy",
-    active: true,
-    phoneDisplay: "(571) XXX-XXXX",
-    editHref: "/voice/receptionist",
-    testHref: "/voice/agents",
-  },
-  sms: { ready: true, label: "SMS Ready", sublabel: "A2P Registered" },
-  kpis: {
-    callsAnswered: 37,
-    callsAnsweredChangePct: 12,
-    callsAnsweredHint: "+12% vs last week",
-    newLeads: 11,
-    newLeadsHint: "Today",
-    appointmentsBooked: 6,
-    appointmentsHint: "This Week",
-    messagesTaken: 14,
-    messagesHint: "Today",
-  },
-  chart: {
-    days: [
-      { label: "M", leads: 4, existing: 3, other: 2 },
-      { label: "T", leads: 5, existing: 4, other: 1 },
-      { label: "W", leads: 3, existing: 5, other: 2 },
-      { label: "T", leads: 6, existing: 3, other: 3 },
-      { label: "F", leads: 4, existing: 6, other: 2 },
-      { label: "S", leads: 2, existing: 2, other: 1 },
-      { label: "S", leads: 1, existing: 1, other: 1 },
-    ],
-  },
-  attention: [
-    {
-      id: "callbacks",
-      tone: "red",
-      title: "2 callers requested callbacks",
-      actionLabel: "View Calls",
-      href: "/voice/calls?filter=messages",
-    },
-    {
-      id: "a2p",
-      tone: "yellow",
-      title: "A2P registration incomplete",
-      body: "Finish registration to enable outbound SMS.",
-      actionLabel: "Continue",
-      href: "/compliance",
-    },
-    {
-      id: "amy",
-      tone: "yellow",
-      title: "Amy couldn't answer 1 question this week",
-      body: "Review and update business information.",
-      actionLabel: "Review",
-      href: "/voice/receptionist",
-    },
-    {
-      id: "automations",
-      tone: "green",
-      title: "Automations healthy",
-      actionLabel: "View Automations",
-      href: "/automations",
-    },
-  ],
-  recentCalls: [
-    {
-      id: "demo-call-jamie",
-      name: "James Wilson",
-      reason: "Furnace not heating — requested callback",
-      statusLabel: "New Lead",
-      statusClass: "bg-violet-50 text-violet-700 ring-violet-200",
-      duration: "3m 42s",
-      time: "2:34 PM",
-      href: "/voice/calls/demo-call-jamie",
-      hasRecording: true,
-    },
-    {
-      id: "demo-call-1",
-      name: "Sarah Miller",
-      reason: "Booked service appointment for Friday",
-      statusLabel: "Booked",
-      statusClass: "bg-indigo-50 text-indigo-700 ring-indigo-200",
-      duration: "4m 08s",
-      time: "1:11 PM",
-      href: "/voice/calls/demo-call-1",
-      hasRecording: true,
-    },
-    {
-      id: "demo-call-spam",
-      name: "(571) 555-0128",
-      reason: "Robocall detected",
-      statusLabel: "Spam",
-      statusClass: "bg-slate-100 text-slate-600 ring-slate-200",
-      duration: "0m 12s",
-      time: "12:45 PM",
-      href: "/voice/calls",
-      hasRecording: false,
-    },
-  ],
-  smsPanel: {
-    sent: 312,
-    replies: 24,
-    campaign: {
-      name: "Spring Reactivation",
-      sent: 428,
-      total: 1200,
-      pct: 36,
-      href: "/campaigns",
-    },
-  },
-  automationsPanel: {
-    activeCount: 4,
-    runsThisWeek: 128,
-    failedCount: 2,
-    flows: [
-      { name: "Missed Call Text Back", status: "Active" },
-      { name: "Appointment Reminder", status: "Active" },
-    ],
-    href: "/automations",
-  },
-  planUsage: {
-    receptionistMinutesUsed: 327,
-    receptionistMinutesLimit: 500,
-    smsMessagesUsed: 1842,
-    smsMessagesLimit: 5000,
-    daysLeftInCycle: 14,
-  },
-  isDemo: true,
-};
+function classifyDisposition(call: {
+  answeredAt: Date | null;
+  voicemailDetected: boolean;
+  status: string;
+}): CallDisposition {
+  if (call.voicemailDetected) return "voicemail";
+  if (call.answeredAt) return "answered";
+  const s = call.status.toUpperCase();
+  if (s === "NO_ANSWER" || s === "FAILED" || s === "CANCELED") return "missed";
+  return "missed";
+}
+
+function dispositionLabel(d: CallDisposition): string {
+  if (d === "answered") return "Answered";
+  if (d === "voicemail") return "Voicemail";
+  return "Missed";
+}
+
+function formatCallTimeLabel(startedAt: Date): string {
+  const d = new Date(startedAt);
+  const now = new Date();
+  const time = d.toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+  if (d.toDateString() === now.toDateString()) return `Today ${time}`;
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  if (d.toDateString() === yesterday.toDateString()) return `Yesterday ${time}`;
+  return d.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function agentDisplayName(raw: string | null | undefined): string {
+  if (!raw?.trim()) return "Amy";
+  const first = raw.trim().split(/\s+/)[0];
+  return first || "Amy";
+}
+
+function agentIsLive(status: string | undefined): boolean {
+  return status === "ACTIVE" || status === "TESTING";
+}
 
 export async function loadOperationalDashboardData(
   workspaceId: string,
@@ -311,23 +204,29 @@ export async function loadOperationalDashboardData(
   const days = periodDays(dateRange);
   const prevStart = new Date(start);
   prevStart.setDate(prevStart.getDate() - days);
+  const weekStart = rangeStart("7d");
 
   const primaryAgentId = await loadPrimaryVoiceAgentId(workspaceId);
 
-  const [metrics, compliance, callCount, agent, phoneNumbers, liveDeployments] =
+  const [metrics, compliance, agent, allAgents, phoneNumbers, liveDeployments] =
     await Promise.all([
       loadDashboardMetrics(workspaceId),
       loadComplianceOverview(workspaceId),
-      prisma.voiceCall.count({ where: { workspaceId, isTest: false } }),
       primaryAgentId
         ? prisma.voiceAgent.findUnique({
             where: { id: primaryAgentId },
             select: { id: true, name: true, status: true },
           })
         : Promise.resolve(null),
+      prisma.voiceAgent.findMany({
+        where: { workspaceId, status: { not: "ARCHIVED" } },
+        orderBy: { updatedAt: "desc" },
+        take: 5,
+        select: { id: true, name: true, status: true },
+      }),
       prisma.phoneNumber.findMany({
         where: { workspaceId, status: "Active" },
-        take: 1,
+        take: 3,
         select: { e164: true },
       }),
       prisma.triggerDeployment.findMany({
@@ -337,35 +236,21 @@ export async function loadOperationalDashboardData(
       }),
     ]);
 
-  if (callCount === 0) {
-    const demo = { ...DEMO_DATA };
-    demo.greeting = greetingForHour(now.getHours());
-    demo.userName = userName.split(" ")[0] || userName;
-    demo.dateRange = dateRange;
-    if (primaryAgentId) {
-      demo.receptionist.editHref = `/voice/agents/${primaryAgentId}/about`;
-      demo.receptionist.testHref = `/voice/agents/${primaryAgentId}/voice-test`;
-    }
-    if (compliance.ready) {
-      demo.attention = demo.attention.filter((a) => a.id !== "a2p");
-    }
-    return demo;
-  }
+  const resolvedAgent =
+    agent ??
+    allAgents.find((a) => a.status === "ACTIVE") ??
+    allAgents.find((a) => a.status === "TESTING") ??
+    allAgents[0] ??
+    null;
 
-  const baseWhere = {
-    workspaceId,
-    isTest: false,
-    startedAt: { gte: start },
-  };
+  const agentId = resolvedAgent?.id ?? primaryAgentId;
+  const agentName = agentDisplayName(resolvedAgent?.name);
+  const agentActive = agentIsLive(resolvedAgent?.status);
 
-  const prevWhere = {
-    workspaceId,
-    isTest: false,
-    startedAt: { gte: prevStart, lt: start },
-  };
+  const baseWhere = { workspaceId, startedAt: { gte: start } };
+  const prevWhere = { workspaceId, startedAt: { gte: prevStart, lt: start } };
 
-  const messageWhere = {
-    ...baseWhere,
+  const messageFilter = {
     OR: [
       { outcome: { contains: "message", mode: "insensitive" as const } },
       { outcome: { contains: "callback", mode: "insensitive" as const } },
@@ -379,54 +264,82 @@ export async function loadOperationalDashboardData(
     appointments,
     messagesTaken,
     prevAnswered,
+    prevLeads,
+    prevAppointments,
+    prevMessages,
     recentCalls,
     weekCalls,
-    callbackCount,
+    missedWeekCount,
+    pendingLeadsWeek,
+    confirmedApptsWeek,
     activeFlows,
-    failedExecutions,
-    runsThisWeek,
     activeCampaign,
     usage,
-    unansweredKnowledge,
+    voiceMinutesAgg,
   ] = await Promise.all([
-    prisma.voiceCall.count({ where: { ...baseWhere, answeredAt: { not: null } } }),
+    prisma.voiceCall.count({
+      where: { ...baseWhere, answeredAt: { not: null } },
+    }),
     prisma.voiceCall.count({
       where: { ...baseWhere, leadScore: { gte: 40 } },
     }),
-    prisma.voiceCall.count({ where: { ...baseWhere, appointmentBooked: true } }),
-    prisma.voiceCall.count({ where: messageWhere }),
+    prisma.voiceCall.count({
+      where: { ...baseWhere, appointmentBooked: true },
+    }),
+    prisma.voiceCall.count({ where: { ...baseWhere, ...messageFilter } }),
     prisma.voiceCall.count({
       where: { ...prevWhere, answeredAt: { not: null } },
     }),
+    prisma.voiceCall.count({
+      where: { ...prevWhere, leadScore: { gte: 40 } },
+    }),
+    prisma.voiceCall.count({
+      where: { ...prevWhere, appointmentBooked: true },
+    }),
+    prisma.voiceCall.count({ where: { ...prevWhere, ...messageFilter } }),
     prisma.voiceCall.findMany({
-      where: { workspaceId, isTest: false },
+      where: { workspaceId },
       orderBy: { startedAt: "desc" },
       take: 5,
       include: {
-        insights: { orderBy: { createdAt: "desc" }, take: 1, select: { summary: true } },
+        insights: {
+          orderBy: { createdAt: "desc" },
+          take: 1,
+          select: { summary: true, intent: true },
+        },
         recordings: { select: { id: true }, take: 1 },
       },
     }),
     prisma.voiceCall.findMany({
-      where: {
-        workspaceId,
-        isTest: false,
-        startedAt: { gte: rangeStart("7d") },
-      },
+      where: { workspaceId, startedAt: { gte: weekStart } },
       select: {
         startedAt: true,
-        contactId: true,
-        leadScore: true,
-        outcome: true,
-        appointmentBooked: true,
+        answeredAt: true,
+        voicemailDetected: true,
+        status: true,
       },
     }),
     prisma.voiceCall.count({
       where: {
         workspaceId,
-        isTest: false,
-        startedAt: { gte: rangeStart("7d") },
-        outcome: { contains: "callback", mode: "insensitive" },
+        startedAt: { gte: weekStart },
+        answeredAt: null,
+        voicemailDetected: false,
+      },
+    }),
+    prisma.voiceCall.count({
+      where: {
+        workspaceId,
+        startedAt: { gte: weekStart },
+        leadScore: { gte: 40 },
+        appointmentBooked: false,
+      },
+    }),
+    prisma.voiceCall.count({
+      where: {
+        workspaceId,
+        startedAt: { gte: weekStart },
+        appointmentBooked: true,
       },
     }),
     prisma.automationFlow.findMany({
@@ -435,38 +348,26 @@ export async function loadOperationalDashboardData(
       take: 4,
       select: { name: true, status: true },
     }),
-    prisma.automationExecution.count({
-      where: {
-        workspaceId,
-        status: "FAILED",
-        startedAt: { gte: rangeStart("7d") },
-      },
-    }),
-    prisma.automationExecution.count({
-      where: {
-        workspaceId,
-        startedAt: { gte: rangeStart("7d") },
-      },
-    }),
     prisma.campaign.findFirst({
       where: {
         workspaceId,
         status: { in: ["SENDING", "SCHEDULED"] },
       },
       orderBy: { updatedAt: "desc" },
-      select: { id: true, name: true, sent: true, audience: true, configJson: true },
+      select: {
+        id: true,
+        name: true,
+        scheduledAt: true,
+        configJson: true,
+      },
     }),
     prisma.usageRecord.findFirst({
       where: { workspaceId },
       orderBy: { periodStart: "desc" },
     }),
-    prisma.voiceCall.count({
-      where: {
-        workspaceId,
-        isTest: false,
-        startedAt: { gte: rangeStart("7d") },
-        outcome: { contains: "unanswered", mode: "insensitive" },
-      },
+    prisma.voiceCall.aggregate({
+      where: { workspaceId, startedAt: { gte: start } },
+      _sum: { durationSeconds: true, aiMinutes: true },
     }),
   ]);
 
@@ -481,8 +382,8 @@ export async function loadOperationalDashboardData(
     : [];
   const contactMap = new Map(contacts.map((c) => [c.id, c]));
 
-  const chartDays: OperationalDashboardData["chart"]["days"] = [];
   const dayLabels = ["M", "T", "W", "T", "F", "S", "S"];
+  const chartDays: OperationalDashboardData["chart"]["days"] = [];
   for (let i = 6; i >= 0; i--) {
     const dayStart = new Date();
     dayStart.setDate(dayStart.getDate() - i);
@@ -492,29 +393,22 @@ export async function loadOperationalDashboardData(
     const dayCalls = weekCalls.filter(
       (c) => c.startedAt >= dayStart && c.startedAt < dayEnd,
     );
-    let leadsC = 0;
-    let existingC = 0;
-    let otherC = 0;
+    let answeredC = 0;
+    let voicemailC = 0;
+    let missedC = 0;
     for (const c of dayCalls) {
-      const bucket = classifyChartBucket(c);
-      if (bucket === "leads") leadsC++;
-      else if (bucket === "existing") existingC++;
-      else otherC++;
+      const d = classifyDisposition(c);
+      if (d === "answered") answeredC++;
+      else if (d === "voicemail") voicemailC++;
+      else missedC++;
     }
     chartDays.push({
       label: dayLabels[dayStart.getDay() === 0 ? 6 : dayStart.getDay() - 1],
-      leads: leadsC,
-      existing: existingC,
-      other: otherC,
+      answered: answeredC,
+      voicemail: voicemailC,
+      missed: missedC,
     });
   }
-
-  const answeredChange = pctChange(answered, prevAnswered);
-  const kpiHints = {
-    today: "Today",
-    week: "This week",
-    period: dateRange === "30d" ? "Last 30 days" : "Last 7 days",
-  };
 
   const phoneE164 =
     liveDeployments[0]?.phoneNumber?.e164 ||
@@ -525,17 +419,35 @@ export async function loadOperationalDashboardData(
       ? maskPhoneDisplay(phoneE164)
       : "No number assigned";
 
-  const agentName = agent?.name?.split(" ")[0] || "Amy";
-  const agentActive = agent?.status === "ACTIVE";
-
   const attention: OperationalDashboardData["attention"] = [];
-  if (callbackCount > 0) {
+  if (missedWeekCount > 0) {
     attention.push({
-      id: "callbacks",
+      id: "missed",
       tone: "red",
-      title: `${callbackCount} caller${callbackCount === 1 ? "" : "s"} requested callbacks`,
+      title: `${missedWeekCount} missed call${missedWeekCount === 1 ? "" : "s"}`,
+      body: "Calls were missed outside of business hours.",
       actionLabel: "View Calls",
-      href: "/voice/calls?filter=messages",
+      href: "/voice/calls?filter=no_answer",
+    });
+  }
+  if (pendingLeadsWeek > 0) {
+    attention.push({
+      id: "leads",
+      tone: "yellow",
+      title: `${pendingLeadsWeek} new lead${pendingLeadsWeek === 1 ? "" : "s"} to review`,
+      body: "New leads need your follow-up.",
+      actionLabel: "View Leads",
+      href: "/voice/calls?filter=leads",
+    });
+  }
+  if (confirmedApptsWeek > 0) {
+    attention.push({
+      id: "appointments",
+      tone: "green",
+      title: "All appointments confirmed",
+      body: "Great job! No pending confirmations.",
+      actionLabel: "View Appointments",
+      href: "/integrations/native/appointments",
     });
   }
   if (!compliance.ready) {
@@ -546,35 +458,6 @@ export async function loadOperationalDashboardData(
       body: "Finish registration to enable outbound SMS.",
       actionLabel: "Continue",
       href: "/compliance",
-    });
-  }
-  if (unansweredKnowledge > 0) {
-    attention.push({
-      id: "knowledge",
-      tone: "yellow",
-      title: `${agentName} couldn't answer ${unansweredKnowledge} question${unansweredKnowledge === 1 ? "" : "s"} this week`,
-      body: "Review and update business information.",
-      actionLabel: "Review",
-      href: primaryAgentId
-        ? `/voice/agents/${primaryAgentId}/about`
-        : "/voice/receptionist",
-    });
-  }
-  if (failedExecutions > 0) {
-    attention.push({
-      id: "automation-fail",
-      tone: "yellow",
-      title: `${failedExecutions} automation run${failedExecutions === 1 ? "" : "s"} failed`,
-      actionLabel: "View Logs",
-      href: "/automations/logs",
-    });
-  } else if (activeFlows.length > 0) {
-    attention.push({
-      id: "automations-ok",
-      tone: "green",
-      title: "Automations healthy",
-      actionLabel: "View Automations",
-      href: "/automations",
     });
   }
   if (attention.length === 0) {
@@ -590,74 +473,77 @@ export async function loadOperationalDashboardData(
   const recentRows = recentCalls.map((call) => {
     const contact = call.contactId ? contactMap.get(call.contactId) : null;
     const name = contact
-      ? [contact.firstName, contact.lastName].filter(Boolean).join(" ") || fmtCallPhone(contact.phone)
+      ? [contact.firstName, contact.lastName].filter(Boolean).join(" ") ||
+        fmtCallPhone(contact.phone)
       : fmtCallPhone(call.fromE164);
     const summary =
       call.insights[0]?.summary ||
+      call.insights[0]?.intent?.replace(/_/g, " ") ||
       call.outcome ||
       "Inbound call";
-    const badge = deriveCallOutcomeBadge({
-      outcome: call.outcome,
-      appointmentBooked: call.appointmentBooked,
-      transferred: call.transferred,
-      voicemailDetected: call.voicemailDetected,
-      leadScore: call.leadScore,
-      status: call.status,
-    });
-    const time = new Date(call.startedAt).toLocaleTimeString(undefined, {
-      hour: "numeric",
-      minute: "2-digit",
-    });
+    const disposition = classifyDisposition(call);
+    const duration =
+      disposition === "missed"
+        ? "—"
+        : fmtCallDurationTable(call.durationSeconds);
     return {
       id: call.id,
       name,
-      reason: String(summary).slice(0, 80),
-      statusLabel: statusLabel(badge),
-      statusClass: statusClass(badge),
-      duration: fmtCallDurationShort(call.durationSeconds),
-      time,
+      initials: initialsFromName(name),
+      reason: String(summary).slice(0, 72),
+      disposition,
+      duration,
+      timeLabel: formatCallTimeLabel(call.startedAt),
       href: `/voice/calls/${call.id}`,
       hasRecording: call.recordings.length > 0,
     };
   });
 
-  let campaignPanel: OperationalDashboardData["smsPanel"]["campaign"] | undefined;
+  const smsMessagesLimit = 5000;
+  const smsMessagesUsed = usage?.outbound ?? metrics.messagesSentPeriod;
+  const smsPct =
+    smsMessagesLimit > 0
+      ? Math.min(100, Math.round((smsMessagesUsed / smsMessagesLimit) * 100))
+      : 0;
+
+  let campaignMeta: OperationalDashboardData["smsPanel"]["campaign"] | undefined;
   if (activeCampaign) {
-    const cfg = (activeCampaign.configJson as { audienceSize?: number } | null) || {};
-    const total = cfg.audienceSize || Math.max(activeCampaign.sent, 1200);
-    campaignPanel = {
+    const ends =
+      activeCampaign.scheduledAt
+        ? `Ends ${activeCampaign.scheduledAt.toLocaleDateString(undefined, {
+            month: "short",
+            day: "numeric",
+            year: "numeric",
+          })}`
+        : undefined;
+    campaignMeta = {
       name: activeCampaign.name,
-      sent: activeCampaign.sent,
-      total,
-      pct: total > 0 ? Math.round((activeCampaign.sent / total) * 100) : 0,
+      endsLabel: ends,
       href: `/campaigns/${activeCampaign.id}`,
     };
   }
 
-  const smsPanel: OperationalDashboardData["smsPanel"] = {
-    sent: metrics.messagesSentPeriod,
-    replies: Math.round(metrics.messagesSentPeriod * (metrics.replyRate / 100)),
-    campaign: campaignPanel,
-    empty: campaignPanel
-      ? undefined
-      : {
-          title: "Reach your customers by text",
-          body: "Send a broadcast or start a campaign.",
-          actionLabel: "Send Message",
-          href: "/send/quick",
-        },
-  };
+  const receptionistMinutesLimit = 2000;
+  const voiceSeconds = voiceMinutesAgg._sum.durationSeconds ?? 0;
+  const aiMinutes = voiceMinutesAgg._sum.aiMinutes ?? 0;
+  const receptionistMinutesUsed = Math.round(
+    usage?.voiceMinutes ?? usage?.aiMinutes ?? aiMinutes ?? voiceSeconds / 60,
+  );
+  const receptionistPct = Math.min(
+    100,
+    Math.round((receptionistMinutesUsed / receptionistMinutesLimit) * 100),
+  );
 
   const periodEnd = usage?.periodEnd ? new Date(usage.periodEnd) : null;
   const daysLeft = periodEnd
     ? Math.max(0, Math.ceil((periodEnd.getTime() - now.getTime()) / 86400000))
     : 14;
 
-  const editHref = primaryAgentId
-    ? `/voice/agents/${primaryAgentId}/about`
+  const editHref = agentId
+    ? `/voice/agents/${agentId}/about`
     : "/voice/receptionist";
-  const testHref = primaryAgentId
-    ? `/voice/agents/${primaryAgentId}/voice-test`
+  const testHref = agentId
+    ? `/voice/agents/${agentId}/voice-test`
     : "/voice/agents";
 
   return {
@@ -674,43 +560,58 @@ export async function loadOperationalDashboardData(
     sms: {
       ready: compliance.ready,
       label: compliance.ready ? "SMS Ready" : "SMS needs attention",
-      sublabel: compliance.ready ? "A2P Registered" : "Complete A2P registration",
+      sublabel: compliance.ready ? "A2P Registered" : "Complete registration",
+      detail: compliance.ready
+        ? "Your number is registered and ready to send SMS."
+        : "Complete A2P registration to send campaigns.",
     },
     kpis: {
       callsAnswered: answered,
-      callsAnsweredChangePct: answeredChange,
-      callsAnsweredHint:
-        answeredChange != null
-          ? `${answeredChange >= 0 ? "+" : ""}${answeredChange}% vs last period`
-          : kpiHints.period,
+      callsAnsweredChangePct: pctChange(answered, prevAnswered),
       newLeads: leads,
-      newLeadsHint: dateRange === "today" ? kpiHints.today : kpiHints.period,
+      newLeadsChangePct: pctChange(leads, prevLeads),
       appointmentsBooked: appointments,
-      appointmentsHint: dateRange === "today" ? kpiHints.today : kpiHints.week,
+      appointmentsChangePct: pctChange(appointments, prevAppointments),
       messagesTaken: messagesTaken,
-      messagesHint: dateRange === "today" ? kpiHints.today : kpiHints.period,
+      messagesChangePct: pctChange(messagesTaken, prevMessages),
     },
     chart: { days: chartDays },
     attention,
     recentCalls: recentRows,
-    smsPanel,
+    smsPanel: {
+      sent: metrics.messagesSentPeriod,
+      replies: Math.round(metrics.messagesSentPeriod * (metrics.replyRate / 100)),
+      messagesUsed: smsMessagesUsed,
+      messagesLimit: smsMessagesLimit,
+      messagesPct: smsPct,
+      campaign: campaignMeta,
+      empty: campaignMeta
+        ? undefined
+        : {
+            title: "Reach your customers by text",
+            body: "Send a broadcast or start a campaign.",
+            actionLabel: "Send Message",
+            href: "/send/quick",
+          },
+    },
     automationsPanel: {
       activeCount: activeFlows.length,
-      runsThisWeek,
-      failedCount: failedExecutions,
-      flows: activeFlows.slice(0, 2).map((f) => ({
+      flows: activeFlows.map((f) => ({
         name: f.name,
-        status: "Active",
+        active: f.status === "ACTIVE",
       })),
       href: "/automations",
     },
     planUsage: {
-      receptionistMinutesUsed: Math.round(usage?.voiceMinutes || usage?.aiMinutes || 0),
-      receptionistMinutesLimit: 500,
-      smsMessagesUsed: usage?.outbound || metrics.messagesSentPeriod,
-      smsMessagesLimit: 5000,
+      receptionistMinutesUsed: receptionistMinutesUsed,
+      receptionistMinutesLimit: receptionistMinutesLimit,
+      receptionistPct,
+      smsMessagesUsed: smsMessagesUsed,
+      smsMessagesLimit: smsMessagesLimit,
+      smsPct,
       daysLeftInCycle: daysLeft,
     },
-    isDemo: false,
   };
 }
+
+export { dispositionLabel };
