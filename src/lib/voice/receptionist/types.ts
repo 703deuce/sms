@@ -82,6 +82,14 @@ export type ReceptionistCompiledSnapshot = {
   voiceLabel?: string;
   /** OpenAI Realtime speech speed (0.5–2.0) — intelligence pacing when supported */
   voiceSpeed?: number;
+  /** ElevenLabs stability (0–1) — lower is more expressive */
+  elevenLabsStability?: number;
+  /** ElevenLabs similarity boost (0–1) */
+  elevenLabsSimilarityBoost?: number;
+  /** ElevenLabs style exaggeration (0–1) */
+  elevenLabsStyle?: number;
+  /** ElevenLabs speaker boost — Transovo default off for latency */
+  elevenLabsSpeakerBoost?: boolean;
   compiledAt: string;
 };
 

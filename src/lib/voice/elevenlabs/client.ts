@@ -165,6 +165,7 @@ export async function synthesizeElevenLabsSpeech(input: {
   stability?: number;
   similarityBoost?: number;
   style?: number;
+  speed?: number;
   useSpeakerBoost?: boolean;
 }): Promise<ArrayBuffer> {
   const apiKey = getElevenLabsApiKey();
@@ -179,6 +180,9 @@ export async function synthesizeElevenLabsSpeech(input: {
   }
   if (input.style != null && Number.isFinite(input.style)) {
     voiceSettings.style = Number(input.style);
+  }
+  if (input.speed != null && Number.isFinite(input.speed)) {
+    voiceSettings.speed = Number(input.speed);
   }
   if (input.useSpeakerBoost != null) {
     voiceSettings.use_speaker_boost = Boolean(input.useSpeakerBoost);

@@ -1,8 +1,17 @@
 "use client";
 
 import { cn } from "@/lib/utils";
+import {
+  ELEVENLABS_SPEED_MAX,
+  ELEVENLABS_SPEED_MIN,
+  EXPRESSIVENESS_LABELS,
+  expressivenessToStability,
+  stabilityToExpressiveness,
+  type VoiceExpressiveness,
+} from "@/lib/voice/elevenlabs/receptionist-voice-tuning";
 import { Bot, Check, ChevronRight, Info, Minus, Sparkles } from "lucide-react";
 import type { ReactNode } from "react";
+import { useState } from "react";
 
 /** Main wizard column + right rail (~30% mockup width). */
 export function WizardPageLayout({
@@ -859,68 +868,98 @@ export function ElevenLabsTuningPanel({
   stability,
   clarity,
   style,
-  speakerBoost,
-  optimizeLatency,
   speakingSpeed,
   onStabilityChange,
   onClarityChange,
   onStyleChange,
-  onSpeakerBoostChange,
-  onOptimizeLatencyChange,
   onSpeakingSpeedChange,
 }: {
   stability: number;
   clarity: number;
   style: number;
-  speakerBoost: boolean;
-  optimizeLatency: boolean;
   speakingSpeed: number;
   onStabilityChange: (v: number) => void;
   onClarityChange: (v: number) => void;
   onStyleChange: (v: number) => void;
-  onSpeakerBoostChange: (v: boolean) => void;
-  onOptimizeLatencyChange: (v: boolean) => void;
   onSpeakingSpeedChange: (v: number) => void;
 }) {
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const expressiveness = stabilityToExpressiveness(stability);
+  const expressivenessOptions: VoiceExpressiveness[] = ["calm", "balanced", "expressive"];
+
   return (
     <div className="mt-5 space-y-4 border-t border-[#e6e8ef] pt-5">
       <SliderRow
-        label="Stability"
-        value={stability}
-        display={`${Math.round(stability * 100)}%`}
-        onChange={onStabilityChange}
-      />
-      <SliderRow
-        label="Similarity"
-        value={clarity}
-        display={`${Math.round(clarity * 100)}%`}
-        onChange={onClarityChange}
-      />
-      <SliderRow
-        label="Style exaggeration"
-        value={style}
-        display={`${Math.round(style * 100)}%`}
-        onChange={onStyleChange}
-      />
-      <SliderRow
         label="Speaking speed"
         value={speakingSpeed}
-        min={0.5}
-        max={2}
-        step={0.1}
-        display={speakingSpeed.toFixed(1)}
+        min={ELEVENLABS_SPEED_MIN}
+        max={ELEVENLABS_SPEED_MAX}
+        step={0.05}
+        display={`${speakingSpeed.toFixed(2)}×`}
         onChange={onSpeakingSpeedChange}
       />
-      <ToggleRow
-        label="Optimize latency"
-        checked={optimizeLatency}
-        onChange={onOptimizeLatencyChange}
-      />
-      <ToggleRow
-        label="Use speaker boost"
-        checked={speakerBoost}
-        onChange={onSpeakerBoostChange}
-      />
+
+      <div>
+        <p className="text-xs font-medium text-[#374151]">Expressiveness</p>
+        <p className="mt-0.5 text-[11px] text-[#6b7280]">
+          More expressive voices vary tone more; calmer voices stay steadier.
+        </p>
+        <div className="mt-2 grid grid-cols-3 gap-2">
+          {expressivenessOptions.map((preset) => {
+            const active = expressiveness === preset;
+            const meta = EXPRESSIVENESS_LABELS[preset];
+            return (
+              <button
+                key={preset}
+                type="button"
+                onClick={() => onStabilityChange(expressivenessToStability(preset))}
+                className={cn(
+                  "rounded-lg border px-2 py-2 text-center transition",
+                  active
+                    ? "border-[#6366f1] bg-[#6366f1]/5 text-[#111827]"
+                    : "border-[#e6e8ef] bg-white text-[#374151] hover:bg-[#f8f9fc]",
+                )}
+              >
+                <span className="text-xs font-semibold">{meta.label}</span>
+                <span className="mt-0.5 block text-[10px] text-[#6b7280]">{meta.description}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div>
+        <button
+          type="button"
+          onClick={() => setAdvancedOpen((open) => !open)}
+          className="flex w-full items-center justify-between text-xs font-medium text-[#374151]"
+        >
+          <span>Advanced voice settings</span>
+          <ChevronRight
+            className={cn("h-4 w-4 text-[#6b7280] transition", advancedOpen && "rotate-90")}
+          />
+        </button>
+        {advancedOpen ? (
+          <div className="mt-3 space-y-4 rounded-lg border border-[#e6e8ef] bg-[#f8f9fc] p-3">
+            <SliderRow
+              label="Voice consistency"
+              value={clarity}
+              display={`${Math.round(clarity * 100)}%`}
+              onChange={onClarityChange}
+            />
+            <SliderRow
+              label="Style"
+              value={style}
+              display={`${Math.round(style * 100)}%`}
+              onChange={onStyleChange}
+            />
+            <p className="text-[10px] leading-relaxed text-[#6b7280]">
+              Higher style adds personality but can affect stability and latency. Keep near zero unless
+              you need more character.
+            </p>
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -958,38 +997,5 @@ function SliderRow({
         className="mt-1.5 w-full accent-[#6366f1]"
       />
     </div>
-  );
-}
-
-function ToggleRow({
-  label,
-  checked,
-  onChange,
-}: {
-  label: string;
-  checked: boolean;
-  onChange: (v: boolean) => void;
-}) {
-  return (
-    <label className="flex items-center justify-between gap-3 text-xs font-medium text-[#374151]">
-      <span>{label}</span>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={checked}
-        onClick={() => onChange(!checked)}
-        className={cn(
-          "relative h-6 w-11 shrink-0 rounded-full transition",
-          checked ? "bg-[#6366f1]" : "bg-[#d1d5db]",
-        )}
-      >
-        <span
-          className={cn(
-            "absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform",
-            checked ? "translate-x-5" : "translate-x-0.5",
-          )}
-        />
-      </button>
-    </label>
   );
 }

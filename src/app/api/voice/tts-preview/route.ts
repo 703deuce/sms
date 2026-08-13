@@ -14,6 +14,10 @@ import {
 } from "@/lib/voice/elevenlabs/receptionist-voice-catalog";
 import { synthesizeElevenLabsSpeech } from "@/lib/voice/elevenlabs/client";
 import { maybeNormalizeForElevenLabsModel } from "@/lib/voice/elevenlabs/normalize-tts-text";
+import {
+  clampElevenLabsSpeed,
+  resolveReceptionistElevenLabsTuning,
+} from "@/lib/voice/elevenlabs/receptionist-voice-tuning";
 
 const previewHits = new Map<string, { count: number; windowStart: number }>();
 
@@ -50,15 +54,21 @@ export async function POST(request: Request) {
       voice?: string;
       language?: string;
       speed?: number;
+      stability?: number;
+      similarityBoost?: number;
+      style?: number;
     };
 
     const requested = String(body.voice || "").trim();
     const text = (body.text || DEFAULT_VOICE_PREVIEW_TEXT).trim().slice(0, 280);
     const language = (body.language || "en-US").trim();
-    const speed =
-      typeof body.speed === "number" && Number.isFinite(body.speed)
-        ? Math.min(2, Math.max(0.5, body.speed))
-        : 1;
+    const tuning = resolveReceptionistElevenLabsTuning({
+      speed: body.speed,
+      stability: body.stability,
+      similarityBoost: body.similarityBoost,
+      style: body.style,
+    });
+    const speed = clampElevenLabsSpeed(tuning.speed);
 
     if (isReceptionistElevenLabsVoiceId(requested)) {
       const voiceId = requested;
@@ -88,6 +98,11 @@ export async function POST(request: Request) {
           voiceId,
           text: spokenText,
           modelId: RECEPTIONIST_TTS_MODEL,
+          stability: tuning.stability,
+          similarityBoost: tuning.similarityBoost,
+          style: tuning.style,
+          speed: tuning.speed,
+          useSpeakerBoost: tuning.speakerBoost,
         });
         const audioUrl = `data:audio/mpeg;base64,${Buffer.from(new Uint8Array(audio)).toString("base64")}`;
         await setCachedPreview({ voiceId, text: spokenText, speed, audioUrl });

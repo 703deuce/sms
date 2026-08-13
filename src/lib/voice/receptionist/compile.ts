@@ -11,6 +11,7 @@ import {
   normalizeWizardVoiceToElevenLabs,
   RECEPTIONIST_TTS_MODEL,
 } from "@/lib/voice/elevenlabs/receptionist-voice-catalog";
+import { resolveReceptionistElevenLabsTuning } from "@/lib/voice/elevenlabs/receptionist-voice-tuning";
 import { buildReceptionistCompiledPrompt } from "./build-receptionist-compiled-prompt";
 import { fieldManifestFromAdvancedRows } from "./field-manifest";
 
@@ -148,6 +149,10 @@ export function compileReceptionistConfig(input: ReceptionistDraftInput): Recept
   const wiz = input.advanced?.receptionistWizard as
     | {
         voiceSpeed?: number;
+        elevenLabsStability?: number;
+        elevenLabsClarity?: number;
+        elevenLabsStyle?: number;
+        elevenLabsSpeakerBoost?: boolean;
         agentJobInstructions?: string;
         agentPersonalityNotes?: string;
         industry?: string;
@@ -160,6 +165,14 @@ export function compileReceptionistConfig(input: ReceptionistDraftInput): Recept
         businessAddress?: string;
       }
     | undefined;
+
+  const voiceTuning = resolveReceptionistElevenLabsTuning({
+    speed: wiz?.voiceSpeed ?? (input.advanced?.voiceSpeed as number | undefined),
+    stability: wiz?.elevenLabsStability,
+    similarityBoost: wiz?.elevenLabsClarity,
+    style: wiz?.elevenLabsStyle,
+    speakerBoost: wiz?.elevenLabsSpeakerBoost,
+  });
 
   const businessProfile = {
     hours: wiz?.businessHours?.trim() || undefined,
@@ -187,11 +200,7 @@ export function compileReceptionistConfig(input: ReceptionistDraftInput): Recept
     wiz?.additionalInstructions?.trim() ||
     undefined;
 
-  const voiceSpeedRaw = wiz?.voiceSpeed ?? input.advanced?.voiceSpeed;
-  const voiceSpeed =
-    typeof voiceSpeedRaw === "number" && Number.isFinite(voiceSpeedRaw)
-      ? Math.min(2, Math.max(0.5, voiceSpeedRaw))
-      : 1;
+  const voiceSpeed = voiceTuning.speed;
 
   const partialSnapshot = {
     livekitProfile: "frontdesk_realtime" as const,
@@ -218,6 +227,10 @@ export function compileReceptionistConfig(input: ReceptionistDraftInput): Recept
     voiceId: elevenLabsVoice,
     voiceLabel: voiceMeta || undefined,
     voiceSpeed,
+    elevenLabsStability: voiceTuning.stability,
+    elevenLabsSimilarityBoost: voiceTuning.similarityBoost,
+    elevenLabsStyle: voiceTuning.style,
+    elevenLabsSpeakerBoost: voiceTuning.speakerBoost,
     compiledAt: new Date().toISOString(),
     conversationBehavior,
     bookingPolicy: advanced?.bookingPolicy ?? (input.advanced?.bookingPolicy as Record<string, unknown>),
@@ -277,7 +290,12 @@ export function applyCompiledToVoiceConfig(
       ...base.voiceLanguage,
       voiceId: snapshot.voiceId,
       primaryLanguage: snapshot.language,
-      speed: snapshot.voiceSpeed ?? base.voiceLanguage?.speed ?? 1,
+      speed: snapshot.voiceSpeed ?? base.voiceLanguage?.speed ?? 1.08,
+      elevenLabsTuning: true,
+      elevenLabsStability: snapshot.elevenLabsStability,
+      elevenLabsSimilarityBoost: snapshot.elevenLabsSimilarityBoost,
+      elevenLabsStyle: snapshot.elevenLabsStyle,
+      elevenLabsSpeakerBoost: snapshot.elevenLabsSpeakerBoost,
     },
     inboundRules: {
       ...base.inboundRules,

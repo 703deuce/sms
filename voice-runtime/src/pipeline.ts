@@ -14,6 +14,7 @@ import {
   RECEPTIONIST_TTS_MODEL,
   resolveConfiguredElevenLabsVoice,
 } from "@/lib/voice/elevenlabs/receptionist-voice-catalog";
+import { resolveElevenLabsTuningFromVoiceConfig } from "@/lib/voice/elevenlabs/receptionist-voice-tuning";
 import {
   getVoicePipelineConfig,
   type VoicePipelineConfig,
@@ -209,14 +210,26 @@ export function buildAmyStt(
 
 export function buildAmyTts(
   cfg: VoicePipelineConfig,
-  options?: { hybridStreaming?: boolean },
+  options?: {
+    hybridStreaming?: boolean;
+    voiceConfig?: Pick<VoiceAgentConfig, "voiceLanguage" | "advanced">;
+  },
 ): tts.TTS {
   if (usesElevenLabsPluginTts(cfg.ttsProvider)) {
     const hybridOutput = options?.hybridStreaming === true;
+    const tuning = resolveElevenLabsTuningFromVoiceConfig(options?.voiceConfig);
+    const voiceSettings: elevenlabs.VoiceSettings = {
+      stability: tuning.stability,
+      similarity_boost: tuning.similarityBoost,
+      style: tuning.style,
+      speed: tuning.speed,
+      use_speaker_boost: tuning.speakerBoost,
+    };
     return new elevenlabs.TTS({
       apiKey: resolveElevenLabsApiKey(),
       model: resolveElevenLabsPluginModel(cfg.ttsModel) as elevenlabs.TTSModels,
       voiceId: cfg.ttsVoice || process.env.VOICE_TTS_VOICE_ID || "cgSgspJ2msm6clMCkdW9",
+      voiceSettings,
       ...(hybridOutput
         ? {
             // Native WebSocket incremental input — not HTTP full-text synthesis.
@@ -345,7 +358,7 @@ export function buildOutboundRealtimeSessionComponents(
   const llm = buildOutboundRealtimeModel(config, outputMode, overrides);
   const ttsInstance =
     outputMode === "elevenlabs"
-      ? buildAmyTts(pipelineCfg, { hybridStreaming: true })
+      ? buildAmyTts(pipelineCfg, { hybridStreaming: true, voiceConfig: config })
       : undefined;
   return { llm, tts: ttsInstance, outputMode, pipelineCfg };
 }

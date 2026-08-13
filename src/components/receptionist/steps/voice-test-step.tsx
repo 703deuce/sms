@@ -57,6 +57,9 @@ export function VoiceTestStep({
           voice: voiceId,
           language: state.language,
           speed: state.voiceSpeed,
+          stability: state.elevenLabsStability,
+          similarityBoost: state.elevenLabsClarity,
+          style: state.elevenLabsStyle,
         }),
       });
       const j = await res.json();
@@ -147,14 +150,10 @@ export function VoiceTestStep({
               stability={state.elevenLabsStability}
               clarity={state.elevenLabsClarity}
               style={state.elevenLabsStyle}
-              speakerBoost={state.elevenLabsSpeakerBoost}
-              optimizeLatency={state.elevenLabsOptimizeLatency}
               speakingSpeed={state.voiceSpeed}
               onStabilityChange={(v) => patch({ elevenLabsStability: v })}
               onClarityChange={(v) => patch({ elevenLabsClarity: v })}
               onStyleChange={(v) => patch({ elevenLabsStyle: v })}
-              onSpeakerBoostChange={(v) => patch({ elevenLabsSpeakerBoost: v })}
-              onOptimizeLatencyChange={(v) => patch({ elevenLabsOptimizeLatency: v })}
               onSpeakingSpeedChange={(v) => patch({ voiceSpeed: v })}
             />
           </div>
