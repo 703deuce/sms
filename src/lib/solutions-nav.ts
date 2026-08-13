@@ -29,21 +29,23 @@ export type SolutionsNavOptions = {
   primaryVoiceAgentId?: string | null;
 };
 
-function receptionistEditorHref(agentId: string | null | undefined, segment?: string): string {
-  if (!agentId) return "/voice/agents";
-  if (!segment) return `/voice/agents/${agentId}`;
-  return `/voice/agents/${agentId}/${segment}`;
-}
-
 export function buildReceptionistNavChildren(agentId?: string | null): NavChild[] {
+  const listOnly = "/voice/agents";
+  if (!agentId) {
+    return [
+      { label: "Agents", href: listOnly },
+      { label: "About your receptionist", href: "/voice/agents/new" },
+      { label: "What should your agent do?", href: listOnly },
+      { label: "Advanced", href: listOnly },
+      { label: "Voice & Test", href: listOnly },
+    ];
+  }
   return [
-    { label: "My Agent", href: agentId ? receptionistEditorHref(agentId) : "/voice/agents" },
-    { label: "Instructions", href: receptionistEditorHref(agentId, "instructions") },
-    { label: "Knowledge", href: receptionistEditorHref(agentId, "knowledge") },
-    { label: "Actions", href: receptionistEditorHref(agentId, "actions") },
-    { label: "Voice", href: receptionistEditorHref(agentId, "voice") },
-    { label: "Test", href: receptionistEditorHref(agentId, "test") },
-    { label: "Advanced", href: receptionistEditorHref(agentId, "advanced") },
+    { label: "Agents", href: listOnly },
+    { label: "About your receptionist", href: `/voice/agents/${agentId}/about` },
+    { label: "What should your agent do?", href: `/voice/agents/${agentId}/capabilities` },
+    { label: "Advanced", href: `/voice/agents/${agentId}/advanced` },
+    { label: "Voice & Test", href: `/voice/agents/${agentId}/voice-test` },
   ];
 }
 
@@ -61,7 +63,7 @@ export function buildSolutionsNav(options: SolutionsNavOptions = {}): NavItem[] 
     },
     {
       label: "AI Receptionist",
-      href: agentId ? `/voice/agents/${agentId}` : "/voice/agents",
+      href: "/voice/agents",
       icon: AudioLines,
       children: buildReceptionistNavChildren(agentId),
     },

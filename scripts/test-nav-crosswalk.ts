@@ -109,27 +109,31 @@ const receptionist = solutionsNav.find((i) => i.label === "AI Receptionist");
 assert.ok(receptionist, "AI Receptionist required");
 assert.deepEqual(
   (receptionist?.children || []).map((c) => c.label),
-  ["My Agent", "Instructions", "Knowledge", "Actions", "Voice", "Test", "Advanced"],
-  "AI Receptionist submenu must match editor tabs",
+  [
+    "Agents",
+    "About your receptionist",
+    "What should your agent do?",
+    "Advanced",
+    "Voice & Test",
+  ],
+  "AI Receptionist submenu must match setup/edit pages only",
 );
 
 const withAgent = buildSolutionsNav({ primaryVoiceAgentId: "agent_test_1" });
 const receptionistWithAgent = withAgent.find((i) => i.label === "AI Receptionist");
 assert.ok(receptionistWithAgent, "AI Receptionist with agent required");
+assert.equal(receptionistWithAgent?.href, "/voice/agents", "AI Receptionist opens agent list");
 assert.equal(
-  receptionistWithAgent?.href,
-  "/voice/agents/agent_test_1",
-  "AI Receptionist parent should open primary agent overview",
+  receptionistWithAgent?.children?.find((c) => c.label === "About your receptionist")?.href,
+  "/voice/agents/agent_test_1/about",
 );
 assert.equal(
-  receptionistWithAgent?.children?.find((c) => c.label === "Instructions")?.href,
-  "/voice/agents/agent_test_1/instructions",
-  "Instructions sidebar must deep-link to agent editor",
+  receptionistWithAgent?.children?.find((c) => c.label === "Voice & Test")?.href,
+  "/voice/agents/agent_test_1/voice-test",
 );
 assert.equal(
   receptionistWithAgent?.children?.find((c) => c.label === "Advanced")?.href,
   "/voice/agents/agent_test_1/advanced",
-  "Advanced sidebar must deep-link to agent editor",
 );
 
 const mctb = solutionsNav.find((i) => i.label === "Missed Call Text Back");

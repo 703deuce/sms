@@ -61,7 +61,7 @@ export default function VoiceAgentsPage() {
           {rows.map((a) => (
             <Link
               key={a.id}
-              href={`/voice/agents/${a.id}`}
+              href={`/voice/agents/${a.id}/about`}
               className="voice-card block p-6 transition hover:border-primary/40 hover:shadow-md"
             >
               <div className="flex items-start justify-between gap-3">

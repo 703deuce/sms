@@ -74,6 +74,9 @@ export function wizardStateToDraftConfig(
         collectFields: state.collectFields,
         answerTiming: state.answerTiming,
         businessDescription: state.businessDescription,
+        businessName: state.businessName,
+        agentName: state.agentName,
+        voiceLabel: state.voiceLabel,
       },
     },
   };
