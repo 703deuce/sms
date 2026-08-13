@@ -25,13 +25,34 @@ export type SolutionNavInstance = {
 export type SolutionsNavOptions = {
   /** Kept for shell compatibility; launch nav no longer surfaces instance shortcuts. */
   instancesBySolution?: Record<string, SolutionNavInstance[]>;
+  /** When set, AI Receptionist submenu links open that agent's editor tabs. */
+  primaryVoiceAgentId?: string | null;
 };
+
+function receptionistEditorHref(agentId: string | null | undefined, segment?: string): string {
+  if (!agentId) return "/voice/agents";
+  if (!segment) return `/voice/agents/${agentId}`;
+  return `/voice/agents/${agentId}/${segment}`;
+}
+
+export function buildReceptionistNavChildren(agentId?: string | null): NavChild[] {
+  return [
+    { label: "My Agent", href: agentId ? receptionistEditorHref(agentId) : "/voice/agents" },
+    { label: "Instructions", href: receptionistEditorHref(agentId, "instructions") },
+    { label: "Knowledge", href: receptionistEditorHref(agentId, "knowledge") },
+    { label: "Actions", href: receptionistEditorHref(agentId, "actions") },
+    { label: "Voice", href: receptionistEditorHref(agentId, "voice") },
+    { label: "Test", href: receptionistEditorHref(agentId, "test") },
+    { label: "Advanced", href: receptionistEditorHref(agentId, "advanced") },
+  ];
+}
 
 /**
  * Launch sidebar — AI receptionist + SMS only.
  * AI answers → collects/handles → optionally books → SMS follows up.
  */
-export function buildSolutionsNav(_options: SolutionsNavOptions = {}): NavItem[] {
+export function buildSolutionsNav(options: SolutionsNavOptions = {}): NavItem[] {
+  const agentId = options.primaryVoiceAgentId ?? null;
   return [
     {
       label: "Dashboard",
@@ -40,17 +61,9 @@ export function buildSolutionsNav(_options: SolutionsNavOptions = {}): NavItem[]
     },
     {
       label: "AI Receptionist",
-      href: "/voice/agents",
+      href: agentId ? `/voice/agents/${agentId}` : "/voice/agents",
       icon: AudioLines,
-      children: [
-        { label: "My Agent", href: "/voice/agents" },
-        { label: "Instructions", href: "/voice/agents" },
-        { label: "Knowledge", href: "/voice/knowledge" },
-        { label: "Actions", href: "/voice/agents" },
-        { label: "Voice", href: "/voice/agents" },
-        { label: "Test", href: "/voice/testing" },
-        { label: "Advanced", href: "/voice/agents" },
-      ],
+      children: buildReceptionistNavChildren(agentId),
     },
     {
       label: "Missed Call Text Back",

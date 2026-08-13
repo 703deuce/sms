@@ -7,6 +7,7 @@ import {
   type SolutionNavInstance,
 } from "@/lib/solutions-nav";
 import { buildRealtorNav } from "@/lib/realtor/nav";
+import { voiceAgentIdFromPath } from "@/lib/voice/shell-nav";
 import { cn } from "@/lib/utils";
 import { ChevronDown, ChevronLeft, LogOut, MessageSquare } from "lucide-react";
 import Link from "next/link";
@@ -190,6 +191,7 @@ export function Sidebar({
   open,
   onClose,
   outcomeInstances = {},
+  primaryVoiceAgentId = null,
   realtorMode = false,
   inboxBadge = 0,
   collapsed = false,
@@ -200,6 +202,7 @@ export function Sidebar({
   open?: boolean;
   onClose?: () => void;
   outcomeInstances?: Record<string, SolutionNavInstance[]>;
+  primaryVoiceAgentId?: string | null;
   realtorMode?: boolean;
   inboxBadge?: number;
   collapsed?: boolean;
@@ -211,13 +214,15 @@ export function Sidebar({
   const router = useRouter();
   const [expanded, setExpanded] = useState<string | null>(null);
 
-  const navItems: NavItem[] = useMemo(
-    () =>
-      realtorMode
-        ? buildRealtorNav(inboxBadge)
-        : buildSolutionsNav({ instancesBySolution: outcomeInstances }),
-    [outcomeInstances, realtorMode, inboxBadge],
-  );
+  const navItems: NavItem[] = useMemo(() => {
+    if (realtorMode) return buildRealtorNav(inboxBadge);
+    const pathAgentId = voiceAgentIdFromPath(pathname);
+    const agentId = pathAgentId ?? primaryVoiceAgentId ?? null;
+    return buildSolutionsNav({
+      instancesBySolution: outcomeInstances,
+      primaryVoiceAgentId: agentId,
+    });
+  }, [outcomeInstances, primaryVoiceAgentId, pathname, realtorMode, inboxBadge]);
 
   useEffect(() => {
     setExpanded(bestExpandedKey(navItems, pathname, search));

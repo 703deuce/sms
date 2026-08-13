@@ -23,6 +23,7 @@ export function AppShell({
   activeFromNumberId,
   unreadNotifications,
   outcomeInstances = {},
+  primaryVoiceAgentId = null,
   realtorMode = false,
 }: {
   children: React.ReactNode;
@@ -36,6 +37,7 @@ export function AppShell({
   activeFromNumberId?: string | null;
   unreadNotifications?: number;
   outcomeInstances?: Record<string, SolutionNavInstance[]>;
+  primaryVoiceAgentId?: string | null;
   realtorMode?: boolean;
 }) {
   const pathname = usePathname();
@@ -65,6 +67,7 @@ export function AppShell({
           open={menuOpen}
           onClose={() => setMenuOpen(false)}
           outcomeInstances={outcomeInstances}
+          primaryVoiceAgentId={primaryVoiceAgentId}
           realtorMode={realtorMode}
           inboxBadge={unreadNotifications}
           collapsed={sidebarCollapsed}
