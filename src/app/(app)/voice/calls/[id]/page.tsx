@@ -31,6 +31,12 @@ type Segment = {
   endMs?: number | null;
 };
 
+type CallInsight = {
+  summary?: string | null;
+  intent?: string | null;
+  sentiment?: string | null;
+};
+
 function fmtSegmentTime(ms?: number | null) {
   if (ms == null) return "0:00";
   const total = Math.round(ms / 1000);
@@ -97,9 +103,9 @@ export default function VoiceCallDetailPage() {
     : ((data?.transcripts as Array<{ segments?: Segment[] }>) || []).flatMap(
         (t) => t.segments || [],
       );
-  const insight = demo && mock
+  const insight: CallInsight | undefined = demo && mock
     ? { summary: mock.summary, intent: mock.intent, sentiment: mock.sentiment }
-    : ((data?.insights as Array<{ summary?: string }>) || [])[0];
+    : ((data?.insights as CallInsight[]) || [])[0];
 
   if (demo && !mock) {
     return (
@@ -157,7 +163,7 @@ export default function VoiceCallDetailPage() {
       label: "Next Steps Identified",
       value: mockCall ? "Send quote, schedule follow-up" : "—",
     },
-    { label: "Goal", value: mockCall?.reason || String(insight?.intent || "—") },
+    { label: "Goal", value: mockCall?.reason || insight?.intent || "—" },
   ];
 
   return (
