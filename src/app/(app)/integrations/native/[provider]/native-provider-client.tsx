@@ -170,7 +170,7 @@ export function NativeProviderClient({ provider }: { provider: string }) {
       </div>
 
       {message ? (
-        <p className={`mb-4 text-sm ${message.error ? "text-red-600" : "text-emerald-700"}`}>
+        <p className={`mb-4 text-sm ${message.error ? "text-red-600" : "text-violet-700"}`}>
           {message.text}
         </p>
       ) : null}

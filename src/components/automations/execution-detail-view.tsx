@@ -8,7 +8,7 @@ import { useCallback, useEffect, useState } from "react";
 function Bool({ value }: { value: boolean | null | undefined }) {
   if (value == null) return <span className="text-[#9CA3AF]">—</span>;
   return (
-    <span className={value ? "font-semibold text-emerald-700" : "text-[#6B7280]"}>
+    <span className={value ? "font-semibold text-violet-700" : "text-[#6B7280]"}>
       {value ? "Yes" : "No"}
     </span>
   );
@@ -88,8 +88,8 @@ export function ExecutionDetailViewPanel({
           <span
             className={cn(
               "inline-flex h-8 items-center rounded-full px-3 text-[12px] font-semibold",
-              data.status === "COMPLETED" && "bg-emerald-50 text-emerald-700",
-              data.status === "RUNNING" && "bg-sky-50 text-sky-700",
+              data.status === "COMPLETED" && "bg-violet-50 text-violet-700",
+              data.status === "RUNNING" && "bg-indigo-50 text-indigo-700",
               data.status === "WAITING" && "bg-amber-50 text-amber-800",
               data.status === "FAILED" && "bg-rose-50 text-rose-700",
               !["COMPLETED", "RUNNING", "WAITING", "FAILED"].includes(
@@ -320,7 +320,7 @@ export function ExecutionDetailViewPanel({
                   className={cn(
                     "rounded px-1.5 py-0.5 text-[10px] font-bold uppercase",
                     step.status === "completed" &&
-                      "bg-emerald-50 text-emerald-700",
+                      "bg-violet-50 text-violet-700",
                     step.status === "failed" && "bg-rose-50 text-rose-700",
                     step.status !== "completed" &&
                       step.status !== "failed" &&

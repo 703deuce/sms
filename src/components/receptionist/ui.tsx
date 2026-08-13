@@ -192,7 +192,7 @@ export function AboutNextPanel({
         <ul className="mt-3 space-y-2">
           {tips.map((tip) => (
             <li key={tip} className="flex items-start gap-2 text-[12px] leading-snug text-[#6b7280]">
-              <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" strokeWidth={3} />
+              <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-violet-500" strokeWidth={3} />
               {tip}
             </li>
           ))}
@@ -490,7 +490,7 @@ export function SetupDetailsPanel({
         <ul className="mt-2.5 space-y-2">
           {enabledCaps.map((cap) => (
             <li key={cap.id} className="flex items-center gap-2 text-[13px] font-medium text-[#374151]">
-              <Check className="h-4 w-4 shrink-0 text-emerald-500" strokeWidth={3} />
+              <Check className="h-4 w-4 shrink-0 text-violet-500" strokeWidth={3} />
               {cap.label}
             </li>
           ))}
@@ -549,8 +549,8 @@ export function VoiceWorksPanel({
           </p>
         </div>
         <div className="flex gap-2.5">
-          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-500/10">
-            <span className="text-[10px] font-bold text-emerald-600">U</span>
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-violet-500/10">
+            <span className="text-[10px] font-bold text-violet-600">U</span>
           </span>
           <p className="rounded-xl rounded-tl-sm bg-[#f8f9fc] px-3 py-2 text-[12px] leading-relaxed text-[#374151]">
             I&apos;m curious about pricing for a service visit.
@@ -572,8 +572,8 @@ export function VoiceWorksPanel({
           <span className="font-bold text-[#111827]">{phoneE164 || "(assign on activate)"}</span>
         </p>
         {phoneE164 ? (
-          <p className="mt-1 flex items-center gap-1.5 text-xs text-emerald-600">
-            <span className="h-2 w-2 rounded-full bg-emerald-500" />
+          <p className="mt-1 flex items-center gap-1.5 text-xs text-violet-600">
+            <span className="h-2 w-2 rounded-full bg-violet-500" />
             Active
           </p>
         ) : null}

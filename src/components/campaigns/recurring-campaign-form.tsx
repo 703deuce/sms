@@ -163,7 +163,7 @@ export function RecurringCampaignForm() {
           </p>
         </div>
         {error ? <p className="text-sm text-rose-600">{error}</p> : null}
-        {done ? <p className="text-sm text-emerald-600">Recurring campaign created.</p> : null}
+        {done ? <p className="text-sm text-violet-600">Recurring campaign created.</p> : null}
         <Button type="submit" disabled={saving}>{saving ? "Creating…" : "Create recurring"}</Button>
       </form>
     </Card>

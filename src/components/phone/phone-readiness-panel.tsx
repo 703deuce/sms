@@ -254,7 +254,7 @@ export function PhoneReadinessPanel() {
         {micActive || micLevel > 0 ? (
           <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
             <div
-              className="h-full bg-emerald-500"
+              className="h-full bg-violet-500"
               style={{ width: `${Math.min(100, micLevel * 100)}%` }}
             />
           </div>

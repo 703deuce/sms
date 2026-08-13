@@ -71,19 +71,19 @@ export default function MockPaymentPage() {
   const paid = link.status === "paid";
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-teal-50 to-slate-100 p-6">
+    <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-violet-50 to-slate-100 p-6">
       <Card className="w-full max-w-md space-y-5 p-6 shadow-lg">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">
+          <p className="text-xs font-semibold uppercase tracking-wide text-violet-700">
             {paid ? "Payment received" : "Secure checkout (dev)"}
           </p>
           <h1 className="mt-1 text-2xl font-bold tracking-tight">
             {link.description || "Payment"}
           </h1>
-          <p className="mt-2 text-3xl font-semibold text-teal-800">{amount}</p>
+          <p className="mt-2 text-3xl font-semibold text-violet-800">{amount}</p>
         </div>
         {paid ? (
-          <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+          <p className="rounded-lg bg-violet-50 px-3 py-2 text-sm text-violet-800">
             Thanks — this payment is marked paid. Campaign reminders will stop automatically.
           </p>
         ) : (

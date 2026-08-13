@@ -42,7 +42,7 @@ export async function GET(
   const branding = {
     businessName:
       config.branding?.businessName || workspace?.displayName || workspace?.name || "Transovo",
-    primaryColor: config.branding?.primaryColor || workspace?.primaryColor || "#2563eb",
+    primaryColor: config.branding?.primaryColor || workspace?.primaryColor || "#6366f1",
     accentColor: config.branding?.accentColor || workspace?.accentColor || "#0ea5e9",
     theme: config.branding?.theme || workspaceTheme,
     logoUrl: config.branding?.logoUrl || workspace?.logoUrl || null,

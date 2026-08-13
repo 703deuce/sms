@@ -63,8 +63,8 @@ export function AboutStep({
           agent={agent}
           steps={[
             { color: "bg-[#6366f1]", text: "Set personality and business knowledge for your agent." },
-            { color: "bg-emerald-500", text: "Choose how calls are handled and what to collect." },
-            { color: "bg-sky-500", text: "Test voice quality and connect your phone number." },
+            { color: "bg-violet-500", text: "Choose how calls are handled and what to collect." },
+            { color: "bg-indigo-500", text: "Test voice quality and connect your phone number." },
           ]}
           tips={[
             "Be specific about services and service area.",

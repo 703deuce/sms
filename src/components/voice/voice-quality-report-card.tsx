@@ -18,7 +18,7 @@ function Stars({ n }: { n: number }) {
 function GradeDot({ grade }: { grade: ConnectionGrade }) {
   const color =
     grade === "excellent"
-      ? "bg-emerald-500"
+      ? "bg-violet-500"
       : grade === "good"
         ? "bg-amber-500"
         : grade === "poor"

@@ -226,7 +226,7 @@ export default function QuickSendPage() {
                     onClick={() => toggleContact(contact.id)}
                     className={cn(
                       "flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition",
-                      selected ? "border-primary bg-teal-50" : "border-border hover:bg-muted/50",
+                      selected ? "border-primary bg-violet-50" : "border-border hover:bg-muted/50",
                     )}
                   >
                     <span

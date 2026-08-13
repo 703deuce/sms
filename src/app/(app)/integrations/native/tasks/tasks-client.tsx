@@ -48,7 +48,7 @@ function stateBadge(t: Task): { label: string; tone: string } {
       (t.origin === "crm" && t.syncStatus === "synced" && Boolean(t.externalId));
     return {
       label: inCrm ? "Completed in CRM" : "Completed in Transovo",
-      tone: "bg-emerald-100 text-emerald-800",
+      tone: "bg-indigo-100 text-violet-800",
     };
   }
   if (t.syncStatus === "failed" || t.syncStatus === "error") {
@@ -59,7 +59,7 @@ function stateBadge(t: Task): { label: string; tone: string } {
   }
   if (t.externalId && t.syncStatus === "synced") {
     return t.origin === "crm"
-      ? { label: "Created from CRM", tone: "bg-sky-100 text-sky-800" }
+      ? { label: "Created from CRM", tone: "bg-indigo-100 text-indigo-800" }
       : { label: "Synced to CRM", tone: "bg-indigo-100 text-indigo-800" };
   }
   return { label: "Transovo-only", tone: "bg-slate-100 text-slate-700" };
@@ -139,7 +139,7 @@ export function TasksClient() {
         </button>
       </div>
       {error ? <p className="mb-3 text-sm text-red-600">{error}</p> : null}
-      {notice ? <p className="mb-3 text-sm text-emerald-600">{notice}</p> : null}
+      {notice ? <p className="mb-3 text-sm text-violet-600">{notice}</p> : null}
       <div className="space-y-3">
         {tasks.map((t) => {
           const badge = stateBadge(t);

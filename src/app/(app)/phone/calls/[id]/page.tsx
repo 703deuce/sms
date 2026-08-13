@@ -83,8 +83,8 @@ function SyncBadge({ status }: { status: string }) {
     status === "error"
       ? "bg-red-100 text-red-800"
       : status === "pending"
-        ? "bg-sky-100 text-sky-800"
-        : "bg-emerald-100 text-emerald-800";
+        ? "bg-indigo-100 text-indigo-800"
+        : "bg-indigo-100 text-violet-800";
   return (
     <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${cls}`}>
       {status}
@@ -309,21 +309,21 @@ export default function PhoneCallDetailPage() {
             <div className="flex flex-wrap gap-2 text-xs">
               <span
                 className={`inline-flex items-center rounded-full px-2 py-0.5 font-medium ${
-                  crm?.hasRecording ? "bg-emerald-100 text-emerald-800" : "bg-muted text-muted-foreground"
+                  crm?.hasRecording ? "bg-indigo-100 text-violet-800" : "bg-muted text-muted-foreground"
                 }`}
               >
                 Recording {crm?.hasRecording ? (crm.synced ? "· synced" : "· local") : "· none"}
               </span>
               <span
                 className={`inline-flex items-center rounded-full px-2 py-0.5 font-medium ${
-                  crm?.hasTranscript ? "bg-emerald-100 text-emerald-800" : "bg-muted text-muted-foreground"
+                  crm?.hasTranscript ? "bg-indigo-100 text-violet-800" : "bg-muted text-muted-foreground"
                 }`}
               >
                 Transcript {crm?.hasTranscript ? (crm.synced ? "· synced" : "· local") : "· none"}
               </span>
               <span
                 className={`inline-flex items-center rounded-full px-2 py-0.5 font-medium ${
-                  crm?.hasSummary ? "bg-emerald-100 text-emerald-800" : "bg-muted text-muted-foreground"
+                  crm?.hasSummary ? "bg-indigo-100 text-violet-800" : "bg-muted text-muted-foreground"
                 }`}
               >
                 AI summary {crm?.hasSummary ? (crm.synced ? "· synced" : "· local") : "· none"}

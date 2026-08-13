@@ -374,7 +374,7 @@ export function InboxView({
                 onClick={() => setSelectedId(c.id)}
                 className={cn(
                   "flex w-full gap-2.5 rounded-[12px] px-2.5 py-2.5 text-left transition",
-                  active ? "bg-sky-50" : "hover:bg-muted/60",
+                  active ? "bg-indigo-50" : "hover:bg-muted/60",
                 )}
               >
                 <span className="relative shrink-0">
@@ -472,7 +472,7 @@ export function InboxView({
             </div>
 
             {alsoViewing.length > 0 ? (
-              <div className="border-b border-sky-200 bg-sky-50 px-4 py-2 text-[12px] text-sky-900">
+              <div className="border-b border-indigo-200 bg-indigo-50 px-4 py-2 text-[12px] text-indigo-900">
                 Also viewing: {alsoViewing.map((v) => v.userName).join(", ")}
               </div>
             ) : null}

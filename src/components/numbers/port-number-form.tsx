@@ -185,7 +185,7 @@ export function PortNumberForm() {
       <div className="grid gap-6 xl:grid-cols-3">
         <Card className="xl:col-span-2">
           <CardTitle>New port request</CardTitle>
-          {success ? <p className="mt-4 text-sm text-emerald-600">{success}</p> : null}
+          {success ? <p className="mt-4 text-sm text-violet-600">{success}</p> : null}
           {error ? <p className="mt-4 text-sm text-rose-600">{error}</p> : null}
           <form className="mt-4 space-y-4" onSubmit={submitPort}>
             <div className="grid gap-4 sm:grid-cols-2">

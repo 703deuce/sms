@@ -129,7 +129,7 @@ export async function loadSolutionsDashboardData(
         actionVariant: "outline",
         href: outcomeHref("appointment-booking"),
         icon: "calendar",
-        iconTone: "bg-emerald-500",
+        iconTone: "bg-violet-500",
       },
       {
         slug: "missed-call-text-back",
@@ -142,7 +142,7 @@ export async function loadSolutionsDashboardData(
         actionVariant: "primary",
         href: outcomeHref("missed-call-text-back", "setup"),
         icon: "mail",
-        iconTone: "bg-sky-500",
+        iconTone: "bg-indigo-500",
       },
       {
         slug: "review-requests",
@@ -168,7 +168,7 @@ export async function loadSolutionsDashboardData(
         actionVariant: "outline",
         href: outcomeHref("customer-reactivation"),
         icon: "reactivate",
-        iconTone: "bg-emerald-500",
+        iconTone: "bg-violet-500",
       },
     ],
     activeSolutions: [
@@ -176,7 +176,7 @@ export async function loadSolutionsDashboardData(
         id: "booking",
         label: "Online Booking Kit",
         icon: "calendar",
-        iconTone: "bg-emerald-100 text-emerald-600",
+        iconTone: "bg-indigo-100 text-violet-600",
         href: outcomeHref("appointment-booking"),
       },
       {
@@ -190,7 +190,7 @@ export async function loadSolutionsDashboardData(
         id: "textback",
         label: "Missed Call Text Back",
         icon: "mail",
-        iconTone: "bg-sky-100 text-sky-600",
+        iconTone: "bg-indigo-100 text-indigo-600",
         href: outcomeHref("missed-call-text-back"),
       },
       {
@@ -247,7 +247,7 @@ export async function loadSolutionsDashboardData(
         when: "1h ago",
         href: "/integrations/native/appointments",
         icon: "calendar",
-        iconTone: "bg-emerald-100 text-emerald-600",
+        iconTone: "bg-indigo-100 text-violet-600",
       },
       {
         id: "4",
@@ -255,7 +255,7 @@ export async function loadSolutionsDashboardData(
         when: "3h ago",
         href: outcomeHref("estimate-follow-up"),
         icon: "mail",
-        iconTone: "bg-sky-100 text-sky-600",
+        iconTone: "bg-indigo-100 text-indigo-600",
       },
     ],
     recommended: [
@@ -271,7 +271,7 @@ export async function loadSolutionsDashboardData(
         title: "Follow Up On Estimates",
         href: outcomeHref("estimate-follow-up"),
         icon: "mail",
-        iconTone: "bg-sky-100 text-sky-600",
+        iconTone: "bg-indigo-100 text-indigo-600",
       },
       {
         slug: "customer-reactivation",
@@ -292,7 +292,7 @@ export async function loadSolutionsDashboardData(
         label: "Appointments Booked",
         value: 5,
         icon: "calendar",
-        iconTone: "bg-emerald-100 text-emerald-500",
+        iconTone: "bg-indigo-100 text-violet-500",
       },
       {
         label: "New Reviews Collected",
@@ -304,7 +304,7 @@ export async function loadSolutionsDashboardData(
         label: "Estimates Sent",
         value: 4,
         icon: "sparkles",
-        iconTone: "bg-sky-100 text-sky-500",
+        iconTone: "bg-indigo-100 text-indigo-500",
       },
     ],
   };

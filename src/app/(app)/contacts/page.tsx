@@ -32,8 +32,8 @@ import Link from "next/link";
 import { contactTabs } from "@/lib/contact-tabs";
 
 const avatarTones = [
-  "bg-emerald-100 text-emerald-700",
-  "bg-sky-100 text-sky-700",
+  "bg-indigo-100 text-violet-700",
+  "bg-indigo-100 text-indigo-700",
   "bg-violet-100 text-violet-700",
   "bg-orange-100 text-orange-700",
   "bg-pink-100 text-pink-700",
@@ -187,7 +187,7 @@ export default async function ContactsPage({ searchParams }: ContactsPageProps) 
           icon={Users}
           tone="bg-violet-50 text-violet-600"
           sparkline={[18, 20, 19, 22, 21, 24, 23, total]}
-          sparkColor="#10b981"
+          sparkColor="#6366f1"
         />
         <MetricCard
           label="Subscribed"
@@ -196,7 +196,7 @@ export default async function ContactsPage({ searchParams }: ContactsPageProps) 
           icon={UserCheck}
           tone="bg-violet-50 text-violet-600"
           sparkline={[14, 15, 16, 15, 17, 18, 19, subscribed]}
-          sparkColor="#10b981"
+          sparkColor="#6366f1"
         />
         <MetricCard
           label="Unsubscribed"
@@ -375,7 +375,7 @@ export default async function ContactsPage({ searchParams }: ContactsPageProps) 
                         </TD>
                         <TD>
                           {crm?.crmConnected ? (
-                            <StatusChip status="Connected" className="bg-emerald-100 text-emerald-800" />
+                            <StatusChip status="Connected" className="bg-indigo-100 text-violet-800" />
                           ) : (
                             <span className="text-muted-foreground">No</span>
                           )}

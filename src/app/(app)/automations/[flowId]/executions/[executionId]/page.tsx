@@ -22,7 +22,7 @@ export default async function ExecutionDetailPage({
     <div className="space-y-4">
       <Link
         href={`/automations/${flowId}?tab=executions`}
-        className="text-[12px] font-semibold text-[#2563EB] hover:underline"
+        className="text-[12px] font-semibold text-[#4f46e5] hover:underline"
       >
         ← All executions
       </Link>

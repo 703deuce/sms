@@ -40,7 +40,7 @@ function leadScore(lead: RealtorLeadRow): number {
 }
 
 function scoreRingColor(score: number): string {
-  if (score >= 80) return "#10b981";
+  if (score >= 80) return "#6366f1";
   if (score >= 60) return "#f59e0b";
   return "#ef4444";
 }
@@ -61,11 +61,11 @@ function statusLabel(status: RealtorLeadStatus): string {
 function statusDot(status: RealtorLeadStatus): string {
   switch (status) {
     case "qualified":
-      return "bg-emerald-500";
+      return "bg-violet-500";
     case "appointment":
       return "bg-purple-500";
     case "new":
-      return "bg-blue-500";
+      return "bg-indigo-500";
     case "nurture":
       return "bg-amber-500";
     case "closed":
@@ -81,7 +81,7 @@ function intentBadge(intent?: string | null): { label: string; className: string
     return { label: "Seller", className: "bg-purple-50 text-purple-700" };
   }
   if (key.includes("buyer")) {
-    return { label: "Buyer", className: "bg-blue-50 text-blue-700" };
+    return { label: "Buyer", className: "bg-indigo-50 text-indigo-700" };
   }
   if (key.includes("agent")) {
     return { label: "Other Agent", className: "bg-orange-50 text-orange-700" };
@@ -193,7 +193,7 @@ export function RealtorLeadsListView({
               className={cn(
                 "inline-flex items-center gap-2 border-b-2 px-3 py-2 text-[13px] font-medium",
                 active
-                  ? "border-[#2563eb] text-[#2563eb]"
+                  ? "border-[#6366f1] text-[#6366f1]"
                   : "border-transparent text-[#6b7280] hover:text-[#111827]",
               )}
             >
@@ -204,7 +204,7 @@ export function RealtorLeadsListView({
                   className={cn(
                     "h-1.5 w-1.5 rounded-full",
                     tab.dot === "orange" && "bg-orange-500",
-                    tab.dot === "green" && "bg-emerald-500",
+                    tab.dot === "green" && "bg-violet-500",
                     tab.dot === "purple" && "bg-purple-500",
                   )}
                 />
@@ -223,7 +223,7 @@ export function RealtorLeadsListView({
               name="q"
               defaultValue={searchQuery || ""}
               placeholder="Search leads..."
-              className="h-10 w-full rounded-lg border border-[#e5e7eb] bg-white pl-10 pr-3 text-[14px] outline-none focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
+              className="h-10 w-full rounded-lg border border-[#e5e7eb] bg-white pl-10 pr-3 text-[14px] outline-none focus:border-[#6366f1] focus:ring-2 focus:ring-[#6366f1]/20"
             />
           </div>
           <select name="type" className="h-10 rounded-lg border border-[#e5e7eb] px-3 text-[13px] text-[#374151]">
@@ -284,7 +284,7 @@ export function RealtorLeadsListView({
                   </td>
                   <td className="px-4 py-3">
                     <Link href={`/realtor/leads/${lead.id}`} className="flex items-center gap-3">
-                      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#eff6ff] text-[12px] font-bold text-[#2563eb]">
+                      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#eff6ff] text-[12px] font-bold text-[#6366f1]">
                         {initials(lead.name)}
                       </span>
                       <span>
@@ -324,7 +324,7 @@ export function RealtorLeadsListView({
                       <span
                         className={cn(
                           "h-1.5 w-1.5 rounded-full",
-                          lead.needsAttention ? "bg-orange-500" : "bg-emerald-500",
+                          lead.needsAttention ? "bg-orange-500" : "bg-violet-500",
                         )}
                       />
                       {lead.needsAttention
@@ -343,7 +343,7 @@ export function RealtorLeadsListView({
                     <ScoreRing score={score} />
                   </td>
                   <td className="px-4 py-3">
-                    <div className="flex items-center gap-2 text-[#2563eb]">
+                    <div className="flex items-center gap-2 text-[#6366f1]">
                       <Link href={`/phone?contact=${lead.id}`} aria-label="Call">
                         <Phone className="h-4 w-4" />
                       </Link>
@@ -387,7 +387,7 @@ export function RealtorLeadsListView({
                 className={cn(
                   "flex h-8 min-w-8 items-center justify-center rounded-lg border px-2",
                   p === page
-                    ? "border-[#2563eb] bg-[#2563eb] text-white"
+                    ? "border-[#6366f1] bg-[#6366f1] text-white"
                     : "border-[#e5e7eb] hover:bg-[#f9fafb]",
                 )}
               >
@@ -424,7 +424,7 @@ export function RealtorLeadsListView({
               href={buildPageHref({ ...pageBase, perPage: 25 }, 1)}
               className={cn(
                 "rounded border px-2 py-1",
-                perPage === 25 ? "border-[#2563eb] text-[#2563eb]" : "border-[#e5e7eb]",
+                perPage === 25 ? "border-[#6366f1] text-[#6366f1]" : "border-[#e5e7eb]",
               )}
             >
               25
@@ -433,7 +433,7 @@ export function RealtorLeadsListView({
               href={buildPageHref({ ...pageBase, perPage: 50 }, 1)}
               className={cn(
                 "rounded border px-2 py-1",
-                perPage === 50 ? "border-[#2563eb] text-[#2563eb]" : "border-[#e5e7eb]",
+                perPage === 50 ? "border-[#6366f1] text-[#6366f1]" : "border-[#e5e7eb]",
               )}
             >
               50

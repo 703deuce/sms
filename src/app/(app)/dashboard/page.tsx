@@ -14,7 +14,7 @@ import Link from "next/link";
 
 function Sparkline({
   points,
-  color = "#10b981",
+  color = "#6366f1",
   width = 88,
   height = 32,
 }: {
@@ -74,7 +74,7 @@ function Delta({ value }: { value: number | null }) {
     <span
       className={cn(
         "inline-flex items-center gap-1 text-[12px] font-semibold",
-        positive ? "text-emerald-600" : "text-rose-500",
+        positive ? "text-violet-600" : "text-rose-500",
       )}
     >
       <Icon className="h-3.5 w-3.5" />
@@ -85,10 +85,10 @@ function Delta({ value }: { value: number | null }) {
 }
 
 const contactStatusTone: Record<string, string> = {
-  New: "bg-sky-100 text-sky-700",
-  Engaged: "bg-emerald-100 text-emerald-700",
+  New: "bg-indigo-100 text-indigo-700",
+  Engaged: "bg-indigo-100 text-violet-700",
   Lead: "bg-amber-100 text-amber-800",
-  Subscribed: "bg-emerald-100 text-emerald-700",
+  Subscribed: "bg-indigo-100 text-violet-700",
   Unsubscribed: "bg-orange-100 text-orange-700",
   Blocked: "bg-rose-100 text-rose-700",
   Invalid: "bg-slate-100 text-slate-600",
@@ -152,7 +152,7 @@ export default async function DashboardPage() {
               </div>
               <Sparkline
                 points={kpi.sparkline}
-                color={kpi.deltaPct != null && kpi.deltaPct < 0 ? "#f43f5e" : "#10b981"}
+                color={kpi.deltaPct != null && kpi.deltaPct < 0 ? "#f43f5e" : "#6366f1"}
               />
             </div>
             <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3">
@@ -163,7 +163,7 @@ export default async function DashboardPage() {
               </p>
               <Link
                 href={kpi.href}
-                className="inline-flex items-center gap-0.5 text-[12px] font-semibold text-blue-600 hover:text-blue-700"
+                className="inline-flex items-center gap-0.5 text-[12px] font-semibold text-indigo-600 hover:text-indigo-700"
               >
                 Go to App
                 <ArrowUpRight className="h-3.5 w-3.5" />
@@ -202,7 +202,7 @@ export default async function DashboardPage() {
             <Link
               key={metric.label}
               href={metric.href}
-              className="rounded-xl border border-slate-100 bg-[#FBFBFD] px-3 py-3 transition hover:border-emerald-200 hover:bg-white"
+              className="rounded-xl border border-slate-100 bg-[#FBFBFD] px-3 py-3 transition hover:border-violet-200 hover:bg-white"
             >
               <p className="text-[11px] font-semibold text-slate-500">{metric.label}</p>
               <div className="mt-2 flex items-end justify-between gap-2">
@@ -224,7 +224,7 @@ export default async function DashboardPage() {
             <Link
               key={block.id}
               href={block.href}
-              className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-[0_1px_2px_rgb(15_23_42/0.04),0_4px_16px_rgb(15_23_42/0.04)] transition hover:border-emerald-200"
+              className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-[0_1px_2px_rgb(15_23_42/0.04),0_4px_16px_rgb(15_23_42/0.04)] transition hover:border-violet-200"
             >
               <p className="text-[13px] font-bold text-slate-900">{block.title}</p>
               <dl className="mt-4 grid grid-cols-3 gap-2">
@@ -250,7 +250,7 @@ export default async function DashboardPage() {
         <section className="rounded-xl border border-slate-200/80 bg-white p-5 shadow-[0_1px_2px_rgb(15_23_42/0.04),0_4px_16px_rgb(15_23_42/0.04)]">
           <div className="mb-3 flex items-center justify-between">
             <h3 className="text-[15px] font-bold text-slate-900">Recent Contacts</h3>
-            <Link href="/contacts" className="text-[12px] font-semibold text-blue-600 hover:underline">
+            <Link href="/contacts" className="text-[12px] font-semibold text-indigo-600 hover:underline">
               View all
             </Link>
           </div>
@@ -272,7 +272,7 @@ export default async function DashboardPage() {
                       <td className="py-2.5 pr-2">
                         <Link
                           href={contact.href}
-                          className="text-[13px] font-semibold text-slate-800 hover:text-emerald-700"
+                          className="text-[13px] font-semibold text-slate-800 hover:text-violet-700"
                         >
                           {contact.name}
                         </Link>
@@ -302,7 +302,7 @@ export default async function DashboardPage() {
         <section className="rounded-xl border border-slate-200/80 bg-white p-5 shadow-[0_1px_2px_rgb(15_23_42/0.04),0_4px_16px_rgb(15_23_42/0.04)]">
           <div className="mb-3 flex items-center justify-between">
             <h3 className="text-[15px] font-bold text-slate-900">Latest Activity</h3>
-            <Link href="/inbox" className="text-[12px] font-semibold text-blue-600 hover:underline">
+            <Link href="/inbox" className="text-[12px] font-semibold text-indigo-600 hover:underline">
               View all
             </Link>
           </div>
@@ -317,7 +317,7 @@ export default async function DashboardPage() {
                   {index < data.activity.length - 1 ? (
                     <span className="absolute left-[7px] top-3 bottom-0 w-px bg-slate-200" />
                   ) : null}
-                  <span className="relative z-10 mt-1.5 h-2 w-2 shrink-0 rounded-full bg-emerald-500 ring-4 ring-emerald-50" />
+                  <span className="relative z-10 mt-1.5 h-2 w-2 shrink-0 rounded-full bg-violet-500 ring-4 ring-violet-50" />
                   <Link href={item.href} className="min-w-0 flex-1 hover:opacity-90">
                     <p className="text-[13px] font-semibold text-slate-800">{item.title}</p>
                     <p className="mt-0.5 truncate text-[12px] text-slate-500">{item.detail}</p>
@@ -347,7 +347,7 @@ export default async function DashboardPage() {
             </div>
             <div className="mb-4 h-2 overflow-hidden rounded-full bg-slate-100">
               <div
-                className="h-full rounded-full bg-emerald-500 transition-all"
+                className="h-full rounded-full bg-violet-500 transition-all"
                 style={{ width: `${onboardingPct}%` }}
               />
             </div>
@@ -356,7 +356,7 @@ export default async function DashboardPage() {
                 <li key={step.id}>
                   {step.done ? (
                     <div className="flex items-center gap-2.5 rounded-lg px-1.5 py-1.5 text-[13px] text-slate-500">
-                      <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                      <CheckCircle2 className="h-4 w-4 text-violet-500" />
                       <span className="line-through decoration-slate-300">{step.label}</span>
                     </div>
                   ) : (
@@ -387,7 +387,7 @@ export default async function DashboardPage() {
                     className="flex items-center justify-between gap-3 rounded-lg bg-[#FBFBFD] px-3 py-2"
                   >
                     <span className="flex min-w-0 items-center gap-2.5">
-                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-[11px] font-bold text-emerald-700">
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-violet-50 text-[11px] font-bold text-violet-700">
                         {i + 1}
                       </span>
                       <span className="truncate text-[13px] font-semibold text-slate-800">

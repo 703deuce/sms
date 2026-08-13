@@ -63,7 +63,7 @@ export default async function GettingStartedPage() {
         }
       />
 
-      <Card className="mb-6 border-emerald-200 bg-emerald-50/40">
+      <Card className="mb-6 border-violet-200 bg-violet-50/40">
         <CardTitle>Hire Amy or Tom</CardTitle>
         <p className="mt-2 text-sm text-muted-foreground">
           After payment or signup, start with your communications team — not a blank dashboard.
@@ -134,7 +134,7 @@ export default async function GettingStartedPage() {
               </div>
               <span
                 className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                  step.done ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"
+                  step.done ? "bg-indigo-100 text-violet-800" : "bg-amber-100 text-amber-800"
                 }`}
               >
                 {step.done ? "Done" : "To do"}

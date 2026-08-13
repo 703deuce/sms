@@ -46,7 +46,7 @@ function Pill({
 }) {
   const cls =
     tone === "ok"
-      ? "bg-emerald-50 text-emerald-700"
+      ? "bg-violet-50 text-violet-700"
       : tone === "warn"
         ? "bg-amber-50 text-amber-800"
         : tone === "bad"
@@ -458,7 +458,7 @@ export function AppointmentAgentDetail({ agentId }: { agentId: string }) {
                   ))}
                 </div>
               ) : (
-                <p className="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                <p className="rounded-xl bg-violet-50 px-4 py-3 text-sm text-violet-800">
                   {name} is ready — no readiness blockers.
                 </p>
               )}
@@ -882,7 +882,7 @@ export function AppointmentAgentDetail({ agentId }: { agentId: string }) {
                         className={cn(
                           "rounded-xl border px-4 py-3 text-sm",
                           v.id === agent.currentVersionId
-                            ? "border-emerald-200 bg-emerald-50/40"
+                            ? "border-violet-200 bg-violet-50/40"
                             : "border-slate-100",
                         )}
                       >

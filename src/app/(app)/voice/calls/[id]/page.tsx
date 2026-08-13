@@ -182,7 +182,7 @@ export default function VoiceCallDetailPage() {
             <h1 className="font-display text-[26px] font-semibold tracking-tight text-[#111827]">
               Call from {callerName}
             </h1>
-            <span className="rounded-full bg-teal-50 px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide text-teal-700 ring-1 ring-inset ring-teal-200">
+            <span className="rounded-full bg-violet-50 px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide text-violet-700 ring-1 ring-inset ring-violet-200">
               Incoming
             </span>
           </div>

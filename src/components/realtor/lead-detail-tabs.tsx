@@ -55,7 +55,7 @@ export function LeadDetailTabs({
             href={href(tab.id)}
             className={
               isActive
-                ? "border-b-2 border-[#2563eb] pb-2 font-semibold text-[#2563eb]"
+                ? "border-b-2 border-[#6366f1] pb-2 font-semibold text-[#6366f1]"
                 : "pb-2 text-[#6b7280] hover:text-[#111827]"
             }
           >

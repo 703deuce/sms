@@ -284,7 +284,7 @@ export default function GrowContestsPage() {
                   <p className="mb-2 text-sm font-semibold">Winners</p>
                   <ul className="space-y-1 text-sm">
                     {winners.map((w) => (
-                      <li key={w.id} className="rounded-md bg-emerald-50 px-3 py-1.5">
+                      <li key={w.id} className="rounded-md bg-violet-50 px-3 py-1.5">
                         {w.name} · <span className="font-mono">{w.phone}</span>
                       </li>
                     ))}

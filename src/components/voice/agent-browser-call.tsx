@@ -1014,7 +1014,7 @@ export function AgentBrowserCall({
   };
 
   return (
-    <Card className="space-y-4 border-emerald-800/25 bg-emerald-50/30 p-5 dark:bg-emerald-950/20">
+    <Card className="space-y-4 border-violet-800/25 bg-violet-50/30 p-5 dark:bg-violet-950/20">
       <div className="flex items-start justify-between gap-2">
         <div>
           <CardTitle>Test Voice Agent</CardTitle>
@@ -1213,7 +1213,7 @@ export function AgentBrowserCall({
                 {muted ? "Unmute" : "Mute"}
               </Button>
             ) : null}
-            <span className="text-sm font-medium text-emerald-700">
+            <span className="text-sm font-medium text-violet-700">
               {phaseLabel[phase]}
             </span>
           </>
@@ -1465,7 +1465,7 @@ function ConnectionBadge({
   const label = connectionGradeLabel(grade);
   const styles =
     grade === "excellent"
-      ? "border-emerald-500/40 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
+      ? "border-violet-500/40 bg-violet-50 text-violet-800 dark:bg-violet-950/40 dark:text-violet-200"
       : grade === "good"
         ? "border-amber-500/40 bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-100"
         : grade === "poor"
@@ -1473,7 +1473,7 @@ function ConnectionBadge({
           : "border-border bg-muted text-muted-foreground";
   const dot =
     grade === "excellent"
-      ? "bg-emerald-500"
+      ? "bg-violet-500"
       : grade === "good"
         ? "bg-amber-500"
         : grade === "poor"

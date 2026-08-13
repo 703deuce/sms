@@ -51,8 +51,8 @@ const CAPABILITY_ICONS: Record<
 > = {
   answer_questions: {
     icon: MessageCircle,
-    iconBg: "bg-[#3b82f6]/10",
-    iconColor: "text-[#3b82f6]",
+    iconBg: "bg-[#6366f1]/10",
+    iconColor: "text-[#6366f1]",
   },
   take_messages: {
     icon: FileText,
@@ -66,8 +66,8 @@ const CAPABILITY_ICONS: Record<
   },
   book_appointments: {
     icon: Calendar,
-    iconBg: "bg-[#10b981]/10",
-    iconColor: "text-[#10b981]",
+    iconBg: "bg-[#6366f1]/10",
+    iconColor: "text-[#6366f1]",
   },
   transfer_calls: {
     icon: PhoneForwarded,

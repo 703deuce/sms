@@ -15,16 +15,16 @@ export default function ContactPage() {
             Transovo AI
           </Link>
           <nav className="flex flex-wrap items-center justify-end gap-x-4 gap-y-2 text-sm font-medium">
-            <Link href="/privacy" className="text-slate-600 hover:text-blue-600">
+            <Link href="/privacy" className="text-slate-600 hover:text-indigo-600">
               Privacy
             </Link>
-            <Link href="/terms" className="text-slate-600 hover:text-blue-600">
+            <Link href="/terms" className="text-slate-600 hover:text-indigo-600">
               Terms
             </Link>
-            <Link href="/acceptable-use" className="text-slate-600 hover:text-blue-600">
+            <Link href="/acceptable-use" className="text-slate-600 hover:text-indigo-600">
               Acceptable Use
             </Link>
-            <Link href="/" className="text-blue-600 hover:underline">
+            <Link href="/" className="text-indigo-600 hover:underline">
               Home
             </Link>
           </nav>
@@ -38,10 +38,10 @@ export default function ContactPage() {
           using the details below.
         </p>
         <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5 sm:p-6">
-          <p className="text-sm font-semibold uppercase tracking-wide text-blue-600">Support email</p>
+          <p className="text-sm font-semibold uppercase tracking-wide text-indigo-600">Support email</p>
           <a
             href="mailto:support@transovo.ai"
-            className="mt-2 block break-all text-xl font-semibold text-slate-900 hover:text-blue-600 sm:text-2xl"
+            className="mt-2 block break-all text-xl font-semibold text-slate-900 hover:text-indigo-600 sm:text-2xl"
           >
             support@transovo.ai
           </a>
@@ -56,16 +56,16 @@ export default function ContactPage() {
           </p>
         </div>
         <div className="mt-8 flex flex-wrap gap-x-4 gap-y-2 text-sm font-medium">
-          <Link href="/privacy" className="text-blue-600 hover:underline">
+          <Link href="/privacy" className="text-indigo-600 hover:underline">
             Privacy Policy
           </Link>
-          <Link href="/terms" className="text-blue-600 hover:underline">
+          <Link href="/terms" className="text-indigo-600 hover:underline">
             Terms of Service
           </Link>
-          <Link href="/acceptable-use" className="text-blue-600 hover:underline">
+          <Link href="/acceptable-use" className="text-indigo-600 hover:underline">
             Acceptable Use Policy
           </Link>
-          <Link href="/login" className="text-blue-600 hover:underline">
+          <Link href="/login" className="text-indigo-600 hover:underline">
             Log In
           </Link>
         </div>

@@ -41,9 +41,9 @@ function initials(name: string) {
 }
 
 const avatarTones = [
-  "bg-blue-100 text-blue-700",
+  "bg-blue-100 text-indigo-700",
   "bg-violet-100 text-violet-700",
-  "bg-emerald-100 text-emerald-700",
+  "bg-indigo-100 text-violet-700",
 ];
 
 function formatA2pDate(status: string) {
@@ -93,7 +93,7 @@ export default async function NumbersPage() {
           icon={Phone}
           tone="bg-violet-50 text-violet-600"
           sparkline={[1, 1, 2, 2, 2, 2, 2, 2]}
-          sparkColor="#10b981"
+          sparkColor="#6366f1"
         />
         <MetricCard
           label="A2P registered"
@@ -115,7 +115,7 @@ export default async function NumbersPage() {
           icon={Layers}
           tone="bg-indigo-50 text-indigo-600"
           sparkline={[2, 2, 3, 3, 3, 3, 3, 3]}
-          sparkColor="#3b82f6"
+          sparkColor="#6366f1"
         />
         <MetricCard
           label="Next payment"

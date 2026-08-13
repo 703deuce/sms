@@ -38,7 +38,7 @@ function StatusPill({ status, label }: { status: SystemStatus; label: string }) 
     <span
       className={cn(
         "inline-flex h-6 items-center rounded-full px-2 text-[11px] font-semibold",
-        status === "active" && "bg-emerald-50 text-emerald-700",
+        status === "active" && "bg-violet-50 text-violet-700",
         status === "draft" && "bg-slate-100 text-slate-600",
         status === "paused" && "bg-amber-50 text-amber-700",
         status === "needs_attention" && "bg-rose-50 text-rose-700",
@@ -65,7 +65,7 @@ function AgentCard({ system }: { system: SystemResource }) {
     <article className="flex flex-col rounded-xl border border-[#E5E7EB] bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-start gap-3">
-          <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#EFF6FF] text-[#2563EB]">
+          <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#eef2ff] text-[#4f46e5]">
             <Icon className="h-5 w-5" />
           </span>
           <div className="min-w-0">
@@ -157,7 +157,7 @@ function AgentCard({ system }: { system: SystemResource }) {
           <dd
             className={cn(
               "mt-0.5 font-medium",
-              system.warning ? "text-rose-600" : "text-emerald-700",
+              system.warning ? "text-rose-600" : "text-violet-700",
             )}
           >
             {system.warning || "Healthy"}
@@ -175,7 +175,7 @@ function AgentCard({ system }: { system: SystemResource }) {
         {system.workflowHref ? (
           <Link
             href={system.workflowHref}
-            className="inline-flex h-9 items-center justify-center rounded-md px-3 text-[12px] font-semibold text-[#2563EB] ring-1 ring-[#BFDBFE] hover:bg-[#EFF6FF]"
+            className="inline-flex h-9 items-center justify-center rounded-md px-3 text-[12px] font-semibold text-[#4f46e5] ring-1 ring-indigo-200 hover:bg-[#eef2ff]"
           >
             Open Workflow
           </Link>
@@ -199,7 +199,7 @@ function AgentCard({ system }: { system: SystemResource }) {
         {system.children?.[0]?.href && !system.workflowHref ? (
           <Link
             href={system.children[0].href}
-            className="inline-flex h-9 items-center justify-center rounded-md px-3 text-[12px] font-semibold text-[#2563EB] ring-1 ring-[#BFDBFE] hover:bg-[#EFF6FF]"
+            className="inline-flex h-9 items-center justify-center rounded-md px-3 text-[12px] font-semibold text-[#4f46e5] ring-1 ring-indigo-200 hover:bg-[#eef2ff]"
           >
             Details
           </Link>
@@ -259,7 +259,7 @@ export function MySystemsView({ systems }: { systems: SystemResource[] }) {
             className={cn(
               "inline-flex h-8 items-center rounded-full px-3 text-[12px] font-semibold transition",
               statusFilter === f.id
-                ? "bg-[#EFF6FF] text-[#2563EB] ring-1 ring-[#BFDBFE]"
+                ? "bg-[#eef2ff] text-[#4f46e5] ring-1 ring-indigo-200"
                 : "bg-white text-[#4B5563] ring-1 ring-[#E5E7EB] hover:bg-slate-50",
             )}
           >

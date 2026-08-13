@@ -13,7 +13,7 @@ import Link from "next/link";
 function StepIcon({ step }: { step: SetupHomeStep }) {
   if (step.status === "complete") {
     return (
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-white">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-violet-500 text-white">
         <Check className="h-5 w-5" strokeWidth={2.5} />
       </span>
     );
@@ -27,7 +27,7 @@ function StepIcon({ step }: { step: SetupHomeStep }) {
   }
   if (step.status === "ready") {
     return (
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#2563eb] text-sm font-bold text-white">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#6366f1] text-sm font-bold text-white">
         {step.stepNumber}
       </span>
     );
@@ -41,7 +41,7 @@ function StepIcon({ step }: { step: SetupHomeStep }) {
 
 function actionClass(status: SetupStepStatus, label: string): string {
   if (status === "complete" || label === "Complete") {
-    return "text-emerald-600 font-semibold";
+    return "text-violet-600 font-semibold";
   }
   if (status === "ready") {
     return "realtor-btn-outline realtor-btn-outline-blue";
@@ -76,7 +76,7 @@ function SetupRow({ step }: { step: SetupHomeStep }) {
         href={step.href}
         className={cn(
           "inline-flex h-9 items-center gap-1 text-[13px]",
-          isCompleteAction ? "text-emerald-600 font-semibold px-2" : actionClass(step.status, step.actionLabel),
+          isCompleteAction ? "text-violet-600 font-semibold px-2" : actionClass(step.status, step.actionLabel),
         )}
       >
         {step.actionLabel}
@@ -120,7 +120,7 @@ export function SetupHomeView({
               <p className="text-[12px] text-[#6b7280]">{pct}%</p>
               <div className="mt-2 h-2 overflow-hidden rounded-full bg-[#e5e7eb]">
                 <div
-                  className="h-full rounded-full bg-[#2563eb] transition-all"
+                  className="h-full rounded-full bg-[#6366f1] transition-all"
                   style={{ width: `${pct}%` }}
                 />
               </div>
@@ -135,7 +135,7 @@ export function SetupHomeView({
 
           {readyToGoLive || requiredComplete < requiredTotal ? (
             <div className="mt-6 flex items-center gap-4 rounded-xl border border-[#bfdbfe] bg-[#eff6ff] px-5 py-4">
-              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#2563eb] text-white">
+              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#6366f1] text-white">
                 <Sparkles className="h-5 w-5" />
               </span>
               <p className="flex-1 text-[14px] text-[#1e40af]">
@@ -153,7 +153,7 @@ export function SetupHomeView({
         <div className="space-y-4">
           <div className="realtor-card overflow-hidden p-0">
             <div className="flex h-28 items-end justify-center bg-gradient-to-br from-[#dbeafe] to-[#eff6ff] px-4 pb-2">
-              <svg viewBox="0 0 120 64" className="h-20 w-auto text-[#2563eb]" aria-hidden>
+              <svg viewBox="0 0 120 64" className="h-20 w-auto text-[#6366f1]" aria-hidden>
                 <path
                   fill="currentColor"
                   opacity="0.25"
@@ -171,7 +171,7 @@ export function SetupHomeView({
                 Amy is your AI receptionist and lead assistant. She answers calls, qualifies
                 leads, books appointments, and follows up 24/7 so you never miss an opportunity.
               </p>
-              <Link href="/realtor/agents/front-desk" className="mt-3 text-[13px] font-semibold text-[#2563eb]">
+              <Link href="/realtor/agents/front-desk" className="mt-3 text-[13px] font-semibold text-[#6366f1]">
                 Learn more &gt;
               </Link>
             </div>
@@ -181,25 +181,25 @@ export function SetupHomeView({
             <h3 className="font-semibold text-[#111827]">Need help?</h3>
             <ul className="mt-3 space-y-3 text-[13px]">
               <li>
-                <Link href="/help" className="flex items-center gap-2 text-[#374151] hover:text-[#2563eb]">
-                  <Play className="h-4 w-4 text-[#2563eb]" />
+                <Link href="/help" className="flex items-center gap-2 text-[#374151] hover:text-[#6366f1]">
+                  <Play className="h-4 w-4 text-[#6366f1]" />
                   Watch Setup Guide
                 </Link>
               </li>
               <li>
-                <Link href="/help" className="flex items-center gap-2 text-[#374151] hover:text-[#2563eb]">
-                  <span className="flex h-4 w-4 items-center justify-center text-[#2563eb]">📅</span>
+                <Link href="/help" className="flex items-center gap-2 text-[#374151] hover:text-[#6366f1]">
+                  <span className="flex h-4 w-4 items-center justify-center text-[#6366f1]">📅</span>
                   Join Live Training
                 </Link>
               </li>
               <li>
-                <Link href="/help" className="flex items-center gap-2 text-[#374151] hover:text-[#2563eb]">
-                  <Headphones className="h-4 w-4 text-[#2563eb]" />
+                <Link href="/help" className="flex items-center gap-2 text-[#374151] hover:text-[#6366f1]">
+                  <Headphones className="h-4 w-4 text-[#6366f1]" />
                   Contact Support
                 </Link>
               </li>
             </ul>
-            <p className="mt-4 text-[13px] font-medium text-[#2563eb]">We&apos;re here for you! 💙</p>
+            <p className="mt-4 text-[13px] font-medium text-[#6366f1]">We&apos;re here for you! 💙</p>
           </div>
         </div>
       </div>

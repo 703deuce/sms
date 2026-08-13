@@ -70,7 +70,7 @@ export function AiPolicyClient() {
         </Link>
       </div>
       {error ? <p className="mb-3 text-sm text-red-600">{error}</p> : null}
-      {saved ? <p className="mb-3 text-sm text-emerald-700">Saved.</p> : null}
+      {saved ? <p className="mb-3 text-sm text-violet-700">Saved.</p> : null}
 
       <Card className="mb-4 p-4">
         <CardTitle className="text-base">Permission modes</CardTitle>

@@ -76,7 +76,7 @@ export function NumberMessagingForm({
         Inbound/status webhook endpoints are managed per workspace in Settings → Messaging.
       </p>
       {state.error ? <p className="text-sm text-rose-600">{state.error}</p> : null}
-      {state.saved ? <p className="text-sm text-emerald-600">Messaging settings saved.</p> : null}
+      {state.saved ? <p className="text-sm text-violet-600">Messaging settings saved.</p> : null}
       <Button type="submit" size="sm" disabled={state.saving}>
         {state.saving ? "Saving…" : "Save messaging settings"}
       </Button>
@@ -126,7 +126,7 @@ export function NumberWebhooksForm({
         </p>
       </div>
       {state.error ? <p className="text-sm text-rose-600">{state.error}</p> : null}
-      {state.saved ? <p className="text-sm text-emerald-600">Webhook saved.</p> : null}
+      {state.saved ? <p className="text-sm text-violet-600">Webhook saved.</p> : null}
       <Button type="submit" size="sm" disabled={state.saving}>
         {state.saving ? "Saving…" : "Save webhook"}
       </Button>
@@ -212,7 +212,7 @@ export function NumberAssignmentForm({
           {state.saving ? "Saving…" : "Save assignments"}
         </Button>
         {state.error ? <p className="text-sm text-rose-600">{state.error}</p> : null}
-        {state.saved ? <p className="text-sm text-emerald-600">Assignments saved.</p> : null}
+        {state.saved ? <p className="text-sm text-violet-600">Assignments saved.</p> : null}
       </div>
     </>
   );

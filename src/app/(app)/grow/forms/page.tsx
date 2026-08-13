@@ -125,7 +125,7 @@ export default function FormsPage() {
             {rows.map((f) => (
               <TR key={f.id}>
                 <TD className="font-medium">
-                  <Link href={`/grow/forms/${f.id}`} className="hover:text-blue-600">
+                  <Link href={`/grow/forms/${f.id}`} className="hover:text-indigo-600">
                     {f.name}
                   </Link>
                 </TD>
@@ -162,7 +162,7 @@ export default function FormsPage() {
                 <TD>
                   <Link
                     href={`/grow/forms/${f.id}`}
-                    className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800"
+                    className="inline-flex items-center gap-1 text-sm text-indigo-600 hover:text-indigo-800"
                   >
                     <Pencil className="h-3.5 w-3.5" />
                     Edit

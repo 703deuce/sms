@@ -114,7 +114,7 @@ export function RealtorOnboardingWizard({ initialConfig }: Props) {
               i === stepIndex
                 ? "bg-primary text-primary-foreground"
                 : i < stepIndex
-                  ? "bg-emerald-100 text-emerald-800"
+                  ? "bg-indigo-100 text-violet-800"
                   : "bg-muted text-muted-foreground",
             )}
           >

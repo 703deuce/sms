@@ -190,7 +190,7 @@ function RecordRow({
               </span>
             ) : null}
             {link.pendingSync ? (
-              <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold text-sky-800">
+              <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-semibold text-indigo-800">
                 Pending sync
               </span>
             ) : null}

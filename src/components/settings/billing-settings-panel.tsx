@@ -301,7 +301,7 @@ export function BillingSettingsPanel() {
                     <td className="py-2 pr-3 text-muted-foreground">{row.source}</td>
                     <td
                       className={`py-2 text-right tabular-nums ${
-                        row.amountCents < 0 ? "text-rose-600" : "text-emerald-700"
+                        row.amountCents < 0 ? "text-rose-600" : "text-violet-700"
                       }`}
                     >
                       {row.amountCents >= 0 ? "+" : ""}

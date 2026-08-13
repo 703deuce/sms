@@ -98,7 +98,7 @@ export function FlowSettingsForm({ flow }: Props) {
             Messages scheduled outside this window will queue until the next allowed time.
           </p>
           {error ? <p className="text-sm text-danger">{error}</p> : null}
-          {saved ? <p className="text-sm text-emerald-700">Settings saved.</p> : null}
+          {saved ? <p className="text-sm text-violet-700">Settings saved.</p> : null}
           <Button disabled={saving} onClick={saveSettings}>
             {saving ? "Saving…" : "Save settings"}
           </Button>

@@ -68,7 +68,7 @@ export function MyNumbersView({
               className="rounded-xl border border-[#E5E7EB] bg-white p-5"
             >
               <div className="flex items-start gap-3">
-                <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#EFF6FF] text-[#2563EB]">
+                <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#eef2ff] text-[#4f46e5]">
                   <Phone className="h-5 w-5" />
                 </span>
                 <div>
@@ -97,7 +97,7 @@ export function MyNumbersView({
                         </p>
                         <Link
                           href={r.href}
-                          className="text-[#2563EB] hover:underline"
+                          className="text-[#4f46e5] hover:underline"
                         >
                           → {r.flowName}
                           {r.agentName ? ` · ${r.agentName}` : ""}
@@ -110,7 +110,7 @@ export function MyNumbersView({
                             "bg-violet-50 text-violet-700",
                           r.status === "paused" &&
                             "bg-amber-50 text-amber-800",
-                          r.status === "test" && "bg-sky-50 text-sky-700",
+                          r.status === "test" && "bg-indigo-50 text-indigo-700",
                           r.status === "error" && "bg-rose-50 text-rose-700",
                           !["live", "paused", "test", "error"].includes(
                             r.status,

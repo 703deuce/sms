@@ -62,7 +62,7 @@ export function CallFeedbackPanel({ callId, initialRating, initialReason }: Prop
           className={cn(
             "inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition",
             rating === "good"
-              ? "border-emerald-300 bg-emerald-50 text-emerald-800"
+              ? "border-violet-300 bg-violet-50 text-violet-800"
               : "border-[#e5e7eb] bg-white text-[#374151] hover:bg-[#f9fafb]",
           )}
         >

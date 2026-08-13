@@ -158,7 +158,7 @@ export default function VoiceAnalyticsPage() {
               .map(([day, count]) => (
                 <div key={day} className="flex flex-1 flex-col items-center gap-1">
                   <div
-                    className="min-h-[2px] w-full rounded-t bg-blue-500"
+                    className="min-h-[2px] w-full rounded-t bg-indigo-500"
                     style={{ height: `${(Number(count) / maxDay) * 100}%` }}
                     title={`${day}: ${count}`}
                   />

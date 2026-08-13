@@ -120,7 +120,7 @@ export function DeploymentDiagnosticsPanel({ flowId }: { flowId: string }) {
           {data?.lastExecutionId ? (
             <a
               href={`/automations/${flowId}/executions/${data.lastExecutionId}`}
-              className="inline-flex h-8 items-center rounded-md px-3 text-[12px] font-semibold text-[#2563EB] ring-1 ring-[#BFDBFE]"
+              className="inline-flex h-8 items-center rounded-md px-3 text-[12px] font-semibold text-[#4f46e5] ring-1 ring-indigo-200"
             >
               Open last execution
             </a>
@@ -191,9 +191,9 @@ export function DeploymentDiagnosticsPanel({ flowId }: { flowId: string }) {
                 className={cn(
                   "rounded-md px-2 py-1 text-[11px] font-medium",
                   good
-                    ? "bg-emerald-50 text-emerald-700"
+                    ? "bg-violet-50 text-violet-700"
                     : v === "ready"
-                      ? "bg-sky-50 text-sky-700"
+                      ? "bg-indigo-50 text-indigo-700"
                       : bad
                         ? "bg-rose-50 text-rose-700"
                         : v === "missing" || v === "draft"
@@ -224,7 +224,7 @@ export function DeploymentDiagnosticsPanel({ flowId }: { flowId: string }) {
             className={cn(
               "inline-flex h-8 items-center rounded-md px-2 text-[12px] font-semibold",
               overall === "pass"
-                ? "bg-emerald-50 text-emerald-700"
+                ? "bg-violet-50 text-violet-700"
                 : overall === "fail"
                   ? "bg-rose-50 text-rose-700"
                   : "bg-amber-50 text-amber-700",
@@ -245,7 +245,7 @@ export function DeploymentDiagnosticsPanel({ flowId }: { flowId: string }) {
               <span
                 className={cn(
                   "mt-0.5 inline-flex min-w-[88px] justify-center rounded px-1.5 py-0.5 text-[10px] font-bold uppercase",
-                  c.status === "pass" && "bg-emerald-50 text-emerald-700",
+                  c.status === "pass" && "bg-violet-50 text-violet-700",
                   c.status === "fail" && "bg-rose-50 text-rose-700",
                   c.status === "not_verified" && "bg-slate-100 text-slate-600",
                 )}

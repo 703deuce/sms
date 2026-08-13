@@ -58,7 +58,7 @@ export function MicTestPanel() {
       </p>
       <div className="h-3 w-full overflow-hidden rounded-full bg-muted">
         <div
-          className="h-full bg-emerald-500 transition-all duration-75"
+          className="h-full bg-violet-500 transition-all duration-75"
           style={{ width: `${Math.min(100, level * 100)}%` }}
         />
       </div>

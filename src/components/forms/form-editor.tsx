@@ -232,7 +232,7 @@ export function FormEditor({ formId }: { formId: string }) {
         </Card>
       </div>
 
-      {message && <p className="mb-4 text-sm text-emerald-600">{message}</p>}
+      {message && <p className="mb-4 text-sm text-violet-600">{message}</p>}
       {error && <p className="mb-4 text-sm text-rose-600">{error}</p>}
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -348,7 +348,7 @@ export function FormEditor({ formId }: { formId: string }) {
                   onClick={() => toggleField(field)}
                   className={`rounded-full px-3 py-1 text-sm border ${
                     fields.includes(field)
-                      ? "border-blue-600 bg-blue-50 text-blue-800"
+                      ? "border-indigo-600 bg-indigo-50 text-indigo-800"
                       : "border-slate-200 text-slate-600"
                   } ${field === "phone" ? "opacity-80" : ""}`}
                 >
@@ -403,7 +403,7 @@ export function FormEditor({ formId }: { formId: string }) {
                 id="primary"
                 type="color"
                 className="h-10 w-full"
-                value={branding.primaryColor || "#2563eb"}
+                value={branding.primaryColor || "#6366f1"}
                 onChange={(e) => updateBranding({ primaryColor: e.target.value })}
               />
             </div>

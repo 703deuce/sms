@@ -17,7 +17,7 @@
   --danger-foreground: #ffffff;
   --warning: #f59e0b;
   --warning-foreground: #78350f;
-  --success: #10b981;
+  --success: #6366f1;
   --success-foreground: #ffffff;
   --sidebar: #ffffff;
   --sidebar-foreground: #111827;
@@ -28,7 +28,7 @@
   --ring: #6366f1;
   --shadow: 0 1px 2px rgb(15 23 42 / 0.04), 0 4px 16px rgb(15 23 42 / 0.04);
   --purple: #8b5cf6;
-  --blue: #3b82f6;
+  --blue: #6366f1;
   --orange: #f97316;
 }
 

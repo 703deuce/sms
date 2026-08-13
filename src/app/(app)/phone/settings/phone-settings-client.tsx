@@ -339,7 +339,7 @@ export function PhoneSettingsClient({
       </div>
 
       {error ? <p className="mb-3 text-sm text-destructive">{error}</p> : null}
-      {saved ? <p className="mb-3 text-sm text-emerald-600">Saved</p> : null}
+      {saved ? <p className="mb-3 text-sm text-violet-600">Saved</p> : null}
 
       {tab === "caller" ? (
         <Card>

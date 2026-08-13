@@ -133,8 +133,8 @@ export function ContactActivityTimeline({ contactId }: { contactId: string }) {
                         s.syncStatus === "error"
                           ? "bg-red-100 text-red-800"
                           : s.syncStatus === "pending"
-                            ? "bg-sky-100 text-sky-800"
-                            : "bg-emerald-100 text-emerald-800"
+                            ? "bg-indigo-100 text-indigo-800"
+                            : "bg-indigo-100 text-violet-800"
                       }`}
                     >
                       {s.syncStatus === "error"

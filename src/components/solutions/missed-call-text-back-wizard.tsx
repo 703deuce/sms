@@ -106,7 +106,7 @@ export function MissedCallTextBackWizard({
             <div className="mt-2">
               <Link
                 href={`/automations/${flowId}/edit`}
-                className="font-semibold text-[#2563EB] hover:underline"
+                className="font-semibold text-[#4f46e5] hover:underline"
               >
                 Open Visual Flow
               </Link>
@@ -237,7 +237,7 @@ export function MissedCallTextBackWizard({
         <p className="text-[13px] font-medium text-rose-600">{error}</p>
       ) : null}
       {saved && !error ? (
-        <p className="text-[13px] font-medium text-emerald-700">
+        <p className="text-[13px] font-medium text-violet-700">
           Saved. Linked automation is ready under Automations → Flows.
         </p>
       ) : null}
@@ -257,13 +257,13 @@ export function MissedCallTextBackWizard({
           <>
             <Link
               href={`/automations/${flowId}`}
-              className="inline-flex h-10 items-center rounded-lg px-3 text-[13px] font-semibold text-[#2563EB] hover:underline"
+              className="inline-flex h-10 items-center rounded-lg px-3 text-[13px] font-semibold text-[#4f46e5] hover:underline"
             >
               Open automation
             </Link>
             <Link
               href={`/automations/${flowId}/edit`}
-              className="inline-flex h-10 items-center rounded-lg px-3 text-[13px] font-semibold text-[#2563EB] hover:underline"
+              className="inline-flex h-10 items-center rounded-lg px-3 text-[13px] font-semibold text-[#4f46e5] hover:underline"
             >
               Edit visual flow
             </Link>

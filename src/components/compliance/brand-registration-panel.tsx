@@ -158,7 +158,7 @@ export function BrandRegistrationPanel({ registration, brandStatus }: Props) {
       <Tabs items={complianceTabs} />
 
       {error ? <p className="mb-4 text-sm text-danger">{error}</p> : null}
-      {saved ? <p className="mb-4 text-sm text-emerald-700">Brand details saved.</p> : null}
+      {saved ? <p className="mb-4 text-sm text-violet-700">Brand details saved.</p> : null}
 
       {!businessComplete ? (
         <div className="mb-6 flex gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">

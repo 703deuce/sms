@@ -818,7 +818,7 @@ export function NodeConfigPanel({
                 <p
                   className={
                     actionTestResult.ok
-                      ? "text-xs text-emerald-600"
+                      ? "text-xs text-violet-600"
                       : "text-xs text-rose-600"
                   }
                 >
@@ -863,7 +863,7 @@ export function NodeConfigPanel({
                   numbers.find((n) => n.id === cfg.phoneNumberId)?.number ||
                   String(cfg.phoneNumberE164 || "");
                 return selected ? (
-                  <p className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12px] font-medium text-emerald-800">
+                  <p className="mt-2 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-[12px] font-medium text-violet-800">
                     Connected number: {selected}
                   </p>
                 ) : (

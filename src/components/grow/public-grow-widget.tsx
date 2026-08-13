@@ -113,7 +113,7 @@ export function PublicGrowWidget({ slug }: { slug: string }) {
         <button
           type="button"
           onClick={() => setFloatingOpen(true)}
-          className="fixed bottom-4 right-4 z-50 rounded-full bg-emerald-600 px-5 py-3 text-sm font-semibold text-white shadow-lg hover:bg-emerald-700"
+          className="fixed bottom-4 right-4 z-50 rounded-full bg-violet-600 px-5 py-3 text-sm font-semibold text-white shadow-lg hover:bg-violet-700"
         >
           {title}
         </button>

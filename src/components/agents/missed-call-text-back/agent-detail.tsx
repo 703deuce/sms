@@ -145,11 +145,11 @@ export function JohnAgentDetail() {
             <div>
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="text-2xl font-bold tracking-tight text-slate-900">John</h1>
-                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-2.5 py-0.5 text-[11px] font-semibold text-violet-700">
+                  <span className="h-1.5 w-1.5 rounded-full bg-violet-500" />
                   Active
                 </span>
-                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700">
+                <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-2.5 py-0.5 text-[11px] font-semibold text-violet-700">
                   <Heart className="h-3 w-3" />
                   Healthy
                 </span>
@@ -248,7 +248,7 @@ export function JohnAgentDetail() {
                     </div>
                   </div>
                   <div className="text-center">
-                    <div className="inline-block rounded-full bg-blue-50 px-4 py-1 text-[11px] font-semibold uppercase tracking-wide text-blue-700">
+                    <div className="inline-block rounded-full bg-indigo-50 px-4 py-1 text-[11px] font-semibold uppercase tracking-wide text-indigo-700">
                       SMS TO {fmtPhone(d.recentCalls[0]?.phone || "+12548675309")} SENT AT{" "}
                       {d.recentCalls[0]?.smsSentAt
                         ? new Date(d.recentCalls[0].smsSentAt).toLocaleTimeString("en-US", {
@@ -359,7 +359,7 @@ export function JohnAgentDetail() {
                               <span
                                 className={cn(
                                   "text-xs font-semibold",
-                                  tone === "sent" && "text-emerald-600",
+                                  tone === "sent" && "text-violet-600",
                                   tone === "scheduled" && "text-amber-600",
                                   tone === "muted" && "text-slate-500",
                                 )}
@@ -435,7 +435,7 @@ export function JohnAgentDetail() {
                 >
                   <div className="text-[10px] font-medium text-slate-500">{m.label}</div>
                   <div className="mt-1 text-xl font-bold text-slate-900">{m.value}</div>
-                  <div className="text-[10px] font-medium text-emerald-600">{m.delta}</div>
+                  <div className="text-[10px] font-medium text-violet-600">{m.delta}</div>
                 </div>
               ))}
             </div>

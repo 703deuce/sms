@@ -116,8 +116,8 @@ export function GoalsStep({
     return (
       <div className="flex flex-col gap-6 lg:flex-row">
         <div className="min-w-0 flex-1 space-y-8">
-          <div className="rounded-2xl border border-emerald-200 bg-emerald-50/50 p-5">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-800">
+          <div className="rounded-2xl border border-violet-200 bg-violet-50/50 p-5">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-violet-800">
               Fixed by agent type
             </p>
             <h2 className="mt-1 font-display text-xl font-semibold text-slate-900">

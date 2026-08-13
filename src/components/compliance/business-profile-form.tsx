@@ -96,7 +96,7 @@ export function BusinessProfileForm({ registration, customerProfile }: Props) {
 
       {error ? <p className="mb-4 text-sm text-danger">{error}</p> : null}
       {saved ? (
-        <p className="mb-4 text-sm text-emerald-700">Business profile saved successfully.</p>
+        <p className="mb-4 text-sm text-violet-700">Business profile saved successfully.</p>
       ) : null}
 
       <form id="business-profile-form" onSubmit={saveProfile}>

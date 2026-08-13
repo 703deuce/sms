@@ -240,7 +240,7 @@ export default function NewCategoryCampaignPage() {
 
           {error && <p className="text-sm text-rose-600">{error}</p>}
           {done && (
-            <p className="flex items-center gap-2 text-sm text-emerald-700">
+            <p className="flex items-center gap-2 text-sm text-violet-700">
               <Check className="h-4 w-4" /> Campaign created
             </p>
           )}

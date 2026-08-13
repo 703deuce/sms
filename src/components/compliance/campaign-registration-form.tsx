@@ -124,7 +124,7 @@ export function CampaignRegistrationForm({ registration, campaignStatus }: Props
 
       {error ? <p className="mb-4 text-sm text-danger">{error}</p> : null}
       {saved ? (
-        <p className="mb-4 text-sm text-emerald-700">Campaign registration saved.</p>
+        <p className="mb-4 text-sm text-violet-700">Campaign registration saved.</p>
       ) : null}
 
       <form id="campaign-registration-form" onSubmit={saveCampaign}>

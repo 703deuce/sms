@@ -531,7 +531,7 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
           {saveState === "unsaved" && "Unsaved changes"}
           {saveState === "error" && "Save error"}
           {agent.rawStatus === "ACTIVE" ? (
-            <p className="mt-1 text-emerald-600">Deployed live</p>
+            <p className="mt-1 text-violet-600">Deployed live</p>
           ) : agent.rawStatus === "TESTING" ? (
             <p className="mt-1 text-amber-700">Built — test before deploy</p>
           ) : (
@@ -583,7 +583,7 @@ export function VoiceAgentBuilder({ agentId }: { agentId: string }) {
 
         {error && <p className="text-sm text-rose-600">{error}</p>}
 
-        <Card className="space-y-2 border-emerald-800/20 bg-emerald-50/40 p-4 dark:bg-emerald-950/20">
+        <Card className="space-y-2 border-violet-800/20 bg-violet-50/40 p-4 dark:bg-violet-950/20">
           <p className="text-sm font-medium">Flow</p>
           <ol className="list-decimal space-y-1 pl-5 text-xs text-muted-foreground">
             <li>Instructions + knowledge (PDF/RAG) + pick a voice (Play a clip) — Save draft.</li>

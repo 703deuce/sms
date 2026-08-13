@@ -203,7 +203,7 @@ export function AppointmentsClient() {
         </div>
       </div>
       {error ? <p className="mb-3 text-sm text-red-600">{error}</p> : null}
-      {notice ? <p className="mb-3 text-sm text-emerald-600">{notice}</p> : null}
+      {notice ? <p className="mb-3 text-sm text-violet-600">{notice}</p> : null}
       <div className="space-y-3">
         {filtered.map((a) => {
           const crm = a.crm;

@@ -267,7 +267,7 @@ export default async function CampaignDetailPage({
 
           <div className="grid gap-4 sm:grid-cols-3">
             <Card className="flex items-center gap-3">
-              <div className="rounded-lg bg-sky-100 p-2 text-sky-800">
+              <div className="rounded-lg bg-indigo-100 p-2 text-indigo-800">
                 <Reply className="h-4 w-4" />
               </div>
               <div>

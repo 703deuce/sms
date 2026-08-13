@@ -121,7 +121,7 @@ export function BusinessSettingsForm({
         title="Business settings"
         description="Account-level business information displayed in messages and compliance records."
         icon={Building2}
-        iconTone="bg-blue-50 text-blue-600"
+        iconTone="bg-indigo-50 text-indigo-600"
         actions={
           <Button type="submit" form="business-settings-form" className="rounded-[10px]" disabled={saving}>
             {saving ? "Saving…" : saved ? "Saved" : "Save changes"}
@@ -200,20 +200,20 @@ export function BusinessSettingsForm({
           <div
             className={`w-full shrink-0 rounded-[12px] border p-4 lg:max-w-[280px] ${
               complianceReady
-                ? "border-emerald-200/80 bg-emerald-50/80"
+                ? "border-violet-200/80 bg-violet-50/80"
                 : "border-amber-200/80 bg-amber-50/80"
             }`}
           >
             <div className="flex items-start gap-2.5">
               <CheckCircle2
                 className={`mt-0.5 h-4 w-4 shrink-0 ${
-                  complianceReady ? "text-emerald-600" : "text-amber-600"
+                  complianceReady ? "text-violet-600" : "text-amber-600"
                 }`}
               />
               <div>
                 <p
                   className={`text-[13px] font-semibold ${
-                    complianceReady ? "text-emerald-900" : "text-amber-900"
+                    complianceReady ? "text-violet-900" : "text-amber-900"
                   }`}
                 >
                   {complianceReady
@@ -222,7 +222,7 @@ export function BusinessSettingsForm({
                 </p>
                 <p
                   className={`mt-1 text-[12px] ${
-                    complianceReady ? "text-emerald-800/80" : "text-amber-800/80"
+                    complianceReady ? "text-violet-800/80" : "text-amber-800/80"
                   }`}
                 >
                   {lastSynced

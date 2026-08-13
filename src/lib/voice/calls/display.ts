@@ -148,15 +148,15 @@ export function deriveCallOutcomeBadge(call: CallRowLike): CallOutcomeBadge {
 }
 
 export const OUTCOME_BADGE_STYLES: Record<CallOutcomeBadge, string> = {
-  "New Lead": "bg-emerald-50 text-emerald-700 ring-emerald-200",
+  "New Lead": "bg-violet-50 text-violet-700 ring-violet-200",
   "Lead Captured": "bg-violet-50 text-violet-700 ring-violet-200",
-  "Message Taken": "bg-sky-50 text-sky-700 ring-sky-200",
+  "Message Taken": "bg-indigo-50 text-indigo-700 ring-indigo-200",
   "Appointment Booked": "bg-amber-50 text-amber-800 ring-amber-200",
   Transferred: "bg-violet-50 text-violet-700 ring-violet-200",
   FAQ: "bg-slate-100 text-slate-700 ring-slate-200",
   "Information Provided": "bg-orange-50 text-orange-800 ring-orange-200",
   Completed: "bg-primary/10 text-primary ring-primary/20",
-  Resolved: "bg-emerald-50 text-emerald-700 ring-emerald-200",
+  Resolved: "bg-violet-50 text-violet-700 ring-violet-200",
   Voice: "bg-slate-100 text-slate-600 ring-slate-200",
   Voicemail: "bg-slate-100 text-slate-600 ring-slate-200",
   Spam: "bg-rose-50 text-rose-700 ring-rose-200",

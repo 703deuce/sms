@@ -75,7 +75,7 @@ export function AutomationFlowNode({ id, data, selected }: NodeProps) {
         ? "border-amber-300 bg-amber-50"
         : isEnd
           ? "border-border bg-muted/40"
-          : "border-sky-300 bg-sky-50";
+          : "border-indigo-300 bg-indigo-50";
 
   return (
     <div
@@ -109,10 +109,10 @@ export function AutomationFlowNode({ id, data, selected }: NodeProps) {
             type="source"
             position={Position.Left}
             id="yes"
-            className="!h-4 !w-4 md:!h-2.5 md:!w-2.5 !bg-emerald-500 touch-manipulation"
+            className="!h-4 !w-4 md:!h-2.5 md:!w-2.5 !bg-violet-500 touch-manipulation"
             style={{ top: "70%" }}
           />
-          <span className="absolute -left-6 top-[65%] text-[10px] font-medium text-emerald-600 max-md:hidden">
+          <span className="absolute -left-6 top-[65%] text-[10px] font-medium text-violet-600 max-md:hidden">
             Yes
           </span>
           <Handle
@@ -139,7 +139,7 @@ export function AutomationFlowNode({ id, data, selected }: NodeProps) {
             type="source"
             position={Position.Bottom}
             id="completed"
-            className="!h-3 !w-3 !bg-emerald-500"
+            className="!h-3 !w-3 !bg-violet-500"
             style={{ left: "40%" }}
           />
           <Handle
@@ -161,7 +161,7 @@ export function AutomationFlowNode({ id, data, selected }: NodeProps) {
               type="source"
               position={Position.Right}
               id="booked"
-              className="!h-3.5 !w-3.5 !bg-sky-500"
+              className="!h-3.5 !w-3.5 !bg-indigo-500"
               style={{ top: "50%" }}
             />
           ) : null}

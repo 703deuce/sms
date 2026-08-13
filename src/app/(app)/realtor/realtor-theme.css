@@ -1,16 +1,18 @@
-/* Realtor product — matches Transovo mockups (blue primary, navy sidebar) */
+/* Realtor product — aligned with Transovo purple product theme */
 .realtor-theme {
-  --primary: #2563eb;
+  --primary: #6366f1;
   --primary-foreground: #ffffff;
-  --primary-hover: #1d4ed8;
-  --ring: #2563eb;
-  --sidebar-active: #2563eb;
-  --background: #f3f5f9;
+  --primary-hover: #4f46e5;
+  --ring: #6366f1;
+  --sidebar-active: #6366f1;
+  --background: #f5f6fa;
 }
 
 .realtor-theme .bg-mesh {
-  background-color: #f3f5f9;
-  background-image: none;
+  background-color: #f5f6fa;
+  background-image:
+    radial-gradient(ellipse 80% 50% at 20% -10%, rgba(99, 102, 241, 0.08), transparent),
+    radial-gradient(ellipse 60% 40% at 90% 0%, rgba(139, 92, 246, 0.06), transparent);
 }
 
 .realtor-card {
@@ -30,12 +32,12 @@
   border-radius: 8px;
   font-size: 14px;
   font-weight: 600;
-  background: #2563eb;
+  background: #6366f1;
   color: #fff;
 }
 
 .realtor-btn-primary:hover {
-  background: #1d4ed8;
+  background: #4f46e5;
 }
 
 .realtor-btn-outline {
@@ -54,6 +56,6 @@
 }
 
 .realtor-btn-outline-blue {
-  border-color: #2563eb;
-  color: #2563eb;
+  border-color: #6366f1;
+  color: #6366f1;
 }

@@ -36,13 +36,13 @@ const typeCards: Array<{
   icon: ComponentType<{ className?: string }>;
   tone: string;
 }> = [
-  { id: "SMS", label: "SMS", description: "Send text messages", icon: MessageSquare, tone: "bg-emerald-50 text-emerald-600" },
-  { id: "MMS", label: "MMS", description: "Send image messages", icon: ImageIcon, tone: "bg-sky-50 text-sky-600" },
+  { id: "SMS", label: "SMS", description: "Send text messages", icon: MessageSquare, tone: "bg-violet-50 text-violet-600" },
+  { id: "MMS", label: "MMS", description: "Send image messages", icon: ImageIcon, tone: "bg-indigo-50 text-indigo-600" },
   { id: "Announcement", label: "Announcement", description: "Broadcast updates", icon: Megaphone, tone: "bg-violet-50 text-violet-600" },
   { id: "Promotion", label: "Promotion", description: "Offers and deals", icon: Tag, tone: "bg-orange-50 text-orange-600" },
-  { id: "Reminder", label: "Reminder", description: "Appointment reminders", icon: Bell, tone: "bg-blue-50 text-blue-600" },
+  { id: "Reminder", label: "Reminder", description: "Appointment reminders", icon: Bell, tone: "bg-indigo-50 text-indigo-600" },
   { id: "Alert", label: "Alert", description: "Urgent notifications", icon: AlertTriangle, tone: "bg-rose-50 text-rose-600" },
-  { id: "Customer update", label: "Customer update", description: "Account updates", icon: UserRound, tone: "bg-teal-50 text-teal-600" },
+  { id: "Customer update", label: "Customer update", description: "Account updates", icon: UserRound, tone: "bg-violet-50 text-violet-600" },
   { id: "Custom", label: "Custom", description: "Build your own", icon: Settings2, tone: "bg-slate-100 text-slate-600" },
 ];
 
@@ -162,7 +162,7 @@ export function CampaignWizard() {
     <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-start gap-2.5">
-          <span className="mt-1 flex h-8 w-8 items-center justify-center rounded-[10px] bg-emerald-50 text-emerald-600">
+          <span className="mt-1 flex h-8 w-8 items-center justify-center rounded-[10px] bg-violet-50 text-violet-600">
             <Sparkles className="h-4 w-4" />
           </span>
           <div>
@@ -202,7 +202,7 @@ export function CampaignWizard() {
                   onClick={() => setStep(i)}
                   className={cn(
                     "relative z-[1] flex w-full items-center gap-2.5 rounded-[10px] px-1.5 py-1.5 text-left text-[13px] transition",
-                    i === step ? "bg-emerald-50 font-semibold text-emerald-700" : "text-muted-foreground hover:bg-muted/50",
+                    i === step ? "bg-violet-50 font-semibold text-violet-700" : "text-muted-foreground hover:bg-muted/50",
                   )}
                 >
                   <span
@@ -211,7 +211,7 @@ export function CampaignWizard() {
                       i === step
                         ? "bg-primary text-white"
                         : i < step
-                          ? "bg-emerald-100 text-emerald-700"
+                          ? "bg-indigo-100 text-violet-700"
                           : "bg-muted text-muted-foreground",
                     )}
                   >
@@ -276,12 +276,12 @@ export function CampaignWizard() {
                 </div>
               </div>
 
-              <div className="flex items-center justify-between gap-3 rounded-[12px] border border-sky-100 bg-sky-50 px-4 py-3">
-                <div className="flex items-center gap-2.5 text-[13px] text-sky-900">
-                  <Info className="h-4 w-4 shrink-0 text-sky-600" />
+              <div className="flex items-center justify-between gap-3 rounded-[12px] border border-indigo-100 bg-indigo-50 px-4 py-3">
+                <div className="flex items-center gap-2.5 text-[13px] text-indigo-900">
+                  <Info className="h-4 w-4 shrink-0 text-indigo-600" />
                   Not sure which type to choose? Learn more about campaign types
                 </div>
-                <ChevronRight className="h-4 w-4 shrink-0 text-sky-600" />
+                <ChevronRight className="h-4 w-4 shrink-0 text-indigo-600" />
               </div>
             </div>
           )}
@@ -417,7 +417,7 @@ export function CampaignWizard() {
                   onClick={() => setScheduleMode("now")}
                   className={cn(
                     "rounded-[12px] border p-4 text-left",
-                    scheduleMode === "now" ? "border-primary bg-emerald-50" : "border-border",
+                    scheduleMode === "now" ? "border-primary bg-violet-50" : "border-border",
                   )}
                 >
                   <p className="font-semibold">Send now</p>
@@ -428,7 +428,7 @@ export function CampaignWizard() {
                   onClick={() => setScheduleMode("later")}
                   className={cn(
                     "rounded-[12px] border p-4 text-left",
-                    scheduleMode === "later" ? "border-primary bg-emerald-50" : "border-border",
+                    scheduleMode === "later" ? "border-primary bg-violet-50" : "border-border",
                   )}
                 >
                   <p className="font-semibold">Schedule</p>

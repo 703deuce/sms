@@ -48,7 +48,7 @@ type ProviderDef = {
 
 const PROVIDERS: ProviderDef[] = [
   { id: "api", name: "API", description: "REST API for contacts, campaigns, and messages.", icon: Terminal, tone: "bg-slate-900 text-white", kind: "link", href: "/integrations/api" },
-  { id: "webhooks", name: "Webhooks", description: "Push delivery, inbound, and subscription events.", icon: Webhook, tone: "bg-blue-100 text-blue-700", kind: "link", href: "/integrations/webhooks" },
+  { id: "webhooks", name: "Webhooks", description: "Push delivery, inbound, and subscription events.", icon: Webhook, tone: "bg-blue-100 text-indigo-700", kind: "link", href: "/integrations/webhooks" },
   { id: "zapier", name: "Zapier", description: "Connect Transovo SMS to 5,000+ apps.", icon: Zap, tone: "bg-orange-100 text-orange-600", kind: "link", href: "/integrations/api" },
   {
     id: "stripe",
@@ -62,26 +62,26 @@ const PROVIDERS: ProviderDef[] = [
       { label: "Billing", href: "/settings/billing" },
     ],
   },
-  { id: "crm", name: "CRM Framework", description: "Salesforce, Zoho, Pipedrive — OAuth sync for calls, SMS, tasks.", icon: Cloud, tone: "bg-sky-100 text-sky-700", kind: "link", href: "/integrations/crm" },
+  { id: "crm", name: "CRM Framework", description: "Salesforce, Zoho, Pipedrive — OAuth sync for calls, SMS, tasks.", icon: Cloud, tone: "bg-indigo-100 text-indigo-700", kind: "link", href: "/integrations/crm" },
   {
     id: "native",
     name: "Connect apps",
     description:
       "Salesforce, Zoho, Pipedrive, Calendly, Typeform, ActiveCampaign, WooCommerce, Jotform, Close, Freshdesk, Klaviyo, HighLevel (Mailchimp deferred).",
     icon: GitBranch,
-    tone: "bg-teal-100 text-teal-700",
+    tone: "bg-violet-100 text-violet-700",
     kind: "link",
     href: "/integrations/native",
   },
   { id: "hubspot", name: "HubSpot", description: "Sync contacts and ingest CRM events.", icon: GitBranch, tone: "bg-orange-100 text-orange-700", kind: "apikey", fields: [{ key: "apiKey", label: "Private app token", placeholder: "pat-...", type: "password" }], canSync: true, hasWebhook: true },
-  { id: "shopify", name: "Shopify", description: "Import customers & order events.", icon: ShoppingBag, tone: "bg-emerald-100 text-emerald-700", kind: "apikey", fields: [{ key: "shopDomain", label: "Shop domain", placeholder: "my-store.myshopify.com" }, { key: "accessToken", label: "Admin API token", placeholder: "shpat_...", type: "password" }], canSync: true, hasWebhook: true },
-  { id: "google_contacts", name: "Google Contacts", description: "Import contacts securely via OAuth.", icon: Contact, tone: "bg-sky-100 text-sky-600", kind: "oauth", canSync: true },
+  { id: "shopify", name: "Shopify", description: "Import customers & order events.", icon: ShoppingBag, tone: "bg-indigo-100 text-violet-700", kind: "apikey", fields: [{ key: "shopDomain", label: "Shop domain", placeholder: "my-store.myshopify.com" }, { key: "accessToken", label: "Admin API token", placeholder: "shpat_...", type: "password" }], canSync: true, hasWebhook: true },
+  { id: "google_contacts", name: "Google Contacts", description: "Import contacts securely via OAuth.", icon: Contact, tone: "bg-indigo-100 text-indigo-600", kind: "oauth", canSync: true },
   {
     id: "google_sheets",
     name: "Google Sheets",
     description: "Import contacts from a spreadsheet (phone/email columns).",
     icon: Sheet,
-    tone: "bg-emerald-100 text-emerald-700",
+    tone: "bg-indigo-100 text-violet-700",
     kind: "oauth",
     canSync: true,
     fields: [

@@ -328,7 +328,7 @@ export function ContactImportForm({ lists }: { lists: ListOption[] }) {
           </div>
 
           {error ? <p className="mt-4 text-sm text-rose-600">{error}</p> : null}
-          {result ? <p className="mt-4 text-sm text-emerald-700">{result}</p> : null}
+          {result ? <p className="mt-4 text-sm text-violet-700">{result}</p> : null}
 
           <div className="mt-6 flex gap-2">
             <Button onClick={handleImport} disabled={loading || !parsedRows.length}>

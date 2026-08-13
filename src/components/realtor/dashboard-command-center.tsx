@@ -37,7 +37,7 @@ function badgeColor(kind: RealtorAttentionKind): string {
     case "transfer_missed":
       return "bg-orange-100 text-orange-700";
     default:
-      return "bg-blue-100 text-blue-700";
+      return "bg-blue-100 text-indigo-700";
   }
 }
 
@@ -71,7 +71,7 @@ function MetricTile({
         <div>
           <p className="text-[12px] font-medium uppercase tracking-wide text-[#6b7280]">{label}</p>
           <p className="mt-2 text-[28px] font-bold text-[#111827]">{value}</p>
-          <p className="mt-1 text-[12px] text-emerald-600">{hint}</p>
+          <p className="mt-1 text-[12px] text-violet-600">{hint}</p>
         </div>
         <span className={cnIcon(tone)}>
           <Icon className="h-5 w-5" />
@@ -140,14 +140,14 @@ export function RealtorDashboardView({
         </div>
         <div className="flex flex-wrap gap-3">
           <div className="realtor-card flex items-center gap-3 px-4 py-3">
-            <Headphones className="h-5 w-5 text-[#2563eb]" />
+            <Headphones className="h-5 w-5 text-[#6366f1]" />
             <div>
               <p className="text-[12px] font-semibold text-[#111827]">Front Desk</p>
               <p className="text-[12px] text-[#6b7280]">
                 {amy.frontDeskActive ? "Amy is active" : "Off"}
               </p>
             </div>
-            <Link href="/realtor/agents/front-desk" className="text-[12px] font-semibold text-[#2563eb]">
+            <Link href="/realtor/agents/front-desk" className="text-[12px] font-semibold text-[#6366f1]">
               View
             </Link>
           </div>
@@ -159,7 +159,7 @@ export function RealtorDashboardView({
                 {amy.speedToLeadActive ? "Amy is active" : "Off"}
               </p>
             </div>
-            <Link href="/realtor/agents/speed-to-lead" className="text-[12px] font-semibold text-[#2563eb]">
+            <Link href="/realtor/agents/speed-to-lead" className="text-[12px] font-semibold text-[#6366f1]">
               View
             </Link>
           </div>
@@ -172,7 +172,7 @@ export function RealtorDashboardView({
           value={metrics.newLeads}
           hint="+24% vs yesterday"
           icon={UserPlus}
-          tone="bg-blue-50 text-blue-600"
+          tone="bg-indigo-50 text-indigo-600"
           href={metricHrefs.newLeads}
         />
         <MetricTile
@@ -180,7 +180,7 @@ export function RealtorDashboardView({
           value={metrics.worked}
           hint="+18% vs yesterday"
           icon={Headphones}
-          tone="bg-emerald-50 text-emerald-600"
+          tone="bg-violet-50 text-violet-600"
           href={metricHrefs.worked}
         />
         <MetricTile
@@ -204,7 +204,7 @@ export function RealtorDashboardView({
           value={metrics.appointments}
           hint="+33% vs yesterday"
           icon={Calendar}
-          tone="bg-blue-50 text-blue-600"
+          tone="bg-indigo-50 text-indigo-600"
           href={metricHrefs.appointments}
         />
       </div>
@@ -240,7 +240,7 @@ export function RealtorDashboardView({
                     ) : null}
                     <Link
                       href={item.href}
-                      className="text-[13px] font-semibold text-[#2563eb]"
+                      className="text-[13px] font-semibold text-[#6366f1]"
                     >
                       View Lead
                     </Link>
@@ -265,7 +265,7 @@ export function RealtorDashboardView({
                   href={item.href || "#"}
                   className="flex items-start gap-3 p-4 hover:bg-[#f9fafb]"
                 >
-                  <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#eff6ff] text-[#2563eb]">
+                  <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#eff6ff] text-[#6366f1]">
                     <Headphones className="h-4 w-4" />
                   </span>
                   <div>
@@ -306,7 +306,7 @@ export function RealtorDashboardView({
                   {appt.leadId ? (
                     <Link
                       href={`/realtor/leads/${appt.leadId}`}
-                      className="mt-2 text-[12px] font-semibold text-[#2563eb]"
+                      className="mt-2 text-[12px] font-semibold text-[#6366f1]"
                     >
                       View Lead
                     </Link>
@@ -318,7 +318,7 @@ export function RealtorDashboardView({
             )}
             <Link
               href="/realtor/appointments"
-              className="block p-3 text-center text-[13px] font-semibold text-[#2563eb]"
+              className="block p-3 text-center text-[13px] font-semibold text-[#6366f1]"
             >
               View all appointments
             </Link>
@@ -333,7 +333,7 @@ export function RealtorDashboardView({
             <span className="text-[11px] text-[#6b7280]">This Week</span>
           </div>
           <div className="mt-4 flex items-center justify-center">
-            <div className="relative h-28 w-28 rounded-full border-[10px] border-[#2563eb] border-r-[#8b5cf6] border-b-[#f97316] border-l-[#10b981]">
+            <div className="relative h-28 w-28 rounded-full border-[10px] border-[#6366f1] border-r-[#8b5cf6] border-b-[#f97316] border-l-[#6366f1]">
               <div className="flex h-full items-center justify-center text-center">
                 <div>
                   <p className="text-[20px] font-bold">{metrics.newLeads}</p>
@@ -369,7 +369,7 @@ export function RealtorDashboardView({
             ].map(([label, val]) => (
               <div key={label as string} className="flex items-center gap-2">
                 <div
-                  className="h-2 rounded-full bg-[#2563eb]"
+                  className="h-2 rounded-full bg-[#6366f1]"
                   style={{
                     width: `${funnel.leads ? ((val as number) / funnel.leads) * 100 : 0}%`,
                     minWidth: "8px",
@@ -387,7 +387,7 @@ export function RealtorDashboardView({
           <ul className="mt-4 space-y-3 text-[13px]">
             <li className="flex justify-between">
               <span>Total Calls Handled</span>
-              <span className="font-semibold text-emerald-600">{aiPerformance.totalCalls}</span>
+              <span className="font-semibold text-violet-600">{aiPerformance.totalCalls}</span>
             </li>
             <li className="flex justify-between">
               <span>Avg Call Duration</span>
@@ -397,11 +397,11 @@ export function RealtorDashboardView({
             </li>
             <li className="flex justify-between">
               <span>Qualification Rate</span>
-              <span className="font-semibold text-emerald-600">{aiPerformance.qualificationRate}%</span>
+              <span className="font-semibold text-violet-600">{aiPerformance.qualificationRate}%</span>
             </li>
             <li className="flex justify-between">
               <span>Appointment Rate</span>
-              <span className="font-semibold text-emerald-600">{aiPerformance.appointmentRate}%</span>
+              <span className="font-semibold text-violet-600">{aiPerformance.appointmentRate}%</span>
             </li>
             <li className="flex justify-between">
               <span>Human Transfer Rate</span>

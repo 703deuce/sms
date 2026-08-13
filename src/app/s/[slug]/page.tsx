@@ -84,8 +84,8 @@ export default function PublicSurveyPage() {
           ) : null}
 
           {done ? (
-            <div className="mt-6 rounded-xl bg-emerald-50 px-4 py-6 text-center">
-              <p className="text-base font-medium text-emerald-800">{done}</p>
+            <div className="mt-6 rounded-xl bg-violet-50 px-4 py-6 text-center">
+              <p className="text-base font-medium text-violet-800">{done}</p>
             </div>
           ) : (
             <form className="mt-6 space-y-5" onSubmit={submit}>

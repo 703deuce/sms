@@ -77,7 +77,7 @@ export function RealtorLeadDetailView({
   return (
     <div className="space-y-5">
       <p className="text-[13px] text-[#6b7280]">
-        <Link href="/realtor/leads" className="hover:text-[#2563eb]">Leads</Link>
+        <Link href="/realtor/leads" className="hover:text-[#6366f1]">Leads</Link>
         <span className="mx-1">/</span>
         <span className="text-[#111827]">{name}</span>
       </p>
@@ -175,7 +175,7 @@ export function RealtorLeadDetailView({
               </li>
               {email ? (
                 <li className="flex gap-2">
-                  <Mail className="h-4 w-4 shrink-0 text-[#2563eb]" />
+                  <Mail className="h-4 w-4 shrink-0 text-[#6366f1]" />
                   <span>{email}</span>
                 </li>
               ) : null}
@@ -211,7 +211,7 @@ export function RealtorLeadDetailView({
             <h3 className="font-semibold text-[#111827]">Assignment</h3>
             <p className="mt-2 text-[13px] font-medium">{assignedTo || "Unassigned"}</p>
             <p className="mt-2 text-[12px] text-[#6b7280]">Pipeline Stage</p>
-            <span className="mt-1 inline-flex rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold capitalize text-emerald-700">
+            <span className="mt-1 inline-flex rounded-full bg-indigo-100 px-2 py-0.5 text-[11px] font-semibold capitalize text-violet-700">
               {status}
             </span>
           </div>
@@ -237,7 +237,7 @@ export function RealtorLeadDetailView({
             <ul className="space-y-4">
               {timeline.map((event) => (
                 <li key={event.id} className="flex gap-3 border-b border-[#f3f4f6] pb-4 last:border-0">
-                  <span className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#eff6ff] text-[#2563eb]">
+                  <span className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#eff6ff] text-[#6366f1]">
                     <TimelineIcon kind={event.kind} />
                   </span>
                   <div>
@@ -245,7 +245,7 @@ export function RealtorLeadDetailView({
                       {new Date(event.at).toLocaleString()}
                     </p>
                     {event.href ? (
-                      <Link href={event.href} className="font-semibold text-[#2563eb]">
+                      <Link href={event.href} className="font-semibold text-[#6366f1]">
                         {event.title}
                       </Link>
                     ) : (
@@ -267,7 +267,7 @@ export function RealtorLeadDetailView({
             <ul className="mt-3 space-y-2 text-[13px] text-[#374151]">
               {profileFields.slice(0, 3).map((f) => (
                 <li key={f.key} className="flex items-start gap-2">
-                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-violet-600" />
                   {f.label}: {f.value}
                 </li>
               ))}
@@ -306,17 +306,17 @@ export function RealtorLeadDetailView({
           <div className="realtor-card p-4">
             <div className="flex items-center justify-between">
               <h3 className="font-semibold text-[#111827]">Automation Status</h3>
-              <span className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+              <span className="flex items-center gap-1 text-[11px] font-semibold text-violet-600">
+                <span className="h-1.5 w-1.5 rounded-full bg-violet-500" />
                 Active
               </span>
             </div>
             <p className="mt-2 text-[13px] font-medium">Buyer Follow-Up Sequence</p>
             <div className="mt-2 h-2 rounded-full bg-[#e5e7eb]">
-              <div className="h-full w-1/3 rounded-full bg-[#2563eb]" />
+              <div className="h-full w-1/3 rounded-full bg-[#6366f1]" />
             </div>
             <p className="mt-2 text-[12px] text-[#6b7280]">Step 2 of 6</p>
-            <Link href="/automations" className="mt-3 flex items-center text-[13px] font-semibold text-[#2563eb]">
+            <Link href="/automations" className="mt-3 flex items-center text-[13px] font-semibold text-[#6366f1]">
               View Workflow <ChevronRight className="h-4 w-4" />
             </Link>
           </div>
@@ -347,7 +347,7 @@ function ActivityPanel({ timeline }: { timeline: LeadTimelineEvent[] }) {
     <ul className="space-y-4 text-left">
       {timeline.map((event) => (
         <li key={event.id} className="flex gap-3 border-b border-[#f3f4f6] pb-4 last:border-0">
-          <span className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#eff6ff] text-[#2563eb]">
+          <span className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#eff6ff] text-[#6366f1]">
             <TimelineIcon kind={event.kind} />
           </span>
           <div>

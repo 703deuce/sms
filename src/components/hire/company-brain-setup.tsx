@@ -234,7 +234,7 @@ export function CompanyBrainSetup() {
   return (
     <div className="mx-auto max-w-3xl space-y-6 p-4 sm:p-8">
       <header className="space-y-2">
-        <Link href="/hire" className="text-sm font-medium text-blue-600">
+        <Link href="/hire" className="text-sm font-medium text-indigo-600">
           ← Back to team
         </Link>
         <h1 className="font-display text-3xl font-semibold tracking-tight text-slate-900">
@@ -362,7 +362,7 @@ export function CompanyBrainSetup() {
           </div>
         ) : null}
 
-        {scanNote ? <p className="mt-3 text-sm text-emerald-700">{scanNote}</p> : null}
+        {scanNote ? <p className="mt-3 text-sm text-violet-700">{scanNote}</p> : null}
         {error ? <p className="mt-3 text-sm text-rose-600">{error}</p> : null}
       </section>
 
@@ -416,7 +416,7 @@ export function CompanyBrainSetup() {
         <button
           type="button"
           onClick={() => router.push(continueHref)}
-          className="min-h-10 rounded-lg bg-emerald-600 px-4 text-sm font-semibold text-white"
+          className="min-h-10 rounded-lg bg-violet-600 px-4 text-sm font-semibold text-white"
         >
           Continue to train {next === "tom" ? "Tom" : "Amy"}
         </button>

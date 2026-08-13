@@ -16,7 +16,7 @@ function TrendPill({ pct }: { pct: number | null }) {
   if (pct == null) return null;
   const label = pct >= 0 ? `+${pct}% vs last 7 days` : `${pct}% vs last 7 days`;
   return (
-    <span className="mt-2 inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+    <span className="mt-2 inline-flex items-center rounded-full bg-violet-50 px-2 py-0.5 text-[11px] font-semibold text-violet-700">
       {label}
     </span>
   );
@@ -70,8 +70,8 @@ export function CallsMetrics({ metrics }: { metrics: Metrics }) {
       />
       <MetricCard
         icon={UserPlus}
-        iconBg="bg-emerald-50"
-        iconColor="text-emerald-600"
+        iconBg="bg-violet-50"
+        iconColor="text-violet-600"
         label="New Leads"
         value={String(metrics.leads)}
         changePct={metrics.leadsChangePct}
@@ -86,8 +86,8 @@ export function CallsMetrics({ metrics }: { metrics: Metrics }) {
       />
       <MetricCard
         icon={Clock}
-        iconBg="bg-sky-50"
-        iconColor="text-sky-600"
+        iconBg="bg-indigo-50"
+        iconColor="text-indigo-600"
         label="Total Talk Time"
         value={fmtTalkTime(metrics.talkTimeSeconds)}
         changePct={metrics.talkTimeChangePct}

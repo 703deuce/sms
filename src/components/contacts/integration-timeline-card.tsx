@@ -18,7 +18,7 @@ type TimelineEvent = {
 };
 
 function dotColor(kind: TimelineEvent["kind"]) {
-  if (kind === "webhook") return "bg-sky-500";
+  if (kind === "webhook") return "bg-indigo-500";
   if (kind === "appointment") return "bg-violet-500";
   return "bg-primary";
 }

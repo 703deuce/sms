@@ -53,7 +53,7 @@ const typeFilters = [
 
 const templateIconTones = [
   "bg-violet-50 text-violet-600",
-  "bg-sky-50 text-sky-600",
+  "bg-indigo-50 text-indigo-600",
   "bg-violet-50 text-violet-600",
   "bg-orange-50 text-orange-600",
 ];
@@ -62,14 +62,14 @@ const categoryTones: Record<string, string> = {
   Greetings: "bg-violet-50 text-violet-700",
   "Appointment reminders": "bg-orange-50 text-orange-700",
   Sales: "bg-violet-50 text-violet-700",
-  "Customer service": "bg-sky-50 text-sky-700",
+  "Customer service": "bg-indigo-50 text-indigo-700",
   Promotions: "bg-pink-50 text-pink-700",
   Compliance: "bg-rose-50 text-rose-700",
 };
 
 const typeTones: Record<string, string> = {
   Campaign: "bg-indigo-50 text-indigo-700",
-  "Inbox reply": "bg-teal-50 text-teal-700",
+  "Inbox reply": "bg-violet-50 text-violet-700",
   "Automation message": "bg-violet-50 text-violet-700",
   "Compliance message": "bg-rose-50 text-rose-700",
 };
@@ -142,13 +142,13 @@ export default function TemplatesPage() {
           icon={LayoutGrid}
           tone="bg-violet-50 text-violet-600"
           sparkline={[2, 3, 3, 4, 4, 4, 4, templates.length]}
-          sparkColor="#10b981"
+          sparkColor="#6366f1"
         />
         <MetricCard
           label="SMS templates"
           value={formatNumber(smsCount)}
           icon={MessageSquare}
-          tone="bg-sky-50 text-sky-600"
+          tone="bg-indigo-50 text-indigo-600"
           sparkline={[2, 3, 3, 4, 4, 4, 4, smsCount]}
           sparkColor="#0ea5e9"
         />

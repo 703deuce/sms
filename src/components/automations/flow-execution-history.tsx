@@ -27,8 +27,8 @@ function StatusBadge({ status, label }: { status: string; label: string }) {
     <span
       className={cn(
         "inline-flex h-6 items-center rounded-full px-2 text-[11px] font-semibold",
-        status === "COMPLETED" && "bg-emerald-50 text-emerald-700",
-        status === "RUNNING" && "bg-sky-50 text-sky-700",
+        status === "COMPLETED" && "bg-violet-50 text-violet-700",
+        status === "RUNNING" && "bg-indigo-50 text-indigo-700",
         status === "WAITING" && "bg-amber-50 text-amber-800",
         status === "FAILED" && "bg-rose-50 text-rose-700",
         status === "CANCELLED" && "bg-slate-100 text-slate-600",
@@ -145,7 +145,7 @@ export function AutomationExecutionHistory({ flowId }: { flowId: string }) {
                 <td className="px-4 py-3 text-right">
                   <Link
                     href={ex.href}
-                    className="text-[12px] font-semibold text-[#2563EB] hover:underline"
+                    className="text-[12px] font-semibold text-[#4f46e5] hover:underline"
                   >
                     Open
                   </Link>
@@ -235,7 +235,7 @@ export function FlowActionButtons({
       </a>
       <a
         href={`/automations/${flowId}?tab=executions`}
-        className="inline-flex h-9 items-center rounded-md px-3 text-[12px] font-semibold text-[#2563EB] ring-1 ring-[#BFDBFE]"
+        className="inline-flex h-9 items-center rounded-md px-3 text-[12px] font-semibold text-[#4f46e5] ring-1 ring-indigo-200"
       >
         Executions
       </a>

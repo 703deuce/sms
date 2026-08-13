@@ -109,7 +109,7 @@ export default function SendTestPage() {
         <div className="space-y-6">
           <Card>
             <div className="flex items-start gap-3">
-              <div className="rounded-lg bg-teal-50 p-2 text-primary">
+              <div className="rounded-lg bg-violet-50 p-2 text-primary">
                 <Smartphone className="h-5 w-5" />
               </div>
               <div>
@@ -160,7 +160,7 @@ export default function SendTestPage() {
                   )}
                 </>
               ) : (
-                <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-900">
+                <div className="flex items-center gap-2 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2.5 text-sm text-violet-900">
                   <CheckCircle2 className="h-4 w-4 shrink-0" />
                   <span>
                     <strong>{formatPhone(phone)}</strong> verified for test sends
@@ -174,7 +174,7 @@ export default function SendTestPage() {
 
           <Card>
             <div className="flex items-start gap-3">
-              <div className="rounded-lg bg-teal-50 p-2 text-primary">
+              <div className="rounded-lg bg-violet-50 p-2 text-primary">
                 <MessageSquare className="h-5 w-5" />
               </div>
               <div>
@@ -215,7 +215,7 @@ export default function SendTestPage() {
                 {sent ? "Demo sent" : sending ? "Sending…" : "Send demo to my phone"}
               </Button>
               {sent ? (
-                <div className="flex items-center gap-2 text-sm text-emerald-800">
+                <div className="flex items-center gap-2 text-sm text-violet-800">
                   <StatusChip status="Delivered" />
                   <span>Demo message delivered to {formatPhone(phone)}</span>
                 </div>

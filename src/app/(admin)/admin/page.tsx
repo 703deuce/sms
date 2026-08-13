@@ -50,9 +50,9 @@ export default async function AdminDashboardPage() {
     icon: LucideIcon;
     tone: string;
   }> = [
-    { stage: "Brand submitted", count: pipeline.brandSubmitted, icon: Shield, tone: "bg-emerald-50 text-emerald-600" },
+    { stage: "Brand submitted", count: pipeline.brandSubmitted, icon: Shield, tone: "bg-violet-50 text-violet-600" },
     { stage: "Brand pending review", count: pipeline.brandPending, icon: Clock, tone: "bg-orange-50 text-orange-600" },
-    { stage: "Campaign draft", count: pipeline.campaignDraft, icon: FileText, tone: "bg-blue-50 text-blue-600" },
+    { stage: "Campaign draft", count: pipeline.campaignDraft, icon: FileText, tone: "bg-indigo-50 text-indigo-600" },
     { stage: "Campaign rejected", count: pipeline.campaignRejected, icon: XCircle, tone: "bg-rose-50 text-rose-600" },
   ];
 
@@ -79,7 +79,7 @@ export default async function AdminDashboardPage() {
           value={activeCustomers}
           hint="Total on platform"
           icon={Users}
-          tone="bg-emerald-50 text-emerald-600"
+          tone="bg-violet-50 text-violet-600"
           href="/admin/customers"
         />
         <MetricCard
@@ -93,14 +93,14 @@ export default async function AdminDashboardPage() {
           label="Paid Accounts"
           value={paid}
           icon={CreditCard}
-          tone="bg-blue-50 text-blue-600"
+          tone="bg-indigo-50 text-indigo-600"
           href="/admin/customers"
         />
         <MetricCard
           label="MRR"
           value={formatCurrency(mrr)}
           icon={DollarSign}
-          tone="bg-emerald-50 text-emerald-600"
+          tone="bg-violet-50 text-violet-600"
           href="/admin/billing"
         />
       </div>
@@ -111,7 +111,7 @@ export default async function AdminDashboardPage() {
           value={formatNumber(messageVolume)}
           hint="Aggregate outbound"
           icon={MessageSquare}
-          tone="bg-blue-50 text-blue-600"
+          tone="bg-indigo-50 text-indigo-600"
         />
         <MetricCard
           label="Est. Telnyx Cost"
@@ -123,7 +123,7 @@ export default async function AdminDashboardPage() {
           label="Est. Revenue"
           value={formatCurrency(revenue)}
           icon={TrendingUp}
-          tone="bg-emerald-50 text-emerald-600"
+          tone="bg-violet-50 text-violet-600"
         />
         <MetricCard
           label="Failed Messages"

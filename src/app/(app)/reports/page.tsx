@@ -71,7 +71,7 @@ export default async function ReportsOverviewPage() {
       href: "/reports/messages",
       value: formatPercent(metrics.deliveryRate),
       icon: Send,
-      tone: "bg-emerald-50 text-emerald-600",
+      tone: "bg-violet-50 text-violet-600",
     },
     {
       title: "Contact growth",
@@ -79,7 +79,7 @@ export default async function ReportsOverviewPage() {
       href: "/reports/contacts",
       value: `+${formatNumber(metrics.contactGrowth)}`,
       icon: Users,
-      tone: "bg-blue-50 text-blue-600",
+      tone: "bg-indigo-50 text-indigo-600",
     },
     {
       title: "Inbox activity",
@@ -87,7 +87,7 @@ export default async function ReportsOverviewPage() {
       href: "/reports/inbox",
       value: formatPercent(metrics.replyRate),
       icon: Inbox,
-      tone: "bg-sky-50 text-sky-600",
+      tone: "bg-indigo-50 text-indigo-600",
     },
     {
       title: "Automation flows",
@@ -129,7 +129,7 @@ export default async function ReportsOverviewPage() {
     <div className="space-y-5">
       <SectionHeader
         icon={BarChart3}
-        iconTone="bg-blue-50 text-blue-600"
+        iconTone="bg-indigo-50 text-indigo-600"
         title="Reports"
         description="Performance metrics across campaigns, messaging, contacts, and account activity."
         actions={
@@ -150,9 +150,9 @@ export default async function ReportsOverviewPage() {
           value={formatNumber(metrics.messagesSentPeriod)}
           hint="Current billing period"
           icon={Send}
-          tone="bg-emerald-50 text-emerald-600"
+          tone="bg-violet-50 text-violet-600"
           sparkline={[8, 9, 12, 11, 14, 13, 15, 17]}
-          sparkColor="#10b981"
+          sparkColor="#6366f1"
           href="/reports/messages"
         />
         <MetricCard
@@ -160,7 +160,7 @@ export default async function ReportsOverviewPage() {
           value={formatPercent(metrics.deliveryRate)}
           hint="Period aggregate"
           icon={Send}
-          tone="bg-sky-50 text-sky-600"
+          tone="bg-indigo-50 text-indigo-600"
           sparkline={[12, 13, 12, 15, 14, 16, 17, 18]}
           sparkColor="#0ea5e9"
           href="/reports/messages"
@@ -193,9 +193,9 @@ export default async function ReportsOverviewPage() {
           value={`+${formatNumber(metrics.contactGrowth)}`}
           hint={`Opt-out ${formatPercent(metrics.optOutRate)}`}
           icon={Users}
-          tone="bg-emerald-50 text-emerald-600"
+          tone="bg-violet-50 text-violet-600"
           sparkline={[4, 6, 5, 8, 9, 11, 12, 14]}
-          sparkColor="#10b981"
+          sparkColor="#6366f1"
           href="/reports/contacts"
         />
         <MetricCard
@@ -234,7 +234,7 @@ export default async function ReportsOverviewPage() {
           value={metrics.activeNumber}
           hint="Default sending number"
           icon={Phone}
-          tone="bg-blue-50 text-blue-600"
+          tone="bg-indigo-50 text-indigo-600"
           href="/numbers"
         />
       </div>

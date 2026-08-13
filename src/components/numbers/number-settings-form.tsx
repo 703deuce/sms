@@ -123,7 +123,7 @@ export function NumberSettingsForm({
         </Button>
       </div>
       {error ? <p className="text-sm text-rose-600">{error}</p> : null}
-      {saved ? <p className="text-sm text-emerald-600">Settings saved.</p> : null}
+      {saved ? <p className="text-sm text-violet-600">Settings saved.</p> : null}
       <Button type="submit" size="sm" disabled={saving || releasing}>
         {saving ? "Saving…" : "Save settings"}
       </Button>

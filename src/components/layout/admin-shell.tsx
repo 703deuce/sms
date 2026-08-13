@@ -238,7 +238,7 @@ export function AdminShell({
 
               <Link
                 href="/admin/settings"
-                className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-emerald-400 to-sky-500 text-[11px] font-bold text-white"
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-violet-400 to-indigo-500 text-[11px] font-bold text-white"
                 title={userName}
               >
                 {initials}

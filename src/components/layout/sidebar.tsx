@@ -402,7 +402,7 @@ export function Sidebar({
                       className={cn(
                         "ml-auto flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1.5 text-[10px] font-bold",
                         active && realtorMode
-                          ? "bg-white text-[#2563eb]"
+                          ? "bg-white text-[#6366f1]"
                           : "bg-danger text-white",
                       )}
                     >

@@ -53,7 +53,7 @@ export function PublicOptInForm({
   }, [slug]);
 
   const fields = form?.fields || ["firstName", "phone"];
-  const primary = form?.branding?.primaryColor || "#2563eb";
+  const primary = form?.branding?.primaryColor || "#6366f1";
   const isDark = form?.branding?.theme === "dark";
 
   const shellClass = useMemo(
@@ -141,8 +141,8 @@ export function PublicOptInForm({
           ) : null}
 
           {done ? (
-            <div className="rounded-xl bg-emerald-50 px-4 py-6 text-center dark:bg-emerald-950/40">
-              <p className="text-base font-medium text-emerald-800 dark:text-emerald-200">{done}</p>
+            <div className="rounded-xl bg-violet-50 px-4 py-6 text-center dark:bg-violet-950/40">
+              <p className="text-base font-medium text-violet-800 dark:text-violet-200">{done}</p>
             </div>
           ) : (
             <form className="space-y-4" onSubmit={submit}>

@@ -226,7 +226,7 @@ export function VoicePicker({
       </div>
 
       {error ? <p className="text-xs text-rose-600">{error}</p> : null}
-      {testNote ? <p className="text-xs text-emerald-700">{testNote}</p> : null}
+      {testNote ? <p className="text-xs text-violet-700">{testNote}</p> : null}
 
       <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border px-3 py-2">
         <p className="flex-1 text-xs text-muted-foreground">
@@ -361,7 +361,7 @@ function VoiceGroup({
               className={cn(
                 "flex items-start justify-between gap-2 rounded-lg border px-3 py-2",
                 selected
-                  ? "border-emerald-600 bg-emerald-50/50 dark:bg-emerald-950/20"
+                  ? "border-violet-600 bg-violet-50/50 dark:bg-violet-950/20"
                   : "border-border",
               )}
             >

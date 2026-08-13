@@ -134,7 +134,7 @@ export default function AutomationsPage() {
           icon={Workflow}
           tone="bg-violet-50 text-violet-600"
           sparkline={[1, 1, 2, 2, 2, 2, 2, 2]}
-          sparkColor="#10b981"
+          sparkColor="#6366f1"
         />
         <MetricCard
           label="Total Enrolled"
@@ -142,7 +142,7 @@ export default function AutomationsPage() {
           icon={Users}
           tone="bg-indigo-50 text-indigo-600"
           sparkline={[6, 8, 10, 12, 14, 16, 18, 20]}
-          sparkColor="#3b82f6"
+          sparkColor="#6366f1"
         />
         <MetricCard
           label="Messages Sent"

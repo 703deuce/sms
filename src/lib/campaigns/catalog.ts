@@ -49,7 +49,7 @@ export const CAMPAIGN_CATEGORIES: CampaignCategory[] = [
     examples: ["promotions", "holiday hours", "emergency notices", "events", "updates"],
     options: ["audience", "message", "send now / schedule", "quiet hours"],
     cta: "Create broadcast",
-    tone: "bg-sky-50 text-sky-700",
+    tone: "bg-indigo-50 text-indigo-700",
     icon: "Megaphone",
   },
   {
@@ -71,7 +71,7 @@ export const CAMPAIGN_CATEGORIES: CampaignCategory[] = [
     examples: ["keyword join", "form signup", "new customer", "new member", "employee"],
     options: ["entry trigger", "welcome message", "extra tips", "start another workflow"],
     cta: "Create welcome",
-    tone: "bg-emerald-50 text-emerald-700",
+    tone: "bg-violet-50 text-violet-700",
     icon: "Hand",
   },
   {
@@ -82,7 +82,7 @@ export const CAMPAIGN_CATEGORIES: CampaignCategory[] = [
     examples: ["confirm", "24h reminder", "2h reminder", "reschedule", "no-show"],
     options: ["reminder timing", "confirm/cancel replies", "instructions", "recurring service"],
     cta: "Set reminders",
-    tone: "bg-blue-50 text-blue-700",
+    tone: "bg-indigo-50 text-indigo-700",
     icon: "CalendarClock",
   },
   {
@@ -148,7 +148,7 @@ export const CAMPAIGN_CATEGORIES: CampaignCategory[] = [
     examples: ["dispatched", "en route", "completed", "shipped", "ready for pickup"],
     options: ["status trigger", "message", "webhook source", "notify staff"],
     cta: "Configure updates",
-    tone: "bg-teal-50 text-teal-700",
+    tone: "bg-violet-50 text-violet-700",
     icon: "Truck",
   },
   {
@@ -181,7 +181,7 @@ export const CAMPAIGN_CATEGORIES: CampaignCategory[] = [
     examples: ["preferences", "zip", "service needed", "poll", "survey", "update info"],
     options: ["questions", "field mapping", "confirmation", "branch on answer"],
     cta: "Create survey",
-    tone: "bg-cyan-50 text-cyan-700",
+    tone: "bg-indigo-50 text-indigo-700",
     icon: "ClipboardList",
   },
   {

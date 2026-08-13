@@ -102,7 +102,7 @@ export default function AdminAgentRuntimesPage() {
               <TR key={r.id}>
                 <TD>{r.id}</TD>
                 <TD>{r.runtime}</TD>
-                <TD className={r.passed ? "text-emerald-700" : "text-red-700"}>
+                <TD className={r.passed ? "text-violet-700" : "text-red-700"}>
                   {r.passed ? "passed" : `failed${r.reason ? `: ${r.reason}` : ""}`}
                 </TD>
               </TR>

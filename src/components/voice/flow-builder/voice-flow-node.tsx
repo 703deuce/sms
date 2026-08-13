@@ -54,7 +54,7 @@ export function VoiceFlowCanvasNode({ data, selected }: NodeProps) {
   const intentBranch = block?.branches === "intent";
 
   const color = isEntry
-    ? "border-emerald-400 bg-emerald-50"
+    ? "border-violet-400 bg-violet-50"
     : branching
       ? "border-violet-300 bg-violet-50"
       : isEnd
@@ -64,7 +64,7 @@ export function VoiceFlowCanvasNode({ data, selected }: NodeProps) {
           : d.category === "handoff"
             ? "border-rose-300 bg-rose-50"
             : d.category === "routing"
-              ? "border-sky-300 bg-sky-50"
+              ? "border-indigo-300 bg-indigo-50"
               : "border-primary/40 bg-primary/5";
 
   return (
@@ -97,10 +97,10 @@ export function VoiceFlowCanvasNode({ data, selected }: NodeProps) {
             type="source"
             position={Position.Left}
             id="yes"
-            className="!h-3.5 !w-3.5 !bg-emerald-500"
+            className="!h-3.5 !w-3.5 !bg-violet-500"
             style={{ top: "70%" }}
           />
-          <span className="absolute -left-6 top-[65%] text-[10px] font-medium text-emerald-600">
+          <span className="absolute -left-6 top-[65%] text-[10px] font-medium text-violet-600">
             Yes
           </span>
           <Handle

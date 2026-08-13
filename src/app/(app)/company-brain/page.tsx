@@ -11,7 +11,7 @@ export default async function CompanyBrainPage() {
   return (
     <div>
       <div className="border-b border-slate-200 bg-slate-50 px-4 py-3 text-sm sm:px-8">
-        <Link href="/agents" className="font-medium text-blue-600">
+        <Link href="/agents" className="font-medium text-indigo-600">
           ← Your Team
         </Link>
         <span className="mx-2 text-slate-300">·</span>

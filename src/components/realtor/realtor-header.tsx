@@ -180,7 +180,7 @@ export function RealtorHeader({
             onClick={() => setWorkspaceOpen((v) => !v)}
             className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-[13px] font-semibold text-[#111827] hover:bg-[#f3f4f6]"
           >
-            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#eff6ff] text-[11px] font-bold text-[#2563eb]">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#eff6ff] text-[11px] font-bold text-[#6366f1]">
               {workspaceName.slice(0, 1)}
             </span>
             <span className="max-w-[160px] truncate">{workspaceName}</span>
@@ -194,7 +194,7 @@ export function RealtorHeader({
                   type="button"
                   onClick={() => switchWorkspace(w.id)}
                   className={`block w-full px-3.5 py-2 text-left text-[13px] hover:bg-[#f9fafb] ${
-                    w.id === workspaceId ? "font-semibold text-[#2563eb]" : "text-[#374151]"
+                    w.id === workspaceId ? "font-semibold text-[#6366f1]" : "text-[#374151]"
                   }`}
                 >
                   {w.name}
@@ -213,7 +213,7 @@ export function RealtorHeader({
             <div className="relative">
               <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9ca3af]" />
               <input
-                className="h-10 w-full rounded-lg border border-[#e5e7eb] bg-[#f9fafb] pl-10 pr-16 text-[13px] outline-none focus:border-[#2563eb] focus:bg-white focus:ring-2 focus:ring-[#2563eb]/20"
+                className="h-10 w-full rounded-lg border border-[#e5e7eb] bg-[#f9fafb] pl-10 pr-16 text-[13px] outline-none focus:border-[#6366f1] focus:bg-white focus:ring-2 focus:ring-[#6366f1]/20"
                 placeholder="Search anything..."
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
@@ -233,8 +233,8 @@ export function RealtorHeader({
               <span className="text-[13px] font-medium text-[#374151]">
                 {formatPhone(activeNumber.number)}
               </span>
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 ring-1 ring-emerald-100">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-violet-50 px-2.5 py-1 text-[11px] font-semibold text-violet-700 ring-1 ring-violet-100">
+                <span className="h-1.5 w-1.5 rounded-full bg-violet-500" />
                 {pathname.startsWith("/realtor/dashboard") ? "Live" : "Online"}
               </span>
             </div>
@@ -269,7 +269,7 @@ export function RealtorHeader({
                   {unread > 0 ? (
                     <button
                       type="button"
-                      className="text-xs font-medium text-[#2563eb] hover:underline"
+                      className="text-xs font-medium text-[#6366f1] hover:underline"
                       onClick={markAllRead}
                     >
                       Mark all read

@@ -15,7 +15,7 @@ export default async function MaintenancePage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-950 px-6 text-center text-white">
       <div className="max-w-lg">
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-300">
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-300">
           Transovo AI
         </p>
         <h1 className="mt-3 text-3xl font-bold tracking-tight">We’ll be right back</h1>

@@ -33,13 +33,13 @@ export function HireTeamChooser() {
               }
               className={cn(
                 "block rounded-2xl border bg-white p-5 shadow-sm transition hover:border-slate-300",
-                recommended ? "border-emerald-300 ring-1 ring-emerald-100" : "border-slate-200",
+                recommended ? "border-violet-300 ring-1 ring-violet-100" : "border-slate-200",
               )}
             >
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   {recommended ? (
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-violet-700">
                       Recommended first
                     </p>
                   ) : null}
@@ -65,7 +65,7 @@ export function HireTeamChooser() {
 
       <p className="text-sm text-slate-500">
         Already have agents?{" "}
-        <Link href="/agents" className="font-semibold text-blue-600">
+        <Link href="/agents" className="font-semibold text-indigo-600">
           Open Your Team
         </Link>
       </p>
