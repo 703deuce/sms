@@ -175,7 +175,7 @@ function buildCollectCallerFieldsTool(snapshot: ReceptionistCompiledSnapshot) {
       purpose: z
         .enum(["message", "service", "booking", "general"])
         .optional()
-        .describe("message = never use; service = HVAC issue; booking = scheduling"),
+        .describe("message = never use; service = field collection for a service request; booking = scheduling"),
     }),
     execute: async (args, opts) => {
       const session = opts.ctx.session as AgentSession<FrontDeskUserData>;
