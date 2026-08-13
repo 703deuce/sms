@@ -59,7 +59,7 @@ export function AppShell({
         : (realtorMode ? getRealtorPageTitle(pathname) : null) || getPageTitle(pathname);
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="product-theme min-h-screen bg-background">
       <Suspense fallback={null}>
         <Sidebar
           userName={userName}
@@ -72,6 +72,7 @@ export function AppShell({
           inboxBadge={unreadNotifications}
           collapsed={sidebarCollapsed}
           onToggleCollapse={() => setSidebarCollapsed((v) => !v)}
+          creditsRemaining={metrics.creditsRemaining}
         />
       </Suspense>
       <div className={sidebarCollapsed ? "lg:pl-[72px]" : "lg:pl-[260px]"}>

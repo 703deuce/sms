@@ -63,13 +63,17 @@ export function SelectableCard({
 export function CapabilityCard({
   selected,
   onClick,
-  emoji,
+  icon,
+  iconBg,
+  iconColor,
   title,
   description,
 }: {
   selected?: boolean;
   onClick?: () => void;
-  emoji: string;
+  icon: ReactNode;
+  iconBg: string;
+  iconColor: string;
   title: string;
   description: string;
 }) {
@@ -89,7 +93,15 @@ export function CapabilityCard({
           <Check className="h-3 w-3" strokeWidth={3} />
         </span>
       ) : null}
-      <span className="text-2xl">{emoji}</span>
+      <span
+        className={cn(
+          "flex h-10 w-10 items-center justify-center rounded-lg",
+          iconBg,
+          iconColor,
+        )}
+      >
+        {icon}
+      </span>
       <p className="mt-3 text-sm font-semibold text-[#111827]">{title}</p>
       <p className="mt-1 text-xs leading-relaxed text-[#6b7280]">{description}</p>
     </button>
@@ -222,31 +234,165 @@ export function FieldChip({
   onRemove?: () => void;
 }) {
   return (
-    <div
+    <button
+      type="button"
+      onClick={onToggle}
+      disabled={!onToggle}
       className={cn(
-        "flex items-center gap-2 rounded-lg border px-3 py-2 text-sm",
-        selected ? "border-[#6366f1]/30 bg-[#6366f1]/5" : "border-[#e6e8ef] bg-white",
+        "inline-flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-xs font-medium transition",
+        selected
+          ? "border-[#6366f1] bg-[#6366f1] text-white"
+          : "border-[#e6e8ef] bg-white text-[#374151] hover:border-[#6366f1]/50",
+        !onToggle && "cursor-default",
       )}
     >
-      <button type="button" onClick={onToggle} disabled={!onToggle} className="flex items-center gap-2">
-        <span
-          className={cn(
-            "flex h-4 w-4 items-center justify-center rounded border",
-            selected ? "border-[#6366f1] bg-[#6366f1] text-white" : "border-[#d1d5db]",
-          )}
-        >
-          {selected ? <Check className="h-3 w-3" /> : null}
-        </span>
-        <span className="font-medium text-[#374151]">{label}</span>
-      </button>
+      {selected ? <Check className="h-3 w-3 shrink-0" strokeWidth={3} /> : null}
+      <span>{label}</span>
       {required !== undefined ? (
-        <span className="text-[10px] text-[#9ca3af]">{required ? "Required" : "Optional"}</span>
+        <span className={cn(selected ? "text-white/80" : "text-[#9ca3af]")}>
+          {required ? "Required" : "Optional"}
+        </span>
       ) : null}
       {onRemove ? (
-        <button type="button" onClick={onRemove} className="text-[#9ca3af] hover:text-[#6b7280]">
+        <span
+          role="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onRemove();
+          }}
+          className={cn(selected ? "text-white/80 hover:text-white" : "text-[#9ca3af] hover:text-[#6b7280]")}
+        >
           ×
-        </button>
+        </span>
       ) : null}
+    </button>
+  );
+}
+
+export function ElevenLabsTuningPanel({
+  stability,
+  clarity,
+  style,
+  speakerBoost,
+  optimizeLatency,
+  speakingSpeed,
+  onStabilityChange,
+  onClarityChange,
+  onStyleChange,
+  onSpeakerBoostChange,
+  onOptimizeLatencyChange,
+  onSpeakingSpeedChange,
+}: {
+  stability: number;
+  clarity: number;
+  style: number;
+  speakerBoost: boolean;
+  optimizeLatency: boolean;
+  speakingSpeed: number;
+  onStabilityChange: (v: number) => void;
+  onClarityChange: (v: number) => void;
+  onStyleChange: (v: number) => void;
+  onSpeakerBoostChange: (v: boolean) => void;
+  onOptimizeLatencyChange: (v: boolean) => void;
+  onSpeakingSpeedChange: (v: number) => void;
+}) {
+  return (
+    <div className="mt-5 space-y-4 border-t border-[#e6e8ef] pt-5">
+      <SliderRow
+        label="Stability"
+        value={stability}
+        onChange={onStabilityChange}
+      />
+      <SliderRow label="Clarity" value={clarity} onChange={onClarityChange} />
+      <SliderRow label="Style" value={style} onChange={onStyleChange} />
+      <SliderRow
+        label="Speaking speed"
+        value={speakingSpeed}
+        min={0.5}
+        max={2}
+        step={0.1}
+        display={speakingSpeed.toFixed(1)}
+        onChange={onSpeakingSpeedChange}
+      />
+      <ToggleRow
+        label="Optimize for latency"
+        checked={optimizeLatency}
+        onChange={onOptimizeLatencyChange}
+      />
+      <ToggleRow
+        label="Speaker boost"
+        checked={speakerBoost}
+        onChange={onSpeakerBoostChange}
+      />
     </div>
+  );
+}
+
+function SliderRow({
+  label,
+  value,
+  min = 0,
+  max = 1,
+  step = 0.05,
+  display,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  min?: number;
+  max?: number;
+  step?: number;
+  display?: string;
+  onChange: (v: number) => void;
+}) {
+  return (
+    <div>
+      <div className="flex items-center justify-between text-xs font-medium text-[#374151]">
+        <span>{label}</span>
+        <span className="text-[#6b7280]">{display ?? value.toFixed(2)}</span>
+      </div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="mt-1.5 w-full accent-[#6366f1]"
+      />
+    </div>
+  );
+}
+
+function ToggleRow({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <label className="flex items-center justify-between gap-3 text-xs font-medium text-[#374151]">
+      <span>{label}</span>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        onClick={() => onChange(!checked)}
+        className={cn(
+          "relative h-6 w-11 shrink-0 rounded-full transition",
+          checked ? "bg-[#6366f1]" : "bg-[#d1d5db]",
+        )}
+      >
+        <span
+          className={cn(
+            "absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform",
+            checked ? "translate-x-5" : "translate-x-0.5",
+          )}
+        />
+      </button>
+    </label>
   );
 }

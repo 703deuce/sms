@@ -19,10 +19,11 @@
   --warning-foreground: #78350f;
   --success: #10b981;
   --success-foreground: #ffffff;
-  --sidebar: #0b1220;
-  --sidebar-foreground: #cbd5e1;
-  --sidebar-muted: #94a3b8;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #111827;
+  --sidebar-muted: #6b7280;
   --sidebar-active: #6366f1;
+  --sidebar-border: #e6e8ef;
   --header: #ffffff;
   --ring: #6366f1;
   --shadow: 0 1px 2px rgb(15 23 42 / 0.04), 0 4px 16px rgb(15 23 42 / 0.04);
@@ -54,6 +55,7 @@
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-muted: var(--sidebar-muted);
   --color-sidebar-active: var(--sidebar-active);
+  --color-sidebar-border: var(--sidebar-border);
   --color-header: var(--header);
   --color-ring: var(--ring);
   --color-purple: var(--purple);

@@ -242,9 +242,9 @@ export function AboutStep({
       <SidePanel
         title="What happens next?"
         illustration={
-          <div className="rounded-2xl bg-[#6366f1]/10 p-6">
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[#6366f1]/20">
-              <Bot className="h-8 w-8 text-[#6366f1]" />
+          <div className="flex justify-center">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[#6366f1] shadow-[0_8px_24px_rgba(99,102,241,0.35)]">
+              <Sparkles className="h-7 w-7 text-white" />
             </div>
           </div>
         }

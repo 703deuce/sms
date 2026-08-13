@@ -95,6 +95,36 @@ export function wizardStateFromDraftConfig(
         : typeof cfg.voiceLanguage?.speed === "number" && Number.isFinite(cfg.voiceLanguage.speed)
           ? cfg.voiceLanguage.speed
           : base.voiceSpeed,
+    elevenLabsStability:
+      typeof wiz?.elevenLabsStability === "number" && Number.isFinite(wiz.elevenLabsStability)
+        ? wiz.elevenLabsStability
+        : typeof cfg.voiceLanguage?.elevenLabsStability === "number"
+          ? cfg.voiceLanguage.elevenLabsStability
+          : base.elevenLabsStability,
+    elevenLabsClarity:
+      typeof wiz?.elevenLabsClarity === "number" && Number.isFinite(wiz.elevenLabsClarity)
+        ? wiz.elevenLabsClarity
+        : typeof cfg.voiceLanguage?.elevenLabsSimilarityBoost === "number"
+          ? cfg.voiceLanguage.elevenLabsSimilarityBoost
+          : base.elevenLabsClarity,
+    elevenLabsStyle:
+      typeof wiz?.elevenLabsStyle === "number" && Number.isFinite(wiz.elevenLabsStyle)
+        ? wiz.elevenLabsStyle
+        : typeof cfg.voiceLanguage?.elevenLabsStyle === "number"
+          ? cfg.voiceLanguage.elevenLabsStyle
+          : base.elevenLabsStyle,
+    elevenLabsSpeakerBoost:
+      typeof wiz?.elevenLabsSpeakerBoost === "boolean"
+        ? wiz.elevenLabsSpeakerBoost
+        : typeof cfg.voiceLanguage?.elevenLabsSpeakerBoost === "boolean"
+          ? cfg.voiceLanguage.elevenLabsSpeakerBoost
+          : base.elevenLabsSpeakerBoost,
+    elevenLabsOptimizeLatency:
+      typeof wiz?.elevenLabsOptimizeLatency === "boolean"
+        ? wiz.elevenLabsOptimizeLatency
+        : cfg.voiceLanguage?.elevenLabsTuning === false
+          ? false
+          : base.elevenLabsOptimizeLatency,
     vadThreshold:
       typeof wiz?.vadThreshold === "number" && Number.isFinite(wiz.vadThreshold)
         ? wiz.vadThreshold

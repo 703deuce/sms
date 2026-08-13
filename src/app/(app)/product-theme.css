@@ -1,0 +1,67 @@
+/* TransOvo product shell — purple primary, light surfaces (mockup) */
+.product-theme {
+  --primary: #6366f1;
+  --primary-foreground: #ffffff;
+  --primary-hover: #4f46e5;
+  --ring: #6366f1;
+  --sidebar-active: #6366f1;
+  --background: #f5f6fa;
+}
+
+.product-theme .bg-mesh {
+  background-color: #f5f6fa;
+  background-image:
+    radial-gradient(ellipse 80% 50% at 20% -10%, rgba(99, 102, 241, 0.08), transparent),
+    radial-gradient(ellipse 60% 40% at 90% 0%, rgba(139, 92, 246, 0.06), transparent);
+}
+
+.voice-card {
+  background: #ffffff;
+  border: 1px solid #e6e8ef;
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.04);
+}
+
+.voice-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  height: 40px;
+  padding: 0 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  background: #6366f1;
+  color: #fff;
+  transition: background 0.15s;
+}
+
+.voice-btn-primary:hover:not(:disabled) {
+  background: #4f46e5;
+}
+
+.voice-btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.voice-btn-outline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  border: 1px solid #d1d5db;
+  background: #fff;
+  color: #374151;
+}
+
+.voice-btn-outline-purple {
+  border-color: #6366f1;
+  color: #6366f1;
+}

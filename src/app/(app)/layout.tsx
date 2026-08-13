@@ -1,3 +1,4 @@
+import "./product-theme.css";
 import { AppShell } from "@/components/layout/app-shell";
 import { ServiceWorkerRegister } from "@/components/push/service-worker-register";
 import { getActiveWorkspaceId, getSession } from "@/lib/auth";

@@ -41,6 +41,14 @@ export type ReceptionistWizardState = {
   voiceLabel: string;
   /** OpenAI Realtime speech speed (0.5–2.0). */
   voiceSpeed: number;
+  /** ElevenLabs stability (0–1). */
+  elevenLabsStability: number;
+  /** ElevenLabs similarity boost / clarity (0–1). */
+  elevenLabsClarity: number;
+  /** ElevenLabs style exaggeration (0–1). */
+  elevenLabsStyle: number;
+  elevenLabsSpeakerBoost: boolean;
+  elevenLabsOptimizeLatency: boolean;
   /** Server VAD threshold (0–1). Higher = less sensitive to background noise. */
   vadThreshold: number;
   /** Silence duration (ms) before the agent treats the caller as done speaking. */

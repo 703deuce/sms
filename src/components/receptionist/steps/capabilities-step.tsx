@@ -12,12 +12,16 @@ import {
   Bot,
   Calendar,
   Clock,
+  FileText,
+  MessageCircle,
   MessageSquare,
   Phone,
   PhoneForwarded,
   PhoneMissed,
   Upload,
+  User,
   Users,
+  type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
@@ -37,6 +41,42 @@ const TIMING_ICONS = {
   nobody_answers: PhoneMissed,
   overflow: Users,
 } as const;
+
+const CAPABILITY_ICONS: Record<
+  CapabilityId,
+  { icon: LucideIcon; iconBg: string; iconColor: string }
+> = {
+  answer_questions: {
+    icon: MessageCircle,
+    iconBg: "bg-[#3b82f6]/10",
+    iconColor: "text-[#3b82f6]",
+  },
+  take_messages: {
+    icon: FileText,
+    iconBg: "bg-[#f59e0b]/10",
+    iconColor: "text-[#f59e0b]",
+  },
+  collect_info: {
+    icon: User,
+    iconBg: "bg-[#8b5cf6]/10",
+    iconColor: "text-[#8b5cf6]",
+  },
+  book_appointments: {
+    icon: Calendar,
+    iconBg: "bg-[#10b981]/10",
+    iconColor: "text-[#10b981]",
+  },
+  transfer_calls: {
+    icon: PhoneForwarded,
+    iconBg: "bg-[#6366f1]/10",
+    iconColor: "text-[#6366f1]",
+  },
+  send_text: {
+    icon: MessageSquare,
+    iconBg: "bg-[#06b6d4]/10",
+    iconColor: "text-[#06b6d4]",
+  },
+};
 
 export function CapabilitiesStep({
   state,
@@ -102,16 +142,22 @@ export function CapabilitiesStep({
 
         <WizardSection number={1} title={`What can ${agent} do?`}>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {CAPABILITY_OPTIONS.map((cap) => (
-              <CapabilityCard
-                key={cap.id}
-                selected={state.capabilities.includes(cap.id)}
-                onClick={() => toggleCap(cap.id)}
-                emoji={cap.emoji}
-                title={cap.label}
-                description={cap.description}
-              />
-            ))}
+            {CAPABILITY_OPTIONS.map((cap) => {
+              const meta = CAPABILITY_ICONS[cap.id];
+              const Icon = meta.icon;
+              return (
+                <CapabilityCard
+                  key={cap.id}
+                  selected={state.capabilities.includes(cap.id)}
+                  onClick={() => toggleCap(cap.id)}
+                  icon={<Icon className="h-5 w-5" />}
+                  iconBg={meta.iconBg}
+                  iconColor={meta.iconColor}
+                  title={cap.label}
+                  description={cap.description}
+                />
+              );
+            })}
           </div>
         </WizardSection>
 

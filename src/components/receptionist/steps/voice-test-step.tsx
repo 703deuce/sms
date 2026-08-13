@@ -10,7 +10,7 @@ import { interpolateGreeting, generateGreeting } from "@/lib/receptionist-wizard
 import { cn } from "@/lib/utils";
 import { Bot, Mic, Pause, Phone, Sparkles, Volume2 } from "lucide-react";
 import { useRef, useState } from "react";
-import { SidePanel, WizardFooter } from "../ui";
+import { SidePanel, WizardFooter, ElevenLabsTuningPanel } from "../ui";
 
 export function VoiceTestStep({
   state,
@@ -127,22 +127,20 @@ export function VoiceTestStep({
                 ))}
               </div>
               {previewError ? <p className="mt-2 text-xs text-red-600">{previewError}</p> : null}
-              <div className="mt-5 space-y-3">
-                <div>
-                  <label className="text-xs font-medium text-[#374151]">
-                    Speaking speed ({state.voiceSpeed.toFixed(1)})
-                  </label>
-                  <input
-                    type="range"
-                    min="0.5"
-                    max="2"
-                    step="0.1"
-                    value={state.voiceSpeed}
-                    onChange={(e) => patch({ voiceSpeed: Number(e.target.value) })}
-                    className="mt-1 w-full accent-[#6366f1]"
-                  />
-                </div>
-              </div>
+              <ElevenLabsTuningPanel
+                stability={state.elevenLabsStability}
+                clarity={state.elevenLabsClarity}
+                style={state.elevenLabsStyle}
+                speakerBoost={state.elevenLabsSpeakerBoost}
+                optimizeLatency={state.elevenLabsOptimizeLatency}
+                speakingSpeed={state.voiceSpeed}
+                onStabilityChange={(v) => patch({ elevenLabsStability: v })}
+                onClarityChange={(v) => patch({ elevenLabsClarity: v })}
+                onStyleChange={(v) => patch({ elevenLabsStyle: v })}
+                onSpeakerBoostChange={(v) => patch({ elevenLabsSpeakerBoost: v })}
+                onOptimizeLatencyChange={(v) => patch({ elevenLabsOptimizeLatency: v })}
+                onSpeakingSpeedChange={(v) => patch({ voiceSpeed: v })}
+              />
             </div>
 
             <div className="voice-card p-5">

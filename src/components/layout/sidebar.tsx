@@ -14,6 +14,8 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
+const WORKSPACE_USAGE_LIMIT = 500;
+
 function hrefPath(href: string) {
   return href.split("?")[0] || href;
 }
@@ -174,14 +176,41 @@ function NavLinkRow({
       data-nav-active={active ? "true" : undefined}
       onClick={onClose}
       className={cn(
-        "block rounded-md px-2.5 py-1 text-[12px] transition",
+        "block rounded-md px-2.5 py-1.5 text-[12px] transition",
         active
           ? "bg-primary/10 font-semibold text-primary"
-          : "text-sidebar-muted hover:bg-white/5 hover:text-white",
+          : "text-sidebar-muted hover:bg-[#f3f4f6] hover:text-sidebar-foreground",
       )}
     >
       {link.label}
     </Link>
+  );
+}
+
+function ProWorkspaceCard({ creditsRemaining }: { creditsRemaining?: number }) {
+  const remaining = typeof creditsRemaining === "number" ? creditsRemaining : WORKSPACE_USAGE_LIMIT;
+  const used = Math.min(WORKSPACE_USAGE_LIMIT, Math.max(0, WORKSPACE_USAGE_LIMIT - remaining));
+  const pct = Math.min(100, Math.round((used / WORKSPACE_USAGE_LIMIT) * 100));
+
+  return (
+    <div className="mx-1 rounded-xl border border-[#e6e8ef] bg-[#f8f9fc] p-3">
+      <div className="flex items-center justify-between text-[11px] font-semibold text-[#374151]">
+        <span>Pro Workspace</span>
+        <span className="text-[#6b7280]">{used}/{WORKSPACE_USAGE_LIMIT}</span>
+      </div>
+      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[#e6e8ef]">
+        <div
+          className="h-full rounded-full bg-primary transition-[width]"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <Link
+        href="/settings/billing"
+        className="mt-2 inline-block text-[11px] font-semibold text-primary hover:text-primary-hover"
+      >
+        Upgrade Plan
+      </Link>
+    </div>
   );
 }
 
@@ -196,6 +225,7 @@ export function Sidebar({
   inboxBadge = 0,
   collapsed = false,
   onToggleCollapse,
+  creditsRemaining,
 }: {
   userName: string;
   workspaceName?: string;
@@ -207,6 +237,7 @@ export function Sidebar({
   inboxBadge?: number;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
+  creditsRemaining?: number;
 }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -242,7 +273,7 @@ export function Sidebar({
   const content = (
     <aside
       className={cn(
-        "flex h-dvh flex-col overflow-hidden bg-sidebar text-sidebar-foreground transition-[width] duration-200",
+        "flex h-dvh flex-col overflow-hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] duration-200",
         collapsed ? "w-[72px]" : "w-[260px]",
       )}
     >
@@ -257,7 +288,7 @@ export function Sidebar({
           </span>
           {!collapsed ? (
             <span>
-              <span className="block text-[14px] font-bold tracking-[0.04em] text-white">
+              <span className="block text-[14px] font-bold tracking-[0.04em] text-[#111827]">
                 {realtorMode ? "TRANSOVO" : "TransOvo"}
               </span>
               {!realtorMode ? (
@@ -297,14 +328,14 @@ export function Sidebar({
           return (
             <div key={expandKey}>
               {item.sectionLabel ? (
-                <p className="px-2.5 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-[0.08em] text-sidebar-muted/80">
+                <p className="px-2.5 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-[0.08em] text-sidebar-muted">
                   {item.sectionLabel}
                 </p>
               ) : null}
               {item.areaLabel ? (
                 <p
                   className={cn(
-                    "px-2.5 pb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-sidebar-muted/80",
+                    "px-2.5 pb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-sidebar-muted",
                     !item.sectionLabel && "pt-3",
                   )}
                 >
@@ -317,8 +348,8 @@ export function Sidebar({
                   active
                     ? realtorMode
                       ? "bg-[#2563eb] text-white"
-                      : "bg-primary/15 text-primary"
-                    : "text-sidebar-foreground/90 hover:bg-white/5 hover:text-white",
+                      : "bg-primary/10 text-primary"
+                    : "text-sidebar-foreground hover:bg-[#f3f4f6]",
                 )}
               >
                 {active && !realtorMode ? (
@@ -339,7 +370,7 @@ export function Sidebar({
                         ? realtorMode
                           ? "text-white"
                           : "text-primary"
-                        : "text-sidebar-muted group-hover:text-white",
+                        : "text-sidebar-muted group-hover:text-sidebar-foreground",
                     )}
                   />
                   {!collapsed ? <span className="truncate">{item.label}</span> : null}
@@ -363,7 +394,7 @@ export function Sidebar({
                       "mr-1.5 rounded-md p-1.5 transition",
                       active
                         ? "text-primary hover:bg-primary/10"
-                        : "text-sidebar-muted hover:bg-white/5 hover:text-white",
+                        : "text-sidebar-muted hover:bg-[#f3f4f6] hover:text-sidebar-foreground",
                     )}
                     onClick={() =>
                       setExpanded((current) =>
@@ -384,12 +415,12 @@ export function Sidebar({
               </div>
 
               {item.children && isOpen ? (
-                <div className="mb-0.5 ml-3.5 mt-0.5 space-y-1 border-l border-white/10 pl-2.5">
+                <div className="mb-0.5 ml-3.5 mt-0.5 space-y-1 border-l border-[#e6e8ef] pl-2.5">
                   {item.children.map((child) => {
                     if (isNavGroup(child)) {
                       return (
                         <div key={child.label} className="pt-1">
-                          <p className="px-2.5 pb-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-sidebar-muted/80">
+                          <p className="px-2.5 pb-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-sidebar-muted">
                             {child.label}
                           </p>
                           <div className="space-y-px">
@@ -425,17 +456,23 @@ export function Sidebar({
           );
         })}
 
-        <div className="mt-3 border-t border-white/10 px-1 pb-3 pt-3">
-          <div className="flex items-center gap-2 rounded-[12px] bg-white/[0.04] px-2 py-1.5">
+        {!collapsed && !realtorMode ? (
+          <div className="mt-3 px-1">
+            <ProWorkspaceCard creditsRemaining={creditsRemaining} />
+          </div>
+        ) : null}
+
+        <div className="mt-3 border-t border-[#e6e8ef] px-1 pb-3 pt-3">
+          <div className="flex items-center gap-2 rounded-[12px] bg-[#f8f9fc] px-2 py-1.5">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="/avatars/alex.svg"
               alt={userName}
-              className="h-7 w-7 shrink-0 rounded-full object-cover ring-2 ring-white/10"
+              className="h-7 w-7 shrink-0 rounded-full object-cover ring-2 ring-[#e6e8ef]"
             />
             {!collapsed ? (
               <div className="min-w-0 flex-1">
-                <p className="truncate text-[12px] font-semibold text-white">{userName}</p>
+                <p className="truncate text-[12px] font-semibold text-[#111827]">{userName}</p>
                 <p className="truncate text-[10px] text-sidebar-muted">
                   {realtorMode && workspaceName ? workspaceName : "Owner"}
                 </p>
@@ -445,7 +482,7 @@ export function Sidebar({
               <button
                 type="button"
                 onClick={logout}
-                className="rounded-md p-1.5 text-sidebar-muted hover:bg-white/5 hover:text-white"
+                className="rounded-md p-1.5 text-sidebar-muted hover:bg-[#eef0f5] hover:text-sidebar-foreground"
                 aria-label="Log out"
               >
                 <LogOut className="h-3.5 w-3.5" />
@@ -459,7 +496,7 @@ export function Sidebar({
               type="button"
               onClick={onToggleCollapse}
               className={cn(
-                "mt-2 flex w-full items-center gap-2 rounded-lg px-2 py-2 text-[12px] font-medium text-sidebar-muted hover:bg-white/5 hover:text-white",
+                "mt-2 flex w-full items-center gap-2 rounded-lg px-2 py-2 text-[12px] font-medium text-sidebar-muted hover:bg-[#f3f4f6] hover:text-sidebar-foreground",
                 collapsed && "justify-center px-0",
               )}
             >
