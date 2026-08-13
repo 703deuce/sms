@@ -1,8 +1,50 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { Check, ChevronRight } from "lucide-react";
+import { Check, ChevronRight, Info, Minus } from "lucide-react";
 import type { ReactNode } from "react";
+
+/** Main wizard column + narrow sticky right rail (mockup proportions). */
+export function WizardPageLayout({
+  children,
+  aside,
+}: {
+  children: ReactNode;
+  aside?: ReactNode;
+}) {
+  return (
+    <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_272px] lg:gap-8">
+      <div className="min-w-0">{children}</div>
+      {aside ? (
+        <div className="w-full shrink-0 lg:sticky lg:top-4 lg:self-start">{aside}</div>
+      ) : null}
+    </div>
+  );
+}
+
+export function WizardPageHeader({
+  icon,
+  title,
+  subtitle,
+}: {
+  icon: ReactNode;
+  title: string;
+  subtitle: string;
+}) {
+  return (
+    <div className="mb-6 flex items-start gap-3">
+      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#6366f1]/10">
+        {icon}
+      </div>
+      <div className="min-w-0 pt-0.5">
+        <h1 className="font-display text-[22px] font-semibold leading-tight tracking-tight text-[#111827]">
+          {title}
+        </h1>
+        <p className="mt-1 text-sm leading-snug text-[#6b7280]">{subtitle}</p>
+      </div>
+    </div>
+  );
+}
 
 export function SelectableCard({
   selected,
@@ -120,10 +162,123 @@ export function SidePanel({
   className?: string;
 }) {
   return (
-    <aside className={cn("voice-card w-full shrink-0 p-5 lg:w-[320px]", className)}>
-      {illustration ? <div className="mb-5 flex justify-center">{illustration}</div> : null}
-      <h3 className="text-sm font-semibold text-[#111827]">{title}</h3>
-      <div className="mt-3 space-y-2 text-sm text-[#6b7280]">{children}</div>
+    <aside className={cn("wizard-rail-card", className)}>
+      {illustration ? <div className="mb-6 flex justify-center">{illustration}</div> : null}
+      <h3 className="text-[15px] font-semibold tracking-tight text-[#111827]">{title}</h3>
+      <div className="mt-4 space-y-3 text-sm leading-relaxed text-[#6b7280]">{children}</div>
+    </aside>
+  );
+}
+
+export function SetupSummaryPanel({
+  agent,
+  businessName,
+  capabilities,
+  capabilityOptions,
+  enabledFieldLabels,
+  answerLabel,
+}: {
+  agent: string;
+  businessName: string;
+  capabilities: string[];
+  capabilityOptions: Array<{ id: string; label: string }>;
+  enabledFieldLabels: string[];
+  answerLabel: string;
+}) {
+  return (
+    <aside className="wizard-rail-card">
+      <h3 className="text-[15px] font-semibold tracking-tight text-[#111827]">{agent}&apos;s Setup</h3>
+
+      <div className="wizard-rail-section mt-5">
+        <div className="flex items-center gap-3">
+          <div
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#6366f1] text-sm font-bold text-white shadow-[0_4px_14px_rgba(99,102,241,0.35)]"
+          >
+            {agent.charAt(0)}
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-[#111827]">{agent}</p>
+            <p className="truncate text-xs text-[#6b7280]">{businessName || "Your business"}</p>
+          </div>
+        </div>
+      </div>
+
+      <ul className="mt-5 space-y-2.5">
+        {capabilityOptions.map((cap) => {
+          const enabled = capabilities.includes(cap.id);
+          return (
+            <li key={cap.id} className="flex items-center gap-2.5 text-[13px]">
+              <span
+                className={cn(
+                  "flex h-5 w-5 shrink-0 items-center justify-center rounded-full",
+                  enabled ? "bg-[#6366f1]/10 text-[#6366f1]" : "bg-[#f3f4f6] text-[#d1d5db]",
+                )}
+              >
+                {enabled ? (
+                  <Check className="h-3 w-3" strokeWidth={3} />
+                ) : (
+                  <Minus className="h-3 w-3" strokeWidth={2} />
+                )}
+              </span>
+              <span className={enabled ? "font-medium text-[#374151]" : "text-[#9ca3af]"}>
+                {cap.label}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+
+      {enabledFieldLabels.length ? (
+        <div className="mt-5 border-t border-[#e6e8ef] pt-5">
+          <p className="wizard-rail-label">Collecting</p>
+          <p className="mt-1.5 text-[13px] leading-snug text-[#374151]">
+            {enabledFieldLabels.join(" · ")}
+          </p>
+        </div>
+      ) : null}
+
+      <div className="mt-5 border-t border-[#e6e8ef] pt-5">
+        <p className="wizard-rail-label">Answering</p>
+        <p className="mt-1.5 text-[13px] font-medium text-[#374151]">{answerLabel}</p>
+      </div>
+
+      <div className="mt-5 flex gap-2.5 rounded-xl border border-[#e6e8ef] bg-[#f8f9fc] px-3.5 py-3">
+        <Info className="mt-0.5 h-4 w-4 shrink-0 text-[#6366f1]" />
+        <p className="text-[11px] leading-relaxed text-[#6b7280]">
+          Capabilities control what tools the runtime exposes — prompt text cannot bypass disabled
+          actions.
+        </p>
+      </div>
+    </aside>
+  );
+}
+
+export function TestRecapPanel({
+  agent,
+  greeting,
+}: {
+  agent: string;
+  greeting: string;
+}) {
+  return (
+    <aside className="wizard-rail-card">
+      <h3 className="text-[15px] font-semibold tracking-tight text-[#111827]">Test Recap</h3>
+      <div className="mt-4 space-y-3 rounded-xl border border-[#e6e8ef] bg-[#f8f9fc] p-4 text-[12px] leading-relaxed">
+        <p>
+          <span className="font-semibold text-[#6366f1]">{agent}:</span> {greeting}
+        </p>
+        <p>
+          <span className="font-semibold text-[#111827]">Caller:</span> I need help with a service
+          request.
+        </p>
+        <p>
+          <span className="font-semibold text-[#6366f1]">{agent}:</span> I can help with that. What
+          type of service do you need?
+        </p>
+      </div>
+      <p className="mt-4 text-[11px] leading-relaxed text-[#6b7280]">
+        Run a browser test before activating to confirm voice and response quality.
+      </p>
     </aside>
   );
 }
@@ -144,7 +299,7 @@ export function WizardSection({
   action?: ReactNode;
 }) {
   return (
-    <div className="rounded-xl border border-[#e6e8ef] bg-white p-5">
+    <div className="rounded-xl border border-[#e6e8ef] bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
       <div className="mb-4 flex items-start justify-between gap-4">
         <div className="flex items-start gap-3">
           <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#6366f1]/10 text-xs font-bold text-[#6366f1]">
@@ -185,7 +340,7 @@ export function WizardFooter({
   showBack?: boolean;
 }) {
   return (
-    <div className="mt-8 flex items-center justify-between border-t border-[#e6e8ef] pt-6">
+    <div className="mt-6 flex items-center justify-between border-t border-[#e6e8ef] pt-5">
       <div>
         {showBack && onBack ? (
           <button

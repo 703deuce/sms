@@ -30,8 +30,10 @@ import {
   CapabilityCard,
   FieldChip,
   SelectableCard,
-  SidePanel,
+  SetupSummaryPanel,
   WizardFooter,
+  WizardPageHeader,
+  WizardPageLayout,
   WizardSection,
 } from "../ui";
 
@@ -124,23 +126,27 @@ export function CapabilitiesStep({
   const enabledFields = advanced.callerFields.filter((f) => f.enabled);
 
   return (
-    <div className="flex flex-col gap-8 lg:flex-row">
-      <div className="min-w-0 flex-1">
-        <div className="mb-8 flex items-start gap-4">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#6366f1]/10">
-            <Bot className="h-6 w-6 text-[#6366f1]" />
-          </div>
-          <div>
-            <h1 className="font-display text-2xl font-semibold tracking-tight text-[#111827]">
-              What {agent} Should Do
-            </h1>
-            <p className="mt-1 text-sm text-[#6b7280]">
-              Choose capabilities, routing, and what information to collect.
-            </p>
-          </div>
-        </div>
+    <WizardPageLayout
+      aside={
+        <SetupSummaryPanel
+          agent={agent}
+          businessName={state.businessName}
+          capabilities={state.capabilities}
+          capabilityOptions={CAPABILITY_OPTIONS}
+          enabledFieldLabels={enabledFields.map((f) => f.label)}
+          answerLabel={
+            ANSWER_TIMING_OPTIONS.find((o) => o.id === state.answerTiming)?.label || "Every call"
+          }
+        />
+      }
+    >
+      <WizardPageHeader
+        icon={<Bot className="h-5 w-5 text-[#6366f1]" />}
+        title={`What ${agent} Should Do`}
+        subtitle="Choose capabilities, routing, and what information to collect."
+      />
 
-        <WizardSection number={1} title={`What can ${agent} do?`}>
+      <WizardSection number={1} title={`What can ${agent} do?`}>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {CAPABILITY_OPTIONS.map((cap) => {
               const meta = CAPABILITY_ICONS[cap.id];
@@ -161,7 +167,7 @@ export function CapabilitiesStep({
           </div>
         </WizardSection>
 
-        <div className="mt-6">
+      <div className="mt-5">
           <WizardSection number={2} title={`When should ${agent} answer?`}>
             <div className="grid gap-3 sm:grid-cols-2">
               {ANSWER_TIMING_OPTIONS.map((opt) => {
@@ -182,8 +188,8 @@ export function CapabilitiesStep({
           </WizardSection>
         </div>
 
-        {showCollect ? (
-          <div className="mt-6">
+      {showCollect ? (
+        <div className="mt-5">
             <WizardSection number={3} title="Information to collect">
               <div className="flex flex-wrap gap-2">
                 {advanced.callerFields.map((field) => (
@@ -203,8 +209,8 @@ export function CapabilitiesStep({
           </div>
         ) : null}
 
-        {bookAppts ? (
-          <div className="mt-6 voice-card p-5">
+      {bookAppts ? (
+        <div className="mt-5 voice-card p-5">
             <div className="flex items-center gap-2 text-sm font-semibold text-[#111827]">
               <Calendar className="h-4 w-4 text-[#6366f1]" />
               Appointment Booking
@@ -255,7 +261,7 @@ export function CapabilitiesStep({
         ) : null}
 
         {transferCalls ? (
-          <div className="mt-6 voice-card p-5">
+          <div className="mt-5 voice-card p-5">
             <div className="flex items-center gap-2 text-sm font-semibold text-[#111827]">
               <PhoneForwarded className="h-4 w-4 text-[#6366f1]" />
               Call Transfers
@@ -314,7 +320,7 @@ export function CapabilitiesStep({
         ) : null}
 
         {takeMessages ? (
-          <div className="mt-6 voice-card p-5">
+          <div className="mt-5 voice-card p-5">
             <div className="flex items-center gap-2 text-sm font-semibold text-[#111827]">
               <MessageSquare className="h-4 w-4 text-[#6366f1]" />
               When {agent} Takes a Message
@@ -351,7 +357,7 @@ export function CapabilitiesStep({
         ) : null}
 
         {sendText ? (
-          <div className="mt-6 voice-card p-5">
+          <div className="mt-5 voice-card p-5">
             <div className="flex items-center gap-2 text-sm font-semibold text-[#111827]">
               <MessageSquare className="h-4 w-4 text-[#6366f1]" />
               Text Messages
@@ -366,7 +372,7 @@ export function CapabilitiesStep({
           </div>
         ) : null}
 
-        <div className="mt-6 voice-card p-5">
+        <div className="mt-5 voice-card p-5">
           <div className="flex items-center gap-2 text-sm font-semibold text-[#111827]">
             <Upload className="h-4 w-4 text-[#6366f1]" />
             Give {agent} More Knowledge
@@ -390,61 +396,21 @@ export function CapabilitiesStep({
           </div>
         </div>
 
-        <WizardFooter
-          showBack
-          onBack={onBack}
-          onContinue={() => {
-            if (bookAppts && !calendarConnected) {
-              setIntegrationError(
-                "Connect Calendly or Google / Outlook before continuing — booking needs a live calendar.",
-              );
-              return;
-            }
-            setIntegrationError("");
-            onContinue();
-          }}
-          busy={busy}
-        />
-      </div>
-
-      <SidePanel title={`${agent}'s Setup`}>
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#6366f1] text-sm font-bold text-white">
-            {agent.charAt(0)}
-          </div>
-          <div>
-            <p className="font-semibold text-[#111827]">{agent}</p>
-            <p className="text-xs text-[#6b7280]">{state.businessName || "Your business"}</p>
-          </div>
-        </div>
-        <ul className="mt-4 space-y-1.5 text-sm">
-          {CAPABILITY_OPTIONS.map((c) => (
-            <li key={c.id} className="flex items-center gap-2 text-[#374151]">
-              <span className={state.capabilities.includes(c.id) ? "text-[#6366f1]" : "text-[#d1d5db]"}>
-                {state.capabilities.includes(c.id) ? "✓" : "—"}
-              </span>
-              {c.label}
-            </li>
-          ))}
-        </ul>
-        {enabledFields.length ? (
-          <div className="mt-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-[#9ca3af]">Collecting</p>
-            <p className="mt-1 text-sm text-[#374151]">
-              {enabledFields.map((f) => f.label).join(" · ")}
-            </p>
-          </div>
-        ) : null}
-        <div className="mt-4">
-          <p className="text-xs font-semibold uppercase tracking-wide text-[#9ca3af]">Answering</p>
-          <p className="mt-1 text-sm text-[#374151]">
-            {ANSWER_TIMING_OPTIONS.find((o) => o.id === state.answerTiming)?.label || "Every call"}
-          </p>
-        </div>
-        <div className="mt-4 rounded-lg bg-[#6366f1]/5 p-3 text-xs text-[#6b7280]">
-          Capabilities control what tools the runtime exposes — prompt text cannot bypass disabled actions.
-        </div>
-      </SidePanel>
-    </div>
+      <WizardFooter
+        showBack
+        onBack={onBack}
+        onContinue={() => {
+          if (bookAppts && !calendarConnected) {
+            setIntegrationError(
+              "Connect Calendly or Google / Outlook before continuing — booking needs a live calendar.",
+            );
+            return;
+          }
+          setIntegrationError("");
+          onContinue();
+        }}
+        busy={busy}
+      />
+    </WizardPageLayout>
   );
 }

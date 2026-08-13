@@ -22,7 +22,7 @@ export function ReceptionistEditorShell({
   saveBusy?: boolean;
 }) {
   return (
-    <div className="mx-auto max-w-[1200px] px-4 py-6 sm:px-8">
+    <div className="mx-auto max-w-[1280px] px-4 py-5 sm:px-6 lg:px-8">
       <div className="mb-6 flex items-center justify-between">
         <Link
           href="/voice/agents"
@@ -62,7 +62,7 @@ export function ReceptionistEditorShell({
         </div>
       ) : null}
 
-      <div className="mb-8 border-b border-[#e6e8ef] pb-6">
+      <div className="mb-6 border-b border-[#e6e8ef] pb-5">
         <ReceptionistFlowStepper agentId={agentId} createMode={createMode} />
       </div>
 

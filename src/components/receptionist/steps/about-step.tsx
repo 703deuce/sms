@@ -7,7 +7,7 @@ import {
 } from "@/lib/receptionist-wizard/types";
 import { defaultAgentJobInstructions } from "@/lib/receptionist-wizard/defaults";
 import { Bot, Check, Sparkles } from "lucide-react";
-import { SidePanel, WizardFooter, WizardSection } from "../ui";
+import { SidePanel, WizardFooter, WizardPageHeader, WizardPageLayout, WizardSection } from "../ui";
 
 function wordCount(text: string): number {
   return text.trim() ? text.trim().split(/\s+/).length : 0;
@@ -50,23 +50,61 @@ export function AboutStep({
   }
 
   return (
-    <div className="flex flex-col gap-8 lg:flex-row">
-      <div className="min-w-0 flex-1">
-        <div className="mb-8 flex items-start gap-4">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#6366f1]/10">
-            <Bot className="h-6 w-6 text-[#6366f1]" />
+    <WizardPageLayout
+      aside={
+        <SidePanel
+          title="What happens next?"
+          illustration={
+            <div className="flex justify-center">
+              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#6366f1] shadow-[0_8px_24px_rgba(99,102,241,0.35)]">
+                <Sparkles className="h-6 w-6 text-white" />
+              </div>
+            </div>
+          }
+        >
+          <ul className="space-y-3.5">
+            {[
+              "Set business information, personality, and job instructions.",
+              "Choose capabilities, collection fields, and integrations.",
+              "Test your receptionist and activate on a phone number.",
+            ].map((text, i) => (
+              <li key={text} className="flex gap-3">
+                <span
+                  className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#6366f1]/10 text-[10px] font-bold text-[#6366f1]"
+                >
+                  {i + 1}
+                </span>
+                <span className="text-[13px] leading-snug text-[#374151]">{text}</span>
+              </li>
+            ))}
+          </ul>
+          <div className="mt-5 border-t border-[#e6e8ef] pt-5">
+            <p className="wizard-rail-label">Top Tips for {agent}</p>
+            <ul className="mt-3 space-y-2">
+              {[
+                "Keep your instructions clear and concise.",
+                "Specify your business hours and location.",
+                "Give clear instructions on what to collect.",
+                "Review and refine setup over time.",
+                "Test your voice agent often.",
+              ].map((tip) => (
+                <li key={tip} className="flex items-start gap-2 text-[12px] leading-snug text-[#6b7280]">
+                  <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" strokeWidth={3} />
+                  {tip}
+                </li>
+              ))}
+            </ul>
           </div>
-          <div>
-            <h1 className="font-display text-2xl font-semibold tracking-tight text-[#111827]">
-              About Your Receptionist
-            </h1>
-            <p className="mt-1 text-sm text-[#6b7280]">
-              Tell us about your business and your receptionist&apos;s personality.
-            </p>
-          </div>
-        </div>
+        </SidePanel>
+      }
+    >
+      <WizardPageHeader
+        icon={<Bot className="h-5 w-5 text-[#6366f1]" />}
+        title="About Your Receptionist"
+        subtitle="Tell us about your business and your receptionist's personality."
+      />
 
-        <div className="mb-6 grid gap-4 sm:grid-cols-3">
+      <div className="mb-5 grid gap-3 sm:grid-cols-3">
           <div>
             <Label htmlFor="agent-name" className="text-xs font-semibold text-[#374151]">
               Agent Name
@@ -109,7 +147,7 @@ export function AboutStep({
           </div>
         </div>
 
-        <div className="space-y-5">
+        <div className="space-y-4">
           <WizardSection
             number={1}
             title="Tell us about your business"
@@ -237,58 +275,6 @@ export function AboutStep({
         </div>
 
         <WizardFooter onCancel={onCancel} onContinue={onContinue} busy={busy} />
-      </div>
-
-      <SidePanel
-        title="What happens next?"
-        illustration={
-          <div className="flex justify-center">
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[#6366f1] shadow-[0_8px_24px_rgba(99,102,241,0.35)]">
-              <Sparkles className="h-7 w-7 text-white" />
-            </div>
-          </div>
-        }
-      >
-        <ul className="space-y-4 text-sm">
-          <li className="flex gap-3">
-            <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#6366f1]/10 text-[10px] font-bold text-[#6366f1]">
-              1
-            </span>
-            <span>Set business information, personality, and job instructions.</span>
-          </li>
-          <li className="flex gap-3">
-            <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#6366f1]/10 text-[10px] font-bold text-[#6366f1]">
-              2
-            </span>
-            <span>Choose capabilities, collection fields, and integrations.</span>
-          </li>
-          <li className="flex gap-3">
-            <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#6366f1]/10 text-[10px] font-bold text-[#6366f1]">
-              3
-            </span>
-            <span>Test your receptionist and activate on a phone number.</span>
-          </li>
-        </ul>
-        <div className="mt-6 border-t border-[#e6e8ef] pt-5">
-          <p className="text-xs font-semibold uppercase tracking-wide text-[#9ca3af]">
-            Top Tips for {agent}
-          </p>
-          <ul className="mt-3 space-y-2">
-            {[
-              "Keep your instructions clear and concise.",
-              "Specify your business hours and location.",
-              "Give clear instructions on what to collect.",
-              "Review and refine setup over time.",
-              "Test your voice agent often.",
-            ].map((tip) => (
-              <li key={tip} className="flex items-start gap-2 text-xs text-[#6b7280]">
-                <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
-                {tip}
-              </li>
-            ))}
-          </ul>
-        </div>
-      </SidePanel>
-    </div>
+    </WizardPageLayout>
   );
 }

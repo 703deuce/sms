@@ -65,3 +65,29 @@
   border-color: #6366f1;
   color: #6366f1;
 }
+
+/* Wizard layout — main column + narrow sticky rail */
+.wizard-rail-card {
+  border-radius: 16px;
+  border: 1px solid #e6e8ef;
+  background: #ffffff;
+  padding: 24px;
+  box-shadow:
+    0 1px 2px rgb(15 23 42 / 0.04),
+    0 12px 32px rgb(15 23 42 / 0.05);
+}
+
+.wizard-rail-section {
+  border-radius: 12px;
+  border: 1px solid #e6e8ef;
+  background: #f8f9fc;
+  padding: 16px;
+}
+
+.wizard-rail-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #9ca3af;
+}
