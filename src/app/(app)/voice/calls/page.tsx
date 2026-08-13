@@ -1,10 +1,17 @@
 "use client";
 
-import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { PageHeader } from "@/components/ui/page-header";
-import { VoiceSubNav } from "@/components/voice/voice-subnav";
+import { CallOutcomeBadge } from "@/components/calls/call-outcome-badge";
+import { CallsMetrics } from "@/components/calls/calls-metrics";
+import { InlineRecordingButton } from "@/components/calls/inline-recording-button";
+import {
+  deriveCallOutcomeBadge,
+  fmtCallDateTime,
+  fmtCallDuration,
+  fmtCallPhone,
+  type CallListFilter,
+} from "@/lib/voice/calls/display";
 import { cn } from "@/lib/utils";
+import { ChevronRight, Search, SlidersHorizontal, User } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
@@ -27,70 +34,56 @@ type CallRow = {
   isLead?: boolean | null;
   transferred?: boolean;
   voicemailDetected?: boolean;
+  appointmentBooked?: boolean;
   hasRecording?: boolean;
+  recordingId?: string | null;
   hasTranscript?: boolean;
 };
 
 type Analytics = {
-  today: number;
-  aiHandledToday: number;
-  transferredToday: number;
-  leadsToday: number;
-  avgDurationSecToday: number | null;
+  answered: number;
+  leads: number;
+  appointments: number;
+  talkTimeSeconds: number;
+  answeredChangePct: number | null;
+  leadsChangePct: number | null;
+  appointmentsChangePct: number | null;
+  talkTimeChangePct: number | null;
 };
 
-function fmtDuration(sec?: number | null) {
-  if (sec == null) return "—";
-  const m = Math.floor(sec / 60);
-  const s = sec % 60;
-  return `${m}m ${String(s).padStart(2, "0")}s`;
-}
+const FILTERS: { id: CallListFilter; label: string }[] = [
+  { id: "all", label: "All calls" },
+  { id: "leads", label: "Leads" },
+  { id: "messages", label: "Messages" },
+  { id: "booked", label: "Booked" },
+  { id: "transferred", label: "Transferred" },
+  { id: "spam", label: "Spam" },
+];
 
-function dayLabel(iso: string) {
-  const d = new Date(iso);
-  const today = new Date();
-  const yest = new Date();
-  yest.setDate(today.getDate() - 1);
-  if (d.toDateString() === today.toDateString()) return "Today";
-  if (d.toDateString() === yest.toDateString()) return "Yesterday";
-  return d.toLocaleDateString(undefined, {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-  });
-}
-
-function answeredLabel(c: CallRow) {
-  if (c.transferred) return "Transferred";
-  if (c.voicemailDetected) return "Voicemail";
-  if (c.status === "NO_ANSWER" || c.status === "BUSY" || c.status === "CANCELLED") {
-    return "Missed";
-  }
-  if (
-    c.status === "COMPLETED" ||
-    c.status === "IN_PROGRESS" ||
-    c.status === "ANSWERED" ||
-    c.hasRecording ||
-    c.hasTranscript
-  ) {
-    return "AI Answered";
-  }
-  return c.status.replace(/_/g, " ");
-}
+const DATE_RANGES = [
+  { id: "today", label: "Today" },
+  { id: "7d", label: "Last 7 days" },
+  { id: "30d", label: "Last 30 days" },
+] as const;
 
 export default function VoiceCallsPage() {
   const [rows, setRows] = useState<CallRow[]>([]);
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
-  const [showTest, setShowTest] = useState(false);
-  const [direction, setDirection] = useState("");
+  const [filter, setFilter] = useState<CallListFilter>("all");
+  const [dateRange, setDateRange] = useState<string>("7d");
   const [q, setQ] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const perPage = 10;
 
   useEffect(() => {
+    setLoading(true);
     const params = new URLSearchParams({
       limit: "100",
-      test: showTest ? "1" : "0",
+      test: "0",
+      filter,
+      dateRange,
     });
-    if (direction) params.set("direction", direction);
     if (q.trim()) params.set("q", q.trim());
     fetch(`/api/voice/calls?${params}`)
       .then((r) => r.json())
@@ -98,168 +91,193 @@ export default function VoiceCallsPage() {
         setRows(j.data || []);
         setAnalytics(j.analytics || null);
       })
-      .catch(() => undefined);
-  }, [showTest, direction, q]);
+      .catch(() => undefined)
+      .finally(() => setLoading(false));
+  }, [filter, dateRange, q]);
 
-  const grouped = useMemo(() => {
-    const map = new Map<string, CallRow[]>();
-    for (const c of rows) {
-      const key = dayLabel(c.startedAt);
-      const list = map.get(key) || [];
-      list.push(c);
-      map.set(key, list);
-    }
-    return [...map.entries()];
-  }, [rows]);
+  const totalPages = Math.max(1, Math.ceil(rows.length / perPage));
+  const pageRows = useMemo(() => {
+    const start = (page - 1) * perPage;
+    return rows.slice(start, start + perPage);
+  }, [rows, page]);
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
 
   return (
-    <div>
-      <PageHeader
-        title="Calls"
-        description="AI call history — recordings, transcripts, summaries, and outcomes."
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <Input
-              className="h-8 w-44 text-xs"
-              placeholder="Search number…"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-            />
-            <select
-              className="h-8 rounded-md border border-border bg-background px-2 text-xs"
-              value={direction}
-              onChange={(e) => setDirection(e.target.value)}
-            >
-              <option value="">All directions</option>
-              <option value="INBOUND">Inbound</option>
-              <option value="OUTBOUND">Outbound</option>
-            </select>
-            <div className="flex rounded-lg border border-border p-0.5 text-xs">
-              <button
-                type="button"
-                className={cn(
-                  "rounded-md px-3 py-1.5 font-medium",
-                  !showTest ? "bg-muted" : "text-muted-foreground",
-                )}
-                onClick={() => setShowTest(false)}
-              >
-                Production
-              </button>
-              <button
-                type="button"
-                className={cn(
-                  "rounded-md px-3 py-1.5 font-medium",
-                  showTest ? "bg-muted" : "text-muted-foreground",
-                )}
-                onClick={() => setShowTest(true)}
-              >
-                Test calls
-              </button>
-            </div>
-          </div>
-        }
-      />
-      <VoiceSubNav />
+    <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
+      <div className="mb-6">
+        <h1 className="font-display text-2xl font-semibold tracking-tight text-[#111827]">Calls</h1>
+        <p className="mt-1 text-sm text-[#6b7280]">
+          Keep track of all call activity for your AI receptionist.
+        </p>
+      </div>
 
-      {analytics ? (
-        <div className="mb-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-          {[
-            ["Calls today", analytics.today],
-            ["AI handled", analytics.aiHandledToday],
-            ["Transfers", analytics.transferredToday],
-            ["Leads", analytics.leadsToday],
-            [
-              "Avg duration",
-              analytics.avgDurationSecToday != null
-                ? fmtDuration(analytics.avgDurationSecToday)
-                : "—",
-            ],
-          ].map(([label, value]) => (
-            <Card key={String(label)} className="p-3">
-              <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                {label}
-              </p>
-              <p className="mt-1 text-xl font-semibold tabular-nums">{value}</p>
-            </Card>
+      {analytics ? <CallsMetrics metrics={analytics} /> : null}
+
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="relative max-w-md flex-1">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9ca3af]" />
+          <input
+            type="search"
+            placeholder="Search calls…"
+            value={q}
+            onChange={(e) => {
+              setPage(1);
+              setQ(e.target.value);
+            }}
+            className="h-10 w-full rounded-lg border border-[#e5e7eb] bg-white pl-9 pr-3 text-sm shadow-sm placeholder:text-[#9ca3af] focus:border-[#6366f1] focus:outline-none focus:ring-2 focus:ring-[#6366f1]/20"
+          />
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            value={dateRange}
+            onChange={(e) => {
+              setPage(1);
+              setDateRange(e.target.value);
+            }}
+            className="h-10 rounded-lg border border-[#e5e7eb] bg-white px-3 text-sm text-[#374151] shadow-sm"
+          >
+            {DATE_RANGES.map((d) => (
+              <option key={d.id} value={d.id}>{d.label}</option>
+            ))}
+          </select>
+          <button
+            type="button"
+            className="flex h-10 items-center gap-1.5 rounded-lg border border-[#e5e7eb] bg-white px-3 text-sm text-[#374151] shadow-sm"
+            title="More filters coming soon"
+          >
+            <SlidersHorizontal className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+
+      <div className="mb-4 flex flex-wrap gap-2">
+        {FILTERS.map((f) => (
+          <button
+            key={f.id}
+            type="button"
+            onClick={() => {
+              setPage(1);
+              setFilter(f.id);
+            }}
+            className={cn(
+              "rounded-full px-3.5 py-1.5 text-sm font-medium transition",
+              filter === f.id
+                ? "bg-[#6366f1] text-white shadow-sm"
+                : "bg-white text-[#6b7280] ring-1 ring-inset ring-[#e5e7eb] hover:bg-[#f9fafb]",
+            )}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="overflow-hidden rounded-xl border border-[#e5e7eb] bg-white shadow-sm">
+        <div className="hidden border-b border-[#e5e7eb] bg-[#f9fafb] px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-[#6b7280] md:grid md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_auto_auto_minmax(0,1.6fr)_auto_auto] md:gap-4">
+          <span>User</span>
+          <span>Date & Time</span>
+          <span>Duration</span>
+          <span>Outcome</span>
+          <span>Summary</span>
+          <span>Recording</span>
+          <span className="w-6" />
+        </div>
+
+        {loading ? (
+          <div className="px-4 py-12 text-center text-sm text-[#6b7280]">Loading calls…</div>
+        ) : pageRows.length === 0 ? (
+          <div className="px-4 py-12 text-center text-sm text-[#6b7280]">
+            No calls match your filters yet.
+          </div>
+        ) : (
+          pageRows.map((c) => {
+            const callerPhone =
+              c.direction === "INBOUND" ? c.fromE164 : c.toE164;
+            const callerName = c.contactName?.trim() || "Unknown Caller";
+            const dt = fmtCallDateTime(c.startedAt);
+            const outcome = deriveCallOutcomeBadge(c);
+
+            return (
+              <Link
+                key={c.id}
+                href={`/voice/calls/${c.id}`}
+                className="block border-b border-[#f3f4f6] px-4 py-4 transition hover:bg-[#fafafa] last:border-b-0 md:grid md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_auto_auto_minmax(0,1.6fr)_auto_auto] md:items-center md:gap-4"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#eef2ff] text-[#6366f1]">
+                    <User className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-[#111827]">{callerName}</p>
+                    <p className="truncate text-xs text-[#6b7280]">{fmtCallPhone(callerPhone)}</p>
+                  </div>
+                </div>
+
+                <div className="mt-3 md:mt-0">
+                  <p className="text-sm text-[#111827]">{dt.primary}</p>
+                  <p className="text-xs text-[#6b7280]">{dt.secondary}</p>
+                </div>
+
+                <p className="mt-2 text-sm tabular-nums text-[#374151] md:mt-0">
+                  {fmtCallDuration(c.durationSeconds)}
+                </p>
+
+                <div className="mt-2 md:mt-0">
+                  <CallOutcomeBadge outcome={outcome} />
+                </div>
+
+                <p className="mt-2 line-clamp-2 text-sm text-[#4b5563] md:mt-0">
+                  {c.summary || c.intent?.replace(/_/g, " ") || "No summary yet."}
+                </p>
+
+                <div className="mt-2 md:mt-0">
+                  {c.recordingId ? (
+                    <InlineRecordingButton
+                      recordingId={c.recordingId}
+                      durationSeconds={c.durationSeconds}
+                    />
+                  ) : (
+                    <span className="text-xs text-[#9ca3af]">—</span>
+                  )}
+                </div>
+
+                <ChevronRight className="mt-2 h-5 w-5 text-[#9ca3af] md:mt-0" />
+              </Link>
+            );
+          })
+        )}
+      </div>
+
+      <div className="mt-4 flex flex-col items-center justify-between gap-3 sm:flex-row">
+        <p className="text-sm text-[#6b7280]">
+          Showing {pageRows.length} of {rows.length} calls
+        </p>
+        <div className="flex items-center gap-1">
+          {Array.from({ length: totalPages }, (_, i) => i + 1).slice(0, 5).map((n) => (
+            <button
+              key={n}
+              type="button"
+              onClick={() => setPage(n)}
+              className={cn(
+                "flex h-8 w-8 items-center justify-center rounded-md text-sm font-medium",
+                page === n
+                  ? "bg-[#6366f1] text-white"
+                  : "text-[#6b7280] hover:bg-[#f3f4f6]",
+              )}
+            >
+              {n}
+            </button>
           ))}
         </div>
-      ) : null}
-
-      <div className="space-y-6">
-        {grouped.map(([day, list]) => (
-          <div key={day}>
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              {day}
-            </p>
-            <Card className="divide-y divide-border overflow-hidden p-0">
-              {list.map((c) => (
-                <Link
-                  key={c.id}
-                  href={`/voice/calls/${c.id}`}
-                  className="block px-4 py-3 transition-colors hover:bg-muted/40"
-                >
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="min-w-0 space-y-1">
-                      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                        <span className="font-medium text-foreground">
-                          {c.direction === "INBOUND" ? "Incoming" : "Outgoing"}
-                        </span>
-                        <span>·</span>
-                        <span>{answeredLabel(c)}</span>
-                        <span>·</span>
-                        <span>
-                          {new Date(c.startedAt).toLocaleTimeString([], {
-                            hour: "numeric",
-                            minute: "2-digit",
-                          })}
-                        </span>
-                      </div>
-                      <p className="truncate text-sm font-medium">
-                        {c.contactName ||
-                          (c.direction === "INBOUND" ? c.fromE164 : c.toE164)}
-                      </p>
-                      <p className="truncate text-xs text-muted-foreground">
-                        {c.summary ||
-                          c.intent?.replace(/_/g, " ") ||
-                          c.agentName ||
-                          "No summary yet"}
-                      </p>
-                    </div>
-                    <div className="flex shrink-0 flex-col items-end gap-1 text-xs">
-                      <span className="tabular-nums text-muted-foreground">
-                        {fmtDuration(c.durationSeconds)}
-                      </span>
-                      <div className="flex flex-wrap justify-end gap-1">
-                        {c.isLead ? (
-                          <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-800">
-                            Lead
-                          </span>
-                        ) : null}
-                        {c.hasRecording ? (
-                          <span className="rounded bg-muted px-1.5 py-0.5 text-[10px]">
-                            Recording
-                          </span>
-                        ) : null}
-                        {c.hasTranscript || c.summary ? (
-                          <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] text-sky-800">
-                            Summary
-                          </span>
-                        ) : null}
-                      </div>
-                    </div>
-                  </div>
-                </Link>
-              ))}
-            </Card>
-          </div>
-        ))}
-        {!rows.length ? (
-          <Card className="p-6 text-sm text-muted-foreground">
-            {showTest
-              ? "No test calls yet. Run one from the agent builder."
-              : "No production calls yet."}
-          </Card>
-        ) : null}
+        <select
+          className="h-8 rounded-lg border border-[#e5e7eb] bg-white px-2 text-xs text-[#6b7280]"
+          value={perPage}
+          disabled
+        >
+          <option value={10}>10 rows</option>
+        </select>
       </div>
     </div>
   );

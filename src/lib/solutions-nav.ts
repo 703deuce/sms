@@ -5,6 +5,7 @@ import {
   KeyRound,
   LayoutDashboard,
   Megaphone,
+  PhoneCall,
   Puzzle,
   Settings,
   Users,
@@ -26,7 +27,11 @@ export type SolutionsNavOptions = {
 };
 
 /** Paths that belong under the AI Receptionist sidebar section. */
-export const RECEPTIONIST_SECTION_PREFIXES = ["/voice/receptionist", "/voice/agents"] as const;
+export const RECEPTIONIST_SECTION_PREFIXES = [
+  "/voice/receptionist",
+  "/voice/agents",
+  "/voice/calls",
+] as const;
 
 export function isReceptionistSectionPath(pathname: string): boolean {
   return RECEPTIONIST_SECTION_PREFIXES.some(
@@ -73,6 +78,7 @@ export function buildProductNav(options: SolutionsNavOptions = {}): NavItem[] {
       icon: AudioLines,
       children: buildReceptionistNavChildren(agentId),
     },
+    { label: "Calls", href: "/voice/calls", icon: PhoneCall },
     { label: "Phone Numbers", href: "/numbers", icon: Hash },
     { label: "Settings", href: "/settings/business", icon: Settings },
     { label: "Contacts", href: "/contacts", icon: Users },

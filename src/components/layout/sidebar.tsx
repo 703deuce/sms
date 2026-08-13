@@ -315,8 +315,12 @@ export function Sidebar({
           const childActive = sectionHasActiveChild(item.children, pathname, search);
           const receptionistOwned =
             item.label === "AI Receptionist" && isReceptionistSectionPath(pathname);
+          const callsOwned =
+            item.href === "/voice/calls" &&
+            (pathname === "/voice/calls" || pathname.startsWith("/voice/calls/"));
           const ownedOutcome =
             receptionistOwned ||
+            callsOwned ||
             pathname.startsWith(`${hrefPath(item.href)}/`) ||
             pathname === hrefPath(item.href);
           const expandKey = itemExpandKey(item);

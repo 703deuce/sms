@@ -78,6 +78,7 @@ const solutionsHrefs = new Set(collectNavHrefs(solutionsNav));
 assert.ok(solutionsHrefs.has("/outcomes"), "Dashboard required");
 assert.ok(solutionsHrefs.has("/voice/receptionist"), "AI Receptionist landing required");
 assert.ok(solutionsHrefs.has("/voice/agents"), "My Agents required");
+assert.ok(solutionsHrefs.has("/voice/calls"), "Calls required");
 assert.ok(solutionsHrefs.has("/numbers"), "Phone Numbers required");
 assert.ok(solutionsHrefs.has("/contacts"), "Contacts required");
 assert.ok(solutionsHrefs.has("/integrations"), "Integrations required");
@@ -86,6 +87,7 @@ assert.ok(solutionsHrefs.has("/settings/business"), "Settings required");
 const expectedTopLevel = [
   "Dashboard",
   "AI Receptionist",
+  "Calls",
   "Phone Numbers",
   "Settings",
   "Contacts",
@@ -119,7 +121,6 @@ for (const slug of solutionsLaunchSlugs()) {
 
 const hiddenFromLaunch = [
   "Inbox",
-  "Calls",
   "Campaigns",
   "Phone",
   "Reports",

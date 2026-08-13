@@ -3,6 +3,84 @@ import { requireSession, jsonError } from "@/lib/api-auth";
 import { getPrisma } from "@/lib/db";
 import { initiateOutboundCall } from "@/lib/voice/call-service";
 
+function rangeStart(dateRange: string): Date | null {
+  const now = new Date();
+  if (dateRange === "today") {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }
+  if (dateRange === "7d") {
+    const d = new Date(now);
+    d.setDate(d.getDate() - 7);
+    return d;
+  }
+  if (dateRange === "30d") {
+    const d = new Date(now);
+    d.setDate(d.getDate() - 30);
+    return d;
+  }
+  return null;
+}
+
+function applyListFilter(where: Record<string, unknown>, filter: string): void {
+  if (filter === "leads") {
+    where.OR = [
+      { leadScore: { gte: 40 } },
+      { outcome: { contains: "lead", mode: "insensitive" } },
+    ];
+  } else if (filter === "messages") {
+    where.OR = [
+      { outcome: { contains: "message", mode: "insensitive" } },
+      { outcome: { contains: "callback", mode: "insensitive" } },
+      { outcome: { contains: "follow_up", mode: "insensitive" } },
+    ];
+  } else if (filter === "booked") {
+    where.appointmentBooked = true;
+  } else if (filter === "transferred") {
+    where.transferred = true;
+  } else if (filter === "spam") {
+    where.outcome = { contains: "spam", mode: "insensitive" };
+  } else if (filter === "no_action") {
+    where.AND = [
+      { appointmentBooked: false },
+      { transferred: false },
+      { OR: [{ outcome: null }, { outcome: "" }, { outcome: "no_action" }] },
+    ];
+  }
+}
+
+async function periodMetrics(
+  prisma: ReturnType<typeof getPrisma>,
+  workspaceId: string,
+  isTest: boolean,
+  from: Date,
+  to?: Date,
+) {
+  const where = {
+    workspaceId,
+    isTest,
+    startedAt: to ? { gte: from, lt: to } : { gte: from },
+  };
+  const [answered, leads, appointments, durationAgg] = await Promise.all([
+    prisma.voiceCall.count({ where: { ...where, answeredAt: { not: null } } }),
+    prisma.voiceCall.count({ where: { ...where, leadScore: { gte: 40 } } }),
+    prisma.voiceCall.count({ where: { ...where, appointmentBooked: true } }),
+    typeof prisma.voiceCall.aggregate === "function"
+      ? prisma.voiceCall.aggregate({
+          where: { ...where, durationSeconds: { not: null } },
+          _sum: { durationSeconds: true },
+        })
+      : Promise.resolve({ _sum: { durationSeconds: 0 } }),
+  ]);
+  return {
+    answered,
+    leads,
+    appointments,
+    talkTimeSeconds: durationAgg._sum.durationSeconds || 0,
+  };
+}
+
 export async function GET(request: Request) {
   try {
     const auth = await requireSession();
@@ -13,18 +91,36 @@ export async function GET(request: Request) {
     const status = url.searchParams.get("status");
     const isTest = url.searchParams.get("test");
     const q = (url.searchParams.get("q") || "").trim();
+    const filter = (url.searchParams.get("filter") || "all").toLowerCase();
+    const dateRange = (url.searchParams.get("dateRange") || "7d").toLowerCase();
 
     const where: Record<string, unknown> = { workspaceId: auth.workspaceId };
     if (direction) where.direction = direction.toUpperCase();
     if (status) where.status = status.toUpperCase();
     if (isTest === "1") where.isTest = true;
     if (isTest === "0") where.isTest = false;
+
+    const rangeFrom = rangeStart(dateRange);
+    if (rangeFrom) {
+      where.startedAt = { gte: rangeFrom };
+    }
+
+    applyListFilter(where, filter);
+
     if (q) {
-      where.OR = [
+      const searchOr = [
         { fromE164: { contains: q } },
         { toE164: { contains: q } },
         { outcome: { contains: q, mode: "insensitive" } },
       ];
+      if (where.OR) {
+        where.AND = [{ OR: where.OR as unknown[] }, { OR: searchOr }];
+        delete where.OR;
+      } else if (where.AND) {
+        (where.AND as unknown[]).push({ OR: searchOr });
+      } else {
+        where.OR = searchOr;
+      }
     }
 
     const prisma = getPrisma();
@@ -73,60 +169,52 @@ export async function GET(request: Request) {
       contacts.map((c) => [c.id, c]),
     );
 
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
-    const baseWhere = { workspaceId: auth.workspaceId, isTest: isTest === "1" };
-    let todayCount = 0;
-    let handledToday = 0;
-    let transferredToday = 0;
-    let leadsToday = 0;
-    let avgDurationSecToday: number | null = null;
+    const isTestBool = isTest === "1";
+    const periodDays = dateRange === "today" ? 1 : dateRange === "30d" ? 30 : 7;
+    const currentStart = rangeStart(dateRange === "today" ? "today" : "7d")!;
+    const previousStart = new Date(currentStart);
+    previousStart.setDate(previousStart.getDate() - periodDays);
+
+    let metrics = {
+      answered: 0,
+      leads: 0,
+      appointments: 0,
+      talkTimeSeconds: 0,
+      answeredChangePct: null as number | null,
+      leadsChangePct: null as number | null,
+      appointmentsChangePct: null as number | null,
+      talkTimeChangePct: null as number | null,
+    };
+
     try {
-      const [t, h, x, l, avgAgg] = await Promise.all([
-        prisma.voiceCall.count({
-          where: { ...baseWhere, startedAt: { gte: startOfDay } },
-        }),
-        prisma.voiceCall.count({
-          where: {
-            ...baseWhere,
-            startedAt: { gte: startOfDay },
-            answeredAt: { not: null },
-          },
-        }),
-        prisma.voiceCall.count({
-          where: {
-            ...baseWhere,
-            startedAt: { gte: startOfDay },
-            transferred: true,
-          },
-        }),
-        prisma.voiceCall.count({
-          where: {
-            ...baseWhere,
-            startedAt: { gte: startOfDay },
-            leadScore: { gte: 40 },
-          },
-        }),
-        typeof prisma.voiceCall.aggregate === "function"
-          ? prisma.voiceCall.aggregate({
-              where: {
-                ...baseWhere,
-                startedAt: { gte: startOfDay },
-                durationSeconds: { not: null },
-              },
-              _avg: { durationSeconds: true },
-            })
-          : Promise.resolve({ _avg: { durationSeconds: null } }),
-      ]);
-      todayCount = t;
-      handledToday = h;
-      transferredToday = x;
-      leadsToday = l;
-      avgDurationSecToday = avgAgg._avg.durationSeconds
-        ? Math.round(avgAgg._avg.durationSeconds)
-        : null;
+      const current = await periodMetrics(
+        prisma,
+        auth.workspaceId,
+        isTestBool,
+        currentStart,
+      );
+      const previous = await periodMetrics(
+        prisma,
+        auth.workspaceId,
+        isTestBool,
+        previousStart,
+        currentStart,
+      );
+      const pct = (c: number, p: number) =>
+        p === 0 ? (c > 0 ? 100 : null) : Math.round(((c - p) / p) * 100);
+
+      metrics = {
+        answered: current.answered,
+        leads: current.leads,
+        appointments: current.appointments,
+        talkTimeSeconds: current.talkTimeSeconds,
+        answeredChangePct: pct(current.answered, previous.answered),
+        leadsChangePct: pct(current.leads, previous.leads),
+        appointmentsChangePct: pct(current.appointments, previous.appointments),
+        talkTimeChangePct: pct(current.talkTimeSeconds, previous.talkTimeSeconds),
+      };
     } catch {
-      // Analytics helpers are best-effort — call list must still return.
+      // Analytics best-effort
     }
 
     return NextResponse.json({
@@ -136,6 +224,7 @@ export async function GET(request: Request) {
         const contactName = contact
           ? [contact.firstName, contact.lastName].filter(Boolean).join(" ")
           : null;
+        const recordingId = c.recordings?.[0]?.id ?? null;
         return {
           id: c.id,
           direction: c.direction,
@@ -161,17 +250,12 @@ export async function GET(request: Request) {
           intent: insight?.intent || null,
           sentiment: insight?.sentiment || null,
           isLead: insight?.isLead ?? (c.leadScore != null && c.leadScore >= 40),
-          hasRecording: (c.recordings?.length || 0) > 0,
+          hasRecording: Boolean(recordingId),
+          recordingId,
           hasTranscript: (c.transcripts?.length || 0) > 0,
         };
       }),
-      analytics: {
-        today: todayCount,
-        aiHandledToday: handledToday,
-        transferredToday,
-        leadsToday,
-        avgDurationSecToday,
-      },
+      analytics: metrics,
     });
   } catch (err) {
     return jsonError(err, 500);
