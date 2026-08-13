@@ -134,11 +134,11 @@ for (const blockType of requiredBlocks) {
   );
 }
 
-// --- 6. Nav: launch sidebar centers on AI Receptionist + SMS ---
+// --- 6. Nav: flat mockup sidebar centers on My Receptionist ---
 assert.equal(solutionsNav[0]?.label, "Dashboard");
-assert.equal(solutionsNav[1]?.label, "AI Receptionist");
-assert.equal(solutionsNav[2]?.label, "Missed Call Text Back");
-assert.equal(solutionsNav[3]?.label, "Messages");
+assert.equal(solutionsNav[1]?.label, "My Receptionist");
+assert.equal(solutionsNav[2]?.label, "Phone Numbers");
+assert.equal(solutionsNav[3]?.label, "Settings");
 
 // --- 7. Unique naming ---
 const n1 = uniqueAgentDisplayName("AI Answering Agent", "01-01 10:00");

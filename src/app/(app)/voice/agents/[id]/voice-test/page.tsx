@@ -39,7 +39,6 @@ export default function AgentVoiceTestPage() {
   return (
     <ReceptionistEditorShell
       agentId={agentId}
-      agentTitle={state.agentName || agentName}
       onSave={() => save()}
       saveBusy={busy}
     >

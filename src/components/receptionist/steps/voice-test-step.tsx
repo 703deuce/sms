@@ -78,6 +78,7 @@ export function VoiceTestStep({
       <audio ref={audioRef} className="hidden" />
 
       <WizardPageHeader
+        banner
         icon={<Volume2 className="h-5 w-5 text-[#6366f1]" />}
         title={`Voice & Test: ${agent}`}
         subtitle="Tune voice settings, preview the call, then connect and deploy."

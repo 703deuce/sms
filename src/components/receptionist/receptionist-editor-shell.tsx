@@ -23,14 +23,17 @@ export function ReceptionistEditorShell({
 }) {
   return (
     <div className="mx-auto max-w-[1280px] px-4 py-5 sm:px-6 lg:px-8">
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-4 grid gap-4 lg:grid-cols-[1fr_auto_1fr] lg:items-center">
         <Link
           href="/voice/agents"
           className="text-sm font-medium text-[#6b7280] hover:text-[#111827]"
         >
           ← Back to agents
         </Link>
-        <div className="flex items-center gap-4">
+        <div className="order-last lg:order-none lg:col-start-2">
+          <ReceptionistFlowStepper agentId={agentId} createMode={createMode} />
+        </div>
+        <div className="flex items-center justify-end gap-4 lg:col-start-3">
           <Link
             href="/help"
             className="flex items-center gap-1.5 text-sm text-[#6b7280] hover:text-[#111827]"
@@ -52,19 +55,15 @@ export function ReceptionistEditorShell({
       </div>
 
       {!createMode && agentTitle ? (
-        <div className="mb-2">
-          <h1 className="font-display text-xl font-semibold tracking-tight text-[#111827]">
+        <div className="mb-5">
+          <h1 className="font-display text-2xl font-semibold tracking-tight text-[#111827]">
             {agentTitle}
           </h1>
           {agentStatus ? (
-            <p className="text-sm text-[#6b7280] capitalize">{agentStatus}</p>
+            <p className="mt-0.5 text-sm text-[#6b7280] capitalize">{agentStatus}</p>
           ) : null}
         </div>
       ) : null}
-
-      <div className="mb-6 border-b border-[#e6e8ef] pb-5">
-        <ReceptionistFlowStepper agentId={agentId} createMode={createMode} />
-      </div>
 
       {children}
     </div>

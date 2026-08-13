@@ -190,7 +190,7 @@ export function CapabilitiesStep({
       {showCollect ? (
         <div className="mt-4">
           <WizardQuestionBlock number={3} title="What information should they collect?">
-              <div className="flex flex-wrap gap-2">
+              <div className="grid gap-2 sm:grid-cols-2">
                 {advanced.callerFields.map((field) => (
                   <FieldChip
                     key={field.id}

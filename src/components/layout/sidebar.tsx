@@ -3,7 +3,7 @@
 import { flattenNavLinks, isNavGroup } from "@/lib/nav";
 import type { NavChild, NavItem, NavLink } from "@/lib/nav";
 import {
-  buildSolutionsNav,
+  buildProductNav,
   type SolutionNavInstance,
 } from "@/lib/solutions-nav";
 import { buildRealtorNav } from "@/lib/realtor/nav";
@@ -14,7 +14,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
-const WORKSPACE_USAGE_LIMIT = 500;
+const PLAN_BALANCE_LIMIT = 100;
 
 function hrefPath(href: string) {
   return href.split("?")[0] || href;
@@ -187,16 +187,19 @@ function NavLinkRow({
   );
 }
 
-function ProWorkspaceCard({ creditsRemaining }: { creditsRemaining?: number }) {
-  const remaining = typeof creditsRemaining === "number" ? creditsRemaining : WORKSPACE_USAGE_LIMIT;
-  const used = Math.min(WORKSPACE_USAGE_LIMIT, Math.max(0, WORKSPACE_USAGE_LIMIT - remaining));
-  const pct = Math.min(100, Math.round((used / WORKSPACE_USAGE_LIMIT) * 100));
+function PlanBalanceCard({ creditsRemaining }: { creditsRemaining?: number }) {
+  // Wallet credits (header) are separate from plan balance in the mockup sidebar widget.
+  const used =
+    typeof creditsRemaining === "number" && creditsRemaining <= PLAN_BALANCE_LIMIT
+      ? PLAN_BALANCE_LIMIT - creditsRemaining
+      : 90;
+  const pct = Math.min(100, Math.round((used / PLAN_BALANCE_LIMIT) * 100));
 
   return (
     <div className="mx-1 rounded-xl border border-[#e6e8ef] bg-[#f8f9fc] p-3">
       <div className="flex items-center justify-between text-[11px] font-semibold text-[#374151]">
-        <span>Pro Workspace</span>
-        <span className="text-[#6b7280]">{used}/{WORKSPACE_USAGE_LIMIT}</span>
+        <span>Plan Balance</span>
+        <span className="text-[#6b7280]">{used}/{PLAN_BALANCE_LIMIT}</span>
       </div>
       <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[#e6e8ef]">
         <div
@@ -249,10 +252,7 @@ export function Sidebar({
     if (realtorMode) return buildRealtorNav(inboxBadge);
     const pathAgentId = voiceAgentIdFromPath(pathname);
     const agentId = pathAgentId ?? primaryVoiceAgentId ?? null;
-    return buildSolutionsNav({
-      instancesBySolution: outcomeInstances,
-      primaryVoiceAgentId: agentId,
-    });
+    return buildProductNav();
   }, [outcomeInstances, primaryVoiceAgentId, pathname, realtorMode, inboxBadge]);
 
   useEffect(() => {
@@ -458,7 +458,7 @@ export function Sidebar({
 
         {!collapsed && !realtorMode ? (
           <div className="mt-3 px-1">
-            <ProWorkspaceCard creditsRemaining={creditsRemaining} />
+            <PlanBalanceCard creditsRemaining={creditsRemaining} />
           </div>
         ) : null}
 

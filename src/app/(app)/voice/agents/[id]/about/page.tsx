@@ -14,7 +14,7 @@ export default function AgentAboutPage() {
 
   if (loading || !state) {
     return (
-      <ReceptionistEditorShell agentId={agentId} agentTitle={agentName}>
+      <ReceptionistEditorShell agentId={agentId}>
         <p className="text-sm text-muted-foreground">Loading…</p>
       </ReceptionistEditorShell>
     );
@@ -37,7 +37,6 @@ export default function AgentAboutPage() {
   return (
     <ReceptionistEditorShell
       agentId={agentId}
-      agentTitle={state.agentName || agentName}
       onSave={() => save()}
       saveBusy={busy}
     >

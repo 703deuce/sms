@@ -45,10 +45,10 @@ export function WizardFieldLabel({
       <span className="text-xs font-semibold text-[#374151]">{children}</span>
       {hint ? (
         <span
-          className="flex h-4 w-4 items-center justify-center rounded-full bg-[#f3f4f6] text-[10px] font-bold text-[#9ca3af]"
+          className="flex h-4 w-4 items-center justify-center rounded-full bg-[#f3f4f6] text-[#9ca3af]"
           title={hint}
         >
-          i
+          <Info className="h-3 w-3" strokeWidth={2.5} />
         </span>
       ) : null}
     </div>
@@ -197,13 +197,20 @@ export function WizardPageHeader({
   icon,
   title,
   subtitle,
+  banner,
 }: {
   icon: ReactNode;
   title: string;
   subtitle: string;
+  banner?: boolean;
 }) {
   return (
-    <div className="mb-6 flex items-start gap-3">
+    <div
+      className={cn(
+        "mb-6 flex items-start gap-3",
+        banner && "rounded-xl border border-[#e9e5ff] bg-[#f5f3ff] px-5 py-4",
+      )}
+    >
       <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#6366f1]/10">
         {icon}
       </div>
@@ -818,7 +825,7 @@ export function FieldChip({
       onClick={onToggle}
       disabled={!onToggle}
       className={cn(
-        "inline-flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-xs font-medium transition",
+        "inline-flex w-full items-center justify-between gap-2 rounded-full border px-3.5 py-1.5 text-xs font-medium transition",
         selected
           ? "border-[#6366f1] bg-[#6366f1] text-white"
           : "border-[#e6e8ef] bg-white text-[#374151] hover:border-[#6366f1]/50",

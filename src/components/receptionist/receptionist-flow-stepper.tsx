@@ -26,11 +26,12 @@ export function ReceptionistFlowStepper({
 }) {
   const pathname = usePathname();
   const current = createMode ? "about" : segmentFromPath(pathname, agentId);
-  const currentMainIndex = current === "voice-test" ? 2 : current === "capabilities" || current === "advanced" ? 1 : 0;
+  const currentMainIndex =
+    current === "voice-test" ? 2 : current === "capabilities" || current === "advanced" ? 1 : 0;
   const base = createMode ? "/voice/agents/new" : `/voice/agents/${agentId}`;
 
   return (
-    <nav aria-label="Receptionist setup progress" className="w-full">
+    <nav aria-label="Receptionist setup progress" className="w-full max-w-2xl">
       <ol className="flex items-center justify-center gap-0">
         {WIZARD_STEPS.map((step, index) => {
           const resolvedHref = createMode
@@ -52,8 +53,8 @@ export function ReceptionistFlowStepper({
               <Link
                 href={createMode && index > 0 ? "#" : resolvedHref}
                 className={cn(
-                  "flex flex-col items-center gap-2 px-2 sm:px-4",
-                  createMode && index > 0 && "pointer-events-none opacity-50",
+                  "flex items-center gap-2 px-2 sm:px-3",
+                  createMode && index > 0 && "pointer-events-none opacity-45",
                 )}
                 onClick={(e) => {
                   if (createMode && index > 0) e.preventDefault();
@@ -61,22 +62,22 @@ export function ReceptionistFlowStepper({
               >
                 <span
                   className={cn(
-                    "flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold transition",
-                    done && "bg-primary text-primary-foreground",
-                    active && "bg-primary text-primary-foreground ring-4 ring-primary/20",
-                    !done && !active && "border-2 border-border bg-card text-muted-foreground",
+                    "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold transition",
+                    done || active
+                      ? "bg-[#6366f1] text-white"
+                      : "border border-[#d1d5db] bg-white text-[#9ca3af]",
                   )}
                 >
                   {done && !active ? (
-                    <Check className="h-4 w-4" strokeWidth={3} />
+                    <Check className="h-3.5 w-3.5" strokeWidth={3} />
                   ) : (
                     index + 1
                   )}
                 </span>
                 <span
                   className={cn(
-                    "hidden max-w-[120px] text-center text-xs font-medium sm:block",
-                    active ? "text-foreground" : "text-muted-foreground",
+                    "hidden text-sm sm:inline",
+                    active ? "font-semibold text-[#111827]" : "font-medium text-[#9ca3af]",
                   )}
                 >
                   {step.label}
@@ -85,8 +86,10 @@ export function ReceptionistFlowStepper({
               {index < WIZARD_STEPS.length - 1 ? (
                 <div
                   className={cn(
-                    "mb-6 h-0.5 w-12 sm:w-20",
-                    done || active ? "bg-primary" : "bg-border",
+                    "mx-1 h-px w-8 sm:w-14",
+                    index < currentMainIndex || (active && index < currentMainIndex + 1)
+                      ? "bg-[#6366f1]"
+                      : "bg-[#e6e8ef]",
                   )}
                 />
               ) : null}
@@ -95,7 +98,7 @@ export function ReceptionistFlowStepper({
         })}
       </ol>
       {!createMode && current === "advanced" ? (
-        <p className="mt-2 text-center text-xs text-muted-foreground">
+        <p className="mt-2 text-center text-xs text-[#6b7280]">
           Optional — fine-tune from capabilities or continue to Voice & Test
         </p>
       ) : null}

@@ -72,125 +72,44 @@ for (const category of solutionCategories) {
   }
 }
 
-// Launch sidebar covers core product areas.
+// Launch sidebar matches flat product mockup nav.
 const solutionsHrefs = new Set(collectNavHrefs(solutionsNav));
 assert.ok(solutionsHrefs.has("/outcomes"), "Dashboard required");
-assert.ok(solutionsHrefs.has("/voice/agents"), "AI Receptionist required");
-assert.ok(solutionsHrefs.has("/inbox"), "Messages required");
+assert.ok(solutionsHrefs.has("/voice/agents"), "My Receptionist required");
+assert.ok(solutionsHrefs.has("/numbers"), "Phone Numbers required");
 assert.ok(solutionsHrefs.has("/contacts"), "Contacts required");
-assert.ok(solutionsHrefs.has("/integrations/native/appointments"), "Appointments required");
-assert.ok(solutionsHrefs.has("/automations"), "Automations required");
 assert.ok(solutionsHrefs.has("/integrations"), "Integrations required");
 assert.ok(solutionsHrefs.has("/settings/business"), "Settings required");
 
 const expectedTopLevel = [
   "Dashboard",
-  "AI Receptionist",
-  "Missed Call Text Back",
-  "Messages",
-  "Contacts",
-  "Appointments",
-  "Automations",
-  "Integrations",
+  "My Receptionist",
+  "Phone Numbers",
   "Settings",
+  "Contacts",
+  "Organizations",
+  "Credentials",
+  "Integrations",
+  "Affiliates",
 ];
 assert.deepEqual(
   solutionsNav.map((item) => item.label),
   expectedTopLevel,
-  "Launch sidebar top-level labels must match the product scope",
+  "Launch sidebar top-level labels must match the product mockup",
+);
+
+assert.ok(
+  !solutionsNav.some((item) => item.children?.length),
+  "Launch sidebar must be flat (no expandable submenus)",
 );
 
 for (const slug of solutionsLaunchSlugs()) {
   const reachable = [...solutionsHrefs].some((href) => href.includes(`/outcomes/${slug}`));
-  assert.ok(reachable, `Outcome ${slug} missing from solutionsNav`);
+  if (!reachable) {
+    // Outcome shortcuts are not surfaced in the flat mockup nav; pages remain reachable via Platform nav.
+    console.warn(`Outcome ${slug} not in flat launch nav (expected for mockup sidebar)`);
+  }
 }
-
-const receptionist = solutionsNav.find((i) => i.label === "AI Receptionist");
-assert.ok(receptionist, "AI Receptionist required");
-assert.deepEqual(
-  (receptionist?.children || []).map((c) => c.label),
-  [
-    "Agents",
-    "About your receptionist",
-    "What should your agent do?",
-    "Advanced",
-    "Voice & Test",
-  ],
-  "AI Receptionist submenu must match setup/edit pages only",
-);
-
-const withAgent = buildSolutionsNav({ primaryVoiceAgentId: "agent_test_1" });
-const receptionistWithAgent = withAgent.find((i) => i.label === "AI Receptionist");
-assert.ok(receptionistWithAgent, "AI Receptionist with agent required");
-assert.equal(receptionistWithAgent?.href, "/voice/agents", "AI Receptionist opens agent list");
-assert.equal(
-  receptionistWithAgent?.children?.find((c) => c.label === "About your receptionist")?.href,
-  "/voice/agents/agent_test_1/about",
-);
-assert.equal(
-  receptionistWithAgent?.children?.find((c) => c.label === "Voice & Test")?.href,
-  "/voice/agents/agent_test_1/voice-test",
-);
-assert.equal(
-  receptionistWithAgent?.children?.find((c) => c.label === "Advanced")?.href,
-  "/voice/agents/agent_test_1/advanced",
-);
-
-const mctb = solutionsNav.find((i) => i.label === "Missed Call Text Back");
-assert.ok(mctb, "Missed Call Text Back required");
-assert.deepEqual(
-  (mctb?.children || []).map((c) => c.label),
-  ["Setup", "Message", "Rules", "Activity"],
-  "Missed Call Text Back submenu must stay light",
-);
-
-const messages = solutionsNav.find((i) => i.label === "Messages");
-assert.ok(messages, "Messages required");
-assert.deepEqual(
-  (messages?.children || []).map((c) => c.label),
-  ["SMS", "Templates", "Scheduled", "Sent"],
-  "Messages submenu must stay light",
-);
-
-const contacts = solutionsNav.find((i) => i.label === "Contacts");
-assert.ok(contacts, "Contacts required");
-assert.deepEqual(
-  (contacts?.children || []).map((c) => c.label),
-  ["All Contacts", "Lists", "Tags", "Import"],
-  "Contacts submenu must stay light",
-);
-
-const appointments = solutionsNav.find((i) => i.label === "Appointments");
-assert.ok(appointments, "Appointments required");
-assert.deepEqual(
-  (appointments?.children || []).map((c) => c.label),
-  ["Appointments", "Calendar", "Connections", "Availability"],
-  "Appointments submenu must stay light",
-);
-
-const automations = solutionsNav.find((i) => i.label === "Automations");
-assert.ok(automations, "Automations required");
-assert.deepEqual(
-  (automations?.children || []).map((c) => c.label),
-  ["Flows", "Templates", "Logs"],
-  "Automations sidebar must be Flows / Templates / Logs",
-);
-
-const integrations = solutionsNav.find((i) => i.label === "Integrations");
-assert.ok(integrations, "Integrations required");
-assert.deepEqual(
-  (integrations?.children || []).map((c) => c.label),
-  ["Calendars", "CRM", "Webhooks"],
-  "Integrations submenu must stay light",
-);
-
-const settings = solutionsNav.find((i) => i.label === "Settings");
-assert.ok(settings, "Settings required");
-assert.deepEqual(
-  (settings?.children || []).map((c) => c.label),
-  ["Business", "AI", "Messaging", "Appointments", "Compliance", "Billing"],
-  "Settings submenu must stay light",
-);
 
 const hiddenFromLaunch = [
   "Inbox",
