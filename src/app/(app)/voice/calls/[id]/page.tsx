@@ -55,16 +55,22 @@ export default function VoiceCallDetailPage() {
   const id = String(params.id || "");
   const [tab, setTab] = useState<"overview" | "transcript">("overview");
   const [data, setData] = useState<Record<string, unknown> | null>(null);
+  const [apiLoaded, setApiLoaded] = useState(false);
   const [showTranscriptDetails, setShowTranscriptDetails] = useState(true);
   const demo = isDemoCallId(id);
   const mock = demo ? getMockCallById(id) : undefined;
 
   useEffect(() => {
-    if (!id || demo) return;
+    if (!id || demo) {
+      setApiLoaded(true);
+      return;
+    }
+    setApiLoaded(false);
     fetch(`/api/voice/calls/${id}`)
       .then((r) => r.json())
-      .then((j) => setData(j.data))
-      .catch(() => undefined);
+      .then((j) => setData(j.data ?? null))
+      .catch(() => setData(null))
+      .finally(() => setApiLoaded(true));
   }, [id, demo]);
 
   const call = demo && mock
@@ -95,10 +101,31 @@ export default function VoiceCallDetailPage() {
     ? { summary: mock.summary, intent: mock.intent, sentiment: mock.sentiment }
     : ((data?.insights as Array<{ summary?: string }>) || [])[0];
 
-  if (!call) {
+  if (demo && !mock) {
     return (
       <div className="mx-auto max-w-[1200px] px-4 py-6 sm:px-8">
-        <p className="text-sm text-[#6b7280]">Loading call…</p>
+        <p className="text-sm text-[#6b7280]">Call not found.</p>
+        <Link href="/voice/calls" className="mt-2 text-sm text-[#6366f1] hover:underline">
+          Back to calls
+        </Link>
+      </div>
+    );
+  }
+
+  if (!call) {
+    if (!apiLoaded) {
+      return (
+        <div className="mx-auto max-w-[1200px] px-4 py-6 sm:px-8">
+          <p className="text-sm text-[#6b7280]">Loading call…</p>
+        </div>
+      );
+    }
+    return (
+      <div className="mx-auto max-w-[1200px] px-4 py-6 sm:px-8">
+        <p className="text-sm text-[#6b7280]">Call not found.</p>
+        <Link href="/voice/calls" className="mt-2 text-sm text-[#6366f1] hover:underline">
+          Back to calls
+        </Link>
       </div>
     );
   }

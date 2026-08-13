@@ -16,7 +16,7 @@ import {
 } from "@/lib/voice/calls/mock-data";
 import { cn } from "@/lib/utils";
 import {
-  Activity,
+  AudioWaveform,
   Calendar,
   ChevronLeft,
   ChevronRight,
@@ -315,7 +315,7 @@ export default function VoiceCallsPage() {
                     className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#e5e7eb] bg-white text-[#6366f1]"
                     title="Play recording"
                   >
-                    <Activity className="h-4 w-4" />
+                    <AudioWaveform className="h-4 w-4" />
                   </span>
                   <button
                     type="button"
