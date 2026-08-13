@@ -59,8 +59,8 @@ export type ReceptionistWizardState = {
 };
 
 export const WIZARD_STEPS = [
-  { id: "about", label: "About Your Receptionist" },
-  { id: "capabilities", label: "What It Should Do" },
+  { id: "about", label: "Setup Your Receptionist" },
+  { id: "capabilities", label: "Select Capabilities" },
   { id: "voice", label: "Voice & Test" },
 ] as const;
 

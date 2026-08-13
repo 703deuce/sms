@@ -12,10 +12,11 @@ import { Bot, Mic, Pause, Phone, Sparkles, Volume2 } from "lucide-react";
 import { useRef, useState } from "react";
 import {
   ElevenLabsTuningPanel,
-  TestRecapPanel,
+  VoiceWorksPanel,
+  WizardAccordionSection,
   WizardFooter,
   WizardPageHeader,
-  WizardPageLayout,
+  WizardTextareaField,
 } from "../ui";
 
 export function VoiceTestStep({
@@ -73,32 +74,40 @@ export function VoiceTestStep({
   }
 
   return (
-    <WizardPageLayout aside={<TestRecapPanel agent={agent} greeting={greeting} />}>
+    <div>
       <audio ref={audioRef} className="hidden" />
 
       <WizardPageHeader
         icon={<Volume2 className="h-5 w-5 text-[#6366f1]" />}
-        title="Voice & Test"
-        subtitle={`Choose voice, test the call experience, then activate ${agent}.`}
+        title={`Voice & Test: ${agent}`}
+        subtitle="Tune voice settings, preview the call, then connect and deploy."
       />
 
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1.25fr)_minmax(300px,0.75fr)] lg:items-start">
-        <div className="space-y-5">
+      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1fr)_minmax(0,1.35fr)]">
+        {/* Column 1 — voice settings (narrowest) */}
+        <div className="space-y-4">
           <div className="voice-card p-5">
-            <h2 className="text-sm font-semibold text-[#111827]">Select a voice</h2>
-            <div className="mt-4 flex items-center gap-3 rounded-xl border border-[#e6e8ef] bg-[#f8f9fc] p-3">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#6366f1] text-base font-bold text-white shadow-[0_4px_12px_rgba(99,102,241,0.3)]">
-                {selectedVoice?.label?.charAt(0) || agent.charAt(0)}
+            <h2 className="text-sm font-semibold text-[#111827]">Voice settings</h2>
+            <div className="mt-4 rounded-xl border border-[#e6e8ef] bg-[#f8f9fc] p-3">
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#6366f1] text-sm font-bold text-white">
+                  {selectedVoice?.label?.charAt(0) || agent.charAt(0)}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-[#111827]">
+                    {selectedVoice?.label || state.voiceLabel} (Professional)
+                  </p>
+                  <p className="text-xs text-[#6b7280]">Friendly and professional · ElevenLabs Flash</p>
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    <span className="rounded-full bg-[#6366f1]/10 px-2 py-0.5 text-[10px] font-semibold text-[#6366f1]">
+                      Optimized
+                    </span>
+                    <span className="rounded-full bg-[#f3f4f6] px-2 py-0.5 text-[10px] font-semibold text-[#6b7280]">
+                      Female
+                    </span>
+                  </div>
+                </div>
               </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold text-[#111827]">
-                  {selectedVoice?.label || state.voiceLabel}
-                </p>
-                <p className="text-xs text-[#6b7280]">Friendly and Professional · ElevenLabs Flash</p>
-              </div>
-              <button type="button" className="voice-btn-outline shrink-0 text-xs">
-                Choose a new voice
-              </button>
             </div>
             <div className="mt-3 divide-y divide-[#e6e8ef] rounded-xl border border-[#e6e8ef]">
               {WIZARD_VOICES.slice(0, 6).map((voice) => (
@@ -107,13 +116,13 @@ export function VoiceTestStep({
                   type="button"
                   onClick={() => patch({ voiceId: voice.id, voiceLabel: voice.label })}
                   className={cn(
-                    "flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm transition first:rounded-t-xl last:rounded-b-xl",
+                    "flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm transition first:rounded-t-xl last:rounded-b-xl",
                     state.voiceId === voice.id
-                      ? "bg-[#6366f1]/5 text-[#111827]"
+                      ? "bg-[#6366f1]/5 font-medium text-[#111827]"
                       : "bg-white hover:bg-[#f8f9fc]",
                   )}
                 >
-                  <span className="font-medium text-[#374151]">{voice.label}</span>
+                  <span>{voice.label}</span>
                   <button
                     type="button"
                     onClick={(e) => {
@@ -149,28 +158,19 @@ export function VoiceTestStep({
             />
           </div>
 
-          <div className="voice-card p-5">
-            <h2 className="text-sm font-semibold text-[#111827]">2. Greeting</h2>
-            <textarea
-              className="mt-3 min-h-[72px] w-full rounded-lg border border-[#e6e8ef] p-3 text-sm"
+          <WizardAccordionSection number={2} title="Greeting">
+            <WizardTextareaField
               value={state.greeting}
-              onChange={(e) => patch({ greeting: e.target.value })}
+              onChange={(v) => patch({ greeting: v })}
+              minHeight={72}
+              onAiSuggest={() => patch({ greeting: generateGreeting(state) })}
+              aiLabel="Regenerate greeting"
             />
-            <button
-              type="button"
-              onClick={() => patch({ greeting: generateGreeting(state) })}
-              className="mt-2 voice-btn-outline text-xs"
-            >
-              <Sparkles className="h-3.5 w-3.5" />
-              Regenerate greeting
-            </button>
-          </div>
+          </WizardAccordionSection>
 
           {onPhoneChange ? (
-            <div className="voice-card p-5">
-              <h2 className="text-sm font-semibold text-[#111827]">{agent}&apos;s Phone Number</h2>
+            <WizardAccordionSection number={3} title="Call handling">
               <PhoneNumberSelect
-                className="mt-3"
                 value={phoneNumberId || null}
                 onChange={onPhoneChange}
               />
@@ -180,18 +180,20 @@ export function VoiceTestStep({
               <p className="mt-1 text-xs text-[#6b7280]">
                 Calls to this number will be handled by {agent}.
               </p>
-            </div>
+            </WizardAccordionSection>
           ) : null}
         </div>
 
+        {/* Column 2 — phone mockup (center) */}
         <div className="flex flex-col items-center lg:sticky lg:top-4">
           <div className="w-full max-w-[300px] rounded-[2rem] border-[3px] border-[#111827] bg-[#0f172a] p-3.5 shadow-[0_20px_48px_rgba(15,23,42,0.25)]">
             <div className="rounded-[1.5rem] bg-[#111827] px-4 py-7 text-center text-white">
-              <div className="mx-auto flex h-[72px] w-[72px] items-center justify-center rounded-full bg-[#6366f1]/30 ring-4 ring-[#6366f1]/20">
+              <p className="text-[11px] text-[#94a3b8]">Incoming call…</p>
+              <div className="mx-auto mt-4 flex h-[72px] w-[72px] items-center justify-center rounded-full bg-[#6366f1]/30 ring-4 ring-[#6366f1]/25">
                 <Bot className="h-9 w-9 text-[#a5b4fc]" />
               </div>
               <p className="mt-3 text-lg font-semibold">{agent}</p>
-              <p className="text-xs text-[#94a3b8]">Receptionist</p>
+              <p className="text-xs text-[#94a3b8]">AI Receptionist</p>
               <p className="mt-1.5 text-xs font-medium text-[#818cf8]">Listening…</p>
               <div className="mt-5 flex h-8 items-end justify-center gap-1">
                 {[3, 5, 8, 4, 7, 5, 9, 4, 6].map((h, i) => (
@@ -221,16 +223,22 @@ export function VoiceTestStep({
               <LiveKitBrowserCall agentId={state.agentId} voiceLabel={state.voiceLabel} />
             </div>
           ) : null}
+          <p className="mt-3 max-w-[300px] text-center text-[11px] text-[#6b7280]">
+            AI is active in browser test mode — use Start test call to hear {agent}.
+          </p>
         </div>
+
+        {/* Column 3 — transcript (widest) */}
+        <VoiceWorksPanel agent={agent} greeting={greeting} phoneE164={phoneE164} />
       </div>
 
       <WizardFooter
         showBack
         onBack={onBack}
         onContinue={onActivate}
-        continueLabel={`Activate ${agent}`}
+        continueLabel="Connect and Deploy"
         busy={busy}
       />
-    </WizardPageLayout>
+    </div>
   );
 }

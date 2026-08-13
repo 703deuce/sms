@@ -1,13 +1,21 @@
 "use client";
 
-import { Input, Label, Textarea } from "@/components/ui/input";
+import { Input, Textarea } from "@/components/ui/input";
 import {
   INDUSTRY_OPTIONS,
   type ReceptionistWizardState,
 } from "@/lib/receptionist-wizard/types";
 import { defaultAgentJobInstructions } from "@/lib/receptionist-wizard/defaults";
-import { Bot, Check, Sparkles } from "lucide-react";
-import { SidePanel, WizardFooter, WizardPageHeader, WizardPageLayout, WizardSection } from "../ui";
+import { Bot } from "lucide-react";
+import {
+  AboutNextPanel,
+  WizardFieldLabel,
+  WizardFooter,
+  WizardPageHeader,
+  WizardPageLayout,
+  WizardQuestionBlock,
+  WizardTextareaField,
+} from "../ui";
 
 function wordCount(text: string): number {
   return text.trim() ? text.trim().split(/\s+/).length : 0;
@@ -37,244 +45,186 @@ export function AboutStep({
     });
   }
 
-  function generatePersonality() {
+  function generateWhatItShouldKnow() {
+    const personality = `You are ${agent}, a helpful and professional receptionist for ${state.businessName.trim() || "the business"}. You speak clearly, stay calm under pressure, and make callers feel welcomed.`;
+    const job =
+      state.agentJobInstructions.trim() || defaultAgentJobInstructions(state.businessName);
     patch({
-      agentPersonalityNotes: `You are ${agent}, a helpful and professional receptionist for ${state.businessName.trim() || "the business"}. You speak clearly, stay calm under pressure, and make callers feel welcomed.`,
+      agentPersonalityNotes: personality,
+      agentJobInstructions: job,
     });
-  }
-
-  function ensureJobInstructions() {
-    if (!state.agentJobInstructions.trim()) {
-      patch({ agentJobInstructions: defaultAgentJobInstructions(state.businessName) });
-    }
   }
 
   return (
     <WizardPageLayout
+      wideAside
       aside={
-        <SidePanel
-          title="What happens next?"
-          illustration={
-            <div className="flex justify-center">
-              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#6366f1] shadow-[0_8px_24px_rgba(99,102,241,0.35)]">
-                <Sparkles className="h-6 w-6 text-white" />
-              </div>
-            </div>
-          }
-        >
-          <ul className="space-y-3.5">
-            {[
-              "Set business information, personality, and job instructions.",
-              "Choose capabilities, collection fields, and integrations.",
-              "Test your receptionist and activate on a phone number.",
-            ].map((text, i) => (
-              <li key={text} className="flex gap-3">
-                <span
-                  className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#6366f1]/10 text-[10px] font-bold text-[#6366f1]"
-                >
-                  {i + 1}
-                </span>
-                <span className="text-[13px] leading-snug text-[#374151]">{text}</span>
-              </li>
-            ))}
-          </ul>
-          <div className="mt-5 border-t border-[#e6e8ef] pt-5">
-            <p className="wizard-rail-label">Top Tips for {agent}</p>
-            <ul className="mt-3 space-y-2">
-              {[
-                "Keep your instructions clear and concise.",
-                "Specify your business hours and location.",
-                "Give clear instructions on what to collect.",
-                "Review and refine setup over time.",
-                "Test your voice agent often.",
-              ].map((tip) => (
-                <li key={tip} className="flex items-start gap-2 text-[12px] leading-snug text-[#6b7280]">
-                  <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" strokeWidth={3} />
-                  {tip}
-                </li>
-              ))}
-            </ul>
-          </div>
-        </SidePanel>
+        <AboutNextPanel
+          agent={agent}
+          steps={[
+            { color: "bg-[#6366f1]", text: "Set personality and business knowledge for your agent." },
+            { color: "bg-emerald-500", text: "Choose how calls are handled and what to collect." },
+            { color: "bg-sky-500", text: "Test voice quality and connect your phone number." },
+          ]}
+          tips={[
+            "Be specific about services and service area.",
+            "Mention business hours and after-hours rules.",
+            "List tools and integrations your agent can use.",
+            "Keep instructions concise and actionable.",
+            "Test often as you refine setup.",
+          ]}
+        />
       }
     >
       <WizardPageHeader
         icon={<Bot className="h-5 w-5 text-[#6366f1]" />}
         title="About Your Receptionist"
-        subtitle="Tell us about your business and your receptionist's personality."
+        subtitle="Tell us about your business and what your receptionist should know."
       />
 
       <div className="mb-5 grid gap-3 sm:grid-cols-3">
-          <div>
-            <Label htmlFor="agent-name" className="text-xs font-semibold text-[#374151]">
-              Agent Name
-            </Label>
-            <Input
-              id="agent-name"
-              className="mt-1.5 h-11 border-[#e6e8ef]"
-              placeholder="Amy"
-              value={state.agentName}
-              onChange={(e) => patch({ agentName: e.target.value })}
-            />
-          </div>
-          <div>
-            <Label htmlFor="business-name" className="text-xs font-semibold text-[#374151]">
-              Business Name
-            </Label>
-            <Input
-              id="business-name"
-              className="mt-1.5 h-11 border-[#e6e8ef]"
-              placeholder="John&apos;s Plumbing"
-              value={state.businessName}
-              onChange={(e) => patch({ businessName: e.target.value })}
-            />
-          </div>
-          <div>
-            <Label htmlFor="industry" className="text-xs font-semibold text-[#374151]">
-              Industry
-            </Label>
-            <select
-              id="industry"
-              className="mt-1.5 h-11 w-full rounded-lg border border-[#e6e8ef] bg-white px-3 text-sm text-[#374151]"
-              value={state.industry}
-              onChange={(e) => patch({ industry: e.target.value })}
-            >
-              <option value="">Select industry</option>
-              {INDUSTRY_OPTIONS.map((opt) => (
-                <option key={opt} value={opt}>{opt}</option>
-              ))}
-            </select>
-          </div>
+        <div>
+          <WizardFieldLabel hint="Internal name for this agent">Agent Name</WizardFieldLabel>
+          <Input
+            id="agent-name"
+            className="mt-1.5 h-11 border-[#e6e8ef]"
+            placeholder="Amy"
+            value={state.agentName}
+            onChange={(e) => patch({ agentName: e.target.value })}
+          />
         </div>
-
-        <div className="space-y-4">
-          <WizardSection
-            number={1}
-            title="Tell us about your business"
-            subtitle="Recommended 100–200 words. Compiled into BUSINESS on every call."
-            action={
-              <button
-                type="button"
-                onClick={regenerateBusinessDescription}
-                className="voice-btn-outline text-xs"
-              >
-                <Sparkles className="h-3.5 w-3.5" />
-                Regenerate
-              </button>
-            }
+        <div>
+          <WizardFieldLabel hint="Used when introducing your business on calls">Business Name</WizardFieldLabel>
+          <Input
+            id="business-name"
+            className="mt-1.5 h-11 border-[#e6e8ef]"
+            placeholder="Zenith Marketing"
+            value={state.businessName}
+            onChange={(e) => patch({ businessName: e.target.value })}
+          />
+        </div>
+        <div>
+          <WizardFieldLabel hint="Helps tailor suggestions">Industry</WizardFieldLabel>
+          <select
+            id="industry"
+            className="mt-1.5 h-11 w-full rounded-lg border border-[#e6e8ef] bg-white px-3 text-sm text-[#374151]"
+            value={state.industry}
+            onChange={(e) => patch({ industry: e.target.value })}
           >
-            <Textarea
-              id="business-desc"
-              className="min-h-[140px] border-[#e6e8ef] text-sm"
-              placeholder="We are a plumbing company that provides repair, maintenance, and emergency plumbing services for residential and commercial customers."
-              value={state.businessDescription}
-              onChange={(e) => patch({ businessDescription: e.target.value })}
-            />
-            <p className="mt-2 text-xs text-[#9ca3af]">{descWords} words</p>
-            <details className="mt-4 rounded-lg border border-[#e6e8ef] bg-[#f8f9fc] p-4">
-              <summary className="cursor-pointer text-xs font-semibold text-[#374151]">
-                Structured business details (hours, services, pricing)
-              </summary>
-              <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                <div>
-                  <Label className="text-xs">Hours</Label>
-                  <Textarea
-                    className="mt-1 min-h-[72px] text-sm"
-                    placeholder="Monday-Friday: 8 AM-6 PM"
-                    value={state.businessHours}
-                    onChange={(e) => patch({ businessHours: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs">Service area</Label>
-                  <Textarea
-                    className="mt-1 min-h-[72px] text-sm"
-                    value={state.serviceArea}
-                    onChange={(e) => patch({ serviceArea: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs">Core services</Label>
-                  <Textarea
-                    className="mt-1 min-h-[72px] text-sm"
-                    value={state.coreServices}
-                    onChange={(e) => patch({ coreServices: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs">Pricing / fees</Label>
-                  <Textarea
-                    className="mt-1 min-h-[72px] text-sm"
-                    value={state.pricingNotes}
-                    onChange={(e) => patch({ pricingNotes: e.target.value })}
-                  />
-                </div>
-                <div className="sm:col-span-2">
-                  <Label className="text-xs">Address</Label>
-                  <Input
-                    className="mt-1 text-sm"
-                    value={state.businessAddress}
-                    onChange={(e) => patch({ businessAddress: e.target.value })}
-                  />
-                </div>
+            <option value="">Select industry</option>
+            {INDUSTRY_OPTIONS.map((opt) => (
+              <option key={opt} value={opt}>{opt}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div className="space-y-4">
+        <WizardQuestionBlock
+          number={1}
+          title="Tell us about your business"
+          subtitle="Compiled into BUSINESS on every call."
+        >
+          <WizardTextareaField
+            id="business-desc"
+            value={state.businessDescription}
+            onChange={(v) => patch({ businessDescription: v })}
+            placeholder="We are a plumbing company that provides repair, maintenance, and emergency plumbing services for residential and commercial customers."
+            minHeight={140}
+            wordHint={`Recommended 100 words · ${descWords} words`}
+            onAiSuggest={regenerateBusinessDescription}
+            aiLabel="AI suggestions"
+          />
+          <details className="mt-3 rounded-lg border border-[#e6e8ef] bg-[#f8f9fc] p-4">
+            <summary className="cursor-pointer text-xs font-semibold text-[#374151]">
+              Structured business details (hours, services, pricing)
+            </summary>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <div>
+                <WizardFieldLabel>Hours</WizardFieldLabel>
+                <Textarea
+                  className="mt-1 min-h-[72px] text-sm"
+                  placeholder="Monday–Friday: 8 AM–6 PM"
+                  value={state.businessHours}
+                  onChange={(e) => patch({ businessHours: e.target.value })}
+                />
               </div>
-            </details>
-          </WizardSection>
+              <div>
+                <WizardFieldLabel>Service area</WizardFieldLabel>
+                <Textarea
+                  className="mt-1 min-h-[72px] text-sm"
+                  value={state.serviceArea}
+                  onChange={(e) => patch({ serviceArea: e.target.value })}
+                />
+              </div>
+              <div>
+                <WizardFieldLabel>Core services</WizardFieldLabel>
+                <Textarea
+                  className="mt-1 min-h-[72px] text-sm"
+                  value={state.coreServices}
+                  onChange={(e) => patch({ coreServices: e.target.value })}
+                />
+              </div>
+              <div>
+                <WizardFieldLabel>Pricing / fees</WizardFieldLabel>
+                <Textarea
+                  className="mt-1 min-h-[72px] text-sm"
+                  value={state.pricingNotes}
+                  onChange={(e) => patch({ pricingNotes: e.target.value })}
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <WizardFieldLabel>Address</WizardFieldLabel>
+                <Input
+                  className="mt-1 text-sm"
+                  value={state.businessAddress}
+                  onChange={(e) => patch({ businessAddress: e.target.value })}
+                />
+              </div>
+            </div>
+          </details>
+        </WizardQuestionBlock>
 
-          <WizardSection
-            number={2}
-            title={`Tell us about ${agent}`}
-            subtitle="Personality and speaking style — compiled into AGENT."
-            optional
-            action={
-              <button type="button" onClick={generatePersonality} className="voice-btn-outline text-xs">
-                <Sparkles className="h-3.5 w-3.5" />
-                Generate
-              </button>
-            }
-          >
-            <Textarea
-              className="min-h-[100px] border-[#e6e8ef] text-sm"
-              placeholder="Professional, warm, and patient. Speaks clearly and keeps calls moving."
-              value={state.agentPersonalityNotes}
-              onChange={(e) => patch({ agentPersonalityNotes: e.target.value })}
-            />
-          </WizardSection>
-
-          <WizardSection
-            number={3}
-            title="What should your receptionist do on calls?"
-            subtitle="YOUR JOB — describe responsibilities in your own words."
-            action={
-              <button type="button" onClick={ensureJobInstructions} className="voice-btn-outline text-xs">
-                Use template
-              </button>
-            }
-          >
-            <Textarea
-              className="min-h-[120px] border-[#e6e8ef] text-sm"
-              placeholder="Answer incoming calls. For service requests, collect name, callback number, service address, and problem description."
+        <WizardQuestionBlock
+          number={2}
+          title="What should it know?"
+          subtitle="Personality and responsibilities — compiled into AGENT and YOUR JOB."
+        >
+          <WizardTextareaField
+            value={state.agentPersonalityNotes}
+            onChange={(v) => patch({ agentPersonalityNotes: v })}
+            placeholder="Professional, warm, and patient. Speaks clearly and keeps calls moving."
+            minHeight={88}
+            onAiSuggest={generateWhatItShouldKnow}
+            aiLabel="AI suggestions"
+          />
+          <div className="mt-3">
+            <WizardFieldLabel>What should it do on calls?</WizardFieldLabel>
+            <WizardTextareaField
               value={state.agentJobInstructions}
-              onChange={(e) => patch({ agentJobInstructions: e.target.value })}
+              onChange={(v) => patch({ agentJobInstructions: v })}
+              placeholder="Answer incoming calls. For service requests, collect name, callback number, service address, and problem description."
+              minHeight={100}
             />
-          </WizardSection>
+          </div>
+        </WizardQuestionBlock>
 
-          <WizardSection
-            number={4}
-            title={`Anything else ${agent} should know?`}
-            subtitle="Additional customer instructions — optional escape hatch for business rules."
-            optional
-          >
-            <Textarea
-              className="min-h-[80px] border-[#e6e8ef] text-sm"
-              placeholder="Never schedule same-day appointments after 3 PM. Do not transfer employment calls."
-              value={state.additionalInstructions}
-              onChange={(e) => patch({ additionalInstructions: e.target.value })}
-            />
-          </WizardSection>
-        </div>
+        <WizardQuestionBlock
+          number={3}
+          title="Anything else it should know?"
+          subtitle="Optional business rules and edge cases."
+          optional
+        >
+          <WizardTextareaField
+            value={state.additionalInstructions}
+            onChange={(v) => patch({ additionalInstructions: v })}
+            placeholder="Never schedule same-day appointments after 3 PM. Do not transfer employment calls."
+            minHeight={80}
+          />
+        </WizardQuestionBlock>
+      </div>
 
-        <WizardFooter onCancel={onCancel} onContinue={onContinue} busy={busy} />
+      <WizardFooter onCancel={onCancel} onContinue={onContinue} busy={busy} />
     </WizardPageLayout>
   );
 }

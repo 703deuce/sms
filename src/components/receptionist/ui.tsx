@@ -1,24 +1,195 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { Check, ChevronRight, Info, Minus } from "lucide-react";
+import { Bot, Check, ChevronRight, Info, Minus, Sparkles } from "lucide-react";
 import type { ReactNode } from "react";
 
-/** Main wizard column + narrow sticky right rail (mockup proportions). */
+/** Main wizard column + right rail (~30% mockup width). */
 export function WizardPageLayout({
   children,
   aside,
+  wideAside,
 }: {
   children: ReactNode;
   aside?: ReactNode;
+  wideAside?: boolean;
 }) {
   return (
-    <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_272px] lg:gap-8">
+    <div
+      className={cn(
+        "grid items-start gap-6 lg:gap-8",
+        aside
+          ? wideAside
+            ? "lg:grid-cols-[minmax(0,1fr)_minmax(300px,380px)]"
+            : "lg:grid-cols-[minmax(0,1fr)_minmax(280px,340px)]"
+          : "",
+      )}
+    >
       <div className="min-w-0">{children}</div>
       {aside ? (
         <div className="w-full shrink-0 lg:sticky lg:top-4 lg:self-start">{aside}</div>
       ) : null}
     </div>
+  );
+}
+
+export function WizardFieldLabel({
+  children,
+  hint,
+}: {
+  children: ReactNode;
+  hint?: string;
+}) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className="text-xs font-semibold text-[#374151]">{children}</span>
+      {hint ? (
+        <span
+          className="flex h-4 w-4 items-center justify-center rounded-full bg-[#f3f4f6] text-[10px] font-bold text-[#9ca3af]"
+          title={hint}
+        >
+          i
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+export function WizardQuestionBlock({
+  number,
+  title,
+  subtitle,
+  optional,
+  metaRight,
+  children,
+}: {
+  number: number;
+  title: string;
+  subtitle?: string;
+  optional?: boolean;
+  metaRight?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <section className="wizard-question-block">
+      <div className="mb-4 flex items-start justify-between gap-4">
+        <div className="flex items-start gap-3">
+          <span
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#6366f1] text-xs font-bold text-white"
+          >
+            {number}
+          </span>
+          <div>
+            <h3 className="text-sm font-semibold text-[#111827]">
+              {title}
+              {optional ? (
+                <span className="ml-2 text-xs font-normal text-[#9ca3af]">Optional</span>
+              ) : null}
+            </h3>
+            {subtitle ? <p className="mt-1 text-xs leading-relaxed text-[#6b7280]">{subtitle}</p> : null}
+          </div>
+        </div>
+        {metaRight}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+export function WizardTextareaField({
+  id,
+  value,
+  onChange,
+  placeholder,
+  minHeight = 120,
+  wordHint,
+  onAiSuggest,
+  aiLabel = "AI suggestions",
+}: {
+  id?: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  minHeight?: number;
+  wordHint?: string;
+  onAiSuggest?: () => void;
+  aiLabel?: string;
+}) {
+  return (
+    <div className="wizard-textarea-shell">
+      {wordHint ? (
+        <div className="flex items-center justify-end px-3 pt-2 text-[11px] text-[#9ca3af]">
+          {wordHint}
+        </div>
+      ) : null}
+      <textarea
+        id={id}
+        className="w-full px-3 pb-3 text-sm leading-relaxed text-[#374151]"
+        style={{ minHeight }}
+        placeholder={placeholder}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      {onAiSuggest ? (
+        <div className="flex justify-end border-t border-[#f3f4f6] px-3 py-2">
+          <button
+            type="button"
+            onClick={onAiSuggest}
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#6366f1] hover:text-[#4f46e5]"
+          >
+            <Sparkles className="h-3.5 w-3.5" />
+            {aiLabel}
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+export function AboutNextPanel({
+  agent,
+  steps,
+  tips,
+}: {
+  agent: string;
+  steps: Array<{ color: string; text: string }>;
+  tips: string[];
+}) {
+  return (
+    <aside className="wizard-rail-card-tinted">
+      <div className="mb-5 flex items-center gap-3">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#6366f1]/15">
+          <Bot className="h-5 w-5 text-[#6366f1]" />
+        </div>
+        <h3 className="text-[15px] font-semibold text-[#111827]">What happens next?</h3>
+      </div>
+      <ul className="space-y-3.5">
+        {steps.map((step, i) => (
+          <li key={step.text} className="flex gap-3">
+            <span
+              className={cn(
+                "mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white",
+                step.color,
+              )}
+            >
+              {i + 1}
+            </span>
+            <span className="text-[13px] leading-snug text-[#374151]">{step.text}</span>
+          </li>
+        ))}
+      </ul>
+      <div className="mt-6 border-t border-[#e9e5ff] pt-5">
+        <p className="wizard-rail-label">Tips for best results</p>
+        <ul className="mt-3 space-y-2">
+          {tips.map((tip) => (
+            <li key={tip} className="flex items-start gap-2 text-[12px] leading-snug text-[#6b7280]">
+              <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" strokeWidth={3} />
+              {tip}
+            </li>
+          ))}
+        </ul>
+      </div>
+    </aside>
   );
 }
 
@@ -170,6 +341,259 @@ export function SidePanel({
   );
 }
 
+export function CapabilityCardCompact({
+  selected,
+  onClick,
+  icon,
+  iconBg,
+  iconColor,
+  title,
+}: {
+  selected?: boolean;
+  onClick?: () => void;
+  icon: ReactNode;
+  iconBg: string;
+  iconColor: string;
+  title: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "relative flex min-h-[108px] flex-col items-center justify-center rounded-xl border bg-white px-3 py-4 text-center transition",
+        selected
+          ? "border-[#6366f1] shadow-[0_0_0_1px_rgba(99,102,241,0.35)]"
+          : "border-[#e6e8ef] hover:border-[#6366f1]/40",
+      )}
+    >
+      {selected ? (
+        <span className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-[#6366f1] text-white">
+          <Check className="h-3 w-3" strokeWidth={3} />
+        </span>
+      ) : null}
+      <span
+        className={cn(
+          "flex h-10 w-10 items-center justify-center rounded-xl",
+          iconBg,
+          iconColor,
+        )}
+      >
+        {icon}
+      </span>
+      <p className="mt-3 text-xs font-semibold leading-tight text-[#111827]">{title}</p>
+    </button>
+  );
+}
+
+export function TimingOptionRow({
+  selected,
+  onClick,
+  icon,
+  title,
+  description,
+}: {
+  selected?: boolean;
+  onClick?: () => void;
+  icon: ReactNode;
+  title: string;
+  description?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "flex w-full items-center gap-3 rounded-xl border bg-white px-4 py-3.5 text-left transition",
+        selected
+          ? "border-[#6366f1] shadow-[0_0_0_1px_rgba(99,102,241,0.35)]"
+          : "border-[#e6e8ef] hover:border-[#6366f1]/40",
+      )}
+    >
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#6366f1]/10 text-[#6366f1]">
+        {icon}
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-semibold text-[#111827]">{title}</p>
+        {description ? <p className="mt-0.5 text-xs text-[#6b7280]">{description}</p> : null}
+      </div>
+      <span
+        className={cn(
+          "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2",
+          selected ? "border-[#6366f1] bg-[#6366f1]" : "border-[#d1d5db] bg-white",
+        )}
+      >
+        {selected ? <Check className="h-3 w-3 text-white" strokeWidth={3} /> : null}
+      </span>
+    </button>
+  );
+}
+
+export function SetupDetailsPanel({
+  agent,
+  businessName,
+  capabilities,
+  capabilityOptions,
+  enabledFieldLabels,
+  answerLabel,
+}: {
+  agent: string;
+  businessName: string;
+  capabilities: string[];
+  capabilityOptions: Array<{ id: string; label: string }>;
+  enabledFieldLabels: string[];
+  answerLabel: string;
+}) {
+  const enabledCaps = capabilityOptions.filter((c) => capabilities.includes(c.id));
+
+  return (
+    <aside className="wizard-rail-card">
+      <div className="flex items-center gap-2.5">
+        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#6366f1]/10">
+          <Bot className="h-4 w-4 text-[#6366f1]" />
+        </span>
+        <h3 className="text-[15px] font-semibold tracking-tight text-[#111827]">Setup Details</h3>
+      </div>
+
+      <div className="wizard-rail-section mt-5">
+        <div className="flex items-center gap-3">
+          <div
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#6366f1] text-sm font-bold text-white"
+          >
+            {agent.charAt(0)}
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-[#111827]">{agent}</p>
+            <p className="truncate text-xs text-[#6b7280]">{businessName || "Your business"}</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-5">
+        <p className="wizard-rail-label">Capabilities</p>
+        <ul className="mt-2.5 space-y-2">
+          {enabledCaps.map((cap) => (
+            <li key={cap.id} className="flex items-center gap-2 text-[13px] font-medium text-[#374151]">
+              <Check className="h-4 w-4 shrink-0 text-emerald-500" strokeWidth={3} />
+              {cap.label}
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <div className="mt-5 border-t border-[#e6e8ef] pt-5">
+        <p className="wizard-rail-label">How it answers</p>
+        <p className="mt-1.5 text-[13px] font-medium text-[#374151]">{answerLabel}</p>
+      </div>
+
+      {enabledFieldLabels.length ? (
+        <div className="mt-5 border-t border-[#e6e8ef] pt-5">
+          <p className="wizard-rail-label">Information collected</p>
+          <ul className="mt-2 space-y-1.5">
+            {enabledFieldLabels.map((label) => (
+              <li key={label} className="text-[13px] text-[#374151]">{label}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      <div className="mt-5 flex gap-2.5 rounded-xl border border-[#e9e5ff] bg-[#f5f3ff] px-3.5 py-3">
+        <Info className="mt-0.5 h-4 w-4 shrink-0 text-[#6366f1]" />
+        <p className="text-[11px] leading-relaxed text-[#6b7280]">
+          Finish setup on Voice & Test to connect your number and go live.
+        </p>
+      </div>
+    </aside>
+  );
+}
+
+export function VoiceWorksPanel({
+  agent,
+  greeting,
+  phoneE164,
+}: {
+  agent: string;
+  greeting: string;
+  phoneE164?: string | null;
+}) {
+  return (
+    <div className="wizard-rail-card h-full">
+      <h3 className="text-[15px] font-semibold text-[#111827]">See how it works</h3>
+      <p className="mt-1 text-xs text-[#6b7280]">
+        Preview the conversation flow before you deploy.
+      </p>
+
+      <div className="mt-4 space-y-3">
+        <div className="flex gap-2.5">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#6366f1]/10">
+            <Bot className="h-3.5 w-3.5 text-[#6366f1]" />
+          </span>
+          <p className="rounded-xl rounded-tl-sm bg-[#f5f3ff] px-3 py-2 text-[12px] leading-relaxed text-[#374151]">
+            {greeting}
+          </p>
+        </div>
+        <div className="flex gap-2.5">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-500/10">
+            <span className="text-[10px] font-bold text-emerald-600">U</span>
+          </span>
+          <p className="rounded-xl rounded-tl-sm bg-[#f8f9fc] px-3 py-2 text-[12px] leading-relaxed text-[#374151]">
+            I&apos;m curious about pricing for a service visit.
+          </p>
+        </div>
+        <div className="flex gap-2.5">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#6366f1]/10">
+            <Bot className="h-3.5 w-3.5 text-[#6366f1]" />
+          </span>
+          <p className="rounded-xl rounded-tl-sm bg-[#f5f3ff] px-3 py-2 text-[12px] leading-relaxed text-[#374151]">
+            I can help with that. What type of service do you need?
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-5 border-t border-[#e6e8ef] pt-5">
+        <p className="text-xs font-semibold text-[#374151]">
+          Our phone number:{" "}
+          <span className="font-bold text-[#111827]">{phoneE164 || "(assign on activate)"}</span>
+        </p>
+        {phoneE164 ? (
+          <p className="mt-1 flex items-center gap-1.5 text-xs text-emerald-600">
+            <span className="h-2 w-2 rounded-full bg-emerald-500" />
+            Active
+          </p>
+        ) : null}
+        <p className="mt-2 text-[11px] leading-relaxed text-[#6b7280]">
+          Run a browser test to confirm voice quality before you connect and deploy.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+export function WizardAccordionSection({
+  number,
+  title,
+  defaultOpen,
+  children,
+}: {
+  number: number;
+  title: string;
+  defaultOpen?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <details className="voice-card group p-0" open={defaultOpen}>
+      <summary className="flex cursor-pointer list-none items-center gap-3 px-5 py-4 [&::-webkit-details-marker]:hidden">
+        <span className="text-sm font-semibold text-[#111827]">
+          {number}. {title}
+        </span>
+        <ChevronRight className="ml-auto h-4 w-4 text-[#9ca3af] transition group-open:rotate-90" />
+      </summary>
+      <div className="border-t border-[#e6e8ef] px-5 pb-5 pt-4">{children}</div>
+    </details>
+  );
+}
+
+/** @deprecated Use SetupDetailsPanel */
 export function SetupSummaryPanel({
   agent,
   businessName,
@@ -456,10 +880,21 @@ export function ElevenLabsTuningPanel({
       <SliderRow
         label="Stability"
         value={stability}
+        display={`${Math.round(stability * 100)}%`}
         onChange={onStabilityChange}
       />
-      <SliderRow label="Clarity" value={clarity} onChange={onClarityChange} />
-      <SliderRow label="Style" value={style} onChange={onStyleChange} />
+      <SliderRow
+        label="Similarity"
+        value={clarity}
+        display={`${Math.round(clarity * 100)}%`}
+        onChange={onClarityChange}
+      />
+      <SliderRow
+        label="Style exaggeration"
+        value={style}
+        display={`${Math.round(style * 100)}%`}
+        onChange={onStyleChange}
+      />
       <SliderRow
         label="Speaking speed"
         value={speakingSpeed}
@@ -470,12 +905,12 @@ export function ElevenLabsTuningPanel({
         onChange={onSpeakingSpeedChange}
       />
       <ToggleRow
-        label="Optimize for latency"
+        label="Optimize latency"
         checked={optimizeLatency}
         onChange={onOptimizeLatencyChange}
       />
       <ToggleRow
-        label="Speaker boost"
+        label="Use speaker boost"
         checked={speakerBoost}
         onChange={onSpeakerBoostChange}
       />

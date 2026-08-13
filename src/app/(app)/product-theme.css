@@ -91,3 +91,38 @@
   text-transform: uppercase;
   color: #9ca3af;
 }
+
+.wizard-rail-card-tinted {
+  border-radius: 16px;
+  border: 1px solid #e9e5ff;
+  background: linear-gradient(180deg, #f5f3ff 0%, #ffffff 55%);
+  padding: 24px;
+  box-shadow:
+    0 1px 2px rgb(99 102 241 / 0.06),
+    0 12px 32px rgb(99 102 241 / 0.08);
+}
+
+.wizard-question-block {
+  border-radius: 12px;
+  border: 1px solid #e6e8ef;
+  background: #ffffff;
+  padding: 20px;
+}
+
+.wizard-textarea-shell {
+  position: relative;
+  border-radius: 10px;
+  border: 1px solid #e6e8ef;
+  background: #ffffff;
+}
+
+.wizard-textarea-shell textarea {
+  border: none;
+  background: transparent;
+  resize: vertical;
+}
+
+.wizard-textarea-shell textarea:focus {
+  outline: none;
+  box-shadow: none;
+}

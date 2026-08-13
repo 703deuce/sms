@@ -27,14 +27,14 @@ import Link from "next/link";
 import { useState } from "react";
 import { ReceptionistIntegrationsPanel } from "../receptionist-integrations-panel";
 import {
-  CapabilityCard,
+  CapabilityCardCompact,
   FieldChip,
-  SelectableCard,
-  SetupSummaryPanel,
+  SetupDetailsPanel,
+  TimingOptionRow,
   WizardFooter,
   WizardPageHeader,
   WizardPageLayout,
-  WizardSection,
+  WizardQuestionBlock,
 } from "../ui";
 
 const TIMING_ICONS = {
@@ -127,8 +127,9 @@ export function CapabilitiesStep({
 
   return (
     <WizardPageLayout
+      wideAside
       aside={
-        <SetupSummaryPanel
+        <SetupDetailsPanel
           agent={agent}
           businessName={state.businessName}
           capabilities={state.capabilities}
@@ -142,55 +143,53 @@ export function CapabilitiesStep({
     >
       <WizardPageHeader
         icon={<Bot className="h-5 w-5 text-[#6366f1]" />}
-        title={`What ${agent} Should Do`}
+        title="What it should do"
         subtitle="Choose capabilities, routing, and what information to collect."
       />
 
-      <WizardSection number={1} title={`What can ${agent} do?`}>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {CAPABILITY_OPTIONS.map((cap) => {
-              const meta = CAPABILITY_ICONS[cap.id];
-              const Icon = meta.icon;
+      <WizardQuestionBlock number={1} title="What can you do?">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+          {CAPABILITY_OPTIONS.map((cap) => {
+            const meta = CAPABILITY_ICONS[cap.id];
+            const Icon = meta.icon;
+            return (
+              <CapabilityCardCompact
+                key={cap.id}
+                selected={state.capabilities.includes(cap.id)}
+                onClick={() => toggleCap(cap.id)}
+                icon={<Icon className="h-5 w-5" />}
+                iconBg={meta.iconBg}
+                iconColor={meta.iconColor}
+                title={cap.label}
+              />
+            );
+          })}
+        </div>
+      </WizardQuestionBlock>
+
+      <div className="mt-4">
+        <WizardQuestionBlock number={2} title="How would they answer?">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {ANSWER_TIMING_OPTIONS.map((opt) => {
+              const Icon = TIMING_ICONS[opt.id] || PhoneForwarded;
               return (
-                <CapabilityCard
-                  key={cap.id}
-                  selected={state.capabilities.includes(cap.id)}
-                  onClick={() => toggleCap(cap.id)}
-                  icon={<Icon className="h-5 w-5" />}
-                  iconBg={meta.iconBg}
-                  iconColor={meta.iconColor}
-                  title={cap.label}
-                  description={cap.description}
+                <TimingOptionRow
+                  key={opt.id}
+                  selected={state.answerTiming === opt.id}
+                  onClick={() => patch({ answerTiming: opt.id })}
+                  icon={<Icon className="h-4 w-4" />}
+                  title={opt.label}
+                  description={opt.description}
                 />
               );
             })}
           </div>
-        </WizardSection>
-
-      <div className="mt-5">
-          <WizardSection number={2} title={`When should ${agent} answer?`}>
-            <div className="grid gap-3 sm:grid-cols-2">
-              {ANSWER_TIMING_OPTIONS.map((opt) => {
-                const Icon = TIMING_ICONS[opt.id] || PhoneForwarded;
-                return (
-                  <SelectableCard
-                    key={opt.id}
-                    selected={state.answerTiming === opt.id}
-                    onClick={() => patch({ answerTiming: opt.id })}
-                    title={opt.label}
-                    description={opt.description}
-                    icon={<Icon className="h-5 w-5" />}
-                    compact
-                  />
-                );
-              })}
-            </div>
-          </WizardSection>
-        </div>
+        </WizardQuestionBlock>
+      </div>
 
       {showCollect ? (
-        <div className="mt-5">
-            <WizardSection number={3} title="Information to collect">
+        <div className="mt-4">
+          <WizardQuestionBlock number={3} title="What information should they collect?">
               <div className="flex flex-wrap gap-2">
                 {advanced.callerFields.map((field) => (
                   <FieldChip
@@ -205,7 +204,7 @@ export function CapabilitiesStep({
               <p className="mt-3 text-xs text-[#6b7280]">
                 Callers can provide information early — you don&apos;t need to configure that behavior.
               </p>
-            </WizardSection>
+            </WizardQuestionBlock>
           </div>
         ) : null}
 
