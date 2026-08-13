@@ -35,6 +35,3 @@ export function buildReceptionistFieldTransitionLine(
   const question = nextField.question.trim();
   return ack ? `${ack} ${question}` : question;
 }
-
-export const RECEPTIONIST_FIELD_COLLECTION_COMPLETE_PHRASE =
-  "Perfect — I have what I need.";
