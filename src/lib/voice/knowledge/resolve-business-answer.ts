@@ -8,7 +8,6 @@ import {
   isPricingTopic,
   isServiceAreaTopic,
   isServicesTopic,
-  isCompanyNameTopic,
 } from "@/lib/voice/knowledge/business-answer-topics";
 
 export type BusinessAnswerResult =
