@@ -23,7 +23,10 @@ export function fieldManifestFromAdvancedRows(rows: CallerFieldRow[]): AgentFiel
     .map((row) => ({
       id: row.id,
       label: row.label,
-      question: FIELD_QUESTIONS[row.id] || `May I have your ${row.label.toLowerCase()}?`,
+      question:
+        row.question?.trim() ||
+        FIELD_QUESTIONS[row.id] ||
+        `May I have your ${row.label.toLowerCase()}?`,
       type: FIELD_TYPES[row.id] || "text",
       required: row.required,
       askWhen: row.askWhen,

@@ -14,6 +14,8 @@ export type AskWhenMode =
 export type CallerFieldRow = {
   id: string;
   label: string;
+  /** Optional collection question — used for custom fields. */
+  question?: string;
   required: boolean;
   askWhen: AskWhenMode;
   confirm: boolean;

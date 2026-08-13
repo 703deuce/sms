@@ -1,12 +1,17 @@
 /**
  * Publish Harbor Home HVAC receptionist on +18663464256 with Jade @ 1.1 speed.
+ * Applies full wizard content (About Q2/Q3, structured business, custom fields).
  * DB-only publish (no LiveKit SIP provision) — routing uses explicit dispatch metadata.
  * Usage: npx tsx scripts/publish-harbor-home-866.ts
  */
 import { getPrisma } from "../src/lib/db";
 import { wizardStateFromDraftConfig } from "../src/lib/receptionist-wizard/load-config";
-import { advancedFromDraftConfig } from "../src/lib/receptionist-wizard/load-advanced";
 import { RECEPTIONIST_ADVANCED_KEY } from "../src/lib/receptionist-wizard/advanced-types";
+import {
+  buildHarborHomeAdvancedSettings,
+  HARBOR_HOME_CAPABILITIES,
+  HARBOR_HOME_WIZARD_CONTENT,
+} from "../src/lib/receptionist-wizard/harbor-home-demo-config";
 import {
   applyCompiledToVoiceConfig,
   compileReceptionistConfig,
@@ -25,6 +30,7 @@ import {
   getReceptionistElevenLabsVoice,
   normalizeWizardVoiceToElevenLabs,
 } from "../src/lib/voice/elevenlabs/receptionist-voice-catalog";
+import { collectFieldIdsFromRows } from "../src/lib/voice/receptionist/field-manifest";
 
 const WORKSPACE_ID = "ws_1";
 const AGENT_ID = "cmsrk6b775h0m3n6o6z693i2l";
@@ -32,7 +38,6 @@ const PHONE_ID = "cmsc3numa1j17084g391t2z5l";
 const PHONE_E164 = "+18663464256";
 const JADE_VOICE_ID = "Bmj4Yi69e7b67di5IKVn";
 const VOICE_SPEED = 1.1;
-/** Expressive preset — same Jade voice, more dynamic delivery for A/B test vs balanced. */
 const ELEVENLABS_STABILITY = 0.35;
 const ELEVENLABS_SIMILARITY = 0.75;
 const ELEVENLABS_STYLE = 0.1;
@@ -161,23 +166,35 @@ async function main() {
   });
   if (!agent) throw new Error(`Agent ${AGENT_ID} not found`);
 
-  const state = wizardStateFromDraftConfig(agent.draftConfig, AGENT_ID, agent.name);
+  const content = HARBOR_HOME_WIZARD_CONTENT;
+  const advanced = buildHarborHomeAdvancedSettings();
   const voiceId = normalizeWizardVoiceToElevenLabs(JADE_VOICE_ID);
-  state.voiceId = voiceId;
-  state.voiceLabel = getReceptionistElevenLabsVoice(voiceId)?.label || "Jade";
-  state.voiceSpeed = VOICE_SPEED;
-  state.elevenLabsStability = ELEVENLABS_STABILITY;
-  state.elevenLabsClarity = ELEVENLABS_SIMILARITY;
-  state.elevenLabsStyle = ELEVENLABS_STYLE;
-  state.elevenLabsSpeakerBoost = false;
+  const collectFields = collectFieldIdsFromRows(advanced.callerFields);
 
-  const advanced = advancedFromDraftConfig(agent.draftConfig, state.capabilities);
+  const state = {
+    ...wizardStateFromDraftConfig(agent.draftConfig, AGENT_ID, agent.name),
+    ...content,
+    capabilities: [...HARBOR_HOME_CAPABILITIES],
+    collectFields,
+    voiceId,
+    voiceLabel: getReceptionistElevenLabsVoice(voiceId)?.label || "Jade",
+    voiceSpeed: VOICE_SPEED,
+    elevenLabsStability: ELEVENLABS_STABILITY,
+    elevenLabsClarity: ELEVENLABS_SIMILARITY,
+    elevenLabsStyle: ELEVENLABS_STYLE,
+    elevenLabsSpeakerBoost: false,
+  };
+
   const prev = parseVoiceAgentConfig(agent.draftConfig);
 
   const snapshot = compileReceptionistConfig({
     agentName: state.agentName,
     businessName: state.businessName,
     businessDescription: state.businessDescription,
+    agentJobInstructions: state.agentJobInstructions,
+    agentPersonalityNotes: state.agentPersonalityNotes,
+    industry: state.industry,
+    additionalInstructions: state.additionalInstructions,
     greeting: state.greeting,
     language: state.language,
     timezone: state.timezone,
@@ -234,6 +251,8 @@ async function main() {
   const cfg = published.config;
   const adv = (cfg.advanced as Record<string, unknown>) || {};
   const compiled = (adv.receptionistCompiled as Record<string, unknown>) || {};
+  const manifest = (compiled.fieldManifest as Array<{ id: string; label: string }>) || [];
+  const prompt = String(compiled.compiledPrompt || "");
 
   console.log(
     JSON.stringify({
@@ -243,16 +262,17 @@ async function main() {
       phoneE164: PHONE_E164,
       voiceId,
       voiceLabel: state.voiceLabel,
-      voiceSpeed: VOICE_SPEED,
-      elevenLabsStability: ELEVENLABS_STABILITY,
-      elevenLabsSimilarityBoost: ELEVENLABS_SIMILARITY,
-      elevenLabsStyle: ELEVENLABS_STYLE,
-      elevenLabsSpeakerBoost: false,
-      voiceLanguageSpeed: cfg.voiceLanguage?.speed,
-      compiledVoiceSpeed: compiled.voiceSpeed,
       publishedVersionId: published.version.id,
       explicitDispatch: dispatch,
       inboundJoins: joins.map((j) => j.agentId),
+      fieldManifestIds: manifest.map((f) => f.id),
+      customFieldCount: manifest.filter((f) => f.id.startsWith("custom_")).length,
+      promptSections: {
+        yourJob: prompt.includes("YOUR JOB"),
+        additional: prompt.includes("ADDITIONAL CUSTOMER"),
+        business: prompt.includes("BUSINESS"),
+        issueCategory: prompt.includes("Issue category") || prompt.includes("no-heat"),
+      },
     }),
   );
 }

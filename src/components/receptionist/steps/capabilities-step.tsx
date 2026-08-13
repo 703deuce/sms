@@ -2,6 +2,7 @@
 
 import { Input } from "@/components/ui/input";
 import type { ReceptionistAdvancedSettings } from "@/lib/receptionist-wizard/advanced-types";
+import { addCustomCallerField } from "@/lib/receptionist-wizard/caller-field-editor";
 import {
   ANSWER_TIMING_OPTIONS,
   CAPABILITY_OPTIONS,
@@ -24,6 +25,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
+import { useState } from "react";
 import { useState } from "react";
 import { ReceptionistIntegrationsPanel } from "../receptionist-integrations-panel";
 import {
@@ -99,6 +101,8 @@ export function CapabilitiesStep({
 }) {
   const [calendarConnected, setCalendarConnected] = useState(false);
   const [integrationError, setIntegrationError] = useState("");
+  const [customLabel, setCustomLabel] = useState("");
+  const [customQuestion, setCustomQuestion] = useState("");
   const agent = state.agentName.trim() || "Amy";
 
   function toggleCap(id: CapabilityId) {
@@ -113,6 +117,19 @@ export function CapabilitiesStep({
       row.id === id ? { ...row, enabled: !row.enabled } : row,
     );
     patchAdvanced({ callerFields: rows });
+  }
+
+  function addCustomField() {
+    const next = addCustomCallerField(advanced.callerFields, {
+      label: customLabel,
+      question: customQuestion,
+      required: false,
+      askWhen: "service_inquiry",
+    });
+    if (next.length === advanced.callerFields.length) return;
+    patchAdvanced({ callerFields: next });
+    setCustomLabel("");
+    setCustomQuestion("");
   }
 
   const collectInfo = state.capabilities.includes("collect_info");
@@ -204,6 +221,34 @@ export function CapabilitiesStep({
               <p className="mt-3 text-xs text-[#6b7280]">
                 Callers can provide information early — you don&apos;t need to configure that behavior.
               </p>
+              <div className="mt-4 rounded-lg border border-[#e6e8ef] bg-[#f8f9fc] p-4">
+                <p className="text-xs font-semibold text-[#374151]">Add custom field</p>
+                <p className="mt-1 text-[11px] text-[#6b7280]">
+                  For details beyond name, phone, and reason — e.g. system type, gate code, property type.
+                </p>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  <Input
+                    placeholder="Field label (e.g. System type)"
+                    value={customLabel}
+                    onChange={(e) => setCustomLabel(e.target.value)}
+                    className="h-9 text-sm"
+                  />
+                  <Input
+                    placeholder="Question to ask (optional)"
+                    value={customQuestion}
+                    onChange={(e) => setCustomQuestion(e.target.value)}
+                    className="h-9 text-sm"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={addCustomField}
+                  disabled={!customLabel.trim()}
+                  className="mt-3 text-xs font-semibold text-[#6366f1] disabled:text-[#9ca3af]"
+                >
+                  + Add field
+                </button>
+              </div>
             </WizardQuestionBlock>
           </div>
         ) : null}
