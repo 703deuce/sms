@@ -71,6 +71,15 @@ export const RECEPTIONIST_ELEVENLABS_VOICES: ReceptionistElevenLabsVoice[] = [
     enabled: true,
   },
   {
+    id: "AaOhDHYJ1XLZk74lXhdE",
+    label: "Caleb",
+    description: "Trusted guide — warm, calm male",
+    gender: "male",
+    style: "warm",
+    accent: "American",
+    enabled: true,
+  },
+  {
     id: "EXAVITQu4vr4xnSDxMaL",
     label: "Bella",
     description: "Soft and friendly",
