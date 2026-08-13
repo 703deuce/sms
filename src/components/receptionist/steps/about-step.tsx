@@ -94,9 +94,107 @@ export function AboutStep({
               onChange={(e) => patch({ businessDescription: e.target.value })}
             />
             <p className="mt-1 text-xs text-muted-foreground">
-              Give a short description of what the business does.
+              Short public-facing description — compiled into BUSINESS on every call.
             </p>
           </div>
+
+          <div>
+            <Label htmlFor="agent-job">What should your receptionist do?</Label>
+            <Textarea
+              id="agent-job"
+              className="mt-1.5 min-h-[140px]"
+              placeholder="Answer incoming calls. Answer basic questions. For service requests, collect name, callback number, and address. Take messages when needed. Transfer emergencies when appropriate."
+              value={state.agentJobInstructions}
+              onChange={(e) => patch({ agentJobInstructions: e.target.value })}
+            />
+            <p className="mt-1 text-xs text-muted-foreground">
+              This is your job description for the agent — loaded on every call, not retrieved from
+              Knowledge.
+            </p>
+          </div>
+
+          <div>
+            <Label htmlFor="additional-instructions">Additional instructions (optional)</Label>
+            <Textarea
+              id="additional-instructions"
+              className="mt-1.5 min-h-[80px]"
+              placeholder="We pride ourselves on being friendly. If someone sounds upset, apologize before collecting information."
+              value={state.additionalInstructions}
+              onChange={(e) => patch({ additionalInstructions: e.target.value })}
+            />
+          </div>
+
+          <details className="rounded-xl border border-border p-4">
+            <summary className="cursor-pointer text-sm font-semibold text-foreground">
+              Structured business details (optional)
+            </summary>
+            <p className="mt-2 text-xs text-muted-foreground">
+              These compile into the always-loaded BUSINESS section. Leave blank to extract hints
+              from your description where possible.
+            </p>
+            <div className="mt-4 space-y-4">
+              <div>
+                <Label htmlFor="business-hours">Hours</Label>
+                <Textarea
+                  id="business-hours"
+                  className="mt-1.5 min-h-[72px]"
+                  placeholder="Monday-Friday: 8 AM-6 PM&#10;Saturday: 9 AM-2 PM&#10;Sunday: Closed"
+                  value={state.businessHours}
+                  onChange={(e) => patch({ businessHours: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label htmlFor="service-area">Service area</Label>
+                <Textarea
+                  id="service-area"
+                  className="mt-1.5 min-h-[60px]"
+                  placeholder="Woodbridge, Dale City, Lake Ridge, and surrounding areas"
+                  value={state.serviceArea}
+                  onChange={(e) => patch({ serviceArea: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label htmlFor="core-services">Core services</Label>
+                <Textarea
+                  id="core-services"
+                  className="mt-1.5 min-h-[100px]"
+                  placeholder="Electrical repairs&#10;Panel upgrades&#10;EV charger installation&#10;Emergency electrical service"
+                  value={state.coreServices}
+                  onChange={(e) => patch({ coreServices: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label htmlFor="pricing-notes">Pricing / fees</Label>
+                <Textarea
+                  id="pricing-notes"
+                  className="mt-1.5 min-h-[60px]"
+                  placeholder="Standard service-call fee is $89. Do not quote exact repair prices unless listed."
+                  value={state.pricingNotes}
+                  onChange={(e) => patch({ pricingNotes: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label htmlFor="important-facts">Important company facts</Label>
+                <Textarea
+                  id="important-facts"
+                  className="mt-1.5 min-h-[60px]"
+                  placeholder="Licensed and insured. Same-day emergency service available."
+                  value={state.importantFacts}
+                  onChange={(e) => patch({ importantFacts: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label htmlFor="business-address">Address (optional)</Label>
+                <Input
+                  id="business-address"
+                  className="mt-1.5"
+                  placeholder="123 Main St, Woodbridge, VA"
+                  value={state.businessAddress}
+                  onChange={(e) => patch({ businessAddress: e.target.value })}
+                />
+              </div>
+            </div>
+          </details>
 
           <div>
             <Label>When should your receptionist answer calls?</Label>

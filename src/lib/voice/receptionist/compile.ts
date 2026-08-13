@@ -10,9 +10,8 @@ import type { ReceptionistAdvancedSettings } from "@/lib/receptionist-wizard/adv
 import {
   normalizeWizardVoiceToElevenLabs,
   RECEPTIONIST_TTS_MODEL,
-  resolveConfiguredElevenLabsVoice,
 } from "@/lib/voice/elevenlabs/receptionist-voice-catalog";
-import { buildReceptionistBusinessContext } from "./build-business-context";
+import { buildReceptionistCompiledPrompt } from "./build-receptionist-compiled-prompt";
 import { fieldManifestFromAdvancedRows } from "./field-manifest";
 
 export type ReceptionistDraftInput = {
@@ -27,6 +26,9 @@ export type ReceptionistDraftInput = {
   collectFields: string[];
   voiceId: string;
   voiceLabel?: string;
+  agentJobInstructions?: string;
+  additionalInstructions?: string;
+  businessProfile?: import("./types").ReceptionistBusinessProfile;
   advanced?: Record<string, unknown>;
 };
 
@@ -141,10 +143,39 @@ export function compileReceptionistConfig(input: ReceptionistDraftInput): Recept
 
   const elevenLabsVoice = normalizeWizardVoiceToElevenLabs(input.voiceId);
   const voiceMeta = input.voiceLabel?.trim();
-  const wizAdvanced = input.advanced?.receptionistWizard as
-    | { voiceSpeed?: number }
+  const wiz = input.advanced?.receptionistWizard as
+    | {
+        voiceSpeed?: number;
+        agentJobInstructions?: string;
+        additionalInstructions?: string;
+        businessHours?: string;
+        serviceArea?: string;
+        coreServices?: string;
+        pricingNotes?: string;
+        importantFacts?: string;
+        businessAddress?: string;
+      }
     | undefined;
-  const voiceSpeedRaw = wizAdvanced?.voiceSpeed ?? input.advanced?.voiceSpeed;
+
+  const businessProfile = {
+    hours: wiz?.businessHours?.trim() || undefined,
+    serviceArea: wiz?.serviceArea?.trim() || undefined,
+    coreServices: wiz?.coreServices?.trim() || undefined,
+    pricingNotes: wiz?.pricingNotes?.trim() || undefined,
+    importantFacts: wiz?.importantFacts?.trim() || undefined,
+    address: wiz?.businessAddress?.trim() || undefined,
+  };
+
+  const agentJobInstructions =
+    input.agentJobInstructions?.trim() ||
+    wiz?.agentJobInstructions?.trim() ||
+    "";
+  const additionalInstructions =
+    input.additionalInstructions?.trim() ||
+    wiz?.additionalInstructions?.trim() ||
+    undefined;
+
+  const voiceSpeedRaw = wiz?.voiceSpeed ?? input.advanced?.voiceSpeed;
   const voiceSpeed =
     typeof voiceSpeedRaw === "number" && Number.isFinite(voiceSpeedRaw)
       ? Math.min(2, Math.max(0.5, voiceSpeedRaw))
@@ -162,6 +193,10 @@ export function compileReceptionistConfig(input: ReceptionistDraftInput): Recept
     capabilities: [...caps],
     fieldManifest,
     enabledBuiltinTools,
+    agentJobInstructions,
+    additionalInstructions,
+    businessProfile,
+    compiledPrompt: "",
     businessContext: "",
     realtimeModel: "gpt-realtime-2.1" as const,
     realtimeOutputMode: "elevenlabs" as const,
@@ -181,7 +216,8 @@ export function compileReceptionistConfig(input: ReceptionistDraftInput): Recept
     decisionRules: advanced?.decisionRules ?? [],
   };
 
-  partialSnapshot.businessContext = buildReceptionistBusinessContext(partialSnapshot);
+  partialSnapshot.compiledPrompt = buildReceptionistCompiledPrompt(partialSnapshot);
+  partialSnapshot.businessContext = partialSnapshot.compiledPrompt;
 
   return partialSnapshot;
 }

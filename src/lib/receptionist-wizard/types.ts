@@ -18,6 +18,16 @@ export type ReceptionistWizardState = {
   agentName: string;
   businessName: string;
   businessDescription: string;
+  /** What the receptionist should do on calls — always loaded (YOUR JOB). */
+  agentJobInstructions: string;
+  /** Optional owner freeform notes (additional training). */
+  additionalInstructions: string;
+  businessHours: string;
+  serviceArea: string;
+  coreServices: string;
+  pricingNotes: string;
+  importantFacts: string;
+  businessAddress: string;
   answerTiming: AnswerTiming;
   greeting: string;
   language: string;

@@ -13,6 +13,16 @@ export type ReceptionistCapability =
   | "transfer_calls"
   | "send_text";
 
+/** Structured business facts compiled into the always-loaded BUSINESS section. */
+export type ReceptionistBusinessProfile = {
+  hours?: string;
+  serviceArea?: string;
+  coreServices?: string;
+  pricingNotes?: string;
+  importantFacts?: string;
+  address?: string;
+};
+
 export type AgentFieldDefinition = {
   id: string;
   label: string;
@@ -38,7 +48,14 @@ export type ReceptionistCompiledSnapshot = {
   capabilities: ReceptionistCapability[];
   fieldManifest: AgentFieldDefinition[];
   enabledBuiltinTools: string[];
-  /** Compact prompt-injected facts — core business knowledge, not retrieved */
+  /** Customer job instructions — what the receptionist should do (always loaded). */
+  agentJobInstructions: string;
+  /** Optional freeform owner notes (Bland-style additional training). */
+  additionalInstructions?: string;
+  businessProfile: ReceptionistBusinessProfile;
+  /** Full static prompt: constitution + agent + job + business + call configuration */
+  compiledPrompt: string;
+  /** Alias kept for retrieval guardrails and backward compatibility */
   businessContext: string;
   /** OpenAI Realtime intelligence model */
   realtimeModel: "gpt-realtime-2.1";

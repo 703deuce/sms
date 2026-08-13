@@ -3,13 +3,37 @@ import { CAPABILITY_OPTIONS } from "./types";
 import {
   DEFAULT_RECEPTIONIST_ELEVENLABS_VOICE_ID,
   getReceptionistElevenLabsVoice,
+  listEnabledReceptionistElevenLabsVoices,
 } from "@/lib/voice/elevenlabs/receptionist-voice-catalog";
+
+export function defaultAgentJobInstructions(businessName: string): string {
+  const business = businessName.trim() || "our business";
+  return [
+    `You are the front-desk receptionist for ${business}.`,
+    "",
+    "Your primary responsibilities:",
+    "- Answer incoming calls professionally.",
+    "- Answer basic questions about the business.",
+    "- Determine why the caller is calling.",
+    "- Collect required caller information when needed.",
+    "- Take messages when the caller cannot be helped immediately.",
+    "- Transfer or book appointments when appropriate and enabled.",
+  ].join("\n");
+}
 
 export function createDefaultWizardState(): ReceptionistWizardState {
   return {
     agentName: "Amy",
     businessName: "",
     businessDescription: "",
+    agentJobInstructions: "",
+    additionalInstructions: "",
+    businessHours: "",
+    serviceArea: "",
+    coreServices: "",
+    pricingNotes: "",
+    importantFacts: "",
+    businessAddress: "",
     answerTiming: "every_call",
     greeting:
       "Hi, thanks for calling {{businessName}}. This is {{agentName}}, how can I help you today?",

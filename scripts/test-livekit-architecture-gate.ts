@@ -197,23 +197,26 @@ check("receptionist field collection uses silent handoff", () => {
   assert.ok(taskCtx.includes("preserveFunctionCallHistory: false"));
 });
 
-check("receptionist compiles BUSINESS_CONTEXT and hybrid voice pipeline", () => {
+check("receptionist compiles layered prompt and hybrid voice pipeline", () => {
   const compile = readProjectFile("src/lib/voice/receptionist/compile.ts");
-  const bizCtx = readProjectFile("src/lib/voice/receptionist/build-business-context.ts");
+  const prompt = readProjectFile("src/lib/voice/receptionist/build-receptionist-compiled-prompt.ts");
+  const constitution = readProjectFile("src/lib/voice/receptionist/transovo-receptionist-constitution.ts");
   const catalog = readProjectFile("src/lib/voice/elevenlabs/receptionist-voice-catalog.ts");
   const pipeline = readProjectFile("voice-runtime/src/pipeline.ts");
   const hybrid = readProjectFile("voice-runtime/src/hybrid-streaming-tts-node.ts");
   const agent = readProjectFile("voice-runtime/src/frontdesk/receptionist/generic-receptionist-agent.ts");
-  assert.ok(compile.includes("buildReceptionistBusinessContext"));
-  assert.ok(compile.includes("gpt-realtime-2.1"));
-  assert.ok(compile.includes("elevenlabs"));
-  assert.ok(bizCtx.includes("BUSINESS CONTEXT"));
+  const about = readProjectFile("src/components/receptionist/steps/about-step.tsx");
+  assert.ok(compile.includes("buildReceptionistCompiledPrompt"));
+  assert.ok(prompt.includes("TRANSOVO_RECEPTIONIST_CONSTITUTION"));
+  assert.ok(prompt.includes("YOUR JOB"));
+  assert.ok(prompt.includes("BUSINESS"));
+  assert.ok(prompt.includes("CALL CONFIGURATION"));
+  assert.ok(constitution.includes("Never claim an action happened"));
   assert.ok(catalog.includes("RECEPTIONIST_ELEVENLABS_VOICES"));
   assert.ok(pipeline.includes("voicePipelineCfgForHybridAgent"));
-  assert.ok(pipeline.includes("isGenericReceptionistRealtimeProfile"));
   assert.ok(hybrid.includes("maybeNormalizeForElevenLabsModel"));
-  assert.ok(agent.includes("BUSINESS CONTEXT"));
-  assert.ok(agent.includes("get_business_answer only for long-tail"));
+  assert.ok(agent.includes("compiledPrompt"));
+  assert.ok(about.includes("What should your receptionist do?"));
 });
 
 check("realtime pipeline supports per-agent speed and VAD", () => {

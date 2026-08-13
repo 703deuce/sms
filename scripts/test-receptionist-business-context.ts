@@ -1,32 +1,44 @@
 import assert from "node:assert/strict";
 import { compileReceptionistConfig } from "../src/lib/voice/receptionist/compile";
-import { buildReceptionistBusinessContext } from "../src/lib/voice/receptionist/build-business-context";
-import { DEFAULT_RECEPTIONIST_ELEVENLABS_VOICE_ID } from "../src/lib/voice/elevenlabs/receptionist-voice-catalog";
+import { buildReceptionistCompiledPrompt } from "../src/lib/voice/receptionist/build-receptionist-compiled-prompt";
+import { TRANSOVO_RECEPTIONIST_CONSTITUTION } from "../src/lib/voice/receptionist/transovo-receptionist-constitution";
 
 const snapshot = compileReceptionistConfig({
   agentName: "Sarah",
-  businessName: "Summit Electric",
+  businessName: "Summit Electric Services",
   businessDescription:
-    "Regular hours are Monday through Friday 8am to 5pm. Our diagnostic fee is $89.",
+    "Summit Electric Services is a residential and commercial electrical contractor serving Northern Virginia.",
+  agentJobInstructions:
+    "Answer incoming calls. For service requests, collect name, callback number, service address, and problem. Do not quote repair prices other than the service-call fee.",
   greeting: "Hi, thanks for calling Summit Electric.",
   language: "en-US",
   timezone: "America/New_York",
   answerTiming: "every_call",
-  capabilities: ["answer_questions", "take_messages"],
-  collectFields: ["name", "phone"],
-  voiceId: "marin",
+  capabilities: ["answer_questions", "take_messages", "collect_info"],
+  collectFields: ["name", "phone", "reason"],
+  voiceId: "cgSgspJ2msm6clMCkdW9",
+  advanced: {
+    receptionistWizard: {
+      businessHours: "Monday-Friday: 8 AM-6 PM\nSaturday: 9 AM-2 PM\nSunday: Closed",
+      serviceArea: "Woodbridge, Dale City, Lake Ridge, Stafford and surrounding areas",
+      coreServices:
+        "Electrical repairs\nBreaker panel inspections\nEV charger installation\nEmergency electrical service",
+      pricingNotes: "Standard service-call fee is $89.",
+    },
+  },
 });
 
-assert.equal(snapshot.realtimeModel, "gpt-realtime-2.1");
-assert.equal(snapshot.realtimeOutputMode, "elevenlabs");
-assert.equal(snapshot.ttsModel, "eleven_flash_v2_5");
-assert.equal(snapshot.voiceId, DEFAULT_RECEPTIONIST_ELEVENLABS_VOICE_ID);
-assert.ok(snapshot.businessContext.includes("BUSINESS CONTEXT"));
-assert.ok(snapshot.businessContext.includes("Summit Electric"));
-assert.ok(snapshot.businessContext.includes("Monday"));
-assert.ok(snapshot.businessContext.includes("get_business_answer only for long-tail"));
+assert.ok(snapshot.compiledPrompt.includes("TRANSOVO RECEPTIONIST RULES"));
+assert.ok(snapshot.compiledPrompt.includes("YOUR JOB"));
+assert.ok(snapshot.compiledPrompt.includes("BUSINESS"));
+assert.ok(snapshot.compiledPrompt.includes("CALL CONFIGURATION"));
+assert.ok(snapshot.compiledPrompt.includes("Summit Electric Services"));
+assert.ok(snapshot.compiledPrompt.includes("Monday-Friday"));
+assert.ok(snapshot.compiledPrompt.includes("EV charger"));
+assert.ok(snapshot.compiledPrompt.includes("Do not quote repair prices"));
+assert.equal(snapshot.compiledPrompt, snapshot.businessContext);
 
-const block = buildReceptionistBusinessContext(snapshot);
-assert.ok(block.includes("Summit Electric"));
+const prompt = buildReceptionistCompiledPrompt(snapshot);
+assert.ok(prompt.startsWith(TRANSOVO_RECEPTIONIST_CONSTITUTION.slice(0, 20)));
 
 console.log("test-receptionist-business-context: ok");

@@ -209,9 +209,12 @@ export async function resolveBusinessAnswer(input: {
   const kbIds = await linkedKnowledgeBaseIds(input.workspaceId, input.agentId);
 
   const receptionistCompiled = advanced.receptionistCompiled as
-    | { businessContext?: string }
+    | { businessContext?: string; compiledPrompt?: string }
     | undefined;
-  if (receptionistCompiled?.businessContext?.trim()) {
+  const hasCompiledContext =
+    receptionistCompiled?.compiledPrompt?.trim() ||
+    receptionistCompiled?.businessContext?.trim();
+  if (hasCompiledContext) {
     const coreTopic =
       isCompanyNameTopic(topicLower) ||
       isHoursTopic(topicLower) ||
@@ -222,7 +225,7 @@ export async function resolveBusinessAnswer(input: {
       return {
         ok: false,
         speak:
-          "That is core business information already in your BUSINESS CONTEXT. Answer the caller directly without calling this tool.",
+          "That is core business information already in your compiled instructions (BUSINESS / YOUR JOB). Answer the caller directly without calling this tool.",
         code: "CORE_FACT_IN_PROMPT",
       };
     }
