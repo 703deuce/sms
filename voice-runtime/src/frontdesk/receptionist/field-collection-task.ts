@@ -4,6 +4,7 @@ import type { AgentSession } from "@livekit/agents";
 import type { AgentFieldDefinition } from "@/lib/voice/receptionist/types";
 import { buildReceptionistFieldTransitionLine } from "@/lib/voice/receptionist/field-transition-phrases";
 import { validateReceptionistFieldValue } from "@/lib/voice/receptionist/field-validation";
+import { applyReceptionistFieldBackfill } from "@/lib/voice/receptionist/field-backfill";
 import { FIELD_TRANSITION_BRIDGE_RULES } from "@/lib/voice/field-transition-bridge";
 import type { FrontDeskUserData } from "../userdata";
 import { deliverScriptedSpeech } from "../../outbound/scripted-speech";
@@ -150,6 +151,13 @@ export class ReceptionistFieldCollectionTask extends voice.AgentTask<Receptionis
 
   async onEnter(): Promise<void> {
     const ud = this.sessionRef.userData;
+    if (!ud.receptionistFields) ud.receptionistFields = {};
+    ud.receptionistFields = applyReceptionistFieldBackfill({
+      chatCtx: this.sessionRef.chatCtx,
+      manifest: this.fields,
+      receptionistFields: ud.receptionistFields,
+    });
+
     markTaskStarted({
       callId: ud.callId,
       taskId: TASK_ID,

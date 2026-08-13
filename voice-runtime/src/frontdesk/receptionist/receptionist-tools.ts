@@ -4,6 +4,11 @@ import type { AgentSession } from "@livekit/agents";
 import type { ReceptionistCompiledSnapshot } from "@/lib/voice/receptionist/types";
 import { takeStructuredMessage } from "@/lib/voice/domain-actions/take-structured-message";
 import { resolveReceptionistCallbackPhone } from "@/lib/voice/receptionist/field-validation";
+import { applyReceptionistFieldBackfill } from "@/lib/voice/receptionist/field-backfill";
+import {
+  missingReceptionistFields,
+  type ReceptionistCollectionPurpose,
+} from "@/lib/voice/receptionist/field-collection-scope";
 import { executeAgentTool } from "@/lib/voice/agent-tool-gateway/gateway";
 import { buildFrontDeskBookingTools } from "../booking-tools";
 import type { FrontDeskUserData } from "../userdata";
@@ -29,11 +34,27 @@ function actionAllowed(
   return true;
 }
 
-function buildTakeMessageTool() {
+function backfillReceptionistFields(
+  session: AgentSession<FrontDeskUserData>,
+  manifest: ReceptionistCompiledSnapshot["fieldManifest"],
+): void {
+  const ud = session.userData;
+  if (!ud.receptionistFields) ud.receptionistFields = {};
+  ud.receptionistFields = applyReceptionistFieldBackfill({
+    chatCtx: session.chatCtx,
+    manifest,
+    receptionistFields: ud.receptionistFields,
+  });
+}
+
+function buildTakeMessageTool(snapshot: ReceptionistCompiledSnapshot) {
   return llm.tool({
     name: "take_message",
     description:
-      "Take a structured message for staff when the caller needs a callback or does not want to book.",
+      "Record a callback message for staff. Use when the caller wants someone to follow up. " +
+      "Put the caller's issue in reason — use what they already said, do not ask again. " +
+      "Do NOT call collect_caller_fields before this tool. " +
+      "Callback number may come from caller ID when they confirm.",
     parameters: z.object({
       reason: z.string().describe("Main message or reason for callback"),
       caller_name: z.string().optional(),
@@ -45,10 +66,28 @@ function buildTakeMessageTool() {
       const session = opts.ctx.session as AgentSession<FrontDeskUserData>;
       const ud = session.userData;
       return withLiveKitToolTelemetry(ud, "take_message", args, async () => {
+        backfillReceptionistFields(session, snapshot.fieldManifest);
+
+        const reason =
+          args.reason?.trim() ||
+          ud.receptionistFields?.reason?.trim() ||
+          "";
+        if (!reason) {
+          throw new llm.ToolError(
+            "Ask one brief question for the message reason. Do not call collect_caller_fields.",
+          );
+        }
+
         const name =
           args.caller_name?.trim() ||
           ud.receptionistFields?.name ||
           "";
+        if (!name) {
+          throw new llm.ToolError(
+            "Ask for the caller's full name only. Do not call collect_caller_fields or explain the process.",
+          );
+        }
+
         const phone = resolveReceptionistCallbackPhone({
           collectedPhone: ud.receptionistFields?.phone,
           preferredCallback: args.preferred_callback,
@@ -56,20 +95,29 @@ function buildTakeMessageTool() {
         });
         if (!phone) {
           throw new llm.ToolError(
-            "No valid callback number yet. Ask for the caller's phone number before taking a message.",
+            "Ask for a callback phone number only. Do not call collect_caller_fields.",
           );
         }
+
+        ud.receptionistFields = {
+          ...(ud.receptionistFields || {}),
+          name,
+          phone,
+          reason,
+        };
+        ud.receptionistMessageTaken = true;
+
         await takeStructuredMessage({
           workspaceId: ud.workspaceId,
           callId: ud.callId,
-          reason: args.reason,
+          reason,
           caller_name: name,
           phone,
           urgency: args.urgency || "normal",
           preferred_callback: args.preferred_callback?.trim() || undefined,
           notes: args.notes,
         });
-        return "Message recorded. Tell the caller someone from the team will follow up.";
+        return "Message recorded. Tell the caller someone from the team will follow up. Do not ask to leave another message.";
       });
     },
   });
@@ -119,17 +167,34 @@ function buildCollectCallerFieldsTool(snapshot: ReceptionistCompiledSnapshot) {
   return llm.tool({
     name: "collect_caller_fields",
     description:
-      "Collect required caller information (name, phone, reason, etc.) when not yet captured.",
+      "Collect missing required caller profile fields (name, phone) for service or booking. " +
+      "Do NOT use when the caller is leaving a message — use take_message instead. " +
+      "Do NOT use when the caller already gave the issue; backfill handles that.",
     parameters: z.object({
       reason: z.string().optional().describe("Why collection is needed"),
+      purpose: z
+        .enum(["message", "service", "booking", "general"])
+        .optional()
+        .describe("message = never use; service = HVAC issue; booking = scheduling"),
     }),
-    execute: async (_args, opts) => {
+    execute: async (args, opts) => {
       const session = opts.ctx.session as AgentSession<FrontDeskUserData>;
       const ud = session.userData;
-      return withLiveKitToolTelemetry(ud, "collect_caller_fields", {}, async () => {
-        const missing = manifest.filter((f) => !ud.receptionistFields?.[f.id]?.trim());
+      return withLiveKitToolTelemetry(ud, "collect_caller_fields", args, async () => {
+        if (args.purpose === "message" || ud.receptionistMessageTaken) {
+          return "Use take_message for callback requests — do not run field collection.";
+        }
+
+        backfillReceptionistFields(session, manifest);
+
+        const purpose = (args.purpose as ReceptionistCollectionPurpose | undefined) || "service";
+        const missing = missingReceptionistFields(
+          manifest,
+          ud.receptionistFields,
+          purpose,
+        );
         if (!missing.length) {
-          return "Caller information is already complete.";
+          return "Caller information is already complete. Continue with take_message, booking, or answering.";
         }
         const firstMissing = missing[0];
         if (firstMissing?.question?.trim()) {
@@ -204,7 +269,7 @@ export function buildReceptionistTools(input: {
     push(tool);
   }
 
-  if (actionAllowed(snapshot, "takeMessages", "take_messages")) push(buildTakeMessageTool());
+  if (actionAllowed(snapshot, "takeMessages", "take_messages")) push(buildTakeMessageTool(snapshot));
   if (actionAllowed(snapshot, "sendSms", "send_text")) push(buildSendSmsTool());
 
   const collectTool = buildCollectCallerFieldsTool(snapshot);

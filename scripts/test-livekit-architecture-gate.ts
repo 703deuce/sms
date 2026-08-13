@@ -198,6 +198,8 @@ check("receptionist field collection uses silent handoff", () => {
   assert.ok(taskCtx.includes("ChatContext.empty()"));
   assert.ok(tools.includes("resyncOpenAIRealtimeAgentChatCtx"));
   assert.ok(tools.includes("receptionistFieldCollectionPrefaceSpoken"));
+  assert.ok(tools.includes("receptionistMessageTaken"));
+  assert.ok(tools.includes("applyReceptionistFieldBackfill"));
 });
 
 check("receptionist compiles layered prompt and hybrid voice pipeline", () => {

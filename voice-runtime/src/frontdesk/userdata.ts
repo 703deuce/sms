@@ -44,6 +44,8 @@ export type FrontDeskUserData = {
   receptionistCompiled?: ReceptionistCompiledSnapshot;
   /** Collected caller fields for generic receptionist (field manifest). */
   receptionistFields?: Record<string, string>;
+  /** Message recorded this call — block duplicate message/collection loops. */
+  receptionistMessageTaken?: boolean;
   /** Field collection task finished — parent should not re-acknowledge fields. */
   receptionistFieldCollectionComplete?: boolean;
   /** Caller fields were acknowledged during collection (operational flag). */

@@ -19,6 +19,7 @@ export function buildGeneratedWorkflowRules(snapshot: ReceptionistCompiledSnapsh
     }
     lines.push(
       "- Collect missing required fields before completing the caller's request when collection is enabled.",
+      "- Use collect_caller_fields only for service or booking — never for a simple callback message.",
       "- Use runtime collected-field state and tools — do not re-ask for values already captured.",
     );
   }
@@ -26,9 +27,11 @@ export function buildGeneratedWorkflowRules(snapshot: ReceptionistCompiledSnapsh
   if (snapshot.capabilities.includes("take_messages")) {
     lines.push("Taking messages:");
     lines.push(
-      "- When taking a message, capture the caller's name, callback number, and reason.",
-      "- Confirm message details when appropriate before submitting.",
-      "- Use take_message and confirm success before telling the caller the message was recorded.",
+      "- When the caller wants a callback or to leave a message, use take_message — not collect_caller_fields.",
+      "- If they already described the issue, put that in reason. Do not ask again.",
+      "- Use caller ID for callback when appropriate; only ask for name or number if still unknown.",
+      "- Do not explain internal steps or narrate what you will collect.",
+      "- After take_message succeeds, confirm follow-up once. Do not ask to leave another message.",
     );
     const notifications = snapshot.notifications as {
       messageEmail?: string;
