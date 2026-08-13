@@ -1,140 +1,348 @@
 "use client";
 
 import { Input } from "@/components/ui/input";
+import type { ReceptionistAdvancedSettings } from "@/lib/receptionist-wizard/advanced-types";
 import {
+  ANSWER_TIMING_OPTIONS,
   CAPABILITY_OPTIONS,
-  DEFAULT_COLLECT_FIELDS,
   type CapabilityId,
-  type CollectFieldId,
   type ReceptionistWizardState,
 } from "@/lib/receptionist-wizard/types";
-import { Sparkles } from "lucide-react";
+import {
+  Bot,
+  Calendar,
+  Clock,
+  MessageSquare,
+  Phone,
+  PhoneForwarded,
+  PhoneMissed,
+  Upload,
+  Users,
+} from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { ReceptionistIntegrationsPanel } from "../receptionist-integrations-panel";
-import { SelectableCard, SidePanel, WizardFooter } from "../ui";
+import {
+  CapabilityCard,
+  FieldChip,
+  SelectableCard,
+  SidePanel,
+  WizardFooter,
+  WizardSection,
+} from "../ui";
+
+const TIMING_ICONS = {
+  every_call: Phone,
+  after_hours: Clock,
+  nobody_answers: PhoneMissed,
+  overflow: Users,
+} as const;
 
 export function CapabilitiesStep({
   state,
+  advanced,
   patch,
+  patchAdvanced,
   onBack,
   onContinue,
   busy,
 }: {
   state: ReceptionistWizardState;
+  advanced: ReceptionistAdvancedSettings;
   patch: (p: Partial<ReceptionistWizardState>) => void;
+  patchAdvanced: (p: Partial<ReceptionistAdvancedSettings>) => void;
   onBack: () => void;
   onContinue: () => void;
   busy?: boolean;
 }) {
   const [calendarConnected, setCalendarConnected] = useState(false);
   const [integrationError, setIntegrationError] = useState("");
+  const agent = state.agentName.trim() || "Amy";
 
   function toggleCap(id: CapabilityId) {
     const has = state.capabilities.includes(id);
-    const next = has
-      ? state.capabilities.filter((c) => c !== id)
-      : [...state.capabilities, id];
-    patch({ capabilities: next });
+    patch({
+      capabilities: has ? state.capabilities.filter((c) => c !== id) : [...state.capabilities, id],
+    });
+  }
+
+  function toggleField(id: string) {
+    const rows = advanced.callerFields.map((row) =>
+      row.id === id ? { ...row, enabled: !row.enabled } : row,
+    );
+    patchAdvanced({ callerFields: rows });
   }
 
   const collectInfo = state.capabilities.includes("collect_info");
+  const takeMessages = state.capabilities.includes("take_messages");
   const bookAppts = state.capabilities.includes("book_appointments");
+  const transferCalls = state.capabilities.includes("transfer_calls");
+  const sendText = state.capabilities.includes("send_text");
+  const showCollect =
+    collectInfo || takeMessages || bookAppts;
 
-  const summaryCaps = CAPABILITY_OPTIONS.filter((c) => state.capabilities.includes(c.id));
+  const enabledFields = advanced.callerFields.filter((f) => f.enabled);
 
   return (
     <div className="flex flex-col gap-8 lg:flex-row">
       <div className="min-w-0 flex-1">
-        <div className="mb-6">
-          <h1 className="font-display text-2xl font-semibold tracking-tight">
-            What should your receptionist do?
-          </h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Choose the capabilities you want {state.agentName || "Amy"} to handle. You can
-            customize and refine these later anytime.
-          </p>
-        </div>
-
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {CAPABILITY_OPTIONS.map((cap) => (
-            <SelectableCard
-              key={cap.id}
-              selected={state.capabilities.includes(cap.id)}
-              onClick={() => toggleCap(cap.id)}
-              title={cap.label}
-              description={cap.description}
-              compact
-            />
-          ))}
-        </div>
-
-        {collectInfo ? (
-          <div className="mt-8 voice-card p-5">
-            <h3 className="text-sm font-semibold">Information Amy should collect</h3>
-            <p className="mt-1 text-sm text-muted-foreground">
-              When Amy takes a message or collects caller info, what should she ask for?
+        <div className="mb-8 flex items-start gap-4">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#6366f1]/10">
+            <Bot className="h-6 w-6 text-[#6366f1]" />
+          </div>
+          <div>
+            <h1 className="font-display text-2xl font-semibold tracking-tight text-[#111827]">
+              What {agent} Should Do
+            </h1>
+            <p className="mt-1 text-sm text-[#6b7280]">
+              Choose capabilities, routing, and what information to collect.
             </p>
-            <ol className="mt-4 space-y-2">
-              {DEFAULT_COLLECT_FIELDS.map((field, i) => (
-                <li
-                  key={field.id}
-                  className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-4 py-2.5 text-sm"
-                >
-                  <span>
-                    <span className="font-medium text-muted-foreground">{i + 1}.</span>{" "}
-                    {field.label}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    {field.required ? "Required" : "Not required"}
-                  </span>
-                </li>
-              ))}
-            </ol>
-            <div className="mt-4 flex gap-2">
-              <Input
-                placeholder="Ask Amy to collect something else (e.g. Email, Order ID)"
-                className="flex-1"
-                readOnly
+          </div>
+        </div>
+
+        <WizardSection number={1} title={`What can ${agent} do?`}>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {CAPABILITY_OPTIONS.map((cap) => (
+              <CapabilityCard
+                key={cap.id}
+                selected={state.capabilities.includes(cap.id)}
+                onClick={() => toggleCap(cap.id)}
+                emoji={cap.emoji}
+                title={cap.label}
+                description={cap.description}
               />
-              <button type="button" className="voice-btn-outline h-10 w-10 shrink-0">+</button>
+            ))}
+          </div>
+        </WizardSection>
+
+        <div className="mt-6">
+          <WizardSection number={2} title={`When should ${agent} answer?`}>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {ANSWER_TIMING_OPTIONS.map((opt) => {
+                const Icon = TIMING_ICONS[opt.id] || PhoneForwarded;
+                return (
+                  <SelectableCard
+                    key={opt.id}
+                    selected={state.answerTiming === opt.id}
+                    onClick={() => patch({ answerTiming: opt.id })}
+                    title={opt.label}
+                    description={opt.description}
+                    icon={<Icon className="h-5 w-5" />}
+                    compact
+                  />
+                );
+              })}
             </div>
-            <div className="mt-4 flex items-start gap-2 rounded-lg bg-primary/5 p-3 text-xs text-muted-foreground">
-              <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-              <span>
-                AI Intelligence: Amy will intelligently collect these details during the natural
-                flow of the conversation.
-              </span>
-            </div>
+          </WizardSection>
+        </div>
+
+        {showCollect ? (
+          <div className="mt-6">
+            <WizardSection number={3} title="Information to collect">
+              <div className="flex flex-wrap gap-2">
+                {advanced.callerFields.map((field) => (
+                  <FieldChip
+                    key={field.id}
+                    label={field.label}
+                    selected={field.enabled}
+                    required={field.required}
+                    onToggle={() => toggleField(field.id)}
+                  />
+                ))}
+              </div>
+              <p className="mt-3 text-xs text-[#6b7280]">
+                Callers can provide information early — you don&apos;t need to configure that behavior.
+              </p>
+            </WizardSection>
           </div>
         ) : null}
 
-        {bookAppts || collectInfo || state.capabilities.includes("take_messages") ? (
-          <div className="mt-8">
-            <div className="mb-3 flex items-center justify-between gap-4">
-              <h3 className="text-sm font-semibold text-foreground">Connect integrations</h3>
-              {state.agentId ? (
-                <Link
-                  href={`/voice/agents/${state.agentId}/integrations`}
-                  className="text-xs font-medium text-primary hover:underline"
-                >
-                  Full integrations page →
-                </Link>
-              ) : null}
+        {bookAppts ? (
+          <div className="mt-6 voice-card p-5">
+            <div className="flex items-center gap-2 text-sm font-semibold text-[#111827]">
+              <Calendar className="h-4 w-4 text-[#6366f1]" />
+              Appointment Booking
             </div>
             {integrationError ? (
-              <p className="mb-3 rounded-lg border border-danger/30 bg-danger/5 px-3 py-2 text-sm text-danger">
+              <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
                 {integrationError}
               </p>
             ) : null}
-            <ReceptionistIntegrationsPanel
-              agentId={state.agentId}
-              showCalendar={bookAppts}
-              showCrm={bookAppts || collectInfo || state.capabilities.includes("take_messages")}
-              onCalendarConnectedChange={setCalendarConnected}
-            />
+            <div className="mt-4">
+              <ReceptionistIntegrationsPanel
+                agentId={state.agentId}
+                showCalendar={true}
+                showCrm={false}
+                onCalendarConnectedChange={setCalendarConnected}
+              />
+            </div>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="text-xs font-semibold text-[#374151]">Appointment length</label>
+                <select
+                  className="mt-1.5 h-10 w-full rounded-lg border border-[#e6e8ef] px-3 text-sm"
+                  value={advanced.bookingPolicy.minimumNoticeHours}
+                  onChange={(e) =>
+                    patchAdvanced({
+                      bookingPolicy: {
+                        ...advanced.bookingPolicy,
+                        minimumNoticeHours: Number(e.target.value),
+                      },
+                    })
+                  }
+                >
+                  <option value={1}>60 minutes</option>
+                  <option value={2}>2 hours notice</option>
+                  <option value={4}>4 hours notice</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-[#374151]">How far ahead</label>
+                <select className="mt-1.5 h-10 w-full rounded-lg border border-[#e6e8ef] px-3 text-sm">
+                  <option>30 days</option>
+                  <option>14 days</option>
+                  <option>7 days</option>
+                </select>
+              </div>
+            </div>
           </div>
         ) : null}
+
+        {transferCalls ? (
+          <div className="mt-6 voice-card p-5">
+            <div className="flex items-center gap-2 text-sm font-semibold text-[#111827]">
+              <PhoneForwarded className="h-4 w-4 text-[#6366f1]" />
+              Call Transfers
+            </div>
+            <div className="mt-4 space-y-3">
+              <Input
+                placeholder="Transfer destination (+1...)"
+                value={advanced.transferPolicy.destinationE164}
+                onChange={(e) =>
+                  patchAdvanced({
+                    transferPolicy: {
+                      ...advanced.transferPolicy,
+                      destinationE164: e.target.value,
+                    },
+                  })
+                }
+              />
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-[#374151]">When should {agent} transfer?</p>
+                {[
+                  { id: "caller_asks" as const, label: "Whenever the caller asks for a person" },
+                  { id: "certain_calls" as const, label: "Only for certain calls" },
+                  { id: "instructions" as const, label: "Use my instructions" },
+                ].map((opt) => (
+                  <label key={opt.id} className="flex items-center gap-2 text-sm text-[#374151]">
+                    <input
+                      type="radio"
+                      checked={advanced.transferPolicy.whenToTransfer === opt.id}
+                      onChange={() =>
+                        patchAdvanced({
+                          transferPolicy: { ...advanced.transferPolicy, whenToTransfer: opt.id },
+                        })
+                      }
+                    />
+                    {opt.label}
+                  </label>
+                ))}
+              </div>
+              {advanced.transferPolicy.whenToTransfer === "certain_calls" ? (
+                <textarea
+                  className="min-h-[72px] w-full rounded-lg border border-[#e6e8ef] p-3 text-sm"
+                  placeholder="Emergency service calls, existing customers with active jobs, billing problems."
+                  value={advanced.transferPolicy.transferInstructions || ""}
+                  onChange={(e) =>
+                    patchAdvanced({
+                      transferPolicy: {
+                        ...advanced.transferPolicy,
+                        transferInstructions: e.target.value,
+                      },
+                    })
+                  }
+                />
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+
+        {takeMessages ? (
+          <div className="mt-6 voice-card p-5">
+            <div className="flex items-center gap-2 text-sm font-semibold text-[#111827]">
+              <MessageSquare className="h-4 w-4 text-[#6366f1]" />
+              When {agent} Takes a Message
+            </div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="text-xs font-semibold text-[#374151]">Send to Email</label>
+                <Input
+                  className="mt-1.5"
+                  placeholder="office@example.com"
+                  value={advanced.notifications.messageEmail || ""}
+                  onChange={(e) =>
+                    patchAdvanced({
+                      notifications: { ...advanced.notifications, messageEmail: e.target.value },
+                    })
+                  }
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-[#374151]">Send to SMS</label>
+                <Input
+                  className="mt-1.5"
+                  placeholder="(703) 555-0198"
+                  value={advanced.notifications.messageSms || ""}
+                  onChange={(e) =>
+                    patchAdvanced({
+                      notifications: { ...advanced.notifications, messageSms: e.target.value },
+                    })
+                  }
+                />
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {sendText ? (
+          <div className="mt-6 voice-card p-5">
+            <div className="flex items-center gap-2 text-sm font-semibold text-[#111827]">
+              <MessageSquare className="h-4 w-4 text-[#6366f1]" />
+              Text Messages
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {["Appointment confirmation", "Business information", "Follow-up message"].map(
+                (label) => (
+                  <FieldChip key={label} label={label} selected={label === "Appointment confirmation"} />
+                ),
+              )}
+            </div>
+          </div>
+        ) : null}
+
+        <div className="mt-6 voice-card p-5">
+          <div className="flex items-center gap-2 text-sm font-semibold text-[#111827]">
+            <Upload className="h-4 w-4 text-[#6366f1]" />
+            Give {agent} More Knowledge
+          </div>
+          <p className="mt-2 text-xs text-[#6b7280]">
+            Best for FAQs, warranties, policies, price books, and manuals — not basic business info from
+            Page 1.
+          </p>
+          <div className="mt-4 rounded-xl border-2 border-dashed border-[#e6e8ef] bg-[#f8f9fc] p-8 text-center">
+            <Upload className="mx-auto h-8 w-8 text-[#9ca3af]" />
+            <p className="mt-2 text-sm font-medium text-[#374151]">Drop files here</p>
+            <p className="text-xs text-[#9ca3af]">PDF · DOCX · TXT</p>
+            {state.agentId ? (
+              <Link
+                href={`/voice/agents/${state.agentId}/integrations`}
+                className="mt-3 inline-block text-xs font-medium text-[#6366f1] hover:underline"
+              >
+                Upload files →
+              </Link>
+            ) : null}
+          </div>
+        </div>
 
         <WizardFooter
           showBack
@@ -153,49 +361,42 @@ export function CapabilitiesStep({
         />
       </div>
 
-      <SidePanel title="Agent summary">
+      <SidePanel title={`${agent}'s Setup`}>
         <div className="flex items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-lg font-bold text-white">
-            {state.agentName.charAt(0) || "A"}
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#6366f1] text-sm font-bold text-white">
+            {agent.charAt(0)}
           </div>
           <div>
-            <p className="font-semibold text-foreground">
-              {state.agentName || "Amy"} (Receptionist)
-            </p>
-            <p className="text-xs text-muted-foreground">{state.businessName || "Your business"}</p>
+            <p className="font-semibold text-[#111827]">{agent}</p>
+            <p className="text-xs text-[#6b7280]">{state.businessName || "Your business"}</p>
           </div>
         </div>
-        <ul className="mt-4 space-y-2 text-sm">
-          <li>
-            <span className="text-muted-foreground">Primary behavior:</span>{" "}
-            {state.answerTiming === "every_call"
-              ? "Every call"
-              : state.answerTiming === "after_hours"
-                ? "After hours"
-                : state.answerTiming === "nobody_answers"
-                  ? "When I don't answer"
-                  : "Overflow"}
-          </li>
-        </ul>
-        <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Capabilities
-        </p>
-        <ul className="mt-2 space-y-1 text-sm">
+        <ul className="mt-4 space-y-1.5 text-sm">
           {CAPABILITY_OPTIONS.map((c) => (
-            <li key={c.id} className="flex items-center gap-2">
-              <span
-                className={
-                  state.capabilities.includes(c.id) ? "text-primary" : "text-muted-foreground/50"
-                }
-              >
-                {state.capabilities.includes(c.id) ? "✓" : "○"}
+            <li key={c.id} className="flex items-center gap-2 text-[#374151]">
+              <span className={state.capabilities.includes(c.id) ? "text-[#6366f1]" : "text-[#d1d5db]"}>
+                {state.capabilities.includes(c.id) ? "✓" : "—"}
               </span>
               {c.label}
             </li>
           ))}
         </ul>
-        <div className="mt-6 rounded-lg bg-primary/5 p-3 text-xs text-muted-foreground">
-          Almost there! Your agent is ready for voice and testing.
+        {enabledFields.length ? (
+          <div className="mt-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-[#9ca3af]">Collecting</p>
+            <p className="mt-1 text-sm text-[#374151]">
+              {enabledFields.map((f) => f.label).join(" · ")}
+            </p>
+          </div>
+        ) : null}
+        <div className="mt-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-[#9ca3af]">Answering</p>
+          <p className="mt-1 text-sm text-[#374151]">
+            {ANSWER_TIMING_OPTIONS.find((o) => o.id === state.answerTiming)?.label || "Every call"}
+          </p>
+        </div>
+        <div className="mt-4 rounded-lg bg-[#6366f1]/5 p-3 text-xs text-[#6b7280]">
+          Capabilities control what tools the runtime exposes — prompt text cannot bypass disabled actions.
         </div>
       </SidePanel>
     </div>

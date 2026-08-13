@@ -34,8 +34,8 @@ export function buildReceptionistNavChildren(agentId?: string | null): NavChild[
   if (!agentId) {
     return [
       { label: "Agents", href: listOnly },
-      { label: "About your receptionist", href: "/voice/agents/new" },
-      { label: "What should your agent do?", href: listOnly },
+      { label: "About Your Receptionist", href: "/voice/agents/new" },
+      { label: "What It Should Do", href: listOnly },
       { label: "Connect integrations", href: listOnly },
       { label: "Advanced", href: listOnly },
       { label: "Voice & Test", href: listOnly },
@@ -43,8 +43,8 @@ export function buildReceptionistNavChildren(agentId?: string | null): NavChild[
   }
   return [
     { label: "Agents", href: listOnly },
-    { label: "About your receptionist", href: `/voice/agents/${agentId}/about` },
-    { label: "What should your agent do?", href: `/voice/agents/${agentId}/capabilities` },
+    { label: "About Your Receptionist", href: `/voice/agents/${agentId}/about` },
+    { label: "What It Should Do", href: `/voice/agents/${agentId}/capabilities` },
     { label: "Connect integrations", href: `/voice/agents/${agentId}/integrations` },
     { label: "Advanced", href: `/voice/agents/${agentId}/advanced` },
     { label: "Voice & Test", href: `/voice/agents/${agentId}/voice-test` },

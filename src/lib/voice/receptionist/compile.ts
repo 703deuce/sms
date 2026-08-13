@@ -27,6 +27,8 @@ export type ReceptionistDraftInput = {
   voiceId: string;
   voiceLabel?: string;
   agentJobInstructions?: string;
+  agentPersonalityNotes?: string;
+  industry?: string;
   additionalInstructions?: string;
   businessProfile?: import("./types").ReceptionistBusinessProfile;
   advanced?: Record<string, unknown>;
@@ -147,6 +149,8 @@ export function compileReceptionistConfig(input: ReceptionistDraftInput): Recept
     | {
         voiceSpeed?: number;
         agentJobInstructions?: string;
+        agentPersonalityNotes?: string;
+        industry?: string;
         additionalInstructions?: string;
         businessHours?: string;
         serviceArea?: string;
@@ -170,6 +174,14 @@ export function compileReceptionistConfig(input: ReceptionistDraftInput): Recept
     input.agentJobInstructions?.trim() ||
     wiz?.agentJobInstructions?.trim() ||
     "";
+  const agentPersonalityNotes =
+    input.agentPersonalityNotes?.trim() ||
+    wiz?.agentPersonalityNotes?.trim() ||
+    undefined;
+  const industry =
+    input.industry?.trim() ||
+    wiz?.industry?.trim() ||
+    undefined;
   const additionalInstructions =
     input.additionalInstructions?.trim() ||
     wiz?.additionalInstructions?.trim() ||
@@ -194,6 +206,8 @@ export function compileReceptionistConfig(input: ReceptionistDraftInput): Recept
     fieldManifest,
     enabledBuiltinTools,
     agentJobInstructions,
+    agentPersonalityNotes,
+    industry,
     additionalInstructions,
     businessProfile,
     compiledPrompt: "",

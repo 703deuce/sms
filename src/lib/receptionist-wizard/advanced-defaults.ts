@@ -106,6 +106,8 @@ export function createDefaultAdvancedSettings(): ReceptionistAdvancedSettings {
       notifyOnFailure: true,
       destinationE164: "",
       emergencyDestinationE164: "",
+      whenToTransfer: "caller_asks",
+      transferInstructions: "",
     },
     knowledgePolicy: {
       approvedKnowledgeOnly: true,

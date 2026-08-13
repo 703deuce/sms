@@ -50,6 +50,10 @@ export type ReceptionistCompiledSnapshot = {
   enabledBuiltinTools: string[];
   /** Customer job instructions — what the receptionist should do (always loaded). */
   agentJobInstructions: string;
+  /** Optional personality notes compiled into AGENT (customer-owned). */
+  agentPersonalityNotes?: string;
+  /** Optional industry label from builder UI. */
+  industry?: string;
   /** Optional freeform owner notes (Bland-style additional training). */
   additionalInstructions?: string;
   businessProfile: ReceptionistBusinessProfile;

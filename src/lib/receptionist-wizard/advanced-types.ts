@@ -64,6 +64,8 @@ export type ReceptionistAdvancedSettings = {
     notifyOnFailure: boolean;
     destinationE164: string;
     emergencyDestinationE164: string;
+    whenToTransfer?: "caller_asks" | "certain_calls" | "instructions";
+    transferInstructions?: string;
   };
   knowledgePolicy: {
     approvedKnowledgeOnly: boolean;
@@ -91,6 +93,8 @@ export type ReceptionistAdvancedSettings = {
     notifyNewCustomers: boolean;
     notifyTransferFail: boolean;
     summaryDetail: "short" | "standard" | "detailed";
+    messageEmail?: string;
+    messageSms?: string;
   };
 };
 

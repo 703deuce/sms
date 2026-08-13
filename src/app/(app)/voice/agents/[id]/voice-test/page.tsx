@@ -9,7 +9,7 @@ export default function AgentVoiceTestPage() {
   const params = useParams();
   const agentId = params?.id as string;
   const router = useRouter();
-  const { state, agentName, loading, busy, error, setError, patch, save, publish, buildForTest, phoneNumberId, assignPhone } =
+  const { state, agentName, loading, busy, error, setError, patch, save, publish, buildForTest, phoneNumberId, phoneE164, assignPhone } =
     useReceptionistAgentState(agentId);
 
   if (loading || !state) {
@@ -55,6 +55,7 @@ export default function AgentVoiceTestPage() {
         onActivate={activate}
         busy={busy}
         phoneNumberId={phoneNumberId}
+        phoneE164={phoneE164}
         onPhoneChange={(id) => assignPhone(id).catch(() => undefined)}
       />
     </ReceptionistEditorShell>

@@ -25,7 +25,9 @@ export function createDefaultWizardState(): ReceptionistWizardState {
   return {
     agentName: "Amy",
     businessName: "",
+    industry: "",
     businessDescription: "",
+    agentPersonalityNotes: "",
     agentJobInstructions: "",
     additionalInstructions: "",
     businessHours: "",

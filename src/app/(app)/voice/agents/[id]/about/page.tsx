@@ -9,7 +9,7 @@ export default function AgentAboutPage() {
   const params = useParams();
   const agentId = params?.id as string;
   const router = useRouter();
-  const { state, agentName, loading, busy, error, setError, patch, save, phoneNumberId, assignPhone } =
+  const { state, agentName, loading, busy, error, setError, patch, save } =
     useReceptionistAgentState(agentId);
 
   if (loading || !state) {
@@ -52,8 +52,6 @@ export default function AgentAboutPage() {
         onContinue={continueNext}
         onCancel={() => router.push("/voice/agents")}
         busy={busy}
-        phoneNumberId={phoneNumberId}
-        onPhoneChange={(id) => assignPhone(id).catch(() => undefined)}
       />
     </ReceptionistEditorShell>
   );

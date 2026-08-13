@@ -48,12 +48,22 @@ export default function CreateReceptionistPage() {
         agentName: state.agentName,
         businessName: state.businessName,
         businessDescription: state.businessDescription,
+        agentJobInstructions: state.agentJobInstructions,
+        agentPersonalityNotes: state.agentPersonalityNotes,
+        industry: state.industry,
+        additionalInstructions: state.additionalInstructions,
         greeting: state.greeting,
         language: state.language,
+        timezone: state.timezone,
         answerTiming: state.answerTiming,
         capabilities: state.capabilities,
         collectFields: state.collectFields,
         voiceId: state.voiceId,
+        advanced: {
+          receptionistWizard: {
+            ...state,
+          },
+        },
       });
       const draftConfig = applyCompiledToVoiceConfig(prev, snapshot);
       await fetch(`/api/voice/agents/${agentId}`, {

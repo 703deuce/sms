@@ -2,27 +2,16 @@
 
 import { Input, Label, Textarea } from "@/components/ui/input";
 import {
-  ANSWER_TIMING_OPTIONS,
+  INDUSTRY_OPTIONS,
   type ReceptionistWizardState,
 } from "@/lib/receptionist-wizard/types";
-import { generateGreeting } from "@/lib/receptionist-wizard/defaults";
-import { PhoneNumberSelect } from "../phone-number-select";
-import {
-  Clock,
-  Phone,
-  PhoneForwarded,
-  PhoneMissed,
-  Sparkles,
-  Users,
-} from "lucide-react";
-import { SelectableCard, SidePanel, WizardFooter } from "../ui";
+import { defaultAgentJobInstructions } from "@/lib/receptionist-wizard/defaults";
+import { Bot, Check, Sparkles } from "lucide-react";
+import { SidePanel, WizardFooter, WizardSection } from "../ui";
 
-const TIMING_ICONS = {
-  every_call: Phone,
-  after_hours: Clock,
-  nobody_answers: PhoneMissed,
-  overflow: Users,
-} as const;
+function wordCount(text: string): number {
+  return text.trim() ? text.trim().split(/\s+/).length : 0;
+}
 
 export function AboutStep({
   state,
@@ -30,255 +19,220 @@ export function AboutStep({
   onContinue,
   onCancel,
   busy,
-  phoneNumberId,
-  onPhoneChange,
 }: {
   state: ReceptionistWizardState;
   patch: (p: Partial<ReceptionistWizardState>) => void;
   onContinue: () => void;
   onCancel: () => void;
   busy?: boolean;
-  phoneNumberId?: string | null;
-  onPhoneChange?: (id: string | null) => void;
 }) {
-  function generateGreetingClick() {
-    patch({ greeting: generateGreeting(state) });
+  const agent = state.agentName.trim() || "Amy";
+  const descWords = wordCount(state.businessDescription);
+
+  function regenerateBusinessDescription() {
+    const industry = state.industry.trim() || "service";
+    const business = state.businessName.trim() || "our business";
+    patch({
+      businessDescription: `${business} is a ${industry.toLowerCase()} business serving local customers with professional, reliable service.`,
+    });
+  }
+
+  function generatePersonality() {
+    patch({
+      agentPersonalityNotes: `You are ${agent}, a helpful and professional receptionist for ${state.businessName.trim() || "the business"}. You speak clearly, stay calm under pressure, and make callers feel welcomed.`,
+    });
+  }
+
+  function ensureJobInstructions() {
+    if (!state.agentJobInstructions.trim()) {
+      patch({ agentJobInstructions: defaultAgentJobInstructions(state.businessName) });
+    }
   }
 
   return (
     <div className="flex flex-col gap-8 lg:flex-row">
       <div className="min-w-0 flex-1">
-        <div className="mb-6">
-          <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground">
-            Tell us about your receptionist
-          </h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            This helps the AI understand who they are and how to handle calls for your business.
-          </p>
+        <div className="mb-8 flex items-start gap-4">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#6366f1]/10">
+            <Bot className="h-6 w-6 text-[#6366f1]" />
+          </div>
+          <div>
+            <h1 className="font-display text-2xl font-semibold tracking-tight text-[#111827]">
+              About Your Receptionist
+            </h1>
+            <p className="mt-1 text-sm text-[#6b7280]">
+              Tell us about your business and your receptionist&apos;s personality.
+            </p>
+          </div>
         </div>
 
-        <div className="space-y-5">
+        <div className="mb-6 grid gap-4 sm:grid-cols-3">
           <div>
-            <Label htmlFor="agent-name">Agent name</Label>
+            <Label htmlFor="agent-name" className="text-xs font-semibold text-[#374151]">
+              Agent Name
+            </Label>
             <Input
               id="agent-name"
-              className="mt-1.5"
+              className="mt-1.5 h-11 border-[#e6e8ef]"
               placeholder="Amy"
               value={state.agentName}
               onChange={(e) => patch({ agentName: e.target.value })}
             />
-            <p className="mt-1 text-xs text-muted-foreground">This is for internal use only.</p>
           </div>
-
           <div>
-            <Label htmlFor="business-name">Business name</Label>
+            <Label htmlFor="business-name" className="text-xs font-semibold text-[#374151]">
+              Business Name
+            </Label>
             <Input
               id="business-name"
-              className="mt-1.5"
+              className="mt-1.5 h-11 border-[#e6e8ef]"
               placeholder="John&apos;s Plumbing"
               value={state.businessName}
               onChange={(e) => patch({ businessName: e.target.value })}
             />
-            <p className="mt-1 text-xs text-muted-foreground">
-              Used when Amy introduces your business on calls.
-            </p>
           </div>
-
           <div>
-            <Label htmlFor="business-desc">What does your business do?</Label>
+            <Label htmlFor="industry" className="text-xs font-semibold text-[#374151]">
+              Industry
+            </Label>
+            <select
+              id="industry"
+              className="mt-1.5 h-11 w-full rounded-lg border border-[#e6e8ef] bg-white px-3 text-sm text-[#374151]"
+              value={state.industry}
+              onChange={(e) => patch({ industry: e.target.value })}
+            >
+              <option value="">Select industry</option>
+              {INDUSTRY_OPTIONS.map((opt) => (
+                <option key={opt} value={opt}>{opt}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="space-y-5">
+          <WizardSection
+            number={1}
+            title="Tell us about your business"
+            subtitle="Recommended 100–200 words. Compiled into BUSINESS on every call."
+            action={
+              <button
+                type="button"
+                onClick={regenerateBusinessDescription}
+                className="voice-btn-outline text-xs"
+              >
+                <Sparkles className="h-3.5 w-3.5" />
+                Regenerate
+              </button>
+            }
+          >
             <Textarea
-              id="business-desc"
-              className="mt-1.5 min-h-[100px]"
-              placeholder="We are a plumbing company based in London that provides repair, maintenance, and emergency plumbing services for residential and commercial property."
+              className="min-h-[140px] border-[#e6e8ef] text-sm"
+              placeholder="We are a plumbing company that provides repair, maintenance, and emergency plumbing services for residential and commercial customers."
               value={state.businessDescription}
               onChange={(e) => patch({ businessDescription: e.target.value })}
             />
-            <p className="mt-1 text-xs text-muted-foreground">
-              Short public-facing description — compiled into BUSINESS on every call.
-            </p>
-          </div>
+            <p className="mt-2 text-xs text-[#9ca3af]">{descWords} words</p>
+            <details className="mt-4 rounded-lg border border-[#e6e8ef] bg-[#f8f9fc] p-4">
+              <summary className="cursor-pointer text-xs font-semibold text-[#374151]">
+                Structured business details (hours, services, pricing)
+              </summary>
+              <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                <div>
+                  <Label className="text-xs">Hours</Label>
+                  <Textarea
+                    className="mt-1 min-h-[72px] text-sm"
+                    placeholder="Monday-Friday: 8 AM-6 PM"
+                    value={state.businessHours}
+                    onChange={(e) => patch({ businessHours: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Service area</Label>
+                  <Textarea
+                    className="mt-1 min-h-[72px] text-sm"
+                    value={state.serviceArea}
+                    onChange={(e) => patch({ serviceArea: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Core services</Label>
+                  <Textarea
+                    className="mt-1 min-h-[72px] text-sm"
+                    value={state.coreServices}
+                    onChange={(e) => patch({ coreServices: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Pricing / fees</Label>
+                  <Textarea
+                    className="mt-1 min-h-[72px] text-sm"
+                    value={state.pricingNotes}
+                    onChange={(e) => patch({ pricingNotes: e.target.value })}
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <Label className="text-xs">Address</Label>
+                  <Input
+                    className="mt-1 text-sm"
+                    value={state.businessAddress}
+                    onChange={(e) => patch({ businessAddress: e.target.value })}
+                  />
+                </div>
+              </div>
+            </details>
+          </WizardSection>
 
-          <div>
-            <Label htmlFor="agent-job">What should your receptionist do?</Label>
+          <WizardSection
+            number={2}
+            title={`Tell us about ${agent}`}
+            subtitle="Personality and speaking style — compiled into AGENT."
+            optional
+            action={
+              <button type="button" onClick={generatePersonality} className="voice-btn-outline text-xs">
+                <Sparkles className="h-3.5 w-3.5" />
+                Generate
+              </button>
+            }
+          >
             <Textarea
-              id="agent-job"
-              className="mt-1.5 min-h-[140px]"
-              placeholder="Answer incoming calls. Answer basic questions. For service requests, collect name, callback number, and address. Take messages when needed. Transfer emergencies when appropriate."
+              className="min-h-[100px] border-[#e6e8ef] text-sm"
+              placeholder="Professional, warm, and patient. Speaks clearly and keeps calls moving."
+              value={state.agentPersonalityNotes}
+              onChange={(e) => patch({ agentPersonalityNotes: e.target.value })}
+            />
+          </WizardSection>
+
+          <WizardSection
+            number={3}
+            title="What should your receptionist do on calls?"
+            subtitle="YOUR JOB — describe responsibilities in your own words."
+            action={
+              <button type="button" onClick={ensureJobInstructions} className="voice-btn-outline text-xs">
+                Use template
+              </button>
+            }
+          >
+            <Textarea
+              className="min-h-[120px] border-[#e6e8ef] text-sm"
+              placeholder="Answer incoming calls. For service requests, collect name, callback number, service address, and problem description."
               value={state.agentJobInstructions}
               onChange={(e) => patch({ agentJobInstructions: e.target.value })}
             />
-            <p className="mt-1 text-xs text-muted-foreground">
-              This is your job description for the agent — loaded on every call, not retrieved from
-              Knowledge.
-            </p>
-          </div>
+          </WizardSection>
 
-          <div>
-            <Label htmlFor="additional-instructions">Additional instructions (optional)</Label>
+          <WizardSection
+            number={4}
+            title={`Anything else ${agent} should know?`}
+            subtitle="Additional customer instructions — optional escape hatch for business rules."
+            optional
+          >
             <Textarea
-              id="additional-instructions"
-              className="mt-1.5 min-h-[80px]"
-              placeholder="We pride ourselves on being friendly. If someone sounds upset, apologize before collecting information."
+              className="min-h-[80px] border-[#e6e8ef] text-sm"
+              placeholder="Never schedule same-day appointments after 3 PM. Do not transfer employment calls."
               value={state.additionalInstructions}
               onChange={(e) => patch({ additionalInstructions: e.target.value })}
             />
-          </div>
-
-          <details className="rounded-xl border border-border p-4">
-            <summary className="cursor-pointer text-sm font-semibold text-foreground">
-              Structured business details (optional)
-            </summary>
-            <p className="mt-2 text-xs text-muted-foreground">
-              These compile into the always-loaded BUSINESS section. Leave blank to extract hints
-              from your description where possible.
-            </p>
-            <div className="mt-4 space-y-4">
-              <div>
-                <Label htmlFor="business-hours">Hours</Label>
-                <Textarea
-                  id="business-hours"
-                  className="mt-1.5 min-h-[72px]"
-                  placeholder="Monday-Friday: 8 AM-6 PM&#10;Saturday: 9 AM-2 PM&#10;Sunday: Closed"
-                  value={state.businessHours}
-                  onChange={(e) => patch({ businessHours: e.target.value })}
-                />
-              </div>
-              <div>
-                <Label htmlFor="service-area">Service area</Label>
-                <Textarea
-                  id="service-area"
-                  className="mt-1.5 min-h-[60px]"
-                  placeholder="Woodbridge, Dale City, Lake Ridge, and surrounding areas"
-                  value={state.serviceArea}
-                  onChange={(e) => patch({ serviceArea: e.target.value })}
-                />
-              </div>
-              <div>
-                <Label htmlFor="core-services">Core services</Label>
-                <Textarea
-                  id="core-services"
-                  className="mt-1.5 min-h-[100px]"
-                  placeholder="Electrical repairs&#10;Panel upgrades&#10;EV charger installation&#10;Emergency electrical service"
-                  value={state.coreServices}
-                  onChange={(e) => patch({ coreServices: e.target.value })}
-                />
-              </div>
-              <div>
-                <Label htmlFor="pricing-notes">Pricing / fees</Label>
-                <Textarea
-                  id="pricing-notes"
-                  className="mt-1.5 min-h-[60px]"
-                  placeholder="Standard service-call fee is $89. Do not quote exact repair prices unless listed."
-                  value={state.pricingNotes}
-                  onChange={(e) => patch({ pricingNotes: e.target.value })}
-                />
-              </div>
-              <div>
-                <Label htmlFor="important-facts">Important company facts</Label>
-                <Textarea
-                  id="important-facts"
-                  className="mt-1.5 min-h-[60px]"
-                  placeholder="Licensed and insured. Same-day emergency service available."
-                  value={state.importantFacts}
-                  onChange={(e) => patch({ importantFacts: e.target.value })}
-                />
-              </div>
-              <div>
-                <Label htmlFor="business-address">Address (optional)</Label>
-                <Input
-                  id="business-address"
-                  className="mt-1.5"
-                  placeholder="123 Main St, Woodbridge, VA"
-                  value={state.businessAddress}
-                  onChange={(e) => patch({ businessAddress: e.target.value })}
-                />
-              </div>
-            </div>
-          </details>
-
-          <div>
-            <Label>When should your receptionist answer calls?</Label>
-            <div className="mt-2 grid gap-3 sm:grid-cols-2">
-              {ANSWER_TIMING_OPTIONS.map((opt) => {
-                const Icon = TIMING_ICONS[opt.id] || PhoneForwarded;
-                return (
-                  <SelectableCard
-                    key={opt.id}
-                    selected={state.answerTiming === opt.id}
-                    onClick={() => patch({ answerTiming: opt.id })}
-                    title={opt.label}
-                    description={opt.description}
-                    icon={<Icon className="h-5 w-5" />}
-                    compact
-                  />
-                );
-              })}
-            </div>
-          </div>
-
-          <div>
-            <Label htmlFor="greeting">Greeting</Label>
-            <div className="mt-1.5 flex gap-2">
-              <Textarea
-                id="greeting"
-                className="min-h-[80px] flex-1"
-                value={state.greeting}
-                onChange={(e) => patch({ greeting: e.target.value })}
-              />
-              <button
-                type="button"
-                onClick={generateGreetingClick}
-                className="voice-btn-outline voice-btn-outline-purple shrink-0 self-start"
-              >
-                <Sparkles className="h-4 w-4" />
-                Generate Greeting
-              </button>
-            </div>
-          </div>
-
-          <div>
-            <Label htmlFor="language">Language</Label>
-            <select
-              id="language"
-              className="mt-1.5 h-10 w-full max-w-xs rounded-lg border border-border bg-card px-3 text-sm"
-              value={state.language}
-              onChange={(e) => patch({ language: e.target.value })}
-            >
-              <option value="en-US">English (US)</option>
-              <option value="en-GB">English (UK)</option>
-              <option value="es-ES">Spanish</option>
-            </select>
-          </div>
-
-          <div>
-            <Label htmlFor="timezone">Timezone</Label>
-            <select
-              id="timezone"
-              className="mt-1.5 h-10 w-full max-w-md rounded-lg border border-border bg-card px-3 text-sm"
-              value={state.timezone}
-              onChange={(e) => patch({ timezone: e.target.value })}
-            >
-              <option value="America/New_York">Eastern (US)</option>
-              <option value="America/Chicago">Central (US)</option>
-              <option value="America/Denver">Mountain (US)</option>
-              <option value="America/Los_Angeles">Pacific (US)</option>
-              <option value="Europe/London">London</option>
-            </select>
-          </div>
-
-          {onPhoneChange ? (
-            <div>
-              <Label>Phone number</Label>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Assign a number so callers reach this agent when deployed.
-              </p>
-              <PhoneNumberSelect
-                className="mt-1.5"
-                value={phoneNumberId || null}
-                onChange={onPhoneChange}
-              />
-            </div>
-          ) : null}
+          </WizardSection>
         </div>
 
         <WizardFooter onCancel={onCancel} onContinue={onContinue} busy={busy} />
@@ -287,19 +241,52 @@ export function AboutStep({
       <SidePanel
         title="What happens next?"
         illustration={
-          <div className="flex h-20 w-20 items-center justify-center rounded-full bg-primary/10">
-            <Sparkles className="h-8 w-8 text-primary" />
+          <div className="rounded-2xl bg-[#6366f1]/10 p-6">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[#6366f1]/20">
+              <Bot className="h-8 w-8 text-[#6366f1]" />
+            </div>
           </div>
         }
       >
-        <ul className="space-y-3 text-sm">
-          <li>We&apos;ll use this information to build your AI and set expectations.</li>
-          <li>Next you&apos;ll select the capabilities and skills your AI needs to handle.</li>
-          <li>Then you&apos;ll test her in your browser and make sure she&apos;s perfect.</li>
+        <ul className="space-y-4 text-sm">
+          <li className="flex gap-3">
+            <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#6366f1]/10 text-[10px] font-bold text-[#6366f1]">
+              1
+            </span>
+            <span>Set business information, personality, and job instructions.</span>
+          </li>
+          <li className="flex gap-3">
+            <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#6366f1]/10 text-[10px] font-bold text-[#6366f1]">
+              2
+            </span>
+            <span>Choose capabilities, collection fields, and integrations.</span>
+          </li>
+          <li className="flex gap-3">
+            <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#6366f1]/10 text-[10px] font-bold text-[#6366f1]">
+              3
+            </span>
+            <span>Test your receptionist and activate on a phone number.</span>
+          </li>
         </ul>
-        <a href="/help" className="mt-4 block text-sm font-medium text-primary hover:underline">
-          Learn more about AI set up
-        </a>
+        <div className="mt-6 border-t border-[#e6e8ef] pt-5">
+          <p className="text-xs font-semibold uppercase tracking-wide text-[#9ca3af]">
+            Top Tips for {agent}
+          </p>
+          <ul className="mt-3 space-y-2">
+            {[
+              "Keep your instructions clear and concise.",
+              "Specify your business hours and location.",
+              "Give clear instructions on what to collect.",
+              "Review and refine setup over time.",
+              "Test your voice agent often.",
+            ].map((tip) => (
+              <li key={tip} className="flex items-start gap-2 text-xs text-[#6b7280]">
+                <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
+                {tip}
+              </li>
+            ))}
+          </ul>
+        </div>
       </SidePanel>
     </div>
   );
