@@ -9,7 +9,7 @@ export default function AgentVoiceTestPage() {
   const params = useParams();
   const agentId = params?.id as string;
   const router = useRouter();
-  const { state, agentName, loading, busy, error, setError, patch, save, publish, buildForTest } =
+  const { state, agentName, loading, busy, error, setError, patch, save, publish, buildForTest, phoneNumberId, assignPhone } =
     useReceptionistAgentState(agentId);
 
   if (loading || !state) {
@@ -23,14 +23,14 @@ export default function AgentVoiceTestPage() {
   const stateWithId = { ...state, agentId };
 
   async function activate() {
+    if (!phoneNumberId) {
+      setError("Assign a phone number before activating — pick one under Test in browser.");
+      return;
+    }
     try {
       await save();
       await buildForTest();
-      try {
-        await publish();
-      } catch {
-        setError("Saved — publish when you're ready from this page.");
-      }
+      await publish();
     } catch {
       // error in hook
     }
@@ -54,6 +54,8 @@ export default function AgentVoiceTestPage() {
         onBack={() => router.push(`/voice/agents/${agentId}/capabilities`)}
         onActivate={activate}
         busy={busy}
+        phoneNumberId={phoneNumberId}
+        onPhoneChange={(id) => assignPhone(id).catch(() => undefined)}
       />
     </ReceptionistEditorShell>
   );

@@ -148,10 +148,16 @@ export function applyCompiledToVoiceConfig(
       answerWhen: snapshot.answerWhen,
     },
     enabledBuiltinTools: snapshot.enabledBuiltinTools,
+    dynamicVariables: {
+      ...(base.dynamicVariables as object),
+      business_name: snapshot.businessName,
+      business_timezone: snapshot.timezone,
+    },
     advanced: {
       ...(base.advanced as object),
       livekitProfile: snapshot.livekitProfile,
       [RECEPTIONIST_COMPILED_KEY]: snapshot,
+      receptionistWizard: (base.advanced as Record<string, unknown> | undefined)?.receptionistWizard,
     },
   };
 }

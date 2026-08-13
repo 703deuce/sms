@@ -24,10 +24,12 @@ export type InboundFrontDeskRouting = AgentRoutingResolution & {
 async function loadFrontDeskAgentRow(
   workspaceId: string,
   agentId: string,
+  options?: { allowTesting?: boolean },
 ): Promise<FrontDeskAgentRow | null> {
   const prisma = getPrisma();
+  const statuses = options?.allowTesting ? ["ACTIVE", "TESTING"] : ["ACTIVE"];
   const agent = await prisma.voiceAgent.findFirst({
-    where: { id: agentId, workspaceId, status: "ACTIVE" },
+    where: { id: agentId, workspaceId, status: { in: statuses } },
     select: {
       id: true,
       name: true,
@@ -119,7 +121,9 @@ export async function resolveInboundFrontDeskRouting(input: {
   let dispatchSource = "workspace_default";
 
   if (metadataAgentId) {
-    const explicit = await loadFrontDeskAgentRow(workspaceId, metadataAgentId);
+    const explicit = await loadFrontDeskAgentRow(workspaceId, metadataAgentId, {
+      allowTesting: true,
+    });
     if (explicit) {
       chosen = explicit;
       dispatchSource = "explicit_dispatch";

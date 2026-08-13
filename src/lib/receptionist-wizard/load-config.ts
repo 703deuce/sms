@@ -61,6 +61,9 @@ export function wizardStateFromDraftConfig(
     answerTiming,
     greeting,
     language: cfg.voiceLanguage?.primaryLanguage || base.language,
+    timezone:
+      wiz?.timezone ||
+      String(cfg.dynamicVariables?.business_timezone || base.timezone),
     capabilities,
     collectFields: (wiz?.collectFields as CollectFieldId[]) || base.collectFields,
     voiceId: cfg.voiceLanguage?.voiceId || base.voiceId,

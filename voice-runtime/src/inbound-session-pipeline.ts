@@ -7,7 +7,9 @@ import { usesFrontDeskRealtimeVoicePipeline } from "@/lib/voice/frontdesk/agent-
 import { resolveOutboundRealtimePipelineConfig } from "@/lib/voice/outbound/agent-config";
 import { CalendlyCalendar } from "./frontdesk/calendly-calendar";
 import { createFrontDeskBookingAgent } from "./frontdesk/frontdesk-booking-agent";
+import { createGenericReceptionistAgent } from "./frontdesk/receptionist/generic-receptionist-agent";
 import { createRealEstateFrontDeskAgent } from "./frontdesk/real-estate/real-estate-frontdesk-agent";
+import { getReceptionistCompiledFromAdvanced } from "@/lib/voice/receptionist/runtime";
 import { isRealEstateFrontDeskProfile } from "@/lib/voice/frontdesk/agent-config";
 import { appendIntakeUtterance } from "@/lib/voice/real-estate/intake-memory";
 import { createInitialCallState } from "@/lib/voice/real-estate/state";
@@ -57,6 +59,7 @@ export type InboundSessionContext = {
   businessName: string;
   isRealEstate: boolean;
   compiledFrontDesk: ReturnType<typeof getCompiledFrontDeskFromAdvanced>;
+  receptionistCompiled: ReturnType<typeof getReceptionistCompiledFromAdvanced>;
   userData: FrontDeskUserData;
   agent: voice.Agent<FrontDeskUserData>;
   outputGainDb: number;
@@ -191,8 +194,12 @@ export function buildSessionContext(input: {
   maxToolSteps: number;
 } {
   const isRealEstate = isRealEstateFrontDeskProfile(input.agentConfig);
+  const advanced = input.agentConfig.advanced as Record<string, unknown> | undefined;
+  const receptionistCompiled = isRealEstate
+    ? null
+    : getReceptionistCompiledFromAdvanced(advanced);
   const compiledFrontDesk = isRealEstate
-    ? getCompiledFrontDeskFromAdvanced(input.agentConfig.advanced as Record<string, unknown>)
+    ? getCompiledFrontDeskFromAdvanced(advanced)
     : null;
 
   if (compiledFrontDesk) {
@@ -208,7 +215,6 @@ export function buildSessionContext(input: {
   }
 
   const useRealtime = usesFrontDeskRealtimeVoicePipeline(input.agentConfig);
-  const advanced = input.agentConfig.advanced as Record<string, unknown> | undefined;
   console.log(
     JSON.stringify({
       source: "transovo-voice-runtime",
@@ -220,7 +226,7 @@ export function buildSessionContext(input: {
       agentVersionId: input.loaded.agentVersionId,
       livekitProfile: advanced?.livekitProfile || null,
       realEstateFrontDesk: advanced?.realEstateFrontDesk === true,
-      hasCompiledFrontDesk: Boolean(advanced?.realEstateCompiled),
+      hasReceptionistCompiled: Boolean(receptionistCompiled),
       dispatchSource: input.routing.dispatchSource || null,
       runtimeProfile: isRealEstate
         ? useRealtime
@@ -243,6 +249,7 @@ export function buildSessionContext(input: {
     businessName: "",
     isRealEstate,
     compiledFrontDesk,
+    receptionistCompiled,
     outputGainDb: resolveLiveKitOutputGainDb(input.agentConfig.voiceLanguage?.outputGainDb),
     useRealtime,
     maxToolSteps:
@@ -266,11 +273,13 @@ export async function createAgentAndUserData(input: {
     select: { timezone: true },
   });
   const timezone = String(
-    input.agentConfig.dynamicVariables?.business_timezone ||
+    input.sessionBase.receptionistCompiled?.timezone ||
+      input.agentConfig.dynamicVariables?.business_timezone ||
       messaging?.timezone ||
       "America/New_York",
   );
   const businessName =
+    input.sessionBase.receptionistCompiled?.businessName?.trim() ||
     String(input.agentConfig.dynamicVariables?.business_name || "").trim() ||
     input.agentRow?.name?.trim() ||
     "our office";
@@ -293,6 +302,13 @@ export async function createAgentAndUserData(input: {
     callerE164: input.identity.fromE164?.trim() || undefined,
     livekitRoomName: input.ctx.room.name,
     livekitParticipantId: input.identity.participant.identity,
+    ...(input.sessionBase.receptionistCompiled
+      ? {
+          receptionistCompiled: input.sessionBase.receptionistCompiled,
+          receptionistFields: {},
+          agentVersionId: input.loaded.agentVersionId || undefined,
+        }
+      : {}),
     ...(input.sessionBase.isRealEstate
       ? {
           callState: createInitialCallState(),
@@ -314,10 +330,16 @@ export async function createAgentAndUserData(input: {
           dynamicVariables: input.agentConfig.dynamicVariables as Record<string, unknown> | null,
           publishedConfig: input.sessionBase.compiledFrontDesk || undefined,
         })
-      : createFrontDeskBookingAgent({
-          businessName,
-          timezone,
-        })
+      : input.sessionBase.receptionistCompiled
+        ? createGenericReceptionistAgent({
+            snapshot: input.sessionBase.receptionistCompiled,
+            businessName,
+            timezone,
+          })
+        : createFrontDeskBookingAgent({
+            businessName,
+            timezone,
+          })
   ) as voice.Agent<FrontDeskUserData>;
 
   return { userData, agent, timezone, businessName };

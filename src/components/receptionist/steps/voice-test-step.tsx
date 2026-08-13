@@ -1,6 +1,7 @@
 "use client";
 
-import { AgentBrowserCall } from "@/components/voice/agent-browser-call";
+import { LiveKitBrowserCall } from "@/components/receptionist/livekit-browser-call";
+import { PhoneNumberSelect } from "@/components/receptionist/phone-number-select";
 import {
   WIZARD_VOICES,
   type ReceptionistWizardState,
@@ -17,12 +18,16 @@ export function VoiceTestStep({
   onBack,
   onActivate,
   busy,
+  phoneNumberId,
+  onPhoneChange,
 }: {
   state: ReceptionistWizardState;
   patch: (p: Partial<ReceptionistWizardState>) => void;
   onBack: () => void;
   onActivate: () => void;
   busy?: boolean;
+  phoneNumberId?: string | null;
+  onPhoneChange?: (id: string | null) => void;
 }) {
   const [previewing, setPreviewing] = useState<string | null>(null);
   const [previewError, setPreviewError] = useState("");
@@ -135,12 +140,18 @@ export function VoiceTestStep({
 
           <div>
             <h2 className="mb-3 text-sm font-semibold text-foreground">2. Test in browser</h2>
+            {onPhoneChange ? (
+              <div className="mb-4">
+                <p className="mb-1.5 text-xs font-medium text-foreground">Inbound number</p>
+                <PhoneNumberSelect value={phoneNumberId || null} onChange={onPhoneChange} />
+              </div>
+            ) : null}
             {state.agentId ? (
               <div className="voice-card p-4">
                 <p className="mb-3 text-sm text-muted-foreground">
-                  Your receptionist is ready. Talk to {state.agentName || "Amy"} →
+                  Talk to {state.agentName || "Amy"} using the same LiveKit runtime as phone calls.
                 </p>
-                <AgentBrowserCall agentId={state.agentId} voiceLabel={state.voiceLabel} />
+                <LiveKitBrowserCall agentId={state.agentId} voiceLabel={state.voiceLabel} />
               </div>
             ) : (
               <div className="voice-card flex flex-col items-center justify-center p-8 text-center">

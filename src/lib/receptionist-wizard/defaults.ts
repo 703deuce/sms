@@ -10,6 +10,7 @@ export function createDefaultWizardState(): ReceptionistWizardState {
     greeting:
       "Hi, thanks for calling {{businessName}}. This is {{agentName}}, how can I help you today?",
     language: "en-US",
+    timezone: "America/New_York",
     capabilities: CAPABILITY_OPTIONS.filter((c) => c.defaultOn).map((c) => c.id),
     collectFields: ["name", "phone", "reason"],
     voiceId: "ava-warm-us",

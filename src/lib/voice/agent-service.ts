@@ -266,7 +266,8 @@ export async function buildVoiceAgentForTest(
     draftConfig: parseVoiceAgentConfig(agent.draftConfig),
     strict: false,
   });
-  const config = applied.config;
+  const { recompileReceptionistFromDraft } = await import("./receptionist/recompile");
+  const config = recompileReceptionistFromDraft(applied.config);
   const issues = validateAgentForPublish(agent.name, config, {
     requirePhone: false,
     phoneNumberId: agent.phoneNumberId,
@@ -374,7 +375,8 @@ export async function publishVoiceAgent(
     if (err && typeof err === "object" && "issues" in err) throw err;
     throw err;
   });
-  const config = applied.config;
+  const { recompileReceptionistFromDraft } = await import("./receptionist/recompile");
+  const config = recompileReceptionistFromDraft(applied.config);
   const issues = validateAgentForPublish(agent.name, config, {
     requirePhone:
       !config.identity?.directions?.length ||

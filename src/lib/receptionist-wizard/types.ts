@@ -21,6 +21,7 @@ export type ReceptionistWizardState = {
   answerTiming: AnswerTiming;
   greeting: string;
   language: string;
+  timezone: string;
   capabilities: CapabilityId[];
   collectFields: CollectFieldId[];
   voiceId: string;

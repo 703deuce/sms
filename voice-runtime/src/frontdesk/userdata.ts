@@ -5,6 +5,7 @@ import {
 } from "@/lib/voice/frontdesk/agent-config";
 import type { RealEstateCallState } from "@/lib/voice/real-estate/types";
 import type { CompiledRealEstateFrontDesk } from "@/lib/voice/real-estate/compile/types";
+import type { ReceptionistCompiledSnapshot } from "@/lib/voice/receptionist/types";
 
 export type BookingStatus = "pending" | "confirmed";
 
@@ -39,6 +40,10 @@ export type FrontDeskUserData = {
   callState?: RealEstateCallState;
   /** Compiled template configuration for this session — authoritative field/intent rules. */
   realEstateCompiled?: CompiledRealEstateFrontDesk;
+  /** Generic receptionist compiled snapshot from wizard UI. */
+  receptionistCompiled?: ReceptionistCompiledSnapshot;
+  /** Collected caller fields for generic receptionist (field manifest). */
+  receptionistFields?: Record<string, string>;
   agentConfigVersion?: number;
   agentVersionId?: string;
   /** @deprecated Prefer booking.status === "confirmed". */

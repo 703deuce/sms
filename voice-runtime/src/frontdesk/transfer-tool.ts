@@ -22,6 +22,16 @@ async function resolveTransferDestination(
     return compiledNumber;
   }
 
+  const receptionistPolicy = ud?.receptionistCompiled?.transferPolicy as
+    | { destinationE164?: string; transferNumber?: string; enabled?: boolean }
+    | undefined;
+  const receptionistNumber =
+    receptionistPolicy?.destinationE164?.trim() ||
+    receptionistPolicy?.transferNumber?.trim();
+  if (receptionistNumber) {
+    return receptionistNumber;
+  }
+
   const fallback = process.env.VOICE_TRANSFER_FALLBACK_E164?.trim();
   if (fallback) return fallback;
 

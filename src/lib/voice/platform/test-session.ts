@@ -47,6 +47,13 @@ export type TestSessionResult =
       synced: boolean;
       expiresAt: string;
       testVariables: Record<string, string>;
+      /** LiveKit browser test — same worker path as inbound SIP. */
+      livekit?: {
+        url: string;
+        token: string;
+        roomName: string;
+        participantIdentity: string;
+      };
     }
   | { ok: false; code: string; error: string; status: number };
 
@@ -83,6 +90,20 @@ export async function createVoiceTestSession(input: {
       status: 403,
     };
   }
+
+  const draftConfig = parseVoiceAgentConfig(agent.draftConfig);
+  const { requiresLiveKitVoiceRuntime } = await import(
+    "@/lib/voice/architecture/livekit-voice-profiles"
+  );
+  if (requiresLiveKitVoiceRuntime({ ...draftConfig, agentType: agent.agentType })) {
+    const { createLiveKitBrowserTestSession } = await import("./livekit-browser-test-session");
+    return createLiveKitBrowserTestSession({
+      workspaceId: input.workspaceId,
+      userId: input.userId,
+      agentId: input.agentId,
+    });
+  }
+
   if (!agent.telnyxAssistantId) {
     return {
       ok: false,

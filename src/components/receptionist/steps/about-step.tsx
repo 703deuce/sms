@@ -6,6 +6,7 @@ import {
   type ReceptionistWizardState,
 } from "@/lib/receptionist-wizard/types";
 import { generateGreeting } from "@/lib/receptionist-wizard/defaults";
+import { PhoneNumberSelect } from "../phone-number-select";
 import {
   Clock,
   Phone,
@@ -29,12 +30,16 @@ export function AboutStep({
   onContinue,
   onCancel,
   busy,
+  phoneNumberId,
+  onPhoneChange,
 }: {
   state: ReceptionistWizardState;
   patch: (p: Partial<ReceptionistWizardState>) => void;
   onContinue: () => void;
   onCancel: () => void;
   busy?: boolean;
+  phoneNumberId?: string | null;
+  onPhoneChange?: (id: string | null) => void;
 }) {
   function generateGreetingClick() {
     patch({ greeting: generateGreeting(state) });
@@ -146,6 +151,36 @@ export function AboutStep({
               <option value="es-ES">Spanish</option>
             </select>
           </div>
+
+          <div>
+            <Label htmlFor="timezone">Timezone</Label>
+            <select
+              id="timezone"
+              className="mt-1.5 h-10 w-full max-w-md rounded-lg border border-border bg-card px-3 text-sm"
+              value={state.timezone}
+              onChange={(e) => patch({ timezone: e.target.value })}
+            >
+              <option value="America/New_York">Eastern (US)</option>
+              <option value="America/Chicago">Central (US)</option>
+              <option value="America/Denver">Mountain (US)</option>
+              <option value="America/Los_Angeles">Pacific (US)</option>
+              <option value="Europe/London">London</option>
+            </select>
+          </div>
+
+          {onPhoneChange ? (
+            <div>
+              <Label>Phone number</Label>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Assign a number so callers reach this agent when deployed.
+              </p>
+              <PhoneNumberSelect
+                className="mt-1.5"
+                value={phoneNumberId || null}
+                onChange={onPhoneChange}
+              />
+            </div>
+          ) : null}
         </div>
 
         <WizardFooter onCancel={onCancel} onContinue={onContinue} busy={busy} />

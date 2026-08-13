@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { StatusChip } from "@/components/ui/status-chip";
-import { Plus, Sparkles } from "lucide-react";
+import { Phone, Plus, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
@@ -13,6 +13,8 @@ type AgentRow = {
   callsHandled: number;
   healthStatus: string;
   updatedAt: string;
+  phoneNumberId: string | null;
+  phoneE164: string | null;
 };
 
 export default function VoiceAgentsPage() {
@@ -29,9 +31,9 @@ export default function VoiceAgentsPage() {
     <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="font-display text-2xl font-semibold tracking-tight">My Agent</h1>
+          <h1 className="font-display text-2xl font-semibold tracking-tight">My Agents</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Create, test, and manage your AI receptionist.
+            Create, test, and manage your AI receptionists — each with its own phone number.
           </p>
         </div>
         <Link href="/voice/agents/new">
@@ -49,8 +51,8 @@ export default function VoiceAgentsPage() {
           </div>
           <h2 className="mt-6 text-lg font-semibold">No receptionist yet</h2>
           <p className="mt-2 max-w-md text-sm text-muted-foreground">
-            Set up Amy in three quick steps — about your business, what she should do, and voice
-            &amp; test.
+            Set up your AI receptionist in three quick steps — about your business, capabilities,
+            and voice &amp; test.
           </p>
           <Link href="/voice/agents/new" className="mt-6 voice-btn-primary">
             Create New Agent
@@ -78,7 +80,15 @@ export default function VoiceAgentsPage() {
                 </div>
                 <StatusChip status={a.status} />
               </div>
-              <p className="mt-4 text-sm text-primary font-medium">Open agent →</p>
+              <div className="mt-4 flex items-center gap-2 text-sm">
+                <Phone className="h-4 w-4 text-muted-foreground" />
+                {a.phoneE164 ? (
+                  <span className="font-medium text-foreground">{a.phoneE164}</span>
+                ) : (
+                  <span className="text-muted-foreground">No number assigned</span>
+                )}
+              </div>
+              <p className="mt-3 text-sm font-medium text-primary">Open agent →</p>
             </Link>
           ))}
         </div>

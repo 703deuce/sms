@@ -2,6 +2,7 @@ import { getPrisma } from "@/lib/db";
 import { loadVoiceAgentRuntimeConfig } from "@/lib/voice/load-agent-config";
 import { parseVoiceAgentConfig, type VoiceAgentConfig } from "@/lib/voice/types";
 import { isRealEstateFrontDeskAgent } from "@/lib/voice/real-estate/config";
+import { hasGenericReceptionistProfile } from "@/lib/voice/receptionist/runtime";
 import {
   isFrontDeskProfile,
   isFrontDeskRealtimeProfile,
@@ -32,8 +33,9 @@ function scoreFrontDeskCandidate(
   const advanced = config.advanced as Record<string, unknown> | undefined;
   let score = 0;
   if (isRealEstateFrontDeskAgent(advanced)) score += 100;
+  if (hasGenericReceptionistProfile(advanced)) score += 40;
   if (isFrontDeskRealtimeProfile(config)) score += 10;
-  if (preferPhoneNumberId && agent.phoneNumberId === preferPhoneNumberId) score += 20;
+  if (preferPhoneNumberId && agent.phoneNumberId === preferPhoneNumberId) score += 30;
   if (agent.phoneNumberId) score += 5;
   return score;
 }
