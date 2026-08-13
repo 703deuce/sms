@@ -38,8 +38,8 @@ const automationTabs = [
 ];
 
 const flowIcons: Record<string, { icon: LucideIcon; tone: string }> = {
-  auto_1: { icon: Wand2, tone: "bg-emerald-50 text-emerald-600" },
-  auto_2: { icon: MessageCircle, tone: "bg-blue-50 text-blue-600" },
+  auto_1: { icon: Wand2, tone: "bg-violet-50 text-violet-600" },
+  auto_2: { icon: MessageCircle, tone: "bg-indigo-50 text-indigo-600" },
   auto_3: { icon: Clock, tone: "bg-orange-50 text-orange-600" },
   auto_4: { icon: Cake, tone: "bg-violet-50 text-violet-600" },
 };
@@ -112,7 +112,7 @@ export default function AutomationsPage() {
     <div className="space-y-5">
       <SectionHeader
         icon={Zap}
-        iconTone="bg-emerald-50 text-emerald-600"
+        iconTone="bg-violet-50 text-violet-600"
         title="Automations"
         description="Agent workflows and standalone automations. Wizard-created agents open here via Edit Workflow."
         actions={
@@ -132,7 +132,7 @@ export default function AutomationsPage() {
           label="Active Flows"
           value={formatNumber(activeCount)}
           icon={Workflow}
-          tone="bg-emerald-50 text-emerald-600"
+          tone="bg-violet-50 text-violet-600"
           sparkline={[1, 1, 2, 2, 2, 2, 2, 2]}
           sparkColor="#10b981"
         />
@@ -140,7 +140,7 @@ export default function AutomationsPage() {
           label="Total Enrolled"
           value={formatNumber(totalEnrolled)}
           icon={Users}
-          tone="bg-blue-50 text-blue-600"
+          tone="bg-indigo-50 text-indigo-600"
           sparkline={[6, 8, 10, 12, 14, 16, 18, 20]}
           sparkColor="#3b82f6"
         />

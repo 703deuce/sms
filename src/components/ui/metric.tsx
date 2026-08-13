@@ -4,7 +4,7 @@ import { ReactNode } from "react";
 
 export function Sparkline({
   points,
-  color = "#10b981",
+  color = "#6366f1",
   width = 72,
   height = 28,
 }: {
@@ -43,7 +43,7 @@ export function MetricCard({
   value,
   hint,
   icon: Icon,
-  tone = "bg-emerald-50 text-emerald-600",
+  tone = "bg-violet-50 text-violet-600",
   sparkline,
   sparkColor,
   href,
@@ -95,7 +95,7 @@ export function SectionHeader({
   title,
   description,
   icon: Icon,
-  iconTone = "bg-emerald-50 text-emerald-600",
+  iconTone = "bg-violet-50 text-violet-600",
   actions,
 }: {
   title: string;

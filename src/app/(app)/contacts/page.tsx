@@ -185,7 +185,7 @@ export default async function ContactsPage({ searchParams }: ContactsPageProps) 
           value={formatNumber(total)}
           hint="All time"
           icon={Users}
-          tone="bg-emerald-50 text-emerald-600"
+          tone="bg-violet-50 text-violet-600"
           sparkline={[18, 20, 19, 22, 21, 24, 23, total]}
           sparkColor="#10b981"
         />
@@ -194,7 +194,7 @@ export default async function ContactsPage({ searchParams }: ContactsPageProps) 
           value={formatNumber(subscribed)}
           hint={`${formatPercent(subscribedPct)} of total`}
           icon={UserCheck}
-          tone="bg-emerald-50 text-emerald-600"
+          tone="bg-violet-50 text-violet-600"
           sparkline={[14, 15, 16, 15, 17, 18, 19, subscribed]}
           sparkColor="#10b981"
         />

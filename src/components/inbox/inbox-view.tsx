@@ -303,9 +303,9 @@ export function InboxView({
                 className={cn(
                   "flex w-full items-center justify-between rounded-[10px] px-2.5 py-2 text-[12px] font-medium transition",
                   active
-                    ? "bg-emerald-50 text-emerald-700"
+                    ? "bg-violet-50 text-violet-700"
                     : accentUnread
-                      ? "bg-emerald-50/70 text-emerald-700 hover:bg-emerald-50"
+                      ? "bg-violet-50/70 text-violet-700 hover:bg-violet-50"
                       : accentPending
                         ? "bg-orange-50/80 text-orange-700 hover:bg-orange-50"
                         : "text-muted-foreground hover:bg-muted",
@@ -316,7 +316,7 @@ export function InboxView({
                   className={cn(
                     "text-[11px] tabular-nums",
                     accentUnread
-                      ? "font-semibold text-emerald-700"
+                      ? "font-semibold text-violet-700"
                       : accentPending
                         ? "font-semibold text-orange-700"
                         : "opacity-80",
@@ -378,13 +378,13 @@ export function InboxView({
                 )}
               >
                 <span className="relative shrink-0">
-                  <span className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100 text-[11px] font-bold text-emerald-700">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-full bg-violet-100 text-[11px] font-bold text-violet-700">
                     {(c.contactName || "?").slice(0, 2).toUpperCase()}
                   </span>
                   <span
                     className={cn(
                       "absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full ring-2 ring-white",
-                      c.status === "Pending" ? "bg-amber-400" : c.status === "Closed" ? "bg-slate-400" : "bg-emerald-500",
+                      c.status === "Pending" ? "bg-amber-400" : c.status === "Closed" ? "bg-slate-400" : "bg-violet-500",
                     )}
                   />
                 </span>
@@ -422,7 +422,7 @@ export function InboxView({
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <p className="text-[15px] font-bold whitespace-nowrap">{selected.contactName}</p>
-                  <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
+                  <span className="h-2 w-2 shrink-0 rounded-full bg-violet-500" />
                 </div>
                 <p className="text-[12px] text-muted-foreground">{formatPhone(selected.phone)}</p>
               </div>
@@ -698,7 +698,7 @@ export function InboxView({
         </p>
         {contact ? (
           <div className="mt-4">
-            <span className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-[16px] font-bold text-emerald-700">
+            <span className="flex h-16 w-16 items-center justify-center rounded-full bg-violet-100 text-[16px] font-bold text-violet-700">
               {`${contact.firstName?.[0] || ""}${contact.lastName?.[0] || ""}`.toUpperCase() || "?"}
             </span>
             <p className="mt-3 text-[15px] font-bold">

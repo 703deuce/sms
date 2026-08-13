@@ -66,7 +66,7 @@ export default async function NumbersPage() {
     <div className="space-y-5">
       <SectionHeader
         icon={Phone}
-        iconTone="bg-blue-50 text-blue-600"
+        iconTone="bg-violet-50 text-violet-600"
         title="Phone numbers"
         description="Manage sending numbers, A2P registration status, and monthly costs."
         actions={
@@ -91,7 +91,7 @@ export default async function NumbersPage() {
           value={activeCount}
           hint="Total active"
           icon={Phone}
-          tone="bg-emerald-50 text-emerald-600"
+          tone="bg-violet-50 text-violet-600"
           sparkline={[1, 1, 2, 2, 2, 2, 2, 2]}
           sparkColor="#10b981"
         />
@@ -113,7 +113,7 @@ export default async function NumbersPage() {
           value={formatCurrency(monthlySpend)}
           hint="Across all numbers"
           icon={Layers}
-          tone="bg-blue-50 text-blue-600"
+          tone="bg-indigo-50 text-indigo-600"
           sparkline={[2, 2, 3, 3, 3, 3, 3, 3]}
           sparkColor="#3b82f6"
         />
@@ -166,8 +166,8 @@ export default async function NumbersPage() {
                       className="flex items-start gap-2.5 hover:opacity-80"
                     >
                       <span className="relative mt-1.5 flex h-2 w-2 shrink-0">
-                        <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                        <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+                        <span className="absolute inline-flex h-full w-full rounded-full bg-violet-400 opacity-75" />
+                        <span className="relative inline-flex h-2 w-2 rounded-full bg-violet-500" />
                       </span>
                       <span>
                         <span className="block font-semibold text-foreground">
@@ -265,14 +265,14 @@ export default async function NumbersPage() {
       </Card>
 
       {allA2pApproved ? (
-        <div className="flex flex-col gap-3 rounded-[12px] border border-emerald-200/80 bg-emerald-50/60 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-3 rounded-[12px] border border-violet-200/80 bg-violet-50/60 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-3">
-            <Shield className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+            <Shield className="mt-0.5 h-4 w-4 shrink-0 text-violet-600" />
             <div>
-              <p className="text-[13px] font-semibold text-emerald-950">
+              <p className="text-[13px] font-semibold text-violet-950">
                 A2P 10DLC compliance
               </p>
-              <p className="mt-0.5 text-[12px] text-emerald-900/80">
+              <p className="mt-0.5 text-[12px] text-violet-900/80">
                 All active numbers are A2P 10DLC registered and compliant.
               </p>
             </div>
@@ -280,7 +280,7 @@ export default async function NumbersPage() {
           <Link href="/compliance">
             <Button
               variant="outline"
-              className="h-9 shrink-0 rounded-[10px] border-emerald-300 bg-white text-[13px] text-emerald-900 hover:bg-emerald-50"
+              className="h-9 shrink-0 rounded-[10px] border-violet-300 bg-white text-[13px] text-violet-900 hover:bg-violet-50"
             >
               View compliance →
             </Button>

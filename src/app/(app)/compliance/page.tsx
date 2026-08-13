@@ -46,7 +46,7 @@ const quickLinks = [
     description: "Legal entity and contact details",
     href: "/compliance/business",
     icon: Building2,
-    tone: "bg-blue-50 text-blue-600",
+    tone: "bg-indigo-50 text-indigo-600",
   },
   {
     title: "Brand registration",
@@ -67,7 +67,7 @@ const quickLinks = [
     description: "Proof of opt-in per contact",
     href: "/compliance/consent",
     icon: UserCheck,
-    tone: "bg-emerald-50 text-emerald-600",
+    tone: "bg-violet-50 text-violet-600",
   },
   {
     title: "Suppression list",
@@ -113,7 +113,7 @@ export default async function ComplianceOverviewPage() {
       hint: overview.customerProfile === "Complete" ? "Verified" : "Incomplete",
       href: "/compliance/business",
       icon: Building2,
-      tone: "bg-emerald-50 text-emerald-600",
+      tone: "bg-violet-50 text-violet-600",
     },
     {
       title: "Brand Registration",
@@ -137,7 +137,7 @@ export default async function ComplianceOverviewPage() {
       hint: phoneSummary,
       href: "/numbers",
       icon: Phone,
-      tone: "bg-blue-50 text-blue-600",
+      tone: "bg-indigo-50 text-indigo-600",
     },
     {
       title: "Toll-Free",

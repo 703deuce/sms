@@ -240,7 +240,7 @@ export function IntegrationsDirectory({
     <Card>
       <h2 className="mb-4 text-[14px] font-bold text-foreground">Integration directory</h2>
       {message && (
-        <p className={cn("mb-3 rounded-lg border px-3 py-2 text-[13px]", message.error ? "border-red-200 bg-red-50 text-red-700" : "border-emerald-200 bg-emerald-50 text-emerald-700")}>
+        <p className={cn("mb-3 rounded-lg border px-3 py-2 text-[13px]", message.error ? "border-red-200 bg-red-50 text-red-700" : "border-violet-200 bg-violet-50 text-violet-700")}>
           {message.text}
         </p>
       )}

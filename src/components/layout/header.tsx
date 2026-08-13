@@ -254,7 +254,7 @@ export function Header({
 
           <Link
             href="/settings/billing"
-            className="hidden h-9 items-center gap-1.5 rounded-full bg-emerald-50 px-3 text-[12px] font-semibold text-emerald-700 ring-1 ring-emerald-100 hover:bg-emerald-100 sm:inline-flex"
+            className="hidden h-9 items-center gap-1.5 rounded-full bg-violet-50 px-3 text-[12px] font-semibold text-violet-700 ring-1 ring-violet-100 hover:bg-violet-100 sm:inline-flex"
           >
             <Coins className="h-3.5 w-3.5" />
             {formatNumber(metrics.creditsRemaining)} credits

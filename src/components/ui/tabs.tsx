@@ -27,7 +27,7 @@ export function Tabs({
           >
             {item.label}
             {item.badge != null ? (
-              <span className="rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700">
+              <span className="rounded-full bg-violet-50 px-1.5 py-0.5 text-[10px] font-bold text-violet-700">
                 {item.badge}
               </span>
             ) : null}

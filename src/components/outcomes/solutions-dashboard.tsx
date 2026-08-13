@@ -44,10 +44,10 @@ function StatusBadge({
       className={cn(
         "inline-flex h-[22px] shrink-0 items-center rounded-md px-2 text-[11px] font-semibold leading-none",
         badge === "voice" && "bg-violet-100 text-violet-700",
-        badge === "automated" && "bg-[#EFF6FF] text-[#2563EB]",
-        badge === "new" && "bg-emerald-50 text-emerald-700",
-        badge === "running" && "bg-[#EFF6FF] text-[#2563EB]",
-        badge === "active" && "bg-emerald-50 text-emerald-700",
+        badge === "automated" && "bg-violet-50 text-violet-700",
+        badge === "new" && "bg-violet-50 text-violet-700",
+        badge === "running" && "bg-violet-50 text-violet-700",
+        badge === "active" && "bg-violet-50 text-violet-700",
         badge === "recommended" && "bg-violet-100 text-violet-700",
         badge === "hot" && "bg-amber-50 text-amber-700",
       )}
@@ -67,7 +67,7 @@ function PrimaryBtn({
   return (
     <Link
       href={href}
-      className="inline-flex h-8 shrink-0 items-center justify-center rounded-md bg-[#3B82F6] px-3 text-[12px] font-semibold text-white shadow-sm hover:bg-[#2563EB]"
+      className="inline-flex h-8 shrink-0 items-center justify-center rounded-md bg-primary px-3 text-[12px] font-semibold text-primary-foreground shadow-sm hover:bg-primary-hover"
     >
       {children}
     </Link>
@@ -114,7 +114,7 @@ export function SolutionsDashboardView({ data }: { data: SolutionsDashboardData 
           </Link>
           <Link
             href="/voice/agents"
-            className="inline-flex h-9 items-center rounded-lg bg-[#3B82F6] px-3.5 text-[13px] font-semibold text-white shadow-sm hover:bg-[#2563EB]"
+            className="inline-flex h-9 items-center rounded-lg bg-primary px-3.5 text-[13px] font-semibold text-primary-foreground shadow-sm hover:bg-primary-hover"
           >
             Manage AI Voice
           </Link>
@@ -226,8 +226,8 @@ export function SolutionsDashboardView({ data }: { data: SolutionsDashboardData 
                     {row.label}
                   </p>
                   <p className="mt-0.5 flex items-center gap-2 text-[12px] text-[#6B7280]">
-                    <span className="inline-flex items-center gap-1.5 font-medium text-emerald-700">
-                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                    <span className="inline-flex items-center gap-1.5 font-medium text-violet-700">
+                      <span className="h-1.5 w-1.5 rounded-full bg-violet-500" />
                       {row.status}
                     </span>
                     <span className="text-[#9CA3AF]">{row.date}</span>

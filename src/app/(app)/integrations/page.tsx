@@ -51,7 +51,7 @@ export default async function IntegrationsPage() {
         title="Integrations"
         description="Connect Transovo SMS to your CRM, payments, calendar, and custom applications."
         icon={Puzzle}
-        iconTone="bg-emerald-50 text-emerald-600"
+        iconTone="bg-violet-50 text-violet-600"
         actions={
           <Link href="/integrations/api">
             <Button variant="outline" className="rounded-[10px]">

@@ -11,7 +11,7 @@
   --primary: #6366f1;
   --primary-foreground: #ffffff;
   --primary-hover: #4f46e5;
-  --accent: #3b82f6;
+  --accent: #6366f1;
   --accent-foreground: #ffffff;
   --danger: #ef4444;
   --danger-foreground: #ffffff;
@@ -94,10 +94,10 @@ h3,
 }
 
 .bg-mesh {
-  background-color: #f3f5f9;
+  background-color: #f5f6fa;
   background-image:
-    radial-gradient(ellipse 70% 45% at 0% 0%, rgb(18 185 139 / 0.1), transparent),
-    radial-gradient(ellipse 50% 35% at 100% 0%, rgb(59 130 246 / 0.08), transparent);
+    radial-gradient(ellipse 80% 50% at 20% -10%, rgba(99, 102, 241, 0.08), transparent),
+    radial-gradient(ellipse 60% 40% at 90% 0%, rgba(139, 92, 246, 0.06), transparent);
 }
 
 /* Sidebar nav: keep scroll available when needed, but hide the loud browser bar */

@@ -44,7 +44,7 @@ export function MyNumbersView({
         <span className="rounded-full bg-[#F3F4F6] px-3 py-1 font-medium">
           {summary.numbers} numbers
         </span>
-        <span className="rounded-full bg-emerald-50 px-3 py-1 font-medium text-emerald-700">
+        <span className="rounded-full bg-violet-50 px-3 py-1 font-medium text-violet-700">
           {summary.live} live routes
         </span>
         <span className="rounded-full bg-amber-50 px-3 py-1 font-medium text-amber-800">
@@ -107,7 +107,7 @@ export function MyNumbersView({
                         className={cn(
                           "shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold",
                           r.status === "live" &&
-                            "bg-emerald-50 text-emerald-700",
+                            "bg-violet-50 text-violet-700",
                           r.status === "paused" &&
                             "bg-amber-50 text-amber-800",
                           r.status === "test" && "bg-sky-50 text-sky-700",

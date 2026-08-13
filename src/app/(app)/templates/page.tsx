@@ -52,14 +52,14 @@ const typeFilters = [
 ] as const;
 
 const templateIconTones = [
-  "bg-emerald-50 text-emerald-600",
+  "bg-violet-50 text-violet-600",
   "bg-sky-50 text-sky-600",
   "bg-violet-50 text-violet-600",
   "bg-orange-50 text-orange-600",
 ];
 
 const categoryTones: Record<string, string> = {
-  Greetings: "bg-emerald-50 text-emerald-700",
+  Greetings: "bg-violet-50 text-violet-700",
   "Appointment reminders": "bg-orange-50 text-orange-700",
   Sales: "bg-violet-50 text-violet-700",
   "Customer service": "bg-sky-50 text-sky-700",
@@ -68,9 +68,9 @@ const categoryTones: Record<string, string> = {
 };
 
 const typeTones: Record<string, string> = {
-  Campaign: "bg-blue-50 text-blue-700",
+  Campaign: "bg-indigo-50 text-indigo-700",
   "Inbox reply": "bg-teal-50 text-teal-700",
-  "Automation message": "bg-emerald-50 text-emerald-700",
+  "Automation message": "bg-violet-50 text-violet-700",
   "Compliance message": "bg-rose-50 text-rose-700",
 };
 
@@ -140,7 +140,7 @@ export default function TemplatesPage() {
           label="Templates"
           value={formatNumber(templates.length)}
           icon={LayoutGrid}
-          tone="bg-emerald-50 text-emerald-600"
+          tone="bg-violet-50 text-violet-600"
           sparkline={[2, 3, 3, 4, 4, 4, 4, templates.length]}
           sparkColor="#10b981"
         />

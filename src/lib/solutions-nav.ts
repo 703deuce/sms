@@ -108,6 +108,10 @@ export function buildProductNav(options: SolutionsNavOptions = {}): NavItem[] {
       label: "Appointments",
       href: "/integrations/native/appointments",
       icon: Calendar,
+      children: [
+        { label: "Bookings", href: "/integrations/native/appointments" },
+        { label: "Calendars", href: "/voice/calendars" },
+      ],
     },
     {
       label: "Phone Numbers",

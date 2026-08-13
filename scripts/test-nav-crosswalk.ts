@@ -85,6 +85,7 @@ assert.ok(solutionsHrefs.has("/campaigns"), "Campaigns required");
 assert.ok(solutionsHrefs.has("/templates"), "Templates required");
 assert.ok(solutionsHrefs.has("/automations"), "Automations required");
 assert.ok(solutionsHrefs.has("/integrations/native/appointments"), "Appointments required");
+assert.ok(solutionsHrefs.has("/voice/calendars"), "Calendars required");
 assert.ok(solutionsHrefs.has("/numbers"), "Phone Numbers required");
 assert.ok(solutionsHrefs.has("/numbers/buy"), "Buy Number required");
 assert.ok(solutionsHrefs.has("/compliance"), "Compliance required");
