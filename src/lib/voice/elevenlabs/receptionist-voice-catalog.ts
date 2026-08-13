@@ -53,6 +53,15 @@ export const RECEPTIONIST_ELEVENLABS_VOICES: ReceptionistElevenLabsVoice[] = [
     enabled: true,
   },
   {
+    id: "OZ0L6eISlOejga3XjDFt",
+    label: "Talia",
+    description: "Warm, soft guide — calm and caring",
+    gender: "female",
+    style: "warm",
+    accent: "American",
+    enabled: true,
+  },
+  {
     id: "EXAVITQu4vr4xnSDxMaL",
     label: "Bella",
     description: "Soft and friendly",
