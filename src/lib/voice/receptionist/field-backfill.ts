@@ -17,7 +17,10 @@ export function userUtterancesFromChatCtx(chatCtx: ChatContext): string[] {
 }
 
 const HVAC_ISSUE =
-  /\b(furnace|a\/c|ac\b|air conditioning|heat pump|not heating|isn't heating|isnt heating|went out|no heat|no-heat|no cool|no-cool|isn't cooling|isnt cooling|not cooling|weak airflow|strange noise|maintenance|hvac)\b/i;
+  /\b(furnace|heater|boiler|thermostat|a\/c|ac\b|air conditioning|heat pump|not heating|isn't heating|isnt heating|went out|stopped working|not working|isn't working|isnt working|no heat|no-heat|no cool|no-cool|isn't cooling|isnt cooling|not cooling|weak airflow|strange noise|maintenance|hvac|repair|service call|emergency)\b/i;
+
+const PROBLEM_PHRASE =
+  /\b(problem|issue|broken|leak|outage|won't|wont|can't|cant|need someone|come out|callback|appointment|schedule)\b/i;
 
 const SERVICE_AREA =
   /\b(arlington|fairfax|falls church|mclean|woodbridge|dale city|virginia|va)\b/i;
@@ -27,6 +30,33 @@ const PHONE_IN_TEXT =
 
 const NAME_LINE =
   /^(?:i'm|i am|my name is|this is)\s+([A-Za-z][A-Za-z' -]{1,48})$/i;
+
+function looksLikeCollectedName(line: string): boolean {
+  const trimmed = line.trim().replace(/[.,!?]+$/, "");
+  if (HVAC_ISSUE.test(trimmed) || PHONE_IN_TEXT.test(trimmed)) return false;
+  const named = trimmed.match(NAME_LINE);
+  if (named?.[1]) {
+    const candidate = named[1].trim();
+    if (!/\b(in|at|near|from)\b/i.test(candidate) && !SERVICE_AREA.test(candidate)) {
+      return true;
+    }
+  }
+  return /^[A-Z][a-z]+ [A-Z][A-Za-z' -]+$/.test(trimmed);
+}
+
+function looksLikeReasonUtterance(line: string): boolean {
+  const trimmed = line.trim();
+  if (trimmed.length < 10) return false;
+  if (looksLikeCollectedName(trimmed)) return false;
+  if (PHONE_IN_TEXT.test(trimmed)) return false;
+  if (/^(hi|hello|hey|yes|yeah|yep|sure|okay|ok|thanks|thank you)\b/i.test(trimmed)) {
+    return false;
+  }
+  if (SERVICE_AREA.test(trimmed) && !HVAC_ISSUE.test(trimmed) && trimmed.length < 48) {
+    return false;
+  }
+  return HVAC_ISSUE.test(trimmed) || PROBLEM_PHRASE.test(trimmed) || trimmed.length >= 18;
+}
 
 function manifestIds(manifest: AgentFieldDefinition[]): Set<string> {
   return new Set(manifest.map((f) => f.id));
@@ -57,9 +87,12 @@ export function heuristicReceptionistFieldBackfill(
   };
 
   if (allowed.has("reason") && !alreadyCollected.reason?.trim()) {
-    const issueLine = utterances.find((u) => HVAC_ISSUE.test(u));
+    const issueLine = utterances.find((u) => HVAC_ISSUE.test(u) || PROBLEM_PHRASE.test(u));
     if (issueLine) {
       push("reason", issueLine.trim());
+    } else {
+      const fallback = utterances.find((u) => looksLikeReasonUtterance(u));
+      if (fallback) push("reason", fallback.trim());
     }
   }
 

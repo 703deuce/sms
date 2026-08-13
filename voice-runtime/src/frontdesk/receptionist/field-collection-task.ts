@@ -59,7 +59,18 @@ export class ReceptionistFieldCollectionTask extends voice.AgentTask<Receptionis
       remaining: [...fields],
     };
 
+    const syncBackfillFromParent = (): void => {
+      const ud = sessionRef.userData;
+      if (!ud.receptionistFields) ud.receptionistFields = {};
+      ud.receptionistFields = applyReceptionistFieldBackfill({
+        chatCtx: sessionRef.chatCtx,
+        manifest: fields,
+        receptionistFields: ud.receptionistFields,
+      });
+    };
+
     const currentField = (): AgentFieldDefinition | undefined => {
+      syncBackfillFromParent();
       for (const field of sequenceState.remaining) {
         const existing = sessionRef.userData.receptionistFields?.[field.id]?.trim();
         if (!existing) return field;
@@ -115,6 +126,7 @@ export class ReceptionistFieldCollectionTask extends voice.AgentTask<Receptionis
         const ud = sessionRef.userData;
         if (!ud.receptionistFields) ud.receptionistFields = {};
         ud.receptionistFields[current.id] = normalized;
+        syncBackfillFromParent();
         if (!sequenceState.collectedIds.includes(current.id)) {
           sequenceState.collectedIds.push(current.id);
         }
@@ -137,6 +149,8 @@ export class ReceptionistFieldCollectionTask extends voice.AgentTask<Receptionis
         {
           instructions:
             "Collect caller information one field at a time. " +
+            "Caller details already captured in this call must not be asked again — " +
+            "the runtime syncs prior answers from the conversation. " +
             FIELD_TRANSITION_BRIDGE_RULES +
             " When the caller answers, call record_caller_field immediately without speaking. " +
             "The runtime asks the next question. Never narrate routing to the caller.",

@@ -34,11 +34,29 @@ export function receptionistFieldsForCollection(
   });
 }
 
+/** Collect problem/reason before profile fields when still missing. */
+const COLLECTION_FIELD_ORDER: Record<string, number> = {
+  reason: 0,
+  name: 1,
+  phone: 2,
+  address: 3,
+  email: 4,
+};
+
+export function sortReceptionistFieldsForCollection(
+  fields: AgentFieldDefinition[],
+): AgentFieldDefinition[] {
+  return [...fields].sort(
+    (a, b) => (COLLECTION_FIELD_ORDER[a.id] ?? 99) - (COLLECTION_FIELD_ORDER[b.id] ?? 99),
+  );
+}
+
 export function missingReceptionistFields(
   manifest: AgentFieldDefinition[],
   fields: Record<string, string> | undefined,
   purpose?: ReceptionistCollectionPurpose,
 ): AgentFieldDefinition[] {
   const scoped = receptionistFieldsForCollection(manifest, purpose);
-  return scoped.filter((f) => !fields?.[f.id]?.trim());
+  const missing = scoped.filter((f) => !fields?.[f.id]?.trim());
+  return sortReceptionistFieldsForCollection(missing);
 }

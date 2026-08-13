@@ -80,6 +80,18 @@ const merged = applyReceptionistFieldBackfill({
 });
 assert.equal(merged.name, "Anthony Johnson");
 
+const furnaceUtterances = [
+  "My furnace stopped working.",
+  "John Smith.",
+  "703-555-1212",
+];
+const furnaceBackfill = heuristicReceptionistFieldBackfill(furnaceUtterances, manifest, {});
+assert.ok(furnaceBackfill.reason?.toLowerCase().includes("furnace"), furnaceBackfill);
+
+const orderedMissing = missingReceptionistFields(manifest, {}, "service");
+assert.equal(orderedMissing[0]?.id, "reason");
+assert.equal(orderedMissing[1]?.id, "name");
+
 const messageScope = receptionistFieldsForCollection(manifest, "message");
 assert.ok(messageScope.every((f) => f.required));
 assert.ok(!messageScope.some((f) => f.id === "email"));
