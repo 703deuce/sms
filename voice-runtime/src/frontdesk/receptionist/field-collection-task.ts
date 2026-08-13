@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { AgentSession } from "@livekit/agents";
 import type { AgentFieldDefinition } from "@/lib/voice/receptionist/types";
 import { buildReceptionistFieldTransitionLine } from "@/lib/voice/receptionist/field-transition-phrases";
+import { validateReceptionistFieldValue } from "@/lib/voice/receptionist/field-validation";
 import { FIELD_TRANSITION_BRIDGE_RULES } from "@/lib/voice/field-transition-bridge";
 import type { FrontDeskUserData } from "../userdata";
 import { deliverScriptedSpeech } from "../../outbound/scripted-speech";
@@ -102,9 +103,17 @@ export class ReceptionistFieldCollectionTask extends voice.AgentTask<Receptionis
           throw new llm.ToolError(`Please provide your ${current.label}.`);
         }
 
+        let normalized: string;
+        try {
+          normalized = validateReceptionistFieldValue(current, trimmed);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : `Please provide your ${current.label}.`;
+          throw new llm.ToolError(message);
+        }
+
         const ud = sessionRef.userData;
         if (!ud.receptionistFields) ud.receptionistFields = {};
-        ud.receptionistFields[current.id] = trimmed;
+        ud.receptionistFields[current.id] = normalized;
         if (!sequenceState.collectedIds.includes(current.id)) {
           sequenceState.collectedIds.push(current.id);
         }
@@ -116,7 +125,7 @@ export class ReceptionistFieldCollectionTask extends voice.AgentTask<Receptionis
           return "Recorded — collection complete. Do not speak.";
         }
 
-        const line = buildReceptionistFieldTransitionLine(current, trimmed, next);
+        const line = buildReceptionistFieldTransitionLine(current, normalized, next);
         await speakCollectionLine(sessionRef, line);
         return "Recorded — next question already asked. Do not speak.";
       },

@@ -40,6 +40,8 @@ export function receptionistOperationalTaskOptionsFromSession<UserData>(
   session: AgentSession<UserData>,
 ): NestedTaskContextOptions {
   return {
+    // Fork parent transcript so OpenAI Realtime keeps a consistent item chain on handoff.
+    chatCtx: session.chatCtx.copy(),
     preserveFunctionCallHistory: false,
   };
 }

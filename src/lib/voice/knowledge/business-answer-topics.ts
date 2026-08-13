@@ -71,3 +71,19 @@ export function isHoursTopic(topicLower: string): boolean {
     "business hours",
   ]);
 }
+
+/** Company / business identity — distinct from agent persona name. */
+export function isCompanyNameTopic(topicLower: string): boolean {
+  return hasTopicToken(topicLower, [
+    "company name",
+    "business name",
+    "what company",
+    "which company",
+    "who are you",
+    "your company",
+    "name of your company",
+    "name of the company",
+    "what's your name",
+    "whats your name",
+  ]);
+}

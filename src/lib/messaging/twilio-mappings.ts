@@ -98,3 +98,13 @@ export function normalizeE164(phone: string): string {
   if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
   throw new Error(`Invalid phone number: ${phone}`);
 }
+
+export function tryNormalizeE164(phone: string): string | null {
+  const trimmed = phone.trim();
+  if (!trimmed) return null;
+  try {
+    return normalizeE164(trimmed);
+  } catch {
+    return null;
+  }
+}

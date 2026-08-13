@@ -4,6 +4,7 @@ import { loadVoiceAgentRuntimeConfigRecord } from "@/lib/voice/load-agent-config
 import { searchKnowledge } from "@/lib/voice/knowledge-processor";
 import {
   isHoursTopic,
+  isCompanyNameTopic,
   isPricingTopic,
   isServiceAreaTopic,
   isServicesTopic,
@@ -219,6 +220,21 @@ export async function resolveBusinessAnswer(input: {
   const wizard = asRecord(advanced.appointmentReceptionistWizard);
   const pricing = asRecord(knowledge.pricing || cfg.pricing);
   const kbIds = await linkedKnowledgeBaseIds(input.workspaceId, input.agentId);
+
+  // --- Company / business name ---
+  if (isCompanyNameTopic(topicLower)) {
+    const { businessName } = readReceptionistWizardContext(advanced);
+    const name =
+      businessName ||
+      String(cfg.businessName || wizard.businessName || cfg.agentName || "").trim();
+    if (name) {
+      return {
+        ok: true,
+        speak: `We're ${name}.`,
+        data: { topic: "company_name", businessName: name, source: "receptionist_wizard" },
+      };
+    }
+  }
 
   // --- Structured pricing ---
   if (isPricingTopic(topicLower)) {

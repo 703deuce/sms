@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { AgentSession } from "@livekit/agents";
 import type { ReceptionistCompiledSnapshot } from "@/lib/voice/receptionist/types";
 import { takeStructuredMessage } from "@/lib/voice/domain-actions/take-structured-message";
+import { resolveReceptionistCallbackPhone } from "@/lib/voice/receptionist/field-validation";
 import { executeAgentTool } from "@/lib/voice/agent-tool-gateway/gateway";
 import { buildFrontDeskBookingTools } from "../booking-tools";
 import type { FrontDeskUserData } from "../userdata";
@@ -47,7 +48,16 @@ function buildTakeMessageTool() {
           args.caller_name?.trim() ||
           ud.receptionistFields?.name ||
           "";
-        const phone = ud.receptionistFields?.phone || ud.callerE164 || "";
+        const phone = resolveReceptionistCallbackPhone({
+          collectedPhone: ud.receptionistFields?.phone,
+          preferredCallback: args.preferred_callback,
+          callerE164: ud.callerE164,
+        });
+        if (!phone) {
+          throw new llm.ToolError(
+            "No valid callback number yet. Ask for the caller's phone number before taking a message.",
+          );
+        }
         await takeStructuredMessage({
           workspaceId: ud.workspaceId,
           callId: ud.callId,
@@ -55,7 +65,7 @@ function buildTakeMessageTool() {
           caller_name: name,
           phone,
           urgency: args.urgency || "normal",
-          preferred_callback: args.preferred_callback,
+          preferred_callback: args.preferred_callback?.trim() || undefined,
           notes: args.notes,
         });
         return "Message recorded. Tell the caller someone from the team will follow up.";
@@ -76,7 +86,10 @@ function buildSendSmsTool() {
       const session = opts.ctx.session as AgentSession<FrontDeskUserData>;
       const ud = session.userData;
       return withLiveKitToolTelemetry(ud, "send_sms", { message }, async () => {
-        const to = phone?.trim() || ud.receptionistFields?.phone || ud.callerE164 || "";
+        const to = resolveReceptionistCallbackPhone({
+          collectedPhone: phone?.trim() || ud.receptionistFields?.phone,
+          callerE164: ud.callerE164,
+        });
         if (!to) {
           throw new llm.ToolError("No phone number available to send a text.");
         }

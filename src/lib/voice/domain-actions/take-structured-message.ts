@@ -1,5 +1,5 @@
 import { getPrisma } from "@/lib/db";
-import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
+import { tryNormalizeE164 } from "@/lib/messaging/twilio-mappings";
 
 export type TakeStructuredMessageInput = {
   workspaceId: string;
@@ -18,7 +18,7 @@ export async function takeStructuredMessage(input: TakeStructuredMessageInput) {
   const reason = input.reason.trim();
   if (!reason) throw new Error("reason required");
 
-  const phone = input.phone?.trim() ? normalizeE164(input.phone.trim()) : "";
+  const phone = input.phone?.trim() ? tryNormalizeE164(input.phone.trim()) ?? "" : "";
   const callerName = String(input.caller_name || "").trim();
   const email = input.email?.trim() || "";
   const urgency = String(input.urgency || "normal");
