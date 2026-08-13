@@ -3,7 +3,11 @@
 import { ReceptionistEditorShell } from "@/components/receptionist/receptionist-editor-shell";
 import { AboutStep } from "@/components/receptionist/steps/about-step";
 import { createDefaultWizardState } from "@/lib/receptionist-wizard/defaults";
-import { wizardStateToDraftConfig } from "@/lib/receptionist-wizard/build-config";
+import {
+  applyCompiledToVoiceConfig,
+  compileReceptionistConfig,
+} from "@/lib/voice/receptionist/compile";
+import { parseVoiceAgentConfig } from "@/lib/voice/types";
 import type { ReceptionistWizardState } from "@/lib/receptionist-wizard/types";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -39,7 +43,19 @@ export default function CreateReceptionistPage() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Failed to create agent");
       const agentId = json.data.id as string;
-      const draftConfig = wizardStateToDraftConfig({ ...state, agentId });
+      const prev = parseVoiceAgentConfig(null);
+      const snapshot = compileReceptionistConfig({
+        agentName: state.agentName,
+        businessName: state.businessName,
+        businessDescription: state.businessDescription,
+        greeting: state.greeting,
+        language: state.language,
+        answerTiming: state.answerTiming,
+        capabilities: state.capabilities,
+        collectFields: state.collectFields,
+        voiceId: state.voiceId,
+      });
+      const draftConfig = applyCompiledToVoiceConfig(prev, snapshot);
       await fetch(`/api/voice/agents/${agentId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },

@@ -1,8 +1,13 @@
 "use client";
 
-import { wizardStateToDraftConfig } from "@/lib/receptionist-wizard/build-config";
 import { wizardStateFromDraftConfig } from "@/lib/receptionist-wizard/load-config";
 import type { ReceptionistWizardState } from "@/lib/receptionist-wizard/types";
+import {
+  applyCompiledToVoiceConfig,
+  compileReceptionistConfig,
+  type ReceptionistDraftInput,
+} from "@/lib/voice/receptionist/compile";
+import { parseVoiceAgentConfig } from "@/lib/voice/types";
 import { useCallback, useEffect, useState } from "react";
 
 export function useReceptionistAgentState(agentId: string) {
@@ -45,8 +50,26 @@ export function useReceptionistAgentState(agentId: string) {
     setBusy(true);
     setError("");
     try {
-      const draftConfig = wizardStateToDraftConfig(next);
-      const res = await fetch(`/api/voice/agents/${agentId}`, {
+      const res = await fetch(`/api/voice/agents/${agentId}`);
+      const j = await res.json();
+      const prev = parseVoiceAgentConfig(j.data?.draftConfig);
+      const draftInput: ReceptionistDraftInput = {
+        agentName: next.agentName,
+        businessName: next.businessName,
+        businessDescription: next.businessDescription,
+        greeting: next.greeting,
+        language: next.language,
+        timezone: "America/New_York",
+        answerTiming: next.answerTiming,
+        capabilities: next.capabilities,
+        collectFields: next.collectFields,
+        voiceId: next.voiceId,
+        voiceLabel: next.voiceLabel,
+        advanced: (prev.advanced as Record<string, unknown>) ?? {},
+      };
+      const snapshot = compileReceptionistConfig(draftInput);
+      const draftConfig = applyCompiledToVoiceConfig(prev, snapshot);
+      const patchRes = await fetch(`/api/voice/agents/${agentId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -54,8 +77,8 @@ export function useReceptionistAgentState(agentId: string) {
           draftConfig,
         }),
       });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Save failed");
+      const patchJson = await patchRes.json();
+      if (!patchRes.ok) throw new Error(patchJson.error || "Save failed");
       setState(next);
       return next;
     } catch (err) {
