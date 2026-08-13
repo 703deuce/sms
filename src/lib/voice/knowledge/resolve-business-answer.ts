@@ -68,6 +68,92 @@ function resolveStructuredPricing(
   return null;
 }
 
+function readReceptionistWizardContext(advanced: Record<string, unknown>): {
+  businessDescription: string;
+  businessName: string;
+} {
+  const compiled = asRecord(advanced.receptionistCompiled);
+  const wizard = asRecord(advanced.receptionistWizard);
+  return {
+    businessDescription: String(
+      compiled.businessDescription || wizard.businessDescription || "",
+    ).trim(),
+    businessName: String(compiled.businessName || wizard.businessName || "").trim(),
+  };
+}
+
+function extractHoursFromDescription(description: string): string | null {
+  const hoursMatch = description.match(
+    /(?:regular\s+)?hours?\s*(?:are\s+)?([^.]+(?:\d\s*(?:am|pm)|Monday|weekday)[^.]*)/i,
+  );
+  if (hoursMatch?.[1]) return hoursMatch[1].trim();
+
+  const weekdayMatch = description.match(
+    /(Monday[^.]*(?:\d\s*(?:am|pm)|through|to)[^.]*)/i,
+  );
+  if (weekdayMatch?.[1]) return weekdayMatch[1].trim();
+
+  return null;
+}
+
+function extractPricingFromDescription(description: string): string | null {
+  const matches = description.match(/\$[\d,]+[^.]*(?:\.|;|$)/gi);
+  if (!matches?.length) return null;
+  return matches.map((m) => m.trim().replace(/[.;]+$/, "")).join(". ") + ".";
+}
+
+function resolveFromGenericReceptionist(
+  topicLower: string,
+  topic: string,
+  advanced: Record<string, unknown>,
+): BusinessAnswerResult | null {
+  const { businessDescription } = readReceptionistWizardContext(advanced);
+  if (!businessDescription) return null;
+
+  if (isHoursTopic(topicLower)) {
+    const hours = extractHoursFromDescription(businessDescription);
+    if (hours) {
+      return {
+        ok: true,
+        speak: `Our hours are ${hours}.`,
+        data: { topic: "hours", hours, source: "receptionist_wizard" },
+      };
+    }
+  }
+
+  if (isPricingTopic(topicLower)) {
+    const pricing = extractPricingFromDescription(businessDescription);
+    if (pricing) {
+      return {
+        ok: true,
+        speak: pricing,
+        data: { topic: "pricing", source: "receptionist_wizard" },
+      };
+    }
+  }
+
+  if (isServicesTopic(topicLower)) {
+    const firstSentence = businessDescription.split(/[.!?]/)[0]?.trim();
+    if (firstSentence) {
+      return {
+        ok: true,
+        speak: `${firstSentence}.`,
+        data: { topic: "services", source: "receptionist_wizard" },
+      };
+    }
+  }
+
+  if (topicMatches(businessDescription, topic)) {
+    return {
+      ok: true,
+      speak: businessDescription,
+      data: { topic, source: "receptionist_wizard" },
+    };
+  }
+
+  return null;
+}
+
 async function linkedKnowledgeBaseIds(workspaceId: string, agentId: string): Promise<string[]> {
   const prisma = getPrisma();
   const agent = await prisma.voiceAgent.findFirst({
@@ -154,12 +240,16 @@ export async function resolveBusinessAnswer(input: {
         data: { topic: "hours", hours },
       };
     }
+    const receptionistHours = resolveFromGenericReceptionist(topicLower, topic, advanced);
+    if (receptionistHours) return receptionistHours;
   }
 
   // --- Service area / coverage (RAG-first — before generic services blurb) ---
   if (isServiceAreaTopic(topicLower)) {
     const ragArea = await searchRagAnswer(input.workspaceId, kbIds, topic);
     if (ragArea) return ragArea;
+    const receptionistArea = resolveFromGenericReceptionist(topicLower, topic, advanced);
+    if (receptionistArea) return receptionistArea;
   }
 
   // --- Services / what we do ---
@@ -176,6 +266,14 @@ export async function resolveBusinessAnswer(input: {
         data: { topic: "services" },
       };
     }
+    const receptionistServices = resolveFromGenericReceptionist(topicLower, topic, advanced);
+    if (receptionistServices) return receptionistServices;
+  }
+
+  // --- Pricing from generic receptionist wizard (after structured pricing) ---
+  if (isPricingTopic(topicLower)) {
+    const receptionistPricing = resolveFromGenericReceptionist(topicLower, topic, advanced);
+    if (receptionistPricing) return receptionistPricing;
   }
 
   // --- FAQ map in draftConfig ---
@@ -225,6 +323,9 @@ export async function resolveBusinessAnswer(input: {
   // --- Vector / local RAG search across linked knowledge bases ---
   const ragAnswer = await searchRagAnswer(input.workspaceId, kbIds, topic);
   if (ragAnswer) return ragAnswer;
+
+  const receptionistFallback = resolveFromGenericReceptionist(topicLower, topic, advanced);
+  if (receptionistFallback) return receptionistFallback;
 
   return {
     ok: false,

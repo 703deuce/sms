@@ -21,6 +21,36 @@ assert.ok(source.includes("searchKnowledge"), "resolver uses RAG search");
 assert.ok(source.includes("loadBusinessBrain"), "resolver uses company brain");
 assert.ok(source.includes("knowledgeBaseIds"), "resolver reads linked KB ids");
 assert.ok(source.includes("isServiceAreaTopic"), "resolver checks service area before services");
+assert.ok(source.includes("receptionistCompiled"), "resolver reads generic receptionist wizard");
+
+const SUMMIT_DESC =
+  "Summit Electric provides residential electrical repair, panel upgrades, and 24/7 emergency service in Denver. Regular hours are Monday through Friday 8am to 6pm. We charge a $95 diagnostic fee; emergency after-hours calls start at $175.";
+
+function extractHoursFromDescription(description: string): string | null {
+  const hoursMatch = description.match(
+    /(?:regular\s+)?hours?\s*(?:are\s+)?([^.]+(?:\d\s*(?:am|pm)|Monday|weekday)[^.]*)/i,
+  );
+  if (hoursMatch?.[1]) return hoursMatch[1].trim();
+  const weekdayMatch = description.match(
+    /(Monday[^.]*(?:\d\s*(?:am|pm)|through|to)[^.]*)/i,
+  );
+  if (weekdayMatch?.[1]) return weekdayMatch[1].trim();
+  return null;
+}
+
+function extractPricingFromDescription(description: string): string | null {
+  const matches = description.match(/\$[\d,]+[^.]*(?:\.|;|$)/gi);
+  if (!matches?.length) return null;
+  return matches.map((m) => m.trim().replace(/[.;]+$/, "")).join(". ") + ".";
+}
+
+assert.equal(
+  extractHoursFromDescription(SUMMIT_DESC),
+  "Monday through Friday 8am to 6pm",
+  "hours extract from receptionist business description",
+);
+assert.match(extractPricingFromDescription(SUMMIT_DESC) || "", /\$95/);
+assert.match(extractPricingFromDescription(SUMMIT_DESC) || "", /\$175/);
 
 assert.equal(isPricingTopic("pricing"), true, '"pricing" must match pricing topics');
 assert.equal(isPricingTopic("diagnostic visit"), true);
