@@ -73,28 +73,38 @@ for (const category of solutionCategories) {
   }
 }
 
-// Launch sidebar matches product mockup nav with AI Receptionist submenu.
+// Launch sidebar matches simplified product nav.
 const solutionsHrefs = new Set(collectNavHrefs(solutionsNav));
 assert.ok(solutionsHrefs.has("/outcomes"), "Dashboard required");
 assert.ok(solutionsHrefs.has("/voice/receptionist"), "AI Receptionist landing required");
 assert.ok(solutionsHrefs.has("/voice/agents"), "My Agents required");
 assert.ok(solutionsHrefs.has("/voice/calls"), "Calls required");
+assert.ok(solutionsHrefs.has("/inbox"), "Inbox required under SMS");
+assert.ok(solutionsHrefs.has("/send/quick"), "Broadcast required");
+assert.ok(solutionsHrefs.has("/campaigns"), "Campaigns required");
+assert.ok(solutionsHrefs.has("/templates"), "Templates required");
+assert.ok(solutionsHrefs.has("/automations"), "Automations required");
+assert.ok(solutionsHrefs.has("/integrations/native/appointments"), "Appointments required");
 assert.ok(solutionsHrefs.has("/numbers"), "Phone Numbers required");
+assert.ok(solutionsHrefs.has("/numbers/buy"), "Buy Number required");
+assert.ok(solutionsHrefs.has("/compliance"), "Compliance required");
 assert.ok(solutionsHrefs.has("/contacts"), "Contacts required");
 assert.ok(solutionsHrefs.has("/integrations"), "Integrations required");
 assert.ok(solutionsHrefs.has("/settings/business"), "Settings required");
+assert.ok(solutionsHrefs.has("/reports/usage"), "Usage & Billing required");
 
 const expectedTopLevel = [
   "Dashboard",
   "AI Receptionist",
   "Calls",
-  "Phone Numbers",
-  "Settings",
+  "SMS",
   "Contacts",
-  "Organizations",
-  "Credentials",
+  "Automations",
+  "Appointments",
+  "Phone Numbers",
+  "Compliance",
   "Integrations",
-  "Affiliates",
+  "Settings",
 ];
 assert.deepEqual(
   solutionsNav.map((item) => item.label),
@@ -111,22 +121,28 @@ assert.deepEqual(
   "AI Receptionist submenu labels must match wizard shortcuts",
 );
 
+const smsNav = solutionsNav.find((item) => item.label === "SMS");
+assert.ok(smsNav?.children?.map((c) => c.label), "SMS submenu required");
+assert.deepEqual(smsNav?.children?.map((c) => c.label), [
+  "Inbox",
+  "Broadcast",
+  "Campaigns",
+  "Templates",
+]);
+
 for (const slug of solutionsLaunchSlugs()) {
   const reachable = [...solutionsHrefs].some((href) => href.includes(`/outcomes/${slug}`));
   if (!reachable) {
-    // Outcome shortcuts are not surfaced in the flat mockup nav; pages remain reachable via Platform nav.
     console.warn(`Outcome ${slug} not in flat launch nav (expected for mockup sidebar)`);
   }
 }
 
 const hiddenFromLaunch = [
-  "Inbox",
   "Campaigns",
   "Phone",
   "Reports",
   "Your Team",
   "My Numbers",
-  "Compliance",
   "Phone & Routing",
   "Developer Tools",
   "Forms",
@@ -136,6 +152,9 @@ const hiddenFromLaunch = [
   "AI Voice",
   "AI Answering Service",
   "Connect With Customers",
+  "Organizations",
+  "Credentials",
+  "Affiliates",
 ];
 for (const label of hiddenFromLaunch) {
   assert.ok(
@@ -149,7 +168,6 @@ assert.ok(
   "Duplicate email channel shortcuts removed",
 );
 
-// Instance shortcuts are no longer injected into the launch sidebar.
 const withInstances = buildSolutionsNav({
   instancesBySolution: {
     "answer-every-call": [

@@ -1,3 +1,5 @@
+import type { MockCallOutcome } from "./mock-data";
+
 export type CallOutcomeBadge =
   | "New Lead"
   | "Message Taken"
@@ -7,16 +9,21 @@ export type CallOutcomeBadge =
   | "Information Provided"
   | "Completed"
   | "Spam"
-  | "No Action";
+  | "No Action"
+  | "Resolved"
+  | "Lead Captured"
+  | "Voice"
+  | "Voicemail"
+  | "No Answer";
 
 export type CallListFilter =
   | "all"
   | "leads"
+  | "appointments"
   | "messages"
-  | "booked"
   | "transferred"
-  | "spam"
-  | "no_action";
+  | "voicemails"
+  | "no_answer";
 
 export type CallRowLike = {
   outcome?: string | null;
@@ -28,6 +35,7 @@ export type CallRowLike = {
   status?: string;
   summary?: string | null;
   intent?: string | null;
+  mockOutcome?: MockCallOutcome | string | null;
 };
 
 export function fmtCallDuration(sec?: number | null): string {
@@ -36,6 +44,14 @@ export function fmtCallDuration(sec?: number | null): string {
   const s = sec % 60;
   if (m === 0) return `${s}s`;
   return `${m}m ${String(s).padStart(2, "0")}s`;
+}
+
+/** Table duration format: 02:45 */
+export function fmtCallDurationTable(sec?: number | null): string {
+  if (sec == null || sec <= 0) return "00:00";
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
 export function fmtCallDurationShort(sec?: number | null): string {
@@ -76,7 +92,27 @@ export function fmtCallDateTime(iso: string): { primary: string; secondary: stri
   };
 }
 
+export function fmtCallDateTable(iso: string): { date: string; time: string } {
+  const d = new Date(iso);
+  return {
+    date: d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }),
+    time: d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }),
+  };
+}
+
 export function deriveCallOutcomeBadge(call: CallRowLike): CallOutcomeBadge {
+  if (call.mockOutcome) {
+    const m = String(call.mockOutcome);
+    if (m === "Lead Captured") return "Lead Captured";
+    if (m === "Resolved") return "Resolved";
+    if (m === "Voice") return "Voice";
+    if (m === "Voicemail") return "Voicemail";
+    if (m === "No Answer") return "No Answer";
+    if (m === "Appointment Booked") return "Appointment Booked";
+    if (m === "Message Taken") return "Message Taken";
+    if (m === "Transferred") return "Transferred";
+  }
+  if (call.voicemailDetected) return "Voicemail";
   if (call.transferred) return "Transferred";
   if (call.appointmentBooked) return "Appointment Booked";
   const outcome = String(call.outcome || "").toLowerCase();
@@ -101,8 +137,9 @@ export function deriveCallOutcomeBadge(call: CallRowLike): CallOutcomeBadge {
   if (outcome.includes("faq") || outcome.includes("information")) {
     return outcome.includes("information") ? "Information Provided" : "FAQ";
   }
+  if (outcome.includes("no_answer") || call.status === "NO_ANSWER") return "No Answer";
   if (outcome.includes("completed") || call.status === "COMPLETED") {
-    return "Completed";
+    return "Resolved";
   }
   if (!outcome || outcome === "no_action" || outcome === "none") {
     return "No Action";
@@ -112,25 +149,31 @@ export function deriveCallOutcomeBadge(call: CallRowLike): CallOutcomeBadge {
 
 export const OUTCOME_BADGE_STYLES: Record<CallOutcomeBadge, string> = {
   "New Lead": "bg-emerald-50 text-emerald-700 ring-emerald-200",
+  "Lead Captured": "bg-violet-50 text-violet-700 ring-violet-200",
   "Message Taken": "bg-sky-50 text-sky-700 ring-sky-200",
   "Appointment Booked": "bg-amber-50 text-amber-800 ring-amber-200",
   Transferred: "bg-violet-50 text-violet-700 ring-violet-200",
   FAQ: "bg-slate-100 text-slate-700 ring-slate-200",
   "Information Provided": "bg-orange-50 text-orange-800 ring-orange-200",
   Completed: "bg-primary/10 text-primary ring-primary/20",
+  Resolved: "bg-emerald-50 text-emerald-700 ring-emerald-200",
+  Voice: "bg-slate-100 text-slate-600 ring-slate-200",
+  Voicemail: "bg-slate-100 text-slate-600 ring-slate-200",
   Spam: "bg-rose-50 text-rose-700 ring-rose-200",
   "No Action": "bg-slate-100 text-slate-600 ring-slate-200",
+  "No Answer": "bg-slate-100 text-slate-600 ring-slate-200",
 };
 
 export function filterMatchesOutcome(filter: CallListFilter, call: CallRowLike): boolean {
   if (filter === "all") return true;
   const badge = deriveCallOutcomeBadge(call);
-  if (filter === "leads") return badge === "New Lead";
+  if (filter === "leads")
+    return badge === "New Lead" || badge === "Lead Captured";
+  if (filter === "appointments") return badge === "Appointment Booked";
   if (filter === "messages") return badge === "Message Taken";
-  if (filter === "booked") return badge === "Appointment Booked";
   if (filter === "transferred") return badge === "Transferred";
-  if (filter === "spam") return badge === "Spam";
-  if (filter === "no_action") return badge === "No Action";
+  if (filter === "voicemails") return badge === "Voicemail";
+  if (filter === "no_answer") return badge === "No Answer" || badge === "No Action";
   return true;
 }
 

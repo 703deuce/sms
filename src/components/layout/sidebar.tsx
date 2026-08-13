@@ -260,7 +260,7 @@ export function Sidebar({
     if (realtorMode) return buildRealtorNav(inboxBadge);
     const pathAgentId = voiceAgentIdFromPath(pathname);
     const agentId = pathAgentId ?? primaryVoiceAgentId ?? null;
-    return buildProductNav({ primaryVoiceAgentId: agentId });
+    return buildProductNav({ primaryVoiceAgentId: agentId, inboxBadge });
   }, [primaryVoiceAgentId, pathname, realtorMode, inboxBadge]);
 
   useEffect(() => {
@@ -316,11 +316,19 @@ export function Sidebar({
           const receptionistOwned =
             item.label === "AI Receptionist" && isReceptionistSectionPath(pathname);
           const callsOwned =
-            item.href === "/voice/calls" &&
+            item.label === "Calls" &&
             (pathname === "/voice/calls" || pathname.startsWith("/voice/calls/"));
+          const smsOwned =
+            item.label === "SMS" &&
+            (pathname === "/inbox" ||
+              pathname.startsWith("/inbox/") ||
+              pathname.startsWith("/send") ||
+              pathname.startsWith("/campaigns") ||
+              pathname.startsWith("/templates"));
           const ownedOutcome =
             receptionistOwned ||
             callsOwned ||
+            smsOwned ||
             pathname.startsWith(`${hrefPath(item.href)}/`) ||
             pathname === hrefPath(item.href);
           const expandKey = itemExpandKey(item);
@@ -361,13 +369,13 @@ export function Sidebar({
                 className={cn(
                   "group relative flex items-center rounded-[10px] transition",
                   active
-                    ? realtorMode
-                      ? "bg-[#2563eb] text-white"
+                    ? item.label === "Calls" || realtorMode
+                      ? "bg-[#6366f1] text-white shadow-[0_4px_14px_rgba(99,102,241,0.35)]"
                       : "bg-primary/10 text-primary"
                     : "text-sidebar-foreground hover:bg-[#f3f4f6]",
                 )}
               >
-                {active && !realtorMode ? (
+                {active && !realtorMode && item.label !== "Calls" ? (
                   <span className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r-full bg-primary" />
                 ) : null}
                 <Link
@@ -382,7 +390,7 @@ export function Sidebar({
                     className={cn(
                       "h-4 w-4 shrink-0",
                       active
-                        ? realtorMode
+                        ? item.label === "Calls" || realtorMode
                           ? "text-white"
                           : "text-primary"
                         : "text-sidebar-muted group-hover:text-sidebar-foreground",
@@ -408,7 +416,9 @@ export function Sidebar({
                     className={cn(
                       "mr-1.5 rounded-md p-1.5 transition",
                       active
-                        ? "text-primary hover:bg-primary/10"
+                        ? item.label === "Calls" || realtorMode
+                          ? "text-white hover:bg-white/15"
+                          : "text-primary hover:bg-primary/10"
                         : "text-sidebar-muted hover:bg-[#f3f4f6] hover:text-sidebar-foreground",
                     )}
                     onClick={() =>

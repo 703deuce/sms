@@ -1,14 +1,15 @@
 import {
   AudioLines,
-  Building2,
+  Calendar,
   Hash,
-  KeyRound,
   LayoutDashboard,
-  Megaphone,
+  MessageSquare,
   PhoneCall,
   Puzzle,
   Settings,
+  ShieldCheck,
   Users,
+  Workflow,
 } from "lucide-react";
 import type { NavChild, NavItem } from "@/lib/nav";
 
@@ -24,13 +25,13 @@ export type SolutionsNavOptions = {
   /** Kept for shell compatibility. */
   instancesBySolution?: Record<string, SolutionNavInstance[]>;
   primaryVoiceAgentId?: string | null;
+  inboxBadge?: number;
 };
 
 /** Paths that belong under the AI Receptionist sidebar section. */
 export const RECEPTIONIST_SECTION_PREFIXES = [
   "/voice/receptionist",
   "/voice/agents",
-  "/voice/calls",
 ] as const;
 
 export function isReceptionistSectionPath(pathname: string): boolean {
@@ -48,7 +49,7 @@ export function buildReceptionistNavChildren(agentId?: string | null): NavChild[
       { label: "My Agents", href: agentsList },
       { label: "About Your Receptionist", href: "/voice/agents/new" },
       { label: "What It Should Do", href: agentsList },
-      { label: "Connect integrations", href: agentsList },
+      { label: "Connect Integrations", href: agentsList },
       { label: "Advanced", href: agentsList },
       { label: "Voice & Test", href: agentsList },
     ];
@@ -58,7 +59,7 @@ export function buildReceptionistNavChildren(agentId?: string | null): NavChild[
     { label: "My Agents", href: agentsList },
     { label: "About Your Receptionist", href: `/voice/agents/${agentId}/about` },
     { label: "What It Should Do", href: `/voice/agents/${agentId}/capabilities` },
-    { label: "Connect integrations", href: `/voice/agents/${agentId}/integrations` },
+    { label: "Connect Integrations", href: `/voice/agents/${agentId}/integrations` },
     { label: "Advanced", href: `/voice/agents/${agentId}/advanced` },
     { label: "Voice & Test", href: `/voice/agents/${agentId}/voice-test` },
   ];
@@ -69,6 +70,7 @@ export function buildProductNav(options: SolutionsNavOptions = {}): NavItem[] {
     options.primaryVoiceAgentId != null && options.primaryVoiceAgentId !== ""
       ? options.primaryVoiceAgentId
       : null;
+  const inboxBadge = options.inboxBadge ?? 0;
 
   return [
     { label: "Dashboard", href: "/outcomes", icon: LayoutDashboard },
@@ -78,18 +80,72 @@ export function buildProductNav(options: SolutionsNavOptions = {}): NavItem[] {
       icon: AudioLines,
       children: buildReceptionistNavChildren(agentId),
     },
-    { label: "Calls", href: "/voice/calls", icon: PhoneCall },
-    { label: "Phone Numbers", href: "/numbers", icon: Hash },
-    { label: "Settings", href: "/settings/business", icon: Settings },
+    { label: "Calls", href: "/voice/calls", icon: PhoneCall, emphasize: true },
+    {
+      label: "SMS",
+      href: "/inbox",
+      icon: MessageSquare,
+      badge: inboxBadge > 0 ? inboxBadge : undefined,
+      children: [
+        { label: "Inbox", href: "/inbox" },
+        { label: "Broadcast", href: "/send/quick" },
+        { label: "Campaigns", href: "/campaigns" },
+        { label: "Templates", href: "/templates" },
+      ],
+    },
     { label: "Contacts", href: "/contacts", icon: Users },
-    { label: "Organizations", href: "/contacts/lists", icon: Building2 },
-    { label: "Credentials", href: "/integrations/crm", icon: KeyRound },
+    {
+      label: "Automations",
+      href: "/automations",
+      icon: Workflow,
+      children: [
+        { label: "Flows", href: "/automations" },
+        { label: "Templates", href: "/automations/templates" },
+        { label: "Logs", href: "/automations/logs" },
+      ],
+    },
+    {
+      label: "Appointments",
+      href: "/integrations/native/appointments",
+      icon: Calendar,
+    },
+    {
+      label: "Phone Numbers",
+      href: "/numbers",
+      icon: Hash,
+      children: [
+        { label: "My Numbers", href: "/numbers" },
+        { label: "Buy Number", href: "/numbers/buy" },
+        { label: "Port Number", href: "/numbers/port" },
+      ],
+    },
+    {
+      label: "Compliance",
+      href: "/compliance",
+      icon: ShieldCheck,
+      children: [
+        { label: "A2P Registration", href: "/compliance" },
+        { label: "Consent & Opt-Outs", href: "/compliance/consent" },
+      ],
+    },
     { label: "Integrations", href: "/integrations", icon: Puzzle },
-    { label: "Affiliates", href: "/settings/billing", icon: Megaphone },
+    {
+      label: "Settings",
+      href: "/settings/business",
+      icon: Settings,
+      children: [
+        { label: "Business", href: "/settings/business" },
+        { label: "Messaging", href: "/settings/messaging" },
+        { label: "Notifications", href: "/settings/notifications" },
+        { label: "Usage & Billing", href: "/reports/usage" },
+        { label: "Security", href: "/settings/security" },
+        { label: "Team", href: "/settings/users" },
+      ],
+    },
   ];
 }
 
-/** Launch sidebar — AI Receptionist expands to wizard shortcuts + My Agents. */
+/** Launch sidebar — simplified product nav. */
 export function buildSolutionsNav(options: SolutionsNavOptions = {}): NavItem[] {
   return buildProductNav(options);
 }
