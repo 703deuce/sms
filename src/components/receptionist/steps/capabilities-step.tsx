@@ -386,7 +386,7 @@ export function CapabilitiesStep({
             <p className="text-xs text-[#9ca3af]">PDF · DOCX · TXT</p>
             {state.agentId ? (
               <Link
-                href={`/voice/agents/${state.agentId}/integrations`}
+                href="/voice/knowledge"
                 className="mt-3 inline-block text-xs font-medium text-[#6366f1] hover:underline"
               >
                 Upload files →

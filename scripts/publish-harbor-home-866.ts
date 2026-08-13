@@ -32,6 +32,10 @@ const PHONE_ID = "cmsc3numa1j17084g391t2z5l";
 const PHONE_E164 = "+18663464256";
 const JADE_VOICE_ID = "Bmj4Yi69e7b67di5IKVn";
 const VOICE_SPEED = 1.1;
+/** Expressive preset — same Jade voice, more dynamic delivery for A/B test vs balanced. */
+const ELEVENLABS_STABILITY = 0.35;
+const ELEVENLABS_SIMILARITY = 0.75;
+const ELEVENLABS_STYLE = 0.1;
 
 async function publishWithoutLiveKitProvision(
   workspaceId: string,
@@ -162,6 +166,10 @@ async function main() {
   state.voiceId = voiceId;
   state.voiceLabel = getReceptionistElevenLabsVoice(voiceId)?.label || "Jade";
   state.voiceSpeed = VOICE_SPEED;
+  state.elevenLabsStability = ELEVENLABS_STABILITY;
+  state.elevenLabsClarity = ELEVENLABS_SIMILARITY;
+  state.elevenLabsStyle = ELEVENLABS_STYLE;
+  state.elevenLabsSpeakerBoost = false;
 
   const advanced = advancedFromDraftConfig(agent.draftConfig, state.capabilities);
   const prev = parseVoiceAgentConfig(agent.draftConfig);
@@ -190,6 +198,11 @@ async function main() {
     voiceLanguage: {
       ...(merged.voiceLanguage || {}),
       speed: VOICE_SPEED,
+      elevenLabsTuning: true,
+      elevenLabsStability: ELEVENLABS_STABILITY,
+      elevenLabsSimilarityBoost: ELEVENLABS_SIMILARITY,
+      elevenLabsStyle: ELEVENLABS_STYLE,
+      elevenLabsSpeakerBoost: false,
     },
     advanced: {
       ...(merged.advanced as object),
@@ -231,6 +244,10 @@ async function main() {
       voiceId,
       voiceLabel: state.voiceLabel,
       voiceSpeed: VOICE_SPEED,
+      elevenLabsStability: ELEVENLABS_STABILITY,
+      elevenLabsSimilarityBoost: ELEVENLABS_SIMILARITY,
+      elevenLabsStyle: ELEVENLABS_STYLE,
+      elevenLabsSpeakerBoost: false,
       voiceLanguageSpeed: cfg.voiceLanguage?.speed,
       compiledVoiceSpeed: compiled.voiceSpeed,
       publishedVersionId: published.version.id,

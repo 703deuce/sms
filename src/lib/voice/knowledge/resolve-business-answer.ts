@@ -76,15 +76,31 @@ function resolveStructuredPricing(
 function readReceptionistWizardContext(advanced: Record<string, unknown>): {
   businessDescription: string;
   businessName: string;
+  businessHours: string;
+  serviceArea: string;
+  coreServices: string;
+  pricingNotes: string;
 } {
   const compiled = asRecord(advanced.receptionistCompiled);
   const wizard = asRecord(advanced.receptionistWizard);
+  const profile = asRecord(compiled.businessProfile);
   return {
     businessDescription: String(
       compiled.businessDescription || wizard.businessDescription || "",
     ).trim(),
     businessName: String(compiled.businessName || wizard.businessName || "").trim(),
+    businessHours: String(wizard.businessHours || profile.hours || "").trim(),
+    serviceArea: String(wizard.serviceArea || profile.serviceArea || "").trim(),
+    coreServices: String(wizard.coreServices || profile.coreServices || "").trim(),
+    pricingNotes: String(wizard.pricingNotes || profile.pricingNotes || "").trim(),
   };
+}
+
+function hasReceptionistCompiledPrompt(advanced: Record<string, unknown>): boolean {
+  const compiled = asRecord(advanced.receptionistCompiled);
+  return Boolean(
+    String(compiled.compiledPrompt || compiled.businessContext || "").trim(),
+  );
 }
 
 function resolveFromGenericReceptionist(
@@ -126,6 +142,11 @@ function resolveFromGenericReceptionist(
         data: { topic: "services", source: "receptionist_wizard" },
       };
     }
+  }
+
+  // Wizard agents load business facts in compiledPrompt — do not dump description via retrieval.
+  if (hasReceptionistCompiledPrompt(advanced)) {
+    return null;
   }
 
   if (topicMatches(businessDescription, topic)) {
@@ -201,16 +222,14 @@ export async function resolveBusinessAnswer(input: {
   const knowledge = asRecord(cfg.knowledgeBase || cfg.knowledge);
   const dynamicVars = asRecord(cfg.dynamicVariables);
   const advanced = asRecord(cfg.advanced);
-  const wizard = asRecord(advanced.appointmentReceptionistWizard);
+  const receptionistWizard = asRecord(advanced.receptionistWizard);
+  const legacyWizard = asRecord(advanced.appointmentReceptionistWizard);
+  const wizard = { ...legacyWizard, ...receptionistWizard };
+  const wizCtx = readReceptionistWizardContext(advanced);
   const pricing = asRecord(knowledge.pricing || cfg.pricing);
   const kbIds = await linkedKnowledgeBaseIds(input.workspaceId, input.agentId);
 
-  const receptionistCompiled = advanced.receptionistCompiled as
-    | { businessContext?: string; compiledPrompt?: string }
-    | undefined;
-  const hasCompiledContext =
-    receptionistCompiled?.compiledPrompt?.trim() ||
-    receptionistCompiled?.businessContext?.trim();
+  const hasCompiledContext = hasReceptionistCompiledPrompt(advanced);
   if (hasCompiledContext) {
     const coreTopic =
       isCompanyNameTopic(topicLower) ||
@@ -255,6 +274,7 @@ export async function resolveBusinessAnswer(input: {
       knowledge.businessHours ||
       cfg.businessHours ||
       dynamicVars.business_hours ||
+      wizCtx.businessHours ||
       wizard.businessHours;
     if (hours) {
       return {
@@ -281,6 +301,8 @@ export async function resolveBusinessAnswer(input: {
       knowledge.services ||
       cfg.services ||
       dynamicVars.services_description ||
+      wizCtx.coreServices ||
+      wizard.coreServices ||
       wizard.servicesDescription;
     if (services) {
       return {
