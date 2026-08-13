@@ -44,6 +44,10 @@ export type FrontDeskUserData = {
   receptionistCompiled?: ReceptionistCompiledSnapshot;
   /** Collected caller fields for generic receptionist (field manifest). */
   receptionistFields?: Record<string, string>;
+  /** Field collection task finished — parent should not re-acknowledge fields. */
+  receptionistFieldCollectionComplete?: boolean;
+  /** Caller fields were acknowledged during collection (operational flag). */
+  receptionistFieldsAcknowledged?: boolean;
   agentConfigVersion?: number;
   agentVersionId?: string;
   /** @deprecated Prefer booking.status === "confirmed". */

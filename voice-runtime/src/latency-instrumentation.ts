@@ -8,7 +8,7 @@ import {
   type UserStateChangedEvent,
   voice,
 } from "@livekit/agents";
-import { markFirstAudioStarted } from "./task-transition-instrumentation";
+import { markFirstAudioStarted, markFirstParentAudio } from "./task-transition-instrumentation";
 import {
   markHybridElevenLabsTtfb,
   markHybridFirstAudio,
@@ -81,6 +81,16 @@ function maybeMarkTaskFirstAudio(session: voice.AgentSession<any>): void {
   const inst = ud?.activeTaskInstrumentation;
   if (!ud?.callId || !inst || inst.firstAudioLogged) return;
   inst.firstAudioLogged = true;
+  if (inst.taskId === "parent_after_collection") {
+    markFirstParentAudio({
+      callId: ud.callId,
+      taskId: inst.taskId,
+      taskType: inst.taskType,
+      parentTaskType: inst.taskType,
+    });
+    ud.activeTaskInstrumentation = undefined;
+    return;
+  }
   markFirstAudioStarted({
     callId: ud.callId,
     taskId: inst.taskId,

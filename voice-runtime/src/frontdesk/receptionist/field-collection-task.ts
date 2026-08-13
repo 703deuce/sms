@@ -2,36 +2,58 @@ import { llm, voice } from "@livekit/agents";
 import { z } from "zod";
 import type { AgentSession } from "@livekit/agents";
 import type { AgentFieldDefinition } from "@/lib/voice/receptionist/types";
-import {
-  buildReceptionistFieldTransitionLine,
-} from "@/lib/voice/receptionist/field-transition-phrases";
+import { buildReceptionistFieldTransitionLine } from "@/lib/voice/receptionist/field-transition-phrases";
 import { FIELD_TRANSITION_BRIDGE_RULES } from "@/lib/voice/field-transition-bridge";
 import type { FrontDeskUserData } from "../userdata";
-import { speakIntakeTransitionLine } from "../../intake-transition-speech";
-import { agentTaskSuperOptions, nestedTaskOptionsFromSession } from "../../tasks/task-context";
+import { deliverScriptedSpeech } from "../../outbound/scripted-speech";
+import {
+  agentTaskSuperOptions,
+  receptionistOperationalTaskOptionsFromSession,
+} from "../../tasks/task-context";
+import {
+  markTaskCompleted,
+  markTaskOnEnterStarted,
+  markTaskStarted,
+} from "../../task-transition-instrumentation";
 
 export type ReceptionistFieldCollectionResult = {
   collected: string[];
   complete: boolean;
+  fields: Record<string, string>;
 };
 
-type SequenceState = {
-  collectedIds: string[];
-  remaining: AgentFieldDefinition[];
-};
+const TASK_ID = "receptionist_field_collection";
+const TASK_TYPE = "ReceptionistFieldCollectionTask";
+
+/** Scripted lines stay out of chat_ctx so handoff does not replay child speech into Realtime. */
+async function speakCollectionLine(
+  session: AgentSession<FrontDeskUserData>,
+  line: string,
+): Promise<void> {
+  const trimmed = line.trim();
+  if (!trimmed) return;
+  await deliverScriptedSpeech(session, trimmed, {
+    allowInterruptions: true,
+    addToChatCtx: false,
+  });
+}
 
 /**
- * Collect caller fields from the receptionist field manifest without RE callState.
+ * Short operational AgentTask — collects missing caller fields, persists to userData,
+ * returns typed result. Conversationally invisible at the parent boundary.
  */
 export class ReceptionistFieldCollectionTask extends voice.AgentTask<ReceptionistFieldCollectionResult> {
-  private readonly sequenceState: SequenceState;
+  private readonly sequenceState: {
+    collectedIds: string[];
+    remaining: AgentFieldDefinition[];
+  };
 
   constructor(
     private readonly sessionRef: AgentSession<FrontDeskUserData>,
     private readonly fields: AgentFieldDefinition[],
   ) {
-    const sequenceState: SequenceState = {
-      collectedIds: [],
+    const sequenceState = {
+      collectedIds: [] as string[],
       remaining: [...fields],
     };
 
@@ -45,6 +67,25 @@ export class ReceptionistFieldCollectionTask extends voice.AgentTask<Receptionis
       }
       sequenceState.remaining = [];
       return undefined;
+    };
+
+    const finishCollection = (complete: boolean): ReceptionistFieldCollectionResult => {
+      const ud = sessionRef.userData;
+      const result: ReceptionistFieldCollectionResult = {
+        collected: [...sequenceState.collectedIds],
+        complete,
+        fields: { ...(ud.receptionistFields || {}) },
+      };
+      markTaskCompleted({
+        callId: ud.callId,
+        taskId: TASK_ID,
+        taskType: TASK_TYPE,
+        complete,
+        collectedCount: result.collected.length,
+      });
+      ud.activeTaskInstrumentation = undefined;
+      this.complete(result);
+      return result;
     };
 
     const recordTool = llm.tool({
@@ -71,13 +112,13 @@ export class ReceptionistFieldCollectionTask extends voice.AgentTask<Receptionis
 
         const next = currentField();
         if (!next) {
-          this.complete({ collected: [...sequenceState.collectedIds], complete: true });
-          return "Collection complete — do not speak; parent agent will continue.";
+          finishCollection(true);
+          return "Recorded — collection complete. Do not speak.";
         }
 
         const line = buildReceptionistFieldTransitionLine(current, trimmed, next);
-        await speakIntakeTransitionLine(sessionRef, line);
-        return "OK — the next question was already asked. Do not repeat it or add filler.";
+        await speakCollectionLine(sessionRef, line);
+        return "Recorded — next question already asked. Do not speak.";
       },
     });
 
@@ -85,13 +126,13 @@ export class ReceptionistFieldCollectionTask extends voice.AgentTask<Receptionis
       agentTaskSuperOptions(
         {
           instructions:
-            "Collect the caller's information one field at a time. " +
+            "Collect caller information one field at a time. " +
             FIELD_TRANSITION_BRIDGE_RULES +
-            " When the caller answers the current field, call record_caller_field immediately without speaking. " +
-            "The runtime delivers the next question. Never narrate backend routing to the caller.",
+            " When the caller answers, call record_caller_field immediately without speaking. " +
+            "The runtime asks the next question. Never narrate routing to the caller.",
           tools: [recordTool],
         },
-        nestedTaskOptionsFromSession(sessionRef),
+        receptionistOperationalTaskOptionsFromSession(sessionRef),
       ),
     );
 
@@ -99,19 +140,42 @@ export class ReceptionistFieldCollectionTask extends voice.AgentTask<Receptionis
   }
 
   async onEnter(): Promise<void> {
+    const ud = this.sessionRef.userData;
+    markTaskStarted({
+      callId: ud.callId,
+      taskId: TASK_ID,
+      taskType: TASK_TYPE,
+    });
+    markTaskOnEnterStarted({
+      callId: ud.callId,
+      taskId: TASK_ID,
+      taskType: TASK_TYPE,
+    });
+    ud.activeTaskInstrumentation = {
+      taskId: TASK_ID,
+      taskType: TASK_TYPE,
+    };
+
     const first = this.fields.find(
       (f) => !this.sessionRef.userData.receptionistFields?.[f.id]?.trim(),
     );
     if (!first) {
+      markTaskCompleted({
+        callId: ud.callId,
+        taskId: TASK_ID,
+        taskType: TASK_TYPE,
+        complete: true,
+        collectedCount: this.fields.length,
+      });
+      ud.activeTaskInstrumentation = undefined;
       this.complete({
         collected: this.fields.map((f) => f.id),
         complete: true,
+        fields: { ...(ud.receptionistFields || {}) },
       });
       return;
     }
-    await this.sessionRef.generateReply({
-      instructions: `Ask the caller: ${first.question}`,
-      toolChoice: "none",
-    });
+
+    await speakCollectionLine(this.sessionRef, first.question);
   }
 }

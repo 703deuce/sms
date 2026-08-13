@@ -5,6 +5,8 @@ type TaskTransitionState = {
   nextTaskId?: string;
   nextTaskType?: string;
   onEnterStartedMs?: number;
+  parentResumedMs?: number;
+  parentTaskType?: string;
 };
 
 const transitions = new Map<string, TaskTransitionState>();
@@ -27,6 +29,72 @@ function stateForCall(callId: string): TaskTransitionState {
     transitions.set(callId, state);
   }
   return state;
+}
+
+export function markTaskStarted(input: {
+  callId: string;
+  taskId: string;
+  taskType: string;
+}): void {
+  logTransition("task_started", {
+    callId: input.callId,
+    taskId: input.taskId,
+    taskType: input.taskType,
+  });
+}
+
+export function markTaskCompleted(input: {
+  callId: string;
+  taskId: string;
+  taskType: string;
+  complete?: boolean;
+  collectedCount?: number;
+}): void {
+  logTransition("task_completed", {
+    callId: input.callId,
+    taskId: input.taskId,
+    taskType: input.taskType,
+    complete: input.complete,
+    collectedCount: input.collectedCount,
+  });
+}
+
+export function markParentResumed(input: {
+  callId: string;
+  taskId: string;
+  taskType: string;
+  parentTaskType: string;
+  collectionComplete?: boolean;
+}): void {
+  const state = stateForCall(input.callId);
+  state.parentResumedMs = Date.now();
+  state.parentTaskType = input.parentTaskType;
+  logTransition("parent_resumed", {
+    callId: input.callId,
+    taskId: input.taskId,
+    taskType: input.taskType,
+    parentTaskType: input.parentTaskType,
+    collectionComplete: input.collectionComplete,
+  });
+}
+
+export function markFirstParentAudio(input: {
+  callId: string;
+  taskId: string;
+  taskType: string;
+  parentTaskType: string;
+}): void {
+  const state = stateForCall(input.callId);
+  const now = Date.now();
+  const msSinceParentResume =
+    state.parentResumedMs != null ? now - state.parentResumedMs : undefined;
+  logTransition("first_parent_audio", {
+    callId: input.callId,
+    taskId: input.taskId,
+    taskType: input.taskType,
+    parentTaskType: input.parentTaskType,
+    msSinceParentResume,
+  });
 }
 
 export function markTaskExitStarted(input: {

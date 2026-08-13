@@ -186,10 +186,15 @@ check("receptionist field collection uses silent handoff", () => {
     "voice-runtime/src/frontdesk/receptionist/field-collection-lifecycle.ts",
   );
   const tools = readProjectFile("voice-runtime/src/frontdesk/receptionist/receptionist-tools.ts");
+  const taskCtx = readProjectFile("voice-runtime/src/tasks/task-context.ts");
   assert.ok(fieldTask.includes("FIELD_TRANSITION_BRIDGE_RULES"));
-  assert.ok(fieldTask.includes("speakIntakeTransitionLine"));
-  assert.ok(lifecycle.includes("COLLECT_COMPLETE_SILENT"));
-  assert.ok(tools.includes("TOOL_RESULT_COLLECT_COMPLETE_SILENT"));
+  assert.ok(fieldTask.includes("addToChatCtx: false"));
+  assert.ok(fieldTask.includes("receptionistOperationalTaskOptionsFromSession"));
+  assert.ok(lifecycle.includes("COLLECTION_COMPLETE"));
+  assert.ok(tools.includes("buildReceptionistCollectionToolResult"));
+  assert.ok(tools.includes("markParentResumed"));
+  assert.ok(taskCtx.includes("receptionistOperationalTaskOptionsFromSession"));
+  assert.ok(taskCtx.includes("preserveFunctionCallHistory: false"));
 });
 
 check("realtime pipeline supports per-agent speed and VAD", () => {

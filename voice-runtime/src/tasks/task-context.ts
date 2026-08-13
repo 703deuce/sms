@@ -31,6 +31,19 @@ export function nestedTaskOptionsFromSession<UserData>(
   };
 }
 
+/**
+ * Receptionist operational sub-tasks (field collection): isolated chat context,
+ * no function-call replay into parent Realtime session on handoff return.
+ * Collected state lives in session userData, not merged child transcript.
+ */
+export function receptionistOperationalTaskOptionsFromSession<UserData>(
+  session: AgentSession<UserData>,
+): NestedTaskContextOptions {
+  return {
+    preserveFunctionCallHistory: false,
+  };
+}
+
 /** Realtime-only sessions have no standard LLM — TaskGroup summarization would fail. */
 export function sessionUsesRealtimeLlm(session: AgentSession<any>): boolean {
   return session.llm instanceof RealtimeModel;

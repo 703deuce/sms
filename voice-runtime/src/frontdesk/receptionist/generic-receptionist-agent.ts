@@ -146,7 +146,8 @@ function buildInstructions(snapshot: ReceptionistCompiledSnapshot, businessLabel
       : "",
     snapshot.capabilities.includes("collect_info")
       ? "Use collect_caller_fields when you need caller details not yet captured. " +
-        "After collection completes, do not thank again for fields already captured — move straight to helping or taking a message. "
+        "After collection completes, the tool result lists captured fields as operational state — " +
+        "continue with take_message, booking, or transfer without thanking or reconfirming them. "
       : "",
     snapshot.capabilities.includes("book_appointments")
       ? "For booking: list_available_slots, then schedule_appointment after they confirm a time. "

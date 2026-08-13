@@ -8,10 +8,8 @@ import { buildFrontDeskBookingTools } from "../booking-tools";
 import type { FrontDeskUserData } from "../userdata";
 import { withLiveKitToolTelemetry } from "../../livekit-tool-telemetry";
 import { ReceptionistFieldCollectionTask } from "./field-collection-task";
-import {
-  TOOL_RESULT_COLLECT_ACTIVE_SILENT,
-  TOOL_RESULT_COLLECT_COMPLETE_SILENT,
-} from "./field-collection-lifecycle";
+import { buildReceptionistCollectionToolResult } from "./field-collection-lifecycle";
+import { markParentResumed } from "../../task-transition-instrumentation";
 
 function caps(snapshot: ReceptionistCompiledSnapshot): Set<string> {
   return new Set(snapshot.capabilities);
@@ -120,9 +118,18 @@ function buildCollectCallerFieldsTool(snapshot: ReceptionistCompiledSnapshot) {
           return "Caller information is already complete.";
         }
         const result = await new ReceptionistFieldCollectionTask(session, missing).run();
-        return result.complete
-          ? TOOL_RESULT_COLLECT_COMPLETE_SILENT
-          : TOOL_RESULT_COLLECT_ACTIVE_SILENT;
+        markParentResumed({
+          callId: ud.callId,
+          taskId: "receptionist_field_collection",
+          taskType: "ReceptionistFieldCollectionTask",
+          parentTaskType: "GenericReceptionistAgent",
+          collectionComplete: result.complete,
+        });
+        ud.activeTaskInstrumentation = {
+          taskId: "parent_after_collection",
+          taskType: "GenericReceptionistAgent",
+        };
+        return buildReceptionistCollectionToolResult(ud, result);
       });
     },
   });
