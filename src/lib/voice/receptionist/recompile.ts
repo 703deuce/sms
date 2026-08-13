@@ -1,11 +1,15 @@
 import type { VoiceAgentConfig } from "@/lib/voice/types";
 import {
+  RECEPTIONIST_ADVANCED_KEY,
+  type ReceptionistAdvancedSettings,
+} from "@/lib/receptionist-wizard/advanced-types";
+import type { ReceptionistWizardState } from "@/lib/receptionist-wizard/types";
+import {
   applyCompiledToVoiceConfig,
   compileReceptionistConfig,
   type ReceptionistDraftInput,
 } from "./compile";
 import { getReceptionistCompiledFromAdvanced } from "./runtime";
-import type { ReceptionistWizardState } from "@/lib/receptionist-wizard/types";
 
 /** Re-compile receptionist draft from wizard snapshot stored on advanced. */
 export function recompileReceptionistFromDraft(config: VoiceAgentConfig): VoiceAgentConfig {
@@ -15,6 +19,10 @@ export function recompileReceptionistFromDraft(config: VoiceAgentConfig): VoiceA
     const existing = getReceptionistCompiledFromAdvanced(advanced);
     return existing ? config : config;
   }
+
+  const storedAdvanced = advanced?.[RECEPTIONIST_ADVANCED_KEY] as
+    | ReceptionistAdvancedSettings
+    | undefined;
 
   const draftInput: ReceptionistDraftInput = {
     agentName: wizard.agentName || config.identity?.displayName || "Amy",
@@ -35,16 +43,34 @@ export function recompileReceptionistFromDraft(config: VoiceAgentConfig): VoiceA
     voiceId: wizard.voiceId || config.voiceLanguage?.voiceId || "ava-warm-us",
     voiceLabel: wizard.voiceLabel,
     advanced: {
-      conversationBehavior: advanced?.conversationBehavior,
-      bookingPolicy: advanced?.bookingPolicy,
-      transferPolicy: advanced?.transferPolicy,
-      knowledgePolicy: advanced?.knowledgePolicy,
-      actionPermissions: advanced?.actionPermissions,
-      fallbackPolicy: advanced?.fallbackPolicy,
-      notifications: advanced?.notifications,
+      conversationBehavior: storedAdvanced?.conversationBehavior ?? advanced?.conversationBehavior,
+      bookingPolicy: storedAdvanced?.bookingPolicy ?? advanced?.bookingPolicy,
+      transferPolicy: storedAdvanced?.transferPolicy ?? advanced?.transferPolicy,
+      knowledgePolicy: storedAdvanced?.knowledgePolicy ?? advanced?.knowledgePolicy,
+      actionPermissions: storedAdvanced?.actionPermissions ?? advanced?.actionPermissions,
+      fallbackPolicy: storedAdvanced?.fallbackPolicy ?? advanced?.fallbackPolicy,
+      notifications: storedAdvanced?.notifications ?? advanced?.notifications,
+      [RECEPTIONIST_ADVANCED_KEY]: storedAdvanced ?? advanced?.[RECEPTIONIST_ADVANCED_KEY],
+      receptionistWizard: wizard,
     },
   };
 
   const snapshot = compileReceptionistConfig(draftInput);
-  return applyCompiledToVoiceConfig(config, snapshot);
+  const merged = applyCompiledToVoiceConfig(config, snapshot);
+
+  return {
+    ...merged,
+    advanced: {
+      ...(merged.advanced as object),
+      [RECEPTIONIST_ADVANCED_KEY]: storedAdvanced ?? advanced?.[RECEPTIONIST_ADVANCED_KEY],
+      receptionistWizard: wizard,
+      conversationBehavior: storedAdvanced?.conversationBehavior ?? advanced?.conversationBehavior,
+      bookingPolicy: storedAdvanced?.bookingPolicy ?? advanced?.bookingPolicy,
+      transferPolicy: storedAdvanced?.transferPolicy ?? advanced?.transferPolicy,
+      knowledgePolicy: storedAdvanced?.knowledgePolicy ?? advanced?.knowledgePolicy,
+      actionPermissions: storedAdvanced?.actionPermissions ?? advanced?.actionPermissions,
+      fallbackPolicy: storedAdvanced?.fallbackPolicy ?? advanced?.fallbackPolicy,
+      notifications: storedAdvanced?.notifications ?? advanced?.notifications,
+    },
+  };
 }

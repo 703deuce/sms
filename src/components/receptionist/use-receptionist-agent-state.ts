@@ -1,17 +1,25 @@
 "use client";
 
 import { wizardStateFromDraftConfig } from "@/lib/receptionist-wizard/load-config";
-import type { ReceptionistWizardState } from "@/lib/receptionist-wizard/types";
+import { advancedFromDraftConfig } from "@/lib/receptionist-wizard/load-advanced";
+import type { ReceptionistAdvancedSettings } from "@/lib/receptionist-wizard/advanced-types";
+import { RECEPTIONIST_ADVANCED_KEY } from "@/lib/receptionist-wizard/advanced-types";
+import type { ReceptionistWizardState, CollectFieldId } from "@/lib/receptionist-wizard/types";
 import {
   applyCompiledToVoiceConfig,
   compileReceptionistConfig,
   type ReceptionistDraftInput,
 } from "@/lib/voice/receptionist/compile";
+import { collectFieldIdsFromRows } from "@/lib/voice/receptionist/field-manifest";
 import { parseVoiceAgentConfig } from "@/lib/voice/types";
 import { useCallback, useEffect, useState } from "react";
 
 export function useReceptionistAgentState(agentId: string) {
   const [state, setState] = useState<ReceptionistWizardState | null>(null);
+  const [advanced, setAdvanced] = useState<ReceptionistAdvancedSettings | null>(null);
+  const [advancedSnapshot, setAdvancedSnapshot] = useState<ReceptionistAdvancedSettings | null>(
+    null,
+  );
   const [agentName, setAgentName] = useState("");
   const [phoneNumberId, setPhoneNumberId] = useState<string | null>(null);
   const [phoneE164, setPhoneE164] = useState<string | null>(null);
@@ -30,9 +38,15 @@ export function useReceptionistAgentState(agentId: string) {
         setAgentName(j.data.name || "");
         setPhoneNumberId(j.data.phoneNumberId || null);
         setRawStatus(j.data.rawStatus || j.data.status || "DRAFT");
-        setState(
-          wizardStateFromDraftConfig(j.data.draftConfig, agentId, j.data.displayName || j.data.name),
+        const wizard = wizardStateFromDraftConfig(
+          j.data.draftConfig,
+          agentId,
+          j.data.displayName || j.data.name,
         );
+        setState(wizard);
+        const adv = advancedFromDraftConfig(j.data.draftConfig, wizard.capabilities);
+        setAdvanced(adv);
+        setAdvancedSnapshot(adv);
         const e164 = (j.data.draftConfig as { phoneE164?: string } | undefined)?.phoneE164;
         if (e164) setPhoneE164(e164);
         if (j.data.phoneNumberId) {
@@ -62,6 +76,14 @@ export function useReceptionistAgentState(agentId: string) {
     setState((prev) => (prev ? { ...prev, ...p } : prev));
   }, []);
 
+  const patchAdvanced = useCallback((next: ReceptionistAdvancedSettings) => {
+    setAdvanced(next);
+  }, []);
+
+  const discardAdvanced = useCallback(() => {
+    if (advancedSnapshot) setAdvanced(advancedSnapshot);
+  }, [advancedSnapshot]);
+
   const assignPhone = useCallback(async (nextPhoneId: string | null) => {
     setBusy(true);
     setError("");
@@ -90,15 +112,43 @@ export function useReceptionistAgentState(agentId: string) {
   }, [agentId]);
 
   const save = useCallback(async (partial?: Partial<ReceptionistWizardState>) => {
-    if (!state) return;
+    if (!state || !advanced) return;
     const next = { ...state, ...partial, agentId };
+    const nextAdvanced = advanced;
+    const collectFields: CollectFieldId[] =
+      next.capabilities.includes("collect_info")
+        ? collectFieldIdsFromRows(nextAdvanced.callerFields) as CollectFieldId[]
+        : next.collectFields;
+
     setBusy(true);
     setError("");
     try {
       const res = await fetch(`/api/voice/agents/${agentId}`);
       const j = await res.json();
       const prev = parseVoiceAgentConfig(j.data?.draftConfig);
-      const advancedBase = (prev.advanced as Record<string, unknown>) ?? {};
+      const advancedBlock = {
+        [RECEPTIONIST_ADVANCED_KEY]: nextAdvanced,
+        conversationBehavior: nextAdvanced.conversationBehavior,
+        bookingPolicy: nextAdvanced.bookingPolicy,
+        transferPolicy: nextAdvanced.transferPolicy,
+        knowledgePolicy: nextAdvanced.knowledgePolicy,
+        actionPermissions: nextAdvanced.actionPermissions,
+        fallbackPolicy: nextAdvanced.fallbackPolicy,
+        notifications: nextAdvanced.notifications,
+        receptionistWizard: {
+          agentName: next.agentName,
+          businessName: next.businessName,
+          businessDescription: next.businessDescription,
+          answerTiming: next.answerTiming,
+          greeting: next.greeting,
+          language: next.language,
+          timezone: next.timezone,
+          capabilities: next.capabilities,
+          collectFields,
+          voiceId: next.voiceId,
+          voiceLabel: next.voiceLabel,
+        },
+      };
       const draftInput: ReceptionistDraftInput = {
         agentName: next.agentName,
         businessName: next.businessName,
@@ -108,25 +158,10 @@ export function useReceptionistAgentState(agentId: string) {
         timezone: next.timezone,
         answerTiming: next.answerTiming,
         capabilities: next.capabilities,
-        collectFields: next.collectFields,
+        collectFields,
         voiceId: next.voiceId,
         voiceLabel: next.voiceLabel,
-        advanced: {
-          ...advancedBase,
-          receptionistWizard: {
-            agentName: next.agentName,
-            businessName: next.businessName,
-            businessDescription: next.businessDescription,
-            answerTiming: next.answerTiming,
-            greeting: next.greeting,
-            language: next.language,
-            timezone: next.timezone,
-            capabilities: next.capabilities,
-            collectFields: next.collectFields,
-            voiceId: next.voiceId,
-            voiceLabel: next.voiceLabel,
-          },
-        },
+        advanced: advancedBlock,
       };
       const snapshot = compileReceptionistConfig(draftInput);
       const merged = applyCompiledToVoiceConfig(prev, snapshot);
@@ -134,7 +169,7 @@ export function useReceptionistAgentState(agentId: string) {
         ...merged,
         advanced: {
           ...(merged.advanced as object),
-          receptionistWizard: draftInput.advanced?.receptionistWizard,
+          ...advancedBlock,
         },
       };
       const patchRes = await fetch(`/api/voice/agents/${agentId}`, {
@@ -147,7 +182,8 @@ export function useReceptionistAgentState(agentId: string) {
       });
       const patchJson = await patchRes.json();
       if (!patchRes.ok) throw new Error(patchJson.error || "Save failed");
-      setState(next);
+      setState({ ...next, collectFields });
+      setAdvancedSnapshot(nextAdvanced);
       return next;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed");
@@ -155,7 +191,7 @@ export function useReceptionistAgentState(agentId: string) {
     } finally {
       setBusy(false);
     }
-  }, [agentId, state]);
+  }, [agentId, state, advanced]);
 
   const buildForTest = useCallback(async () => {
     const res = await fetch(`/api/voice/agents/${agentId}`, {
@@ -180,6 +216,7 @@ export function useReceptionistAgentState(agentId: string) {
 
   return {
     state,
+    advanced,
     agentName,
     phoneNumberId,
     phoneE164,
@@ -189,6 +226,8 @@ export function useReceptionistAgentState(agentId: string) {
     error,
     setError,
     patch,
+    patchAdvanced,
+    discardAdvanced,
     save,
     assignPhone,
     buildForTest,

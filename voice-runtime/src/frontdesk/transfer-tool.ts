@@ -6,6 +6,27 @@ import { transferLiveKitSipParticipant } from "@/lib/voice/livekit/sip-transfer"
 import { initiateTransfer } from "@/lib/voice/transfers";
 import type { FrontDeskUserData } from "./userdata";
 import { withLiveKitToolTelemetry } from "../livekit-tool-telemetry";
+import { notifyReceptionistStaff } from "@/lib/voice/receptionist/notifications";
+
+async function notifyTransferFailure(
+  ud: FrontDeskUserData,
+  reason?: string,
+  failureReason?: string,
+): Promise<void> {
+  const notifyOnFailure =
+    (ud.receptionistCompiled?.transferPolicy as { notifyOnFailure?: boolean } | undefined)
+      ?.notifyOnFailure !== false;
+  if (!notifyOnFailure && !ud.receptionistCompiled?.notifications?.notifyTransferFail) return;
+  await notifyReceptionistStaff({
+    workspaceId: ud.workspaceId,
+    callId: ud.callId,
+    event: "transfer_failed",
+    businessName: ud.businessName,
+    callerE164: ud.callerE164,
+    detail: [reason, failureReason].filter(Boolean).join(" — "),
+    snapshot: ud.receptionistCompiled,
+  }).catch(() => undefined);
+}
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -13,9 +34,25 @@ function asRecord(value: unknown): Record<string, unknown> {
     : {};
 }
 
+function isEmergencyTransfer(reason?: string, ud?: FrontDeskUserData): boolean {
+  const text = (reason || "").trim().toLowerCase();
+  if (!text) return false;
+  if (text.includes("emergency")) return true;
+  const rules = ud?.receptionistCompiled?.decisionRules || [];
+  for (const rule of rules) {
+    const condition = String((rule as { condition?: string }).condition || "").toLowerCase();
+    const action = String((rule as { action?: string }).action || "").toLowerCase();
+    if (action === "transfer" && condition.includes("emergency") && text.includes("emergency")) {
+      return true;
+    }
+  }
+  return false;
+}
+
 async function resolveTransferDestination(
   workspaceId: string,
   ud?: FrontDeskUserData,
+  reason?: string,
 ): Promise<string | null> {
   const compiledNumber = ud?.realEstateCompiled?.transfer?.transferNumber?.trim();
   if (ud?.realEstateCompiled?.transfer?.enabled && compiledNumber) {
@@ -23,8 +60,19 @@ async function resolveTransferDestination(
   }
 
   const receptionistPolicy = ud?.receptionistCompiled?.transferPolicy as
-    | { destinationE164?: string; transferNumber?: string; enabled?: boolean }
+    | {
+        destinationE164?: string;
+        transferNumber?: string;
+        emergencyDestinationE164?: string;
+        enabled?: boolean;
+      }
     | undefined;
+
+  const emergencyNumber = receptionistPolicy?.emergencyDestinationE164?.trim();
+  if (emergencyNumber && isEmergencyTransfer(reason, ud)) {
+    return emergencyNumber;
+  }
+
   const receptionistNumber =
     receptionistPolicy?.destinationE164?.trim() ||
     receptionistPolicy?.transferNumber?.trim();
@@ -56,12 +104,18 @@ export function buildFrontDeskTransferTool() {
       const session = opts.ctx.session as AgentSession<FrontDeskUserData>;
       const ud = session.userData;
       return withLiveKitToolTelemetry(ud, "transfer_to_human", { reason }, async () => {
-        const destination = await resolveTransferDestination(ud.workspaceId, ud);
+        const destination = await resolveTransferDestination(ud.workspaceId, ud, reason);
         if (!destination) {
           throw new llm.ToolError(
             "I can't transfer this call right now — I can take a message for the team instead.",
           );
         }
+
+        const transferPolicy = ud.receptionistCompiled?.transferPolicy as
+          | { warmTransfer?: boolean }
+          | undefined;
+        const transferType =
+          transferPolicy?.warmTransfer === false ? "blind_transfer" : "warm_transfer";
 
         const prisma = getPrisma();
         const call = await prisma.voiceCall.findUnique({
@@ -81,7 +135,7 @@ export function buildFrontDeskTransferTool() {
             workspaceId: ud.workspaceId,
             callId: ud.callId,
             destination,
-            transferType: "warm_transfer",
+            transferType,
             summary: reason || "Caller requested human",
             timeoutSeconds: 25,
           });
@@ -95,15 +149,27 @@ export function buildFrontDeskTransferTool() {
             destinationE164: destination,
           });
           if (!xfer.ok) {
+            await notifyTransferFailure(ud, reason, xfer.reason);
+            const takeMessage =
+              (ud.receptionistCompiled?.transferPolicy as { takeMessageOnFailure?: boolean } | undefined)
+                ?.takeMessageOnFailure !== false;
             throw new llm.ToolError(
-              `I couldn't complete the transfer (${xfer.reason}). I can take a message instead.`,
+              takeMessage
+                ? `I couldn't complete the transfer (${xfer.reason}). I can take a message instead.`
+                : `I couldn't complete the transfer (${xfer.reason}).`,
             );
           }
           return "Transferring you now — please hold.";
         }
 
+        await notifyTransferFailure(ud, reason, "no_transfer_path");
+        const takeMessage =
+          (ud.receptionistCompiled?.transferPolicy as { takeMessageOnFailure?: boolean } | undefined)
+            ?.takeMessageOnFailure !== false;
         throw new llm.ToolError(
-          "I can't transfer this call right now — I can take a message for the team instead.",
+          takeMessage
+            ? "I can't transfer this call right now — I can take a message for the team instead."
+            : "I can't transfer this call right now.",
         );
       });
     },

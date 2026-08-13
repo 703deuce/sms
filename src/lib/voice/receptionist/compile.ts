@@ -6,6 +6,8 @@ import type {
   ReceptionistCompiledSnapshot,
 } from "./types";
 import { RECEPTIONIST_COMPILED_KEY } from "./types";
+import type { ReceptionistAdvancedSettings } from "@/lib/receptionist-wizard/advanced-types";
+import { fieldManifestFromAdvancedRows } from "./field-manifest";
 
 export type ReceptionistDraftInput = {
   agentName: string;
@@ -61,9 +63,29 @@ function fieldManifestFromCollectIds(ids: string[]): AgentFieldDefinition[] {
   return DEFAULT_FIELDS.filter((f) => ids.includes(f.id));
 }
 
+function readAdvanced(input: ReceptionistDraftInput): ReceptionistAdvancedSettings | undefined {
+  const raw = input.advanced?.receptionistAdvanced as ReceptionistAdvancedSettings | undefined;
+  if (raw) return raw;
+  return undefined;
+}
+
+function defaultConversationBehavior() {
+  return {
+    responseLength: "balanced" as const,
+    style: "professional" as const,
+    allowInterrupt: true,
+    confirmImportantDetails: true,
+    repeatWhenUncertain: true,
+    avoidDuplicateQuestions: true,
+    handleOutOfOrderAnswers: true,
+    allowAcknowledgments: true,
+    fillerSpeech: "natural" as const,
+    silenceRepromptSec: 5 as const,
+  };
+}
+
 /**
  * Convert customer-friendly draft into immutable runtime snapshot.
- * Phase 1: core fields + capabilities; Advanced sections use safe defaults.
  */
 export function compileReceptionistConfig(input: ReceptionistDraftInput): ReceptionistCompiledSnapshot {
   const caps = new Set(input.capabilities);
@@ -76,9 +98,40 @@ export function compileReceptionistConfig(input: ReceptionistDraftInput): Recept
     enabledBuiltinTools.push("get_business_answer");
   }
 
-  const fieldManifest = caps.has("collect_info")
-    ? fieldManifestFromCollectIds(input.collectFields)
-    : [];
+  const advanced = readAdvanced(input);
+  const actionPerms = advanced?.actionPermissions;
+
+  if (actionPerms?.cancelAppointments && caps.has("book_appointments")) {
+    enabledBuiltinTools.push("cancel_appointment");
+  }
+  if (actionPerms?.rescheduleAppointments && caps.has("book_appointments")) {
+    enabledBuiltinTools.push("reschedule_appointment");
+  }
+
+  let fieldManifest: AgentFieldDefinition[] = [];
+  if (caps.has("collect_info")) {
+    if (advanced?.callerFields?.length) {
+      fieldManifest = fieldManifestFromAdvancedRows(advanced.callerFields);
+    } else {
+      fieldManifest = fieldManifestFromCollectIds(input.collectFields);
+    }
+  }
+
+  const conversationBehavior =
+    advanced?.conversationBehavior ??
+    (input.advanced?.conversationBehavior as Record<string, unknown>) ??
+    defaultConversationBehavior();
+
+  const transferPolicy = {
+    ...(advanced?.transferPolicy as object),
+    ...(input.advanced?.transferPolicy as object),
+    destinationE164:
+      advanced?.transferPolicy?.destinationE164?.trim() ||
+      (input.advanced?.transferPolicy as { destinationE164?: string } | undefined)?.destinationE164?.trim() ||
+      undefined,
+    emergencyDestinationE164:
+      advanced?.transferPolicy?.emergencyDestinationE164?.trim() || undefined,
+  };
 
   return {
     livekitProfile: "frontdesk_realtime",
@@ -94,17 +147,15 @@ export function compileReceptionistConfig(input: ReceptionistDraftInput): Recept
     enabledBuiltinTools,
     voiceId: input.voiceId,
     compiledAt: new Date().toISOString(),
-    conversationBehavior: (input.advanced?.conversationBehavior as Record<string, unknown>) ?? {
-      responseLength: "balanced",
-      style: "professional",
-      allowInterrupt: true,
-    },
-    bookingPolicy: input.advanced?.bookingPolicy as Record<string, unknown> | undefined,
-    transferPolicy: input.advanced?.transferPolicy as Record<string, unknown> | undefined,
-    knowledgePolicy: input.advanced?.knowledgePolicy as Record<string, unknown> | undefined,
-    actionPermissions: input.advanced?.actionPermissions as Record<string, boolean> | undefined,
-    fallbackPolicy: input.advanced?.fallbackPolicy as Record<string, unknown> | undefined,
-    notifications: input.advanced?.notifications as Record<string, unknown> | undefined,
+    conversationBehavior,
+    bookingPolicy: advanced?.bookingPolicy ?? (input.advanced?.bookingPolicy as Record<string, unknown>),
+    transferPolicy,
+    knowledgePolicy: advanced?.knowledgePolicy ?? (input.advanced?.knowledgePolicy as Record<string, unknown>),
+    actionPermissions: advanced?.actionPermissions ?? (input.advanced?.actionPermissions as Record<string, boolean>),
+    fallbackPolicy: advanced?.fallbackPolicy ?? (input.advanced?.fallbackPolicy as Record<string, unknown>),
+    notifications: advanced?.notifications ?? (input.advanced?.notifications as Record<string, unknown>),
+    intentRules: advanced?.intents?.filter((i) => i.enabled) ?? [],
+    decisionRules: advanced?.decisionRules ?? [],
   };
 }
 
@@ -116,6 +167,13 @@ export function applyCompiledToVoiceConfig(
   const goals = snapshot.capabilities
     .map((c) => c.replace(/_/g, " "))
     .join(", ");
+
+  const conv = snapshot.conversationBehavior as {
+    responseLength?: string;
+    style?: string;
+  } | undefined;
+  const responseLength = conv?.responseLength || "balanced";
+  const style = conv?.style || "professional";
 
   return {
     ...base,
@@ -130,9 +188,9 @@ export function applyCompiledToVoiceConfig(
       system: snapshot.businessDescription,
       goals,
       requiredQuestions: snapshot.fieldManifest.map((f) => f.label),
-      tone: "friendly",
-      style: "professional",
-      responseLength: "balanced",
+      tone: style === "casual" ? "casual" : style === "friendly" ? "friendly" : "professional",
+      style,
+      responseLength,
     },
     callHandling: {
       ...base.callHandling,
@@ -158,6 +216,7 @@ export function applyCompiledToVoiceConfig(
       livekitProfile: snapshot.livekitProfile,
       [RECEPTIONIST_COMPILED_KEY]: snapshot,
       receptionistWizard: (base.advanced as Record<string, unknown> | undefined)?.receptionistWizard,
+      receptionistAdvanced: (base.advanced as Record<string, unknown> | undefined)?.receptionistAdvanced,
     },
   };
 }

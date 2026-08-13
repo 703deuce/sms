@@ -9,9 +9,20 @@ import { useParams } from "next/navigation";
 export default function AgentAdvancedPage() {
   const params = useParams();
   const agentId = params?.id as string;
-  const { state, agentName, loading, busy, save } = useReceptionistAgentState(agentId);
+  const {
+    state,
+    advanced,
+    agentName,
+    loading,
+    busy,
+    error,
+    setError,
+    patchAdvanced,
+    discardAdvanced,
+    save,
+  } = useReceptionistAgentState(agentId);
 
-  if (loading || !state) {
+  if (loading || !state || !advanced) {
     return (
       <ReceptionistEditorShell agentId={agentId}>
         <p className="text-sm text-muted-foreground">Loading…</p>
@@ -19,13 +30,26 @@ export default function AgentAdvancedPage() {
     );
   }
 
+  async function handleSave() {
+    try {
+      await save();
+    } catch {
+      // error in hook
+    }
+  }
+
   return (
     <ReceptionistEditorShell
       agentId={agentId}
       agentTitle={state.agentName || agentName}
-      onSave={() => save()}
+      onSave={handleSave}
       saveBusy={busy}
     >
+      {error ? (
+        <div className="mb-4 rounded-lg border border-danger/30 bg-danger/5 px-4 py-3 text-sm text-danger">
+          {error}
+        </div>
+      ) : null}
       <div className="mb-4 flex items-center justify-between gap-4">
         <Link
           href={`/voice/agents/${agentId}/capabilities`}
@@ -40,7 +64,16 @@ export default function AgentAdvancedPage() {
           Continue to Voice & Test →
         </Link>
       </div>
-      <AgentAdvancedSettings />
+      <AgentAdvancedSettings
+        value={advanced}
+        onChange={patchAdvanced}
+        capabilities={state.capabilities}
+        agentId={agentId}
+        agentDisplayName={state.agentName || "Amy"}
+        onSave={handleSave}
+        onDiscard={discardAdvanced}
+        busy={busy}
+      />
     </ReceptionistEditorShell>
   );
 }

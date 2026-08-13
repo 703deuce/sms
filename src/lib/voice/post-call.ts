@@ -5,6 +5,8 @@ import { emitVoiceAutomationEvents } from "./automation-events";
 import { recordVoiceUsage } from "./usage";
 import { parseVoiceAgentConfig } from "./types";
 import { resolveTransferInsightFields, resolveMessageTakenInsight } from "./routing-action-resolve";
+import { getReceptionistCompiledFromAdvanced } from "./receptionist/runtime";
+import { notifyReceptionistStaff } from "./receptionist/notifications";
 
 export async function processPostCall(callId: string) {
   const prisma = getPrisma();
@@ -101,6 +103,46 @@ export async function processPostCall(callId: string) {
         where: { id: call.id },
         data: { leadScore: insight.leadScore },
       });
+    }
+
+    const receptionistSnapshot = getReceptionistCompiledFromAdvanced(
+      config?.advanced as Record<string, unknown> | undefined,
+    );
+    if (receptionistSnapshot) {
+      await notifyReceptionistStaff({
+        workspaceId: call.workspaceId,
+        callId: call.id,
+        event: "call_summary",
+        businessName: receptionistSnapshot.businessName,
+        callerE164: call.fromE164,
+        detail: insight.summary || undefined,
+        snapshot: receptionistSnapshot,
+      }).catch(() => undefined);
+
+      if (insight.urgency === "high") {
+        await notifyReceptionistStaff({
+          workspaceId: call.workspaceId,
+          callId: call.id,
+          event: "urgent",
+          businessName: receptionistSnapshot.businessName,
+          callerE164: call.fromE164,
+          detail: insight.summary || undefined,
+          snapshot: receptionistSnapshot,
+        }).catch(() => undefined);
+      }
+
+      const intent = String(insight.intent || "").toLowerCase();
+      if (intent.includes("new") && intent.includes("customer")) {
+        await notifyReceptionistStaff({
+          workspaceId: call.workspaceId,
+          callId: call.id,
+          event: "new_customer",
+          businessName: receptionistSnapshot.businessName,
+          callerE164: call.fromE164,
+          detail: insight.summary || undefined,
+          snapshot: receptionistSnapshot,
+        }).catch(() => undefined);
+      }
     }
   }
 

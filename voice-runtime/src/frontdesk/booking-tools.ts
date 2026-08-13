@@ -230,7 +230,11 @@ export function buildFrontDeskBookingTools(input: {
                 });
               }
 
-              sendBookingSmsAsync(session, booked.slot.startTime);
+              const smsEnabled =
+                userData.receptionistCompiled?.bookingPolicy?.sendSmsConfirmation !== false;
+              if (smsEnabled) {
+                sendBookingSmsAsync(session, booked.slot.startTime);
+              }
 
               const spoken = await speakBookingLine(session, buildBookingSuccessLine(local));
               console.log(

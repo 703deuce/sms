@@ -13,6 +13,18 @@ function caps(snapshot: ReceptionistCompiledSnapshot): Set<string> {
   return new Set(snapshot.capabilities);
 }
 
+function actionAllowed(
+  snapshot: ReceptionistCompiledSnapshot,
+  permKey: keyof NonNullable<ReceptionistCompiledSnapshot["actionPermissions"]>,
+  capability?: string,
+): boolean {
+  const capabilitySet = caps(snapshot);
+  if (capability && !capabilitySet.has(capability)) return false;
+  const perms = snapshot.actionPermissions;
+  if (perms && permKey in perms && perms[permKey] === false) return false;
+  return true;
+}
+
 function buildTakeMessageTool() {
   return llm.tool({
     name: "take_message",
@@ -146,13 +158,22 @@ export function buildReceptionistTools(input: {
     if (name === "take_message" || name === "send_sms" || name === "collect_caller_fields") {
       continue;
     }
-    if (!capabilitySet.has("answer_questions") && name === "get_business_answer") continue;
-    if (!capabilitySet.has("transfer_calls") && name === "transfer_to_human") continue;
+    if (!actionAllowed(snapshot, "bookAppointments", "book_appointments") && name?.includes("appointment")) {
+      continue;
+    }
+    if (name === "cancel_appointment" && !actionAllowed(snapshot, "cancelAppointments", "book_appointments")) {
+      continue;
+    }
+    if (name === "reschedule_appointment" && !actionAllowed(snapshot, "rescheduleAppointments", "book_appointments")) {
+      continue;
+    }
+    if (!snapshot.capabilities.includes("answer_questions") && name === "get_business_answer") continue;
+    if (!actionAllowed(snapshot, "transferCalls", "transfer_calls") && name === "transfer_to_human") continue;
     push(tool);
   }
 
-  if (capabilitySet.has("take_messages")) push(buildTakeMessageTool());
-  if (capabilitySet.has("send_text")) push(buildSendSmsTool());
+  if (actionAllowed(snapshot, "takeMessages", "take_messages")) push(buildTakeMessageTool());
+  if (actionAllowed(snapshot, "sendSms", "send_text")) push(buildSendSmsTool());
 
   const collectTool = buildCollectCallerFieldsTool(snapshot);
   if (collectTool && capabilitySet.has("collect_info")) push(collectTool);
