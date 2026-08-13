@@ -9,6 +9,10 @@ import {
   isServiceAreaTopic,
   isServicesTopic,
 } from "@/lib/voice/knowledge/business-answer-topics";
+import {
+  extractHoursFromDescription,
+  extractPricingFromDescription,
+} from "@/lib/voice/knowledge/resolve-business-answer-helpers";
 
 export type BusinessAnswerResult =
   | { ok: true; speak: string; data: Record<string, unknown> }
@@ -82,12 +86,6 @@ function readReceptionistWizardContext(advanced: Record<string, unknown>): {
     businessName: String(compiled.businessName || wizard.businessName || "").trim(),
   };
 }
-
-import {
-  extractHoursFromDescription,
-  extractPricingFromDescription,
-  isCompanyNameTopic,
-} from "@/lib/voice/knowledge/resolve-business-answer-helpers";
 
 function resolveFromGenericReceptionist(
   topicLower: string,

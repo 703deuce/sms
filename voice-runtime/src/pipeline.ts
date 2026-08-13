@@ -4,7 +4,6 @@ import * as openai from "@livekit/agents-plugin-openai";
 import * as elevenlabs from "@livekit/agents-plugin-elevenlabs";
 import OpenAI from "openai";
 import type { VoiceAgentConfig } from "@/lib/voice/types";
-import type { VoiceAgentConfig } from "@/lib/voice/types";
 import {
   resolveOutboundRealtimePipelineConfig,
   isGenericReceptionistRealtimeProfile,
