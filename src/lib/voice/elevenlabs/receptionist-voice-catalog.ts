@@ -62,6 +62,15 @@ export const RECEPTIONIST_ELEVENLABS_VOICES: ReceptionistElevenLabsVoice[] = [
     enabled: true,
   },
   {
+    id: "xbIuSyF7FdqvuiiHz4Rb",
+    label: "Eddie",
+    description: "Clear middle-aged male — natural and steady",
+    gender: "male",
+    style: "professional",
+    accent: "American",
+    enabled: true,
+  },
+  {
     id: "EXAVITQu4vr4xnSDxMaL",
     label: "Bella",
     description: "Soft and friendly",
