@@ -1,6 +1,7 @@
 import {
   ChatContext,
   RealtimeModel,
+  type Agent,
   type RealtimeSession,
 } from "@livekit/agents";
 
@@ -69,4 +70,12 @@ export function wrapRealtimeModelForOpenAI(model: RealtimeModel): RealtimeModel 
     return model;
   }
   return new OpenAIRealtimeModelAdapter(model);
+}
+
+/**
+ * After an isolated operational AgentTask, push a sanitized parent chat context to
+ * OpenAI Realtime so item chains stay consistent (no stale previous_item_id refs).
+ */
+export async function resyncOpenAIRealtimeAgentChatCtx(agent: Agent): Promise<void> {
+  await agent.updateChatCtx(chatContextForOpenAIRealtime(agent.chatCtx));
 }

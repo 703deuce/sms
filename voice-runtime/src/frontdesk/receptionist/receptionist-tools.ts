@@ -8,9 +8,10 @@ import { executeAgentTool } from "@/lib/voice/agent-tool-gateway/gateway";
 import { buildFrontDeskBookingTools } from "../booking-tools";
 import type { FrontDeskUserData } from "../userdata";
 import { withLiveKitToolTelemetry } from "../../livekit-tool-telemetry";
-import { ReceptionistFieldCollectionTask } from "./field-collection-task";
+import { ReceptionistFieldCollectionTask, speakReceptionistCollectionLine } from "./field-collection-task";
 import { buildReceptionistCollectionToolResult } from "./field-collection-lifecycle";
 import { markParentResumed } from "../../task-transition-instrumentation";
+import { resyncOpenAIRealtimeAgentChatCtx } from "../../realtime-openai-chat-context";
 
 function caps(snapshot: ReceptionistCompiledSnapshot): Set<string> {
   return new Set(snapshot.capabilities);
@@ -130,7 +131,14 @@ function buildCollectCallerFieldsTool(snapshot: ReceptionistCompiledSnapshot) {
         if (!missing.length) {
           return "Caller information is already complete.";
         }
+        const firstMissing = missing[0];
+        if (firstMissing?.question?.trim()) {
+          ud.receptionistFieldCollectionPrefaceSpoken = true;
+          await speakReceptionistCollectionLine(session, firstMissing.question);
+        }
         const result = await new ReceptionistFieldCollectionTask(session, missing).run();
+        ud.receptionistFieldCollectionPrefaceSpoken = false;
+        await resyncOpenAIRealtimeAgentChatCtx(session.currentAgent);
         markParentResumed({
           callId: ud.callId,
           taskId: "receptionist_field_collection",

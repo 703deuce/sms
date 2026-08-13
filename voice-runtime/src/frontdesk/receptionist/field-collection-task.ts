@@ -27,7 +27,7 @@ const TASK_ID = "receptionist_field_collection";
 const TASK_TYPE = "ReceptionistFieldCollectionTask";
 
 /** Scripted lines stay out of chat_ctx so handoff does not replay child speech into Realtime. */
-async function speakCollectionLine(
+export async function speakReceptionistCollectionLine(
   session: AgentSession<FrontDeskUserData>,
   line: string,
 ): Promise<void> {
@@ -126,7 +126,7 @@ export class ReceptionistFieldCollectionTask extends voice.AgentTask<Receptionis
         }
 
         const line = buildReceptionistFieldTransitionLine(current, normalized, next);
-        await speakCollectionLine(sessionRef, line);
+        await speakReceptionistCollectionLine(sessionRef, line);
         return "Recorded — next question already asked. Do not speak.";
       },
     });
@@ -185,6 +185,11 @@ export class ReceptionistFieldCollectionTask extends voice.AgentTask<Receptionis
       return;
     }
 
-    await speakCollectionLine(this.sessionRef, first.question);
+    if (ud.receptionistFieldCollectionPrefaceSpoken) {
+      ud.receptionistFieldCollectionPrefaceSpoken = false;
+      return;
+    }
+
+    await speakReceptionistCollectionLine(this.sessionRef, first.question);
   }
 }

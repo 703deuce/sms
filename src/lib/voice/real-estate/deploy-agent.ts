@@ -245,12 +245,25 @@ export async function ensureRealEstateFrontDeskAgent(
   );
 
   if (assignPhone && phone) {
-    await assignNumberToAgent({
+    const { shouldSkipInboundPhoneReassignment } = await import("@/lib/voice/phone-reassignment-guard");
+    const phoneGuard = await shouldSkipInboundPhoneReassignment({
       workspaceId,
-      phoneNumberId: phone.id,
-      agentId,
-      exclusive: true,
+      phoneE164: phone.e164,
+      requestingAgentId: agentId,
     });
+    if (phoneGuard.skip) {
+      console.warn(
+        `[re-frontdesk] skipping phone assignment on ${phone.e164} — ` +
+          `${phoneGuard.reason} (${phoneGuard.ownerAgentName || phoneGuard.ownerAgentId})`,
+      );
+    } else {
+      await assignNumberToAgent({
+        workspaceId,
+        phoneNumberId: phone.id,
+        agentId,
+        exclusive: true,
+      });
+    }
   }
 
   const workflow = await ensureAgentPrimaryWorkflow({

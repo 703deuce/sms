@@ -37,11 +37,11 @@ export function nestedTaskOptionsFromSession<UserData>(
  * Collected state lives in session userData, not merged child transcript.
  */
 export function receptionistOperationalTaskOptionsFromSession<UserData>(
-  session: AgentSession<UserData>,
+  _session: AgentSession<UserData>,
 ): NestedTaskContextOptions {
   return {
-    // Fork parent transcript so OpenAI Realtime keeps a consistent item chain on handoff.
-    chatCtx: session.chatCtx.copy(),
+    // Isolated ctx — parent keeps authoritative transcript; merge adds no duplicate ids.
+    chatCtx: ChatContext.empty(),
     preserveFunctionCallHistory: false,
   };
 }

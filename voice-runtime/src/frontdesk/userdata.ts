@@ -66,6 +66,8 @@ export type FrontDeskUserData = {
   asyncWorkBridgeDelivered?: boolean;
   /** Brief ack for the next intake field task onEnter (non-interactive). */
   intakeTransitionPhrase?: string;
+  /** Parent spoke the first collection question before task handoff — skip duplicate onEnter. */
+  receptionistFieldCollectionPrefaceSpoken?: boolean;
   /** Instrumentation for task boundary first-audio metrics. */
   activeTaskInstrumentation?: {
     taskId: string;

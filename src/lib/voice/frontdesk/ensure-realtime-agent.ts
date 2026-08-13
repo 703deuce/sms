@@ -125,11 +125,24 @@ export async function ensureFrontDeskRealtimeAgent(
   let phoneReassigned = false;
 
   if (assignPhone && targetE164) {
+    const { shouldSkipInboundPhoneReassignment } = await import("@/lib/voice/phone-reassignment-guard");
+    const phoneGuard = await shouldSkipInboundPhoneReassignment({
+      workspaceId,
+      phoneE164: targetE164,
+      requestingAgentId: agent.id,
+    });
+    if (phoneGuard.skip) {
+      console.warn(
+        `[frontdesk-realtime] skipping phone reassignment on ${targetE164} — ` +
+          `${phoneGuard.reason} (${phoneGuard.ownerAgentName || phoneGuard.ownerAgentId})`,
+      );
+    }
+
     const phone = await prisma.phoneNumber.findFirst({
       where: { workspaceId, e164: targetE164 },
       select: { id: true, e164: true },
     });
-    if (phone) {
+    if (phone && !phoneGuard.skip) {
       const { assignNumberToAgent } = await import("@/lib/telephony/provisioning");
       await assignNumberToAgent({
         workspaceId,
