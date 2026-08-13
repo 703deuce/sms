@@ -114,7 +114,9 @@ export function buildGeneratedWorkflowRules(snapshot: ReceptionistCompiledSnapsh
   if (snapshot.capabilities.includes("send_text")) {
     lines.push("Text messages:");
     lines.push(
-      "- Send SMS only when enabled and after the caller agrees.",
+      "- After a successful booking, a confirmation text is sent automatically.",
+      "- When the caller asks for a text, use send_sms — never say you cannot send texts from here.",
+      "- If a confirmation text was already sent, tell them to check their phone or use send_sms again.",
       "- Confirm SMS success via tool results before telling the caller a text was sent.",
     );
   }

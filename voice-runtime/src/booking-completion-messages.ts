@@ -17,6 +17,8 @@ export function buildBookingSuccessLine(timeLabel: string): string {
 export const BOOKING_COMPLETE_TOOL_RESULT =
   "BOOKING_COMPLETE_ALREADY_SPOKEN: The confirmation was already spoken to the caller. " +
   "Do not repeat the booking details or give another goodbye. " +
+  "If the caller asks for a text confirmation, use send_sms or tell them the confirmation " +
+  "text was already sent to their phone. " +
   "If the caller indicates they are done (for example: that's it, no, thanks), call end_call " +
   "immediately with one brief farewell. If they ask a short follow-up, answer in one sentence " +
   "then call end_call.";

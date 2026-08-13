@@ -117,7 +117,11 @@ function buildTakeMessageTool(snapshot: ReceptionistCompiledSnapshot) {
           preferred_callback: args.preferred_callback?.trim() || undefined,
           notes: args.notes,
         });
-        return "Message recorded. Tell the caller someone from the team will follow up. Do not ask to leave another message.";
+        return (
+          "Message recorded. Tell the caller someone from the team will follow up once — " +
+          "do not repeat the callback script. If they change their mind and want to book, " +
+          "proceed with booking using collect_caller_fields with purpose booking."
+        );
       });
     },
   });
@@ -126,7 +130,9 @@ function buildTakeMessageTool(snapshot: ReceptionistCompiledSnapshot) {
 function buildSendSmsTool() {
   return llm.tool({
     name: "send_sms",
-    description: "Send a text message to the caller after they confirm.",
+    description:
+      "Send a text message to the caller's phone. Use when they ask for a text confirmation " +
+      "or follow-up. Do not say you cannot send texts — use this tool.",
     parameters: z.object({
       message: z.string().describe("SMS body to send"),
       phone: z.string().optional().describe("Destination phone if not caller ANI"),
@@ -134,6 +140,12 @@ function buildSendSmsTool() {
     execute: async ({ message, phone }, opts) => {
       const session = opts.ctx.session as AgentSession<FrontDeskUserData>;
       const ud = session.userData;
+      if (ud.bookingConfirmationSmsSent && !message?.trim()) {
+        return (
+          "A booking confirmation text was already sent to the caller's phone. " +
+          "Tell them to check their messages — it may take a moment to arrive."
+        );
+      }
       return withLiveKitToolTelemetry(ud, "send_sms", { message }, async () => {
         const to = resolveReceptionistCallbackPhone({
           collectedPhone: phone?.trim() || ud.receptionistFields?.phone,
@@ -181,13 +193,18 @@ function buildCollectCallerFieldsTool(snapshot: ReceptionistCompiledSnapshot) {
       const session = opts.ctx.session as AgentSession<FrontDeskUserData>;
       const ud = session.userData;
       return withLiveKitToolTelemetry(ud, "collect_caller_fields", args, async () => {
-        if (args.purpose === "message" || ud.receptionistMessageTaken) {
+        const purpose = (args.purpose as ReceptionistCollectionPurpose | undefined) || "service";
+        if (purpose === "message") {
           return "Use take_message for callback requests — do not run field collection.";
+        }
+        if (ud.receptionistMessageTaken && purpose !== "booking") {
+          return (
+            "A callback message was already recorded. If the caller wants to book instead, " +
+            "call collect_caller_fields with purpose booking. Otherwise continue their request."
+          );
         }
 
         backfillReceptionistFields(session, manifest);
-
-        const purpose = (args.purpose as ReceptionistCollectionPurpose | undefined) || "service";
         const missing = missingReceptionistFields(
           manifest,
           ud.receptionistFields,

@@ -23,6 +23,26 @@ assert.ok(
   "must not preserve child function-call history into parent",
 );
 
+const receptionistTools = read("voice-runtime/src/frontdesk/receptionist/receptionist-tools.ts");
+assert.ok(
+  receptionistTools.includes("purpose !== \"booking\""),
+  "collect_caller_fields must allow booking after take_message",
+);
+assert.ok(
+  receptionistTools.includes("when they ask for a text confirmation"),
+  "send_sms tool must invite explicit text requests",
+);
+
+const bookingTools = read("voice-runtime/src/frontdesk/booking-tools.ts");
+assert.ok(
+  bookingTools.includes("await sendBookingConfirmationSms"),
+  "booking success must await SMS before speaking confirmation",
+);
+assert.ok(
+  bookingTools.includes("skipOnEnterPrompt: true"),
+  "email prompt must be spoken once before nested email task",
+);
+
 const ud = {
   callId: "test-call",
   workspaceId: "ws",

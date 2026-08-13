@@ -68,7 +68,9 @@ function synthesizeJobInstructions(snapshot: ReceptionistCompiledSnapshot): stri
     bullets.push("Book appointments when requested and permitted.");
   }
   if (snapshot.capabilities.includes("send_text")) {
-    bullets.push("Send SMS only after the caller agrees.");
+    bullets.push(
+      "Send SMS when the caller asks for a text — use the send_sms tool; never say you cannot text.",
+    );
   }
   return bullets.map((b) => `- ${b}`).join("\n");
 }

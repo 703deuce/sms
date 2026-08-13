@@ -6,7 +6,6 @@ import type { FrontDeskUserData } from "./userdata";
 import { agentTaskSuperOptions, nestedTaskOptionsFromSession } from "../tasks/task-context";
 import { POST_EMAIL_BOOKING_FILLER } from "../booking-completion-messages";
 import { speakBeforeTaskHandoff } from "../task-async-work-bridge";
-import { deliverScriptedSpeech } from "../outbound/scripted-speech";
 import {
   markFirstReplyRequested,
   markTaskExitFinished,
@@ -19,6 +18,14 @@ export type EmailCollectionResult = {
   declined: boolean;
 };
 
+export const EMAIL_COLLECTION_PROMPT =
+  "What's the best email for your calendar invite? Please say it out loud.";
+
+export type EmailCollectionTaskOptions = {
+  /** Parent already spoke the email prompt — skip duplicate onEnter audio. */
+  skipOnEnterPrompt?: boolean;
+};
+
 /**
  * Bounded AgentTask for Calendly booking email — replaces flat update/confirm tools.
  */
@@ -26,6 +33,7 @@ export class EmailCollectionTask extends voice.AgentTask<EmailCollectionResult> 
   constructor(
     private readonly sessionRef: AgentSession<FrontDeskUserData>,
     taskContext?: ReturnType<typeof nestedTaskOptionsFromSession>,
+    private readonly options: EmailCollectionTaskOptions = {},
   ) {
     super(
       agentTaskSuperOptions(
@@ -95,12 +103,16 @@ export class EmailCollectionTask extends voice.AgentTask<EmailCollectionResult> 
       taskId: "email_collection",
       taskType: "EmailCollectionTask",
     };
+    if (this.options.skipOnEnterPrompt) {
+      return;
+    }
     markFirstReplyRequested({
       callId: ud.callId,
       taskId: "email_collection",
       taskType: "EmailCollectionTask",
     });
 
+    const { deliverScriptedSpeech } = await import("../outbound/scripted-speech");
     await deliverScriptedSpeech(this.sessionRef, EMAIL_COLLECTION_PROMPT, {
       allowInterruptions: true,
       addToChatCtx: true,
@@ -108,12 +120,10 @@ export class EmailCollectionTask extends voice.AgentTask<EmailCollectionResult> 
   }
 }
 
-const EMAIL_COLLECTION_PROMPT =
-  "What's the best email for your calendar invite? Please say it out loud.";
-
 export async function runEmailCollectionTask(
   session: AgentSession<FrontDeskUserData>,
+  options: EmailCollectionTaskOptions = {},
 ): Promise<EmailCollectionResult> {
-  const task = new EmailCollectionTask(session);
+  const task = new EmailCollectionTask(session, undefined, options);
   return await task.run();
 }

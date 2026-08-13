@@ -10,7 +10,7 @@ import {
   scheduleAppointmentResilient,
 } from "./booking-recovery";
 import { resolveConfirmedEmail } from "./email-collection-tools";
-import { runEmailCollectionTask } from "./email-collection-task";
+import { runEmailCollectionTask, EMAIL_COLLECTION_PROMPT } from "./email-collection-task";
 import { buildFrontDeskEndCallToolset } from "./end-frontdesk-call";
 import { buildFrontDeskRescheduleAppointmentTool } from "./reschedule-appointment-tool";
 import { syncFrontDeskBookingToCrm } from "@/lib/voice/crm/frontdesk-crm-sync";
@@ -32,7 +32,7 @@ import { buildFrontDeskTransferTool } from "./transfer-tool";
 import { buildFrontDeskCheckBookingStatusTool } from "./check-booking-status-tool";
 import { speakBookingLine } from "./booking-speech";
 import { markBookingConfirmed, type FrontDeskUserData } from "./userdata";
-import { sendBookingSmsAsync } from "./booking-sms";
+import { sendBookingConfirmationSms, sendBookingSmsAsync } from "./booking-sms";
 import { markAppointmentBooked, persistCallState } from "@/lib/voice/real-estate/state";
 import { notifyRealEstateStaff } from "@/lib/voice/real-estate/notifications";
 import { syncRealEstateLeadToCrm } from "@/lib/voice/real-estate/crm-sync";
@@ -159,9 +159,12 @@ export function buildFrontDeskBookingTools(input: {
       userData.bookingInProgress = true;
 
       try {
+        await safeInterruptSession(session);
+
         const email = resolveConfirmedEmail(userData, inlineEmail);
         if (!email) {
-          const collected = await runEmailCollectionTask(session);
+          await speakBookingLine(session, EMAIL_COLLECTION_PROMPT);
+          const collected = await runEmailCollectionTask(session, { skipOnEnterPrompt: true });
           if (collected.declined || !collected.email) {
             return (
               "Email is required for the calendar invite. Explain that and offer to call back later."
@@ -233,7 +236,7 @@ export function buildFrontDeskBookingTools(input: {
               const smsEnabled =
                 userData.receptionistCompiled?.bookingPolicy?.sendSmsConfirmation !== false;
               if (smsEnabled) {
-                sendBookingSmsAsync(session, booked.slot.startTime);
+                await sendBookingConfirmationSms(session, booked.slot.startTime);
               }
 
               const spoken = await speakBookingLine(session, buildBookingSuccessLine(local));

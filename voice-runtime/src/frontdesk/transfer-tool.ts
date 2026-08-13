@@ -92,6 +92,34 @@ async function resolveTransferDestination(
   return dest?.destination?.trim() || null;
 }
 
+async function markVoiceCallTransferred(
+  workspaceId: string,
+  callId: string,
+  destination: string,
+  reason?: string,
+): Promise<void> {
+  const prisma = getPrisma();
+  const call = await prisma.voiceCall.findFirst({
+    where: { id: callId, workspaceId },
+    select: { metadata: true },
+  });
+  const meta = asRecord(call?.metadata);
+  await prisma.voiceCall.update({
+    where: { id: callId },
+    data: {
+      transferred: true,
+      status: "TRANSFERRED",
+      outcome: "transferred",
+      metadata: {
+        ...meta,
+        transferDestination: destination,
+        transferReason: reason || "Caller requested human",
+        transferCompletedAt: new Date().toISOString(),
+      },
+    },
+  });
+}
+
 export function buildFrontDeskTransferTool() {
   return llm.tool({
     name: "transfer_to_human",
@@ -139,6 +167,7 @@ export function buildFrontDeskTransferTool() {
             summary: reason || "Caller requested human",
             timeoutSeconds: 25,
           });
+          await markVoiceCallTransferred(ud.workspaceId, ud.callId, destination, reason);
           return "Transferring you now — please hold.";
         }
 
@@ -159,6 +188,7 @@ export function buildFrontDeskTransferTool() {
                 : `I couldn't complete the transfer (${xfer.reason}).`,
             );
           }
+          await markVoiceCallTransferred(ud.workspaceId, ud.callId, destination, reason);
           return "Transferring you now — please hold.";
         }
 
