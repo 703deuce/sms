@@ -13,7 +13,7 @@ const snapshot = compileReceptionistConfig({
   answerTiming: "every_call",
   capabilities: ["answer_questions", "take_messages", "collect_info"],
   collectFields: ["name", "phone", "reason"],
-  voiceId: "ava-warm-us",
+  voiceId: "marin",
 });
 
 assert.equal(snapshot.livekitProfile, "frontdesk_realtime");
@@ -46,7 +46,7 @@ const advancedSnapshot = compileReceptionistConfig({
   answerTiming: "every_call",
   capabilities: ["collect_info", "book_appointments", "transfer_calls"],
   collectFields: [],
-  voiceId: "ava-warm-us",
+  voiceId: "marin",
   advanced: { receptionistAdvanced: advanced },
 });
 

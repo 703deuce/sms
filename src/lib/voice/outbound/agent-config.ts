@@ -1,6 +1,7 @@
 import type { VoiceAgentConfig } from "@/lib/voice/types";
 import { createDefaultQualificationDefinition } from "./default-qualification-definition";
 import { normalizeRealtimeNativeVoice } from "./realtime-native-voices";
+import { resolveConfiguredRealtimeVoice } from "@/lib/voice/realtime-voice-picker";
 import type { QualificationDefinition } from "./types";
 
 export const OUTBOUND_LEAD_QUALIFICATION_PROFILE = "outbound_lead_qualification";
@@ -77,15 +78,17 @@ export type OutboundRealtimePipelineOverrides = {
 };
 
 export function resolveOutboundRealtimePipelineConfig(
-  config: Pick<VoiceAgentConfig, "advanced">,
+  config: Pick<VoiceAgentConfig, "advanced" | "voiceLanguage">,
   overrides?: OutboundRealtimePipelineOverrides,
 ): OutboundRealtimePipelineConfig {
   const advanced = getVoiceAgentAdvanced(config);
   const model =
     process.env.VOICE_REALTIME_MODEL?.trim() ||
     String(advanced.realtimeModel || "gpt-realtime-2.1-mini").trim();
+  const fromAgent = resolveConfiguredRealtimeVoice(config);
   const voiceRaw =
     overrides?.voice?.trim() ||
+    fromAgent ||
     process.env.VOICE_REALTIME_VOICE?.trim() ||
     String(advanced.realtimeVoice || "marin").trim();
   const voice = normalizeRealtimeNativeVoice(voiceRaw, "realtimeVoice");

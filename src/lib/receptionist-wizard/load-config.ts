@@ -1,5 +1,6 @@
 import type { VoiceAgentConfig } from "@/lib/voice/types";
 import { createDefaultWizardState } from "./defaults";
+import { normalizeWizardVoiceToRealtime } from "@/lib/voice/realtime-voice-picker";
 import type {
   AnswerTiming,
   CapabilityId,
@@ -66,7 +67,9 @@ export function wizardStateFromDraftConfig(
       String(cfg.dynamicVariables?.business_timezone || base.timezone),
     capabilities,
     collectFields: (wiz?.collectFields as CollectFieldId[]) || base.collectFields,
-    voiceId: cfg.voiceLanguage?.voiceId || base.voiceId,
+    voiceId: normalizeWizardVoiceToRealtime(
+      cfg.voiceLanguage?.voiceId || wiz?.voiceId || base.voiceId,
+    ),
     voiceLabel: wiz?.voiceLabel || base.voiceLabel,
   };
 }

@@ -8,6 +8,9 @@ import {
   resolvePreviewVoiceId,
 } from "@/lib/voice/telnyx/voices";
 import { getCachedPreview, setCachedPreview } from "@/lib/voice/platform/preview-cache";
+import {
+  tryNormalizeWizardVoiceToRealtime,
+} from "@/lib/voice/realtime-voice-picker";
 
 const previewHits = new Map<string, { count: number; windowStart: number }>();
 
@@ -47,6 +50,91 @@ export async function POST(request: Request) {
     };
 
     const requested = String(body.voice || "").trim();
+    const text = (body.text || DEFAULT_VOICE_PREVIEW_TEXT).trim().slice(0, 280);
+    const language = (body.language || "en-US").trim();
+    const speed =
+      typeof body.speed === "number" && Number.isFinite(body.speed)
+        ? Math.min(2, Math.max(0.5, body.speed))
+        : 1;
+
+    const realtimeVoice = tryNormalizeWizardVoiceToRealtime(requested);
+    if (realtimeVoice) {
+      const cached = await getCachedPreview({
+        voiceId: realtimeVoice,
+        text,
+        speed,
+      });
+      if (cached) {
+        return NextResponse.json({
+          data: {
+            mode: "cache",
+            text,
+            voice: realtimeVoice,
+            provider: "openai_realtime",
+            language,
+            audioUrl: cached,
+            cached: true,
+          },
+        });
+      }
+
+      const apiKey = process.env.OPENAI_API_KEY?.trim();
+      if (!apiKey) {
+        return NextResponse.json({
+          data: {
+            mode: "mock",
+            text,
+            voice: realtimeVoice,
+            provider: "openai_realtime",
+            language,
+            message: "OpenAI not configured — use Test in browser to hear this voice.",
+          },
+        });
+      }
+
+      const speechRes = await fetch("https://api.openai.com/v1/audio/speech", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "gpt-4o-mini-tts",
+          voice: realtimeVoice,
+          input: text,
+          speed,
+        }),
+      });
+
+      if (!speechRes.ok) {
+        const errText = await speechRes.text();
+        return NextResponse.json(
+          {
+            error: "Could not preview this Realtime voice. Use Test in browser instead.",
+            detail: errText.slice(0, 300),
+            voice: realtimeVoice,
+          },
+          { status: 502 },
+        );
+      }
+
+      const buf = Buffer.from(await speechRes.arrayBuffer());
+      const audioUrl = `data:audio/mpeg;base64,${buf.toString("base64")}`;
+      await setCachedPreview({ voiceId: realtimeVoice, text, speed, audioUrl });
+
+      return NextResponse.json({
+        data: {
+          mode: "openai_realtime",
+          text,
+          voice: realtimeVoice,
+          provider: "openai_realtime",
+          language,
+          audioUrl,
+          cached: false,
+        },
+      });
+    }
+
     if (!requested || !isApprovedVoiceId(requested)) {
       return NextResponse.json(
         { error: "Voice is not in the approved catalog." },
@@ -57,18 +145,6 @@ export async function POST(request: Request) {
     const curated = getCuratedVoice(requested);
     // Use raw Ultra/xAI ids for preview compare; do not map to NaturalHD here.
     const providerVoice = resolvePreviewVoiceId(requested);
-    const text = (
-      body.text ||
-      curated?.previewText ||
-      DEFAULT_VOICE_PREVIEW_TEXT
-    )
-      .trim()
-      .slice(0, 280);
-    const language = (body.language || curated?.locale || "en-US").trim();
-    const speed =
-      typeof body.speed === "number" && Number.isFinite(body.speed)
-        ? Math.min(2, Math.max(0.5, body.speed))
-        : 1;
 
     const cached = await getCachedPreview({
       voiceId: providerVoice,

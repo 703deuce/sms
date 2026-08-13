@@ -40,7 +40,7 @@ export function recompileReceptionistFromDraft(config: VoiceAgentConfig): VoiceA
     answerTiming: wizard.answerTiming || "every_call",
     capabilities: wizard.capabilities || [],
     collectFields: wizard.collectFields || [],
-    voiceId: wizard.voiceId || config.voiceLanguage?.voiceId || "ava-warm-us",
+    voiceId: wizard.voiceId || config.voiceLanguage?.voiceId || "marin",
     voiceLabel: wizard.voiceLabel,
     advanced: {
       conversationBehavior: storedAdvanced?.conversationBehavior ?? advanced?.conversationBehavior,

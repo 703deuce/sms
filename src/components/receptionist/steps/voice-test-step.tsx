@@ -70,7 +70,8 @@ export function VoiceTestStep({
             Voice & Test {state.agentName || "Amy"}
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Choose a voice, then talk to {state.agentName || "Amy"} in your browser.
+            Pick an OpenAI Realtime voice — the same voice is used on phone calls and in browser
+            test.
           </p>
         </div>
 
@@ -105,7 +106,7 @@ export function VoiceTestStep({
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-semibold">{voice.label}</span>
-                        {voice.badge ? (
+                        {"badge" in voice && voice.badge ? (
                           <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
                             {voice.badge}
                           </span>

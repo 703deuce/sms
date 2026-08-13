@@ -113,36 +113,6 @@ export const DEFAULT_COLLECT_FIELDS: Array<{
   { id: "reason", label: "Reason for calling", required: false },
 ];
 
-export const WIZARD_VOICES = [
-  {
-    id: "ava-warm-us",
-    label: "Amy",
-    badge: "Recommended",
-    description: "Friendly, Warm, Professional",
-    locale: "English - US",
-  },
-  {
-    id: "allie-ultra",
-    label: "Emma",
-    description: "Calm and reassuring",
-    locale: "English - US",
-  },
-  {
-    id: "maya-energetic-us",
-    label: "Lily",
-    description: "Bright and energetic",
-    locale: "English - US",
-  },
-  {
-    id: "celeste-naturalhd",
-    label: "Jacob",
-    description: "Professional and clear",
-    locale: "English - US",
-  },
-  {
-    id: "orion-naturalhd",
-    label: "Daniel",
-    description: "Warm and approachable",
-    locale: "English - US",
-  },
-];
+import { RECEPTIONIST_REALTIME_VOICES } from "@/lib/voice/realtime-voice-picker";
+
+export const WIZARD_VOICES = RECEPTIONIST_REALTIME_VOICES;

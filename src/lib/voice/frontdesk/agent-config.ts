@@ -45,7 +45,7 @@ export function usesFrontDeskRealtimeVoicePipeline(
 }
 
 export function resolveFrontDeskRealtimePipelineConfig(
-  config: Pick<VoiceAgentConfig, "advanced">,
+  config: Pick<VoiceAgentConfig, "advanced" | "voiceLanguage">,
   overrides?: OutboundRealtimePipelineOverrides,
 ): OutboundRealtimePipelineConfig {
   return resolveOutboundRealtimePipelineConfig(config, overrides);

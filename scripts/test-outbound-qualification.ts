@@ -149,11 +149,33 @@ const prevVoiceEnv = process.env.VOICE_REALTIME_VOICE;
 process.env.VOICE_REALTIME_VOICE = "coral";
 assert.equal(
   resolveOutboundRealtimePipelineConfig(realtimeConfig).voice,
-  "coral",
+  "marin",
+  "agent realtimeVoice wins over VOICE_REALTIME_VOICE env",
 );
 assert.equal(
   resolveOutboundRealtimePipelineConfig(realtimeConfig, { voice: "shimmer" }).voice,
   "shimmer",
+);
+assert.equal(
+  resolveOutboundRealtimePipelineConfig({
+    advanced: {
+      livekitProfile: OUTBOUND_LEAD_QUALIFICATION_REALTIME_PROFILE,
+      realtimeModel: "gpt-realtime-2.1-mini",
+    },
+    voiceLanguage: { voiceId: "shimmer", primaryLanguage: "en-US" },
+  }).voice,
+  "shimmer",
+  "voiceLanguage picker wins over env when realtimeVoice unset",
+);
+assert.equal(
+  resolveOutboundRealtimePipelineConfig({
+    advanced: {
+      livekitProfile: OUTBOUND_LEAD_QUALIFICATION_REALTIME_PROFILE,
+      realtimeModel: "gpt-realtime-2.1-mini",
+    },
+  }).voice,
+  "coral",
+  "env fallback when agent has no configured realtime voice",
 );
 process.env.VOICE_REALTIME_VOICE = prevVoiceEnv;
 if (prevVoiceEnv == null) delete process.env.VOICE_REALTIME_VOICE;

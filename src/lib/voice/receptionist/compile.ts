@@ -7,6 +7,7 @@ import type {
 } from "./types";
 import { RECEPTIONIST_COMPILED_KEY } from "./types";
 import type { ReceptionistAdvancedSettings } from "@/lib/receptionist-wizard/advanced-types";
+import { normalizeWizardVoiceToRealtime } from "@/lib/voice/realtime-voice-picker";
 import { fieldManifestFromAdvancedRows } from "./field-manifest";
 
 export type ReceptionistDraftInput = {
@@ -133,6 +134,8 @@ export function compileReceptionistConfig(input: ReceptionistDraftInput): Recept
       advanced?.transferPolicy?.emergencyDestinationE164?.trim() || undefined,
   };
 
+  const realtimeVoice = normalizeWizardVoiceToRealtime(input.voiceId);
+
   return {
     livekitProfile: "frontdesk_realtime",
     businessName: input.businessName.trim(),
@@ -145,7 +148,7 @@ export function compileReceptionistConfig(input: ReceptionistDraftInput): Recept
     capabilities: [...caps],
     fieldManifest,
     enabledBuiltinTools,
-    voiceId: input.voiceId,
+    voiceId: realtimeVoice,
     compiledAt: new Date().toISOString(),
     conversationBehavior,
     bookingPolicy: advanced?.bookingPolicy ?? (input.advanced?.bookingPolicy as Record<string, unknown>),
@@ -214,6 +217,7 @@ export function applyCompiledToVoiceConfig(
     advanced: {
       ...(base.advanced as object),
       livekitProfile: snapshot.livekitProfile,
+      realtimeVoice: snapshot.voiceId,
       [RECEPTIONIST_COMPILED_KEY]: snapshot,
       receptionistWizard: (base.advanced as Record<string, unknown> | undefined)?.receptionistWizard,
       receptionistAdvanced: (base.advanced as Record<string, unknown> | undefined)?.receptionistAdvanced,
