@@ -126,6 +126,7 @@ export function AboutStep({
             }
           >
             <Textarea
+              id="business-desc"
               className="min-h-[140px] border-[#e6e8ef] text-sm"
               placeholder="We are a plumbing company that provides repair, maintenance, and emergency plumbing services for residential and commercial customers."
               value={state.businessDescription}
