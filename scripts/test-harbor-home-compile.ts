@@ -23,7 +23,7 @@ const snapshot = compileReceptionistConfig({
   answerTiming: "every_call",
   capabilities: HARBOR_HOME_CAPABILITIES,
   collectFields: collectFieldIdsFromRows(advanced.callerFields),
-  voiceId: "Bmj4Yi69e7b67di5IKVn",
+  voiceId: "cgSgspJ2msm6clMCkdW9",
   advanced: {
     [RECEPTIONIST_ADVANCED_KEY]: advanced,
     receptionistWizard: {
@@ -56,5 +56,8 @@ assert.ok(ids.includes("custom_access_notes"));
 
 const issueField = snapshot.fieldManifest.find((f) => f.id === "custom_issue_category");
 assert.ok(issueField?.question?.includes("no-heat"));
+
+assert.ok(snapshot.capabilities.includes("send_text"));
+assert.equal(advanced.transferPolicy.destinationE164, "+17038166017");
 
 console.log("test-harbor-home-compile: ok");

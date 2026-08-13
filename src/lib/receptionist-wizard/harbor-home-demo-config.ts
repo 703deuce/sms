@@ -2,6 +2,9 @@ import type { CapabilityId } from "./types";
 import type { ReceptionistAdvancedSettings } from "./advanced-types";
 import { actionPermissionsFromCapabilities, createDefaultAdvancedSettings } from "./advanced-defaults";
 
+/** Transfer destination for Harbor Home smoke tests (user-provided). */
+export const HARBOR_HOME_TRANSFER_E164 = "+17038166017";
+
 /** Full demo/production Harbor Home HVAC wizard content for smoke tests and 866 line. */
 export const HARBOR_HOME_CAPABILITIES: CapabilityId[] = [
   "answer_questions",
@@ -9,6 +12,7 @@ export const HARBOR_HOME_CAPABILITIES: CapabilityId[] = [
   "collect_info",
   "book_appointments",
   "transfer_calls",
+  "send_text",
 ];
 
 export const HARBOR_HOME_WIZARD_CONTENT = {
@@ -27,7 +31,8 @@ export const HARBOR_HOME_WIZARD_CONTENT = {
     "- Explain the $89 diagnostic fee for standard visits and $149 after-hours emergency dispatch. Never quote exact repair prices without an on-site diagnosis.\n" +
     "- Offer to schedule a technician visit when the caller wants service.\n" +
     "- Take detailed messages when they prefer a callback.\n" +
-    "- Transfer true emergencies per policy when the caller needs immediate human help.",
+    "- Transfer true emergencies per policy when the caller needs immediate human help.\n" +
+    "- Send SMS confirmations and follow-ups to the caller's phone when they ask for a text.",
   additionalInstructions:
     "Operations:\n" +
     "- No same-day emergency bookings after 5 PM — take a message for the on-call manager instead.\n" +
@@ -35,7 +40,14 @@ export const HARBOR_HOME_WIZARD_CONTENT = {
     "- Do not transfer landlord or condo authorization questions; take a message for the office manager.\n" +
     "- If the caller mentions an active maintenance plan, note it and tell them the office will confirm benefits.\n" +
     "- Spanish-speaking callers: offer to take a detailed message if no bilingual staff is available.\n" +
-    "- Do not schedule commercial generator work — we only service residential HVAC.",
+    "- Do not schedule commercial generator work — we only service residential HVAC.\n" +
+    "Capability smoke tests (owner QA):\n" +
+    "- Questions: ask about diagnostic fee or service area.\n" +
+    "- Messages: ask for a callback without booking.\n" +
+    "- Collection: provide name, phone, address, and issue details when scheduling.\n" +
+    "- Booking: request a technician visit and confirm a slot.\n" +
+    "- Transfer: say you need to speak to someone right now about an emergency.\n" +
+    "- SMS: ask Amy to text you a confirmation to your phone.",
   businessHours:
     "Monday–Friday 7:00 AM – 7:00 PM. Saturday 9:00 AM – 3:00 PM (emergency only). Closed Sunday.",
   serviceArea: "Arlington County, Fairfax County, Falls Church, and McLean.",
@@ -106,6 +118,7 @@ export function buildHarborHomeAdvancedSettings(): ReceptionistAdvancedSettings 
       ...base.bookingPolicy,
       askPreferredDayFirst: true,
       confirmDateTimeVerbally: true,
+      sendSmsConfirmation: true,
       slotsToOffer: 3,
       minimumNoticeHours: 2,
     },
@@ -113,9 +126,11 @@ export function buildHarborHomeAdvancedSettings(): ReceptionistAdvancedSettings 
       ...base.transferPolicy,
       whenToTransfer: "certain_calls",
       transferInstructions:
-        "Transfer no-heat or no-cool emergencies when the caller needs immediate help. Take a message for billing and landlord authorization questions.",
-      destinationE164: process.env.HARBOR_HOME_TRANSFER_E164 || "",
-      emergencyDestinationE164: process.env.HARBOR_HOME_EMERGENCY_E164 || "",
+        "Transfer when the caller asks to speak to a person, or for no-heat/no-cool emergencies that need immediate help. Take a message for billing and landlord authorization questions.",
+      destinationE164:
+        process.env.HARBOR_HOME_TRANSFER_E164?.trim() || HARBOR_HOME_TRANSFER_E164,
+      emergencyDestinationE164:
+        process.env.HARBOR_HOME_EMERGENCY_E164?.trim() || HARBOR_HOME_TRANSFER_E164,
     },
     knowledgePolicy: {
       approvedKnowledgeOnly: true,

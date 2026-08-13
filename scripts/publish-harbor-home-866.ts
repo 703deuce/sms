@@ -1,6 +1,6 @@
 /**
- * Publish Harbor Home HVAC receptionist on +18663464256 with Jade @ 1.1 speed.
- * Applies full wizard content (About Q2/Q3, structured business, custom fields).
+ * Publish Harbor Home HVAC receptionist on +18663464256 with Jessica (default voice).
+ * Applies full wizard content, all capabilities, and capability-test transfer/SMS settings.
  * DB-only publish (no LiveKit SIP provision) — routing uses explicit dispatch metadata.
  * Usage: npx tsx scripts/publish-harbor-home-866.ts
  */
@@ -27,20 +27,22 @@ import {
   explicitDispatchPatchForPhoneSettings,
 } from "../src/lib/telephony/provisioning/dispatch-metadata";
 import {
+  DEFAULT_RECEPTIONIST_ELEVENLABS_VOICE_ID,
   getReceptionistElevenLabsVoice,
   normalizeWizardVoiceToElevenLabs,
 } from "../src/lib/voice/elevenlabs/receptionist-voice-catalog";
+import { DEFAULT_RECEPTIONIST_VOICE_TUNING } from "../src/lib/voice/elevenlabs/receptionist-voice-tuning";
 import { collectFieldIdsFromRows } from "../src/lib/voice/receptionist/field-manifest";
 
 const WORKSPACE_ID = "ws_1";
 const AGENT_ID = "cmsrk6b775h0m3n6o6z693i2l";
 const PHONE_ID = "cmsc3numa1j17084g391t2z5l";
 const PHONE_E164 = "+18663464256";
-const JADE_VOICE_ID = "Bmj4Yi69e7b67di5IKVn";
-const VOICE_SPEED = 1.1;
-const ELEVENLABS_STABILITY = 0.35;
-const ELEVENLABS_SIMILARITY = 0.75;
-const ELEVENLABS_STYLE = 0.1;
+const VOICE_ID = normalizeWizardVoiceToElevenLabs(DEFAULT_RECEPTIONIST_ELEVENLABS_VOICE_ID);
+const VOICE_SPEED = DEFAULT_RECEPTIONIST_VOICE_TUNING.speed;
+const ELEVENLABS_STABILITY = DEFAULT_RECEPTIONIST_VOICE_TUNING.stability;
+const ELEVENLABS_SIMILARITY = DEFAULT_RECEPTIONIST_VOICE_TUNING.similarityBoost;
+const ELEVENLABS_STYLE = DEFAULT_RECEPTIONIST_VOICE_TUNING.style;
 
 async function publishWithoutLiveKitProvision(
   workspaceId: string,
@@ -168,7 +170,7 @@ async function main() {
 
   const content = HARBOR_HOME_WIZARD_CONTENT;
   const advanced = buildHarborHomeAdvancedSettings();
-  const voiceId = normalizeWizardVoiceToElevenLabs(JADE_VOICE_ID);
+  const voiceId = VOICE_ID;
   const collectFields = collectFieldIdsFromRows(advanced.callerFields);
 
   const state = {
@@ -177,7 +179,7 @@ async function main() {
     capabilities: [...HARBOR_HOME_CAPABILITIES],
     collectFields,
     voiceId,
-    voiceLabel: getReceptionistElevenLabsVoice(voiceId)?.label || "Jade",
+    voiceLabel: getReceptionistElevenLabsVoice(voiceId)?.label || "Jessica",
     voiceSpeed: VOICE_SPEED,
     elevenLabsStability: ELEVENLABS_STABILITY,
     elevenLabsClarity: ELEVENLABS_SIMILARITY,
