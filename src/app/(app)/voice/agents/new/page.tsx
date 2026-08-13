@@ -90,7 +90,7 @@ export default function CreateReceptionistPage() {
         state={state}
         patch={patch}
         onContinue={continueToCapabilities}
-        onCancel={() => router.push("/voice/agents")}
+        onCancel={() => router.push("/voice/receptionist")}
         busy={busy}
       />
     </ReceptionistEditorShell>

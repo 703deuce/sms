@@ -4,6 +4,7 @@ import { flattenNavLinks, isNavGroup } from "@/lib/nav";
 import type { NavChild, NavItem, NavLink } from "@/lib/nav";
 import {
   buildProductNav,
+  isReceptionistSectionPath,
   type SolutionNavInstance,
 } from "@/lib/solutions-nav";
 import { buildRealtorNav } from "@/lib/realtor/nav";
@@ -138,6 +139,13 @@ function bestExpandedKey(
       score = Math.max(score, base);
     }
 
+    if (
+      item.href === "/voice/receptionist" &&
+      isReceptionistSectionPath(pathname)
+    ) {
+      score = Math.max(score, 60_000);
+    }
+
     if (score > bestScore || (score === bestScore && item.children?.length && score >= 0)) {
       if (score > bestScore) {
         bestScore = score;
@@ -252,8 +260,8 @@ export function Sidebar({
     if (realtorMode) return buildRealtorNav(inboxBadge);
     const pathAgentId = voiceAgentIdFromPath(pathname);
     const agentId = pathAgentId ?? primaryVoiceAgentId ?? null;
-    return buildProductNav();
-  }, [outcomeInstances, primaryVoiceAgentId, pathname, realtorMode, inboxBadge]);
+    return buildProductNav({ primaryVoiceAgentId: agentId });
+  }, [primaryVoiceAgentId, pathname, realtorMode, inboxBadge]);
 
   useEffect(() => {
     setExpanded(bestExpandedKey(navItems, pathname, search));
@@ -305,7 +313,10 @@ export function Sidebar({
         {navItems.map((item) => {
           const Icon = item.icon;
           const childActive = sectionHasActiveChild(item.children, pathname, search);
+          const receptionistOwned =
+            item.label === "AI Receptionist" && isReceptionistSectionPath(pathname);
           const ownedOutcome =
+            receptionistOwned ||
             pathname.startsWith(`${hrefPath(item.href)}/`) ||
             pathname === hrefPath(item.href);
           const expandKey = itemExpandKey(item);

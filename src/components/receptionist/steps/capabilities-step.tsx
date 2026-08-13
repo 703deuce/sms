@@ -26,7 +26,6 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
-import { useState } from "react";
 import { ReceptionistIntegrationsPanel } from "../receptionist-integrations-panel";
 import {
   CapabilityCardCompact,

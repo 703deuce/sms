@@ -545,7 +545,8 @@ export const pageTitles: Record<string, string> = {
   "/automations/logs": "Automation Run History",
   "/surveys": "Surveys",
   "/voice/overview": "AI Voice Overview",
-  "/voice/agents": "Voice Agents",
+  "/voice/receptionist": "AI Receptionist",
+  "/voice/agents": "My Agents",
   "/voice/agents/new": "Agent Builder",
   "/voice/ai-platform": "AI Voice Platform",
   "/voice/numbers": "Voice Phone Numbers",
@@ -659,6 +660,8 @@ export function getPageTitle(pathname: string) {
   if (pathname.startsWith("/automations/")) return "Automation Detail";
   if (pathname.startsWith("/surveys/")) return "Survey Detail";
   if (pathname.startsWith("/voice/agents/")) return "Agent builder";
+  if (pathname === "/voice/receptionist") return "AI Receptionist";
+  if (pathname === "/voice/agents") return "My Agents";
   if (pathname.startsWith("/voice/calls/")) return "Call detail";
   if (pathname.startsWith("/voice/")) return "AI Voice";
   if (pathname.startsWith("/phone/")) return "Business Phone";

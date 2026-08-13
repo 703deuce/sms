@@ -12,6 +12,7 @@ import {
 } from "../src/lib/nav";
 import { outcomeSolutions } from "../src/lib/outcomes/registry";
 import {
+  buildReceptionistNavChildren,
   buildSolutionsNav,
   solutionsLaunchSlugs,
   solutionsNav,
@@ -72,10 +73,11 @@ for (const category of solutionCategories) {
   }
 }
 
-// Launch sidebar matches flat product mockup nav.
+// Launch sidebar matches product mockup nav with AI Receptionist submenu.
 const solutionsHrefs = new Set(collectNavHrefs(solutionsNav));
 assert.ok(solutionsHrefs.has("/outcomes"), "Dashboard required");
-assert.ok(solutionsHrefs.has("/voice/agents"), "My Receptionist required");
+assert.ok(solutionsHrefs.has("/voice/receptionist"), "AI Receptionist landing required");
+assert.ok(solutionsHrefs.has("/voice/agents"), "My Agents required");
 assert.ok(solutionsHrefs.has("/numbers"), "Phone Numbers required");
 assert.ok(solutionsHrefs.has("/contacts"), "Contacts required");
 assert.ok(solutionsHrefs.has("/integrations"), "Integrations required");
@@ -83,7 +85,7 @@ assert.ok(solutionsHrefs.has("/settings/business"), "Settings required");
 
 const expectedTopLevel = [
   "Dashboard",
-  "My Receptionist",
+  "AI Receptionist",
   "Phone Numbers",
   "Settings",
   "Contacts",
@@ -98,9 +100,13 @@ assert.deepEqual(
   "Launch sidebar top-level labels must match the product mockup",
 );
 
-assert.ok(
-  !solutionsNav.some((item) => item.children?.length),
-  "Launch sidebar must be flat (no expandable submenus)",
+const receptionistNav = solutionsNav.find((item) => item.label === "AI Receptionist");
+assert.ok(receptionistNav, "AI Receptionist nav item required");
+assert.ok(receptionistNav?.children?.length, "AI Receptionist must expose wizard shortcuts");
+assert.deepEqual(
+  receptionistNav?.children?.map((c) => c.label),
+  buildReceptionistNavChildren(null).map((c) => c.label),
+  "AI Receptionist submenu labels must match wizard shortcuts",
 );
 
 for (const slug of solutionsLaunchSlugs()) {
@@ -154,11 +160,16 @@ const withInstances = buildSolutionsNav({
       },
     ],
   },
+  primaryVoiceAgentId: "a2",
 });
 const withInstanceHrefs = new Set(collectNavHrefs(withInstances));
 assert.ok(
+  withInstanceHrefs.has(`/voice/agents/a2/capabilities`),
+  "Launch nav should deep-link wizard steps for the primary agent",
+);
+assert.ok(
   !withInstanceHrefs.has("/voice/agents/a2"),
-  "Launch nav should not surface per-instance shortcuts",
+  "Launch nav should not surface bare instance shortcuts",
 );
 
 console.log(

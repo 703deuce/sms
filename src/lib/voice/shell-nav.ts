@@ -38,3 +38,9 @@ export function voiceAgentIdFromPath(pathname: string): string | null {
   if (!id || id === "new") return null;
   return id;
 }
+
+/** Receptionist wizard step slugs under `/voice/agents/[id]/…`. */
+export function receptionistStepFromPath(pathname: string): string | null {
+  const match = pathname.match(/^\/voice\/agents\/[^/]+\/([^/]+)/);
+  return match?.[1] ?? null;
+}

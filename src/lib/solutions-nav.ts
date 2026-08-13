@@ -8,7 +8,6 @@ import {
   Puzzle,
   Settings,
   Users,
-  type LucideIcon,
 } from "lucide-react";
 import type { NavChild, NavItem } from "@/lib/nav";
 
@@ -26,11 +25,54 @@ export type SolutionsNavOptions = {
   primaryVoiceAgentId?: string | null;
 };
 
-/** Flat product sidebar — matches setup mockups (no per-page submenu). */
-export function buildProductNav(): NavItem[] {
+/** Paths that belong under the AI Receptionist sidebar section. */
+export const RECEPTIONIST_SECTION_PREFIXES = ["/voice/receptionist", "/voice/agents"] as const;
+
+export function isReceptionistSectionPath(pathname: string): boolean {
+  return RECEPTIONIST_SECTION_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  );
+}
+
+export function buildReceptionistNavChildren(agentId?: string | null): NavChild[] {
+  const landing = "/voice/receptionist";
+  const agentsList = "/voice/agents";
+  if (!agentId) {
+    return [
+      { label: "Overview", href: landing },
+      { label: "My Agents", href: agentsList },
+      { label: "About Your Receptionist", href: "/voice/agents/new" },
+      { label: "What It Should Do", href: agentsList },
+      { label: "Connect integrations", href: agentsList },
+      { label: "Advanced", href: agentsList },
+      { label: "Voice & Test", href: agentsList },
+    ];
+  }
+  return [
+    { label: "Overview", href: landing },
+    { label: "My Agents", href: agentsList },
+    { label: "About Your Receptionist", href: `/voice/agents/${agentId}/about` },
+    { label: "What It Should Do", href: `/voice/agents/${agentId}/capabilities` },
+    { label: "Connect integrations", href: `/voice/agents/${agentId}/integrations` },
+    { label: "Advanced", href: `/voice/agents/${agentId}/advanced` },
+    { label: "Voice & Test", href: `/voice/agents/${agentId}/voice-test` },
+  ];
+}
+
+export function buildProductNav(options: SolutionsNavOptions = {}): NavItem[] {
+  const agentId =
+    options.primaryVoiceAgentId != null && options.primaryVoiceAgentId !== ""
+      ? options.primaryVoiceAgentId
+      : null;
+
   return [
     { label: "Dashboard", href: "/outcomes", icon: LayoutDashboard },
-    { label: "My Receptionist", href: "/voice/agents", icon: AudioLines },
+    {
+      label: "AI Receptionist",
+      href: "/voice/receptionist",
+      icon: AudioLines,
+      children: buildReceptionistNavChildren(agentId),
+    },
     { label: "Phone Numbers", href: "/numbers", icon: Hash },
     { label: "Settings", href: "/settings/business", icon: Settings },
     { label: "Contacts", href: "/contacts", icon: Users },
@@ -41,34 +83,12 @@ export function buildProductNav(): NavItem[] {
   ];
 }
 
-export function buildReceptionistNavChildren(agentId?: string | null): NavChild[] {
-  const listOnly = "/voice/agents";
-  if (!agentId) {
-    return [
-      { label: "Agents", href: listOnly },
-      { label: "About Your Receptionist", href: "/voice/agents/new" },
-      { label: "What It Should Do", href: listOnly },
-      { label: "Connect integrations", href: listOnly },
-      { label: "Advanced", href: listOnly },
-      { label: "Voice & Test", href: listOnly },
-    ];
-  }
-  return [
-    { label: "Agents", href: listOnly },
-    { label: "About Your Receptionist", href: `/voice/agents/${agentId}/about` },
-    { label: "What It Should Do", href: `/voice/agents/${agentId}/capabilities` },
-    { label: "Connect integrations", href: `/voice/agents/${agentId}/integrations` },
-    { label: "Advanced", href: `/voice/agents/${agentId}/advanced` },
-    { label: "Voice & Test", href: `/voice/agents/${agentId}/voice-test` },
-  ];
+/** Launch sidebar — AI Receptionist expands to wizard shortcuts + My Agents. */
+export function buildSolutionsNav(options: SolutionsNavOptions = {}): NavItem[] {
+  return buildProductNav(options);
 }
 
-/** Launch sidebar — flat mockup nav globally. */
-export function buildSolutionsNav(_options: SolutionsNavOptions = {}): NavItem[] {
-  return buildProductNav();
-}
-
-/** Static launch nav — used for titles / tests. */
+/** Static launch nav — used for titles / tests (no primary agent context). */
 export const solutionsNav: NavItem[] = buildProductNav();
 
 /** Alias — there is one app nav now. */
