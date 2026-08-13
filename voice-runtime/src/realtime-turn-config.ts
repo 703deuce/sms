@@ -54,14 +54,37 @@ export function resolveOutboundRealtimeTurnDetection(): OutboundRealtimeTurnDete
 }
 
 /** Inbound front desk — OpenAI Realtime server_vad tuned for phone line noise. */
-export function resolveFrontDeskInboundRealtimeTurnDetection(): OutboundRealtimeTurnDetectionConfig {
+export function resolveFrontDeskInboundRealtimeTurnDetection(
+  config?: Pick<{ advanced?: Record<string, unknown> }, "advanced">,
+): OutboundRealtimeTurnDetectionConfig {
+  const vad = config?.advanced?.realtimeVad as
+    | {
+        threshold?: number;
+        silenceDurationMs?: number;
+        prefixPaddingMs?: number;
+      }
+    | undefined;
+
+  const threshold =
+    typeof vad?.threshold === "number" && Number.isFinite(vad.threshold)
+      ? vad.threshold
+      : parseNumberEnv(process.env.VOICE_REALTIME_VAD_THRESHOLD, 0.65);
+  const silenceDurationMs =
+    typeof vad?.silenceDurationMs === "number" && Number.isFinite(vad.silenceDurationMs)
+      ? vad.silenceDurationMs
+      : parseNumberEnv(process.env.VOICE_REALTIME_VAD_SILENCE_MS, 500);
+  const prefixPaddingMs =
+    typeof vad?.prefixPaddingMs === "number" && Number.isFinite(vad.prefixPaddingMs)
+      ? vad.prefixPaddingMs
+      : parseNumberEnv(process.env.VOICE_REALTIME_VAD_PREFIX_MS, 300);
+
   return {
     mode: "server",
     turnDetection: {
       type: "server_vad",
-      threshold: parseNumberEnv(process.env.VOICE_REALTIME_VAD_THRESHOLD, 0.65),
-      prefix_padding_ms: parseNumberEnv(process.env.VOICE_REALTIME_VAD_PREFIX_MS, 300),
-      silence_duration_ms: parseNumberEnv(process.env.VOICE_REALTIME_VAD_SILENCE_MS, 500),
+      threshold,
+      prefix_padding_ms: prefixPaddingMs,
+      silence_duration_ms: silenceDurationMs,
       create_response: true,
       interrupt_response: parseBoolEnv(process.env.VOICE_REALTIME_INTERRUPT_RESPONSE, true),
     },

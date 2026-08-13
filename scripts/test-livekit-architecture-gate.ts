@@ -166,7 +166,8 @@ check("frontdesk inbound uses safer realtime VAD", () => {
   assert.ok(inbound.includes("buildFrontDeskRealtimeTurnHandling"));
   assert.ok(inbound.includes("aecWarmupDuration: 3000"));
   assert.ok(turnCfg.includes("resolveFrontDeskInboundRealtimeTurnDetection"));
-  assert.match(turnCfg, /threshold: parseNumberEnv\(process\.env\.VOICE_REALTIME_VAD_THRESHOLD, 0\.65\)/);
+  assert.ok(turnCfg.includes("realtimeVad"));
+  assert.ok(turnCfg.includes("parseNumberEnv(process.env.VOICE_REALTIME_VAD_THRESHOLD, 0.65)"));
   assert.ok(turnHandling.includes("turnDetection: null"));
   assert.ok(turnHandling.includes("resumeFalseInterruption: true"));
   assert.ok(turnHandling.includes("minDuration: parseNumberEnv(process.env.VOICE_INTERRUPTION_MIN_DURATION_MS, 650)"));
@@ -175,6 +176,29 @@ check("frontdesk inbound uses safer realtime VAD", () => {
   assert.ok(latency.includes("suspected_false_interruption"));
   assert.ok(latency.includes("false_interruption"));
   assert.ok(latency.includes("agent_resumed"));
+});
+
+check("receptionist field collection uses silent handoff", () => {
+  const fieldTask = readProjectFile(
+    "voice-runtime/src/frontdesk/receptionist/field-collection-task.ts",
+  );
+  const lifecycle = readProjectFile(
+    "voice-runtime/src/frontdesk/receptionist/field-collection-lifecycle.ts",
+  );
+  const tools = readProjectFile("voice-runtime/src/frontdesk/receptionist/receptionist-tools.ts");
+  assert.ok(fieldTask.includes("FIELD_TRANSITION_BRIDGE_RULES"));
+  assert.ok(fieldTask.includes("speakIntakeTransitionLine"));
+  assert.ok(lifecycle.includes("COLLECT_COMPLETE_SILENT"));
+  assert.ok(tools.includes("TOOL_RESULT_COLLECT_COMPLETE_SILENT"));
+});
+
+check("realtime pipeline supports per-agent speed and VAD", () => {
+  const pipeline = readProjectFile("voice-runtime/src/pipeline.ts");
+  const agentCfg = readProjectFile("src/lib/voice/outbound/agent-config.ts");
+  const turnCfg = readProjectFile("voice-runtime/src/realtime-turn-config.ts");
+  assert.ok(pipeline.includes("speed"));
+  assert.ok(agentCfg.includes("voiceLanguage?.speed"));
+  assert.ok(turnCfg.includes("realtimeVad"));
 });
 
 check("intake scripted speech uses caller-facing questions", () => {

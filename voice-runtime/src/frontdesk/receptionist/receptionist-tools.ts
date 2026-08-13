@@ -8,6 +8,10 @@ import { buildFrontDeskBookingTools } from "../booking-tools";
 import type { FrontDeskUserData } from "../userdata";
 import { withLiveKitToolTelemetry } from "../../livekit-tool-telemetry";
 import { ReceptionistFieldCollectionTask } from "./field-collection-task";
+import {
+  TOOL_RESULT_COLLECT_ACTIVE_SILENT,
+  TOOL_RESULT_COLLECT_COMPLETE_SILENT,
+} from "./field-collection-lifecycle";
 
 function caps(snapshot: ReceptionistCompiledSnapshot): Set<string> {
   return new Set(snapshot.capabilities);
@@ -117,8 +121,8 @@ function buildCollectCallerFieldsTool(snapshot: ReceptionistCompiledSnapshot) {
         }
         const result = await new ReceptionistFieldCollectionTask(session, missing).run();
         return result.complete
-          ? "Caller information collected."
-          : "Partial caller information collected — continue the conversation.";
+          ? TOOL_RESULT_COLLECT_COMPLETE_SILENT
+          : TOOL_RESULT_COLLECT_ACTIVE_SILENT;
       });
     },
   });

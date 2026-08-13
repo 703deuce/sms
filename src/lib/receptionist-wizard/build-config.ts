@@ -62,7 +62,7 @@ export function wizardStateToDraftConfig(
     voiceLanguage: {
       voiceId: state.voiceId,
       primaryLanguage: state.language,
-      speed: 1,
+      speed: state.voiceSpeed,
     },
     inboundRules: {
       answerWhen: ANSWER_WHEN_MAP[state.answerTiming],
@@ -77,6 +77,15 @@ export function wizardStateToDraftConfig(
         businessName: state.businessName,
         agentName: state.agentName,
         voiceLabel: state.voiceLabel,
+        voiceSpeed: state.voiceSpeed,
+        vadThreshold: state.vadThreshold,
+        vadSilenceMs: state.vadSilenceMs,
+        vadPrefixMs: state.vadPrefixMs,
+      },
+      realtimeVad: {
+        threshold: state.vadThreshold,
+        silenceDurationMs: state.vadSilenceMs,
+        prefixPaddingMs: state.vadPrefixMs,
       },
     },
   };

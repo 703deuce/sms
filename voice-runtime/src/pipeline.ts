@@ -256,7 +256,7 @@ export function resolveOutboundRealtimeOutputMode(): OutboundRealtimeOutputMode 
 }
 
 export function buildOutboundRealtimeModel(
-  config: Pick<VoiceAgentConfig, "advanced">,
+  config: Pick<VoiceAgentConfig, "advanced" | "voiceLanguage">,
   outputMode: OutboundRealtimeOutputMode = resolveOutboundRealtimeOutputMode(),
   overrides?: OutboundRealtimePipelineOverrides,
 ) {
@@ -268,10 +268,11 @@ export function buildOutboundRealtimeModel(
 
   const useElevenLabsOutput = outputMode === "elevenlabs";
   const turnDetectionCfg = overrides?.frontdeskInbound
-    ? resolveFrontDeskInboundRealtimeTurnDetection()
+    ? resolveFrontDeskInboundRealtimeTurnDetection(config)
     : resolveOutboundRealtimeTurnDetection();
   const disableInputTranscription = !overrides?.enableInputAudioTranscription;
   const frontdeskInbound = overrides?.frontdeskInbound === true;
+  const speed = realtimeCfg.speed;
 
   const model = new openai.realtime.RealtimeModel({
     apiKey,
@@ -284,12 +285,13 @@ export function buildOutboundRealtimeModel(
       : {}),
     turnDetection: turnDetectionCfg.turnDetection,
     ...(realtimeCfg.reasoning ? { reasoning: realtimeCfg.reasoning } : {}),
+    ...(speed != null && speed !== 1 ? { speed } : {}),
   });
   return wrapRealtimeModelForOpenAI(model);
 }
 
 export function buildOutboundRealtimeSessionComponents(
-  config: Pick<VoiceAgentConfig, "advanced">,
+  config: Pick<VoiceAgentConfig, "advanced" | "voiceLanguage">,
   overrides?: OutboundRealtimePipelineOverrides,
 ) {
   const outputMode = resolveOutboundRealtimeOutputMode();
@@ -303,17 +305,22 @@ export function describeRealtimePipelineConfig(
   realtimeCfg: OutboundRealtimePipelineConfig,
   outputMode: OutboundRealtimeOutputMode = resolveOutboundRealtimeOutputMode(),
   pipelineCfg = getVoicePipelineConfig(),
-  options?: { inputAudioTranscription?: boolean; frontdeskInbound?: boolean },
+  options?: {
+    inputAudioTranscription?: boolean;
+    frontdeskInbound?: boolean;
+    config?: Pick<VoiceAgentConfig, "advanced">;
+  },
 ) {
   const halfCascade = outputMode === "elevenlabs";
   const turnDetectionCfg = options?.frontdeskInbound
-    ? resolveFrontDeskInboundRealtimeTurnDetection()
+    ? resolveFrontDeskInboundRealtimeTurnDetection(options?.config)
     : resolveOutboundRealtimeTurnDetection();
   return {
     mode: halfCascade ? "openai_realtime_half_cascade" : "openai_realtime",
     outputMode: halfCascade ? "REALTIME_ELEVENLABS" : "REALTIME_NATIVE",
     model: realtimeCfg.model,
     voice: halfCascade ? null : realtimeCfg.voice,
+    speed: realtimeCfg.speed ?? 1,
     reasoning: realtimeCfg.reasoning?.effort || null,
     turnDetection: describeOutboundRealtimeTurnDetection(turnDetectionCfg),
     inputAudioTranscription: options?.inputAudioTranscription ?? false,

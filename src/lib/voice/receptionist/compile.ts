@@ -135,6 +135,14 @@ export function compileReceptionistConfig(input: ReceptionistDraftInput): Recept
   };
 
   const realtimeVoice = normalizeWizardVoiceToRealtime(input.voiceId);
+  const wizAdvanced = input.advanced?.receptionistWizard as
+    | { voiceSpeed?: number }
+    | undefined;
+  const voiceSpeedRaw = wizAdvanced?.voiceSpeed ?? input.advanced?.voiceSpeed;
+  const voiceSpeed =
+    typeof voiceSpeedRaw === "number" && Number.isFinite(voiceSpeedRaw)
+      ? Math.min(2, Math.max(0.5, voiceSpeedRaw))
+      : 1;
 
   return {
     livekitProfile: "frontdesk_realtime",
@@ -149,6 +157,7 @@ export function compileReceptionistConfig(input: ReceptionistDraftInput): Recept
     fieldManifest,
     enabledBuiltinTools,
     voiceId: realtimeVoice,
+    voiceSpeed,
     compiledAt: new Date().toISOString(),
     conversationBehavior,
     bookingPolicy: advanced?.bookingPolicy ?? (input.advanced?.bookingPolicy as Record<string, unknown>),
@@ -203,6 +212,7 @@ export function applyCompiledToVoiceConfig(
       ...base.voiceLanguage,
       voiceId: snapshot.voiceId,
       primaryLanguage: snapshot.language,
+      speed: snapshot.voiceSpeed ?? base.voiceLanguage?.speed ?? 1,
     },
     inboundRules: {
       ...base.inboundRules,
@@ -218,6 +228,7 @@ export function applyCompiledToVoiceConfig(
       ...(base.advanced as object),
       livekitProfile: snapshot.livekitProfile,
       realtimeVoice: snapshot.voiceId,
+      realtimeVad: input.advanced?.realtimeVad,
       [RECEPTIONIST_COMPILED_KEY]: snapshot,
       receptionistWizard: (base.advanced as Record<string, unknown> | undefined)?.receptionistWizard,
       receptionistAdvanced: (base.advanced as Record<string, unknown> | undefined)?.receptionistAdvanced,

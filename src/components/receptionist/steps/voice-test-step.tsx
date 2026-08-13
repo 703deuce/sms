@@ -45,6 +45,7 @@ export function VoiceTestStep({
           text: greeting,
           voice: voiceId,
           language: state.language,
+          speed: state.voiceSpeed,
         }),
       });
       const j = await res.json();
@@ -137,6 +138,81 @@ export function VoiceTestStep({
             {previewError ? (
               <p className="mt-2 text-xs text-danger">{previewError}</p>
             ) : null}
+
+            <div className="mt-6 space-y-4 rounded-xl border border-border p-4">
+              <h3 className="text-sm font-semibold text-foreground">Voice tuning</h3>
+              <p className="text-xs text-muted-foreground">
+                These settings apply to phone calls and browser test — same OpenAI Realtime session.
+              </p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-foreground">
+                    Speaking speed ({state.voiceSpeed.toFixed(1)})
+                  </label>
+                  <input
+                    type="range"
+                    min="0.5"
+                    max="2"
+                    step="0.1"
+                    value={state.voiceSpeed}
+                    onChange={(e) => patch({ voiceSpeed: Number(e.target.value) })}
+                    className="w-full"
+                  />
+                  <p className="mt-1 text-[10px] text-muted-foreground">0.5 slow · 1.0 normal · 2.0 fast</p>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-foreground">
+                    Turn cutoff — silence ({state.vadSilenceMs} ms)
+                  </label>
+                  <input
+                    type="range"
+                    min="200"
+                    max="1200"
+                    step="50"
+                    value={state.vadSilenceMs}
+                    onChange={(e) => patch({ vadSilenceMs: Number(e.target.value) })}
+                    className="w-full"
+                  />
+                  <p className="mt-1 text-[10px] text-muted-foreground">
+                    How long to wait after the caller stops before the agent replies
+                  </p>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-foreground">
+                    Mic sensitivity ({state.vadThreshold.toFixed(2)})
+                  </label>
+                  <input
+                    type="range"
+                    min="0.4"
+                    max="0.9"
+                    step="0.05"
+                    value={state.vadThreshold}
+                    onChange={(e) => patch({ vadThreshold: Number(e.target.value) })}
+                    className="w-full"
+                  />
+                  <p className="mt-1 text-[10px] text-muted-foreground">
+                    Higher = less sensitive to background noise
+                  </p>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-foreground">
+                    Speech padding ({state.vadPrefixMs} ms)
+                  </label>
+                  <input
+                    type="range"
+                    min="100"
+                    max="600"
+                    step="50"
+                    value={state.vadPrefixMs}
+                    onChange={(e) => patch({ vadPrefixMs: Number(e.target.value) })}
+                    className="w-full"
+                  />
+                  <p className="mt-1 text-[10px] text-muted-foreground">
+                    Audio captured before detected speech start
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div>

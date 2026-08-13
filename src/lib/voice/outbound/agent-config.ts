@@ -65,6 +65,7 @@ export function usesOutboundRealtimeVoicePipeline(
 export type OutboundRealtimePipelineConfig = {
   model: string;
   voice: string;
+  speed?: number;
   reasoning?: { effort: OutboundRealtimeReasoningEffort };
 };
 
@@ -105,7 +106,15 @@ export function resolveOutboundRealtimePipelineConfig(
     reasoning = { effort };
   }
 
-  return { model, voice, reasoning };
+  const speedRaw = config.voiceLanguage?.speed;
+  const compiled = advanced.receptionistCompiled as { voiceSpeed?: number } | undefined;
+  const speedCandidate = speedRaw ?? compiled?.voiceSpeed;
+  const speed =
+    typeof speedCandidate === "number" && Number.isFinite(speedCandidate)
+      ? Math.min(2, Math.max(0.5, speedCandidate))
+      : undefined;
+
+  return { model, voice, speed, reasoning };
 }
 
 export function getOutboundQualificationFromConfig(

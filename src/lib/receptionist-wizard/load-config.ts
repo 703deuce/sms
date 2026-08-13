@@ -51,6 +51,8 @@ export function wizardStateFromDraftConfig(
       ? wiz.capabilities
       : inferCapabilitiesFromConfig(cfg);
 
+  const advancedVad = readRealtimeVad(cfg.advanced as Record<string, unknown> | undefined);
+
   return {
     ...base,
     agentId,
@@ -71,7 +73,40 @@ export function wizardStateFromDraftConfig(
       cfg.voiceLanguage?.voiceId || wiz?.voiceId || base.voiceId,
     ),
     voiceLabel: wiz?.voiceLabel || base.voiceLabel,
+    voiceSpeed:
+      typeof wiz?.voiceSpeed === "number" && Number.isFinite(wiz.voiceSpeed)
+        ? wiz.voiceSpeed
+        : typeof cfg.voiceLanguage?.speed === "number" && Number.isFinite(cfg.voiceLanguage.speed)
+          ? cfg.voiceLanguage.speed
+          : base.voiceSpeed,
+    vadThreshold:
+      typeof wiz?.vadThreshold === "number" && Number.isFinite(wiz.vadThreshold)
+        ? wiz.vadThreshold
+        : typeof advancedVad?.threshold === "number" && Number.isFinite(advancedVad.threshold)
+          ? advancedVad.threshold
+          : base.vadThreshold,
+    vadSilenceMs:
+      typeof wiz?.vadSilenceMs === "number" && Number.isFinite(wiz.vadSilenceMs)
+        ? wiz.vadSilenceMs
+        : typeof advancedVad?.silenceDurationMs === "number" &&
+            Number.isFinite(advancedVad.silenceDurationMs)
+          ? advancedVad.silenceDurationMs
+          : base.vadSilenceMs,
+    vadPrefixMs:
+      typeof wiz?.vadPrefixMs === "number" && Number.isFinite(wiz.vadPrefixMs)
+        ? wiz.vadPrefixMs
+        : typeof advancedVad?.prefixPaddingMs === "number" &&
+            Number.isFinite(advancedVad.prefixPaddingMs)
+          ? advancedVad.prefixPaddingMs
+          : base.vadPrefixMs,
   };
+}
+
+function readRealtimeVad(advanced: Record<string, unknown> | undefined) {
+  const raw = advanced?.realtimeVad as
+    | { threshold?: number; silenceDurationMs?: number; prefixPaddingMs?: number }
+    | undefined;
+  return raw;
 }
 
 function extractBusinessFromRole(role?: string): string {

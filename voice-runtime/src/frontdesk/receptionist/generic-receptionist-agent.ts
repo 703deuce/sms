@@ -145,7 +145,8 @@ function buildInstructions(snapshot: ReceptionistCompiledSnapshot, businessLabel
       ? "Use take_message when they want a callback instead of booking. "
       : "",
     snapshot.capabilities.includes("collect_info")
-      ? "Use collect_caller_fields when you need caller details not yet captured. "
+      ? "Use collect_caller_fields when you need caller details not yet captured. " +
+        "After collection completes, do not thank again for fields already captured — move straight to helping or taking a message. "
       : "",
     snapshot.capabilities.includes("book_appointments")
       ? "For booking: list_available_slots, then schedule_appointment after they confirm a time. "

@@ -147,6 +147,15 @@ export function useReceptionistAgentState(agentId: string) {
           collectFields,
           voiceId: next.voiceId,
           voiceLabel: next.voiceLabel,
+          voiceSpeed: next.voiceSpeed,
+          vadThreshold: next.vadThreshold,
+          vadSilenceMs: next.vadSilenceMs,
+          vadPrefixMs: next.vadPrefixMs,
+        },
+        realtimeVad: {
+          threshold: next.vadThreshold,
+          silenceDurationMs: next.vadSilenceMs,
+          prefixPaddingMs: next.vadPrefixMs,
         },
       };
       const draftInput: ReceptionistDraftInput = {
@@ -167,6 +176,12 @@ export function useReceptionistAgentState(agentId: string) {
       const merged = applyCompiledToVoiceConfig(prev, snapshot);
       const draftConfig = {
         ...merged,
+        voiceLanguage: {
+          ...merged.voiceLanguage,
+          voiceId: next.voiceId,
+          primaryLanguage: next.language,
+          speed: next.voiceSpeed,
+        },
         advanced: {
           ...(merged.advanced as object),
           ...advancedBlock,

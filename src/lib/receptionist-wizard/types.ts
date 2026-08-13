@@ -26,6 +26,14 @@ export type ReceptionistWizardState = {
   collectFields: CollectFieldId[];
   voiceId: string;
   voiceLabel: string;
+  /** OpenAI Realtime speech speed (0.5–2.0). */
+  voiceSpeed: number;
+  /** Server VAD threshold (0–1). Higher = less sensitive to background noise. */
+  vadThreshold: number;
+  /** Silence duration (ms) before the agent treats the caller as done speaking. */
+  vadSilenceMs: number;
+  /** Audio padding (ms) before detected speech start. */
+  vadPrefixMs: number;
   agentId?: string;
 };
 

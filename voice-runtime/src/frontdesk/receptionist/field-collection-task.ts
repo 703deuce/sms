@@ -2,7 +2,12 @@ import { llm, voice } from "@livekit/agents";
 import { z } from "zod";
 import type { AgentSession } from "@livekit/agents";
 import type { AgentFieldDefinition } from "@/lib/voice/receptionist/types";
+import {
+  buildReceptionistFieldTransitionLine,
+} from "@/lib/voice/receptionist/field-transition-phrases";
+import { FIELD_TRANSITION_BRIDGE_RULES } from "@/lib/voice/field-transition-bridge";
 import type { FrontDeskUserData } from "../userdata";
+import { speakIntakeTransitionLine } from "../../intake-transition-speech";
 import { agentTaskSuperOptions, nestedTaskOptionsFromSession } from "../../tasks/task-context";
 
 export type ReceptionistFieldCollectionResult = {
@@ -62,13 +67,17 @@ export class ReceptionistFieldCollectionTask extends voice.AgentTask<Receptionis
         if (!sequenceState.collectedIds.includes(current.id)) {
           sequenceState.collectedIds.push(current.id);
         }
+        sequenceState.remaining = sequenceState.remaining.filter((f) => f.id !== current.id);
 
         const next = currentField();
         if (!next) {
           this.complete({ collected: [...sequenceState.collectedIds], complete: true });
-          return "All caller information recorded.";
+          return "Collection complete — do not speak; parent agent will continue.";
         }
-        return `Saved ${current.label}. Next ask: ${next.question}`;
+
+        const line = buildReceptionistFieldTransitionLine(current, trimmed, next);
+        await speakIntakeTransitionLine(sessionRef, line);
+        return "OK — the next question was already asked. Do not repeat it or add filler.";
       },
     });
 
@@ -76,7 +85,10 @@ export class ReceptionistFieldCollectionTask extends voice.AgentTask<Receptionis
       agentTaskSuperOptions(
         {
           instructions:
-            "Collect the caller's information one field at a time. Ask naturally, record each answer with record_caller_field, then move on.",
+            "Collect the caller's information one field at a time. " +
+            FIELD_TRANSITION_BRIDGE_RULES +
+            " When the caller answers the current field, call record_caller_field immediately without speaking. " +
+            "The runtime delivers the next question. Never narrate backend routing to the caller.",
           tools: [recordTool],
         },
         nestedTaskOptionsFromSession(sessionRef),

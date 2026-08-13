@@ -49,6 +49,8 @@ export type ReceptionistCompiledSnapshot = {
   intentRules?: Record<string, unknown>[];
   decisionRules?: Record<string, unknown>[];
   voiceId: string;
+  /** OpenAI Realtime speech speed (0.5–2.0). */
+  voiceSpeed?: number;
   compiledAt: string;
 };
 

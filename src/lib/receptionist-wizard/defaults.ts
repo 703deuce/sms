@@ -15,6 +15,10 @@ export function createDefaultWizardState(): ReceptionistWizardState {
     collectFields: ["name", "phone", "reason"],
     voiceId: "marin",
     voiceLabel: "Marin",
+    voiceSpeed: 1,
+    vadThreshold: 0.65,
+    vadSilenceMs: 500,
+    vadPrefixMs: 300,
   };
 }
 
