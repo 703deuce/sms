@@ -44,6 +44,15 @@ export const RECEPTIONIST_ELEVENLABS_VOICES: ReceptionistElevenLabsVoice[] = [
     enabled: true,
   },
   {
+    id: "Bmj4Yi69e7b67di5IKVn",
+    label: "Jade",
+    description: "Warm, natural professional",
+    gender: "female",
+    style: "warm",
+    accent: "American",
+    enabled: true,
+  },
+  {
     id: "EXAVITQu4vr4xnSDxMaL",
     label: "Bella",
     description: "Soft and friendly",

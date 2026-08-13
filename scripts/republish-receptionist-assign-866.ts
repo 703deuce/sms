@@ -31,7 +31,7 @@ const AGENT_ID = "cmsqtfphh336n4a4q5v4u1a2t";
 const PHONE_ID = "cmsc3numa1j17084g391t2z5l";
 const PHONE_E164 = "+18663464256";
 /** Real ElevenLabs premade voice_id — never legacy OpenAI names like shimmer/marin. */
-const DEFAULT_ELEVENLABS_VOICE_ID = "21m00Tcm4TlvDq8ikWAM"; // Rachel
+const DEFAULT_ELEVENLABS_VOICE_ID = "Bmj4Yi69e7b67di5IKVn"; // Jade
 const rawVoiceInput = process.env.VOICE_ID?.trim() || DEFAULT_ELEVENLABS_VOICE_ID;
 const ELEVENLABS_VOICE_ID = normalizeWizardVoiceToElevenLabs(rawVoiceInput);
 const VOICE_LABEL =
