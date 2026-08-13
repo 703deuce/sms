@@ -52,7 +52,7 @@ export default function AgentCapabilitiesPage() {
         </Link>
       </div>
       <CapabilitiesStep
-        state={state}
+        state={{ ...state, agentId }}
         patch={patch}
         onBack={() => router.push(`/voice/agents/${agentId}/about`)}
         onContinue={continueNext}

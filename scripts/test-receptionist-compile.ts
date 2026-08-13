@@ -1,4 +1,5 @@
 import { compileReceptionistConfig } from "../src/lib/voice/receptionist/compile";
+import { getReceptionistCompiledFromAdvanced } from "../src/lib/voice/receptionist/runtime";
 import { RECEPTIONIST_COMPILED_KEY } from "../src/lib/voice/receptionist/types";
 import assert from "node:assert";
 
@@ -20,5 +21,10 @@ assert.equal(snapshot.fieldManifest.length, 3);
 assert.ok(snapshot.enabledBuiltinTools.includes("get_business_answer"));
 assert.ok(snapshot.enabledBuiltinTools.includes("take_message"));
 assert.equal(RECEPTIONIST_COMPILED_KEY, "receptionistCompiled");
+
+const fromAdvanced = getReceptionistCompiledFromAdvanced({
+  [RECEPTIONIST_COMPILED_KEY]: snapshot,
+});
+assert.equal(fromAdvanced?.businessName, "John's Plumbing");
 
 console.log("test-receptionist-compile: ok");

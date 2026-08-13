@@ -9,6 +9,9 @@ import {
   type ReceptionistWizardState,
 } from "@/lib/receptionist-wizard/types";
 import { Sparkles } from "lucide-react";
+import Link from "next/link";
+import { useState } from "react";
+import { ReceptionistIntegrationsPanel } from "../receptionist-integrations-panel";
 import { SelectableCard, SidePanel, WizardFooter } from "../ui";
 
 export function CapabilitiesStep({
@@ -24,6 +27,9 @@ export function CapabilitiesStep({
   onContinue: () => void;
   busy?: boolean;
 }) {
+  const [calendarConnected, setCalendarConnected] = useState(false);
+  const [integrationError, setIntegrationError] = useState("");
+
   function toggleCap(id: CapabilityId) {
     const has = state.capabilities.includes(id);
     const next = has
@@ -103,19 +109,46 @@ export function CapabilitiesStep({
           </div>
         ) : null}
 
-        {bookAppts ? (
-          <div className="mt-4 rounded-lg border border-primary/30 bg-primary/5 p-4 text-sm">
-            <p className="font-medium text-foreground">Calendar connection</p>
-            <p className="mt-1 text-muted-foreground">
-              You can connect a calendar after activation under Appointments → Connections.
-            </p>
+        {bookAppts || collectInfo || state.capabilities.includes("take_messages") ? (
+          <div className="mt-8">
+            <div className="mb-3 flex items-center justify-between gap-4">
+              <h3 className="text-sm font-semibold text-foreground">Connect integrations</h3>
+              {state.agentId ? (
+                <Link
+                  href={`/voice/agents/${state.agentId}/integrations`}
+                  className="text-xs font-medium text-primary hover:underline"
+                >
+                  Full integrations page →
+                </Link>
+              ) : null}
+            </div>
+            {integrationError ? (
+              <p className="mb-3 rounded-lg border border-danger/30 bg-danger/5 px-3 py-2 text-sm text-danger">
+                {integrationError}
+              </p>
+            ) : null}
+            <ReceptionistIntegrationsPanel
+              agentId={state.agentId}
+              showCalendar={bookAppts}
+              showCrm={bookAppts || collectInfo || state.capabilities.includes("take_messages")}
+              onCalendarConnectedChange={setCalendarConnected}
+            />
           </div>
         ) : null}
 
         <WizardFooter
           showBack
           onBack={onBack}
-          onContinue={onContinue}
+          onContinue={() => {
+            if (bookAppts && !calendarConnected) {
+              setIntegrationError(
+                "Connect Calendly or Google / Outlook before continuing — booking needs a live calendar.",
+              );
+              return;
+            }
+            setIntegrationError("");
+            onContinue();
+          }}
           busy={busy}
         />
       </div>
