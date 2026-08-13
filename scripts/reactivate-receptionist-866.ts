@@ -12,13 +12,22 @@ import {
 } from "../src/lib/voice/receptionist/compile";
 import { updateVoiceAgentDraft, publishVoiceAgent } from "../src/lib/voice/agent-service";
 import { parseVoiceAgentConfig } from "../src/lib/voice/types";
+import {
+  getReceptionistElevenLabsVoice,
+  normalizeWizardVoiceToElevenLabs,
+} from "../src/lib/voice/elevenlabs/receptionist-voice-catalog";
 
 const WORKSPACE_ID = "ws_1";
 const AGENT_ID = "cmsqtfphh336n4a4q5v4u1a2t";
 const PHONE_ID = "cmsc3numa1j17084g391t2z5l";
 const PHONE_E164 = "+18663464256";
-const VOICE_ID = process.env.VOICE_ID?.trim() || "shimmer";
-const VOICE_LABEL = process.env.VOICE_LABEL?.trim() || "Shimmer";
+const DEFAULT_ELEVENLABS_VOICE_ID = "21m00Tcm4TlvDq8ikWAM"; // Rachel
+const rawVoiceInput = process.env.VOICE_ID?.trim() || DEFAULT_ELEVENLABS_VOICE_ID;
+const ELEVENLABS_VOICE_ID = normalizeWizardVoiceToElevenLabs(rawVoiceInput);
+const VOICE_LABEL =
+  process.env.VOICE_LABEL?.trim() ||
+  getReceptionistElevenLabsVoice(ELEVENLABS_VOICE_ID)?.label ||
+  ELEVENLABS_VOICE_ID;
 
 async function main() {
   const prisma = getPrisma();
@@ -28,7 +37,7 @@ async function main() {
   if (!agent) throw new Error("Receptionist agent not found");
 
   const state = wizardStateFromDraftConfig(agent.draftConfig, AGENT_ID, agent.name);
-  state.voiceId = VOICE_ID as typeof state.voiceId;
+  state.voiceId = ELEVENLABS_VOICE_ID;
   state.voiceLabel = VOICE_LABEL;
 
   const advanced = advancedFromDraftConfig(agent.draftConfig, state.capabilities);
@@ -44,7 +53,7 @@ async function main() {
     answerTiming: state.answerTiming,
     capabilities: state.capabilities,
     collectFields: state.collectFields,
-    voiceId: VOICE_ID,
+    voiceId: ELEVENLABS_VOICE_ID,
     voiceLabel: VOICE_LABEL,
     advanced: {
       [RECEPTIONIST_ADVANCED_KEY]: advanced,
@@ -59,7 +68,9 @@ async function main() {
       ...(merged.advanced as object),
       receptionistWizard: state,
       [RECEPTIONIST_ADVANCED_KEY]: advanced,
-      realtimeVoice: snapshot.voiceId,
+      realtimeVoice: ELEVENLABS_VOICE_ID,
+      elevenLabsVoiceId: ELEVENLABS_VOICE_ID,
+      realtimeOutputMode: "elevenlabs",
     },
   };
 
