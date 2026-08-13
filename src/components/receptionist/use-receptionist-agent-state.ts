@@ -76,8 +76,8 @@ export function useReceptionistAgentState(agentId: string) {
     setState((prev) => (prev ? { ...prev, ...p } : prev));
   }, []);
 
-  const patchAdvanced = useCallback((next: ReceptionistAdvancedSettings) => {
-    setAdvanced(next);
+  const patchAdvanced = useCallback((patch: Partial<ReceptionistAdvancedSettings>) => {
+    setAdvanced((prev) => (prev ? { ...prev, ...patch } : prev));
   }, []);
 
   const discardAdvanced = useCallback(() => {
@@ -138,7 +138,9 @@ export function useReceptionistAgentState(agentId: string) {
         receptionistWizard: {
           agentName: next.agentName,
           businessName: next.businessName,
+          industry: next.industry,
           businessDescription: next.businessDescription,
+          agentPersonalityNotes: next.agentPersonalityNotes,
           agentJobInstructions: next.agentJobInstructions,
           additionalInstructions: next.additionalInstructions,
           businessHours: next.businessHours,
@@ -171,6 +173,8 @@ export function useReceptionistAgentState(agentId: string) {
         businessName: next.businessName,
         businessDescription: next.businessDescription,
         agentJobInstructions: next.agentJobInstructions,
+        agentPersonalityNotes: next.agentPersonalityNotes,
+        industry: next.industry,
         additionalInstructions: next.additionalInstructions,
         greeting: next.greeting,
         language: next.language,

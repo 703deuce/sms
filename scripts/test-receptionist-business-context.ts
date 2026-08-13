@@ -28,10 +28,12 @@ const snapshot = compileReceptionistConfig({
   },
 });
 
-assert.ok(snapshot.compiledPrompt.includes("TRANSOVO RECEPTIONIST RULES"));
+assert.ok(snapshot.compiledPrompt.includes("TRANSOVO SYSTEM"));
 assert.ok(snapshot.compiledPrompt.includes("YOUR JOB"));
 assert.ok(snapshot.compiledPrompt.includes("BUSINESS"));
 assert.ok(snapshot.compiledPrompt.includes("CALL CONFIGURATION"));
+assert.ok(snapshot.compiledPrompt.includes("GENERATED WORKFLOW RULES"));
+assert.ok(!snapshot.compiledPrompt.includes("Speak naturally and conversationally.\n- Do not sound scripted"));
 assert.ok(snapshot.compiledPrompt.includes("Summit Electric Services"));
 assert.ok(snapshot.compiledPrompt.includes("Monday-Friday"));
 assert.ok(snapshot.compiledPrompt.includes("EV charger"));

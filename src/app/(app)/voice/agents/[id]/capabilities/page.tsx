@@ -3,17 +3,16 @@
 import { ReceptionistEditorShell } from "@/components/receptionist/receptionist-editor-shell";
 import { CapabilitiesStep } from "@/components/receptionist/steps/capabilities-step";
 import { useReceptionistAgentState } from "@/components/receptionist/use-receptionist-agent-state";
-import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 
 export default function AgentCapabilitiesPage() {
   const params = useParams();
   const agentId = params?.id as string;
   const router = useRouter();
-  const { state, agentName, loading, busy, error, setError, patch, save, buildForTest } =
+  const { state, agentName, loading, busy, error, setError, patch, patchAdvanced, advanced, save, buildForTest } =
     useReceptionistAgentState(agentId);
 
-  if (loading || !state) {
+  if (loading || !state || !advanced) {
     return (
       <ReceptionistEditorShell agentId={agentId}>
         <p className="text-sm text-muted-foreground">Loading…</p>
@@ -43,17 +42,11 @@ export default function AgentCapabilitiesPage() {
           {error}
         </div>
       ) : null}
-      <div className="mb-4 flex justify-end">
-        <Link
-          href={`/voice/agents/${agentId}/advanced`}
-          className="text-sm font-medium text-primary hover:underline"
-        >
-          Advanced settings →
-        </Link>
-      </div>
       <CapabilitiesStep
         state={{ ...state, agentId }}
+        advanced={advanced}
         patch={patch}
+        patchAdvanced={patchAdvanced}
         onBack={() => router.push(`/voice/agents/${agentId}/about`)}
         onContinue={continueNext}
         busy={busy}

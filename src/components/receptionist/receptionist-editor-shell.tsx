@@ -22,18 +22,18 @@ export function ReceptionistEditorShell({
   saveBusy?: boolean;
 }) {
   return (
-    <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
+    <div className="mx-auto max-w-[1200px] px-4 py-6 sm:px-8">
       <div className="mb-6 flex items-center justify-between">
         <Link
           href="/voice/agents"
-          className="text-sm font-medium text-muted-foreground hover:text-foreground"
+          className="text-sm font-medium text-[#6b7280] hover:text-[#111827]"
         >
-          ← Back to Agents
+          ← Back to agents
         </Link>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-4">
           <Link
             href="/help"
-            className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+            className="flex items-center gap-1.5 text-sm text-[#6b7280] hover:text-[#111827]"
           >
             <HelpCircle className="h-4 w-4" />
             Help Center
@@ -43,7 +43,7 @@ export function ReceptionistEditorShell({
               type="button"
               disabled={saveBusy}
               onClick={onSave}
-              className="voice-btn-primary text-sm"
+              className="voice-btn-outline text-sm"
             >
               {saveBusy ? "Saving…" : "Save Changes"}
             </button>
@@ -52,15 +52,17 @@ export function ReceptionistEditorShell({
       </div>
 
       {!createMode && agentTitle ? (
-        <div className="mb-4">
-          <h1 className="font-display text-xl font-semibold tracking-tight">{agentTitle}</h1>
+        <div className="mb-2">
+          <h1 className="font-display text-xl font-semibold tracking-tight text-[#111827]">
+            {agentTitle}
+          </h1>
           {agentStatus ? (
-            <p className="text-sm text-muted-foreground capitalize">{agentStatus}</p>
+            <p className="text-sm text-[#6b7280] capitalize">{agentStatus}</p>
           ) : null}
         </div>
       ) : null}
 
-      <div className="mb-8">
+      <div className="mb-8 border-b border-[#e6e8ef] pb-6">
         <ReceptionistFlowStepper agentId={agentId} createMode={createMode} />
       </div>
 

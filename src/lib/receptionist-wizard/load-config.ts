@@ -63,6 +63,8 @@ export function wizardStateFromDraftConfig(
     businessDescription:
       wiz?.businessDescription || cfg.instructions?.system || base.businessDescription,
     agentJobInstructions: wiz?.agentJobInstructions || base.agentJobInstructions,
+    agentPersonalityNotes: wiz?.agentPersonalityNotes || base.agentPersonalityNotes,
+    industry: wiz?.industry || base.industry,
     additionalInstructions: wiz?.additionalInstructions || base.additionalInstructions,
     businessHours: wiz?.businessHours || base.businessHours,
     serviceArea: wiz?.serviceArea || base.serviceArea,

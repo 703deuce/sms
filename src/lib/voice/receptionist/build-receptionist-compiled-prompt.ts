@@ -1,5 +1,6 @@
 import type { ReceptionistCompiledSnapshot } from "./types";
 import { TRANSOVO_RECEPTIONIST_CONSTITUTION } from "./transovo-receptionist-constitution";
+import { buildGeneratedWorkflowRules } from "./build-generated-workflow-rules";
 import {
   extractHoursFromDescription,
   extractPricingFromDescription,
@@ -13,40 +14,32 @@ const ANSWER_WHEN_LABELS: Record<string, string> = {
 };
 
 const STYLE_LABELS: Record<string, string> = {
-  friendly: "Friendly, warm, and approachable",
+  friendly: "Friendly and warm",
   professional: "Professional and courteous",
   casual: "Casual and conversational",
 };
 
 const LENGTH_LABELS: Record<string, string> = {
-  concise: "Keep replies short — one or two sentences unless more detail is needed",
-  balanced: "Balanced — clear and conversational without rambling",
-  detailed: "May give fuller explanations when helpful, but stay conversational",
+  concise: "Concise",
+  balanced: "Balanced",
+  detailed: "Detailed when helpful",
 };
 
 function personalityFromSnapshot(snapshot: ReceptionistCompiledSnapshot): string {
   const conv = snapshot.conversationBehavior as {
     style?: string;
     responseLength?: string;
-    fillerSpeech?: string;
   } | undefined;
   const style = STYLE_LABELS[conv?.style || "professional"] || STYLE_LABELS.professional;
   const length = LENGTH_LABELS[conv?.responseLength || "balanced"] || LENGTH_LABELS.balanced;
   const lines = [
     `Name: ${snapshot.agentDisplayName}`,
-    `Role: AI receptionist for ${snapshot.businessName}`,
-    `Personality: ${style}.`,
-    "Speaking behavior:",
-    "- Speak naturally and conversationally.",
-    "- Do not sound scripted.",
-    `- ${length}.`,
-    "- Acknowledge information naturally without repeating it unnecessarily.",
-    "- Never claim an action happened unless the corresponding tool succeeded.",
+    `Role: Receptionist for ${snapshot.businessName}`,
+    `Personality: ${style}`,
+    `Speaking style: ${length}`,
   ];
-  if (conv?.fillerSpeech === "minimal") {
-    lines.push("- Use minimal filler words.");
-  } else if (conv?.fillerSpeech === "off") {
-    lines.push("- Avoid filler words and transition phrases.");
+  if (snapshot.agentPersonalityNotes?.trim()) {
+    lines.push(snapshot.agentPersonalityNotes.trim());
   }
   return lines.join("\n");
 }
@@ -55,8 +48,7 @@ function synthesizeJobInstructions(snapshot: ReceptionistCompiledSnapshot): stri
   const business = snapshot.businessName.trim() || "the business";
   const bullets: string[] = [
     "Answer incoming calls.",
-    "Answer basic questions about the business using BUSINESS and these instructions.",
-    "Determine why the caller is calling.",
+    "Determine why the caller is calling and help them appropriately.",
   ];
   if (snapshot.capabilities.includes("collect_info")) {
     const fields = snapshot.fieldManifest.map((f) => f.label).join(", ");
@@ -70,7 +62,7 @@ function synthesizeJobInstructions(snapshot: ReceptionistCompiledSnapshot): stri
     bullets.push("Take messages when the caller cannot be helped immediately.");
   }
   if (snapshot.capabilities.includes("transfer_calls")) {
-    bullets.push("Transfer callers when appropriate and after they confirm.");
+    bullets.push("Transfer callers when appropriate per configured policy.");
   }
   if (snapshot.capabilities.includes("book_appointments")) {
     bullets.push("Book appointments when requested and permitted.");
@@ -78,22 +70,19 @@ function synthesizeJobInstructions(snapshot: ReceptionistCompiledSnapshot): stri
   if (snapshot.capabilities.includes("send_text")) {
     bullets.push("Send SMS only after the caller agrees.");
   }
-  return [
-    `You are the front-desk receptionist for ${business}.`,
-    "",
-    "Your primary responsibilities:",
-    ...bullets.map((b) => `- ${b}`),
-  ].join("\n");
+  return bullets.map((b) => `- ${b}`).join("\n");
 }
 
 function buildYourJobSection(snapshot: ReceptionistCompiledSnapshot): string {
-  const job = snapshot.agentJobInstructions?.trim() || synthesizeJobInstructions(snapshot);
+  const job =
+    snapshot.agentJobInstructions?.trim() || synthesizeJobInstructions(snapshot);
+  return ["YOUR JOB", job].join("\n");
+}
+
+function buildAdditionalInstructionsSection(snapshot: ReceptionistCompiledSnapshot): string | null {
   const additional = snapshot.additionalInstructions?.trim();
-  const parts = ["YOUR JOB", job];
-  if (additional) {
-    parts.push("", "Additional instructions from the business owner:", additional);
-  }
-  return parts.join("\n");
+  if (!additional) return null;
+  return ["ADDITIONAL CUSTOMER INSTRUCTIONS", additional].join("\n");
 }
 
 function formatBulletBlock(raw: string | undefined): string | null {
@@ -123,6 +112,10 @@ function buildBusinessSection(snapshot: ReceptionistCompiledSnapshot): string {
 
   const lines: string[] = ["BUSINESS"];
   lines.push(`Business name: ${snapshot.businessName}`);
+
+  if (snapshot.industry?.trim()) {
+    lines.push(`Industry: ${snapshot.industry.trim()}`);
+  }
 
   if (description) {
     lines.push("About:");
@@ -157,19 +150,9 @@ function buildBusinessSection(snapshot: ReceptionistCompiledSnapshot): string {
     );
   }
 
-  if (snapshot.capabilities.includes("book_appointments")) {
-    const booking = snapshot.bookingPolicy as { minimumNoticeHours?: number } | undefined;
-    lines.push("Appointments:");
-    lines.push("Appointments are available during normal business hours when booking is enabled.");
-    if (booking?.minimumNoticeHours) {
-      lines.push(`Require at least ${booking.minimumNoticeHours} hours notice when scheduling.`);
-    }
-    lines.push("Collect required customer information before booking.");
-  }
-
   const facts = formatBulletBlock(profile.importantFacts);
   if (facts) {
-    lines.push("Important company facts:");
+    lines.push("Important business information:");
     lines.push(facts);
   }
 
@@ -186,46 +169,55 @@ function buildCallConfigurationSection(snapshot: ReceptionistCompiledSnapshot): 
     `When to answer: ${ANSWER_WHEN_LABELS[snapshot.answerWhen] || snapshot.answerWhen}`,
   );
 
-  const fieldLabels =
-    snapshot.fieldManifest.length > 0
-      ? snapshot.fieldManifest.map((f) => f.label).join(", ")
-      : "None configured";
-  lines.push(`Information to collect: ${fieldLabels}`);
-
   lines.push(`Answer questions: ${snapshot.capabilities.includes("answer_questions") ? "yes" : "no"}`);
   lines.push(`Take messages: ${snapshot.capabilities.includes("take_messages") ? "yes" : "no"}`);
-  lines.push(`Collect caller info: ${snapshot.capabilities.includes("collect_info") ? "yes" : "no"}`);
-  lines.push(`Booking enabled: ${snapshot.capabilities.includes("book_appointments") ? "yes" : "no"}`);
-  lines.push(`Transfer enabled: ${snapshot.capabilities.includes("transfer_calls") ? "yes" : "no"}`);
-  lines.push(`SMS enabled: ${snapshot.capabilities.includes("send_text") ? "yes" : "no"}`);
+  lines.push(`Collect caller information: ${snapshot.capabilities.includes("collect_info") ? "yes" : "no"}`);
+  lines.push(`Booking: ${snapshot.capabilities.includes("book_appointments") ? "yes" : "no"}`);
+  lines.push(`Transfer: ${snapshot.capabilities.includes("transfer_calls") ? "yes" : "no"}`);
+  lines.push(`SMS: ${snapshot.capabilities.includes("send_text") ? "yes" : "no"}`);
+
+  if (snapshot.fieldManifest.length > 0) {
+    lines.push("Required information:");
+    for (const field of snapshot.fieldManifest) {
+      lines.push(`- ${field.label}${field.required ? " (required)" : ""}`);
+    }
+  }
 
   const transfer = snapshot.transferPolicy as {
     destinationE164?: string;
     emergencyDestinationE164?: string;
+    whenToTransfer?: string;
+    transferInstructions?: string;
   } | undefined;
-  if (transfer?.destinationE164) {
-    lines.push(`Transfer destination: ${transfer.destinationE164}`);
-  }
-  if (transfer?.emergencyDestinationE164) {
-    lines.push(`Emergency transfer: ${transfer.emergencyDestinationE164}`);
+  if (snapshot.capabilities.includes("transfer_calls")) {
+    lines.push("Transfer configuration:");
+    if (transfer?.whenToTransfer === "caller_asks") {
+      lines.push("- Transfer when the caller asks for a person.");
+    } else if (transfer?.whenToTransfer === "certain_calls") {
+      lines.push("- Transfer only for certain calls per customer policy.");
+      if (transfer.transferInstructions?.trim()) {
+        lines.push(`- Policy: ${transfer.transferInstructions.trim()}`);
+      }
+    }
+    if (transfer?.destinationE164) {
+      lines.push(`- Destination: ${transfer.destinationE164}`);
+    }
+    if (transfer?.emergencyDestinationE164) {
+      lines.push(`- Emergency destination: ${transfer.emergencyDestinationE164}`);
+    }
   }
 
   const booking = snapshot.bookingPolicy as {
     slotsToOffer?: number;
-    confirmDateTimeVerbally?: boolean;
-    offerEarliestAvailability?: boolean;
-    askPreferredDayFirst?: boolean;
+    minimumNoticeHours?: number;
   } | undefined;
-  if (snapshot.capabilities.includes("book_appointments") && booking) {
-    if (booking.askPreferredDayFirst) lines.push("Booking: ask preferred day/time before listing slots.");
-    if (booking.offerEarliestAvailability) {
-      lines.push("Booking: offer earliest availability when caller has no preference.");
+  if (snapshot.capabilities.includes("book_appointments")) {
+    lines.push("Booking configuration:");
+    if (booking?.minimumNoticeHours) {
+      lines.push(`- Minimum notice: ${booking.minimumNoticeHours} hours`);
     }
-    if (booking.confirmDateTimeVerbally) {
-      lines.push("Booking: confirm date and time verbally before scheduling.");
-    }
-    if (booking.slotsToOffer) {
-      lines.push(`Booking: offer up to ${booking.slotsToOffer} slot options at a time.`);
+    if (booking?.slotsToOffer) {
+      lines.push(`- Offer up to ${booking.slotsToOffer} slots per request`);
     }
   }
 
@@ -247,63 +239,36 @@ function buildCallConfigurationSection(snapshot: ReceptionistCompiledSnapshot): 
     }
   }
 
-  const intents = (snapshot.intentRules || [])
-    .filter((i) => (i as { enabled?: boolean }).enabled !== false)
-    .map((i) => String((i as { label?: string }).label || "").trim())
-    .filter(Boolean);
-  if (intents.length) {
-    lines.push(`Recognize caller intents: ${intents.join(", ")}`);
-  }
-
-  const fallback = snapshot.fallbackPolicy as {
-    maxMisunderstandAttempts?: number;
-    onMisunderstand?: string;
-    onBookingFail?: string;
-    onTransferFail?: string;
-  } | undefined;
-  if (fallback?.maxMisunderstandAttempts) {
-    const action =
-      fallback.onMisunderstand === "take_message"
-        ? "take a message"
-        : fallback.onMisunderstand === "transfer"
-          ? "offer transfer"
-          : "rephrase once more";
-    lines.push(
-      `After ${fallback.maxMisunderstandAttempts} failed attempts to understand: ${action}.`,
-    );
-  }
-  if (fallback?.onBookingFail === "take_message") {
-    lines.push("If booking fails: apologize and take a message for follow-up.");
-  } else if (fallback?.onBookingFail === "follow_up") {
-    lines.push("If booking fails: tell the caller someone will follow up shortly.");
-  }
-  if (fallback?.onTransferFail === "take_message") {
-    lines.push("If transfer fails: take a message instead of ending abruptly.");
-  }
-
-  lines.push(
-    "",
-    "CURRENT CALL STATE is maintained in runtime session data and tool results — use collected fields and tool outcomes; do not assume static prompt text reflects the live call.",
-  );
-
   return lines.join("\n");
 }
 
 /**
- * Layers 1–5 of the receptionist prompt (static, compiled at publish).
- * Layer 6 (knowledge retrieval) and layer 7 (tools) are outside this string.
+ * Static compiled prompt (Layers 1–7 at publish).
+ * Runtime call state and tools are outside this string.
  */
 export function buildReceptionistCompiledPrompt(snapshot: ReceptionistCompiledSnapshot): string {
-  return [
+  const sections = [
     TRANSOVO_RECEPTIONIST_CONSTITUTION,
     "",
     "AGENT",
     personalityFromSnapshot(snapshot),
     "",
-    buildYourJobSection(snapshot),
-    "",
     buildBusinessSection(snapshot),
     "",
+    buildYourJobSection(snapshot),
+  ];
+
+  const additional = buildAdditionalInstructionsSection(snapshot);
+  if (additional) {
+    sections.push("", additional);
+  }
+
+  sections.push(
+    "",
     buildCallConfigurationSection(snapshot),
-  ].join("\n");
+    "",
+    buildGeneratedWorkflowRules(snapshot),
+  );
+
+  return sections.join("\n");
 }
