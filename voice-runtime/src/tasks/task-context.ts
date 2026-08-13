@@ -1,9 +1,9 @@
 import {
   LLM,
   RealtimeModel,
+  ChatContext,
   type AgentOptions,
   type AgentSession,
-  type ChatContext,
 } from "@livekit/agents";
 
 /** Options every nested AgentTask should receive from its parent tool/agent. */
