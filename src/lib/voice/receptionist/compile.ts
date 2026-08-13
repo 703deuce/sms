@@ -228,7 +228,7 @@ export function applyCompiledToVoiceConfig(
       ...(base.advanced as object),
       livekitProfile: snapshot.livekitProfile,
       realtimeVoice: snapshot.voiceId,
-      realtimeVad: input.advanced?.realtimeVad,
+      realtimeVad: (base.advanced as Record<string, unknown> | undefined)?.realtimeVad,
       [RECEPTIONIST_COMPILED_KEY]: snapshot,
       receptionistWizard: (base.advanced as Record<string, unknown> | undefined)?.receptionistWizard,
       receptionistAdvanced: (base.advanced as Record<string, unknown> | undefined)?.receptionistAdvanced,
