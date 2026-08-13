@@ -197,6 +197,25 @@ check("receptionist field collection uses silent handoff", () => {
   assert.ok(taskCtx.includes("preserveFunctionCallHistory: false"));
 });
 
+check("receptionist compiles BUSINESS_CONTEXT and hybrid voice pipeline", () => {
+  const compile = readProjectFile("src/lib/voice/receptionist/compile.ts");
+  const bizCtx = readProjectFile("src/lib/voice/receptionist/build-business-context.ts");
+  const catalog = readProjectFile("src/lib/voice/elevenlabs/receptionist-voice-catalog.ts");
+  const pipeline = readProjectFile("voice-runtime/src/pipeline.ts");
+  const hybrid = readProjectFile("voice-runtime/src/hybrid-streaming-tts-node.ts");
+  const agent = readProjectFile("voice-runtime/src/frontdesk/receptionist/generic-receptionist-agent.ts");
+  assert.ok(compile.includes("buildReceptionistBusinessContext"));
+  assert.ok(compile.includes("gpt-realtime-2.1"));
+  assert.ok(compile.includes("elevenlabs"));
+  assert.ok(bizCtx.includes("BUSINESS CONTEXT"));
+  assert.ok(catalog.includes("RECEPTIONIST_ELEVENLABS_VOICES"));
+  assert.ok(pipeline.includes("voicePipelineCfgForHybridAgent"));
+  assert.ok(pipeline.includes("isGenericReceptionistRealtimeProfile"));
+  assert.ok(hybrid.includes("maybeNormalizeForElevenLabsModel"));
+  assert.ok(agent.includes("BUSINESS CONTEXT"));
+  assert.ok(agent.includes("get_business_answer only for long-tail"));
+});
+
 check("realtime pipeline supports per-agent speed and VAD", () => {
   const pipeline = readProjectFile("voice-runtime/src/pipeline.ts");
   const agentCfg = readProjectFile("src/lib/voice/outbound/agent-config.ts");

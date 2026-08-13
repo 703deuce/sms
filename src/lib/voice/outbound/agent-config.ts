@@ -1,7 +1,11 @@
 import type { VoiceAgentConfig } from "@/lib/voice/types";
+import type { ReceptionistCompiledSnapshot } from "@/lib/voice/receptionist/types";
 import { createDefaultQualificationDefinition } from "./default-qualification-definition";
 import { normalizeRealtimeNativeVoice } from "./realtime-native-voices";
 import { resolveConfiguredRealtimeVoice } from "@/lib/voice/realtime-voice-picker";
+import {
+  resolveConfiguredElevenLabsVoice,
+} from "@/lib/voice/elevenlabs/receptionist-voice-catalog";
 import type { QualificationDefinition } from "./types";
 
 export const OUTBOUND_LEAD_QUALIFICATION_PROFILE = "outbound_lead_qualification";
@@ -78,11 +82,47 @@ export type OutboundRealtimePipelineOverrides = {
   frontdeskInbound?: boolean;
 };
 
+export function isGenericReceptionistRealtimeProfile(
+  config: Pick<VoiceAgentConfig, "advanced">,
+): boolean {
+  const advanced = getVoiceAgentAdvanced(config);
+  const compiled = advanced.receptionistCompiled as ReceptionistCompiledSnapshot | undefined;
+  return (
+    compiled?.livekitProfile === "frontdesk_realtime" ||
+    advanced.livekitProfile === "frontdesk_realtime"
+  );
+}
+
 export function resolveOutboundRealtimePipelineConfig(
   config: Pick<VoiceAgentConfig, "advanced" | "voiceLanguage">,
   overrides?: OutboundRealtimePipelineOverrides,
 ): OutboundRealtimePipelineConfig {
   const advanced = getVoiceAgentAdvanced(config);
+  const compiled = advanced.receptionistCompiled as ReceptionistCompiledSnapshot | undefined;
+
+  if (isGenericReceptionistRealtimeProfile(config) && compiled) {
+    const model = String(compiled.realtimeModel || advanced.realtimeModel || "gpt-realtime-2.1").trim();
+    const speedRaw = config.voiceLanguage?.speed ?? compiled.voiceSpeed;
+    const speed =
+      typeof speedRaw === "number" && Number.isFinite(speedRaw)
+        ? Math.min(2, Math.max(0.5, speedRaw))
+        : undefined;
+
+    const isMini = model.includes("mini");
+    let reasoning: OutboundRealtimePipelineConfig["reasoning"];
+    if (model.startsWith("gpt-realtime-2") && !isMini) {
+      const effortRaw =
+        advanced.realtimeReasoningEffort ||
+        (process.env.VOICE_REALTIME_REASONING_EFFORT?.trim().toLowerCase() as
+          | OutboundRealtimeReasoningEffort
+          | undefined);
+      reasoning = { effort: effortRaw || "low" };
+    }
+
+    const elevenVoice = resolveConfiguredElevenLabsVoice(config) || compiled.voiceId;
+    return { model, voice: elevenVoice, speed, reasoning };
+  }
+
   const model =
     process.env.VOICE_REALTIME_MODEL?.trim() ||
     String(advanced.realtimeModel || "gpt-realtime-2.1-mini").trim();
@@ -107,7 +147,6 @@ export function resolveOutboundRealtimePipelineConfig(
   }
 
   const speedRaw = config.voiceLanguage?.speed;
-  const compiled = advanced.receptionistCompiled as { voiceSpeed?: number } | undefined;
   const speedCandidate = speedRaw ?? compiled?.voiceSpeed;
   const speed =
     typeof speedCandidate === "number" && Number.isFinite(speedCandidate)

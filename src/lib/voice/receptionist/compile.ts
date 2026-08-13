@@ -7,7 +7,12 @@ import type {
 } from "./types";
 import { RECEPTIONIST_COMPILED_KEY } from "./types";
 import type { ReceptionistAdvancedSettings } from "@/lib/receptionist-wizard/advanced-types";
-import { normalizeWizardVoiceToRealtime } from "@/lib/voice/realtime-voice-picker";
+import {
+  normalizeWizardVoiceToElevenLabs,
+  RECEPTIONIST_TTS_MODEL,
+  resolveConfiguredElevenLabsVoice,
+} from "@/lib/voice/elevenlabs/receptionist-voice-catalog";
+import { buildReceptionistBusinessContext } from "./build-business-context";
 import { fieldManifestFromAdvancedRows } from "./field-manifest";
 
 export type ReceptionistDraftInput = {
@@ -134,7 +139,8 @@ export function compileReceptionistConfig(input: ReceptionistDraftInput): Recept
       advanced?.transferPolicy?.emergencyDestinationE164?.trim() || undefined,
   };
 
-  const realtimeVoice = normalizeWizardVoiceToRealtime(input.voiceId);
+  const elevenLabsVoice = normalizeWizardVoiceToElevenLabs(input.voiceId);
+  const voiceMeta = input.voiceLabel?.trim();
   const wizAdvanced = input.advanced?.receptionistWizard as
     | { voiceSpeed?: number }
     | undefined;
@@ -144,8 +150,8 @@ export function compileReceptionistConfig(input: ReceptionistDraftInput): Recept
       ? Math.min(2, Math.max(0.5, voiceSpeedRaw))
       : 1;
 
-  return {
-    livekitProfile: "frontdesk_realtime",
+  const partialSnapshot = {
+    livekitProfile: "frontdesk_realtime" as const,
     businessName: input.businessName.trim(),
     agentDisplayName: input.agentName.trim() || "Amy",
     businessDescription: input.businessDescription.trim(),
@@ -156,7 +162,12 @@ export function compileReceptionistConfig(input: ReceptionistDraftInput): Recept
     capabilities: [...caps],
     fieldManifest,
     enabledBuiltinTools,
-    voiceId: realtimeVoice,
+    businessContext: "",
+    realtimeModel: "gpt-realtime-2.1" as const,
+    realtimeOutputMode: "elevenlabs" as const,
+    ttsModel: RECEPTIONIST_TTS_MODEL as "eleven_flash_v2_5",
+    voiceId: elevenLabsVoice,
+    voiceLabel: voiceMeta || undefined,
     voiceSpeed,
     compiledAt: new Date().toISOString(),
     conversationBehavior,
@@ -169,6 +180,10 @@ export function compileReceptionistConfig(input: ReceptionistDraftInput): Recept
     intentRules: advanced?.intents?.filter((i) => i.enabled) ?? [],
     decisionRules: advanced?.decisionRules ?? [],
   };
+
+  partialSnapshot.businessContext = buildReceptionistBusinessContext(partialSnapshot);
+
+  return partialSnapshot;
 }
 
 /** Merge compiled snapshot into VoiceAgentConfig for draft/publish. */
@@ -227,8 +242,10 @@ export function applyCompiledToVoiceConfig(
     advanced: {
       ...(base.advanced as object),
       livekitProfile: snapshot.livekitProfile,
-      realtimeVoice: snapshot.voiceId,
-      realtimeVad: (base.advanced as Record<string, unknown> | undefined)?.realtimeVad,
+      realtimeModel: snapshot.realtimeModel,
+      realtimeOutputMode: snapshot.realtimeOutputMode,
+      elevenLabsVoiceId: snapshot.voiceId,
+      ttsModel: snapshot.ttsModel,
       [RECEPTIONIST_COMPILED_KEY]: snapshot,
       receptionistWizard: (base.advanced as Record<string, unknown> | undefined)?.receptionistWizard,
       receptionistAdvanced: (base.advanced as Record<string, unknown> | undefined)?.receptionistAdvanced,

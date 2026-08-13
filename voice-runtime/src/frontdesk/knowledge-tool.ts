@@ -13,7 +13,7 @@ export function buildFrontDeskBusinessAnswerTool() {
   return llm.tool({
     name: "get_business_answer",
     description:
-      "Look up business hours, pricing, services, policies, or FAQs. Call when the caller asks a general question.",
+      "Look up long-tail business knowledge: uploaded documents, website pages, large FAQ libraries, detailed policies, manuals, or niche product documentation. Do not use for hours, pricing, services, or company name — those are in BUSINESS CONTEXT.",
     parameters: z.object({
       topic: z.string().describe("What the caller wants to know, e.g. hours, pricing, warranty, emergency"),
     }),

@@ -1,5 +1,9 @@
 import type { ReceptionistWizardState } from "./types";
 import { CAPABILITY_OPTIONS } from "./types";
+import {
+  DEFAULT_RECEPTIONIST_ELEVENLABS_VOICE_ID,
+  getReceptionistElevenLabsVoice,
+} from "@/lib/voice/elevenlabs/receptionist-voice-catalog";
 
 export function createDefaultWizardState(): ReceptionistWizardState {
   return {
@@ -13,8 +17,8 @@ export function createDefaultWizardState(): ReceptionistWizardState {
     timezone: "America/New_York",
     capabilities: CAPABILITY_OPTIONS.filter((c) => c.defaultOn).map((c) => c.id),
     collectFields: ["name", "phone", "reason"],
-    voiceId: "marin",
-    voiceLabel: "Marin",
+    voiceId: DEFAULT_RECEPTIONIST_ELEVENLABS_VOICE_ID,
+    voiceLabel: getReceptionistElevenLabsVoice(DEFAULT_RECEPTIONIST_ELEVENLABS_VOICE_ID)?.label || "Jessica",
     voiceSpeed: 1,
     vadThreshold: 0.65,
     vadSilenceMs: 500,

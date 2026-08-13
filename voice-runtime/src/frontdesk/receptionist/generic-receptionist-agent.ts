@@ -69,7 +69,9 @@ function policyLines(snapshot: ReceptionistCompiledSnapshot): string[] {
     whenUncertain?: string;
   } | undefined;
   if (knowledge?.approvedKnowledgeOnly) {
-    lines.push("Only answer business questions using get_business_answer — do not invent facts. ");
+    lines.push(
+      "Only answer business questions using BUSINESS CONTEXT or get_business_answer for long-tail knowledge — do not invent facts. ",
+    );
   }
   if (knowledge?.allowGeneralAnswers) {
     lines.push("You may answer general business questions conversationally when appropriate. ");
@@ -128,18 +130,20 @@ function buildInstructions(snapshot: ReceptionistCompiledSnapshot, businessLabel
       ? `Collect: ${snapshot.fieldManifest.map((f) => f.label).join(", ")}. `
       : "";
 
+  const businessContext = snapshot.businessContext?.trim();
+
   return [
     `You are ${snapshot.agentDisplayName}, the AI receptionist for ${businessLabel}. `,
-    snapshot.businessDescription.trim(),
-    " ",
+    businessContext ? `${businessContext}\n\n` : "",
     `Your capabilities: ${caps}. `,
     fields,
     ...policyLines(snapshot),
     " ",
-    "Speak naturally — your output is synthesized to speech. ",
+    "Speak naturally — your spoken replies are synthesized by ElevenLabs Flash. ",
     "Never speak internal planning aloud. If you promise to check the calendar, book, or transfer — call the matching tool in the same turn. ",
     snapshot.capabilities.includes("answer_questions")
-      ? "Use get_business_answer for hours, services, pricing, and FAQs. "
+      ? "Answer hours, services, pricing, and company facts from BUSINESS CONTEXT directly. " +
+        "Use get_business_answer only for long-tail uploaded documents, detailed policies, or niche FAQs not in BUSINESS CONTEXT. "
       : "",
     snapshot.capabilities.includes("take_messages")
       ? "Use take_message when they want a callback instead of booking. "
@@ -171,30 +175,33 @@ export function createGenericReceptionistAgent(input: {
   const instructions = buildInstructions(input.snapshot, label);
 
   const agent = voice.Agent.create<FrontDeskUserData>(
-    withHybridStreamingAgentOptions({
-      instructions,
-      tools: llm.toToolContext(
-        buildReceptionistTools({
-          snapshot: input.snapshot,
-          timezone: input.timezone,
-        }).toolDefs as never,
-      ),
-      onEnter: async (agentCtx) => {
-        const session = agentCtx.session as AgentSession<FrontDeskUserData>;
-        const greeting = input.snapshot.greeting.trim();
-        if (greeting) {
+    withHybridStreamingAgentOptions(
+      {
+        instructions,
+        tools: llm.toToolContext(
+          buildReceptionistTools({
+            snapshot: input.snapshot,
+            timezone: input.timezone,
+          }).toolDefs as never,
+        ),
+        onEnter: async (agentCtx) => {
+          const session = agentCtx.session as AgentSession<FrontDeskUserData>;
+          const greeting = input.snapshot.greeting.trim();
+          if (greeting) {
+            await session.generateReply({
+              instructions: `Say exactly this greeting to the caller (warm and natural): ${greeting}`,
+              toolChoice: "none",
+            });
+            return;
+          }
           await session.generateReply({
-            instructions: `Say exactly this greeting to the caller (warm and natural): ${greeting}`,
+            instructions: `Welcome the caller to ${label}. Ask how you can help today. Keep it brief and warm.`,
             toolChoice: "none",
           });
-          return;
-        }
-        await session.generateReply({
-          instructions: `Welcome the caller to ${label}. Ask how you can help today. Keep it brief and warm.`,
-          toolChoice: "none",
-        });
+        },
       },
-    }),
+      input.snapshot.realtimeOutputMode,
+    ),
   );
 
   return agent;

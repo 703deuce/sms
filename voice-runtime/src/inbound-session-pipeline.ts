@@ -381,7 +381,7 @@ export function createVoicePipeline(input: {
       frontdeskInbound: true,
     };
     const realtimeCfg = resolveOutboundRealtimePipelineConfig(input.agentConfig, realtimeOverrides);
-    const outputMode = resolveOutboundRealtimeOutputMode();
+    const outputMode = resolveOutboundRealtimeOutputMode(input.agentConfig);
     const { llm, tts, pipelineCfg } = buildOutboundRealtimeSessionComponents(
       input.agentConfig,
       realtimeOverrides,
@@ -416,6 +416,13 @@ export function createVoicePipeline(input: {
           frontdeskInbound: true,
           config: input.agentConfig,
         }),
+        hybridTelemetry: {
+          realtimeModel: realtimeCfg.model,
+          ttsModel: pipelineCfg.ttsModel,
+          elevenLabsVoiceId: pipelineCfg.ttsVoice,
+          outputMode: outputMode === "elevenlabs" ? "REALTIME_ELEVENLABS" : "REALTIME_NATIVE",
+          cancellation: "livekit_stream_close_on_interrupt",
+        },
         outputGainDb: input.sessionBase.outputGainDb,
       }),
     );

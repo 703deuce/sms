@@ -25,7 +25,7 @@ export type AgentFieldDefinition = {
   skipIfKnown?: boolean;
 };
 
-/** Immutable runtime snapshot — stored on VoiceAgentVersion.config after compile. */
+/** Receptionist immutable runtime snapshot — stored on VoiceAgentVersion.config after compile. */
 export type ReceptionistCompiledSnapshot = {
   livekitProfile: "frontdesk_realtime";
   businessName: string;
@@ -38,6 +38,14 @@ export type ReceptionistCompiledSnapshot = {
   capabilities: ReceptionistCapability[];
   fieldManifest: AgentFieldDefinition[];
   enabledBuiltinTools: string[];
+  /** Compact prompt-injected facts — core business knowledge, not retrieved */
+  businessContext: string;
+  /** OpenAI Realtime intelligence model */
+  realtimeModel: "gpt-realtime-2.1";
+  /** Hybrid output: OpenAI text + ElevenLabs TTS */
+  realtimeOutputMode: "elevenlabs";
+  /** ElevenLabs TTS model — Flash v2.5 for all receptionist voices */
+  ttsModel: "eleven_flash_v2_5";
   /** Advanced sections — safe defaults applied when omitted */
   conversationBehavior?: Record<string, unknown>;
   bookingPolicy?: Record<string, unknown>;
@@ -49,7 +57,9 @@ export type ReceptionistCompiledSnapshot = {
   intentRules?: Record<string, unknown>[];
   decisionRules?: Record<string, unknown>[];
   voiceId: string;
-  /** OpenAI Realtime speech speed (0.5–2.0). */
+  /** ElevenLabs voice_id for TTS */
+  voiceLabel?: string;
+  /** OpenAI Realtime speech speed (0.5–2.0) — intelligence pacing when supported */
   voiceSpeed?: number;
   compiledAt: string;
 };

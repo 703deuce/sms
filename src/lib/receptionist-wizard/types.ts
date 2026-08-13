@@ -121,6 +121,15 @@ export const DEFAULT_COLLECT_FIELDS: Array<{
   { id: "reason", label: "Reason for calling", required: false },
 ];
 
-import { RECEPTIONIST_REALTIME_VOICES } from "@/lib/voice/realtime-voice-picker";
+import {
+  DEFAULT_RECEPTIONIST_ELEVENLABS_VOICE_ID,
+  listEnabledReceptionistElevenLabsVoices,
+} from "@/lib/voice/elevenlabs/receptionist-voice-catalog";
 
-export const WIZARD_VOICES = RECEPTIONIST_REALTIME_VOICES;
+export const WIZARD_VOICES = listEnabledReceptionistElevenLabsVoices().map((v) => ({
+  id: v.id,
+  label: v.label,
+  badge: v.badge,
+  description: `${v.description} · ${v.style} · ${v.accent}`,
+  locale: "ElevenLabs Flash",
+}));

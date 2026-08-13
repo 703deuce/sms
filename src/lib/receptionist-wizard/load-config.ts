@@ -1,6 +1,7 @@
 import type { VoiceAgentConfig } from "@/lib/voice/types";
 import { createDefaultWizardState } from "./defaults";
-import { normalizeWizardVoiceToRealtime } from "@/lib/voice/realtime-voice-picker";
+import { normalizeWizardVoiceToElevenLabs } from "@/lib/voice/elevenlabs/receptionist-voice-catalog";
+import { getReceptionistElevenLabsVoice } from "@/lib/voice/elevenlabs/receptionist-voice-catalog";
 import type {
   AnswerTiming,
   CapabilityId,
@@ -69,10 +70,15 @@ export function wizardStateFromDraftConfig(
       String(cfg.dynamicVariables?.business_timezone || base.timezone),
     capabilities,
     collectFields: (wiz?.collectFields as CollectFieldId[]) || base.collectFields,
-    voiceId: normalizeWizardVoiceToRealtime(
+    voiceId: normalizeWizardVoiceToElevenLabs(
       cfg.voiceLanguage?.voiceId || wiz?.voiceId || base.voiceId,
     ),
-    voiceLabel: wiz?.voiceLabel || base.voiceLabel,
+    voiceLabel:
+      wiz?.voiceLabel ||
+      getReceptionistElevenLabsVoice(
+        normalizeWizardVoiceToElevenLabs(cfg.voiceLanguage?.voiceId || wiz?.voiceId || base.voiceId),
+      )?.label ||
+      base.voiceLabel,
     voiceSpeed:
       typeof wiz?.voiceSpeed === "number" && Number.isFinite(wiz.voiceSpeed)
         ? wiz.voiceSpeed

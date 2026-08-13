@@ -9,8 +9,11 @@ import {
 } from "@/lib/voice/telnyx/voices";
 import { getCachedPreview, setCachedPreview } from "@/lib/voice/platform/preview-cache";
 import {
-  tryNormalizeWizardVoiceToRealtime,
-} from "@/lib/voice/realtime-voice-picker";
+  isReceptionistElevenLabsVoiceId,
+  RECEPTIONIST_TTS_MODEL,
+} from "@/lib/voice/elevenlabs/receptionist-voice-catalog";
+import { synthesizeElevenLabsSpeech } from "@/lib/voice/elevenlabs/client";
+import { maybeNormalizeForElevenLabsModel } from "@/lib/voice/elevenlabs/normalize-tts-text";
 
 const previewHits = new Map<string, { count: number; windowStart: number }>();
 
@@ -57,20 +60,22 @@ export async function POST(request: Request) {
         ? Math.min(2, Math.max(0.5, body.speed))
         : 1;
 
-    const realtimeVoice = tryNormalizeWizardVoiceToRealtime(requested);
-    if (realtimeVoice) {
+    if (isReceptionistElevenLabsVoiceId(requested)) {
+      const voiceId = requested;
+      const spokenText = maybeNormalizeForElevenLabsModel(text, RECEPTIONIST_TTS_MODEL);
       const cached = await getCachedPreview({
-        voiceId: realtimeVoice,
-        text,
+        voiceId,
+        text: spokenText,
         speed,
       });
       if (cached) {
         return NextResponse.json({
           data: {
             mode: "cache",
-            text,
-            voice: realtimeVoice,
-            provider: "openai_realtime",
+            text: spokenText,
+            voice: voiceId,
+            provider: "elevenlabs",
+            model: RECEPTIONIST_TTS_MODEL,
             language,
             audioUrl: cached,
             cached: true,
@@ -78,61 +83,36 @@ export async function POST(request: Request) {
         });
       }
 
-      const apiKey = process.env.OPENAI_API_KEY?.trim();
-      if (!apiKey) {
+      try {
+        const audio = await synthesizeElevenLabsSpeech({
+          voiceId,
+          text: spokenText,
+          modelId: RECEPTIONIST_TTS_MODEL,
+        });
+        const audioUrl = `data:audio/mpeg;base64,${Buffer.from(new Uint8Array(audio)).toString("base64")}`;
+        await setCachedPreview({ voiceId, text: spokenText, speed, audioUrl });
         return NextResponse.json({
           data: {
-            mode: "mock",
-            text,
-            voice: realtimeVoice,
-            provider: "openai_realtime",
+            mode: "elevenlabs",
+            text: spokenText,
+            voice: voiceId,
+            provider: "elevenlabs",
+            model: RECEPTIONIST_TTS_MODEL,
             language,
-            message: "OpenAI not configured — use Test in browser to hear this voice.",
+            audioUrl,
+            cached: false,
           },
         });
-      }
-
-      const speechRes = await fetch("https://api.openai.com/v1/audio/speech", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "gpt-4o-mini-tts",
-          voice: realtimeVoice,
-          input: text,
-          speed,
-        }),
-      });
-
-      if (!speechRes.ok) {
-        const errText = await speechRes.text();
+      } catch (err) {
         return NextResponse.json(
           {
-            error: "Could not preview this Realtime voice. Use Test in browser instead.",
-            detail: errText.slice(0, 300),
-            voice: realtimeVoice,
+            error: "Could not preview this ElevenLabs voice. Use Test in browser instead.",
+            detail: err instanceof Error ? err.message : String(err),
+            voice: voiceId,
           },
           { status: 502 },
         );
       }
-
-      const buf = Buffer.from(await speechRes.arrayBuffer());
-      const audioUrl = `data:audio/mpeg;base64,${buf.toString("base64")}`;
-      await setCachedPreview({ voiceId: realtimeVoice, text, speed, audioUrl });
-
-      return NextResponse.json({
-        data: {
-          mode: "openai_realtime",
-          text,
-          voice: realtimeVoice,
-          provider: "openai_realtime",
-          language,
-          audioUrl,
-          cached: false,
-        },
-      });
     }
 
     if (!requested || !isApprovedVoiceId(requested)) {

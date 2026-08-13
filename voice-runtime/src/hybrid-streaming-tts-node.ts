@@ -1,11 +1,16 @@
 import { voice, type AgentCreateOptions } from "@livekit/agents";
 import type { AgentContext } from "@livekit/agents";
+import { maybeNormalizeForElevenLabsModel } from "@/lib/voice/elevenlabs/normalize-tts-text";
+import { RECEPTIONIST_TTS_MODEL } from "@/lib/voice/elevenlabs/receptionist-voice-catalog";
 import { phraseBufferStream } from "./phrase-text-buffer";
 import {
   markHybridLlmFirstTextDelta,
   markHybridTtsFirstTextSent,
 } from "./hybrid-streaming-telemetry";
-import { resolveOutboundRealtimeOutputMode } from "./pipeline";
+import {
+  resolveOutboundRealtimeOutputMode,
+  type OutboundRealtimeOutputMode,
+} from "./pipeline";
 
 type AgentHookContext<TUserData> = AgentContext<TUserData>;
 
@@ -28,8 +33,9 @@ export function createHybridStreamingTtsNode<TUserData = unknown>(): NonNullable
 
     const monitoredText = (async function* () {
       for await (const phrase of bufferedText) {
-        markHybridTtsFirstTextSent(phrase);
-        yield phrase;
+        const spoken = maybeNormalizeForElevenLabsModel(phrase, RECEPTIONIST_TTS_MODEL);
+        markHybridTtsFirstTextSent(spoken);
+        yield spoken;
       }
     })();
 
@@ -40,8 +46,10 @@ export function createHybridStreamingTtsNode<TUserData = unknown>(): NonNullable
 /** Merge hybrid streaming hooks when REALTIME_ELEVENLABS output mode is active. */
 export function withHybridStreamingAgentOptions<TUserData>(
   options: AgentCreateOptions<TUserData>,
+  outputMode?: OutboundRealtimeOutputMode,
 ): AgentCreateOptions<TUserData> {
-  if (resolveOutboundRealtimeOutputMode() !== "elevenlabs") {
+  const mode = outputMode ?? resolveOutboundRealtimeOutputMode();
+  if (mode !== "elevenlabs") {
     return options;
   }
   if (options.ttsNode) {

@@ -4,11 +4,17 @@ import * as openai from "@livekit/agents-plugin-openai";
 import * as elevenlabs from "@livekit/agents-plugin-elevenlabs";
 import OpenAI from "openai";
 import type { VoiceAgentConfig } from "@/lib/voice/types";
+import type { VoiceAgentConfig } from "@/lib/voice/types";
 import {
   resolveOutboundRealtimePipelineConfig,
+  isGenericReceptionistRealtimeProfile,
   type OutboundRealtimePipelineConfig,
   type OutboundRealtimePipelineOverrides,
 } from "@/lib/voice/outbound/agent-config";
+import {
+  RECEPTIONIST_TTS_MODEL,
+  resolveConfiguredElevenLabsVoice,
+} from "@/lib/voice/elevenlabs/receptionist-voice-catalog";
 import {
   getVoicePipelineConfig,
   type VoicePipelineConfig,
@@ -202,9 +208,12 @@ export function buildAmyStt(
   });
 }
 
-export function buildAmyTts(cfg: VoicePipelineConfig): tts.TTS {
+export function buildAmyTts(
+  cfg: VoicePipelineConfig,
+  options?: { hybridStreaming?: boolean },
+): tts.TTS {
   if (usesElevenLabsPluginTts(cfg.ttsProvider)) {
-    const hybridOutput = resolveOutboundRealtimeOutputMode() === "elevenlabs";
+    const hybridOutput = options?.hybridStreaming === true;
     return new elevenlabs.TTS({
       apiKey: resolveElevenLabsApiKey(),
       model: resolveElevenLabsPluginModel(cfg.ttsModel) as elevenlabs.TTSModels,
@@ -242,7 +251,22 @@ export function buildAmyTts(cfg: VoicePipelineConfig): tts.TTS {
 export type OutboundRealtimeOutputMode = "native" | "elevenlabs";
 
 /** REALTIME_NATIVE = OpenAI audio out. REALTIME_ELEVENLABS = OpenAI text out + ElevenLabs TTS. */
-export function resolveOutboundRealtimeOutputMode(): OutboundRealtimeOutputMode {
+export function resolveOutboundRealtimeOutputMode(
+  config?: Pick<VoiceAgentConfig, "advanced">,
+): OutboundRealtimeOutputMode {
+  if (config && isGenericReceptionistRealtimeProfile(config)) {
+    return "elevenlabs";
+  }
+
+  const advanced = (config?.advanced || {}) as Record<string, unknown>;
+  const compiled = advanced.receptionistCompiled as { realtimeOutputMode?: string } | undefined;
+  if (
+    compiled?.realtimeOutputMode === "elevenlabs" ||
+    advanced.realtimeOutputMode === "elevenlabs"
+  ) {
+    return "elevenlabs";
+  }
+
   const raw = (process.env.VOICE_REALTIME_OUTPUT_MODE || "native").trim().toLowerCase();
   if (
     raw === "elevenlabs" ||
@@ -253,6 +277,25 @@ export function resolveOutboundRealtimeOutputMode(): OutboundRealtimeOutputMode 
     return "elevenlabs";
   }
   return "native";
+}
+
+export function voicePipelineCfgForHybridAgent(
+  base: VoicePipelineConfig,
+  config: Pick<VoiceAgentConfig, "advanced" | "voiceLanguage">,
+): VoicePipelineConfig {
+  const voice = resolveConfiguredElevenLabsVoice(config) || base.ttsVoice;
+  const advanced = (config.advanced || {}) as Record<string, unknown>;
+  const compiled = advanced.receptionistCompiled as { ttsModel?: string } | undefined;
+  const ttsModel =
+    compiled?.ttsModel ||
+    String(advanced.ttsModel || base.ttsModel || RECEPTIONIST_TTS_MODEL).trim();
+
+  return {
+    ...base,
+    ttsProvider: "elevenlabs-plugin",
+    ttsModel,
+    ttsVoice: voice || base.ttsVoice,
+  };
 }
 
 export function buildOutboundRealtimeModel(
@@ -294,10 +337,17 @@ export function buildOutboundRealtimeSessionComponents(
   config: Pick<VoiceAgentConfig, "advanced" | "voiceLanguage">,
   overrides?: OutboundRealtimePipelineOverrides,
 ) {
-  const outputMode = resolveOutboundRealtimeOutputMode();
-  const pipelineCfg = getVoicePipelineConfig();
+  const outputMode = resolveOutboundRealtimeOutputMode(config);
+  const basePipelineCfg = getVoicePipelineConfig();
+  const pipelineCfg =
+    outputMode === "elevenlabs"
+      ? voicePipelineCfgForHybridAgent(basePipelineCfg, config)
+      : basePipelineCfg;
   const llm = buildOutboundRealtimeModel(config, outputMode, overrides);
-  const ttsInstance = outputMode === "elevenlabs" ? buildAmyTts(pipelineCfg) : undefined;
+  const ttsInstance =
+    outputMode === "elevenlabs"
+      ? buildAmyTts(pipelineCfg, { hybridStreaming: true })
+      : undefined;
   return { llm, tts: ttsInstance, outputMode, pipelineCfg };
 }
 
@@ -311,7 +361,10 @@ export function describeRealtimePipelineConfig(
     config?: Pick<VoiceAgentConfig, "advanced">;
   },
 ) {
-  const halfCascade = outputMode === "elevenlabs";
+  const resolvedOutputMode = options?.config
+    ? resolveOutboundRealtimeOutputMode(options.config)
+    : outputMode;
+  const halfCascade = resolvedOutputMode === "elevenlabs";
   const turnDetectionCfg = options?.frontdeskInbound
     ? resolveFrontDeskInboundRealtimeTurnDetection(options?.config)
     : resolveOutboundRealtimeTurnDetection();

@@ -71,8 +71,8 @@ export function VoiceTestStep({
             Voice & Test {state.agentName || "Amy"}
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Pick an OpenAI Realtime voice — the same voice is used on phone calls and in browser
-            test.
+            Pick an ElevenLabs Flash voice — the same voice is used on phone calls and in browser
+            test. Intelligence uses GPT-Realtime-2.1 with ElevenLabs speech output.
           </p>
         </div>
 

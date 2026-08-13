@@ -8,6 +8,7 @@ import {
   isPricingTopic,
   isServiceAreaTopic,
   isServicesTopic,
+  isCompanyNameTopic,
 } from "@/lib/voice/knowledge/business-answer-topics";
 
 export type BusinessAnswerResult =
@@ -83,25 +84,11 @@ function readReceptionistWizardContext(advanced: Record<string, unknown>): {
   };
 }
 
-function extractHoursFromDescription(description: string): string | null {
-  const hoursMatch = description.match(
-    /(?:regular\s+)?hours?\s*(?:are\s+)?([^.]+(?:\d\s*(?:am|pm)|Monday|weekday)[^.]*)/i,
-  );
-  if (hoursMatch?.[1]) return hoursMatch[1].trim();
-
-  const weekdayMatch = description.match(
-    /(Monday[^.]*(?:\d\s*(?:am|pm)|through|to)[^.]*)/i,
-  );
-  if (weekdayMatch?.[1]) return weekdayMatch[1].trim();
-
-  return null;
-}
-
-function extractPricingFromDescription(description: string): string | null {
-  const matches = description.match(/\$[\d,]+[^.]*(?:\.|;|$)/gi);
-  if (!matches?.length) return null;
-  return matches.map((m) => m.trim().replace(/[.;]+$/, "")).join(". ") + ".";
-}
+import {
+  extractHoursFromDescription,
+  extractPricingFromDescription,
+  isCompanyNameTopic,
+} from "@/lib/voice/knowledge/resolve-business-answer-helpers";
 
 function resolveFromGenericReceptionist(
   topicLower: string,
@@ -220,6 +207,26 @@ export async function resolveBusinessAnswer(input: {
   const wizard = asRecord(advanced.appointmentReceptionistWizard);
   const pricing = asRecord(knowledge.pricing || cfg.pricing);
   const kbIds = await linkedKnowledgeBaseIds(input.workspaceId, input.agentId);
+
+  const receptionistCompiled = advanced.receptionistCompiled as
+    | { businessContext?: string }
+    | undefined;
+  if (receptionistCompiled?.businessContext?.trim()) {
+    const coreTopic =
+      isCompanyNameTopic(topicLower) ||
+      isHoursTopic(topicLower) ||
+      isPricingTopic(topicLower) ||
+      isServicesTopic(topicLower) ||
+      isServiceAreaTopic(topicLower);
+    if (coreTopic) {
+      return {
+        ok: false,
+        speak:
+          "That is core business information already in your BUSINESS CONTEXT. Answer the caller directly without calling this tool.",
+        code: "CORE_FACT_IN_PROMPT",
+      };
+    }
+  }
 
   // --- Company / business name ---
   if (isCompanyNameTopic(topicLower)) {

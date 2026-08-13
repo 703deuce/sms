@@ -18,6 +18,10 @@ const snapshot = compileReceptionistConfig({
 
 assert.equal(snapshot.livekitProfile, "frontdesk_realtime");
 assert.equal(snapshot.businessName, "John's Plumbing");
+assert.equal(snapshot.realtimeModel, "gpt-realtime-2.1");
+assert.equal(snapshot.realtimeOutputMode, "elevenlabs");
+assert.ok(snapshot.businessContext.includes("BUSINESS CONTEXT"));
+assert.equal(snapshot.voiceId, "cgSgspJ2msm6clMCkdW9");
 assert.equal(snapshot.fieldManifest.length, 3);
 assert.ok(snapshot.enabledBuiltinTools.includes("get_business_answer"));
 assert.ok(snapshot.enabledBuiltinTools.includes("take_message"));
