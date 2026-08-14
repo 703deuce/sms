@@ -165,16 +165,19 @@ export async function processPostCall(callId: string) {
   }
   if (isMissed) {
     let johnMctbTriggered = false;
+    let skipMissedAutomation = false;
     try {
       const mctb = await triggerJohnMctbForVoiceCall(call);
       johnMctbTriggered = Boolean(mctb.triggered);
+      skipMissedAutomation =
+        johnMctbTriggered || mctb.reason === "smart_routing_active";
     } catch (err) {
       console.warn("[post-call] John MCTB process failed", call.id, err);
     }
 
     // John schedules the deterministic MCTB send; skip CALL_MISSED automation enroll
-    // to avoid duplicate texts from the managed MCTB flow graph.
-    if (!johnMctbTriggered) {
+    // to avoid duplicate texts. Also skip when Smart Routing owns this DID.
+    if (!skipMissedAutomation) {
       await emitPlatformEvent({
         workspaceId: call.workspaceId,
         type: "CALL_MISSED",

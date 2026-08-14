@@ -170,6 +170,31 @@ export async function handleTexmlStatusCallback(request: Request) {
     },
   });
 
+  const toEarly = normalizeE164(
+    pick(eventPayload.to, eventPayload.To, eventPayload.destination_number),
+  );
+  if (
+    toEarly &&
+    (eventType === "call.initiated" || eventType === "call.ringing")
+  ) {
+    const pnEarly = await prisma.phoneNumber.findFirst({
+      where: { e164: toEarly },
+      select: { id: true, workspaceId: true },
+    });
+    if (pnEarly) {
+      const { hasActiveSmartRoutingOnNumber } = await import(
+        "@/lib/smart-routing/flow-service"
+      );
+      if (await hasActiveSmartRoutingOnNumber(pnEarly.workspaceId, pnEarly.id)) {
+        await prisma.providerWebhookEvent.update({
+          where: { providerEventId },
+          data: { status: "processed", processedAt: new Date() },
+        });
+        return NextResponse.json({ ok: true, skipped: "smart_routing_did" });
+      }
+    }
+  }
+
   // Ensure VoiceCall + workflow enrollment as early as initiated/answered.
   const { ensureVoiceCallForTelnyxEvent } = await import(
     "@/lib/voice/ensure-call-from-event"

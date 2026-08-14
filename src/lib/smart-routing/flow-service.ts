@@ -241,6 +241,16 @@ export async function resolveActiveFlowForNumber(workspaceId: string, phoneNumbe
   });
 }
 
+/** True when inbound on this DID should be owned by Smart Routing (not MCTB / softphone). */
+export async function hasActiveSmartRoutingOnNumber(
+  workspaceId: string,
+  phoneNumberId: string | null | undefined,
+) {
+  if (!phoneNumberId) return false;
+  const flow = await resolveActiveFlowForNumber(workspaceId, phoneNumberId);
+  return Boolean(flow?.publishedVersionId);
+}
+
 export async function getOverviewMetrics(workspaceId: string) {
   const prisma = getPrisma();
   const todayStart = new Date();

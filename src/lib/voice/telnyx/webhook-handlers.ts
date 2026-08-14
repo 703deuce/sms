@@ -283,7 +283,10 @@ export async function processVoiceWebhookEvent(input: {
         toE164: to,
         callControlId,
         forwardedFrom: String(eventPayload.forwarded_from ?? ""),
-      }).catch(() => ({ started: false as const }));
+      }).catch((err) => {
+        console.error("[voice/webhook] tryStartSmartRoutingInbound", err);
+        return { started: false as const };
+      });
       if (sr.started) {
         await prisma.providerWebhookEvent.update({
           where: { providerEventId: input.providerEventId },

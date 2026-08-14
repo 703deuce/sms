@@ -33,10 +33,10 @@ async function activeSmartRoutingOnNumber(
   workspaceId: string,
   phoneNumberId: string | null | undefined,
 ) {
-  if (!phoneNumberId) return false;
-  const { resolveActiveFlowForNumber } = await import("@/lib/smart-routing/flow-service");
-  const flow = await resolveActiveFlowForNumber(workspaceId, phoneNumberId);
-  return Boolean(flow?.publishedVersionId);
+  const { hasActiveSmartRoutingOnNumber } = await import(
+    "@/lib/smart-routing/flow-service"
+  );
+  return hasActiveSmartRoutingOnNumber(workspaceId, phoneNumberId);
 }
 
 export async function triggerJohnMctbForVoiceCall(call: Pick<
