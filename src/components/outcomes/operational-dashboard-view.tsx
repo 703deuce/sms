@@ -4,8 +4,8 @@ import type {
   CallDisposition,
   DashboardDateRange,
   OperationalDashboardData,
-} from "@/lib/outcomes/operational-dashboard";
-import { dispositionLabel } from "@/lib/outcomes/operational-dashboard";
+} from "@/lib/outcomes/operational-dashboard-types";
+import { dispositionLabel } from "@/lib/outcomes/operational-dashboard-types";
 import { cn } from "@/lib/utils";
 import {
   Calendar,

@@ -1,8 +1,6 @@
 import { OperationalDashboardView } from "@/components/outcomes/operational-dashboard-view";
-import {
-  loadOperationalDashboardData,
-  type DashboardDateRange,
-} from "@/lib/outcomes/operational-dashboard";
+import type { DashboardDateRange } from "@/lib/outcomes/operational-dashboard-types";
+import { loadOperationalDashboardData } from "@/lib/outcomes/operational-dashboard";
 import { requireWorkspaceContext } from "@/lib/workspace-data";
 
 function parseRange(raw: string | undefined): DashboardDateRange {

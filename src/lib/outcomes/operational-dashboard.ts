@@ -1,3 +1,5 @@
+import "server-only";
+
 import { getPrisma } from "@/lib/db";
 import {
   fmtCallDurationTable,
@@ -9,94 +11,43 @@ import {
   loadDashboardMetrics,
 } from "@/lib/workspace-data";
 
-export type DashboardDateRange = "today" | "7d" | "30d";
+import type {
+  CallDisposition,
+  DashboardDateRange,
+  OperationalDashboardData,
+} from "./operational-dashboard-types";
 
-export type AttentionTone = "red" | "yellow" | "green";
+type VoiceAgentSummary = { id: string; name: string | null; status: string };
 
-export type CallDisposition = "answered" | "voicemail" | "missed";
-
-export type OperationalDashboardData = {
-  greeting: string;
-  userName: string;
-  dateRange: DashboardDateRange;
-  receptionist: {
-    name: string;
-    active: boolean;
-    phoneDisplay: string;
-    editHref: string;
-    testHref: string;
-  };
-  sms: {
-    ready: boolean;
-    label: string;
-    sublabel: string;
-    detail: string;
-  };
-  kpis: {
-    callsAnswered: number;
-    callsAnsweredChangePct: number | null;
-    newLeads: number;
-    newLeadsChangePct: number | null;
-    appointmentsBooked: number;
-    appointmentsChangePct: number | null;
-    messagesTaken: number;
-    messagesChangePct: number | null;
-  };
-  chart: {
-    days: Array<{
-      label: string;
-      answered: number;
-      voicemail: number;
-      missed: number;
-    }>;
-  };
-  attention: Array<{
-    id: string;
-    tone: AttentionTone;
-    title: string;
-    body?: string;
-    actionLabel: string;
-    href: string;
-  }>;
-  recentCalls: Array<{
-    id: string;
-    name: string;
-    initials: string;
-    reason: string;
-    disposition: CallDisposition;
-    duration: string;
-    timeLabel: string;
-    href: string;
-    hasRecording: boolean;
-  }>;
-  smsPanel: {
-    sent: number;
-    replies: number;
-    messagesUsed: number;
-    messagesLimit: number;
-    messagesPct: number;
-    campaign?: {
-      name: string;
-      endsLabel?: string;
-      href: string;
-    };
-    empty?: { title: string; body: string; actionLabel: string; href: string };
-  };
-  automationsPanel: {
-    activeCount: number;
-    flows: Array<{ name: string; active: boolean }>;
-    href: string;
-  };
-  planUsage: {
-    receptionistMinutesUsed: number;
-    receptionistMinutesLimit: number;
-    receptionistPct: number;
-    smsMessagesUsed: number;
-    smsMessagesLimit: number;
-    smsPct: number;
-    daysLeftInCycle: number;
-  };
+type RecentCallRow = {
+  id: string;
+  contactId: string | null;
+  fromE164: string;
+  startedAt: Date;
+  answeredAt: Date | null;
+  voicemailDetected: boolean;
+  status: string;
+  outcome: string | null;
+  durationSeconds: number | null;
+  insights: Array<{ summary: string | null; intent: string | null }>;
+  recordings: Array<{ id: string }>;
 };
+
+type WeekCallRow = {
+  startedAt: Date;
+  answeredAt: Date | null;
+  voicemailDetected: boolean;
+  status: string;
+};
+
+type ContactSummary = {
+  id: string;
+  firstName: string | null;
+  lastName: string | null;
+  phone: string | null;
+};
+
+type AutomationFlowSummary = { name: string; status: string };
 
 function greetingForHour(hour: number): string {
   if (hour < 12) return "Good morning";
@@ -156,12 +107,6 @@ function classifyDisposition(call: {
   const s = call.status.toUpperCase();
   if (s === "NO_ANSWER" || s === "FAILED" || s === "CANCELED") return "missed";
   return "missed";
-}
-
-function dispositionLabel(d: CallDisposition): string {
-  if (d === "answered") return "Answered";
-  if (d === "voicemail") return "Voicemail";
-  return "Missed";
 }
 
 function formatCallTimeLabel(startedAt: Date): string {
@@ -236,10 +181,10 @@ export async function loadOperationalDashboardData(
       }),
     ]);
 
-  const resolvedAgent =
+  const resolvedAgent: VoiceAgentSummary | null =
     agent ??
-    allAgents.find((a) => a.status === "ACTIVE") ??
-    allAgents.find((a) => a.status === "TESTING") ??
+    allAgents.find((a: VoiceAgentSummary) => a.status === "ACTIVE") ??
+    allAgents.find((a: VoiceAgentSummary) => a.status === "TESTING") ??
     allAgents[0] ??
     null;
 
@@ -371,8 +316,12 @@ export async function loadOperationalDashboardData(
     }),
   ]);
 
+  const recentCallRows = recentCalls as RecentCallRow[];
+  const weekCallRows = weekCalls as WeekCallRow[];
+  const activeFlowRows = activeFlows as AutomationFlowSummary[];
+
   const contactIds = [
-    ...new Set(recentCalls.map((c) => c.contactId).filter(Boolean) as string[]),
+    ...new Set(recentCallRows.map((c) => c.contactId).filter(Boolean) as string[]),
   ];
   const contacts = contactIds.length
     ? await prisma.contact.findMany({
@@ -380,7 +329,9 @@ export async function loadOperationalDashboardData(
         select: { id: true, firstName: true, lastName: true, phone: true },
       })
     : [];
-  const contactMap = new Map(contacts.map((c) => [c.id, c]));
+  const contactMap = new Map(
+    (contacts as ContactSummary[]).map((c) => [c.id, c]),
+  );
 
   const dayLabels = ["M", "T", "W", "T", "F", "S", "S"];
   const chartDays: OperationalDashboardData["chart"]["days"] = [];
@@ -390,7 +341,7 @@ export async function loadOperationalDashboardData(
     dayStart.setHours(0, 0, 0, 0);
     const dayEnd = new Date(dayStart);
     dayEnd.setDate(dayEnd.getDate() + 1);
-    const dayCalls = weekCalls.filter(
+    const dayCalls = weekCallRows.filter(
       (c) => c.startedAt >= dayStart && c.startedAt < dayEnd,
     );
     let answeredC = 0;
@@ -470,11 +421,11 @@ export async function loadOperationalDashboardData(
     });
   }
 
-  const recentRows = recentCalls.map((call) => {
+  const recentRows = recentCallRows.map((call) => {
     const contact = call.contactId ? contactMap.get(call.contactId) : null;
     const name = contact
       ? [contact.firstName, contact.lastName].filter(Boolean).join(" ") ||
-        fmtCallPhone(contact.phone)
+        fmtCallPhone(contact.phone ?? call.fromE164)
       : fmtCallPhone(call.fromE164);
     const summary =
       call.insights[0]?.summary ||
@@ -595,8 +546,8 @@ export async function loadOperationalDashboardData(
           },
     },
     automationsPanel: {
-      activeCount: activeFlows.length,
-      flows: activeFlows.map((f) => ({
+      activeCount: activeFlowRows.length,
+      flows: activeFlowRows.map((f) => ({
         name: f.name,
         active: f.status === "ACTIVE",
       })),
@@ -613,5 +564,3 @@ export async function loadOperationalDashboardData(
     },
   };
 }
-
-export { dispositionLabel };
