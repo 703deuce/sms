@@ -13,6 +13,10 @@ import {
 } from "@/components/smart-routing/shared";
 import { fmtDurationMs } from "@/lib/smart-routing/display";
 import {
+  DEFAULT_RECEPTIONIST_ELEVENLABS_VOICE_ID,
+  listEnabledReceptionistElevenLabsVoices,
+} from "@/lib/voice/elevenlabs/receptionist-voice-catalog";
+import {
   shouldUseWireframeAudio,
   WIREFRAME_AUDIO_ASSETS,
 } from "@/lib/smart-routing/wireframe-demo";
@@ -66,6 +70,7 @@ export function SmartRoutingAudioView() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [generateText, setGenerateText] = useState("");
   const [generateName, setGenerateName] = useState("New prompt");
+  const [generateVoiceId, setGenerateVoiceId] = useState(DEFAULT_RECEPTIONIST_ELEVENLABS_VOICE_ID);
 
   const load = useCallback(() => {
     fetch("/api/smart-routing/audio")
@@ -136,7 +141,7 @@ export function SmartRoutingAudioView() {
       body: JSON.stringify({
         name: generateName,
         text: generateText,
-        voiceId: "EXAVITQu4vr4xnSDxMaL",
+        voiceId: generateVoiceId,
       }),
     });
     load();

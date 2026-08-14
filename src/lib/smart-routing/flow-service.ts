@@ -158,13 +158,22 @@ export async function validateFlow(workspaceId: string, flowId: string) {
 }
 
 export async function publishFlow(workspaceId: string, flowId: string, createdBy?: string) {
-  const validation = await validateFlow(workspaceId, flowId);
+  const flow = await getFlow(workspaceId, flowId);
+  if (!flow) throw new Error("Flow not found");
+
+  let draft = parseDraftConfig(flow.draftConfigJson);
+  const { ensureDraftGreetingAudio } = await import("./media-service");
+  draft = await ensureDraftGreetingAudio(workspaceId, draft);
+  const hadAudio = Boolean(parseDraftConfig(flow.draftConfigJson).greeting?.audioAssetId);
+  if (!hadAudio && draft.greeting?.audioAssetId) {
+    await updateFlowDraft(workspaceId, flowId, { draftConfig: draft });
+  }
+
+  const validation = validateDraftConfig(draft, { requireAudio: true });
   if (!validation.valid) {
     throw new Error(`Flow validation failed: ${validation.issues[0]?.message}`);
   }
-  const flow = await getFlow(workspaceId, flowId);
-  if (!flow) throw new Error("Flow not found");
-  const draft = parseDraftConfig(flow.draftConfigJson);
+
   const compiled = compileDraftConfig(draft);
   const prisma = getPrisma();
   const lastVersion = await prisma.smartRoutingFlowVersion.findFirst({

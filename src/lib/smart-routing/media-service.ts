@@ -9,7 +9,9 @@ import {
   isElevenLabsConfigured,
   synthesizeElevenLabsSpeech,
 } from "@/lib/voice/elevenlabs/client";
+import { RECEPTIONIST_TTS_MODEL } from "@/lib/voice/elevenlabs/receptionist-voice-catalog";
 import { promptHash } from "./session-store";
+import type { DraftConfig } from "./types";
 
 const AUDIO_DIR = path.join(process.cwd(), "public", "smart-routing-audio");
 
@@ -55,7 +57,7 @@ export async function generatePromptAudio(input: {
   const audioBuffer = await synthesizeElevenLabsSpeech({
     text: input.text,
     voiceId: input.voiceId,
-    modelId: "eleven_turbo_v2_5",
+    modelId: RECEPTIONIST_TTS_MODEL,
     speed: input.speed ?? 1,
   });
 
@@ -143,6 +145,43 @@ export async function resolveAudioUrlForAsset(
   if (!assetId) return null;
   const asset = await getAudioAsset(workspaceId, assetId);
   return asset?.processedUrl ?? null;
+}
+
+export async function ensureDraftGreetingAudio(
+  workspaceId: string,
+  draft: DraftConfig,
+): Promise<DraftConfig> {
+  const greeting = draft.greeting;
+  if (!greeting || greeting.source !== "elevenlabs") return draft;
+  if (greeting.audioAssetId) return draft;
+  const text = greeting.text?.trim();
+  if (!text) return draft;
+
+  const {
+    DEFAULT_RECEPTIONIST_ELEVENLABS_VOICE_ID,
+    normalizeWizardVoiceToElevenLabs,
+  } = await import("@/lib/voice/elevenlabs/receptionist-voice-catalog");
+  const voiceId = normalizeWizardVoiceToElevenLabs(
+    greeting.voiceId ?? DEFAULT_RECEPTIONIST_ELEVENLABS_VOICE_ID,
+  );
+
+  const asset = await generatePromptAudio({
+    workspaceId,
+    name: "Main greeting",
+    text,
+    voiceId,
+    speed: greeting.speed ?? 1,
+  });
+
+  return {
+    ...draft,
+    greeting: {
+      ...greeting,
+      source: "elevenlabs",
+      voiceId,
+      audioAssetId: asset.id,
+    },
+  };
 }
 
 export function hashUpload(buffer: Buffer): string {

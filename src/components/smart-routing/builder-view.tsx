@@ -21,6 +21,10 @@ import {
   fmtRelativeTime,
 } from "@/lib/smart-routing/display";
 import type { DraftConfig } from "@/lib/smart-routing/types";
+import {
+  DEFAULT_RECEPTIONIST_ELEVENLABS_VOICE_ID,
+  listEnabledReceptionistElevenLabsVoices,
+} from "@/lib/voice/elevenlabs/receptionist-voice-catalog";
 import { cn } from "@/lib/utils";
 import {
   Bot,
@@ -66,7 +70,11 @@ export function SmartRoutingBuilderView({ flowId }: { flowId: string }) {
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [greetingText, setGreetingText] = useState("");
-  const [voiceId, setVoiceId] = useState("EXAVITQu4vr4xnSDxMaL");
+  const [voiceId, setVoiceId] = useState(DEFAULT_RECEPTIONIST_ELEVENLABS_VOICE_ID);
+  const [greetingAudioAssetId, setGreetingAudioAssetId] = useState<string | null>(null);
+  const [greetingAudioUrl, setGreetingAudioUrl] = useState<string | null>(null);
+  const [generatingAudio, setGeneratingAudio] = useState(false);
+  const [audioGenerateError, setAudioGenerateError] = useState<string | null>(null);
   const [voiceSpeed, setVoiceSpeed] = useState(0.95);
   const [menuOptions, setMenuOptions] = useState<
     Array<{ digit: string; label: string; phoneNumber: string; destinationLabel?: string }>
@@ -100,8 +108,22 @@ export function SmartRoutingBuilderView({ flowId }: { flowId: string }) {
           (draft.greeting?.source as "elevenlabs" | "recording" | "upload" | "telnyx_tts") ??
             "elevenlabs",
         );
-        setVoiceId(draft.greeting?.voiceId ?? "EXAVITQu4vr4xnSDxMaL");
+        setVoiceId(draft.greeting?.voiceId ?? DEFAULT_RECEPTIONIST_ELEVENLABS_VOICE_ID);
         setVoiceSpeed(draft.greeting?.speed ?? 0.95);
+        setGreetingAudioAssetId(draft.greeting?.audioAssetId ?? null);
+        if (draft.greeting?.audioAssetId) {
+          fetch(`/api/smart-routing/audio`)
+            .then((r) => r.json())
+            .then((j) => {
+              const asset = (j.data ?? []).find(
+                (a: { id: string }) => a.id === draft.greeting?.audioAssetId,
+              );
+              if (asset?.processedUrl) setGreetingAudioUrl(asset.processedUrl);
+            })
+            .catch(() => undefined);
+        } else {
+          setGreetingAudioUrl(null);
+        }
         setMenuOptions(
           (draft.menuOptions ?? []).map((o) => ({
             digit: o.digit,
@@ -158,7 +180,7 @@ export function SmartRoutingBuilderView({ flowId }: { flowId: string }) {
       greeting: {
         source: voiceSource,
         text: greetingText,
-        audioAssetId: baseDraft.greeting?.audioAssetId,
+        audioAssetId: greetingAudioAssetId ?? baseDraft.greeting?.audioAssetId,
         voiceId,
         speed: voiceSpeed,
       },
@@ -250,7 +272,68 @@ export function SmartRoutingBuilderView({ flowId }: { flowId: string }) {
     load();
   }
 
+  async function generateAudio(opts?: { silent?: boolean }) {
+    if (!greetingText.trim()) return null;
+    setGeneratingAudio(true);
+    setAudioGenerateError(null);
+    try {
+      const res = await fetch("/api/smart-routing/audio/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "Main greeting",
+          text: greetingText,
+          voiceId,
+          speed: voiceSpeed,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.data?.id) {
+        throw new Error(json.error || "Audio generation failed");
+      }
+      const asset = json.data as { id: string; processedUrl?: string };
+      setGreetingAudioAssetId(asset.id);
+      setGreetingAudioUrl(asset.processedUrl ?? null);
+      const base = flow?.draftConfigJson ?? { nodes: [], edges: [] };
+      setFlow((prev) =>
+        prev
+          ? {
+              ...prev,
+              draftConfigJson: {
+                ...base,
+                greeting: {
+                  source: "elevenlabs",
+                  text: greetingText,
+                  audioAssetId: asset.id,
+                  voiceId,
+                  speed: voiceSpeed,
+                },
+              },
+            }
+          : prev,
+      );
+      if (!opts?.silent) {
+        await saveDraft();
+      }
+      return asset;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Audio generation failed";
+      setAudioGenerateError(msg);
+      return null;
+    } finally {
+      setGeneratingAudio(false);
+    }
+  }
+
   async function publishFlow() {
+    if (
+      voiceSource === "elevenlabs" &&
+      greetingText.trim() &&
+      !greetingAudioAssetId &&
+      !flow?.draftConfigJson?.greeting?.audioAssetId
+    ) {
+      await generateAudio({ silent: true });
+    }
     await saveDraft();
     setPublishing(true);
     const res = await fetch(`/api/smart-routing/flows/${flowId}/publish`, { method: "POST" });
@@ -258,19 +341,12 @@ export function SmartRoutingBuilderView({ flowId }: { flowId: string }) {
     if (res.ok) load();
   }
 
-  async function generateAudio() {
-    if (!greetingText.trim()) return;
-    await fetch("/api/smart-routing/audio/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: "Main greeting",
-        text: greetingText,
-        voiceId,
-        speed: voiceSpeed,
-      }),
-    });
-    alert("Greeting audio generated. Save and publish to use on calls.");
+  async function generateAudioPreview() {
+    const asset = await generateAudio();
+    if (asset?.processedUrl) {
+      const audio = new Audio(asset.processedUrl);
+      audio.play().catch(() => undefined);
+    }
   }
 
   if (!flow) {
@@ -478,13 +554,54 @@ export function SmartRoutingBuilderView({ flowId }: { flowId: string }) {
               <div className="mt-4 grid gap-4 sm:grid-cols-2">
                 <div>
                   <SrFieldLabel>Selected Voice</SrFieldLabel>
-                  <div className="flex gap-2">
-                    <SrSelect value={voiceId} onChange={(e) => setVoiceId(e.target.value)}>
-                      <option value="EXAVITQu4vr4xnSDxMaL">Astra</option>
-                      <option value="21m00Tcm4TlvDq8ikWAM">Rachel</option>
+                  <div className="flex flex-wrap gap-2">
+                    <SrSelect
+                      value={voiceId}
+                      onChange={(e) => {
+                        setVoiceId(e.target.value);
+                        setGreetingAudioAssetId(null);
+                        setGreetingAudioUrl(null);
+                      }}
+                      className="min-w-[180px] flex-1"
+                    >
+                      {listEnabledReceptionistElevenLabsVoices().map((v) => (
+                        <option key={v.id} value={v.id}>
+                          {v.label}
+                          {v.badge ? ` — ${v.badge}` : ""}
+                        </option>
+                      ))}
                     </SrSelect>
-                    <SrOutlineButton onClick={generateAudio}>Preview</SrOutlineButton>
+                    <SrOutlineButton
+                      onClick={generateAudioPreview}
+                      disabled={generatingAudio || !greetingText.trim()}
+                    >
+                      {generatingAudio ? "Generating…" : "Generate with ElevenLabs"}
+                    </SrOutlineButton>
                   </div>
+                  {greetingAudioAssetId ? (
+                    <p className="mt-2 text-[12px] font-medium text-emerald-700">
+                      ✓ Greeting audio ready — callers hear ElevenLabs, not Telnyx TTS.
+                      {greetingAudioUrl ? (
+                        <button
+                          type="button"
+                          className="ml-2 text-[#6366f1] underline"
+                          onClick={() => {
+                            const audio = new Audio(greetingAudioUrl);
+                            audio.play().catch(() => undefined);
+                          }}
+                        >
+                          Play
+                        </button>
+                      ) : null}
+                    </p>
+                  ) : voiceSource === "elevenlabs" ? (
+                    <p className="mt-2 text-[12px] text-amber-700">
+                      Generate audio before publishing — otherwise callers hear basic Telnyx TTS.
+                    </p>
+                  ) : null}
+                  {audioGenerateError ? (
+                    <p className="mt-1 text-[12px] text-red-600">{audioGenerateError}</p>
+                  ) : null}
                 </div>
                 <div>
                   <SrFieldLabel>Speed — {voiceSpeed.toFixed(2)}x</SrFieldLabel>
@@ -503,6 +620,8 @@ export function SmartRoutingBuilderView({ flowId }: { flowId: string }) {
                 <div className="mt-4">
                   <AudioRecorderUpload
                     onUploaded={(asset) => {
+                      setGreetingAudioAssetId(asset.id);
+                      setGreetingAudioUrl(asset.processedUrl ?? null);
                       const base = flow.draftConfigJson ?? { nodes: [], edges: [] };
                       setFlow({
                         ...flow,

@@ -86,11 +86,35 @@ export function validateDraftConfig(
   }
 
   if (options?.requireAudio) {
-    const hasAudio =
-      Boolean(draft.greeting?.audioAssetId) ||
-      Boolean(draft.greeting?.text?.trim()) ||
-      nodes.some((n) => n.type === "MENU" && String(n.config.promptText ?? "").trim());
-    if (!hasAudio) {
+    const source = draft.greeting?.source ?? "elevenlabs";
+    const hasElevenLabsAudio =
+      source === "elevenlabs" && Boolean(draft.greeting?.audioAssetId);
+    const hasRecordedAudio =
+      (source === "recording" || source === "upload") &&
+      Boolean(draft.greeting?.audioAssetId);
+    const hasTelnyxText =
+      source === "telnyx_tts" && Boolean(draft.greeting?.text?.trim());
+    const hasMenuPrompt = nodes.some(
+      (n) => n.type === "MENU" && String(n.config.promptText ?? "").trim(),
+    );
+    if (
+      source === "elevenlabs" &&
+      draft.greeting?.text?.trim() &&
+      !draft.greeting?.audioAssetId
+    ) {
+      issues.push({
+        code: "missing_greeting_audio",
+        message:
+          "Generate ElevenLabs audio for your greeting (click Generate in the builder) before publishing.",
+      });
+    }
+    if (
+      !hasElevenLabsAudio &&
+      !hasRecordedAudio &&
+      !hasTelnyxText &&
+      !hasMenuPrompt &&
+      !draft.greeting?.text?.trim()
+    ) {
       issues.push({ code: "missing_audio", message: "Greeting or menu prompt is required." });
     }
   }
