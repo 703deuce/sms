@@ -66,14 +66,21 @@ export function SmartRoutingNewFlowView({ templates }: { templates: Template[] }
     const template = templates.find((t) => t.type === selected);
     if (!template) return;
     setCreating(true);
-    const res = await fetch("/api/smart-routing/flows", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: template.type, name: template.title }),
-    });
-    const json = await res.json();
-    if (json.data?.id) router.push(`/smart-routing/${json.data.id}`);
-    setCreating(false);
+    try {
+      const res = await fetch("/api/smart-routing/flows", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: template.type, name: template.title }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.data?.id) {
+        console.error("Create flow failed", json);
+        return;
+      }
+      router.push(`/smart-routing/${json.data.id}`);
+    } finally {
+      setCreating(false);
+    }
   }
 
   return (
