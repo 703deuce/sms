@@ -44,14 +44,14 @@ const TEMPLATE_ICONS: Record<string, { icon: typeof Grid3x3; color: string }> = 
 };
 
 const BUILDING_BLOCKS = [
-  { label: "Greeting", icon: Radio },
-  { label: "Keypad Menu", icon: Grid3x3 },
-  { label: "Ring Group", icon: Users },
-  { label: "Call Whisper", icon: Headphones },
-  { label: "Business Hours", icon: Clock },
-  { label: "Voicemail", icon: Voicemail },
-  { label: "AI Receptionist", icon: Bot },
-  { label: "Text Recovery", icon: MessageSquare },
+  { label: "Greeting", icon: Radio, color: "text-[#6366f1] bg-[#eef2ff]" },
+  { label: "Keypad Menu", icon: Grid3x3, color: "text-[#6366f1] bg-[#eef2ff]" },
+  { label: "Ring Group", icon: Users, color: "text-emerald-600 bg-emerald-50" },
+  { label: "Call Whisper", icon: Headphones, color: "text-orange-600 bg-orange-50" },
+  { label: "Business Hours", icon: Clock, color: "text-amber-600 bg-amber-50" },
+  { label: "Voicemail", icon: Voicemail, color: "text-sky-600 bg-sky-50" },
+  { label: "AI Receptionist", icon: Bot, color: "text-[#6366f1] bg-[#eef2ff]" },
+  { label: "Text Recovery", icon: MessageSquare, color: "text-emerald-600 bg-emerald-50" },
 ];
 
 export function SmartRoutingNewFlowView({ templates }: { templates: Template[] }) {
@@ -107,6 +107,9 @@ export function SmartRoutingNewFlowView({ templates }: { templates: Template[] }
           <div className="space-y-6">
             <div>
               <h2 className="text-[15px] font-bold text-[#111827]">Choose a template</h2>
+              <p className="mt-1 text-[12px] text-[#6b7280]">
+                Start with a proven template and customize it to fit your business.
+              </p>
               <div className="mt-4 grid gap-4 sm:grid-cols-2">
                 {mainTemplates.map((t) => {
                   const meta = TEMPLATE_ICONS[t.type] ?? TEMPLATE_ICONS.phone_menu;
@@ -194,7 +197,9 @@ export function SmartRoutingNewFlowView({ templates }: { templates: Template[] }
                     key={b.label}
                     className="flex flex-col items-center gap-2 rounded-lg border border-[#e5e7eb] p-3 text-center"
                   >
-                    <b.icon className="h-4 w-4 text-[#6366f1]" />
+                    <span className={cn("flex h-8 w-8 items-center justify-center rounded-lg", b.color)}>
+                      <b.icon className="h-4 w-4" />
+                    </span>
                     <span className="text-[10px] font-semibold text-[#374151]">{b.label}</span>
                   </div>
                 ))}
@@ -206,7 +211,9 @@ export function SmartRoutingNewFlowView({ templates }: { templates: Template[] }
             <div className={cn(srCard, "p-5")}>
               <div className="flex items-center justify-between">
                 <h2 className="text-[14px] font-bold text-[#111827]">What happens next?</h2>
-                <Bot className="h-4 w-4 text-[#6366f1]" />
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#eef2ff]">
+                  <Bot className="h-4 w-4 text-[#6366f1]" />
+                </span>
               </div>
               <ol className="mt-4 space-y-4">
                 {[

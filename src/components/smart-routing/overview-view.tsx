@@ -14,10 +14,17 @@ import {
   fmtPhoneDisplay,
   fmtRelativeTime,
 } from "@/lib/smart-routing/display";
+import {
+  shouldUseWireframeOverview,
+  WIREFRAME_DEMO_FLOWS,
+  WIREFRAME_OVERVIEW_METRICS,
+  type WireframeFlowRow,
+} from "@/lib/smart-routing/wireframe-demo";
 import type { DraftConfig } from "@/lib/smart-routing/types";
 import { cn } from "@/lib/utils";
 import {
   AlertTriangle,
+  BookOpen,
   Clock,
   GitBranch,
   Grid3x3,
@@ -71,6 +78,12 @@ const FLOW_ICONS: Record<string, typeof Grid3x3> = {
 
 const STATUS_FILTERS = ["all", "active", "draft", "paused"] as const;
 
+type TableRow = FlowRow | WireframeFlowRow;
+
+function isDemoRow(row: TableRow): row is WireframeFlowRow {
+  return "isDemo" in row && row.isDemo === true;
+}
+
 export function SmartRoutingOverviewView({
   flows,
   metrics,
@@ -92,18 +105,41 @@ export function SmartRoutingOverviewView({
   const [statusFilter, setStatusFilter] = useState<typeof STATUS_FILTERS[number]>("all");
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
 
+  const useWireframe = shouldUseWireframeOverview(flows.length, metrics);
+  const displayMetrics = useWireframe
+    ? WIREFRAME_OVERVIEW_METRICS
+    : {
+        activeFlows: metrics?.activeFlows ?? 0,
+        routedToday: metrics?.routedToday ?? 0,
+        recovered: metrics?.recovered ?? 0,
+        failures: metrics?.failures ?? 0,
+        trends: {
+          activeFlows: metrics?.activeFlows ? 12 : null,
+          routedToday: metrics?.routedToday ? 15 : null,
+          recovered: metrics?.recovered ? 9 : null,
+          failures: metrics?.failures ? -25 : null,
+        },
+      };
+
+  const tableRows: TableRow[] = useWireframe
+    ? WIREFRAME_DEMO_FLOWS
+    : flows;
+
   const filtered = useMemo(() => {
-    return flows.filter((f) => {
+    return tableRows.filter((f) => {
       if (statusFilter !== "all" && f.status !== statusFilter) return false;
       if (!search.trim()) return true;
       const q = search.toLowerCase();
+      const number = isDemoRow(f)
+        ? f.businessNumberE164
+        : f.businessNumberE164 ?? numberMap[f.assignedPhoneNumberId ?? ""] ?? "";
       return (
         f.name.toLowerCase().includes(q) ||
         f.type.toLowerCase().includes(q) ||
-        (numberMap[f.assignedPhoneNumberId ?? ""] ?? "").includes(q)
+        number.includes(q)
       );
     });
-  }, [flows, search, statusFilter, numberMap]);
+  }, [tableRows, search, statusFilter, numberMap]);
 
   const templateCards = templates.filter((t) => t.type !== "custom").slice(0, 4);
 
@@ -111,14 +147,17 @@ export function SmartRoutingOverviewView({
     <SrPageShell>
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-[26px] font-bold tracking-tight text-[#111827]">Smart Routing</h1>
+          <h1 className="text-[28px] font-bold tracking-tight text-[#111827]">Smart Routing</h1>
           <p className="mt-1 max-w-2xl text-[14px] text-[#6b7280]">
             Add a professional call menu and routing to the business number you already use.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Link href="/numbers">
-            <SrOutlineButton>View Forwarding Guide</SrOutlineButton>
+            <SrOutlineButton>
+              <BookOpen className="h-4 w-4 text-[#6366f1]" />
+              View Forwarding Guide
+            </SrOutlineButton>
           </Link>
           <Link href="/smart-routing/new">
             <SrPrimaryButton>
@@ -129,91 +168,90 @@ export function SmartRoutingOverviewView({
         </div>
       </div>
 
-      {metrics ? (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <SrMetricCard
-            label="Active Flows"
-            value={metrics.activeFlows}
-            icon={<GitBranch className="h-4 w-4" />}
-            trend={metrics.activeFlows > 0 ? 12 : null}
-            trendLabel="vs last week"
-          />
-          <SrMetricCard
-            label="Calls Routed Today"
-            value={metrics.routedToday}
-            icon={<PhoneForwarded className="h-4 w-4" />}
-            iconClass="bg-emerald-50 text-emerald-600"
-            trend={metrics.routedToday > 0 ? 15 : null}
-            trendLabel="vs yesterday"
-          />
-          <SrMetricCard
-            label="Missed Calls Recovered"
-            value={metrics.recovered}
-            icon={<RefreshCw className="h-4 w-4" />}
-            iconClass="bg-amber-50 text-amber-600"
-            trend={metrics.recovered > 0 ? 9 : null}
-            trendLabel="vs yesterday"
-          />
-          <SrMetricCard
-            label="Routing Failures"
-            value={metrics.failures}
-            icon={<AlertTriangle className="h-4 w-4" />}
-            iconClass="bg-red-50 text-red-600"
-            trend={metrics.failures > 0 ? -25 : null}
-            trendLabel="vs yesterday"
-          />
-        </div>
-      ) : null}
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <SrMetricCard
+          label="Active Flows"
+          value={displayMetrics.activeFlows}
+          icon={<GitBranch className="h-5 w-5" />}
+          trend={displayMetrics.trends.activeFlows}
+          trendLabel="vs last week"
+        />
+        <SrMetricCard
+          label="Calls Routed Today"
+          value={displayMetrics.routedToday}
+          icon={<PhoneForwarded className="h-5 w-5" />}
+          iconClass="bg-emerald-50 text-emerald-600"
+          trend={displayMetrics.trends.routedToday}
+          trendLabel="vs yesterday"
+        />
+        <SrMetricCard
+          label="Missed Calls Recovered"
+          value={displayMetrics.recovered}
+          icon={<RefreshCw className="h-5 w-5" />}
+          iconClass="bg-orange-50 text-orange-600"
+          trend={displayMetrics.trends.recovered}
+          trendLabel="vs yesterday"
+        />
+        <SrMetricCard
+          label="Routing Failures"
+          value={displayMetrics.failures}
+          icon={<AlertTriangle className="h-5 w-5" />}
+          iconClass="bg-red-50 text-red-600"
+          trend={displayMetrics.trends.failures}
+          trendLabel="vs yesterday"
+          trendPositiveIsGood={false}
+        />
+      </div>
 
       <div className={cn(srCard, "overflow-hidden")}>
         <div className="border-b border-[#e5e7eb] px-5 py-4">
-          <h2 className="text-[15px] font-bold text-[#111827]">Your Call Flows</h2>
-          <div className="mt-4 flex flex-wrap items-center gap-3">
-            <div className="relative min-w-[200px] flex-1">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9ca3af]" />
-              <input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search flows…"
-                className="w-full rounded-lg border border-[#e5e7eb] py-2 pl-9 pr-3 text-[13px] focus:border-[#6366f1] focus:outline-none focus:ring-2 focus:ring-[#6366f1]/20"
-              />
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-[16px] font-bold text-[#111827]">Your Call Flows</h2>
+                <span className="text-[#9ca3af]">ⓘ</span>
+              </div>
+              <p className="mt-1 text-[12px] text-[#6b7280]">
+                Manage greetings, routing rules, and recovery paths for each business line.
+              </p>
             </div>
-            <div className="flex flex-wrap gap-1">
-              {STATUS_FILTERS.map((f) => (
-                <button
-                  key={f}
-                  type="button"
-                  onClick={() => setStatusFilter(f)}
-                  className={cn(
-                    "rounded-lg px-3 py-1.5 text-[12px] font-semibold capitalize",
-                    statusFilter === f
-                      ? "bg-[#6366f1] text-white"
-                      : "text-[#6b7280] hover:bg-[#f3f4f6]",
-                  )}
-                >
-                  {f === "all" ? "All" : f}
-                </button>
-              ))}
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex rounded-lg border border-[#e5e7eb] p-0.5">
+                {STATUS_FILTERS.map((f) => (
+                  <button
+                    key={f}
+                    type="button"
+                    onClick={() => setStatusFilter(f)}
+                    className={cn(
+                      "rounded-md px-3 py-1.5 text-[12px] font-semibold capitalize",
+                      statusFilter === f
+                        ? "bg-[#6366f1] text-white"
+                        : "text-[#6b7280] hover:text-[#111827]",
+                    )}
+                  >
+                    {f === "all" ? "All" : f}
+                  </button>
+                ))}
+              </div>
+              <div className="relative min-w-[220px]">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9ca3af]" />
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search flows…"
+                  className="w-full rounded-lg border border-[#e5e7eb] py-2 pl-9 pr-3 text-[13px] focus:border-[#6366f1] focus:outline-none focus:ring-2 focus:ring-[#6366f1]/20"
+                />
+              </div>
             </div>
           </div>
         </div>
 
         {loading ? (
           <p className="p-10 text-center text-[13px] text-[#6b7280]">Loading flows…</p>
-        ) : filtered.length === 0 ? (
-          <div className="p-12 text-center">
-            <h3 className="text-lg font-semibold text-[#111827]">Make your business line smarter</h3>
-            <p className="mt-2 text-[13px] text-[#6b7280]">
-              Add a greeting, route callers to the right person, or recover missed calls automatically.
-            </p>
-            <Link href="/smart-routing/new" className="mt-6 inline-block">
-              <SrPrimaryButton>Create Your First Call Flow</SrPrimaryButton>
-            </Link>
-          </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[900px] text-left text-[13px]">
-              <thead className="bg-[#f9fafb] text-[11px] font-semibold uppercase tracking-wide text-[#6b7280]">
+            <table className="w-full min-w-[960px] text-left text-[13px]">
+              <thead className="bg-[#f9fafb] text-[10px] font-semibold uppercase tracking-wide text-[#6b7280]">
                 <tr>
                   <th className="px-5 py-3">Flow Name</th>
                   <th className="px-3 py-3">Number</th>
@@ -228,27 +266,41 @@ export function SmartRoutingOverviewView({
               <tbody className="divide-y divide-[#f3f4f6]">
                 {filtered.map((f) => {
                   const Icon = FLOW_ICONS[f.type] ?? Grid3x3;
-                  const number =
-                    f.businessNumberE164 ??
-                    numberMap[f.assignedPhoneNumberId ?? ""] ??
-                    "—";
-                  const draft = f.draftConfigJson;
+                  const demo = isDemoRow(f);
+                  const number = demo
+                    ? f.businessNumberE164
+                    : f.businessNumberE164 ??
+                      numberMap[(f as FlowRow).assignedPhoneNumberId ?? ""] ??
+                      "—";
+                  const destination = demo
+                    ? f.primaryDestination
+                    : derivePrimaryDestination(
+                        (f as FlowRow).draftConfigJson,
+                        f.type,
+                      );
+                  const updated = demo
+                    ? f.updatedLabel
+                    : fmtRelativeTime((f as FlowRow).updatedAt);
+                  const href = demo ? "/smart-routing/new" : `/smart-routing/${f.id}`;
+
                   return (
                     <tr key={f.id} className="hover:bg-[#f9fafb]/80">
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-3">
-                          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#eef2ff] text-[#6366f1]">
+                          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#eef2ff] text-[#6366f1]">
                             <Icon className="h-4 w-4" />
                           </span>
                           <Link
-                            href={`/smart-routing/${f.id}`}
+                            href={href}
                             className="font-semibold text-[#111827] hover:text-[#6366f1]"
                           >
                             {f.name}
                           </Link>
                         </div>
                       </td>
-                      <td className="px-3 py-4 text-[#374151]">{fmtPhoneDisplay(number)}</td>
+                      <td className="px-3 py-4 text-[#374151]">
+                        {fmtPhoneDisplay(number)}
+                      </td>
                       <td className="px-3 py-4 text-[#374151]">
                         {FLOW_TYPE_LABELS[f.type] ?? f.type}
                       </td>
@@ -256,71 +308,73 @@ export function SmartRoutingOverviewView({
                         <SrStatusBadge status={f.status} />
                       </td>
                       <td className="px-3 py-4 font-semibold text-[#111827]">
-                        {f.todayCalls ?? 0}
+                        {demo ? f.todayCalls : (f as FlowRow).todayCalls ?? 0}
                       </td>
-                      <td className="px-3 py-4 text-[#374151]">
-                        {derivePrimaryDestination(draft, f.type)}
-                      </td>
-                      <td className="px-3 py-4 text-[#6b7280]">
-                        {fmtRelativeTime(f.updatedAt)}
-                      </td>
+                      <td className="px-3 py-4 text-[#374151]">{destination}</td>
+                      <td className="px-3 py-4 text-[#6b7280]">{updated}</td>
                       <td className="px-5 py-4">
                         <div className="flex items-center justify-end gap-1">
                           <Link
-                            href={`/smart-routing/${f.id}`}
+                            href={href}
                             className="rounded-lg p-2 text-[#6b7280] hover:bg-[#f3f4f6] hover:text-[#6366f1]"
                           >
                             <Pencil className="h-4 w-4" />
                           </Link>
-                          <div className="relative">
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setMenuOpen(menuOpen === f.id ? null : f.id)
-                              }
-                              className="rounded-lg p-2 text-[#6b7280] hover:bg-[#f3f4f6]"
-                            >
+                          {!demo ? (
+                            <div className="relative">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setMenuOpen(menuOpen === f.id ? null : f.id)
+                                }
+                                className="rounded-lg p-2 text-[#6b7280] hover:bg-[#f3f4f6]"
+                              >
+                                <MoreHorizontal className="h-4 w-4" />
+                              </button>
+                              {menuOpen === f.id ? (
+                                <div className="absolute right-0 z-10 mt-1 w-44 rounded-lg border border-[#e5e7eb] bg-white py-1 shadow-lg">
+                                  <Link
+                                    href={`/smart-routing/${f.id}/test`}
+                                    className="block px-3 py-2 text-[13px] hover:bg-[#f9fafb]"
+                                    onClick={() => setMenuOpen(null)}
+                                  >
+                                    Test
+                                  </Link>
+                                  <button
+                                    type="button"
+                                    className="block w-full px-3 py-2 text-left text-[13px] hover:bg-[#f9fafb]"
+                                    onClick={async () => {
+                                      await onPause(f.id);
+                                      setMenuOpen(null);
+                                    }}
+                                  >
+                                    Pause
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="block w-full px-3 py-2 text-left text-[13px] hover:bg-[#f9fafb]"
+                                    onClick={async () => {
+                                      await onDuplicate(f.id);
+                                      setMenuOpen(null);
+                                    }}
+                                  >
+                                    Duplicate
+                                  </button>
+                                  <Link
+                                    href={`/smart-routing/${f.id}/activity`}
+                                    className="block px-3 py-2 text-[13px] hover:bg-[#f9fafb]"
+                                    onClick={() => setMenuOpen(null)}
+                                  >
+                                    View Activity
+                                  </Link>
+                                </div>
+                              ) : null}
+                            </div>
+                          ) : (
+                            <span className="rounded-lg p-2 text-[#9ca3af]">
                               <MoreHorizontal className="h-4 w-4" />
-                            </button>
-                            {menuOpen === f.id ? (
-                              <div className="absolute right-0 z-10 mt-1 w-44 rounded-lg border border-[#e5e7eb] bg-white py-1 shadow-lg">
-                                <Link
-                                  href={`/smart-routing/${f.id}/test`}
-                                  className="block px-3 py-2 text-[13px] hover:bg-[#f9fafb]"
-                                  onClick={() => setMenuOpen(null)}
-                                >
-                                  Test
-                                </Link>
-                                <button
-                                  type="button"
-                                  className="block w-full px-3 py-2 text-left text-[13px] hover:bg-[#f9fafb]"
-                                  onClick={async () => {
-                                    await onPause(f.id);
-                                    setMenuOpen(null);
-                                  }}
-                                >
-                                  Pause
-                                </button>
-                                <button
-                                  type="button"
-                                  className="block w-full px-3 py-2 text-left text-[13px] hover:bg-[#f9fafb]"
-                                  onClick={async () => {
-                                    await onDuplicate(f.id);
-                                    setMenuOpen(null);
-                                  }}
-                                >
-                                  Duplicate
-                                </button>
-                                <Link
-                                  href={`/smart-routing/${f.id}/activity`}
-                                  className="block px-3 py-2 text-[13px] hover:bg-[#f9fafb]"
-                                  onClick={() => setMenuOpen(null)}
-                                >
-                                  View Activity
-                                </Link>
-                              </div>
-                            ) : null}
-                          </div>
+                            </span>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -330,11 +384,21 @@ export function SmartRoutingOverviewView({
             </table>
           </div>
         )}
+
+        <div className="border-t border-[#e5e7eb] px-5 py-3 text-[12px] text-[#6b7280]">
+          Showing 1 to {filtered.length} of {filtered.length} results
+          {useWireframe ? (
+            <span className="ml-2 text-[#9ca3af]">· Sample data shown</span>
+          ) : null}
+        </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
         <div className={cn(srCard, "p-5")}>
           <h2 className="text-[15px] font-bold text-[#111827]">Smart Routing Templates</h2>
+          <p className="mt-1 text-[12px] text-[#6b7280]">
+            Start with a proven template and customize it for your business.
+          </p>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             {templateCards.map((t) => {
               const Icon = FLOW_ICONS[t.type] ?? Grid3x3;
@@ -342,7 +406,7 @@ export function SmartRoutingOverviewView({
                 <Link
                   key={t.type}
                   href="/smart-routing/new"
-                  className="rounded-xl border border-[#e5e7eb] p-4 transition-colors hover:border-[#6366f1]/40 hover:bg-[#f9fafb]"
+                  className="rounded-xl border border-[#e5e7eb] p-4 transition-colors hover:border-[#c7d2fe] hover:bg-[#fafafa]"
                 >
                   <Icon className="h-5 w-5 text-[#6366f1]" />
                   <p className="mt-2 text-[13px] font-bold text-[#111827]">{t.title}</p>
@@ -364,40 +428,44 @@ export function SmartRoutingOverviewView({
 
         <div className={cn(srCard, "p-5")}>
           <h2 className="text-[15px] font-bold text-[#111827]">How It Works</h2>
-          <div className="mt-6 space-y-6">
+          <div className="mt-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             {[
               {
                 n: 1,
                 icon: Phone,
                 title: "Customer calls your business number",
-                desc: "Callers use the number they already know — no new number required.",
+                desc: "Callers use the number they already know.",
               },
               {
                 n: 2,
                 icon: Network,
                 title: "Transovo routes the call automatically",
-                desc: "Your greeting, menu, and routing rules run on every inbound call.",
+                desc: "Greeting, menu, and routing on every call.",
               },
               {
                 n: 3,
                 icon: Users,
                 title: "Caller reaches the right person",
-                desc: "Ring groups, whisper transfers, voicemail, or AI receptionist handoff.",
+                desc: "Voicemail, AI, or text recovery when needed.",
               },
-            ].map((step) => (
-              <div key={step.n} className="flex gap-4">
+            ].map((step, i, arr) => (
+              <div key={step.n} className="flex flex-1 items-start gap-3">
                 <div className="flex flex-col items-center">
-                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#6366f1] text-[11px] font-bold text-white">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#6366f1] text-[12px] font-bold text-white">
                     {step.n}
                   </span>
+                  {i < arr.length - 1 ? (
+                    <div className="mt-2 hidden h-8 w-px border-l border-dashed border-[#c7d2fe] lg:block" />
+                  ) : null}
                 </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <step.icon className="h-4 w-4 text-[#6366f1]" />
-                    <p className="text-[13px] font-bold text-[#111827]">{step.title}</p>
-                  </div>
-                  <p className="mt-1 text-[12px] text-[#6b7280]">{step.desc}</p>
+                <div className="min-w-0">
+                  <step.icon className="h-4 w-4 text-[#6366f1]" />
+                  <p className="mt-1 text-[12px] font-bold text-[#111827]">{step.title}</p>
+                  <p className="mt-0.5 text-[11px] text-[#6b7280]">{step.desc}</p>
                 </div>
+                {i < arr.length - 1 ? (
+                  <div className="hidden flex-1 border-t border-dashed border-[#d1d5db] lg:mt-4 lg:block" />
+                ) : null}
               </div>
             ))}
           </div>

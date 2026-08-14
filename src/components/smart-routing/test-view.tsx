@@ -7,6 +7,7 @@ import {
   SrOutlineButton,
   SrPageShell,
   SrPrimaryButton,
+  SrFlowSimulator,
   SrSectionCard,
   SrSelect,
   SrStatusBadge,
@@ -264,7 +265,11 @@ export function SmartRoutingTestView({ flowId }: { flowId: string }) {
               </table>
             </SrSectionCard>
 
-            <SrSectionCard number={4} title="Flow Simulator" className="lg:col-span-2">
+            <SrSectionCard
+              number={4}
+              title="Flow Simulator"
+              className="lg:col-span-2"
+            >
               <div className="flex flex-wrap gap-1">
                 {[
                   { id: "1", label: "Press 1" },
@@ -288,21 +293,29 @@ export function SmartRoutingTestView({ flowId }: { flowId: string }) {
                   </button>
                 ))}
               </div>
-              <div className="mt-4 flex flex-wrap items-center gap-2 text-[11px]">
-                {["Incoming Call", "Greeting", "Menu"].map((step, i, arr) => (
-                  <div key={step} className="flex items-center gap-2">
-                    <span className="rounded-lg bg-[#eef2ff] px-3 py-2 font-semibold text-[#6366f1]">
-                      {step}
-                    </span>
-                    {i < arr.length - 1 ? <ChevronRight className="h-4 w-4 text-[#9ca3af]" /> : null}
-                  </div>
-                ))}
-              </div>
-              <ol className="mt-4 space-y-1 text-[12px] text-[#374151]">
-                {simSteps.map((s, i) => (
-                  <li key={i}>{s}</li>
-                ))}
-              </ol>
+              <SrFlowSimulator
+                steps={[
+                  { label: "Incoming Call", variant: "primary" },
+                  { label: "Greeting (Astra/v3)", variant: "default" },
+                  { label: "Menu (3 options)", variant: "default" },
+                  { label: `Press ${simTab}`, variant: "primary" },
+                  { label: "Front Desk + Ring Group", variant: "default" },
+                  { label: "No Answer", variant: "warning" },
+                  { label: "SMS Consent", variant: "default" },
+                  { label: "Send Text", variant: "default" },
+                  { label: "End Call", variant: "primary" },
+                ]}
+              />
+              <details className="mt-3">
+                <summary className="text-[12px] font-semibold text-[#6366f1] cursor-pointer">
+                  Expand simulator
+                </summary>
+                <ol className="mt-2 space-y-1 text-[12px] text-[#374151]">
+                  {simSteps.map((s, i) => (
+                    <li key={i}>{s}</li>
+                  ))}
+                </ol>
+              </details>
             </SrSectionCard>
 
             <SrSectionCard number={5} title="Publish Changes">

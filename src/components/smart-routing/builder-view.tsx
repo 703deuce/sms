@@ -84,6 +84,9 @@ export function SmartRoutingBuilderView({ flowId }: { flowId: string }) {
   const [forwardMode, setForwardMode] = useState("unconditional");
   const [forwardInstructions, setForwardInstructions] = useState<string | null>(null);
   const [recordPhone, setRecordPhone] = useState("");
+  const [voiceSource, setVoiceSource] = useState<
+    "elevenlabs" | "recording" | "upload" | "telnyx_tts"
+  >("elevenlabs");
 
   const load = useCallback(() => {
     fetch(`/api/smart-routing/flows/${flowId}`)
@@ -93,6 +96,10 @@ export function SmartRoutingBuilderView({ flowId }: { flowId: string }) {
         setFlow(f);
         const draft = f.draftConfigJson ?? { nodes: [], edges: [] };
         setGreetingText(draft.greeting?.text ?? "");
+        setVoiceSource(
+          (draft.greeting?.source as "elevenlabs" | "recording" | "upload" | "telnyx_tts") ??
+            "elevenlabs",
+        );
         setVoiceId(draft.greeting?.voiceId ?? "EXAVITQu4vr4xnSDxMaL");
         setVoiceSpeed(draft.greeting?.speed ?? 0.95);
         setMenuOptions(
@@ -145,12 +152,13 @@ export function SmartRoutingBuilderView({ flowId }: { flowId: string }) {
 
   async function buildDraftConfig(): Promise<DraftConfig | null> {
     if (!flow) return null;
+    const baseDraft = flow.draftConfigJson ?? { nodes: [], edges: [] };
     const draftConfig: DraftConfig = {
-      ...flow.draftConfigJson,
+      ...baseDraft,
       greeting: {
-        source: flow.draftConfigJson?.greeting?.source ?? "elevenlabs",
+        source: voiceSource,
         text: greetingText,
-        audioAssetId: flow.draftConfigJson?.greeting?.audioAssetId,
+        audioAssetId: baseDraft.greeting?.audioAssetId,
         voiceId,
         speed: voiceSpeed,
       },
@@ -160,8 +168,8 @@ export function SmartRoutingBuilderView({ flowId }: { flowId: string }) {
         action: "transfer",
         phoneNumber: o.phoneNumber,
       })),
-      nodes: [...(flow.draftConfigJson.nodes ?? [])],
-      edges: [...(flow.draftConfigJson.edges ?? [])],
+      nodes: [...(baseDraft.nodes ?? [])],
+      edges: [...(baseDraft.edges ?? [])],
     };
 
     const upsertNode = (type: DraftConfig["nodes"][0]["type"], id: string, config: Record<string, unknown>) => {
@@ -282,7 +290,10 @@ export function SmartRoutingBuilderView({ flowId }: { flowId: string }) {
               <h1 className="text-[24px] font-bold text-[#111827]">{flow.name}</h1>
               <SrStatusBadge status={flow.status} />
             </div>
-            <p className="mt-1 text-[13px] text-[#6b7280]">
+            <p className="mt-1 text-[14px] text-[#6b7280]">
+              Configure how callers are greeted, routed, and handled across your business line.
+            </p>
+            <p className="text-[12px] text-[#9ca3af]">
               Last edited {fmtRelativeTime(flow.updatedAt)}
             </p>
           </div>
@@ -433,13 +444,38 @@ export function SmartRoutingBuilderView({ flowId }: { flowId: string }) {
             </SrSectionCard>
 
             <SrSectionCard number={3} title="Greeting">
-              <SrFieldLabel>Greeting prompt</SrFieldLabel>
+              <SrFieldLabel>Prompt Preview</SrFieldLabel>
               <SrTextarea rows={3} value={greetingText} onChange={(e) => setGreetingText(e.target.value)} />
-              <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                <div>
-                  <SrFieldLabel>Voice Source</SrFieldLabel>
-                  <p className="text-[12px] font-semibold text-[#6366f1]">AI Voice</p>
+              <div className="mt-4">
+                <SrFieldLabel>Voice Source</SrFieldLabel>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {[
+                    { id: "elevenlabs", label: "AI Voice" },
+                    { id: "recording", label: "Record My Own Voice" },
+                    { id: "upload", label: "Upload Recording" },
+                    { id: "telnyx_tts", label: "Instant TTS" },
+                  ].map((src) => (
+                    <button
+                      key={src.id}
+                      type="button"
+                      onClick={() =>
+                        setVoiceSource(
+                          src.id as "elevenlabs" | "recording" | "upload" | "telnyx_tts",
+                        )
+                      }
+                      className={cn(
+                        "rounded-lg border px-3 py-2 text-[12px] font-semibold",
+                        voiceSource === src.id
+                          ? "border-[#6366f1] bg-[#eef2ff] text-[#6366f1]"
+                          : "border-[#e5e7eb] text-[#6b7280]",
+                      )}
+                    >
+                      {src.label}
+                    </button>
+                  ))}
                 </div>
+              </div>
+              <div className="mt-4 grid gap-4 sm:grid-cols-2">
                 <div>
                   <SrFieldLabel>Selected Voice</SrFieldLabel>
                   <div className="flex gap-2">
@@ -450,36 +486,39 @@ export function SmartRoutingBuilderView({ flowId }: { flowId: string }) {
                     <SrOutlineButton onClick={generateAudio}>Preview</SrOutlineButton>
                   </div>
                 </div>
+                <div>
+                  <SrFieldLabel>Speed — {voiceSpeed.toFixed(2)}x</SrFieldLabel>
+                  <input
+                    type="range"
+                    min={0.7}
+                    max={1.2}
+                    step={0.05}
+                    value={voiceSpeed}
+                    onChange={(e) => setVoiceSpeed(Number(e.target.value))}
+                    className="w-full accent-[#6366f1]"
+                  />
+                </div>
               </div>
-              <div className="mt-4">
-                <SrFieldLabel>Speed — {voiceSpeed.toFixed(2)}x</SrFieldLabel>
-                <input
-                  type="range"
-                  min={0.7}
-                  max={1.2}
-                  step={0.05}
-                  value={voiceSpeed}
-                  onChange={(e) => setVoiceSpeed(Number(e.target.value))}
-                  className="w-full accent-[#6366f1]"
-                />
-              </div>
-              <div className="mt-4">
-                <AudioRecorderUpload
-                  onUploaded={(asset) => {
-                    setFlow({
-                      ...flow,
-                      draftConfigJson: {
-                        ...flow.draftConfigJson,
-                        greeting: {
-                          ...flow.draftConfigJson?.greeting,
-                          source: "recording",
-                          audioAssetId: asset.id,
+              {voiceSource === "recording" ? (
+                <div className="mt-4">
+                  <AudioRecorderUpload
+                    onUploaded={(asset) => {
+                      const base = flow.draftConfigJson ?? { nodes: [], edges: [] };
+                      setFlow({
+                        ...flow,
+                        draftConfigJson: {
+                          ...base,
+                          greeting: {
+                            ...base.greeting,
+                            source: "recording",
+                            audioAssetId: asset.id,
+                          },
                         },
-                      },
-                    });
-                  }}
-                />
-              </div>
+                      });
+                    }}
+                  />
+                </div>
+              ) : null}
               <div className="mt-4 rounded-lg border border-[#e5e7eb] p-3">
                 <SrFieldLabel>Record by phone</SrFieldLabel>
                 <div className="flex gap-2">
@@ -516,9 +555,11 @@ export function SmartRoutingBuilderView({ flowId }: { flowId: string }) {
                     className="flex flex-wrap items-center gap-2 rounded-lg border border-[#e5e7eb] p-3"
                   >
                     <GripVertical className="h-4 w-4 text-[#9ca3af]" />
-                    <span className="text-[12px] font-bold text-[#6366f1]">Press {opt.digit}</span>
+                    <span className="rounded-md bg-[#eef2ff] px-2 py-1 text-[11px] font-bold text-[#6366f1]">
+                      Press {opt.digit}
+                    </span>
                     <SrInput
-                      className="flex-1"
+                      className="min-w-[120px] flex-1"
                       placeholder="Label"
                       value={opt.label}
                       onChange={(e) => {
@@ -527,16 +568,17 @@ export function SmartRoutingBuilderView({ flowId }: { flowId: string }) {
                         setMenuOptions(next);
                       }}
                     />
-                    <SrInput
-                      className="flex-1"
-                      placeholder="Destination phone"
-                      value={opt.phoneNumber}
-                      onChange={(e) => {
-                        const next = [...menuOptions];
-                        next[idx] = { ...opt, phoneNumber: e.target.value };
-                        setMenuOptions(next);
-                      }}
-                    />
+                    <ChevronRight className="h-4 w-4 text-[#9ca3af]" />
+                    <span className="text-[12px] font-semibold text-[#374151]">
+                      {opt.label || "Destination"}
+                      {opt.phoneNumber ? ` · ${fmtPhoneDisplay(opt.phoneNumber)}` : ""}
+                    </span>
+                    <button
+                      type="button"
+                      className="p-2 text-[#9ca3af] hover:text-[#6366f1]"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
                     <button
                       type="button"
                       onClick={() => setMenuOptions(menuOptions.filter((_, i) => i !== idx))}
@@ -544,6 +586,8 @@ export function SmartRoutingBuilderView({ flowId }: { flowId: string }) {
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
+                  </div>
+                ))}
                   </div>
                 ))}
                 <button
