@@ -161,6 +161,44 @@ export async function processVoiceWebhookEvent(input: {
     }
   }
 
+  if (eventType === "call.gather.ended" || eventType === "call.dtmf.received") {
+    const { processSmartRoutingWebhookEvent } = await import(
+      "@/lib/smart-routing/webhook-handler"
+    );
+    const srGather = await processSmartRoutingWebhookEvent({
+      eventType,
+      eventPayload,
+    }).catch(() => ({ handled: false as const }));
+    if (srGather.handled) {
+      await prisma.providerWebhookEvent.update({
+        where: { providerEventId: input.providerEventId },
+        data: { status: "processed", processedAt: new Date() },
+      });
+      return { ok: true, kind: "smart_routing", ...srGather };
+    }
+  }
+
+  if (
+    eventType === "call.answered" ||
+    eventType === "call.hangup" ||
+    eventType === "call.recording.saved"
+  ) {
+    const { processSmartRoutingWebhookEvent } = await import(
+      "@/lib/smart-routing/webhook-handler"
+    );
+    const srEvent = await processSmartRoutingWebhookEvent({
+      eventType,
+      eventPayload,
+    }).catch(() => ({ handled: false as const }));
+    if (srEvent.handled) {
+      await prisma.providerWebhookEvent.update({
+        where: { providerEventId: input.providerEventId },
+        data: { status: "processed", processedAt: new Date() },
+      });
+      return { ok: true, kind: "smart_routing", ...srEvent };
+    }
+  }
+
   // IVR keypad selection — route the caller to their chosen option.
   if (eventType === "call.gather.ended" || eventType === "call.dtmf.received") {
     const { handleIvrGatherEnded } = await import("@/lib/phone/ivr-service");
@@ -258,6 +296,25 @@ export async function processVoiceWebhookEvent(input: {
     const from = String(eventPayload.from || "");
     const pn = await prisma.phoneNumber.findFirst({ where: { e164: to } });
     if (pn) {
+      const { tryStartSmartRoutingInbound } = await import(
+        "@/lib/smart-routing/webhook-handler"
+      );
+      const sr = await tryStartSmartRoutingInbound({
+        workspaceId: pn.workspaceId,
+        phoneNumberId: pn.id,
+        fromE164: from,
+        toE164: to,
+        callControlId: String(eventPayload.call_control_id || ""),
+        forwardedFrom: String(eventPayload.forwarded_from ?? ""),
+      }).catch(() => ({ started: false as const }));
+      if (sr.started && eventPayload.call_control_id) {
+        await prisma.providerWebhookEvent.update({
+          where: { providerEventId: input.providerEventId },
+          data: { status: "processed", processedAt: new Date() },
+        });
+        return { ok: true, kind: "smart_routing", sessionId: sr.sessionId };
+      }
+
       // If an IVR menu is active for this number, greet + gather a DTMF digit
       // and defer routing until call.gather.ended.
       const { resolveIvrForNumber, startIvrGather } = await import("@/lib/phone/ivr-service");

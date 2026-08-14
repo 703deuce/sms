@@ -78,7 +78,8 @@ const solutionsHrefs = new Set(collectNavHrefs(solutionsNav));
 assert.ok(solutionsHrefs.has("/outcomes"), "Dashboard required");
 assert.ok(solutionsHrefs.has("/voice/receptionist"), "AI Receptionist landing required");
 assert.ok(solutionsHrefs.has("/voice/agents"), "My Agents required");
-assert.ok(solutionsHrefs.has("/voice/calls"), "Calls required");
+assert.ok(solutionsHrefs.has("/smart-routing"), "Smart Routing required");
+assert.ok(solutionsHrefs.has("/solutions/missed-call-text-back/setup"), "MCTB required");
 assert.ok(solutionsHrefs.has("/inbox"), "Inbox required under SMS");
 assert.ok(solutionsHrefs.has("/send/quick"), "Broadcast required");
 assert.ok(solutionsHrefs.has("/campaigns"), "Campaigns required");
@@ -98,7 +99,9 @@ const expectedTopLevel = [
   "Dashboard",
   "AI Receptionist",
   "Calls",
-  "SMS",
+  "Missed Call Text Back",
+  "Smart Routing",
+  "Messages",
   "Contacts",
   "Automations",
   "Appointments",
@@ -122,7 +125,7 @@ assert.deepEqual(
   "AI Receptionist submenu labels must match wizard shortcuts",
 );
 
-const smsNav = solutionsNav.find((item) => item.label === "SMS");
+const smsNav = solutionsNav.find((item) => item.label === "Messages");
 assert.ok(smsNav?.children?.map((c) => c.label), "SMS submenu required");
 assert.deepEqual(smsNav?.children?.map((c) => c.label), [
   "Inbox",

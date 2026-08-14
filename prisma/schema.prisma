@@ -271,6 +271,11 @@ model Workspace {
   missedCallEvents MissedCallEvent[]
   missedCallTextTraces MissedCallTextTrace[]
   agentConfigurationChanges AgentConfigurationChange[]
+  smartRoutingFlows SmartRoutingFlow[]
+  smartRoutingDestinations SmartRoutingDestination[]
+  smartRoutingAudioAssets SmartRoutingAudioAsset[]
+  smartRoutingCallSessions SmartRoutingCallSession[]
+  smartRoutingSmsConsentEvents SmartRoutingSmsConsentEvent[]
 }
 
 model SenderPool {
@@ -3359,4 +3364,191 @@ model AgentConfigurationChange {
 
   @@index([workspaceId, createdAt])
   @@map("agent_configuration_changes")
+}
+
+/// Smart Routing — tenant call flow definition (draft + published pointer).
+model SmartRoutingFlow {
+  id                    String    @id @default(cuid())
+  workspaceId           String
+  name                  String
+  type                  String    @default("phone_menu")
+  status                String    @default("draft")
+  draftConfigJson       Json      @default("{}")
+  publishedVersionId    String?
+  assignedPhoneNumberId String?
+  numberMode            String    @default("transovo_number")
+  businessNumberE164    String?
+  routingNumberE164     String?
+  triggerMode           String    @default("every_call")
+  scheduleJson          Json?
+  timezone              String    @default("America/New_York")
+  createdBy             String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  activatedAt           DateTime?
+  workspace             Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  versions              SmartRoutingFlowVersion[]
+  callSessions          SmartRoutingCallSession[]
+
+  @@index([workspaceId, status])
+  @@index([workspaceId, assignedPhoneNumberId])
+  @@map("smart_routing_flows")
+}
+
+/// Immutable published (or historical) flow snapshots.
+model SmartRoutingFlowVersion {
+  id            String    @id @default(cuid())
+  flowId        String
+  versionNumber Int
+  snapshotJson  Json
+  compiledJson  Json
+  status        String    @default("draft")
+  createdBy     String?
+  createdAt     DateTime  @default(now())
+  publishedAt   DateTime?
+  flow          SmartRoutingFlow @relation(fields: [flowId], references: [id], onDelete: Cascade)
+
+  @@unique([flowId, versionNumber])
+  @@index([flowId, status])
+  @@map("smart_routing_flow_versions")
+}
+
+/// Reusable routing destinations (phones, agents, subflows).
+model SmartRoutingDestination {
+  id              String   @id @default(cuid())
+  workspaceId     String
+  label           String
+  destinationType String
+  phoneNumber     String?
+  contactId       String?
+  aiAgentId       String?
+  subflowId       String?
+  ringGroupJson   Json?
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, active])
+  @@map("smart_routing_destinations")
+}
+
+/// Cached IVR / greeting audio (ElevenLabs, upload, recording).
+model SmartRoutingAudioAsset {
+  id              String   @id @default(cuid())
+  workspaceId     String
+  name            String
+  sourceType      String
+  originalUrl     String?
+  processedUrl    String?
+  storageKey      String?
+  provider        String?
+  providerVoiceId String?
+  sourceText      String?
+  promptHash      String?
+  mimeType        String?
+  durationMs      Int?
+  versionNumber   Int      @default(1)
+  status          String   @default("ready")
+  metadataJson    Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, promptHash])
+  @@index([workspaceId, status])
+  @@map("smart_routing_audio_assets")
+}
+
+/// Live call session — server-side routing state machine.
+model SmartRoutingCallSession {
+  id                  String    @id @default(cuid())
+  workspaceId         String
+  flowId              String
+  flowVersionId       String
+  provider            String    @default("telnyx")
+  providerCallId      String?
+  callControlId       String?
+  callerNumber        String
+  calledNumber        String
+  forwardedFromNumber String?
+  currentNodeId       String?
+  stateJson           Json      @default("{}")
+  correlationId       String
+  startedAt           DateTime  @default(now())
+  answeredAt          DateTime?
+  completedAt         DateTime?
+  finalOutcome        String?
+  isTest              Boolean   @default(false)
+  menuSelection       String?
+  smsTriggered        Boolean   @default(false)
+  recordingUrl        String?
+  workspace           Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  flow                SmartRoutingFlow @relation(fields: [flowId], references: [id], onDelete: Cascade)
+  nodeExecutions      SmartRoutingNodeExecution[]
+  commandReceipts     SmartRoutingCommandReceipt[]
+
+  @@index([workspaceId, startedAt])
+  @@index([flowId, startedAt])
+  @@index([callControlId])
+  @@index([correlationId])
+  @@map("smart_routing_call_sessions")
+}
+
+/// Per-node execution audit trail.
+model SmartRoutingNodeExecution {
+  id            String   @id @default(cuid())
+  callSessionId String
+  nodeId        String
+  nodeType      String
+  startedAt     DateTime @default(now())
+  completedAt   DateTime?
+  resultJson    Json?
+  attemptNumber Int      @default(1)
+  status        String   @default("started")
+  callSession   SmartRoutingCallSession @relation(fields: [callSessionId], references: [id], onDelete: Cascade)
+
+  @@index([callSessionId, startedAt])
+  @@map("smart_routing_node_executions")
+}
+
+/// Provider command receipts for safe retries / debugging.
+model SmartRoutingCommandReceipt {
+  id                 String   @id @default(cuid())
+  callSessionId      String
+  internalOperationId String
+  provider           String   @default("telnyx")
+  providerCommand    String
+  idempotencyKey     String
+  requestJson        Json?
+  responseJson       Json?
+  status             String   @default("pending")
+  createdAt          DateTime @default(now())
+  callSession        SmartRoutingCallSession @relation(fields: [callSessionId], references: [id], onDelete: Cascade)
+
+  @@unique([idempotencyKey])
+  @@index([callSessionId, createdAt])
+  @@map("smart_routing_command_receipts")
+}
+
+/// IVR SMS consent receipts (Missed Call Text Back integration).
+model SmartRoutingSmsConsentEvent {
+  id               String   @id @default(cuid())
+  workspaceId      String
+  contactId        String?
+  callerNumber     String
+  businessNumber   String
+  callSessionId    String?
+  method           String   @default("IVR_DTMF")
+  promptAssetId    String?
+  promptVersion    String?
+  affirmativeInput String
+  consentScope     String   @default("CUSTOMER_CARE_SMS")
+  consentedAt      DateTime @default(now())
+  metadataJson     Json?
+  workspace        Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, consentedAt])
+  @@index([callerNumber, consentedAt])
+  @@map("smart_routing_sms_consent_events")
 }

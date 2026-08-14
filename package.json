@@ -22,6 +22,7 @@
     "test:telnyx-wiring": "tsx scripts/test-telnyx-wiring.ts",
     "test:campaign-catalog": "tsx scripts/test-campaign-catalog.ts",
     "test:nav-crosswalk": "tsx scripts/test-nav-crosswalk.ts",
+    "test:smart-routing-compiler": "tsx scripts/test-smart-routing-compiler.ts",
     "test:automation-builder": "tsx scripts/test-automation-builder.ts",
     "test:automation-e2e": "tsx scripts/test-automation-e2e.ts",
     "test:forms-e2e": "tsx scripts/test-forms-e2e.ts",

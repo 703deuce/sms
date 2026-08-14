@@ -1,10 +1,12 @@
 import {
   AudioLines,
   Calendar,
+  GitBranch,
   Hash,
   LayoutDashboard,
   MessageSquare,
   PhoneCall,
+  PhoneMissed,
   Puzzle,
   Settings,
   ShieldCheck,
@@ -82,7 +84,17 @@ export function buildProductNav(options: SolutionsNavOptions = {}): NavItem[] {
     },
     { label: "Calls", href: "/voice/calls", icon: PhoneCall, emphasize: true },
     {
-      label: "SMS",
+      label: "Missed Call Text Back",
+      href: "/solutions/missed-call-text-back/setup",
+      icon: PhoneMissed,
+    },
+    {
+      label: "Smart Routing",
+      href: "/smart-routing",
+      icon: GitBranch,
+    },
+    {
+      label: "Messages",
       href: "/inbox",
       icon: MessageSquare,
       badge: inboxBadge > 0 ? inboxBadge : undefined,
@@ -162,5 +174,5 @@ export const appSolutionsNav = solutionsNav;
 
 /** Primary launch outcome slugs surfaced in the simplified sidebar. */
 export function solutionsLaunchSlugs(): string[] {
-  return ["missed-call-text-back"];
+  return ["missed-call-text-back", "smart-routing"];
 }
