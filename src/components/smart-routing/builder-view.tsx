@@ -588,8 +588,6 @@ export function SmartRoutingBuilderView({ flowId }: { flowId: string }) {
                     </button>
                   </div>
                 ))}
-                  </div>
-                ))}
                 <button
                   type="button"
                   onClick={() =>
