@@ -1,0 +1,6 @@
+# Coolify/Nixpacks: Turbopack production builds need extra heap on smaller build VMs.
+[variables]
+NODE_OPTIONS = "--max-old-space-size=4096"
+
+[phases.build]
+cmds = ["npm run build"]
