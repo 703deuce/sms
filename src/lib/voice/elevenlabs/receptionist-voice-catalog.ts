@@ -209,6 +209,23 @@ export function listEnabledReceptionistElevenLabsVoices(): ReceptionistElevenLab
   return RECEPTIONIST_ELEVENLABS_VOICES.filter((v) => v.enabled);
 }
 
+/** Same six voices as AI agent voice settings / receptionist wizard. */
+export const CURATED_RECEPTIONIST_GREETING_VOICE_IDS = [
+  "cgSgspJ2msm6clMCkdW9", // Jessica
+  "21m00Tcm4TlvDq8ikWAM", // Rachel
+  "Bmj4Yi69e7b67di5IKVn", // Jade
+  "OZ0L6eISlOejga3XjDFt", // Talia
+  "xbIuSyF7FdqvuiiHz4Rb", // Eddie
+  "AaOhDHYJ1XLZk74lXhdE", // Caleb
+] as const;
+
+export function listCuratedReceptionistGreetingVoices(): ReceptionistElevenLabsVoice[] {
+  const byId = new Map(RECEPTIONIST_ELEVENLABS_VOICES.map((v) => [v.id, v]));
+  return CURATED_RECEPTIONIST_GREETING_VOICE_IDS.map(
+    (id) => byId.get(id),
+  ).filter((v): v is ReceptionistElevenLabsVoice => Boolean(v));
+}
+
 /** ElevenLabs voice_id from published agent config — not from env. */
 export function resolveConfiguredElevenLabsVoice(
   config: Pick<VoiceAgentConfig, "advanced" | "voiceLanguage">,

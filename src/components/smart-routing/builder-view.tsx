@@ -1,6 +1,7 @@
 "use client";
 
 import { AudioRecorderUpload } from "@/components/smart-routing/audio-recorder-upload";
+import { GreetingVoicePicker } from "@/components/smart-routing/greeting-voice-picker";
 import {
   SrBackLink,
   SrFieldLabel,
@@ -23,7 +24,6 @@ import {
 import type { DraftConfig } from "@/lib/smart-routing/types";
 import {
   DEFAULT_RECEPTIONIST_ELEVENLABS_VOICE_ID,
-  listEnabledReceptionistElevenLabsVoices,
 } from "@/lib/voice/elevenlabs/receptionist-voice-catalog";
 import { cn } from "@/lib/utils";
 import {
@@ -551,35 +551,34 @@ export function SmartRoutingBuilderView({ flowId }: { flowId: string }) {
                   ))}
                 </div>
               </div>
-              <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                <div>
-                  <SrFieldLabel>Selected Voice</SrFieldLabel>
-                  <div className="flex flex-wrap gap-2">
-                    <SrSelect
+              {voiceSource === "elevenlabs" ? (
+                <div className="mt-4 space-y-4">
+                  <div>
+                    <SrFieldLabel>Voice — same catalog as AI agent settings</SrFieldLabel>
+                    <p className="mb-2 text-[12px] text-[#6b7280]">
+                      Pick a voice, play a sample, then generate your greeting with ElevenLabs.
+                    </p>
+                    <GreetingVoicePicker
                       value={voiceId}
-                      onChange={(e) => {
-                        setVoiceId(e.target.value);
+                      previewText={greetingText}
+                      speed={voiceSpeed}
+                      onChange={setVoiceId}
+                      onVoiceChange={() => {
                         setGreetingAudioAssetId(null);
                         setGreetingAudioUrl(null);
                       }}
-                      className="min-w-[180px] flex-1"
-                    >
-                      {listEnabledReceptionistElevenLabsVoices().map((v) => (
-                        <option key={v.id} value={v.id}>
-                          {v.label}
-                          {v.badge ? ` — ${v.badge}` : ""}
-                        </option>
-                      ))}
-                    </SrSelect>
+                    />
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
                     <SrOutlineButton
                       onClick={generateAudioPreview}
                       disabled={generatingAudio || !greetingText.trim()}
                     >
-                      {generatingAudio ? "Generating…" : "Generate with ElevenLabs"}
+                      {generatingAudio ? "Generating…" : "Generate greeting with this voice"}
                     </SrOutlineButton>
                   </div>
                   {greetingAudioAssetId ? (
-                    <p className="mt-2 text-[12px] font-medium text-emerald-700">
+                    <p className="text-[12px] font-medium text-emerald-700">
                       ✓ Greeting audio ready — callers hear ElevenLabs, not Telnyx TTS.
                       {greetingAudioUrl ? (
                         <button
@@ -590,32 +589,32 @@ export function SmartRoutingBuilderView({ flowId }: { flowId: string }) {
                             audio.play().catch(() => undefined);
                           }}
                         >
-                          Play
+                          Play greeting
                         </button>
                       ) : null}
                     </p>
-                  ) : voiceSource === "elevenlabs" ? (
-                    <p className="mt-2 text-[12px] text-amber-700">
+                  ) : (
+                    <p className="text-[12px] text-amber-700">
                       Generate audio before publishing — otherwise callers hear basic Telnyx TTS.
                     </p>
-                  ) : null}
+                  )}
                   {audioGenerateError ? (
-                    <p className="mt-1 text-[12px] text-red-600">{audioGenerateError}</p>
+                    <p className="text-[12px] text-red-600">{audioGenerateError}</p>
                   ) : null}
+                  <div>
+                    <SrFieldLabel>Speed — {voiceSpeed.toFixed(2)}x</SrFieldLabel>
+                    <input
+                      type="range"
+                      min={0.7}
+                      max={1.2}
+                      step={0.05}
+                      value={voiceSpeed}
+                      onChange={(e) => setVoiceSpeed(Number(e.target.value))}
+                      className="w-full accent-[#6366f1]"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <SrFieldLabel>Speed — {voiceSpeed.toFixed(2)}x</SrFieldLabel>
-                  <input
-                    type="range"
-                    min={0.7}
-                    max={1.2}
-                    step={0.05}
-                    value={voiceSpeed}
-                    onChange={(e) => setVoiceSpeed(Number(e.target.value))}
-                    className="w-full accent-[#6366f1]"
-                  />
-                </div>
-              </div>
+              ) : null}
               {voiceSource === "recording" ? (
                 <div className="mt-4">
                   <AudioRecorderUpload

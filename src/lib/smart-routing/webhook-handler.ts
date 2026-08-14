@@ -38,6 +38,15 @@ export async function tryStartSmartRoutingInbound(input: {
   const flow = await resolveActiveFlowForNumber(input.workspaceId, input.phoneNumberId);
   if (!flow?.publishedVersionId) return { started: false as const };
 
+  const prisma = getPrisma();
+  const existing = await prisma.smartRoutingCallSession.findFirst({
+    where: { callControlId: input.callControlId },
+    select: { id: true },
+  });
+  if (existing) {
+    return { started: true as const, sessionId: existing.id, duplicate: true as const };
+  }
+
   const { startFlowForInboundCall } = await import("./flow-runtime");
   const session = await startFlowForInboundCall({
     workspaceId: input.workspaceId,

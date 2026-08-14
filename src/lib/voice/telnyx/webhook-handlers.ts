@@ -265,11 +265,14 @@ export async function processVoiceWebhookEvent(input: {
 
   // Inbound routing must run before ensureVoiceCall on call.initiated — creating a
   // VoiceCall row first skips Smart Routing and falls through to MCTB on hangup.
-  if (!call && eventType === "call.initiated") {
+  // TeXML status callbacks may create VoiceCall early, so Smart Routing is attempted
+  // whenever the DID has an active flow (not only when !call).
+  if (eventType === "call.initiated") {
     const to = String(eventPayload.to || "");
     const from = String(eventPayload.from || "");
+    const callControlId = String(eventPayload.call_control_id || "");
     const pn = await prisma.phoneNumber.findFirst({ where: { e164: to } });
-    if (pn) {
+    if (pn && callControlId) {
       const { tryStartSmartRoutingInbound } = await import(
         "@/lib/smart-routing/webhook-handler"
       );
@@ -278,54 +281,61 @@ export async function processVoiceWebhookEvent(input: {
         phoneNumberId: pn.id,
         fromE164: from,
         toE164: to,
-        callControlId: String(eventPayload.call_control_id || ""),
+        callControlId,
         forwardedFrom: String(eventPayload.forwarded_from ?? ""),
       }).catch(() => ({ started: false as const }));
-      if (sr.started && eventPayload.call_control_id) {
+      if (sr.started) {
         await prisma.providerWebhookEvent.update({
           where: { providerEventId: input.providerEventId },
           data: { status: "processed", processedAt: new Date() },
         });
-        return { ok: true, kind: "smart_routing", sessionId: sr.sessionId };
+        return {
+          ok: true,
+          kind: "smart_routing",
+          sessionId: sr.sessionId,
+          duplicate: "duplicate" in sr ? sr.duplicate : undefined,
+        };
       }
 
-      const { resolveIvrForNumber, startIvrGather } = await import("@/lib/phone/ivr-service");
-      const ivr = await resolveIvrForNumber(pn.workspaceId, to);
-      if (ivr && eventPayload.call_control_id) {
-        await startIvrGather(String(eventPayload.call_control_id), ivr).catch(() => undefined);
-        await prisma.providerWebhookEvent.update({
-          where: { providerEventId: input.providerEventId },
-          data: { status: "processed", processedAt: new Date() },
-        });
-        return { ok: true, kind: "ivr_gather" };
-      }
+      if (!call) {
+        const { resolveIvrForNumber, startIvrGather } = await import("@/lib/phone/ivr-service");
+        const ivr = await resolveIvrForNumber(pn.workspaceId, to);
+        if (ivr) {
+          await startIvrGather(callControlId, ivr).catch(() => undefined);
+          await prisma.providerWebhookEvent.update({
+            where: { providerEventId: input.providerEventId },
+            data: { status: "processed", processedAt: new Date() },
+          });
+          return { ok: true, kind: "ivr_gather" };
+        }
 
-      const { resolveInboundAiAgent } = await import("../agent-phone");
-      const aiAgent = await resolveInboundAiAgent(pn.workspaceId, pn.id);
+        const { resolveInboundAiAgent } = await import("../agent-phone");
+        const aiAgent = await resolveInboundAiAgent(pn.workspaceId, pn.id);
 
-      if (aiAgent) {
-        const { handleInboundCallEvent } = await import("../inbound");
-        const result = await handleInboundCallEvent({
-          workspaceId: pn.workspaceId,
-          fromE164: from,
-          toE164: to,
-          telnyxCallControlId: String(eventPayload.call_control_id || ""),
-          payload: eventPayload,
-        });
-        call = await prisma.voiceCall.findUnique({ where: { id: result.callId } });
-      } else {
-        const { processSoftphoneInbound } = await import("@/lib/phone/inbound-runtime");
-        await processSoftphoneInbound({
-          workspaceId: pn.workspaceId,
-          fromE164: from,
-          toE164: to,
-          telnyxCallControlId: String(eventPayload.call_control_id || ""),
-        });
-        await prisma.providerWebhookEvent.update({
-          where: { providerEventId: input.providerEventId },
-          data: { status: "processed", processedAt: new Date() },
-        });
-        return { ok: true, kind: "softphone_inbound" };
+        if (aiAgent) {
+          const { handleInboundCallEvent } = await import("../inbound");
+          const result = await handleInboundCallEvent({
+            workspaceId: pn.workspaceId,
+            fromE164: from,
+            toE164: to,
+            telnyxCallControlId: callControlId,
+            payload: eventPayload,
+          });
+          call = await prisma.voiceCall.findUnique({ where: { id: result.callId } });
+        } else {
+          const { processSoftphoneInbound } = await import("@/lib/phone/inbound-runtime");
+          await processSoftphoneInbound({
+            workspaceId: pn.workspaceId,
+            fromE164: from,
+            toE164: to,
+            telnyxCallControlId: callControlId,
+          });
+          await prisma.providerWebhookEvent.update({
+            where: { providerEventId: input.providerEventId },
+            data: { status: "processed", processedAt: new Date() },
+          });
+          return { ok: true, kind: "softphone_inbound" };
+        }
       }
     }
   }
