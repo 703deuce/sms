@@ -5,8 +5,10 @@ import type { NavChild, NavItem, NavLink } from "@/lib/nav";
 import {
   buildProductNav,
   isReceptionistSectionPath,
+  isSmartRoutingSectionPathExport,
   type SolutionNavInstance,
 } from "@/lib/solutions-nav";
+import { smartRoutingFlowIdFromPath } from "@/lib/smart-routing/display";
 import { buildRealtorNav } from "@/lib/realtor/nav";
 import { voiceAgentIdFromPath } from "@/lib/voice/shell-nav";
 import { cn } from "@/lib/utils";
@@ -260,7 +262,13 @@ export function Sidebar({
     if (realtorMode) return buildRealtorNav(inboxBadge);
     const pathAgentId = voiceAgentIdFromPath(pathname);
     const agentId = pathAgentId ?? primaryVoiceAgentId ?? null;
-    return buildProductNav({ primaryVoiceAgentId: agentId, inboxBadge });
+    const smartRoutingFlowId =
+      smartRoutingFlowIdFromPath(pathname) ?? null;
+    return buildProductNav({
+      primaryVoiceAgentId: agentId,
+      primarySmartRoutingFlowId: smartRoutingFlowId,
+      inboxBadge,
+    });
   }, [primaryVoiceAgentId, pathname, realtorMode, inboxBadge]);
 
   useEffect(() => {
@@ -325,10 +333,13 @@ export function Sidebar({
               pathname.startsWith("/send") ||
               pathname.startsWith("/campaigns") ||
               pathname.startsWith("/templates"));
+          const smartRoutingOwned =
+            item.label === "Smart Routing" && isSmartRoutingSectionPathExport(pathname);
           const ownedOutcome =
             receptionistOwned ||
             callsOwned ||
             smsOwned ||
+            smartRoutingOwned ||
             pathname.startsWith(`${hrefPath(item.href)}/`) ||
             pathname === hrefPath(item.href);
           const expandKey = itemExpandKey(item);

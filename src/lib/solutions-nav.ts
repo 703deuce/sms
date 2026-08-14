@@ -14,6 +14,10 @@ import {
   Workflow,
 } from "lucide-react";
 import type { NavChild, NavItem } from "@/lib/nav";
+import {
+  isSmartRoutingSectionPath,
+  smartRoutingFlowIdFromPath,
+} from "@/lib/smart-routing/display";
 
 export type SolutionNavInstance = {
   id: string;
@@ -27,6 +31,7 @@ export type SolutionsNavOptions = {
   /** Kept for shell compatibility. */
   instancesBySolution?: Record<string, SolutionNavInstance[]>;
   primaryVoiceAgentId?: string | null;
+  primarySmartRoutingFlowId?: string | null;
   inboxBadge?: number;
 };
 
@@ -40,6 +45,31 @@ export function isReceptionistSectionPath(pathname: string): boolean {
   return RECEPTIONIST_SECTION_PREFIXES.some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
   );
+}
+
+export function isSmartRoutingSectionPathExport(pathname: string): boolean {
+  return isSmartRoutingSectionPath(pathname);
+}
+
+export function buildSmartRoutingNavChildren(flowId?: string | null): NavChild[] {
+  const fid = flowId ?? null;
+  return [
+    { label: "Overview", href: "/smart-routing" },
+    { label: "Create Flow", href: "/smart-routing/new" },
+    {
+      label: "Call Flow Builder",
+      href: fid ? `/smart-routing/${fid}` : "/smart-routing",
+    },
+    { label: "Audio", href: "/smart-routing/audio" },
+    {
+      label: "Test & Activate",
+      href: fid ? `/smart-routing/${fid}/test` : "/smart-routing",
+    },
+    {
+      label: "Activity",
+      href: fid ? `/smart-routing/${fid}/activity` : "/smart-routing",
+    },
+  ];
 }
 
 export function buildReceptionistNavChildren(agentId?: string | null): NavChild[] {
@@ -72,6 +102,10 @@ export function buildProductNav(options: SolutionsNavOptions = {}): NavItem[] {
     options.primaryVoiceAgentId != null && options.primaryVoiceAgentId !== ""
       ? options.primaryVoiceAgentId
       : null;
+  const smartRoutingFlowId =
+    options.primarySmartRoutingFlowId != null && options.primarySmartRoutingFlowId !== ""
+      ? options.primarySmartRoutingFlowId
+      : null;
   const inboxBadge = options.inboxBadge ?? 0;
 
   return [
@@ -92,6 +126,7 @@ export function buildProductNav(options: SolutionsNavOptions = {}): NavItem[] {
       label: "Smart Routing",
       href: "/smart-routing",
       icon: GitBranch,
+      children: buildSmartRoutingNavChildren(smartRoutingFlowId),
     },
     {
       label: "Messages",

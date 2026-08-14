@@ -79,6 +79,8 @@ assert.ok(solutionsHrefs.has("/outcomes"), "Dashboard required");
 assert.ok(solutionsHrefs.has("/voice/receptionist"), "AI Receptionist landing required");
 assert.ok(solutionsHrefs.has("/voice/agents"), "My Agents required");
 assert.ok(solutionsHrefs.has("/smart-routing"), "Smart Routing required");
+assert.ok(solutionsHrefs.has("/smart-routing/new"), "Smart Routing create flow required");
+assert.ok(solutionsHrefs.has("/smart-routing/audio"), "Smart Routing audio required");
 assert.ok(solutionsHrefs.has("/solutions/missed-call-text-back/setup"), "MCTB required");
 assert.ok(solutionsHrefs.has("/inbox"), "Inbox required under SMS");
 assert.ok(solutionsHrefs.has("/send/quick"), "Broadcast required");
