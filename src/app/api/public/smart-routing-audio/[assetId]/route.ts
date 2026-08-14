@@ -13,7 +13,7 @@ export async function GET(_request: Request, ctx: Ctx) {
   if (!result) {
     return NextResponse.json({ error: "Audio not found" }, { status: 404 });
   }
-  return new NextResponse(result.bytes, {
+  return new NextResponse(new Uint8Array(result.bytes), {
     status: 200,
     headers: {
       "content-type": result.mimeType || "audio/mpeg",
