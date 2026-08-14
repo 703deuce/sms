@@ -164,20 +164,26 @@ export async function processPostCall(callId: string) {
     await emitVoiceAutomationEvents(call);
   }
   if (isMissed) {
-    await emitPlatformEvent({
-      workspaceId: call.workspaceId,
-      type: "CALL_MISSED",
-      contactId: call.contactId || undefined,
-      agentId: call.agentId,
-      callId: call.id,
-      payload: { status: call.status, outcome: call.outcome },
-      idempotencyKey: `call-missed:${call.id}`,
-    }).catch(() => undefined);
-
+    let johnMctbTriggered = false;
     try {
-      await triggerJohnMctbForVoiceCall(call);
+      const mctb = await triggerJohnMctbForVoiceCall(call);
+      johnMctbTriggered = Boolean(mctb.triggered);
     } catch (err) {
       console.warn("[post-call] John MCTB process failed", call.id, err);
+    }
+
+    // John schedules the deterministic MCTB send; skip CALL_MISSED automation enroll
+    // to avoid duplicate texts from the managed MCTB flow graph.
+    if (!johnMctbTriggered) {
+      await emitPlatformEvent({
+        workspaceId: call.workspaceId,
+        type: "CALL_MISSED",
+        contactId: call.contactId || undefined,
+        agentId: call.agentId,
+        callId: call.id,
+        payload: { status: call.status, outcome: call.outcome },
+        idempotencyKey: `call-missed:${call.id}`,
+      }).catch(() => undefined);
     }
   }
   await emitPlatformEvent({

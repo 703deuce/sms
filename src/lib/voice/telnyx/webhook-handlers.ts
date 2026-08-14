@@ -263,34 +263,8 @@ export async function processVoiceWebhookEvent(input: {
     });
   }
 
-  // TeXML / AI assistant path: conversation START events may arrive without a prior
-  // Call Control call.initiated. Create VoiceCall + enroll execution early so tools,
-  // transcripts, and traces bind to one canonical call id for the whole conversation.
-  // Do NOT create on conversation.ended — that caused hangup-only rows with no tool trace.
-  if (
-    !call &&
-    (eventType === "call.conversation.created" ||
-      eventType === "conversation.created" ||
-      eventType === "conversation.started" ||
-      eventType === "call.answered" ||
-      eventType === "call.initiated")
-  ) {
-    const { ensureVoiceCallForTelnyxEvent } = await import(
-      "@/lib/voice/ensure-call-from-event"
-    );
-    const ensured = await ensureVoiceCallForTelnyxEvent({
-      eventType,
-      eventPayload,
-    }).catch((err) => {
-      console.error("[voice/webhook] ensureVoiceCallForTelnyxEvent", err);
-      return null;
-    });
-    if (ensured?.callId) {
-      call = await prisma.voiceCall.findUnique({ where: { id: ensured.callId } });
-    }
-  }
-
-  // New inbound leg — create call + routing
+  // Inbound routing must run before ensureVoiceCall on call.initiated — creating a
+  // VoiceCall row first skips Smart Routing and falls through to MCTB on hangup.
   if (!call && eventType === "call.initiated") {
     const to = String(eventPayload.to || "");
     const from = String(eventPayload.from || "");
@@ -315,8 +289,6 @@ export async function processVoiceWebhookEvent(input: {
         return { ok: true, kind: "smart_routing", sessionId: sr.sessionId };
       }
 
-      // If an IVR menu is active for this number, greet + gather a DTMF digit
-      // and defer routing until call.gather.ended.
       const { resolveIvrForNumber, startIvrGather } = await import("@/lib/phone/ivr-service");
       const ivr = await resolveIvrForNumber(pn.workspaceId, to);
       if (ivr && eventPayload.call_control_id) {
@@ -328,8 +300,6 @@ export async function processVoiceWebhookEvent(input: {
         return { ok: true, kind: "ivr_gather" };
       }
 
-      // Phone-first only when no ACTIVE AI owns this DID. Softphone / queue /
-      // IVR still apply for numbers without an AI owner.
       const { resolveInboundAiAgent } = await import("../agent-phone");
       const aiAgent = await resolveInboundAiAgent(pn.workspaceId, pn.id);
 
@@ -357,6 +327,33 @@ export async function processVoiceWebhookEvent(input: {
         });
         return { ok: true, kind: "softphone_inbound" };
       }
+    }
+  }
+
+  // TeXML / AI assistant path: conversation START events may arrive without a prior
+  // Call Control call.initiated. Create VoiceCall + enroll execution early so tools,
+  // transcripts, and traces bind to one canonical call id for the whole conversation.
+  // Do NOT create on conversation.ended — that caused hangup-only rows with no tool trace.
+  // call.initiated is handled above (Smart Routing / IVR / AI / softphone) first.
+  if (
+    !call &&
+    (eventType === "call.conversation.created" ||
+      eventType === "conversation.created" ||
+      eventType === "conversation.started" ||
+      eventType === "call.answered")
+  ) {
+    const { ensureVoiceCallForTelnyxEvent } = await import(
+      "@/lib/voice/ensure-call-from-event"
+    );
+    const ensured = await ensureVoiceCallForTelnyxEvent({
+      eventType,
+      eventPayload,
+    }).catch((err) => {
+      console.error("[voice/webhook] ensureVoiceCallForTelnyxEvent", err);
+      return null;
+    });
+    if (ensured?.callId) {
+      call = await prisma.voiceCall.findUnique({ where: { id: ensured.callId } });
     }
   }
 

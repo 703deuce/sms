@@ -29,6 +29,16 @@ export function isMissedInboundVoiceCall(call: Pick<
   return false;
 }
 
+async function activeSmartRoutingOnNumber(
+  workspaceId: string,
+  phoneNumberId: string | null | undefined,
+) {
+  if (!phoneNumberId) return false;
+  const { resolveActiveFlowForNumber } = await import("@/lib/smart-routing/flow-service");
+  const flow = await resolveActiveFlowForNumber(workspaceId, phoneNumberId);
+  return Boolean(flow?.publishedVersionId);
+}
+
 export async function triggerJohnMctbForVoiceCall(call: Pick<
   VoiceCall,
   | "id"
@@ -50,6 +60,10 @@ export async function triggerJohnMctbForVoiceCall(call: Pick<
   | "direction"
 >) {
   if (!isMissedInboundVoiceCall(call)) return { triggered: false, reason: "not_missed" };
+
+  if (await activeSmartRoutingOnNumber(call.workspaceId, call.phoneNumberId)) {
+    return { triggered: false, reason: "smart_routing_active" };
+  }
 
   const config = await loadMissedCallTextConfig(call.workspaceId);
   const classification = classifyInboundCallOutcome({
