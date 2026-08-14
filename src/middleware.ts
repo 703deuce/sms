@@ -56,6 +56,8 @@ function isPublicPath(pathname: string) {
   if (pathname.startsWith("/telnyx-agent-voices")) return true;
   // Prerecorded connection greeting media (public HTTPS for Telnyx playback_start)
   if (pathname.startsWith("/connection-greeting")) return true;
+  // Smart Routing ElevenLabs greeting/menu audio (Telnyx gather_using_audio / playback_start)
+  if (pathname.startsWith("/smart-routing-audio/")) return true;
   // Signed expiring recording streams (token-gated, no session cookie)
   if (pathname.startsWith("/api/voice/recordings/") && pathname.endsWith("/stream")) return true;
   // Calendar OAuth callbacks (provider redirects without session)

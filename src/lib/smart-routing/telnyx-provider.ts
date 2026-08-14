@@ -208,7 +208,12 @@ export async function transferToPhone(
 }
 
 export async function startRecording(callControlId: string, sessionId?: string) {
-  return telnyxAction(callControlId, "record_start", { format: "mp3" }, sessionId);
+  return telnyxAction(
+    callControlId,
+    "record_start",
+    { format: "mp3", channels: "dual" },
+    sessionId,
+  );
 }
 
 export async function bridgeCalls(
