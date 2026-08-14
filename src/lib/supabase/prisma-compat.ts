@@ -163,6 +163,14 @@ const MODEL_TO_TABLE: Record<string, string> = {
   missedCallEvent: "missed_call_events",
   missedCallTextTrace: "missed_call_text_traces",
   agentConfigurationChange: "agent_configuration_changes",
+  smartRoutingFlow: "smart_routing_flows",
+  smartRoutingFlowVersion: "smart_routing_flow_versions",
+  smartRoutingDestination: "smart_routing_destinations",
+  smartRoutingAudioAsset: "smart_routing_audio_assets",
+  smartRoutingCallSession: "smart_routing_call_sessions",
+  smartRoutingNodeExecution: "smart_routing_node_executions",
+  smartRoutingCommandReceipt: "smart_routing_command_receipts",
+  smartRoutingSmsConsentEvent: "smart_routing_sms_consent_events",
 };
 
 /** Relation name on a model → { table, fk on this model, pk on related }. */
@@ -412,6 +420,37 @@ const RELATIONS: Record<string, Record<string, { table: string; fk: string; pk?:
     phoneNumbers: { table: "PhoneNumber", fk: "workspaceId", pk: "id" },
     messagingRegistration: { table: "messaging_registrations", fk: "workspaceId", pk: "id" },
   },
+  smartRoutingFlow: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+    versions: { table: "smart_routing_flow_versions", fk: "flowId", pk: "id" },
+    callSessions: { table: "smart_routing_call_sessions", fk: "flowId", pk: "id" },
+  },
+  smartRoutingFlowVersion: {
+    flow: { table: "smart_routing_flows", fk: "flowId" },
+  },
+  smartRoutingDestination: { workspace: { table: "Workspace", fk: "workspaceId" } },
+  smartRoutingAudioAsset: { workspace: { table: "Workspace", fk: "workspaceId" } },
+  smartRoutingCallSession: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+    flow: { table: "smart_routing_flows", fk: "flowId" },
+    nodeExecutions: {
+      table: "smart_routing_node_executions",
+      fk: "callSessionId",
+      pk: "id",
+    },
+    commandReceipts: {
+      table: "smart_routing_command_receipts",
+      fk: "callSessionId",
+      pk: "id",
+    },
+  },
+  smartRoutingNodeExecution: {
+    callSession: { table: "smart_routing_call_sessions", fk: "callSessionId" },
+  },
+  smartRoutingCommandReceipt: {
+    callSession: { table: "smart_routing_call_sessions", fk: "callSessionId" },
+  },
+  smartRoutingSmsConsentEvent: { workspace: { table: "Workspace", fk: "workspaceId" } },
 };
 
 /** model → `_count` relation name → child table + FK for aggregate counts. */
@@ -421,6 +460,10 @@ const COUNT_RELATIONS: Record<string, Record<string, { table: string; fk: string
   campaign: {
     recipients: { table: "campaign_recipients", fk: "campaignId" },
     campaignMessages: { table: "campaign_messages", fk: "campaignId" },
+  },
+  smartRoutingFlow: {
+    callSessions: { table: "smart_routing_call_sessions", fk: "flowId" },
+    versions: { table: "smart_routing_flow_versions", fk: "flowId" },
   },
 };
 
