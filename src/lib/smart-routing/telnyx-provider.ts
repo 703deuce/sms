@@ -12,6 +12,21 @@ export type SmartRoutingClientState = {
   awaiting?: string;
 };
 
+export type SmartRoutingLegKind =
+  | "smart_routing"
+  | "smart_routing_whisper"
+  | "smart_routing_ring"
+  | "smart_routing_record";
+
+export function decodeAnySmartRoutingState(raw?: string): Record<string, unknown> | null {
+  if (!raw) return null;
+  try {
+    return JSON.parse(Buffer.from(raw, "base64").toString("utf8")) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
 export function encodeClientState(state: SmartRoutingClientState): string {
   return Buffer.from(JSON.stringify(state)).toString("base64");
 }
@@ -207,4 +222,40 @@ export async function bridgeCalls(
     { call_control_id: otherControlId },
     sessionId,
   );
+}
+
+export async function holdCall(callControlId: string, sessionId?: string) {
+  return telnyxAction(callControlId, "hold", {}, sessionId);
+}
+
+export async function unholdCall(callControlId: string, sessionId?: string) {
+  return telnyxAction(callControlId, "unhold", {}, sessionId);
+}
+
+export async function dialOutbound(input: {
+  connectionId: string;
+  from: string;
+  to: string;
+  clientState: Record<string, unknown>;
+  sessionId?: string;
+}) {
+  if (!isTelnyxVoiceConfigured()) return { mock: true, call_control_id: "mock_leg" };
+  const res = await telnyxRequest<{ data?: { call_control_id?: string } }>("/calls", {
+    method: "POST",
+    body: {
+      connection_id: input.connectionId,
+      from: input.from,
+      to: input.to,
+      client_state: Buffer.from(JSON.stringify(input.clientState)).toString("base64"),
+    },
+  });
+  if (input.sessionId) {
+    await recordCommandReceipt({
+      callSessionId: input.sessionId,
+      providerCommand: "dial",
+      request: input,
+      response: res,
+    });
+  }
+  return res?.data;
 }

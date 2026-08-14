@@ -93,10 +93,17 @@ export type SessionState = {
   gatherRetries?: number;
   ringIndex?: number;
   whisperPending?: boolean;
+  whisperAgentControlId?: string;
+  whisperText?: string;
+  acceptDigit?: string;
   lastDigit?: string;
   subflowStack?: string[];
   awaitingEvent?: string;
   transferLegId?: string;
+  ringLegIds?: string[];
+  ringMode?: "simultaneous" | "sequential";
+  ringPhones?: string[];
+  recordingAssetId?: string;
 };
 
 export type FlowValidationIssue = {

@@ -1,6 +1,7 @@
 "use client";
 
 import { SmartRoutingSubNav } from "@/components/smart-routing/smart-routing-subnav";
+import { AudioRecorderUpload } from "@/components/smart-routing/audio-recorder-upload";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input, Label } from "@/components/ui/input";
@@ -37,6 +38,10 @@ export default function SmartRoutingBuilderPage() {
   const [menuOptions, setMenuOptions] = useState<
     Array<{ digit: string; label: string; phoneNumber: string }>
   >([]);
+  const [forwardCarrier, setForwardCarrier] = useState("Verizon");
+  const [forwardMode, setForwardMode] = useState("unconditional");
+  const [forwardInstructions, setForwardInstructions] = useState<string | null>(null);
+  const [recordPhone, setRecordPhone] = useState("");
 
   function load() {
     fetch(`/api/smart-routing/flows/${flowId}`)
@@ -69,7 +74,7 @@ export default function SmartRoutingBuilderPage() {
     const draftConfig: DraftConfig = {
       ...flow.draftConfigJson,
       greeting: {
-        source: "elevenlabs",
+        source: flow.draftConfigJson?.greeting?.source ?? "elevenlabs",
         text: greetingText,
         audioAssetId: flow.draftConfigJson?.greeting?.audioAssetId,
       },
@@ -80,6 +85,29 @@ export default function SmartRoutingBuilderPage() {
         phoneNumber: o.phoneNumber,
       })),
     };
+    const menuNode = draftConfig.nodes?.find((n) => n.type === "MENU");
+    if (menuNode && draftConfig.edges && draftConfig.nodes) {
+      for (const opt of draftConfig.menuOptions ?? []) {
+        const edge = draftConfig.edges.find(
+          (e) =>
+            e.fromNodeId === menuNode.id &&
+            e.conditionType === "digit" &&
+            e.conditionValue === opt.digit,
+        );
+        if (edge) {
+          const target = draftConfig.nodes.find((n) => n.id === edge.toNodeId);
+          if (target && (target.type === "TRANSFER_EXTERNAL" || target.type === "CALL_WHISPER")) {
+            target.config = {
+              ...target.config,
+              phoneNumber: opt.phoneNumber,
+              label: opt.label,
+              whisperEnabled: true,
+              whisperText: `${opt.label} caller. Press 1 to accept.`,
+            };
+          }
+        }
+      }
+    }
     await fetch(`/api/smart-routing/flows/${flowId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -164,8 +192,76 @@ export default function SmartRoutingBuilderPage() {
           </div>
         </div>
         <Link href="/numbers" className="text-sm text-indigo-600 hover:underline">
-          View call forwarding instructions
+          View numbers & porting
         </Link>
+        <div className="mt-4 space-y-3 rounded-lg border border-slate-100 bg-slate-50/80 p-4">
+          <p className="text-sm font-medium text-slate-900">Call forwarding setup</p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <select
+              className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
+              value={forwardCarrier}
+              onChange={(e) => setForwardCarrier(e.target.value)}
+            >
+              <option value="Verizon">Verizon</option>
+              <option value="AT&T">AT&T</option>
+              <option value="T-Mobile">T-Mobile</option>
+              <option value="Other">Other</option>
+            </select>
+            <select
+              className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
+              value={forwardMode}
+              onChange={(e) => setForwardMode(e.target.value)}
+            >
+              <option value="unconditional">Forward all calls</option>
+              <option value="no_answer">No answer</option>
+              <option value="busy">Busy</option>
+            </select>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={async () => {
+              if (!flow.routingNumberE164) return;
+              const q = new URLSearchParams({
+                carrier: forwardCarrier,
+                mode: forwardMode,
+                routingNumber: flow.routingNumberE164,
+              });
+              const res = await fetch(
+                `/api/smart-routing/flows/${flowId}/forwarding?${q}`,
+              );
+              const j = await res.json();
+              setForwardInstructions(
+                j.data?.dialCode
+                  ? `${j.data.label}: ${j.data.dialCode}${j.data.notes ? ` — ${j.data.notes}` : ""}`
+                  : null,
+              );
+            }}
+          >
+            Show forwarding instructions
+          </Button>
+          {forwardInstructions && (
+            <p className="text-sm text-slate-700">{forwardInstructions}</p>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={async () => {
+              await fetch(`/api/smart-routing/flows/${flowId}/forwarding`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  carrier: forwardCarrier,
+                  forwardingType: forwardMode,
+                  confirm: true,
+                }),
+              });
+              alert("Forwarding marked as verified.");
+            }}
+          >
+            I verified forwarding works
+          </Button>
+        </div>
       </Card>
 
       <Card className="space-y-4 p-5">
@@ -195,6 +291,49 @@ export default function SmartRoutingBuilderPage() {
         />
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={generateAudio}>Generate audio</Button>
+        </div>
+        <AudioRecorderUpload
+          onUploaded={(asset) => {
+            if (flow) {
+              setFlow({
+                ...flow,
+                draftConfigJson: {
+                  ...flow.draftConfigJson,
+                  greeting: {
+                    ...flow.draftConfigJson?.greeting,
+                    source: "recording",
+                    audioAssetId: asset.id,
+                  },
+                },
+              });
+            }
+          }}
+        />
+        <div className="space-y-2 rounded-lg border border-slate-100 p-3">
+          <Label>Record by phone</Label>
+          <Input
+            placeholder="Your cell number"
+            value={recordPhone}
+            onChange={(e) => setRecordPhone(e.target.value)}
+          />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={async () => {
+              await fetch("/api/smart-routing/record-by-phone", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  phone: recordPhone,
+                  flowId,
+                  assetName: "Phone recording",
+                }),
+              });
+              alert("Calling you now — record after the tone, press # when finished.");
+            }}
+          >
+            Call me to record
+          </Button>
         </div>
       </Card>
 

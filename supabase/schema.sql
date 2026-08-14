@@ -2608,6 +2608,259 @@ CREATE TABLE "workspace_ai_integration_policies" (
     CONSTRAINT "workspace_ai_integration_policies_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateTable
+CREATE TABLE "missed_call_text_configs" (
+    "id" TEXT NOT NULL,
+    "workspaceId" TEXT NOT NULL,
+    "agentId" TEXT,
+    "enabled" BOOLEAN NOT NULL DEFAULT true,
+    "delaySeconds" INTEGER NOT NULL DEFAULT 0,
+    "messageTemplate" TEXT NOT NULL DEFAULT 'Hi, sorry we missed your call. How can we help?',
+    "sendAfterNoAnswer" BOOLEAN NOT NULL DEFAULT true,
+    "sendAfterBusy" BOOLEAN NOT NULL DEFAULT true,
+    "sendAfterRejected" BOOLEAN NOT NULL DEFAULT true,
+    "sendAfterTimeout" BOOLEAN NOT NULL DEFAULT true,
+    "sendAfterVoicemail" BOOLEAN NOT NULL DEFAULT false,
+    "businessHoursOnly" BOOLEAN NOT NULL DEFAULT false,
+    "allowedStartTime" TEXT,
+    "allowedEndTime" TEXT,
+    "timezone" TEXT NOT NULL DEFAULT 'America/New_York',
+    "quietHoursEnabled" BOOLEAN NOT NULL DEFAULT false,
+    "quietHoursStart" TEXT,
+    "quietHoursEnd" TEXT,
+    "maxMessagesPerCaller" INTEGER NOT NULL DEFAULT 1,
+    "cooldownMinutes" INTEGER NOT NULL DEFAULT 60,
+    "suppressKnownSpam" BOOLEAN NOT NULL DEFAULT true,
+    "suppressBlockedNumbers" BOOLEAN NOT NULL DEFAULT true,
+    "suppressOptedOutNumbers" BOOLEAN NOT NULL DEFAULT true,
+    "conversationEnabled" BOOLEAN NOT NULL DEFAULT true,
+    "phoneNumberId" TEXT,
+    "smsPhoneNumberId" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "missed_call_text_configs_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "missed_call_events" (
+    "id" TEXT NOT NULL,
+    "workspaceId" TEXT NOT NULL,
+    "voiceCallId" TEXT,
+    "humanCallId" TEXT,
+    "contactId" TEXT,
+    "callerE164" TEXT NOT NULL,
+    "businessE164" TEXT NOT NULL,
+    "phoneNumberId" TEXT,
+    "reason" TEXT NOT NULL,
+    "disposition" TEXT,
+    "detectedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "eligible" BOOLEAN NOT NULL DEFAULT false,
+    "suppressionReason" TEXT,
+    "scheduledSmsAt" TIMESTAMP(3),
+    "smsSentAt" TIMESTAMP(3),
+    "smsMessageId" TEXT,
+    "status" TEXT NOT NULL DEFAULT 'DETECTED',
+    "traceId" TEXT NOT NULL,
+    "idempotencyKey" TEXT NOT NULL,
+    "metadata" JSONB,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "missed_call_events_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "missed_call_text_traces" (
+    "id" TEXT NOT NULL,
+    "workspaceId" TEXT NOT NULL,
+    "traceId" TEXT NOT NULL,
+    "missedCallEventId" TEXT,
+    "voiceCallId" TEXT,
+    "humanCallId" TEXT,
+    "conversationId" TEXT,
+    "kind" TEXT NOT NULL,
+    "detail" JSONB,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "missed_call_text_traces_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "agent_configuration_changes" (
+    "id" TEXT NOT NULL,
+    "workspaceId" TEXT NOT NULL,
+    "agentId" TEXT,
+    "source" TEXT NOT NULL DEFAULT 'owner_john',
+    "actor" TEXT,
+    "field" TEXT NOT NULL,
+    "oldValue" JSONB,
+    "newValue" JSONB,
+    "requestedNaturalLanguage" TEXT,
+    "toolCallId" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "agent_configuration_changes_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "smart_routing_flows" (
+    "id" TEXT NOT NULL,
+    "workspaceId" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "type" TEXT NOT NULL DEFAULT 'phone_menu',
+    "status" TEXT NOT NULL DEFAULT 'draft',
+    "draftConfigJson" JSONB NOT NULL DEFAULT '{}',
+    "publishedVersionId" TEXT,
+    "assignedPhoneNumberId" TEXT,
+    "numberMode" TEXT NOT NULL DEFAULT 'transovo_number',
+    "businessNumberE164" TEXT,
+    "routingNumberE164" TEXT,
+    "triggerMode" TEXT NOT NULL DEFAULT 'every_call',
+    "scheduleJson" JSONB,
+    "timezone" TEXT NOT NULL DEFAULT 'America/New_York',
+    "createdBy" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "activatedAt" TIMESTAMP(3),
+
+    CONSTRAINT "smart_routing_flows_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "smart_routing_flow_versions" (
+    "id" TEXT NOT NULL,
+    "flowId" TEXT NOT NULL,
+    "versionNumber" INTEGER NOT NULL,
+    "snapshotJson" JSONB NOT NULL,
+    "compiledJson" JSONB NOT NULL,
+    "status" TEXT NOT NULL DEFAULT 'draft',
+    "createdBy" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "publishedAt" TIMESTAMP(3),
+
+    CONSTRAINT "smart_routing_flow_versions_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "smart_routing_destinations" (
+    "id" TEXT NOT NULL,
+    "workspaceId" TEXT NOT NULL,
+    "label" TEXT NOT NULL,
+    "destinationType" TEXT NOT NULL,
+    "phoneNumber" TEXT,
+    "contactId" TEXT,
+    "aiAgentId" TEXT,
+    "subflowId" TEXT,
+    "ringGroupJson" JSONB,
+    "active" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "smart_routing_destinations_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "smart_routing_audio_assets" (
+    "id" TEXT NOT NULL,
+    "workspaceId" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "sourceType" TEXT NOT NULL,
+    "originalUrl" TEXT,
+    "processedUrl" TEXT,
+    "storageKey" TEXT,
+    "provider" TEXT,
+    "providerVoiceId" TEXT,
+    "sourceText" TEXT,
+    "promptHash" TEXT,
+    "mimeType" TEXT,
+    "durationMs" INTEGER,
+    "versionNumber" INTEGER NOT NULL DEFAULT 1,
+    "status" TEXT NOT NULL DEFAULT 'ready',
+    "metadataJson" JSONB,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "smart_routing_audio_assets_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "smart_routing_call_sessions" (
+    "id" TEXT NOT NULL,
+    "workspaceId" TEXT NOT NULL,
+    "flowId" TEXT NOT NULL,
+    "flowVersionId" TEXT NOT NULL,
+    "provider" TEXT NOT NULL DEFAULT 'telnyx',
+    "providerCallId" TEXT,
+    "callControlId" TEXT,
+    "callerNumber" TEXT NOT NULL,
+    "calledNumber" TEXT NOT NULL,
+    "forwardedFromNumber" TEXT,
+    "currentNodeId" TEXT,
+    "stateJson" JSONB NOT NULL DEFAULT '{}',
+    "correlationId" TEXT NOT NULL,
+    "startedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "answeredAt" TIMESTAMP(3),
+    "completedAt" TIMESTAMP(3),
+    "finalOutcome" TEXT,
+    "isTest" BOOLEAN NOT NULL DEFAULT false,
+    "menuSelection" TEXT,
+    "smsTriggered" BOOLEAN NOT NULL DEFAULT false,
+    "recordingUrl" TEXT,
+
+    CONSTRAINT "smart_routing_call_sessions_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "smart_routing_node_executions" (
+    "id" TEXT NOT NULL,
+    "callSessionId" TEXT NOT NULL,
+    "nodeId" TEXT NOT NULL,
+    "nodeType" TEXT NOT NULL,
+    "startedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "completedAt" TIMESTAMP(3),
+    "resultJson" JSONB,
+    "attemptNumber" INTEGER NOT NULL DEFAULT 1,
+    "status" TEXT NOT NULL DEFAULT 'started',
+
+    CONSTRAINT "smart_routing_node_executions_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "smart_routing_command_receipts" (
+    "id" TEXT NOT NULL,
+    "callSessionId" TEXT NOT NULL,
+    "internalOperationId" TEXT NOT NULL,
+    "provider" TEXT NOT NULL DEFAULT 'telnyx',
+    "providerCommand" TEXT NOT NULL,
+    "idempotencyKey" TEXT NOT NULL,
+    "requestJson" JSONB,
+    "responseJson" JSONB,
+    "status" TEXT NOT NULL DEFAULT 'pending',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "smart_routing_command_receipts_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "smart_routing_sms_consent_events" (
+    "id" TEXT NOT NULL,
+    "workspaceId" TEXT NOT NULL,
+    "contactId" TEXT,
+    "callerNumber" TEXT NOT NULL,
+    "businessNumber" TEXT NOT NULL,
+    "callSessionId" TEXT,
+    "method" TEXT NOT NULL DEFAULT 'IVR_DTMF',
+    "promptAssetId" TEXT,
+    "promptVersion" TEXT,
+    "affirmativeInput" TEXT NOT NULL,
+    "consentScope" TEXT NOT NULL DEFAULT 'CUSTOMER_CARE_SMS',
+    "consentedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "metadataJson" JSONB,
+
+    CONSTRAINT "smart_routing_sms_consent_events_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
 
@@ -3331,6 +3584,81 @@ CREATE UNIQUE INDEX "integration_orders_workspaceId_provider_externalId_key" ON 
 -- CreateIndex
 CREATE UNIQUE INDEX "workspace_ai_integration_policies_workspaceId_key" ON "workspace_ai_integration_policies"("workspaceId");
 
+-- CreateIndex
+CREATE UNIQUE INDEX "missed_call_text_configs_workspaceId_key" ON "missed_call_text_configs"("workspaceId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "missed_call_events_idempotencyKey_key" ON "missed_call_events"("idempotencyKey");
+
+-- CreateIndex
+CREATE INDEX "missed_call_events_workspaceId_detectedAt_idx" ON "missed_call_events"("workspaceId", "detectedAt");
+
+-- CreateIndex
+CREATE INDEX "missed_call_events_workspaceId_callerE164_detectedAt_idx" ON "missed_call_events"("workspaceId", "callerE164", "detectedAt");
+
+-- CreateIndex
+CREATE INDEX "missed_call_events_voiceCallId_idx" ON "missed_call_events"("voiceCallId");
+
+-- CreateIndex
+CREATE INDEX "missed_call_events_humanCallId_idx" ON "missed_call_events"("humanCallId");
+
+-- CreateIndex
+CREATE INDEX "missed_call_text_traces_traceId_createdAt_idx" ON "missed_call_text_traces"("traceId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "missed_call_text_traces_missedCallEventId_idx" ON "missed_call_text_traces"("missedCallEventId");
+
+-- CreateIndex
+CREATE INDEX "agent_configuration_changes_workspaceId_createdAt_idx" ON "agent_configuration_changes"("workspaceId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "smart_routing_flows_workspaceId_status_idx" ON "smart_routing_flows"("workspaceId", "status");
+
+-- CreateIndex
+CREATE INDEX "smart_routing_flows_workspaceId_assignedPhoneNumberId_idx" ON "smart_routing_flows"("workspaceId", "assignedPhoneNumberId");
+
+-- CreateIndex
+CREATE INDEX "smart_routing_flow_versions_flowId_status_idx" ON "smart_routing_flow_versions"("flowId", "status");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "smart_routing_flow_versions_flowId_versionNumber_key" ON "smart_routing_flow_versions"("flowId", "versionNumber");
+
+-- CreateIndex
+CREATE INDEX "smart_routing_destinations_workspaceId_active_idx" ON "smart_routing_destinations"("workspaceId", "active");
+
+-- CreateIndex
+CREATE INDEX "smart_routing_audio_assets_workspaceId_promptHash_idx" ON "smart_routing_audio_assets"("workspaceId", "promptHash");
+
+-- CreateIndex
+CREATE INDEX "smart_routing_audio_assets_workspaceId_status_idx" ON "smart_routing_audio_assets"("workspaceId", "status");
+
+-- CreateIndex
+CREATE INDEX "smart_routing_call_sessions_workspaceId_startedAt_idx" ON "smart_routing_call_sessions"("workspaceId", "startedAt");
+
+-- CreateIndex
+CREATE INDEX "smart_routing_call_sessions_flowId_startedAt_idx" ON "smart_routing_call_sessions"("flowId", "startedAt");
+
+-- CreateIndex
+CREATE INDEX "smart_routing_call_sessions_callControlId_idx" ON "smart_routing_call_sessions"("callControlId");
+
+-- CreateIndex
+CREATE INDEX "smart_routing_call_sessions_correlationId_idx" ON "smart_routing_call_sessions"("correlationId");
+
+-- CreateIndex
+CREATE INDEX "smart_routing_node_executions_callSessionId_startedAt_idx" ON "smart_routing_node_executions"("callSessionId", "startedAt");
+
+-- CreateIndex
+CREATE INDEX "smart_routing_command_receipts_callSessionId_createdAt_idx" ON "smart_routing_command_receipts"("callSessionId", "createdAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "smart_routing_command_receipts_idempotencyKey_key" ON "smart_routing_command_receipts"("idempotencyKey");
+
+-- CreateIndex
+CREATE INDEX "smart_routing_sms_consent_events_workspaceId_consentedAt_idx" ON "smart_routing_sms_consent_events"("workspaceId", "consentedAt");
+
+-- CreateIndex
+CREATE INDEX "smart_routing_sms_consent_events_callerNumber_consentedAt_idx" ON "smart_routing_sms_consent_events"("callerNumber", "consentedAt");
+
 -- AddForeignKey
 ALTER TABLE "sender_pools" ADD CONSTRAINT "sender_pools_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
@@ -3954,4 +4282,43 @@ ALTER TABLE "integration_orders" ADD CONSTRAINT "integration_orders_workspaceId_
 
 -- AddForeignKey
 ALTER TABLE "workspace_ai_integration_policies" ADD CONSTRAINT "workspace_ai_integration_policies_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "missed_call_text_configs" ADD CONSTRAINT "missed_call_text_configs_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "missed_call_events" ADD CONSTRAINT "missed_call_events_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "missed_call_text_traces" ADD CONSTRAINT "missed_call_text_traces_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "agent_configuration_changes" ADD CONSTRAINT "agent_configuration_changes_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "smart_routing_flows" ADD CONSTRAINT "smart_routing_flows_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "smart_routing_flow_versions" ADD CONSTRAINT "smart_routing_flow_versions_flowId_fkey" FOREIGN KEY ("flowId") REFERENCES "smart_routing_flows"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "smart_routing_destinations" ADD CONSTRAINT "smart_routing_destinations_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "smart_routing_audio_assets" ADD CONSTRAINT "smart_routing_audio_assets_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "smart_routing_call_sessions" ADD CONSTRAINT "smart_routing_call_sessions_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "smart_routing_call_sessions" ADD CONSTRAINT "smart_routing_call_sessions_flowId_fkey" FOREIGN KEY ("flowId") REFERENCES "smart_routing_flows"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "smart_routing_node_executions" ADD CONSTRAINT "smart_routing_node_executions_callSessionId_fkey" FOREIGN KEY ("callSessionId") REFERENCES "smart_routing_call_sessions"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "smart_routing_command_receipts" ADD CONSTRAINT "smart_routing_command_receipts_callSessionId_fkey" FOREIGN KEY ("callSessionId") REFERENCES "smart_routing_call_sessions"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "smart_routing_sms_consent_events" ADD CONSTRAINT "smart_routing_sms_consent_events_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 

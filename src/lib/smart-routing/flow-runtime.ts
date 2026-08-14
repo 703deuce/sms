@@ -144,13 +144,33 @@ export async function executeNode(input: {
           nextId = nextNodeId(node, "no_answer") ?? nextNodeId(node, "failed");
           break;
         }
+        const whisperText = String(node.config.whisperText ?? "").trim();
+        const whisperEnabled = Boolean(node.config.whisperEnabled) || whisperText.length > 0;
         await emitSmartRoutingEvent({
           workspaceId: session.workspaceId,
           type: "TRANSFER_STARTED",
           sessionId: input.sessionId,
           flowId: session.flowId,
-          payload: { to: phone },
+          payload: { to: phone, whisper: whisperEnabled },
         });
+        if (whisperEnabled) {
+          const { startWhisperTransfer } = await import("./whisper-service");
+          await startWhisperTransfer({
+            sessionId: input.sessionId,
+            workspaceId: session.workspaceId,
+            flowId: session.flowId,
+            nodeId: node.id,
+            callerControlId: controlId,
+            agentPhone: phone,
+            fromNumber: session.calledNumber,
+            whisperText:
+              whisperText ||
+              `Incoming business call. Press 1 to accept.`,
+            acceptDigit: String(node.config.acceptDigit ?? "1"),
+          });
+          await completeNodeExecution(execution.id, { whisperTo: phone });
+          return { done: false, awaiting: "whisper" };
+        }
         await transferToPhone(controlId, phone, input.sessionId, {
           ...clientBase,
           awaiting: "transfer",
@@ -162,27 +182,57 @@ export async function executeNode(input: {
         await completeNodeExecution(execution.id, { transferTo: phone });
         return { done: false, awaiting: "transfer" };
       }
-      case "RING_GROUP": {
-        const mode = String(node.config.mode ?? "sequential");
-        const destinations = (node.config.destinations as string[]) ?? [];
-        const idx = state.ringIndex ?? 0;
-        const phone = destinations[idx]
-          ? await resolveDestinationPhone(session.workspaceId, destinations[idx])
-          : null;
+      case "CALL_WHISPER": {
+        const phone =
+          String(node.config.phoneNumber ?? "").trim() ||
+          await resolveDestinationPhone(session.workspaceId, String(node.config.destinationId ?? ""));
         if (!phone) {
+          nextId = nextNodeId(node, "no_answer") ?? nextNodeId(node, "failed");
+          break;
+        }
+        const { startWhisperTransfer } = await import("./whisper-service");
+        await startWhisperTransfer({
+          sessionId: input.sessionId,
+          workspaceId: session.workspaceId,
+          flowId: session.flowId,
+          nodeId: node.id,
+          callerControlId: controlId,
+          agentPhone: phone,
+          fromNumber: session.calledNumber,
+          whisperText: String(
+            node.config.whisperText ??
+              node.config.text ??
+              "Incoming business call. Press 1 to accept.",
+          ),
+          acceptDigit: String(node.config.acceptDigit ?? "1"),
+        });
+        await completeNodeExecution(execution.id, { whisperTo: phone });
+        return { done: false, awaiting: "whisper" };
+      }
+      case "RING_GROUP": {
+        const mode = (String(node.config.mode ?? "sequential") === "simultaneous"
+          ? "simultaneous"
+          : "sequential") as "simultaneous" | "sequential";
+        const phoneList = (node.config.phoneNumbers as string[]) ?? [];
+        const { startRingGroup } = await import("./ring-group-service");
+        const ringResult = await startRingGroup({
+          sessionId: input.sessionId,
+          workspaceId: session.workspaceId,
+          flowId: session.flowId,
+          nodeId: node.id,
+          callerControlId: controlId,
+          fromNumber: session.calledNumber,
+          destinationIds: (node.config.destinations as string[]) ?? [],
+          phoneNumbers: phoneList,
+          mode,
+          ringIndex: state.ringIndex ?? 0,
+        });
+        if (ringResult.error === "no_destinations") {
           nextId = nextNodeId(node, "no_answer");
           break;
         }
-        await transferToPhone(controlId, phone, input.sessionId, clientBase);
-        await updateSessionState(input.sessionId, {
-          stateJson: {
-            ...state,
-            ringIndex: mode === "sequential" ? idx : idx,
-            awaitingEvent: "transfer",
-          },
-        });
-        await completeNodeExecution(execution.id, { ringIndex: idx, phone });
-        return { done: false, awaiting: "transfer" };
+        await completeNodeExecution(execution.id, { ring: ringResult });
+        return { done: false, awaiting: "ring_group" };
       }
       case "VOICEMAIL": {
         const greeting = String(
@@ -459,6 +509,10 @@ export async function handleTransferResult(input: {
   if (!node) return { handled: false };
 
   if (input.answered) {
+    const state = (session.stateJson as SessionState) ?? {};
+    if (state.awaitingEvent === "whisper" || state.awaitingEvent === "ring_group") {
+      return { handled: true, outcome: "connected" };
+    }
     await updateSessionState(input.sessionId, { answeredAt: new Date() });
     await emitSmartRoutingEvent({
       workspaceId: session.workspaceId,
