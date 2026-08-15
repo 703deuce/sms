@@ -1,5 +1,4 @@
-import { PersonalVoicemailClient } from "@/components/personal/personal-voicemail-client";
-import { PageHeader } from "@/components/ui/page-header";
+import { PersonalVoicemailUI } from "@/components/personal/personal-voicemail-ui";
 import { requireWorkspaceContext } from "@/lib/workspace-data";
 
 export default async function PersonalVoicemailPage({
@@ -10,10 +9,5 @@ export default async function PersonalVoicemailPage({
   await requireWorkspaceContext();
   const { numberId } = await searchParams;
 
-  return (
-    <div>
-      <PageHeader title="Voicemail" description="Listen to messages and manage greetings." />
-      <PersonalVoicemailClient numberId={numberId} />
-    </div>
-  );
+  return <PersonalVoicemailUI numberId={numberId} />;
 }

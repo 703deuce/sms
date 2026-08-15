@@ -1,17 +1,6 @@
-import { BuyNumberPageClient } from "@/components/numbers/buy-number-page";
-import { PageHeader } from "@/components/ui/page-header";
-import { requireWorkspaceContext } from "@/lib/workspace-data";
+import { redirect } from "next/navigation";
 
-export default async function PersonalFindNumberPage() {
-  const { workspaceId } = await requireWorkspaceContext();
-
-  return (
-    <div>
-      <PageHeader
-        title="Find a Number"
-        description="Search available local and toll-free numbers for your Personal workspace."
-      />
-      <BuyNumberPageClient workspaceId={workspaceId} />
-    </div>
-  );
+/** Find a Number on Personal uses the same premium search product as Business. */
+export default function PersonalFindNumberRedirect() {
+  redirect("/personal/numbers/premium");
 }

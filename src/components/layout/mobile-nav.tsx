@@ -23,7 +23,7 @@ export function MobileNav({
       ? [
           { label: "Home", href: "/personal", icon: mobilePrimaryNav[0].icon },
           { label: "Numbers", href: "/personal/numbers", icon: mobilePrimaryNav[0].icon },
-          { label: "Find", href: "/personal/numbers/find", icon: mobilePrimaryNav[0].icon },
+          { label: "Find", href: "/personal/numbers/premium", icon: mobilePrimaryNav[0].icon },
           { label: "Vault", href: "/personal/vault", icon: mobilePrimaryNav[0].icon },
         ]
       : mobilePrimaryNav;

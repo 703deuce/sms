@@ -18,7 +18,7 @@ assert.ok(capabilities.includes("isBusinessOnlyPath"));
 assert.ok(capabilities.includes("isPersonalOnlyPath"));
 
 const personalNav = read("src/lib/workspace/personal-nav.ts");
-assert.ok(personalNav.includes("/personal/numbers/find"));
+assert.ok(personalNav.includes("/personal/numbers/premium"));
 assert.ok(personalNav.includes("/personal/numbers/premium"));
 assert.ok(personalNav.includes("/personal/vault"));
 

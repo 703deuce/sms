@@ -21,7 +21,7 @@ export function PersonalOverviewClient({
         title="You don't have a number yet"
         description="Get a new number, find a memorable premium number, or bring your existing number to Transovo."
         actionLabel="Get a Number"
-        actionHref="/personal/numbers/find"
+        actionHref="/personal/numbers/premium"
         icon={<Phone className="h-10 w-10" />}
       />
     );
@@ -117,7 +117,7 @@ export function PersonalNumbersListClient({ numbers }: { numbers: PersonalNumber
         title="You don't have a number yet"
         description="Search for a local or toll-free number, or bring your number from another carrier."
         actionLabel="Find a Number"
-        actionHref="/personal/numbers/find"
+        actionHref="/personal/numbers/premium"
       />
     );
   }

@@ -1,5 +1,5 @@
-import { PersonalOverviewClient } from "@/components/personal/personal-pages";
-import { PageHeader } from "@/components/ui/page-header";
+import { PersonalOverviewUI } from "@/components/personal/personal-overview-ui";
+import { listPortRequests } from "@/lib/numbers/port-service";
 import { requireWorkspaceContext } from "@/lib/workspace-data";
 import {
   loadPersonalActivity,
@@ -7,19 +7,24 @@ import {
 } from "@/lib/workspace/personal-data";
 
 export default async function PersonalOverviewPage() {
-  const { workspaceId } = await requireWorkspaceContext();
-  const [numbers, activity] = await Promise.all([
+  const { workspaceId, session } = await requireWorkspaceContext();
+  const [numbers, activity, portRequests] = await Promise.all([
     loadPersonalNumbers(workspaceId),
     loadPersonalActivity(workspaceId),
+    listPortRequests(workspaceId),
   ]);
 
   return (
-    <div>
-      <PageHeader
-        title="Overview"
-        description="What numbers you have, what each is doing, and quick ways to get or manage another."
-      />
-      <PersonalOverviewClient numbers={numbers} activity={activity} />
-    </div>
+    <PersonalOverviewUI
+      userName={session.name}
+      numbers={numbers}
+      activity={activity}
+      portRequests={portRequests.map((p: { id: string; phone?: string; status?: string; statusLabel?: string }) => ({
+        id: String(p.id),
+        phone: String(p.phone ?? ""),
+        status: String(p.status ?? ""),
+        statusLabel: p.statusLabel ? String(p.statusLabel) : undefined,
+      }))}
+    />
   );
 }

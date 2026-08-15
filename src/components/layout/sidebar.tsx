@@ -332,6 +332,15 @@ export function Sidebar({
             </span>
           ) : null}
         </Link>
+        {personalMode && !collapsed ? (
+          <Link
+            href="/personal/numbers/premium"
+            onClick={onClose}
+            className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg bg-[#6366f1] px-3 py-2.5 text-[13px] font-semibold text-white shadow-sm hover:bg-[#5558e8]"
+          >
+            + Add Line
+          </Link>
+        ) : null}
       </div>
 
       <nav className="sidebar-nav min-h-0 flex-1 space-y-px overflow-y-auto overscroll-contain px-2 pb-1.5">
@@ -509,9 +518,43 @@ export function Sidebar({
           );
         })}
 
-        {!collapsed && !realtorMode ? (
+        {!collapsed && !realtorMode && !personalMode ? (
           <div className="mt-3 px-1">
             <PlanBalanceCard creditsRemaining={creditsRemaining} />
+          </div>
+        ) : null}
+
+        {personalMode && !collapsed ? (
+          <div className="mt-3 space-y-1 px-1">
+            <Link
+              href="/contact"
+              className="block rounded-md px-2.5 py-2 text-[12px] font-medium text-sidebar-muted hover:bg-[#f3f4f6]"
+              onClick={onClose}
+            >
+              Help Center
+            </Link>
+            <Link
+              href="/settings"
+              className="block rounded-md px-2.5 py-2 text-[12px] font-medium text-sidebar-muted hover:bg-[#f3f4f6]"
+              onClick={onClose}
+            >
+              Settings
+            </Link>
+            <div className="mt-3 rounded-xl border border-[#e6e8ef] bg-[#f5f3ff] p-3">
+              <p className="text-[11px] font-semibold text-[#111827]">
+                Keep your number always within reach.
+              </p>
+              <p className="mt-1 text-[10px] leading-snug text-[#6b7280]">
+                Don&apos;t lose it even if you don&apos;t use it.
+              </p>
+              <Link
+                href="/personal/vault"
+                className="mt-2 inline-block text-[11px] font-semibold text-[#6366f1]"
+                onClick={onClose}
+              >
+                Learn More
+              </Link>
+            </div>
           </div>
         ) : null}
 
@@ -527,7 +570,7 @@ export function Sidebar({
               <div className="min-w-0 flex-1">
                 <p className="truncate text-[12px] font-semibold text-[#111827]">{userName}</p>
                 <p className="truncate text-[10px] text-sidebar-muted">
-                  {realtorMode && workspaceName ? workspaceName : "Owner"}
+                  {personalMode ? "Personal" : realtorMode && workspaceName ? workspaceName : "Owner"}
                 </p>
               </div>
             ) : null}

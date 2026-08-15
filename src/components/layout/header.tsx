@@ -217,6 +217,15 @@ export function Header({
           <span className="shrink-0" aria-hidden />
         )}
 
+        {personalMode ? (
+          <Link
+            href="/personal/numbers/premium"
+            className="ml-auto hidden h-9 items-center rounded-lg bg-[#6366f1] px-4 text-[13px] font-semibold text-white hover:bg-[#5558e8] sm:inline-flex"
+          >
+            Find a New Number
+          </Link>
+        ) : null}
+
         {!personalMode ? (
         <div className="mx-auto hidden w-full max-w-[440px] flex-1 md:block" ref={searchRef}>
           <div className="relative">

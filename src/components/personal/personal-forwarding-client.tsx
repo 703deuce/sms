@@ -48,7 +48,7 @@ export function PersonalForwardingClient({
         title="No numbers to forward"
         description="Choose a number and send its calls to any phone you already use."
         actionLabel="Get a Number"
-        actionHref="/personal/numbers/find"
+        actionHref="/personal/numbers/premium"
       />
     );
   }

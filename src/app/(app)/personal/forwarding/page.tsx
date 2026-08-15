@@ -1,5 +1,4 @@
-import { PersonalForwardingClient } from "@/components/personal/personal-forwarding-client";
-import { PageHeader } from "@/components/ui/page-header";
+import { PersonalForwardingUI } from "@/components/personal/personal-forwarding-ui";
 import { loadPhoneNumbers, requireWorkspaceContext } from "@/lib/workspace-data";
 
 export default async function PersonalForwardingPage({
@@ -11,10 +10,5 @@ export default async function PersonalForwardingPage({
   const numbers = await loadPhoneNumbers(workspaceId);
   const { numberId } = await searchParams;
 
-  return (
-    <div>
-      <PageHeader title="Call Forwarding" description="Send calls to any phone you already use." />
-      <PersonalForwardingClient numbers={numbers} initialNumberId={numberId} />
-    </div>
-  );
+  return <PersonalForwardingUI numbers={numbers} initialNumberId={numberId} />;
 }
