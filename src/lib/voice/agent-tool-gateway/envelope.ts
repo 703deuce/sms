@@ -24,7 +24,7 @@ export function toolSuccess<T extends Record<string, unknown>>(input: {
 /** Map gateway envelope to legacy builtin-actions shape Telnyx already consumes. */
 export function toLegacyVoiceShape(result: AgentToolResult): Record<string, unknown> {
   const toolName = String((result.data as { tool?: string } | undefined)?.tool || "gateway_tool");
-  const legacy = {
+  return {
     ok: result.ok,
     success: result.success,
     status: result.status,
@@ -38,7 +38,6 @@ export function toLegacyVoiceShape(result: AgentToolResult): Record<string, unkn
     ...(result.success
       ? {}
       : { error: result.user_message || "Tool failed" }),
+    tool_feedback: formatGatewayResultForModel(result, toolName),
   };
-  legacy.tool_feedback = formatGatewayResultForModel(result, toolName);
-  return legacy;
 }
