@@ -22,6 +22,8 @@ export type InventorySearchOptions = {
   strategy: string;
 };
 
+export type KeywordMatchStyle = "ends_with" | "contains" | "both";
+
 const DEFAULT_PER_SEARCH_LIMIT = 20;
 
 function buildQuery(opts: InventorySearchOptions): Record<string, string | number> {
@@ -170,16 +172,19 @@ export async function runTelnyxInventorySearches(input: {
   keywordDigitStrings: string[];
   memorablePatterns: string[];
   baseLimit?: number;
+  matchStyle?: KeywordMatchStyle;
 }): Promise<{
   candidates: TelnyxRawCandidate[];
   attempts: TelnyxSearchAttempt[];
 }> {
+  const matchStyle = input.matchStyle ?? "both";
   const attempts: TelnyxSearchAttempt[] = [];
   const byPhone = new Map<string, TelnyxRawCandidate>();
   const seenQueries = new Set<string>();
 
   const run = async (opts: InventorySearchOptions) => {
     const queryKey = JSON.stringify({
+      areaCode: opts.areaCode,
       endsWith: opts.endsWith ?? "",
       contains: opts.contains ?? "",
       startsWith: opts.startsWith ?? "",
@@ -202,26 +207,32 @@ export async function runTelnyxInventorySearches(input: {
 
   for (const digits of input.keywordDigitStrings) {
     const chunks = patternFilterChunks(digits);
-    for (const tail of chunks.endsWith) {
-      await run({
-        areaCode: input.areaCode,
-        strategy: `keyword_ends_with:${digits}:${tail}`,
-        endsWith: tail,
-      });
+    if (matchStyle === "ends_with" || matchStyle === "both") {
+      for (const tail of chunks.endsWith) {
+        await run({
+          areaCode: input.areaCode,
+          strategy: `keyword_ends_with:${digits}:${tail}`,
+          endsWith: tail,
+        });
+      }
     }
-    for (const mid of chunks.contains) {
-      await run({
-        areaCode: input.areaCode,
-        strategy: `keyword_contains:${digits}:${mid}`,
-        contains: mid,
-      });
+    if (matchStyle === "contains" || matchStyle === "both") {
+      for (const mid of chunks.contains) {
+        await run({
+          areaCode: input.areaCode,
+          strategy: `keyword_contains:${digits}:${mid}`,
+          contains: mid,
+        });
+      }
     }
-    for (const head of chunks.startsWith) {
-      await run({
-        areaCode: input.areaCode,
-        strategy: `keyword_starts_with:${digits}:${head}`,
-        startsWith: head,
-      });
+    if (matchStyle === "both") {
+      for (const head of chunks.startsWith) {
+        await run({
+          areaCode: input.areaCode,
+          strategy: `keyword_starts_with:${digits}:${head}`,
+          startsWith: head,
+        });
+      }
     }
   }
 

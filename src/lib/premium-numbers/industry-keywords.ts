@@ -126,9 +126,14 @@ export function resolveIndustryKeywords(industry?: string): {
 export function buildKeywordEntries(input: {
   industry?: string;
   customKeywords?: string[];
+  primaryKeywords?: string[];
 }): KeywordEntry[] {
   const { primary, industryKey } = resolveIndustryKeywords(input.industry);
   const primarySet = new Set(primary.map(normalizeWord));
+  for (const w of input.primaryKeywords ?? []) {
+    const n = normalizeWord(w);
+    if (n.length >= 3) primarySet.add(n);
+  }
   const secondarySet = new Set<string>();
 
   if (industryKey && INDUSTRY_KEYWORD_MAP[industryKey]) {

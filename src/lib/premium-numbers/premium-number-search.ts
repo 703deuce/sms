@@ -1,3 +1,4 @@
+import { inferIndustryFromText } from "./business-name-keywords";
 import { buildKeywordEntries } from "./industry-keywords";
 import { parsePhoneDigits } from "./keypad";
 import { scoreCandidate, sortCandidates } from "./scoring";
@@ -10,6 +11,7 @@ import type {
   PremiumSearchStatus,
   QualityTier,
   TelnyxCost,
+  TelnyxSearchAttempt,
 } from "./types";
 
 function emptyTierCounts(): Record<QualityTier, number> {
@@ -58,7 +60,7 @@ function buildStatistics(candidates: ReturnType<typeof sortCandidates>): Premium
 
 function resolveStatus(
   candidates: ReturnType<typeof sortCandidates>,
-  attempts: import("./types").TelnyxSearchAttempt[],
+  attempts: TelnyxSearchAttempt[],
   hadInventory: boolean,
 ): PremiumSearchStatus {
   const telnyxSearchesSucceeded = attempts.filter((a) => a.status === "ok").length;
@@ -76,49 +78,81 @@ function resolveStatus(
   return "RESULTS_FOUND";
 }
 
+function filterCandidatesForAreaCodes(
+  candidates: Awaited<ReturnType<typeof runTelnyxInventorySearches>>["candidates"],
+  areaCodes: string[],
+): typeof candidates {
+  const allowed = new Set(areaCodes);
+  return candidates.filter((c) => {
+    const digits = parsePhoneDigits(c.phoneNumber);
+    if (digits.length !== 10) return false;
+    const ndc = digits.slice(0, 3);
+    return allowed.has(ndc);
+  });
+}
+
 /**
- * Read-only vanity / premium local US number discovery against live Telnyx inventory.
+ * Read-only vanity / premium US number discovery against live Telnyx inventory.
  * Does not purchase, reserve, or assign numbers.
  */
 export async function searchPremiumNumbers(
   input: PremiumSearchInput,
 ): Promise<PremiumSearchResult> {
-  const areaCode = input.areaCode.replace(/\D/g, "").slice(0, 3);
-  if (areaCode.length !== 3) {
+  const areaCodes =
+    input.areaCodes?.length
+      ? input.areaCodes.map((c) => c.replace(/\D/g, "").slice(0, 3)).filter((c) => c.length === 3)
+      : [input.areaCode.replace(/\D/g, "").slice(0, 3)];
+
+  const primaryAreaCode = areaCodes[0] ?? "";
+  if (!areaCodes.length || areaCodes.some((c) => c.length !== 3)) {
     return {
       status: "NOT_CONFIGURED",
-      areaCode,
+      areaCode: primaryAreaCode,
       industry: input.industry,
       keywords: [],
       candidates: [],
       statistics: buildStatistics([]),
       searchAttempts: [],
-      message: "areaCode must be a 3-digit US area code",
+      message: "A valid 3-digit area code is required",
     };
   }
 
+  const inferredIndustry =
+    input.industry?.trim() ||
+    inferIndustryFromText((input.customKeywords ?? []).join(" ")) ||
+    undefined;
+
   const keywords = buildKeywordEntries({
-    industry: input.industry,
+    industry: inferredIndustry,
     customKeywords: input.customKeywords,
+    primaryKeywords: input.primaryKeywords,
   });
 
   const keywordDigitStrings = [...new Set(keywords.map((k) => k.digits))];
+  const matchStyle = input.matchStyle ?? "ends_with";
 
-  let inventory;
+  let allCandidates: Awaited<ReturnType<typeof runTelnyxInventorySearches>>["candidates"] = [];
+  const attempts: TelnyxSearchAttempt[] = [];
+
   try {
-    inventory = await runTelnyxInventorySearches({
-      areaCode,
-      keywordDigitStrings,
-      memorablePatterns: [...SCORING_WEIGHTS.memorablePatternSearchDigits],
-      baseLimit: 50,
-    });
+    for (const areaCode of areaCodes) {
+      const inventory = await runTelnyxInventorySearches({
+        areaCode,
+        keywordDigitStrings,
+        memorablePatterns: [...SCORING_WEIGHTS.memorablePatternSearchDigits],
+        baseLimit: areaCodes.length > 1 ? 30 : 50,
+        matchStyle,
+      });
+      attempts.push(...inventory.attempts);
+      allCandidates.push(...inventory.candidates);
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     if (/not configured|TELNYX_API_KEY/i.test(message)) {
       return {
         status: "NOT_CONFIGURED",
-        areaCode,
-        industry: input.industry,
+        areaCode: primaryAreaCode,
+        industry: inferredIndustry,
         keywords,
         candidates: [],
         statistics: buildStatistics([]),
@@ -128,8 +162,8 @@ export async function searchPremiumNumbers(
     }
     return {
       status: "TELNYX_ERROR",
-      areaCode,
-      industry: input.industry,
+      areaCode: primaryAreaCode,
+      industry: inferredIndustry,
       keywords,
       candidates: [],
       statistics: buildStatistics([]),
@@ -138,19 +172,18 @@ export async function searchPremiumNumbers(
     };
   }
 
-  // best_effort can return nearby NDCs — keep only the requested area code.
-  inventory.candidates = inventory.candidates.filter((c) => {
-    const digits = parsePhoneDigits(c.phoneNumber);
-    return digits.length === 10 && digits.startsWith(areaCode);
-  });
+  const byPhone = new Map<string, Awaited<ReturnType<typeof runTelnyxInventorySearches>>["candidates"][0]>();
+  for (const c of allCandidates) {
+    if (!byPhone.has(c.phoneNumber)) byPhone.set(c.phoneNumber, c);
+  }
+  allCandidates = filterCandidatesForAreaCodes([...byPhone.values()], areaCodes);
 
-  const attempts = inventory.attempts;
   const telnyxSearchesAttempted = attempts.length;
   const telnyxSearchesSucceeded = attempts.filter((a) => a.status === "ok").length;
   const telnyxSearchesFailed = attempts.filter((a) => a.status !== "ok").length;
-  const hadInventory = inventory.candidates.length > 0;
+  const hadInventory = allCandidates.length > 0;
 
-  const scored = inventory.candidates
+  const scored = allCandidates
     .map((raw) => {
       const telnyxCost: TelnyxCost | undefined =
         raw.monthlyCost || raw.upfrontCost
@@ -177,15 +210,15 @@ export async function searchPremiumNumbers(
   statistics.telnyxSearchesAttempted = telnyxSearchesAttempted;
   statistics.telnyxSearchesSucceeded = telnyxSearchesSucceeded;
   statistics.telnyxSearchesFailed = telnyxSearchesFailed;
-  statistics.rawCandidates = inventory.candidates.length;
+  statistics.rawCandidates = allCandidates.length;
   statistics.uniqueCandidates = sorted.length;
 
   const status = resolveStatus(sorted, attempts, hadInventory);
 
   return {
     status,
-    areaCode,
-    industry: input.industry,
+    areaCode: primaryAreaCode,
+    industry: inferredIndustry,
     keywords,
     candidates,
     statistics,

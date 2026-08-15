@@ -1,15 +1,20 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Input, Label } from "@/components/ui/input";
+import { Input, Label, Textarea } from "@/components/ui/input";
+import { srCard } from "@/components/smart-routing/shared";
 import {
-  PREMIUM_INDUSTRY_OPTIONS,
   type PremiumNumberProductResult,
   type PremiumSearchProductResponse,
 } from "@/lib/premium-numbers/product-api";
-import { extractBusinessNameKeywords } from "@/lib/premium-numbers/business-name-keywords";
 import { formatPremiumPrice } from "@/lib/premium-numbers/premium-pricing";
 import type { PersonalPreference } from "@/lib/premium-numbers/personal-search";
+import type { KeywordMatchStyle } from "@/lib/premium-numbers/telnyx-inventory-search";
+import {
+  TOLL_FREE_AREA_CODES,
+  type NumberType,
+  type TollFreePrefix,
+} from "@/lib/premium-numbers/toll-free";
 import { cn } from "@/lib/utils";
 import {
   ArrowRight,
@@ -23,12 +28,22 @@ import {
   Sparkles,
   Trophy,
   Vault,
+  Wand2,
 } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 
-const srCard =
-  "rounded-xl border border-[#e5e7eb] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]";
+const TOLL_FREE_OPTIONS: { value: TollFreePrefix; label: string }[] = [
+  { value: "all", label: "All toll-free (800, 833, 866, …)" },
+  ...TOLL_FREE_AREA_CODES.map((code) => ({ value: code as TollFreePrefix, label: code })),
+];
+
+function splitKeywordInput(text: string): string[] {
+  return text
+    .split(/[,]+/)
+    .map((k) => k.trim())
+    .filter(Boolean);
+}
 
 type SearchMode = "business" | "personal";
 
@@ -56,10 +71,16 @@ type CheckoutState = {
 
 export function PremiumNumbersPageClient({ workspaceId }: Props) {
   const [mode, setMode] = useState<SearchMode>("business");
-  const [areaCode, setAreaCode] = useState("571");
-  const [industry, setIndustry] = useState("roofing");
+  const [numberType, setNumberType] = useState<NumberType>("local");
+  const [areaCode, setAreaCode] = useState("");
+  const [tollFreePrefix, setTollFreePrefix] = useState<TollFreePrefix>("all");
+  const [primaryKeyword, setPrimaryKeyword] = useState("");
+  const [matchStyle, setMatchStyle] = useState<KeywordMatchStyle>("ends_with");
   const [businessName, setBusinessName] = useState("");
-  const [keywords, setKeywords] = useState("roof, roofer");
+  const [suggestedKeywords, setSuggestedKeywords] = useState("");
+  const [extraKeywords, setExtraKeywords] = useState("");
+  const [suggestingKeywords, setSuggestingKeywords] = useState(false);
+  const [suggestError, setSuggestError] = useState("");
   const [preferences, setPreferences] = useState<PersonalPreference[]>(["surprise_me"]);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
 
@@ -72,6 +93,41 @@ export function PremiumNumbersPageClient({ workspaceId }: Props) {
   const [success, setSuccess] = useState<CheckoutState | null>(null);
   const [reserveError, setReserveError] = useState("");
 
+  const canSearch =
+    mode === "personal"
+      ? areaCode.length === 3
+      : numberType === "local"
+        ? areaCode.length === 3
+        : true;
+
+  async function onSuggestKeywords() {
+    const description = businessName.trim();
+    if (description.length < 2) {
+      setSuggestError("Tell us your business name first");
+      return;
+    }
+    setSuggestingKeywords(true);
+    setSuggestError("");
+    try {
+      const res = await fetch("/api/numbers/premium/suggest-keywords", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ businessDescription: description }),
+      });
+      const data = (await res.json()) as { keywords?: string[]; error?: string };
+      if (!res.ok) throw new Error(data.error || "Could not suggest keywords");
+      if (data.keywords?.length) {
+        setSuggestedKeywords(data.keywords.join(", "));
+      } else {
+        setSuggestError("No keyword ideas returned — try adding your main word manually.");
+      }
+    } catch (err) {
+      setSuggestError(err instanceof Error ? err.message : "Suggestion failed");
+    } finally {
+      setSuggestingKeywords(false);
+    }
+  }
+
   async function onSearch() {
     setLoading(true);
     setError("");
@@ -80,23 +136,31 @@ export function PremiumNumbersPageClient({ workspaceId }: Props) {
     setSearchDurationSec(null);
     const started = performance.now();
     try {
-      const customList = [
-        ...keywords.split(/[,]+/).map((k) => k.trim()).filter(Boolean),
-        ...extractBusinessNameKeywords(businessName),
-      ];
+      const body =
+        mode === "business"
+          ? {
+              workspaceId,
+              mode,
+              numberType,
+              areaCode: numberType === "local" ? areaCode.trim() : undefined,
+              tollFreePrefix: numberType === "tollfree" ? tollFreePrefix : undefined,
+              matchStyle,
+              primaryKeyword: primaryKeyword.trim(),
+              suggestedKeywords: splitKeywordInput(suggestedKeywords),
+              extraKeywords: splitKeywordInput(extraKeywords),
+              businessName: businessName.trim(),
+            }
+          : {
+              workspaceId,
+              mode,
+              areaCode: areaCode.trim(),
+              preferences,
+            };
 
       const res = await fetch("/api/numbers/premium/search", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          workspaceId,
-          mode,
-          areaCode: areaCode.trim(),
-          industry: mode === "business" ? industry : undefined,
-          businessName: mode === "business" ? businessName : undefined,
-          customKeywords: mode === "business" ? customList : undefined,
-          preferences: mode === "personal" ? preferences : undefined,
-        }),
+        body: JSON.stringify(body),
       });
       const data = (await res.json()) as PremiumSearchProductResponse & { error?: string };
       if (!res.ok) throw new Error(data.error || "Search failed");
@@ -144,14 +208,28 @@ export function PremiumNumbersPageClient({ workspaceId }: Props) {
 
   const resultSummary = useMemo(() => {
     if (!searchResponse || searchDurationSec === null) return "";
-    const industryLabel =
-      PREMIUM_INDUSTRY_OPTIONS.find((o) => o.value === industry)?.label ?? industry;
     if (mode === "business") {
-      const biz = businessName.trim() ? `${businessName.trim()} and ` : "";
-      return `${searchResponse.resultCount} results found in ${searchDurationSec}s matching ${biz}'${industryLabel}' keywords in area ${areaCode}`;
+      const location =
+        numberType === "tollfree"
+          ? tollFreePrefix === "all"
+            ? "toll-free numbers"
+            : `toll-free ${tollFreePrefix}`
+          : `area ${areaCode}`;
+      const word = primaryKeyword.trim() || splitKeywordInput(suggestedKeywords)[0];
+      const wordPart = word ? ` for “${word.toUpperCase()}”` : "";
+      return `${searchResponse.resultCount} numbers found in ${searchDurationSec}s${wordPart} · ${location}`;
     }
     return `${searchResponse.resultCount} memorable numbers found in ${searchDurationSec}s for area ${areaCode}`;
-  }, [searchResponse, searchDurationSec, mode, areaCode, industry, businessName]);
+  }, [
+    searchResponse,
+    searchDurationSec,
+    mode,
+    areaCode,
+    numberType,
+    tollFreePrefix,
+    primaryKeyword,
+    suggestedKeywords,
+  ]);
 
   const showPreSearch = !searchResponse && !loading && !success;
 
@@ -193,50 +271,132 @@ export function PremiumNumbersPageClient({ workspaceId }: Props) {
 
             <div className="mt-5">
               {mode === "business" ? (
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                  <Field label="Area Code" required>
-                    <Input
-                      value={areaCode}
-                      onChange={(e) => setAreaCode(e.target.value.replace(/\D/g, "").slice(0, 3))}
-                      placeholder="571"
-                      className="h-11 rounded-lg border-[#e5e7eb] bg-white text-[14px]"
-                    />
-                  </Field>
-                  <Field label="Industry">
-                    <select
-                      className="flex h-11 w-full rounded-lg border border-[#e5e7eb] bg-white px-3 text-[14px]"
-                      value={industry}
-                      onChange={(e) => setIndustry(e.target.value)}
+                <div className="space-y-5">
+                  <div>
+                    <p className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-[#6b7280]">
+                      Number type
+                    </p>
+                    <div className="inline-flex rounded-lg border border-[#e5e7eb] bg-[#f9fafb] p-1">
+                      <PillTab active={numberType === "local"} onClick={() => setNumberType("local")}>
+                        Local number
+                      </PillTab>
+                      <PillTab active={numberType === "tollfree"} onClick={() => setNumberType("tollfree")}>
+                        Toll-free
+                      </PillTab>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    {numberType === "local" ? (
+                      <Field label="Area code" required hint="Any US area code">
+                        <Input
+                          value={areaCode}
+                          onChange={(e) =>
+                            setAreaCode(e.target.value.replace(/\D/g, "").slice(0, 3))
+                          }
+                          placeholder="e.g. 571"
+                          className="h-11 rounded-lg border-[#e5e7eb] bg-white text-[14px]"
+                        />
+                      </Field>
+                    ) : (
+                      <Field label="Toll-free prefix" required>
+                        <select
+                          className="flex h-11 w-full rounded-lg border border-[#e5e7eb] bg-white px-3 text-[14px]"
+                          value={tollFreePrefix}
+                          onChange={(e) => setTollFreePrefix(e.target.value as TollFreePrefix)}
+                        >
+                          {TOLL_FREE_OPTIONS.map((opt) => (
+                            <option key={opt.value} value={opt.value}>{opt.label}</option>
+                          ))}
+                        </select>
+                      </Field>
+                    )}
+
+                    <Field
+                      label="Word in your number"
+                      hint="What customers should remember"
                     >
-                      {PREMIUM_INDUSTRY_OPTIONS.map((opt) => (
-                        <option key={opt.value} value={opt.value}>{opt.label}</option>
-                      ))}
-                    </select>
-                  </Field>
-                  <Field label="Business Name (optional)">
+                      <Input
+                        value={primaryKeyword}
+                        onChange={(e) => setPrimaryKeyword(e.target.value)}
+                        placeholder="e.g. ROOF, PLUMB, LAWN"
+                        className="h-11 rounded-lg border-[#e5e7eb] bg-white text-[14px]"
+                      />
+                    </Field>
+                  </div>
+
+                  <div>
+                    <p className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-[#6b7280]">
+                      Match style
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <MatchStyleChip
+                        active={matchStyle === "ends_with"}
+                        onClick={() => setMatchStyle("ends_with")}
+                        title="Ends with your word"
+                        subtitle="Best match · highest value"
+                      />
+                      <MatchStyleChip
+                        active={matchStyle === "contains"}
+                        onClick={() => setMatchStyle("contains")}
+                        title="Anywhere in the number"
+                        subtitle="More options"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 lg:grid-cols-2">
+                    <Field label="Your business" hint="We’ll suggest words to search">
+                      <Input
+                        value={businessName}
+                        onChange={(e) => setBusinessName(e.target.value)}
+                        placeholder="e.g. Jackson Roofing"
+                        className="h-11 rounded-lg border-[#e5e7eb] bg-white text-[14px]"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={suggestingKeywords || businessName.trim().length < 2}
+                        onClick={onSuggestKeywords}
+                        className="mt-2 h-9 rounded-lg border-[#e5e7eb] text-[13px]"
+                      >
+                        <Wand2 className="h-3.5 w-3.5" />
+                        {suggestingKeywords ? "Finding keyword ideas…" : "Suggest keywords"}
+                      </Button>
+                      {suggestError ? (
+                        <p className="mt-1 text-[12px] text-destructive">{suggestError}</p>
+                      ) : null}
+                    </Field>
+
+                    <Field
+                      label="Suggested keywords"
+                      hint="Edit or add — comma separated"
+                    >
+                      <Textarea
+                        value={suggestedKeywords}
+                        onChange={(e) => setSuggestedKeywords(e.target.value)}
+                        placeholder="ROOF, ROOFER, SHINGLE…"
+                        className="min-h-[88px] rounded-lg border-[#e5e7eb] bg-white text-[14px]"
+                      />
+                    </Field>
+                  </div>
+
+                  <Field label="Extra keywords (optional)" hint="Anything else to try">
                     <Input
-                      value={businessName}
-                      onChange={(e) => setBusinessName(e.target.value)}
-                      placeholder="Jackson Roofing"
-                      className="h-11 rounded-lg border-[#e5e7eb] bg-white text-[14px]"
-                    />
-                  </Field>
-                  <Field label="Keywords (optional)">
-                    <Input
-                      value={keywords}
-                      onChange={(e) => setKeywords(e.target.value)}
-                      placeholder="roof, roofer, home"
+                      value={extraKeywords}
+                      onChange={(e) => setExtraKeywords(e.target.value)}
+                      placeholder="e.g. HOME, PRO"
                       className="h-11 rounded-lg border-[#e5e7eb] bg-white text-[14px]"
                     />
                   </Field>
                 </div>
               ) : (
                 <div className="space-y-4">
-                  <Field label="Area Code" required>
+                  <Field label="Area code" required hint="Any US area code">
                     <Input
                       value={areaCode}
                       onChange={(e) => setAreaCode(e.target.value.replace(/\D/g, "").slice(0, 3))}
-                      placeholder="571"
+                      placeholder="e.g. 571"
                       className="h-11 max-w-[160px] rounded-lg border-[#e5e7eb] bg-white text-[14px]"
                     />
                   </Field>
@@ -282,7 +442,7 @@ export function PremiumNumbersPageClient({ workspaceId }: Props) {
             <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
               <Button
                 onClick={onSearch}
-                disabled={loading || areaCode.length !== 3}
+                disabled={loading || !canSearch}
                 className="h-11 min-w-[220px] rounded-lg bg-[#6366f1] px-8 text-[14px] font-semibold shadow-[0_4px_14px_rgba(99,102,241,0.35)] hover:bg-[#5558e3]"
               >
                 {loading ? "Searching live inventory…" : "Find Premium Numbers"}
@@ -302,7 +462,7 @@ export function PremiumNumbersPageClient({ workspaceId }: Props) {
           {error && <p className="text-destructive text-sm">{error}</p>}
           {reserveError && <p className="text-destructive text-sm">{reserveError}</p>}
 
-          {showPreSearch && <PreSearchHero areaCode={areaCode} />}
+          {showPreSearch && <PreSearchHero />}
 
           {success ? <SuccessPanel state={success} onClose={() => setSuccess(null)} /> : null}
 
@@ -387,10 +547,12 @@ function PillTab({
 function Field({
   label,
   required,
+  hint,
   children,
 }: {
   label: string;
   required?: boolean;
+  hint?: string;
   children: ReactNode;
 }) {
   return (
@@ -399,16 +561,45 @@ function Field({
         {label}
         {required ? <span className="text-destructive"> *</span> : null}
       </Label>
+      {hint ? <p className="text-[11px] text-[#9ca3af]">{hint}</p> : null}
       {children}
     </div>
   );
 }
 
-function PreSearchHero({ areaCode }: { areaCode: string }) {
+function MatchStyleChip({
+  active,
+  onClick,
+  title,
+  subtitle,
+}: {
+  active: boolean;
+  onClick: () => void;
+  title: string;
+  subtitle: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "rounded-lg border px-4 py-2.5 text-left transition",
+        active
+          ? "border-[#6366f1] bg-[#eef2ff] ring-1 ring-[#6366f1]/30"
+          : "border-[#e5e7eb] bg-white hover:border-[#c7d2fe]",
+      )}
+    >
+      <span className="block text-[13px] font-semibold text-[#111827]">{title}</span>
+      <span className="block text-[11px] text-[#6b7280]">{subtitle}</span>
+    </button>
+  );
+}
+
+function PreSearchHero() {
   const examples = [
-    { vanity: `${areaCode}-704-ROOF`, numeric: `${areaCode}-704-7663`, tag: "Business word" },
-    { vanity: `${areaCode}-240-1111`, numeric: `${areaCode}-240-1111`, tag: "Memorable" },
-    { vanity: `${areaCode}-296-MOWER`, numeric: `${areaCode}-296-6937`, tag: "5-letter match" },
+    { vanity: "571-704-ROOF", numeric: "571-704-7663", tag: "Business word" },
+    { vanity: "571-240-1111", numeric: "571-240-1111", tag: "Memorable" },
+    { vanity: "866-296-MOWER", numeric: "866-296-6937", tag: "Toll-free" },
   ];
   return (
     <div className={cn(srCard, "p-6 md:p-8")}>

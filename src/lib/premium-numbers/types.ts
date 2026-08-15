@@ -79,11 +79,16 @@ export type PremiumSearchStatistics = {
   tierCounts: Record<QualityTier, number>;
 };
 
+import type { KeywordMatchStyle } from "./telnyx-inventory-search";
+
 export type PremiumSearchInput = {
   areaCode: string;
   industry?: string;
   customKeywords?: string[];
+  primaryKeywords?: string[];
   limit?: number;
+  matchStyle?: KeywordMatchStyle;
+  areaCodes?: string[];
 };
 
 export type PremiumSearchResult = {
