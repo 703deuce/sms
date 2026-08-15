@@ -1,8 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Input, Label } from "@/components/ui/input";
 import type { PremiumSearchResult, ScoredCandidate } from "@/lib/premium-numbers/types";
 import {
   BUSINESS_MATCH_LIST_THRESHOLD,
