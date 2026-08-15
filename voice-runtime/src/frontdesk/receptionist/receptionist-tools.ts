@@ -15,7 +15,7 @@ import {
 import { executeAgentTool } from "@/lib/voice/agent-tool-gateway/gateway";
 import { buildFrontDeskBookingTools } from "../booking-tools";
 import { isBookingOperationActive } from "../booking-operation";
-import type { FrontDeskUserData } from "../userdata";
+import { isBookingConfirmed, type FrontDeskUserData } from "../userdata";
 import { withLiveKitToolTelemetry } from "../../livekit-tool-telemetry";
 import {
   formatToolFeedbackForModel,
@@ -98,6 +98,9 @@ function buildRecordReceptionistFieldTool(snapshot: ReceptionistCompiledSnapshot
           const normalized = validateReceptionistFieldValue(field, trimmed);
           if (!ud.receptionistFields) ud.receptionistFields = {};
           ud.receptionistFields[field_id] = normalized;
+          if (field_id === "email" || field.type === "email") {
+            ud.confirmedEmail = normalized;
+          }
           const pendingSlot = ud.pendingSlotId || ud.bookingOperation?.slotId;
           const bookingTail = pendingSlot
             ? ` Then call schedule_appointment with slot_id ${pendingSlot}.`
@@ -290,6 +293,20 @@ function buildCollectBookingRequirementsTool(snapshot: ReceptionistCompiledSnaps
       const session = opts.ctx.session as AgentSession<FrontDeskUserData>;
       const ud = session.userData;
       return withLiveKitToolTelemetry(ud, "collect_booking_requirements", args, async () => {
+        if (isBookingConfirmed(ud)) {
+          return formatToolFeedbackForModel(
+            toolFeedbackSuccess(
+              "Appointment is already confirmed on this call. Do not collect booking fields again. " +
+                "If the caller is done, use end_call.",
+              {
+                tool: "collect_booking_requirements",
+                next_action: "end_call",
+                caller_already_heard_success: true,
+              },
+            ),
+          );
+        }
+
         if (isBookingOperationActive(ud)) {
           return formatToolFeedbackForModel(
             toolFeedbackSuccess(

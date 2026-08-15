@@ -12,6 +12,7 @@ import { validateReceptionistFieldValue } from "../src/lib/voice/receptionist/fi
 import type { AgentFieldDefinition } from "../src/lib/voice/receptionist/types";
 import { deriveAuthoritativeBookingState } from "../voice-runtime/src/frontdesk/booking-state";
 import { findBookingPrerequisiteGaps } from "../voice-runtime/src/frontdesk/booking-prerequisites";
+import { resolveConfirmedEmail } from "../voice-runtime/src/frontdesk/email-collection-tools";
 import { buildBookingIntakeToolResult } from "../voice-runtime/src/frontdesk/booking-intake-lifecycle";
 import { alreadyBookedToolMessage } from "../voice-runtime/src/frontdesk/booking-recovery";
 import {
@@ -76,6 +77,14 @@ assert.ok(
   fieldTask.includes("receptionistOperationalTaskOptionsFromSession"),
   "legacy field collection still isolated — booking path must not depend on it",
 );
+assert.ok(
+  receptionistTools.includes("ud.confirmedEmail = normalized"),
+  "record_receptionist_field mirrors email to confirmedEmail",
+);
+assert.ok(
+  receptionistTools.includes("isBookingConfirmed(ud)"),
+  "collect_booking_requirements guards confirmed bookings",
+);
 
 // --- Fixtures ---
 
@@ -137,6 +146,16 @@ function baseUserData(overrides: Partial<FrontDeskUserData> = {}): FrontDeskUser
     ...overrides,
   };
 }
+
+assert.equal(
+  resolveConfirmedEmail(
+    baseUserData({
+      receptionistFields: { email: "anthony@yahoo.com" },
+    }),
+  ),
+  "anthony@yahoo.com",
+  "resolveConfirmedEmail reads receptionistFields.email",
+);
 
 function chatWithUtterance(text: string): ChatContext {
   const ctx = ChatContext.empty();

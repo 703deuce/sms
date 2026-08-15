@@ -35,8 +35,12 @@ assert.ok(
 
 const bookingTools = read("voice-runtime/src/frontdesk/booking-tools.ts");
 assert.ok(
-  bookingTools.includes("await sendBookingConfirmationSms"),
-  "booking success must await SMS before speaking confirmation",
+  bookingTools.includes("sendBookingSmsAsync"),
+  "booking success queues SMS async after speaking confirmation",
+);
+assert.ok(
+  !bookingTools.includes("await sendBookingConfirmationSms"),
+  "must not block caller audio on SMS send",
 );
 assert.ok(
   fieldTask.includes("record_additional_caller_field"),

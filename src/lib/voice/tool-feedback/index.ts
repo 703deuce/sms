@@ -364,8 +364,13 @@ export function toolFeedbackBookingCompleteSpoken(): ToolFeedback {
 
 export function toolFeedbackBookingCompleteSpeakNow(timeLabel: string): ToolFeedback {
   return toolFeedbackSuccess(
-    `Appointment IS confirmed for ${timeLabel}. Tell the caller clearly they are all set.`,
-    { tool: "schedule_appointment", context: { booked_time_label: timeLabel } },
+    `Appointment IS confirmed for ${timeLabel}. Tell the caller clearly they are all set. ` +
+      "Do NOT call check_booking_status — booking already succeeded.",
+    {
+      tool: "schedule_appointment",
+      context: { booked_time_label: timeLabel },
+      next_action: "end_call",
+    },
   );
 }
 

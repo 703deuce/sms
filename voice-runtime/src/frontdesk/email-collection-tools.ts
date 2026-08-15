@@ -13,5 +13,12 @@ export function resolveConfirmedEmail(
   }
   const confirmed = userData.confirmedEmail?.trim();
   if (confirmed && isValidEmail(confirmed)) return confirmed;
+
+  const fromFields = userData.receptionistFields?.email?.trim();
+  if (fromFields) {
+    const normalized = normalizeSpokenEmail(fromFields);
+    if (isValidEmail(normalized)) return normalized;
+  }
+
   return null;
 }

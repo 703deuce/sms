@@ -55,7 +55,7 @@ import { buildFrontDeskTransferTool } from "./transfer-tool";
 import { buildFrontDeskCheckBookingStatusTool } from "./check-booking-status-tool";
 import { speakBookingLine } from "./booking-speech";
 import { markBookingConfirmed, type FrontDeskUserData } from "./userdata";
-import { sendBookingConfirmationSms, sendBookingSmsAsync } from "./booking-sms";
+import { sendBookingSmsAsync } from "./booking-sms";
 import { markAppointmentBooked, persistCallState } from "@/lib/voice/real-estate/state";
 import { notifyRealEstateStaff } from "@/lib/voice/real-estate/notifications";
 import { syncRealEstateLeadToCrm } from "@/lib/voice/real-estate/crm-sync";
@@ -205,6 +205,8 @@ export function buildFrontDeskBookingTools(input: {
             tool: "schedule_appointment",
             recovery_class: "DUPLICATE_OPERATION",
             reason: "already_completed",
+            next_action: "end_call",
+            caller_already_heard_success: true,
           }),
         );
       }
@@ -286,12 +288,29 @@ export function buildFrontDeskBookingTools(input: {
               markBookingOperationConfirmed(userData);
               void onRealEstateBookingConfirmed(userData);
 
-              const appointmentId = await lookupAppointmentIdForCallWithRetry({
+              const spoken = await speakBookingLine(session, buildBookingSuccessLine(local));
+              console.log(
+                JSON.stringify({
+                  source: "frontdesk-booking-tools",
+                  event: "booking_confirmation_spoken",
+                  callId: userData.callId,
+                  spoken,
+                  eventUri: booked.eventUri,
+                }),
+              );
+
+              const smsEnabled =
+                userData.receptionistCompiled?.bookingPolicy?.sendSmsConfirmation !== false;
+              if (smsEnabled) {
+                sendBookingSmsAsync(session, booked.slot.startTime);
+              }
+
+              void lookupAppointmentIdForCallWithRetry({
                 workspaceId: userData.workspaceId,
                 callId: userData.callId,
                 eventUri: booked.eventUri,
-              });
-              if (appointmentId) {
+              }).then((appointmentId) => {
+                if (!appointmentId) return;
                 userData.booking = {
                   ...userData.booking!,
                   appointmentId,
@@ -313,24 +332,7 @@ export function buildFrontDeskBookingTools(input: {
                     }),
                   );
                 });
-              }
-
-              const smsEnabled =
-                userData.receptionistCompiled?.bookingPolicy?.sendSmsConfirmation !== false;
-              if (smsEnabled) {
-                await sendBookingConfirmationSms(session, booked.slot.startTime);
-              }
-
-              const spoken = await speakBookingLine(session, buildBookingSuccessLine(local));
-              console.log(
-                JSON.stringify({
-                  source: "frontdesk-booking-tools",
-                  event: "booking_confirmation_spoken",
-                  callId: userData.callId,
-                  spoken,
-                  eventUri: booked.eventUri,
-                }),
-              );
+              });
 
               if (spoken) {
                 return formatToolFeedbackForModel(toolFeedbackBookingCompleteSpoken());

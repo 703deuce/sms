@@ -35,7 +35,7 @@ export function buildFrontDeskCheckBookingStatusTool() {
     name: "check_booking_status",
     description:
       "Check whether the caller's appointment is confirmed on the calendar. " +
-      "Use when they ask if booking went through or while waiting.",
+      "Use ONLY when the caller explicitly asks if booking worked — never right after schedule_appointment succeeds.",
     parameters: z.object({}),
     execute: async (_args, opts) => {
       const session = opts.ctx.session as AgentSession<FrontDeskUserData>;
@@ -47,11 +47,12 @@ export function buildFrontDeskCheckBookingStatusTool() {
             ud.booking?.bookedTimeLabel || ud.bookedTimeLabel || "the time you chose";
           return formatToolFeedbackForModel(
             toolFeedbackSuccess(
-              `Appointment IS confirmed for ${when}. Tell the caller confidently they are all set.`,
+              `Appointment IS confirmed for ${when}. Tell the caller confidently they are all set. ` +
+                "Do not call check_booking_status again.",
               {
                 tool: "check_booking_status",
                 caller_already_heard_success: true,
-                context: { booked_time_label: when },
+                next_action: "end_call",
               },
             ),
           );

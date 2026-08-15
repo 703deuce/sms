@@ -78,8 +78,32 @@ assert.ok(
 );
 
 assert.ok(
-  bookingToolsSource.includes("speakBookingLine(session, buildBookingSuccessLine(local)"),
-  "confirmation uses speakBookingLine after Calendly write",
+  bookingToolsSource.includes("sendBookingSmsAsync"),
+  "confirmation SMS is queued async after speak (LiveKit say-before-slow-IO)",
+);
+assert.ok(
+  !bookingToolsSource.includes("await sendBookingConfirmationSms"),
+  "must not await SMS before speaking confirmation",
+);
+const postWriteBlock = bookingToolsSource.match(
+  /markBookingOperationConfirmed\(userData\)[\s\S]*?toolFeedbackBookingCompleteSpeakNow/,
+);
+assert.ok(postWriteBlock, "post-write success block exists");
+assert.ok(
+  postWriteBlock![0].indexOf("speakBookingLine") < postWriteBlock![0].indexOf("sendBookingSmsAsync"),
+  "speak confirmation before async SMS",
+);
+assert.ok(
+  postWriteBlock![0].indexOf("speakBookingLine") < postWriteBlock![0].indexOf("lookupAppointmentIdForCallWithRetry"),
+  "speak confirmation before deferred CRM lookup",
+);
+
+assert.ok(
+  fs.readFileSync(
+    path.join(process.cwd(), "voice-runtime/src/frontdesk/booking-speech.ts"),
+    "utf8",
+  ).includes("allowInterruptions: false"),
+  "booking confirmation uses non-interruptible scripted speech",
 );
 
 assert.doesNotMatch(
