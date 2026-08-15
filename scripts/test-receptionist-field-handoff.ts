@@ -25,8 +25,8 @@ assert.ok(
 
 const receptionistTools = read("voice-runtime/src/frontdesk/receptionist/receptionist-tools.ts");
 assert.ok(
-  receptionistTools.includes("purpose !== \"booking\""),
-  "collect_caller_fields must allow booking after take_message",
+  receptionistTools.includes("collect_booking_requirements"),
+  "collect_caller_fields booking path must redirect to booking intake",
 );
 assert.ok(
   receptionistTools.includes("when they ask for a text confirmation"),

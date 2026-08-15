@@ -31,6 +31,7 @@ export type RecoveryClass =
 export type ToolNextAction =
   | "collect_email_then_retry"
   | "collect_field_then_retry"
+  | "collect_booking_requirements"
   | "record_field_then_retry"
   | "retry_same_tool"
   | "list_slots_then_retry"

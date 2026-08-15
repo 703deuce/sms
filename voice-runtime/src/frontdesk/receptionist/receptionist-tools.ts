@@ -420,7 +420,7 @@ function buildCollectCallerFieldsTool(snapshot: ReceptionistCompiledSnapshot) {
         if (purpose === "booking") {
           return runBookingPurposeFieldCollection(session, manifest);
         }
-        if (ud.receptionistMessageTaken && purpose !== "booking") {
+        if (ud.receptionistMessageTaken) {
           return (
             "A callback message was already recorded. If the caller wants to book instead, " +
             "call collect_booking_requirements. Otherwise continue their request."
