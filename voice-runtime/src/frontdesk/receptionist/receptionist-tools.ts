@@ -26,6 +26,8 @@ import {
 } from "@/lib/voice/tool-feedback";
 import { ReceptionistFieldCollectionTask, speakReceptionistCollectionLine } from "./field-collection-task";
 import { buildReceptionistCollectionToolResult } from "./field-collection-lifecycle";
+import { runBookingIntakeTask } from "../booking-intake-task";
+import { buildBookingIntakeToolResult } from "../booking-intake-lifecycle";
 import { markParentResumed } from "../../task-transition-instrumentation";
 import { resyncOpenAIRealtimeAgentChatCtx } from "../../realtime-openai-chat-context";
 
@@ -270,6 +272,103 @@ function buildSendSmsTool() {
   });
 }
 
+function buildCollectBookingRequirementsTool(snapshot: ReceptionistCompiledSnapshot) {
+  const manifest = snapshot.fieldManifest;
+  if (!manifest.length) return null;
+
+  return llm.tool({
+    name: "collect_booking_requirements",
+    description:
+      "Collect all missing booking requirements (name, phone, email, address, custom fields, preferred time). " +
+      "Use when schedule_appointment reports missing information or before booking when profile fields are incomplete. " +
+      "Caller may provide multiple details in one answer — the intake task persists each immediately. " +
+      "Do NOT use collect_caller_fields for booking.",
+    parameters: z.object({
+      reason: z.string().optional().describe("Why booking intake is needed"),
+    }),
+    execute: async (args, opts) => {
+      const session = opts.ctx.session as AgentSession<FrontDeskUserData>;
+      const ud = session.userData;
+      return withLiveKitToolTelemetry(ud, "collect_booking_requirements", args, async () => {
+        if (isBookingOperationActive(ud)) {
+          return formatToolFeedbackForModel(
+            toolFeedbackSuccess(
+              "Booking is already in progress. Tell the caller you're finishing the appointment. " +
+                "If they ask whether it worked, use check_booking_status.",
+              { tool: "collect_booking_requirements", next_action: "check_booking_status" },
+            ),
+          );
+        }
+
+        backfillReceptionistFields(session, manifest);
+        const missing = missingReceptionistFields(manifest, ud.receptionistFields, "booking");
+        if (!missing.length) {
+          return formatToolFeedbackForModel(
+            toolFeedbackSuccess(
+              "All booking requirements are already satisfied. Call schedule_appointment with the chosen slot_id.",
+              { tool: "collect_booking_requirements" },
+            ),
+          );
+        }
+
+        const firstMissing = missing[0];
+        if (firstMissing?.question?.trim()) {
+          ud.receptionistFieldCollectionPrefaceSpoken = true;
+          await speakReceptionistCollectionLine(session, firstMissing.question);
+        }
+
+        const result = await runBookingIntakeTask(session);
+        ud.receptionistFieldCollectionPrefaceSpoken = false;
+        await resyncOpenAIRealtimeAgentChatCtx(session.currentAgent);
+        markParentResumed({
+          callId: ud.callId,
+          taskId: "booking_intake",
+          taskType: "BookingIntakeTask",
+          parentTaskType: "GenericReceptionistAgent",
+          collectionComplete: result.complete,
+        });
+        ud.activeTaskInstrumentation = {
+          taskId: "parent_after_booking_intake",
+          taskType: "GenericReceptionistAgent",
+        };
+        return buildBookingIntakeToolResult(ud, result);
+      });
+    },
+  });
+}
+
+async function runBookingPurposeFieldCollection(
+  session: AgentSession<FrontDeskUserData>,
+  manifest: ReceptionistCompiledSnapshot["fieldManifest"],
+): Promise<string> {
+  const ud = session.userData;
+  backfillReceptionistFields(session, manifest);
+  const missing = missingReceptionistFields(manifest, ud.receptionistFields, "booking");
+  if (!missing.length) {
+    return "Caller information is already complete. Continue with booking.";
+  }
+  const firstMissing = missing[0];
+  if (firstMissing?.question?.trim()) {
+    ud.receptionistFieldCollectionPrefaceSpoken = true;
+    await speakReceptionistCollectionLine(session, firstMissing.question);
+  }
+  const result = await runBookingIntakeTask(session);
+  ud.receptionistFieldCollectionPrefaceSpoken = false;
+  await resyncOpenAIRealtimeAgentChatCtx(session.currentAgent);
+  markParentResumed({
+    callId: ud.callId,
+    taskId: "booking_intake",
+    taskType: "BookingIntakeTask",
+    parentTaskType: "GenericReceptionistAgent",
+    collectionComplete: result.complete,
+  });
+  ud.activeTaskInstrumentation = {
+    taskId: "parent_after_booking_intake",
+    taskType: "GenericReceptionistAgent",
+  };
+  return buildBookingIntakeToolResult(ud, result);
+}
+
 function buildCollectCallerFieldsTool(snapshot: ReceptionistCompiledSnapshot) {
   const manifest = snapshot.fieldManifest;
   if (!manifest.length) return null;
@@ -277,7 +376,8 @@ function buildCollectCallerFieldsTool(snapshot: ReceptionistCompiledSnapshot) {
   return llm.tool({
     name: "collect_caller_fields",
     description:
-      "Collect missing required caller profile fields (name, phone) for service or booking. " +
+      "Collect missing required caller profile fields (name, phone) for service requests. " +
+      "Do NOT use for booking — use collect_booking_requirements instead. " +
       "Do NOT use when the caller is leaving a message — use take_message instead. " +
       "Do NOT use when the caller already gave the issue; backfill handles that.",
     parameters: z.object({
@@ -310,17 +410,20 @@ function buildCollectCallerFieldsTool(snapshot: ReceptionistCompiledSnapshot) {
               tool: "collect_caller_fields",
               recovery_class: "OPERATION_IN_PROGRESS",
               reason: "booking_slot_pending",
-              next_action: "retry_same_tool",
+              next_action: "collect_booking_requirements",
               guidance:
-                `A time slot is already chosen (${ud.pendingSlotId}). Ask for any missing name or phone in one question, ` +
-                "then call schedule_appointment with that slot_id — do not run collect_caller_fields.",
+                `A time slot is already chosen (${ud.pendingSlotId}). Use collect_booking_requirements for any missing fields, ` +
+                "then call schedule_appointment with that slot_id.",
             }),
           );
+        }
+        if (purpose === "booking") {
+          return runBookingPurposeFieldCollection(session, manifest);
         }
         if (ud.receptionistMessageTaken && purpose !== "booking") {
           return (
             "A callback message was already recorded. If the caller wants to book instead, " +
-            "call collect_caller_fields with purpose booking. Otherwise continue their request."
+            "call collect_booking_requirements. Otherwise continue their request."
           );
         }
 
@@ -411,6 +514,11 @@ export function buildReceptionistTools(input: {
 
   const recordFieldTool = buildRecordReceptionistFieldTool(snapshot);
   if (recordFieldTool && capabilitySet.has("collect_info")) push(recordFieldTool);
+
+  const collectBookingTool = buildCollectBookingRequirementsTool(snapshot);
+  if (collectBookingTool && capabilitySet.has("collect_info") && capabilitySet.has("book_appointments")) {
+    push(collectBookingTool);
+  }
 
   const collectTool = buildCollectCallerFieldsTool(snapshot);
   if (collectTool && capabilitySet.has("collect_info")) push(collectTool);

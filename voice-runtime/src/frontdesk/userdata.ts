@@ -79,6 +79,8 @@ export type FrontDeskUserData = {
   intakeTransitionPhrase?: string;
   /** Parent spoke the first collection question before task handoff — skip duplicate onEnter. */
   receptionistFieldCollectionPrefaceSpoken?: boolean;
+  /** BookingIntakeTask is running — authoritative booking phase is intake. */
+  bookingIntakeActive?: boolean;
   /** Instrumentation for task boundary first-audio metrics. */
   activeTaskInstrumentation?: {
     taskId: string;

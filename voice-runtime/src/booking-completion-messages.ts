@@ -68,7 +68,7 @@ export function buildBookingNeedsFieldToolResult(
     `BOOKING_NEEDS_FIELD: Missing ${label} (${fieldId}) before booking slot ${slotId}. ` +
     "Do NOT say there was a system error or that booking failed. " +
     `Ask the caller naturally for their ${label}. ` +
-    "Use record_receptionist_field when they answer, or record_booking_email for email — " +
+    "Use record_receptionist_field when they answer, or collect_booking_requirements for multiple missing fields — " +
     "do not call collect_caller_fields during an active booking. " +
     "Then call schedule_appointment again with the same slot_id."
   );

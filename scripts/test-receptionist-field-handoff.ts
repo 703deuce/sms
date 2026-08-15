@@ -43,12 +43,24 @@ assert.ok(
   "field collection must support unordered multi-field answers",
 );
 assert.ok(
+  receptionistTools.includes("collect_booking_requirements"),
+  "receptionist must expose booking intake tool",
+);
+assert.ok(
+  receptionistTools.includes("runBookingIntakeTask"),
+  "booking must route to BookingIntakeTask not empty-context field collection",
+);
+assert.ok(
   receptionistTools.includes("record_receptionist_field"),
   "supervisor must persist volunteered fields without task handoff",
 );
 assert.ok(
   !bookingTools.includes("collectEmailInlineForBooking"),
   "booking must not use blocking inline email AgentTask",
+);
+assert.ok(
+  !bookingTools.includes("EmailCollectionTask"),
+  "schedule_appointment must not spawn EmailCollectionTask",
 );
 
 const ud = {
