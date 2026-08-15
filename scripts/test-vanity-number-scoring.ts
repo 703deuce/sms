@@ -5,7 +5,12 @@
 import { wordToKeypadDigits } from "../src/lib/premium-numbers/keypad";
 import { buildKeywordEntries } from "../src/lib/premium-numbers/industry-keywords";
 import { scoreCandidate } from "../src/lib/premium-numbers/scoring";
-import { buildVanityDisplay } from "../src/lib/premium-numbers/vanity-display";
+import {
+  buildVanityDisplay,
+  pickVanityDisplayWords,
+  vanityAlignsWithPhone,
+} from "../src/lib/premium-numbers/vanity-display";
+import { toProductResult } from "../src/lib/premium-numbers/product-api";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
@@ -38,9 +43,54 @@ assert(
   "VOLTS vanity must be 10 chars (240-91-VOLTS)",
 );
 assert(
-  buildVanityDisplay("+15712766377", ["ROOFER"]) === "571-2-ROOFER",
+  buildVanityDisplay("+15712766337", ["ROOFER"]) === "571-2-ROOFER",
   "ROOFER vanity must be 10 chars (571-2-ROOFER)",
 );
+assert(
+  pickVanityDisplayWords("+17575296262", ["LAWN"]).length === 0,
+  "5296262 must not display LAWN letters",
+);
+assert(
+  pickVanityDisplayWords("+15409295296", ["LAWN"]).includes("LAWN"),
+  "9295296 must display LAWN letters",
+);
+
+assert(
+  buildVanityDisplay("+17575296262", ["LAWN"]) === undefined,
+  "contains-only LAWN must not produce vanity",
+);
+const lawnContainsProduct = toProductResult(
+  scoreCandidate({
+    phoneNumber: "+17575296262",
+    keywords: buildKeywordEntries({ industry: "lawn_care" }),
+  })!,
+  "business",
+  buildKeywordEntries({ industry: "lawn_care" }),
+  "memorable_alternative",
+  "757",
+);
+assert(
+  !lawnContainsProduct.displayWord,
+  "contains-only LAWN must not set displayWord",
+);
+assert(
+  !lawnContainsProduct.cardBullets.some((b) => b.includes("letter")),
+  "contains-only LAWN must not claim exact letter match",
+);
+assert(
+  lawnContainsProduct.premiumPriceCents < 4900,
+  "contains-only LAWN must not get word-tier $49 pricing",
+);
+
+assert(
+  vanityAlignsWithPhone("757-607-YARD", "+17576079273"),
+  "757-607-YARD must align with 7576079273",
+);
+assert(
+  !vanityAlignsWithPhone("757-529-LAWN", "+17575296262"),
+  "mislabeled vanity must fail digit alignment",
+);
+
 assert(
   buildVanityDisplay("+12402077275", ["SPARK"]) !== "240-207-SPARK",
   "SPARK vanity must not use 11-char exchange format",

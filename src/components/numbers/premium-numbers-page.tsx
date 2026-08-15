@@ -767,16 +767,16 @@ function NumberCard({
 }) {
   const vanityTitle =
     result.vanityDisplay ??
-    (result.matchedWords.length > 0
-      ? buildVanityDisplay(result.phoneNumber, result.matchedWords)
+    (result.displayWord
+      ? buildVanityDisplay(result.phoneNumber, [result.displayWord])
       : undefined);
   const heroTitle = vanityTitle ?? result.displayNumber;
   const subNumber = vanityTitle ? result.displayNumber : null;
 
   const badge =
-    variant === "business" && result.businessMatchScore >= 75
+    variant === "business" && result.displayWord && result.businessMatchScore >= 75
       ? "EXACT MATCH"
-      : variant === "business" && result.businessMatchScore >= 55
+      : variant === "business" && result.displayWord && result.businessMatchScore >= 55
         ? "STRONG MATCH"
         : result.premiumPriceBand === "exceptional" || result.numberQualityScore >= 80
           ? "BEST MATCH"

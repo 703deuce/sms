@@ -2,10 +2,10 @@ import {
   BUSINESS_MATCH_LIST_THRESHOLD,
   MEMORABLE_NUMBER_QUALITY_THRESHOLD,
 } from "./scoring-config";
-import type { ScoredCandidate, KeywordEntry } from "./types";
-import { longestMatchedWordLength } from "./industry-keywords";
+import { normalizeWord } from "./keypad";
 import { quotePremiumPrice, type PremiumSearchMode } from "./premium-pricing";
-import { buildVanityDisplay } from "./vanity-display";
+import { resolveVanityPresentation } from "./vanity-display";
+import type { ScoredCandidate, KeywordEntry } from "./types";
 
 export type PremiumNumberAvailabilityStatus =
   | "available"
@@ -22,6 +22,8 @@ export type PremiumNumberProductResult = {
   phoneNumber: string;
   displayNumber: string;
   vanityDisplay?: string;
+  /** Word letters shown in vanityDisplay (exact ending match only). */
+  displayWord?: string;
   businessMatchScore: number;
   numberQualityScore: number;
   matchedWords: string[];
@@ -83,7 +85,8 @@ function simplifyReason(reason: string): string | null {
     if (word && len) return `Exact ${len}-letter ${word.toLowerCase()} match`;
     return "Exact industry keyword match";
   }
-  if (lower.includes("primary industry")) return "Primary industry keyword";
+  if (lower.includes("keyword contained")) return null;
+  if (lower.includes("primary industry")) return null;
   if (lower.includes("clean exact")) return "Clean word placement at end of number";
   if (lower.includes("simplicity")) return "Simple, easy-to-read number";
   if (lower.includes("memorable numeric")) return "Memorable numeric pattern";
@@ -95,10 +98,11 @@ function buildCardBullets(
   candidate: ScoredCandidate,
   mode: PremiumSearchMode,
   areaCode: string,
-  wordLen: number,
+  displayWord?: string,
 ): string[] {
   const bullets: string[] = [];
-  const hasWord = candidate.matchedWords.length > 0;
+  const hasDisplayWord = Boolean(displayWord);
+  const displayWordLen = displayWord ? normalizeWord(displayWord).length : 0;
 
   for (const r of [...candidate.businessReasons, ...candidate.numberQualityReasons]) {
     if (r.points <= 0) continue;
@@ -107,9 +111,8 @@ function buildCardBullets(
     if (bullets.length >= 3) break;
   }
 
-  if (mode === "business" && hasWord && wordLen >= 4 && bullets.length < 3) {
-    const word = candidate.matchedWords[0];
-    const exact = `Exact ${wordLen}-letter ${word.toLowerCase()} match`;
+  if (mode === "business" && hasDisplayWord && displayWordLen >= 4 && bullets.length < 3) {
+    const exact = `Exact ${displayWordLen}-letter ${displayWord!.toLowerCase()} match`;
     if (!bullets.some((b) => b.includes("letter"))) bullets.unshift(exact);
   }
 
@@ -118,11 +121,11 @@ function buildCardBullets(
     if (!bullets.includes(local)) bullets.push(local);
   }
 
-  if (mode === "business" && hasWord && wordLen >= 4 && bullets.length < 3) {
+  if (mode === "business" && hasDisplayWord && displayWordLen >= 4 && bullets.length < 3) {
     bullets.push("Easy to say and advertise");
   }
 
-  if (!hasWord && candidate.numberQualityScore >= 55 && bullets.length < 3) {
+  if (!hasDisplayWord && candidate.numberQualityScore >= 55 && bullets.length < 3) {
     if (!bullets.some((b) => b.includes("remember"))) {
       bullets.push("Very easy to remember");
     }
@@ -134,15 +137,16 @@ function buildCardBullets(
 function buildHeadlineLabel(
   candidate: ScoredCandidate,
   mode: PremiumSearchMode,
+  displayWord?: string,
 ): string {
+  const hasDisplayWord = Boolean(displayWord);
   const matchLabel =
     mode === "business" && candidate.businessMatchScore >= 55
-      ? businessMatchLabel(candidate.businessMatchScore, candidate.matchedWords)
-      : memorabilityLabel(candidate.numberQualityScore, candidate.matchedWords.length > 0);
+      ? businessMatchLabel(candidate.businessMatchScore, hasDisplayWord ? [displayWord!] : [])
+      : memorabilityLabel(candidate.numberQualityScore, hasDisplayWord);
 
-  const word = candidate.matchedWords[0];
-  if (word && candidate.businessMatchScore >= 55) {
-    return `${matchLabel} · ${word}`;
+  if (displayWord && candidate.businessMatchScore >= 55) {
+    return `${matchLabel} · ${displayWord}`;
   }
   return matchLabel;
 }
@@ -150,16 +154,17 @@ function buildHeadlineLabel(
 function buildTags(
   candidate: ScoredCandidate,
   mode: PremiumSearchMode,
-  wordLen: number,
+  displayWord?: string,
 ): string[] {
   const tags: string[] = [];
+  const displayWordLen = displayWord ? normalizeWord(displayWord).length : 0;
   if (mode === "business" && candidate.businessMatchScore >= BUSINESS_MATCH_LIST_THRESHOLD) {
     tags.push("Smart Match");
     tags.push("Local");
   }
-  if (candidate.matchedWords[0]) tags.push(candidate.matchedWords[0]);
+  if (displayWord) tags.push(displayWord);
   if (candidate.numberQualityScore >= 80) tags.push("Highly Memorable");
-  if (wordLen >= 5) tags.push(`${wordLen}-letter word`);
+  if (displayWordLen >= 5) tags.push(`${displayWordLen}-letter word`);
   for (const p of candidate.matchedPatterns.slice(0, 1)) {
     if (p.toLowerCase().includes("repeater")) tags.push(p.replace(/\(.*\)/, "").trim());
   }
@@ -184,28 +189,29 @@ export function toProductResult(
   listSection: PremiumNumberProductResult["listSection"],
   areaCode?: string,
 ): PremiumNumberProductResult {
-  const wordLen = longestMatchedWordLength(candidate.matchedWords, keywords);
   const telnyxVanity = candidate.rawTelnyx?.vanity_format as string | undefined;
-  const vanityDisplay = buildVanityDisplay(
+  const { vanityDisplay, displayWord } = resolveVanityPresentation(
     candidate.phoneNumber,
     candidate.matchedWords,
     telnyxVanity,
   );
+  const wordLen = displayWord ? normalizeWord(displayWord).length : 0;
   const price = quotePremiumPrice(candidate, mode, wordLen);
   const monthly = Number(candidate.telnyxCost?.monthlyCost);
   const providerPremium = Number.isFinite(monthly) && monthly >= 2;
 
-  const bmLabel = businessMatchLabel(candidate.businessMatchScore, candidate.matchedWords);
-  const memLabel = memorabilityLabel(
-    candidate.numberQualityScore,
-    candidate.matchedWords.length > 0,
+  const bmLabel = businessMatchLabel(
+    candidate.businessMatchScore,
+    displayWord ? [displayWord] : [],
   );
+  const memLabel = memorabilityLabel(candidate.numberQualityScore, Boolean(displayWord));
 
   return {
     resultId: candidate.phoneNumber,
     phoneNumber: candidate.phoneNumber,
     displayNumber: candidate.formattedNumber,
     vanityDisplay,
+    displayWord,
     businessMatchScore: candidate.businessMatchScore,
     numberQualityScore: candidate.numberQualityScore,
     matchedWords: candidate.matchedWords,
@@ -214,14 +220,22 @@ export function toProductResult(
     memorabilityLabel: memLabel,
     premiumPriceCents: price.premiumPriceCents,
     premiumPriceBand: price.band,
-    headlineLabel: buildHeadlineLabel(candidate, mode),
-    cardBullets: buildCardBullets(candidate, mode, areaCode ?? "", wordLen),
-    tags: buildTags(candidate, mode, wordLen),
+    headlineLabel: buildHeadlineLabel(candidate, mode, displayWord),
+    cardBullets: buildCardBullets(candidate, mode, areaCode ?? "", displayWord),
+    tags: buildTags(candidate, mode, displayWord),
     whyReasons: whyReasons(candidate),
     providerPremium,
     availabilityStatus: "available",
     listSection,
   };
+}
+
+function candidateHasDisplayWord(candidate: ScoredCandidate): boolean {
+  const telnyxVanity = candidate.rawTelnyx?.vanity_format as string | undefined;
+  return Boolean(
+    resolveVanityPresentation(candidate.phoneNumber, candidate.matchedWords, telnyxVanity)
+      .displayWord,
+  );
 }
 
 export function buildProductSearchResponse(input: {
@@ -258,7 +272,10 @@ export function buildProductSearchResponse(input: {
   }
 
   const businessMatches = candidates
-    .filter((c) => c.businessMatchScore >= BUSINESS_MATCH_LIST_THRESHOLD)
+    .filter(
+      (c) =>
+        c.businessMatchScore >= BUSINESS_MATCH_LIST_THRESHOLD && candidateHasDisplayWord(c),
+    )
     .sort((a, b) => {
       if (b.businessMatchScore !== a.businessMatchScore) {
         return b.businessMatchScore - a.businessMatchScore;
