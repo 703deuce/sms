@@ -27,3 +27,22 @@ export function isCalendlyAlreadyCancelledError(err: unknown): boolean {
   const message = err instanceof Error ? err.message : String(err);
   return /already cancel|already canceled|not found|404/i.test(message);
 }
+
+export function isCalendlyMissingFieldError(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  return (
+    /missing required|required field|must provide|invalid email|email.*required/i.test(message) ||
+    /MISSING_REQUIRED_FIELD/i.test(message)
+  );
+}
+
+/** Best-effort field id when Calendly rejects a booking for missing caller data. */
+export function missingFieldIdFromBookingError(err: unknown): string | null {
+  const message = err instanceof Error ? err.message : String(err);
+  if (/email/i.test(message)) return "email";
+  if (/phone/i.test(message)) return "phone";
+  if (/name/i.test(message)) return "name";
+  if (/address/i.test(message)) return "address";
+  if (/reason/i.test(message)) return "reason";
+  return null;
+}

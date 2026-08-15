@@ -54,8 +54,12 @@ assert.ok(
   "booking bridge line is passed to runAsyncWorkWithBridge",
 );
 assert.ok(
-  bookingToolsSource.includes("collectEmailInlineForBooking"),
-  "schedule_appointment uses inline email collection",
+  bookingToolsSource.includes("buildBookingNeedsEmailToolResult"),
+  "schedule_appointment fast-returns when email is missing",
+);
+assert.ok(
+  !bookingToolsSource.includes("collectEmailInlineForBooking"),
+  "schedule_appointment must not block on inline email waiter",
 );
 assert.ok(
   emailTaskSource.includes("speakBeforeTaskHandoff"),

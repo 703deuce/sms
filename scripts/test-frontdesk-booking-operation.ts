@@ -11,6 +11,12 @@ import {
   markBookingOperationConfirmed,
   markBookingOperationFailed,
 } from "../voice-runtime/src/frontdesk/booking-operation";
+import { findBookingPrerequisiteGaps } from "../voice-runtime/src/frontdesk/booking-prerequisites";
+import { buildBookingNeedsEmailToolResult } from "../voice-runtime/src/booking-completion-messages";
+import {
+  isCalendlyMissingFieldError,
+  missingFieldIdFromBookingError,
+} from "../voice-runtime/src/booking-error";
 import type { FrontDeskUserData } from "../voice-runtime/src/frontdesk/userdata";
 
 function baseUserData(): FrontDeskUserData {
@@ -46,5 +52,15 @@ beginBookingOperation(ud2, "ST_fail");
 markBookingOperationFailed(ud2, "calendly_error");
 assert.equal(ud2.bookingOperation?.state, "failed");
 assert.equal(ud2.bookingOperation?.errorReason, "calendly_error");
+
+const ud3 = baseUserData();
+assert.deepEqual(findBookingPrerequisiteGaps(ud3), [{ fieldId: "email", label: "email address", kind: "email" }]);
+ud3.confirmedEmail = "caller@example.com";
+assert.deepEqual(findBookingPrerequisiteGaps(ud3), []);
+
+assert.match(buildBookingNeedsEmailToolResult("ST_abc"), /BOOKING_NEEDS_EMAIL/);
+assert.match(buildBookingNeedsEmailToolResult("ST_abc"), /record_booking_email/);
+assert.ok(isCalendlyMissingFieldError(new Error("Missing required field: email")));
+assert.equal(missingFieldIdFromBookingError(new Error("invalid email format")), "email");
 
 console.log("frontdesk booking operation tests: PASS");

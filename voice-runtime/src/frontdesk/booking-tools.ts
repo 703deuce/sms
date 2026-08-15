@@ -10,13 +10,12 @@ import {
   scheduleAppointmentResilient,
 } from "./booking-recovery";
 import { resolveConfirmedEmail } from "./email-collection-tools";
-import { EMAIL_COLLECTION_PROMPT } from "./email-collection-task";
 import {
-  collectEmailInlineForBooking,
   buildDeclineBookingEmailTool,
   buildRecordBookingEmailTool,
   clearBookingEmailWaiter,
 } from "./booking-email-inline";
+import { findBookingPrerequisiteGaps } from "./booking-prerequisites";
 import {
   beginBookingOperation,
   canStartScheduleAppointment,
@@ -35,10 +34,17 @@ import {
   BOOKING_FAILED_TOOL_RESULT,
   buildBookingCompleteToolResultFallback,
   buildBookingFailureLine,
+  buildBookingNeedsEmailToolResult,
+  buildBookingNeedsFieldToolResult,
+  buildBookingRecoverableToolResult,
   buildBookingSuccessLine,
   POST_EMAIL_BOOKING_FILLER,
 } from "../booking-completion-messages";
-import { bookingFailureReason } from "../booking-error";
+import {
+  bookingFailureReason,
+  isCalendlyMissingFieldError,
+  missingFieldIdFromBookingError,
+} from "../booking-error";
 import { runAsyncWorkWithBridge } from "../task-async-work-bridge";
 import { safeInterruptSession } from "../session-utils";
 import { buildFrontDeskBusinessAnswerTool } from "./knowledge-tool";
@@ -151,7 +157,8 @@ export function buildFrontDeskBookingTools(input: {
   const scheduleAppointment = llm.tool({
     name: "schedule_appointment",
     description:
-      "Book the appointment at slot_id after the caller picks a time. Collects email via AgentTask when needed.",
+      "Book the appointment at slot_id after the caller picks a time. " +
+      "Returns BOOKING_NEEDS_EMAIL when email is missing — ask naturally, use record_booking_email, then retry.",
     parameters: z.object({
       slot_id: z.string().describe("Slot id from list_available_slots"),
       email: z
@@ -180,28 +187,27 @@ export function buildFrontDeskBookingTools(input: {
         throw new llm.ToolError(`Slot ${slot_id} was not found — call list_available_slots again.`);
       }
 
+      userData.pendingSlotId = slot_id;
+
+      const prerequisiteGaps = findBookingPrerequisiteGaps(userData, inlineEmail);
+      if (prerequisiteGaps.length > 0) {
+        const first = prerequisiteGaps[0];
+        if (first.kind === "email") {
+          return buildBookingNeedsEmailToolResult(slot_id);
+        }
+        return buildBookingNeedsFieldToolResult(slot_id, first.fieldId, first.label);
+      }
+
+      const resolvedEmail = resolveConfirmedEmail(userData, inlineEmail);
+      if (resolvedEmail) {
+        userData.confirmedEmail = resolvedEmail;
+      }
+
       beginBookingOperation(userData, slot_id);
       userData.bookingInProgress = true;
 
       try {
         await safeInterruptSession(session);
-
-        const email = resolveConfirmedEmail(userData, inlineEmail);
-        if (!email) {
-          await speakBookingLine(session, EMAIL_COLLECTION_PROMPT);
-          const collected = await collectEmailInlineForBooking(session, {
-            skipPrompt: true,
-          });
-          if (collected.declined || !collected.email) {
-            markBookingOperationFailed(userData, "email_required");
-            return (
-              "Email is required for the calendar invite. Explain that and offer to call back later."
-            );
-          }
-          userData.confirmedEmail = collected.email;
-        } else {
-          userData.confirmedEmail = email;
-        }
 
         const confirmedEmail = userData.confirmedEmail!;
         markBookingOperationState(userData, "writing_calendar");
@@ -298,6 +304,29 @@ export function buildFrontDeskBookingTools(input: {
               }
               const recovered = alreadyBookedToolMessage(userData);
               if (recovered) return recovered;
+
+              const missingField =
+                isCalendlyMissingFieldError(err) ? missingFieldIdFromBookingError(err) : null;
+              if (missingField) {
+                console.warn(
+                  JSON.stringify({
+                    source: "frontdesk-booking-tools",
+                    event: "schedule_appointment_missing_field",
+                    callId: userData.callId,
+                    missingField,
+                    error: err instanceof Error ? err.message : String(err),
+                  }),
+                );
+                markBookingOperationFailed(userData, `missing_${missingField}`);
+                if (missingField === "email") {
+                  userData.confirmedEmail = undefined;
+                }
+                return buildBookingRecoverableToolResult(
+                  slot_id,
+                  `Calendly needs ${missingField} before this slot can be booked.`,
+                  missingField,
+                );
+              }
 
               console.warn(
                 JSON.stringify({

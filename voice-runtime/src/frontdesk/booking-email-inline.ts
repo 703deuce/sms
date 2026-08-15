@@ -94,28 +94,34 @@ export function buildRecordBookingEmailTool() {
   return llm.tool({
     name: "record_booking_email",
     description:
-      "Save the caller's confirmed email for the calendar invite during an active booking. " +
-      "Only call after repeating the email back and the caller confirms it is correct.",
+      "Save the caller's confirmed email for the calendar invite. " +
+      "Call after repeating the email back and the caller confirms it is correct.",
     parameters: z.object({
       email: z.string().describe("Confirmed email address"),
     }),
     execute: async ({ email }, opts) => {
       const session = opts.ctx.session as AgentSession<FrontDeskUserData>;
       const ud = session.userData;
-      if (!ud.bookingEmailWaiter) {
-        throw new llm.ToolError(
-          "No active booking email collection — use during schedule_appointment only.",
-        );
-      }
       const normalized = normalizeSpokenEmail(email);
       if (!isValidEmail(normalized)) {
         throw new llm.ToolError(`Invalid email: ${email}`);
       }
       ud.confirmedEmail = normalized;
       ud.draftEmail = undefined;
-      await speakBeforeTaskHandoff(session, POST_EMAIL_BOOKING_FILLER);
-      resolveBookingEmailWaiter(ud, { email: normalized, declined: false });
-      return "Email saved. Calendar booking is in progress — do not speak or add filler.";
+
+      if (ud.bookingEmailWaiter) {
+        await speakBeforeTaskHandoff(session, POST_EMAIL_BOOKING_FILLER);
+        resolveBookingEmailWaiter(ud, { email: normalized, declined: false });
+        return "Email saved. Calendar booking is in progress — do not speak or add filler.";
+      }
+
+      const slotId = ud.pendingSlotId || ud.bookingOperation?.slotId;
+      return (
+        "Email saved for this call. " +
+        (slotId
+          ? `Call schedule_appointment again with slot_id ${slotId} to complete the booking.`
+          : "Call schedule_appointment with the chosen slot_id to complete the booking.")
+      );
     },
   });
 }

@@ -15,7 +15,7 @@ import {
   resolveConfirmedEmail,
 } from "./email-collection-tools";
 import { guardCalendarTool } from "./booking-operation-guard";
-import { collectEmailInlineForBooking } from "./booking-email-inline";
+import { buildBookingNeedsEmailToolResult } from "../booking-completion-messages";
 import {
   syncFrontDeskBookingToCrm,
 } from "@/lib/voice/crm/frontdesk-crm-sync";
@@ -77,11 +77,7 @@ export function buildFrontDeskRescheduleAppointmentTool(
         if (attendeeEmail) ud.confirmedEmail = attendeeEmail;
       }
       if (!attendeeEmail) {
-        const collected = await collectEmailInlineForBooking(session);
-        if (collected.declined || !collected.email) {
-          return "Email is required to reschedule. Offer to call back later.";
-        }
-        attendeeEmail = collected.email;
+        return buildBookingNeedsEmailToolResult(slot_id);
       }
       ud.confirmedEmail = attendeeEmail;
 

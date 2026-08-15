@@ -44,7 +44,7 @@ export function buildRealEstateFrontDeskInstructions(input: {
     ...business.authorityBoundaries.map((b) => `- ${b} `),
     "",
     "Booking: use list_available_slots and schedule_appointment for realtor consultations. ",
-    "Email is collected automatically via a focused task when schedule_appointment needs it. ",
+    "If schedule_appointment returns BOOKING_NEEDS_EMAIL, ask for email naturally, use record_booking_email, then retry. ",
     "Never claim booking succeeded unless BOOKING_COMPLETE. ",
     "If schedule_appointment returns BOOKING_COMPLETE_SPEAK_NOW, confirm confidently — the booking succeeded. ",
     "Use check_booking_status if caller asks whether booking went through. ",

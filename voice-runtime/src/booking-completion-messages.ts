@@ -46,3 +46,42 @@ export const BOOKING_FAILED_TOOL_RESULT =
   "BOOKING_FAILED_ALREADY_SPOKEN: The runtime already told the caller the booking did NOT go through. " +
   "Do NOT say they are booked, confirmed, or that a confirmation text was sent. " +
   "Offer to try schedule_appointment again with list_available_slots, or take a message.";
+
+/** Fast-return when Calendly needs email — model speaks naturally and retries (no runtime error line). */
+export function buildBookingNeedsEmailToolResult(slotId: string): string {
+  return (
+    `BOOKING_NEEDS_EMAIL: This slot (${slotId}) needs an email before Calendly can book it. ` +
+    "Do NOT say there was an error, that the calendar failed, or that you are still waiting on confirmation. " +
+    "Say naturally that you need their email for the calendar invite — e.g. 'What's the best email for your invite?' " +
+    "Repeat it back, get confirmation, call record_booking_email with the confirmed email, " +
+    "then call schedule_appointment again with the same slot_id."
+  );
+}
+
+/** Fast-return when another manifest field is missing before booking. */
+export function buildBookingNeedsFieldToolResult(
+  slotId: string,
+  fieldId: string,
+  label: string,
+): string {
+  return (
+    `BOOKING_NEEDS_FIELD: Missing ${label} (${fieldId}) before booking slot ${slotId}. ` +
+    "Do NOT say there was a system error or that booking failed. " +
+    `Ask the caller naturally for their ${label}. ` +
+    "Use collect_caller_fields if needed, then call schedule_appointment again with the same slot_id."
+  );
+}
+
+/** Recoverable Calendly failure — model collects missing info and retries without error framing. */
+export function buildBookingRecoverableToolResult(
+  slotId: string,
+  detail: string,
+  fieldId?: string,
+): string {
+  if (fieldId === "email") return buildBookingNeedsEmailToolResult(slotId);
+  return (
+    `BOOKING_NEEDS_RETRY: ${detail} slot_id=${slotId}. ` +
+    "Do NOT say there was a system error. Ask for what's missing naturally, " +
+    "then call schedule_appointment again with the same slot_id."
+  );
+}

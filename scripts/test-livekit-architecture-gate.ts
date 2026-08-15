@@ -273,7 +273,8 @@ check("booking uses inline email gate and LiveKit end call", () => {
   const booking = readProjectFile("voice-runtime/src/frontdesk/booking-tools.ts");
   const emailInline = readProjectFile("voice-runtime/src/frontdesk/booking-email-inline.ts");
   const bridge = readProjectFile("voice-runtime/src/task-async-work-bridge.ts");
-  assert.ok(booking.includes("collectEmailInlineForBooking"));
+  assert.ok(booking.includes("buildBookingNeedsEmailToolResult"));
+  assert.ok(booking.includes("findBookingPrerequisiteGaps"));
   assert.ok(booking.includes("record_booking_email"));
   assert.ok(booking.includes("buildFrontDeskEndCallToolset"));
   assert.ok(booking.includes("runAsyncWorkWithBridge"));

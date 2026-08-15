@@ -19,8 +19,8 @@ assert.ok(
   "frontdesk agent must not use GetEmailTask (agent_handoff)",
 );
 assert.ok(
-  bookingToolsSource.includes("collectEmailInlineForBooking"),
-  "frontdesk booking uses inline email gate for Realtime tool safety",
+  bookingToolsSource.includes("buildBookingNeedsEmailToolResult"),
+  "frontdesk booking fast-returns BOOKING_NEEDS_EMAIL for Realtime tool safety",
 );
 assert.ok(
   bookingToolsSource.includes("record_booking_email"),
@@ -31,7 +31,7 @@ assert.ok(
   "frontdesk booking locks calendar tools during active operations",
 );
 assert.ok(
-  bookingToolsSource.includes("buildEndCallToolset"),
+  bookingToolsSource.includes("buildFrontDeskEndCallToolset"),
   "frontdesk booking uses LiveKit end-call toolset",
 );
 assert.ok(
