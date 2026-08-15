@@ -1,6 +1,7 @@
-# Coolify/Nixpacks: extra heap + heartbeat during long Turbopack compiles.
+# Coolify/Nixpacks: Turbopack builds need headroom on smaller build VMs.
+# Leave ~1GB for Turbopack/native outside the V8 heap on 4GB builders.
 [variables]
-NODE_OPTIONS = "--max-old-space-size=4096"
+NODE_OPTIONS = "--max-old-space-size=3072"
 
 [phases.build]
 cmds = [

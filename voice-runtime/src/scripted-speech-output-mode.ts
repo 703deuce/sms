@@ -5,12 +5,14 @@ import {
 } from "./pipeline";
 import type { FrontDeskUserData } from "./frontdesk/userdata";
 
+type ScriptedSpeechSession = Pick<AgentSession<unknown>, "userData">;
+
 /**
  * Resolve half-cascade vs native realtime for scripted speech on this session.
  * Must use session snapshot — env-only resolution misses inbound receptionist config.
  */
-export function resolveSessionScriptedSpeechOutputMode<T>(
-  session: AgentSession<T>,
+export function resolveSessionScriptedSpeechOutputMode(
+  session: ScriptedSpeechSession,
 ): OutboundRealtimeOutputMode {
   const ud = session.userData as FrontDeskUserData | undefined;
   const fromCompiled = ud?.receptionistCompiled?.realtimeOutputMode;
@@ -19,6 +21,6 @@ export function resolveSessionScriptedSpeechOutputMode<T>(
   return resolveOutboundRealtimeOutputMode();
 }
 
-export function sessionUsesTtsSay<T>(session: AgentSession<T>): boolean {
+export function sessionUsesTtsSay(session: ScriptedSpeechSession): boolean {
   return resolveSessionScriptedSpeechOutputMode(session) === "elevenlabs";
 }
