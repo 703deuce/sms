@@ -1,6 +1,8 @@
-# Coolify/Nixpacks: Turbopack production builds need extra heap on smaller build VMs.
+# Coolify/Nixpacks: extra heap + heartbeat during long Turbopack compiles.
 [variables]
 NODE_OPTIONS = "--max-old-space-size=4096"
 
 [phases.build]
-cmds = ["npm run build"]
+cmds = [
+  "bash scripts/coolify-build-with-heartbeat.sh",
+]

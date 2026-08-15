@@ -1,7 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // BullMQ pulls Node builtins (net, child_process) — must stay external for webpack builds.
+  output: "standalone",
+  // BullMQ pulls Node builtins (net, child_process) — keep external when webpack is used.
   serverExternalPackages: ["bullmq", "ioredis"],
 };
 
