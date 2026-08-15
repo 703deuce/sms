@@ -19,6 +19,8 @@ const MODEL_TO_TABLE: Record<string, string> = {
   workspace: "Workspace",
   membership: "Membership",
   phoneNumber: "PhoneNumber",
+  premiumNumberReservation: "premium_number_reservations",
+  premiumNumberSearchLog: "premium_number_search_logs",
   contact: "Contact",
   contactList: "ContactList",
   contactListMember: "ContactListMember",
@@ -180,6 +182,14 @@ const RELATIONS: Record<string, Record<string, { table: string; fk: string; pk?:
     workspace: { table: "Workspace", fk: "workspaceId" },
   },
   phoneNumber: { workspace: { table: "Workspace", fk: "workspaceId" } },
+  premiumNumberReservation: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+    user: { table: "User", fk: "userId" },
+  },
+  premiumNumberSearchLog: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+    user: { table: "User", fk: "userId" },
+  },
   portRequest: { workspace: { table: "Workspace", fk: "workspaceId" } },
   humanCall: { workspace: { table: "Workspace", fk: "workspaceId" } },
   humanCallEvent: {

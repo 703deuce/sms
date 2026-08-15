@@ -2,13 +2,12 @@
 
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
-import { Tabs } from "@/components/ui/tabs";
-import { numberTabs } from "@/lib/number-tabs";
 import {
   PREMIUM_INDUSTRY_OPTIONS,
   type PremiumNumberProductResult,
   type PremiumSearchProductResponse,
 } from "@/lib/premium-numbers/product-api";
+import { inferIndustryFromText } from "@/lib/premium-numbers/business-name-keywords";
 import { formatPremiumPrice } from "@/lib/premium-numbers/premium-pricing";
 import type { PersonalPreference } from "@/lib/premium-numbers/personal-search";
 import { cn } from "@/lib/utils";
@@ -17,6 +16,7 @@ import {
   Brain,
   CheckCircle2,
   Forward,
+  Heart,
   Lightbulb,
   MessageSquare,
   Phone,
@@ -55,12 +55,13 @@ type CheckoutState = {
 export function PremiumNumbersPageClient({ workspaceId }: Props) {
   const [mode, setMode] = useState<SearchMode>("business");
   const [areaCode, setAreaCode] = useState("571");
-  const [industry, setIndustry] = useState("roofing");
-  const [businessName, setBusinessName] = useState("");
-  const [customKeywords, setCustomKeywords] = useState("");
+  const [pattern, setPattern] = useState("contains");
+  const [searchTerm, setSearchTerm] = useState("roof, roofer, home");
   const [preferences, setPreferences] = useState<PersonalPreference[]>(["surprise_me"]);
+  const [favorites, setFavorites] = useState<Set<string>>(new Set());
 
   const [loading, setLoading] = useState(false);
+  const [searchDurationSec, setSearchDurationSec] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [searchResponse, setSearchResponse] = useState<PremiumSearchProductResponse | null>(null);
   const [reserving, setReserving] = useState<string | null>(null);
@@ -73,11 +74,14 @@ export function PremiumNumbersPageClient({ workspaceId }: Props) {
     setError("");
     setSearchResponse(null);
     setSuccess(null);
+    setSearchDurationSec(null);
+    const started = performance.now();
     try {
-      const customList = customKeywords
+      const customList = searchTerm
         .split(/[,]+/)
         .map((k) => k.trim())
         .filter(Boolean);
+      const inferredIndustry = inferIndustryFromText(searchTerm) ?? "roofing";
 
       const res = await fetch("/api/numbers/premium/search", {
         method: "POST",
@@ -86,8 +90,7 @@ export function PremiumNumbersPageClient({ workspaceId }: Props) {
           workspaceId,
           mode,
           areaCode: areaCode.trim(),
-          industry: mode === "business" ? industry : undefined,
-          businessName: mode === "business" ? businessName : undefined,
+          industry: mode === "business" ? inferredIndustry : undefined,
           customKeywords: mode === "business" ? customList : undefined,
           preferences: mode === "personal" ? preferences : undefined,
         }),
@@ -95,6 +98,7 @@ export function PremiumNumbersPageClient({ workspaceId }: Props) {
       const data = (await res.json()) as PremiumSearchProductResponse & { error?: string };
       if (!res.ok) throw new Error(data.error || "Search failed");
       setSearchResponse(data);
+      setSearchDurationSec(Math.round(((performance.now() - started) / 1000) * 10) / 10);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Search failed");
     } finally {
@@ -138,22 +142,19 @@ export function PremiumNumbersPageClient({ workspaceId }: Props) {
   }
 
   const resultSummary = useMemo(() => {
-    if (!searchResponse) return "";
-    const industryLabel =
-      PREMIUM_INDUSTRY_OPTIONS.find((o) => o.value === industry)?.label ?? industry;
+    if (!searchResponse || searchDurationSec === null) return "";
+    const keyword = inferIndustryFromText(searchTerm) ?? searchTerm.split(",")[0]?.trim() ?? "your search";
     if (mode === "business") {
-      return `${searchResponse.resultCount} results found for ${areaCode} · ${industryLabel}`;
+      return `${searchResponse.resultCount} results found in ${searchDurationSec} seconds for keyword: ${keyword}`;
     }
-    return `${searchResponse.resultCount} memorable numbers found for ${areaCode}`;
-  }, [searchResponse, mode, areaCode, industry]);
+    return `${searchResponse.resultCount} results found in ${searchDurationSec} seconds for area ${areaCode}`;
+  }, [searchResponse, searchDurationSec, mode, areaCode, searchTerm]);
 
   return (
     <div className="space-y-5">
-      <Tabs items={numberTabs} />
-
       <div className="flex flex-col gap-6 xl:flex-row xl:items-start">
-        <div className="min-w-0 flex-1 space-y-6">
-          <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 flex-1 space-y-5">
+          <header>
             <div className="flex items-start gap-3">
               <span className="mt-0.5 flex h-10 w-10 items-center justify-center rounded-[10px] bg-violet-50 text-violet-600">
                 <Sparkles className="h-5 w-5" />
@@ -163,65 +164,62 @@ export function PremiumNumbersPageClient({ workspaceId }: Props) {
                   Premium Numbers
                 </h1>
                 <p className="mt-1 max-w-2xl text-[13px] text-muted-foreground">
-                  Find a memorable number that fits your business — or choose an easy-to-remember
-                  personal number.
+                  Find and select the perfect phone number for your business or personal use.
                 </p>
               </div>
             </div>
-            <Link href="/numbers">
-              <Button variant="outline" className="h-9 rounded-[10px] text-[13px]">
-                <Phone className="h-4 w-4" />
-                My Numbers
-              </Button>
-            </Link>
           </header>
 
-          <div className="inline-flex rounded-[10px] border border-border bg-card p-1">
-            <ModeToggle active={mode === "business"} onClick={() => setMode("business")}>
+          <div className="flex gap-6 border-b border-border">
+            <UnderlineTab active={mode === "business"} onClick={() => setMode("business")}>
               Business
-            </ModeToggle>
-            <ModeToggle active={mode === "personal"} onClick={() => setMode("personal")}>
+            </UnderlineTab>
+            <UnderlineTab active={mode === "personal"} onClick={() => setMode("personal")}>
               Personal
-            </ModeToggle>
+            </UnderlineTab>
           </div>
 
-          <div className="rounded-[12px] border border-border bg-card p-4 md:p-5">
+          <div className="rounded-[12px] border border-[#e5e7eb] bg-[#fafafa] p-4 md:p-5">
             {mode === "business" ? (
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                 <Field label="Area Code" required>
-                  <Input
+                  <select
+                    className="border-input bg-card flex h-10 w-full rounded-[10px] border px-3 text-[13px]"
                     value={areaCode}
                     onChange={(e) => setAreaCode(e.target.value.replace(/\D/g, "").slice(0, 3))}
-                    placeholder="571"
-                    className="h-10 rounded-[10px]"
-                  />
-                </Field>
-                <Field label="Industry">
-                  <select
-                    className="border-input bg-background flex h-10 w-full rounded-[10px] border px-3 text-[13px]"
-                    value={industry}
-                    onChange={(e) => setIndustry(e.target.value)}
                   >
-                    {PREMIUM_INDUSTRY_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>{opt.label}</option>
-                    ))}
+                    <option value="571">571</option>
+                    <option value="540">540</option>
+                    <option value="703">703</option>
+                    <option value="415">415</option>
+                    <option value="310">310</option>
                   </select>
                 </Field>
-                <Field label="Business Name (optional)">
+                <Field label="Pattern">
+                  <select
+                    className="border-input bg-card flex h-10 w-full rounded-[10px] border px-3 text-[13px]"
+                    value={pattern}
+                    onChange={(e) => setPattern(e.target.value)}
+                  >
+                    <option value="contains">Contains</option>
+                    <option value="ends_with">Ends with</option>
+                  </select>
+                </Field>
+                <Field label="Search Term / Keyword">
                   <Input
-                    value={businessName}
-                    onChange={(e) => setBusinessName(e.target.value)}
-                    placeholder="Johnson Roofing"
-                    className="h-10 rounded-[10px]"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    placeholder="any, blue, roofing"
+                    className="h-10 rounded-[10px] bg-card"
                   />
                 </Field>
-                <Field label="Words I want (optional)">
-                  <Input
-                    value={customKeywords}
-                    onChange={(e) => setCustomKeywords(e.target.value)}
-                    placeholder="roof, roofer, home"
-                    className="h-10 rounded-[10px]"
-                  />
+                <Field label="Select Phone Number">
+                  <select
+                    className="border-input bg-card flex h-10 w-full rounded-[10px] border px-3 text-[13px]"
+                    defaultValue="US"
+                  >
+                    <option value="US">🇺🇸 United States</option>
+                  </select>
                 </Field>
               </div>
             ) : (
@@ -271,21 +269,24 @@ export function PremiumNumbersPageClient({ workspaceId }: Props) {
             )}
 
             <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-[12px] text-muted-foreground">
-                {loading ? "Searching available numbers…" : searchResponse ? resultSummary : ""}
-              </p>
+              <Button variant="outline" className="h-10 rounded-[10px] border-dashed text-[13px]">
+                Add Filter +
+              </Button>
               <Button
                 onClick={onSearch}
                 disabled={loading || areaCode.length !== 3}
-                className="h-10 rounded-[10px] bg-violet-600 px-6 hover:bg-violet-700"
+                className="h-10 min-w-[200px] rounded-[10px] bg-[#6B46C1] px-8 hover:bg-[#5b3ba8]"
               >
-                {loading ? "Searching…" : mode === "business" ? "Find Premium Numbers" : "Find Numbers"}
+                {loading ? "Searching…" : "Search for numbers"}
               </Button>
             </div>
             {loading && (
-              <p className="mt-2 text-[12px] text-muted-foreground">
-                Checking business-word and memorable-number combinations.
+              <p className="mt-3 text-[12px] text-muted-foreground">
+                Checking business-word and memorable-number combinations…
               </p>
+            )}
+            {searchResponse && resultSummary && (
+              <p className="mt-3 text-[12px] text-muted-foreground">{resultSummary}</p>
             )}
           </div>
 
@@ -300,6 +301,15 @@ export function PremiumNumbersPageClient({ workspaceId }: Props) {
             <BusinessResults
               response={searchResponse}
               reserving={reserving}
+              favorites={favorites}
+              onToggleFavorite={(phone) => {
+                setFavorites((prev) => {
+                  const next = new Set(prev);
+                  if (next.has(phone)) next.delete(phone);
+                  else next.add(phone);
+                  return next;
+                });
+              }}
               onGetNumber={onGetNumber}
             />
           )}
@@ -308,6 +318,15 @@ export function PremiumNumbersPageClient({ workspaceId }: Props) {
             <PersonalResults
               response={searchResponse}
               reserving={reserving}
+              favorites={favorites}
+              onToggleFavorite={(phone) => {
+                setFavorites((prev) => {
+                  const next = new Set(prev);
+                  if (next.has(phone)) next.delete(phone);
+                  else next.add(phone);
+                  return next;
+                });
+              }}
               onGetNumber={onGetNumber}
             />
           )}
@@ -315,7 +334,6 @@ export function PremiumNumbersPageClient({ workspaceId }: Props) {
 
         <aside className="w-full shrink-0 space-y-4 xl:w-[280px]">
           <PromoPanel />
-          <WhyPremiumPanel />
           <HowItWorksPanel />
         </aside>
       </div>
@@ -335,7 +353,7 @@ export function PremiumNumbersPageClient({ workspaceId }: Props) {
   );
 }
 
-function ModeToggle({
+function UnderlineTab({
   active,
   onClick,
   children,
@@ -349,8 +367,10 @@ function ModeToggle({
       type="button"
       onClick={onClick}
       className={cn(
-        "rounded-[8px] px-4 py-2 text-[13px] font-medium transition",
-        active ? "bg-violet-600 text-white shadow-sm" : "text-muted-foreground hover:text-foreground",
+        "pb-2.5 text-[14px] font-semibold transition",
+        active
+          ? "border-b-[3px] border-[#6B46C1] text-foreground"
+          : "border-b-[3px] border-transparent text-muted-foreground hover:text-foreground",
       )}
     >
       {children}
@@ -381,10 +401,14 @@ function Field({
 function BusinessResults({
   response,
   reserving,
+  favorites,
+  onToggleFavorite,
   onGetNumber,
 }: {
   response: PremiumSearchProductResponse;
   reserving: string | null;
+  favorites: Set<string>;
+  onToggleFavorite: (phone: string) => void;
   onGetNumber: (r: PremiumNumberProductResult) => void;
 }) {
   const hasBusiness = response.bestMatches.length > 0;
@@ -398,6 +422,8 @@ function BusinessResults({
           icon={Trophy}
           results={response.bestMatches}
           reserving={reserving}
+          favorites={favorites}
+          onToggleFavorite={onToggleFavorite}
           onGetNumber={onGetNumber}
         />
       ) : (
@@ -413,11 +439,13 @@ function BusinessResults({
 
       {hasMemorable ? (
         <ResultSection
-          title="Other Memorable Numbers You May Like"
+          title="Other Memorable Numbers For The City"
           icon={Lightbulb}
-          subtitle="See all results"
+          subtitle="See all"
           results={response.memorableAlternatives}
           reserving={reserving}
+          favorites={favorites}
+          onToggleFavorite={onToggleFavorite}
           onGetNumber={onGetNumber}
         />
       ) : null}
@@ -428,10 +456,14 @@ function BusinessResults({
 function PersonalResults({
   response,
   reserving,
+  favorites,
+  onToggleFavorite,
   onGetNumber,
 }: {
   response: PremiumSearchProductResponse;
   reserving: string | null;
+  favorites: Set<string>;
+  onToggleFavorite: (phone: string) => void;
   onGetNumber: (r: PremiumNumberProductResult) => void;
 }) {
   const picks = response.topPicks ?? [];
@@ -450,6 +482,8 @@ function PersonalResults({
       icon={Star}
       results={picks}
       reserving={reserving}
+      favorites={favorites}
+      onToggleFavorite={onToggleFavorite}
       onGetNumber={onGetNumber}
     />
   );
@@ -461,6 +495,8 @@ function ResultSection({
   subtitle,
   results,
   reserving,
+  favorites,
+  onToggleFavorite,
   onGetNumber,
 }: {
   title: string;
@@ -468,6 +504,8 @@ function ResultSection({
   subtitle?: string;
   results: PremiumNumberProductResult[];
   reserving: string | null;
+  favorites: Set<string>;
+  onToggleFavorite: (phone: string) => void;
   onGetNumber: (r: PremiumNumberProductResult) => void;
 }) {
   return (
@@ -478,17 +516,19 @@ function ResultSection({
           <h2 className="text-[15px] font-bold text-foreground">{title}</h2>
         </div>
         {subtitle ? (
-          <span className="text-[12px] text-violet-600">{subtitle}</span>
-        ) : (
-          <span className="text-[12px] text-muted-foreground">Sort by: Relevance</span>
-        )}
+          <button type="button" className="text-[12px] font-medium text-[#6B46C1] hover:underline">
+            {subtitle}
+          </button>
+        ) : null}
       </div>
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {results.map((result) => (
           <NumberCard
             key={result.phoneNumber}
             result={result}
             loading={reserving === result.phoneNumber}
+            favorited={favorites.has(result.phoneNumber)}
+            onToggleFavorite={() => onToggleFavorite(result.phoneNumber)}
             onGetNumber={() => onGetNumber(result)}
           />
         ))}
@@ -500,81 +540,93 @@ function ResultSection({
 function NumberCard({
   result,
   loading,
+  favorited,
+  onToggleFavorite,
   onGetNumber,
 }: {
   result: PremiumNumberProductResult;
   loading: boolean;
+  favorited: boolean;
+  onToggleFavorite: () => void;
   onGetNumber: () => void;
 }) {
-  const headline = result.vanityDisplay ?? result.displayNumber;
-  const hasVanity = Boolean(result.vanityDisplay);
-  const badge = hasVanity
-    ? result.matchedWords.length
-      ? "WORD MATCH"
-      : "VANITY"
-    : null;
+  const badge =
+    result.premiumPriceBand === "strong" || result.premiumPriceBand === "exceptional"
+      ? "BEST DEAL"
+      : result.businessMatchScore >= 55
+        ? "MATCH"
+        : null;
+
+  const features = ["Instant activation", "Mobile ready", "Free setup"];
 
   return (
     <div className="relative flex flex-col rounded-[12px] border border-border bg-card p-4 shadow-sm">
       {badge ? (
-        <span
-          className={cn(
-            "absolute left-3 top-3 rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide",
-            badge === "WORD MATCH"
-              ? "bg-blue-100 text-blue-700"
-              : "bg-violet-100 text-violet-700",
-          )}
-        >
+        <span className="absolute left-3 top-3 rounded-md bg-[#6B46C1] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
           {badge}
         </span>
       ) : null}
 
-      <div className="mt-6 flex-1">
-        <p className="text-[20px] font-bold tracking-tight text-foreground">{headline}</p>
-        {hasVanity && (
-          <p className="mt-0.5 text-[12px] text-muted-foreground">{result.displayNumber}</p>
+      <div className="mt-5 flex-1">
+        <p className="text-[22px] font-bold tracking-tight text-foreground">{result.displayNumber}</p>
+        {result.vanityDisplay && (
+          <p className="mt-1 text-[14px] font-semibold text-emerald-600">{result.vanityDisplay}</p>
         )}
-        <StarRow rating={result.starRating} />
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          <TagPill>{result.businessMatchLabel}</TagPill>
-          {result.memorabilityLabel !== "Standard" && (
-            <TagPill>{result.memorabilityLabel}</TagPill>
-          )}
+        <ul className="mt-3 space-y-1">
+          {features.map((f) => (
+            <li key={f} className="flex items-center gap-2 text-[11px] text-muted-foreground">
+              <span className="h-1 w-1 rounded-full bg-muted-foreground" />
+              {f}
+            </li>
+          ))}
+        </ul>
+        <div className="mt-3 flex items-center justify-between">
+          <p className="text-[18px] font-bold text-foreground">
+            {formatPremiumPrice(result.premiumPriceCents)}
+          </p>
+          <StarRow rating={result.starRating} />
         </div>
       </div>
 
-      <div className="mt-4 border-t border-border pt-4">
-        <p className="text-[18px] font-bold text-foreground">
-          {formatPremiumPrice(result.premiumPriceCents)}
-          <span className="text-[12px] font-normal text-muted-foreground"> one-time</span>
-        </p>
+      <div className="mt-4 flex items-center gap-2">
         <Button
-          className="mt-3 w-full rounded-[10px] bg-violet-600 hover:bg-violet-700"
+          className="h-10 flex-1 rounded-[10px] bg-[#6B46C1] hover:bg-[#5b3ba8]"
           disabled={loading}
           onClick={onGetNumber}
         >
-          {loading ? "Reserving…" : "Get This Number"}
+          {loading ? "Reserving…" : "Get this number"}
         </Button>
-        {result.whyReasons.length > 0 && (
-          <details className="mt-2">
-            <summary className="cursor-pointer text-[11px] text-muted-foreground">
-              Why this number?
-            </summary>
-            <ul className="mt-1 space-y-0.5 text-[11px] text-muted-foreground">
-              {result.whyReasons.map((r) => (
-                <li key={r}>{r}</li>
-              ))}
-            </ul>
-          </details>
-        )}
+        <button
+          type="button"
+          onClick={onToggleFavorite}
+          className={cn(
+            "flex h-10 w-10 items-center justify-center rounded-[10px] border border-border transition",
+            favorited ? "bg-rose-50 text-rose-500" : "bg-card text-muted-foreground hover:text-rose-500",
+          )}
+          aria-label="Favorite"
+        >
+          <Heart className={cn("h-4 w-4", favorited && "fill-current")} />
+        </button>
       </div>
+      {result.whyReasons.length > 0 && (
+        <details className="mt-2">
+          <summary className="cursor-pointer text-[11px] text-muted-foreground">
+            Why this number?
+          </summary>
+          <ul className="mt-1 space-y-0.5 text-[11px] text-muted-foreground">
+            {result.whyReasons.map((r) => (
+              <li key={r}>{r}</li>
+            ))}
+          </ul>
+        </details>
+      )}
     </div>
   );
 }
 
 function StarRow({ rating }: { rating: number }) {
   return (
-    <div className="mt-2 flex gap-0.5">
+    <div className="flex gap-0.5">
       {Array.from({ length: 5 }).map((_, i) => (
         <Star
           key={i}
@@ -585,14 +637,6 @@ function StarRow({ rating }: { rating: number }) {
         />
       ))}
     </div>
-  );
-}
-
-function TagPill({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-      {children}
-    </span>
   );
 }
 
@@ -738,46 +782,33 @@ function SuccessPanel({
 
 function PromoPanel() {
   return (
-    <div className="rounded-[12px] border border-violet-100 bg-violet-50 p-4">
+    <div className="rounded-[12px] border border-violet-100 bg-violet-50 p-4 shadow-sm">
       <div className="flex h-10 w-10 items-center justify-center rounded-full bg-violet-100 text-violet-600">
         <Phone className="h-5 w-5" />
       </div>
-      <h3 className="mt-3 text-[14px] font-bold text-foreground">First impressions matter</h3>
+      <h3 className="mt-3 text-[14px] font-bold text-foreground">Get the perfect number</h3>
       <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground">
-        A memorable number builds trust, improves recall, and helps customers reach you without
-        hunting for digits.
+        Our experts help you find a brand-specific number customers will remember on the first call.
       </p>
     </div>
   );
 }
 
-function WhyPremiumPanel() {
-  const items = [
-    { title: "Trust", desc: "Build immediate credibility" },
-    { title: "Recall", desc: "7× more likely to be remembered" },
-    { title: "Direct", desc: "No need for extensions" },
-    { title: "Market", desc: "Secure a local presence" },
-    { title: "Unique", desc: "Stand out from competitors" },
+function HowItWorksPanel() {
+  const steps = [
+    "Search for keyword",
+    "Choose a number",
+    "Pay & Activate",
+    "Use it!",
+  ];
+  const checks = [
+    "Next day activation",
+    "No hidden costs",
+    "Cancel anytime",
+    "Local & Toll-free",
   ];
   return (
-    <div className="rounded-[12px] border border-border bg-card p-4">
-      <h3 className="text-[13px] font-bold">Why a premium number?</h3>
-      <ul className="mt-3 space-y-2">
-        {items.map((item) => (
-          <li key={item.title} className="text-[12px]">
-            <span className="font-semibold text-foreground">{item.title}</span>
-            <span className="text-muted-foreground"> — {item.desc}</span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-function HowItWorksPanel() {
-  const steps = ["Search & select", "Instant Reservation", "Secure Payment", "Ready to Use"];
-  return (
-    <div className="rounded-[12px] border border-border bg-card p-4">
+    <div className="rounded-[12px] border border-border bg-card p-4 shadow-sm">
       <h3 className="text-[13px] font-bold">How it works</h3>
       <ol className="mt-3 space-y-2">
         {steps.map((step, i) => (
@@ -789,6 +820,14 @@ function HowItWorksPanel() {
           </li>
         ))}
       </ol>
+      <ul className="mt-4 space-y-2 border-t border-border pt-4">
+        {checks.map((item) => (
+          <li key={item} className="flex items-center gap-2 text-[12px] text-muted-foreground">
+            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+            {item}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
