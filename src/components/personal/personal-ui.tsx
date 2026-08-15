@@ -66,24 +66,26 @@ export function PersonalStatCard({
 }) {
   return (
     <div className={cn(pCard, "p-4")}>
-      <div className="flex items-start justify-between gap-2">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[12px] font-medium text-[#6b7280]">{label}</p>
+          <p className="mt-1 text-[26px] font-bold leading-none text-[#111827]">{value}</p>
+          {sub ? <p className="mt-1 text-[11px] text-[#9ca3af]">{sub}</p> : null}
+          {href && hrefLabel ? (
+            <a href={href} className="mt-2 inline-block text-[12px] font-semibold text-[#6366f1]">
+              {hrefLabel}
+            </a>
+          ) : null}
+        </div>
         <div
           className={cn(
-            "flex h-9 w-9 items-center justify-center rounded-lg",
+            "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg",
             iconClass,
           )}
         >
           <Icon className="h-4 w-4" />
         </div>
       </div>
-      <p className="mt-3 text-[12px] font-medium text-[#6b7280]">{label}</p>
-      <p className="mt-0.5 text-[26px] font-bold leading-none text-[#111827]">{value}</p>
-      {sub ? <p className="mt-1 text-[11px] text-[#9ca3af]">{sub}</p> : null}
-      {href && hrefLabel ? (
-        <a href={href} className="mt-2 inline-block text-[12px] font-semibold text-[#6366f1]">
-          {hrefLabel}
-        </a>
-      ) : null}
     </div>
   );
 }

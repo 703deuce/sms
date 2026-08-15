@@ -3,6 +3,7 @@
 import type { DashboardMetrics, PhoneNumber, Workspace } from "@/lib/types";
 import type { WorkspaceTypeCookie } from "@/lib/auth";
 import { WorkspaceSwitcher } from "@/components/workspace/workspace-switcher";
+import { WorkspaceModeToggle } from "@/components/workspace/workspace-mode-toggle";
 import { formatNumber, formatPhone } from "@/lib/utils";
 import {
   Bell,
@@ -201,15 +202,23 @@ export function Header({
           <Menu className="h-5 w-5" />
         </button>
 
-        <WorkspaceSwitcher
+        <WorkspaceModeToggle
           workspaceId={workspaceId}
-          workspaceName={workspaceName || "Workspace"}
           workspaceType={workspaceType}
           workspaces={workspaces}
-          className="shrink-0"
         />
 
-        {title ? (
+        {!personalMode ? (
+          <WorkspaceSwitcher
+            workspaceId={workspaceId}
+            workspaceName={workspaceName || "Workspace"}
+            workspaceType={workspaceType}
+            workspaces={workspaces}
+            className="shrink-0"
+          />
+        ) : null}
+
+        {title && !personalMode ? (
           <h1 className="shrink-0 text-[18px] font-bold tracking-tight text-foreground">
             {title}
           </h1>
@@ -217,10 +226,12 @@ export function Header({
           <span className="shrink-0" aria-hidden />
         )}
 
+        <div className="flex-1" />
+
         {personalMode ? (
           <Link
             href="/personal/numbers/premium"
-            className="ml-auto hidden h-9 items-center rounded-lg bg-[#6366f1] px-4 text-[13px] font-semibold text-white hover:bg-[#5558e8] sm:inline-flex"
+            className="hidden h-9 items-center rounded-lg bg-[#6366f1] px-4 text-[13px] font-semibold text-white shadow-sm hover:bg-[#5558e8] sm:inline-flex"
           >
             Find a New Number
           </Link>
@@ -267,7 +278,7 @@ export function Header({
         </div>
         ) : null}
 
-        <div className="ml-auto flex items-center gap-2">
+        <div className="flex items-center gap-2">
           {!personalMode && phoneNumbers.length > 0 ? (
             <select
               className="hidden h-9 max-w-[170px] rounded-full border border-border bg-card px-3 text-[12px] font-medium outline-none focus:border-primary sm:block"

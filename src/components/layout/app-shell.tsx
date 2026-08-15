@@ -53,17 +53,18 @@ export function AppShell({
     (pathname.startsWith("/realtor/setup") ||
       pathname.startsWith("/realtor/dashboard") ||
       pathname.startsWith("/realtor/leads"));
-  const title =
-    hideChromeTitle
+  const title = hideChromeTitle
+    ? ""
+    : pathname === "/outcomes" ||
+        pathname === "/systems" ||
+        pathname === "/agents" ||
+        pathname.startsWith("/agents/")
       ? ""
-      : pathname === "/outcomes" ||
-          pathname === "/systems" ||
-          pathname === "/agents" ||
-          pathname.startsWith("/agents/")
-        ? ""
-        : (realtorMode ? getRealtorPageTitle(pathname) : null) ||
-          (personalMode ? getPersonalPageTitle(pathname) : null) ||
-          getPageTitle(pathname);
+      : realtorMode
+        ? getRealtorPageTitle(pathname) ?? ""
+        : personalMode
+          ? getPersonalPageTitle(pathname)
+          : getPageTitle(pathname);
 
   return (
     <div className="product-theme min-h-screen bg-background">

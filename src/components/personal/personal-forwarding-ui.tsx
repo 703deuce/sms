@@ -47,6 +47,7 @@ export function PersonalForwardingUI({
   const [_rules, setRules] = useState<ForwardingRule[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [ruleTab, setRuleTab] = useState<"private" | "duo">("private");
   const [editId, setEditId] = useState(initialNumberId || numbers[0]?.id || "");
   const [destination, setDestination] = useState("");
   const [enabled, setEnabled] = useState(true);
@@ -174,6 +175,26 @@ export function PersonalForwardingUI({
           </>
         }
       />
+
+      <div className="flex gap-1 rounded-lg border border-[#e5e7eb] bg-[#f3f4f6] p-0.5">
+        {[
+          { id: "private" as const, label: "Private" },
+          { id: "duo" as const, label: "My Duo" },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => setRuleTab(tab.id)}
+            className={`rounded-md px-4 py-1.5 text-[12px] font-semibold transition ${
+              ruleTab === tab.id
+                ? "bg-white text-[#6366f1] shadow-sm"
+                : "text-[#6b7280] hover:text-[#374151]"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <PersonalStatCard

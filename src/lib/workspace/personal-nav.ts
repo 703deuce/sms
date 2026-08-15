@@ -1,9 +1,10 @@
 import {
+  ArrowRightLeft,
   CreditCard,
-  Forward,
   Hash,
   LayoutDashboard,
   Phone,
+  PhoneForwarded,
   Vault,
   Voicemail,
 } from "lucide-react";
@@ -16,9 +17,9 @@ export function buildPersonalNav(): NavItem[] {
     { label: "My Numbers", href: "/personal/numbers", icon: Phone },
     { label: "Find a Number", href: "/personal/numbers/premium", icon: Hash },
     { label: "Number Vault", href: "/personal/vault", icon: Vault },
-    { label: "Forwarding", href: "/personal/forwarding", icon: Forward },
+    { label: "Forwarding", href: "/personal/forwarding", icon: PhoneForwarded },
     { label: "Voicemail", href: "/personal/voicemail", icon: Voicemail },
-    { label: "Porting", href: "/personal/porting", icon: Phone },
+    { label: "Porting", href: "/personal/porting", icon: ArrowRightLeft },
     { label: "Billing", href: "/settings/billing", icon: CreditCard },
   ];
 }

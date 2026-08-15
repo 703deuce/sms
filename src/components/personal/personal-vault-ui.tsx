@@ -11,6 +11,7 @@ import {
   Pencil,
   Plus,
   RefreshCw,
+  Search,
   Shield,
   Trash2,
 } from "lucide-react";
@@ -104,15 +105,18 @@ export function PersonalVaultUI({ numbers, parked }: { numbers: PersonalNumberRo
             <Link href="/personal/numbers/premium">
               <PersonalPrimaryButton className="gap-1.5">
                 <Plus className="h-4 w-4" />
-                Add number to Vault
+                Add to Vault
               </PersonalPrimaryButton>
             </Link>
-            <input
-              className="h-9 w-56 rounded-lg border border-[#e5e7eb] bg-[#f9fafb] px-3 text-[13px] outline-none focus:border-[#6366f1] focus:bg-white"
-              placeholder="Search in your vault…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9ca3af]" />
+              <input
+                className="h-9 w-56 rounded-lg border border-[#e5e7eb] bg-[#f9fafb] pl-9 pr-3 text-[13px] outline-none focus:border-[#6366f1] focus:bg-white"
+                placeholder="Search your vault…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
           </>
         }
       />

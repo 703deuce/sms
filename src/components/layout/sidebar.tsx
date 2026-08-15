@@ -361,21 +361,27 @@ export function Sidebar({
               pathname.startsWith("/templates"));
           const smartRoutingOwned =
             item.label === "Smart Routing" && isSmartRoutingSectionPathExport(pathname);
+          const expandKey = itemExpandKey(item);
+          const personalOverviewExactOnly =
+            personalMode && item.href === "/personal" && pathname !== "/personal";
+          const itemHrefActive =
+            isNavHrefActive(pathname, search, item.href) && !personalOverviewExactOnly;
           const ownedOutcome =
             receptionistOwned ||
             callsOwned ||
             smsOwned ||
             smartRoutingOwned ||
-            pathname.startsWith(`${hrefPath(item.href)}/`) ||
-            pathname === hrefPath(item.href);
-          const expandKey = itemExpandKey(item);
-          const itemHrefActive = isNavHrefActive(pathname, search, item.href);
+            (personalMode && item.href === "/personal"
+              ? pathname === "/personal"
+              : pathname.startsWith(`${hrefPath(item.href)}/`) ||
+                pathname === hrefPath(item.href));
           const active =
             itemHrefActive ||
             Boolean(childActive) ||
             (item.href !== "/dashboard" &&
               item.href !== "/outcomes" &&
               ownedOutcome &&
+              !personalOverviewExactOnly &&
               !navItems.some(
                 (other) =>
                   other !== item &&
@@ -406,13 +412,15 @@ export function Sidebar({
                 className={cn(
                   "group relative flex items-center rounded-[10px] transition",
                   active
-                    ? item.label === "Calls" || realtorMode
+                    ? personalMode
                       ? "bg-[#6366f1] text-white shadow-[0_4px_14px_rgba(99,102,241,0.35)]"
-                      : "bg-primary/10 text-primary"
+                      : item.label === "Calls" || realtorMode
+                        ? "bg-[#6366f1] text-white shadow-[0_4px_14px_rgba(99,102,241,0.35)]"
+                        : "bg-primary/10 text-primary"
                     : "text-sidebar-foreground hover:bg-[#f3f4f6]",
                 )}
               >
-                {active && !realtorMode && item.label !== "Calls" ? (
+                {active && !realtorMode && !personalMode && item.label !== "Calls" ? (
                   <span className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r-full bg-primary" />
                 ) : null}
                 <Link
@@ -427,7 +435,7 @@ export function Sidebar({
                     className={cn(
                       "h-4 w-4 shrink-0",
                       active
-                        ? item.label === "Calls" || realtorMode
+                        ? personalMode || item.label === "Calls" || realtorMode
                           ? "text-white"
                           : "text-primary"
                         : "text-sidebar-muted group-hover:text-sidebar-foreground",
@@ -453,7 +461,7 @@ export function Sidebar({
                     className={cn(
                       "mr-1.5 rounded-md p-1.5 transition",
                       active
-                        ? item.label === "Calls" || realtorMode
+                        ? personalMode || item.label === "Calls" || realtorMode
                           ? "text-white hover:bg-white/15"
                           : "text-primary hover:bg-primary/10"
                         : "text-sidebar-muted hover:bg-[#f3f4f6] hover:text-sidebar-foreground",

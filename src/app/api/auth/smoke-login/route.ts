@@ -6,7 +6,8 @@
  * Body: { "email": "user@example.com", "workspaceId"?: "..." }
  */
 import { NextResponse } from "next/server";
-import { encodeSession, SESSION_COOKIE, WORKSPACE_COOKIE } from "@/lib/auth";
+import { encodeSession, SESSION_COOKIE } from "@/lib/auth";
+import { applyWorkspaceCookies } from "@/lib/workspace/cookies";
 import { getPrisma } from "@/lib/db";
 
 const BOOTSTRAP_HEADER = "x-smoke-bootstrap";
@@ -35,7 +36,7 @@ export async function POST(request: Request) {
 
     const memberships = await prisma.membership.findMany({
       where: { userId: user.id },
-      include: { workspace: { select: { id: true, name: true, slug: true } } },
+      include: { workspace: { select: { id: true, name: true, slug: true, type: true } } },
     });
     if (!memberships.length) {
       return NextResponse.json({ error: "User has no workspace" }, { status: 404 });
@@ -78,15 +79,13 @@ export async function POST(request: Request) {
     res.cookies.set(SESSION_COOKIE, encodeSession(session), {
       httpOnly: true,
       sameSite: "lax",
-      secure: true,
       path: "/",
     });
-    res.cookies.set(WORKSPACE_COOKIE, membership.workspaceId, {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: true,
-      path: "/",
-    });
+    applyWorkspaceCookies(
+      res,
+      membership.workspaceId,
+      membership.workspace.type === "PERSONAL" ? "PERSONAL" : "BUSINESS",
+    );
     return res;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
