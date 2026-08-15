@@ -11,25 +11,25 @@ import {
   formatBookedTimeLabel,
   rescheduleAppointmentResilient,
 } from "./booking-recovery";
-import {
-  resolveConfirmedEmail,
-} from "./email-collection-tools";
-import { guardCalendarTool } from "./booking-operation-guard";
-import { buildBookingNeedsEmailToolResult } from "../booking-completion-messages";
-import {
-  syncFrontDeskBookingToCrm,
-} from "@/lib/voice/crm/frontdesk-crm-sync";
+import { resolveConfirmedEmail } from "./email-collection-tools";
+import { calendarToolGuardFeedback } from "./booking-operation-guard";
+import { syncFrontDeskBookingToCrm } from "@/lib/voice/crm/frontdesk-crm-sync";
 import { withLiveKitToolTelemetry } from "../livekit-tool-telemetry";
 import {
-  BOOKING_COMPLETE_TOOL_RESULT,
-  BOOKING_FAILED_TOOL_RESULT,
-  buildBookingCompleteToolResultFallback,
   buildBookingFailureLine,
   buildBookingSuccessLine,
   POST_EMAIL_BOOKING_FILLER,
 } from "../booking-completion-messages";
-import { bookingFailureReason } from "../booking-error";
 import { runAsyncWorkWithBridge } from "../task-async-work-bridge";
+import {
+  formatToolFeedbackForModel,
+  toolFeedbackBookingCompleteSpeakNow,
+  toolFeedbackBookingCompleteSpoken,
+  toolFeedbackFromBookingWriteError,
+  toolFeedbackInvalidSlot,
+  toolFeedbackMissingEmail,
+  toolFeedbackRecoverable,
+} from "../tool-feedback";
 import { markBookingConfirmed, type FrontDeskUserData } from "./userdata";
 import { sendBookingSmsAsync } from "./booking-sms";
 import { speakBookingLine } from "./booking-speech";
@@ -60,15 +60,24 @@ export function buildFrontDeskRescheduleAppointmentTool(
       const session = opts.ctx.session as AgentSession<FrontDeskUserData>;
       const ud = session.userData;
 
-      guardCalendarTool(ud, "reschedule_appointment");
+      const blocked = calendarToolGuardFeedback(ud, "reschedule_appointment");
+      if (blocked) return formatToolFeedbackForModel(blocked);
 
       if (!confirmed) {
-        return "Ask the caller to confirm the new time before rescheduling.";
+        return formatToolFeedbackForModel(
+          toolFeedbackRecoverable({
+            tool: "reschedule_appointment",
+            recovery_class: "MISSING_INFORMATION",
+            reason: "confirmation_required",
+            next_action: "none",
+            guidance: "Ask the caller to confirm the new time before rescheduling.",
+          }),
+        );
       }
 
       const slot = slotsMap.get(slot_id);
       if (!slot) {
-        throw new llm.ToolError(`Slot ${slot_id} was not found — call list_available_slots again.`);
+        return formatToolFeedbackForModel(toolFeedbackInvalidSlot("reschedule_appointment", slot_id));
       }
 
       let attendeeEmail: string | null = resolveConfirmedEmail(ud, inlineEmail);
@@ -77,7 +86,9 @@ export function buildFrontDeskRescheduleAppointmentTool(
         if (attendeeEmail) ud.confirmedEmail = attendeeEmail;
       }
       if (!attendeeEmail) {
-        return buildBookingNeedsEmailToolResult(slot_id);
+        return formatToolFeedbackForModel(
+          toolFeedbackMissingEmail({ tool: "reschedule_appointment", slotId: slot_id }),
+        );
       }
       ud.confirmedEmail = attendeeEmail;
 
@@ -125,15 +136,13 @@ export function buildFrontDeskRescheduleAppointmentTool(
             sendBookingSmsAsync(session, rescheduled.slot.startTime);
 
             const spoken = await speakBookingLine(session, buildBookingSuccessLine(local));
-
-            const completion = spoken
-              ? BOOKING_COMPLETE_TOOL_RESULT
-              : buildBookingCompleteToolResultFallback(local);
-
-            return (
-              `${completion} ` +
-              `(Rescheduled from ${when} to ${local}.)`
-            );
+            const base = spoken
+              ? toolFeedbackBookingCompleteSpoken()
+              : toolFeedbackBookingCompleteSpeakNow(local);
+            return formatToolFeedbackForModel({
+              ...base,
+              guidance: `${base.guidance} (Rescheduled from ${when} to ${local}.)`,
+            });
           } catch (err) {
             if (err instanceof SlotUnavailableError) {
               ud.slotUnavailableCount += 1;
@@ -143,7 +152,13 @@ export function buildFrontDeskRescheduleAppointmentTool(
                   "That new time isn't available anymore — I can check what else is open.",
                 ),
               );
-              return BOOKING_FAILED_TOOL_RESULT;
+              return formatToolFeedbackForModel(
+                toolFeedbackFromBookingWriteError(err, {
+                  tool: "reschedule_appointment",
+                  slotId: slot_id,
+                  callerAlreadyHeardFailure: true,
+                }),
+              );
             }
 
             console.warn(
@@ -154,8 +169,14 @@ export function buildFrontDeskRescheduleAppointmentTool(
                 error: err instanceof Error ? err.message : String(err),
               }),
             );
-            await speakBookingLine(session, buildBookingFailureLine(bookingFailureReason(err)));
-            return BOOKING_FAILED_TOOL_RESULT;
+            await speakBookingLine(session, buildBookingFailureLine());
+            return formatToolFeedbackForModel(
+              toolFeedbackFromBookingWriteError(err, {
+                tool: "reschedule_appointment",
+                slotId: slot_id,
+                callerAlreadyHeardFailure: true,
+              }),
+            );
           }
         },
       );

@@ -8,6 +8,11 @@ import { speakBookingLine } from "./booking-speech";
 import { markBookingOperationState } from "./booking-operation";
 import { POST_EMAIL_BOOKING_FILLER } from "../booking-completion-messages";
 import { speakBeforeTaskHandoff } from "../task-async-work-bridge";
+import {
+  formatToolFeedbackForModel,
+  toolFeedbackInvalidEmail,
+  toolFeedbackSuccess,
+} from "../tool-feedback";
 import type { FrontDeskUserData } from "./userdata";
 
 export class BookingEmailTimeoutError extends Error {
@@ -104,7 +109,7 @@ export function buildRecordBookingEmailTool() {
       const ud = session.userData;
       const normalized = normalizeSpokenEmail(email);
       if (!isValidEmail(normalized)) {
-        throw new llm.ToolError(`Invalid email: ${email}`);
+        return formatToolFeedbackForModel(toolFeedbackInvalidEmail(email));
       }
       ud.confirmedEmail = normalized;
       ud.draftEmail = undefined;
@@ -116,11 +121,13 @@ export function buildRecordBookingEmailTool() {
       }
 
       const slotId = ud.pendingSlotId || ud.bookingOperation?.slotId;
-      return (
-        "Email saved for this call. " +
-        (slotId
-          ? `Call schedule_appointment again with slot_id ${slotId} to complete the booking.`
-          : "Call schedule_appointment with the chosen slot_id to complete the booking.")
+      return formatToolFeedbackForModel(
+        toolFeedbackSuccess(
+          slotId
+            ? `Email saved. Call schedule_appointment again with slot_id ${slotId} to complete booking.`
+            : "Email saved. Call schedule_appointment with the chosen slot_id to complete booking.",
+          { tool: "record_booking_email", context: slotId ? { slot_id: slotId } : undefined },
+        ),
       );
     },
   });

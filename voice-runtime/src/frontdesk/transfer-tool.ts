@@ -8,6 +8,13 @@ import { deliverScriptedSpeech } from "../outbound/scripted-speech";
 import type { FrontDeskUserData } from "./userdata";
 import { withLiveKitToolTelemetry } from "../livekit-tool-telemetry";
 import { notifyReceptionistStaff } from "@/lib/voice/receptionist/notifications";
+import {
+  formatToolFeedbackForModel,
+  toolFeedbackSuccess,
+  toolFeedbackTerminal,
+  toolFeedbackTransferFailure,
+  type RecoveryClass,
+} from "../tool-feedback";
 
 async function notifyTransferFailure(
   ud: FrontDeskUserData,
@@ -93,7 +100,14 @@ async function resolveTransferDestination(
   return dest?.destination?.trim() || null;
 }
 
-async function markVoiceCallTransferred(
+function transferRecoveryClass(reason: string): RecoveryClass {
+  const lower = reason.toLowerCase();
+  if (/busy|decline|rejected|486/i.test(lower)) return "TRANSFER_BUSY";
+  if (/no answer|unavailable|timeout|no_answer/i.test(lower)) return "TRANSFER_NO_ANSWER";
+  if (/rate|429|503|502|temporarily/i.test(lower)) return "TEMPORARY_PROVIDER_ERROR";
+  return "UNKNOWN_FAILURE";
+}
+
   workspaceId: string,
   callId: string,
   destination: string,
@@ -135,8 +149,19 @@ export function buildFrontDeskTransferTool() {
       return withLiveKitToolTelemetry(ud, "transfer_to_human", { reason }, async () => {
         const destination = await resolveTransferDestination(ud.workspaceId, ud, reason);
         if (!destination) {
-          throw new llm.ToolError(
-            "I can't transfer this call right now — I can take a message for the team instead.",
+          const takeMessage =
+            (ud.receptionistCompiled?.transferPolicy as { takeMessageOnFailure?: boolean } | undefined)
+              ?.takeMessageOnFailure !== false;
+          return formatToolFeedbackForModel(
+            toolFeedbackTerminal({
+              tool: "transfer_to_human",
+              recovery_class: "RESOURCE_UNAVAILABLE",
+              reason: "no_destination",
+              next_action: takeMessage ? "take_message" : "none",
+              guidance: takeMessage
+                ? "Transfer isn't configured. Offer to take a message for the team."
+                : "Transfer isn't available right now.",
+            }),
           );
         }
 
@@ -178,7 +203,11 @@ export function buildFrontDeskTransferTool() {
             timeoutSeconds: 25,
           });
           await markVoiceCallTransferred(ud.workspaceId, ud.callId, destination, reason);
-          return "Transferring you now — please hold.";
+          return formatToolFeedbackForModel(
+            toolFeedbackSuccess("Transferring now — caller is on hold.", {
+              tool: "transfer_to_human",
+            }),
+          );
         }
 
         if (livekitRoomName && livekitParticipantId) {
@@ -192,24 +221,38 @@ export function buildFrontDeskTransferTool() {
             const takeMessage =
               (ud.receptionistCompiled?.transferPolicy as { takeMessageOnFailure?: boolean } | undefined)
                 ?.takeMessageOnFailure !== false;
-            throw new llm.ToolError(
-              takeMessage
-                ? `I couldn't complete the transfer (${xfer.reason}). I can take a message instead.`
-                : `I couldn't complete the transfer (${xfer.reason}).`,
+            return formatToolFeedbackForModel(
+              toolFeedbackTransferFailure({
+                reason: xfer.reason || "transfer_failed",
+                takeMessage,
+                recoveryClass: transferRecoveryClass(xfer.reason || ""),
+              }),
             );
           }
           await markVoiceCallTransferred(ud.workspaceId, ud.callId, destination, reason);
-          return "Transferring you now — please hold.";
+          return formatToolFeedbackForModel(
+            toolFeedbackSuccess("Transferring now — caller is on hold.", {
+              tool: "transfer_to_human",
+            }),
+          );
         }
 
         await notifyTransferFailure(ud, reason, "no_transfer_path");
         const takeMessage =
           (ud.receptionistCompiled?.transferPolicy as { takeMessageOnFailure?: boolean } | undefined)
             ?.takeMessageOnFailure !== false;
-        throw new llm.ToolError(
-          takeMessage
-            ? "I can't transfer this call right now — I can take a message for the team instead."
-            : "I can't transfer this call right now.",
+        return formatToolFeedbackForModel(
+          toolFeedbackTerminal({
+            tool: "transfer_to_human",
+            recovery_class: "RESOURCE_UNAVAILABLE",
+            reason: "no_transfer_path",
+            next_action: takeMessage ? "take_message" : "none",
+            runtime_handled_retry: true,
+            caller_already_heard_failure: true,
+            guidance: takeMessage
+              ? "Can't transfer this call right now — offer to take a message."
+              : "Can't transfer this call right now.",
+          }),
         );
       });
     },

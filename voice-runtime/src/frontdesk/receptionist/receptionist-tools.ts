@@ -13,6 +13,10 @@ import { executeAgentTool } from "@/lib/voice/agent-tool-gateway/gateway";
 import { buildFrontDeskBookingTools } from "../booking-tools";
 import type { FrontDeskUserData } from "../userdata";
 import { withLiveKitToolTelemetry } from "../../livekit-tool-telemetry";
+import {
+  formatToolFeedbackForModel,
+  toolFeedbackMissingCallerField,
+} from "../../tool-feedback";
 import { ReceptionistFieldCollectionTask, speakReceptionistCollectionLine } from "./field-collection-task";
 import { buildReceptionistCollectionToolResult } from "./field-collection-lifecycle";
 import { markParentResumed } from "../../task-transition-instrumentation";
@@ -73,8 +77,13 @@ function buildTakeMessageTool(snapshot: ReceptionistCompiledSnapshot) {
           ud.receptionistFields?.reason?.trim() ||
           "";
         if (!reason) {
-          throw new llm.ToolError(
-            "Ask one brief question for the message reason. Do not call collect_caller_fields.",
+          return formatToolFeedbackForModel(
+            toolFeedbackMissingCallerField({
+              tool: "take_message",
+              fieldId: "reason",
+              fieldLabel: "message reason",
+              hint: "Ask one brief question for the message reason. Do not call collect_caller_fields.",
+            }),
           );
         }
 
@@ -83,8 +92,13 @@ function buildTakeMessageTool(snapshot: ReceptionistCompiledSnapshot) {
           ud.receptionistFields?.name ||
           "";
         if (!name) {
-          throw new llm.ToolError(
-            "Ask for the caller's full name only. Do not call collect_caller_fields or explain the process.",
+          return formatToolFeedbackForModel(
+            toolFeedbackMissingCallerField({
+              tool: "take_message",
+              fieldId: "name",
+              fieldLabel: "full name",
+              hint: "Ask for the caller's full name only. Do not call collect_caller_fields.",
+            }),
           );
         }
 
@@ -94,8 +108,13 @@ function buildTakeMessageTool(snapshot: ReceptionistCompiledSnapshot) {
           callerE164: ud.callerE164,
         });
         if (!phone) {
-          throw new llm.ToolError(
-            "Ask for a callback phone number only. Do not call collect_caller_fields.",
+          return formatToolFeedbackForModel(
+            toolFeedbackMissingCallerField({
+              tool: "take_message",
+              fieldId: "phone",
+              fieldLabel: "callback phone number",
+              hint: "Ask for a callback phone number only. Do not call collect_caller_fields.",
+            }),
           );
         }
 

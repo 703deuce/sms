@@ -12,7 +12,10 @@ import {
   markBookingOperationFailed,
 } from "../voice-runtime/src/frontdesk/booking-operation";
 import { findBookingPrerequisiteGaps } from "../voice-runtime/src/frontdesk/booking-prerequisites";
-import { buildBookingNeedsEmailToolResult } from "../voice-runtime/src/booking-completion-messages";
+import {
+  formatToolFeedbackForModel,
+  toolFeedbackMissingEmail,
+} from "../voice-runtime/src/tool-feedback";
 import {
   isCalendlyMissingFieldError,
   missingFieldIdFromBookingError,
@@ -58,8 +61,8 @@ assert.deepEqual(findBookingPrerequisiteGaps(ud3), [{ fieldId: "email", label: "
 ud3.confirmedEmail = "caller@example.com";
 assert.deepEqual(findBookingPrerequisiteGaps(ud3), []);
 
-assert.match(buildBookingNeedsEmailToolResult("ST_abc"), /BOOKING_NEEDS_EMAIL/);
-assert.match(buildBookingNeedsEmailToolResult("ST_abc"), /record_booking_email/);
+assert.match(formatToolFeedbackForModel(toolFeedbackMissingEmail({ tool: "schedule_appointment", slotId: "ST_abc" })), /TOOL_FEEDBACK: recoverable_failure/);
+assert.match(formatToolFeedbackForModel(toolFeedbackMissingEmail({ tool: "schedule_appointment", slotId: "ST_abc" })), /record_booking_email/);
 assert.ok(isCalendlyMissingFieldError(new Error("Missing required field: email")));
 assert.equal(missingFieldIdFromBookingError(new Error("invalid email format")), "email");
 

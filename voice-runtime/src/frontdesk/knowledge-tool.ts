@@ -4,6 +4,7 @@ import type { AgentSession } from "@livekit/agents";
 import { resolveBusinessAnswer } from "@/lib/voice/knowledge/resolve-business-answer";
 import type { FrontDeskUserData } from "./userdata";
 import { withLiveKitToolTelemetry } from "../livekit-tool-telemetry";
+import { formatToolFeedbackForModel, toolFeedbackFromError } from "../tool-feedback";
 
 /**
  * Read-only business knowledge — wizard config + linked RAG corpus.
@@ -27,7 +28,11 @@ export function buildFrontDeskBusinessAnswerTool() {
           topic,
         });
         if (!result.ok) {
-          throw new llm.ToolError(result.speak);
+          return formatToolFeedbackForModel(
+            toolFeedbackFromError(result.speak || "Knowledge lookup failed", {
+              tool: "get_business_answer",
+            }),
+          );
         }
         return result.speak;
       });

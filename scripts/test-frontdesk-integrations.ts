@@ -19,15 +19,15 @@ assert.ok(
   "frontdesk agent must not use GetEmailTask (agent_handoff)",
 );
 assert.ok(
-  bookingToolsSource.includes("buildBookingNeedsEmailToolResult"),
-  "frontdesk booking fast-returns BOOKING_NEEDS_EMAIL for Realtime tool safety",
+  bookingToolsSource.includes("formatToolFeedbackForModel"),
+  "frontdesk booking returns TOOL_FEEDBACK envelopes",
 );
 assert.ok(
-  bookingToolsSource.includes("record_booking_email"),
+  bookingToolsSource.includes("buildRecordBookingEmailTool"),
   "frontdesk booking exposes record_booking_email on parent agent",
 );
 assert.ok(
-  bookingToolsSource.includes("guardCalendarTool"),
+  bookingToolsSource.includes("calendarToolGuardFeedback"),
   "frontdesk booking locks calendar tools during active operations",
 );
 assert.ok(

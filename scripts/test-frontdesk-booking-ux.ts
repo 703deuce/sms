@@ -7,8 +7,6 @@ import fs from "node:fs";
 import path from "node:path";
 import {
   BOOKING_COMPLETE_TOOL_RESULT,
-  BOOKING_FAILED_TOOL_RESULT,
-  POST_EMAIL_BOOKING_FILLER,
   buildBookingFailureLine,
   buildBookingSuccessLine,
 } from "../voice-runtime/src/booking-completion-messages";
@@ -54,7 +52,11 @@ assert.ok(
   "booking bridge line is passed to runAsyncWorkWithBridge",
 );
 assert.ok(
-  bookingToolsSource.includes("buildBookingNeedsEmailToolResult"),
+  bookingToolsSource.includes("formatToolFeedbackForModel"),
+  "schedule_appointment returns structured TOOL_FEEDBACK",
+);
+assert.ok(
+  bookingToolsSource.includes("toolFeedbackMissingEmail"),
   "schedule_appointment fast-returns when email is missing",
 );
 assert.ok(
@@ -115,16 +117,15 @@ assert.ok(
 );
 
 assert.ok(
-  bookingToolsSource.includes("return BOOKING_COMPLETE_TOOL_RESULT") ||
-    bookingToolsSource.includes("buildBookingCompleteToolResultFallback"),
+  bookingToolsSource.includes("toolFeedbackBookingCompleteSpoken") ||
+    bookingToolsSource.includes("toolFeedbackBookingCompleteSpeakNow"),
   "tool result tells model confirmation state after booking",
 );
 
-assert.match(BOOKING_COMPLETE_TOOL_RESULT, /BOOKING_COMPLETE_ALREADY_SPOKEN/);
-assert.match(BOOKING_COMPLETE_TOOL_RESULT, /end_call/);
-
-assert.match(BOOKING_FAILED_TOOL_RESULT, /BOOKING_FAILED_ALREADY_SPOKEN/);
-assert.match(BOOKING_FAILED_TOOL_RESULT, /Do NOT say they are booked/i);
+assert.ok(
+  bookingToolsSource.includes("formatToolFeedbackForModel"),
+  "booking tools return TOOL_FEEDBACK envelopes",
+);
 assert.match(buildBookingFailureLine(), /didn't go through/i);
 assert.ok(
   isCalendlyRateLimitError(new Error("Integration HTTP 429")),
@@ -136,8 +137,8 @@ assert.match(
 );
 
 assert.ok(
-  bookingToolsSource.includes("BOOKING_FAILED_TOOL_RESULT"),
-  "failed booking returns deterministic tool result instead of hallucination",
+  bookingToolsSource.includes("toolFeedbackFromBookingWriteError"),
+  "failed booking returns structured recoverable/terminal feedback",
 );
 assert.ok(
   bookingToolsSource.includes("buildBookingFailureLine"),

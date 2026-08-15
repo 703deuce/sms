@@ -24,28 +24,29 @@ import {
   markBookingOperationState,
   isBookingOperationActive,
 } from "./booking-operation";
-import { guardCalendarTool } from "./booking-operation-guard";
+import { calendarToolGuardFeedback } from "./booking-operation-guard";
 import { buildFrontDeskEndCallToolset } from "./end-frontdesk-call";
 import { buildFrontDeskRescheduleAppointmentTool } from "./reschedule-appointment-tool";
 import { syncFrontDeskBookingToCrm } from "@/lib/voice/crm/frontdesk-crm-sync";
 import { withLiveKitToolTelemetry } from "../livekit-tool-telemetry";
 import {
-  BOOKING_COMPLETE_TOOL_RESULT,
-  BOOKING_FAILED_TOOL_RESULT,
-  buildBookingCompleteToolResultFallback,
   buildBookingFailureLine,
-  buildBookingNeedsEmailToolResult,
-  buildBookingNeedsFieldToolResult,
-  buildBookingRecoverableToolResult,
   buildBookingSuccessLine,
   POST_EMAIL_BOOKING_FILLER,
 } from "../booking-completion-messages";
-import {
-  bookingFailureReason,
-  isCalendlyMissingFieldError,
-  missingFieldIdFromBookingError,
-} from "../booking-error";
 import { runAsyncWorkWithBridge } from "../task-async-work-bridge";
+import {
+  formatToolFeedbackForModel,
+  toolFeedbackBookingCompleteSpeakNow,
+  toolFeedbackBookingCompleteSpoken,
+  toolFeedbackBookingInProgress,
+  toolFeedbackFromBookingWriteError,
+  toolFeedbackInvalidSlot,
+  toolFeedbackMissingEmail,
+  toolFeedbackMissingField,
+  toolFeedbackFromError,
+  toolFeedbackSuccess,
+} from "../tool-feedback";
 import { safeInterruptSession } from "../session-utils";
 import { buildFrontDeskBusinessAnswerTool } from "./knowledge-tool";
 import { buildFrontDeskCancelAppointmentTool } from "./cancel-appointment-tool";
@@ -132,7 +133,9 @@ export function buildFrontDeskBookingTools(input: {
     }),
     execute: async ({ range }, opts) => {
       const session = opts.ctx.session as AgentSession<FrontDeskUserData>;
-      guardCalendarTool(session.userData, "list_available_slots");
+      const blocked = calendarToolGuardFeedback(session.userData, "list_available_slots");
+      if (blocked) return formatToolFeedbackForModel(blocked);
+
       return withLiveKitToolTelemetry(session.userData, "list_available_slots", { range }, async () => {
         const cal = session.userData.cal;
         const rangeDays = range === "+1month" || range === "+3month" ? 14 : 14;
@@ -145,9 +148,11 @@ export function buildFrontDeskBookingTools(input: {
           const lines = cal.formatSlotsForModel(slots);
           return lines || "No slots available at the moment.";
         } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          throw new llm.ToolError(
-            `Could not load calendar availability: ${message}. Do not invent times — tell the caller the calendar is temporarily unavailable.`,
+          return formatToolFeedbackForModel(
+            toolFeedbackFromError(err, {
+              tool: "list_available_slots",
+              runtimeHandledRetry: true,
+            }),
           );
         }
       });
@@ -158,7 +163,7 @@ export function buildFrontDeskBookingTools(input: {
     name: "schedule_appointment",
     description:
       "Book the appointment at slot_id after the caller picks a time. " +
-      "Returns BOOKING_NEEDS_EMAIL when email is missing — ask naturally, use record_booking_email, then retry.",
+      "Returns TOOL_FEEDBACK recoverable_failure when email or other fields are missing — collect and retry.",
     parameters: z.object({
       slot_id: z.string().describe("Slot id from list_available_slots"),
       email: z
@@ -170,21 +175,27 @@ export function buildFrontDeskBookingTools(input: {
       const session = opts.ctx.session as AgentSession<FrontDeskUserData>;
       const userData = session.userData;
 
-      guardCalendarTool(userData, "schedule_appointment");
+      const calendarBlocked = calendarToolGuardFeedback(userData, "schedule_appointment");
+      if (calendarBlocked) return formatToolFeedbackForModel(calendarBlocked);
 
       const alreadyBooked = alreadyBookedToolMessage(userData);
-      if (alreadyBooked) return alreadyBooked;
+      if (alreadyBooked) {
+        return formatToolFeedbackForModel(
+          toolFeedbackSuccess(alreadyBooked, {
+            tool: "schedule_appointment",
+            recovery_class: "DUPLICATE_OPERATION",
+            reason: "already_completed",
+          }),
+        );
+      }
 
       if (!canStartScheduleAppointment(userData)) {
-        throw new llm.ToolError(
-          "A booking is already in progress. Tell the caller you're finishing that step, " +
-            "then use check_booking_status if they ask whether it worked.",
-        );
+        return formatToolFeedbackForModel(toolFeedbackBookingInProgress("schedule_appointment"));
       }
 
       const slot = slotsMap.get(slot_id);
       if (!slot) {
-        throw new llm.ToolError(`Slot ${slot_id} was not found — call list_available_slots again.`);
+        return formatToolFeedbackForModel(toolFeedbackInvalidSlot("schedule_appointment", slot_id));
       }
 
       userData.pendingSlotId = slot_id;
@@ -193,9 +204,18 @@ export function buildFrontDeskBookingTools(input: {
       if (prerequisiteGaps.length > 0) {
         const first = prerequisiteGaps[0];
         if (first.kind === "email") {
-          return buildBookingNeedsEmailToolResult(slot_id);
+          return formatToolFeedbackForModel(
+            toolFeedbackMissingEmail({ tool: "schedule_appointment", slotId: slot_id }),
+          );
         }
-        return buildBookingNeedsFieldToolResult(slot_id, first.fieldId, first.label);
+        return formatToolFeedbackForModel(
+          toolFeedbackMissingField({
+            tool: "schedule_appointment",
+            slotId: slot_id,
+            fieldId: first.fieldId,
+            fieldLabel: first.label,
+          }),
+        );
       }
 
       const resolvedEmail = resolveConfirmedEmail(userData, inlineEmail);
@@ -287,9 +307,9 @@ export function buildFrontDeskBookingTools(input: {
               );
 
               if (spoken) {
-                return BOOKING_COMPLETE_TOOL_RESULT;
+                return formatToolFeedbackForModel(toolFeedbackBookingCompleteSpoken());
               }
-              return buildBookingCompleteToolResultFallback(local);
+              return formatToolFeedbackForModel(toolFeedbackBookingCompleteSpeakNow(local));
             } catch (err) {
               if (err instanceof SlotUnavailableError) {
                 userData.slotUnavailableCount += 1;
@@ -300,31 +320,21 @@ export function buildFrontDeskBookingTools(input: {
                     "That time slot isn't available anymore — I can check what else is open.",
                   ),
                 );
-                return BOOKING_FAILED_TOOL_RESULT;
-              }
-              const recovered = alreadyBookedToolMessage(userData);
-              if (recovered) return recovered;
-
-              const missingField =
-                isCalendlyMissingFieldError(err) ? missingFieldIdFromBookingError(err) : null;
-              if (missingField) {
-                console.warn(
-                  JSON.stringify({
-                    source: "frontdesk-booking-tools",
-                    event: "schedule_appointment_missing_field",
-                    callId: userData.callId,
-                    missingField,
-                    error: err instanceof Error ? err.message : String(err),
+                return formatToolFeedbackForModel(
+                  toolFeedbackFromBookingWriteError(err, {
+                    tool: "schedule_appointment",
+                    slotId: slot_id,
+                    callerAlreadyHeardFailure: true,
                   }),
                 );
-                markBookingOperationFailed(userData, `missing_${missingField}`);
-                if (missingField === "email") {
-                  userData.confirmedEmail = undefined;
-                }
-                return buildBookingRecoverableToolResult(
-                  slot_id,
-                  `Calendly needs ${missingField} before this slot can be booked.`,
-                  missingField,
+              }
+              const recovered = alreadyBookedToolMessage(userData);
+              if (recovered) {
+                return formatToolFeedbackForModel(
+                  toolFeedbackSuccess(recovered, {
+                    tool: "schedule_appointment",
+                    recovery_class: "DUPLICATE_OPERATION",
+                  }),
                 );
               }
 
@@ -340,8 +350,14 @@ export function buildFrontDeskBookingTools(input: {
                 userData,
                 err instanceof Error ? err.message : String(err),
               );
-              await speakBookingLine(session, buildBookingFailureLine(bookingFailureReason(err)));
-              return BOOKING_FAILED_TOOL_RESULT;
+              await speakBookingLine(session, buildBookingFailureLine());
+              return formatToolFeedbackForModel(
+                toolFeedbackFromBookingWriteError(err, {
+                  tool: "schedule_appointment",
+                  slotId: slot_id,
+                  callerAlreadyHeardFailure: true,
+                }),
+              );
             }
           },
         );
