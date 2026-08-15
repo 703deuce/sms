@@ -39,8 +39,16 @@ assert.ok(
   "booking success must await SMS before speaking confirmation",
 );
 assert.ok(
-  bookingTools.includes("skipOnEnterPrompt: true"),
-  "email prompt must be spoken once before nested email task",
+  fieldTask.includes("record_additional_caller_field"),
+  "field collection must support unordered multi-field answers",
+);
+assert.ok(
+  receptionistTools.includes("record_receptionist_field"),
+  "supervisor must persist volunteered fields without task handoff",
+);
+assert.ok(
+  !bookingTools.includes("collectEmailInlineForBooking"),
+  "booking must not use blocking inline email AgentTask",
 );
 
 const ud = {

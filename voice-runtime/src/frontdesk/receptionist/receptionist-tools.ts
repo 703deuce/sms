@@ -3,7 +3,10 @@ import { z } from "zod";
 import type { AgentSession } from "@livekit/agents";
 import type { ReceptionistCompiledSnapshot } from "@/lib/voice/receptionist/types";
 import { takeStructuredMessage } from "@/lib/voice/domain-actions/take-structured-message";
-import { resolveReceptionistCallbackPhone } from "@/lib/voice/receptionist/field-validation";
+import {
+  resolveReceptionistCallbackPhone,
+  validateReceptionistFieldValue,
+} from "@/lib/voice/receptionist/field-validation";
 import { applyReceptionistFieldBackfill } from "@/lib/voice/receptionist/field-backfill";
 import {
   missingReceptionistFields,
@@ -52,6 +55,73 @@ function backfillReceptionistFields(
     chatCtx: session.chatCtx,
     manifest,
     receptionistFields: ud.receptionistFields,
+  });
+}
+
+function buildRecordReceptionistFieldTool(snapshot: ReceptionistCompiledSnapshot) {
+  const manifest = snapshot.fieldManifest;
+  if (!manifest.length) return null;
+  const fieldIds = manifest.map((f) => f.id);
+  if (!fieldIds.length) return null;
+
+  return llm.tool({
+    name: "record_receptionist_field",
+    description:
+      "Persist caller information they already stated (name, phone, email, address, reason, etc.). " +
+      "Call immediately when the caller volunteers a value — do not wait for collect_caller_fields. " +
+      "Use during booking after schedule_appointment reports a missing field.",
+    parameters: z.object({
+      field_id: z
+        .enum(fieldIds as [string, ...string[]])
+        .describe(`Field id from manifest: ${fieldIds.join(", ")}`),
+      value: z.string().describe("The value the caller provided"),
+    }),
+    execute: async ({ field_id, value }, opts) => {
+      const session = opts.ctx.session as AgentSession<FrontDeskUserData>;
+      const ud = session.userData;
+      return withLiveKitToolTelemetry(ud, "record_receptionist_field", { field_id, value }, async () => {
+        const field = manifest.find((f) => f.id === field_id);
+        if (!field) return `Unknown field ${field_id}.`;
+        const trimmed = value?.trim() || "";
+        if (!trimmed) {
+          return formatToolFeedbackForModel(
+            toolFeedbackMissingCallerField({
+              tool: "record_receptionist_field",
+              fieldId: field_id,
+              fieldLabel: field.label,
+            }),
+          );
+        }
+        try {
+          const normalized = validateReceptionistFieldValue(field, trimmed);
+          if (!ud.receptionistFields) ud.receptionistFields = {};
+          ud.receptionistFields[field_id] = normalized;
+          const pendingSlot = ud.pendingSlotId || ud.bookingOperation?.slotId;
+          const bookingTail = pendingSlot
+            ? ` Then call schedule_appointment with slot_id ${pendingSlot}.`
+            : "";
+          return formatToolFeedbackForModel(
+            toolFeedbackSuccess(
+              `${field.label} saved.${bookingTail}`,
+              { tool: "record_receptionist_field" },
+            ),
+          );
+        } catch (err) {
+          const message = err instanceof Error ? err.message : `Please provide your ${field.label}.`;
+          return formatToolFeedbackForModel(
+            toolFeedbackRecoverable({
+              tool: "record_receptionist_field",
+              recovery_class: "INVALID_INFORMATION",
+              reason: "validation_failed",
+              field_id,
+              field_label: field.label,
+              next_action: "collect_field_then_retry",
+              guidance: message,
+            }),
+          );
+        }
+      });
+    },
   });
 }
 
@@ -338,6 +408,9 @@ export function buildReceptionistTools(input: {
 
   if (actionAllowed(snapshot, "takeMessages", "take_messages")) push(buildTakeMessageTool(snapshot));
   if (actionAllowed(snapshot, "sendSms", "send_text")) push(buildSendSmsTool());
+
+  const recordFieldTool = buildRecordReceptionistFieldTool(snapshot);
+  if (recordFieldTool && capabilitySet.has("collect_info")) push(recordFieldTool);
 
   const collectTool = buildCollectCallerFieldsTool(snapshot);
   if (collectTool && capabilitySet.has("collect_info")) push(collectTool);
