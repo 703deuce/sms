@@ -337,11 +337,24 @@ export function toolFeedbackBookingInProgress(toolName: string): ToolFeedback {
     tool: toolName,
     recovery_class: "OPERATION_IN_PROGRESS",
     reason: "booking_in_progress",
-    next_action: "check_booking_status",
+    next_action: "none",
     guidance:
-      "A booking step is already running. Tell the caller you're finishing that step. " +
-      "Use check_booking_status if they ask whether it worked.",
+      "Calendar write is already in progress. Tell the caller you're finishing the booking. " +
+      "Do NOT call schedule_appointment, record_booking_email, or record email again until it completes.",
   });
+}
+
+export function toolFeedbackBookingConfirmedAnswer(when: string): ToolFeedback {
+  return toolFeedbackSuccess(
+    `Appointment IS confirmed for ${when}. Tell the caller directly they are all set — ` +
+      "do NOT say you are checking or call check_booking_status.",
+    {
+      tool: "check_booking_status",
+      caller_already_heard_success: true,
+      next_action: "end_call",
+      context: { booked_time_label: when },
+    },
+  );
 }
 
 export function toolFeedbackInvalidSlot(toolName: string, slotId: string): ToolFeedback {

@@ -5,7 +5,8 @@ import type { AgentFieldDefinition } from "@/lib/voice/receptionist/types";
 import { missingReceptionistFields } from "@/lib/voice/receptionist/field-collection-scope";
 import { applyReceptionistFieldBackfill } from "@/lib/voice/receptionist/field-backfill";
 import { validateReceptionistFieldValue } from "@/lib/voice/receptionist/field-validation";
-import { isValidEmail, normalizeSpokenEmail } from "./email-utils";
+import { validateBookingNotesField } from "./booking-field-validation";
+import { persistConfirmedBookingEmail } from "./booking-email-state";
 import { FIELD_TRANSITION_BRIDGE_RULES } from "@/lib/voice/field-transition-bridge";
 import { buildReceptionistFieldTransitionLine } from "@/lib/voice/receptionist/field-transition-phrases";
 import type { FrontDeskUserData } from "./userdata";
@@ -98,14 +99,22 @@ export class BookingIntakeTask extends voice.AgentTask<BookingIntakeResult> {
       let normalized: string;
       try {
         if (field.id === "email" || field.type === "email") {
-          normalized = normalizeSpokenEmail(trimmed);
-          if (!isValidEmail(normalized)) {
+          const persisted = persistConfirmedBookingEmail(ud, trimmed);
+          if (!persisted.ok) {
             logBookingIntake(ud.callId, "field_validation_failed", { fieldId: field.id });
             return { ok: false, message: "That email doesn't look right — could you say it again?" };
           }
-          ud.confirmedEmail = normalized;
+          normalized = persisted.email;
         } else {
-          normalized = validateReceptionistFieldValue(field, trimmed);
+          const notesCheck = validateBookingNotesField(field.id, trimmed);
+          if (!notesCheck.ok) {
+            logBookingIntake(ud.callId, "field_validation_failed", {
+              fieldId: field.id,
+              reason: notesCheck.message,
+            });
+            return { ok: false, message: notesCheck.message };
+          }
+          normalized = validateReceptionistFieldValue(field, notesCheck.normalized);
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : `Please provide your ${field.label}.`;

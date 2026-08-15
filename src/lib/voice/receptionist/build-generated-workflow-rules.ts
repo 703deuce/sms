@@ -72,6 +72,11 @@ export function buildGeneratedWorkflowRules(snapshot: ReceptionistCompiledSnapsh
       lines.push(`- Do not book within ${booking.minimumNoticeHours} hours of the current time.`);
     }
     lines.push("- Collect all required booking fields before scheduling.");
+    lines.push(
+      "- For email during booking, use record_receptionist_field (field_id email) — do not also call record_booking_email.",
+      "- After schedule_appointment succeeds, answer outcome questions from booking state — do not call check_booking_status unless the write may still be in progress.",
+      "- Do not call schedule_appointment repeatedly while a calendar write is already running.",
+    );
     const fallback = snapshot.fallbackPolicy as { onBookingFail?: string } | undefined;
     if (fallback?.onBookingFail === "take_message") {
       lines.push("- If booking fails: apologize and take a message for follow-up.");

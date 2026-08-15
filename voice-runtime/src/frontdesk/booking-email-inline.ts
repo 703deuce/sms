@@ -1,7 +1,6 @@
 import { llm } from "@livekit/agents";
 import { z } from "zod";
 import type { AgentSession } from "@livekit/agents";
-import { isValidEmail, normalizeSpokenEmail } from "./email-utils";
 import type { EmailCollectionResult } from "./email-collection-task";
 import { EMAIL_COLLECTION_PROMPT } from "./email-collection-task";
 import { speakBookingLine } from "./booking-speech";
@@ -10,10 +9,13 @@ import { POST_EMAIL_BOOKING_FILLER } from "../booking-completion-messages";
 import { speakBeforeTaskHandoff } from "../task-async-work-bridge";
 import {
   formatToolFeedbackForModel,
-  toolFeedbackInvalidEmail,
   toolFeedbackRecoverable,
   toolFeedbackSuccess,
 } from "@/lib/voice/tool-feedback";
+import {
+  formatBookingEmailSavedFeedback,
+  persistConfirmedBookingEmail,
+} from "./booking-email-state";
 import type { FrontDeskUserData } from "./userdata";
 
 export class BookingEmailTimeoutError extends Error {
@@ -100,36 +102,24 @@ export function buildRecordBookingEmailTool() {
   return llm.tool({
     name: "record_booking_email",
     description:
-      "Save the caller's confirmed email for the calendar invite. " +
-      "Call after repeating the email back and the caller confirms it is correct.",
+      "Save confirmed email for the calendar invite. Prefer record_receptionist_field with field_id email " +
+      "during normal booking intake — do not call both tools for the same email. " +
+      "Use this when schedule_appointment reports missing email or the inline email waiter is active.",
     parameters: z.object({
       email: z.string().describe("Confirmed email address"),
     }),
     execute: async ({ email }, opts) => {
       const session = opts.ctx.session as AgentSession<FrontDeskUserData>;
       const ud = session.userData;
-      const normalized = normalizeSpokenEmail(email);
-      if (!isValidEmail(normalized)) {
-        return formatToolFeedbackForModel(toolFeedbackInvalidEmail(email));
-      }
-      ud.confirmedEmail = normalized;
-      ud.draftEmail = undefined;
+      const persisted = persistConfirmedBookingEmail(ud, email);
 
-      if (ud.bookingEmailWaiter) {
+      if (ud.bookingEmailWaiter && persisted.ok) {
         await speakBeforeTaskHandoff(session, POST_EMAIL_BOOKING_FILLER);
-        resolveBookingEmailWaiter(ud, { email: normalized, declined: false });
+        resolveBookingEmailWaiter(ud, { email: persisted.email, declined: false });
         return "Email saved. Calendar booking is in progress — do not speak or add filler.";
       }
 
-      const slotId = ud.pendingSlotId || ud.bookingOperation?.slotId;
-      return formatToolFeedbackForModel(
-        toolFeedbackSuccess(
-          slotId
-            ? `Email saved. Call schedule_appointment again with slot_id ${slotId} to complete booking.`
-            : "Email saved. Call schedule_appointment with the chosen slot_id to complete booking.",
-          { tool: "record_booking_email", context: slotId ? { slot_id: slotId } : undefined },
-        ),
-      );
+      return formatBookingEmailSavedFeedback(ud, "record_booking_email", persisted);
     },
   });
 }

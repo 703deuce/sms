@@ -1,5 +1,5 @@
 import type { AgentSession } from "@livekit/agents";
-import { resolveOutboundRealtimeOutputMode } from "../pipeline";
+import { sessionUsesTtsSay } from "../scripted-speech-output-mode";
 
 type ScriptedSpeechOptions = {
   allowInterruptions?: boolean;
@@ -7,8 +7,8 @@ type ScriptedSpeechOptions = {
 };
 
 /**
- * Verbatim scripted line — uses ElevenLabs TTS in half-cascade mode, or
- * generateReply in native realtime mode (session.say requires a TTS plugin).
+ * Verbatim scripted line — uses session.say + TTS plugin on half-cascade (Realtime text + ElevenLabs),
+ * or generateReply on native realtime audio output.
  */
 export async function deliverScriptedSpeech<T>(
   session: AgentSession<T>,
@@ -20,7 +20,7 @@ export async function deliverScriptedSpeech<T>(
 
   session.clearUserTurn();
 
-  if (resolveOutboundRealtimeOutputMode() === "elevenlabs") {
+  if (sessionUsesTtsSay(session)) {
     const handle = session.say(text, { allowInterruptions, addToChatCtx });
     await handle.waitForPlayout();
   } else {

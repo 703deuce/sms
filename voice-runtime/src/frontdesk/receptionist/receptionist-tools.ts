@@ -15,6 +15,8 @@ import {
 import { executeAgentTool } from "@/lib/voice/agent-tool-gateway/gateway";
 import { buildFrontDeskBookingTools } from "../booking-tools";
 import { isBookingOperationActive } from "../booking-operation";
+import { validateBookingNotesField } from "../booking-field-validation";
+import { formatBookingEmailSavedFeedback, persistConfirmedBookingEmail } from "../booking-email-state";
 import { isBookingConfirmed, type FrontDeskUserData } from "../userdata";
 import { withLiveKitToolTelemetry } from "../../livekit-tool-telemetry";
 import {
@@ -71,7 +73,7 @@ function buildRecordReceptionistFieldTool(snapshot: ReceptionistCompiledSnapshot
     description:
       "Persist caller information they already stated (name, phone, email, address, reason, etc.). " +
       "Call immediately when the caller volunteers a value — do not wait for collect_caller_fields. " +
-      "Use during booking after schedule_appointment reports a missing field.",
+      "For email during booking, use this tool (field_id email) — do not also call record_booking_email.",
     parameters: z.object({
       field_id: z
         .enum(fieldIds as [string, ...string[]])
@@ -95,12 +97,29 @@ function buildRecordReceptionistFieldTool(snapshot: ReceptionistCompiledSnapshot
           );
         }
         try {
-          const normalized = validateReceptionistFieldValue(field, trimmed);
+          if (field_id === "email" || field.type === "email") {
+            const persisted = persistConfirmedBookingEmail(ud, trimmed);
+            return formatBookingEmailSavedFeedback(ud, "record_receptionist_field", persisted);
+          }
+
+          const notesCheck = validateBookingNotesField(field_id, trimmed);
+          if (!notesCheck.ok) {
+            return formatToolFeedbackForModel(
+              toolFeedbackRecoverable({
+                tool: "record_receptionist_field",
+                recovery_class: "INVALID_INFORMATION",
+                reason: "needs_confirmation",
+                field_id,
+                field_label: field.label,
+                next_action: "collect_field_then_retry",
+                guidance: notesCheck.message,
+              }),
+            );
+          }
+
+          const normalized = validateReceptionistFieldValue(field, notesCheck.normalized);
           if (!ud.receptionistFields) ud.receptionistFields = {};
           ud.receptionistFields[field_id] = normalized;
-          if (field_id === "email" || field.type === "email") {
-            ud.confirmedEmail = normalized;
-          }
           const pendingSlot = ud.pendingSlotId || ud.bookingOperation?.slotId;
           const bookingTail = pendingSlot
             ? ` Then call schedule_appointment with slot_id ${pendingSlot}.`

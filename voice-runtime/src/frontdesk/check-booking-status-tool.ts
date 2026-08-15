@@ -13,6 +13,7 @@ import {
   toolFeedbackRecoverable,
   toolFeedbackSuccess,
   toolFeedbackTerminal,
+  toolFeedbackBookingConfirmedAnswer,
 } from "@/lib/voice/tool-feedback";
 
 async function appointmentOnThisCall(
@@ -45,17 +46,7 @@ export function buildFrontDeskCheckBookingStatusTool() {
         if (isBookingConfirmed(ud)) {
           const when =
             ud.booking?.bookedTimeLabel || ud.bookedTimeLabel || "the time you chose";
-          return formatToolFeedbackForModel(
-            toolFeedbackSuccess(
-              `Appointment IS confirmed for ${when}. Tell the caller confidently they are all set. ` +
-                "Do not call check_booking_status again.",
-              {
-                tool: "check_booking_status",
-                caller_already_heard_success: true,
-                next_action: "end_call",
-              },
-            ),
-          );
+          return formatToolFeedbackForModel(toolFeedbackBookingConfirmedAnswer(when));
         }
 
         if (ud.bookingInProgress) {

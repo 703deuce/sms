@@ -78,8 +78,8 @@ assert.ok(
   "legacy field collection still isolated — booking path must not depend on it",
 );
 assert.ok(
-  receptionistTools.includes("ud.confirmedEmail = normalized"),
-  "record_receptionist_field mirrors email to confirmedEmail",
+  receptionistTools.includes("persistConfirmedBookingEmail"),
+  "record_receptionist_field uses canonical email persistence",
 );
 assert.ok(
   receptionistTools.includes("isBookingConfirmed(ud)"),
