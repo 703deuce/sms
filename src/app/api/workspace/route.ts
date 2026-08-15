@@ -115,6 +115,23 @@ export async function POST(request: Request) {
         },
       });
       if (existing) {
+        const membership = await getPrisma().membership.findUnique({
+          where: {
+            userId_workspaceId: {
+              userId: auth.session.userId,
+              workspaceId: existing.id,
+            },
+          },
+        });
+        if (!membership) {
+          await getPrisma().membership.create({
+            data: {
+              userId: auth.session.userId,
+              workspaceId: existing.id,
+              role: "OWNER",
+            },
+          });
+        }
         const res = NextResponse.json({ data: existing });
         applyWorkspaceCookies(res, existing.id, "PERSONAL");
         return res;
