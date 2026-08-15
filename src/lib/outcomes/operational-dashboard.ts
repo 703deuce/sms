@@ -29,8 +29,8 @@ type RecentCallRow = {
   status: string;
   outcome: string | null;
   durationSeconds: number | null;
-  insights: Array<{ summary: string | null; intent: string | null }>;
-  recordings: Array<{ id: string }>;
+  insights?: Array<{ summary: string | null; intent: string | null }>;
+  recordings?: Array<{ id: string }>;
 };
 
 type WeekCallRow = {
@@ -428,8 +428,8 @@ export async function loadOperationalDashboardData(
         fmtCallPhone(contact.phone ?? call.fromE164)
       : fmtCallPhone(call.fromE164);
     const summary =
-      call.insights[0]?.summary ||
-      call.insights[0]?.intent?.replace(/_/g, " ") ||
+      call.insights?.[0]?.summary ||
+      call.insights?.[0]?.intent?.replace(/_/g, " ") ||
       call.outcome ||
       "Inbound call";
     const disposition = classifyDisposition(call);
@@ -446,7 +446,7 @@ export async function loadOperationalDashboardData(
       duration,
       timeLabel: formatCallTimeLabel(call.startedAt),
       href: `/voice/calls/${call.id}`,
-      hasRecording: call.recordings.length > 0,
+      hasRecording: (call.recordings?.length ?? 0) > 0,
     };
   });
 
