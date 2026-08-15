@@ -2,6 +2,7 @@ import { inferIndustryFromText } from "./business-name-keywords";
 import { buildKeywordEntries } from "./industry-keywords";
 import { parsePhoneDigits } from "./keypad";
 import { scoreCandidate, sortCandidates } from "./scoring";
+import { attachScarcityObservations } from "./scarcity";
 import { SCORING_WEIGHTS } from "./scoring-config";
 import { runTelnyxInventorySearches } from "./telnyx-inventory-search";
 import type {
@@ -198,22 +199,31 @@ export async function searchPremiumNumbers(
         keywords,
         telnyxCost,
         rawTelnyx: raw.raw,
+        searchContext: {
+          requestedAreaCodes: areaCodes,
+          industry: inferredIndustry,
+          explicitKeywords: [
+            ...(input.customKeywords ?? []),
+            ...(input.primaryKeywords ?? []),
+          ],
+        },
       });
     })
     .filter((c): c is NonNullable<typeof c> => c !== null);
 
   const sorted = sortCandidates(scored);
+  const withScarcity = attachScarcityObservations(sorted);
   const limit = input.limit ?? 100;
-  const candidates = sorted.slice(0, limit);
+  const candidates = withScarcity.slice(0, limit);
 
-  const statistics = buildStatistics(sorted);
+  const statistics = buildStatistics(withScarcity);
   statistics.telnyxSearchesAttempted = telnyxSearchesAttempted;
   statistics.telnyxSearchesSucceeded = telnyxSearchesSucceeded;
   statistics.telnyxSearchesFailed = telnyxSearchesFailed;
   statistics.rawCandidates = allCandidates.length;
   statistics.uniqueCandidates = sorted.length;
 
-  const status = resolveStatus(sorted, attempts, hadInventory);
+  const status = resolveStatus(withScarcity, attempts, hadInventory);
 
   return {
     status,

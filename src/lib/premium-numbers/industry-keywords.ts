@@ -1,108 +1,113 @@
 import { normalizeWord, wordToKeypadDigits } from "./keypad";
-import type { KeywordEntry } from "./types";
+import type { KeywordEntry, KeywordTier } from "./types";
+
+type IndustryKeywordDef = { word: string; tier: KeywordTier };
 
 /**
- * Deterministic industry → commercial keypad words (no LLM).
- * Longer words listed first — rare but high value when inventory exists.
+ * Deterministic industry → commercial keypad words with importance tiers.
  */
-export const INDUSTRY_KEYWORD_MAP: Record<string, string[]> = {
+export const INDUSTRY_KEYWORD_MAP: Record<string, IndustryKeywordDef[]> = {
   roofing: [
-    "ROOFING",
-    "ROOFERS",
-    "ROOFER",
-    "SHINGLE",
-    "RAFTERS",
-    "RAFTER",
-    "ROOFS",
-    "ROOF",
+    { word: "ROOF", tier: "PRIMARY" },
+    { word: "ROOFER", tier: "PRIMARY" },
+    { word: "ROOFS", tier: "PRIMARY" },
+    { word: "ROOFING", tier: "PRIMARY" },
+    { word: "ROOFERS", tier: "PRIMARY" },
+    { word: "SHINGLE", tier: "SECONDARY" },
+    { word: "RAFTER", tier: "SECONDARY" },
+    { word: "RAFTERS", tier: "SECONDARY" },
+    { word: "HOME", tier: "TERTIARY" },
+    { word: "FIX", tier: "TERTIARY" },
   ],
   plumbing: [
-    "PLUMBER",
-    "PLUMBERS",
-    "PLUMBING",
-    "FIXING",
-    "FAUCET",
-    "DRAINS",
-    "PLUMB",
-    "PIPES",
-    "PIPE",
-    "DRAIN",
-    "FIXER",
-    "LEAKS",
+    { word: "PLUMB", tier: "PRIMARY" },
+    { word: "PIPE", tier: "PRIMARY" },
+    { word: "DRAIN", tier: "PRIMARY" },
+    { word: "PLUMBER", tier: "PRIMARY" },
+    { word: "PLUMBERS", tier: "PRIMARY" },
+    { word: "PLUMBING", tier: "PRIMARY" },
+    { word: "PIPES", tier: "SECONDARY" },
+    { word: "DRAINS", tier: "SECONDARY" },
+    { word: "LEAK", tier: "SECONDARY" },
+    { word: "LEAKS", tier: "SECONDARY" },
+    { word: "WATER", tier: "SECONDARY" },
+    { word: "FIXER", tier: "TERTIARY" },
+    { word: "FIXING", tier: "TERTIARY" },
+    { word: "FAUCET", tier: "TERTIARY" },
   ],
   hvac: [
-    "HEATING",
-    "COOLING",
-    "FURNACE",
-    "HEATERS",
-    "COOLERS",
-    "HEATER",
-    "HVAC",
-    "HEAT",
-    "COOL",
-    "AIR",
+    { word: "HVAC", tier: "PRIMARY" },
+    { word: "HEAT", tier: "PRIMARY" },
+    { word: "COOL", tier: "PRIMARY" },
+    { word: "HEATING", tier: "PRIMARY" },
+    { word: "COOLING", tier: "PRIMARY" },
+    { word: "HEATER", tier: "SECONDARY" },
+    { word: "HEATERS", tier: "SECONDARY" },
+    { word: "COOLERS", tier: "SECONDARY" },
+    { word: "FURNACE", tier: "SECONDARY" },
+    { word: "AIR", tier: "TERTIARY" },
   ],
   lawn_care: [
-    "MOWING",
-    "MOWERS",
-    "TRIMMER",
-    "GARDEN",
-    "MOWER",
-    "CUTTER",
-    "LAWNS",
-    "GRASS",
-    "LAWN",
-    "MOW",
-    "YARD",
+    { word: "LAWN", tier: "PRIMARY" },
+    { word: "MOWER", tier: "PRIMARY" },
+    { word: "GRASS", tier: "PRIMARY" },
+    { word: "MOWING", tier: "SECONDARY" },
+    { word: "MOWERS", tier: "SECONDARY" },
+    { word: "YARD", tier: "SECONDARY" },
+    { word: "MOW", tier: "SECONDARY" },
+    { word: "LAWNS", tier: "SECONDARY" },
+    { word: "TRIMMER", tier: "TERTIARY" },
+    { word: "GARDEN", tier: "TERTIARY" },
+    { word: "CUTTER", tier: "TERTIARY" },
   ],
   junk_removal: [
-    "HAULING",
-    "REMOVAL",
-    "HAULER",
-    "REMOVE",
-    "TRASH",
-    "LOADS",
-    "JUNK",
-    "HAUL",
+    { word: "JUNK", tier: "PRIMARY" },
+    { word: "HAUL", tier: "PRIMARY" },
+    { word: "REMOVAL", tier: "PRIMARY" },
+    { word: "TRASH", tier: "SECONDARY" },
+    { word: "HAULING", tier: "SECONDARY" },
+    { word: "HAULER", tier: "SECONDARY" },
+    { word: "REMOVE", tier: "SECONDARY" },
+    { word: "LOADS", tier: "TERTIARY" },
   ],
   moving: [
-    "MOVING",
-    "MOVERS",
-    "PACKERS",
-    "PACKER",
-    "MOVER",
-    "MOVE",
-    "LOAD",
+    { word: "MOVE", tier: "PRIMARY" },
+    { word: "MOVER", tier: "PRIMARY" },
+    { word: "MOVERS", tier: "PRIMARY" },
+    { word: "MOVING", tier: "PRIMARY" },
+    { word: "PACKER", tier: "SECONDARY" },
+    { word: "PACKERS", tier: "SECONDARY" },
+    { word: "LOAD", tier: "TERTIARY" },
   ],
   legal: [
-    "LAWYERS",
-    "LAWYER",
-    "ATTORNEY",
-    "LITIGATE",
-    "LEGAL",
-    "TRIAL",
-    "LAW",
+    { word: "LAW", tier: "PRIMARY" },
+    { word: "LAWYER", tier: "PRIMARY" },
+    { word: "LAWYERS", tier: "PRIMARY" },
+    { word: "LEGAL", tier: "PRIMARY" },
+    { word: "ATTORNEY", tier: "SECONDARY" },
+    { word: "TRIAL", tier: "SECONDARY" },
+    { word: "LITIGATE", tier: "TERTIARY" },
   ],
   dental: [
-    "DENTIST",
-    "BRACES",
-    "SMILES",
-    "DENTAL",
-    "TOOTH",
-    "SMILE",
-    "TEETH",
+    { word: "DENTAL", tier: "PRIMARY" },
+    { word: "DENTIST", tier: "PRIMARY" },
+    { word: "TOOTH", tier: "SECONDARY" },
+    { word: "TEETH", tier: "SECONDARY" },
+    { word: "SMILE", tier: "SECONDARY" },
+    { word: "SMILES", tier: "SECONDARY" },
+    { word: "BRACES", tier: "TERTIARY" },
   ],
   auto: [
-    "MECHANIC",
-    "REPAIR",
-    "GARAGE",
-    "MOTORS",
-    "BRAKES",
-    "TIRES",
-    "PARTS",
-    "AUTO",
-    "CARS",
-    "TIRE",
+    { word: "AUTO", tier: "PRIMARY" },
+    { word: "CARS", tier: "PRIMARY" },
+    { word: "REPAIR", tier: "PRIMARY" },
+    { word: "MECHANIC", tier: "SECONDARY" },
+    { word: "GARAGE", tier: "SECONDARY" },
+    { word: "MOTORS", tier: "SECONDARY" },
+    { word: "BRAKES", tier: "SECONDARY" },
+    { word: "TIRES", tier: "SECONDARY" },
+    { word: "TIRE", tier: "SECONDARY" },
+    { word: "PARTS", tier: "TERTIARY" },
   ],
 };
 
@@ -116,11 +121,28 @@ export function resolveIndustryKeywords(industry?: string): {
 } {
   if (!industry?.trim()) return { primary: [] };
   const key = normalizeIndustryKey(industry);
-  const words = INDUSTRY_KEYWORD_MAP[key];
-  if (words) return { primary: words, industryKey: key };
+  const defs = INDUSTRY_KEYWORD_MAP[key];
+  if (defs) {
+    return {
+      primary: defs.filter((d) => d.tier === "PRIMARY").map((d) => d.word),
+      industryKey: key,
+    };
+  }
   const custom = normalizeWord(industry);
   if (custom.length >= 3) return { primary: [custom], industryKey: key };
   return { primary: [], industryKey: key };
+}
+
+function tierForWord(
+  word: string,
+  primaryOverride: Set<string>,
+  industryKey?: string,
+): KeywordTier {
+  if (primaryOverride.has(word)) return "PRIMARY";
+  if (!industryKey) return "TERTIARY";
+  const defs = INDUSTRY_KEYWORD_MAP[industryKey];
+  const hit = defs?.find((d) => normalizeWord(d.word) === word);
+  return hit?.tier ?? "TERTIARY";
 }
 
 export function buildKeywordEntries(input: {
@@ -134,17 +156,11 @@ export function buildKeywordEntries(input: {
     const n = normalizeWord(w);
     if (n.length >= 3) primarySet.add(n);
   }
-  const secondarySet = new Set<string>();
-
-  if (industryKey && INDUSTRY_KEYWORD_MAP[industryKey]) {
-    for (const w of INDUSTRY_KEYWORD_MAP[industryKey]) {
-      if (!primarySet.has(normalizeWord(w))) secondarySet.add(normalizeWord(w));
-    }
-  }
 
   const custom = (input.customKeywords || [])
     .map((k) => normalizeWord(k))
     .filter((k) => k.length >= 3);
+  for (const w of custom) primarySet.add(w);
 
   const orderedWords: string[] = [];
   const seen = new Set<string>();
@@ -155,8 +171,12 @@ export function buildKeywordEntries(input: {
     orderedWords.push(n);
   };
 
-  // Longer words first for search priority and display.
-  const allWords = [...primary, ...custom, ...secondarySet];
+  const industryWords =
+    industryKey && INDUSTRY_KEYWORD_MAP[industryKey]
+      ? INDUSTRY_KEYWORD_MAP[industryKey].map((d) => d.word)
+      : [];
+
+  const allWords = [...industryWords, ...custom];
   allWords.sort((a, b) => b.length - a.length);
   for (const w of allWords) push(w);
 
@@ -164,13 +184,13 @@ export function buildKeywordEntries(input: {
     .map((word) => {
       const digits = wordToKeypadDigits(word);
       if (digits.length < 3) return null;
-      const isPrimary = primarySet.has(word);
-      const isSecondary = !isPrimary && secondarySet.has(word);
+      const tier = tierForWord(word, primarySet, industryKey);
       return {
         word,
         digits,
-        isPrimary,
-        isSecondary,
+        tier,
+        isPrimary: tier === "PRIMARY",
+        isSecondary: tier === "SECONDARY",
       };
     })
     .filter((e): e is KeywordEntry => e !== null);

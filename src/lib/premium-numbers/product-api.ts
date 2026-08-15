@@ -28,6 +28,9 @@ export type PremiumNumberProductResult = {
   wordPlacement?: WordPlacement;
   businessMatchScore: number;
   numberQualityScore: number;
+  commercialSemanticScore: number;
+  numberQualityLabel?: string;
+  businessFitLabel?: string;
   matchedWords: string[];
   patterns: string[];
   businessMatchLabel: string;
@@ -59,18 +62,26 @@ export type PremiumSearchProductResponse = {
 };
 
 function businessMatchLabel(score: number, matchedWords: string[]): string {
-  if (score >= 85) return "Excellent Match";
-  if (score >= 75) return "Strong Business Match";
-  if (score >= 55) return "Good Business Match";
+  if (score >= 95) return "Exceptional Business Match";
+  if (score >= 85) return "Excellent Business Match";
+  if (score >= 70) return "Strong Business Match";
+  if (score >= 50) return "Good Business Match";
+  if (score >= 25) return "Related";
   if (matchedWords.length) return "Keyword Match";
-  return "No Business Match";
+  return "No Direct Match";
 }
 
-function memorabilityLabel(nq: number, hasBusinessWord: boolean): string {
-  if (nq >= 80) return hasBusinessWord ? "Exceptional Match" : "Exceptional Number";
-  if (nq >= 55) return "Very Memorable";
+function memorabilityLabel(
+  candidate: ScoredCandidate,
+  hasBusinessWord: boolean,
+): string {
+  if (candidate.numberQualityLabel) return candidate.numberQualityLabel;
+  const nq = candidate.numberQualityScore;
+  if (nq >= 85) return hasBusinessWord ? "Elite Number" : "Elite Number";
+  if (nq >= 70) return "Premium Pattern";
+  if (nq >= 55) return "Highly Memorable";
   if (nq >= 40) return "Memorable";
-  if (nq >= 25) return "Nice Pattern";
+  if (nq >= 25) return "Distinctive";
   return "Standard";
 }
 
@@ -154,7 +165,7 @@ function buildHeadlineLabel(
   const matchLabel =
     mode === "business" && candidate.businessMatchScore >= 55
       ? businessMatchLabel(candidate.businessMatchScore, hasDisplayWord ? [displayWord!] : [])
-      : memorabilityLabel(candidate.numberQualityScore, hasDisplayWord);
+      : memorabilityLabel(candidate, hasDisplayWord);
 
   if (displayWord && candidate.businessMatchScore >= 55) {
     return `${matchLabel} · ${displayWord}`;
@@ -209,13 +220,17 @@ export function toProductResult(
   const wordLen = displayWord ? normalizeWord(displayWord).length : 0;
   const price = quotePremiumPrice(candidate, mode, wordLen, wordPlacement);
   const monthly = Number(candidate.telnyxCost?.monthlyCost);
-  const providerPremium = Number.isFinite(monthly) && monthly >= 2;
+  const providerPremium =
+    candidate.providerPremiumFlag ||
+    (Number.isFinite(monthly) && monthly >= 2 && candidate.providerCostPremiumSignal);
 
-  const bmLabel = businessMatchLabel(
-    candidate.businessMatchScore,
-    displayWord ? [displayWord] : [],
-  );
-  const memLabel = memorabilityLabel(candidate.numberQualityScore, Boolean(displayWord));
+  const bmLabel =
+    candidate.businessFitLabel ??
+    businessMatchLabel(
+      candidate.businessMatchScore,
+      displayWord ? [displayWord] : [],
+    );
+  const memLabel = memorabilityLabel(candidate, Boolean(displayWord));
 
   return {
     resultId: candidate.phoneNumber,
@@ -226,6 +241,9 @@ export function toProductResult(
     wordPlacement,
     businessMatchScore: candidate.businessMatchScore,
     numberQualityScore: candidate.numberQualityScore,
+    commercialSemanticScore: candidate.commercialSemanticScore,
+    numberQualityLabel: candidate.numberQualityLabel,
+    businessFitLabel: candidate.businessFitLabel,
     matchedWords: candidate.matchedWords,
     patterns: candidate.matchedPatterns,
     businessMatchLabel: bmLabel,

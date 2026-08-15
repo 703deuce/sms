@@ -1,20 +1,35 @@
-import type { KeywordEntry, ScoringReason, ScoredCandidate, TelnyxCost } from "./types";
+import type {
+  KeywordEntry,
+  ScoringReason,
+  ScoredCandidate,
+  ScoringSearchContext,
+  TelnyxCost,
+} from "./types";
+import { commercialSemanticScoreForWords } from "./commercial-semantic";
 import { formatUsPhone, parsePhoneDigits, splitUsLocalNumber } from "./keypad";
-import { detectNumericPatterns, simplicityScore } from "./pattern-detect";
+import {
+  detectNumericPatterns,
+  isIndependentNumericPattern,
+  simplicityScore,
+} from "./pattern-detect";
 import {
   blendScores,
+  businessMatchToLabel,
   capDimension,
+  numberQualityToLabel,
   SCORING_WEIGHTS,
   scoreToTier,
+  THREE_LETTER_BUSINESS_MATCH_CAP,
 } from "./scoring-config";
+
+type WordPlacement = "exact_ending" | "beginning" | "interior" | "contains";
 
 type WordMatch = {
   word: string;
   digits: string;
-  kind: "exact_ending" | "contains";
+  placement: WordPlacement;
   digitLength: number;
-  isPrimary: boolean;
-  isSecondary: boolean;
+  tier: KeywordEntry["tier"];
 };
 
 export function scoreCandidate(input: {
@@ -22,32 +37,42 @@ export function scoreCandidate(input: {
   keywords: KeywordEntry[];
   telnyxCost?: TelnyxCost;
   rawTelnyx?: Record<string, unknown>;
+  searchContext?: ScoringSearchContext;
 }): ScoredCandidate | null {
   const digits10 = parsePhoneDigits(input.phoneNumber);
   const parts = splitUsLocalNumber(digits10);
   if (!parts) return null;
 
-  const { subscriber } = parts;
+  const { subscriber, areaCode } = parts;
   const wordMatches = dedupeWordMatches(findWordMatches(subscriber, input.keywords), subscriber);
   const patterns = detectNumericPatterns(subscriber);
 
-  const business = computeBusinessMatch(wordMatches);
+  const business = computeBusinessMatch(
+    wordMatches,
+    areaCode,
+    input.searchContext,
+  );
   const numberQuality = computeNumberQuality(
     subscriber,
     patterns,
     wordMatches,
-    input.telnyxCost,
+    providerCostSignals(input.telnyxCost, input.rawTelnyx),
   );
+  const commercialSemanticScore = capDimension(
+    commercialSemanticScoreForWords(wordMatches.map((m) => m.word)),
+  );
+
+  const personalMatchScore = input.searchContext?.personalPreferences
+    ? capDimension(computePersonalMatch(digits10, subscriber, input.searchContext))
+    : undefined;
 
   const businessMatchScore = capDimension(business.score);
   const numberQualityScore = capDimension(numberQuality.score);
   const score = blendScores(businessMatchScore, numberQualityScore);
 
-  const reasons: ScoringReason[] = [
-    ...business.reasons,
-    ...numberQuality.reasons,
-  ];
+  const providerSignals = providerCostSignals(input.telnyxCost, input.rawTelnyx);
 
+  const reasons: ScoringReason[] = [...business.reasons, ...numberQuality.reasons];
   const matchedWords = [...new Set(wordMatches.map((m) => m.word))];
   const matchedPatterns = patterns.map((p) => p.label);
 
@@ -58,28 +83,45 @@ export function scoreCandidate(input: {
     tier: scoreToTier(score),
     businessMatchScore,
     numberQualityScore,
+    commercialSemanticScore,
+    personalMatchScore,
+    localFitScore: business.localFitScore,
+    areaCodeMarketScore: business.areaCodeMarketScore,
+    numberQualityLabel: numberQualityToLabel(numberQualityScore),
+    businessFitLabel: businessMatchToLabel(businessMatchScore),
     matchedWords,
     matchedPatterns,
     reasons,
     businessReasons: business.reasons,
     numberQualityReasons: numberQuality.reasons,
     telnyxCost: input.telnyxCost,
+    providerPremiumFlag: providerSignals.premiumFlag,
+    providerCostPremiumSignal: providerSignals.costSignal,
     rawDigits: digits10,
     subscriberDigits: subscriber,
     rawTelnyx: input.rawTelnyx,
   };
 }
 
-function computeBusinessMatch(wordMatches: WordMatch[]): {
+function computeBusinessMatch(
+  wordMatches: WordMatch[],
+  areaCode: string,
+  searchContext?: ScoringSearchContext,
+): {
   score: number;
   reasons: ScoringReason[];
+  localFitScore: number;
+  areaCodeMarketScore: number;
 } {
   const reasons: ScoringReason[] = [];
   let score = 0;
   const applied = new Set<string>();
+  const explicitWords = new Set(
+    (searchContext?.explicitKeywords ?? []).map((w) => w.trim().toUpperCase()),
+  );
 
   for (const match of wordMatches) {
-    const key = `${match.word}:${match.kind}`;
+    const key = `${match.word}:${match.placement}`;
     if (applied.has(key)) continue;
     applied.add(key);
 
@@ -88,26 +130,17 @@ function computeBusinessMatch(wordMatches: WordMatch[]): {
     score += pts;
     reasons.push({ label: wordMatchLabel(match), points: pts });
 
-    if (match.kind === "exact_ending" && match.isPrimary && match.digitLength >= 4) {
-      score += SCORING_WEIGHTS.businessMatch.cleanPlacementBonus;
-      reasons.push({
-        label: "Clean exact industry word placement",
-        points: SCORING_WEIGHTS.businessMatch.cleanPlacementBonus,
-      });
-    }
+    const tierBonus = SCORING_WEIGHTS.businessMatch.tierBonus[match.tier];
+    score += tierBonus;
+    reasons.push({
+      label: `${match.tier} industry keyword (${match.word})`,
+      points: tierBonus,
+    });
 
-    if (match.isPrimary) {
-      score += SCORING_WEIGHTS.businessMatch.industryPrimaryBonus;
-      reasons.push({
-        label: "Primary industry match",
-        points: SCORING_WEIGHTS.businessMatch.industryPrimaryBonus,
-      });
-    } else if (match.isSecondary) {
-      score += SCORING_WEIGHTS.businessMatch.industrySecondaryBonus;
-      reasons.push({
-        label: "Secondary industry synonym",
-        points: SCORING_WEIGHTS.businessMatch.industrySecondaryBonus,
-      });
+    const placementPts = placementBonus(match);
+    if (placementPts > 0) {
+      score += placementPts;
+      reasons.push({ label: placementLabel(match), points: placementPts });
     }
   }
 
@@ -116,14 +149,42 @@ function computeBusinessMatch(wordMatches: WordMatch[]): {
     reasons.push({ label: penalty.label, points: -penalty.points });
   }
 
-  return { score, reasons };
+  const local = computeLocalFit(areaCode, searchContext?.requestedAreaCodes);
+  const localFitScore = local.score;
+  if (local.score > 0) {
+    score += local.score;
+    reasons.push({ label: local.label, points: local.score });
+  }
+
+  const areaCodeMarketScore = SCORING_WEIGHTS.businessMatch.areaCodeMarketDefault;
+
+  const onlyShortWords =
+    wordMatches.length > 0 && wordMatches.every((m) => m.digitLength === 3);
+  const hasExplicitShort = wordMatches.some((m) => explicitWords.has(m.word));
+  const hasStrongLong = wordMatches.some((m) => m.digitLength >= 4);
+
+  if (
+    onlyShortWords &&
+    !hasExplicitShort &&
+    !hasStrongLong &&
+    score > THREE_LETTER_BUSINESS_MATCH_CAP
+  ) {
+    const capped = score - THREE_LETTER_BUSINESS_MATCH_CAP;
+    score = THREE_LETTER_BUSINESS_MATCH_CAP;
+    reasons.push({
+      label: "Short accidental 3-letter match capped",
+      points: -capped,
+    });
+  }
+
+  return { score, reasons, localFitScore, areaCodeMarketScore };
 }
 
 function computeNumberQuality(
   subscriber: string,
   patterns: ReturnType<typeof detectNumericPatterns>,
   wordMatches: WordMatch[],
-  telnyxCost?: TelnyxCost,
+  providerSignals: { premiumFlag: boolean; costSignal: boolean },
 ): { score: number; reasons: ScoringReason[] } {
   const reasons: ScoringReason[] = [];
   let score = 0;
@@ -136,25 +197,28 @@ function computeNumberQuality(
   const simplicity = simplicityScore(subscriber);
   if (simplicity > 0) {
     score += simplicity;
-    reasons.push({ label: "High overall numeric simplicity", points: simplicity });
+    reasons.push({ label: "Digit simplicity (few unique digits)", points: simplicity });
   }
 
-  const providerBonus = providerCostBonus(telnyxCost);
-  if (providerBonus.points > 0) {
-    score += providerBonus.points;
-    reasons.push({ label: providerBonus.label, points: providerBonus.points });
+  if (providerSignals.premiumFlag) {
+    reasons.push({ label: "Provider premium flag", points: 0 });
+  } else if (providerSignals.costSignal) {
+    const pts = SCORING_WEIGHTS.providerCost.premiumSignal;
+    score += pts;
+    reasons.push({ label: "Provider cost corroboration (minor)", points: pts });
   }
 
   const strongWord = wordMatches.some(
-    (m) => m.kind === "exact_ending" && m.digitLength >= 4 && m.isPrimary,
+    (m) =>
+      (m.placement === "exact_ending" || m.placement === "beginning") &&
+      m.digitLength >= 4 &&
+      m.tier === "PRIMARY",
   );
-  const hasIndependentNumeric = patterns.some(
-    (p) => p.family === "prefix" || p.family === "full" || p.strength === "strong",
-  );
-  if (strongWord && hasIndependentNumeric) {
+  const independentNumeric = patterns.some(isIndependentNumericPattern);
+  if (strongWord && independentNumeric) {
     score += SCORING_WEIGHTS.numberQuality.wordPlusNumericBoost;
     reasons.push({
-      label: "Memorable numeric portion enhances industry word",
+      label: "Hybrid: strong commercial word plus memorable numeric pattern",
       points: SCORING_WEIGHTS.numberQuality.wordPlusNumericBoost,
     });
   }
@@ -162,24 +226,19 @@ function computeNumberQuality(
   return { score, reasons };
 }
 
-function providerCostBonus(telnyxCost?: TelnyxCost): { points: number; label: string } {
+function providerCostSignals(
+  telnyxCost?: TelnyxCost,
+  rawTelnyx?: Record<string, unknown>,
+): { premiumFlag: boolean; costSignal: boolean } {
   const monthly = Number(telnyxCost?.monthlyCost);
-  if (!Number.isFinite(monthly)) return { points: 0, label: "" };
-  const { baselineMonthly, premiumThreshold, highPremiumThreshold, premiumBonus, highPremiumBonus } =
-    SCORING_WEIGHTS.providerCost;
-  if (monthly >= highPremiumThreshold) {
-    return {
-      points: highPremiumBonus,
-      label: "Provider marks this number as premium inventory",
-    };
-  }
-  if (monthly >= premiumThreshold || monthly > baselineMonthly) {
-    return {
-      points: premiumBonus,
-      label: "Provider marks this number as premium inventory",
-    };
-  }
-  return { points: 0, label: "" };
+  const explicitPremium =
+    rawTelnyx?.premium === true ||
+    rawTelnyx?.is_premium === true ||
+    rawTelnyx?.premium_number === true;
+  const costSignal =
+    Number.isFinite(monthly) &&
+    monthly >= SCORING_WEIGHTS.providerCost.premiumThreshold;
+  return { premiumFlag: explicitPremium, costSignal };
 }
 
 function findWordMatches(subscriber: string, keywords: KeywordEntry[]): WordMatch[] {
@@ -192,23 +251,43 @@ function findWordMatches(subscriber: string, keywords: KeywordEntry[]): WordMatc
       matches.push({
         word: kw.word,
         digits,
-        kind: "exact_ending",
+        placement: "exact_ending",
         digitLength: digits.length,
-        isPrimary: kw.isPrimary,
-        isSecondary: kw.isSecondary,
+        tier: kw.tier,
+      });
+      continue;
+    }
+
+    if (subscriber.startsWith(digits)) {
+      matches.push({
+        word: kw.word,
+        digits,
+        placement: "beginning",
+        digitLength: digits.length,
+        tier: kw.tier,
       });
       continue;
     }
 
     const idx = subscriber.indexOf(digits);
-    if (idx >= 0 && idx + digits.length < subscriber.length) {
+    if (idx > 0 && idx + digits.length < subscriber.length) {
       matches.push({
         word: kw.word,
         digits,
-        kind: "contains",
+        placement: "interior",
         digitLength: digits.length,
-        isPrimary: kw.isPrimary,
-        isSecondary: kw.isSecondary,
+        tier: kw.tier,
+      });
+      continue;
+    }
+
+    if (idx >= 0 && idx + digits.length === subscriber.length) {
+      matches.push({
+        word: kw.word,
+        digits,
+        placement: "contains",
+        digitLength: digits.length,
+        tier: kw.tier,
       });
     }
   }
@@ -232,8 +311,8 @@ function dedupeWordMatches(matches: WordMatch[], subscriber: string): WordMatch[
 
 function businessWordPoints(match: WordMatch): number {
   const bm = SCORING_WEIGHTS.businessMatch;
-  if (match.kind === "exact_ending") {
-    const table = match.isPrimary ? bm.exactEndingPrimary : bm.exactEndingSecondary;
+  if (match.placement === "exact_ending" || match.placement === "beginning") {
+    const table = bm.exactEndingBase;
     if (match.digitLength >= 7) return table.seven;
     if (match.digitLength === 6) return table.six;
     if (match.digitLength === 5) return table.five;
@@ -241,27 +320,53 @@ function businessWordPoints(match: WordMatch): number {
     if (match.digitLength === 3) return table.three;
     return 0;
   }
-  if (match.digitLength >= 6) return bm.contains.sixSeven;
-  if (match.digitLength >= 4) return bm.contains.fourFive;
-  if (match.digitLength === 3) return bm.contains.three;
+  if (match.placement === "interior") {
+    if (match.digitLength >= 6) return bm.containsBase.sixSeven;
+    if (match.digitLength >= 4) return bm.containsBase.fourFive;
+    if (match.digitLength === 3) return bm.containsBase.three;
+  }
+  if (match.digitLength >= 6) return bm.containsBase.sixSeven;
+  if (match.digitLength >= 4) return bm.containsBase.fourFive;
+  if (match.digitLength === 3) return bm.containsBase.three;
   return 0;
+}
+
+function placementBonus(match: WordMatch): number {
+  const pb = SCORING_WEIGHTS.businessMatch.placementBonus;
+  if (match.placement === "exact_ending") {
+    return match.digitLength >= 4 ? pb.exactEnding + pb.cleanEnding : pb.exactEnding;
+  }
+  if (match.placement === "beginning") return pb.beginning;
+  if (match.placement === "interior") return pb.interior;
+  return 0;
+}
+
+function placementLabel(match: WordMatch): string {
+  if (match.placement === "exact_ending") {
+    return match.digitLength >= 4
+      ? "Word cleanly ends subscriber number"
+      : "Keyword ends subscriber number";
+  }
+  if (match.placement === "beginning") return "Keyword starts subscriber number";
+  if (match.placement === "interior") return "Keyword embedded in subscriber number";
+  return "Keyword contained in number";
 }
 
 function wordMatchLabel(match: WordMatch): string {
   const lenLabel =
     match.digitLength >= 7
-      ? "7-digit"
+      ? "7-letter"
       : match.digitLength === 6
-        ? "6-digit"
+        ? "6-letter"
         : match.digitLength === 5
-          ? "5-digit"
+          ? "5-letter"
           : match.digitLength === 4
-            ? "4-digit"
-            : "3-digit";
-  if (match.kind === "exact_ending") {
-    return `Exact ${lenLabel} keyword ending (${match.word} → ${match.digits})`;
+            ? "4-letter"
+            : "3-letter";
+  if (match.placement === "exact_ending") {
+    return `Exact ${lenLabel} commercial word: ${match.word}`;
   }
-  return `Keyword contained (${match.word} → ${match.digits})`;
+  return `Matched ${lenLabel} word: ${match.word}`;
 }
 
 function computeBusinessPenalties(matches: WordMatch[]): ScoringReason[] {
@@ -269,9 +374,9 @@ function computeBusinessPenalties(matches: WordMatch[]): ScoringReason[] {
   if (!matches.length) return penalties;
 
   for (const match of matches) {
-    if (match.kind === "contains" && match.digitLength <= 3) {
+    if (match.placement === "interior" && match.digitLength <= 3) {
       penalties.push({
-        label: `Short accidental ${match.digitLength}-digit match (${match.word})`,
+        label: `Short accidental ${match.digitLength}-letter match (${match.word})`,
         points: SCORING_WEIGHTS.penalties.shortAccidental,
       });
     }
@@ -286,7 +391,7 @@ function computeBusinessPenalties(matches: WordMatch[]): ScoringReason[] {
   }
 
   const onlyWeak =
-    matches.every((m) => m.digitLength <= 3 || m.kind === "contains") &&
+    matches.every((m) => m.digitLength <= 3 || m.placement === "interior") &&
     matches.length > 0;
   if (onlyWeak) {
     penalties.push({
@@ -296,6 +401,52 @@ function computeBusinessPenalties(matches: WordMatch[]): ScoringReason[] {
   }
 
   return penalties;
+}
+
+function computeLocalFit(
+  areaCode: string,
+  requestedAreaCodes?: string[],
+): { score: number; label: string } {
+  if (!requestedAreaCodes?.length) return { score: 0, label: "" };
+  const allowed = new Set(requestedAreaCodes.map((c) => c.replace(/\D/g, "").slice(0, 3)));
+  if (!allowed.has(areaCode)) return { score: 0, label: "" };
+  const max = SCORING_WEIGHTS.businessMatch.localFitMax;
+  return {
+    score: max,
+    label: `Requested ${areaCode} area code`,
+  };
+}
+
+function computePersonalMatch(
+  digits10: string,
+  subscriber: string,
+  searchContext: ScoringSearchContext,
+): number {
+  const prefs = searchContext.personalPreferences;
+  if (!prefs) return 0;
+  let score = 0;
+  const areaCode = digits10.slice(0, 3);
+
+  if (prefs.requestedAreaCodes?.includes(areaCode)) score += 25;
+
+  for (const ending of prefs.requestedEndingDigits ?? []) {
+    if (subscriber.endsWith(ending)) score += 20;
+  }
+
+  for (const fav of prefs.favoriteDigits ?? []) {
+    if (subscriber.includes(fav)) score += 10;
+  }
+
+  for (const date of [...(prefs.birthdayDigits ?? []), ...(prefs.anniversaryDigits ?? [])]) {
+    if (subscriber.includes(date)) score += 15;
+  }
+
+  for (const token of prefs.nameTokens ?? []) {
+    const digits = token.replace(/\D/g, "");
+    if (digits.length >= 3 && subscriber.includes(digits)) score += 12;
+  }
+
+  return Math.min(100, score);
 }
 
 export function sortCandidates(candidates: ScoredCandidate[]): ScoredCandidate[] {

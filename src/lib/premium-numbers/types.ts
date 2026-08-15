@@ -14,12 +14,34 @@ export type QualityTier =
   | "Nice"
   | "Ordinary";
 
+/** Intrinsic number memorability label (search-independent). */
+export type NumberQualityLabel =
+  | "Standard"
+  | "Distinctive"
+  | "Memorable"
+  | "Highly Memorable"
+  | "Premium Pattern"
+  | "Elite Number"
+  | "Signature Number";
+
+/** Business-fit label for the active search context. */
+export type BusinessFitLabel =
+  | "No Direct Match"
+  | "Related"
+  | "Good Business Match"
+  | "Strong Business Match"
+  | "Excellent Business Match"
+  | "Exceptional Business Match";
+
+export type KeywordTier = "PRIMARY" | "SECONDARY" | "TERTIARY";
+
 export type KeywordEntry = {
   word: string;
   digits: string;
-  /** Primary industry synonym for the active search. */
+  tier: KeywordTier;
+  /** @deprecated use tier — kept for transitional callers */
   isPrimary: boolean;
-  /** Secondary industry synonym. */
+  /** @deprecated use tier */
   isSecondary: boolean;
 };
 
@@ -34,22 +56,63 @@ export type TelnyxCost = {
   currency?: string;
 };
 
+export type ScarcityObservation = {
+  exactComparableCount: number;
+  patternFamilyComparableCount: number;
+  areaCode: string;
+  observationDate: string;
+  keyword?: string;
+  patternFamily?: string;
+  observationWindowDays: number;
+};
+
+export type PersonalSearchPreferences = {
+  requestedAreaCodes?: string[];
+  nameTokens?: string[];
+  requestedEndingDigits?: string[];
+  birthdayDigits?: string[];
+  anniversaryDigits?: string[];
+  favoriteDigits?: string[];
+  hobbyKeywords?: string[];
+};
+
+export type ScoringSearchContext = {
+  requestedAreaCodes?: string[];
+  industry?: string;
+  /** User-supplied keywords — unlock stronger 3-letter matches when listed. */
+  explicitKeywords?: string[];
+  personalPreferences?: PersonalSearchPreferences;
+};
+
 export type ScoredCandidate = {
   phoneNumber: string;
   formattedNumber: string;
-  /** Blended overall score (70% business + 30% number quality). */
+  /** Blended overall score (70% business + 30% number quality) for list ranking. */
   score: number;
   tier: QualityTier;
-  /** Business / industry word relevance (0–100). */
-  businessMatchScore: number;
-  /** Generic numeric memorability (0–100). */
+  /** Inherent memorability regardless of who searches (0–100). */
   numberQualityScore: number;
+  /** Fit for the active business/industry search (0–100). */
+  businessMatchScore: number;
+  /** Objective commercial usefulness of decoded word(s) (0–100). */
+  commercialSemanticScore: number;
+  /** Personal preference fit when personal context is supplied (0–100). */
+  personalMatchScore?: number;
+  /** Area code matches customer's requested locality (0–100). */
+  localFitScore: number;
+  /** Broad area-code market desirability — conservative until market data exists. */
+  areaCodeMarketScore: number;
+  numberQualityLabel: NumberQualityLabel;
+  businessFitLabel: BusinessFitLabel;
   matchedWords: string[];
   matchedPatterns: string[];
   reasons: ScoringReason[];
   businessReasons: ScoringReason[];
   numberQualityReasons: ScoringReason[];
   telnyxCost?: TelnyxCost;
+  providerPremiumFlag: boolean;
+  providerCostPremiumSignal: boolean;
+  scarcity?: ScarcityObservation;
   rawDigits: string;
   subscriberDigits: string;
   rawTelnyx?: Record<string, unknown>;
