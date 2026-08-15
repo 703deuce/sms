@@ -260,6 +260,7 @@ export class ReceptionistFieldCollectionTask extends voice.AgentTask<Receptionis
       chatCtx: this.sessionRef.chatCtx,
       manifest: this.fields,
       receptionistFields: ud.receptionistFields,
+      authoritativeFieldIds: ud.authoritativeFieldIds,
     });
 
     markTaskStarted({
