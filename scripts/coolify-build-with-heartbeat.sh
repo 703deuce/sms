@@ -8,12 +8,6 @@ heartbeat_interval="${COOLIFY_BUILD_HEARTBEAT_SECS:-20}"
 echo "[coolify-build] starting next production build (turbopack default)"
 echo "[coolify-build] node=$(node -v) heap_limit=${NODE_OPTIONS:-unset}"
 
-# Stale Turbopack cache on small VMs can spike RAM; force-deploy parity.
-if [[ -d .next/cache ]]; then
-  echo "[coolify-build] clearing .next/cache before build"
-  rm -rf .next/cache
-fi
-
 set -o pipefail
 npm run build > >(stdbuf -oL -eL tee /tmp/coolify-next-build.log) 2>&1 &
 build_pid=$!
