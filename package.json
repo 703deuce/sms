@@ -78,6 +78,8 @@
     "test:product-suite": "tsx scripts/test-product-suite.ts",
     "test:crm-enterprise": "tsx scripts/test-crm-enterprise.ts",
     "test:native-integrations": "tsx scripts/test-native-integrations.ts",
+    "test:vanity-number-scoring": "tsx scripts/test-vanity-number-scoring.ts",
+    "test:vanity-numbers": "tsx scripts/test-vanity-numbers.ts",
     "crm:live-readiness": "tsx scripts/crm-live-readiness.ts"
   },
   "dependencies": {
