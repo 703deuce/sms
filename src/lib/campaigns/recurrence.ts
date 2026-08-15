@@ -53,7 +53,7 @@ export async function tickRecurringCampaigns() {
       status: { in: ["SCHEDULED", "SENDING", "COMPLETED", "PAUSED"] },
     },
     take: 200,
-    orderBy: { updatedAt: "desc" },
+    orderBy: { createdAt: "desc" },
   });
 
   const activated: string[] = [];

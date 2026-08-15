@@ -298,7 +298,7 @@ export async function loadOperationalDashboardData(
         workspaceId,
         status: { in: ["SENDING", "SCHEDULED"] },
       },
-      orderBy: { updatedAt: "desc" },
+      orderBy: { createdAt: "desc" },
       select: {
         id: true,
         name: true,

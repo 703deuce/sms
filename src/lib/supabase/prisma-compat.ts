@@ -1028,6 +1028,7 @@ type ModelApi = {
   deleteMany: (args?: Args) => Promise<{ count: number }>;
   count: (args?: Args) => Promise<number>;
   groupBy: (args: Args) => Promise<Row[]>;
+  aggregate: (args: Args) => Promise<Row>;
 };
 
 function modelApi(model: string): ModelApi {
@@ -1246,6 +1247,88 @@ function modelApi(model: string): ModelApi {
         }
       }
       return [...groups.values()];
+    },
+
+    /** Prisma-style aggregate via filtered row scan (PostgREST has no SUM). */
+    async aggregate(args: Args = {}) {
+      const rows = await api.findMany({ where: args.where });
+      const out: Row = {
+        _sum: {},
+        _avg: {},
+        _min: {},
+        _max: {},
+        _count: {},
+      };
+
+      const sumSpec = isObject(args._sum) ? (args._sum as Row) : {};
+      for (const [field, enabled] of Object.entries(sumSpec)) {
+        if (!enabled) continue;
+        let total = 0;
+        for (const row of rows) {
+          const v = row[field];
+          if (typeof v === "number" && Number.isFinite(v)) total += v;
+          else if (v != null && v !== "") total += Number(v) || 0;
+        }
+        out._sum[field] = total;
+      }
+
+      const avgSpec = isObject(args._avg) ? (args._avg as Row) : {};
+      for (const [field, enabled] of Object.entries(avgSpec)) {
+        if (!enabled || rows.length === 0) continue;
+        let total = 0;
+        let n = 0;
+        for (const row of rows) {
+          const v = row[field];
+          if (typeof v === "number" && Number.isFinite(v)) {
+            total += v;
+            n += 1;
+          } else if (v != null && v !== "") {
+            total += Number(v) || 0;
+            n += 1;
+          }
+        }
+        out._avg[field] = n > 0 ? total / n : null;
+      }
+
+      const minSpec = isObject(args._min) ? (args._min as Row) : {};
+      for (const [field, enabled] of Object.entries(minSpec)) {
+        if (!enabled) continue;
+        let min: number | null = null;
+        for (const row of rows) {
+          const v = row[field];
+          const n = typeof v === "number" ? v : Number(v);
+          if (!Number.isFinite(n)) continue;
+          if (min === null || n < min) min = n;
+        }
+        out._min[field] = min;
+      }
+
+      const maxSpec = isObject(args._max) ? (args._max as Row) : {};
+      for (const [field, enabled] of Object.entries(maxSpec)) {
+        if (!enabled) continue;
+        let max: number | null = null;
+        for (const row of rows) {
+          const v = row[field];
+          const n = typeof v === "number" ? v : Number(v);
+          if (!Number.isFinite(n)) continue;
+          if (max === null || n > max) max = n;
+        }
+        out._max[field] = max;
+      }
+
+      if (args._count === true) {
+        out._count = { _all: rows.length };
+      } else if (isObject(args._count)) {
+        const cnt: Row = {};
+        for (const [field, enabled] of Object.entries(args._count as Row)) {
+          if (!enabled) continue;
+          if (field === "_all") cnt._all = rows.length;
+          else cnt[field] = rows.filter((r) => r[field] != null).length;
+        }
+        out._count = cnt;
+      }
+
+      return out;
     },
   };
   return api;
